@@ -39,7 +39,7 @@ class FlydraBrainPyroServer( Pyro.core.ObjBase ):
         self.update_wx()
     def update_wx(self):
         self.wxApp.statusbar.SetStatusText('%d camera servlet(s)'%len(self.servlets),2)
-    def get_URI_for_new_camera_servlet(self):
+    def make_new_camera_servlet(self):
         cam_serv = CameraServlet()
         cam_serv.post_init( self.wxApp, self )
         daemon = self.getDaemon()
@@ -54,10 +54,16 @@ class FlydraBrainPyroServer( Pyro.core.ObjBase ):
 class CameraServlet( Pyro.core.ObjBase ):
     """Communication between camPanel and Pyro"""
     
-    # -=-=-=-=-= start remote access -=-=-=-=-=
+    # -=-=-=-=-= remotely called methods start -=-=-=-=-=
     
     def set_cam_info(self, cam_id, scalar_control_info):
-        # this is like a 2nd __init__
+        """Set up servlet's representation of the client camera.
+        
+        This is called once immediately after connection by the camera
+        client.
+        
+        """
+        
         self.cam_id = cam_id
         self.scalar_control_info = scalar_control_info
 
@@ -66,16 +72,19 @@ class CameraServlet( Pyro.core.ObjBase ):
 
         self.n_frames = 0
         self.last_measurement_time = time.time()
-        self.updates = {}
+        self.command_queue = {}
 
         self.init_gui()
 
-    def get_updates(self):
-        result = self.updates.items()
-        self.updates = {} # clear queue
+    def get_commands(self):
+        """Return queue of commands for client camera."""
+        result = self.command_queue.items()
+        self.command_queue = {} # clear queue
         return result
 
     def push_image(self, image):
+        if self.my_id is None: # make sure we're not quitting!
+            return
         self.dyn_canv.update_image(self.my_id,image)
         self.n_frames += 1
 
@@ -92,20 +101,27 @@ class CameraServlet( Pyro.core.ObjBase ):
         displayed_fps_label.SetLabel('Frames per second (displayed): %.1f'%displayed_fps)
         
         self.n_frames = 0
+        
+    def close(self, dummy_event=None):
+        if self.my_id is not None: # only close once
+            self.command_queue['quit']=True
+            self.parent.close_servlet(self)
+            self.dyn_canv.delete_image(self.my_id)
+            if hasattr(self,'camPanel'):
+                self.camPanel.DestroyChildren()
+                self.camPanel.Destroy()
+                del self.camPanel
+            self.my_id = None
+            #else:
+            #    print 'WARNING: calling close 2nd time'
 
-    # -=-=-=-=-= end remote access -=-=-=-=-=
+    # -=-=-=-=-= remotely called methods end -=-=-=-=-=
         
     def post_init(self, wxApp, parent):
         self.parent = parent
         self.wxApp = wxApp
         self.dyn_canv = self.parent.cam_image_canvas
         self.my_id = id(self)
-
-##    def disconnect_camera(self, event):
-##        print 'disconnecting'
-##        self.updates['quit']=True
-##        self.parent.close_servlet(self)
-##        print 'disconnected'
 
     def init_gui(self):
         """build GUI"""
@@ -114,14 +130,14 @@ class CameraServlet( Pyro.core.ObjBase ):
         # Add myself to my_container's sizer
         acp_box = self.my_container.GetSizer()
         acp_box.Add(self.camPanel,1,wxEXPAND | wxALL,border=10)
+        #self.my_container.Layout() #???
 
         if 0:
             box = self.camPanel.GetSizer()
             static_box = box.GetStaticBox()
             static_box.SetLabel( 'Camera ID: %s'%self.cam_id )
 
-
-        caller_addr= self.daemon.getLocalStorage().caller.addr
+        caller_addr= self.daemon.getLocalStorage().caller.addr # XXX Pyro hack??
         caller_ip, caller_port = caller_addr
         fqdn = socket.getfqdn(caller_ip)
 
@@ -155,7 +171,7 @@ class CameraServlet( Pyro.core.ObjBase ):
                     self.slider=slider
                     self.parent = parent
                 def onScroll(self, event):
-                    self.parent.updates[self.name] = self.slider.GetValue()
+                    self.parent.command_queue[self.name] = self.slider.GetValue()
             
             psh = ParamSliderHelper(param,slider,self)
             EVT_COMMAND_SCROLL(slider, slider.GetId(), psh.onScroll)
@@ -163,22 +179,11 @@ class CameraServlet( Pyro.core.ObjBase ):
         per_cam_controls_panel.SetSizer(box)
         self.my_container.Layout()
 
-    def close(self, dummy_event=None):
-        self.dyn_canv.delete_image(self.my_id)
-        self.updates['quit']=True
-        self.parent.close_servlet(self)
-        if hasattr(self,'camPanel'):
-            self.camPanel.DestroyChildren()
-            self.camPanel.Destroy()
-            del self.camPanel
-        #else:
-        #    print 'WARNING: calling close 2nd time'
-        
 class App(wxApp):
     def OnInit(self,*args,**kw):
     
         wxInitAllImageHandlers()
-        frame = wxFrame(None, -1, "Flydra Main Brain",size=(700,500))
+        frame = wxFrame(None, -1, "Flydra Main Brain",size=(800,600))
         
         self.statusbar = frame.CreateStatusBar()
         self.statusbar.SetFieldsCount(3)
@@ -202,7 +207,7 @@ class App(wxApp):
 
         self.all_cam_panel = XRCCTRL(self.main_panel,"AllCamPanel")
 
-        acp_box = wxBoxSizer(wxVERTICAL)
+        acp_box = wxBoxSizer(wxHORIZONTAL) # all camera panel (for camera controls, e.g. gain)
         self.all_cam_panel.SetSizer(acp_box)
         
         #acp_box.Add(wxStaticText(self.all_cam_panel,-1,"This is the main panel"),0,wxEXPAND)

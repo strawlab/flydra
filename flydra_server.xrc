@@ -29,9 +29,9 @@
             </object>
             <object class="sizeritem">
               <object class="wxPanel" name="AllCamPanel">
-                <size>640,400</size>
+                <size>640,210</size>
               </object>
-              <option>1</option>
+              <option>0</option>
               <flag>wxEXPAND</flag>
             </object>
           </object>

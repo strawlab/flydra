@@ -84,9 +84,9 @@ def main():
     cam_id = '%(hostname)s %(driver)s'%locals()
     #cam_id = '%(hostname)s %(driver)s %(device_number)d %(start)f'%locals()
     # inform brain that we're connected before starting camera thread
-    servlet_URI = flydra_brain.get_URI_for_new_camera_servlet()
+    servlet_URI = flydra_brain.make_new_camera_servlet()
     camera_servlet = Pyro.core.getProxyForURI(servlet_URI)
-    camera_servlet._setOneway(['push_image','set_current_fps'])
+    camera_servlet._setOneway(['push_image','set_current_fps','close'])
     
     camera_servlet.set_cam_info(cam_id,scalar_control_info)
 
@@ -126,7 +126,7 @@ def main():
 
                 # poll for commands
                 if now - last_return_info_check > 1.0:
-                    updates = camera_servlet.get_updates()
+                    updates = camera_servlet.get_commands()
                     last_return_info_check = now
 
                     for key,value in updates:
@@ -145,7 +145,7 @@ def main():
             quit_now.release()
             camera_servlet.close()
             del camera_servlet
-            flydra_brain.delete_servlet_by_URI(servlet_URI)
+            #flydra_brain.delete_servlet_by_URI(servlet_URI)
             thread_done.acquire() # block until thread is done...
     except Pyro.errors.ConnectionClosedError:
         pass

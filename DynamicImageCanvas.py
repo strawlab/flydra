@@ -19,9 +19,13 @@ class DynamicImageCanvas(wxGLCanvas):
 #        self._gl_lock = thread.allocate_lock()
 
     def delete_image(self,id_val):
+        print 'deleting id_val',id_val
         tex_id, gl_tex_xy_alloc, gl_tex_xyfrac = self._gl_tex_info_dict[id_val]
         glDeleteTextures( tex_id )
+        print 'len(self._gl_tex_info_dict)',len(self._gl_tex_info_dict)
         del self._gl_tex_info_dict[id_val]        
+        print 'len(self._gl_tex_info_dict)',len(self._gl_tex_info_dict)
+        print '-='*30
 
     def __del__(self, *args, **kwargs):
         for id_val in self._gl_tex_info_dict.keys():
@@ -57,7 +61,7 @@ class DynamicImageCanvas(wxGLCanvas):
         glColor4f(1.0,1.0,1.0,1.0)
         
     def create_texture_object(self,id_val,image):
-        
+        print 'create',id_val
         def next_power_of_2(f):
             return int(math.pow(2.0,math.ceil(math.log(f)/math.log(2.0))))
 
@@ -136,7 +140,8 @@ class DynamicImageCanvas(wxGLCanvas):
         # clear color and depth buffers
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
 
-        N = float(len(self._gl_tex_info_dict))
+        N = len(self._gl_tex_info_dict)
+        #print 'draw',N
         ids = self._gl_tex_info_dict.keys()
         ids.sort()
         x_border_pixels = 1
@@ -149,11 +154,11 @@ class DynamicImageCanvas(wxGLCanvas):
         hy = y_border*0.5
         x_borders = x_border*(N+1)
         y_borders = y_border*(N+1)
-        for i in range(int(N)):
+        for i in range(N):
             bottom = y_border
             top = 1.0-y_border
-            left = (1.0-2*hx)*i/N+hx+hx
-            right = (1.0-2*hx)*(i+1)/N-hx+hx
+            left = (1.0-2*hx)*i/float(N)+hx+hx
+            right = (1.0-2*hx)*(i+1)/float(N)-hx+hx
             
             tex_id, gl_tex_xy_alloc, gl_tex_xyfrac = self._gl_tex_info_dict[ids[i]]
 
