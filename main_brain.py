@@ -125,8 +125,6 @@ class MainBrain:
                     if not self.cam_info[cam_id]['caller'].connected:
                         print 'WARNING: lost camera',cam_id
                         self.close(cam_id)
-##                sys.stdout.write('.')
-##                sys.stdout.flush()
             self.thread_done.set()
                                              
         # ----------------------------------------------------------------
@@ -389,6 +387,8 @@ class App(wxApp):
         self.frame.Close(True)
 
     def OnIdle(self, event):
+        if not hasattr(self,'main_brain'):
+            return # quitting
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc
         for cam_id in self.cameras.keys():
             cam = self.cameras[cam_id]
@@ -407,7 +407,7 @@ class App(wxApp):
                 show_fps_label.SetLabel('Frames per second (acquired): %.1f'%show_fps)
         self.cam_image_canvas.OnDraw()
         
-        if isinstance(event,wxIdleEventPtr):
+        if sys.platform != 'win32' or isinstance(event,wxIdleEventPtr):
             event.RequestMore()
             
     def OnNewCamera(self, cam_id, scalar_control_info):
