@@ -97,7 +97,7 @@ class App(wxApp):
         self.timer = wxTimer(self,      # object to send the event to 	 
                              ID_Timer)  # event id to use 	 
         EVT_TIMER(self,  ID_Timer, self.OnIdle) 	 
-        self.timer.Start(100) # call every n msec
+        self.timer.Start(500) # call every n msec
         EVT_IDLE(self.frame, self.OnIdle)
 
         self.cameras = {} #OrderedDict()
@@ -171,7 +171,6 @@ class App(wxApp):
         collect_background = XRCCTRL(PreviewPerCamPanel,"collect_background")
         EVT_BUTTON(collect_background, collect_background.GetId(),
                    self.OnCollectBackground)
-        print cam_id, collect_background.GetId()
         
         quit_camera = XRCCTRL(PreviewPerCamPanel,"quit_camera")
         EVT_BUTTON(quit_camera, quit_camera.GetId(), self.OnCloseCamera)
@@ -388,7 +387,10 @@ class App(wxApp):
         cam_choice.GetParent().GetSizer().Layout()
 
     def RecordRawPerCamClose(self,cam_id):
-        pass
+        cam_choice = XRCCTRL(self.record_raw_panel,
+                             "record_raw_cam_select_checklist")
+        i=cam_choice.FindString(cam_id)
+        cam_choice.Delete(i)
     
     def OnSnapshot(self,event):
         snapshot_cam_choice = XRCCTRL(self.snapshot_panel,
@@ -474,7 +476,6 @@ class App(wxApp):
 
     def OnCloseCamera(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
-        print 'OnCloseCamera',cam_id
         self.main_brain.close_camera(cam_id) # eventually calls OnOldCamera
     
     def OnOldCamera(self, cam_id):
@@ -485,7 +486,6 @@ class App(wxApp):
             # camera never sent frame??
             pass
 
-        print 'OnOldCamera',cam_id
         self.PreviewPerCamClose(cam_id)
         self.SnapshotPerCamClose(cam_id)
         self.RecordRawPerCamClose(cam_id)
