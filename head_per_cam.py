@@ -29,15 +29,17 @@ def grab_func(cam,quit_now,thread_done,incoming_frames_lock):
     # (this could be in C)
     global incoming_frames
     buf = na.zeros( (cam.max_height,cam.max_width), na.UInt8 ) # allocate buffer
-    while not quit_now.isSet():
-        cam.grab_next_frame_blocking(buf) # grab frame and stick in buf
-        incoming_frames_lock.acquire()
-        incoming_frames.append( buf.copy() ) # save a copy of the buffer
-        incoming_frames_lock.release()
-##        sys.stdout.write('_')
-##        sys.stdout.flush()
-        time.sleep(0.00001) # yield processor
-    thread_done.set()
+    try:
+        while not quit_now.isSet():
+            cam.grab_next_frame_blocking(buf,0) # grab frame and stick in buf
+            incoming_frames_lock.acquire()
+            incoming_frames.append( buf.copy() ) # save a copy of the buffer
+            incoming_frames_lock.release()
+    ##        sys.stdout.write('_')
+    ##        sys.stdout.flush()
+            time.sleep(0.00001) # yield processor
+    finally:
+        thread_done.set()
 
 def main():
     global incoming_frames
@@ -149,6 +151,8 @@ def main():
                         else:
                             raise RuntimeError ('Unknown command: %s'%repr(ud))
                 time.sleep(0.01)
+                if thread_done.isSet():
+                    quit = True
 
         finally:
             print 'telling grab thread to quit'

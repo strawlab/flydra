@@ -73,9 +73,11 @@
             <object class="wxStaticText" name="acquired_fps_label">
               <label>Frames per second (acquired): --</label>
             </object>
-            <option>0</option>
-            <flag>wxALL|wxALIGN_CENTRE</flag>
-            <border>5</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxStaticText" name="exposure_label">
+              <label>Exposure (msec): --</label>
+            </object>
           </object>
         </object>
         <option>0</option>

@@ -147,7 +147,6 @@ class MainBrain:
             fqdn = socket.getfqdn(caller_ip)
         
             cam_id = '%s:%d'%(fqdn,caller_port)
-            print 'listening to',cam_id
 
             self.cam_info[cam_id] = {'commands':{}, # command queue for cam
                                      'lock':threading.Lock(), # prevent concurrent access
@@ -380,8 +379,6 @@ class App(wxApp):
 
         self.update_wx()
 
-        print 'initial setup'
-        
         return True
 
     def attach_and_start_main_brain(self,main_brain):
@@ -419,8 +416,6 @@ class App(wxApp):
         self.cam_image_canvas.OnDraw()
 
     def OnNewCamera(self, cam_id, scalar_control_info):
-        print 'a new camera was registered:',cam_id
-
         # add self to WX
         camPanel = RES.LoadPanel(self.all_cam_panel,"PerCameraPanel")
         acp_box = self.all_cam_panel.GetSizer()
@@ -440,7 +435,7 @@ class App(wxApp):
         per_cam_controls_panel = XRCCTRL(camPanel,"PerCameraControlsContainer") # get container
         box = wxBoxSizer(wxVERTICAL)
 
-        for param in scalar_control_info:
+        for param in scalar_control_info.keys():
             current_value, min_value, max_value = scalar_control_info[param]
             scalarPanel = RES.LoadPanel(per_cam_controls_panel,"ScalarControlPanel") # frame main panel
             box.Add(scalarPanel,1,wxEXPAND)
@@ -454,17 +449,25 @@ class App(wxApp):
             slider.SetValue( current_value )
             
             class ParamSliderHelper:
-                def __init__(self, name, cam_id, slider, main_brain):
+                def __init__(self, name, cam_id, slider, main_brain,label_if_shutter=None):
                     self.name=name
                     self.cam_id=cam_id
                     self.slider=slider
                     self.main_brain=main_brain
+                    self.label_if_shutter=label_if_shutter
                 def onScroll(self, event):
+                    current_value = self.slider.GetValue()
                     self.main_brain.send_commands(self.cam_id,
-                                                  {self.name:
-                                                   self.slider.GetValue()})
-            
-            psh = ParamSliderHelper(param,cam_id,slider,self.main_brain)
+                                                  {self.name:current_value})
+                    if self.label_if_shutter is not None: # this is the shutter control
+                        self.label_if_shutter.SetLabel('Exposure (msec): %.3f'%(current_value*0.02,))
+
+            if param.lower() == 'shutter':
+                label_if_shutter = XRCCTRL(camPanel,'exposure_label') # get label
+                label_if_shutter.SetLabel('Exposure (msec): %.3f'%(current_value*0.02,))
+            else:
+                label_if_shutter = None
+            psh = ParamSliderHelper(param,cam_id,slider,self.main_brain,label_if_shutter)
             EVT_COMMAND_SCROLL(slider, slider.GetId(), psh.onScroll)
       
         per_cam_controls_panel.SetSizer(box)
@@ -483,8 +486,12 @@ class App(wxApp):
     
     def OnOldCamera(self, cam_id):
         print 'a camera was unregistered:',cam_id
-        self.cam_image_canvas.delete_image(cam_id)
+        try:
+            self.cam_image_canvas.delete_image(cam_id)
         
+        except KeyError:
+            # camera never sent frame??
+            pass
         camPanel=self.cameras[cam_id]['camPanel']
         camPanel.DestroyChildren()
         camPanel.Destroy()
@@ -504,13 +511,10 @@ def main():
     try:
         # connect server to GUI
         app.attach_and_start_main_brain(main_brain)
-        print 'between init and ml'
 
         # hand control to GUI
         app.MainLoop()
-        print 'MainLoop done'
         del app
-        print 'app deleted'
 
     finally:
         # stop main_brain server
