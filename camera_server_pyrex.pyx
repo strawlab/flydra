@@ -237,12 +237,12 @@ cdef class GrabClass:
                     (im1 + self.bottom*im1_step + self.left), im1_step,
                     (im2 + self.bottom*im2_step + self.left), im2_step, roi_sz))
                 # (to avoid big moment arm:) if pixel < .8*max(pixel): pixel=0
-                CHK( ipp.ippiThreshold_Val_8u_C1IR(
-                    (im2 + self.bottom*im2_step + self.left), im2_step,
-                    roi_sz, self.clear_threshold*max_val, 0, ipp.ippCmpLess))
                 CHK( ipp.ippiMaxIndx_8u_C1R(
                     (im2 + self.bottom*im2_step + self.left), im2_step,
                     roi_sz, &max_val, &index_x,&index_y))
+                CHK( ipp.ippiThreshold_Val_8u_C1IR(
+                    (im2 + self.bottom*im2_step + self.left), im2_step,
+                    roi_sz, self.clear_threshold*max_val, 0, ipp.ippCmpLess))
 #                CHK( ipp.ippiSqr_8u_C1IRSfs(
 #                    (im2 + self.bottom*im2_step + self.left), im2_step,
 #                    roi_sz, 5 ))
