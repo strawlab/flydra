@@ -266,6 +266,7 @@ class App:
         last_measurement_time = time.time()
         last_return_info_check = 0.0 # never
         n_frames = 0
+	first_timestamp=None
         try:
             try:
                 while not self.app_quit_event.isSet():
@@ -308,7 +309,6 @@ class App:
 
                     if len(grabbed_frames):
                         if cmd=='save':
-                            first_timestamp=None
                             fly_movie_lock.acquire()
                             try:
                                 for frame,timestamp in grabbed_frames:
@@ -318,6 +318,9 @@ class App:
                                     fly_movie.add_frame(frame,msec_since_start)
                             finally:
                                 fly_movie_lock.release()
+			else:
+			    first_timestamp=None # XXX hack to reset timestamp after each save
+
                         grabbed_frames = []
 
                     time.sleep(0.05)
