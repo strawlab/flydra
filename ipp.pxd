@@ -337,6 +337,3 @@ cdef extern from "ippcv.h":
 cdef extern from "ipps.h":
     IppStatus ippSetFlushToZero( int value, unsigned int* pUMask )
     IppStatus ippSetDenormAreZeros( int value )
-
-cdef extern from "fp_info.h": # XXX my stuff, doesn't belong in ipp.pxd
-    unsigned short getcw()
