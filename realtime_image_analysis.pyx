@@ -485,7 +485,7 @@ cdef class RealtimeAnalyzer:
             x0 = x0 - self._left
             y0 = y0 - self._bottom
             self.arena_controller.update_center_calculation( x0, y0, orientation )
-            self.arena_controller.arena_control.rotation_update()
+            self.arena_controller.rotation_update()
         # end of IPP-requiring code
         return
 
@@ -494,7 +494,7 @@ cdef class RealtimeAnalyzer:
         cdef double new_x_cent, new_y_cent
         if self.arena_controller is not None:
             self.arena_controller.end_center_calculation( &new_x_cent, &new_y_cent )
-            self.arena_controller.arena_control.rotation_calculation_finish( new_x_cent, new_y_cent )
+            self.arena_controller.rotation_calculation_finish( new_x_cent, new_y_cent )
         # end of IPP-requiring code
         return
         
