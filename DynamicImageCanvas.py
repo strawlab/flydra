@@ -241,7 +241,7 @@ class DynamicImageCanvas(wxGLCanvas):
                     draw_points = self.draw_points.get(ids[i],[])
                     
                     glDisable(GL_TEXTURE_2D)
-                    glColor4f(0.0,1.0,0.0,1.0)                        
+                    glColor4f(0.0,1.0,0.0,1.0) # green point
                     glBegin(GL_POINTS)
 
                     width = float(widthheight[0])
@@ -260,27 +260,67 @@ class DynamicImageCanvas(wxGLCanvas):
 
                     for draw_point in draw_points:
                         ox0,oy0,area,slope,eccentricity = draw_point[:5]
-                        if len(numarray.ieeespecial.getnan(pt[2])[0]):
-                            # no orientation information
+##                        if len(numarray.ieeespecial.getnan(pt[2])[0]):
+##                            # no orientation information
+##                            continue
+                        
+                        if eccentricity <= 2.0:
+                            # don't draw green lines -- not much orientation info
                             continue
+                        
+                        xmin = 0
+                        ymin = 0
+                        xmax = width-1
+                        ymax = height-1
+                        
+                        # ax+by+c=0
+                        a=slope
+                        b=-1
+                        c=oy0-a*ox0
+                        
+                        x1=xmin
+                        y1=-(c+a*x1)/b
+                        if y1 < ymin:
+                            y1 = ymin
+                            x1 = -(c+b*y1)/a
+                        elif y1 > ymax:
+                            y1 = ymax
+                            x1 = -(c+b*y1)/a
 
-                        angle_radians = -math.atan(slope)
+                        x2=xmax
+                        y2=-(c+a*x2)/b
+                        if y2 < ymin:
+                            y2 = ymin
+                            x2 = -(c+b*y2)/a
+                        elif y2 > ymax:
+                            y2 = ymax
+                            x2 = -(c+b*y2)/a                
 
-                        r = eccentricity
-                        odx = r*math.cos( angle_radians )
-                        ody = r*math.sin( angle_radians )
+##                        angle_radians = -math.atan(slope)
 
-                        x0 = (ox0-odx)/width*xg+xo
-                        x1 = (ox0+odx)/width*xg+xo
+##                        r = eccentricity
+##                        odx = r*math.cos( angle_radians )
+##                        ody = r*math.sin( angle_radians )
 
-                        y0 = (height-oy0-ody)/height*yg+yo
-                        y1 = (height-oy0+ody)/height*yg+yo
+##                        x0 = (ox0-odx)/width*xg+xo
+##                        x1 = (ox0+odx)/width*xg+xo
+
+##                        y0 = (height-oy0-ody)/height*yg+yo
+##                        y1 = (height-oy0+ody)/height*yg+yo
+
+                        x1 = x1/width*xg+xo
+                        x2 = x2/width*xg+xo
+
+                        y1 = (height-y1)/height*yg+yo
+                        y2 = (height-y2)/height*yg+yo
 
                         glDisable(GL_TEXTURE_2D)
-                        glColor4f(0.0,1.0,0.0,1.0)                        
+                        glColor4f(0.0,1.0,0.0,1.0) # green line
                         glBegin(GL_LINES)
-                        glVertex2f(x0,y0)
                         glVertex2f(x1,y1)
+                        glVertex2f(x2,y2)
+##                        glVertex2f(x0,y0)
+##                        glVertex2f(x1,y1)
                         glEnd()
                         glColor4f(1.0,1.0,1.0,1.0)                        
                         glEnable(GL_TEXTURE_2D)
@@ -290,7 +330,7 @@ class DynamicImageCanvas(wxGLCanvas):
 
                     # draw points
                     glDisable(GL_TEXTURE_2D)
-                    glColor4f(1.0,0.0,0.0,1.0)                        
+                    glColor4f(1.0,0.0,0.0,0.5) # red points
                     glBegin(GL_POINTS)
 
                     for pt in draw_points:
@@ -307,7 +347,7 @@ class DynamicImageCanvas(wxGLCanvas):
                     # draw lines
 
                     glDisable(GL_TEXTURE_2D)
-                    glColor4f(1.0,0.0,1.0,1.0)                        
+                    glColor4f(1.0,0.0,0.0,0.5) # red lines
                     glBegin(GL_LINES)
 
                     for L in draw_lines:
