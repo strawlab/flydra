@@ -314,7 +314,7 @@ class App(wxApp):
         selection_string = listbox.GetString(selection)
         frame,corners = listbox.GetClientData(selection)
         height = frame.shape[0]
-        self.plotpanel.set_image(frame/255.0)
+        self.plotpanel.set_image(frame)
         self.plotpanel.set_data(corners[:,0],height-corners[:,1])
         self.plotpanel.draw()
         self.statusbar.SetStatusText('Viewing %s %s'%(
@@ -363,9 +363,14 @@ class App(wxApp):
                 self.main_brain.start_recording(cam_id,filename)
                 self._currently_recording_cams.append(cam_id)
             self.statusbar.SetStatusText('Recording started',0)
-        except:
-            self.statusbar.SetStatusText('Failed to start recording: see console',0)
-            raise
+        except Exception,x:
+            try:
+                for tmp_cam_id in self._currently_recording_cams[:]:
+                    self.main_brain.stop_recording(tmp_cam_id)
+                    self._currently_recording_cams.remove(tmp_cam_id)
+            finally:
+                self.statusbar.SetStatusText('Failed to start recording (%s): see console'%(cam_id,),0)
+                raise x
 
     def OnRecordRawStop(self, event):
         if not len(self._currently_recording_cams):
@@ -435,7 +440,7 @@ class App(wxApp):
             return
         frame = self.main_brain.get_image_sync(cam_id)
         height = frame.shape[0]
-        self.plotpanel.set_image(frame/255.0)
+        self.plotpanel.set_image(frame)
 
         etalon_width = int(XRCCTRL(self.calibration_panel,
                                    "etalon_width").GetValue())
