@@ -318,8 +318,13 @@ class Reconstructor:
             X = nx.array([[X[0]], [X[1]], [X[2]], [1.0]])
         Pmat = self.Pmat[cam_id]
         x=nx.dot(Pmat,X)
-
-        x = x[0:2,0]/x[2,0] # normalize
+        
+        x = x[0:2,0]/x[2,0] # normalize (old 1 point version)
+        #x = x[0:2,:]/x[2,:] # normalize
+        
+        # XXX The rest of this function hasn't been checked for >1
+        # points.
+        
         if distorted:
             xd, yd = self.distort(cam_id, x)
             x[0] = xd
