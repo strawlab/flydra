@@ -347,21 +347,22 @@ class CoordReceiver(threading.Thread):
                 corrected_framenumber = framenumber-self.framenumber_offsets[cam_idx]
                 XXX_framenumber = corrected_framenumber
 
-                # Save 2D data (even when no point found) to allow
-                # temporal correlation of movie frames to 2D data.
-                deferred_2d_data.append((absolute_cam_no, # defer saving to later
-                                         corrected_framenumber,
-                                         timestamp,
-                                         points[0][0], # x
-                                         points[0][1], # y
-                                         points[0][2], # area
-                                         points[0][3], # slope
-                                         points[0][4], # eccentricity
-                                         points[0][5], # p1
-                                         points[0][6], # p2
-                                         points[0][7], # p3
-                                         points[0][8], # p4
-                                         ))
+                if self.main_brain.h5file is not None or len(getnan(points[0][0])[0]):
+                    # Save 2D data (even when no point found) to allow
+                    # temporal correlation of movie frames to 2D data.
+                    deferred_2d_data.append((absolute_cam_no, # defer saving to later
+                                             corrected_framenumber,
+                                             timestamp,
+                                             points[0][0], # x
+                                             points[0][1], # y
+                                             points[0][2], # area
+                                             points[0][3], # slope
+                                             points[0][4], # eccentricity
+                                             points[0][5], # p1
+                                             points[0][6], # p2
+                                             points[0][7], # p3
+                                             points[0][8], # p4
+                                             ))
                     
                 # save new frame data
                 # XXX for now, only attempt 3D reconstruction of 1st point
@@ -471,6 +472,8 @@ class CoordReceiver(threading.Thread):
 
             if len(deferred_2d_data):
                 self.main_brain.queue_data2d.put( deferred_2d_data )
+                
+                    
             self.all_data_lock.release()
             
 class MainBrain(object):
