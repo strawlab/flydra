@@ -20,7 +20,12 @@ if struct.unpack('d','\x18-DT\xfb!\t\xc0')[0] == -math.pi:
 else:
     from numarray.ieeespecial import nan
 
-reconstructor=Reconstructor()
+reconstructor_ok = False
+try:
+    reconstructor=Reconstructor()
+    reconstructor_ok = True
+except Exception, x:
+    print 'WARNING: 3d reconstruction disabled:',x.__class__,x
 
 Pyro.config.PYRO_MULTITHREADED = 0 # No multithreading!
 
@@ -155,22 +160,23 @@ class CoordReceiver(threading.Thread):
             if data_dict is not None:
                 
                 # do 3D reconstruction -=-=-=-=-=-=-=-=
-                t1 = time.time()
-#                print 'time.time() % 15d'%t1
-#                print ' framenumber %d:'%corrected_framenumber,cur_framenumber_dict
-                X = reconstructor.find3d(data_dict.items())
-                t2 = time.time()
-                latency = (t2-t1)*1000.0
-#                print ' 3d point:', X, '(3d calc duration % 4.1f msec)'%latency
-                x,y,z=X
-                try:
-                    projector_socket.sendto(struct.pack('<fff',x,y,z),
-                                            (projector_hostname,PROJECTOR_PORT))
-                except x:
-                    print 'WARNING: could not send 3d point data to projector:'
-                    print x.__class__, x
-                    print
-                realtime_data = X
+                if reconstructor_ok:
+                    t1 = time.time()
+#                    print 'time.time() % 15d'%t1
+#                    print ' framenumber %d:'%corrected_framenumber,cur_framenumber_dict
+                    X = reconstructor.find3d(data_dict.items())
+                    t2 = time.time()
+                    latency = (t2-t1)*1000.0
+#                    print ' 3d point:', X, '(3d calc duration % 4.1f msec)'%latency
+                    x,y,z=X
+                    try:
+                        projector_socket.sendto(struct.pack('<fff',x,y,z),
+                                                (projector_hostname,PROJECTOR_PORT))
+                    except x:
+                        print 'WARNING: could not send 3d point data to projector:'
+                        print x.__class__, x
+                        print
+                    realtime_data = X
 
                 # save calibration data -=-=-=-=-=-=-=-=
                 if self.main_brain.currently_calibrating.isSet():
