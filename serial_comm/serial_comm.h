@@ -17,6 +17,7 @@
  *		(11/07/2003) Original version - William Dickson 
  *		(7/13/04) revised for Linux - John Bender
  *		(10/11/04) changed baud rate from B19200 to B57600 - JAB
+ *		(3/2/05) changed baud rate back
  *
  ****************************************************************************/
 
@@ -30,7 +31,8 @@
 /* Global Variables and Constants *******************************************/  
 
 #define SC_COMM_PORT "/dev/ttyS0"	/* Communications Port	*/
-#define SC_BAUD_RATE B57600		/* Baud rate	*/ 
+#define SC_BAUD_RATE B19200		/* Baud rate	*/ 
+/*#define SC_BAUD_RATE B57600		/* Baud rate	*/ 
 
 #define SC_CMD_BUF_SIZE 100			/* Size of cmd buffer	(send)			*/
 #define SC_MSG_BUF_SIZE 100			/* Size of msg buffer	(recieve)		*/
