@@ -17,8 +17,17 @@ cimport c_python
 
 # start of IPP-requiring code
 cimport ipp
-cimport c_fit_params
 cimport arena_control
+
+cdef extern from "c_fit_params.h":
+
+    int fit_params( ipp.IppiMomentState_64f *pState, double *x0, double *y0,
+                    double *orientation, double *orientation_goodness,
+                    int width, int height, unsigned char *img, int img_step )
+
+    void start_center_calculation( int nframes )
+    void end_center_calculation( double *x_center, double *y_center )
+    void update_center_calculation( double new_x_pos, double new_y_pos, double new_orientation )
 
 class IPPError(Exception):
     pass
@@ -85,6 +94,8 @@ cdef class RealtimeAnalyzer:
     cdef ipp.Ipp8u *bg_img, *std_img  # 8-bit background
     cdef ipp.Ipp32f *sum_image, *sq_image # FP accumulators
     cdef ipp.Ipp32f *mean_image, *std_image # FP background
+
+    cdef ipp.IppiMomentState_64f *pState
     # end of IPP-requiring code
 
     def __init__(self, int w, int h):
@@ -126,9 +137,7 @@ cdef class RealtimeAnalyzer:
         if self.std_image==NULL: raise MemoryError("Error allocating memory by IPP")
 
         # image moment calculation initialization
-        # XXX this is global -- could not use more than one camera per computer
-        if c_fit_params.init_moment_state() != 0: 
-            raise RuntimeError("could not init moment state")
+        CHK( ipp.ippiMomentInitAlloc_64f( &self.pState, ipp.ippAlgHintFast ) )
 
         # initialize background images
         CHK( ipp.ippiSet_8u_C1R(0,self.bg_img,self.bg_img_step, self._roi_sz))
@@ -152,6 +161,8 @@ cdef class RealtimeAnalyzer:
         print 'de-allocating IPP memory'
         if self.arena_control_working:
             arena_control.arena_finish()
+
+        CHK( ipp.ippiMomentFree_64f( self.pState ))
         ipp.ippiFree(self.im1)
         ipp.ippiFree(self.im2)
         ipp.ippiFree(self.bg_img)
@@ -160,13 +171,12 @@ cdef class RealtimeAnalyzer:
         ipp.ippiFree(self.sq_image)
         ipp.ippiFree(self.mean_image)
         ipp.ippiFree(self.std_image)
-        c_fit_params.free_moment_state()
         # end of IPP-requiring code
         return
 
     def do_work(self, c_numarray._numarray buf, double timestamp, int framenumber):
         cdef double x0, y0
-        cdef double orientation
+        cdef double orientation, orientation_goodness
         cdef int i
         cdef int result
         
@@ -220,10 +230,10 @@ cdef class RealtimeAnalyzer:
             x0=-1
             y0=-1
         else:
-            result = c_fit_params.fit_params( &x0, &y0, &orientation,
-                                              self._roi_sz.width, self._roi_sz.height,
-                                              (self.im2 + self._bottom*self.im2_step + self._left),
-                                              self.im2_step )
+            result = fit_params( self.pState, &x0, &y0, &orientation, &orientation_goodness,
+                                 self._roi_sz.width, self._roi_sz.height,
+                                 (self.im2 + self._bottom*self.im2_step + self._left),
+                                 self.im2_step )
             if result == 0:
                 # note that x0 and y0 are now relative to the ROI origin
                 orientation = orientation + 1.57079632679489661923 # (pi/2)
@@ -353,7 +363,7 @@ cdef class RealtimeAnalyzer:
         arena_control.rotation_calculation_init()
         
         n_rot_samples = 100*60 # 1 minute
-        c_fit_params.start_center_calculation( n_rot_samples )
+        start_center_calculation( n_rot_samples )
         # end of IPP-requiring code
         return
 
@@ -362,7 +372,7 @@ cdef class RealtimeAnalyzer:
         # convert back to ROI-relative coordinates
         x0 = x0 - self._left
         y0 = y0 - self._bottom
-        c_fit_params.update_center_calculation( x0, y0, orientation )
+        update_center_calculation( x0, y0, orientation )
         arena_control.rotation_update()
         # end of IPP-requiring code
         return
@@ -371,7 +381,7 @@ cdef class RealtimeAnalyzer:
         # start of IPP-requiring code
         cdef double new_x_cent, new_y_cent
         
-        c_fit_params.end_center_calculation( &new_x_cent, &new_y_cent )
+        end_center_calculation( &new_x_cent, &new_y_cent )
         arena_control.rotation_calculation_finish( new_x_cent, new_y_cent )
         # end of IPP-requiring code
         return

@@ -236,23 +236,23 @@ class CoordReceiver(threading.Thread):
                             save_3d_data1[corrected_framenumber]=x,y,z,find3d_time,2
                             save_3d_data1_lock.release()
                         data_packet = struct.pack('<fff',x,y,z)
-                        try:
-                            projector_socket.sendto(data_packet,
-                                                    (projector_hostname,FASTEST_DATA_PORT))
-                        except x:
-                            print 'WARNING: could not send 3d point data to projector:'
-                            print x.__class__, x
-                            print
+##                        try:
+##                            projector_socket.sendto(data_packet,
+##                                                    (projector_hostname,FASTEST_DATA_PORT))
+##                        except x:
+##                            print 'WARNING: could not send 3d point data to projector:'
+##                            print x.__class__, x
+##                            print
                         fastest_realtime_data = X
                         if cams_in_count == self.main_brain.get_num_cams():
                             best_realtime_data = X
-                            try:
-                                projector_socket.sendto(data_packet,
-                                                        (projector_hostname,BEST_DATA_PORT))
-                            except x:
-                                print 'WARNING: could not send 3d point data to projector:'
-                                print x.__class__, x
-                                print
+##                            try:
+##                                projector_socket.sendto(data_packet,
+##                                                        (projector_hostname,BEST_DATA_PORT))
+##                            except x:
+##                                print 'WARNING: could not send 3d point data to projector:'
+##                                print x.__class__, x
+##                                print
                             
                         if SAVE_3D_DATA:
                             save_3d_data2_lock.acquire()

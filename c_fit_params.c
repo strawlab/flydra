@@ -1,3 +1,4 @@
+/* $Id$ */
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,8 +9,6 @@
 
 #define CHK( a ) (a == ippStsNoErr? 1:0)
 #define MAX( a, b ) (a > b? a:b)
-
-IppiMomentState_64f *pState;
 
 double *x_pos_calc, *y_pos_calc;
 int curr_frame = -1;
@@ -56,35 +55,10 @@ void fill_time_string( char string[] )
 }
 
 /****************************************************************
-** init_moment_state ********************************************
-****************************************************************/
-int init_moment_state()
-{
-  if( !CHK( ippiMomentInitAlloc_64f( &pState, ippAlgHintFast ) ) )
-  {
-    printf( "failed allocating moment state\n" );
-    return 1;
-  }
-  return 0;
-}
-
-/****************************************************************
-** free_moment_state ********************************************
-****************************************************************/
-int free_moment_state()
-{
-  if( !CHK( ippiMomentFree_64f( pState ) ) )
-  {
-    printf( "failed freeing moment state\n" );
-    return 2;
-  }
-  return 0;
-}
-
-/****************************************************************
 ** fit_params ***************************************************
 ****************************************************************/
-int fit_params( double *x0, double *y0, double *orientation,
+int fit_params( IppiMomentState_64f *pState, double *x0, double *y0, 
+		double *orientation, double *orientation_goodness,
 		int width, int height, unsigned char *img, int img_step )
 {
   double Mu00, Mu10, Mu01;
