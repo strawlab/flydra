@@ -165,7 +165,7 @@ class GrabClass(object):
                 n_pts = len(points)
                 data = struct.pack('<dli',timestamp,framenumber,n_pts)
                 for i in range(n_pts):
-                    data = data + struct.pack('fff',*points[i])
+                    data = data + struct.pack('ffff',*points[i])
                 coord_socket.sendto(data,
                                     (main_brain_hostname,self.coord_port))
                 sleep(1e-6) # yield processor

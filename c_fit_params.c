@@ -58,11 +58,11 @@ void fill_time_string( char string[] )
 ** fit_params ***************************************************
 ****************************************************************/
 int fit_params( IppiMomentState_64f *pState, double *x0, double *y0, 
-		double *orientation, double *orientation_goodness,
+		double *Uu11, double *Uu20, double *Uu02,
 		int width, int height, unsigned char *img, int img_step )
 {
   double Mu00, Mu10, Mu01;
-  double Uu11, Uu20, Uu02;
+  //  double Uu11, Uu20, Uu02;
   IppiSize roi_size;
   IppiPoint roi_offset;
 
@@ -123,19 +123,18 @@ int fit_params( IppiMomentState_64f *pState, double *x0, double *y0,
 #endif
 
   /* calculate blob orientation from central moments */
-  if( !CHK( ippiGetCentralMoment_64f( pState, 1, 1, 0, (Ipp64f*)&Uu11 ) ) )
+  if( !CHK( ippiGetCentralMoment_64f( pState, 1, 1, 0, (Ipp64f*)Uu11 ) ) )
   {
     return 31;
   }
-  if( !CHK( ippiGetCentralMoment_64f( pState, 2, 0, 0, (Ipp64f*)&Uu20 ) ) )
+  if( !CHK( ippiGetCentralMoment_64f( pState, 2, 0, 0, (Ipp64f*)Uu20 ) ) )
   {
     return 32;
   }
-  if( !CHK( ippiGetCentralMoment_64f( pState, 0, 2, 0, (Ipp64f*)&Uu02 ) ) )
+  if( !CHK( ippiGetCentralMoment_64f( pState, 0, 2, 0, (Ipp64f*)Uu02 ) ) )
   {
     return 33;
   }
-  *orientation = 0.5 * atan2( 2*Uu11, Uu20 - Uu02 ); /* 90-degree ambiguity! */
 
   return 0;
 }

@@ -266,8 +266,9 @@ class DynamicImageCanvas(wxGLCanvas):
                         ox0 = pt[0]
                         oy0 = pt[1]
 
-                        angle_radians = math.pi/2 - pt[2]
-                        r = 20.0
+                        angle_radians = -math.atan(pt[2])
+
+                        r = pt[3]
                         odx = r*math.cos( angle_radians )
                         ody = r*math.sin( angle_radians )
 

@@ -145,7 +145,7 @@ class CoordReceiver(threading.Thread):
 
         header_fmt = '<dli'
         header_size = struct.calcsize(header_fmt)
-        pt_fmt = '<fff'
+        pt_fmt = '<ffff'
         pt_size = struct.calcsize(pt_fmt)
         while not self.quit_event.isSet():
             data, addr = self.recSocket.recvfrom(1024)
@@ -156,8 +156,8 @@ class CoordReceiver(threading.Thread):
             points = []
             for i in range(n_pts):
                 end=start+pt_size
-                x,y,slope = struct.unpack(pt_fmt,data[start:end])
-                points.append( (x,y,slope) )
+                x,y,slope,eccentricity = struct.unpack(pt_fmt,data[start:end])
+                points.append( (x,y,slope,eccentricity) )
                 start=end
 
             if 0:

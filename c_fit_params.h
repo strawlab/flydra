@@ -17,7 +17,7 @@
 * calling this function.
 **********************************************************/
 int fit_params( IppiMomentState_64f *pState, double *x0, double *y0,
-		double *orientation, double *orientation_goodness,
+		double *Uu11, double *Uu20, double *Uu02,
 		int width, int height, unsigned char *img, int img_step );
 
 /**********************************************************

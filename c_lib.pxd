@@ -13,3 +13,4 @@ cdef extern from "stdlib.h":
     void exit(int status)
     int printf(char *format)
     
+    double atan2( double y, double x)
