@@ -4,6 +4,11 @@ import socket
 import Pyro.core
 import os
 import copy
+import socket
+import struct
+from flydra.reconstruct import Reconstructor
+reconstructor=Reconstructor()
+
 Pyro.config.PYRO_MULTITHREADED = 0 # No multithreading!
 
 Pyro.config.PYRO_TRACELEVEL = 3
@@ -11,6 +16,116 @@ Pyro.config.PYRO_USER_TRACELEVEL = 3
 Pyro.config.PYRO_DETAILED_TRACEBACK = 1
 Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
 
+UDP_ports=[]
+recent_data={}
+recent_data_lock=threading.Lock()
+zz={}
+zz_lock=threading.Lock()
+data_ready_event=threading.Event()
+RESET_FRAMENUMBER_DURATION=1.0 # seconds
+
+try:
+    hostname = socket.gethostbyname('mainbrain')
+except:
+    hostname = socket.gethostbyname(socket.gethostname())
+
+class CoordReceiver(threading.Thread):
+    def __init__(self,new_data_event,cam_id,n_spaces):
+        self.new_data_event = new_data_event
+        self.cam_id = cam_id
+        self.n_spaces=n_spaces # XXX tmp
+        self.last_timestamp=0.0
+
+        # set up threading stuff
+        self.quit_event = threading.Event()
+        threading.Thread.__init__(self)
+
+        # find UDP port number
+        if len(UDP_ports)>0:
+            self.port = max(UDP_ports)+1
+        else:
+            self.port = 34813
+        UDP_ports.append( self.port )
+
+        # create and bind socket to listen to
+        self.recSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.recSocket.bind((hostname, self.port))
+
+    def get_port(self):
+        return self.port
+
+    def quit(self):
+        self.quit_event.set()
+        
+        # send packet to wake listener and allow thread to quit
+        tmp_socket=socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        tmp_socket.sendto(struct.pack('<dlii',0.0,-1,-1,-1),(hostname,self.port))
+    
+    def run(self):
+        global recent_data, recent_data_lock
+        
+        while not self.quit_event.isSet():
+            data, addr = self.recSocket.recvfrom(1024)
+            incoming_data = struct.unpack('<dlii',data)
+
+            timestamp, framenumber, index_x, index_y = incoming_data
+            if framenumber==-1:
+                continue # leftover in socket buffer from last run??
+            
+            if timestamp-self.last_timestamp > RESET_FRAMENUMBER_DURATION:
+                self.framenumber_offset = framenumber
+            self.last_timestamp=timestamp
+            corrected_framenumber = framenumber-self.framenumber_offset
+
+            recent_data_lock.acquire()
+            recent_data[self.cam_id]= timestamp, corrected_framenumber, index_x, index_y
+            recent_data_lock.release()
+
+            zz_lock.acquire()
+            # clean up old frame records to save RAM
+            k=zz.keys()
+            if len(k)>5:
+                k.sort()
+                for ki in k[:-3]:
+                    del zz[ki]
+                    
+            # save new frame record
+            cur_framenumber_dict=zz.setdefault(corrected_framenumber,{})
+            cur_framenumber_dict[self.cam_id]=index_x,index_y
+
+            # print results if 3D reconstruction possible
+            if len(cur_framenumber_dict)>=2:
+                data_dict = cur_framenumber_dict.copy()
+            else:
+                data_dict = None
+            zz_lock.release()
+
+            if data_dict is not None:
+                t1 = time.time()
+                print 'time.time() % 15d'%t1
+                print ' framenumber %d:'%corrected_framenumber,cur_framenumber_dict
+                cam_idx = []
+                points2d = []
+                k = data_dict.keys()
+                k.sort()
+                for cam_id in k:
+                    cam_idx.append( int( cam_id[3] )-1 )
+                    points2d.append( data_dict[cam_id] )
+                X = reconstructor.find3d(cam_idx,points2d)
+                t2 = time.time()
+                latency = (t2-t1)*1000.0
+                print ' 3d point:', X, '(3d calc duration % 4.1f msec)'%latency
+
+            self.new_data_event.set()
+
+##            timestamp, index_x, index_y = incoming_data
+##            print "%s % 15f % 15f"%(self.cam_id, time.time(), timestamp)
+            latency = (time.time()-timestamp)*1000.0
+            print "% 15f %s% 6.1f: % 5d (% 3d % 3d)"%(time.time(),
+                                               ' '*self.n_spaces,latency,corrected_framenumber,
+                                                      index_x,index_y)
+            #print 'RECV on port %d (from %s): %s'%(self.port,addr,repr(data))
+        UDP_ports.remove( self.port )
 
 class MainBrain:
     """Handle all camera network stuff and interact with application"""
@@ -65,7 +180,7 @@ class MainBrain:
 
         def register_new_camera(self,scalar_control_info):
             """register new camera, return cam_id (caller: remote camera)"""
-            
+
             caller= self.daemon.getLocalStorage().caller # XXX Pyro hack??
             caller_addr= caller.addr
             caller_ip, caller_port = caller_addr
@@ -73,6 +188,9 @@ class MainBrain:
         
             cam_id = '%s:%d'%(fqdn,caller_port)
 
+            cam_no = int(fqdn[3:])
+            coord_receiver = CoordReceiver(data_ready_event,cam_id,(cam_no-1)*23)
+            
             self.cam_info[cam_id] = {'commands':{}, # command queue for cam
                                      'lock':threading.Lock(), # prevent concurrent access
                                      'image':None,  # most recent image from cam
@@ -81,7 +199,10 @@ class MainBrain:
                                      'caller':caller,    # most recept fps from cam
                                      'scalar_control_info':scalar_control_info,
                                      'fqdn':fqdn,
+                                     'coord_receiver':coord_receiver,
                                      }
+            coord_receiver.start()
+            
             self.no_cams_connected.clear()
             
             self.changed_cam_lock.acquire()
@@ -115,8 +236,14 @@ class MainBrain:
             cam_lock.release()
             return cmds
 
+        def get_coord_port(self,cam_id):
+            """Send UDP port number to which camera should send realtime data"""
+            return self.cam_info[cam_id]['coord_receiver'].get_port()
+
         def close(self,cam_id):
             """gracefully say goodbye (caller: remote camera)"""
+            self.cam_info[cam_id]['coord_receiver'].quit()
+            del self.cam_info[cam_id]['coord_receiver']
             del self.cam_info[cam_id]
             if not len(self.cam_info):
                 self.no_cams_connected.set()
@@ -125,22 +252,15 @@ class MainBrain:
             self.old_cam_ids.append(cam_id)
             self.changed_cam_lock.release()
             
-            print 'bye to',cam_id
-
     def __init__(self):
         Pyro.core.initServer(banner=0)
-        try:
-            hostname = socket.gethostbyname('mainbrain')
-        except:
-            hostname = socket.gethostbyname(socket.gethostname())
-        fqdn = socket.getfqdn(hostname)
+
         port = 9833
 
         # start Pyro server
         daemon = Pyro.core.Daemon(host=hostname,port=port)
         remote_api = MainBrain.RemoteAPI(); remote_api.post_init()
         URI=daemon.connect(remote_api,'main_brain')
-        print 'serving',URI,'at',time.time(),'(main_brain)'
 
         # create (but don't start) listen thread
         self.listen_thread=threading.Thread(target=remote_api.listen,
@@ -157,7 +277,7 @@ class MainBrain:
         self.last_set_param_time = {}
         self.set_new_camera_callback(self.AddCameraServer)
         self.set_old_camera_callback(self.RemoveCameraServer)
-
+        
     def AddCameraServer(self, cam_id, scalar_control_info):
         time.sleep(0.1) # let camera server get started
         fqdn = self.remote_api.cam_info[cam_id]['fqdn'] # crosses thread boundary?
