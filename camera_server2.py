@@ -148,7 +148,7 @@ class GrabClass(object):
                 old_ts = timestamp
                 old_fn = framenumber
                 
-                points = self.realtime_analyzer.do_work( buf, timestamp, framenumber )
+                points, found_anything = self.realtime_analyzer.do_work( buf, timestamp, framenumber )
                 raw_image = buf.copy()
                 
                 # make appropriate references to our copy of the data
@@ -159,7 +159,7 @@ class GrabClass(object):
                     globals['most_recent_frame'] = raw_image
                     
                 globals['incoming_raw_frames'].put(
-                    (raw_image,timestamp,framenumber) ) # save it
+                    (raw_image,timestamp,framenumber,found_anything) ) # save it
 
                 if collecting_background_isSet():
                     if bg_frame_number % BG_FRAME_INTERVAL == 0:
@@ -490,8 +490,8 @@ class App:
                             if qsize > 30:
                                 print '%s: qsize is %d'%(cam_id,qsize)
                             while 1:
-                                frame,timestamp,framenumber = get_raw_frame_nowait() # this may raise Queue.Empty
-                                if raw_movie is not None:
+                                frame,timestamp,framenumber,found_anything = get_raw_frame_nowait() # this may raise Queue.Empty
+                                if found_anything and raw_movie is not None:
                                     raw_movie.add_frame(frame,timestamp)
                                 n_raw_frames[cam_no] += 1
                         except Queue.Empty:

@@ -325,7 +325,12 @@ cdef class RealtimeAnalyzer:
             p1,p2,p3,p4 = nan, nan, nan, nan
 
         # end of IPP-requiring code
-        return [ (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4) ]
+
+        if not c_lib.isnan(x0_abs):
+            found_anything = True
+        else:
+            found_anything = False
+        return [ (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4) ], found_anything
 
     def get_working_image(self):
         cdef c_numarray._numarray buf
