@@ -1,3 +1,4 @@
+
 from pylab import *
 from matplotlib.collections import LineCollection
 from matplotlib.patches import Rectangle
@@ -87,51 +88,9 @@ def sort_on_col0( a, b ):
     elif a0 > b0: return 1
     else: return 0
 
-def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9):
-    # get data from file
-    start_frame = 5784
-    stop_frame = 5947
-
-    if type(results) == tables.File:
-        data3d = results.root.data3d_best
-        fXl = [(row['frame'],
-                row['x'],row['y'],row['z'],
-                row['p0'],row['p1'],row['p2'],row['p3'],row['p4'],row['p5']) for row in
-               data3d if start_frame <= row['frame'] <= stop_frame ] # XXX
-##               data3d.where( start_frame <= data3d.cols.frame <= stop_frame )]
-        fXl.sort( sort_on_col0 )
-    else:
-        print 'assuming results are numeric'
-        fXl = results
-    fXl = nx.array(fXl)
-    frame = fXl[:,0].astype(nx.Int32)
-    P = fXl[:,1:4]
-    line3d = fXl[:,4:]
-
-    t_P = (frame-frame[0])*1e-2 # put in seconds
-    P = nx.array(P)*1e-2 # put in meters
-    print 'WARNING: assumed data in centimeters'
-    line3d = nx.array(line3d)
-
-    # check timestamps
-    delta_ts = t_P[1:]-t_P[:-1]
-    try:
-        assert abs(min(delta_ts)-max(delta_ts)) < 1e-15
-    except:
-        print delta_ts
-        raise
-    delta_t = delta_ts[0]
-
-    # get angular position phi
-    phi_with_nans = reconstruct.line_direction(line3d) # unit vector
-    #print 'phi_with_nans[10]',phi_with_nans[10]
-    bad_idxs = getnan(phi_with_nans[:,0])[0]
-    Q = QuatSeq([ orientation_to_quat(U) for U in phi_with_nans ])
-    #print 'Q[10]',Q[10]
-    #print 'quat_to_euler(Q[10])',quat_to_euler(Q[10])
-    #return
+def slerp_quats( Q, bad_idxs, allow_roll = True ):
+    """replace quats in sequence with interpolated version"""
     for cur_idx in bad_idxs:
-        print 'replacing missing quaternion using SLERP at time',cur_idx*1e-2
         
         pre_idx = cur_idx-1
         preQ = None
@@ -152,8 +111,79 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
                 post_idx += 1
 
         frac = float(cur_idx-pre_idx)/float(post_idx-pre_idx)
-        print '  ',frac, cur_idx, pre_idx, post_idx
-        Q[cur_idx] = cgtypes.slerp(frac, preQ, postQ)
+        #print '  ',frac, cur_idx, pre_idx, post_idx
+        new_quat = cgtypes.slerp(frac, preQ, postQ)
+        if allow_roll:
+            Q[cur_idx] = new_quat
+        else:
+            # convert back and forth from orientation to eliminate roll
+            ori = quat_to_orient(new_quat)
+            no_roll_quat = orientation_to_quat(ori)
+            Q[cur_idx] = no_roll_quat
+    
+def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9):
+    # get data from file
+#    start_frame = 48989 +400
+
+    start_frame = 49048
+    stop_frame = 49377
+    
+##    start_frame = 48989 +400
+##    stop_frame = start_frame + 500
+    
+    if type(results) == tables.File:
+        data3d = results.root.data3d_best
+        fXl = [(row['frame'],
+                row['x'],row['y'],row['z'],
+                row['p0'],row['p1'],row['p2'],row['p3'],row['p4'],row['p5']) for row in
+               data3d if start_frame <= row['frame'] <= stop_frame ] # XXX
+##               data3d.where( start_frame <= data3d.cols.frame <= stop_frame )]
+        fXl.sort( sort_on_col0 )
+    else:
+        print 'assuming results are numeric'
+        fXl = results
+    fXl = nx.array(fXl)
+    frame = fXl[:,0].astype(nx.Int32)
+    P = fXl[:,1:4]
+    line3d = fXl[:,4:]
+
+    t_P = (frame-frame[0])*1e-2 # put in seconds
+    to_meters = 1e-3 # put in meters (from mm)
+    P = nx.array(P)*to_meters 
+    if Psmooth is not None:
+        Psmooth = nx.array(Psmooth)*to_meters
+    line3d = nx.array(line3d)
+
+    # check timestamps
+    delta_ts = t_P[1:]-t_P[:-1]
+    frames_missing = False
+    for i,delta_t in enumerate(delta_ts):
+        if not (0.009 < delta_t < 0.011):
+            frames_missing = True
+            print 'are you missing frames between %d and %d?'%(frame[i], frame[i+1])
+    if frames_missing:
+        raise ValueError("results have missing frames")
+            
+##    try:
+##        assert abs(min(delta_ts)-max(delta_ts)) < 1e-15
+##    except:
+##        sort_idx = nx.argsort(delta_ts)
+##        print 'are you missing frames between %d and %d?'%(frame[sort_idx[-1]], frame[sort_idx[-1]+1])
+##        #print delta_ts
+##        raise
+    delta_t = delta_ts[0]
+
+    # get angular position phi
+    phi_with_nans = reconstruct.line_direction(line3d) # unit vector
+    trouble_idx = nx.where(frame==start_frame+16)[0][0]
+    print 'trouble ori',phi_with_nans[trouble_idx-3:trouble_idx+3]
+    bad_idxs = getnan(phi_with_nans[:,0])[0]
+    Q = QuatSeq([ orientation_to_quat(U) for U in phi_with_nans ])
+    slerp_quats( Q, bad_idxs, allow_roll=False )
+    for cur_idx in bad_idxs:
+        print 'SLERPed missing quat at time %.2f (frame %d)'%(cur_idx*1e-2, frame[cur_idx])
+    t_bad = t_P[bad_idxs]
+    frame_bad = frame[bad_idxs]
     
     # first position derivative (velocity)
     dPdt = (P[2:]-P[:-2]) / (2*delta_t)
@@ -174,11 +204,15 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
     
     do_smooth_position = True
     do_smooth_quats = True
+
+    xtitle = 'time'
+    xtitle = None
     
-    plot_pos_and_vel = True
+    plot_pos_and_vel = False
     plot_pos_err_histogram = False
     
-    plot_xy = False; plot_xy_Qsmooth = True; plot_xy_Qraw = True
+    plot_xy = True; plot_xy_Qsmooth = False; plot_xy_Qraw = True
+    plot_xz = True
     plot_xy_air = False
     
     plot_accel = False
@@ -187,8 +221,16 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
     plot_body_angular_vel = True
     plot_error_angles = False
     plot_body_ground_V = False
-    plot_body_air_V = False
+    plot_body_air_V = True
     plot_forces = True
+    
+    had_post = True
+    show_grid = False
+
+    if had_post:
+        post_top_center=array([ 181.88106377,  221.06126383,  168.28886479])
+        post_radius=5 # mm
+        post_height=120 # mm
 
     outputs = []
     if Psmooth is None and do_smooth_position:
@@ -215,7 +257,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
                     break
             last_err = err
             Psmooth = Psmooth - lambda1*del_F
-        outputs.append(Psmooth)
+        outputs.append(Psmooth/to_meters)
     if Psmooth is not None:
         dPdt_smooth = (Psmooth[2:]-Psmooth[:-2]) / (2*delta_t)
         d2Pdt2_smooth = (Psmooth[2:] - 2*Psmooth[1:-1] + Psmooth[:-2]) / (delta_t**2)
@@ -501,15 +543,27 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
 
     elif plot_xy:
         axes([.1,.1,.8,.8])
-        title('position (ground frame)')
-        plot(P[:,0]*1000,P[:,1]*1000,'ko',mfc=(1,1,1),markersize=4)
+        title('top view')
+
+        if had_post:
+            theta = linspace(0,2*math.pi,30)[:-1]
+            postxs = post_radius*nx.cos(theta) + post_top_center[0]
+            postys = post_radius*nx.sin(theta) + post_top_center[1]
+            fill( postxs, postys )
+        
+##        title('top view (ground frame)')
+        plot(P[:,0]*1000,P[:,1]*1000,'ko',mfc=(1,1,1),markersize=2)
+##        plot(P[:,0]*1000,P[:,1]*1000,'ko',mfc=(1,1,1),markersize=4)
         
         for idx in range(len(t_P)):
             if idx%10==0:
-                text(P[idx,0]*1000,P[idx,1]*1000, str(t_P[idx]) )
-            
-        if do_smooth_position: # smoothed
-            plot(Psmooth[:,0]*1000,Psmooth[:,1]*1000,'b-')
+                if xtitle == 'time':
+                    text(P[idx,0]*1000,P[idx,1]*1000, str(t_P[idx]) )
+                elif xtitle == 'frame':
+                    text(P[idx,0]*1000,P[idx,1]*1000, str(frame[idx]) )
+                
+        #if do_smooth_position: # smoothed
+        #    plot(Psmooth[:,0]*1000,Psmooth[:,1]*1000,'b-')
 
         for use_it, data, color in [[plot_xy_Qsmooth,Qsmooth,  (0,0,1,1)],
                                     [plot_xy_Qraw,   Q, (0,0,0,1)]]:
@@ -530,13 +584,69 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
                 gca().add_collection(collection)
         xlabel('x (mm)')
         ylabel('y (mm)')
-        t=text( 0.6, .2, '<- wind (0.4 m/sec)', transform = gca().transAxes)
-        
-        grid()
+        #t=text( 0.6, .2, '<- wind (0.4 m/sec)', transform = gca().transAxes)
 
-        if start_frame == 176000 and stop_frame == 176120:
-            set(gca(),'xlim',(175.37396288503308, 215.78732628185975))
-            set(gca(),'ylim',(221.92475177602776, 256.81651468099369))
+        if show_grid:
+            grid()
+
+    elif plot_xz:
+        axes([.1,.1,.8,.8])
+        title('side view')
+        #title('side view (ground frame)')
+
+        if had_post:
+            postxs = [post_top_center[0] + post_radius,
+                      post_top_center[0] + post_radius,
+                      post_top_center[0] - post_radius,
+                      post_top_center[0] - post_radius]
+            postzs = [post_top_center[2],
+                      post_top_center[2] - post_height,
+                      post_top_center[2] - post_height,
+                      post_top_center[2]]
+            fill( postxs, postzs )
+        
+        #plot(P[:,0]*1000,P[:,2]*1000,'ko',mfc=(1,1,1),markersize=4)
+        plot(P[:,0]*1000,P[:,2]*1000,'ko',mfc=(1,1,1),markersize=2)
+        
+        for idx in range(len(t_P)):
+            if idx%10==0:
+                if xtitle == 'time':
+                    text(P[idx,0]*1000,P[idx,2]*1000, str(t_P[idx]) )
+                elif xtitle == 'frame':
+                    text(P[idx,0]*1000,P[idx,2]*1000, str(frame[idx]) )
+                
+        if 0:
+        #if do_smooth_position: # smoothed
+            plot(Psmooth[:,0]*1000,Psmooth[:,2]*1000,'b-')
+
+        for use_it, data, color in [[plot_xy_Qsmooth,Qsmooth,  (0,0,1,1)],
+                                    [plot_xy_Qraw,   Q, (0,0,0,1)]]:
+            if use_it:
+                segments = []
+                for i in range(len(P)):
+                    pi = P[i]
+                    qi = data[i]
+                    Pqi = quat_to_orient(qi)
+                    segment = ( (pi[0]*1000,  # x1
+                                 pi[2]*1000), # y1
+                                (pi[0]*1000-Pqi[0]*2,   # x2
+                                 pi[2]*1000-Pqi[2]*2) ) # y2
+                    segments.append( segment )
+
+                collection = LineCollection(segments,
+                                            colors=[color]*len(segments))
+                gca().add_collection(collection)
+        xlabel('x (mm)')
+        ylabel('z (mm)')
+##        t=text( 0, 1.0, '<- wind (0.4 m/sec)',
+###        t=text( 0.6, .2, '<- wind (0.4 m/sec)',
+##                transform = gca().transAxes,
+##                horizontalalignment = 'left',
+##                verticalalignment = 'top',
+##                )
+
+        if show_grid:
+            grid()
 
     elif plot_xy_air:
         axes([.1,.1,.8,.8])
@@ -556,7 +666,10 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
         
         for idx in range(len(t_P)):
             if idx%10==0:
-                text(Pair[idx,0]*1000,Pair[idx,1]*1000, str(t_P[idx]) )
+                if xtitle == 'time':
+                    text(P[idx,0]*1000,P[idx,1]*1000, str(t_P[idx]) )
+                elif xtitle == 'frame':
+                    text(P[idx,0]*1000,P[idx,1]*1000, str(frame[idx]) )
             
 ##        if do_smooth_position: # smoothed
 ##            plot(Psmooth_air[:,0]*1000,Psmooth_air[:,1]*1000,'b-')
@@ -581,10 +694,6 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
         xlabel('x (mm)')
         ylabel('y (mm)')
         grid()
-
-        if start_frame == 176000 and stop_frame == 176120:
-            set(gca(),'xlim',(287.81839554893872, 463.22969806629266))
-            set(gca(),'ylim',(166.91290840503387, 307.90142365077338))
 
     elif plot_accel:
         subplot(3,1,1)
@@ -684,14 +793,22 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
         rad2deg = 180/math.pi
         fontsize = 10
 
-        subplot(3,1,1)
+        ax1 = subplot(3,1,1)
         title('angles and angular velocities')
         euler_smooth = nx.array([quat_to_euler(q) for q in Qsmooth])*rad2deg
         euler = nx.array([quat_to_euler(q) for q in Q])*rad2deg
         yaw = euler[:,0]; pitch = euler[:,1]; roll = euler[:,2]
         yaw_smooth = euler_smooth[:,0]; pitch_smooth = euler_smooth[:,1]; roll_smooth = euler_smooth[:,2]
-        lines = plot(t_P, yaw, 'r-', t_P, pitch, 'g-', t_P, roll, 'b-')
-        lines_smooth = plot(t_P, yaw_smooth, 'r-', t_P, pitch_smooth, 'g-', t_P, roll_smooth, 'b-')
+        if xtitle == 'time':
+            xdata = t_P
+        elif xtitle == 'frame':
+            xdata = t_P*100 + start_frame
+        lines = plot(xdata, yaw, 'r-', xdata, pitch, 'g-', xdata, roll, 'b-')
+        lines_smooth = plot(xdata, yaw_smooth, 'r-', xdata, pitch_smooth, 'g-', xdata, roll_smooth, 'b-')
+        if xtitle == 'time':
+            plot(t_bad,[0.0]*len(t_bad),'ko')
+        elif xtitle == 'frame':
+            plot(frame_bad,[0.0]*len(frame_bad),'ko')
         set(lines_smooth,'lw',linewidth)
         legend(lines,['heading','pitch (body)','roll'])
         ylabel('angular position (global)\n(deg)')
@@ -701,28 +818,32 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
 
         plot_mag = False
         plot_roll = False
-        subplot(3,1,2)
+        subplot(3,1,2, sharex=ax1)
+        if xtitle == 'time':
+            xdata = t_omega
+        elif xtitle == 'frame':
+            xdata = t_omega*100 + start_frame
         if plot_mag:
             mag_omega = nx.array([ abs(q) for q in omega ])*rad2deg
-            args = [ t_omega, mag_omega, 'k-']
+            args = [ xdata, mag_omega, 'k-']
             line_titles = ['mag']
         else:
             args = []
             line_titles = []
-        args.extend( [t_omega, omega.z*rad2deg, 'r-', t_omega, omega.y*rad2deg, 'g-'] )
+        args.extend( [xdata, omega.z*rad2deg, 'r-', xdata, omega.y*rad2deg, 'g-'] )
         line_titles.extend( ['heading','pitch (body)'] )
         if plot_roll:
-            args.extend( [ t_omega, omega.x*rad2deg, 'b-'] )
+            args.extend( [ xdata, omega.x*rad2deg, 'b-'] )
             line_titles.extend( ['roll'] )
         lines=plot( *args )
         if plot_mag:
             mag_omega = nx.array([ abs(q) for q in omega_smooth ])*rad2deg
-            args = [t_omega, mag_omega, 'k-' ]
+            args = [xdata, mag_omega, 'k-' ]
         else:
             args = []
-        args.extend( [t_omega, omega_smooth.z*rad2deg, 'r-', t_omega, omega_smooth.y*rad2deg, 'g-'] )
+        args.extend( [xdata, omega_smooth.z*rad2deg, 'r-', xdata, omega_smooth.y*rad2deg, 'g-'] )
         if plot_roll:
-            args.extend( [t_omega, omega_smooth.x*rad2deg, 'b-'] )
+            args.extend( [xdata, omega_smooth.x*rad2deg, 'b-'] )
         lines_smooth=plot( *args )
         set(lines_smooth,'lw',linewidth)
         legend(lines,line_titles)
@@ -731,36 +852,39 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
         set(gca(),'ylim',[-750,600])
         grid()
 
-        subplot(3,1,3)
+        subplot(3,1,3, sharex=ax1)
         if plot_mag:
             mag_omega_body = nx.array([ abs(q) for q in omega_body ])*rad2deg
-            args = [ t_omega, mag_omega_body, 'k-' ]
+            args = [ xdata, mag_omega_body, 'k-' ]
             line_titles = ['mag']
         else:
             args = []
             line_titles = []
-        args.extend([t_omega, omega_body.z*rad2deg, 'r-', t_omega, omega_body.y*rad2deg, 'g-'])
+        args.extend([xdata, omega_body.z*rad2deg, 'r-', xdata, omega_body.y*rad2deg, 'g-'])
         line_titles.extend( ['yaw','pitch'])
         if plot_roll:
-            args.extend([t_omega, omega_body.x*rad2deg, 'b-'])
+            args.extend([xdata, omega_body.x*rad2deg, 'b-'])
             line_titles.extend( ['roll'])
         lines = plot(*args)
         legend(lines,line_titles)
 
         if plot_mag:
             mag_omega_body = nx.array([ abs(q) for q in omega_smooth_body ])*rad2deg
-            args = [ t_omega, mag_omega_body, 'k-' ]
+            args = [ xdata, mag_omega_body, 'k-' ]
         else:
             args = []
-        args.extend( [ t_omega, omega_smooth_body.z*rad2deg, 'r-', t_omega, omega_smooth_body.y*rad2deg, 'g-'] )
+        args.extend( [ xdata, omega_smooth_body.z*rad2deg, 'r-', xdata, omega_smooth_body.y*rad2deg, 'g-'] )
         if plot_roll:
-            args.extend( [ t_omega, omega_smooth_body.x*rad2deg, 'b-' ])
+            args.extend( [ xdata, omega_smooth_body.x*rad2deg, 'b-' ])
         lines_smooth=plot( *args)
         set(lines_smooth,'lw',linewidth)
         ylabel('angular velocity\nbody frame (deg/sec)')
         set(gca().yaxis.label,'size',fontsize)
         set(gca(),'ylim',[-500,500])
-        xlabel('time (sec)')
+        if xtitle == 'time':
+            xlabel('time (sec)')
+        elif xtitle == 'frame':
+            xlabel('frame')
         grid()
 
     elif plot_error_angles:

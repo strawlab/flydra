@@ -4,7 +4,7 @@ import os
 os.environ['__GL_FSAA_MODE']='5' # 4x gaussian multisampling on geForce3 linux
 opj=os.path.join
 from vtkpython import *
-from vtk.util.colors import tomato, banana, azure
+from vtk.util.colors import tomato, banana, azure, blue, black
 import math
 
 import flydra.reconstruct as reconstruct
@@ -18,31 +18,25 @@ def init_vtk():
     renWin = vtkRenderWindow()
 
     renderers = []
-    for side_view in True,False:
+    for side_view in [True]:
         camera = vtkCamera()
         camera.SetParallelProjection(1)
         if side_view:
 
-            camera.SetFocalPoint (-1.9782873690128326, 196.56941223144531, 238.97973775863647)
-            camera.SetPosition (-8.485836842682339, 494.11141210245398, 506.23693618849427)
+            camera.SetParallelProjection(1)
+            camera.SetFocalPoint (180.46645292639732, 224.52830505371094, 176.89396047592163)
+            camera.SetPosition (44.00298175247319, 530.72541129307763, 395.11644594845245)
             camera.SetViewAngle(30.0)
-            camera.SetViewUp (0,0,1)#0.012360012587596501, -0.66803075957540525, 0.74403100362144969)
-            camera.SetClippingRange (344.08248470401315, 472.73133517177911)
-            camera.SetParallelScale(46.8500834541)
+            camera.SetClippingRange (18.925321490682652, 913.86296121238297)
+            camera.SetParallelScale(24.3987052689)
 
-##            camera.SetFocalPoint (47.39898619055748, 124.75350952148438, 408.3019118309021)
-##            camera.SetPosition (-95.853041149440017, 120.60803983968323, 781.74758625236768)
-##            camera.SetViewUp (0.93183956385213751, -0.066579406489786164, 0.35671026039536052)
-##            camera.SetClippingRange (0.1, 2950.8839479104745)
-##            camera.SetParallelScale(836.89906263)
-
-            camera.SetFocalPoint (221.15751585364342, 198.91822814941406, 191.19458150863647)
-            camera.SetPosition (211.89068356556754, -187.83602145978676, 292.85714211251099)
-            camera.SetViewAngle(30.0)
+##            camera.SetFocalPoint (148.8128350675106, 243.92594909667969, 173.37159872055054)
+##            camera.SetPosition (-196.05324871445703, 54.975538082313001, 246.618622102937)
+##            camera.SetViewAngle(30.0)
+##            camera.SetClippingRange (9.3450693570905621, 934.50693570905617)
+##            camera.SetParallelScale(15.9151865864)
             camera.SetViewUp (0,0,1)
-            #camera.SetViewUp (-0.028122233503963957, 0.25475430562251483, 0.96659680516207946)
-            camera.SetClippingRange (340.45412724721058, 528.94699523652093)
-            camera.SetParallelScale(106.633271058)
+
 
         else:
             camera.SetFocalPoint (52.963163375854492, 117.89408111572266, 37.192019939422607)
@@ -55,7 +49,7 @@ def init_vtk():
         ren1 = vtkRenderer()
         lk = vtkLightKit()
         if side_view:
-            ren1.SetViewport(0.0,0,0.9,1.0)
+            ren1.SetViewport(0.0,0,1.0,1.0)
         else:
             ren1.SetViewport(0.9,0.0,1.0,1)
         ren1.SetBackground( 1,1,1)
@@ -99,7 +93,7 @@ def show_cameras(results,renderers,frustums=True,labels=True,centers=True):
         mapBalls = vtkPolyDataMapper()
         mapBalls.SetInput( balls.GetOutput())
         ballActor = vtk.vtkActor()
-        ballActor.GetProperty().SetDiffuseColor(tomato)
+        ballActor.GetProperty().SetDiffuseColor(azure)
         ballActor.GetProperty().SetSpecular(.3)
         ballActor.GetProperty().SetSpecularPower(30)
         ballActor.SetMapper(mapBalls)
@@ -167,8 +161,11 @@ def show_cameras(results,renderers,frustums=True,labels=True,centers=True):
 
         profile = vtk.vtkActor()
         profile.SetMapper(profileMapper)
-        profile.GetProperty().SetColor(azure)
+#        profile.GetProperty().SetColor(azure)
         profile.GetProperty().SetOpacity(0.1)
+        profile.GetProperty().SetDiffuseColor(tomato)
+        profile.GetProperty().SetSpecular(.3)
+        profile.GetProperty().SetSpecularPower(30)
 
         for renderer in renderers:
             renderer.AddActor( profile )
@@ -195,11 +192,53 @@ def show_cameras(results,renderers,frustums=True,labels=True,centers=True):
             actors.append( textlabel )
     return actors
 
+def show_line(renderers,v1,v2,color,radius,nsides=20):
+    actors = []
+    
+##    top3 = [ 139.36847345,  238.72722076,  251.94798316]
+##    bottom3 = [ 121.02785563,  237.63751778,  302.77628737]
+    
+    line_points = vtk.vtkPoints()
+    lines = vtk.vtkCellArray()
+    line_points.InsertNextPoint(*v1)
+    line_points.InsertNextPoint(*v2)
+    lines.InsertNextCell(2)
+    lines.InsertCellPoint(0)
+    lines.InsertCellPoint(1)
+
+
+    profileData = vtk.vtkPolyData()
+    
+    profileData.SetPoints(line_points)
+    profileData.SetLines(lines)
+    
+    # Add thickness to the resulting line.
+    profileTubes = vtk.vtkTubeFilter()
+    profileTubes.SetNumberOfSides(nsides)
+    profileTubes.SetInput(profileData)
+    profileTubes.SetRadius(radius)
+
+    profileMapper = vtk.vtkPolyDataMapper()
+    profileMapper.SetInput(profileTubes.GetOutput())
+    
+    profile = vtk.vtkActor()
+    profile.SetMapper(profileMapper)
+    profile.GetProperty().SetDiffuseColor(color)
+    profile.GetProperty().SetSpecular(.3)
+    profile.GetProperty().SetSpecularPower(30)
+    
+    for renderer in renderers:
+        renderer.AddActor( profile )
+    actors.append( profile )
+    return actors
+
 def show_frames_vtk(results,renderers,
                     f1,f2=None,fstep=None,
                     typ=None,labels=True,
                     show_bounds=False,
-                    use_timestamps=False):
+                    use_timestamps=False,
+                    orientation_corrected=True,
+                    max_err=None):
     if typ is None:
         typ = 'best'
         
@@ -214,6 +253,7 @@ def show_frames_vtk(results,renderers,
     
     cog_points = vtk.vtkPoints() # 'center of gravity'
     line_points = vtk.vtkPoints()
+    
     lines = vtk.vtkCellArray()
 
     # Get data from results
@@ -240,9 +280,16 @@ def show_frames_vtk(results,renderers,
                 line3d = None
             else:
                 line3d = row['p0'],row['p1'],row['p2'],row['p3'],row['p4'],row['p5']
+            err = row['mean_dist']
             break
         if X is None:
             print 'WARNING: frame %d not found'%frame_no
+        else:
+            if max_err is not None:
+                if err > max_err:
+                    print 'WARNING: frame %d err too large'%frame_no
+                    X = None
+                    line3d = None
         Xs.append(X)
         line3ds.append(line3d)
 
@@ -273,10 +320,16 @@ def show_frames_vtk(results,renderers,
             L = line3d # Plucker coordinates
             U = reconstruct.line_direction(line3d)
             tube_length = 4
-            line_points.InsertNextPoint(*(X-tube_length*U))
+            if orientation_corrected:
+                line_points.InsertNextPoint(*(X-tube_length*U))
+            else:
+                line_points.InsertNextPoint(*(X-tube_length*.5*U))
             point_num += 1
             
-            line_points.InsertNextPoint(*X)
+            if orientation_corrected:
+                line_points.InsertNextPoint(*X)
+            else:
+                line_points.InsertNextPoint(*(X+tube_length*.5*U))
             #line_points.InsertNextPoint(*(X-tube_length*U))
             point_num += 1
 
@@ -433,14 +486,27 @@ if __name__=='__main__':
 ##    except NameError:
 ##        results = result_browser.Results()
     if 1:
-        
-        start_frame = 5788
-        stop_frame = 5945
+        start_frame = 49048
+        stop_frame = 49378
+##        start_frame = 48989 +400
+##        stop_frame = start_frame + 500
         
         renWin, renderers = init_vtk()
         #show_cameras(results,renderers)
+
+        if 1:
+            CT=array([ 181.88106377,  221.06126383,  168.28886479])
+            CB=array([ 188.25655514,  218.76102605,   30.89531996])
+            show_line(renderers,CT,CB,black,4)
+        if 0:
+            NZ = array([   9.11331261,  117.08933803,   53.84209957])
+            NY = array([  10.98416978,  392.19324712,   70.9049832 ])
+            show_line(renderers,NZ,NY,blue,1)
+            
         show_frames_vtk(results,renderers,start_frame,stop_frame,1,
-                        show_bounds=False,use_timestamps=True)
+                        orientation_corrected=True,
+                        show_bounds=False,
+                        use_timestamps=True,max_err=10)
         for renderer in renderers:
             renderer.ResetCameraClippingRange()
         interact_with_renWin(renWin,renderers)
@@ -452,7 +518,7 @@ if __name__=='__main__':
         imf.SetInput(renWin)
         imf.Update()
         
-        for i in range(5788,5945,1):
+        for i in range(6711,6930,1):
             actors = show_frames_vtk(results,renderers,11938,i,1)
             renWin.Render()
             
