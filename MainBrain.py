@@ -1131,12 +1131,14 @@ class MainBrain(object):
                                         self.reconstructor.get_pmat(cam_id))
             res_group = self.h5file.createGroup(cal_group,'resolution')
             for cam_id in self.remote_api.external_get_cam_ids():
-                self.h5file.createArray(res_group, cam_id,
-                                        self.reconstructor.get_resolution(cam_id))
+                res = self.reconstructor.get_resolution(cam_id)
+                self.h5file.createArray(res_group, cam_id, res)
+                                        
             intlin_group = self.h5file.createGroup(cal_group,'intrinsic_linear')
             for cam_id in self.remote_api.external_get_cam_ids():
-                self.h5file.createArray(intlin_group, cam_id,
-                                        self.reconstructor.get_intrinsic_linear(cam_id))
+                intlin = self.reconstructor.get_intrinsic_linear(cam_id)
+                self.h5file.createArray(intlin_group, cam_id, intlin)
+                                        
             intnonlin_group = self.h5file.createGroup(cal_group,'intrinsic_nonlinear')
             for cam_id in self.remote_api.external_get_cam_ids():
                 self.h5file.createArray(intnonlin_group, cam_id,

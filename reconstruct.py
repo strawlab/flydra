@@ -187,10 +187,10 @@ class Reconstructor:
         return self.Pmat[cam_id]
 
     def get_intrinsic_linear(self, cam_id):
-        self._helper[cam_id].get_K()
+        return self._helper[cam_id].get_K()
         
     def get_intrinsic_nonlinear(self, cam_id):
-        self._helper[cam_id].get_nlparams()
+        return self._helper[cam_id].get_nlparams()
 
     def undistort(self, cam_id, x_kk):
         return self._helper[cam_id].undistort(x_kk[0],x_kk[1])
