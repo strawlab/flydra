@@ -1,52 +1,5 @@
 <?xml version="1.0" ?>
 <resource>
-  <object class="wxPanel" name="calib_intrinsic_per_cam_panel">
-    <object class="wxStaticBoxSizer">
-      <label>cam</label>
-      <orient>wxVERTICAL</orient>
-      <object class="sizeritem">
-        <object class="wxStaticText">
-          <label>Points saved</label>
-          <style>wxALIGN_CENTRE</style>
-        </object>
-        <option>0</option>
-        <flag>wxALL|wxEXPAND</flag>
-        <border>3</border>
-      </object>
-      <object class="sizeritem">
-        <object class="wxListBox" name="calib_intrinsic_listbox">
-          <content/>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-        <minsize>80,150</minsize>
-      </object>
-      <object class="sizeritem">
-        <object class="wxBoxSizer">
-          <orient>wxHORIZONTAL</orient>
-          <object class="sizeritem">
-            <object class="wxButton" name="per_cam_intrinsic_view">
-              <label>view</label>
-            </object>
-            <option>1</option>
-          </object>
-          <object class="sizeritem">
-            <object class="wxButton" name="per_cam_intrinsic_delete">
-              <label>delete</label>
-            </object>
-            <option>1</option>
-          </object>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxButton" name="per_cam_intrinsic_calc">
-          <label>calculate intrinsic params</label>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-    </object>
-  </object>
   <object class="wxPanel" name="preview_per_cam_panel">
     <object class="wxStaticBoxSizer">
       <label>Camera</label>
@@ -55,17 +8,19 @@
         <object class="wxBoxSizer">
           <orient>wxHORIZONTAL</orient>
           <object class="sizeritem">
+            <object class="wxButton" name="collect_background">
+              <label>collect bg</label>
+            </object>
+          </object>
+          <object class="sizeritem">
             <object class="wxPanel"/>
             <option>1</option>
-            <flag>wxEXPAND</flag>
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="quit_camera">
               <label>quit camera</label>
               <tooltip>quit this camera</tooltip>
             </object>
-            <option>0</option>
-            <flag>wxALIGN_RIGHT</flag>
           </object>
         </object>
         <option>0</option>
@@ -89,12 +44,9 @@
         <flag>wxALIGN_CENTRE</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="PerCameraControlsContainer">
-          <size>100,100</size>
-        </object>
+        <object class="wxPanel" name="PerCameraControlsContainer"/>
         <option>1</option>
         <flag>wxEXPAND</flag>
-        <minsize>400,100</minsize>
       </object>
     </object>
   </object>
@@ -103,16 +55,14 @@
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
         <object class="wxPanel" name="PreviewDynamicImagePanel"/>
-        <option>2</option>
+        <option>5</option>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="PreviewPerCamPanel">
-          <object class="wxBoxSizer">
-            <orient>wxHORIZONTAL</orient>
-          </object>
+          <bg>#00FF00</bg>
         </object>
-        <option>1</option>
+        <option>2</option>
         <flag>wxEXPAND</flag>
       </object>
     </object>
@@ -137,30 +87,6 @@
       </object>
     </object>
   </object>
-  <object class="wxPanel" name="ScalarControlPanel">
-    <object class="wxBoxSizer">
-      <orient>wxHORIZONTAL</orient>
-      <object class="sizeritem">
-        <object class="wxStaticText" name="scalar_control_label">
-          <label>param1</label>
-        </object>
-        <option>0</option>
-        <flag>wxALL|wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
-        <border>3</border>
-      </object>
-      <object class="sizeritem">
-        <object class="wxSlider" name="scalar_control_slider">
-          <value></value>
-          <min></min>
-          <max>98</max>
-          <style>wxSL_HORIZONTAL|wxSL_LABELS</style>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-        <minsize>40,15</minsize>
-      </object>
-    </object>
-  </object>
   <object class="wxPanel" name="UNDER_CONSTRUCTION_PANEL">
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
@@ -174,80 +100,25 @@
       </object>
     </object>
   </object>
-  <object class="wxPanel" name="CALIBRATION_PANEL">
+  <object class="wxPanel" name="SNAPSHOT_PANEL">
     <object class="wxBoxSizer">
       <orient>wxHORIZONTAL</orient>
       <object class="sizeritem">
         <object class="wxBoxSizer">
           <orient>wxVERTICAL</orient>
           <object class="sizeritem">
-            <object class="wxListBox" name="calibration_cam_choice">
-              <content/>
-            </object>
-            <option>0</option>
-            <flag>wxEXPAND</flag>
-          </object>
-          <object class="sizeritem">
-            <object class="wxButton" name="find_chessboard_button">
-              <label>find chessboard</label>
-            </object>
-            <option>0</option>
-            <flag>wxEXPAND</flag>
-          </object>
-          <object class="sizeritem">
-            <object class="wxButton" name="find_and_save_chessboard_button">
-              <label>find and save chessboard</label>
-            </object>
-            <option>0</option>
-            <flag>wxEXPAND</flag>
-          </object>
-          <object class="sizeritem">
-            <object class="wxStaticBoxSizer">
-              <label>Etalon parameters</label>
-              <orient>wxVERTICAL</orient>
-              <object class="sizeritem">
-                <object class="wxFlexGridSizer">
-                  <cols>2</cols>
-                  <rows>2</rows>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>width</label>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxTextCtrl" name="etalon_width">
-                      <value>11</value>
-                    </object>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>height</label>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxTextCtrl" name="etalon_height">
-                      <value>7</value>
-                    </object>
-                  </object>
-                </object>
-              </object>
-            </object>
-            <option>0</option>
-            <flag>wxBOTTOM|wxEXPAND</flag>
-            <border>30</border>
-          </object>
-          <object class="sizeritem">
-            <object class="wxPanel" name="calib_intrinsic_per_cam_container">
-              <object class="wxBoxSizer">
-                <orient>wxVERTICAL</orient>
-              </object>
-              <bg>#FF00FF</bg>
+            <object class="wxListBox" name="snapshot_cam_choice">
+              <content>
+                <item/></content>
             </object>
             <option>1</option>
+            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="snapshot_button">
+              <label>refresh view</label>
+            </object>
+            <option>0</option>
             <flag>wxEXPAND</flag>
           </object>
         </object>
@@ -256,9 +127,7 @@
         <border>4</border>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="calibration_plot">
-          <bg>#00FF00</bg>
-        </object>
+        <object class="wxPanel" name="snapshot_plot"/>
         <option>1</option>
         <flag>wxEXPAND</flag>
       </object>
@@ -290,18 +159,11 @@
                 <object class="wxBoxSizer">
                   <orient>wxHORIZONTAL</orient>
                   <object class="sizeritem">
-                    <object class="wxButton" name="record_raw_record">
-                      <label>record</label>
+                    <object class="wxCheckBox" name="record_raw">
+                      <label>Record</label>
+                      <checked>0</checked>
                     </object>
                     <option>1</option>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxButton" name="record_raw_stop">
-                      <label>stop</label>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
                   </object>
                 </object>
                 <option>0</option>
@@ -346,7 +208,8 @@
               </object>
               <object class="sizeritem">
                 <object class="wxCheckListBox" name="record_raw_cam_select_checklist">
-                  <content/>
+                  <content>
+                    <item/></content>
                 </object>
                 <option>1</option>
                 <flag>wxEXPAND</flag>

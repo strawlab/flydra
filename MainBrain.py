@@ -226,6 +226,9 @@ class MainBrain:
     def close_camera(self,cam_id):
         self.camera_server[cam_id].quit()
 
+    def collect_background(self,cam_id):
+        self.camera_server[cam_id].collect_background()
+
     def send_set_camera_property(self, cam_id, property_name, value):
         cam = self.remote_api.cam_info[cam_id]
         cam_lock = cam['lock']
