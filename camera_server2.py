@@ -35,6 +35,9 @@ CAM_CONTROLS = {'shutter':cam_iface.SHUTTER,
                 'gain':cam_iface.GAIN,
                 'brightness':cam_iface.BRIGHTNESS}
 
+NUM_BG_IMAGES = 100 # the accumulator holds this many images
+BG_FRAME_INTERVAL = 25 # every N frames, add a new BG image to the accumulator
+
 # where is the "main brain" server?
 try:
     main_brain_hostname = socket.gethostbyname('mainbrain')
@@ -50,7 +53,9 @@ class GrabClass(object):
         # get coordinates for region of interest
         height = self.cam.get_max_height()
         width = self.cam.get_max_width()
-        self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(width, height)
+        self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(width,
+                                                                          height,
+                                                                          NUM_BG_IMAGES)
 
     def get_clear_threshold(self):
         return self.realtime_analyzer.clear_threshold
@@ -90,12 +95,12 @@ class GrabClass(object):
         acquire_lock = globals['incoming_frames_lock'].acquire
         release_lock = globals['incoming_frames_lock'].release
         sleep = time.sleep
-        bg_frame_number = -1
+        bg_frame_number = 0
         rot_frame_number = -1
-        collect_background_start_isSet = globals['collect_background_start'].isSet
-        collect_background_start_clear = globals['collect_background_start'].clear
         clear_background_start_isSet = globals['clear_background_start'].isSet
         clear_background_start_clear = globals['clear_background_start'].clear
+        collecting_background_isSet = globals['collecting_background'].isSet
+##        using_background_subtraction_isSet = globals['using_background_subtraction'].isSet
         find_rotation_center_start_isSet = globals['find_rotation_center_start'].isSet
         find_rotation_center_start_clear = globals['find_rotation_center_start'].clear
         debug_isSet = globals['debug'].isSet
@@ -141,22 +146,16 @@ class GrabClass(object):
                     (show_image,timestamp,framenumber) ) # save it
                 release_lock()
 
-                if clear_background_start_isSet():
-                    clear_background_start_clear()
-                    self.realtime_analyzer.clear_background_image()
-                    
-                if collect_background_start_isSet():
-                    bg_frame_number=0
-                    collect_background_start_clear()
-                    self.realtime_analyzer.clear_accumulator_image()
-                    
-                if bg_frame_number>=0:
-                    self.realtime_analyzer.accumulate_last_image()
+                if collecting_background_isSet():
+                    if bg_frame_number % BG_FRAME_INTERVAL == 0:
+                        self.realtime_analyzer.accumulate_last_image()
+                        bg_frame_number = 0
                     bg_frame_number += 1
-                    if bg_frame_number>=n_bg_samples:
-                        bg_frame_number=-1 # stop averaging frames
-                        self.realtime_analyzer.convert_accumulator_to_bg_image(n_bg_samples)
-                                
+                
+                if clear_background_start_isSet():
+                    self.realtime_analyzer.clear_background_image()
+                    clear_background_start_clear()
+                    
                 if find_rotation_center_start_isSet():
                     find_rotation_center_start_clear()
                     rot_frame_number=0
@@ -252,8 +251,9 @@ class App:
             globals['listen_thread_done'] = threading.Event()
             globals['grab_thread_done'] = threading.Event()
             globals['incoming_frames_lock'] = threading.Lock()
-            globals['collect_background_start'] = threading.Event()
             globals['clear_background_start'] = threading.Event()
+            globals['collecting_background'] = threading.Event()
+            globals['collecting_background'].set()
             globals['find_rotation_center_start'] = threading.Event()
             globals['debug'] = threading.Event()
 
@@ -358,10 +358,13 @@ class App:
                 globals['use_arena'] = grabber.use_arena
             elif key == 'quit':
                 globals['cam_quit_event'].set()
-            elif key == 'collect_bg':
-                globals['collect_background_start'].set()
             elif key == 'clear_bg':
                 globals['clear_background_start'].set()
+            elif key == 'collecting_bg':
+                if cmds[key]:
+                    globals['collecting_background'].set()
+                else:
+                    globals['collecting_background'].clear()
             elif key == 'find_r_center':
                 globals['find_rotation_center_start'].set()
             elif key == 'stop_recording':

@@ -582,14 +582,23 @@ class MainBrain(object):
             cam_lock.release()
             self.cam_info_lock.release()
 
-        def external_collect_background( self, cam_id):
+        def external_set_collecting_background( self, cam_id, value):
             self.cam_info_lock.acquire()            
             cam = self.cam_info[cam_id]
             cam_lock = cam['lock']
             cam_lock.acquire()
-            cam['commands']['collect_bg']=None
+            cam['commands']['collecting_bg']=value
             cam_lock.release()
             self.cam_info_lock.release()
+
+##        def external_collect_background( self, cam_id):
+##            self.cam_info_lock.acquire()            
+##            cam = self.cam_info[cam_id]
+##            cam_lock = cam['lock']
+##            cam_lock.acquire()
+##            cam['commands']['collect_bg']=None
+##            cam_lock.release()
+##            self.cam_info_lock.release()
 
         def external_clear_background( self, cam_id):
             self.cam_info_lock.acquire()            
@@ -907,8 +916,11 @@ class MainBrain(object):
     def set_debug_mode(self, cam_id, value):
         self.remote_api.external_set_debug( cam_id, value)
 
-    def collect_background(self,cam_id):
-        self.remote_api.external_collect_background(cam_id)
+    def set_collecting_background(self, cam_id, value):
+        self.remote_api.external_set_collecting_background( cam_id, value)
+
+##    def collect_background(self,cam_id):
+##        self.remote_api.external_collect_background(cam_id)
 
     def clear_background(self,cam_id):
         self.remote_api.external_clear_background(cam_id)

@@ -72,9 +72,12 @@
         <object class="wxBoxSizer">
           <orient>wxHORIZONTAL</orient>
           <object class="sizeritem">
-            <object class="wxButton" name="collect_background">
-              <label>collect bg</label>
+            <object class="wxCheckBox" name="COLLECTING_BACKGROUND">
+              <label>Collect bg</label>
+              <checked>1</checked>
             </object>
+            <flag>wxTOP</flag>
+            <border>3</border>
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="clear_background">
@@ -153,6 +156,8 @@
             <object class="wxStaticText" name="exposure_label">
               <label>Exposure (msec): --</label>
             </object>
+            <flag>wxRIGHT</flag>
+            <border>20</border>
           </object>
           <object class="sizeritem">
             <object class="wxCheckBox" name="ARENA_CONTROL">
@@ -330,10 +335,7 @@
               <object class="sizeritem">
                 <object class="wxCheckListBox" name="record_raw_cam_select_checklist">
                   <content>
-                    
-                    
-                    <item/>
-                  </content>
+                    <item/></content>
                 </object>
                 <option>1</option>
                 <flag>wxEXPAND</flag>

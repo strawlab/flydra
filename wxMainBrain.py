@@ -229,9 +229,13 @@ class App(wxApp):
         static_box = box.GetStaticBox()
         static_box.SetLabel( cam_id )
 
-        collect_background = XRCCTRL(previewPerCamPanel,"collect_background")
-        EVT_BUTTON(collect_background, collect_background.GetId(),
-                   self.OnCollectBackground)
+        collecting_background = XRCCTRL(previewPerCamPanel,"COLLECTING_BACKGROUND")
+        EVT_CHECKBOX(collecting_background, collecting_background.GetId(),
+                     self.OnCollectingBackground)
+        
+##        collect_background = XRCCTRL(previewPerCamPanel,"collect_background")
+##        EVT_BUTTON(collect_background, collect_background.GetId(),
+##                   self.OnCollectBackground)
         
         clear_background = XRCCTRL(previewPerCamPanel,"clear_background")
         EVT_BUTTON(clear_background, clear_background.GetId(),
@@ -302,7 +306,7 @@ class App(wxApp):
                     if self.label_if_shutter is not None:
                         # this is the shutter control
                         self.label_if_shutter.SetLabel(
-                            'Exposure (msec): %.3f'%(value*0.02,))
+                            'Exposure (msec): %.1f'%(value*0.02,))
                 def onScroll(self, event):
                     current_value = self.slider.GetValue()
                     self.txtctrl.SetValue(str(current_value))
@@ -775,9 +779,13 @@ class App(wxApp):
         static_box = box.GetStaticBox()
         return static_box.GetLabel()
 
-    def OnCollectBackground(self, event):
+    def OnCollectingBackground(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
-        self.main_brain.collect_background(cam_id)
+        self.main_brain.set_collecting_background( cam_id, event.IsChecked() )
+
+##    def OnCollectBackground(self, event):
+##        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+##        self.main_brain.collect_background(cam_id)
 
     def OnClearBackground(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())

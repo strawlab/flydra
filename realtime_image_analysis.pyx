@@ -66,6 +66,9 @@ cdef class RealtimeAnalyzer:
 
     # full image size
     cdef int width, height
+
+    # number of images in accumulator
+    cdef float alpha
     
     # ROI size
     cdef int _left, _bottom, _right, _top
@@ -85,23 +88,21 @@ cdef class RealtimeAnalyzer:
     # start of IPP-requiring code
     cdef ipp.IppiSize _roi_sz
         
-    cdef int im1_step, im2_step, sum_image_step, bg_img_step
-    cdef int mean_image_step, std_image_step, sq_image_step, std_img_step
-    cdef int n_bg_samples
+    cdef int im1_step, im2_step, accum_image_step, bg_img_step
     cdef int n_rot_samples
 
     cdef ipp.Ipp8u *im1, *im2 # current image
-    cdef ipp.Ipp8u *bg_img, *std_img  # 8-bit background
-    cdef ipp.Ipp32f *sum_image, *sq_image # FP accumulators
-    cdef ipp.Ipp32f *mean_image, *std_image # FP background
+    cdef ipp.Ipp8u *bg_img # 8-bit background
+    cdef ipp.Ipp32f *accum_image # FP accumulator
 
     cdef ipp.IppiMomentState_64f *pState
 
     # end of IPP-requiring code
 
-    def __init__(self, int w, int h):
+    def __init__(self, int w, int h, int n_bg_images):
         self.width = w
         self.height = h
+        self.alpha = 1.0/n_bg_images
         self.roi = ( 0, 0, self.width-1, self.height-1)
 
         self._diff_threshold = 8.1
@@ -112,7 +113,6 @@ cdef class RealtimeAnalyzer:
         self._pmat_inv = None
 
         # start of IPP-requiring code
-        self.n_bg_samples = 100
         self.n_rot_samples = 100*60 # 1 minute
 
         # pre- and post-processed images of every frame
@@ -121,34 +121,19 @@ cdef class RealtimeAnalyzer:
         self.im2=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.im2_step )
         if self.im2==NULL: raise MemoryError("Error allocating memory by IPP")
 
-        # 8u background, std images
+        # 8u background
         self.bg_img=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.bg_img_step )
         if self.bg_img==NULL: raise MemoryError("Error allocating memory by IPP")
-        self.std_img=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.std_img_step )
-        if self.std_img==NULL: raise MemoryError("Error allocating memory by IPP")
 
         # 32f statistics and accumulator images for background collection
-        self.sum_image=ipp.ippiMalloc_32f_C1( self.width, self.height, &self.sum_image_step )
-        if self.sum_image==NULL: raise MemoryError("Error allocating memory by IPP")
-
-        self.sq_image=ipp.ippiMalloc_32f_C1( self.width, self.height, &self.sq_image_step )
-        if self.sq_image==NULL: raise MemoryError("Error allocating memory by IPP")
-            
-        self.mean_image=ipp.ippiMalloc_32f_C1( self.width, self.height, &self.mean_image_step )
-        if self.mean_image==NULL: raise MemoryError("Error allocating memory by IPP")
-
-        self.std_image=ipp.ippiMalloc_32f_C1( self.width, self.height, &self.std_image_step )
-        if self.std_image==NULL: raise MemoryError("Error allocating memory by IPP")
+        self.accum_image=ipp.ippiMalloc_32f_C1( self.width, self.height, &self.accum_image_step )
+        if self.accum_image==NULL: raise MemoryError("Error allocating memory by IPP")
 
         # image moment calculation initialization
         CHK( ipp.ippiMomentInitAlloc_64f( &self.pState, ipp.ippAlgHintFast ) )
 
         # initialize background images
-        CHK( ipp.ippiSet_8u_C1R(0,self.bg_img,self.bg_img_step, self._roi_sz))
-        CHK( ipp.ippiSet_8u_C1R(0,self.std_img,self.std_img_step, self._roi_sz))
-
-        CHK( ipp.ippiSet_32f_C1R(0.0,self.mean_image,self.mean_image_step, self._roi_sz))
-        CHK( ipp.ippiSet_32f_C1R(0.0,self.std_image,self.std_image_step, self._roi_sz))
+        self.clear_background_image()
 
         try:
             arena_error = arena_control.arena_initialize()
@@ -170,11 +155,7 @@ cdef class RealtimeAnalyzer:
         ipp.ippiFree(self.im1)
         ipp.ippiFree(self.im2)
         ipp.ippiFree(self.bg_img)
-        ipp.ippiFree(self.std_img)
-        ipp.ippiFree(self.sum_image)
-        ipp.ippiFree(self.sq_image)
-        ipp.ippiFree(self.mean_image)
-        ipp.ippiFree(self.std_image)
+        ipp.ippiFree(self.accum_image)
         # end of IPP-requiring code
         return
 
@@ -272,7 +253,7 @@ cdef class RealtimeAnalyzer:
                         eccentricity = evalB/evalA
                     slope = rise/run
 
-                    # John -- I don't use orientation -- fix this however you need it.
+                    # John -- I don't use "orientation" -- fix this however you need it.
                     orientation = c_lib.atan2(rise,run)
                     orientation = orientation + 1.57079632679489661923 # (pi/2)
             elif result == 31: orientation = nan
@@ -342,76 +323,26 @@ cdef class RealtimeAnalyzer:
         CHK( ipp.ippiSet_8u_C1R( 0,
                                  (self.bg_img + self._bottom*self.bg_img_step + self._left),
                                  self.bg_img_step, self._roi_sz))
-        CHK( ipp.ippiSet_8u_C1R( 0,
-                                 (self.std_img + self._bottom*self.std_img_step + self._left),
-                                 self.std_img_step, self._roi_sz))
-        # end of IPP-requiring code
-        return
-
-    def clear_accumulator_image(self):
-        # start of IPP-requiring code
-        # divide by 4 because 32f = 4 bytes
-        CHK( ipp.ippiSet_32f_C1R( 0.0, 
-                                  (self.sum_image + self._bottom*self.sum_image_step/4 + self._left),
-                                  self.sum_image_step, self._roi_sz)) 
-        CHK( ipp.ippiSet_32f_C1R( 0.0,
-                                  (self.sq_image + self._bottom*self.sq_image_step/4 + self._left),
-                                  self.sq_image_step, self._roi_sz))
+        CHK( ipp.ippiSet_32f_C1R( 0,
+                                  (self.accum_image + self._bottom*self.accum_image_step + self._left),
+                                  self.accum_image_step, self._roi_sz))
         # end of IPP-requiring code
         return
 
     def accumulate_last_image(self):
         # start of IPP-requiring code
-        CHK( ipp.ippiAdd_8u32f_C1IR(
+        CHK( ipp.ippiAddWeighted_8u32f_C1IR(
             (self.im1 + self._bottom*self.im1_step + self._left), self.im1_step,
-            (self.sum_image + self._bottom*self.sum_image_step/4 + self._left),
-            self.sum_image_step, self._roi_sz))
-        CHK( ipp.ippiAddSquare_8u32f_C1IR(
-            (self.im1 + self._bottom*self.im1_step + self._left), self.im1_step,
-            (self.sq_image + self._bottom*self.sq_image_step/4 + self._left),
-            self.sq_image_step, self._roi_sz))
-        # end of IPP-requiring code
-        return
+            (self.accum_image + self._bottom*self.accum_image_step/4 + self._left),
+            self.accum_image_step, self._roi_sz, self.alpha ))
 
-    def convert_accumulator_to_bg_image(self,int n_bg_samples):
-        # start of IPP-requiring code
-        # find mean
-        CHK( ipp.ippiMulC_32f_C1R(
-            (self.sum_image + self._bottom*self.sum_image_step/4 + self._left),
-            self.sum_image_step, 1.0/n_bg_samples,
-            (self.mean_image + self._bottom*self.mean_image_step/4 + self._left),
-            self.mean_image_step, self._roi_sz))
+        # maintain 8 bit unsigned background image
         CHK( ipp.ippiConvert_32f8u_C1R(
-            (self.mean_image + self._bottom*self.mean_image_step/4 + self._left),
-            self.mean_image_step,
+            (self.accum_image + self._bottom*self.accum_image_step/4 + self._left),
+            self.accum_image_step,
             (self.bg_img + self._bottom*self.bg_img_step + self._left),
             self.bg_img_step, self._roi_sz, ipp.ippRndNear ))
-
-        # find STD (use sum_image as temporary variable
-        CHK( ipp.ippiSqr_32f_C1R(
-            (self.mean_image + self._bottom*self.mean_image_step/4 + self._left),
-            self.mean_image_step,
-            (self.sum_image + self._bottom*self.sum_image_step/4 + self._left),
-            self.sum_image_step, self._roi_sz))
-        CHK( ipp.ippiMulC_32f_C1R(
-            (self.sq_image + self._bottom*self.sq_image_step/4 + self._left),
-            self.sq_image_step, 1.0/n_bg_samples,
-            (self.std_image + self._bottom*self.std_image_step/4 + self._left),
-            self.std_image_step, self._roi_sz))
-        CHK( ipp.ippiSub_32f_C1IR(
-            (self.sum_image + self._bottom*self.sum_image_step/4 + self._left),
-            self.sum_image_step,
-            (self.std_image + self._bottom*self.std_image_step/4 + self._left),
-            self.std_image_step, self._roi_sz))
-        CHK( ipp.ippiSqrt_32f_C1IR(
-            (self.std_image + self._bottom*self.std_image_step/4 + self._left),
-            self.std_image_step, self._roi_sz))
-
-        CHK( ipp.ippiConvert_32f8u_C1R(
-            (self.std_image + self._bottom*self.std_image_step/4 + self._left),
-            self.std_image_step,
-            (self.std_img + self._bottom*self.std_img_step + self._left),
-            self.std_img_step, self._roi_sz, ipp.ippRndNear ))
+        
         # end of IPP-requiring code
         return
 
