@@ -5,7 +5,7 @@ if ENABLED:
     import matplotlib
     matplotlib.use('WXAgg')
     import matplotlib.numerix as nx
-    import matplotlib.matlab as mpl
+    import pylab
     import matplotlib.cm
     from matplotlib.backends.backend_wx import NavigationToolbar2Wx
     from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
@@ -19,7 +19,7 @@ class PlotPanel(wxPanel):
     def __init__(self, parent):
         wxPanel.__init__(self, parent, -1)
         if ENABLED:
-            self.fig = mpl.Figure((5,4), 75)
+            self.fig = pylab.Figure((5,4), 75)
             self.canvas = FigureCanvasWxAgg(self, -1, self.fig)
             self.toolbar = NavigationToolbar2Wx(self.canvas) #matplotlib toolbar
             self.toolbar.Realize()
@@ -41,10 +41,10 @@ class PlotPanel(wxPanel):
             start_size=656,491
             x = nx.arange(start_size[0])
             y = nx.arange(start_size[1])
-            mpl.set(a,'xlim',[0,start_size[0]])
-            mpl.set(a,'xticks',range(0,start_size[0],100))
-            mpl.set(a,'ylim',[0,start_size[1]])
-            mpl.set(a,'yticks',range(0,start_size[1],100))
+            pylab.set(a,'xlim',[0,start_size[0]])
+            pylab.set(a,'xticks',range(0,start_size[0],100))
+            pylab.set(a,'ylim',[0,start_size[1]])
+            pylab.set(a,'yticks',range(0,start_size[1],100))
             x, y = meshgrid(x, y)
             z = nx.zeros(x.shape)
             frame = z
@@ -59,12 +59,12 @@ class PlotPanel(wxPanel):
 
             self.lines = a.plot([0],[0],'o-') 	 
             #self.lines = a.plot([0,0,0],[0,0,0],'o-') 	 
-            mpl.set(self.lines[0],'markerfacecolor',None) 	 
+            pylab.set(self.lines[0],'markerfacecolor',None) 	 
             white = (1.0,1.0,1.0) 	 
-            mpl.set(self.lines[0],'color',white) 	 
-            mpl.set(self.lines[0],'linewidth',2.0) 	 
-            mpl.set(self.lines[0],'markeredgecolor',white) 	 
-            mpl.set(self.lines[0],'markeredgewidth',2)
+            pylab.set(self.lines[0],'color',white) 	 
+            pylab.set(self.lines[0],'linewidth',2.0) 	 
+            pylab.set(self.lines[0],'markeredgecolor',white) 	 
+            pylab.set(self.lines[0],'markeredgewidth',2)
             a.grid('on')
             self.toolbar.update() # Not sure why this is needed - ADS
 
