@@ -435,6 +435,11 @@ class App(wxApp):
         for i in range(cam_choice.GetCount()):
             if cam_choice.IsChecked(i):
                 cam_ids.append(cam_choice.GetString(i))
+        if len(cam_ids)==0:
+            record_raw = XRCCTRL(self.record_raw_panel,
+                                 "record_raw")
+            record_raw.SetValue(False)
+            return
         try:
             for cam_id in cam_ids:
                 self.main_brain.start_recording(cam_id,filename)
@@ -455,18 +460,25 @@ class App(wxApp):
                     'Failed to start recording (%s): see console'%(cam_id,),0)
                 raise x
 
-    def OnRecordRawStop(self):
-        if not len(self._currently_recording_cams):
+    def OnRecordRawStop(self,warn=True):
+        if warn and not len(self._currently_recording_cams):
             self.statusbar.SetStatusText('Not recording - cannot stop',0)
             return
         try:
             n_stopped = 0
             for cam_id in self._currently_recording_cams[:]:
-                self.main_brain.stop_recording(cam_id)
+                try:
+                    self.main_brain.stop_recording(cam_id)
+                except KeyError, x:
+                    print '%s: %s'%(x.__class__,str(x)),
+                    MainBrain.DEBUG()
                 self._currently_recording_cams.remove(cam_id)
                 n_stopped+=1
             self.statusbar.SetStatusText('Recording stopped on %d cameras'%(
                 n_stopped,))
+            record_raw = XRCCTRL(self.record_raw_panel,
+                                 "record_raw")
+            record_raw.SetValue(False)
         except:
             self.statusbar.SetStatusText('Failed to stop recording: see console',0)
             raise
@@ -553,7 +565,7 @@ class App(wxApp):
         self.main_brain.save_2d_data = event.IsChecked()
             
     def OnToggleCollect3dInfo(self, event):
-        self.main_brain.save_3d_data = event.IsChecked()
+        self.main_brain.collect_3d_data = event.IsChecked()
             
     def OnToggleTint(self, event):
         self.cam_image_canvas.set_clipping( event.IsChecked() )
@@ -798,6 +810,8 @@ class App(wxApp):
         self.main_brain.set_use_arena( cam_id, event.IsChecked() )
 
     def OnOldCamera(self, cam_id):
+        self.OnRecordRawStop(warn=False)
+        
         try:
             self.cam_image_canvas.delete_image(cam_id)
         
