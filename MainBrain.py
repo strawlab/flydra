@@ -3,6 +3,7 @@ import threading, time, socket, select, sys, os, copy, struct, math
 import sets
 import Pyro.core
 import flydra.reconstruct
+import reconstruct_utils as ru
 import numarray as nx
 import numarray.records
 from numarray.ieeespecial import nan, inf, getnan
@@ -388,87 +389,13 @@ class CoordReceiver(threading.Thread):
                 if num_good_images < 2:
                     # no point in dealing with this frame!
                     continue
-                #if num_cams_arrived==len(self.cam_ids):
-                if num_good_images==2 or num_cams_arrived==len(self.cam_ids):
-                    # either first possible moment or all data present
-##                    if num_cams_arrived==len(self.cam_ids):
-##                        use_hypothesis_testing=True
-##                    else:
-##                        use_hypothesis_testing=False
+                #if num_good_images==2 or num_cams_arrived==len(self.cam_ids):
+                if num_cams_arrived==len(self.cam_ids):
+                    #X, line3d = self.reconstructor.find3d(d2.items())
+                    #cam_ids_used = d2.keys()
+                    X, line3d, cam_ids_used, min_mean_dist = ru.find_best_3d(self.reconstructor,d2)
+                    cam_nos_used = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
 
-                    use_hypothesis_testing=False
-
-                        
-                    if not use_hypothesis_testing:
-                        X, line3d = self.reconstructor.find3d(d2.items())
-                        cam_ids_used = d2.keys()
-                        cam_nos_used = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
-                        
-                        # find "min_mean_dist" (just mean_dist)
-                        alpha = 1.0/len(d2)
-                        mean_dist = 0.0
-                        for cam_id in d2.iterkeys():
-                            orig_x, orig_y = d2[cam_id][:2]
-                            recon_x, recon_y = self.reconstructor.find2d(cam_id,X)
-                            dist = math.sqrt((orig_x-recon_x)**2 + (orig_y-recon_y)**2)
-                            mean_dist += dist*alpha
-                        min_mean_dist = mean_dist
-                        ##print '  3D found with %d views, mean dist %.1f pixels, frame %s'%(len(d2),min_mean_dist,str(corrected_framenumber))
-                    else:
-                        start_hypothesis_testing = time.time()
-                        reached_threshold = False
-                        min_mean_dist = inf
-                        best_hypothesis_data = None
-                        for cam_ids_used in self.reconstructor.cam_combinations:
-                            start_hypothesis = time.time()
-
-                            #print 'cam_ids_used',len(cam_ids_used),cam_ids_used
-                            d3 = {}
-                            
-                            # check if data available from all camera combinations:
-                            try:
-                                for cam_id in cam_ids_used:
-                                    d3[cam_id] = d2[cam_id] # d2 only has points found in 2D image
-                            except KeyError:
-                                #print 'skipping cam_ids_used, camera not available'
-                                continue
-
-                            X, line3d = self.reconstructor.find3d(d3.items())
-                                                        
-                            #print 'X',X
-
-                            alpha = 1.0/len(d3)
-                            mean_dist = 0.0
-                            for cam_id in d3.iterkeys():
-                                orig_x, orig_y = d3[cam_id][:2]
-                                recon_x, recon_y = self.reconstructor.find2d(cam_id,X)
-
-                                dist = math.sqrt((orig_x-recon_x)**2 + (orig_y-recon_y)**2)
-                                mean_dist += dist*alpha
-                                #print cam_id,(orig_x, orig_y), (recon_x, recon_y), dist
-                                #print '  ',cam_id, dist
-                            #print ' ** mean **',mean_dist
-                            end_hypothesis = time.time()
-                            if mean_dist < min_mean_dist:
-                                min_mean_dist = mean_dist
-                                best_hypothesis_data = X, line3d, cam_ids_used
-                            if mean_dist < THRESHOLD_MEAN_DIST:
-                                reached_threshold = True
-                                break
-                        end_hypothesis_testing = time.time()
-                        ht_dur_msec = (end_hypothesis_testing-start_hypothesis_testing)*1000.0
-                        print 'ht_dur_msec',ht_dur_msec
-                        if not reached_threshold:
-                            #print 'WARNING: did not reach minimum threshold distance'
-                            if best_hypothesis_data is not None:
-                                X, line3d, cam_ids_used = best_hypothesis_data
-                                #print '  using data with mean_dist %f'%min_mean_dist,cam_ids_used
-                            else:
-                                #X, line3d, cam_ids_used = (nan,nan,nan), None, []
-                                #print '  no data...'
-                                continue # XXX (double check this) go to next frame: no useful data here
-                        cam_nos_used = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
-                    
                     if line3d is None:
                         line3d = nan, nan, nan, nan, nan, nan
                     find3d_time = time.time()
