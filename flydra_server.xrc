@@ -10,14 +10,12 @@
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="DynamicImagePanel"/>
-        <option>1</option>
+        <option>2</option>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="AllCamPanel">
-          <size>640,210</size>
-        </object>
-        <option>0</option>
+        <object class="wxPanel" name="AllCamPanel"/>
+        <option>1</option>
         <flag>wxEXPAND</flag>
       </object>
     </object>
@@ -28,6 +26,7 @@
       <object class="sizeritem">
         <object class="wxStaticBitmap" name="">
           <bitmap>flydra_server_art.png</bitmap>
+          <bg>#FFFFFF</bg>
         </object>
         <option>0</option>
         <flag>wxALIGN_CENTRE</flag>
@@ -87,7 +86,7 @@
         <object class="wxPanel" name="PerCameraControlsContainer">
           <size>100,100</size>
         </object>
-        <option>0</option>
+        <option>1</option>
         <flag>wxEXPAND</flag>
       </object>
     </object>
@@ -97,11 +96,11 @@
       <orient>wxHORIZONTAL</orient>
       <object class="sizeritem">
         <object class="wxStaticText" name="scalar_control_label">
-          <label>param</label>
-          <size>60,10</size>
+          <label>param1</label>
         </object>
         <option>0</option>
-        <flag>wxEXPAND</flag>
+        <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
+        <border>3</border>
       </object>
       <object class="sizeritem">
         <object class="wxSlider" name="scalar_control_slider">
