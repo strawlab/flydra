@@ -121,6 +121,7 @@ class GrabClass(object):
         width = self.cam.get_max_width()
         buf_ptr_step = width
         bg_changed = True
+        use_roi2_isSet = globals['use_roi2'].isSet
 
         coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         old_ts = time.time()
@@ -145,7 +146,8 @@ class GrabClass(object):
                 old_ts = timestamp
                 old_fn = framenumber
                 
-                points, found_anything, orientation = self.realtime_analyzer.do_work( framebuffer, timestamp, framenumber )
+                points, found_anything, orientation = self.realtime_analyzer.do_work(
+                    framebuffer, timestamp, framenumber, use_roi2_isSet() )
                 raw_image = framebuffer
                 
                 # make appropriate references to our copy of the data
@@ -288,6 +290,7 @@ class App:
             globals['collecting_background'].set()
             globals['find_rotation_center_start'] = threading.Event()
             globals['debug'] = threading.Event()
+            globals['use_roi2'] = threading.Event()
 
             # set defaults
             cam.set_camera_property(cam_iface.SHUTTER,300,0,0)
@@ -308,6 +311,7 @@ class App:
             scalar_control_info['clear_threshold'] = clear_threshold
             
             scalar_control_info['trigger_source'] = cam.get_trigger_source()
+            scalar_control_info['roi2'] = globals['use_roi2'].isSet()
             
             scalar_control_info['width'] = width
             scalar_control_info['height'] = height
@@ -387,6 +391,9 @@ class App:
                         assert cam.get_max_height() == value
                     elif property_name == 'trigger_source':
                         cam.set_trigger_source( value )
+                    elif property_name == 'roi2':
+                        if value: globals['use_roi2'].set()
+                        else: globals['use_roi2'].clear()
             elif key == 'get_im':
                 self.main_brain.set_image(cam_id, globals['most_recent_frame'])
             elif key == 'use_arena':

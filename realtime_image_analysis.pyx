@@ -169,7 +169,8 @@ cdef class RealtimeAnalyzer:
 
     def do_work(self, c_numarray._numarray framebuffer,
                 double timestamp,
-                int framenumber):
+                int framenumber,
+                int use_roi2):
         """find fly and orientation (fast enough for realtime use)
 
         inputs
@@ -178,6 +179,7 @@ cdef class RealtimeAnalyzer:
         framebuffer
         timestamp
         framenumber
+        use_roi2
 
         outputs
         -------
@@ -251,16 +253,22 @@ cdef class RealtimeAnalyzer:
             (self.im2 + self._bottom*self.im2_step + self._left), self.im2_step,
             self._roi_sz, &max_val, &index_x,&index_y))
 
-        # find mini-ROI for further analysis (defined in non-ROI space)
-        left2 = index_x - self.roi2_radius + self._left
-        right2 = index_x + self.roi2_radius + self._left
-        bottom2 = index_y - self.roi2_radius + self._bottom
-        top2 = index_y + self.roi2_radius + self._bottom
+        if use_roi2:
+            # find mini-ROI for further analysis (defined in non-ROI space)
+            left2 = index_x - self.roi2_radius + self._left
+            right2 = index_x + self.roi2_radius + self._left
+            bottom2 = index_y - self.roi2_radius + self._bottom
+            top2 = index_y + self.roi2_radius + self._bottom
 
-        if left2 < self._left: left2 = self._left
-        if right2 > self._right: right2 = self._right
-        if bottom2 < self._bottom: bottom2 = self._bottom
-        if top2 > self._top: top2 = self._top
+            if left2 < self._left: left2 = self._left
+            if right2 > self._right: right2 = self._right
+            if bottom2 < self._bottom: bottom2 = self._bottom
+            if top2 > self._top: top2 = self._top
+        else:
+            left2 = self._left
+            right2 = self._right
+            bottom2 = self._bottom
+            top2 = self._top
         roi2_sz.width = right2 - left2 + 1
         roi2_sz.height = top2 - bottom2 + 1
         

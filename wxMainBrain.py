@@ -362,6 +362,12 @@ class App(wxApp):
         ext_trig.SetValue( val )
         EVT_CHECKBOX(ext_trig, ext_trig.GetId(), self.OnExtTrig)
         
+        roi2 = XRCCTRL(previewPerCamPanel,
+                           "ROI2")
+        val = scalar_control_info['roi2']
+        roi2.SetValue( val )
+        EVT_CHECKBOX(roi2, roi2.GetId(), self.OnROI2)
+        
         per_cam_controls_panel = XRCCTRL(previewPerCamPanel,
                                          "PerCameraControlsContainer")
         grid = wxFlexGridSizer(0,3,0,0) # 3 columns
@@ -456,6 +462,10 @@ class App(wxApp):
             ext_trig = XRCCTRL(previewPerCamPanel,
                                "EXT_TRIG")
             ext_trig.SetValue( value )
+        elif param == 'roi2':
+            roi2 = XRCCTRL(previewPerCamPanel,
+                           "ROI2")
+            roi2.SetValue( value )
         else:
             if param not in ('roi','width','height'):
                 print 'WARNING: could not update panel display for',param
@@ -973,6 +983,11 @@ class App(wxApp):
         widget = event.GetEventObject()
         cam_id = self._get_cam_id_for_button(widget)
         self.main_brain.send_set_camera_property( cam_id, 'trigger_source', widget.IsChecked() )
+
+    def OnROI2(self, event):
+        widget = event.GetEventObject()
+        cam_id = self._get_cam_id_for_button(widget)
+        self.main_brain.send_set_camera_property( cam_id, 'roi2', widget.IsChecked() )
 
     def OnOldCamera(self, cam_id):
         self.OnRecordRawStop(warn=False)

@@ -177,8 +177,18 @@
           </object>
           <hgap>10</hgap>
           <object class="sizeritem">
-            <object class="wxCheckBox" name="EXT_TRIG">
-              <label>external trigger</label>
+            <object class="wxBoxSizer">
+              <orient>wxHORIZONTAL</orient>
+              <object class="sizeritem">
+                <object class="wxCheckBox" name="EXT_TRIG">
+                  <label>external trigger</label>
+                </object>
+              </object>
+              <object class="sizeritem">
+                <object class="wxCheckBox" name="ROI2">
+                  <label>use roi2</label>
+                </object>
+              </object>
             </object>
           </object>
         </object>
@@ -350,9 +360,7 @@
               <object class="sizeritem">
                 <object class="wxCheckListBox" name="record_raw_cam_select_checklist">
                   <content>
-                    
-                    <item/>
-                  </content>
+                    <item/></content>
                 </object>
                 <option>1</option>
                 <flag>wxEXPAND</flag>
