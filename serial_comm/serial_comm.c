@@ -116,7 +116,7 @@ long sc_send_cmd(
 	/* Variable Declarations ***********************************************/
 	size_t bytes_out; /* Number of bytes to write	*/
 	size_t bytes_out_act;	/* Number of bytes actually written*/
-#if 1
+#if 0
 int i,j;
 	/* End Variable Declarations ********************************************/
 printf( "  sending serial\t" );

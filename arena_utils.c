@@ -106,7 +106,7 @@ void init_analog_output( void )
   cdi_dev = comedi_open( cdi_DEVICE );
   if( cdi_dev == NULL )
   {
-    printf( "failed opening comedi device %s\n", cdi_DEVICE );
+    printf( "**failed opening comedi device %s\n", cdi_DEVICE );
     comedi_perror( cdi_DEVICE );
   }
 }
@@ -134,5 +134,12 @@ void set_position_analog( int pos_x, int pos_y )
 
   ana_y = pos_y*cdi_RANGE/(PATTERN_DEPTH-1) + cdi_MIN;
   comedi_data_write( cdi_dev, cdi_SUBDEV, cdi_CHAN_Y, 0, cdi_AREF, ana_y );
+
+  /* in order for this to work with a single output range, the x and y gains must
+     be set on the controlle  in a ratio consistent with their possible values here; 
+     here; specifically, they must have a ratio equal to NPIXELS/PATTERN_DEPTH
+     (currently gains are 120 and 15 for NPIXELS=64 and PATTERN_DEPTH=8) -- more
+     accurately, instead of NPIXELS one should use the pattern width, but presumably
+     that will always equal the number of possible pattern positions, NPIXELS */
 }
 
