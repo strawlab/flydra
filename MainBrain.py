@@ -817,6 +817,11 @@ class MainBrain(object):
     def __del__(self):
         self.quit()
 
+    def set_all_cameras_debug_mode( self, value ):
+        cam_ids = self.remote_api.external_get_cam_ids()
+        for cam_id in cam_ids:
+            self.remote_api.external_set_debug( cam_id, value)
+
     def get_save_2d_data(self):
         global SAVE_2D_DATA
         return SAVE_2D_DATA

@@ -7,6 +7,7 @@ from wxPython.wx import *
 from wxPython.glcanvas import *
 from OpenGL.GL import *
 from numarray.ieeespecial import nan
+import numarray.ieeespecial
 
 have_glue = False
 try:
@@ -258,7 +259,7 @@ class DynamicImageCanvas(wxGLCanvas):
                     glEnable(GL_TEXTURE_2D)
 
                     for pt in draw_points:
-                        if pt[2] == nan:
+                        if len(numarray.ieeespecial.getnan(pt[2])[0]):
                             # no orientation information
                             continue
 

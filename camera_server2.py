@@ -104,8 +104,6 @@ class GrabClass(object):
         try:
             while not cam_quit_event_isSet():
                 self.cam.grab_next_frame_blocking(buf) # grab frame and stick in buf
-                sys.stdout.write('.')
-                sys.stdout.flush()
                 # get best guess as to when image was taken
                 timestamp=self.cam.get_last_timestamp()
                 framenumber=self.cam.get_last_framenumber()
@@ -113,6 +111,7 @@ class GrabClass(object):
                 diff = timestamp-old_ts
                 if diff > 0.02:
                     print 'warning: IFI is',diff
+                    flip = False # reset to synchronize across all cameras
                 globals['last_frame_timestamp']=timestamp
                 old_ts = timestamp
                 
@@ -455,8 +454,6 @@ class App:
                         len_gfcn = len(gfcn)
                         if len_gfcn:
                             if fly_movie is not None:
-                                sys.stdout.write('<%d'%len_gfcn)
-                                sys.stdout.flush()
                                 t1=time_func()
                                 if 1:
                                     for frame,timestamp,framenumber in gfcn:
@@ -469,8 +466,6 @@ class App:
                                 t2=time_func()
                                 tdiff = t2-t1
                                 mb_per_sec = len_gfcn*sz/(1024*1024)/tdiff
-                                sys.stdout.write('> %d frames, %d MB/sec\n'%(len_gfcn,mb_per_sec))
-                                sys.stdout.flush()
 
                             grabbed_frames[cam_no] = []
 

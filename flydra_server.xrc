@@ -160,14 +160,6 @@
               <checked>0</checked>
             </object>
           </object>
-          <object class="sizeritem">
-            <object class="wxCheckBox" name="debug_mode">
-              <label>debug info</label>
-              <checked>0</checked>
-            </object>
-            <flag>wxLEFT</flag>
-            <border>4</border>
-          </object>
           <hgap>10</hgap>
         </object>
         <flag>wxEXPAND</flag>

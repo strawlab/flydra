@@ -74,6 +74,13 @@ class App(wxApp):
         data_logging_menu.Append(ID_save_3d_data, "Save collected 3D points", "Saving all previously acquired 3d points")
         EVT_MENU(self, ID_save_3d_data, self.OnSave3dData)
         
+        data_logging_menu.AppendItem(wxMenuItem(kind=wxITEM_SEPARATOR))
+
+        ID_debug_cameras = wxNewId()
+        data_logging_menu.Append(ID_debug_cameras, "Camera debug mode",
+                                 "Enter camera debug mode", wxITEM_CHECK)
+        EVT_MENU(self, ID_debug_cameras, self.OnToggleDebugCameras)
+
         menuBar.Append(data_logging_menu, "Data &Logging")
         
         #   View
@@ -256,10 +263,6 @@ class App(wxApp):
         arena_control = XRCCTRL(previewPerCamPanel,
                              "ARENA_CONTROL")
         EVT_CHECKBOX(arena_control, arena_control.GetId(), self.OnArenaControl)
-        
-        debug_mode = XRCCTRL(previewPerCamPanel,
-                             "debug_mode")
-        EVT_CHECKBOX(debug_mode, debug_mode.GetId(), self.OnDebugMode)
         
         per_cam_controls_panel = XRCCTRL(previewPerCamPanel,
                                          "PerCameraControlsContainer")
@@ -545,6 +548,9 @@ class App(wxApp):
         self.plotpanel.set_points(points)
         self.plotpanel.draw()
 
+    def OnToggleDebugCameras(self, event):
+        self.main_brain.set_all_cameras_debug_mode( event.IsChecked() )
+
     def OnToggleCollect2dInfo(self, event):
         self.main_brain.save_2d_data = event.IsChecked()
             
@@ -792,10 +798,6 @@ class App(wxApp):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         self.main_brain.set_use_arena( cam_id, event.IsChecked() )
 
-    def OnDebugMode(self, event):
-        cam_id = self._get_cam_id_for_button(event.GetEventObject())
-        self.main_brain.set_debug_mode( cam_id, event.IsChecked() )
-    
     def OnOldCamera(self, cam_id):
         try:
             self.cam_image_canvas.delete_image(cam_id)
