@@ -741,7 +741,8 @@ class App(wxApp):
                 elif self.current_page == 'preview':
                     r=self.main_brain.reconstructor
                     for cam_id in self.cameras.keys():
-                        pt,ln=r.find2d(cam_id,data3d,line3d)
+                        pt,ln=r.find2d(cam_id,data3d,
+                                       Lcoords=line3d,distorted=True)
                         self.cam_image_canvas.set_reconstructed_points(cam_id,([pt],[ln]))
             if self.current_page in ['preview','snapshot']:
                 for cam_id in self.cameras.keys():

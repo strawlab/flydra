@@ -260,7 +260,7 @@ class Reconstructor:
         else:
             return X
 
-    def find2d(self,cam_id,X,Lcoords=None):
+    def find2d(self,cam_id,X,Lcoords=None,distorted=False):
         # see Hartley & Zisserman (2003) p. 449
         if len(X) == 3:
             X = nx.array([[X[0]], [X[1]], [X[2]], [1.0]])
@@ -268,6 +268,14 @@ class Reconstructor:
         x=nx.dot(Pmat,X)
 
         x = x[0:2,0]/x[2,0] # normalize
+        if distorted:
+            xd, yd = self.distort(cam_id, x[0], x[1])
+            x[0] = xd
+            x[1] = yd
+
+        # XXX Impossible to distort Lcoords. The image of the line
+        # should be distorted downstream, but this is not usually
+        # possible.
         
         if Lcoords is not None:
             # see Hartley & Zisserman (2003) p. 198, eqn 8.2
