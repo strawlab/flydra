@@ -14,7 +14,6 @@ Pyro.config.PYRO_DETAILED_TRACEBACK = 1
 Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
 
 from wxPython.wx import *
-from wxPython.lib import newevent
 from wxPython.xrc import *
 
 RESDIR = os.path.split(os.path.abspath(sys.argv[0]))[0]
