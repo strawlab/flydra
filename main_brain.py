@@ -5,7 +5,7 @@ import time
 import socket
 import os
 import copy
-from MainBrain import MainBrain
+import MainBrain
 from MatplotlibPanel import PlotPanel
 import DynamicImageCanvas
 from wxPython.wx import *
@@ -19,10 +19,8 @@ RESFILE = os.path.join(RESDIR,'flydra_server.xrc')
 hydra_image_file = os.path.join(RESDIR,'hydra.gif')
 RES = wxXmlResource(RESFILE)
 
-        
 class App(wxApp):
     def OnInit(self,*args,**kw):
-    
         wxInitAllImageHandlers()
         frame = wxFrame(None, -1, "Flydra Main Brain",size=(1100,750))
 
@@ -34,9 +32,15 @@ class App(wxApp):
         menuBar = wxMenuBar()
         #   File
         filemenu = wxMenu()
+        
+        ID_start_calibration = wxNewId()
+        filemenu.Append(ID_start_calibration, "Start calibration...", "Start saving calibration points")
+        EVT_MENU(self, ID_start_calibration, self.OnStartCalibration)
+        
         ID_quit = wxNewId()
         filemenu.Append(ID_quit, "Quit\tCtrl-Q", "Quit application")
         EVT_MENU(self, ID_quit, self.OnQuit)
+        
         menuBar.Append(filemenu, "&File")
 
         #   View
@@ -45,6 +49,12 @@ class App(wxApp):
         viewmenu.Append(ID_toggle_image_tinting, "Tint clipped data",
                         "Tints clipped pixels blue", wxITEM_CHECK)
         EVT_MENU(self, ID_toggle_image_tinting, self.OnToggleTint)
+
+        ID_set_timer = wxNewId()
+        viewmenu.Append(ID_set_timer, "Set update timer",
+                        "Sets interval at which display is updated")#, wxITEM_CHECK)
+        EVT_MENU(self, ID_set_timer, self.OnSetTimer)
+
         menuBar.Append(viewmenu, "&View")
 
         # finish menubar -----------------------------
@@ -78,8 +88,11 @@ class App(wxApp):
         nb.AddPage(self.record_raw_panel,"Record raw video")
         self.InitRecordRawPanel()
 
-        temp_panel = RES.LoadPanel(nb,"UNDER_CONSTRUCTION_PANEL")
-        nb.AddPage(temp_panel,"Realtime 3D tracking")
+        self.tracking_panel = RES.LoadPanel(nb,"REALTIME_TRACKING_PANEL")
+        nb.AddPage(self.tracking_panel,"Realtime 3D tracking")
+        
+        #temp_panel = RES.LoadPanel(nb,"UNDER_CONSTRUCTION_PANEL")
+        #nb.AddPage(temp_panel,"Under construction")
         
         EVT_NOTEBOOK_PAGE_CHANGED(nb,nb.GetId(),self.OnPageChanged)
         self.main_notebook = nb
@@ -96,8 +109,9 @@ class App(wxApp):
         ID_Timer  = wxNewId() 	         
         self.timer = wxTimer(self,      # object to send the event to 	 
                              ID_Timer)  # event id to use 	 
-        EVT_TIMER(self,  ID_Timer, self.OnIdle) 	 
-        self.timer.Start(500) # call every n msec
+        EVT_TIMER(self,  ID_Timer, self.OnIdle)
+        self.update_interval=500
+        self.timer.Start(self.update_interval) # call every n msec
         EVT_IDLE(self.frame, self.OnIdle)
 
         self.cameras = {} #OrderedDict()
@@ -115,6 +129,8 @@ class App(wxApp):
             self.current_page = 'snapshot'
         elif page==2:
             self.current_page = 'record'
+        elif page==3:
+            self.current_page = 'tracking'
         else:
             self.current_page = 'unknown'
 
@@ -172,8 +188,17 @@ class App(wxApp):
         EVT_BUTTON(collect_background, collect_background.GetId(),
                    self.OnCollectBackground)
         
+        clear_background = XRCCTRL(PreviewPerCamPanel,"clear_background")
+        EVT_BUTTON(clear_background, clear_background.GetId(),
+                   self.OnClearBackground)
+        
         quit_camera = XRCCTRL(PreviewPerCamPanel,"quit_camera")
         EVT_BUTTON(quit_camera, quit_camera.GetId(), self.OnCloseCamera)
+
+        threshold_value = XRCCTRL(PreviewPerCamPanel,"threshold_value")
+        threshold_value.SetValue(
+            str( self.cameras[cam_id]['scalar_control_info']['threshold'] ) )
+        EVT_TEXT(threshold_value, threshold_value.GetId(), self.OnSetCameraThreshold)
         
         per_cam_controls_panel = XRCCTRL(PreviewPerCamPanel,
                                          "PerCameraControlsContainer")
@@ -181,6 +206,8 @@ class App(wxApp):
         grid.AddGrowableCol(2)
 
         for param in scalar_control_info.keys():
+            if param == 'threshold':
+                continue
             current_value, min_value, max_value = scalar_control_info[param]
             grid.Add( wxStaticText(per_cam_controls_panel,wxNewId(),param),
                      0,wxALIGN_RIGHT|wxALIGN_CENTER_VERTICAL )
@@ -398,13 +425,24 @@ class App(wxApp):
         cam_id = snapshot_cam_choice.GetStringSelection()
         if cam_id == '':
             return
-        frame = self.main_brain.get_image_sync(cam_id)
+        frame, points = self.main_brain.get_image_sync(cam_id)
         height = frame.shape[0]
         self.plotpanel.set_image(frame)
+        self.plotpanel.set_points(points)
         self.plotpanel.draw()
             
     def OnToggleTint(self, event):
         self.cam_image_canvas.set_clipping( event.IsChecked() )
+
+    def OnSetTimer(self, event):
+        dlg=wxTextEntryDialog(self.frame, 'What interval should the display be updated at (msec)?',
+                              'Set display update interval',str(self.update_interval))
+        try:
+            if dlg.ShowModal() == wxID_OK:
+                self.update_interval = int(dlg.GetValue())
+                self.timer.Start(self.update_interval)
+        finally:
+            dlg.Destroy()
 
     def attach_and_start_main_brain(self,main_brain):
         self.main_brain = main_brain
@@ -414,6 +452,28 @@ class App(wxApp):
 
     def update_wx(self):
         self.statusbar.SetStatusText('%d camera(s)'%len(self.cameras),1)
+        
+    def OnStartCalibration(self, event):
+        doit = False
+        dlg = wxDirDialog( self.frame, "Calibration save directory",
+                           style = wxDD_DEFAULT_STYLE | wxDD_NEW_DIR_BUTTON,
+                           defaultPath = os.environ.get('HOME','')
+                           )
+        try:
+            if dlg.ShowModal() == wxID_OK:
+                calib_dir = dlg.GetPath()
+                doit = True
+        finally:
+            dlg.Destroy()
+        if doit:
+            self.main_brain.start_calibrating(calib_dir)
+            dlg = wxMessageDialog( self.frame, 'Acquiring calibration points',
+                                   'calibration', wxOK | wxICON_INFORMATION )
+            try:
+                dlg.ShowModal()
+            finally:
+                self.main_brain.stop_calibrating()
+                dlg.Destroy()
         
     def OnQuit(self, event):
         del self.main_brain
@@ -435,7 +495,7 @@ class App(wxApp):
                 image = None
                 show_fps = None
                 try:
-                    image, show_fps = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
+                    image, show_fps, points = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
                 except KeyError:
                     # unexpected disconnect
                     pass # may have lost camera since call to service_pending
@@ -444,20 +504,27 @@ class App(wxApp):
                 if show_fps is not None:
                     show_fps_label = XRCCTRL(PreviewPerCamPanel,'acquired_fps_label') # get container
                     show_fps_label.SetLabel('fps: %.1f'%show_fps)
+                self.cam_image_canvas.set_draw_points(cam_id,points)
+                
             self.cam_image_canvas.OnDraw()
 
             if isinstance(event,wxIdleEventPtr):
                 event.RequestMore()
-            
+                
+        elif self.current_page == 'tracking':
+            data3d=MainBrain.get_realtime_data()
+            if data3d is not None:
+                XRCCTRL(self.tracking_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
+                XRCCTRL(self.tracking_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
+                XRCCTRL(self.tracking_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
         else:
             # do other stuff
             pass
             
-    def OnNewCamera(self, cam_id, scalar_control_info):
+    def OnNewCamera(self, cam_id, scalar_control_info, fqdnport):
         # bookkeeping
         self.cameras[cam_id] = {'scalar_control_info':scalar_control_info,
                                 }
-
         # XXX should tell self.cam_image_canvas
         self.PreviewPerCamInit(cam_id)
         self.SnapshotPerCamInit(cam_id)
@@ -474,9 +541,20 @@ class App(wxApp):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         self.main_brain.collect_background(cam_id)
 
+    def OnClearBackground(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        self.main_brain.clear_background(cam_id)
+
     def OnCloseCamera(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         self.main_brain.close_camera(cam_id) # eventually calls OnOldCamera
+    
+    def OnSetCameraThreshold(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        value = event.GetString()
+        if value:
+            value = float(value)
+            self.main_brain.set_diff_threshold(cam_id,value) # eventually calls OnOldCamera
     
     def OnOldCamera(self, cam_id):
         try:
@@ -501,7 +579,7 @@ def main():
     app = App() 
     
     # create main_brain server (not started yet)
-    main_brain = MainBrain()
+    main_brain = MainBrain.MainBrain()
 
     try:
         # connect server to GUI
