@@ -2,7 +2,7 @@
 
 cdef extern from "serial_comm.h":
     ctypedef enum SERIAL_COMM_DEFINES:
-#        SC_COMM_PORT
+        SC_COMM_PORT
         SC_BAUD_RATE
         SC_CMD_BUF_SIZE
         SC_MSG_BUF_SIZE

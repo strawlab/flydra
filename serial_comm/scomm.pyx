@@ -7,7 +7,7 @@ cdef extern from "Python.h":
     
 # Global Variables and Constants *******************************************
 
-COMM_PORT = "/dev/ttyS0"
+COMM_PORT = <char*>serial_comm.SC_COMM_PORT
 BAUD_RATE = serial_comm.SC_BAUD_RATE
 
 cdef void CHK( long errval ) except *:
