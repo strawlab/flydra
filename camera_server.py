@@ -9,13 +9,14 @@ import sys
 import numarray as na
 import Pyro.core, Pyro.errors
 import FlyMovieFormat
+import flydra.grabber
 
 if sys.platform == 'win32':
     time_func = time.clock
 else:
     time_func = time.time
     
-Pyro.config.PYRO_MULTITHREADED = 0 # No multithreading!
+Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here!
 Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
 
 if not DUMMY:
@@ -25,41 +26,8 @@ else:
     cam_iface = cam_iface_dummy
 
 CAM_CONTROLS = {'shutter':cam_iface.SHUTTER,
-            'gain':cam_iface.GAIN,
-            'brightness':cam_iface.BRIGHTNESS}
-
-incoming_frames = []
-record_status = None
-most_recent_frame = None
-
-def grab_func(cam,app_quit_event,grab_thread_done,incoming_frames_lock):
-    # transfer data from camera
-    # (this could be in C)
-    global incoming_frames, most_recent_frame
-    buf = na.zeros( (cam.max_height,cam.max_width), na.UInt8 ) # allocate buffer
-
-    # speed up by eliminating namespace lookups
-    app_quit_event_isSet = app_quit_event.isSet
-    grab = cam.grab_next_frame_blocking
-    get_last_timestamp = cam.get_last_timestamp
-    acquire_lock = incoming_frames_lock.acquire
-    copy_data = buf.copy
-    release_lock = incoming_frames_lock.release
-    sleep = time.sleep
-    try:
-        while not app_quit_event_isSet():
-            grab(buf) # grab frame and stick in buf
-            now=get_last_timestamp()
-            #now=time_func()
-            acquire_lock()
-            most_recent_frame = copy_data() # copy buffer out of FIFO
-            incoming_frames.append( (most_recent_frame,now) ) # save it
-            release_lock()
-            sleep(0.00001) # yield processor
-            
-    finally:
-        app_quit_event.set()
-        grab_thread_done.set()
+                'gain':cam_iface.GAIN,
+                'brightness':cam_iface.BRIGHTNESS}
 
 class FromMainBrainAPI( Pyro.core.ObjBase ):
 
@@ -69,27 +37,23 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
     #
     # ----------------------------------------------------------------
     
-    def post_init(self, cam, cam_id, main_brain,
-                  app_quit_event, listen_thread_done,
-                  record_status_lock):
+    def post_init(self, cam, cam_id, main_brain,globals):
         self.cam_id = cam_id
         self.main_brain = main_brain
-        self.app_quit_event = app_quit_event
-        self.listen_thread_done = listen_thread_done
         self.cam = cam
-        self.record_status_lock = record_status_lock
+        self.globals = globals
 
     def listen(self,daemon):
         """thread mainloop"""
-        self_app_quit_event_isSet = self.app_quit_event.isSet
+        self_app_quit_event_isSet = self.globals['app_quit_event'].isSet
         hr = daemon.handleRequests
         try:
             while not self_app_quit_event_isSet():
                 hr(0.1) # block on select for n seconds
                 
         finally:
-            self.app_quit_event.set()
-            self.listen_thread_done.set()
+            self.globals['app_quit_event'].set()
+            self.globals['listen_thread_done'].set()
 
     # ----------------------------------------------------------------
     #
@@ -101,35 +65,30 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
     # ----------------------------------------------------------------
 
     def send_most_recent_frame(self):
-        global most_recent_frame
-        self.main_brain.set_image(self.cam_id,most_recent_frame)
-##        most_recent_frame=None
+        self.main_brain.set_image(self.cam_id,self.globals['most_recent_frame'])
 
     def get_most_recent_frame(self):
-        global most_recent_frame
-        return most_recent_frame
+        return self.globals['most_recent_frame']
 
     def start_recording(self,filename):
-        global record_status
         fly_movie_lock = threading.Lock()
-        self.record_status_lock.acquire()
+        self.globals['record_status_lock'].acquire()
         try:
             fly_movie = FlyMovieFormat.FlyMovieSaver(filename,version=1)
-            record_status = ('save',fly_movie,fly_movie_lock)
+            self.globals['record_status'] = ('save',fly_movie,fly_movie_lock)
             print "starting to record to %s"%filename
         finally:
-            self.record_status_lock.release()        
+            self.globals['record_status_lock'].release()        
 
     def stop_recording(self):
-        global record_status
         cmd=None
-        self.record_status_lock.acquire()
+        self.globals['record_status_lock'].acquire()
         try:
-            if record_status:
-                cmd,fly_movie,fly_movie_lock = record_status
-            record_status = None
+            if self.globals['record_status']:
+                cmd,fly_movie,fly_movie_lock = self.globals['record_status']
+            self.globals['record_status'] = None
         finally:
-            self.record_status_lock.release()
+            self.globals['record_status_lock'].release()
             
         if cmd == 'save':
             fly_movie_lock.acquire()
@@ -144,7 +103,11 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
 
     def quit(self):
         print 'received quit command'
-        self.app_quit_event.set()
+        self.globals['app_quit_event'].set()
+
+    def collect_background(self):
+        print 'received collect_background command'
+        self.globals['collect_background_start'].set()
 
     def set_camera_property(self,property_name,value):
         enum = CAM_CONTROLS[property_name]
@@ -153,7 +116,24 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
 
 class App:
     def __init__(self):
-        global incoming_frames, record_status
+        # ----------------------------------------------------------------
+        #
+        # Initialize "global" variables
+        #
+        # ----------------------------------------------------------------
+
+        self.globals = {}
+        self.globals['incoming_frames']=[]
+        self.globals['record_status']=None
+        self.globals['most_recent_frame']=None
+        
+        # control flow events for threading model
+        self.globals['app_quit_event'] = threading.Event()
+        self.globals['listen_thread_done'] = threading.Event()
+        self.globals['grab_thread_done'] = threading.Event()
+        self.globals['incoming_frames_lock'] = threading.Lock()
+        self.globals['collect_background_start'] = threading.Event()
+        self.globals['record_status_lock'] = threading.Lock()
 
         # ----------------------------------------------------------------
         #
@@ -173,17 +153,6 @@ class App:
         self.cam.set_camera_property(cam_iface.SHUTTER,300,0,0)
         self.cam.set_camera_property(cam_iface.GAIN,72,0,0)
         self.cam.set_camera_property(cam_iface.BRIGHTNESS,783,0,0)
-
-        # ----------------------------------------------------------------
-        #
-        # Initialize variables
-        #
-        # ----------------------------------------------------------------
-
-        # control flow events for threading model
-        self.app_quit_event = threading.Event()
-        self.listen_thread_done = threading.Event()
-        self.grab_thread_done = threading.Event()
 
         # ----------------------------------------------------------------
         #
@@ -233,10 +202,8 @@ class App:
         port=9834
         daemon = Pyro.core.Daemon(host=hostname,port=port)
         self.from_main_brain_api = FromMainBrainAPI()
-        self.record_status_lock = threading.Lock()
         self.from_main_brain_api.post_init(self.cam,self.cam_id,self.main_brain,
-                                           self.app_quit_event,self.listen_thread_done,
-                                           self.record_status_lock)
+                                           self.globals)
         URI=daemon.connect(self.from_main_brain_api,'camera_server')
         print 'URI:',URI
 
@@ -250,19 +217,14 @@ class App:
         # start camera thread
         #
         # ----------------------------------------------------------------
-
-        self.incoming_frames_lock = threading.Lock()
-        grab_thread=threading.Thread(target=grab_func,
+        
+        grab_thread=threading.Thread(target=flydra.grabber.grab_func,
                                      args=(self.cam,
-                                           self.app_quit_event,
-                                           self.grab_thread_done,
-                                           self.incoming_frames_lock))
+                                           self.globals))
         self.cam.start_camera()  # start camera
         grab_thread.start() # start grabbing frames from camera
 
     def mainloop(self):
-        global incoming_frames, record_status
-
         grabbed_frames = []
 
         last_measurement_time = time.time()
@@ -270,7 +232,7 @@ class App:
         n_frames = 0
         try:
             try:
-                while not self.app_quit_event.isSet():
+                while not self.globals['app_quit_event'].isSet():
                     now = time.time()
 
                     # calculate and send FPS
@@ -282,12 +244,13 @@ class App:
                         n_frames = 0
 
                     # get new frames from grab thread
-                    self.incoming_frames_lock.acquire()
-                    if len(incoming_frames):
-                        n_frames += len(incoming_frames)
-                        grabbed_frames.extend( incoming_frames )
-                        incoming_frames = []
-                    self.incoming_frames_lock.release()
+                    self.globals['incoming_frames_lock'].acquire()
+                    len_if = len(self.globals['incoming_frames'])
+                    if len_if:
+                        n_frames += len_if
+                        grabbed_frames.extend( self.globals['incoming_frames'] )
+                        self.globals['incoming_frames'] = []
+                    self.globals['incoming_frames_lock'].release()
 
                     # process asynchronous commands
                     cmds=self.main_brain.get_and_clear_commands(self.cam_id)
@@ -298,15 +261,14 @@ class App:
                         elif key == 'get_im': # low priority get image (for streaming)
                             self.from_main_brain_api.send_most_recent_frame() # mimic call
 
-
                     # handle saving movie if needed
                     cmd=None
-                    self.record_status_lock.acquire()
+                    self.globals['record_status_lock'].acquire()
                     try:
-                        if record_status:
-                            cmd,fly_movie,fly_movie_lock = record_status
+                        if self.globals['record_status']:
+                            cmd,fly_movie,fly_movie_lock = self.globals['record_status']
                     finally:
-                        self.record_status_lock.release()
+                        self.globals['record_status_lock'].release()
 
                     if len(grabbed_frames):
                         if cmd=='save':
@@ -322,17 +284,17 @@ class App:
                     time.sleep(0.05)
 
             finally:
-                self.app_quit_event.set() # make sure other threads close
+                self.globals['app_quit_event'].set() # make sure other threads close
                 print 'telling main_brain to close cam_id'
                 self.main_brain.close(self.cam_id)
                 print 'closed'
                 print
                 print 'waiting for grab thread to quit'
-                self.grab_thread_done.wait() # block until thread is done...
+                self.globals['grab_thread_done'].wait() # block until thread is done...
                 print 'closed'
                 print
                 print 'waiting for camera_server to close'
-                self.listen_thread_done.wait() # block until thread is done...
+                self.globals['listen_thread_done'].wait() # block until thread is done...
                 print 'closed'
                 print
                 print 'quitting'
