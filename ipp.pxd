@@ -330,6 +330,8 @@ cdef extern from "ippi.h":
                                   Ipp32f* pMax, int* pIndexX, int* pIndexY)
     IppStatus ippiSqr_32f_C1R(Ipp32f* pSrc, int srcStep,
                               Ipp32f* pDst, int dstStep, IppiSize roiSize)
+    IppStatus ippiSqr_32f_C1IR(Ipp32f* pSrcDst, int srcDstStep,
+                              IppiSize roiSize)
     IppStatus ippiSub_32f_C1IR(Ipp32f* pSrc, int srcStep, Ipp32f* pSrcDst,
                                int srcDstStep, IppiSize roiSize)
     IppStatus ippiSqrt_32f_C1IR(Ipp32f* pSrcDst, int srcDstStep,
@@ -340,7 +342,15 @@ cdef extern from "ippi.h":
     IppStatus ippiGetSpatialMoment_64f(IppiMomentState_64f* pState,
                                        int mOrd, int nOrd, int nChannel,
                                        IppiPoint roiOffset, Ipp64f* pValue)
-    
+    # do not use! weird floating point error
+    IppStatus ippiGetCentralMoment_64f(IppiMomentState_64f* pState,
+                                       int mOrd, int nOrd, int nChannel,
+                                       Ipp64f* pValue)
+    ##
+    IppStatus ippiGetNormalizedCentralMoment_64f(IppiMomentState_64f* pState,
+                                       int mOrd, int nOrd, int nChannel,
+                                       Ipp64f* pValue)
+
 cdef extern from "ippcv.h":
     IppStatus ippiAdd_8u32f_C1IR(Ipp8u*  pSrc, int srcStep,
                                  Ipp32f* pSrcDst, int srcDstStep,

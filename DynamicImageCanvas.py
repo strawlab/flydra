@@ -236,21 +236,19 @@ class DynamicImageCanvas(wxGLCanvas):
                     glEnable(GL_TEXTURE_2D)
 
                 for pt in draw_points:
-                    x0 = pt[0]
-                    y0 = pt[1]
+                    ox0 = pt[0]
+                    oy0 = pt[1]
 
-                    slope = pt[2]
-                    
-                    angle_radians = math.atan( slope )
+                    angle_radians = pt[2]
                     r = 20.0
-                    x1 = r*math.cos( angle_radians ) + x0
-                    y1 = r*math.sin( angle_radians ) + y0
+                    odx = r*math.cos( angle_radians )
+                    ody = r*math.sin( angle_radians )
 
-                    x0 = x0/width*xg+xo
-                    x1 = x1/width*xg+xo
+                    x0 = (ox0-odx)/width*xg+xo
+                    x1 = (ox0+odx)/width*xg+xo
                     
-                    y0 = (height-y0)/height*yg+yo
-                    y1 = (height-y1)/height*yg+yo
+                    y0 = (height-oy0-ody)/height*yg+yo
+                    y1 = (height-oy0+ody)/height*yg+yo
 
                     glDisable(GL_TEXTURE_2D)
                     glColor4f(0.0,1.0,0.0,1.0)                        

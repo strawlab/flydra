@@ -4,28 +4,35 @@ import threading
 import time
 import socket
 import sys
-import numarray as na
 import Pyro.core, Pyro.errors
 import FlyMovieFormat
 import warnings
 import struct
-
+import Numeric as na
 
 include "../cam_iface/src/pyx_cam_iface.pyx"
-# cimport c_numarray
-# CamIFaceError, Camera, c_numarray
-#c_numarray.import_libnumarray()
+# this has the following side effects:
+## OLD # cimport c_numarray
+## OLD # CamIFaceError, Camera, c_numarray
+## OLD #c_numarray.import_libnumarray()
+# cimport c_numeric
+#c_numeric.import_array()
 
 cimport c_lib
 
 # start of IPP-requiring code
-include "fit_params.pyx" # does "cimport ipp", defines CHK
+cimport ipp
+cimport c_fit_params
 
 class IPPError(Exception):
     pass
 
 cdef object IppStatus2str(ipp.IppStatus status):
     return 'IppStatus: %d'%status
+
+cdef void CHK( int errval ) except *:
+    if errval != 0:
+        raise IPPError("IPP status %d"%IppStatus2str(errval))
 
 cdef void print_info_8u(ipp.Ipp8u* im, int im_step, ipp.IppiSize sz, object prefix):
     cdef ipp.Ipp32f minVal, maxVal
@@ -39,7 +46,6 @@ cdef void print_info_8u(ipp.Ipp8u* im, int im_step, ipp.IppiSize sz, object pref
                                                                    minIdx.x,minIdx.y,
                                                                    maxIdx.x,maxIdx.y)
 # end of IPP-requiring code
-
 
 if sys.platform == 'win32':
     time_func = time.clock
@@ -64,7 +70,6 @@ except:
     # try localhost
     main_brain_hostname = socket.gethostbyname(socket.gethostname())
 
-
 cdef class GrabClass:
     cdef Camera cam
     cdef int coord_port
@@ -75,9 +80,11 @@ cdef class GrabClass:
         
     def grab_func(self,globals):
         cdef unsigned char* buf_ptr
-        cdef c_numarray._numarray buf
+        #cdef c_numarray._numarray buf
+        cdef c_numeric.ArrayType buf
         cdef int height
         cdef int buf_ptr_step, width
+        cdef int heightwidth[2]
         cdef int collecting_background_frames
         cdef int bg_frame_number
         cdef int n_frames4stats
@@ -109,15 +116,14 @@ cdef class GrabClass:
         cdef ipp.Ipp32f *mean_image, *std_image # FP background
         cdef ipp.Ipp32f *im1_32f, *im2_32f
         cdef ipp.IppiSize sz
-        cdef ipp.IppiMomentState_64f *pState
 
-        cdef float x0, y0 # centroid
-        cdef float slope
+        cdef double x0, y0 # centroid
+        cdef double orientation
         # end of IPP-requiring code
 
 ##        COORD_PORT = None
         n_bg_samples = 100
-        centroid_search_radius = 10
+        centroid_search_radius = 50
         alpha = 1.0/n_bg_samples
         # questionable optimization: speed up by eliminating namespace lookups
         cam_quit_event_isSet = globals['cam_quit_event'].isSet
@@ -186,7 +192,8 @@ cdef class GrabClass:
         if im2_32f==NULL:
             raise MemoryError("Error allocating memory by IPP")
 
-        CHK(ipp.ippiMomentInitAlloc_64f(&pState, ipp.ippAlgHintFast))
+        if c_fit_params.init_moment_state() != 0:
+            raise RuntimeError("could not init moment state")
 
 ##        CHK(
 ##            ipp.ippiSet_8u_C1R(0,bg,bg_step,sz))
@@ -243,9 +250,9 @@ cdef class GrabClass:
                     # compute centroid -=-=-=-=-=-=-=-=-=-=-=-=
 
                     # start of IPP-requiring code
-                    _fit_params( &x0, &y0, &slope,
-                                 index_x, index_y, centroid_search_radius,
-                                 width, height, im2_32f, im2_32f_step, pState )
+                    c_fit_params.fit_params( &x0, &y0, &orientation,
+                                index_x, index_y, centroid_search_radius,
+                                width, height, im2_32f, im2_32f_step )
                     
                 #print 'max_val %f (% 8.1f,% 8.1f)'%(max_val,x0,y0)
                 
@@ -255,34 +262,45 @@ cdef class GrabClass:
                 buf_ptr=im2
                 buf_ptr_step=im2_step
                 # end of IPP-requiring code                    
-                
-                # allocate new numarray memory
-                buf = <c_numarray._numarray>c_numarray.NA_NewArray(
-                    NULL, c_numarray.tUInt8, 2,
-                    height, width)
 
-                # copy image to numarray
-                for i from 0 <= i < height:
-                    c_lib.memcpy(buf.data+width*i,buf_ptr+buf_ptr_step*i,width)
+                make_buf = True
+                if make_buf:
+                    # allocate new numarray memory
+                    #buf = <c_numarray._numarray>c_numarray.NA_NewArray(
+                    #    NULL, c_numarray.tUInt8, 2,
+                    #    height, width)
+                    heightwidth[0]=height
+                    heightwidth[1]=width
+                    buf = <c_numeric.ArrayType>c_numeric.PyArray_FromDims(
+                        2, heightwidth,
+                        c_numeric.PyArray_UBYTE);
 
-                # XXX need to Py_DECREF(buf) ??
+                    # copy image to numarray
+                    for i from 0 <= i < height:
+                        c_lib.memcpy(buf.data+width*i,
+                                     buf_ptr+buf_ptr_step*i,
+                                     width)
 
                 # return camwire's buffer
                 self.cam.unpoint_frame()
 
-                points = [ (x0,y0,slope) ]
+                points = [ (x0,y0,orientation) ]
 
 ##                points = [ (x0,y0),
 ##                           (index_x, index_y) ]
                 
                 # make appropriate references to our copy of the data
+                if not make_buf:
+                    # make some fake data
+                    buf = na.zeros( (height,width), na.UInt8 )
+                    buf[20:30,60:70]=255
+
                 globals['most_recent_frame'] = buf
                 globals['most_recent_frame_and_points'] = buf, points
                 acquire_lock()
                 globals['incoming_frames'].append(
                     (buf,timestamp,framenumber) ) # save it
                 release_lock()
-
 
                 #
                 #
@@ -398,6 +416,7 @@ cdef class GrabClass:
             # start of IPP-requiring code
             ipp.ippiFree(im1)
             ipp.ippiFree(bg)
+##            c_fit_params.free_moment_state()
             # end of IPP-requiring code
 
             globals['cam_quit_event'].set()

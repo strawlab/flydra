@@ -1,15 +1,15 @@
 #!/usr/bin/env python
-from numarray import *
-from matplotlib.matlab import *
+from Numeric import *
+plot_flag = 0
+if plot_flag:
+    from matplotlib.matlab import *
 import fit_params
 
 print "==========================================================="
 print "==========================================================="
 
-plot_flag = 1
-
 for i in range(1,9):
-    X = zeros((8,8),type=UInt8)
+    X = zeros((10,10), UInt8)
     if i == 1:
         X[4:7,2:7]=200
         X[5,1]=193
@@ -106,8 +106,8 @@ for i in range(1,9):
         X[1,7] = 255
 
     print X,i
-
     x0,y0,slope=fit_params.fit_params(X)
+
     print i,'x0,y0',x0,y0
     print 'slope',slope
 
