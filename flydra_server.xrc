@@ -143,7 +143,7 @@
                   </object>
                   <object class="sizeritem">
                     <object class="wxTextCtrl" name="threshold_value">
-                      <value>7.9</value>
+                      <value>?</value>
                     </object>
                   </object>
                 </object>
@@ -176,6 +176,14 @@
                     </object>
                   </object>
                 </object>
+              </object>
+              <object class="sizeritem">
+                <object class="wxCheckBox" name="debug_mode">
+                  <label>debug</label>
+                  <checked>0</checked>
+                </object>
+                <flag>wxLEFT</flag>
+                <border>4</border>
               </object>
             </object>
             <option>0</option>
@@ -442,6 +450,54 @@
           </object>
         </object>
         <flag>wxEXPAND</flag>
+      </object>
+    </object>
+  </object>
+  <object class="wxDialog" name="REPLAY_DIALOG">
+    <title>Replay controls</title>
+    <object class="wxBoxSizer">
+      <orient>wxVERTICAL</orient>
+      <object class="sizeritem">
+        <object class="wxBoxSizer">
+          <orient>wxHORIZONTAL</orient>
+          <object class="sizeritem">
+            <object class="wxButton" name="&lt;&lt;">
+              <label>&lt;&lt;</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="|&lt;">
+              <label>|&lt;</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="&gt;|">
+              <label>&gt;|</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="&gt;&gt;">
+              <label>&gt;&gt;</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxStaticText">
+              <label></label>
+            </object>
+            <flag>wxLEFT|wxRIGHT</flag>
+            <border>3</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="o">
+              <label>o</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="&gt;">
+              <label>&gt;</label>
+            </object>
+          </object>
+        </object>
       </object>
     </object>
   </object>
