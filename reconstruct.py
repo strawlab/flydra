@@ -76,8 +76,17 @@ def pts2Lcoords(A,B):
     return Lmatrix2Lcoords(pts2Lmatrix(A,B))
 
 def line_direction(Lcoords):
-    U = nx.array((-Lcoords[2], Lcoords[4], -Lcoords[5]))
-    U = U/math.sqrt(U[0]**2 + U[1]**2 + U[2]**2) # normalize
+    L = nx.asarray(Lcoords)
+    if len(L.shape)==1:
+        # single line coord
+        U = nx.array((-L[2], L[4], -L[5]))
+        U = U/math.sqrt(U[0]**2 + U[1]**2 + U[2]**2) # normalize
+    else:
+        assert L.shape[1] == 6
+        U = nx.array((-L[:,2], L[:,4], -L[:,5]))
+        U = nx.transpose(U)
+        Umags = nx.sqrt(U[:,0]**2 + U[:,1]**2 + U[:,2]**2)
+        U = U/Umags[:,nx.NewAxis]
     return U
 
 def pmat2cam_center(P):
