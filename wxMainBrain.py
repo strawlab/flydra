@@ -12,17 +12,15 @@
 # make sound when tracking (DONE)
 # toggle for save movie only when point found
 # toggle for external trigger (DONE)
+# add various bells and whistles for John
 
 # In other files:
 #  don't crash camera servers when hard-drives not mounted
 #  use ROI surrounding maximum point (DONE)
 #  save clear_threshold and diff_threshold camera settings (really?)
 
-import sys
-import threading
-import time
-import os
-import copy
+import sys, threading, time, os, copy
+import traceback
 import MainBrain
 from MatplotlibPanel import PlotPanel
 import DynamicImageCanvas
@@ -888,17 +886,26 @@ class wxMainBrainApp(wxApp):
         #print 'stopped timers'
         print "why doesn't the app stop now?"
         event.Skip()
-
+        #frame = sys._getframe()
+        #traceback.print_stack(frame)
+        sys.exit(0)
+        
     def OnQuit(self, event):
         #print 'in OnQuit'
         self._on_common_quit()
         self.frame.Destroy()
         print "why doesn't the app stop now??"
+        #frame = sys._getframe()
+        #traceback.print_stack(frame)
+        sys.exit(0)
 
     def OnUpdateRawImages(self, event):
         if self.current_page in ['preview','snapshot']:
             for cam_id in self.cameras.keys():
-                self.main_brain.request_image_async(cam_id)
+                try:
+                    self.main_brain.request_image_async(cam_id)
+                except KeyError: # no big deal, camera probably just disconnected
+                    pass
 
     def OnTimer(self, event):
         if not hasattr(self,'main_brain'):
@@ -932,19 +939,17 @@ class wxMainBrainApp(wxApp):
                     # not added yet
                     continue
                 previewPerCamPanel = cam['previewPerCamPanel']
-                image = None
-                show_fps = None
                 try:
+                    # this may fail with a Key Error if unexpected disconnect:
                     image, show_fps, points = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
+                    if image is not None:
+                        self.cam_image_canvas.update_image(cam_id,image)
+                    if show_fps is not None:
+                        show_fps_label = XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
+                        show_fps_label.SetLabel('fps: %.1f'%show_fps)
+                    self.cam_image_canvas.set_draw_points(cam_id,points)
                 except KeyError:
-                    # unexpected disconnect
                     pass # may have lost camera since call to service_pending
-                if image is not None:
-                    self.cam_image_canvas.update_image(cam_id,image)
-                if show_fps is not None:
-                    show_fps_label = XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
-                    show_fps_label.SetLabel('fps: %.1f'%show_fps)
-                self.cam_image_canvas.set_draw_points(cam_id,points)
 
             self.cam_image_canvas.OnDraw()
 
@@ -1029,6 +1034,7 @@ class wxMainBrainApp(wxApp):
         self.main_brain.send_set_camera_property( cam_id, 'roi2', widget.IsChecked() )
 
     def OnOldCamera(self, cam_id):
+        sys.stdout.flush()
         self.OnRecordRawStop(warn=False)
         
         try:

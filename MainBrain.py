@@ -127,6 +127,30 @@ def DEBUG():
     #for t in threading.enumerate():
     #    print '   ',t
 
+class DebugLock:
+    def __init__(self,name,verbose=False):
+        self.name = name
+        self._lock = threading.Lock()
+        self.verbose = verbose
+
+    def acquire(self):
+        if self.verbose:
+            print '-='*20
+        print '*****',self.name,'request acquire by',threading.currentThread()
+        if self.verbose:
+            frame = sys._getframe()
+            traceback.print_stack(frame)
+            print '-='*20
+        self._lock.acquire()
+        print '*****',self.name,'acquired by',threading.currentThread()
+        if self.verbose:
+            traceback.print_stack(frame)
+            print '-='*20
+
+    def release(self):
+        print '*****',self.name,'released by',threading.currentThread()
+        self._lock.release()
+
 class CoordReceiver(threading.Thread):
     def __init__(self,main_brain):
         
@@ -177,8 +201,10 @@ class CoordReceiver(threading.Thread):
 
     def set_reconstructor(self,r):
         self.all_data_lock.acquire()
-        self.reconstructor = r    
-        self.all_data_lock.release()
+        try:
+            self.reconstructor = r
+        finally:
+            self.all_data_lock.release()
 
     def connect(self,cam_id):
         global hostname
@@ -186,67 +212,71 @@ class CoordReceiver(threading.Thread):
         assert not self.main_brain.is_saving_data()
         
         self.all_data_lock.acquire()
-        self.cam_ids.append(cam_id)
+        try:
+            self.cam_ids.append(cam_id)
         
-        # find cam2mainbrain_data_port
-        if len(self.cam2mainbrain_data_ports)>0:
-            cam2mainbrain_data_port = max(self.cam2mainbrain_data_ports)+1
-        else:
-            cam2mainbrain_data_port = 34813
-        self.cam2mainbrain_data_ports.append( cam2mainbrain_data_port )
-        
-        # find absolute_cam_no
-        self.max_absolute_cam_nos += 1        
-        absolute_cam_no = self.max_absolute_cam_nos
-        self.absolute_cam_nos.append( absolute_cam_no )
-        
-        self.cam_id2cam_no[cam_id] = absolute_cam_no
+            # find cam2mainbrain_data_port
+            if len(self.cam2mainbrain_data_ports)>0:
+                cam2mainbrain_data_port = max(self.cam2mainbrain_data_ports)+1
+            else:
+                cam2mainbrain_data_port = 34813
+            self.cam2mainbrain_data_ports.append( cam2mainbrain_data_port )
 
-        # create and bind socket to listen to
-        if REALTIME_UDP:
-            sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sockobj.bind((hostname, cam2mainbrain_data_port))
-            sockobj.setblocking(0)
-            self.listen_sockets[ sockobj ] = cam_id
-        else:
-            sockobj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sockobj.bind((hostname, cam2mainbrain_data_port))
-            sockobj.listen(1)
-            sockobj.setblocking(0)
-            self.server_sockets[ sockobj ] = cam_id
-        self.last_timestamps.append(IMPOSSIBLE_TIMESTAMP) # arbitrary impossible number
-        self.last_framenumbers_delay.append(-1) # arbitrary impossible number
-        self.last_framenumbers_skip.append(-1) # arbitrary impossible number
-        self.framenumber_offsets.append(0)
-        self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no,
-                                          'frame0':IMPOSSIBLE_TIMESTAMP}
-        self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, IMPOSSIBLE_TIMESTAMP) )
-        self.all_data_lock.release()
+            # find absolute_cam_no
+            self.max_absolute_cam_nos += 1        
+            absolute_cam_no = self.max_absolute_cam_nos
+            self.absolute_cam_nos.append( absolute_cam_no )
+
+            self.cam_id2cam_no[cam_id] = absolute_cam_no
+
+            # create and bind socket to listen to
+            if REALTIME_UDP:
+                sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sockobj.bind((hostname, cam2mainbrain_data_port))
+                sockobj.setblocking(0)
+                self.listen_sockets[ sockobj ] = cam_id
+            else:
+                sockobj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sockobj.bind((hostname, cam2mainbrain_data_port))
+                sockobj.listen(1)
+                sockobj.setblocking(0)
+                self.server_sockets[ sockobj ] = cam_id
+            self.last_timestamps.append(IMPOSSIBLE_TIMESTAMP) # arbitrary impossible number
+            self.last_framenumbers_delay.append(-1) # arbitrary impossible number
+            self.last_framenumbers_skip.append(-1) # arbitrary impossible number
+            self.framenumber_offsets.append(0)
+            self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no,
+                                              'frame0':IMPOSSIBLE_TIMESTAMP}
+            self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, IMPOSSIBLE_TIMESTAMP) )
+        finally:
+            self.all_data_lock.release()
 
         return cam2mainbrain_data_port
 
     def disconnect(self,cam_id):
         cam_idx = self.cam_ids.index( cam_id )
-
         self.all_data_lock.acquire()
-        
-        del self.cam_ids[cam_idx]
-        del self.cam2mainbrain_data_ports[cam_idx]
-        del self.absolute_cam_nos[cam_idx]
-        for sockobj, test_cam_id in self.listen_sockets.iteritems():
-            if cam_id == test_cam_id:
-                sockobj.close()
-                del self.listen_sockets[sockobj]
-        for sockobj, test_cam_id in self.server_sockets.iteritems():
-            if cam_id == test_cam_id:
-                sockobj.close()
-                del self.server_sockets[sockobj]
-        del self.last_timestamps[cam_idx]
-        del self.last_framenumbers_delay[cam_idx]
-        del self.last_framenumbers_skip[cam_idx]
-        del self.framenumber_offsets[cam_idx]
-        del self.general_save_info[cam_id]
-        self.all_data_lock.release()
+        try:
+            del self.cam_ids[cam_idx]
+            del self.cam2mainbrain_data_ports[cam_idx]
+            del self.absolute_cam_nos[cam_idx]
+            for sockobj, test_cam_id in self.listen_sockets.iteritems():
+                if cam_id == test_cam_id:
+                    sockobj.close()
+                    del self.listen_sockets[sockobj]
+                    break # XXX naughty to delete item inside iteration
+            for sockobj, test_cam_id in self.server_sockets.iteritems():
+                if cam_id == test_cam_id:
+                    sockobj.close()
+                    del self.server_sockets[sockobj]
+                    break # XXX naughty to delete item inside iteration
+            del self.last_timestamps[cam_idx]
+            del self.last_framenumbers_delay[cam_idx]
+            del self.last_framenumbers_skip[cam_idx]
+            del self.framenumber_offsets[cam_idx]
+            del self.general_save_info[cam_id]
+        finally:
+            self.all_data_lock.release()
     
     def quit(self):
         # called from outside of thread to quit the thread
@@ -305,8 +335,15 @@ class CoordReceiver(threading.Thread):
         old_data = {}
         while not self.quit_event.isSet():
             if not REALTIME_UDP:
-                in_ready, out_ready, exc_ready = select_select( self.server_sockets.keys(),
-                                                                empty_list, empty_list, 0.0 )
+                try:
+                    in_ready, out_ready, exc_ready = select_select( self.server_sockets.keys(),
+                                                                    empty_list, empty_list, 0.0 )
+                except select.error, exc:
+                    print 'select.error on server socket, ignoring...'
+                    continue
+                except socket.error, exc:
+                    print 'socket.error on server socket, ignoring...'
+                    continue
                 for sockobj in in_ready:
                     cam_id = self.server_sockets[sockobj]
                     client_sockobj, addr = sockobj.accept()
@@ -316,10 +353,17 @@ class CoordReceiver(threading.Thread):
             try:
                 in_ready, out_ready, exc_ready = select_select( self.listen_sockets.keys(),
                                                                 empty_list, empty_list, timeout )
-            except Exception:
+            except select.error, exc:
+                print 'select.error on listen socket, ignoring...'
+                continue
+            except socket.error, exc:
+                print 'socket.error on listen socket, ignoring...'
+                continue
+            except Exception, exc:
                 raise
             except:
-                print 'WARNING: CoordReceiver received an exception not derived from Exception'
+                print 'ERROR: CoordReceiver received an exception not derived from Exception'
+                print '-='*10,'I should really quit now!','-='*10
                 continue
 ##            now = time_time()
 ##            tstamp_fd.write( struct.pack('d',now ) )
@@ -335,206 +379,207 @@ class CoordReceiver(threading.Thread):
                 continue
             
             self.all_data_lock.acquire()
-            deferred_2d_data = []
-            for sockobj in in_ready:
-                try:
-                    cam_id = self.listen_sockets[sockobj]
-                except ValueError:
-                    # camera was dropped?
-                    continue
-                cam_idx = self.cam_ids.index(cam_id)
-                #cam_id = self.cam_ids[cam_idx]
-                absolute_cam_no = self.absolute_cam_nos[cam_idx]
-
-                if REALTIME_UDP:
-                    newdata, addr = sockobj.recvfrom(4096)
-                else:
-                    newdata = sockobj.recv(4096)
-                data = old_data.get( sockobj, '')
-                data = data + newdata
-                while len(data):
-                    header = data[:header_size]
-                    if len(header) != header_size:
-                        #print 'incomplete header buffer'
-                        break
-                    timestamp, framenumber, n_pts = struct.unpack(header_fmt,header)
-                    points = []
-                    if len(data) < header_size + n_pts*pt_size:
-                        #print 'incomplete point info'
-                        break
-                    if framenumber-self.last_framenumbers_skip[cam_idx] > 1:
-                        print '  WARNING: frame data loss %s'%(cam_id,) # (or UDP out-of-order)
-                    self.last_framenumbers_skip[cam_idx]=framenumber
-                    start=header_size
-                    for i in range(n_pts):
-                        end=start+pt_size
-                        x,y,area,slope,eccentricity,p1,p2,p3,p4 = struct.unpack(pt_fmt,data[start:end])
-                        points.append( (x,y,area,slope,eccentricity, p1,p2,p3,p4) )
-                        start=end
-                    data = data[end:]
-
-                    # -----------------------------------------------
-                    
-                    # XXX hack? make data available via cam_dict
-                    cam_dict = self.main_brain.remote_api.cam_info[cam_id]
-                    cam_dict['lock'].acquire()
-                    cam_dict['points']=points
-                    cam_dict['lock'].release()
-
-                    #if timestamp-self.last_timestamps[cam_idx] > 0.02:
-                    #    print 'WARNING frame skipped %s?'%cam_id
-
-    ##                if framenumber-self.last_framenumbers_delay[cam_idx] > 1:
-    ##                    print '  (frame delay/misorder %s)'%(cam_id,)
-
-                    if timestamp-self.last_timestamps[cam_idx] > self.RESET_FRAMENUMBER_DURATION:
-                        self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
-                                            realtime_coord_dict, new_data_framenumbers )
-
-                    self.last_timestamps[cam_idx]=timestamp
-                    self.last_framenumbers_delay[cam_idx]=framenumber
-                    corrected_framenumber = framenumber-self.framenumber_offsets[cam_idx]
-                    XXX_framenumber = corrected_framenumber
-
-                    if self.main_brain.is_saving_data() or len(getnan(points[0][0])[0]):
-                        # Save 2D data (even when no point found) to allow
-                        # temporal correlation of movie frames to 2D data.
-                        deferred_2d_data.append((absolute_cam_no, # defer saving to later
-                                                 corrected_framenumber,
-                                                 timestamp,
-                                                 points[0][0], # x
-                                                 points[0][1], # y
-                                                 points[0][2], # area
-                                                 points[0][3], # slope
-                                                 points[0][4], # eccentricity
-                                                 points[0][5], # p1
-                                                 points[0][6], # p2
-                                                 points[0][7], # p3
-                                                 points[0][8], # p4
-                                                 ))
-
-                    # save new frame data
-                    # XXX for now, only attempt 3D reconstruction of 1st point
-                    realtime_coord_dict.setdefault(corrected_framenumber,{})[cam_id]=points[0]
-
-                    new_data_framenumbers.add( corrected_framenumber ) # insert into set
-
-                # preserve unprocessed data
-                old_data[sockobj] = data
-
-            # Now we've grabbed all data waiting on network. Now it's
-            # time to calculate 3D info.
-            
-            # XXX could go for latest data first to minimize latency
-            # on that data.
-
-            for corrected_framenumber in new_data_framenumbers:
-                if self.reconstructor is None:
-                    # can't do any 3D math without calibration information
-                    break
-                data_dict = realtime_coord_dict[corrected_framenumber]
-                num_cams_arrived = len(data_dict)
-                d2 = {} # old "good" points will go in here
-                for cam_id, PT in data_dict.iteritems():
-                    if PT[0] > -0.9: # only use found points
-                        d2[cam_id] = PT
-                num_good_images = len(d2)
-                if num_good_images < 2:
-                    # no point in dealing with this frame!
-                    continue
-                #if num_good_images==2 or num_cams_arrived==len(self.cam_ids):
-                if num_cams_arrived==len(self.cam_ids):
-                    #X, line3d = self.reconstructor.find3d(d2.items())
-                    #cam_ids_used = d2.keys()
+            try:
+                deferred_2d_data = []
+                for sockobj in in_ready:
                     try:
-                        X, line3d, cam_ids_used, min_mean_dist = ru.find_best_3d(self.reconstructor,d2)
-                    except:
-                        # this prevents us from bombing this thread...
-                        print 'WARNING:'
-                        traceback.print_last()
-                        print 'SKIPPED 3d calculation for this frame.'
+                        cam_id = self.listen_sockets[sockobj]
+                    except KeyError,ValueError:
+                        # camera was dropped?
                         continue
-                    cam_nos_used = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
+                    cam_idx = self.cam_ids.index(cam_id)
+                    #cam_id = self.cam_ids[cam_idx]
+                    absolute_cam_no = self.absolute_cam_nos[cam_idx]
 
-                    if line3d is None:
-                        line3d = nan, nan, nan, nan, nan, nan
-                    find3d_time = time.time()
+                    if REALTIME_UDP:
+                        newdata, addr = sockobj.recvfrom(4096)
+                    else:
+                        newdata = sockobj.recv(4096)
+                    data = old_data.get( sockobj, '')
+                    data = data + newdata
+                    while len(data):
+                        header = data[:header_size]
+                        if len(header) != header_size:
+                            #print 'incomplete header buffer'
+                            break
+                        timestamp, framenumber, n_pts = struct.unpack(header_fmt,header)
+                        points = []
+                        if len(data) < header_size + n_pts*pt_size:
+                            #print 'incomplete point info'
+                            break
+                        if framenumber-self.last_framenumbers_skip[cam_idx] > 1:
+                            print '  WARNING: frame data loss %s'%(cam_id,) # (or UDP out-of-order)
+                        self.last_framenumbers_skip[cam_idx]=framenumber
+                        start=header_size
+                        for i in range(n_pts):
+                            end=start+pt_size
+                            x,y,area,slope,eccentricity,p1,p2,p3,p4 = struct.unpack(pt_fmt,data[start:end])
+                            points.append( (x,y,area,slope,eccentricity, p1,p2,p3,p4) )
+                            start=end
+                        data = data[end:]
 
-                    x,y,z=X
-                    outgoing_data = [x,y,z]
-                    outgoing_data.extend( line3d ) # 6 component vector
-                    outgoing_data.append( find3d_time )
+                        # -----------------------------------------------
 
-                    if len(downstream_hostnames):
-                        data_packet = struct.pack('ifffffffffd',corrected_framenumber,*outgoing_data)
-                    if num_good_images==2:
-                        # fastest 3d data
-                        fastest_realtime_data = X, line3d, cam_ids_used, min_mean_dist
-                        try:
-                            for downstream_hostname in downstream_hostnames:
-                                outgoing_UDP_socket.sendto(data_packet,(downstream_hostname,FASTEST_DATA_PORT))
-                        except:
-                            print 'WARNING: could not send 3d point data to projector:'
-                            print
-                        if self.main_brain.is_saving_data():
-                            self.main_brain.queue_data3d_fastest.put( (corrected_framenumber,
-                                                                       outgoing_data,
-                                                                       cam_nos_used,
-                                                                       min_mean_dist) )
-                    if num_cams_arrived==len(self.cam_ids):
-                        # realtime 3d data
-                        best_realtime_data = X, line3d, cam_ids_used, min_mean_dist
-                        try:
-                            for downstream_hostname in downstream_hostnames:
-                                outgoing_UDP_socket.sendto(data_packet,(downstream_hostname,BEST_DATA_PORT))
-                        except:
-                            print 'WARNING: could not send 3d point data to projector:'
-                            print
-                        if self.main_brain.is_saving_data():
-                            self.main_brain.queue_data3d_best.put( (corrected_framenumber,
-                                                                    outgoing_data,
-                                                                    cam_nos_used,
-                                                                    min_mean_dist) )
+                        # XXX hack? make data available via cam_dict
+                        cam_dict = self.main_brain.remote_api.cam_info[cam_id]
+                        cam_dict['lock'].acquire()
+                        cam_dict['points']=points
+                        cam_dict['lock'].release()
 
-            # save calibration data -=-=-=-=-=-=-=-=
-            if self.main_brain.currently_calibrating.isSet():
+                        #if timestamp-self.last_timestamps[cam_idx] > 0.02:
+                        #    print 'WARNING frame skipped %s?'%cam_id
+
+        ##                if framenumber-self.last_framenumbers_delay[cam_idx] > 1:
+        ##                    print '  (frame delay/misorder %s)'%(cam_id,)
+
+                        if timestamp-self.last_timestamps[cam_idx] > self.RESET_FRAMENUMBER_DURATION:
+                            self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
+                                                realtime_coord_dict, new_data_framenumbers )
+
+                        self.last_timestamps[cam_idx]=timestamp
+                        self.last_framenumbers_delay[cam_idx]=framenumber
+                        corrected_framenumber = framenumber-self.framenumber_offsets[cam_idx]
+                        XXX_framenumber = corrected_framenumber
+
+                        if self.main_brain.is_saving_data() or len(getnan(points[0][0])[0]):
+                            # Save 2D data (even when no point found) to allow
+                            # temporal correlation of movie frames to 2D data.
+                            deferred_2d_data.append((absolute_cam_no, # defer saving to later
+                                                     corrected_framenumber,
+                                                     timestamp,
+                                                     points[0][0], # x
+                                                     points[0][1], # y
+                                                     points[0][2], # area
+                                                     points[0][3], # slope
+                                                     points[0][4], # eccentricity
+                                                     points[0][5], # p1
+                                                     points[0][6], # p2
+                                                     points[0][7], # p3
+                                                     points[0][8], # p4
+                                                     ))
+
+                        # save new frame data
+                        # XXX for now, only attempt 3D reconstruction of 1st point
+                        realtime_coord_dict.setdefault(corrected_framenumber,{})[cam_id]=points[0]
+
+                        new_data_framenumbers.add( corrected_framenumber ) # insert into set
+
+                    # preserve unprocessed data
+                    old_data[sockobj] = data
+
+                # Now we've grabbed all data waiting on network. Now it's
+                # time to calculate 3D info.
+
+                # XXX could go for latest data first to minimize latency
+                # on that data.
+
                 for corrected_framenumber in new_data_framenumbers:
+                    if self.reconstructor is None:
+                        # can't do any 3D math without calibration information
+                        break
                     data_dict = realtime_coord_dict[corrected_framenumber]
-                    if len(data_dict) == len(self.cam_ids):
-                        k = data_dict.keys()
-                        k.sort()
-                        ids = []
-                        save_points = []
-                        for cam_id in k:
-                            pt = data_dict[cam_id]
-                            if len(getnan(pt[:2])[0]):
-                                save_pt = nan, nan, nan
-                                id = 0
-                            else:
-                                save_pt = pt[0], pt[1], 1.0
-                                id = 1
-                            ids.append( id )
-                            save_points.extend( save_pt )
-                        # we now have data from all cameras
-                        calib_data_lock.acquire()
-                        calib_IdMat.append( ids )
-                        calib_points.append( save_points )
-                        calib_data_lock.release()
-                    
-            # clean up old frame records to save RAM
-            # XXX does this drop unintended frames on re-sync?
-            if len(realtime_coord_dict)>100:
-                k=realtime_coord_dict.keys()
-                k.sort()
-                for ki in k[:-50]:
-                    del realtime_coord_dict[ki]  
+                    num_cams_arrived = len(data_dict)
+                    d2 = {} # old "good" points will go in here
+                    for cam_id, PT in data_dict.iteritems():
+                        if PT[0] > -0.9: # only use found points
+                            d2[cam_id] = PT
+                    num_good_images = len(d2)
+                    if num_good_images < 2:
+                        # no point in dealing with this frame!
+                        continue
+                    #if num_good_images==2 or num_cams_arrived==len(self.cam_ids):
+                    if num_cams_arrived==len(self.cam_ids):
+                        #X, line3d = self.reconstructor.find3d(d2.items())
+                        #cam_ids_used = d2.keys()
+                        try:
+                            X, line3d, cam_ids_used, min_mean_dist = ru.find_best_3d(self.reconstructor,d2)
+                        except:
+                            # this prevents us from bombing this thread...
+                            print 'WARNING:'
+                            traceback.print_last()
+                            print 'SKIPPED 3d calculation for this frame.'
+                            continue
+                        cam_nos_used = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
 
-            if len(deferred_2d_data):
-                self.main_brain.queue_data2d.put( deferred_2d_data )
-                
-                    
-            self.all_data_lock.release()
-##        tstamp_fd.close()
+                        if line3d is None:
+                            line3d = nan, nan, nan, nan, nan, nan
+                        find3d_time = time.time()
+
+                        x,y,z=X
+                        outgoing_data = [x,y,z]
+                        outgoing_data.extend( line3d ) # 6 component vector
+                        outgoing_data.append( find3d_time )
+
+                        if len(downstream_hostnames):
+                            data_packet = struct.pack('ifffffffffd',corrected_framenumber,*outgoing_data)
+                        if num_good_images==2:
+                            # fastest 3d data
+                            fastest_realtime_data = X, line3d, cam_ids_used, min_mean_dist
+                            try:
+                                for downstream_hostname in downstream_hostnames:
+                                    outgoing_UDP_socket.sendto(data_packet,(downstream_hostname,FASTEST_DATA_PORT))
+                            except:
+                                print 'WARNING: could not send 3d point data to projector:'
+                                print
+                            if self.main_brain.is_saving_data():
+                                self.main_brain.queue_data3d_fastest.put( (corrected_framenumber,
+                                                                           outgoing_data,
+                                                                           cam_nos_used,
+                                                                           min_mean_dist) )
+                        if num_cams_arrived==len(self.cam_ids):
+                            # realtime 3d data
+                            best_realtime_data = X, line3d, cam_ids_used, min_mean_dist
+                            try:
+                                for downstream_hostname in downstream_hostnames:
+                                    outgoing_UDP_socket.sendto(data_packet,(downstream_hostname,BEST_DATA_PORT))
+                            except:
+                                print 'WARNING: could not send 3d point data to projector:'
+                                print
+                            if self.main_brain.is_saving_data():
+                                self.main_brain.queue_data3d_best.put( (corrected_framenumber,
+                                                                        outgoing_data,
+                                                                        cam_nos_used,
+                                                                        min_mean_dist) )
+
+                # save calibration data -=-=-=-=-=-=-=-=
+                if self.main_brain.currently_calibrating.isSet():
+                    for corrected_framenumber in new_data_framenumbers:
+                        data_dict = realtime_coord_dict[corrected_framenumber]
+                        if len(data_dict) == len(self.cam_ids):
+                            k = data_dict.keys()
+                            k.sort()
+                            ids = []
+                            save_points = []
+                            for cam_id in k:
+                                pt = data_dict[cam_id]
+                                if len(getnan(pt[:2])[0]):
+                                    save_pt = nan, nan, nan
+                                    id = 0
+                                else:
+                                    save_pt = pt[0], pt[1], 1.0
+                                    id = 1
+                                ids.append( id )
+                                save_points.extend( save_pt )
+                            # we now have data from all cameras
+                            calib_data_lock.acquire()
+                            calib_IdMat.append( ids )
+                            calib_points.append( save_points )
+                            calib_data_lock.release()
+
+                # clean up old frame records to save RAM
+                # XXX does this drop unintended frames on re-sync?
+                if len(realtime_coord_dict)>100:
+                    k=realtime_coord_dict.keys()
+                    k.sort()
+                    for ki in k[:-50]:
+                        del realtime_coord_dict[ki]  
+
+                if len(deferred_2d_data):
+                    self.main_brain.queue_data2d.put( deferred_2d_data )
+
+            finally:
+                self.all_data_lock.release()
+    ##        tstamp_fd.close()
     
 class MainBrain(object):
     """Handle all camera network stuff and interact with application"""
@@ -556,9 +601,11 @@ class MainBrain(object):
             self.no_cams_connected = threading.Event()
             self.no_cams_connected.set()
             self.changed_cam_lock.acquire()
-            self.new_cam_ids = []
-            self.old_cam_ids = []
-            self.changed_cam_lock.release()
+            try:
+                self.new_cam_ids = []
+                self.old_cam_ids = []
+            finally:
+                self.changed_cam_lock.release()
             self.main_brain = main_brain
             
             # threading control locks
@@ -567,44 +614,56 @@ class MainBrain(object):
 
         def external_get_and_clear_pending_cams(self):
             self.changed_cam_lock.acquire()
-            new_cam_ids = self.new_cam_ids
-            self.new_cam_ids = []
-            old_cam_ids = self.old_cam_ids
-            self.old_cam_ids = []
-            self.changed_cam_lock.release()
+            try:
+                new_cam_ids = self.new_cam_ids
+                self.new_cam_ids = []
+                old_cam_ids = self.old_cam_ids
+                self.old_cam_ids = []
+            finally:
+                self.changed_cam_lock.release()
             return new_cam_ids, old_cam_ids
 
         def external_get_cam_ids(self):
             self.cam_info_lock.acquire()
-            cam_ids = self.cam_info.keys()
-            self.cam_info_lock.release()
+            try:
+                cam_ids = self.cam_info.keys()
+            finally:
+                self.cam_info_lock.release()
             cam_ids.sort()
             return cam_ids
 
         def external_get_info(self, cam_id):
             self.cam_info_lock.acquire()
-            cam = self.cam_info[cam_id]
-            cam_lock = cam['lock']
-            cam_lock.acquire()
-            scalar_control_info = copy.deepcopy(cam['scalar_control_info'])
-            fqdn = cam['fqdn']
-            port = cam['port']
-            cam_lock.release()
-            self.cam_info_lock.release()
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    scalar_control_info = copy.deepcopy(cam['scalar_control_info'])
+                    fqdn = cam['fqdn']
+                    port = cam['port']
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()
             return scalar_control_info, fqdn, port
 
         def external_get_image_fps_points(self, cam_id):
             self.cam_info_lock.acquire()
-            cam = self.cam_info[cam_id]
-            cam_lock = cam['lock']
-            cam_lock.acquire()
-            image = cam['image']
-            cam['image'] = None
-            fps = cam['fps']
-            cam['fps'] = None
-            points = cam['points'][:]
-            cam_lock.release()
-            self.cam_info_lock.release()
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    image = cam['image']
+                    cam['image'] = None
+                    fps = cam['fps']
+                    cam['fps'] = None
+                    points = cam['points'][:]
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()
             # NB: points are undistorted (and therefore do not align
             # with distorted image)
             return image, fps, points
@@ -642,13 +701,17 @@ class MainBrain(object):
                 self.cam_info_lock.release()            
 
         def external_start_recording( self, cam_id, raw_filename, bg_filename):
-            self.cam_info_lock.acquire()            
-            cam = self.cam_info[cam_id]
-            cam_lock = cam['lock']
-            cam_lock.acquire()
-            cam['commands']['start_recording']=raw_filename, bg_filename
-            cam_lock.release()
-            self.cam_info_lock.release()
+            self.cam_info_lock.acquire()
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    cam['commands']['start_recording']=raw_filename, bg_filename
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()
 
         def external_stop_recording( self, cam_id):
             self.cam_info_lock.acquire()            
@@ -675,71 +738,97 @@ class MainBrain(object):
                     cam_lock.release()
             finally:
                 self.cam_info_lock.release()
-##            print 'sent camera quit event',cam_id
-##            sys.stdout.flush()
 
         def external_set_use_arena( self, cam_id, value):
-            self.cam_info_lock.acquire()            
-            cam = self.cam_info[cam_id]
-            cam_lock = cam['lock']
-            cam_lock.acquire()
-            cam['commands']['use_arena']=value
-            cam_lock.release()
-            self.cam_info_lock.release()
+            self.cam_info_lock.acquire()
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    cam['commands']['use_arena']=value
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()
 
         def external_find_r_center( self, cam_id):
-            self.cam_info_lock.acquire()            
-            cam = self.cam_info[cam_id]
-            cam_lock = cam['lock']
-            cam_lock.acquire()
-            cam['commands']['find_r_center']=None
-            cam_lock.release()
-            self.cam_info_lock.release()
+            self.cam_info_lock.acquire()
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    cam['commands']['find_r_center']=None
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()
 
         def external_set_collecting_background( self, cam_id, value):
-            self.cam_info_lock.acquire()            
-            cam = self.cam_info[cam_id]
-            cam_lock = cam['lock']
-            cam_lock.acquire()
-            cam['commands']['collecting_bg']=value
-            cam_lock.release()
-            self.cam_info_lock.release()
+            self.cam_info_lock.acquire()
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    cam['commands']['collecting_bg']=value
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()
 
         def external_take_background( self, cam_id):
-            self.cam_info_lock.acquire()            
-            cam = self.cam_info[cam_id]
-            cam_lock = cam['lock']
-            cam_lock.acquire()
-            cam['commands']['take_bg']=None
-            cam_lock.release()
-            self.cam_info_lock.release()        
+            self.cam_info_lock.acquire()
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    cam['commands']['take_bg']=None
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()        
 
         def external_clear_background( self, cam_id):
-            self.cam_info_lock.acquire()            
-            cam = self.cam_info[cam_id]
-            cam_lock = cam['lock']
-            cam_lock.acquire()
-            cam['commands']['clear_bg']=None
-            cam_lock.release()
-            self.cam_info_lock.release()        
+            self.cam_info_lock.acquire()
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    cam['commands']['clear_bg']=None
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()        
 
         def external_set_debug( self, cam_id, value):
-            self.cam_info_lock.acquire()            
-            cam = self.cam_info[cam_id]
-            cam_lock = cam['lock']
-            cam_lock.acquire()
-            cam['commands']['debug']=value
-            cam_lock.release()
-            self.cam_info_lock.release()
+            self.cam_info_lock.acquire()
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    cam['commands']['debug']=value
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()
 
         def external_set_cal( self, cam_id, pmat, intlin, intnonlin):
-            self.cam_info_lock.acquire()            
-            cam = self.cam_info[cam_id]
-            cam_lock = cam['lock']
-            cam_lock.acquire()
-            cam['commands']['cal']= pmat, intlin, intnonlin
-            cam_lock.release()
-            self.cam_info_lock.release()
+            self.cam_info_lock.acquire()
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    cam['commands']['cal']= pmat, intlin, intnonlin
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()
 
         # --- thread boundary -----------------------------------------
 
@@ -749,13 +838,17 @@ class MainBrain(object):
             hr = daemon.handleRequests
             while not quit_now_isSet():
                 hr(0.1) # block on select for n seconds
-                self.cam_info_lock.acquire()                
-                cam_ids = self.cam_info.keys()
-                self.cam_info_lock.release()
+                self.cam_info_lock.acquire()
+                try:
+                    cam_ids = self.cam_info.keys()
+                finally:
+                    self.cam_info_lock.release()
                 for cam_id in cam_ids:
                     self.cam_info_lock.acquire()
-                    connected = self.cam_info[cam_id]['caller'].connected
-                    self.cam_info_lock.release()                    
+                    try:
+                        connected = self.cam_info[cam_id]['caller'].connected
+                    finally:
+                        self.cam_info_lock.release()                    
                     if not connected:
                         print 'main_brain WARNING: lost camera',cam_id
                         self.close(cam_id)
@@ -784,56 +877,71 @@ class MainBrain(object):
             print 'cam_id',cam_id,'connected'
             
             cam2mainbrain_data_port = self.main_brain.coord_receiver.connect(cam_id)
-            self.cam_info_lock.acquire()            
-            self.cam_info[cam_id] = {'commands':{}, # command queue for cam
-                                     'lock':threading.Lock(), # prevent concurrent access
-                                     'image':None,  # most recent image from cam
-                                     'fps':None,    # most recept fps from cam
-                                     'points':[], # 2D image points
-                                     'caller':caller,    # most recept fps from cam
-                                     'scalar_control_info':scalar_control_info,
-                                     'fqdn':fqdn,
-                                     'port':port,
-                                     'cam2mainbrain_data_port':cam2mainbrain_data_port,
-                                     }
-            self.cam_info_lock.release()
+            self.cam_info_lock.acquire()
+            try:
+                self.cam_info[cam_id] = {'commands':{}, # command queue for cam
+                                         'lock':threading.Lock(), # prevent concurrent access
+                                         'image':None,  # most recent image from cam
+                                         'fps':None,    # most recept fps from cam
+                                         'points':[], # 2D image points
+                                         'caller':caller,    # most recept fps from cam
+                                         'scalar_control_info':scalar_control_info,
+                                         'fqdn':fqdn,
+                                         'port':port,
+                                         'cam2mainbrain_data_port':cam2mainbrain_data_port,
+                                         }
+            finally:
+                self.cam_info_lock.release()
             self.no_cams_connected.clear()
             self.changed_cam_lock.acquire()
-            self.new_cam_ids.append(cam_id)
-            self.changed_cam_lock.release()
+            try:
+                self.new_cam_ids.append(cam_id)
+            finally:
+                self.changed_cam_lock.release()
             
             return cam_id
 
         def set_image(self,cam_id,image):
             """set most recent image (caller: remote camera)"""
             self.cam_info_lock.acquire()
-            cam = self.cam_info[cam_id]
-            cam_lock = cam['lock']
-            cam_lock.acquire()
-            self.cam_info[cam_id]['image'] = image
-            cam_lock.release()
-            self.cam_info_lock.release()            
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    self.cam_info[cam_id]['image'] = image
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()            
 
         def set_fps(self,cam_id,fps):
             """set most recent fps (caller: remote camera)"""
             self.cam_info_lock.acquire()
-            
-            cam = self.cam_info[cam_id]
-            cam_lock = cam['lock']
-            cam_lock.acquire()
-            self.cam_info[cam_id]['fps'] = fps
-            cam_lock.release()
-            self.cam_info_lock.release()            
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    self.cam_info[cam_id]['fps'] = fps
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()            
 
         def get_and_clear_commands(self,cam_id):
             self.cam_info_lock.acquire()
-            cam = self.cam_info[cam_id]
-            cam_lock = cam['lock']
-            cam_lock.acquire()
-            cmds = cam['commands']
-            cam['commands'] = {}
-            cam_lock.release()
-            self.cam_info_lock.release()
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    cmds = cam['commands']
+                    cam['commands'] = {}
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()
             return cmds
 
         def get_cam2mainbrain_port(self,cam_id):
@@ -844,17 +952,20 @@ class MainBrain(object):
         def close(self,cam_id):
             """gracefully say goodbye (caller: remote camera)"""
             self.cam_info_lock.acquire()
-            self.main_brain.coord_receiver.disconnect(cam_id)
-            #self.cam_info[cam_id]['coord_receiver'].quit()
-            #del self.cam_info[cam_id]['coord_receiver']
-            del self.cam_info[cam_id]
-            if not len(self.cam_info):
-                self.no_cams_connected.set()
-            
-            self.changed_cam_lock.acquire()
-            self.old_cam_ids.append(cam_id)
-            self.changed_cam_lock.release()
-            self.cam_info_lock.release()
+            try:
+                self.main_brain.coord_receiver.disconnect(cam_id)
+                #self.cam_info[cam_id]['coord_receiver'].quit()
+                #del self.cam_info[cam_id]['coord_receiver']
+                del self.cam_info[cam_id]
+                if not len(self.cam_info):
+                    self.no_cams_connected.set()
+                self.changed_cam_lock.acquire()
+                try:
+                    self.old_cam_ids.append(cam_id)
+                finally:
+                    self.changed_cam_lock.release()
+            finally:
+                self.cam_info_lock.release()
             
     def __init__(self):
         Pyro.core.initServer(banner=0)
@@ -967,14 +1078,14 @@ class MainBrain(object):
         cam_ids.sort()
                                 
         calib_data_lock.acquire()
+        try:
+            IdMat = calib_IdMat
+            calib_IdMat = []
         
-        IdMat = calib_IdMat
-        calib_IdMat = []
-        
-        points = calib_points
-        calib_points = []
-        
-        calib_data_lock.release()
+            points = calib_points
+            calib_points = []
+        finally:
+            calib_data_lock.release()
 
         IdMat = nx.transpose(IdMat)
         points = nx.transpose(points)
@@ -1035,9 +1146,9 @@ class MainBrain(object):
         self.coord_receiver.fake_synchronize()
 
     def close_camera(self,cam_id):
-##        print 'close_camera',cam_id,'called'
-##        sys.stdout.flush()
+        sys.stdout.flush()
         self.remote_api.external_quit( cam_id )
+        sys.stdout.flush()
 
     def set_use_arena(self, cam_id, value):
         self.remote_api.external_set_use_arena( cam_id, value)
@@ -1102,8 +1213,10 @@ class MainBrain(object):
         # XXX ----- non-isolated calls to remote_api being done ----
         # this may be called twice: once explicitly and once by __del__
         self.remote_api.cam_info_lock.acquire()
-        cam_ids = self.remote_api.cam_info.keys()
-        self.remote_api.cam_info_lock.release()
+        try:
+            cam_ids = self.remote_api.cam_info.keys()
+        finally:
+            self.remote_api.cam_info_lock.release()
         
         for cam_id in cam_ids:
             try:
