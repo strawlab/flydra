@@ -107,26 +107,24 @@ def setOfSubsets(L):
 
 class Reconstructor:
     def __init__(self,
-                 calibration_dir = '/home/astraw/mcsc_data',
-                 Pmat_name = 'camera%d.Pmat.cal',
-                 debug = False,
+                 cal_source = '/home/astraw/mcsc_data',
                  ):
-        self._debug = debug
+        self.cal_source = cal_source
 
-        if type(calibration_dir) in [str,unicode]:
-            calibration_data_source = 'normal files'
+        if type(self.cal_source) in [str,unicode]:
+            self.cal_source_type = 'normal files'
         else:
-            calibration_data_source = 'pytables'
+            self.cal_source_type = 'pytables'
 
-        if calibration_data_source == 'normal files':
-            fd = open(os.path.join(calibration_dir,'camera_order.txt'),'r')
+        if self.cal_source_type == 'normal files':
+            fd = open(os.path.join(self.cal_source,'camera_order.txt'),'r')
             cam_ids = fd.read().split('\n')
             fd.close()
             if cam_ids[-1] == '': del cam_ids[-1] # remove blank line
-        elif calibration_data_source == 'pytables':
+        elif self.cal_source_type == 'pytables':
             import tables as PT # PyTables
-            assert type(calibration_dir)==PT.File
-            results = calibration_dir
+            assert type(self.cal_source)==PT.File
+            results = self.cal_source
             nodes = results.root.calibration.pmat._f_listNodes()
             cam_ids = []
             for node in nodes:
@@ -139,18 +137,18 @@ class Reconstructor:
         self.pmat_inv = {}
         self._helper = {}
         
-        if calibration_data_source == 'normal files':
-            res_fd = open(os.path.join(calibration_dir,'Res.dat'),'r')
+        if self.cal_source_type == 'normal files':
+            res_fd = open(os.path.join(self.cal_source,'Res.dat'),'r')
             for i, cam_id in enumerate(cam_ids):
-                fname = Pmat_name%(i+1)
-                pmat = load_ascii_matrix(opj(calibration_dir,fname)) # 3 rows x 4 columns
+                fname = 'camera%d.Pmat.cal'%(i+1)
+                pmat = load_ascii_matrix(opj(self.cal_source,fname)) # 3 rows x 4 columns
                 self.Pmat[cam_id] = pmat
                 self.Res[cam_id] = map(int,res_fd.readline().split())
                 self.pmat_inv[cam_id] = numarray.linear_algebra.generalized_inverse(pmat)
             res_fd.close()
 
             # load non linear parameters
-            rad_files = glob.glob(os.path.join(calibration_dir,'*.rad'))
+            rad_files = glob.glob(os.path.join(self.cal_source,'*.rad'))
             assert len(rad_files) < 10
             rad_files.sort() # cheap trick to associate camera number with file
             for cam_id, filename in zip( cam_ids, rad_files ):
@@ -160,7 +158,7 @@ class Reconstructor:
                     params['K11'], params['K22'], params['K13'], params['K23'],
                     params['kc1'], params['kc2'], params['kc3'], params['kc4'])
                 
-        elif calibration_data_source == 'pytables':
+        elif self.cal_source_type == 'pytables':
             for cam_id in cam_ids:
                 pmat = nx.array(results.root.calibration.pmat.__getattr__(cam_id))
                 res = tuple(results.root.calibration.resolution.__getattr__(cam_id))
@@ -269,7 +267,7 @@ class Reconstructor:
 
         x = x[0:2,0]/x[2,0] # normalize
         if distorted:
-            xd, yd = self.distort(cam_id, x[0], x[1])
+            xd, yd = self.distort(cam_id, x)
             x[0] = xd
             x[1] = yd
 

@@ -1,13 +1,9 @@
 #emacs, this is -*-Python-*- mode
 # $Id$
 
-import threading
-import time
-import socket
-import sys
+import threading, time, socket, sys, struct
 import Pyro.core, Pyro.errors
 import FlyMovieFormat
-import struct
 import numarray as nx
 import pyx_cam_iface as cam_iface
 import reconstruct_utils

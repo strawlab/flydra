@@ -84,6 +84,7 @@ cdef class RealtimeAnalyzer:
 
     # calibration matrix
     cdef c_numarray._numarray _pmat, _pmat_inv, camera_center
+    cdef object _helper
 
     # start of IPP-requiring code
     cdef ipp.IppiSize _roi_sz

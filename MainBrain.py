@@ -79,6 +79,8 @@ class MovieInfo(PT.IsDescription):
     approx_stop_frame  = PT.Int32Col(pos=3)
 
 class AdditionalInfo(PT.IsDescription):
+    cal_source_type      = PT.StringCol(20)
+    cal_source           = PT.StringCol(80)
     minimum_eccentricity = PT.Float32Col() # record what parameter was used during reconstruction
 
 class Info3D(PT.IsDescription):
@@ -235,7 +237,6 @@ class CoordReceiver(threading.Thread):
         #pt_fmt = '<fffffffff'
         pt_fmt = 'ddddddddd'
         pt_size = struct.calcsize(pt_fmt)
-        #save_2d_fmt = 'Bidfffffffff'
         timeout = 0.1
         
         realtime_coord_dict = {}        
@@ -287,6 +288,7 @@ class CoordReceiver(threading.Thread):
                     
                 if timestamp-self.last_timestamps[cam_idx] > self.RESET_FRAMENUMBER_DURATION:
                     self.framenumber_offsets[cam_idx] = framenumber
+                    # XXX should delete everything in realtime_coord_dict
                     if self.last_timestamps[cam_idx] != IMPOSSIBLE_TIMESTAMP:
                         print cam_id,'(re)synchronized'
                     #else:
@@ -308,25 +310,21 @@ class CoordReceiver(threading.Thread):
                 corrected_framenumber = framenumber-self.framenumber_offsets[cam_idx]
                 XXX_framenumber = corrected_framenumber
 
-##                x = points[0][0]
-##                if x > -0.9: # only save 2D data if point is identified
-                if 1:
-                    # We must save 2D data (even when no point found)
-                    # if we want to correlate movie frames.
-                    args = ( absolute_cam_no,
-                             corrected_framenumber,
-                             timestamp,
-                             points[0][0], # x
-                             points[0][1], # y
-                             points[0][2], # area
-                             points[0][3], # slope
-                             points[0][4], # eccentricity
-                             points[0][5], # p1
-                             points[0][6], # p2
-                             points[0][7], # p3
-                             points[0][8], # p4
-                             )
-                    deferred_2d_data.append(args) # defer saving to later
+                # Save 2D data (even when no point found) to allow
+                # temporal correlation of movie frames to 2D data.
+                deferred_2d_data.append((absolute_cam_no, # defer saving to later
+                                         corrected_framenumber,
+                                         timestamp,
+                                         points[0][0], # x
+                                         points[0][1], # y
+                                         points[0][2], # area
+                                         points[0][3], # slope
+                                         points[0][4], # eccentricity
+                                         points[0][5], # p1
+                                         points[0][6], # p2
+                                         points[0][7], # p3
+                                         points[0][8], # p4
+                                         ))
                     
                 # save new frame data
                 cur_framenumber_dict=realtime_coord_dict.setdefault(corrected_framenumber,{})
@@ -858,6 +856,8 @@ class MainBrain(object):
         self.currently_calibrating = threading.Event()
 
         self._currently_recording_movies = {}
+        
+        self.reconstructor = None
 
         # Attributes which come in use when saving data occurs
         self.h5file = None
@@ -992,12 +992,12 @@ class MainBrain(object):
         else:
             distorted_points = []
             for pt in points:
-                xd,yd = self.reconstructor.distort(cam_id,pt[0],pt[1])
+                xd,yd = self.reconstructor.distort(cam_id,pt)
                 dp = list(pt)
                 dp[0] = xd
                 dp[1] = yd
                 distorted_points.append( dp )
-        return image, fps, distored_points
+        return image, fps, distorted_points
 
     def close_camera(self,cam_id):
         self.remote_api.external_quit( cam_id )
@@ -1093,7 +1093,7 @@ class MainBrain(object):
         if self.h5file is not None:
             raise RuntimeError("Cannot (re)load calibration while saving data")
         cam_ids = self.remote_api.external_get_cam_ids()
-        self.reconstructor = flydra.reconstruct.Reconstructor(calibration_dir=dirname)
+        self.reconstructor = flydra.reconstruct.Reconstructor(dirname)
 
         self.coord_receiver.set_reconstructor(self.reconstructor)
         
@@ -1141,6 +1141,15 @@ class MainBrain(object):
             for cam_id in self.remote_api.external_get_cam_ids():
                 self.h5file.createArray(intnonlin_group, cam_id,
                                         self.reconstructor.get_intrinsic_nonlinear(cam_id))
+
+            self.h5additional_info = ct(cal_group,'additional_info', AdditionalInfo,
+                                        '')
+            row = self.h5additional_info.row
+            row['cal_source_type'] = self.reconstructor.cal_source_type
+            row['cal_source'] = self.reconstructor.cal_source
+            row['minimum_eccentricity'] = flydra.reconstruct.MINIMUM_ECCENTRICITY
+            row.append()
+            self.h5additional_info.flush()
                 
             self.h5data3d_fastest = ct(root,'data3d_fastest', Info3D,
                                        "3d data (fastest)",
@@ -1148,13 +1157,6 @@ class MainBrain(object):
             self.h5data3d_best = ct(root,'data3d_best', Info3D,
                                     "3d data (best)",
                                     expectedrows=expected_rows)
-            self.h5additional_info = ct(root,'additional_info', AdditionalInfo,
-                                        '')
-            self.h5additional_info
-            row = self.h5additional_info.row
-            row['minimum_eccentricity'] = flydra.reconstruct.MINIMUM_ECCENTRICITY
-            row.append()
-            self.h5additional_info.flush()
 
         general_save_info=self.coord_receiver.get_general_cam_info()
         for cam_id,dd in general_save_info.iteritems():
