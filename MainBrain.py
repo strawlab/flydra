@@ -14,7 +14,7 @@ import numarray as nx
 
 import struct
 import math
-from numarray.ieeespecial import nan
+from numarray.ieeespecial import nan, inf
 
 Pyro.config.PYRO_MULTITHREADED = 0 # No multithreading!
 
@@ -34,7 +34,7 @@ realtime_coord_dict={}
 realtime_coord_dict_lock=threading.Lock()
 
 SAVE_2D_DATA = False
-SAVE_2D_FMT = '<Bidfffffffff'
+SAVE_2D_FMT = 'Bidfffffffff'
 SAVE_2D_CAMS = 0
 SAVE_GLOBALS_LOCK = threading.Lock()
 SAVE_GLOBALS = {}
@@ -58,14 +58,24 @@ try:
 except:
     hostname = socket.gethostbyname(socket.gethostname())
 
-##try:
-##    projector_hostname = socket.gethostbyname('projector')
-##except:
-##    projector_hostname = socket.gethostbyname(socket.gethostname())
-projector_hostname = socket.gethostbyname(socket.gethostname())
-projector_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+downstream_hostnames = []
+
+use_projector = False
+realtime_display = True
+
+if use_projector:
+    projector_hostname = socket.gethostbyname('projector')
+    downstream_hostnames.append(projector_hostname)
+if realtime_display:
+    realtime_display_hostname = hostname
+    downstream_hostnames.append(realtime_display_hostname)
+
 FASTEST_DATA_PORT = 28931
 BEST_DATA_PORT = 28932
+
+if len(downstream_hostnames):
+    outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    print 'will send data to',' '.join(downstream_hostnames),'ports',FASTEST_DATA_PORT,BEST_DATA_PORT
 
 def save_ascii_matrix(filename,m):
     fd=open(filename,mode='wb')
@@ -95,11 +105,11 @@ class CoordReceiver(threading.Thread):
         global SAVE_2D_CAMS, SAVE_GLOBALS, SAVE_GLOBALS_LOCK
         
         self.cam_id = cam_id
-        self.hack_cam_no = SAVE_2D_CAMS
-        print self.cam_id,'assigned to hack_cam_no',self.hack_cam_no
+        self.absolute_cam_no = SAVE_2D_CAMS
+        print 'assigning absolute_cam_no %d to %s'%(self.absolute_cam_no,cam_id)
         SAVE_GLOBALS_LOCK.acquire()
         SAVE_GLOBALS[self.cam_id]={}
-        SAVE_GLOBALS[self.cam_id]['cam_no']=self.hack_cam_no
+        SAVE_GLOBALS[self.cam_id]['cam_no']=self.absolute_cam_no
         SAVE_GLOBALS_LOCK.release()
 
         SAVE_2D_CAMS += 1
@@ -123,6 +133,8 @@ class CoordReceiver(threading.Thread):
         self.recSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.recSocket.bind((hostname, self.port))
 
+##        self.fastest_timediff = inf
+
     def get_port(self):
         return self.port
 
@@ -135,7 +147,7 @@ class CoordReceiver(threading.Thread):
         
         # send packet to wake listener and allow thread to quit (on MainBrain)
         tmp_socket=socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        tmp_socket.sendto(struct.pack('<dlii',0.0,-1,-1,-1),(hostname,self.port))
+        tmp_socket.sendto(struct.pack('<dli',0.0,-1,-1),(hostname,self.port))
     
     def run(self):
         global fastest_realtime_data, best_realtime_data
@@ -149,7 +161,8 @@ class CoordReceiver(threading.Thread):
         pt_size = struct.calcsize(pt_fmt)
         while not self.quit_event.isSet():
             data, addr = self.recSocket.recvfrom(1024)
-            
+##            local_timestamp = time.time()
+
             header = data[:header_size]
             timestamp, framenumber, n_pts = struct.unpack(header_fmt,header)
             start=header_size
@@ -160,13 +173,19 @@ class CoordReceiver(threading.Thread):
                 points.append( (x,y,area,slope,eccentricity, p1,p2,p3,p4) )
                 start=end
 
+##            timediff = local_timestamp-timestamp
+##            self.fastest_timediff = min( self.fastest_timediff,
+##                                         timediff )
+##            recv_and_ethernet_latency = timediff-self.fastest_timediff
+##            if recv_and_ethernet_latency > 0.005:
+##                print 'recv_and_ethernet_latency',recv_and_ethernet_latency*1000.0,'msec'
+            
             if 0:
                 now = time.time()
                 latency = now-timestamp
-                print (' '*self.hack_cam_no*10)+('% 11.1f'%( (now*1000.0)%1000.0, ))+(' '*(SAVE_2D_CAMS-self.hack_cam_no-1)*10),
+                print (' '*self.absolute_cam_no*10)+('% 11.1f'%( (now*1000.0)%1000.0, ))+(' '*(SAVE_2D_CAMS-self.absolute_cam_no-1)*10),
                 print '% 6.1f'%((timestamp*1000)%1000.0,),
                 print '% 6.1f'%((latency*1000)%1000.0,)
-            
 
             if framenumber==-1:
                 continue # leftover in socket buffer from last run??
@@ -178,28 +197,36 @@ class CoordReceiver(threading.Thread):
                     SAVE_GLOBALS_LOCK.acquire()
                     SAVE_GLOBALS[self.cam_id]['frame0']=timestamp
                     SAVE_GLOBALS_LOCK.release()
-                else:
-                    print self.cam_id,'first 2D coordinates received'
+##                else:
+##                    print self.cam_id,'first 2D coordinates received'
 
             self.last_timestamp=timestamp
             corrected_framenumber = framenumber-self.framenumber_offset
 
             if SAVE_2D_DATA:
-                #points.append( (x,y,area,slope,eccentricity, p1,p2,p3,p4) )
-                buf = struct.pack(SAVE_2D_FMT,
-                                  self.hack_cam_no,
-                                  corrected_framenumber,
-                                  timestamp,
-                                  points[0][0], # x
-                                  points[0][1], # y
-                                  points[0][2], # area
-                                  points[0][3], # slope
-                                  points[0][4], # eccentricity
-                                  points[0][5], # p1
-                                  points[0][6], # p2
-                                  points[0][7], # p3
-                                  points[0][9], # p4
-                                  )
+                args = ( self.absolute_cam_no,
+                         corrected_framenumber,
+                         timestamp,
+                         points[0][0], # x
+                         points[0][1], # y
+                         points[0][2], # area
+                         points[0][3], # slope
+                         points[0][4], # eccentricity
+                         points[0][5], # p1
+                         points[0][6], # p2
+                         points[0][7], # p3
+                         points[0][8], # p4
+                         )
+                try:
+                    buf = struct.pack(SAVE_2D_FMT,*args)
+                except:
+                    for i in range(len(SAVE_2D_FMT)):
+                        try:
+                            struct.pack(SAVE_2D_FMT[i],args[i])
+                        except:
+                            print "argument %d '%s' = %s failed"%(i,SAVE_2D_FMT[i],repr(args[i]))
+                            raise
+                    raise
                 save_2d_data_lock.acquire()
                 save_2d_data_fd.write( buf )
                 save_2d_data_lock.release()
@@ -233,40 +260,51 @@ class CoordReceiver(threading.Thread):
                         cams_in_count += 1
                         if PT[0] + 1 > 1e-6: # only use found points
                             d2[cam_id] = PT
-                    if len(d2) >=2:
+                    num_good_images = len(d2)
+                    if num_good_images==2 or cams_in_count==self.main_brain.get_num_cams():
+                        # either first possible moment or all data present
+                        
                         X, line3d = self.reconstructor.find3d(d2.items())
+                        if line3d is None:
+                            line3d = nan, nan, nan, nan, nan, nan
                         find3d_time = time.time()
+                        
                         x,y,z=X
-                        tmp = [x,y,z]
-                        tmp.extend( line3d )
-                        tmp.extend( (find3d_time,2) )
-                        if len(d2) == 2 and SAVE_3D_DATA: # fastest data
-                            save_3d_data1_lock.acquire()
-                            save_3d_data1[corrected_framenumber]=tmp
-                            save_3d_data1_lock.release()
-##                        data_packet = struct.pack('<fff',x,y,z)
-##                        try:
-##                            projector_socket.sendto(data_packet,
-##                                                    (projector_hostname,FASTEST_DATA_PORT))
-##                        except x:
-##                            print 'WARNING: could not send 3d point data to projector:'
-##                            print x.__class__, x
-##                            print
-                        fastest_realtime_data = X, line3d
+                        outgoing_data = [x,y,z]
+                        outgoing_data.extend( line3d ) # 6 component vector
+                        outgoing_data.extend( (find3d_time,num_good_images) )
+
+                        if len(downstream_hostnames):
+                            data_packet = struct.pack('ifffffffffdi',corrected_framenumber,*outgoing_data)
+                        if num_good_images==2:
+                            # fastest 3d data
+                            fastest_realtime_data = X, line3d
+                            try:
+                                for downstream_hostname in downstream_hostnames:
+                                    outgoing_UDP_socket.sendto(data_packet,(downstream_hostname,FASTEST_DATA_PORT))
+                            except:
+                                print 'WARNING: could not send 3d point data to projector:'
+                                print
+                            if SAVE_3D_DATA: # fastest data
+                                save_3d_data1_lock.acquire()
+                                save_3d_data1[corrected_framenumber]=outgoing_data
+                                save_3d_data1_lock.release()
+##                            print '  fastest:',(find3d_time-local_timestamp)*1000.0,'msec'
                         if cams_in_count == self.main_brain.get_num_cams():
+                            # realtime 3d data
                             best_realtime_data = X, line3d
-##                            try:
-##                                projector_socket.sendto(data_packet,
-##                                                        (projector_hostname,BEST_DATA_PORT))
-##                            except x:
-##                                print 'WARNING: could not send 3d point data to projector:'
-##                                print x.__class__, x
-##                                print
+                            try:
+                                for downstream_hostname in downstream_hostnames:
+                                    outgoing_UDP_socket.sendto(data_packet,(downstream_hostname,BEST_DATA_PORT))
+                            except:
+                                print 'WARNING: could not send 3d point data to projector:'
+                                print
                             
-                        if SAVE_3D_DATA: # best data
-                            save_3d_data2_lock.acquire()
-                            save_3d_data2[corrected_framenumber]=tmp
-                            save_3d_data2_lock.release()
+                            if SAVE_3D_DATA: # best data
+                                save_3d_data2_lock.acquire()
+                                save_3d_data2[corrected_framenumber]=outgoing_data
+                                save_3d_data2_lock.release()
+##                            print '  best:',(find3d_time-local_timestamp)*1000.0,'msec'
                             
                 # save calibration data -=-=-=-=-=-=-=-=
                 if self.main_brain.currently_calibrating.isSet():
@@ -627,11 +665,9 @@ class MainBrain(object):
         self.currently_calibrating = threading.Event()
 
     def IncreaseCamCounter(self,*args):
-        print 'new camera:',args
         self.num_cams += 1
 
     def DecreaseCamCounter(self,*args):
-        print 'old camera:',args
         self.num_cams -= 1
 
     def get_num_cams(self):
@@ -676,7 +712,7 @@ class MainBrain(object):
             keys=dd.keys()
             keys.sort()
             for k in keys:
-                fd.write('%d %s\n'%(k,' '.join(map( str, dd[k]))))
+                fd.write('%d %s\n'%(k,' '.join(map( repr, dd[k]))))
             fd.close()
             print '  done'
 
