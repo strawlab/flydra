@@ -22,6 +22,7 @@ class DynamicImageCanvas(wxGLCanvas):
         EVT_IDLE(self, self.OnDraw)
         self._gl_tex_info_dict = {}
         self.do_clipping = True
+        self.draw_points = {}
 
     def set_clipping(self, value):
         self.do_clipping = value
@@ -30,9 +31,12 @@ class DynamicImageCanvas(wxGLCanvas):
         return self.do_clipping
 
     def delete_image(self,id_val):
-        tex_id, gl_tex_xy_alloc, gl_tex_xyfrac = self._gl_tex_info_dict[id_val]
+        tex_id, gl_tex_xy_alloc, gl_tex_xyfrac, widthheight = self._gl_tex_info_dict[id_val]
         glDeleteTextures( tex_id )
-        del self._gl_tex_info_dict[id_val]        
+        del self._gl_tex_info_dict[id_val]
+
+    def set_draw_points(self,id_val,points):
+        self.draw_points[id_val]=points
 
     def __del__(self, *args, **kwargs):
         for id_val in self._gl_tex_info_dict.keys():
@@ -62,10 +66,12 @@ class DynamicImageCanvas(wxGLCanvas):
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
         glEnable( GL_BLEND )
-        glClearColor(0.0, 0.0, 1.0, 0.0) # blue
+        glClearColor(0.0, 1.0, 0.0, 0.0) # green
         glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA )
         glDisable(GL_DEPTH_TEST);
         glColor4f(1.0,1.0,1.0,1.0)
+        glEnable( GL_POINT_SMOOTH )
+        glPointSize(5)
         
     def create_texture_object(self,id_val,image):
         def next_power_of_2(f):
@@ -90,8 +96,10 @@ class DynamicImageCanvas(wxGLCanvas):
 
         gl_tex_xy_alloc = width_pow2, height_pow2
         gl_tex_xyfrac = width/float(width_pow2),  height/float(height_pow2)
+        widthheight = width, height
 
-        self._gl_tex_info_dict[id_val] = tex_id, gl_tex_xy_alloc, gl_tex_xyfrac            
+        self._gl_tex_info_dict[id_val] = (tex_id, gl_tex_xy_alloc, gl_tex_xyfrac,
+                                          widthheight)
         
         glBindTexture(GL_TEXTURE_2D, tex_id)
         glEnable(GL_TEXTURE_2D)
@@ -112,13 +120,11 @@ class DynamicImageCanvas(wxGLCanvas):
                      raw_data);
 
     def update_image(self,id_val,image):
-#        self._gl_lock.acquire() # serialize OpenGL access
-
         if id_val not in self._gl_tex_info_dict:
             self.create_texture_object(id_val,image)
             return
         height, width = image.shape
-        tex_id, gl_tex_xy_alloc, gl_tex_xyfrac = self._gl_tex_info_dict[id_val]
+        tex_id, gl_tex_xy_alloc, gl_tex_xyfrac, widthheight = self._gl_tex_info_dict[id_val]
         
         max_x, max_y = gl_tex_xy_alloc 
         if width > max_x or height > max_y: 
@@ -153,17 +159,22 @@ class DynamicImageCanvas(wxGLCanvas):
                             buffer_string)
 
     def OnDraw(self,*dummy_arg):
-        glClear(GL_COLOR_BUFFER_BIT)
         N = len(self._gl_tex_info_dict)
         if N == 0:
+            glClearColor(0.0, 0.0, 0.0, 0.0) # black
+            glColor4f(0.0,1.0,0.0,1.0) # green
+            glClear(GL_COLOR_BUFFER_BIT)
             glDisable(GL_TEXTURE_2D)
             glDisable(GL_BLEND)
-            glRasterPos3f(.01,.01,0)
+            glRasterPos3f(.02,.02,0)
             for char in 'no image sources':
-                glutBitmapCharacter(5,ord(char))
+                glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18,ord(char))
             glEnable(GL_TEXTURE_2D)
             glEnable(GL_BLEND)
+            glClearColor(0.0, 1.0, 0.0, 0.0) # green
+            glColor4f(1.0,1.0,1.0,1.0) # white
         else:
+            glClear(GL_COLOR_BUFFER_BIT)
             ids = self._gl_tex_info_dict.keys()
             ids.sort()
             x_border_pixels = 1
@@ -182,7 +193,7 @@ class DynamicImageCanvas(wxGLCanvas):
                 left = (1.0-2*hx)*i/float(N)+hx+hx
                 right = (1.0-2*hx)*(i+1)/float(N)-hx+hx
 
-                tex_id, gl_tex_xy_alloc, gl_tex_xyfrac = self._gl_tex_info_dict[ids[i]]
+                tex_id, gl_tex_xy_alloc, gl_tex_xyfrac, widthheight = self._gl_tex_info_dict[ids[i]]
 
                 xx,yy = gl_tex_xyfrac
 
@@ -200,4 +211,28 @@ class DynamicImageCanvas(wxGLCanvas):
                 glTexCoord2f( 0, 0)
                 glVertex2f( left,top)
                 glEnd()
+
+                # draw points if needed
+                xg=right-left
+                xo=left
+                yg=top-bottom
+                yo=bottom
+                draw_points = self.draw_points.get(ids[i],[])
+                pts_mode = False
+                width = float(widthheight[0])
+                height = float(widthheight[1])
+                for pt in draw_points:
+                    x = pt[0]/width*xg+xo
+                    y = (height-pt[1])/height*yg+yo
+                    if not pts_mode:
+                        glDisable(GL_TEXTURE_2D)
+                        glColor4f(0.0,1.0,0.0,1.0)                        
+                        glBegin(GL_POINTS)
+                        pts_mode = True
+                    glVertex2f(x,y)
+                if pts_mode:
+                    glEnd()
+                    glColor4f(1.0,1.0,1.0,1.0)                        
+                    glEnable(GL_TEXTURE_2D)
+                    
         self.SwapBuffers()
