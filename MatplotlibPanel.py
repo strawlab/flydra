@@ -44,14 +44,6 @@ class PlotPanel(wxPanel):
                             origin='upper',
                             interpolation='nearest')
         self.im.set_clim(0,255)
-        self.lines = a.plot([0],[0],'o-')
-        #self.lines = a.plot([0,0,0],[0,0,0],'o-')
-        mpl.set(self.lines[0],'markerfacecolor',None)
-        white = (1.0,1.0,1.0)
-        mpl.set(self.lines[0],'color',white)
-        mpl.set(self.lines[0],'linewidth',2.0)
-        mpl.set(self.lines[0],'markeredgecolor',white)
-        mpl.set(self.lines[0],'markeredgewidth',2)
         self.toolbar.update() # Not sure why this is needed - ADS
 
     def GetToolBar(self):
@@ -64,9 +56,6 @@ class PlotPanel(wxPanel):
         if image.shape[0] != orig_shape[0] or image.shape[1] != orig_shape[1]:
             print "main_brain WARNING: size changed to %s, don't know how to re-adjust"%str(image.shape)
         self.im.set_array(image)
-
-    def set_data(self,x,y):
-        self.lines[0].set_data(x[:],y[:])
 
     def draw(self):
         self.canvas.draw()
