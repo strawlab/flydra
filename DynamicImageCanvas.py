@@ -149,7 +149,7 @@ class DynamicImageCanvas(wxGLCanvas):
         hy = y_border*0.5
         x_borders = x_border*(N+1)
         y_borders = y_border*(N+1)
-        for i in range(N):
+        for i in range(int(N)):
             bottom = y_border
             top = 1.0-y_border
             left = (1.0-2*hx)*i/N+hx+hx
