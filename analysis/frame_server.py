@@ -6,8 +6,8 @@ import socket
 
 Pyro.config.PYRO_MULTITHREADED = 0 # No multithreading!
 
-Pyro.config.PYRO_TRACELEVEL = 1
-Pyro.config.PYRO_USER_TRACELEVEL = 1
+Pyro.config.PYRO_TRACELEVEL = 0
+Pyro.config.PYRO_USER_TRACELEVEL = 0
 Pyro.config.PYRO_DETAILED_TRACEBACK = 0
 Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
 
@@ -18,8 +18,11 @@ class FrameServer(Pyro.core.ObjBase):
     def get_frame(self, frame_number):
         return self.fly_movie.get_frame(frame_number)
 
+    def noop(self):
+        return
+
 if __name__ == '__main__':
-    Pyro.core.initServer(banner=0)
+    Pyro.core.initServer(banner=0,storageCheck=0)
     
     # start Pyro server
     hostname = socket.gethostbyname(socket.gethostname())
