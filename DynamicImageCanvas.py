@@ -117,11 +117,21 @@ class DynamicImageCanvas(wxGLCanvas):
             self.delete_image(id_val) 
             self.create_texture_object(id_val,image)
         else:
-            buffer = na.zeros( (height,width,2), image.typecode() )+128
-            buffer[:,:,0] = image
+            # XXX allocating new memory...
+            if not hasattr(self,'_buffer') or self._buffer.shape != (height,width,2):
+                self._buffer = na.zeros( (height,width,2), image.typecode() )
+##            im_luminance = self._buffer[:,:,0] # view into buffer
+##            im_alpha = self._buffer[:,:,1] # view into buffer
+            
+##            im_luminance[:,:] = image
+##            im_alpha[:,:] = 255
+##            im_alpha[im_luminance == 0 | im_luminance==255] = 200 # reduce alpha where image is clipped
+            
             clipped = na.greater(image,254) + na.less(image,1)
             mask = na.choose(clipped, (255, 200) ) # alpha for transparency
-            buffer[:,:,1] = mask
+            self._buffer[:,:,0] = image
+            self._buffer[:,:,1] = mask
+            
             self._gl_tex_xyfrac = width/float(max_x),  height/float(max_y)
             glBindTexture(GL_TEXTURE_2D,tex_id)
             glTexSubImage2D(GL_TEXTURE_2D, #target,
@@ -132,7 +142,7 @@ class DynamicImageCanvas(wxGLCanvas):
                             height,
                             GL_LUMINANCE_ALPHA, #data_format,
                             GL_UNSIGNED_BYTE, #data_type,
-                            buffer.tostring())
+                            self._buffer.tostring())
 
     def OnDraw(self,*dummy_arg):
         glClear(GL_COLOR_BUFFER_BIT)

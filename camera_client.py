@@ -13,8 +13,8 @@ if not DUMMY:
         import cam_iface_bcam
         cam_iface = cam_iface_bcam
     elif sys.platform.startswith('linux'):
-        import cam_iface_dc1394
-        cam_iface = cam_iface_dc1394
+        import cam_iface_camwire
+        cam_iface = cam_iface_camwire
     else:
         raise NotImplementedError('only win32 and linux support implemented')
 else:
@@ -36,6 +36,7 @@ def grab_thread(cam,quit_now,thread_done):
     while quit_now.locked():
         cam.grab_next_frame_blocking(buf) # grab frame and stick in buf
         incoming_frames.append( buf.copy() ) # save a copy of the buffer
+        time.sleep(0.00001) # yield processor
     thread_done.release()
 
 def main():
@@ -138,7 +139,6 @@ def main():
                             quit = value
                         else:
                             raise RuntimeError ('Unknown command: %s'%repr(ud))
-
                 time.sleep(0.05)
 
         finally:

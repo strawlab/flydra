@@ -47,9 +47,20 @@ class FlydraBrainPyroServer( Pyro.core.ObjBase ):
         self.servlets[cam_serv]=None
         self.update_wx()
         return URI
-    def close_servlet(self,servlet):
+    def unregister_servlet(self,servlet):
+        """To be called by the servlet upon it's close()"""
         del self.servlets[servlet]
         self.update_wx()
+    def check_servlets(self):
+        for servlet in self.servlets.keys(): # copy servlet in case we have to delete it
+            if hasattr(servlet,'caller'): # XXX when servlet being closed, check_servlets may still be called?! (implies threads!)
+                if not servlet.caller.connected:
+                    servlet.close()
+                    # XXX should run this in a new thread to keep other tasks going!
+                    dlg = wxMessageDialog(self.wxApp.main_panel, 'Camera %s unexpectedly disconneted'%servlet.cam_id,
+                                          'Unexpected camera disconnection', wxOK | wxICON_ERROR)
+                    dlg.ShowModal()
+                    dlg.Destroy()
 
 class CameraServlet( Pyro.core.ObjBase ):
     """Communication between camPanel and Pyro"""
@@ -105,15 +116,16 @@ class CameraServlet( Pyro.core.ObjBase ):
     def close(self, dummy_event=None):
         if self.my_id is not None: # only close once
             self.command_queue['quit']=True
-            self.parent.close_servlet(self)
-            self.dyn_canv.delete_image(self.my_id)
+            self.parent.unregister_servlet(self)
             if hasattr(self,'camPanel'):
                 self.camPanel.DestroyChildren()
                 self.camPanel.Destroy()
                 del self.camPanel
+            try:
+                self.dyn_canv.delete_image(self.my_id)
+            except KeyError:
+                pass
             self.my_id = None
-            #else:
-            #    print 'WARNING: calling close 2nd time'
 
     # -=-=-=-=-= remotely called methods end -=-=-=-=-=
         
@@ -137,7 +149,8 @@ class CameraServlet( Pyro.core.ObjBase ):
             static_box = box.GetStaticBox()
             static_box.SetLabel( 'Camera ID: %s'%self.cam_id )
 
-        caller_addr= self.daemon.getLocalStorage().caller.addr # XXX Pyro hack??
+        self.caller= self.daemon.getLocalStorage().caller # XXX Pyro hack??
+        caller_addr= self.caller.addr
         caller_ip, caller_port = caller_addr
         fqdn = socket.getfqdn(caller_ip)
 
@@ -251,6 +264,8 @@ class App(wxApp):
 
     def OnTimer(self, event):
         self.daemon.handleRequests(0) # don't block
+        self.flydra_brain.check_servlets()
+        self.flydra_brain.cam_image_canvas.OnDraw()
         
     def start_pyro_server(self):
         Pyro.core.initServer(banner=0)
