@@ -106,8 +106,6 @@ cdef class RealtimeAnalyzer:
 
     cdef ipp.IppiMomentState_64f *pState
 
-    cdef c_numarray._numarray covariance_matrix
-    
     # end of IPP-requiring code
 
     def __init__(self, int w, int h):
@@ -158,10 +156,6 @@ cdef class RealtimeAnalyzer:
         CHK( ipp.ippiSet_32f_C1R(0.0,self.mean_image,self.mean_image_step, self._roi_sz))
         CHK( ipp.ippiSet_32f_C1R(0.0,self.std_image,self.std_image_step, self._roi_sz))
 
-        # allocate new numarray memory
-        self.covariance_matrix = <c_numarray._numarray>c_numarray.NA_NewArray(
-            NULL, c_numarray.tFloat64, 2, 2, 2)
-
         try:
             arena_error = arena_control.arena_initialize()
             self.arena_control_working = True
@@ -202,7 +196,7 @@ cdef class RealtimeAnalyzer:
         
         cdef double Uu11, Uu02, Uu20
         cdef int i
-        cdef int result
+        cdef int result, eigen_err
         
         # start of IPP-requiring code
         cdef ipp.Ipp8u max_val
@@ -261,25 +255,29 @@ cdef class RealtimeAnalyzer:
                                  self._roi_sz.width, self._roi_sz.height,
                                  (self.im2 + self._bottom*self.im2_step + self._left),
                                  self.im2_step )
-
-            eigen_2x2_real( Uu20, Uu11,
-                            Uu11, Uu02,
-                            &evalA, &evalB,
-                            &evecA1, &evecB1 )
-            rise = 1.0 # 2nd component of eigenvectors will always be 1.0
-            if evalA > evalB:
-                run = evecA1
-                eccentricity = evalA/evalB
-            else:
-                run = evecB1
-                eccentricity = evalB/evalA
-            slope = rise/run
-            
-            # John -- I don't use orientation -- fix this however you need it.
-            orientation = c_lib.atan2(rise,run)
+            # note that x0 and y0 are now relative to the ROI origin
             if result == 0:
-                # note that x0 and y0 are now relative to the ROI origin
-                orientation = orientation + 1.57079632679489661923 # (pi/2)
+                eigen_err = eigen_2x2_real( Uu20, Uu11,
+                                            Uu11, Uu02,
+                                            &evalA, &evecA1,
+                                            &evalB, &evecB1)
+                if eigen_err:
+                    slope = nan
+                    orientation = nan
+                    eccentricity = 0.0
+                else:
+                    rise = 1.0 # 2nd component of eigenvectors will always be 1.0
+                    if evalA > evalB:
+                        run = evecA1
+                        eccentricity = evalA/evalB
+                    else:
+                        run = evecB1
+                        eccentricity = evalB/evalA
+                    slope = rise/run
+
+                    # John -- I don't use orientation -- fix this however you need it.
+                    orientation = c_lib.atan2(rise,run)
+                    orientation = orientation + 1.57079632679489661923 # (pi/2)
             elif result == 31: orientation = nan
             elif result == 32: orientation = nan
             elif result == 33: orientation = nan
