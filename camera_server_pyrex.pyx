@@ -9,10 +9,10 @@ cimport c_numarray
 import Pyro.core, Pyro.errors
 import FlyMovieFormat
 import warnings
-cimport c_cam_iface
+import struct
+#cimport c_cam_iface
+include "../cam_iface/src/pyx_cam_iface.pyx" # CamIFaceError, Camera
 cimport c_lib
-
-include "../cam_iface/src/pyx_cam_iface.pyx"
 
 # start of IPP-requiring code
 cimport ipp
@@ -23,42 +23,11 @@ class IPPError(Exception):
 cdef object IppStatus2str(ipp.IppStatus status):
     return 'IppStatus: %d'%status
 
-cdef void _ipp_check(ipp.IppStatus status):
+cdef void _ipp_check(ipp.IppStatus status) except *:
     if (status < ipp.ippStsNoErr):
         raise IPPError(IppStatus2str(status))
     elif (status > ipp.ippStsNoErr):
         warnings.warn(IppStatus2str(status))
-
-cdef object get_cpu_type():
-    cdef ipp.IppCpuType t
-    t=ipp.ippCoreGetCpuType()
-    if t==ipp.ippCpuUnknown:
-        s='ippCpuUnknown'
-    elif t==ipp.ippCpuPP:
-        s='ippCpuPP'
-    elif t==ipp.ippCpuPMX:
-        s='ippCpuPMX'
-    elif t==ipp.ippCpuPPR:
-        s='ippCpuPPR'
-    elif t==ipp.ippCpuPII:
-        s='ippCpuPII'
-    elif t==ipp.ippCpuPIII:
-        s='ippCpuPIII'
-    elif t==ipp.ippCpuP4:
-        s='ippCpuP4'
-    elif t==ipp.ippCpuP4HT:
-        s='ippCpuP4HT'
-    elif t==ipp.ippCpuP4HT2:
-        s='ippCpuP4HT2'
-    elif t==ipp.ippCpuCentrino:
-        s='ippCpuCentrino'
-    elif t==ipp.ippCpuITP:
-        s='ippCpuITP'
-    elif t==ipp.ippCpuITP2:
-        s='ippCpuITP2'
-    return s
-print 'CPU type:', get_cpu_type()
-
 
 cdef void print_info_8u(ipp.Ipp8u* im, int im_step, ipp.IppiSize sz, object prefix):
     cdef ipp.Ipp32f minVal, maxVal
@@ -88,6 +57,14 @@ CAM_CONTROLS = {'shutter':c_cam_iface.SHUTTER,
                 'gain':c_cam_iface.GAIN,
                 'brightness':c_cam_iface.BRIGHTNESS}
 
+# where is the "main brain" server?
+try:
+    main_brain_hostname = socket.gethostbyname('mainbrain')
+except:
+    # try localhost
+    main_brain_hostname = socket.gethostbyname(socket.gethostname())
+
+
 cdef class GrabClass:
     cdef Camera cam
 
@@ -96,15 +73,16 @@ cdef class GrabClass:
         
     def grab_func(self,globals):
         cdef unsigned char* buf_ptr
-        cdef c_cam_iface.CamContext* cc
         cdef c_numarray._numarray buf
         cdef int height
         cdef int buf_ptr_step, width
         cdef int collecting_background_frames
         cdef int bg_frame_number
         cdef int n_frames4stats
-        cdef double tval1, tval2, tval3, latency1, latency2
+##        cdef double tval1, tval2, tval3, latency1, latency2
         cdef int i, j
+        cdef double timestamp
+        cdef long framenumber
 
         # start of IPP-requiring code
         cdef int index_x,index_y
@@ -171,6 +149,8 @@ cdef class GrabClass:
             ipp.ippiSet_8u_C1R(0,bg,bg_step,sz))
 
         # end of IPP-requiring code
+
+        coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         
         try:
             while not app_quit_event_isSet():
@@ -179,9 +159,10 @@ cdef class GrabClass:
 
                 # get best guess as to when image was taken
                 timestamp=self.cam.get_last_timestamp()
+                framenumber=self.cam.get_last_framenumber()
 
                 # now
-                tval1=time_func()
+##                tval1=time_func()
 
                 # start of IPP-requiring code
                 # copy image to IPP memory
@@ -217,7 +198,6 @@ cdef class GrabClass:
                         ipp.ippiMaxIndx_8u_C1R(im2,im2_step,sz,
                                                &max_val,
                                                &index_x,&index_y))
-                print "x,y:",index_x,index_y
                 buf_ptr=im2
                 # end of IPP-requiring code                    
                 
@@ -239,11 +219,11 @@ cdef class GrabClass:
                 globals['most_recent_frame'] = buf
                 acquire_lock()
                 globals['incoming_frames'].append(
-                    (buf,timestamp) ) # save it
+                    (buf,timestamp,framenumber) ) # save it
                 release_lock()
 
                 # now
-                tval2=time_func()
+##                tval2=time_func()
 
                 #
                 #
@@ -285,7 +265,6 @@ cdef class GrabClass:
                                                   bg,bg_step,
                                                   sz,
                                                   ipp.ippRndNear))
-                    print 'conversion performed'
                     # end of IPP-requiring code
                     bg_frame_number = bg_frame_number+1
                     if bg_frame_number>=n_bg_samples:
@@ -298,12 +277,24 @@ cdef class GrabClass:
                         
                         bg_frame_number=-1 # stop averaging frames
 
-                tval3=time_func()
+##                tval3=time_func()
 
-                latency1 = (tval1 - timestamp)*1000.0
-                latency2 = (tval2 - timestamp)*1000.0
-                latency3 = (tval3 - timestamp)*1000.0
-                print ('%.1f'%latency1).rjust(10),('%.1f'%latency2).rjust(10),('%.1f'%latency3).rjust(10)
+##                latency1 = (tval1 - timestamp)*1000.0
+##                latency2 = (tval2 - timestamp)*1000.0
+##                latency3 = (tval3 - timestamp)*1000.0
+##                print ('%.1f'%latency1).rjust(10),('%.1f'%latency2).rjust(10),('%.1f'%latency3).rjust(10)
+
+                if COORD_PORT is None:
+                    COORD_PORT = globals['coord_port']
+                else:
+                    coord_socket.sendto(struct.pack('<dlii',timestamp,framenumber,index_x,index_y),
+                                        (main_brain_hostname,COORD_PORT))
+##                    coord_socket.sendto('%f: %d %d'%(timestamp,index_x,index_y),
+##                                        (main_brain_hostname,COORD_PORT))
+ 
+                globals['grab_thread_done'].set()
+
+                
                 sleep(0.00001) # yield processor
         finally:
             # start of IPP-requiring code
@@ -387,11 +378,9 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
         print value
 
     def quit(self):
-        print 'received quit command'
         self.globals['app_quit_event'].set()
 
     def collect_background(self):
-        print 'received collect_background command'
         self.globals['collect_background_start'].set()
 
     def set_camera_property(self,property_name,value):
@@ -429,6 +418,7 @@ cdef class App:
         self.globals['record_status_lock'] = threading.Lock()
         
         self.globals['image_offset'] = 127
+        self.globals['coord_port'] = None
         
         # ----------------------------------------------------------------
         #
@@ -439,36 +429,12 @@ cdef class App:
         assert c_cam_iface.cam_iface_get_num_cameras()==1
         self.cam = Camera(0,30)
 
+        # set defaults
         self.cam.set_camera_property(c_cam_iface.SHUTTER,300,0,0)
         self.cam.set_camera_property(c_cam_iface.GAIN,72,0,0)
         self.cam.set_camera_property(c_cam_iface.BRIGHTNESS,783,0,0)
 
-        # ----------------------------------------------------------------
-        #
-        # Initialize network connections
-        #
-        # ----------------------------------------------------------------
-
-        Pyro.core.initServer(banner=0,storageCheck=0)
-        hostname = socket.gethostbyname(socket.gethostname())
-        fqdn = socket.getfqdn(hostname)
-        port = 9834
-
-        # where is the "main brain" server?
-        try:
-            main_brain_hostname = socket.gethostbyname('mainbrain')
-        except:
-            # try localhost
-            main_brain_hostname = socket.gethostbyname(socket.gethostname())
-        port = 9833
-        name = 'main_brain'
-
-        main_brain_URI = "PYROLOC://%s:%d/%s" % (main_brain_hostname,port,name)
-        print 'searching for',main_brain_URI
-        self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
-        print 'found'
-
-        # inform brain that we're connected before starting camera thread
+        # get settings
         scalar_control_info = {}
         for name, enum_val in CAM_CONTROLS.items():
             current_value = self.cam.get_camera_property(enum_val)[0]
@@ -477,10 +443,25 @@ cdef class App:
             max_value = tmp[2]
             scalar_control_info[name] = (current_value, min_value, max_value)
 
-        driver = c_cam_iface.cam_iface_get_driver_name()
+        # ----------------------------------------------------------------
+        #
+        # Initialize network connections
+        #
+        # ----------------------------------------------------------------
+
+        Pyro.core.initServer(banner=0,storageCheck=0)
+        port = 9833
+        name = 'main_brain'
+
+        main_brain_URI = "PYROLOC://%s:%d/%s" % (main_brain_hostname,port,name)
+        print 'connecting to',main_brain_URI
+        self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
+        self.main_brain._setOneway(['set_image','set_fps','close'])
+
+        # inform brain that we're connected before starting camera thread
 
         self.cam_id = self.main_brain.register_new_camera(scalar_control_info)
-        self.main_brain._setOneway(['set_image','set_fps','close'])
+        self.globals['coord_port'] = self.main_brain.get_coord_port(self.cam_id)
 
         # ---------------------------------------------------------------
         #
@@ -488,13 +469,14 @@ cdef class App:
         #
         # ---------------------------------------------------------------
 
-        port=9834
+        hostname = socket.gethostbyname(socket.gethostname())
+        port = 9834
         daemon = Pyro.core.Daemon(host=hostname,port=port)
         self.from_main_brain_api = FromMainBrainAPI()
         self.from_main_brain_api.post_init(self.cam,self.cam_id,self.main_brain,
                                            self.globals)
         URI=daemon.connect(self.from_main_brain_api,'camera_server')
-        print 'URI:',URI
+        print 'server',URI
 
         # create and start listen thread
         listen_thread=threading.Thread(target=self.from_main_brain_api.listen,
@@ -564,8 +546,8 @@ cdef class App:
                         if cmd=='save':
                             fly_movie_lock.acquire()
                             try:
-                                for frame,timestamp in grabbed_frames:
-                                    fly_movie.add_frame(frame,timestamp)
+                                for frame,timestamp,framenumber in grabbed_frames:
+                                    fly_movie.add_frame(frame,timestamp,framenumber)
                             finally:
                                 fly_movie_lock.release()
 
@@ -575,19 +557,9 @@ cdef class App:
 
             finally:
                 self.globals['app_quit_event'].set() # make sure other threads close
-                print 'telling main_brain to close cam_id'
                 self.main_brain.close(self.cam_id)
-                print 'closed'
-                print
-                print 'waiting for grab thread to quit'
                 self.globals['grab_thread_done'].wait() # block until thread is done...
-                print 'closed'
-                print
-                print 'waiting for camera_server to close'
                 self.globals['listen_thread_done'].wait() # block until thread is done...
-                print 'closed'
-                print
-                print 'quitting'
         except Pyro.errors.ConnectionClosedError:
             print 'unexpected connection closure...'
 
