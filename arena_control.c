@@ -157,7 +157,9 @@ void arena_update( double x, double y, double orientation,
   if( ncalls == 0 ) sc_send_cmd( &serial_port, cmd, 4 );
   
   ncalls++;
-  if( ncalls > 2 ) ncalls = 0; /* 4 works, 2 doesn't, at 19200 baud */
+  if( ncalls > 3 ) ncalls = 0;
+    /* 4 works, 2 doesn't, at 19200 baud */
+    /* 3 doesn't work at 57600 baud */
 #endif
 
   /* write data to file */
