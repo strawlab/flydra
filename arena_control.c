@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -254,6 +255,9 @@ void arena_update( double x, double y, double orientation,
   static int expanding = 0;
   const double expansion_rate = 1000.0; /* deg/sec */
 
+  double use_orientation;
+  double use_pos_x;
+
   if( first_time == 0.0 )
   {
     first_time = set_time = timestamp;
@@ -336,15 +340,14 @@ void arena_update( double x, double y, double orientation,
   else if( cur_set >= 0 && expanding == 0 ) /* pre-expansion x movement */
   {
     /* gently try to get square in front of fly */
-    if( orientation > PI/4 && orientation < 7*PI/4 )
-    {
-    }
-    else if( orientation <= PI/4 )
-    {
-    }
-    else if( orientation >= 7*PI/4 )
-    {
-    }
+    use_orientation = orientation;
+    use_pos_x = new_pos_x_f / RAD2PIX; /* in radians */
+    if( fabs( use_orientation - use_pos_x ) > PI ) /* unwrap */
+      if( use_orientation < use_pos_x ) use_orientation += 2*PI;
+      else use_pos_x += 2*PI;
+    if( fabs( use_orientation - use_pos_x ) > PI/2 ) /* adjust x pos */
+      if( use_orientation < use_pos_x ) new_pos_x_f -= 0.1;
+      else new_pos_x_f += 0.1; /* gently! */
   }
 
   /* set pattern position */
