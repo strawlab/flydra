@@ -146,7 +146,7 @@ def main():
     #
     # ----------------------------------------------------------------
  
-    Pyro.core.initServer(banner=0)
+    Pyro.core.initServer(banner=0,storageCheck=0)
     hostname = socket.gethostbyname(socket.gethostname())
     fqdn = socket.getfqdn(hostname)
     port = 9834
