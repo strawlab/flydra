@@ -19,8 +19,12 @@ def rotate_velocity_by_orientation(vel,orient):
     return orient.inverse()*vel*orient
 
 def assert_unit_vector(U):
-    chk = norm_vec(U)
-    assert nx.sum(nx.abs(chk-U)) < 1e-15
+    V = nx.array(U)
+    if len(V.shape)==1:
+        V = V[nx.NewAxis,:]
+    V = V**2
+    mag = nx.sqrt(nx.sum(V,axis=1))
+    assert nx.sum(nx.abs(mag-1.0)) < 1e-15
 
 def world2body( U, roll_angle = 0 ):
     """convert world coordinates to body-relative coordinates
@@ -57,13 +61,108 @@ def make_quat(angle_radians, axis_of_rotation):
     b,c,d = math.sin(half_angle)*norm_vec(axis_of_rotation)
     return cgtypes.quat(a,b,c,d)
 
-def euler_to_quat(roll=0.0,pitch=0.0,yaw=0.0):
-    a,b,c=roll,-pitch,yaw
-    Qx = cgtypes.quat( math.cos(a/2.0), math.sin(a/2.0), 0, 0 )
-    Qy = cgtypes.quat( math.cos(b/2.0), 0, math.sin(b/2.0), 0 )
-    Qz = cgtypes.quat( math.cos(c/2.0), 0, 0, math.sin(c/2.0) )
-    return Qx*Qy*Qz
+def euler_to_orientation( yaw=0.0, pitch = 0.0 ):
+    """
+>>> euler_to_orientation(0,0)
+(1.0, 0.0, 0.0)
 
+>>> euler_to_orientation(math.pi,0)
+(-1.0, 1.2246063538223773e-16, 0.0)
+
+>>> euler_to_orientation(math.pi,math.pi/2)
+(-6.1230317691118863e-17, 7.4983036091106872e-33, 1.0)
+
+>>> euler_to_orientation(math.pi,-math.pi/2)
+(-6.1230317691118863e-17, 7.4983036091106872e-33, -1.0)
+
+>>> euler_to_orientation(math.pi,-math.pi/4)
+(-0.70710678118654757, 8.6592745707193554e-17, -0.70710678118654746)
+
+>>> euler_to_orientation(math.pi/2,-math.pi/4)
+(4.3296372853596777e-17, 0.70710678118654757, -0.70710678118654746)
+"""
+    z = math.sin( pitch )
+    xyr = math.cos( pitch )
+    y = xyr*math.sin( yaw )
+    x = xyr*math.cos( yaw )
+    return x, y, z
+
+def euler_to_quat(roll=0.0,pitch=0.0,yaw=0.0):
+    heading = yaw
+    attitude = pitch
+    bank = roll
+    c1 = math.cos(heading/2);
+    s1 = math.sin(heading/2);
+    c2 = math.cos(attitude/2);
+    s2 = math.sin(attitude/2);
+    c3 = math.cos(bank/2);
+    s3 = math.sin(bank/2);
+    c1c2 = c1*c2;
+    s1s2 = s1*s2;
+    w =c1c2*c3 - s1s2*s3;
+    x =c1c2*s3 + s1s2*c3;
+    y =s1*c2*c3 + c1*s2*s3;
+    z =c1*s2*c3 - s1*c2*s3;
+    z, y = y, -z
+    return cgtypes.quat(w,x,y,z)
+    
+##    a,b,c=roll,-pitch,yaw
+##    Qx = cgtypes.quat( math.cos(a/2.0), math.sin(a/2.0), 0, 0 )
+##    Qy = cgtypes.quat( math.cos(b/2.0), 0, math.sin(b/2.0), 0 )
+##    Qz = cgtypes.quat( math.cos(c/2.0), 0, 0, math.sin(c/2.0) )
+##    return Qx*Qy*Qz
+
+def orientation_to_euler( U ):
+    """
+convert orientation to euler angles (in radians)
+
+results are yaw, pitch (no roll is provided)
+
+>>> orientation_to_euler( (1, 0, 0) )
+(0.0, 0.0)
+
+>>> orientation_to_euler( (0, 1, 0) )
+(1.5707963267948966, 0.0)
+
+>>> orientation_to_euler( (-1, 0, 0) )
+(3.1415926535897931, 0.0)
+
+>>> orientation_to_euler( (0, -1, 0) )
+(-1.5707963267948966, 0.0)
+
+>>> orientation_to_euler( (0, 0, 1) )
+(0.0, 1.5707963267948966)
+
+>>> orientation_to_euler( (0, 0, -1) )
+(0.0, -1.5707963267948966)
+
+>>> orientation_to_euler( (0,0,0) ) # This is not a unit vector.
+Traceback (most recent call last):
+    ...
+AssertionError
+
+>>> r1=math.sqrt(2)/2
+
+>>> math.pi/4
+0.78539816339744828
+
+>>> orientation_to_euler( (r1,0,r1) )
+(0.0, 0.78539816339744828)
+
+>>> orientation_to_euler( (r1,r1,0) )
+(0.78539816339744828, 0.0)
+
+"""
+
+    if str(U[0]) == 'nan':
+        return (nan,nan)
+    assert_unit_vector(U)
+        
+    yaw = math.atan2( U[1],U[0] )
+    xy_r = math.sqrt(U[0]**2+U[1]**2)
+    pitch = math.atan2( U[2], xy_r )
+    return yaw, pitch
+    
 def orientation_to_quat( U, roll_angle=0 ):
     """convert world coordinates to body-relative coordinates
 
@@ -76,42 +175,13 @@ def orientation_to_quat( U, roll_angle=0 ):
 
     quaternion (4 tuple)
     """
+    if roll_angle != 0:
+        # I presume this has an effect on the b component of the quaternion
+        raise NotImplementedError('')
     if str(U[0]) == 'nan':
         return cgtypes.quat((nan,nan,nan,nan))
-    try:
-        assert_unit_vector(U)
-    except:
-        print 'ERROR: U is not unit (mag = %f)'%( math.sqrt(U[0]**2 + U[1]**2 + U[2]**2), )
-        raise
-
-    if 1:
-        yaw = math.atan2( U[1],U[0] )
-        pitch = math.atan2( U[2], U[0] )
-        return euler_to_quat(yaw=yaw,pitch=pitch)
-    else:
-        if roll_angle != 0:
-            # I presume this has an effect on the b component of the quaternion
-            raise NotImplementedError('')
-        fast = True
-        if not fast:
-            X = (1,0,0)
-            v = nx.array(cross(X,U))
-            v = v/norm(v)
-        else:
-            v = (0,-U[2],U[1]) # faster way of same
-            
-        if nx.sum(nx.abs(v))<1e-16:
-            return make_quat(0, (1,0,0))
-        
-        if not fast:
-            cos_theta = nx.dot(U,X)
-            theta = math.acos(cos_theta/(norm(U)*norm(X)))
-        else:
-            cos_theta = U[0] # faster way of same
-            theta = math.acos(cos_theta)
-            
-        #return cgtypes.quat(theta, cgtypes.vec3(v))
-        return make_quat(theta, v)
+    yaw, pitch = orientation_to_euler( U )
+    return euler_to_quat(yaw=yaw, pitch=pitch, roll=roll_angle)
 
 def quat_to_orient(S3):
     """returns x, y, z for unit quaternions"""
@@ -124,29 +194,27 @@ def quat_to_orient(S3):
         return V.x, V.y, V.z
 
 def quat_to_euler(q):
-    """returns yaw, pitch, roll"""
-    qw = q.w; qx = q.x; qy = q.y; qz = q.z
+    """returns yaw, pitch, roll
 
-    # from Martin Baker's website:
-    #heading = math.atan2(2*qy*qw-2*qx*qz , 1 - 2*qy**2 - 2*qz**2)
-    #attitude = math.asin(2*qx*qy + 2*qz*qw)
-    #bank = math.atan2(2*qx*qw-2*qy*qz , 1 - 2*qx**2 - 2*qz**2)
-    #return heading, attitude, bank
-
-    pitch = -math.atan2(2*qy*qw-2*qx*qz , 1 - 2*qy**2 - 2*qz**2)
-    yaw = math.asin(2*qx*qy + 2*qz*qw)
-    roll = math.atan2(2*qx*qw-2*qy*qz , 1 - 2*qx**2 - 2*qz**2)
+    at singularities (north and south pole), assumes roll = 0
+    """
+    eps=1e-14
+    qw = q.w; qx = q.x; qy = q.z; qz = -q.y
+    pitch_y = 2*qx*qy + 2*qz*qw
+    pitch = math.asin(pitch_y)
+    if pitch_y > (1.0-eps): # north pole
+        yaw = 2*math.atan2( qx, qw)
+        roll = 0.0
+    elif pitch_y < -(1.0-eps): # south pole
+        yaw = -2*math.atan2( qx, qw)
+        roll = 0.0
+    else:
+        yaw = math.atan2(2*qy*qw-2*qx*qz , 1 - 2*qy**2 - 2*qz**2)
+        roll = math.atan2(2*qx*qw-2*qy*qz , 1 - 2*qx**2 - 2*qz**2)
     return yaw, pitch, roll
 
 def quat_to_absroll(q):
-    qw = q.w; qx = q.x; qy = q.y; qz = q.z
-
-    # from Martin Baker's website:
-    #heading = math.atan2(2*qy*qw-2*qx*qz , 1 - 2*qy**2 - 2*qz**2)
-    #attitude = math.asin(2*qx*qy + 2*qz*qw)
-    #bank = math.atan2(2*qx*qw-2*qy*qz , 1 - 2*qx**2 - 2*qz**2)
-    #return heading, attitude, bank
-
+    qw = q.w; qx = q.x; qy = q.z; qz = -q.y
     roll = math.atan2(2*qx*qw-2*qy*qz , 1 - 2*qx**2 - 2*qz**2)
     return abs(roll)
 
@@ -332,3 +400,62 @@ class ObjectiveFunctionQuats:
         pd_finder = PDfinder(self,Q)
         del_G_Q = QuatSeq([ pd_finder.eval_pd(i) for i in range(len(Q)) ])
         return del_G_Q
+
+def _test():
+    # test math
+    eps=1e-7
+    yaws = list( nx.arange( -math.pi, math.pi, math.pi/16.0 ) )
+    yaws.append( math.pi )
+    pitches = list( nx.arange( -math.pi/2, math.pi/2, math.pi/16.0 ) )
+    pitches.append( math.pi/2 )
+    err_count = 0
+    total_count = 0
+    for yaw in yaws:
+        for pitch in pitches:
+            had_err = False
+            # forward and backward test 1
+            yaw2,pitch2 = orientation_to_euler(euler_to_orientation(yaw,pitch))
+            if abs(yaw-yaw2)>eps or abs(pitch-pitch2)>eps:
+                print 'orientation problem at',repr((yaw,pitch))
+                had_err = True
+
+            # forward and backward test 2
+            yaw3, pitch3, roll3 = quat_to_euler( euler_to_quat( yaw=yaw, pitch=pitch ))
+            if abs(yaw-yaw3)>eps or abs(pitch-pitch3)>eps:
+                print 'quat problem at',repr((yaw,pitch))
+                #print ' ',yaw,pitch,0.0
+                print ' ',repr((yaw3, pitch3, roll3))
+                print '    ',abs(yaw-yaw3)
+                print '    ',abs(pitch-pitch3)
+                print
+                had_err = True
+
+            # triangle test 1
+            xyz1=euler_to_orientation(yaw,pitch)
+            xyz2=quat_to_orient( euler_to_quat( yaw=yaw, pitch=pitch ))
+            l2dist = math.sqrt(nx.sum((nx.array(xyz1)-nx.array(xyz2))**2))
+            if l2dist > eps:
+                print 'other problem at',repr((yaw,pitch))
+                print ' ',xyz1
+                print ' ',xyz2
+                print
+                had_err = True
+
+            # triangle test 2
+            yaw4, pitch4, roll4 = quat_to_euler(orientation_to_quat( xyz1 ))
+            if abs(yaw-yaw4)>eps or abs(pitch-pitch4)>eps:
+                print 'yet another problem at',repr((yaw,pitch))
+                print
+                had_err = True
+            total_count += 1
+            if had_err:
+                err_count += 1
+    print 'Error count: (%d of %d)'%(err_count,total_count)
+                
+    # do doctest
+    import doctest, PQmath
+    return doctest.testmod(PQmath)
+
+
+if __name__ == "__main__":
+    _test()
