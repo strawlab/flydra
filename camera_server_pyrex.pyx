@@ -294,8 +294,7 @@ cdef class GrabClass:
                 if self.use_arena: # call out to arena feedback function
                     if have_arena_control:
                         arena_control.arena_update(
-                            x0+self.left, y0+self.bottom, orientation,
-                            timestamp, framenumber )
+                            x0, y0, orientation, timestamp, framenumber )
                     else:
                         print 'ERROR: no arena control'
                     
@@ -432,8 +431,8 @@ cdef class GrabClass:
                 
                 # start of IPP-requiring code
                 if find_rotation_center_start_isSet():
-                    rot_frame_number=0
                     find_rotation_center_start_clear()
+                    rot_frame_number=0
                     arena_control.rotation_calculation_init()
                     c_fit_params.start_center_calculation( n_rot_samples )
                     
@@ -444,7 +443,7 @@ cdef class GrabClass:
                 #
                 
                 if rot_frame_number>=0:
-                    c_fit_params.update_center_calculation( x0, y0 )
+                    c_fit_params.update_center_calculation( x0, y0, orientation )
 
                     rot_frame_number = rot_frame_number+1
                     if rot_frame_number>=n_rot_samples:

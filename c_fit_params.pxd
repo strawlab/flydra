@@ -11,5 +11,5 @@ cdef extern from "c_fit_params.h":
 
     void start_center_calculation( int nframes )
     void end_center_calculation( double *x_center, double *y_center )
-    void update_center_calculation( double new_x_pos, double new_y_pos )
+    void update_center_calculation( double new_x_pos, double new_y_pos, double new_orientation )
 

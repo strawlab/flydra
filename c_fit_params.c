@@ -1,6 +1,8 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
+#include <string.h>
+#include <time.h>
 #include "ippi.h"
 #include "c_fit_params.h"
 
@@ -8,8 +10,10 @@
 #define MAX( a, b ) (a > b? a:b)
 
 IppiMomentState_64f *pState;
+
 double *x_pos_calc, *y_pos_calc;
 int curr_frame = -1;
+FILE *calibfile;
 
 /****************************************************************
 ** print_img2 ***************************************************
@@ -25,6 +29,30 @@ void print_img2( unsigned char *img, int width, int height, int img_step )
       printf( "%4d", ptr[j] );
     printf( "\n" );
   }
+}
+
+/****************************************************************
+** fill_time string *********************************************
+****************************************************************/
+void fill_time_string( char string[] )
+{
+  time_t now;
+  struct tm *timeinfo;
+
+  /* fill string with current time (pad with zeros) */
+  time( &now );
+  timeinfo = localtime( &now );
+  sprintf( string, "%d-", timeinfo->tm_year + 1900 );
+  if( timeinfo->tm_mon + 1 < 10 ) strcat( string, "0" );
+  sprintf( &string[strlen( string )], "%d-", timeinfo->tm_mon + 1 );
+  if( timeinfo->tm_mday < 10 ) strcat( string, "0" );
+  sprintf( &string[strlen( string )], "%d_", timeinfo->tm_mday );
+  if( timeinfo->tm_hour < 10 ) strcat( string, "0" );
+  sprintf( &string[strlen( string )], "%d-", timeinfo->tm_hour );
+  if( timeinfo->tm_min < 10 ) strcat( string, "0" );
+  sprintf( &string[strlen( string )], "%d-", timeinfo->tm_min );
+  if( timeinfo->tm_sec < 10 ) strcat( string, "0" );
+  sprintf( &string[strlen( string )], "%d", timeinfo->tm_sec );
 }
 
 /****************************************************************
@@ -76,6 +104,12 @@ int fit_params( double *x0, double *y0, double *orientation,
   top = index_y + centroid_search_radius;
   if( top >= height ) top = height - 1;
 
+  /* ignoring centroid search radius! */
+  bottom = 0;
+  top = height - 1;
+  left = 0;
+  right = width - 1;
+
   roi_offset.x = left;
   roi_offset.y = bottom;
   roi_size.width = right - left + 1;
@@ -116,9 +150,9 @@ int fit_params( double *x0, double *y0, double *orientation,
     *y0 = -1;
   }
 
-#if 0
+#if 1
   /* square image for orientation calculation */
-  if( !CHK( ippiSqr_C1IRSfs( (Ipp8u*)(img + bottom*img_step + left), img_step, roi_size, 5 ) ) )
+  if( !CHK( ippiSqr_8u_C1IRSfs( (Ipp8u*)(img + bottom*img_step + left), img_step, roi_size, 5 ) ) )
   {
     printf( "failed squaring image\n" );
     return 60;
@@ -154,100 +188,18 @@ int fit_params( double *x0, double *y0, double *orientation,
 }
 
 /****************************************************************
-** fit_params_once_float ****************************************
-****************************************************************/
-int fit_params_once_float( double *x0, double *y0, double *orientation,
-                       int width, int height, float *img )
-{
-  int i;
-  int sts;
-  int new_img_step, use_img_step;
-  Ipp32f* new_img;
-  Ipp8u* use_img;
-  IppiSize roi = {width,height};
-
-  new_img = ippiMalloc_32f_C1( width, height, &new_img_step );
-  if( !new_img )
-  {
-    printf( "failed allocating memory 32f\n" );
-    return 101;
-  }
-
-  for( i = 0; i < height; i++ )
-    memcpy( new_img + (new_img_step/sizeof( Ipp32f ))*i,
-      img + width*i, width*sizeof( float ) );
-
-  use_img = ippiMalloc_8u_C1( width, height, &use_img_step );
-  if( !use_img )
-  {
-    printf( "failed allocating memory 8u\n" );
-    return 102;
-  }
-
-  if( !CHK( ippiConvert_32f8u_C1R( new_img, new_img_step, use_img, use_img_step, roi, ippRndNear ) ) )
-  {
-    printf( "failed converting\n" );
-    return 113;
-  }
-
-  sts = init_moment_state();
-  if( sts != 0 ) return sts;
-
-  sts = fit_params( x0, y0, orientation, width/2, height/2,
-    MAX( width, height ), width, height, use_img, use_img_step );
-  if( sts != 0 ) return sts;
-
-  sts = free_moment_state();
-  if( sts != 0 ) return sts;
-
-  ippiFree( new_img );
-  ippiFree( use_img );
-
-  return 0;
-}
-
-/****************************************************************
-** fit_params_once_char *****************************************
-****************************************************************/
-int fit_params_once_char( double *x0, double *y0, double *orientation,
-                       int width, int height, unsigned char *img )
-{
-  int i;
-  int sts;
-  int new_img_step;
-  Ipp8u* new_img;
-
-  new_img = ippiMalloc_8u_C1( width, height, &new_img_step );
-  if( !new_img )
-  {
-    printf( "failed allocating memory 8u\n" );
-    return 101;
-  }
-
-  for( i = 0; i < height; i++ )
-    memcpy( new_img + new_img_step*i,
-      img + width*i, width );
-
-  sts = init_moment_state();
-  if( sts != 0 ) return sts;
-
-  sts = fit_params( x0, y0, orientation, width/2, height/2,
-    MAX( width, height ), width, height, new_img, new_img_step );
-  if( sts != 0 ) return sts;
-
-  sts = free_moment_state();
-  if( sts != 0 ) return sts;
-
-  ippiFree( new_img );
-
-  return 0;
-}
-
-/****************************************************************
 ** start_center_calculation *************************************
 ****************************************************************/
 void start_center_calculation( int nframes )
 {
+  char timestring[64], filename[64];
+
+  fill_time_string( timestring );
+  sprintf( filename, "%scalib%s.dat", _c_FIT_PARAMS_data_prefix_, timestring );
+  calibfile = fopen( filename, "w" );
+
+  printf( "==saving center calculation to %s\n", filename );
+
   x_pos_calc = (double*)malloc( nframes * sizeof( double ) );
   y_pos_calc = (double*)malloc( nframes * sizeof( double ) );
   curr_frame = 0;
@@ -259,28 +211,35 @@ void start_center_calculation( int nframes )
 void end_center_calculation( double *x_center, double *y_center )
 {
   int i;
+  double x_min = 9999.9, x_max = -1.0;
+  double y_min = 9999.9, y_max = -1.0;
 
-  /* arithmetic mean */
-  *x_center = 0.0;
-  *y_center = 0.0;
+  /* mean could be skewed; instead use middle, assuming a circle */
   for( i = 0; i < curr_frame; i++ )
   {
-    *x_center += x_pos_calc[i];
-    *y_center += y_pos_calc[i];
+    if( x_pos_calc[i] < x_min ) x_min = x_pos_calc[i];
+    else if( x_pos_calc[i] > x_max ) x_max = x_pos_calc[i];
+    if( y_pos_calc[i] < y_min ) y_min = y_pos_calc[i];
+    else if( y_pos_calc[i] > y_max ) y_max = y_pos_calc[i];
   }
-  *x_center /= curr_frame;
-  *y_center /= curr_frame;
+  *x_center = (x_max - x_min)/2 + x_min;
+  *y_center = (y_max - y_min)/2 + y_min;
 
   free( x_pos_calc );
   free( y_pos_calc );
   curr_frame = -1;
+
+  fclose( calibfile );
+  printf( "==done calculating center %.4lf %.4lf\n", *x_center, *y_center );
 }
 
 /****************************************************************
 ** update_center_calculation ************************************
 ****************************************************************/
-void update_center_calculation( double new_x_pos, double new_y_pos )
+void update_center_calculation( double new_x_pos, double new_y_pos, double new_orientation )
 {
+  fprintf( calibfile, "%lf\t%lf\t%lf\n", new_x_pos, new_y_pos, new_orientation );
+
   x_pos_calc[curr_frame] = new_x_pos;
   y_pos_calc[curr_frame] = new_y_pos;
   curr_frame++;
