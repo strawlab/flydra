@@ -3,6 +3,13 @@ from numarray.ieeespecial import inf
 
 import Numeric as fast_nx
 import LinearAlgebra
+import flydra.common_variables 
+
+cdef float MINIMUM_ECCENTRICITY
+MINIMUM_ECCENTRICITY = flydra.common_variables.MINIMUM_ECCENTRICITY
+
+cdef float ACCEPTABLE_DISTANCE_PIXELS
+ACCEPTABLE_DISTANCE_PIXELS = flydra.common_variables.ACCEPTABLE_DISTANCE_PIXELS
 
 fast_svd = LinearAlgebra.singular_value_decomposition
 
@@ -98,9 +105,7 @@ cdef class ReconstructHelper:
         
         return (xd, yd)
         
-def find_best_3d( object recon, object d2,
-                  float acceptable_distance_pixels=10.0,
-                  float minimum_eccentricity=2.0):
+def find_best_3d( object recon, object d2):
     """
     
     Finds combination of cameras which uses the most number of cameras
@@ -164,7 +169,7 @@ def find_best_3d( object recon, object d2,
 
         # can we short-circuit the rest of these computations?
         if not isinf(least_err_by_n_cameras[n_cams-2]):
-            if least_err_by_n_cameras[n_cams-1] > acceptable_distance_pixels:
+            if least_err_by_n_cameras[n_cams-1] > ACCEPTABLE_DISTANCE_PIXELS:
                 break
             
         for cam_ids_used in recon.cam_combinations_by_size[n_cams]:
@@ -202,11 +207,12 @@ def find_best_3d( object recon, object d2,
     # now we have the best estimate for 2 views, 3 views, ...
     best_n_cams = 2
     least_err = least_err_by_n_cameras[2]
+    mean_dist = least_err
     for n_cams from 3 <= n_cams <= max_n_cams:
         least_err = least_err_by_n_cameras[n_cams]
         if isinf(least_err):
             break # if we don't have e.g. 4 cameras, we won't have 5
-        if least_err < acceptable_distance_pixels:
+        if least_err < ACCEPTABLE_DISTANCE_PIXELS:
             mean_dist = least_err
             best_n_cams = n_cams
 
@@ -218,7 +224,7 @@ def find_best_3d( object recon, object d2,
     P = []
     for cam_id in cam_ids_used:
         x,y,area,slope,eccentricity, p1,p2,p3,p4 = d2[cam_id]
-        if eccentricity > minimum_eccentricity:
+        if eccentricity > MINIMUM_ECCENTRICITY:
             P.append( (p1,p2,p3,p4) )
     if len(P) < 2:
         Lcoords = None
