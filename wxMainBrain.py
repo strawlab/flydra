@@ -226,7 +226,7 @@ class App(wxApp):
                 widget = self.collecting_background_buttons[cam_id]
                 widget.SetValue( not widget.GetValue() )
                 id = widget.GetId()
-                event = wxCommandEvent(EVT_CHECKBOX.evtType[0],id)
+                event = wxCommandEvent(wxEVT_COMMAND_CHECKBOX_CLICKED,id)
                 event.SetEventObject( widget )
                 widget.Command( event )
             self.statusbar.SetStatusText('running BG collection toggled',0)
@@ -239,7 +239,7 @@ class App(wxApp):
             for cam_id in self.cameras.keys():
                 widget = self.take_background_buttons[cam_id]
                 id = widget.GetId()
-                event = wxCommandEvent(EVT_BUTTON.evtType[0],id)
+                event = wxCommandEvent(wxEVT_COMMAND_BUTTON_CLICKED,id)
                 event.SetEventObject( widget )
                 widget.Command( event )
             self.statusbar.SetStatusText('took BG images',0)
@@ -247,7 +247,7 @@ class App(wxApp):
             for cam_id in self.cameras.keys():
                 widget = self.clear_background_buttons[cam_id]
                 id = widget.GetId()
-                event = wxCommandEvent(EVT_BUTTON.evtType[0],id)
+                event = wxCommandEvent(wxEVT_COMMAND_BUTTON_CLICKED,id)
                 event.SetEventObject( widget )
                 widget.Command( event )
             self.statusbar.SetStatusText('cleared BG images',0)
