@@ -6,43 +6,50 @@
 #define YES 1
 #define NO 0
 
-#define CLOSED_LOOP 0
-#define OPEN_LOOP 1
-#define ARENA_CONTROL CLOSED_LOOP
-#define CALIBRATION_PATTERN 1
+#define BIAS_AVAILABLE NO
+
 /* 1 poles
    2 square
    3 vert
    4 horiz
    5 diag */
+#define CALIBRATION_PATTERN 1
+#define ARENA_START_PATTERN 3
 
-#undef ARENA_PATTERN
-#if ARENA_CONTROL == OPEN_LOOP
-  #define ARENA_PATTERN 1
-  /* pattern starting index is 1 */
-  #define BIAS_AVAILABLE NO
-  #if BIAS_AVAILABLE == YES
-    /* gain,bias as percentages, in 2s complement (x=x; -x=256-x) */
-    #define PATTERN_BIAS_X 226
-    #define PATTERN_BIAS_Y 15
-  #endif
-#elif ARENA_CONTROL == CLOSED_LOOP
-  #define ARENA_PATTERN 3
-#endif
-/* else won't compile! */
+/* gain,bias in 2s complement (x=x; -x=256-x) */
+/* bias seems to be a percentage */
+#define EXP_GAIN_X 15
+#define EXP_BIAS_X 0
+#define EXP_GAIN_Y 120
+#define EXP_BIAS_Y 0
+
+#define CAL_GAIN_X 0
+#define CAL_BIAS_X 30
+#define CAL_GAIN_Y 0
+#define CAL_BIAS_Y 45
+
 
 #define NPIXELS_PER_PANEL 8
 #define NPANELS_CIRCUMFERENCE 8
 #define NPIXELS (NPIXELS_PER_PANEL*NPANELS_CIRCUMFERENCE)
-#if BIAS_AVAILABLE == NO
-  #define PATTERN_DEPTH 8
-#endif
+#define PATTERN_DEPTH 8
 
-/****************************************************************
-** unwrap *******************************************************
-****************************************************************/
+#define cdi_DEVICE "/dev/comedi0"
+#define cdi_SUBDEV 1
+#define cdi_CHAN_X 0
+#define cdi_CHAN_Y 1
+#define cdi_MIN 2030
+#define cdi_MAX 2995
+#define cdi_MAX 2995
+#define cdi_RANGE (cdi_MAX-cdi_MIN)
+#define cdi_AREF AREF_GROUND
+
 void unwrap( double *th1, double *th2 );
 double disambiguate( double x, double y, double center_x, double center_y );
 void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f );
+
+void init_analog_output( void );
+void finish_analog_output( void );
+void set_position_analog( int pos_x, int pos_y );
 
 #endif

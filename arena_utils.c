@@ -1,5 +1,8 @@
+#include <comedilib.h>
 #include <math.h>
 #include "arena_utils.h"
+
+comedi_t *cdi_dev = NULL;
 
 /****************************************************************
 ** unwrap *******************************************************
@@ -94,3 +97,42 @@ void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f )
   }
   *pos_y = *pos_y_f - (int)*pos_y_f >= 0.5? (int)*pos_y_f+1 : (int)*pos_y_f;
 }
+
+/****************************************************************
+** init_analog_output *******************************************
+****************************************************************/
+void init_analog_output( void )
+{
+  cdi_dev = comedi_open( cdi_DEVICE );
+  if( cdi_dev == NULL )
+  {
+    printf( "failed opening comedi device %s\n", cdi_DEVICE );
+    comedi_perror( cdi_DEVICE );
+  }
+}
+
+/****************************************************************
+** finish_analog_output *****************************************
+****************************************************************/
+void finish_analog_output( void )
+{
+  comedi_close( cdi_dev );
+  cdi_dev = NULL;
+}
+
+/****************************************************************
+** set_position_analog ******************************************
+****************************************************************/
+void set_position_analog( int pos_x, int pos_y )
+{
+  lsampl_t ana_x, ana_y;
+
+  if( cdi_dev == NULL ) return;
+
+  ana_x = pos_x*cdi_RANGE/(NPIXELS-1) + cdi_MIN;
+  comedi_data_write( cdi_dev, cdi_SUBDEV, cdi_CHAN_X, 0, cdi_AREF, ana_x );
+
+  ana_y = pos_y*cdi_RANGE/(PATTERN_DEPTH-1) + cdi_MIN;
+  comedi_data_write( cdi_dev, cdi_SUBDEV, cdi_CHAN_Y, 0, cdi_AREF, ana_y );
+}
+
