@@ -42,7 +42,15 @@ class FrameServer(Pyro.core.ObjBase):
         self._ts_dict = result
 
     def get_frame_by_timestamp(self, timestamp):
-        return self.fly_movie.get_frame(self._ts_dict[timestamp])
+        try:
+            return self.fly_movie.get_frame(self._ts_dict[timestamp])
+        except KeyError:
+            print repr(timestamp)
+            for key in self._ts_dict:
+                print 
+                if abs(key-timestamp) < 0.02:
+                    print >> sys.stderr, repr(key)
+            raise
         
     def get_frame_prior_to_timestamp(self, target_timestamp):
         timestamps = self._ts_dict.keys()

@@ -257,8 +257,6 @@ class App:
         for cam_no in range(self.num_cams):
             num_buffers = 20
             cam = cam_iface.Camera(cam_no,num_buffers)
-            cam.set_trigger_source( 0 ) # internal
-            print 'set trigger internal'
             self.all_cams.append( cam )
 
             height = cam.get_max_height()
@@ -308,6 +306,8 @@ class App:
             scalar_control_info['diff_threshold'] = diff_threshold
             clear_threshold = 0.0
             scalar_control_info['clear_threshold'] = clear_threshold
+            
+            scalar_control_info['trigger_source'] = cam.get_trigger_source()
             
             scalar_control_info['width'] = width
             scalar_control_info['height'] = height
@@ -385,6 +385,8 @@ class App:
                         assert cam.get_max_width() == value
                     elif property_name == 'height':
                         assert cam.get_max_height() == value
+                    elif property_name == 'trigger_source':
+                        cam.set_trigger_source( value )
             elif key == 'get_im':
                 self.main_brain.set_image(cam_id, globals['most_recent_frame'])
             elif key == 'use_arena':

@@ -170,6 +170,23 @@ cdef class RealtimeAnalyzer:
     def do_work(self, c_numarray._numarray framebuffer,
                 double timestamp,
                 int framenumber):
+        """find fly and orientation (fast enough for realtime use)
+
+        inputs
+        ------
+        
+        framebuffer
+        timestamp
+        framenumber
+
+        outputs
+        -------
+        
+        [ (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4) ]
+        found_anything
+        orientation
+        
+        """
         cdef double x0, y0
         cdef double x0_abs, y0_abs, area, x0u, y0u, x1u, y1u
         cdef double orientation

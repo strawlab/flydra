@@ -4,18 +4,19 @@
 # TODO:
 #
 # hotkeys for
-#   running average on all cameras
-#   take bg image on all cameras
-#   clean bg image on all cameras
-#   record data (auto filename)
+#   running average on all cameras (DONE)
+#   take bg image on all cameras (DONE)
+#   clean bg image on all cameras (DONE)
+#   record data (auto filename) (DONE)
 #   record movie (auto filename)
-# make sound when tracking
+# make sound when tracking (DONE)
 # toggle for save movie only when point found
+# toggle for external trigger (DONE)
 
 # In other files:
 #  don't crash camera servers when hard-drives not mounted
 #  use ROI surrounding maximum point (DONE)
-#  save clear_threshold and diff_threshold camera settings(??)
+#  save clear_threshold and diff_threshold camera settings (really?)
 
 import sys
 import threading
@@ -34,6 +35,8 @@ RESDIR = os.path.split(os.path.abspath(sys.argv[0]))[0]
 RESFILE = os.path.join(RESDIR,'flydra_server.xrc')
 hydra_image_file = os.path.join(RESDIR,'hydra.gif')
 RES = wxXmlResource(RESFILE)
+DETECT_SND = wxSound(os.path.join(RESDIR,'detect.wav'))
+DETECT_SND.Play()
 
 class App(wxApp):
     def OnInit(self,*args,**kw):
@@ -42,7 +45,7 @@ class App(wxApp):
 
         # statusbar ----------------------------------
         self.statusbar = frame.CreateStatusBar()
-        self.statusbar.SetFieldsCount(2)
+        self.statusbar.SetFieldsCount(4)
         
         # menubar ------------------------------------
         menuBar = wxMenuBar()
@@ -184,24 +187,71 @@ class App(wxApp):
         self.timer = wxTimer(self,      # object to send the event to 	 
                              ID_Timer)  # event id to use 	 
         EVT_TIMER(self,  ID_Timer, self.OnIdle)
-        self.update_interval=500
+        self.update_interval=100
         self.timer.Start(self.update_interval) # call every n msec
-        EVT_IDLE(self.frame, self.OnIdle)
+##        EVT_IDLE(self.frame, self.OnIdle)
 
         # raw image update timer
         ID_Timer2  = wxNewId() 	         
         self.timer2 = wxTimer(self,      # object to send the event to 	 
                               ID_Timer2)  # event id to use 	 
         EVT_TIMER(self,  ID_Timer2, self.OnUpdateRawImages)
-        self.update_interval2=500
+        self.update_interval2=2000
         self.timer2.Start(self.update_interval2) # call every n msec
 
         self.cameras = {} #OrderedDict()
 
+        self.Bind(EVT_KEY_DOWN, self.OnKeyDown)
+
         self.update_wx()
 
+        self.collecting_background_buttons = {}
+        self.take_background_buttons = {}
+        self.clear_background_buttons = {}
         return True
 
+    def OnKeyDown(self, event):
+        keycode = event.GetKeyCode()
+        if not (27 < keycode < 256):
+            # propagate event up the chain...
+            event.Skip()
+            return
+        
+        keyname = "%s" % chr(keycode)
+        if keyname == 'R':
+            for cam_id in self.cameras.keys():
+                widget = self.collecting_background_buttons[cam_id]
+                widget.SetValue( not widget.GetValue() )
+                id = widget.GetId()
+                event = wxCommandEvent(EVT_CHECKBOX.evtType[0],id)
+                event.SetEventObject( widget )
+                widget.Command( event )
+            self.statusbar.SetStatusText('running BG collection toggled',0)
+        elif keyname == 'S':
+            if str(self.statusbar.GetStatusText(2)) == '':
+                self.OnStartSavingData()
+            else:
+                self.OnStopSavingData()
+        elif keyname == 'T':
+            for cam_id in self.cameras.keys():
+                widget = self.take_background_buttons[cam_id]
+                id = widget.GetId()
+                event = wxCommandEvent(EVT_BUTTON.evtType[0],id)
+                event.SetEventObject( widget )
+                widget.Command( event )
+            self.statusbar.SetStatusText('took BG images',0)
+        elif keyname == 'C':
+            for cam_id in self.cameras.keys():
+                widget = self.clear_background_buttons[cam_id]
+                id = widget.GetId()
+                event = wxCommandEvent(EVT_BUTTON.evtType[0],id)
+                event.SetEventObject( widget )
+                widget.Command( event )
+            self.statusbar.SetStatusText('cleared BG images',0)
+        else:
+            # propagate event up the chain...
+            event.Skip()
+        
     def OnPageChanged(self, event):
         page = event.GetSelection()
         self.statusbar.SetStatusText('',0)
@@ -264,14 +314,17 @@ class App(wxApp):
         static_box.SetLabel( cam_id )
 
         collecting_background = XRCCTRL(previewPerCamPanel,"COLLECTING_BACKGROUND")
+        self.collecting_background_buttons[cam_id] = collecting_background
         EVT_CHECKBOX(collecting_background, collecting_background.GetId(),
                      self.OnCollectingBackground)
         
         take_background = XRCCTRL(previewPerCamPanel,"take_background")
+        self.take_background_buttons[cam_id] = take_background
         EVT_BUTTON(take_background, take_background.GetId(),
                    self.OnTakeBackground)
         
         clear_background = XRCCTRL(previewPerCamPanel,"clear_background")
+        self.clear_background_buttons[cam_id] = clear_background
         EVT_BUTTON(clear_background, clear_background.GetId(),
                    self.OnClearBackground)
         
@@ -299,6 +352,12 @@ class App(wxApp):
         arena_control = XRCCTRL(previewPerCamPanel,
                              "ARENA_CONTROL")
         EVT_CHECKBOX(arena_control, arena_control.GetId(), self.OnArenaControl)
+        
+        ext_trig = XRCCTRL(previewPerCamPanel,
+                           "EXT_TRIG")
+        val = scalar_control_info['trigger_source']
+        ext_trig.SetValue( val )
+        EVT_CHECKBOX(ext_trig, ext_trig.GetId(), self.OnExtTrig)
         
         per_cam_controls_panel = XRCCTRL(previewPerCamPanel,
                                          "PerCameraControlsContainer")
@@ -390,6 +449,13 @@ class App(wxApp):
         elif param == 'diff_threshold':
             threshold_diff_value = XRCCTRL(previewPerCamPanel,"threshold_value")
             threshold_diff_value.SetValue( str( value ) )
+        elif param == 'trigger_source':
+            ext_trig = XRCCTRL(previewPerCamPanel,
+                               "EXT_TRIG")
+            ext_trig.SetValue( value )
+        else:
+            if param not in ('roi','width','height'):
+                print 'WARNING: could not update panel display for',param
         
     def PreviewPerCamClose(self,cam_id):
         previewPerCamPanel=self.cameras[cam_id]['previewPerCamPanel']
@@ -448,14 +514,15 @@ class App(wxApp):
         snapshot_cam_choice.Delete(i)
 
     def InitRecordRawPanel(self):
-        record_raw = XRCCTRL(self.record_raw_panel,
-                             "record_raw")
-        EVT_CHECKBOX(record_raw, record_raw.GetId(), self.OnRecordRaw)
+        self.record_raw = XRCCTRL(self.record_raw_panel,
+                                  "record_raw")
+        EVT_CHECKBOX(self.record_raw, self.record_raw.GetId(),
+                     self.OnRecordRaw)
         
         self._currently_recording_cams = []
 
     def OnRecordRaw(self,event):
-        if event.IsChecked():
+        if self.record_raw.IsChecked():
             self.OnRecordRawStart()
         else:
             self.OnRecordRawStop()
@@ -607,31 +674,27 @@ class App(wxApp):
     def OnToggleDebugCameras(self, event):
         self.main_brain.set_all_cameras_debug_mode( event.IsChecked() )
 
-    def OnStartSavingData(self, event):
-        doit=False
-        dlg = wxFileDialog( self.frame, "Select file to save data",
-                            style = wxDD_DEFAULT_STYLE,
-                            defaultDir = os.environ.get('HOME',''),
-                            wildcard = '*.h5',
-                            )
-        try:
-            if dlg.ShowModal() == wxID_OK:
-                save_filename = dlg.GetPath()
-                doit = True
-        finally:
-            dlg.Destroy()
-            
-        if doit:
+    def OnStartSavingData(self, event=None):
+        display_save_filename = time.strftime( 'DATA%Y%m%d_%H%M%S.h5' )
+        save_dir = os.environ.get('HOME','')
+        test_dir = os.path.join( save_dir, 'ORIGINAL_DATA' )
+        if os.path.exists(test_dir):
+            save_dir = test_dir
+        save_filename = os.path.join( save_dir, display_save_filename )
+        if 1:
             try:
                 self.main_brain.start_saving_data(save_filename)
                 self.statusbar.SetStatusText("Saving data to '%s'"%save_filename)
+                self.statusbar.SetStatusText(display_save_filename,2)
             except:
                 self.statusbar.SetStatusText("Error saving data to '%s', see console"%save_filename)
+                self.statusbar.SetStatusText("",2)
                 raise
 
-    def OnStopSavingData(self, event):
+    def OnStopSavingData(self, event=None):
         self.main_brain.stop_saving_data()
         self.statusbar.SetStatusText("Saving stopped")        
+        self.statusbar.SetStatusText("",2)
         
     def OnToggleTint(self, event):
         self.cam_image_canvas.set_clipping( event.IsChecked() )
@@ -667,8 +730,6 @@ class App(wxApp):
         dlg_cam_id = XRCCTRL(dlg,"ROI_cam_id")
         dlg_cam_id.SetLabel(cam_id)
 
-        # XXX
-        #lbrt = 0,0,655,490
         lbrt = self.main_brain.get_roi(cam_id)
         width, height = self.main_brain.get_widthheight(cam_id)
         
@@ -693,7 +754,6 @@ class App(wxApp):
                 if l >= r or b >= t or r >= width or t >= height:
                     raise ValueError("ROI dimensions not possible")
                 self.main_brain.send_set_camera_property(cam_id,'roi',lbrt)
-                #self.main_brain.send_roi(cam_id,*lbrt)
                 self.cam_image_canvas.set_lbrt(cam_id,lbrt)
         finally:
             dlg.Destroy()
@@ -706,6 +766,7 @@ class App(wxApp):
 
     def update_wx(self):
         self.statusbar.SetStatusText('%d camera(s)'%len(self.cameras),1)
+        self.frame.Layout()
 
     def OnOpenCamConfig(self, event):
         doit=False
@@ -786,10 +847,15 @@ class App(wxApp):
                 dlg.Destroy()
         
     def OnQuit(self, event):
+        self.timer.Stop()
+        self.timer2.Stop()
+        
         if hasattr(self,'main_brain'):
             self.main_brain.quit()
             del self.main_brain
-        self.frame.Close(True)
+        #self.frame.Close(True)
+        self.frame.Destroy()
+        print "why doesn't the app stop now??"
 
     def OnUpdateRawImages(self, event):
         if self.current_page in ['preview','snapshot']:
@@ -857,8 +923,9 @@ class App(wxApp):
         return static_box.GetLabel()
 
     def OnCollectingBackground(self, event):
-        cam_id = self._get_cam_id_for_button(event.GetEventObject())
-        self.main_brain.set_collecting_background( cam_id, event.IsChecked() )
+        widget = event.GetEventObject()
+        cam_id = self._get_cam_id_for_button(widget)
+        self.main_brain.set_collecting_background( cam_id, widget.IsChecked() )
 
     def OnStopAllCollectingBg(self, event):
         # XXX not finished
@@ -895,8 +962,14 @@ class App(wxApp):
             self.main_brain.send_set_camera_property(cam_id,'clear_threshold',value)
 
     def OnArenaControl(self, event):
-        cam_id = self._get_cam_id_for_button(event.GetEventObject())
-        self.main_brain.set_use_arena( cam_id, event.IsChecked() )
+        widget = event.GetEventObject()
+        cam_id = self._get_cam_id_for_button(widget)
+        self.main_brain.set_use_arena( cam_id, widget.IsChecked() )
+
+    def OnExtTrig(self, event):
+        widget = event.GetEventObject()
+        cam_id = self._get_cam_id_for_button(widget)
+        self.main_brain.send_set_camera_property( cam_id, 'trigger_source', widget.IsChecked() )
 
     def OnOldCamera(self, cam_id):
         self.OnRecordRawStop(warn=False)
@@ -907,6 +980,10 @@ class App(wxApp):
         except KeyError:
             # camera never sent frame??
             pass
+
+        del self.collecting_background_buttons[cam_id]
+        del self.take_background_buttons[cam_id]
+        del self.clear_background_buttons[cam_id]
 
         self.PreviewPerCamClose(cam_id)
         self.SnapshotPerCamClose(cam_id)
@@ -931,10 +1008,12 @@ def main():
 
         # hand control to GUI
         app.MainLoop()
+        print 'mainloop over'
         del app
     finally:
         # stop main_brain server
         main_brain.quit()
+        print '2nd(?) call to quit?'
     
 if __name__ == '__main__':
     main()

@@ -176,6 +176,11 @@
             </object>
           </object>
           <hgap>10</hgap>
+          <object class="sizeritem">
+            <object class="wxCheckBox" name="EXT_TRIG">
+              <label>external trigger</label>
+            </object>
+          </object>
         </object>
         <flag>wxEXPAND</flag>
       </object>

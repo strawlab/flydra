@@ -15,7 +15,7 @@ import time
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
 
-MINIMUM_ECCENTRICITY = 2.0 # threshold to fit line
+MINIMUM_ECCENTRICITY = 1.4 # threshold to fit line
     
 def load_ascii_matrix(filename):
     fd=open(filename,mode='rb')

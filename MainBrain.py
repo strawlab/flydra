@@ -180,7 +180,7 @@ class CoordReceiver(threading.Thread):
     def connect(self,cam_id):
         global hostname
 
-        assert self.main_brain.h5file is None
+        assert not self.main_brain.is_saving_data()
         
         self.all_data_lock.acquire()
         self.cam_ids.append(cam_id)
@@ -347,7 +347,7 @@ class CoordReceiver(threading.Thread):
                 corrected_framenumber = framenumber-self.framenumber_offsets[cam_idx]
                 XXX_framenumber = corrected_framenumber
 
-                if self.main_brain.h5file is not None or len(getnan(points[0][0])[0]):
+                if self.main_brain.is_saving_data() or len(getnan(points[0][0])[0]):
                     # Save 2D data (even when no point found) to allow
                     # temporal correlation of movie frames to 2D data.
                     deferred_2d_data.append((absolute_cam_no, # defer saving to later
@@ -424,7 +424,7 @@ class CoordReceiver(threading.Thread):
                         except:
                             print 'WARNING: could not send 3d point data to projector:'
                             print
-                        if self.main_brain.h5file is not None:
+                        if self.main_brain.is_saving_data():
                             self.main_brain.queue_data3d_fastest.put( (corrected_framenumber,
                                                                        outgoing_data,
                                                                        cam_nos_used,
@@ -438,7 +438,7 @@ class CoordReceiver(threading.Thread):
                         except:
                             print 'WARNING: could not send 3d point data to projector:'
                             print
-                        if self.main_brain.h5file is not None:
+                        if self.main_brain.is_saving_data():
                             self.main_brain.queue_data3d_best.put( (corrected_framenumber,
                                                                     outgoing_data,
                                                                     cam_nos_used,
@@ -948,7 +948,7 @@ class MainBrain(object):
         for cam_id in new_cam_ids:
             if cam_id in old_cam_ids:
                 continue # inserted and then removed
-            if self.h5file is not None:
+            if self.is_saving_data():
                 raise RuntimeError("Cannot add new camera while saving data")
             scalar_control_info, fqdn, port = self.remote_api.external_get_info(cam_id)
             for new_cam_func in self._new_camera_functions:
@@ -1016,7 +1016,7 @@ class MainBrain(object):
         self.remote_api.external_start_recording( cam_id, raw_filename, bg_filename)
         approx_start_frame = XXX_framenumber
         self._currently_recording_movies[ cam_id ] = (raw_filename, approx_start_frame)
-        if self.h5file is not None:
+        if self.is_saving_data():
             self.h5movie_info.row['cam_id'] = cam_id
             self.h5movie_info.row['filename'] = raw_filename
             self.h5movie_info.row['approx_start_frame'] = approx_start_frame
@@ -1030,7 +1030,7 @@ class MainBrain(object):
         raw_filename, approx_start_frame = self._currently_recording_movies[ cam_id ]
         del self._currently_recording_movies[ cam_id ]
         # modify save file to include approximate movie stop time
-        if self.h5file is not None:
+        if self.is_saving_data():
             nrow = None
             for r in self.h5movie_info:
                 # get row in table
@@ -1068,13 +1068,13 @@ class MainBrain(object):
             #raise RuntimeError('cameras failed to quit cleanly: %s'%str(cam_ids))
 
         self.coord_receiver.quit()
-        if self.h5file is not None:
+        if self.is_saving_data():
             self._service_save_data()
             self.h5file.close()
             self.h5file = None
 
     def load_calibration(self,dirname):
-        if self.h5file is not None:
+        if self.is_saving_data():
             raise RuntimeError("Cannot (re)load calibration while saving data")
         cam_ids = self.remote_api.external_get_cam_ids()
         self.reconstructor = flydra.reconstruct.Reconstructor(dirname)
@@ -1094,6 +1094,9 @@ class MainBrain(object):
         cam_ids = self.remote_api.external_get_cam_ids()
         for cam_id in cam_ids:
             self.remote_api.external_set_debug( cam_id, value)
+
+    def is_saving_data(self):
+        return self.h5file is not None
 
     def start_saving_data(self, filename):
         if os.path.exists(filename):
