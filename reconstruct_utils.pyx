@@ -1,5 +1,7 @@
 import numarray as nx
 from numarray.ieeespecial import inf
+cdef double cinf
+cinf = inf
 
 import Numeric as fast_nx
 import LinearAlgebra
@@ -110,8 +112,8 @@ def find_best_3d( object recon, object d2):
     
     Finds combination of cameras which uses the most number of cameras
     while minimizing mean reprojection error. Algorithm used accepts
-    any camera combination with reprojection error less than
-    acceptable_distance_pixels.
+    any camera combination with reprojection error less than the
+    global variable ACCEPTABLE_DISTANCE_PIXELS.
 
     """
     cdef int max_n_cams, n_cams, best_n_cams
@@ -120,15 +122,20 @@ def find_best_3d( object recon, object d2):
     cdef double alpha
     cdef double x, y, orig_x, orig_y, new_x, new_y
     cdef double dist, mean_dist, least_err
+    
+    cdef int MAX_CAMERAS
     # 10 = MAX_CAMERAS
     cdef double least_err_by_n_cameras[10] # fake dict (index = key)
-    cdef int MAX_CAMERAS
-    cdef double cinf
-
+    
+    MAX_CAMERAS = 10 # should be a compile-time define
+    
     cam_ids = recon.cam_ids # shorthand
     max_n_cams = len(cam_ids)
-    
-    cinf = inf
+    if max_n_cams > MAX_CAMERAS:
+        raise ValueError("too many cameras -- MAX_CAMERAS = %d"%(MAX_CAMERAS,))
+
+    # Initialize least_err_by_n_cameras to be infinity.  Note that
+    # values at 0th and 1st index will always remain infinity.
     for i from 0 <= i <= max_n_cams:
         least_err_by_n_cameras[i] = cinf
     
@@ -149,8 +156,8 @@ def find_best_3d( object recon, object d2):
             continue # don't build this row
 
         # was a 2d point found?
-        values = value_tuple[:2]
-        x,y = values
+        xy_values = value_tuple[:2]
+        x,y = xy_values
         if isnan(x):
             bad_cam_ids.append( cam_id )
             continue # don't build this row
@@ -160,16 +167,26 @@ def find_best_3d( object recon, object d2):
         allA[ i*2, : ] = x*row3 - Pmat[0,:]
         allA[ i*2+1, :]= y*row3 - Pmat[1,:]
 
-        all2d[cam_id] = values
+        all2d[cam_id] = xy_values
 
     cam_ids_for_least_err = {}
     X_for_least_err = {}
     for n_cams from 2<=n_cams<=max_n_cams:
+        
+        # Calculate in least reprojection error starting with all
+        # possible combinations of 2 cameras, then start increasing
+        # the number of cameras used.  For each number of cameras,
+        # determine if there exists a combination with an acceptable
+        # reprojection error.
+        
         alpha = 1.0/n_cams
 
-        # can we short-circuit the rest of these computations?
+        # Can we short-circuit the rest of these computations?
+        
         if not isinf(least_err_by_n_cameras[n_cams-2]):
+            # If we've calculated error for 2 less than n_cams
             if least_err_by_n_cameras[n_cams-1] > ACCEPTABLE_DISTANCE_PIXELS:
+                # and if the error for 1 less is too large, don't bother with more.
                 break
             
         for cam_ids_used in recon.cam_combinations_by_size[n_cams]:
