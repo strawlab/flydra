@@ -47,10 +47,6 @@ class App(wxApp):
         filemenu.Append(ID_start_calibration, "Start calibration...", "Start saving calibration points")
         EVT_MENU(self, ID_start_calibration, self.OnStartCalibration)
         
-        ID_save_3d_data = wxNewId()
-        filemenu.Append(ID_save_3d_data, "Save 3D data...", "Saving all previously acquired 3d points")
-        EVT_MENU(self, ID_save_3d_data, self.OnSave3dData)
-        
         filemenu.AppendItem(wxMenuItem(kind=wxITEM_SEPARATOR))
         
         ID_quit = wxNewId()
@@ -59,6 +55,27 @@ class App(wxApp):
         
         menuBar.Append(filemenu, "&File")
 
+        #   Data logging
+        data_logging_menu = wxMenu()
+
+        ID_collect_2d_info = wxNewId()
+        data_logging_menu.Append(ID_collect_2d_info, "Collect and log 2D info",
+                        "Collect & save to log file 2D points and orientation", wxITEM_CHECK)
+        EVT_MENU(self, ID_collect_2d_info, self.OnToggleCollect2dInfo)
+
+        ID_collect_3d_info = wxNewId()
+        data_logging_menu.Append(ID_collect_3d_info, "Collect 3D points",
+                                 "Collect 3D points", wxITEM_CHECK)
+        EVT_MENU(self, ID_collect_3d_info, self.OnToggleCollect3dInfo)
+
+        data_logging_menu.AppendItem(wxMenuItem(kind=wxITEM_SEPARATOR))
+
+        ID_save_3d_data = wxNewId()
+        data_logging_menu.Append(ID_save_3d_data, "Save collected 3D points", "Saving all previously acquired 3d points")
+        EVT_MENU(self, ID_save_3d_data, self.OnSave3dData)
+        
+        menuBar.Append(data_logging_menu, "Data &Logging")
+        
         #   View
         viewmenu = wxMenu()
         ID_toggle_image_tinting = wxNewId()
@@ -527,6 +544,12 @@ class App(wxApp):
         self.plotpanel.set_image(image)
         self.plotpanel.set_points(points)
         self.plotpanel.draw()
+
+    def OnToggleCollect2dInfo(self, event):
+        self.main_brain.save_2d_data = event.IsChecked()
+            
+    def OnToggleCollect3dInfo(self, event):
+        self.main_brain.save_3d_data = event.IsChecked()
             
     def OnToggleTint(self, event):
         self.cam_image_canvas.set_clipping( event.IsChecked() )

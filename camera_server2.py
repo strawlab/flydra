@@ -96,23 +96,36 @@ class GrabClass(object):
         height = self.cam.get_max_height()
         width = self.cam.get_max_width()
         buf_ptr_step = width
+        flip = False
 
         buf = nx.zeros( (self.cam.max_height,self.cam.max_width), nx.UInt8 ) # allocate buffer
         coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        old_ts = time.time()
         try:
             while not cam_quit_event_isSet():
                 self.cam.grab_next_frame_blocking(buf) # grab frame and stick in buf
+                sys.stdout.write('.')
+                sys.stdout.flush()
                 # get best guess as to when image was taken
                 timestamp=self.cam.get_last_timestamp()
                 framenumber=self.cam.get_last_framenumber()
+
+                diff = timestamp-old_ts
+                if diff > 0.02:
+                    print 'warning: IFI is',diff
                 globals['last_frame_timestamp']=timestamp
+                old_ts = timestamp
                 
-                points = self.realtime_analyzer.do_work( buf )
+                points = self.realtime_analyzer.do_work( buf, timestamp, framenumber )
                 
                 if debug_isSet():
-                    show_image = self.realtime_analyzer.get_working_image()
+                    if flip:
+                        show_image = self.realtime_analyzer.get_working_image()
+                    else:
+                        show_image = buf.copy()
+                    flip = not flip
                 else:
-                    show_image = buf
+                    show_image = buf.copy()
                 
                 # make appropriate references to our copy of the data
                 globals['most_recent_frame'] = show_image
@@ -224,7 +237,7 @@ class App:
             globals = self.globals[cam_no] # shorthand
 
             globals['incoming_frames']=[]
-            globals['record_status']=None
+            globals['currently_saving_fly_movie']=None
             globals['most_recent_frame']=None
             globals['most_recent_frame_and_points']=None
 
@@ -237,7 +250,6 @@ class App:
             globals['clear_background_start'] = threading.Event()
             globals['find_rotation_center_start'] = threading.Event()
             globals['debug'] = threading.Event()
-            globals['record_status_lock'] = threading.Lock()
 
             globals['last_frame_timestamp']=None
 
@@ -347,30 +359,19 @@ class App:
             elif key == 'find_r_center':
                 globals['find_rotation_center_start'].set()
             elif key == 'stop_recording':
-                globals['record_status_lock'].acquire()
-                try:
-                    if globals['record_status']:
-                        cmd,fly_movie,fly_movie_lock = globals['record_status']
-                        fly_movie_lock.acquire()
-                        fly_movie.close()
-                        fly_movie_lock.release()
-                    globals['record_status'] = None
-                finally:
-                    globals['record_status_lock'].release()
+                if globals['currently_saving_fly_movie']:
+                    fly_movie = globals['currently_saving_fly_movie']
+                    fly_movie.close()
+                    print 'stopped recording'
+                globals['currently_saving_fly_movie'] = None
             elif key == 'start_recording':
                 filename = cmds[key]
-                fly_movie_lock = threading.Lock()
-                globals['record_status_lock'].acquire()
-                try:
-                    fly_movie = FlyMovieFormat.FlyMovieSaver(filename,version=1)
-                    globals['record_status'] = ('save',fly_movie,fly_movie_lock)
-                    print "starting to record to %s"%filename
-                finally:
-                    globals['record_status_lock'].release()
+                fly_movie = FlyMovieFormat.FlyMovieSaver(filename,version=1)
+                globals['currently_saving_fly_movie'] = fly_movie
+                print "starting to record to %s"%filename
             elif key == 'debug':
                 if cmds[key]: globals['debug'].set()
                 else: globals['debug'].clear()
-                    
                 
     def mainloop(self):
         # per camera variables
@@ -448,34 +449,23 @@ class App:
                         self.handle_commands(cam_no,cmds)
                             
                         # handle saving movie if needed
-                        cmd=None
-                        globals['record_status_lock'].acquire()
-                        try:
-                            if globals['record_status']:
-                                cmd,fly_movie,fly_movie_lock = globals['record_status']
-                        finally:
-                            globals['record_status_lock'].release()
+                        fly_movie = globals['currently_saving_fly_movie']
 
                         gfcn = grabbed_frames[cam_no]
                         len_gfcn = len(gfcn)
                         if len_gfcn:
-                            if cmd=='save':
-                                #print 'saving %d frames'%(len(grabbed_frames[cam_no]),)
-                                sys.stdout.write('<%d'%len(gfcn))
+                            if fly_movie is not None:
+                                sys.stdout.write('<%d'%len_gfcn)
                                 sys.stdout.flush()
                                 t1=time_func()
-                                fly_movie_lock.acquire()
-                                try:
-                                    if 1:
-                                        for frame,timestamp,framenumber in gfcn:
-                                            fly_movie.add_frame(frame,timestamp)
-                                        sz= frame.shape[1]*frame.shape[0]
-                                    else:
-                                        frames, timestamps, framenumbers = zip(*gfcn)
-                                        fly_movie.add_frames(frames,timestamps)
-                                        sz= frames[0].shape[1]*frames[0].shape[0]
-                                finally:
-                                    fly_movie_lock.release()
+                                if 1:
+                                    for frame,timestamp,framenumber in gfcn:
+                                        fly_movie.add_frame(frame,timestamp)
+                                    sz= frame.shape[1]*frame.shape[0]
+                                else:
+                                    frames, timestamps, framenumbers = zip(*gfcn)
+                                    fly_movie.add_frames(frames,timestamps)
+                                    sz= frames[0].shape[1]*frames[0].shape[0]
                                 t2=time_func()
                                 tdiff = t2-t1
                                 mb_per_sec = len_gfcn*sz/(1024*1024)/tdiff

@@ -151,17 +151,14 @@ int fit_params( double *x0, double *y0, double *orientation,
   /* calculate blob orientation from central moments */
   if( !CHK( ippiGetCentralMoment_64f( pState, 1, 1, 0, (Ipp64f*)&Uu11 ) ) )
   {
-    printf( "failed getting central moment 1 1\n" );
     return 31;
   }
   if( !CHK( ippiGetCentralMoment_64f( pState, 2, 0, 0, (Ipp64f*)&Uu20 ) ) )
   {
-    printf( "failed getting central moment 2 0\n" );
     return 32;
   }
   if( !CHK( ippiGetCentralMoment_64f( pState, 0, 2, 0, (Ipp64f*)&Uu02 ) ) )
   {
-    printf( "failed getting central moment 0 2\n" );
     return 33;
   }
   *orientation = 0.5 * atan2( 2*Uu11, Uu20 - Uu02 ); /* 90-degree ambiguity! */

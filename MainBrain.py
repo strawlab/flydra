@@ -33,15 +33,15 @@ calib_points = []
 realtime_coord_dict={}
 realtime_coord_dict_lock=threading.Lock()
 
-SAVE_2D_DATA = True
+SAVE_2D_DATA = False
 SAVE_2D_FMT = '<Bidddd'
 SAVE_2D_CAMS = 0
 SAVE_GLOBALS_LOCK = threading.Lock()
 SAVE_GLOBALS = {}
-save_2d_data_fd=open('raw_data.dat','wb')
+save_2d_data_fd=None
 save_2d_data_lock=threading.Lock()
 
-SAVE_3D_DATA = True
+SAVE_3D_DATA = False
 SAVE_3D_FMT = '<iddd'
 save_3d_data1={}
 save_3d_data1_lock=threading.Lock()
@@ -141,7 +141,8 @@ class CoordReceiver(threading.Thread):
         global fastest_realtime_data, best_realtime_data
         global calib_IdMat, calib_points, calib_data_lock
         global SAVE_2D_CAMS, SAVE_2D_DATA, SAVE_GLOBALS, SAVE_GLOBALS_LOCK
-        
+        global save_2d_data_fd, save_2d_data_lock
+
         header_fmt = '<dli'
         header_size = struct.calcsize(header_fmt)
         pt_fmt = '<fff'
@@ -288,7 +289,7 @@ class CoordReceiver(threading.Thread):
             cam_dict['lock'].release()
         UDP_ports.remove( self.port )
 
-class MainBrain:
+class MainBrain(object):
     """Handle all camera network stuff and interact with application"""
 
     class RemoteAPI(Pyro.core.ObjBase):
@@ -815,3 +816,43 @@ class MainBrain:
     
     def __del__(self):
         self.quit()
+
+    def get_save_2d_data(self):
+        global SAVE_2D_DATA
+        return SAVE_2D_DATA
+    def set_save_2d_data(self,value):
+        global SAVE_2D_DATA, save_2d_data_fd
+
+        if value:
+            if save_2d_data_fd is None:
+                save_2d_data_fd = open('raw_data.dat','wb')
+        SAVE_2D_DATA = value
+        
+    save_2d_data = property( get_save_2d_data, set_save_2d_data )
+    
+    def clear_2d_data(self):
+        global save_2d_data_fd, save_2d_data_lock
+
+        save_2d_data_lock.acquire()
+        save_2d_data_fd.seek(0)
+        save_2d_data_lock.release()
+
+    def get_save_3d_data(self):
+        global SAVE_3D_DATA
+        return SAVE_3D_DATA
+    def set_save_3d_data(self,value):
+        global SAVE_3D_DATA
+        SAVE_3D_DATA=value
+    save_3d_data = property( get_save_3d_data, set_save_3d_data )
+    
+    def clear_3d_data(self):
+        global save_3d_data1, save_3d_data1_lock, save_3d_data2, save_3d_data2_lock
+        
+        save_3d_data1_lock.acquire()
+        save_3d_data1 = {}
+        save_3d_data1_lock.release()
+
+        save_3d_data2_lock.acquire()
+        save_3d_data2 = {}
+        save_3d_data2_lock.release()
+

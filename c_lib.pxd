@@ -1,8 +1,5 @@
 #emacs, this is -*-Python-*- mode
 
-# This code shamelessly stolen from PyTables, copyright (c) Francesc
-# Alted
-
 # Structs and functions from numarray
 cdef extern from "stdlib.h":
     ctypedef int size_t
@@ -12,4 +9,7 @@ cdef extern from "stdlib.h":
     int abs(int i)
     double round( double f)
     double ceil( double f)
-    float ceilf( float f)    
+    float ceilf( float f)
+    void exit(int status)
+    int printf(char *format)
+    
