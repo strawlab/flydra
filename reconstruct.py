@@ -219,6 +219,9 @@ class Reconstructor:
                 return 0
         # order camera combinations from most cameras to least
         self.cam_combinations.sort(cmpfunc)
+        self.cam_combinations_by_size = {}
+        for cc in self.cam_combinations:
+            self.cam_combinations_by_size.setdefault(len(cc),[]).append(cc)
         self.cam_ids = cam_ids
 
     def get_resolution(self, cam_id):

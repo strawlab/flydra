@@ -1,5 +1,5 @@
 import numarray as nx
-from numarray.ieeespecial import nan
+from numarray.ieeespecial import inf
 
 import Numeric as fast_nx
 import LinearAlgebra
@@ -9,6 +9,7 @@ fast_svd = LinearAlgebra.singular_value_decomposition
 cdef extern from "math.h":
     double sqrt(double)
     int isnan(double x)
+    int isinf(double x)
 
 cdef class ReconstructHelper:
     cdef float fc1, fc2, cc1, cc2
@@ -114,9 +115,18 @@ def find_best_3d( object recon, object d2,
     cdef double alpha
     cdef double x, y, orig_x, orig_y, new_x, new_y
     cdef double dist, mean_dist, least_err
+    # 10 = MAX_CAMERAS
+    cdef double least_err_by_n_cameras[10] # fake dict (index = key)
+    cdef int MAX_CAMERAS
+    cdef double cinf
 
     cam_ids = recon.cam_ids # shorthand
     max_n_cams = len(cam_ids)
+    
+    cinf = inf
+    for i from 0 <= i <= max_n_cams:
+        least_err_by_n_cameras[i] = cinf
+    
     allA = fast_nx.zeros( (2*max_n_cams,4),'d')
     bad_cam_ids = []
     cam_id2idx = {}
@@ -147,17 +157,13 @@ def find_best_3d( object recon, object d2,
 
         all2d[cam_id] = values
 
-    #print allA
-    least_err_by_n_cameras = {}
     cam_ids_for_least_err = {}
     X_for_least_err = {}
-    n_cams_list = recon.cam_combinations_by_size.keys()
-    n_cams_list.sort()
-    for n_cams in n_cams_list:
+    for n_cams from 2<=n_cams<=max_n_cams:
         alpha = 1.0/n_cams
 
         # can we short-circuit the rest of these computations?
-        if least_err_by_n_cameras.has_key(n_cams-2):
+        if not isinf(least_err_by_n_cameras[n_cams-2]):
             if least_err_by_n_cameras[n_cams-1] > acceptable_distance_pixels:
                 break
             
@@ -174,9 +180,6 @@ def find_best_3d( object recon, object d2,
             if missing_cam_data == 1:
                 continue
             A = fast_nx.take(allA,good_A_idx)
-            #print cam_ids_used
-            #print A
-            #print
             u,d,vt=fast_svd(A)
             X = vt[-1,:]/vt[-1,3] # normalize
 
@@ -190,7 +193,7 @@ def find_best_3d( object recon, object d2,
                 dist = sqrt((orig_x-new_x)**2 + (orig_y-new_y)**2)
                 mean_dist = mean_dist + dist*alpha
 
-            least_err = least_err_by_n_cameras.get(n_cams,1e16)
+            least_err = least_err_by_n_cameras[n_cams]
             if mean_dist < least_err:
                 least_err_by_n_cameras[n_cams] = mean_dist
                 cam_ids_for_least_err[n_cams] = cam_ids_used
@@ -199,12 +202,12 @@ def find_best_3d( object recon, object d2,
     # now we have the best estimate for 2 views, 3 views, ...
     best_n_cams = 2
     least_err = least_err_by_n_cameras[2]
-    for n_cams from 3 <= n_cams <= max_n_cams+1:
-        try:
-            least_err = least_err_by_n_cameras[n_cams]
-        except KeyError:
-            break # if we don't have 4, we won't have 5
+    for n_cams from 3 <= n_cams <= max_n_cams:
+        least_err = least_err_by_n_cameras[n_cams]
+        if isinf(least_err):
+            break # if we don't have e.g. 4 cameras, we won't have 5
         if least_err < acceptable_distance_pixels:
+            mean_dist = least_err
             best_n_cams = n_cams
 
     # now calculate final values
@@ -221,20 +224,16 @@ def find_best_3d( object recon, object d2,
         Lcoords = None
     else:
         P = fast_nx.array(P)
-        try:
-            u,d,vt=fast_svd(P,full_matrices=True)
+        u,d,vt=fast_svd(P,full_matrices=True)
 
-            P = vt[0,:] # P,Q are planes (take row because this is transpose(V))
-            Q = vt[1,:]
+        P = vt[0,:] # P,Q are planes (take row because this is transpose(V))
+        Q = vt[1,:]
 
-            # directly to Pluecker line coordinates
-            Lcoords = ( -(P[3]*Q[2]) + P[2]*Q[3],
-                          P[3]*Q[1]  - P[1]*Q[3],
-                        -(P[2]*Q[1]) + P[1]*Q[2],
-                        -(P[3]*Q[0]) + P[0]*Q[3],
-                        -(P[2]*Q[0]) + P[0]*Q[2],
-                        -(P[1]*Q[0]) + P[0]*Q[1] )
-        except numarray.linear_algebra.LinearAlgebra2.LinearAlgebraError, exc:
-            print 'WARNING:',str(exc)
-            Lcoords = None
-    return X, Lcoords, cam_ids_used
+        # directly to Pluecker line coordinates
+        Lcoords = ( -(P[3]*Q[2]) + P[2]*Q[3],
+                      P[3]*Q[1]  - P[1]*Q[3],
+                    -(P[2]*Q[1]) + P[1]*Q[2],
+                    -(P[3]*Q[0]) + P[0]*Q[3],
+                    -(P[2]*Q[0]) + P[0]*Q[2],
+                    -(P[1]*Q[0]) + P[0]*Q[1] )
+    return X, Lcoords, cam_ids_used, mean_dist
