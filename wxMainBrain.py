@@ -211,6 +211,8 @@ class App(wxApp):
         self.collecting_background_buttons = {}
         self.take_background_buttons = {}
         self.clear_background_buttons = {}
+        self.last_sound_time = time.time()
+
         return True
 
     def OnKeyDown(self, event):
@@ -883,6 +885,12 @@ class App(wxApp):
             realtime_data=MainBrain.get_best_realtime_data()
             if realtime_data is not None:
                 data3d,line3d,cam_ids_used=realtime_data
+                if DETECT_SND is not None:
+                    now = time.time()
+                    if (now - self.last_sound_time) > 1.0:
+                        DETECT_SND.Play()
+                        self.last_sound_time = now
+                    
                 if self.current_page == 'tracking':
                     XRCCTRL(self.tracking_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
                     XRCCTRL(self.tracking_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
