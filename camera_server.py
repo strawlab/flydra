@@ -198,7 +198,7 @@ class App:
 
         # where is the "main brain" server?
         try:
-            main_brain_hostname = socket.gethostbyname('flydra-server')
+            main_brain_hostname = socket.gethostbyname('mainbrain')
         except:
             # try localhost
             main_brain_hostname = socket.gethostbyname(socket.gethostname())
@@ -268,7 +268,6 @@ class App:
         last_measurement_time = time.time()
         last_return_info_check = 0.0 # never
         n_frames = 0
-	first_timestamp=None
         try:
             try:
                 while not self.app_quit_event.isSet():
@@ -314,14 +313,9 @@ class App:
                             fly_movie_lock.acquire()
                             try:
                                 for frame,timestamp in grabbed_frames:
-                                    if first_timestamp is None:
-                                        first_timestamp=timestamp
-                                    msec_since_start=(timestamp-first_timestamp)*1000.0
-                                    fly_movie.add_frame(frame,msec_since_start)
+                                    fly_movie.add_frame(frame,timestamp)
                             finally:
                                 fly_movie_lock.release()
-			else:
-			    first_timestamp=None # XXX hack to reset timestamp after each save
 
                         grabbed_frames = []
 
