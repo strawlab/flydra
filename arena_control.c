@@ -366,7 +366,7 @@ void arena_update( double x, double y, double orientation,
      but that's not the way it was designed */
 
   /* write data to file */
-  fprintf( datafile, "%ld\t%.4lf\t%.4lf\t%.4lf\t%.4lf\t%d\t%d\t%d\t%d\t%d\n",
+  fprintf( datafile, "%ld\t%.4lf\t%.4lf\t%.4lf\t%.4lf\t%d\t%d\t%lf\t%d\t%d\n",
   framenumber, timestamp, x, y, orientation, new_pos_x, new_pos_y,
-  cur_set, cur_set, cur_set+2 );
+  expansion_rate, cur_set, cur_set+2 );
 }
