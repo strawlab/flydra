@@ -1,10 +1,8 @@
 # $Id$
-import os
+import os, glob, sys, math
 opj=os.path.join
 import numarray as nx
-import sys
 import numarray.linear_algebra
-import math
 svd = numarray.linear_algebra.singular_value_decomposition
 Lstar_i = nx.array([2,3,1,0,0,0]) # Lstar to Pluecker line coords (i index)
 Lstar_j = nx.array([3,1,2,3,2,1]) # Lstar to Pluecker line coords (j index)
@@ -139,6 +137,8 @@ class Reconstructor:
         self.Pmat = {}
         self.Res = {}
         self.pmat_inv = {}
+        self.K = {} # intrinsic parameters (CalTechCal format) (XXX should get from Pmat)
+        self.kc = {} # nonlinear distortion parameters (CalTechCal format)
         
         if calibration_data_source == 'normal files':
             res_fd = open(os.path.join(calibration_dir,'Res.dat'),'r')
@@ -149,6 +149,20 @@ class Reconstructor:
                 self.Res[cam_id] = map(int,res_fd.readline().split())
                 self.pmat_inv[cam_id] = numarray.linear_algebra.generalized_inverse(pmat)
             res_fd.close()
+
+            # load non linear parameters
+            rad_files = glob.glob(os.path.join(calibration_dir,'*.rad'))
+            assert len(rad_files) < 10
+            rad_files.sort() # cheap trick to associate camera number with file
+            for cam_id, filename in zip( cam_ids, rad_files ):
+                params = {}
+                execfile(filename,params)
+                self.K[cam_id] = nx.array( ((params['K11'],0,params['K13']),
+                                            (0,params['K22'],params['K23']),
+                                            (0,0,1)))
+                self.kc[cam_id] = (params['kc1'], params['kc2'],
+                                   params['kc3'], params['kc4'])
+                
         elif calibration_data_source == 'pytables':
             for cam_id in cam_ids:
                 pmat = nx.array(results.root.calibration.pmat.__getattr__(cam_id))
@@ -172,36 +186,67 @@ class Reconstructor:
     def get_pmat(self, cam_id):
         return self.Pmat[cam_id]
 
+    def undistort(self, cam_id, x_kk):
+        # undoradial.m
+        K = self.K[cam_id]
+        kc = self.kc[cam_id]
+        k1 = kc[0]
+        k2 = kc[1]
+        p1 = kc[2]
+        p2 = kc[3]
+        fc1 = K[0,0]
+        fc2 = K[1,1]
+        cc1 = K[0,2]
+        cc2 = K[1,2]
+
+        xd = nx.array(((x_kk[0]-cc1)/fc1, (x_kk[1]-cc2)/fc2))
+        x = xd # initial guess
+        # comp_distortion_oulu.m
+        for kk in range(20):
+            r_2 = nx.sum(x**2)
+            k_radial = 1 + k1 * r_2 + k2 * r_2**2
+            delta_x = nx.array((2*p1*x[0]*x[1] + p2*(r_2 + 2*x[0]**2),
+                                p1 * (r_2 + 2*x[1]**2)+2*p2*x[0]*x[1]))
+            x = (xd-delta_x)/k_radial
+
+        # put back in original coords
+##        tmp = nx.array(((x[0]),(x[1]),(1.0)))
+##        xl = nx.matrixmultiply(K,tmp)
+##        return xl[:2]
+        xl = nx.matrixmultiply(K[:2,:],(x[0],x[1],1.0))
+        return xl
+
     def find3d(self, cam_ids_and_points2d ):
         # for info on SVD, see Hartley & Zisserman (2003) p. 593 (see
         # also p. 587)
         
-        M=len(cam_ids_and_points2d) # number of views of single point
-
-        # Fill matrices
-##        A=nx.zeros((2*M,4),nx.Float64) # for best point
+        # Construct matrices
         A=[]
         P=[]
+        return_line_coords = True
         for m, (cam_id,value_tuple) in enumerate(cam_ids_and_points2d):
-            # get shape information from each view of a blob:
-            x,y,area,slope,eccentricity, p1,p2,p3,p4 = value_tuple 
+            if len(value_tuple)==2:
+                # only point information ( no line )
+                x,y = value_tuple
+                return_line_coords = False
+            else:
+                # get shape information from each view of a blob:
+                x,y,area,slope,eccentricity, p1,p2,p3,p4 = value_tuple
             Pmat = self.Pmat[cam_id] # Pmat is 3 rows x 4 columns
             row3 = Pmat[2,:]
             A.append( x*row3 - Pmat[0,:] )
             A.append( y*row3 - Pmat[1,:] )
-##            A[2*m  ,:]=x*row3 - Pmat[0,:]
-##            A[2*m+1,:]=y*row3 - Pmat[1,:]
 
-            if eccentricity > MINIMUM_ECCENTRICITY: # require a bit of elongation
-                P.append( (p1,p2,p3,p4) )
+            if return_line_coords:
+                if eccentricity > MINIMUM_ECCENTRICITY: # require a bit of elongation
+                    P.append( (p1,p2,p3,p4) )
         
         # Calculate best point
         A=nx.array(A)
-##        A=A.copy() # force to be contiguous (XXX hack -- find out why it gets non-contiguous)
         u,d,vt=svd(A)
         X = vt[-1,0:3]/vt[-1,3] # normalize
 
-        if len(P) < 2:
+        if not return_line_coords or len(P) < 2:
             Lcoords = None
         else:
             P = nx.asarray(P)
@@ -215,11 +260,6 @@ class Reconstructor:
                 P = vt[0,:] # P,Q are planes (take row because this is transpose(V))
                 Q = vt[1,:]
 
-        ##        # dual Pluecker representation: (Hartley & Zisserman, p. 71)
-        ##        Lstar = nx.outerproduct(P,Q) - nx.outerproduct(Q,P)
-        ##        # convert to Pluecker line coordinates
-        ##        Lcoords = Lstar[Lstar_i,Lstar_j]
-
                 # directly to Pluecker line coordinates
                 Lcoords = ( -(P[3]*Q[2]) + P[2]*Q[3],
                               P[3]*Q[1]  - P[1]*Q[3],
@@ -231,7 +271,10 @@ class Reconstructor:
                 #print 'WARNING: %s %s'%(x.__class__, str(x))
                 print 'WARNING: unknown error in reconstruct.py'
                 Lcoords = None
-        return X, Lcoords    
+        if return_line_coords:
+            return X, Lcoords
+        else:
+            return X
 
     def find2d(self,cam_id,X,Lcoords=None):
         # see Hartley & Zisserman (2003) p. 449
