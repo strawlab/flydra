@@ -12,25 +12,20 @@ import struct
 
 
 include "../cam_iface/src/pyx_cam_iface.pyx"
+# cimport c_numarray
 # CamIFaceError, Camera, c_numarray
 #c_numarray.import_libnumarray()
 
 cimport c_lib
 
 # start of IPP-requiring code
-cimport ipp
+include "fit_params.pyx" # does "cimport ipp", defines CHK
 
 class IPPError(Exception):
     pass
 
 cdef object IppStatus2str(ipp.IppStatus status):
     return 'IppStatus: %d'%status
-
-cdef void CHK(ipp.IppStatus status) except *:
-    if (status < ipp.ippStsNoErr):
-        raise IPPError(IppStatus2str(status))
-    elif (status > ipp.ippStsNoErr):
-        warnings.warn(IppStatus2str(status))
 
 cdef void print_info_8u(ipp.Ipp8u* im, int im_step, ipp.IppiSize sz, object prefix):
     cdef ipp.Ipp32f minVal, maxVal
@@ -103,7 +98,6 @@ cdef class GrabClass:
         cdef ipp.Ipp32f alpha
         
         cdef int w,h
-        cdef int left, right, bottom, top
         
         cdef ipp.Ipp32f v32f
         cdef ipp.Ipp8u  v8u
@@ -113,12 +107,12 @@ cdef class GrabClass:
         cdef ipp.Ipp8u* bg  # 8-bit background
         cdef ipp.Ipp32f *sum_image, *sq_image # FP background
         cdef ipp.Ipp32f *mean_image, *std_image # FP background
-        cdef ipp.Ipp32f *im1_32f, *im2_32f, *roi_start
-        cdef ipp.IppiSize sz, roi_sz
-        cdef ipp.IppiPoint roi_offset
+        cdef ipp.Ipp32f *im1_32f, *im2_32f
+        cdef ipp.IppiSize sz
         cdef ipp.IppiMomentState_64f *pState
-        cdef ipp.Ipp64f Mu00, Mu10, Mu01
+
         cdef float x0, y0 # centroid
+        cdef float orientation
         # end of IPP-requiring code
 
 ##        COORD_PORT = None
@@ -217,7 +211,7 @@ cdef class GrabClass:
 
                 # now
                 tval1=time_func()
-                
+
                 # start of IPP-requiring code
                 # copy image to IPP memory
                 for i from 0 <= i < height:
@@ -236,12 +230,6 @@ cdef class GrabClass:
                     ipp.ippiMaxIndx_32f_C1R(im2_32f,im2_32f_step,sz,
                                             &max_val,
                                             &index_x,&index_y))
-
-##                roi_sz.width = 20
-##                roi_sz.height = 20
-##                CHK(
-##                    ipp.ippiSet_32f_C1R(255.0,im2_32f+240*sz.width+320,im2_32f_step,roi_sz))
-                
                 CHK(
                     ipp.ippiConvert_32f8u_C1R(im2_32f,im2_32f_step,
                                               im2,im2_step,
@@ -254,38 +242,11 @@ cdef class GrabClass:
                 else:
                     # compute centroid -=-=-=-=-=-=-=-=-=-=-=-=
 
-                    left   = index_x - centroid_search_radius
-                    right  = index_x + centroid_search_radius
-                    bottom = index_y - centroid_search_radius
-                    top    = index_y + centroid_search_radius
-
-                    if left < 0:
-                        left = 0
-                    if right >= width:
-                        right = width-1
-                    if bottom < 0:
-                        bottom = 0
-                    if top >= height:
-                        top = height-1
-
-                    roi_sz.width = right-left+1
-                    roi_sz.height = top-bottom+1
-
-                    roi_start = im2_32f + (im2_32f_step/4)*bottom + left
-                    CHK( ipp.ippiMoments64f_32f_C1R( roi_start, im2_32f_step, roi_sz, pState))
-
-                    roi_offset.x = left
-                    roi_offset.y = bottom
-                    CHK( ipp.ippiGetSpatialMoment_64f( pState, 0, 0, 0, roi_offset, &Mu00 ))
-                    if Mu00 == 0.0:
-                        x0=-1
-                        y0=-1
-                    else:
-                        CHK( ipp.ippiGetSpatialMoment_64f( pState, 1, 0, 0, roi_offset, &Mu10 ))
-                        CHK( ipp.ippiGetSpatialMoment_64f( pState, 0, 1, 0, roi_offset, &Mu01 ))
-                        
-                        x0=Mu10/Mu00
-                        y0=Mu01/Mu00
+                    # start of IPP-requiring code
+                    _fit_params( &x0, &y0, &orientation,
+                                 index_x, index_y, centroid_search_radius,
+                                 width, height, im2_32f, im2_32f_step, pState )
+                    
                 #print 'max_val %f (% 8.1f,% 8.1f)'%(max_val,x0,y0)
                 
                 # now
