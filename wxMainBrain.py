@@ -35,13 +35,16 @@ RESDIR = os.path.split(os.path.abspath(sys.argv[0]))[0]
 RESFILE = os.path.join(RESDIR,'flydra_server.xrc')
 hydra_image_file = os.path.join(RESDIR,'hydra.gif')
 RES = wxXmlResource(RESFILE)
-DETECT_SND = wxSound(os.path.join(RESDIR,'detect.wav'))
-DETECT_SND.Play()
+try:
+    DETECT_SND = wxSound(os.path.join(RESDIR,'detect.wav'))
+    DETECT_SND.Play()
+except NameError: #wxSound not in some versions of wx
+    DETECT_SND = None
 
 class App(wxApp):
     def OnInit(self,*args,**kw):
         wxInitAllImageHandlers()
-        frame = wxFrame(None, -1, "Flydra Main Brain",size=(650,700))
+        frame = wxFrame(None, -1, "Flydra Main Brain",size=(650,600))
 
         # statusbar ----------------------------------
         self.statusbar = frame.CreateStatusBar()
@@ -201,7 +204,7 @@ class App(wxApp):
 
         self.cameras = {} #OrderedDict()
 
-        self.Bind(EVT_KEY_DOWN, self.OnKeyDown)
+        EVT_KEY_DOWN(self, self.OnKeyDown)
 
         self.update_wx()
 

@@ -201,9 +201,9 @@
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="PreviewPerCamPanel">
+          <size>10,200</size>
           <bg>#00FF00</bg>
         </object>
-        <option>2</option>
         <flag>wxEXPAND</flag>
       </object>
     </object>
@@ -350,7 +350,9 @@
               <object class="sizeritem">
                 <object class="wxCheckListBox" name="record_raw_cam_select_checklist">
                   <content>
-                    <item/></content>
+                    
+                    <item/>
+                  </content>
                 </object>
                 <option>1</option>
                 <flag>wxEXPAND</flag>
