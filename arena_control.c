@@ -57,7 +57,7 @@ long arena_initialize( void )
   }
 
   /* set initial position within pattern */
-/*  cmd[0] = 3; cmd[1] = 112; cmd[2] = 0; cmd[3] = PATTERN_DEPTH-1;
+/*  cmd[0] = 3; cmd[1] = 112; cmd[2] = 0; cmd[3] = ARENA_PATTERN_DEPTH-1;
   sc_send_cmd( &serial_port, cmd, 4 );  do later in analog */
 
   /* set gain and bias */
@@ -71,7 +71,7 @@ long arena_initialize( void )
   sc_send_cmd( &serial_port, cmd, 2 );
 
   /* set initial position within pattern */
-  set_position_analog( 0, 0 );
+  set_position_analog( 0, NPIXELS, 0, ARENA_PATTERN_DEPTH );
 
   /* close serial port */
   sc_close_port( &serial_port );
@@ -145,17 +145,10 @@ long rotation_calculation_init( void )
   sc_send_cmd( &serial_port, cmd, 4 );
 
   /* set gain and bias */
-#if BIAS_AVAILABLE == YES
   cmd[0] = 5; cmd[1] = 128;
   cmd[2] = CAL_GAIN_X; cmd[3] = CAL_BIAS_X;
   cmd[4] = CAL_GAIN_Y; cmd[5] = CAL_BIAS_Y;
   sc_send_cmd( &serial_port, cmd, 6 );
-#else
-  cmd[0] = 5; cmd[1] = 128;
-  cmd[2] = EXP_GAIN_X; cmd[3] = EXP_BIAS_X;
-  cmd[4] = EXP_GAIN_Y; cmd[5] = EXP_BIAS_Y;
-  sc_send_cmd( &serial_port, cmd, 6 );
-#endif
 
   /* start pattern */
   cmd[0] = 1; cmd[1] = 32;
@@ -200,7 +193,7 @@ void rotation_calculation_finish( double new_x_cent, double new_y_cent )
   sc_send_cmd( &serial_port, cmd, 2 );
 
   /* set initial position within pattern */
-  set_position_analog( 0, PATTERN_DEPTH-1 );
+  set_position_analog( 0, NPIXELS, 0, ARENA_PATTERN_DEPTH );
 
   /* close serial port */
   sc_close_port( &serial_port );
@@ -222,8 +215,8 @@ void rotation_update( void )
 
   new_pos_x_f -= 0.20; /* counterclockwise turn */
   new_pos_y_f += 0.35;
-  round_position( &new_pos_x, &new_pos_x_f, &new_pos_y, &new_pos_y_f );
-  set_position_analog( new_pos_x, new_pos_y );
+  round_position( &new_pos_x, &new_pos_x_f, &new_pos_y, &new_pos_y_f, NPIXELS, CALIB_PATTERN_DEPTH );
+  set_position_analog( new_pos_x, NPIXELS, new_pos_y, CALIB_PATTERN_DEPTH );
 #endif
 }
 
@@ -255,8 +248,8 @@ void arena_update( double x, double y, double orientation,
     &new_pos_y_f, &out1, &out2, &out3 );
 
   /* set pattern position */
-  round_position( &new_pos_x, &new_pos_x_f, &new_pos_y, &new_pos_y_f );
-  set_position_analog( new_pos_x, new_pos_y );
+  round_position( &new_pos_x, &new_pos_x_f, &new_pos_y, &new_pos_y_f, NPIXELS, ARENA_PATTERN_DEPTH );
+  set_position_analog( new_pos_x, NPIXELS, new_pos_y, ARENA_PATTERN_DEPTH );
   /* kind of stupid to round and then convert to analog, but it's digital
      again on the control board -- which is also stupid, since it would be
      much more efficient to simply give the control board this digital value,

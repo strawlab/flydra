@@ -25,10 +25,14 @@
 #define EXP_GAIN_Y 60
 #define EXP_BIAS_Y 0
 
-#define CAL_GAIN_X 0
+/*#define CAL_GAIN_X 0
 #define CAL_BIAS_X 30
 #define CAL_GAIN_Y 0
-#define CAL_BIAS_Y 45
+#define CAL_BIAS_Y 45 */
+#define CAL_GAIN_X 15
+#define CAL_BIAS_X 0
+#define CAL_GAIN_Y 120
+#define CAL_BIAS_Y 0
 
 
 #define NPIXELS_PER_PANEL 8
@@ -39,12 +43,13 @@
 #define PIX2RAD (2.0*PI/(double)NPIXELS)
 #define PIX2DEG (360.0/(double)NPIXELS)
 
+#define CALIB_PATTERN_DEPTH 8
 #if 0
   #define PATTERN_DEPTH 8
   #define PATTERN_START_ANGLE 33.75
   #define PATTERN_END_ANGLE 112.5
 #else
-  #define PATTERN_DEPTH 16
+  #define ARENA_PATTERN_DEPTH 16
   #define PATTERN_START_ANGLE (2*PIX2DEG)
   #define PATTERN_END_ANGLE (32*PIX2DEG)
 #endif
@@ -69,11 +74,11 @@ void update_center_calculation( double new_x_pos, double new_y_pos, double new_o
 /* some utility functions */
 void unwrap( double *th1, double *th2 );
 double disambiguate( double x, double y, double center_x, double center_y );
-void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f );
+void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f, int max_x, int max_y );
 
 /* interface to analog output */
 void init_analog_output( void );
 void finish_analog_output( void );
-void set_position_analog( int pos_x, int pos_y );
+void set_position_analog( int pos_x, int max_x, int pos_y, int max_y );
 
 #endif

@@ -83,7 +83,7 @@ void set_patt_position( double orientation, double timestamp, long framenumber,
         /* patterns expand a total of 78.75 deg (in each of x and y), so at 100 Hz
            and expanding at 1 patt per frame, expansion is 984.375 deg/sec */
 
-        if( new_pos_y_f >= (double)PATTERN_DEPTH - 0.5 ) /* stop expanding */
+        if( new_pos_y_f >= (double)ARENA_PATTERN_DEPTH - 0.5 ) /* stop expanding */
         {
           new_pos_y_f = 2.0;
           expanding = 1;

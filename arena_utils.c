@@ -159,31 +159,31 @@ double disambiguate( double x, double y, double center_x, double center_y )
 /****************************************************************
 ** round_position ***********************************************
 ****************************************************************/
-void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f )
+void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f, int max_x, int max_y )
 {
   *pos_x = *pos_x_f - (int)*pos_x_f >= 0.5? (int)*pos_x_f+1 : (int)*pos_x_f;
-  while( *pos_x >= NPIXELS )
+  while( *pos_x >= max_x )
   {
-    *pos_x -= NPIXELS;
-    *pos_x_f -= (double)NPIXELS;
+    *pos_x -= max_x;
+    *pos_x_f -= (double)max_x;
   }
   while( *pos_x < 0 )
   {
-    *pos_x += NPIXELS;
-    *pos_x_f += (double)NPIXELS;
+    *pos_x += max_x;
+    *pos_x_f += (double)max_x;
   }
   *pos_x = *pos_x_f - (int)*pos_x_f >= 0.5? (int)*pos_x_f+1 : (int)*pos_x_f;
 
   *pos_y = *pos_y_f - (int)*pos_y_f >= 0.5? (int)*pos_y_f+1 : (int)*pos_y_f;
-  while( *pos_y >= PATTERN_DEPTH )
+  while( *pos_y >= max_y )
   {
-    *pos_y -= PATTERN_DEPTH;
-    *pos_y_f -= (double)PATTERN_DEPTH;
+    *pos_y -= max_y;
+    *pos_y_f -= (double)max_y;
   }
   while( *pos_y < 0 )
   {
-    *pos_y += PATTERN_DEPTH;
-    *pos_y_f += (double)PATTERN_DEPTH;
+    *pos_y += max_y;
+    *pos_y_f += (double)max_y;
   }
   *pos_y = *pos_y_f - (int)*pos_y_f >= 0.5? (int)*pos_y_f+1 : (int)*pos_y_f;
 }
@@ -213,22 +213,20 @@ void finish_analog_output( void )
 /****************************************************************
 ** set_position_analog ******************************************
 ****************************************************************/
-void set_position_analog( int pos_x, int pos_y )
+void set_position_analog( int pos_x, int max_x, int pos_y, int max_y )
 {
   lsampl_t ana_x, ana_y;
 
   if( cdi_dev == NULL ) return;
 
-  ana_x = pos_x*cdi_RANGE/(NPIXELS-1) + cdi_MIN;
+  ana_x = pos_x*cdi_RANGE/(max_x-1) + cdi_MIN;
   comedi_data_write( cdi_dev, cdi_SUBDEV, cdi_CHAN_X, 0, cdi_AREF, ana_x );
 
-  ana_y = pos_y*cdi_RANGE/(PATTERN_DEPTH-1) + cdi_MIN;
+  ana_y = pos_y*cdi_RANGE/(max_y-1) + cdi_MIN;
   comedi_data_write( cdi_dev, cdi_SUBDEV, cdi_CHAN_Y, 0, cdi_AREF, ana_y );
 
   /* in order for this to work with a single output range, the x and y gains must
      be set on the controller in a ratio consistent with their possible values here; 
-     specifically, they must have a ratio equal to NPIXELS/PATTERN_DEPTH
-     (for example, gains are 120 and 15 for NPIXELS=64 and PATTERN_DEPTH=8) --
-     more accurately, instead of NPIXELS one should use the pattern width, but
-     presumably that will always equal the number of possible pattern positions NPIXELS */
+     in this case, they must have a ratio equal to max_x/max_y
+     (for example, gains are 120 and 15 for NPIXELS=64 and PATTERN_DEPTH=8) */
 }
