@@ -130,7 +130,7 @@ class MainBrain:
     def __init__(self):
         Pyro.core.initServer(banner=0)
         try:
-            hostname = socket.gethostbyname('flydra-server')
+            hostname = socket.gethostbyname('mainbrain')
         except:
             hostname = socket.gethostbyname(socket.gethostname())
         fqdn = socket.getfqdn(hostname)
@@ -159,6 +159,7 @@ class MainBrain:
         self.set_old_camera_callback(self.RemoveCameraServer)
 
     def AddCameraServer(self, cam_id, scalar_control_info):
+        time.sleep(0.1) # let camera server get started
         fqdn = self.remote_api.cam_info[cam_id]['fqdn'] # crosses thread boundary?
         port = 9834
         name = 'camera_server'
