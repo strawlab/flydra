@@ -96,10 +96,10 @@ cdef class GrabClass:
 
         # start of IPP-requiring code
         cdef int index_x,index_y
-        cdef ipp.Ipp32f max_val, std_val
-        cdef int im1_step, im2_step, sum_image_step#, bg_step
-        cdef int mean_image_step, std_image_step, sq_image_step
-        cdef int im1_32f_step, im2_32f_step
+#        cdef ipp.Ipp32f max_val, std_val
+        cdef ipp.Ipp8u max_val, std_val
+        cdef int im1_step, im2_step, sum_image_step, bg_img_step
+        cdef int mean_image_step, std_image_step, sq_image_step, std_img_step
         cdef int tmp1_step, tmp2_step, roi_step
         cdef int centroid_search_radius
         cdef int n_bg_samples
@@ -112,10 +112,9 @@ cdef class GrabClass:
         
         cdef ipp.Ipp8u *im1, *im2 # current image
         cdef ipp.Ipp8u *tmp1, *tmp2 # current image
-        cdef ipp.Ipp8u* bg  # 8-bit background
+        cdef ipp.Ipp8u *bg_img, *std_img  # 8-bit background
         cdef ipp.Ipp32f *sum_image, *sq_image # FP background
         cdef ipp.Ipp32f *mean_image, *std_image # FP background
-        cdef ipp.Ipp32f *im1_32f, *im2_32f
         cdef ipp.IppiSize sz
 
         cdef ipp.IppiSize roi_sz
@@ -144,6 +143,8 @@ cdef class GrabClass:
 
         # start of IPP-requiring code
         # allocate IPP memory
+
+        # pre- and post-processed images of every frame
         im1=ipp.ippiMalloc_8u_C1( width, height, &im1_step )
         if im1==NULL:
             raise MemoryError("Error allocating memory by IPP")
@@ -151,20 +152,26 @@ cdef class GrabClass:
         if im2==NULL:
             raise MemoryError("Error allocating memory by IPP")
 
+        # temp images
         tmp1=ipp.ippiMalloc_8u_C1( width, height, &tmp1_step )
         if tmp1==NULL:
             raise MemoryError("Error allocating memory by IPP")
         tmp2=ipp.ippiMalloc_8u_C1( width, height, &tmp2_step )
         if tmp2==NULL:
             raise MemoryError("Error allocating memory by IPP")
-        
-##        bg=ipp.ippiMalloc_8u_C1( width, height, &bg_step )
-##        if bg==NULL:
-##            raise MemoryError("Error allocating memory by IPP")
+
+        # 8u background, std images
+        bg_img=ipp.ippiMalloc_8u_C1( width, height, &bg_img_step )
+        if bg_img==NULL:
+            raise MemoryError("Error allocating memory by IPP")
+        std_img=ipp.ippiMalloc_8u_C1( width, height, &std_img_step )
+        if std_img==NULL:
+            raise MemoryError("Error allocating memory by IPP")
         
         sz.width = width
         sz.height = height
-        
+
+        # 32f statistics and accumulator images for background collection
         sum_image=ipp.ippiMalloc_32f_C1( width, height,
                                         &sum_image_step )
         if sum_image==NULL:
@@ -185,27 +192,16 @@ cdef class GrabClass:
         if std_image==NULL:
             raise MemoryError("Error allocating memory by IPP")
 
-        im1_32f=ipp.ippiMalloc_32f_C1( width, height,
-                                       &im1_32f_step )
-        if im1_32f==NULL:
-            raise MemoryError("Error allocating memory by IPP")
-
-        im2_32f=ipp.ippiMalloc_32f_C1( width, height,
-                                       &im2_32f_step )
-        if im2_32f==NULL:
-            raise MemoryError("Error allocating memory by IPP")
-
+        # image moment calculation initialization
         if c_fit_params.init_moment_state() != 0:
             raise RuntimeError("could not init moment state")
 
-##        CHK(
-##            ipp.ippiSet_8u_C1R(0,bg,bg_step,sz))
+        # initialize background images
+        CHK( ipp.ippiSet_8u_C1R(0,bg_img,bg_img_step,sz))
+        CHK( ipp.ippiSet_8u_C1R(0,std_img,std_img_step,sz))
 
-        CHK(
-            ipp.ippiSet_32f_C1R(0,mean_image,mean_image_step,sz))
-
-        CHK(
-            ipp.ippiSet_32f_C1R(0,std_image,std_image_step,sz))
+        CHK( ipp.ippiSet_32f_C1R(0.0,mean_image,mean_image_step,sz))
+        CHK( ipp.ippiSet_32f_C1R(0.0,std_image,std_image_step,sz))
 
         # end of IPP-requiring code
 
@@ -245,23 +241,12 @@ cdef class GrabClass:
 
                     # THIS CODE IS UNFINISHED
                 else:
-                    CHK(
-                        ipp.ippiConvert_8u32f_C1R(im1, im1_step,
-                                                  im1_32f, im1_32f_step,sz))
-                
-                    CHK(
-                        ipp.ippiAbsDiff_32f_C1R(mean_image, mean_image_step,
-                                                im1_32f,im1_32f_step,
-                                                im2_32f,im2_32f_step,sz))
-                    CHK(
-                        ipp.ippiMaxIndx_32f_C1R(im2_32f,im2_32f_step,sz,
+                    CHK( ipp.ippiAbsDiff_8u_C1R(bg_img, bg_img_step,
+                                                im1,im1_step,
+                                                im2,im2_step,sz))
+                    CHK( ipp.ippiMaxIndx_8u_C1R(im2,im2_step,sz,
                                                 &max_val,
                                                 &index_x,&index_y))
-                    CHK(
-                        ipp.ippiConvert_32f8u_C1R(im2_32f,im2_32f_step,
-                                                  im2,im2_step,
-                                                  sz,
-                                                  ipp.ippRndNear))
                 
                 if max_val < globals['diff_threshold']:
                     x0=-1
@@ -271,7 +256,7 @@ cdef class GrabClass:
 
                     c_fit_params.fit_params( &x0, &y0, &orientation,
                                 index_x, index_y, centroid_search_radius,
-                                width, height, im2_32f, im2_32f_step )
+                                width, height, im2, im2_step )
                     
                 #print 'max_val %f (% 8.1f,% 8.1f)'%(max_val,x0,y0)
                 
@@ -329,13 +314,8 @@ cdef class GrabClass:
                 
                 if clear_background_start_isSet():
                     clear_background_start_clear()
-##                    CHK(
-##                        ipp.ippiSet_8u_C1R(0,bg,bg_step,sz))
-                    CHK(
-                        ipp.ippiSet_32f_C1R(0,mean_image,mean_image_step,sz))
-
-                    CHK(
-                        ipp.ippiSet_32f_C1R(0,std_image,std_image_step,sz))
+                    CHK( ipp.ippiSet_8u_C1R(0,bg_img,bg_img_step,sz))
+                    CHK( ipp.ippiSet_8u_C1R(0,std_img,std_img_step,sz))
 
                 #
                 #
@@ -390,6 +370,9 @@ cdef class GrabClass:
                             ipp.ippiMulC_32f_C1R(sum_image, sum_image_step,
                                                  1.0/n_bg_samples,
                                                  mean_image, mean_image_step,sz))
+                        CHK( ipp.ippiConvert_32f8u_C1R( mean_image, mean_image_step,
+                                                 bg_img, bg_img_step,
+                                                 sz, ipp.ippRndNear ))
 
                         # find STD (use sum_image as temporary variable
                         CHK(
@@ -407,7 +390,11 @@ cdef class GrabClass:
                         
 ##                        CHK(
 ##                            ipp.ippiMulC_32f_C1IR(3.0,std_image, std_image_step,sz))
-                        
+
+                        CHK( ipp.ippiConvert_32f8u_C1R( std_image, std_image_step,
+                                                        std_img, std_img_step,
+                                                        sz, ipp.ippRndNear ))
+
                         # end of IPP-requiring code
 
                 tval3=time_func()
@@ -434,8 +421,16 @@ cdef class GrabClass:
         finally:
             # start of IPP-requiring code
             ipp.ippiFree(im1)
-            ipp.ippiFree(bg)
-##            c_fit_params.free_moment_state()
+            ipp.ippiFree(im2)
+            ipp.ippiFree(tmp1)
+            ipp.ippiFree(tmp2)
+            ipp.ippiFree(bg_img)
+            ipp.ippiFree(std_img)
+            ipp.ippiFree(sum_image)
+            ipp.ippiFree(sq_image)
+            ipp.ippiFree(mean_image)
+            ipp.ippiFree(std_image)
+            c_fit_params.free_moment_state()
             # end of IPP-requiring code
 
             globals['cam_quit_event'].set()

@@ -7,4 +7,4 @@ cdef extern from "c_fit_params.h":
 
     int fit_params( double *x0, double *y0, double *orientation,
                        int index_x, int index_y, int centroid_search_radius,
-                       int width, int height, float *img, int img_step )
+                       int width, int height, unsigned char *img, int img_step )
