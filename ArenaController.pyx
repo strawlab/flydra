@@ -7,7 +7,7 @@
 # may use arena control if possible, but gracefully ignore it
 # otherwise.
 
-cdef extern from "arena_misc.h":
+cdef extern from "arena_utils.h":
     cdef void start_center_calculation( int nframes )
     cdef void end_center_calculation( double *x_center, double *y_center )
     cdef void update_center_calculation( double new_x_pos, double new_y_pos, double new_orientation )
