@@ -335,6 +335,8 @@ cdef class RealtimeAnalyzer:
                 if self.arena_control_working:
                     arena_control.arena_update(
                         x0, y0, orientation, timestamp, framenumber )
+                    # JB: should maybe set found_point=0 here to avoid doing SVD?
+                    # uncertain how this would affect camera server
                 else: SET_ERR(2)
 
         # grab GIL
