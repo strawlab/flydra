@@ -1,5 +1,5 @@
 #emacs, this is -*-Python-*- mode
-# $Id: camera_server_pyrex.pyx 304 2004-11-03 22:00:16Z astraw $
+# $Id$
 
 import time
 import sys
