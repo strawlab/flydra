@@ -1,5 +1,37 @@
 <?xml version="1.0" ?>
 <resource>
+  <object class="wxPanel" name="REALTIME_TRACKING_PANEL">
+    <object class="wxFlexGridSizer">
+      <cols>3</cols>
+      <object class="sizeritem">
+        <object class="wxStaticText">
+          <label>x</label>
+        </object>
+        <flag>wxALIGN_CENTRE</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxStaticText">
+          <label>y</label>
+        </object>
+        <flag>wxALIGN_CENTRE</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxStaticText">
+          <label>z</label>
+        </object>
+        <flag>wxALIGN_CENTRE</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxTextCtrl" name="x_pos"/>
+      </object>
+      <object class="sizeritem">
+        <object class="wxTextCtrl" name="y_pos"/>
+      </object>
+      <object class="sizeritem">
+        <object class="wxTextCtrl" name="z_pos"/>
+      </object>
+    </object>
+  </object>
   <object class="wxPanel" name="preview_per_cam_panel">
     <object class="wxStaticBoxSizer">
       <label>Camera</label>
@@ -10,6 +42,11 @@
           <object class="sizeritem">
             <object class="wxButton" name="collect_background">
               <label>collect bg</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="clear_background">
+              <label>clear bg</label>
             </object>
           </object>
           <object class="sizeritem">
@@ -42,6 +79,23 @@
         </object>
         <option>0</option>
         <flag>wxALIGN_CENTRE</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxBoxSizer">
+          <orient>wxHORIZONTAL</orient>
+          <object class="sizeritem">
+            <object class="wxStaticText">
+              <label>Threshold for AbsDiff</label>
+            </object>
+            <flag>wxTOP|wxRIGHT</flag>
+            <border>3</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxTextCtrl" name="threshold_value">
+              <value>7.9</value>
+            </object>
+          </object>
+        </object>
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="PerCameraControlsContainer"/>
@@ -209,7 +263,10 @@
               <object class="sizeritem">
                 <object class="wxCheckListBox" name="record_raw_cam_select_checklist">
                   <content>
-                    <item/></content>
+                    
+                    
+                    <item/>
+                  </content>
                 </object>
                 <option>1</option>
                 <flag>wxEXPAND</flag>
