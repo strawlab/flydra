@@ -40,9 +40,8 @@ cdef void print_info_8u(ipp.Ipp8u* im, int im_step, ipp.IppiSize sz, object pref
     print prefix,'min: %f, max: %f, minIdx: %d,%d, maxIdx: %d,%d'%(minVal,maxVal,
                                                                    minIdx.x,minIdx.y,
                                                                    maxIdx.x,maxIdx.y)
-# end of IPP-requiring code
-
 cimport arena_control
+# end of IPP-requiring code
 
 if sys.platform == 'win32':
     time_func = time.clock
@@ -84,12 +83,10 @@ cdef class GrabClass:
         cdef c_numarray._numarray buf
         cdef int height
         cdef int buf_ptr_step, width
-        cdef int heightwidth[2]
         cdef int collecting_background_frames
         cdef int bg_frame_number
         cdef double new_x_cent, new_y_cent
         cdef int n_frames4stats
-##        cdef double tval1, tval2, tval3, latency1, latency2
         cdef int i, j
         cdef double timestamp
         cdef long framenumber
@@ -117,18 +114,27 @@ cdef class GrabClass:
         cdef ipp.Ipp32f *mean_image, *std_image # FP background
 
         cdef ipp.IppiSize roi_sz
-        
-        cdef double x0, y0 # centroid
-        cdef double orientation
         # end of IPP-requiring code
+        
+        cdef double x0, y0
+        cdef double orientation
 
 ##        COORD_PORT = None
         n_bg_samples = 100
         n_rot_samples = 100*60 # 1 minute
         centroid_search_radius = 50
         alpha = 1.0/n_bg_samples
+        
         # questionable optimization: speed up by eliminating namespace lookups
-        # very questionable! doesn't the compiler resolve these? -JB
+        
+        # ( Very questionable! doesn't the compiler resolve these? -JB
+        
+        # No, these are Python objects and thus the Pyrex compiler
+        # treats them as such. By taking dictionary and attribute
+        # lookups out, this should run faster. Furthermore, lookups in
+        # the local namespace are faster than global lookups, but I'm
+        # not sure this matters in a Pyrex environment. - ADS )
+        
         cam_quit_event_isSet = globals['cam_quit_event'].isSet
         acquire_lock = globals['incoming_frames_lock'].acquire
         release_lock = globals['incoming_frames_lock'].release
@@ -199,8 +205,6 @@ cdef class GrabClass:
         CHK( ipp.ippiSet_32f_C1R(0.0,mean_image,mean_image_step, roi_sz))
         CHK( ipp.ippiSet_32f_C1R(0.0,std_image,std_image_step, roi_sz))
 
-        # end of IPP-requiring code
-
         try:
             arena_error = arena_control.arena_initialize()
             have_arena_control = 1
@@ -209,6 +213,7 @@ cdef class GrabClass:
                 have_arena_control = 0
         except NameError:
             have_arena_control = 0
+        # end of IPP-requiring code
 
         coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
@@ -219,10 +224,7 @@ cdef class GrabClass:
                 # get best guess as to when image was taken
                 timestamp=self.cam.get_last_timestamp()
                 framenumber=self.cam.get_last_framenumber()
-
-                # now
-                tval1=time_func()
-
+                
                 # start of IPP-requiring code
                 # copy image to IPP memory
                 for i from 0 <= i < height:
@@ -263,19 +265,14 @@ cdef class GrabClass:
 
                 #print 'max_val %f (% 8.1f,% 8.1f)'%(max_val,x0,y0)
                 
-                # now
-                tval2=time_func()
-                
                 buf_ptr=im2
                 buf_ptr_step=im2_step
-                # end of IPP-requiring code                    
-
+                # end of IPP-requiring code
+                
                 # allocate new numarray memory
                 buf = <c_numarray._numarray>c_numarray.NA_NewArray(
                     NULL, c_numarray.tUInt8, 2,
                     height, width)
-                heightwidth[0]=height
-                heightwidth[1]=width
 
                 # copy image to numarray
                 for i from 0 <= i < height:
@@ -286,6 +283,8 @@ cdef class GrabClass:
                 # return camwire's buffer
                 self.cam.unpoint_frame()
 
+                globals['last_frame_timestamp']=timestamp
+
                 points = [ (x0 + self.left,
                             y0 + self.bottom,
                             orientation) ]
@@ -293,12 +292,14 @@ cdef class GrabClass:
 ##                if debug_isSet():
 ##                    print points
 
+                # start of IPP-requiring code
                 if self.use_arena: # call out to arena feedback function
                     if have_arena_control:
                         arena_control.arena_update(
                             x0, y0, orientation, timestamp, framenumber )
                     else:
                         print 'ERROR: no arena control'
+                # end of IPP-requiring code
                     
                 # make appropriate references to our copy of the data
                 globals['most_recent_frame'] = buf
@@ -307,6 +308,9 @@ cdef class GrabClass:
                 globals['incoming_frames'].append(
                     (buf,timestamp,framenumber) ) # save it
                 release_lock()
+
+                # start of IPP-requiring code
+
 
                 #
                 #
@@ -332,14 +336,12 @@ cdef class GrabClass:
                 if collect_background_start_isSet():
                     bg_frame_number=0
                     collect_background_start_clear()
-                    # start of IPP-requiring code
                     CHK( ipp.ippiSet_32f_C1R( 0.0, 
                         (sum_image + self.bottom*sum_image_step/4 + self.left),
                         sum_image_step, roi_sz)) # divide by 4 because 32f = 4 bytes
                     CHK( ipp.ippiSet_32f_C1R( 0.0,
                         (sq_image + self.bottom*sq_image_step/4 + self.left),
                         sq_image_step, roi_sz))
-                    # end of IPP-requiring code
                     
                 #
                 #
@@ -349,7 +351,6 @@ cdef class GrabClass:
                 
                 if bg_frame_number>=0:
                     
-                    # start of IPP-requiring code
                     CHK( ipp.ippiAdd_8u32f_C1IR(
                         (im1 + self.bottom*im1_step + self.left), im1_step,
                         (sum_image + self.bottom*sum_image_step/4 + self.left),
@@ -358,7 +359,6 @@ cdef class GrabClass:
                         (im1 + self.bottom*im1_step + self.left), im1_step,
                         (sq_image + self.bottom*sq_image_step/4 + self.left),
                         sq_image_step, roi_sz))
-                    # end of IPP-requiring code
                     
                     bg_frame_number = bg_frame_number+1
                     if bg_frame_number>=n_bg_samples:
@@ -371,8 +371,6 @@ cdef class GrabClass:
                         
                         bg_frame_number=-1 # stop averaging frames
                         
-                        # start of IPP-requiring code
-
                         # find mean
                         CHK( ipp.ippiMulC_32f_C1R(
                             (sum_image + self.bottom*sum_image_step/4 + self.left),
@@ -414,7 +412,6 @@ cdef class GrabClass:
                             (std_img + self.bottom*std_img_step + self.left),
                             std_img_step, roi_sz, ipp.ippRndNear ))
 
-                        # end of IPP-requiring code
 
                 #
                 #
@@ -423,7 +420,6 @@ cdef class GrabClass:
                 #
 
                 
-                # start of IPP-requiring code
                 if find_rotation_center_start_isSet():
                     find_rotation_center_start_clear()
                     rot_frame_number=0
@@ -455,14 +451,6 @@ cdef class GrabClass:
 
                 # end of IPP-requiring code
                 
-                tval3=time_func()
-
-                latency1 = (tval1 - timestamp)*1000.0
-                latency2 = (tval2 - timestamp)*1000.0
-                latency3 = (tval3 - timestamp)*1000.0
-##                print 'max_val %f i(% 5d,% 5d) f(% 8.1f,% 8.1f)'%(max_val,index_x,index_y,x0,y0)
-##                print ('%.1f'%latency1).rjust(10),('%.1f'%latency2).rjust(10),('%.1f'%latency3).rjust(10)
-
 ##                if COORD_PORT is None:
 ##                    COORD_PORT = self.coord_port
 ##                else:
@@ -477,10 +465,9 @@ cdef class GrabClass:
 ##                                        (main_brain_hostname,COORD_PORT))
                 sleep(1e-6) # yield processor
         finally:
+            # start of IPP-requiring code
             if have_arena_control:
                 arena_control.arena_finish()
-
-            # start of IPP-requiring code
             ipp.ippiFree(im1)
             ipp.ippiFree(im2)
             ipp.ippiFree(bg_img)
@@ -518,7 +505,7 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
         hr = daemon.handleRequests
         try:
             while not self_cam_quit_event_isSet():
-                hr(0.1) # block on select for n seconds
+                hr(5.0) # block on select for n seconds
                 
         finally:
             self.globals['listen_thread_done'].set()
@@ -720,6 +707,7 @@ cdef class App:
             globals['lbrt'] = 0,0,width-1,height-1
             globals['width'] = width
             globals['height'] = height
+            globals['last_frame_timestamp']=None
 
             # set defaults
             cam.set_camera_property(c_cam_iface.SHUTTER,300,0,0)
@@ -736,7 +724,7 @@ cdef class App:
                 scalar_control_info[name] = (current_value, min_value, max_value)
             diff_threshold = 8.1
             scalar_control_info['initial_diff_threshold'] = diff_threshold
-            clear_threshold = 0.8
+            clear_threshold = 0.0
             scalar_control_info['initial_clear_threshold'] = clear_threshold
 
             # register self with remote server
@@ -769,7 +757,7 @@ cdef class App:
                                                        globals)
             URI=daemon.connect(self.from_main_brain_api[cam_no],'camera_server')
             print 'listening locally at',URI
-            
+
             # create and start listen thread
             listen_thread=threading.Thread(target=self.from_main_brain_api[cam_no].listen,
                                            args=(daemon,))
@@ -858,6 +846,12 @@ cdef class App:
                         cam_id = self.cam_id[cam_no]
                         
                         now = time_func()
+                        lft = globals['last_frame_timestamp']
+                        if lft is not None:
+                            if (now-lft) > 1.0:
+                                print 'WARNING: last frame was %f seconds ago'%(now-lft,)
+                                print '(Is the grab thread dead?)'
+                                globals['last_frame_timestamp'] = None
 
                         # calculate and send FPS
                         elapsed = now-last_measurement_time[cam_no]
@@ -870,13 +864,15 @@ cdef class App:
                             n_frames[cam_no] = 0
 
                         # get new frames from grab thread
-                        globals['incoming_frames_lock'].acquire()
-                        len_if = len(globals['incoming_frames'])
+                        lock = globals['incoming_frames_lock']
+                        lock.acquire()
+                        gif = globals['incoming_frames']
+                        len_if = len(gif)
                         if len_if:
                             n_frames[cam_no] = n_frames[cam_no]+len_if
-                            grabbed_frames[cam_no].extend( globals['incoming_frames'] )
+                            grabbed_frames[cam_no].extend( gif )
                             globals['incoming_frames'] = []
-                        globals['incoming_frames_lock'].release()
+                        lock.release()
 
                         # process asynchronous commands
                         self.main_brain_lock.acquire()
@@ -927,7 +923,6 @@ cdef class App:
 
                         if len(grabbed_frames[cam_no]):
                             if cmd=='save':
-                                #print 'saving %d frames'%(len(grabbed_frames[cam_no]),)
                                 fly_movie_lock.acquire()
                                 try:
                                     for frame,timestamp,framenumber in grabbed_frames[cam_no]:
@@ -945,7 +940,8 @@ cdef class App:
                 for cam_id in self.cam_id:
                     self.main_brain.close(cam_id)
                 self.main_brain_lock.release()
-##                for cam_no in range(self.num_cams):
+                for cam_no in range(self.num_cams):
+                    self.globals[cam_no]['cam_quit_event'].set()
 ##                    self.globals[cam_no]['grab_thread_done'].wait() # block until thread is done...
 ##                    self.globals[cam_no]['listen_thread_done'].wait() # block until thread is done...
         except Pyro.errors.ConnectionClosedError:
