@@ -11,6 +11,7 @@
 int serial_port;
 FILE *datafile;
 
+int calcing = 0;
 double center_x = -1, center_y = -1;
 
 /****************************************************************
@@ -159,6 +160,8 @@ long rotation_calculation_init( void )
   /* close serial port */
   sc_close_port( &serial_port );
 
+  calcing = 1;
+
   return 0;
 }
 
@@ -199,6 +202,8 @@ void rotation_calculation_finish( double new_x_cent, double new_y_cent )
 
   center_x = new_x_cent;
   center_y = new_y_cent;
+
+  calcing = 0;
 }
 
 /****************************************************************
@@ -257,6 +262,8 @@ void arena_update( double x, double y, double orientation,
 
   double use_orientation;
   double use_pos_x;
+
+  if( calcing ) return;
 
   if( first_time == 0.0 )
   {
