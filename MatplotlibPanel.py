@@ -2,7 +2,8 @@ import numarray
 import matplotlib.matlab as mpl
 import matplotlib
 import matplotlib.cm
-from matplotlib.backends.backend_wxagg import Toolbar, FigureCanvasWxAgg
+from matplotlib.backends.backend_wx import NavigationToolbar2Wx
+from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
 from matplotlib.mlab import meshgrid
 from wxPython.wx import *
 
@@ -13,7 +14,7 @@ class PlotPanel(wxPanel):
 
         self.fig = mpl.Figure((5,4), 75)
         self.canvas = FigureCanvasWxAgg(self, -1, self.fig)
-        self.toolbar = Toolbar(self.canvas) #matplotlib toolbar
+        self.toolbar = NavigationToolbar2Wx(self.canvas) #matplotlib toolbar
         self.toolbar.Realize()
         #self.toolbar.set_active([0,1])
 
@@ -42,6 +43,7 @@ class PlotPanel(wxPanel):
                             cmap=matplotlib.cm.jet,
                             origin='upper',
                             interpolation='nearest')
+        self.im.set_clim(0,255)
         self.lines = a.plot([0],[0],'o-')
         #self.lines = a.plot([0,0,0],[0,0,0],'o-')
         mpl.set(self.lines[0],'markerfacecolor',None)
