@@ -52,6 +52,11 @@ class App(wxApp):
                         "Tints clipped pixels green", wxITEM_CHECK)
         EVT_MENU(self, ID_toggle_image_tinting, self.OnToggleTint)
 
+        ID_draw_points = wxNewId()
+        viewmenu.Append(ID_draw_points, "Draw points",
+                        "Draw 2D points and orientation", wxITEM_CHECK)
+        EVT_MENU(self, ID_draw_points, self.OnToggleDrawPoints)
+
         ID_set_timer = wxNewId()
         viewmenu.Append(ID_set_timer, "Set update timer...",
                         "Sets interval at which display is updated")
@@ -81,6 +86,7 @@ class App(wxApp):
         self.InitPreviewPanel()
         
         viewmenu.Check(ID_toggle_image_tinting,self.cam_image_canvas.get_clipping())
+        viewmenu.Check(ID_draw_points,self.cam_image_canvas.get_display_points())
         
         self.snapshot_panel = RES.LoadPanel(nb,"SNAPSHOT_PANEL")
         nb.AddPage(self.snapshot_panel,"Snapshot")
@@ -92,6 +98,7 @@ class App(wxApp):
 
         self.tracking_panel = RES.LoadPanel(nb,"REALTIME_TRACKING_PANEL")
         nb.AddPage(self.tracking_panel,"Realtime 3D tracking")
+        self.InitTrackingPanel()
         
         #temp_panel = RES.LoadPanel(nb,"UNDER_CONSTRUCTION_PANEL")
         #nb.AddPage(temp_panel,"Under construction")
@@ -193,6 +200,10 @@ class App(wxApp):
         clear_background = XRCCTRL(PreviewPerCamPanel,"clear_background")
         EVT_BUTTON(clear_background, clear_background.GetId(),
                    self.OnClearBackground)
+        
+        find_Rcenter = XRCCTRL(PreviewPerCamPanel,"find_Rcenter")
+        EVT_BUTTON(find_Rcenter, find_Rcenter.GetId(),
+                   self.OnFindRCenter)
         
         set_roi = XRCCTRL(PreviewPerCamPanel,"set_roi")
         EVT_BUTTON(set_roi, set_roi.GetId(), self.OnSetROI)
@@ -432,6 +443,30 @@ class App(wxApp):
         i=cam_choice.FindString(cam_id)
         cam_choice.Delete(i)
     
+    def InitTrackingPanel(self):
+        load_cal = XRCCTRL(self.tracking_panel,
+                           "LOAD_CAL")
+        EVT_BUTTON(load_cal, load_cal.GetId(), self.OnLoadCal)
+
+    def OnLoadCal(self,event):
+        doit=False
+        dlg = wxDirDialog( self.frame, "Select directory with calibration data",
+                           style = wxDD_DEFAULT_STYLE,
+                           defaultPath = os.environ.get('HOME','')
+                           )
+        try:
+            if dlg.ShowModal() == wxID_OK:
+                calib_dir = dlg.GetPath()
+                doit = True
+        finally:
+            dlg.Destroy()
+        if doit:
+            self.main_brain.load_calibration(calib_dir)
+            cal_status_light = XRCCTRL(self.tracking_panel,
+                                       "CAL_STATUS_LIGHT")
+            Img = wx.Image('greenlight.png', wxBITMAP_TYPE_PNG)
+            cal_status_light.SetBitmap(wx.BitmapFromImage(Img))
+
     def OnSnapshot(self,event):
         snapshot_cam_choice = XRCCTRL(self.snapshot_panel,
                                       "snapshot_cam_choice")
@@ -447,6 +482,9 @@ class App(wxApp):
     def OnToggleTint(self, event):
         self.cam_image_canvas.set_clipping( event.IsChecked() )
 
+    def OnToggleDrawPoints(self, event):
+        self.cam_image_canvas.set_display_points( event.IsChecked() )
+        
     def OnSetTimer(self, event):
         dlg=wxTextEntryDialog(self.frame, 'What interval should the display be updated at (msec)?',
                               'Set display update interval',str(self.update_interval))
@@ -593,6 +631,10 @@ class App(wxApp):
     def OnClearBackground(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         self.main_brain.clear_background(cam_id)
+
+    def OnFindRCenter(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        self.main_brain.find_r_center(cam_id)
 
     def OnCloseCamera(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())

@@ -1,34 +1,69 @@
 <?xml version="1.0" ?>
 <resource>
   <object class="wxPanel" name="REALTIME_TRACKING_PANEL">
-    <object class="wxFlexGridSizer">
-      <cols>3</cols>
+    <object class="wxBoxSizer">
+      <orient>wxVERTICAL</orient>
       <object class="sizeritem">
-        <object class="wxStaticText">
-          <label>x</label>
+        <object class="wxFlexGridSizer">
+          <cols>3</cols>
+          <object class="sizeritem">
+            <object class="wxStaticText">
+              <label>x</label>
+            </object>
+            <flag>wxALIGN_CENTRE</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxStaticText">
+              <label>y</label>
+            </object>
+            <flag>wxALIGN_CENTRE</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxStaticText">
+              <label>z</label>
+            </object>
+            <flag>wxALIGN_CENTRE</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxTextCtrl" name="x_pos"/>
+          </object>
+          <object class="sizeritem">
+            <object class="wxTextCtrl" name="y_pos"/>
+          </object>
+          <object class="sizeritem">
+            <object class="wxTextCtrl" name="z_pos"/>
+          </object>
         </object>
-        <flag>wxALIGN_CENTRE</flag>
+        <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxStaticText">
-          <label>y</label>
+        <object class="wxBoxSizer">
+          <orient>wxHORIZONTAL</orient>
+          <object class="sizeritem">
+            <object class="wxStaticText">
+              <label>Calibration status:</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxStaticBitmap" name="CAL_STATUS_LIGHT">
+              <bitmap>redlight.png</bitmap>
+            </object>
+          </object>
         </object>
-        <flag>wxALIGN_CENTRE</flag>
+        <flag>wxTOP|wxEXPAND</flag>
+        <border>5</border>
       </object>
       <object class="sizeritem">
-        <object class="wxStaticText">
-          <label>z</label>
+        <object class="wxBoxSizer">
+          <orient>wxHORIZONTAL</orient>
+          <object class="sizeritem">
+            <object class="wxButton" name="LOAD_CAL">
+              <label>Load calibration...</label>
+            </object>
+            <option>1</option>
+          </object>
         </object>
-        <flag>wxALIGN_CENTRE</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxTextCtrl" name="x_pos"/>
-      </object>
-      <object class="sizeritem">
-        <object class="wxTextCtrl" name="y_pos"/>
-      </object>
-      <object class="sizeritem">
-        <object class="wxTextCtrl" name="z_pos"/>
+        <flag>wxEXPAND</flag>
       </object>
     </object>
   </object>
@@ -47,6 +82,11 @@
           <object class="sizeritem">
             <object class="wxButton" name="clear_background">
               <label>clear bg</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="find_Rcenter">
+              <label>find Rcenter</label>
             </object>
           </object>
           <object class="sizeritem">
@@ -85,7 +125,7 @@
                 </object>
               </object>
             </object>
-            <option>1</option>
+            <option>0</option>
             <flag>wxALIGN_CENTRE</flag>
           </object>
           <object class="sizeritem">
@@ -115,8 +155,31 @@
                 </object>
               </object>
             </object>
-            <option>1</option>
-            <flag>wxALIGN_CENTRE</flag>
+            <option>0</option>
+            <flag>wxLEFT|wxRIGHT</flag>
+            <border>5</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxBoxSizer">
+              <orient>wxVERTICAL</orient>
+              <object class="sizeritem">
+                <object class="wxBoxSizer">
+                  <orient>wxHORIZONTAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Cam sync:</label>
+                    </object>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticBitmap" name="SYNCED_CTRL">
+                      <bitmap>redlight.png</bitmap>
+                    </object>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <option>0</option>
+            <flag>wxEXPAND|wxALIGN_CENTRE</flag>
           </object>
         </object>
         <option>0</option>

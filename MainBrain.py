@@ -21,13 +21,6 @@ if struct.unpack('d','\x18-DT\xfb!\t\xc0')[0] == -math.pi:
 else:
     from numarray.ieeespecial import nan
 
-reconstructor_ok = False
-try:
-    reconstructor=Reconstructor()
-    reconstructor_ok = True
-except Exception, x:
-    print 'WARNING: 3d reconstruction disabled:',x.__class__,x
-
 Pyro.config.PYRO_MULTITHREADED = 0 # No multithreading!
 
 Pyro.config.PYRO_TRACELEVEL = 3
@@ -81,6 +74,7 @@ class CoordReceiver(threading.Thread):
         self.cam_id = cam_id
         self.main_brain = main_brain
         self.last_timestamp=0.0
+        self.reconstructor = None
 
         # set up threading stuff
         self.quit_event = threading.Event()
@@ -99,6 +93,10 @@ class CoordReceiver(threading.Thread):
 
     def get_port(self):
         return self.port
+
+    def set_reconstructor(self,r):
+        # This is called on a running thread...
+        self.reconstructor = r
 
     def quit(self):
         self.quit_event.set()
@@ -162,11 +160,11 @@ class CoordReceiver(threading.Thread):
             if data_dict is not None:
                 
                 # do 3D reconstruction -=-=-=-=-=-=-=-=
-                if reconstructor_ok:
+                if self.reconstructor is not None:
                     t1 = time.time()
 #                    print 'time.time() % 15d'%t1
 #                    print ' framenumber %d:'%corrected_framenumber,cur_framenumber_dict
-                    X = reconstructor.find3d(data_dict.items())
+                    X = self.reconstructor.find3d(data_dict.items())
                     t2 = time.time()
                     latency = (t2-t1)*1000.0
 #                    print ' 3d point:', X, '(3d calc duration % 4.1f msec)'%latency
@@ -570,12 +568,12 @@ class MainBrain:
         print 'saving to',self.calib_dir
         save_ascii_matrix(os.path.join(self.calib_dir,'IdMat.dat'),IdMat)
         save_ascii_matrix(os.path.join(self.calib_dir,'points.dat'),points)
-        cam_ids = self.main_brain.external_get_cam_ids()
+        cam_ids = self.remote_api.external_get_cam_ids()
         if 1:
             # new, untested code
             Res = []
             for cam_id in cam_ids:
-                sci = self.main_brain.external_get_info(cam_id)
+                sci, fqdn, port = self.remote_api.external_get_info(cam_id)
                 width = sci['width']
                 height = sci['height']
                 Res.append( [width,height] )
@@ -618,6 +616,9 @@ class MainBrain:
 
     def clear_background(self,cam_id):
         self.camera_server[cam_id].clear_background()
+
+    def find_r_center(self,cam_id):
+        self.camera_server[cam_id].find_r_center()
 
     def send_set_camera_property(self, cam_id, property_name, value):
         self.remote_api.external_send_set_camera_property( cam_id, property_name, value)
@@ -664,6 +665,16 @@ class MainBrain:
             cam_ids = self.remote_api.cam_info.keys()
             print 'cameras failed to quit cleanly: %s'%str(cam_ids)
             #raise RuntimeError('cameras failed to quit cleanly: %s'%str(cam_ids))
+
+    def load_calibration(self,dirname):
+        cam_ids = self.remote_api.external_get_cam_ids()
+        r = Reconstructor(CAMS=len(cam_ids), calibration_dir=dirname)
+
+        # XXX this is naughty accessing remote_api
+        self.remote_api.cam_info_lock.acquire()
+        for cam_id in cam_ids:
+            port = self.remote_api.cam_info[cam_id]['coord_receiver'].set_reconstructor(r)
+        self.remote_api.cam_info_lock.release()
     
     def __del__(self):
         self.quit()

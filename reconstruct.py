@@ -13,7 +13,7 @@ def load_ascii_matrix(filename):
 
 class Reconstructor:
     def __init__(self,
-                 CAMS = 4,
+                 CAMS = 5,
                  calibration_dir = '/home/astraw/mcsc_data',
                  Pmat_name = 'camera%d.Pmat.cal',
                  ):
@@ -24,7 +24,7 @@ class Reconstructor:
     def find3d(self,
                cam_idx_and_points2d):
         M=len(cam_idx_and_points2d) # number of views of single point
-        A=nx.zeros((2*M,4))
+        A=nx.zeros((2*M,4),nx.Float64)
         
         for m,(cam,(xm,ym)) in enumerate(cam_idx_and_points2d):
             row2=self.Pmat[m*3+2,:]

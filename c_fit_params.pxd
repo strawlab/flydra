@@ -10,6 +10,6 @@ cdef extern from "c_fit_params.h":
                        int width, int height, unsigned char *img, int img_step )
 
     void start_center_calculation( int nframes )
-    void end_center_calcuation( double *x_center, double *y_center )
+    void end_center_calculation( double *x_center, double *y_center )
     void update_center_calculation( double new_x_pos, double new_y_pos )
 

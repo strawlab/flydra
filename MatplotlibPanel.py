@@ -1,6 +1,7 @@
-import numarray
-import matplotlib.matlab as mpl
+##import numarray as nx
+import Numeric as nx
 import matplotlib
+import matplotlib.matlab as mpl
 import matplotlib.cm
 from matplotlib.backends.backend_wx import NavigationToolbar2Wx
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
@@ -33,14 +34,14 @@ class PlotPanel(wxPanel):
         a = self.fig.add_axes([0.05,0.05,0.9,0.9])
 
         start_size=656,491
-        x = numarray.arange(start_size[0])
-        y = numarray.arange(start_size[1])
+        x = nx.arange(start_size[0])
+        y = nx.arange(start_size[1])
 ##        mpl.set(a,'xlim',[0,start_size[0]])
 ##        mpl.set(a,'xticks',range(0,start_size[0],100))
 ##        mpl.set(a,'ylim',[0,start_size[1]])
 ##        mpl.set(a,'yticks',range(0,start_size[1],100))
         x, y = meshgrid(x, y)
-        z = numarray.zeros(x.shape)
+        z = nx.zeros(x.shape)
         self.im = a.imshow( z,
                             cmap=matplotlib.cm.jet,
                             origin=origin,
@@ -73,7 +74,7 @@ class PlotPanel(wxPanel):
         zp = zip(*points)
         #self.lines[0].set_data(zp[0],zp[1])
         if origin == 'upper':
-            y = 490-numarray.asarray(zp[1])
+            y = 490-nx.asarray(zp[1])
         else:
             y = zp[1]
         self.lines[0].set_data(zp[0],y)

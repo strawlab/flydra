@@ -25,12 +25,19 @@ class DynamicImageCanvas(wxGLCanvas):
         self.do_clipping = True
         self.lbrt = {}
         self.draw_points = {}
+        self.do_draw_points = True
 
     def set_clipping(self, value):
         self.do_clipping = value
 
     def get_clipping(self):
         return self.do_clipping
+
+    def set_display_points(self, value):
+        self.do_draw_points = value
+
+    def get_display_points(self):
+        return self.do_draw_points
 
     def delete_image(self,id_val):
         tex_id, gl_tex_xy_alloc, gl_tex_xyfrac, widthheight = self._gl_tex_info_dict[id_val]
@@ -217,52 +224,53 @@ class DynamicImageCanvas(wxGLCanvas):
                 glVertex2f( left,top)
                 glEnd()
 
-                # draw points if needed
-                xg=right-left
-                xo=left
-                yg=top-bottom
-                yo=bottom
-                draw_points = self.draw_points.get(ids[i],[])
-                pts_mode = False
-                width = float(widthheight[0])
-                height = float(widthheight[1])
-                for pt in draw_points:
-                    x = pt[0]/width*xg+xo
-                    y = (height-pt[1])/height*yg+yo
-                    if not pts_mode:
+                if self.do_draw_points:
+                    # draw points if needed
+                    xg=right-left
+                    xo=left
+                    yg=top-bottom
+                    yo=bottom
+                    draw_points = self.draw_points.get(ids[i],[])
+                    pts_mode = False
+                    width = float(widthheight[0])
+                    height = float(widthheight[1])
+                    for pt in draw_points:
+                        x = pt[0]/width*xg+xo
+                        y = (height-pt[1])/height*yg+yo
+                        if not pts_mode:
+                            glDisable(GL_TEXTURE_2D)
+                            glColor4f(0.0,1.0,0.0,1.0)                        
+                            glBegin(GL_POINTS)
+                            pts_mode = True
+                        glVertex2f(x,y)
+                    if pts_mode:
+                        glEnd()
+                        glColor4f(1.0,1.0,1.0,1.0)                        
+                        glEnable(GL_TEXTURE_2D)
+
+                    for pt in draw_points:
+                        ox0 = pt[0]
+                        oy0 = pt[1]
+
+                        angle_radians = math.pi/2 - pt[2]
+                        r = 20.0
+                        odx = r*math.cos( angle_radians )
+                        ody = r*math.sin( angle_radians )
+
+                        x0 = (ox0-odx)/width*xg+xo
+                        x1 = (ox0+odx)/width*xg+xo
+
+                        y0 = (height-oy0-ody)/height*yg+yo
+                        y1 = (height-oy0+ody)/height*yg+yo
+
                         glDisable(GL_TEXTURE_2D)
                         glColor4f(0.0,1.0,0.0,1.0)                        
-                        glBegin(GL_POINTS)
-                        pts_mode = True
-                    glVertex2f(x,y)
-                if pts_mode:
-                    glEnd()
-                    glColor4f(1.0,1.0,1.0,1.0)                        
-                    glEnable(GL_TEXTURE_2D)
-
-                for pt in draw_points:
-                    ox0 = pt[0]
-                    oy0 = pt[1]
-
-                    angle_radians = math.pi/2 - pt[2]
-                    r = 20.0
-                    odx = r*math.cos( angle_radians )
-                    ody = r*math.sin( angle_radians )
-
-                    x0 = (ox0-odx)/width*xg+xo
-                    x1 = (ox0+odx)/width*xg+xo
-                    
-                    y0 = (height-oy0-ody)/height*yg+yo
-                    y1 = (height-oy0+ody)/height*yg+yo
-
-                    glDisable(GL_TEXTURE_2D)
-                    glColor4f(0.0,1.0,0.0,1.0)                        
-                    glBegin(GL_LINES)
-                    glVertex2f(x0,y0)
-                    glVertex2f(x1,y1)
-                    glEnd()
-                    glColor4f(1.0,1.0,1.0,1.0)                        
-                    glEnable(GL_TEXTURE_2D)
+                        glBegin(GL_LINES)
+                        glVertex2f(x0,y0)
+                        glVertex2f(x1,y1)
+                        glEnd()
+                        glColor4f(1.0,1.0,1.0,1.0)                        
+                        glEnable(GL_TEXTURE_2D)
 
                 if ids[i] in self.lbrt:
                     # draw ROI

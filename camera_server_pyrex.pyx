@@ -204,9 +204,10 @@ cdef class GrabClass:
 
         try:
             arena_error = arena_control.arena_initialize()
-            if arena_error != 0:
-                raise RuntimeError( "Error initializing arena control" )
             have_arena_control = 1
+            if arena_error != 0:
+                print "WARNING: could not initialize arena control"
+                have_arena_control = 0
         except NameError:
             have_arena_control = 0
 
@@ -427,7 +428,9 @@ cdef class GrabClass:
                 # -=-=-=-=-= Start finding center of rotation -=-=-=-=
                 #
                 #
+
                 
+                # start of IPP-requiring code
                 if find_rotation_center_start_isSet():
                     rot_frame_number=0
                     find_rotation_center_start_clear()
@@ -456,6 +459,8 @@ cdef class GrabClass:
                         arena_control.rotation_calculation_finish( new_x_cent, new_y_cent )
                         rot_frame_number=-1 # stop averaging frames
 
+                # end of IPP-requiring code
+                
                 tval3=time_func()
 
                 latency1 = (tval1 - timestamp)*1000.0
@@ -603,8 +608,8 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
     def get_diff_threshold(self,value):
         return self.globals['diff_threshold']
 
-    def find_rotation_center(self):
-        self.glonals['find_rotation_center_start'].set()
+    def find_r_center(self):
+        self.globals['find_rotation_center_start'].set()
     
 cdef class App:
     cdef object globals

@@ -256,7 +256,7 @@ void start_center_calculation( int nframes )
 /****************************************************************
 ** end_center_calculation ***************************************
 ****************************************************************/
-void end_center_calcuation( double *x_center, double *y_center )
+void end_center_calculation( double *x_center, double *y_center )
 {
   int i;
 
