@@ -7,7 +7,7 @@ cdef extern from "stdlib.h":
     void *malloc(size_t size)
     void free(void* ptr)
     void exit(int status)
-    int printf(char *format)
+    int printf(char *format, ...)
     
 cdef extern from "math.h":
     int abs(int i)
