@@ -271,6 +271,7 @@ cdef extern from "ippcore.h":
     IppStatus ippCoreSetDenormAreZeros( int value )
 
     IppCpuType ippCoreGetCpuType()
+    char* ippCoreGetStatusString( IppStatus StsCode )
 
 cdef extern from "ippi.h":
     ctypedef struct IppiMomentState_64f
@@ -342,15 +343,14 @@ cdef extern from "ippi.h":
                                 IppiSize roiSize)
     IppStatus ippiMomentInitAlloc_64f(IppiMomentState_64f** pState, IppHintAlgorithm hint)
     IppStatus ippiMomentFree_64f(IppiMomentState_64f* pState)
+    IppStatus ippiMoments64f_8u_C1R( Ipp8u*  pSrc, int srcStep, IppiSize roiSize, IppiMomentState_64f* pCtx)
     IppStatus ippiMoments64f_32f_C1R(Ipp32f* pSrc, int srcStep, IppiSize roiSize, IppiMomentState_64f* pCtx)
     IppStatus ippiGetSpatialMoment_64f(IppiMomentState_64f* pState,
                                        int mOrd, int nOrd, int nChannel,
                                        IppiPoint roiOffset, Ipp64f* pValue)
-    # do not use! weird floating point error
     IppStatus ippiGetCentralMoment_64f(IppiMomentState_64f* pState,
                                        int mOrd, int nOrd, int nChannel,
                                        Ipp64f* pValue)
-    ##
     IppStatus ippiGetNormalizedCentralMoment_64f(IppiMomentState_64f* pState,
                                        int mOrd, int nOrd, int nChannel,
                                        Ipp64f* pValue)
