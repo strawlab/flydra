@@ -5,10 +5,9 @@
 #include <time.h>
 #include "serial_comm/serial_comm.h"
 #include "arena_control.h"
-#include "arena_misc.h"
+#include "arena_feedback.h"
 #include "arena_utils.h"
 
-int serial_port;
 FILE *datafile;
 
 int calcing = 0;
@@ -20,6 +19,7 @@ double center_x = -1, center_y = -1;
 long arena_initialize( void )
 {
   char cmd[8], timestring[64], filename[64];
+  int serial_port;
   long errval;
 
   /* seed random number generator with current time */
@@ -27,7 +27,7 @@ long arena_initialize( void )
 
   /* open data file */
   fill_time_string( timestring );
-  sprintf( filename, "%sfly%s.dat", _ARENA_MISC_data_prefix_, timestring );
+  sprintf( filename, "%sfly%s.dat", _ARENA_CONTROL_data_prefix_, timestring );
   datafile = fopen( filename, "w" );
   if( datafile == 0 )
   {
@@ -85,6 +85,7 @@ long arena_initialize( void )
 void arena_finish( void )
 {
   char cmd[8];
+  int serial_port;
 
   if( datafile == 0 ) return;
 
@@ -117,9 +118,10 @@ void arena_finish( void )
 long rotation_calculation_init( void )
 {
   long errval;
+  int serial_port;
   char cmd[8];
 
-  if( calcing ) return;
+  if( calcing ) return 0.0;
 
   /* open serial port */
   errval = sc_open_port( &serial_port, SC_COMM_PORT );
@@ -173,6 +175,7 @@ long rotation_calculation_init( void )
 void rotation_calculation_finish( double new_x_cent, double new_y_cent )
 {
   long errval;
+  int serial_port;
   char cmd[8];
 
   /* open serial port */
@@ -224,14 +227,6 @@ void rotation_update( void )
 #endif
 }
 
-int get_random_set( int cur_set, int n_sets )
-{
-  int r = cur_set;
-  while( r == cur_set )
-    r = rand() % n_sets;
-  return r;
-}
-
 /****************************************************************
 ** update *******************************************************
 ****************************************************************/
@@ -243,34 +238,11 @@ void arena_update( double x, double y, double orientation,
 /* framenumber since beginning of data collection (not zero first time this function is called) */
 {
   int new_pos_x, new_pos_y;
-  char cmd[8];
-  static double new_pos_x_f = 0.0, new_pos_y_f = 0.0;
-  static double first_time = 0.0;
-  static double avg_frametime = 0.0;
-  static int ncalls = 0;
-  long errval;
-
-  static int exp_flag = 0;
+  double new_pos_x_f, new_pos_y_f;
   double theta_exp;
-
-  /* experimental variables */
-  static int set_time = 0.0;
-  const double n_seconds_per_set = 10.0;
-  const int n_sets = 4;
-  /* positive is clockwise in arena */
-  static int cur_set = -1;
-  static int expanding = 0;
-  const double expansion_rate = 1000.0; /* deg/sec */
-
-  double use_orientation;
-  double use_pos_x;
+  double out1, out2, out3;
 
   if( calcing ) return;
-
-  if( first_time == 0.0 )
-  {
-    first_time = set_time = timestamp;
-  }
 
   /* disambiguate fly's orientation using position data */
   theta_exp = disambiguate( x, y, center_x, center_y );
@@ -278,94 +250,9 @@ void arena_update( double x, double y, double orientation,
   while( orientation < theta_exp - PI/4 ) orientation += PI/2;
   while( orientation >= theta_exp + PI/4 ) orientation -= PI/2;
 
-  /* debug calibration during first set */
-  if( cur_set < 0 )
-  {
-    new_pos_x_f = orientation * RAD2PIX;
-    ncalls++;
-  }
-
-  /* update experimental variables */
-  if( timestamp > set_time + n_seconds_per_set )
-  {
-    if( cur_set < 0 )
-    {
-      avg_frametime = (timestamp - set_time) / ncalls;
-      printf( "__avg frametime %.2lf ms (%.2f Hz)\n", avg_frametime*1000.0, 1/avg_frametime );
-    }
-    new_pos_y_f = 0.0;
-    cur_set = get_random_set( cur_set, n_sets );
-    expanding = 0;
-    set_time = timestamp;
-
-    printf( "__current experiment: set %d\n", cur_set );
-    if( timestamp > first_time + 15.0*60.0 && !exp_flag )
-    {
-      printf( "__15 minutes\n" );
-      exp_flag = 1;
-    }
-
-    /* open serial port */
-    errval = sc_open_port( &serial_port, SC_COMM_PORT );
-    if( errval != 0 ) printf( "**failed opening serial port!\n" );
-
-    /* set new pattern number */
-    cmd[0] = 2; cmd[1] = 3; cmd[2] = cur_set + 2;
-    sc_send_cmd( &serial_port, cmd, 3 );
-
-    /* set position within pattern */
-/*    cmd[0] = 3; cmd[1] = 112; cmd[2] = new_pos_x; cmd[3] = new_pos_y;
-    sc_send_cmd( &serial_port, cmd, 4 ); */
-
-    /* start pattern */
-/*    cmd[0] = 1; cmd[2] = 32;
-    sc_send_cmd( &serial_port, cmd, 2 ); */
-
-    /* close serial port */
-    sc_close_port( &serial_port );
-  }
-  else if( cur_set >= 0 )
-  {
-    switch( expanding )
-    {
-      case 0:
-        /* assume avg_frametime seconds between this frame and the next one */
-        /* deg/sec * sec * pixels/deg = pixels */
-        new_pos_y_f += expansion_rate * avg_frametime * DEG2PIX;
-        /* assuming one-pixel expansion per pattern y shift */
-        /* patterns expand a total of 78.75 deg (in each of x and y), so at 100 Hz
-           and expanding at 1 patt per frame, expansion is 984.375 deg/sec */
-
-        if( new_pos_y_f >= (double)PATTERN_DEPTH - 0.5 ) /* stop expanding */
-        {
-          new_pos_y_f = (double)PATTERN_DEPTH - 1;
-          expanding = 1;
-        }
-      break;
-      case 1:
-        if( timestamp > set_time + n_seconds_per_set/2  ) /* contraction time */
-        {
-          new_pos_y_f -= expansion_rate * avg_frametime * DEG2PIX;
-          if( new_pos_y_f < 0.5 ) /* stop contracting */
-          {
-            new_pos_y_f = 0.0;
-            expanding = 2;
-          }
-        }
-      break;
-      case 2:
-        /* gently try to get square in front of fly */
-        use_orientation = orientation;
-        use_pos_x = new_pos_x_f / RAD2PIX; /* in radians */
-        if( fabs( use_orientation - use_pos_x ) > PI ) /* unwrap */
-          if( use_orientation < use_pos_x ) use_orientation += 2*PI;
-          else use_pos_x += 2*PI;
-        if( fabs( use_orientation - use_pos_x ) > PI/2 ) /* adjust x pos */
-          if( use_orientation < use_pos_x ) new_pos_x_f -= 0.1;
-          else new_pos_x_f += 0.1; /* gently! */
-      break;
-    } /* switch */
-  } /* if */
+  /* find correct pattern position given current state */
+  set_patt_position( orientation, timestamp, framenumber, &new_pos_x_f, 
+    &new_pos_y_f, &out1, &out2, &out3 );
 
   /* set pattern position */
   round_position( &new_pos_x, &new_pos_x_f, &new_pos_y, &new_pos_y_f );
@@ -376,7 +263,6 @@ void arena_update( double x, double y, double orientation,
      but that's not the way it was designed */
 
   /* write data to file */
-  fprintf( datafile, "%ld\t%.4lf\t%.4lf\t%.4lf\t%.4lf\t%d\t%d\t%lf\t%d\t%d\n",
-  framenumber, timestamp, x, y, orientation, new_pos_x, new_pos_y,
-  expansion_rate, cur_set, cur_set+2 );
+  fprintf( datafile, "%ld\t%.4lf\t%.4lf\t%.4lf\t%.4lf\t%d\t%d\t%lf\t%lf\t%lf\n",
+  framenumber, timestamp, x, y, orientation, new_pos_x, new_pos_y, out1, out2, out3 );
 }

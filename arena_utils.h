@@ -1,6 +1,8 @@
 #ifndef _flydra_ARENA_UTILS_h_
 #define _flydra_ARENA_UTILS_h_
 
+#define _ARENA_CONTROL_data_prefix_ "/home/jbender/data/"
+
 #define PI 3.14159265358979
 #define DIST( x1,y1, x2,y2 ) sqrt( (x2-x1)*(x2-x1) + (y2-y1)*(y2-y1) )
 #define YES 1
@@ -49,12 +51,20 @@
 #define cdi_RANGE (cdi_MAX-cdi_MIN)
 #define cdi_AREF AREF_GROUND
 
+/* some utility functions */
+void fill_time_string( char string[] );
 void unwrap( double *th1, double *th2 );
 double disambiguate( double x, double y, double center_x, double center_y );
 void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f );
 
+/* interface to analog output */
 void init_analog_output( void );
 void finish_analog_output( void );
 void set_position_analog( int pos_x, int pos_y );
+
+/* save data points for nframes, then calculate center of rotation from those data points */
+void start_center_calculation( int nframes );
+void end_center_calculation( double *x_center, double *y_center );
+void update_center_calculation( double new_x_pos, double new_y_pos, double new_orientation );
 
 #endif
