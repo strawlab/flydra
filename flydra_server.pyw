@@ -100,9 +100,11 @@ class CameraServlet( Pyro.core.ObjBase ):
         self.dyn_canv = self.parent.cam_image_canvas
         self.my_id = id(self)
 
-    def disconnect_camera(self, event):
-        self.updates['quit']=True
-        self.parent.close_servlet(self)
+##    def disconnect_camera(self, event):
+##        print 'disconnecting'
+##        self.updates['quit']=True
+##        self.parent.close_servlet(self)
+##        print 'disconnected'
 
     def init_gui(self):
         """build GUI"""
@@ -127,7 +129,8 @@ class CameraServlet( Pyro.core.ObjBase ):
         cam_info_label.SetLabel(cam_id_string)
 
         quit_camera = XRCCTRL(self.camPanel,"quit_camera") # get container
-        EVT_BUTTON(quit_camera, quit_camera.GetId(), self.disconnect_camera)
+#        EVT_BUTTON(quit_camera, quit_camera.GetId(), self.disconnect_camera)
+        EVT_BUTTON(quit_camera, quit_camera.GetId(), self.close)
         
         per_cam_controls_panel = XRCCTRL(self.camPanel,"PerCameraControlsContainer") # get container
         box = wxBoxSizer(wxVERTICAL)
@@ -159,8 +162,10 @@ class CameraServlet( Pyro.core.ObjBase ):
         per_cam_controls_panel.SetSizer(box)
         self.my_container.Layout()
 
-    def close(self):
+    def close(self, dummy_event=None):
         self.dyn_canv.delete_image(self.my_id)
+        self.updates['quit']=True
+        self.parent.close_servlet(self)
         if hasattr(self,'camPanel'):
             self.camPanel.DestroyChildren()
             self.camPanel.Destroy()
@@ -241,8 +246,8 @@ class App(wxApp):
         self.frame.SetFocus()
 
 def main():
-    app = App(redirect=1,filename='flydra_log.txt')
-    #app = App()
+    #app = App(redirect=1,filename='flydra_log.txt')
+    app = App()
     app.MainLoop()
 
 if __name__ == '__main__':
