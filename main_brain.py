@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import generators # for Python 2.2
 import sys
 import threading
 import time
@@ -9,8 +10,6 @@ import Pyro.core
 import DynamicImageCanvas
 
 from UserDict import UserDict
-if sys.version < '2.3':
-    from __future__ import generators
 
 Pyro.config.PYRO_MULTITHREADED = 0 # No multithreading!
 
