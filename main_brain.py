@@ -153,6 +153,7 @@ class MainBrain:
                                      'fps':None,    # most recept fps from cam
                                      'caller':caller,    # most recept fps from cam
                                      'scalar_control_info':scalar_control_info,
+                                     'fqdn':fqdn,
                                      }
             self.no_cams_connected.clear()
             
@@ -201,6 +202,7 @@ class MainBrain:
             print 'bye to',cam_id
 
     def __init__(self):
+        #Pyro.core.initClient(banner=0)
         Pyro.core.initServer(banner=0)
         try:
             hostname = socket.gethostbyname('flydra-server')
@@ -213,6 +215,7 @@ class MainBrain:
         daemon = Pyro.core.Daemon(host=hostname,port=port)
         remote_api = MainBrain.RemoteAPI(); remote_api.post_init()
         URI=daemon.connect(remote_api,'main_brain')
+        print 'serving',URI,'at',time.time(),'(main_brain)'
 
         # create (but don't start) listen thread
         self.listen_thread=threading.Thread(target=remote_api.listen,
@@ -222,6 +225,25 @@ class MainBrain:
 
         self._new_camera_functions = []
         self._old_camera_functions = []
+
+        self.camera_server = {} # dict of Pyro servers for each camera
+        self.set_new_camera_callback(self.AddCameraServer)
+        self.set_old_camera_callback(self.RemoveCameraServer)
+
+    def AddCameraServer(self, cam_id, scalar_control_info):
+        fqdn = self.remote_api.cam_info[cam_id]['fqdn'] # crosses thread boundary?
+        port = 9834
+        name = 'camera_server'
+        
+        camera_server_URI = "PYROLOC://%s:%d/%s" % (fqdn,port,name)
+        print 'resolving',camera_server_URI,'at',time.time()
+        camera_server = Pyro.core.getProxyForURI(camera_server_URI)
+        print 'found'
+        camera_server._setOneway(['ouch'])
+        self.camera_server[cam_id] = camera_server
+    
+    def RemoveCameraServer(self, cam_id):
+        del self.camera_server[cam_id]
 
     def start_listening(self):
         # start listen thread
@@ -278,6 +300,9 @@ class MainBrain:
 
     def close_camera(self,cam_id):
         self.send_commands(cam_id,{'quit':True})
+
+    def ouch_camera(self,cam_id):
+        self.camera_server[cam_id].ouch()
 
     def quit(self):
         # this may be called twice: once explicitly and once by __del__
@@ -423,6 +448,10 @@ class App(wxApp):
 
         XRCCTRL(camPanel,'cam_info_label').SetLabel('camera %s'%(cam_id))
         
+        ouch_camera = XRCCTRL(camPanel,"ouch_button") # get container
+        EVT_BUTTON(ouch_camera, ouch_camera.GetId(), self.OnOuchCamera)
+        self.wx_id_2_cam_id.update( {ouch_camera.GetId():cam_id} )
+        
         quit_camera = XRCCTRL(camPanel,"quit_camera") # get container
         EVT_BUTTON(quit_camera, quit_camera.GetId(), self.OnCloseCamera)
         self.wx_id_2_cam_id.update( {quit_camera.GetId():cam_id} )
@@ -478,6 +507,10 @@ class App(wxApp):
     def OnCloseCamera(self, event):
         cam_id = self.wx_id_2_cam_id[event.GetId()]
         self.main_brain.close_camera(cam_id) # eventually calls OnOldCamera
+    
+    def OnOuchCamera(self, event):
+        cam_id = self.wx_id_2_cam_id[event.GetId()]
+        self.main_brain.ouch_camera(cam_id)
     
     def OnOldCamera(self, cam_id):
         print 'a camera was unregistered:',cam_id

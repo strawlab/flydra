@@ -39,6 +39,43 @@ def grab_func(cam,quit_now,thread_done,incoming_frames_lock):
     finally:
         thread_done.set()
 
+class FromMainBrainAPI( Pyro.core.ObjBase ):
+
+    # ----------------------------------------------------------------
+    #
+    # Methods called locally
+    #
+    # ----------------------------------------------------------------
+    
+    def post_init(self):
+        # threading control locks
+        self.quit_now = threading.Event()
+        self.thread_done = threading.Event()
+
+    def listen(self,daemon):
+        """thread mainloop"""
+        quit_now_isSet = self.quit_now.isSet
+        hr = daemon.handleRequests
+        while not quit_now_isSet():
+            hr(0.1) # block on select for n seconds
+        self.thread_done.set()
+
+    def quit_listening(self):
+        self.quit_now.set()
+        self.thread_done.wait()
+        
+    # ----------------------------------------------------------------
+    #
+    # Methods called remotely from cameras
+    #
+    # These all get called in their own thread.  Don't call across
+    # the thread boundary without using locks.
+    #
+    # ----------------------------------------------------------------
+
+    def ouch(self):
+        print 'ouch'
+           
 def main():
     global incoming_frames
 
@@ -48,21 +85,45 @@ def main():
     
     grabbed_frames = []
 
-    # open network stuff
-    Pyro.core.initClient(banner=0)
-    # where is the server
+    # open network stuff ###########################
+    # myself as a server
+    Pyro.core.initServer(banner=0)
+    hostname = socket.gethostbyname(socket.gethostname())
+    fqdn = socket.getfqdn(hostname)
+    port = 9834
+    
+    # start Pyro server
+    daemon = Pyro.core.Daemon(host=hostname,port=port)
+    from_main_brain_api = FromMainBrainAPI(); from_main_brain_api.post_init()
+    URI=daemon.connect(from_main_brain_api,'camera_server')
+    print 'serving',URI,'at',time.time(),'(camera_server)'
+    
+    # create and start listen thread
+    listen_thread=threading.Thread(target=from_main_brain_api.listen,
+                                   args=(daemon,))
+    listen_thread.start()
+        
+    # myself as a client
+    #Pyro.core.initClient(banner=0)
+    # where is the "main brain" server?
     try:
-        hostname = socket.gethostbyname('flydra-server')
+        main_brain_hostname = socket.gethostbyname('flydra-server')
     except:
         # try localhost
-        hostname = socket.gethostbyname(socket.gethostname())
+        main_brain_hostname = socket.gethostbyname(socket.gethostname())
     port = 9833
     name = 'main_brain'
     
-    main_brain_URI = "PYROLOC://%s:%d/%s" % (hostname,port,name)
+    main_brain_URI = "PYROLOC://%s:%d/%s" % (main_brain_hostname,port,name)
     print 'searching for',main_brain_URI
     main_brain = Pyro.core.getProxyForURI(main_brain_URI)
     print 'found'
+
+    # ----------------------------------------------------------------
+    #
+    # Setup cameras
+    #
+    # ----------------------------------------------------------------
 
     for device_number in range(cam_iface.cam_iface_get_num_cameras()):
         try:
@@ -78,7 +139,12 @@ def main():
     
     cam.start_camera()
 
-    # build scalar_control_info dict
+    # ----------------------------------------------------------------
+    #
+    # inform brain that we're connected before starting camera thread
+    #
+    # ----------------------------------------------------------------
+
     scalar_control_info = {}
     for name, enum_val in CAM_CONTROLS.items():
         current_value = cam.get_camera_property(enum_val)[0]
@@ -87,19 +153,25 @@ def main():
         max_value = tmp[2]
         scalar_control_info[name] = (current_value, min_value, max_value)
 
-    hostname = socket.gethostbyname(socket.gethostname())
     driver = cam_iface.cam_iface_get_driver_name()
 
-    # inform brain that we're connected before starting camera thread
     cam_id = main_brain.register_new_camera(scalar_control_info)
     main_brain._setOneway(['set_image','set_fps','close'])
-    
+
+    # ----------------------------------------------------------------
+    #
     # start camera thread
+    #
+    # ----------------------------------------------------------------
+    
     thread_done = threading.Event()
     quit_now = threading.Event()
     incoming_frames_lock = threading.Lock()
     grab_thread=threading.Thread(target=grab_func,
-                                 args=(cam,quit_now,thread_done,incoming_frames_lock))
+                                 args=(cam,
+                                       quit_now,
+                                       thread_done,
+                                       incoming_frames_lock))
     grab_thread.start()
 
     last_measurement_time = time.time()
@@ -126,8 +198,6 @@ def main():
                     grabbed_frames.extend( incoming_frames )
                     incoming_frames = []
                     incoming_frames_lock.release()
-##                    sys.stdout.write('y')
-##                    sys.stdout.flush()
 
                 # send most recent image
                 if len(grabbed_frames):
@@ -159,6 +229,9 @@ def main():
             thread_done.wait() # block until thread is done...
             print 'telling main_brain to close cam_id'
             main_brain.close(cam_id)
+            print 'closed connection to main_brain server'
+            print 'closing camera_server'
+            from_main_brain_api.quit_listening()
             print 'quitting'
     except Pyro.errors.ConnectionClosedError:
         print 'unexpected connection closure...'
