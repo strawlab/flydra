@@ -95,18 +95,11 @@ cdef class GrabClass:
         # start of IPP-requiring code
         cdef int index_x,index_y
 #        cdef ipp.Ipp32f max_val, std_val
-        cdef ipp.Ipp8u max_val, std_val
+        cdef ipp.Ipp8u max_val
         cdef int im1_step, im2_step, sum_image_step, bg_img_step
         cdef int mean_image_step, std_image_step, sq_image_step, std_img_step
-        cdef int centroid_search_radius
         cdef int n_bg_samples
         cdef int n_rot_samples
-        cdef ipp.Ipp32f alpha
-        
-        cdef int w,h
-        
-        cdef ipp.Ipp32f v32f
-        cdef ipp.Ipp8u  v8u
         
         cdef ipp.Ipp8u *im1, *im2 # current image
         cdef ipp.Ipp8u *bg_img, *std_img  # 8-bit background
@@ -122,8 +115,6 @@ cdef class GrabClass:
 ##        COORD_PORT = None
         n_bg_samples = 100
         n_rot_samples = 100*60 # 1 minute
-        centroid_search_radius = 50
-        alpha = 1.0/n_bg_samples
         
         # questionable optimization: speed up by eliminating namespace lookups
         
