@@ -126,7 +126,7 @@ class GrabClass(object):
         coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         old_ts = time.time()
         old_fn = 0
-        n_rot_samples = 101*1 # 1 minute
+        n_rot_samples = 101*60 # 1 minute
         points = []
         try:
             while not cam_quit_event_isSet():

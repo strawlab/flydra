@@ -1,41 +1,11 @@
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "serial_comm/serial_comm.h"
 #include "c_fit_params.h"
 #include "arena_control.h"
-
-#define PI 3.14159265358979
-#define DIST( x1,y1, x2,y2 ) sqrt( (x2-x1)*(x2-x1) + (y2-y1)*(y2-y1) )
-#define YES 1
-#define NO 0
-
-#define CLOSED_LOOP 0
-#define OPEN_LOOP 1
-#define ARENA_CONTROL CLOSED_LOOP
-
-#undef ARENA_PATTERN
-#if ARENA_CONTROL == OPEN_LOOP
-  #define ARENA_PATTERN 1
-  /* pattern starting index is 1 */
-  #define BIAS_AVAILABLE NO
-  #if BIAS_AVAILABLE == YES
-    /* gain,bias as percentages, in 2s complement (x=x; -x=256-x) */
-    #define PATTERN_BIAS_X 226
-    #define PATTERN_BIAS_Y 15
-  #endif
-#elif ARENA_CONTROL == CLOSED_LOOP
-  #define ARENA_PATTERN 1
-#endif
-/* else won't compile! */
-
-#define NPIXELS_PER_PANEL 8
-#define NPANELS_CIRCUMFERENCE 8
-#define NPIXELS (NPIXELS_PER_PANEL*NPANELS_CIRCUMFERENCE)
-#if BIAS_AVAILABLE == NO
-  #define PATTERN_DEPTH 8
-#endif
+#include "arena_utils.h"
 
 int serial_port;
 int is_port_open = 0;
@@ -44,106 +14,15 @@ FILE *datafile;
 double center_x = -1, center_y = -1;
 
 /****************************************************************
-** unwrap *******************************************************
-****************************************************************/
-void unwrap( double *th1, double *th2 )
-{
-  /* make both positive */
-  while( *th1 < 0 ) *th1 += 2*PI;
-  while( *th2 < 0 ) *th2 += 2*PI;
-
-  /* force th1 and th2 to be no more than PI apart */
-  if( *th1 - *th2 > PI ) *th2 += 2*PI;
-  else if( *th2 - *th1 > PI ) *th1 += 2*PI;
-}
-
-/****************************************************************
-** disambiguate *************************************************
-****************************************************************/
-double disambiguate( double x, double y )
-/* orientation is returned with a 90-degree ambiguity from c_fit_params() */
-{
-  double theta1, theta2, theta3, theta4, theta5, theta6, theta7, theta8;
-  double th_dist12, th_dist34, th_dist56, th_dist78;
-  double theta_f;
-
-  /* find expected angle given center of mass */
-  /* x = r*cos(t); y = r*sin(t) */
-  theta1 = acos( (x - center_x) / DIST( x,y, center_x,center_y ) );
-  theta2 = asin( (y - center_y) / DIST( x,y, center_x,center_y ) );
-  unwrap( &theta1, &theta2 );
-  th_dist12 = fabs( theta1 - theta2 );
-
-  /* try different symmetries -- acos and asin are ambiguous, too */
-  theta3 = 2*PI - theta1;
-  theta4 = theta2;
-  unwrap( &theta3, &theta4 );
-  th_dist34 = fabs( theta3 - theta4 );
-
-  theta5 = theta1;
-  theta6 = PI - theta2;
-  unwrap( &theta5, &theta6 );
-  th_dist56 = fabs( theta5 - theta6 );
-
-  theta7 = 2*PI - theta1;
-  theta8 = PI - theta2;
-  unwrap( &theta7, &theta8 );
-  th_dist78 = fabs( theta7 - theta8 );
-
-  /* average the best two possibilities */
-  if( th_dist12 <= th_dist34 && th_dist12 <= th_dist56 && th_dist12 <= th_dist78 )
-    theta_f = (theta1 + theta2) / 2;
-  else if( th_dist34 <= th_dist56 && th_dist34 <= th_dist78 )
-    theta_f = (theta3 + theta4) / 2;
-  else if( th_dist56 < th_dist78 )
-    theta_f = (theta5 + theta6) / 2;
-  else theta_f = (theta7 + theta8) / 2;
-
-  while( theta_f < 0 ) theta_f += 2*PI;
-  while( theta_f >= 2*PI ) theta_f -= 2*PI;
-
-  return theta_f;
-}
-
-/****************************************************************
-** round_position ***********************************************
-****************************************************************/
-void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f )
-{
-  *pos_x = *pos_x_f - (int)*pos_x_f >= 0.5? (int)*pos_x_f+1 : (int)*pos_x_f;
-  while( *pos_x > NPIXELS )
-  {
-    *pos_x -= NPIXELS;
-    *pos_x_f -= (double)NPIXELS;
-  }
-  while( *pos_x < 0 )
-  {
-    *pos_x += NPIXELS;
-    *pos_x_f += (double)NPIXELS;
-  }
-  *pos_x = *pos_x_f - (int)*pos_x_f >= 0.5? (int)*pos_x_f+1 : (int)*pos_x_f;
-
-  *pos_y = *pos_y_f - (int)*pos_y_f >= 0.5? (int)*pos_y_f+1 : (int)*pos_y_f;
-  while( *pos_y >= PATTERN_DEPTH )
-  {
-    *pos_y -= PATTERN_DEPTH;
-    *pos_y_f -= (double)PATTERN_DEPTH;
-  }
-  while( *pos_y < 0 )
-  {
-    *pos_y += PATTERN_DEPTH;
-    *pos_y_f += (double)PATTERN_DEPTH;
-  }
-  *pos_y = *pos_y_f - (int)*pos_y_f >= 0.5? (int)*pos_y_f+1 : (int)*pos_y_f;
-}
-
-/****************************************************************
 ** initialize ***************************************************
 ****************************************************************/
 long arena_initialize( void )
 {
   char cmd[8], timestring[64], filename[64];
   long errval;
+
+  /* seed random number generator with current time */
+  srand( time( NULL ) );
 
   /* open data file */
   fill_time_string( timestring );
@@ -183,7 +62,7 @@ long arena_initialize( void )
   }
 
   /* set initial position within pattern */
-  cmd[0] = 3; cmd[1] = 112; cmd[2] = 0; cmd[3] = 0;
+  cmd[0] = 3; cmd[1] = 112; cmd[2] = 0; cmd[3] = PATTERN_DEPTH-1;
   sc_send_cmd( &serial_port, cmd, 4 );
 
 #if ARENA_CONTROL == OPEN_LOOP && BIAS_AVAILABLE == YES
@@ -211,6 +90,8 @@ long arena_initialize( void )
 void arena_finish( void )
 {
   char cmd[8];
+
+  if( datafile == 0 ) return;
 
   fclose( datafile );
 
@@ -255,8 +136,8 @@ long rotation_calculation_init( void )
     is_port_open = 1;
   }
 
-  /* set pattern id to 1 -- rotation of exp/cont poles */
-  cmd[0] = 2; cmd[1] = 3; cmd[2] = 1;
+  /* set pattern id to rotation of exp/cont poles */
+  cmd[0] = 2; cmd[1] = 3; cmd[2] = CALIBRATION_PATTERN;
   errval = sc_send_cmd( &serial_port, cmd, 3 );
   if( errval != SC_SUCCESS_RC )
   {
@@ -310,8 +191,12 @@ void rotation_calculation_finish( double new_x_cent, double new_y_cent )
 #endif
 
   /* set pattern id to expt. pattern */
-  cmd[0] = 1; cmd[1] = 0;
-  sc_send_cmd( &serial_port, cmd, 2 );
+  cmd[0] = 2; cmd[1] = 3; cmd[2] = ARENA_PATTERN;
+  errval = sc_send_cmd( &serial_port, cmd, 3 );
+
+  /* set initial position within pattern */
+  cmd[0] = 3; cmd[1] = 112; cmd[2] = 0; cmd[3] = PATTERN_DEPTH-1;
+  sc_send_cmd( &serial_port, cmd, 4 );
 
 #if ARENA_CONTROL == OPEN_LOOP && BIAS_AVAILABLE == YES
   /* set gain and bias */
@@ -367,6 +252,14 @@ void rotation_update( void )
 #endif
 }
 
+int get_random_set( int cur_set, int n_sets )
+{
+  int r = cur_set;
+  while( r == cur_set )
+    r = rand() % n_sets;
+  return r;
+}
+
 /****************************************************************
 ** update *******************************************************
 ****************************************************************/
@@ -378,17 +271,19 @@ void arena_update( double x, double y, double orientation,
   static double new_pos_x_f = 0.0, new_pos_y_f = 0.0;
   long errval;
   static int update = 1;
-  static long ncalls = 0;
   static long firstframe = 0;
   static double last_orientation;
   static int exp_flag = 0;
   double theta_exp;
 
   /* experimental variables */
-  const int n_calls_per_set = 101*30; /* 30 sec */
-  const int n_sets = 2;
+  static long ncalls = 0;
+  const int n_calls_per_set = 101* 20; /* 101 Hz * n seconds */
+  const int n_sets = 4;
   /* positive is clockwise in arena */
-  static int cur_set = 0;
+  static int cur_set = -1;
+  static int expanding = 0;
+  const double expansion_rate = 0.25; /* y pos step per frame */
 
   if( firstframe == 0 )
   {
@@ -397,37 +292,61 @@ void arena_update( double x, double y, double orientation,
   }
 
   /* disambiguate fly's orientation using position data */
-  theta_exp = disambiguate( x, y );
+  theta_exp = disambiguate( x, y, center_x, center_y );
   /* change to best match expected angle */
   while( orientation < theta_exp - PI/4 ) orientation += PI/2;
   while( orientation >= theta_exp + PI/4 ) orientation -= PI/2;
 
-  if( cur_set == 0 ) /* vis open loop */
-    new_pos_x_f += (orientation - last_orientation) * NPIXELS/(2*PI);
-  /* else do nothing -- vis closed loop */
-  new_pos_y_f = 0.0;
-  round_position( &new_pos_x, &new_pos_x_f, &new_pos_y, &new_pos_y_f );
+  /* debug calibration during first set */
+  if( cur_set < 0 )
+    new_pos_x_f += orientation * NPIXELS/(2*PI);
 
   /* update experimental variables */
   ncalls++;
-  if( ncalls > (cur_set + 1)*n_calls_per_set )
+  if( ncalls > n_calls_per_set )
   {
-    cur_set++;
-    if( cur_set >= n_sets )
-    {
-      cur_set = 0;
-      ncalls = 0;
-    }
+    if( cur_set < 0 ) new_pos_y_f = 0.0;
+    cur_set = get_random_set( cur_set, n_sets );
+    expanding = 0;
+    ncalls = 0;
+
     printf( "__current experiment: set %d\n", cur_set );
     if( framenumber > firstframe + 101*60*15 && !exp_flag )
     {
       printf( "__15 minutes\n" );
       exp_flag = 1;
     }
-    /* set pattern number again for robustness' sake */
-    cmd[0] = 2; cmd[1] = 3; cmd[2] = ARENA_PATTERN;
+
+    /* set new pattern number */
+    if( !is_port_open )
+    {
+      printf( "**found serial port closed!\n" );
+      errval = sc_open_port( &serial_port, SC_COMM_PORT );
+      if( errval == 0 ) is_port_open = 1;
+      else printf( "**failed opening serial port!\n" );
+    }
+    cmd[0] = 2; cmd[1] = 3; cmd[2] = cur_set + 2;
     if( is_port_open ) sc_send_cmd( &serial_port, cmd, 3 );
   }
+  else if( cur_set >= 0 && ncalls > n_calls_per_set/2 )
+      /* halfway through set, time to expand square! */
+  {
+    if( expanding == 0 ) expanding = 1;
+    else if( expanding == 1 )
+    {
+      new_pos_y_f += expansion_rate;
+      if( new_pos_y_f >= (double)PATTERN_DEPTH - 0.5 ) /* stop expanding! */
+      {
+        new_pos_y_f = 0.0;
+        expanding = 2;
+      }
+    }
+    else if( expanding == 2 ) /* post-expansion x movement */
+    {
+    }
+  }
+
+  round_position( &new_pos_x, &new_pos_x_f, &new_pos_y, &new_pos_y_f );
 
 #if ARENA_CONTROL == CLOSED_LOOP || BIAS_AVAILABLE == NO
   /* ensure serial port is open */
@@ -449,7 +368,7 @@ void arena_update( double x, double y, double orientation,
 #endif
 
   /* write data to file */
-  fprintf( datafile, "%ld\t%.4lf\t%.4lf\t%.4lf\t%.4lf\t%d\t%d\t%ld\t%d\t%.4lf\n",
+  fprintf( datafile, "%ld\t%.4lf\t%.4lf\t%.4lf\t%.4lf\t%d\t%d\t%ld\t%d\t%d\n",
   framenumber, timestamp, x, y, orientation, new_pos_x, new_pos_y,
-  ncalls, cur_set, cur_set );
+  ncalls, cur_set, cur_set+1 );
 }
