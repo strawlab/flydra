@@ -300,6 +300,8 @@ cdef extern from "ippi.h":
                                        IppiSize roiSize, Ipp8u threshold)
     IppStatus ippiThreshold_LT_32f_C1IR(Ipp32f* pSrcDst, int srcDstStep,
                                         IppiSize roiSize, Ipp32f threshold)
+    IppStatus ippiThreshold_Val_8u_C1IR(Ipp8u* pSrcDst, int srcDstStep,
+                                        IppiSize roiSize, Ipp8u threshold, Ipp8u value, IppCmpOp ippCmpOp)
     IppStatus ippiMin_8u_C1R(Ipp8u* pSrc, int srcStep, IppiSize roiSize, Ipp8u* pMin)
     IppStatus ippiMin_32f_C1R(Ipp32f* pSrc, int srcStep, IppiSize roiSize, Ipp32f* pMin)
     IppStatus ippiMax_8u_C1R(Ipp8u* pSrc, int srcStep, IppiSize roiSize, Ipp8u* pMax)
