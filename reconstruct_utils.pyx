@@ -114,8 +114,7 @@ def find_best_3d( object recon, object d2,
     cdef double alpha
     cdef double x, y, orig_x, orig_y, new_x, new_y
     cdef double dist, mean_dist, least_err
-    
-    least_err_by_n_cameras = {}
+
     cam_ids = recon.cam_ids # shorthand
     max_n_cams = len(cam_ids)
     allA = fast_nx.zeros( (2*max_n_cams,4),'d')
@@ -152,48 +151,55 @@ def find_best_3d( object recon, object d2,
     least_err_by_n_cameras = {}
     cam_ids_for_least_err = {}
     X_for_least_err = {}
-    for cam_ids_used in recon.cam_combinations:
-        missing_cam_data = 0 #False
-        good_A_idx = []
-        for cam_id in cam_ids_used:
-            if cam_id in bad_cam_ids:
-                missing_cam_data = 1 #True
-                break
-            else:
-                i = cam_id2idx[cam_id]
-                good_A_idx.extend( (i*2, i*2+1) )
-        if missing_cam_data == 1:
-            continue
-        A = fast_nx.take(allA,good_A_idx)
-        #print cam_ids_used
-        #print A
-        #print
-        n_cams = len(cam_ids_used)
-        u,d,vt=fast_svd(A)
-        X = vt[-1,:]/vt[-1,3] # normalize
-
-        mean_dist = 0.0
-        n_cams = len(cam_ids_used)
+    n_cams_list = recon.cam_combinations_by_size.keys()
+    n_cams_list.sort()
+    for n_cams in n_cams_list:
         alpha = 1.0/n_cams
-        for cam_id in cam_ids_used:
-            orig_x,orig_y = all2d[cam_id]
-            Pmat = Pmat_fastnx[cam_id]
-            new_xyw = fast_nx.matrixmultiply( Pmat, X )
-            new_x, new_y = new_xyw[0:2]/new_xyw[2]
 
-            dist = sqrt((orig_x-new_x)**2 + (orig_y-new_y)**2)
-            mean_dist = mean_dist + dist*alpha
+        # can we short-circuit the rest of these computations?
+        if least_err_by_n_cameras.has_key(n_cams-2):
+            if least_err_by_n_cameras[n_cams-1] > acceptable_distance_pixels:
+                break
+            
+        for cam_ids_used in recon.cam_combinations_by_size[n_cams]:
+            missing_cam_data = 0 #False
+            good_A_idx = []
+            for cam_id in cam_ids_used:
+                if cam_id in bad_cam_ids:
+                    missing_cam_data = 1 #True
+                    break
+                else:
+                    i = cam_id2idx[cam_id]
+                    good_A_idx.extend( (i*2, i*2+1) )
+            if missing_cam_data == 1:
+                continue
+            A = fast_nx.take(allA,good_A_idx)
+            #print cam_ids_used
+            #print A
+            #print
+            u,d,vt=fast_svd(A)
+            X = vt[-1,:]/vt[-1,3] # normalize
 
-        least_err = least_err_by_n_cameras.get(n_cams,1e16)
-        if mean_dist < least_err:
-            least_err_by_n_cameras[n_cams] = mean_dist
-            cam_ids_for_least_err[n_cams] = cam_ids_used
-            X_for_least_err[n_cams] = X[:3]
+            mean_dist = 0.0
+            for cam_id in cam_ids_used:
+                orig_x,orig_y = all2d[cam_id]
+                Pmat = Pmat_fastnx[cam_id]
+                new_xyw = fast_nx.matrixmultiply( Pmat, X )
+                new_x, new_y = new_xyw[0:2]/new_xyw[2]
+
+                dist = sqrt((orig_x-new_x)**2 + (orig_y-new_y)**2)
+                mean_dist = mean_dist + dist*alpha
+
+            least_err = least_err_by_n_cameras.get(n_cams,1e16)
+            if mean_dist < least_err:
+                least_err_by_n_cameras[n_cams] = mean_dist
+                cam_ids_for_least_err[n_cams] = cam_ids_used
+                X_for_least_err[n_cams] = X[:3]
 
     # now we have the best estimate for 2 views, 3 views, ...
     best_n_cams = 2
     least_err = least_err_by_n_cameras[2]
-    for n_cams in range(3,max_n_cams+1):
+    for n_cams from 3 <= n_cams <= max_n_cams+1:
         try:
             least_err = least_err_by_n_cameras[n_cams]
         except KeyError:
