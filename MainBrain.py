@@ -242,6 +242,12 @@ class MainBrain:
     def get_image_sync(self, cam_id):
         return self.camera_server[cam_id].get_most_recent_frame()
 
+    def start_recording(self, cam_id,filename):
+        return self.camera_server[cam_id].start_recording(filename)
+
+    def stop_recording(self, cam_id):
+        return self.camera_server[cam_id].stop_recording()
+
     def quit(self):
         # this may be called twice: once explicitly and once by __del__
         print 'sending quit signal to cameras'
