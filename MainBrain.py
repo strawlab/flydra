@@ -249,7 +249,9 @@ class CoordReceiver(threading.Thread):
         self.all_data_lock.release()
     
     def quit(self):
+        # called from outside of thread to quit the thread
         self.quit_event.set()
+        self.join() # wait until CoordReveiver thread quits
 
     def fake_synchronize(self):
         self._fake_sync_event.set()
@@ -532,7 +534,6 @@ class CoordReceiver(threading.Thread):
                 
                     
             self.all_data_lock.release()
-        print 'quit coord reciever loop'
 ##        tstamp_fd.close()
     
 class MainBrain(object):
@@ -869,7 +870,7 @@ class MainBrain(object):
         self.listen_thread=threading.Thread(target=remote_api.listen,
                                             name='RemoteAPI-Thread',
                                             args=(daemon,))
-
+        self.listen_thread.setDaemon(True) # don't let this thread keep app alive
         self.remote_api = remote_api
 
         self._new_camera_functions = []
@@ -904,7 +905,7 @@ class MainBrain(object):
         self.queue_data3d_best    = Queue.Queue()
 
         self.coord_receiver = CoordReceiver(self)
-        #self.coord_receiver.setDaemon(True)
+        self.coord_receiver.setDaemon(True)
         self.coord_receiver.start()
 
     def IncreaseCamCounter(self,*args):

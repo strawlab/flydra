@@ -29,7 +29,6 @@ import DynamicImageCanvas
 from wxPython.wx import *
 from wxPython.lib.scrolledpanel import wxScrolledPanel
 from wxPython.xrc import *
-import ErrorDialog
 
 RESDIR = os.path.split(os.path.abspath(sys.argv[0]))[0]
 RESFILE = os.path.join(RESDIR,'flydra_server.xrc')
@@ -41,7 +40,7 @@ try:
 except NameError: #wxSound not in some versions of wx
     DETECT_SND = None
 
-class App(wxApp):
+class wxMainBrainApp(wxApp):
     def OnInit(self,*args,**kw):
         wxInitAllImageHandlers()
         frame = wxFrame(None, -1, "Flydra Main Brain",size=(650,600))
@@ -74,6 +73,7 @@ class App(wxApp):
         ID_quit = wxNewId()
         filemenu.Append(ID_quit, "Quit\tCtrl-Q", "Quit application")
         EVT_MENU(self, ID_quit, self.OnQuit)
+        EVT_CLOSE(frame, self.OnWindowClose)
         
         menuBar.Append(filemenu, "&File")
 
@@ -189,7 +189,7 @@ class App(wxApp):
         ID_Timer  = wxNewId() 	         
         self.timer = wxTimer(self,      # object to send the event to 	 
                              ID_Timer)  # event id to use 	 
-        EVT_TIMER(self,  ID_Timer, self.OnIdle)
+        EVT_TIMER(self,  ID_Timer, self.OnTimer)
         self.update_interval=100
         self.timer.Start(self.update_interval) # call every n msec
 ##        EVT_IDLE(self.frame, self.OnIdle)
@@ -867,14 +867,31 @@ class App(wxApp):
                 self.main_brain.stop_calibrating()
                 dlg.Destroy()
 
-    def OnQuit(self, event):
+    def _on_common_quit(self):
         self.timer.Stop()
         self.timer2.Stop()
-      
-        if hasattr(self,'main_brain'):
-            self.main_brain.quit()
-            del self.main_brain
-        #self.frame.Close(True)
+        
+        #for t in threading.enumerate():
+        #    print t
+
+        self.main_brain.quit()
+        del self.main_brain
+
+        #print '-='*20
+        
+        #for t in threading.enumerate():
+        #    print t
+            
+    def OnWindowClose(self, event):
+        #print 'in OnWindowClose'
+        self._on_common_quit()
+        #print 'stopped timers'
+        print "why doesn't the app stop now?"
+        event.Skip()
+
+    def OnQuit(self, event):
+        #print 'in OnQuit'
+        self._on_common_quit()
         self.frame.Destroy()
         print "why doesn't the app stop now??"
 
@@ -883,7 +900,7 @@ class App(wxApp):
             for cam_id in self.cameras.keys():
                 self.main_brain.request_image_async(cam_id)
 
-    def OnIdle(self, event):
+    def OnTimer(self, event):
         if not hasattr(self,'main_brain'):
             return # quitting
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc
@@ -1037,7 +1054,7 @@ class App(wxApp):
 def main():
     # initialize GUI
     #app = App(redirect=1,filename='flydra_log.txt')
-    app = App() 
+    app = wxMainBrainApp(0)
     
     # create main_brain server (not started yet)
     main_brain = MainBrain.MainBrain()
@@ -1050,6 +1067,7 @@ def main():
         app.MainLoop()
         print 'mainloop over'
         del app
+        
     finally:
         # stop main_brain server
         main_brain.quit()
