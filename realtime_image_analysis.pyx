@@ -20,7 +20,6 @@ cimport ipp
 cimport arena_control
 
 cdef extern from "c_fit_params.h":
-
     int fit_params( ipp.IppiMomentState_64f *pState, double *x0, double *y0,
                     double *Mu00,
                     double *Uu11, double *Uu20, double *Uu02,
@@ -354,7 +353,7 @@ cdef class RealtimeAnalyzer:
             found_anything = True
         else:
             found_anything = False
-        return [ (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4) ], found_anything
+        return [ (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4) ], found_anything, orientation # XXX orientation is hack
 
     def get_working_image(self):
         cdef c_numarray._numarray buf
@@ -454,14 +453,10 @@ cdef class RealtimeAnalyzer:
         # end of IPP-requiring code
         return
 
-    def rotation_calculation_init(self):
+    def rotation_calculation_init(self, int n_rot_samples):
         # start of IPP-requiring code
-        cdef int n_rot_samples
-        
-        arena_control.rotation_calculation_init()
-        
-        n_rot_samples = 100*60 # 1 minute
         start_center_calculation( n_rot_samples )
+        arena_control.rotation_calculation_init()
         # end of IPP-requiring code
         return
 

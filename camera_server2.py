@@ -125,6 +125,7 @@ class GrabClass(object):
         coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         old_ts = time.time()
         old_fn = 0
+        n_rot_samples = 101*1 # 1 minute
         points = []
         try:
             while not cam_quit_event_isSet():
@@ -144,7 +145,7 @@ class GrabClass(object):
                 old_ts = timestamp
                 old_fn = framenumber
                 
-                points, found_anything = self.realtime_analyzer.do_work( framebuffer, timestamp, framenumber )
+                points, found_anything, orientation = self.realtime_analyzer.do_work( framebuffer, timestamp, framenumber )
                 raw_image = framebuffer
                 
                 # make appropriate references to our copy of the data
@@ -184,10 +185,12 @@ class GrabClass(object):
                 if find_rotation_center_start_isSet():
                     find_rotation_center_start_clear()
                     rot_frame_number=0
-                    self.realtime_analyzer.rotation_calculation_init()
+                    self.realtime_analyzer.rotation_calculation_init( n_rot_samples )
                     
                 if rot_frame_number>=0:
-                    self.realtime_analyzer.rotation_update()
+                    pt = points[0]
+                    x0, y0 = pt[0],pt[1]
+                    self.realtime_analyzer.rotation_update(x0,y0,orientation)
                     rot_frame_number += 1
                     if rot_frame_number>=n_rot_samples:
                         self.realtime_analyzer.rotation_end()
@@ -252,9 +255,10 @@ class App:
         self.all_grabbers = []
         
         for cam_no in range(self.num_cams):
-            num_buffers = 80
+            num_buffers = 20
             cam = cam_iface.Camera(cam_no,num_buffers)
-            cam.set_trigger_source( 1 ) # external
+            cam.set_trigger_source( 0 ) # internal
+            print 'set trigger internal'
             self.all_cams.append( cam )
 
             height = cam.get_max_height()
@@ -480,8 +484,8 @@ class App:
                         get_raw_frame_nowait = globals['incoming_raw_frames'].get_nowait
                         try:
                             qsize = globals['incoming_raw_frames'].qsize()
-                            if qsize > 30:
-                                print '%s: qsize is %d'%(cam_id,qsize)
+#                            if qsize > 30:
+#                                print '%s: qsize is %d'%(cam_id,qsize)
                             while 1:
                                 frame,timestamp,framenumber,found_anything = get_raw_frame_nowait() # this may raise Queue.Empty
                                 if found_anything and raw_movie is not None:
