@@ -35,6 +35,6 @@ if __name__ == '__main__':
     daemon = Pyro.core.Daemon(host=hostname,port=port)
     frame_server = FrameServer()
     URI=daemon.connect(frame_server,'frame_server')
+    print 'listening on',URI
     while 1:
-        print 'listening on',URI
         daemon.handleRequests(60.0) # block on select
