@@ -1,3 +1,4 @@
+# $Id$
 
 import sys
 # force use of Numeric (numarray bug with SSE2 FPE?)

@@ -1,3 +1,4 @@
+# $Id$
 import threading
 import time
 import socket
@@ -10,7 +11,6 @@ from flydra.reconstruct import Reconstructor
 import struct
 import math
 import numarray as nx
-#import Numeric as nx
 
 import struct
 import math
@@ -92,12 +92,12 @@ def DEBUG():
 class CoordReceiver(threading.Thread):
     def __init__(self,cam_id,main_brain):
         global SAVE_2D_CAMS
-
-	SAVE_2D_CAMS +=1
+        
         self.cam_id = cam_id
         self.hack_cam_no = SAVE_2D_CAMS
+        SAVE_2D_CAMS += 1
         self.main_brain = main_brain
-        self.last_timestamp=0.0
+        self.last_timestamp=-10.0
         self.reconstructor = None
 
         # set up threading stuff
@@ -151,12 +151,20 @@ class CoordReceiver(threading.Thread):
                 points.append( (x,y,slope) )
                 start=end
 
+            now = time.time()
+            latency = now-timestamp
+            print (' '*self.hack_cam_no*10)+('% 11.1f'%( (now*1000.0)%1000.0, ))+(' '*(SAVE_2D_CAMS-self.hack_cam_no)*10),
+            print '% 6.1f'%((timestamp*1000)%1000.0,),
+            print '% 6.1f'%((latency*1000)%1000.0,)
+            
+
             if framenumber==-1:
                 continue # leftover in socket buffer from last run??
             
             if timestamp-self.last_timestamp > RESET_FRAMENUMBER_DURATION:
                 self.framenumber_offset = framenumber
-                print self.cam_id,'synchronized(?)'
+                if self.last_timestamp != -10.0:
+                    print self.cam_id,'synchronized(?)'
             self.last_timestamp=timestamp
             corrected_framenumber = framenumber-self.framenumber_offset
 
@@ -392,6 +400,15 @@ class MainBrain:
             cam_lock = cam['lock']
             cam_lock.acquire()
             cam['commands']['diff_threshold']=value
+            cam_lock.release()
+            self.cam_info_lock.release()
+
+        def external_set_clear_threshold( self, cam_id, value):
+            self.cam_info_lock.acquire()            
+            cam = self.cam_info[cam_id]
+            cam_lock = cam['lock']
+            cam_lock.acquire()
+            cam['commands']['clear_threshold']=value
             cam_lock.release()
             self.cam_info_lock.release()
 
@@ -688,6 +705,12 @@ class MainBrain:
 
     def get_diff_threshold(self, cam_id):
         return self.camera_server[cam_id].get_diff_threshold()
+
+    def set_clear_threshold(self, cam_id, value):
+        self.remote_api.external_set_clear_threshold( cam_id, value)
+
+    def get_clear_threshold(self, cam_id):
+        return self.camera_server[cam_id].get_clear_threshold()
 
     def set_use_arena(self, cam_id, value):
         self.remote_api.external_set_use_arena( cam_id, value)

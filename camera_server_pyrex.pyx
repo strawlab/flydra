@@ -72,6 +72,7 @@ cdef class GrabClass:
     cdef int coord_port
     cdef int left, bottom, right, top
     cdef float diff_threshold
+    cdef float clear_threshold
     cdef int use_arena
     
     cdef void set_camera_and_coord_port(self, Camera cam, object coord_port):
@@ -238,7 +239,7 @@ cdef class GrabClass:
                 # (to avoid big moment arm:) if pixel < .8*max(pixel): pixel=0
                 CHK( ipp.ippiThreshold_Val_8u_C1IR(
                     (im2 + self.bottom*im2_step + self.left), im2_step,
-                    roi_sz, max_val*0.8, 0, ipp.ippCmpLess))
+                    roi_sz, self.clear_threshold*max_val, 0, ipp.ippCmpLess))
                 CHK( ipp.ippiMaxIndx_8u_C1R(
                     (im2 + self.bottom*im2_step + self.left), im2_step,
                     roi_sz, &max_val, &index_x,&index_y))
@@ -610,6 +611,9 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
     def get_diff_threshold(self):
         return self.globals['diff_threshold']
 
+    def get_clear_threshold(self):
+        return self.globals['clear_threshold']
+
     def find_r_center(self):
         self.globals['find_rotation_center_start'].set()
     
@@ -732,6 +736,8 @@ cdef class App:
                 scalar_control_info[name] = (current_value, min_value, max_value)
             diff_threshold = 8.1
             scalar_control_info['initial_diff_threshold'] = diff_threshold
+            clear_threshold = 0.8
+            scalar_control_info['initial_clear_threshold'] = clear_threshold
 
             # register self with remote server
             port = 9834 + cam_no # for local Pyro server
@@ -785,6 +791,10 @@ cdef class App:
             grabber.diff_threshold = diff_threshold
             # shadow grabber value
             globals['diff_threshold'] = grabber.diff_threshold
+            
+            grabber.clear_threshold = clear_threshold
+            # shadow grabber value
+            globals['clear_threshold'] = grabber.clear_threshold
             
             grabber.use_arena = 0
             globals['use_arena'] = grabber.use_arena
@@ -898,6 +908,10 @@ cdef class App:
                                     grabber.diff_threshold = cmds[key]
                                     # shadow grabber value
                                     globals['diff_threshold'] = grabber.diff_threshold
+                                elif key == 'clear_threshold':
+                                    grabber.clear_threshold = cmds[key]
+                                    # shadow grabber value
+                                    globals['clear_threshold'] = grabber.clear_threshold
                                 elif key == 'use_arena':
                                     grabber.use_arena = cmds[key]
                                     globals['use_arena'] = grabber.use_arena

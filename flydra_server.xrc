@@ -105,92 +105,74 @@
             </object>
           </object>
         </object>
-        <option>0</option>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxBoxSizer">
-          <orient>wxHORIZONTAL</orient>
+        <object class="wxFlexGridSizer">
+          <cols>3</cols>
+          <rows>2</rows>
           <object class="sizeritem">
-            <object class="wxBoxSizer">
-              <orient>wxVERTICAL</orient>
-              <object class="sizeritem">
-                <object class="wxStaticText" name="acquired_fps_label">
-                  <label>fps: --</label>
-                </object>
-              </object>
-              <object class="sizeritem">
-                <object class="wxStaticText" name="exposure_label">
-                  <label>Exposure (msec): --</label>
-                </object>
-              </object>
+            <object class="wxStaticText" name="acquired_fps_label">
+              <label>approx. fps: --</label>
             </object>
-            <option>0</option>
-            <flag>wxALIGN_CENTRE</flag>
           </object>
           <object class="sizeritem">
             <object class="wxBoxSizer">
-              <orient>wxVERTICAL</orient>
+              <orient>wxHORIZONTAL</orient>
               <object class="sizeritem">
-                <object class="wxBoxSizer">
-                  <orient>wxHORIZONTAL</orient>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Threshold for AbsDiff</label>
-                    </object>
-                    <flag>wxTOP|wxRIGHT</flag>
-                    <border>3</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxTextCtrl" name="threshold_value">
-                      <value>?</value>
-                    </object>
-                  </object>
+                <object class="wxStaticText">
+                  <label>Threshold for AbsDiff</label>
                 </object>
+                <flag>wxTOP|wxRIGHT</flag>
+                <border>3</border>
               </object>
               <object class="sizeritem">
-                <object class="wxCheckBox" name="ARENA_CONTROL">
-                  <label>send LED arena signals</label>
-                  <checked>0</checked>
+                <object class="wxTextCtrl" name="threshold_value">
+                  <value>?</value>
+                  <size>40,20</size>
                 </object>
               </object>
             </object>
-            <option>0</option>
-            <flag>wxLEFT|wxRIGHT</flag>
-            <border>5</border>
           </object>
           <object class="sizeritem">
             <object class="wxBoxSizer">
-              <orient>wxVERTICAL</orient>
+              <orient>wxHORIZONTAL</orient>
               <object class="sizeritem">
-                <object class="wxBoxSizer">
-                  <orient>wxHORIZONTAL</orient>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Cam sync:</label>
-                    </object>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticBitmap" name="SYNCED_CTRL">
-                      <bitmap>redlight.png</bitmap>
-                    </object>
-                  </object>
+                <object class="wxStaticText">
+                  <label>Threshold for Clear</label>
                 </object>
+                <flag>wxTOP|wxRIGHT</flag>
+                <border>3</border>
               </object>
               <object class="sizeritem">
-                <object class="wxCheckBox" name="debug_mode">
-                  <label>debug</label>
-                  <checked>0</checked>
+                <object class="wxTextCtrl" name="threshold_clear_value">
+                  <value>?</value>
+                  <size>40,20</size>
                 </object>
-                <flag>wxLEFT</flag>
-                <border>4</border>
               </object>
             </object>
-            <option>0</option>
-            <flag>wxEXPAND|wxALIGN_CENTRE</flag>
           </object>
+          <object class="sizeritem">
+            <object class="wxStaticText" name="exposure_label">
+              <label>Exposure (msec): --</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxCheckBox" name="ARENA_CONTROL">
+              <label>send LED arena signals</label>
+              <checked>0</checked>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxCheckBox" name="debug_mode">
+              <label>debug info</label>
+              <checked>0</checked>
+            </object>
+            <flag>wxLEFT</flag>
+            <border>4</border>
+          </object>
+          <hgap>10</hgap>
         </object>
-        <option>0</option>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">

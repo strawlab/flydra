@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# $Id$
+
 import sys
 import threading
 import time
@@ -220,6 +222,12 @@ class App(wxApp):
         threshold_value.SetValue( str( val ) )
         EVT_TEXT(threshold_value, threshold_value.GetId(), self.OnSetCameraThreshold)
 
+        threshold_clear_value = XRCCTRL(PreviewPerCamPanel,"threshold_clear_value")
+        val = scalar_control_info['initial_clear_threshold']
+        threshold_clear_value.SetValue( str( val ) )
+        EVT_TEXT(threshold_clear_value, threshold_clear_value.GetId(),
+                 self.OnSetCameraClearThreshold)
+
         arena_control = XRCCTRL(PreviewPerCamPanel,
                              "ARENA_CONTROL")
         EVT_CHECKBOX(arena_control, arena_control.GetId(), self.OnArenaControl)
@@ -234,7 +242,7 @@ class App(wxApp):
         grid.AddGrowableCol(2)
 
         for param in scalar_control_info.keys():
-            if param == 'initial_diff_threshold':
+            if param in ['initial_diff_threshold','initial_clear_threshold']:
                 continue
             current_value, min_value, max_value = scalar_control_info[param]
             grid.Add( wxStaticText(per_cam_controls_panel,wxNewId(),param),
@@ -663,6 +671,13 @@ class App(wxApp):
         if value:
             value = float(value)
             self.main_brain.set_diff_threshold(cam_id,value)
+
+    def OnSetCameraClearThreshold(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        value = event.GetString()
+        if value:
+            value = float(value)
+            self.main_brain.set_clear_threshold(cam_id,value)
 
     def OnArenaControl(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())

@@ -1,3 +1,5 @@
+# $Id$
+
 import numarray as nx
 import math
 
