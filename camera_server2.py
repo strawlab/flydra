@@ -7,6 +7,7 @@ import FlyMovieFormat
 import numarray as nx
 import pyx_cam_iface as cam_iface
 import reconstruct_utils
+import Queue
 
 try:
     import realtime_image_analysis
@@ -37,7 +38,7 @@ CAM_CONTROLS = {'shutter':cam_iface.SHUTTER,
                 'brightness':cam_iface.BRIGHTNESS}
 
 ALPHA = 1.0/10 # relative importance of each new frame
-BG_FRAME_INTERVAL = 25 # every N frames, add a new BG image to the accumulator
+BG_FRAME_INTERVAL = 100 # every N frames, add a new BG image to the accumulator
 
 # where is the "main brain" server?
 try:
@@ -106,8 +107,6 @@ class GrabClass(object):
         
         # questionable optimization: speed up by eliminating namespace lookups
         cam_quit_event_isSet = globals['cam_quit_event'].isSet
-        acquire_lock = globals['incoming_frames_lock'].acquire
-        release_lock = globals['incoming_frames_lock'].release
         sleep = time.sleep
         bg_frame_number = 0
         rot_frame_number = -1
@@ -123,7 +122,7 @@ class GrabClass(object):
         height = self.cam.get_max_height()
         width = self.cam.get_max_width()
         buf_ptr_step = width
-        flip = False
+        bg_changed = True
 
         buf = nx.zeros( (self.cam.max_height,self.cam.max_width), nx.UInt8 ) # allocate buffer
         coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -143,45 +142,48 @@ class GrabClass(object):
                 diff = timestamp-old_ts
                 if diff > 0.02:
                     print >> sys.stderr, 'Warning: IFI is %f on %s at %s'%(diff,self.cam_id,time.asctime())
-                    flip = False # reset to synchronize across all cameras
                 if framenumber-old_fn > 1:
                     print >> sys.stderr, '  frames apparently skipped:', framenumber-old_fn
-                globals['last_frame_timestamp']=timestamp
+##                globals['last_frame_timestamp']=timestamp
                 old_ts = timestamp
                 old_fn = framenumber
                 
                 points = self.realtime_analyzer.do_work( buf, timestamp, framenumber )
-                    
-                if debug_isSet():
-                    if flip:
-                        show_image = self.realtime_analyzer.get_working_image()
-                    else:
-                        show_image = buf.copy()
-                    flip = not flip
-                else:
-                    show_image = buf.copy()
+                raw_image = buf.copy()
                 
                 # make appropriate references to our copy of the data
-                globals['most_recent_frame'] = show_image
-                globals['most_recent_frame_and_points'] = show_image, points
-                acquire_lock()
-                globals['incoming_frames'].append(
-                    (show_image,timestamp,framenumber) ) # save it
-                release_lock()
+                if debug_isSet():
+                    debug_image = self.realtime_analyzer.get_working_image()
+                    globals['most_recent_frame'] = debug_image
+                else:
+                    globals['most_recent_frame'] = raw_image
+                    
+                globals['incoming_raw_frames'].put(
+                    (raw_image,timestamp,framenumber) ) # save it
 
                 if collecting_background_isSet():
                     if bg_frame_number % BG_FRAME_INTERVAL == 0:
                         self.realtime_analyzer.accumulate_last_image()
+                        bg_changed = True
                         bg_frame_number = 0
                     bg_frame_number += 1
                 
                 if take_background_isSet():
                     self.realtime_analyzer.take_background_image()
+                    bg_changed = True
                     take_background_clear()
                     
                 if clear_background_isSet():
                     self.realtime_analyzer.clear_background_image()
+                    bg_changed = True
                     clear_background_clear()
+
+                if bg_changed:
+                    bg_image = self.realtime_analyzer.get_background_image()
+                    globals['current_bg_frame_and_timestamp']=bg_image,timestamp
+                    globals['incoming_bg_frames'].put(
+                        (bg_image,timestamp,framenumber) ) # save it
+                    bg_changed = False
                     
                 if find_rotation_center_start_isSet():
                     find_rotation_center_start_clear()
@@ -207,8 +209,8 @@ class GrabClass(object):
 
             globals['cam_quit_event'].set()
             globals['grab_thread_done'].set()
-            print 'camera quit',self.cam_id
-            sys.stdout.flush()
+##            print 'camera quit',self.cam_id
+##            sys.stdout.flush()
 
 class App:
     
@@ -272,16 +274,17 @@ class App:
             self.globals.append({})
             globals = self.globals[cam_no] # shorthand
 
-            globals['incoming_frames']=[]
-            globals['currently_saving_fly_movie']=None
+            globals['incoming_raw_frames']=Queue.Queue()
+            globals['incoming_bg_frames']=Queue.Queue()
+            globals['raw_fmf_and_bg_fmf']=None
             globals['most_recent_frame']=None
-            globals['most_recent_frame_and_points']=None
+            globals['saved_bg_frame']=False
+            globals['current_bg_frame_and_timestamp']=None
 
             # control flow events for threading model
             globals['cam_quit_event'] = threading.Event()
             globals['listen_thread_done'] = threading.Event()
             globals['grab_thread_done'] = threading.Event()
-            globals['incoming_frames_lock'] = threading.Lock()
             globals['take_background'] = threading.Event()
             globals['clear_background'] = threading.Event()
             globals['collecting_background'] = threading.Event()
@@ -289,7 +292,7 @@ class App:
             globals['find_rotation_center_start'] = threading.Event()
             globals['debug'] = threading.Event()
 
-            globals['last_frame_timestamp']=None
+##            globals['last_frame_timestamp']=None
 
             # set defaults
             cam.set_camera_property(cam_iface.SHUTTER,300,0,0)
@@ -392,8 +395,6 @@ class App:
                 globals['use_arena'] = grabber.use_arena
             elif key == 'quit':
                 globals['cam_quit_event'].set()
-                print "globals['cam_quit_event'].set()",cam_id
-                sys.stdout.flush()
             elif key == 'take_bg':
                 globals['take_background'].set()
             elif key == 'clear_bg':
@@ -406,16 +407,21 @@ class App:
             elif key == 'find_r_center':
                 globals['find_rotation_center_start'].set()
             elif key == 'stop_recording':
-                if globals['currently_saving_fly_movie']:
-                    fly_movie = globals['currently_saving_fly_movie']
-                    fly_movie.close()
+                if globals['raw_fmf_and_bg_fmf'] is not None:
+                    raw_movie, bg_movie = globals['raw_fmf_and_bg_fmf']
+                    raw_movie.close()
+                    bg_movie.close()
                     print 'stopped recording'
-                globals['currently_saving_fly_movie'] = None
+                    globals['saved_bg_frame']=False
+                    globals['raw_fmf_and_bg_fmf'] = None
             elif key == 'start_recording':
-                filename = cmds[key]
-                fly_movie = FlyMovieFormat.FlyMovieSaver(filename,version=1)
-                globals['currently_saving_fly_movie'] = fly_movie
-                print "starting to record to %s"%filename
+                raw_filename, bg_filename = cmds[key]
+                raw_movie = FlyMovieFormat.FlyMovieSaver(raw_filename,version=1)
+                bg_movie = FlyMovieFormat.FlyMovieSaver(bg_filename,version=1)
+                globals['raw_fmf_and_bg_fmf'] = raw_movie, bg_movie
+                globals['saved_bg_frame']=False
+                print "starting to record to %s"%raw_filename
+                print "  background to %s"%bg_filename
             elif key == 'debug':
                 if cmds[key]: globals['debug'].set()
                 else: globals['debug'].clear()
@@ -428,21 +434,17 @@ class App:
                 
     def mainloop(self):
         # per camera variables
-        grabbed_frames = []
-
         last_measurement_time = []
         last_return_info_check = []
-        n_frames = []
+        n_raw_frames = []
         
         if self.num_cams == 0:
             return
 
         for cam_no in range(self.num_cams):
-            grabbed_frames.append( [] )
-
             last_measurement_time.append( time_func() )
             last_return_info_check.append( 0.0 ) # never
-            n_frames.append( 0 )
+            n_raw_frames.append( 0 )
             
         try:
             try:
@@ -462,38 +464,54 @@ class App:
                         cam_id = self.all_cam_ids[cam_no]
                         
                         now = time_func()
-                        lft = globals['last_frame_timestamp']
-                        if lft is not None:
-                            if (now-lft) > 1.0:
-                                print 'WARNING: last frame was %f seconds ago'%(now-lft,)
-                                print '(Is the grab thread dead?)'
-                                globals['last_frame_timestamp'] = None
 
-                        # calculate and send FPS
+                        # calculate and send FPS every 5 sec
                         elapsed = now-last_measurement_time[cam_no]
                         if elapsed > 5.0:
-                            fps = n_frames[cam_no]/elapsed
+                            fps = n_raw_frames[cam_no]/elapsed
                             self.main_brain_lock.acquire()
                             self.main_brain.set_fps(cam_id,fps)
                             self.main_brain_lock.release()
                             last_measurement_time[cam_no] = now
-                            n_frames[cam_no] = 0
+                            n_raw_frames[cam_no] = 0
 
-                        # get new frames from grab thread
-                        lock = globals['incoming_frames_lock']
-                        lock.acquire()
-                        t1=time_func()
-                        gif = globals['incoming_frames']
-                        len_if = len(gif)
-                        if len_if:
-                            n_frames[cam_no] = n_frames[cam_no]+len_if
-                            grabbed_frames[cam_no].extend( gif )
-                            globals['incoming_frames'] = []
-                        lock.release()
-                        t2=time_func()
-                        diff = t2-t1
-                        if diff > 0.005:
-                            print '                        Held lock for %f msec'%(diff*1000.0,)
+                        # Are we saving movies?
+                        raw_fmf_and_bg_fmf = globals['raw_fmf_and_bg_fmf']
+                        if raw_fmf_and_bg_fmf is None:
+                            raw_movie = None
+                            bg_movie = None
+                        else:
+                            raw_movie, bg_movie = raw_fmf_and_bg_fmf
+                            
+                        # Get new raw frames from grab thread.
+                        get_raw_frame_nowait = globals['incoming_raw_frames'].get_nowait
+                        try:
+                            qsize = globals['incoming_raw_frames'].qsize()
+                            if qsize > 30:
+                                print '%s: qsize is %d'%(cam_id,qsize)
+                            while 1:
+                                frame,timestamp,framenumber = get_raw_frame_nowait() # this may raise Queue.Empty
+                                if raw_movie is not None:
+                                    raw_movie.add_frame(frame,timestamp)
+                                n_raw_frames[cam_no] += 1
+                        except Queue.Empty:
+                            pass
+
+                        # Get new BG frames from grab thread.
+                        get_bg_frame_nowait = globals['incoming_bg_frames'].get_nowait
+                        try:
+                            while 1:
+                                frame,timestamp,framenumber = get_bg_frame_nowait() # this may raise Queue.Empty
+                                if bg_movie is not None:
+                                    bg_movie.add_frame(frame,timestamp)
+                                    globals['saved_bg_frame'] = True
+                        except Queue.Empty:
+                            pass
+
+                        if bg_movie is not None and not globals['saved_bg_frame']:
+                            frame,timestamp = globals['current_bg_frame_and_timestamp']
+                            bg_movie.add_frame(frame,timestamp)
+                            globals['saved_bg_frame'] = True
 
                         # process asynchronous commands
                         self.main_brain_lock.acquire()
@@ -501,28 +519,6 @@ class App:
                         self.main_brain_lock.release()
                         self.handle_commands(cam_no,cmds)
                             
-                        # handle saving movie if needed
-                        fly_movie = globals['currently_saving_fly_movie']
-
-                        gfcn = grabbed_frames[cam_no]
-                        len_gfcn = len(gfcn)
-                        if len_gfcn:
-                            if fly_movie is not None:
-                                t1=time_func()
-                                if 1:
-                                    for frame,timestamp,framenumber in gfcn:
-                                        fly_movie.add_frame(frame,timestamp)
-                                    sz= frame.shape[1]*frame.shape[0]
-                                else:
-                                    frames, timestamps, framenumbers = zip(*gfcn)
-                                    fly_movie.add_frames(frames,timestamps)
-                                    sz= frames[0].shape[1]*frames[0].shape[0]
-                                t2=time_func()
-                                tdiff = t2-t1
-                                mb_per_sec = len_gfcn*sz/(1024*1024)/tdiff
-
-                            grabbed_frames[cam_no] = []
-
                     time.sleep(0.05)
 
             finally:

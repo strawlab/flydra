@@ -651,12 +651,12 @@ class MainBrain(object):
             finally:
                 self.cam_info_lock.release()            
 
-        def external_start_recording( self, cam_id, filename):
+        def external_start_recording( self, cam_id, raw_filename, bg_filename):
             self.cam_info_lock.acquire()            
             cam = self.cam_info[cam_id]
             cam_lock = cam['lock']
             cam_lock.acquire()
-            cam['commands']['start_recording']=filename
+            cam['commands']['start_recording']=raw_filename, bg_filename
             cam_lock.release()
             self.cam_info_lock.release()
 
@@ -685,8 +685,8 @@ class MainBrain(object):
                     cam_lock.release()
             finally:
                 self.cam_info_lock.release()
-            print 'sent camera quit event',cam_id
-            sys.stdout.flush()
+##            print 'sent camera quit event',cam_id
+##            sys.stdout.flush()
 
         def external_set_use_arena( self, cam_id, value):
             self.cam_info_lock.acquire()            
@@ -1045,8 +1045,8 @@ class MainBrain(object):
         self.coord_receiver.fake_synchronize()
 
     def close_camera(self,cam_id):
-        print 'close_camera',cam_id,'called'
-        sys.stdout.flush()
+##        print 'close_camera',cam_id,'called'
+##        sys.stdout.flush()
         self.remote_api.external_quit( cam_id )
 
     def set_use_arena(self, cam_id, value):
@@ -1073,15 +1073,15 @@ class MainBrain(object):
     def request_image_async(self, cam_id):
         self.remote_api.external_request_image_async(cam_id)
 
-    def start_recording(self, cam_id,filename):
+    def start_recording(self, cam_id, raw_filename, bg_filename):
         global XXX_framenumber
 
-        self.remote_api.external_start_recording( cam_id, filename)
+        self.remote_api.external_start_recording( cam_id, raw_filename, bg_filename)
         approx_start_frame = XXX_framenumber
-        self._currently_recording_movies[ cam_id ] = (filename, approx_start_frame)
+        self._currently_recording_movies[ cam_id ] = (raw_filename, approx_start_frame)
         if self.h5file is not None:
             self.h5movie_info.row['cam_id'] = cam_id
-            self.h5movie_info.row['filename'] = filename
+            self.h5movie_info.row['filename'] = raw_filename
             self.h5movie_info.row['approx_start_frame'] = approx_start_frame
             self.h5movie_info.row.append()
             self.h5movie_info.flush()
@@ -1090,14 +1090,14 @@ class MainBrain(object):
         global XXX_framenumber
         self.remote_api.external_stop_recording(cam_id)
         approx_stop_frame = XXX_framenumber
-        filename, approx_start_frame = self._currently_recording_movies[ cam_id ]
+        raw_filename, approx_start_frame = self._currently_recording_movies[ cam_id ]
         del self._currently_recording_movies[ cam_id ]
         # modify save file to include approximate movie stop time
         if self.h5file is not None:
             nrow = None
             for r in self.h5movie_info:
                 # get row in table
-                if (r['cam_id'] == cam_id and r['filename'] == filename and
+                if (r['cam_id'] == cam_id and r['filename'] == raw_filename and
                     r['approx_start_frame']==approx_start_frame):
                     nrow =r.nrow()
                     break
@@ -1109,7 +1109,6 @@ class MainBrain(object):
                 raise RuntimeError("could not find row to save movie stop frame.")
                     
     def quit(self):
-        print 'MainBrain.quit() called'
         # XXX ----- non-isolated calls to remote_api being done ----
         # this may be called twice: once explicitly and once by __del__
         self.remote_api.cam_info_lock.acquire()

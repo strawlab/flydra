@@ -439,7 +439,11 @@ class App(wxApp):
                              "record_raw_cam_select_checklist")
         filename_text_entry = XRCCTRL(self.record_raw_panel,
                                       "record_raw_filename")
-        filename = filename_text_entry.GetValue()
+        raw_filename = filename_text_entry.GetValue()
+        if raw_filename.endswith('.fmf'):
+            bg_filename = raw_filename[:-4] + '_bg.fmf'
+        else:
+            bg_filename = raw_filename + '.bg.fmf'
         cam_ids = []
         for i in range(cam_choice.GetCount()):
             if cam_choice.IsChecked(i):
@@ -451,11 +455,11 @@ class App(wxApp):
             return
         try:
             for cam_id in cam_ids:
-                self.main_brain.start_recording(cam_id,filename)
+                self.main_brain.start_recording(cam_id, raw_filename, bg_filename)
                 self._currently_recording_cams.append(cam_id)
             self.statusbar.SetStatusText('Recording started on %d cameras'%(
                 len(self._currently_recording_cams),),0)
-        except Exception,x:
+        except Exception, exc:
             try:
                 for tmp_cam_id in self._currently_recording_cams[:]:
                     self.main_brain.stop_recording(tmp_cam_id)
@@ -467,7 +471,7 @@ class App(wxApp):
 
                 self.statusbar.SetStatusText(
                     'Failed to start recording (%s): see console'%(cam_id,),0)
-                raise x
+                raise exc
 
     def OnRecordRawStop(self,warn=True):
         if warn and not len(self._currently_recording_cams):
@@ -744,7 +748,6 @@ class App(wxApp):
         
     def OnQuit(self, event):
         if hasattr(self,'main_brain'):
-            print 'calling self.main_brain.quit()'
             self.main_brain.quit()
             del self.main_brain
         self.frame.Close(True)

@@ -347,6 +347,26 @@ cdef class RealtimeAnalyzer:
         # end of IPP-requiring code
         return buf
 
+    def get_background_image(self):
+        cdef c_numarray._numarray buf
+        cdef int i
+
+        buf = self.last_image # useful when no IPP
+        
+        # start of IPP-requiring code
+        # allocate new numarray memory
+        buf = <c_numarray._numarray>c_numarray.NA_NewArray(
+            NULL, c_numarray.tUInt8, 2,
+            self.height, self.width)
+
+        # copy image to numarray
+        for i from 0 <= i < self.height:
+            c_lib.memcpy(buf.data+self.width*i,
+                         self.bg_img+self.bg_img_step*i,
+                         self.width)
+        # end of IPP-requiring code
+        return buf
+
     def take_background_image(self):
         # start of IPP-requiring code
         CHK( ipp.ippiCopy_8u_C1R(
