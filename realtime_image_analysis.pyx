@@ -68,7 +68,7 @@ cdef class RealtimeAnalyzer:
     # ROI size
     cdef int _left, _bottom, _right, _top
 
-    cdef int roi2_radius
+    cdef int _roi2_radius
     
     # runtime parameters
     cdef float _diff_threshold
@@ -83,6 +83,9 @@ cdef class RealtimeAnalyzer:
     cdef object _helper
 
     # start of IPP-requiring code
+    cdef int index_x,index_y
+    cdef ipp.Ipp8u _despeckle_threshold
+    
     cdef ipp.IppiSize _roi_sz
         
     cdef int im1_step, im2_step, accum_image_step, bg_img_step
@@ -104,7 +107,7 @@ cdef class RealtimeAnalyzer:
         self.roi = ( 0, 0, self.width-1, self.height-1)
 
 
-        self.roi2_radius = 15
+        self._roi2_radius = 5
         self._diff_threshold = 8.1
         self._clear_threshold = 0.0
         self._use_arena = 0
@@ -115,6 +118,7 @@ cdef class RealtimeAnalyzer:
         self._helper = None
 
         # start of IPP-requiring code
+        self._despeckle_threshold = 5
         self.n_rot_samples = 100*60 # 1 minute
 
         # pre- and post-processed images of every frame
@@ -195,9 +199,9 @@ cdef class RealtimeAnalyzer:
         
         # start of IPP-requiring code
         cdef ipp.Ipp8u max_val
-        cdef int index_x,index_y
-
         
+        cdef ipp.Ipp8u clear_despeckle_thresh
+    
         cdef ipp.IppiSize roi2_sz
         cdef int left2, right2, bottom2, top2
         
@@ -241,14 +245,14 @@ cdef class RealtimeAnalyzer:
             (self.im2 + self._bottom*self.im2_step + self._left), self.im2_step, self._roi_sz))
         CHK( ipp.ippiMaxIndx_8u_C1R(
             (self.im2 + self._bottom*self.im2_step + self._left), self.im2_step,
-            self._roi_sz, &max_val, &index_x,&index_y))
+            self._roi_sz, &max_val, &self.index_x,&self.index_y))
 
         if use_roi2:
             # find mini-ROI for further analysis (defined in non-ROI space)
-            left2 = index_x - self.roi2_radius + self._left
-            right2 = index_x + self.roi2_radius + self._left
-            bottom2 = index_y - self.roi2_radius + self._bottom
-            top2 = index_y + self.roi2_radius + self._bottom
+            left2 = self.index_x - self._roi2_radius + self._left
+            right2 = self.index_x + self._roi2_radius + self._left
+            bottom2 = self.index_y - self._roi2_radius + self._bottom
+            top2 = self.index_y + self._roi2_radius + self._bottom
 
             if left2 < self._left: left2 = self._left
             if right2 > self._right: right2 = self._right
@@ -263,9 +267,14 @@ cdef class RealtimeAnalyzer:
         roi2_sz.height = top2 - bottom2 + 1
         
         # (to reduce moment arm:) if pixel < self._clear_threshold*max(pixel): pixel=0
+
+        clear_despeckle_thresh = <ipp.Ipp8u>self._clear_threshold*max_val
+        if clear_despeckle_thresh < self._despeckle_threshold:
+            clear_despeckle_thresh = self._despeckle_threshold
+        
         CHK( ipp.ippiThreshold_Val_8u_C1IR(
             (self.im2 + bottom2*self.im2_step + left2), self.im2_step,
-            roi2_sz, self._clear_threshold*max_val, 0, ipp.ippCmpLess))
+            roi2_sz, clear_despeckle_thresh, 0, ipp.ippCmpLess))
 
         found_point = 1
         if max_val < self._diff_threshold:
@@ -389,6 +398,9 @@ cdef class RealtimeAnalyzer:
                          self.width)
         # end of IPP-requiring code
         return buf
+    
+    def get_last_bright_point(self):
+        return (self.index_x, self.index_y)
 
     def get_background_image(self):
         cdef c_numarray._numarray buf
@@ -497,6 +509,12 @@ cdef class RealtimeAnalyzer:
             self.arena_controller.rotation_calculation_finish( new_x_cent, new_y_cent )
         # end of IPP-requiring code
         return
+        
+    property roi2_radius:
+        def __get__(self):
+            return self._roi2_radius
+        def __set__(self,value):
+            self._roi2_radius = value
         
     property clear_threshold:
         def __get__(self):
