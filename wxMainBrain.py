@@ -74,17 +74,15 @@ class App(wxApp):
         data_logging_menu.Append(ID_save_3d_data, "Save collected 3D points", "Saving all previously acquired 3d points")
         EVT_MENU(self, ID_save_3d_data, self.OnSave3dData)
         
-        data_logging_menu.AppendItem(wxMenuItem(kind=wxITEM_SEPARATOR))
-
-        ID_debug_cameras = wxNewId()
-        data_logging_menu.Append(ID_debug_cameras, "Camera debug mode",
-                                 "Enter camera debug mode", wxITEM_CHECK)
-        EVT_MENU(self, ID_debug_cameras, self.OnToggleDebugCameras)
-
         menuBar.Append(data_logging_menu, "Data &Logging")
         
         #   View
         viewmenu = wxMenu()
+        ID_debug_cameras = wxNewId()
+        viewmenu.Append(ID_debug_cameras, "Camera debug mode",
+                        "Enter camera debug mode", wxITEM_CHECK)
+        EVT_MENU(self, ID_debug_cameras, self.OnToggleDebugCameras)
+
         ID_toggle_image_tinting = wxNewId()
         viewmenu.Append(ID_toggle_image_tinting, "Tint clipped data",
                         "Tints clipped pixels green", wxITEM_CHECK)
@@ -708,8 +706,9 @@ class App(wxApp):
             return # quitting
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc
         if self.current_page in ['tracking','preview','snapshot']:
-            data3d=MainBrain.get_best_realtime_data()
-            if data3d is not None:
+            realtime_data=MainBrain.get_best_realtime_data()
+            if realtime_data is not None:
+                data3d,line3d=realtime_data
                 if self.current_page == 'tracking':
                     XRCCTRL(self.tracking_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
                     XRCCTRL(self.tracking_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
@@ -717,8 +716,8 @@ class App(wxApp):
                 elif self.current_page == 'preview':
                     r=self.main_brain.reconstructor
                     for cam_id in self.cameras.keys():
-                        pt=r.find2d(cam_id,data3d)
-                        self.cam_image_canvas.set_reconstructed_points(cam_id,[pt])
+                        pt,ln=r.find2d(cam_id,data3d,line3d)
+                        self.cam_image_canvas.set_reconstructed_points(cam_id,([pt],[ln]))
             if self.current_page in ['preview','snapshot']:
                 for cam_id in self.cameras.keys():
                     self.main_brain.request_image_async(cam_id)

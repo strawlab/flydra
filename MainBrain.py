@@ -34,7 +34,7 @@ realtime_coord_dict={}
 realtime_coord_dict_lock=threading.Lock()
 
 SAVE_2D_DATA = False
-SAVE_2D_FMT = '<Bidddd'
+SAVE_2D_FMT = '<Bidfffffffff'
 SAVE_2D_CAMS = 0
 SAVE_GLOBALS_LOCK = threading.Lock()
 SAVE_GLOBALS = {}
@@ -133,7 +133,7 @@ class CoordReceiver(threading.Thread):
     def quit(self):
         self.quit_event.set()
         
-        # send packet to wake listener and allow thread to quit
+        # send packet to wake listener and allow thread to quit (on MainBrain)
         tmp_socket=socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         tmp_socket.sendto(struct.pack('<dlii',0.0,-1,-1,-1),(hostname,self.port))
     
@@ -145,7 +145,7 @@ class CoordReceiver(threading.Thread):
 
         header_fmt = '<dli'
         header_size = struct.calcsize(header_fmt)
-        pt_fmt = '<ffff'
+        pt_fmt = '<fffffffff'
         pt_size = struct.calcsize(pt_fmt)
         while not self.quit_event.isSet():
             data, addr = self.recSocket.recvfrom(1024)
@@ -156,8 +156,8 @@ class CoordReceiver(threading.Thread):
             points = []
             for i in range(n_pts):
                 end=start+pt_size
-                x,y,slope,eccentricity = struct.unpack(pt_fmt,data[start:end])
-                points.append( (x,y,slope,eccentricity) )
+                x,y,area,slope,eccentricity,p1,p2,p3,p4 = struct.unpack(pt_fmt,data[start:end])
+                points.append( (x,y,area,slope,eccentricity, p1,p2,p3,p4) )
                 start=end
 
             if 0:
@@ -185,13 +185,20 @@ class CoordReceiver(threading.Thread):
             corrected_framenumber = framenumber-self.framenumber_offset
 
             if SAVE_2D_DATA:
+                #points.append( (x,y,area,slope,eccentricity, p1,p2,p3,p4) )
                 buf = struct.pack(SAVE_2D_FMT,
                                   self.hack_cam_no,
                                   corrected_framenumber,
                                   timestamp,
-                                  points[0][0],
-                                  points[0][1],
-                                  points[0][2],
+                                  points[0][0], # x
+                                  points[0][1], # y
+                                  points[0][2], # area
+                                  points[0][3], # slope
+                                  points[0][4], # eccentricity
+                                  points[0][5], # p1
+                                  points[0][6], # p2
+                                  points[0][7], # p3
+                                  points[0][9], # p4
                                   )
                 save_2d_data_lock.acquire()
                 save_2d_data_fd.write( buf )
@@ -207,7 +214,6 @@ class CoordReceiver(threading.Thread):
                     
             # save new frame record
             cur_framenumber_dict=realtime_coord_dict.setdefault(corrected_framenumber,{})
-            # save x,y, not slope
             cur_framenumber_dict[self.cam_id]=points[0] # XXX for now, only attempt 3D reconstruction of 1st point
 
             # make thread-local copy of results if 3D reconstruction possible
@@ -228,14 +234,17 @@ class CoordReceiver(threading.Thread):
                         if PT[0] + 1 > 1e-6: # only use found points
                             d2[cam_id] = PT
                     if len(d2) >=2:
-                        X = self.reconstructor.find3d(d2.items())
+                        X, line3d = self.reconstructor.find3d(d2.items())
                         find3d_time = time.time()
                         x,y,z=X
-                        if len(d2) == 2 and SAVE_3D_DATA:
+                        tmp = [x,y,z]
+                        tmp.extend( line3d )
+                        tmp.extend( (find3d_time,2) )
+                        if len(d2) == 2 and SAVE_3D_DATA: # fastest data
                             save_3d_data1_lock.acquire()
-                            save_3d_data1[corrected_framenumber]=x,y,z,find3d_time,2
+                            save_3d_data1[corrected_framenumber]=tmp
                             save_3d_data1_lock.release()
-                        data_packet = struct.pack('<fff',x,y,z)
+##                        data_packet = struct.pack('<fff',x,y,z)
 ##                        try:
 ##                            projector_socket.sendto(data_packet,
 ##                                                    (projector_hostname,FASTEST_DATA_PORT))
@@ -243,9 +252,9 @@ class CoordReceiver(threading.Thread):
 ##                            print 'WARNING: could not send 3d point data to projector:'
 ##                            print x.__class__, x
 ##                            print
-                        fastest_realtime_data = X
+                        fastest_realtime_data = X, line3d
                         if cams_in_count == self.main_brain.get_num_cams():
-                            best_realtime_data = X
+                            best_realtime_data = X, line3d
 ##                            try:
 ##                                projector_socket.sendto(data_packet,
 ##                                                        (projector_hostname,BEST_DATA_PORT))
@@ -254,9 +263,9 @@ class CoordReceiver(threading.Thread):
 ##                                print x.__class__, x
 ##                                print
                             
-                        if SAVE_3D_DATA:
+                        if SAVE_3D_DATA: # best data
                             save_3d_data2_lock.acquire()
-                            save_3d_data2[corrected_framenumber]=x,y,z,find3d_time,len(d2)
+                            save_3d_data2[corrected_framenumber]=tmp
                             save_3d_data2_lock.release()
                             
                 # save calibration data -=-=-=-=-=-=-=-=
@@ -446,7 +455,7 @@ class MainBrain(object):
             cam_lock.acquire()
             cam['commands']['clear_bg']=None
             cam_lock.release()
-            self.cam_info_lock.release()
+            self.cam_info_lock.release()        
 
         def external_set_debug( self, cam_id, value):
             self.cam_info_lock.acquire()            
@@ -454,6 +463,15 @@ class MainBrain(object):
             cam_lock = cam['lock']
             cam_lock.acquire()
             cam['commands']['debug']=value
+            cam_lock.release()
+            self.cam_info_lock.release()
+
+        def external_set_pmat( self, cam_id, value):
+            self.cam_info_lock.acquire()            
+            cam = self.cam_info[cam_id]
+            cam_lock = cam['lock']
+            cam_lock.acquire()
+            cam['commands']['pmat']=value
             cam_lock.release()
             self.cam_info_lock.release()
 
@@ -813,6 +831,9 @@ class MainBrain(object):
         for cam_id in cam_ids:
             port = self.remote_api.cam_info[cam_id]['coord_receiver'].set_reconstructor(self.reconstructor)
         self.remote_api.cam_info_lock.release()
+
+        for cam_id in cam_ids:
+            self.remote_api.external_set_pmat( cam_id, self.reconstructor.get_pmat(cam_id))
     
     def __del__(self):
         self.quit()

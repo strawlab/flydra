@@ -258,7 +258,8 @@ class DynamicImageCanvas(wxGLCanvas):
                     glColor4f(1.0,1.0,1.0,1.0)                        
                     glEnable(GL_TEXTURE_2D)
 
-                    for ox0,oy0,slope,eccentricity in draw_points:
+                    for draw_point in draw_points:
+                        ox0,oy0,area,slope,eccentricity = draw_point[:5]
                         if len(numarray.ieeespecial.getnan(pt[2])[0]):
                             # no orientation information
                             continue
@@ -285,8 +286,9 @@ class DynamicImageCanvas(wxGLCanvas):
                         glEnable(GL_TEXTURE_2D)
 
                     # reconstructed points
-                    draw_points = self.reconstructed_points.get(ids[i],[])
-                    
+                    draw_points, draw_lines = self.reconstructed_points.get(ids[i],([],[]))
+
+                    # draw points
                     glDisable(GL_TEXTURE_2D)
                     glColor4f(1.0,0.0,0.0,1.0)                        
                     glBegin(GL_POINTS)
@@ -298,6 +300,38 @@ class DynamicImageCanvas(wxGLCanvas):
                         y = (height-pt[1])/height*yg+yo
                         glVertex2f(x,y)
                         
+                    glEnd()
+                    glColor4f(1.0,1.0,1.0,1.0)                        
+                    glEnable(GL_TEXTURE_2D)
+
+                    # draw lines
+
+                    glDisable(GL_TEXTURE_2D)
+                    glColor4f(1.0,0.0,1.0,1.0)                        
+                    glBegin(GL_LINES)
+
+                    for L in draw_lines:
+                        pt=[0,0]
+                        a,b,c=L
+                        # ax+by+c=0
+                        # y = -(c+ax)/b
+                        
+                        # at x=0:
+                        pt[0] = 0
+                        pt[1] = -(c+a*pt[0])/b
+                        
+                        x = pt[0]/width*xg+xo
+                        y = (height-pt[1])/height*yg+yo
+                        glVertex2f(x,y)
+
+                        # at x=width-1:
+                        pt[0] = width-1
+                        pt[1] = -(c+a*pt[0])/b
+                        
+                        x = pt[0]/width*xg+xo
+                        y = (height-pt[1])/height*yg+yo
+                        glVertex2f(x,y)
+
                     glEnd()
                     glColor4f(1.0,1.0,1.0,1.0)                        
                     glEnable(GL_TEXTURE_2D)

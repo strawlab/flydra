@@ -5,6 +5,7 @@ import time
 import sys
 import numarray as nx
 import numarray.ieeespecial
+import numarray.linear_algebra
 import math
 
 argmax = nx.argmax
@@ -91,6 +92,9 @@ cdef class RealtimeAnalyzer:
     cdef c_numarray._numarray last_image
     cdef int arena_control_working
 
+    # calibration matrix
+    cdef c_numarray._numarray _pmat, _pmat_inv, camera_center
+
     # start of IPP-requiring code
     cdef ipp.IppiSize _roi_sz
         
@@ -116,6 +120,9 @@ cdef class RealtimeAnalyzer:
         self._diff_threshold = 8.1
         self._clear_threshold = 0.0
         self._use_arena = 0
+
+        self._pmat = None
+        self._pmat_inv = None
 
         # start of IPP-requiring code
         self.n_bg_samples = 100
@@ -186,9 +193,10 @@ cdef class RealtimeAnalyzer:
 
     def do_work(self, c_numarray._numarray buf, double timestamp, int framenumber):
         cdef double x0, y0
-        cdef double x0_abs, y0_abs
+        cdef double x0_abs, y0_abs, area
         cdef double orientation
         cdef double slope, eccentricity
+        cdef double p1, p2, p3, p4
         cdef double eval1, eval2
         cdef double rise, run
         cdef double evalA, evalB
@@ -210,7 +218,7 @@ cdef class RealtimeAnalyzer:
         eccentricity = 0
         
         # start of IPP-requiring code
-
+        
         # release GIL
         c_python.Py_BEGIN_ALLOW_THREADS
         
@@ -296,9 +304,30 @@ cdef class RealtimeAnalyzer:
         # grab GIL
         c_python.Py_END_ALLOW_THREADS
         
+        if self._pmat_inv is not None:
+
+            # calculate plane containing camera origin and found line
+            # in 3D world coords
+
+            # Step 1) Find world coordinates points defining plane:
+            #    A) found point
+            X1=nx.dot(self._pmat_inv,[x0_abs,y0_abs,1.0])
+            #    B) another point on found line
+            X2=nx.dot(self._pmat_inv,[x0_abs+run,y0_abs+rise,1.0])
+            #    C) world coordinates of camera center already known
+
+            # Step 2) Find world coordinates of plane
+            svd = numarray.linear_algebra.singular_value_decomposition
+            A = nx.array( [ X1, X2, self.camera_center] ) # 3 points define plane
+            u,d,vt=svd(A,full_matrices=True)
+            Pt = vt[3,:] # plane parameters
+            
+            p1,p2,p3,p4 = Pt[0:4]
+        
         # end of IPP-requiring code
 
-        return [ (x0_abs, y0_abs, slope, eccentricity) ]
+        area = 0.123456
+        return [ (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4) ]
 
     def get_working_image(self):
         cdef c_numarray._numarray buf
@@ -445,6 +474,24 @@ cdef class RealtimeAnalyzer:
             return self._use_arena
         def __set__(self,value):
             self._use_arena = value
+
+    property pmat:
+        def __get__(self):
+            return self._pmat
+        def __set__(self,c_numarray._numarray value):
+            self._pmat = value
+
+            P = self._pmat
+            determinant = numarray.linear_algebra.determinant
+            
+            # find camera center in 3D world coordinates
+            X = determinant( [ P[:,1], P[:,2], P[:,3] ] )
+            Y = -determinant( [ P[:,0], P[:,2], P[:,3] ] )
+            Z = determinant( [ P[:,0], P[:,1], P[:,3] ] )
+            T = -determinant( [ P[:,0], P[:,1], P[:,2] ] )
+
+            self.camera_center = nx.array( [ X/T, Y/T, Z/T, 1.0 ] )
+            self._pmat_inv = numarray.linear_algebra.generalized_inverse(self._pmat)
 
     property roi:
         def __get__(self):

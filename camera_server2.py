@@ -64,6 +64,12 @@ class GrabClass(object):
         self.realtime_analyzer.diff_threshold = value
     diff_threshold = property( get_diff_threshold, set_diff_threshold )
 
+    def get_pmat(self):
+        return self.realtime_analyzer.pmat
+    def set_pmat(self,value):
+        self.realtime_analyzer.pmat = value
+    pmat = property( get_pmat, set_pmat )
+
     def get_use_arena(self):
         return self.realtime_analyzer.use_arena
     def set_use_arena(self, value):
@@ -101,6 +107,7 @@ class GrabClass(object):
         buf = nx.zeros( (self.cam.max_height,self.cam.max_width), nx.UInt8 ) # allocate buffer
         coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         old_ts = time.time()
+        points = []
         try:
             while not cam_quit_event_isSet():
                 self.cam.grab_next_frame_blocking(buf) # grab frame and stick in buf
@@ -165,7 +172,7 @@ class GrabClass(object):
                 n_pts = len(points)
                 data = struct.pack('<dli',timestamp,framenumber,n_pts)
                 for i in range(n_pts):
-                    data = data + struct.pack('ffff',*points[i])
+                    data = data + struct.pack('fffffffff',*points[i])
                 coord_socket.sendto(data,
                                     (main_brain_hostname,self.coord_port))
                 sleep(1e-6) # yield processor
@@ -371,6 +378,8 @@ class App:
             elif key == 'debug':
                 if cmds[key]: globals['debug'].set()
                 else: globals['debug'].clear()
+            elif key == 'pmat':
+                grabber.pmat = cmds[key]
                 
     def mainloop(self):
         # per camera variables
