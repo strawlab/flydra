@@ -31,12 +31,10 @@ def grab_func(cam,quit_now,thread_done,incoming_frames_lock):
     buf = na.zeros( (cam.max_height,cam.max_width), na.UInt8 ) # allocate buffer
     try:
         while not quit_now.isSet():
-            cam.grab_next_frame_blocking(buf,0) # grab frame and stick in buf
+            cam.grab_next_frame_blocking(buf) # grab frame and stick in buf
             incoming_frames_lock.acquire()
             incoming_frames.append( buf.copy() ) # save a copy of the buffer
             incoming_frames_lock.release()
-    ##        sys.stdout.write('_')
-    ##        sys.stdout.flush()
             time.sleep(0.00001) # yield processor
     finally:
         thread_done.set()
@@ -74,9 +72,9 @@ def main():
             if not x.args[0].startswith('The requested resource is in use.'):
                 raise
 
-    cam.set_camera_property(cam_iface.GAIN,28,0,0)
-    cam.set_camera_property(cam_iface.SHUTTER,498,0,0)
-    cam.set_camera_property(cam_iface.BRIGHTNESS,717,0,0)
+    cam.set_camera_property(cam_iface.SHUTTER,300,0,0)
+    cam.set_camera_property(cam_iface.GAIN,72,0,0)
+    cam.set_camera_property(cam_iface.BRIGHTNESS,783,0,0)
     
     cam.start_camera()
 
