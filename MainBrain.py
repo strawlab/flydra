@@ -864,7 +864,7 @@ class MainBrain(object):
 
         IdMat = nx.transpose(IdMat)
         points = nx.transpose(points)
-        print 'saving %d points to %s'%(len(points),self.calib_dir)
+        print 'saving %d points to %s'%(points.shape[1],self.calib_dir)
         save_ascii_matrix(os.path.join(self.calib_dir,'IdMat.dat'),IdMat)
         save_ascii_matrix(os.path.join(self.calib_dir,'points.dat'),points)
         cam_ids = self.remote_api.external_get_cam_ids()
