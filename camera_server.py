@@ -41,6 +41,7 @@ def grab_func(cam,app_quit_event,grab_thread_done,incoming_frames_lock):
     # speed up by eliminating namespace lookups
     app_quit_event_isSet = app_quit_event.isSet
     grab = cam.grab_next_frame_blocking
+    get_last_timestamp = cam.get_last_timestamp
     acquire_lock = incoming_frames_lock.acquire
     copy_data = buf.copy
     release_lock = incoming_frames_lock.release
@@ -48,7 +49,8 @@ def grab_func(cam,app_quit_event,grab_thread_done,incoming_frames_lock):
     try:
         while not app_quit_event_isSet():
             grab(buf) # grab frame and stick in buf
-            now=time_func()
+            now=get_last_timestamp()
+            #now=time_func()
             acquire_lock()
             most_recent_frame = copy_data() # copy buffer out of FIFO
             incoming_frames.append( (most_recent_frame,now) ) # save it
