@@ -117,7 +117,7 @@ class DynamicImageCanvas(wxGLCanvas):
             buffer = na.zeros( (height,width,2), image.typecode() )+128
             buffer[:,:,0] = image
             clipped = na.greater(image,254) + na.less(image,1)
-            mask = na.choose(clipped, (255, 0) )
+            mask = na.choose(clipped, (255, 200) ) # alpha for transparency
             buffer[:,:,1] = mask
             self._gl_tex_xyfrac = width/float(max_x),  height/float(max_y)
             glBindTexture(GL_TEXTURE_2D,tex_id)
@@ -139,11 +139,21 @@ class DynamicImageCanvas(wxGLCanvas):
         N = float(len(self._gl_tex_info_dict))
         ids = self._gl_tex_info_dict.keys()
         ids.sort()
+        x_border_pixels = 1
+        y_border_pixels = 1
+        size = self.GetClientSize()
+
+        x_border = x_border_pixels/float(size[0])
+        y_border = y_border_pixels/float(size[1])
+        hx = x_border*0.5
+        hy = y_border*0.5
+        x_borders = x_border*(N+1)
+        y_borders = y_border*(N+1)
         for i in range(N):
-            bottom = 0.00
-            top = 0.90
-            left = i/N
-            right = (i+1)/N
+            bottom = y_border
+            top = 1.0-y_border
+            left = (1.0-2*hx)*i/N+hx+hx
+            right = (1.0-2*hx)*(i+1)/N-hx+hx
             
             tex_id, gl_tex_xy_alloc, gl_tex_xyfrac = self._gl_tex_info_dict[ids[i]]
 

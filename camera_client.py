@@ -43,8 +43,7 @@ def main():
 
     start = time.time()
     now = start
-    device_number = 0
-    num_buffers = 10
+    num_buffers = 3
     
     grabbed_frames = []
 
@@ -57,7 +56,13 @@ def main():
     flydra_brain_URI = "PYROLOC://%s:%d/%s" % (hostname,port,name)
     flydra_brain = Pyro.core.getProxyForURI(flydra_brain_URI)
 
-    cam = cam_iface.CamContext(device_number,num_buffers)
+    for device_number in range(cam_iface.get_num_cameras()):
+        try:
+            cam = cam_iface.CamContext(device_number,num_buffers)
+            break # found a camera
+        except Exception, x:
+            if not x.args[0].startswith('The requested resource is in use.'):
+                raise
 
     cam.set_camera_property(cam_iface.GAIN,28,0,0)
     cam.set_camera_property(cam_iface.SHUTTER,498,0,0)
