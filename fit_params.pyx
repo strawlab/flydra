@@ -34,7 +34,7 @@ cdef void _fit_params( float *x0, float *y0, float *slope,
     cdef ipp.IppiSize roi_sz
     cdef ipp.Ipp32f *roi_start
     cdef ipp.IppiPoint roi_offset
-    cdef ipp.Ipp64f Mu00, Mu10, Mu01, Mu20, Mu11
+    cdef ipp.Ipp64f Mu00, Mu10, Mu01, Mu20, Mu02, Mu11
     
     left   = index_x - centroid_search_radius
     right  = index_x + centroid_search_radius
@@ -77,12 +77,26 @@ cdef void _fit_params( float *x0, float *y0, float *slope,
         CHK( ipp.ippiGetSpatialMoment_64f( pState, 1, 1, 0, roi_offset, &Mu11 ) )
 
         slope[0] = (Mu00*Mu20 - Mu10*Mu10)
+        print 'denom',slope[0]
         if slope[0] == 0.0:
             slope[0] = 9999
             # I'm not importing math.h just to get the INFINITY constant
             # besides, I've never had this case occur, and I've tried!
         else:
+            print 'num',(Mu00*Mu11 - Mu10*Mu01)
             slope[0] = (Mu00*Mu11 - Mu10*Mu01) / slope[0]
+
+            if abs( slope[0] ) > 1:
+                print 'inverting',slope[0]
+                # equations possibly ill-conditioned; calculate inversely
+                CHK( ipp.ippiGetSpatialMoment_64f( pState, 0, 2, 0, roi_offset, &Mu02 ) )
+                slope[0] = (Mu00*Mu02 - Mu01*Mu01)
+                if slope[0] != 0.0: # infinity inverted = 0 anyway
+                    slope[0] = slope[0] / (Mu00*Mu11 - Mu10*Mu01)
+
+                # this seems to give better numbers, but vertical lines
+                # still return a slope of 0 (which never enters this code
+                # branch since 0 < 1!)
 
 def fit_params(A, index_x=None, index_y=None, centroid_search_radius=10):
     """find 'center of gravity' and orientation in image"""
