@@ -337,6 +337,7 @@ void arena_update( double x, double y, double orientation,
 
       if( new_pos_y_f >= (double)PATTERN_DEPTH - 0.5 ) /* stop expanding! */
       {
+        new_pos_y_f = (double)PATTERN_DEPTH - 1;
         expanding = 2;
       }
     }
