@@ -408,6 +408,8 @@ class App:
                 pmat, intlin, intnonlin = cmds[key]
                 grabber.pmat = pmat
                 grabber.make_reconstruct_helper(intlin, intnonlin)
+            else:
+                raise ValueError("Unknown key '%s'"%key)
                 
     def mainloop(self):
         # per camera variables

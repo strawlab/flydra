@@ -702,12 +702,12 @@ class MainBrain(object):
             cam_lock.release()
             self.cam_info_lock.release()
 
-        def external_set_pmat( self, cam_id, value):
+        def external_set_cal( self, cam_id, pmat, intlin, intnonlin):
             self.cam_info_lock.acquire()            
             cam = self.cam_info[cam_id]
             cam_lock = cam['lock']
             cam_lock.acquire()
-            cam['commands']['pmat']=value
+            cam['commands']['cal']= pmat, intlin, intnonlin
             cam_lock.release()
             self.cam_info_lock.release()
 
@@ -1098,7 +1098,10 @@ class MainBrain(object):
         self.coord_receiver.set_reconstructor(self.reconstructor)
         
         for cam_id in cam_ids:
-            self.remote_api.external_set_pmat( cam_id, self.reconstructor.get_pmat(cam_id))
+            pmat = self.reconstructor.get_pmat(cam_id)
+            intlin = self.reconstructor.get_intrinsic_linear(cam_id)
+            intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
+            self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin )
     
     def __del__(self):
         self.quit()

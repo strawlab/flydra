@@ -249,9 +249,13 @@ class Reconstructor:
                             -(P[3]*Q[0]) + P[0]*Q[3],
                             -(P[2]*Q[0]) + P[0]*Q[2],
                             -(P[1]*Q[0]) + P[0]*Q[1] )
+            except numarray.linear_algebra.LinearAlgebra2.LinearAlgebraError, x:
+                print 'WARNING:',str(x)
+                Lcoords = None
             except:
-                #print 'WARNING: %s %s'%(x.__class__, str(x))
                 print 'WARNING: unknown error in reconstruct.py'
+                print '(you probably have an old version of numarray'
+                print 'and SVD did not converge'
                 Lcoords = None
         if return_line_coords:
             return X, Lcoords
