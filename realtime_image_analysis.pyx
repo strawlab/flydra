@@ -11,7 +11,6 @@ cdef double nan
 nan = numarray.ieeespecial.nan
 
 cimport c_numarray
-c_numarray.import_libnumarray()
 
 cimport c_lib
 cimport c_python
@@ -165,7 +164,9 @@ cdef class RealtimeAnalyzer:
     def set_reconstruct_helper( self, helper ):
         self._helper = helper
 
-    def do_work(self, c_numarray._numarray buf, double timestamp, int framenumber):
+    def do_work(self, c_numarray._numarray framebuffer,
+                double timestamp,
+                int framenumber):
         cdef double x0, y0
         cdef double x0_abs, y0_abs, area, x0u, y0u, x1u, y1u
         cdef double orientation
@@ -175,7 +176,6 @@ cdef class RealtimeAnalyzer:
         cdef double rise, run
         cdef double evalA, evalB
         cdef double evecA1, evecB1
-##        cdef double left_double, bottom_double
         
         cdef double Mu00, Uu11, Uu02, Uu20
         cdef int i
@@ -185,8 +185,9 @@ cdef class RealtimeAnalyzer:
         cdef ipp.Ipp8u max_val
         cdef int index_x,index_y
         # end of IPP-requiring code
-
-        self.last_image = buf # useful when no IPP
+        cdef int found_point
+        
+        self.last_image = framebuffer # useful when no IPP
         
         x0,y0=320,240
         slope = 1
@@ -213,7 +214,7 @@ cdef class RealtimeAnalyzer:
         # copy image to IPP memory
         for i from 0 <= i < self.height:
             c_lib.memcpy(self.im1+self.im1_step*i, # dest
-                         buf.data+self.width*i, # src
+                         framebuffer.data+self.width*i, # src
                          self.width) # length
 
         # do background subtraction & find max pixel in ROI
@@ -229,13 +230,13 @@ cdef class RealtimeAnalyzer:
             (self.im2 + self._bottom*self.im2_step + self._left), self.im2_step,
             self._roi_sz, self._clear_threshold*max_val, 0, ipp.ippCmpLess))
 
-        found_point = True
+        found_point = 1
         if max_val < self._diff_threshold:
             x0=nan
             y0=nan
             x0_abs = nan
             y0_abs = nan
-            found_point = False
+            found_point = 0 # c int (bool)
         else:
             result = fit_params( self.pState, &x0, &y0,
                                  &Mu00,
@@ -278,7 +279,7 @@ cdef class RealtimeAnalyzer:
                 y0 = nan
                 x0_abs = nan
                 y0_abs = nan
-                found_point = False
+                found_point = 0
             else:
                 x0_abs = x0+self._left
                 y0_abs = y0+self._bottom
@@ -340,9 +341,7 @@ cdef class RealtimeAnalyzer:
         
         # start of IPP-requiring code
         # allocate new numarray memory
-        buf = <c_numarray._numarray>c_numarray.NA_NewArray(
-            NULL, c_numarray.tUInt8, 2,
-            self.height, self.width)
+        buf = nx.zeros( (self.height, self.width), nx.UInt8 )
 
         # copy image to numarray
         for i from 0 <= i < self.height:
@@ -360,9 +359,7 @@ cdef class RealtimeAnalyzer:
         
         # start of IPP-requiring code
         # allocate new numarray memory
-        buf = <c_numarray._numarray>c_numarray.NA_NewArray(
-            NULL, c_numarray.tUInt8, 2,
-            self.height, self.width)
+        buf = nx.zeros( (self.height, self.width), nx.UInt8 )
 
         # copy image to numarray
         for i from 0 <= i < self.height:
@@ -494,5 +491,7 @@ cdef class RealtimeAnalyzer:
             assert self._right < self.width
             assert self._top < self.height
 
+            # start of IPP-requiring code
             self._roi_sz.width = self._right-self._left+1
             self._roi_sz.height = self._top-self._bottom+1
+            # end of IPP-requiring code

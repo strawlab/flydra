@@ -23,7 +23,6 @@ if sys.platform == 'win32':
 else:
     time_func = time.time
 
-#pt_fmt = '<fffffffff'
 pt_fmt = 'ddddddddd'
     
 Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here!
@@ -115,7 +114,6 @@ class GrabClass(object):
         take_background_isSet = globals['take_background'].isSet
         take_background_clear = globals['take_background'].clear
         collecting_background_isSet = globals['collecting_background'].isSet
-##        using_background_subtraction_isSet = globals['using_background_subtraction'].isSet
         find_rotation_center_start_isSet = globals['find_rotation_center_start'].isSet
         find_rotation_center_start_clear = globals['find_rotation_center_start'].clear
         debug_isSet = globals['debug'].isSet
@@ -124,7 +122,6 @@ class GrabClass(object):
         buf_ptr_step = width
         bg_changed = True
 
-        buf = nx.zeros( (self.cam.max_height,self.cam.max_width), nx.UInt8 ) # allocate buffer
         coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         old_ts = time.time()
         old_fn = 0
@@ -132,7 +129,7 @@ class GrabClass(object):
         try:
             while not cam_quit_event_isSet():
                 try:
-                    self.cam.grab_next_frame_blocking(buf) # grab frame and stick in buf
+                    framebuffer = self.cam.grab_next_frame_blocking_numarray()
                 except cam_iface.BuffersOverflowed:
                     print >> sys.stderr , 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
                 # get best guess as to when image was taken
@@ -144,12 +141,11 @@ class GrabClass(object):
                     print >> sys.stderr, 'Warning: IFI is %f on %s at %s'%(diff,self.cam_id,time.asctime())
                 if framenumber-old_fn > 1:
                     print >> sys.stderr, '  frames apparently skipped:', framenumber-old_fn
-##                globals['last_frame_timestamp']=timestamp
                 old_ts = timestamp
                 old_fn = framenumber
                 
-                points, found_anything = self.realtime_analyzer.do_work( buf, timestamp, framenumber )
-                raw_image = buf.copy()
+                points, found_anything = self.realtime_analyzer.do_work( framebuffer, timestamp, framenumber )
+                raw_image = framebuffer
                 
                 # make appropriate references to our copy of the data
                 if debug_isSet():
@@ -209,8 +205,6 @@ class GrabClass(object):
 
             globals['cam_quit_event'].set()
             globals['grab_thread_done'].set()
-##            print 'camera quit',self.cam_id
-##            sys.stdout.flush()
 
 class App:
     
@@ -258,8 +252,9 @@ class App:
         self.all_grabbers = []
         
         for cam_no in range(self.num_cams):
-            num_buffers = 100
-            cam = cam_iface.CamContext(cam_no,num_buffers)
+            num_buffers = 80
+            cam = cam_iface.Camera(cam_no,num_buffers)
+            cam.set_trigger_source( 1 ) # external
             self.all_cams.append( cam )
 
             height = cam.get_max_height()
@@ -291,8 +286,6 @@ class App:
             globals['collecting_background'].set()
             globals['find_rotation_center_start'] = threading.Event()
             globals['debug'] = threading.Event()
-
-##            globals['last_frame_timestamp']=None
 
             # set defaults
             cam.set_camera_property(cam_iface.SHUTTER,300,0,0)
