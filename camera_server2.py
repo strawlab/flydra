@@ -268,7 +268,7 @@ class App:
         
         for cam_no in range(self.num_cams):
             num_buffers = 20
-            cam = cam_iface.Camera(cam_no,num_buffers)
+            cam = cam_iface.Camera(cam_no,num_buffers,7,0,0) # last 3 parameters only used on window drivers for now
             self.all_cams.append( cam )
 
             height = cam.get_max_height()
@@ -319,8 +319,11 @@ class App:
             scalar_control_info['diff_threshold'] = diff_threshold
             clear_threshold = 0.0
             scalar_control_info['clear_threshold'] = clear_threshold
-            
-            scalar_control_info['trigger_source'] = cam.get_trigger_source()
+
+            try:
+                scalar_control_info['trigger_source'] = cam.get_trigger_source()
+            except cam_iface.CamIFaceError:
+                scalar_control_info['trigger_source'] = 0
             scalar_control_info['roi2'] = globals['use_roi2'].isSet()
             
             scalar_control_info['width'] = width

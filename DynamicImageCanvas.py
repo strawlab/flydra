@@ -26,6 +26,8 @@ class DynamicImageCanvas(wxGLCanvas):
         self.draw_points = {}
         self.reconstructed_points = {}
         self.do_draw_points = True
+        self.x_border_pixels = 1
+        self.y_border_pixels = 1
 
     def set_clipping(self, value):
         self.do_clipping = value
@@ -149,8 +151,10 @@ class DynamicImageCanvas(wxGLCanvas):
                      raw_data)
 
     def update_image(self,id_val,image,format='MONO8'):
-        if format == 'YUV422':
-            image = imops.yuv422_to_rgb888( image )
+        if format == 'YUV411':
+            image = imops.yuv411_to_rgb24( image )
+        elif format == 'YUV422':
+            image = imops.yuv422_to_rgb24( image )
         elif format == 'MONO8':
             pass
         else:
@@ -217,12 +221,10 @@ class DynamicImageCanvas(wxGLCanvas):
             glClear(GL_COLOR_BUFFER_BIT)
             ids = self._gl_tex_info_dict.keys()
             ids.sort()
-            x_border_pixels = 1
-            y_border_pixels = 1
             size = self.GetClientSize()
 
-            x_border = x_border_pixels/float(size[0])
-            y_border = y_border_pixels/float(size[1])
+            x_border = self.x_border_pixels/float(size[0])
+            y_border = self.y_border_pixels/float(size[1])
             hx = x_border*0.5
             hy = y_border*0.5
             x_borders = x_border*(N+1)

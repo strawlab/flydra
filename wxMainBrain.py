@@ -178,7 +178,7 @@ class wxMainBrainApp(wxApp):
 
         # finalize wx stuff
 
-        frame.SetAutoLayout(true)
+        frame.SetAutoLayout(True)
 
         frame.Show()
         self.SetTopWindow(frame)
