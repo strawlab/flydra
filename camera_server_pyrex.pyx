@@ -47,6 +47,10 @@ cdef void print_info_8u(ipp.Ipp8u* im, int im_step, ipp.IppiSize sz, object pref
                                                                    maxIdx.x,maxIdx.y)
 # end of IPP-requiring code
 
+use_arena = 1
+if use_arena:
+    cimport arena_control
+
 if sys.platform == 'win32':
     time_func = time.clock
 else:
@@ -125,6 +129,7 @@ cdef class GrabClass:
         centroid_search_radius = 50
         alpha = 1.0/n_bg_samples
         # questionable optimization: speed up by eliminating namespace lookups
+        # very questionable! doesn't the compiler resolve these before execution?
         cam_quit_event_isSet = globals['cam_quit_event'].isSet
         acquire_lock = globals['incoming_frames_lock'].acquire
         release_lock = globals['incoming_frames_lock'].release
@@ -194,6 +199,11 @@ cdef class GrabClass:
 
         # end of IPP-requiring code
 
+        if use_arena:
+            arena_error = arena_control.arena_initialize()
+            if arena_error != 0:
+                raise RuntimeError( "Error initializing arena control" )
+
         coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             while not cam_quit_event_isSet():
@@ -223,6 +233,9 @@ cdef class GrabClass:
                 CHK( ipp.ippiMaxIndx_8u_C1R(
                     (im2 + self.bottom*im2_step + self.left), im2_step,
                     roi_sz, &max_val, &index_x,&index_y))
+                CHK( ipp.ippiSqr_8u_C1IRSfs(
+                    (im2 + self.bottom*im2_step + self.left), im2_step,
+                    roi_sz, 4 ))
                 
                 if max_val < globals['diff_threshold']:
                     x0=-1
@@ -235,7 +248,7 @@ cdef class GrabClass:
                                 roi_sz.width, roi_sz.height,
                                 (im2 + self.bottom*im2_step + self.left), im2_step )
                     # note that x0 and y0 are now relative to the ROI origin
-                    
+
                 #print 'max_val %f (% 8.1f,% 8.1f)'%(max_val,x0,y0)
                 
                 # now
@@ -270,6 +283,11 @@ cdef class GrabClass:
                             y0 + self.bottom,
                             orientation) ]
 
+                if use_arena: # call out to arena feedback function
+                    arena_control.arena_update(
+                        x0+self.left, y0+self.bottom, orientation,
+                        timestamp, framenumber )
+                    
 ##                points = [ (x0,y0),
 ##                           (index_x, index_y) ]
                 
@@ -416,6 +434,9 @@ cdef class GrabClass:
 ##                                        (main_brain_hostname,COORD_PORT))
                 sleep(1e-6) # yield processor
         finally:
+            if use_arena:
+                arena_control.arena_finish()
+
             # start of IPP-requiring code
             ipp.ippiFree(im1)
             ipp.ippiFree(im2)

@@ -19,13 +19,13 @@ int fit_params_once_char( double *x0, double *y0, double *orientation,
 * is used locally in fit_params().  Call this before calling
 * fit_params() for the first time.
 **********************************************************/
-int init_moment_state();
+int init_moment_state( void );
 
 /**********************************************************
 * Deallocation of the IPP "moment state" structure.  Call this
 * after calling fit_params() for the last time.
 **********************************************************/
-int free_moment_state();
+int free_moment_state( void );
 
 /**********************************************************
 * Function to find the center of gravity and orientation of the

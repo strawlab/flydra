@@ -332,6 +332,8 @@ cdef extern from "ippi.h":
                               Ipp32f* pDst, int dstStep, IppiSize roiSize)
     IppStatus ippiSqr_32f_C1IR(Ipp32f* pSrcDst, int srcDstStep,
                               IppiSize roiSize)
+    IppStatus ippiSqr_8u_C1IRSfs(Ipp8u* pSrcDst, int srcDstStep,
+                              IppiSize roiSize, int scaleFactor)
     IppStatus ippiSub_32f_C1IR(Ipp32f* pSrc, int srcStep, Ipp32f* pSrcDst,
                                int srcDstStep, IppiSize roiSize)
     IppStatus ippiSqrt_32f_C1IR(Ipp32f* pSrcDst, int srcDstStep,

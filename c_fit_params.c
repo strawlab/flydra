@@ -9,6 +9,9 @@
 
 IppiMomentState_64f *pState;
 
+/****************************************************************
+** print_img2 ***************************************************
+****************************************************************/
 void print_img2( unsigned char *img, int width, int height, int img_step )
 {
   int i,j;
@@ -22,6 +25,9 @@ void print_img2( unsigned char *img, int width, int height, int img_step )
   }
 }
 
+/****************************************************************
+** init_moment_state ********************************************
+****************************************************************/
 int init_moment_state()
 {
   if( !CHK( ippiMomentInitAlloc_64f( &pState, ippAlgHintFast ) ) )
@@ -32,6 +38,9 @@ int init_moment_state()
   return 0;
 }
 
+/****************************************************************
+** free_moment_state ********************************************
+****************************************************************/
 int free_moment_state()
 {
   if( !CHK( ippiMomentFree_64f( pState ) ) )
@@ -42,6 +51,9 @@ int free_moment_state()
   return 0;
 }
 
+/****************************************************************
+** fit_params ***************************************************
+****************************************************************/
 int fit_params( double *x0, double *y0, double *orientation,
                        int index_x, int index_y, int centroid_search_radius,
                        int width, int height, unsigned char *img, int img_step )
@@ -123,6 +135,9 @@ int fit_params( double *x0, double *y0, double *orientation,
   return 0;
 }
 
+/****************************************************************
+** fit_params_once_float ****************************************
+****************************************************************/
 int fit_params_once_float( double *x0, double *y0, double *orientation,
                        int width, int height, float *img )
 {
@@ -173,12 +188,15 @@ int fit_params_once_float( double *x0, double *y0, double *orientation,
   return 0;
 }
 
+/****************************************************************
+** fit_params_once_char *****************************************
+****************************************************************/
 int fit_params_once_char( double *x0, double *y0, double *orientation,
                        int width, int height, unsigned char *img )
 {
   int i;
   int sts;
-  int new_img_step, use_img_step;
+  int new_img_step;
   Ipp8u* new_img;
 
   new_img = ippiMalloc_8u_C1( width, height, &new_img_step );
