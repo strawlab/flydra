@@ -45,8 +45,7 @@
 #define cdi_CHAN_X 0
 #define cdi_CHAN_Y 1
 #define cdi_MIN 2030
-#define cdi_MAX 2995
-#define cdi_MAX 2995
+#define cdi_MAX 2990
 #define cdi_RANGE (cdi_MAX-cdi_MIN)
 #define cdi_AREF AREF_GROUND
 

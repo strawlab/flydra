@@ -324,41 +324,48 @@ void arena_update( double x, double y, double orientation,
     /* close serial port */
     sc_close_port( &serial_port );
   }
-  else if( cur_set >= 0 && timestamp > set_time + n_seconds_per_set/2 )
-      /* halfway through set, time to expand square! */
+  else if( cur_set >= 0 )
   {
-    if( expanding == 0 ) expanding = 1;
-    else if( expanding == 1 ) /* do y expansion */
+    switch( expanding )
     {
-      /* assume avg_frametime seconds between this frame and the next one */
-      /* deg/sec * sec * pixels/deg = pixels */
-      new_pos_y_f += expansion_rate * avg_frametime * DEG2PIX;
-      /* assuming one-pixel expansion per pattern y shift */
-      /* patterns expand a total of 78.75 deg (in each of x and y), so at 100 Hz
-         and expanding at 1 patt per frame, expansion is 984.375 deg/sec */
+      case 0:
+        /* assume avg_frametime seconds between this frame and the next one */
+        /* deg/sec * sec * pixels/deg = pixels */
+        new_pos_y_f += expansion_rate * avg_frametime * DEG2PIX;
+        /* assuming one-pixel expansion per pattern y shift */
+        /* patterns expand a total of 78.75 deg (in each of x and y), so at 100 Hz
+           and expanding at 1 patt per frame, expansion is 984.375 deg/sec */
 
-      if( new_pos_y_f >= (double)PATTERN_DEPTH - 0.5 ) /* stop expanding! */
-      {
-        new_pos_y_f = (double)PATTERN_DEPTH - 1;
-        expanding = 2;
-      }
-    }
-    else if( expanding == 2 ) /* post-expansion x movement */
-    {
-    }
-  }
-  else if( cur_set >= 0 && expanding == 0 ) /* pre-expansion x movement */
-  {
-    /* gently try to get square in front of fly */
-    use_orientation = orientation;
-    use_pos_x = new_pos_x_f / RAD2PIX; /* in radians */
-    if( fabs( use_orientation - use_pos_x ) > PI ) /* unwrap */
-      if( use_orientation < use_pos_x ) use_orientation += 2*PI;
-      else use_pos_x += 2*PI;
-    if( fabs( use_orientation - use_pos_x ) > PI/2 ) /* adjust x pos */
-      if( use_orientation < use_pos_x ) new_pos_x_f -= 0.1;
-      else new_pos_x_f += 0.1; /* gently! */
-  }
+        if( new_pos_y_f >= (double)PATTERN_DEPTH - 0.5 ) /* stop expanding */
+        {
+          new_pos_y_f = (double)PATTERN_DEPTH - 1;
+          expanding = 1;
+        }
+      break;
+      case 1:
+        if( timestamp > set_time + n_seconds_per_set/2  ) /* contraction time */
+        {
+          new_pos_y_f -= expansion_rate * avg_frametime * DEG2PIX;
+          if( new_pos_y_f < 0.5 ) /* stop contracting */
+          {
+            new_pos_y_f = 0.0;
+            expanding = 2;
+          }
+        }
+      break;
+      case 2:
+        /* gently try to get square in front of fly */
+        use_orientation = orientation;
+        use_pos_x = new_pos_x_f / RAD2PIX; /* in radians */
+        if( fabs( use_orientation - use_pos_x ) > PI ) /* unwrap */
+          if( use_orientation < use_pos_x ) use_orientation += 2*PI;
+          else use_pos_x += 2*PI;
+        if( fabs( use_orientation - use_pos_x ) > PI/2 ) /* adjust x pos */
+          if( use_orientation < use_pos_x ) new_pos_x_f -= 0.1;
+          else new_pos_x_f += 0.1; /* gently! */
+      break;
+    } /* switch */
+  } /* if */
 
   /* set pattern position */
   round_position( &new_pos_x, &new_pos_x_f, &new_pos_y, &new_pos_y_f );
