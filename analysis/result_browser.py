@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import time, StringIO, sets, sys
+import math
 import numarray as nx
 import tables as PT
 import matplotlib
@@ -10,7 +11,8 @@ from matplotlib.ticker import LinearLocator
 
 import flydra.undistort as undistort
 
-from numarray.ieeespecial import getnan, nan
+from numarray.ieeespecial import getnan, nan, inf
+import numarray.linear_algebra
 
 import Pyro.core, Pyro.errors
 Pyro.core.initClient(banner=0)
@@ -26,7 +28,6 @@ class ExactMovieInfo(PT.IsDescription):
 def status(status_string):
     print " status:",status_string
 
-
 def my_subplot(n):
     x_space = 0.05
     y_space = 0.15
@@ -35,6 +36,20 @@ def my_subplot(n):
     bottom = 0 + + y_space
     w = 0.2 - (x_space*1.5)
     h = 1.0 - (y_space*2)
+    return axes([left,bottom,w,h])
+
+def dougs_subplot(n):
+    
+    row = n / 2
+    col = n % 2
+    
+    x_space = 0.01
+    y_space = 0.025
+    
+    left = col*0.5 + x_space
+    bottom = (1.0-row*0.5)-0.5 + y_space
+    w = 0.5 - x_space
+    h = 0.5 - y_space
     return axes([left,bottom,w,h])
 
 proxy_spawner = None
@@ -91,7 +106,16 @@ def normalize(V):
     u = v/ math.sqrt( nx.sum( v**2) )
     return u
 
-def auto_flip_line_direction(results,start_frame,stop_frame,typ='best'):
+def sort_on_col0( a, b ):
+    a0 = a[0]
+    b0 = b[0]
+    if a0 < b0: return -1
+    elif a0 > b0: return 1
+    else: return 0
+
+def auto_flip_line_direction(results,start_frame,stop_frame,typ='best',
+                             skip_allowance = 5,                             
+                             ):
     if typ=='best':
         data3d = results.root.data3d_best
     elif typ=='fastest':
@@ -99,7 +123,10 @@ def auto_flip_line_direction(results,start_frame,stop_frame,typ='best'):
 
     assert stop_frame-start_frame > 1
     
-    frame_and_dir_list = nx.array([ (row['frame'], -row['p2'],row['p4'],-row['p5']) for row in data3d.where( start_frame <= data3d.cols.frame <= stop_frame ) ])
+    frame_and_dir_list = [ (row['frame'], -row['p2'],row['p4'],-row['p5']) for row in data3d.where( start_frame <= data3d.cols.frame <= stop_frame ) ]
+    frame_and_dir_list.sort(sort_on_col0)
+    frame_and_dir_list = nx.array( frame_and_dir_list )
+    print frame_and_dir_list
     bad_idx=list(numarray.ieeespecial.getnan(frame_and_dir_list[:,1])[0])
     good_idx = [i for i in range(len(frame_and_dir_list[:,1])) if i not in bad_idx]
     frame_and_dir_list = [ frame_and_dir_list[i] for i in good_idx]
@@ -131,9 +158,10 @@ def auto_flip_line_direction(results,start_frame,stop_frame,typ='best'):
         
         prev_frame = this_frame
         prev_dir = this_dir
+
         
-        if dt_frames > 3:
-            print 'frame %d skipped because previous 3 frames not found'
+        if dt_frames > skip_allowance:
+            print 'frame %d skipped because previous %d frames not found'%(this_frame,skip_allowance)
             continue
         if theta_deg > 90:
             flip_line_direction(results,this_frame,typ=typ)
@@ -310,9 +338,9 @@ def plot_whole_movie_3d(results, typ='best', show_err=False):
     
     # plot it!
     ax = pylab.axes()
-    ax.plot(f,x,'r.')
-    ax.plot(f,y,'g.')
-    ax.plot(f,z,'b.')
+    ax.plot(f,x,'r-')
+    ax.plot(f,y,'g-')
+    ax.plot(f,z,'b-')
     if show_err:
         ax.plot(f,err,'k.')
     set(ax,'ylim',[-1000,1000])
@@ -468,10 +496,15 @@ def get_cam_ids(results):
     cam_ids.sort()
     return cam_ids
 
-def recompute_3d_from_2d(results,overwrite=False,typ='best'):
+def recompute_3d_from_2d(results,
+                         overwrite=False,
+                         hypothesis_test=True, # discards camns_used
+                         typ='best',
+                         start_stop=None, # used for hypothesis_test
+                         ):
     import flydra.reconstruct
     reconstructor = flydra.reconstruct.Reconstructor(results)
-    
+
     if typ == 'fast':
         data3d = results.root.data3d_fast
     elif typ == 'best':
@@ -485,48 +518,166 @@ def recompute_3d_from_2d(results,overwrite=False,typ='best'):
         cam_id, camn = row['cam_id'], row['camn']
         camn2cam_id[camn]=cam_id
 
-    print len(data3d),'rows to be processed'
-    count = 0
-    for row in data3d:
-        if count%100==0:
-            print 'processing row',count
-        count += 1
-        camns_used = map(int,row['camns_used'].split())
-        if not len(camns_used):
-            continue
-        nrow = row.nrow()
-        frame_no = row['frame']
-        d2 = {}
-        for x in data2d.where( data2d.cols.frame == frame_no ):
-            camn = x['camn']
-            if camn in camns_used:
-                cam_id = camn2cam_id[camn]
+    if not hypothesis_test:
+        print len(data3d),'rows to be processed'
+        count = 0
+        for row in data3d:
+            if count%100==0:
+                print 'processing row',count
+            count += 1
+            camns_used = map(int,row['camns_used'].split())
+            if not len(camns_used):
+                continue
+            nrow = row.nrow()
+            frame_no = row['frame']
+            d2 = {}
+            for x in data2d.where( data2d.cols.frame == frame_no ):
+                camn = x['camn']
+                if camn in camns_used:
+                    cam_id = camn2cam_id[camn]
+                    d2[cam_id] = (x['x'], x['y'], x['area'], x['slope'],
+                                  x['eccentricity'], x['p1'], x['p2'],
+                                  x['p3'], x['p4'])
 
+            X, line3d = reconstructor.find3d(d2.items())
+            if overwrite:
+                new_row = []
+                for colname in data3d.colnames:
+                    if colname == 'x': value = X[0]
+                    elif colname == 'y': value = X[1]
+                    elif colname == 'z': value = X[2]
+                    else: value = row[colname]
+                    if line3d is not None:
+                        if   colname == 'p0': value = line3d[0]
+                        elif colname == 'p1': value = line3d[1]
+                        elif colname == 'p2': value = line3d[2]
+                        elif colname == 'p3': value = line3d[3]
+                        elif colname == 'p4': value = line3d[4]
+                        elif colname == 'p5': value = line3d[5]
+                    new_row.append( value )
+                data3d[nrow] = new_row
+
+    else: # do hypothesis testing
+        start_frame, stop_frame = start_stop
+
+        
+        print stop_frame-start_frame+1,'rows to be processed'
+        count = 0
+        for frame_no in range(start_frame,stop_frame+1):
+            if count%100==0:
+                print 'processing frame',frame_no
+            count += 1
+            
+            # load all 2D data
+            d2 = {}
+            cam_id2camn = {} # must be recomputed each frame
+            for x in data2d.where( data2d.cols.frame == frame_no ):
+                camn = x['camn']
+                cam_id = camn2cam_id[camn]
+                cam_id2camn[cam_id] = camn
                 d2[cam_id] = (x['x'], x['y'], x['area'], x['slope'],
                               x['eccentricity'], x['p1'], x['p2'],
                               x['p3'], x['p4'])
-                
-        X, line3d = reconstructor.find3d(d2.items())
-        if overwrite:
-            new_row = []
-            for colname in data3d.colnames:
-                if colname == 'x': value = X[0]
-                elif colname == 'y': value = X[1]
-                elif colname == 'z': value = X[2]
-                else: value = row[colname]
-                if line3d is not None:
-                    if   colname == 'p0': value = line3d[0]
-                    elif colname == 'p1': value = line3d[1]
-                    elif colname == 'p2': value = line3d[2]
-                    elif colname == 'p3': value = line3d[3]
-                    elif colname == 'p4': value = line3d[4]
-                    elif colname == 'p5': value = line3d[5]
-                new_row.append( value )
-            data3d[nrow] = new_row
 
-def plot_all_images(results,frame_no,show_raw_image=True,zoomed=True, typ='best',
-                    PLOT_RED=True, recompute_3d=False, frame_server_dict=None,
-                    do_undistort=True,fixed_im_centers=None):
+            # do hypothestis testing
+            min_mean_dist = inf
+            best_hypothesis_data = None
+            min_err_dist = inf # normalized to weight more cameras
+            for cam_ids_used in reconstructor.cam_combinations:
+                camns_used = [cam_id2camn[cam_id] for cam_id in cam_ids_used]
+                #print 'cam_ids_used',len(cam_ids_used),cam_ids_used
+                d3 = {}
+                # check if data available from all camera combinations:
+                try:
+                    for cam_id in cam_ids_used:
+                        d3[cam_id] = d2[cam_id] # d2 only has points found in 2D image
+                except KeyError:
+                    #print 'skipping cam_ids_used, camera not available'
+                    continue
+                try:
+                    X, line3d = reconstructor.find3d(d3.items())
+                except numarray.linear_algebra.LinearAlgebra2.LinearAlgebraError, exc:
+                    #print 'WARNING:',str(exc),frame_no,len(d3)
+                    continue
+                alpha = 1.0/len(d3)
+                mean_dist = 0.0
+                for cam_id in d3.iterkeys():
+                    orig_x, orig_y = d3[cam_id][:2]
+                    recon_x, recon_y = reconstructor.find2d(cam_id,X)
+
+                    dist = math.sqrt((orig_x-recon_x)**2 + (orig_y-recon_y)**2)
+                    mean_dist += dist*alpha
+                    #print cam_id,(orig_x, orig_y), (recon_x, recon_y), dist
+                    #print '  ',cam_id, dist
+                err_dist = mean_dist / (1*float(len(camns_used))**2) # XXX weighting function to boost more camera views
+##                if mean_dist < min_mean_dist:
+##                    min_mean_dist = mean_dist
+##                    cam_ids_used_min_mean_dist = cam_ids_used
+####                    best_hypothesis_data = X, line3d, camns_used
+                if err_dist < min_err_dist:
+                    min_err_dist = err_dist
+                    min_mean_dist = mean_dist
+                    best_hypothesis_data = X, line3d, camns_used
+                    cam_ids_used_min_err_dist = cam_ids_used
+            print 'frame',frame_no,cam_ids_used_min_err_dist,min_err_dist
+                #print '  using data with mean_dist %f'%min_mean_dist,cam_ids_used
+##            else:
+##                #X, line3d, cam_ids_used = (nan,nan,nan), None, []
+##                #print '  no data...'
+##                continue # XXX (double check this) go to next frame: no useful data here
+            
+            # Now we have the best possible data
+            
+            if overwrite:
+                # find old row
+                old_nrow = None
+                for row in data3d.where( data3d.cols.frame == frame_no ):
+                    if old_nrow is not None:
+                        raise RuntimeError('more than row with frame number %d in data3d'%frame_no)
+                    old_nrow = row.nrow()
+                    
+                # delete old row
+                if old_nrow is not None:
+                    data3d.removeRows(start=old_nrow,stop=None)
+                
+                # insert new row if it meets threshold distance
+                if min_err_dist < 10.0 and best_hypothesis_data is not None:
+                    X, line3d, camns_used = best_hypothesis_data
+                    if line3d is None:
+                        line3d = [nan]*6 # fill with nans
+                    cam_nos_used_str = ' '.join( map(str, camns_used) )
+                    new_row = data3d.row
+                    new_row['frame'] = frame_no
+                    new_row['x'] = X[0]
+                    new_row['y'] = X[1]
+                    new_row['z'] = X[2]
+                    new_row['p0'] = line3d[0]
+                    new_row['p1'] = line3d[1]
+                    new_row['p2'] = line3d[2]
+                    new_row['p3'] = line3d[3]
+                    new_row['p4'] = line3d[4]
+                    new_row['p5'] = line3d[5]
+                    new_row['timestamp']=0.0
+                    new_row['camns_used']=cam_nos_used_str
+                    new_row['mean_dist']=min_mean_dist
+                    new_row.append()
+                    data3d.flush()
+
+def plot_all_images(results,
+                    frame_no,
+                    show_raw_image=True,
+                    zoomed=True,
+                    typ='best',
+                    PLOT_RED=True,
+                    ##recompute_3d=False,
+                    frame_server_dict=None,
+                    do_undistort=True,
+                    fixed_im_centers=None,
+                    plot_orientation=True,
+                    origin='lower',
+                    display_labels=True,
+                    colormap='jet'):
+    
     if fixed_im_centers is None:
         fixed_im_centers = {}
     ioff()
@@ -541,73 +692,52 @@ def plot_all_images(results,frame_no,show_raw_image=True,zoomed=True, typ='best'
     data2d = results.root.data2d
     cam_info = results.root.cam_info
 
+    if colormap == 'jet':
+        cmap = cm.jet
+    elif colormap.startswith('gray'):
+        cmap = cm.gray
+    else:
+        raise ValueError("unknown colormap '%s'"%colormap)
+
     camn2cam_id = {}
     for row in cam_info:
         cam_id, camn = row['cam_id'], row['camn']
         camn2cam_id[camn]=cam_id
     
-##    camns_avail = [x['camn'] for x in data2d.where( data2d.cols.frame == frame_no )]
-    camns_avail = [x['camn'] for x in data2d if x['frame'] == frame_no ]
-##    tmp = [map(int,x['camns_used'].split()) for x in data3d.where( data3d.cols.frame == frame_no)]
-    tmp = [map(int,x['camns_used'].split()) for x in data3d if x['frame'] == frame_no]
-    if len(tmp) == 0:
-        status('WARNING: No 3D data for frame %d'%frame_no)
-        camns_used = []
-    else:
-        camns_used = tmp[0]
-
     # find total number of cameras plugged in:
     cam_ids=list(sets.Set(cam_info.cols.cam_id))
     cam_ids.sort()
 
-    if recompute_3d:
-        d2 = {}
-        failed = False
-        for camn in camns_used:
-            cam_id = camn2cam_id[camn]
-            tmp = [ (x['x'],x['y'],x['area'],x['slope'],x['eccentricity'],
-                     x['p1'],x['p2'],x['p3'],x['p4'])
-##                    for x in data2d.where( data2d.cols.frame == frame_no )
-##                    if x['camn'] == camn ]
-                    for x in data2d if x['frame'] == frame_no and x['camn'] == camn ]
-            print 'tmp',cam_id,tmp
-            if len(tmp)==0:
-                status('WARNING: could not recompute 3D data')
-                failed=True
-                break
-            d2[cam_id] = tmp[0]
-        if failed:
-            X, line3d = None, None
-        else:
-            X, line3d = reconstructor.find3d(d2.items())
-            print 'found new line',line3d
+    print 'WARNING: not plotting cam2:0'
+    cam_ids.remove('cam2:0')
+
+    tmp = [((x['x'],x['y'],x['z']),
+            (x['p0'],x['p1'],x['p2'],x['p3'],x['p4'],x['p5']),
+            x['camns_used']
+            ) for x in data3d.where( data3d.cols.frame == frame_no) ]
+    if len(tmp) == 0:
+        X, line3d = None, None
+        camns_used = ()
     else:
-        tmp = [((x['x'],x['y'],x['z']),
-                (x['p0'],x['p1'],x['p2'],x['p3'],x['p4'],x['p5'])
-##                ) for x in data3d.where( data3d.cols.frame == frame_no) ]
-                ) for x in data3d if x['frame'] == frame_no ]
-        if len(tmp) == 0:
-            X, line3d = None, None
-        else:
-            X, line3d = tmp[0]
-
-    #print X,line3d
-
-    #gcf().set_figsize_inches( (8,3) )
+        assert len(tmp)==1
+        X, line3d, camns_used = tmp[0]
+        camns_used = map(int,camns_used.split())
+        
     clf()
     for subplot_number,cam_id in enumerate(cam_ids):
-        #print ' doing',cam_id
-        sys.stdout.flush()
         width, height = reconstructor.get_resolution(cam_id)
         
         i = cam_ids.index(cam_id)
-        ax=my_subplot(subplot_number)
-        
+        ax=dougs_subplot(subplot_number)
+        set(ax,'frame_on',display_labels)
+
         have_2d_data = False
-        for row in data2d.where( data2d.cols.frame == frame_no ):
-##        for row in data2d:
-##            if row['frame'] != frame_no:
-##                continue
+        for row in data2d:
+            if row['frame'] != frame_no:
+                # XXX ARGH!!! some weird bug in my code or pytables??
+                # it means I can't do "in kernel", e.g.:
+                #        for row in data2d.where( data2d.cols.frame == frame_no ):
+                continue
             camn = row['camn']
             if camn2cam_id[camn] == cam_id:
                 have_2d_data = True
@@ -620,12 +750,13 @@ def plot_all_images(results,frame_no,show_raw_image=True,zoomed=True, typ='best'
                     have_2d_data = False
                 break
         if not have_2d_data:
+            camn=None
             x=None
             y=None
             slope=None
             eccentricity=None
             remote_timestamp = None
-        
+            
         title_str = cam_id
 
         have_limit_data = False
@@ -674,9 +805,9 @@ def plot_all_images(results,frame_no,show_raw_image=True,zoomed=True, typ='best'
                     im_small = im[ymin:ymax,xmin:xmax]
                     im_small = im_small.copy()
                     ax.imshow(im_small,
-                              origin='lower',
+                              origin=origin,
                               interpolation='nearest',
-                              cmap=cm.jet,
+                              cmap=cmap,
                               extent = extent,
                               )
                     
@@ -685,17 +816,21 @@ def plot_all_images(results,frame_no,show_raw_image=True,zoomed=True, typ='best'
                     xmax=width-1
                     ymin=0
                     ymax=height-1
-                    ax.imshow(im,origin='lower',interpolation='nearest',cmap=cm.jet)
+                    ax.imshow(im,origin=origin,interpolation='nearest',cmap=cmap)
             else:
                 xmin=0
                 xmax=width-1
                 ymin=0
                 ymax=height-1
 
-        if have_2d_data:
+        if have_2d_data and camn is not None:
+                
             # raw 2D
             try:
-                lines=ax.plot([x],[y],'o')
+                if origin == 'upper':
+                    lines=ax.plot([x],[height-y],'o')
+                else:
+                    lines=ax.plot([x],[y],'o')
             except:
                 print 'x, y',x, y
                 sys.stdout.flush()
@@ -704,8 +839,12 @@ def plot_all_images(results,frame_no,show_raw_image=True,zoomed=True, typ='best'
             if show_raw_image:
                 green = (0,1,0)
                 set(lines,'markerfacecolor',None)
-                #set(lines,'markerfacecolor',green)
-                set(lines,'markeredgecolor',green) 	 
+                if camn in camns_used:
+                    set(lines,'markeredgecolor',green)
+                elif camn not in camns_used:
+                    set(lines,'markeredgecolor',(0, 0.2, 0))
+                    #print 'setting alpha in',cam_id
+                    #set(lines,'alpha',0.2)
                 set(lines,'markeredgewidth',2.0)
 
             #if not len(numarray.ieeespecial.getnan(slope)[0]):
@@ -736,12 +875,13 @@ def plot_all_images(results,frame_no,show_raw_image=True,zoomed=True, typ='best'
                 elif y2 > ymax:
                     y2 = ymax
                     x2 = -(c+b*y2)/a                
-                
-                lines=ax.plot([x1,x2],[y1,y2],':',linewidth=1.5)
-                if show_raw_image:
-                    green = (0,1,0)
-                    set(lines,'color',green)
-                    #set(lines[0],'linewidth',0.8)
+
+                if plot_orientation:
+                    lines=ax.plot([x1,x2],[y1,y2],':',linewidth=1.5)
+                    if show_raw_image:
+                        green = (0,1,0)
+                        set(lines,'color',green)
+                        #set(lines[0],'linewidth',0.8)
 
         if X is not None:
             if line3d is None:
@@ -753,49 +893,56 @@ def plot_all_images(results,frame_no,show_raw_image=True,zoomed=True, typ='best'
                 
             #near = 10
             if PLOT_RED:
-                #if x>=0-near and x < width+near and y>=0-near and y < height+near:
-                    # reconstructed 2D
+                if origin=='upper':
+                    lines=ax.plot([x],[height-y],'rx')
+                else:
                     lines=ax.plot([x],[y],'rx')
-                    set(lines,'markeredgewidth',2.0)
+                set(lines,'markeredgewidth',2.0)
                 
             if l3 is not None:
-                a,b,c=l3
-                # ax+by+c=0
+                if plot_orientation:
 
-                # y = -(c+ax)/b
-                # x = -(c+by)/a
+                    a,b,c=l3
+                    # ax+by+c=0
 
-                
-                x1=xmin
-                y1=-(c+a*x1)/b
-                if y1 < ymin:
-                    y1 = ymin
-                    x1 = -(c+b*y1)/a
-                elif y1 > ymax:
-                    y1 = ymax
-                    x1 = -(c+b*y1)/a
-                
-                x2=xmax
-                y2=-(c+a*x2)/b
-                if y2 < ymin:
-                    y2 = ymin
-                    x2 = -(c+b*y2)/a
-                elif y2 > ymax:
-                    y2 = ymax
-                    x2 = -(c+b*y2)/a
+                    # y = -(c+ax)/b
+                    # x = -(c+by)/a
 
-                if PLOT_RED:
-                    lines=ax.plot([x1,x2],[y1,y2],'r--',linewidth=1.5)
-                    #red = (1.0,0,0,0.5)
-                    #set(lines,'color',red)
+
+                    x1=xmin
+                    y1=-(c+a*x1)/b
+                    if y1 < ymin:
+                        y1 = ymin
+                        x1 = -(c+b*y1)/a
+                    elif y1 > ymax:
+                        y1 = ymax
+                        x1 = -(c+b*y1)/a
+
+                    x2=xmax
+                    y2=-(c+a*x2)/b
+                    if y2 < ymin:
+                        y2 = ymin
+                        x2 = -(c+b*y2)/a
+                    elif y2 > ymax:
+                        y2 = ymax
+                        x2 = -(c+b*y2)/a
+
+                    if PLOT_RED:
+                        lines=ax.plot([x1,x2],[y1,y2],'r--',linewidth=1.5)
+                        #red = (1.0,0,0,0.5)
+                        #set(lines,'color',red)
         labels=ax.get_xticklabels()
         set(labels, rotation=90)
-        title(title_str)
+        if display_labels:
+            title(title_str)
         if have_limit_data:
             ax.xaxis.set_major_locator( LinearLocator(numticks=5) )
             ax.yaxis.set_major_locator( LinearLocator(numticks=5) )
             set(ax,'xlim',[xmin, xmax])
             set(ax,'ylim',[ymin, ymax])
+        if not display_labels:
+            set(ax,'xticks',[])
+            set(ax,'yticks',[])
     ion()
 
 def test():
@@ -830,16 +977,23 @@ def save_movie(results):
     cam_ids = get_cam_ids(results,)
     frame_server_dict = {}
     for cam_id in cam_ids:
+        print 'getting frame server for',cam_id
         frame_server_dict[cam_id] = get_server(cam_id)
-    for frame in xrange(26250, 26350, 1):
+    for frame in xrange(5783, 5948, 1):
+#    for frame in xrange(5896,5898):
         clf()
         try:
             plot_all_images(results, frame,
                             frame_server_dict=frame_server_dict,
                             #fixed_im_centers=fixed_im_centers,
+                            colormap='grayscale',
+                            zoomed=False,
+                            plot_orientation=False,
+                            origin='upper',
+                            display_labels=False,
                             )
             
-            fname = 'raw_zoomed_frame%04d.png'%frame
+            fname = 'raw_frame%04d.png'%frame
             #fname = 'raw_frame%04d.png'%frame
             print ' saving',fname
             savefig(fname)
@@ -860,7 +1014,7 @@ def get_data_array(results):
     return M
    
 if __name__=='__main__':
-    results = get_results('drill2.h5')
+    results = get_results('hb124j.h5')
     if 0:
         save_movie(results)
     if 0:
