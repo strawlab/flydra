@@ -89,6 +89,7 @@ cdef class GrabClass:
         cdef int heightwidth[2]
         cdef int collecting_background_frames
         cdef int bg_frame_number
+        cdef double new_x_cent, new_y_cent
         cdef int n_frames4stats
 ##        cdef double tval1, tval2, tval3, latency1, latency2
         cdef int i, j
@@ -104,6 +105,7 @@ cdef class GrabClass:
         cdef int mean_image_step, std_image_step, sq_image_step, std_img_step
         cdef int centroid_search_radius
         cdef int n_bg_samples
+        cdef int n_rot_samples
         cdef ipp.Ipp32f alpha
         
         cdef int w,h
@@ -124,10 +126,11 @@ cdef class GrabClass:
 
 ##        COORD_PORT = None
         n_bg_samples = 100
+        n_rot_samples = 100*60 # 1 minute
         centroid_search_radius = 50
         alpha = 1.0/n_bg_samples
         # questionable optimization: speed up by eliminating namespace lookups
-        # very questionable! doesn't the compiler resolve these before execution?
+        # very questionable! doesn't the compiler resolve these? -JB
         cam_quit_event_isSet = globals['cam_quit_event'].isSet
         acquire_lock = globals['incoming_frames_lock'].acquire
         release_lock = globals['incoming_frames_lock'].release
@@ -137,6 +140,8 @@ cdef class GrabClass:
         collect_background_start_clear = globals['collect_background_start'].clear
         clear_background_start_isSet = globals['clear_background_start'].isSet
         clear_background_start_clear = globals['clear_background_start'].clear
+        find_rotation_center_start_isSet = globals['find_rotation_center_start'].isSet
+        find_rotation_center_start_clear = globals['find_rotation_center_start'].clear
         height = self.cam.get_max_height()
         width = self.cam.get_max_width()
         buf_ptr_step = width
@@ -417,6 +422,40 @@ cdef class GrabClass:
 
                         # end of IPP-requiring code
 
+                #
+                #
+                # -=-=-=-=-= Start finding center of rotation -=-=-=-=
+                #
+                #
+                
+                if find_rotation_center_start_isSet():
+                    rot_frame_number=0
+                    find_rotation_center_start_clear()
+                    arena_control.rotation_calculation_init()
+                    c_fit_params.start_center_calculation( n_rot_samples )
+                    
+                #
+                #
+                # -=-=-=-=-= Collect data to find rotation center -=-=-=-=
+                #
+                #
+                
+                if rot_frame_number>=0:
+                    c_fit_params.update_center_calculation( x0, y0 )
+
+                    rot_frame_number = rot_frame_number+1
+                    if rot_frame_number>=n_rot_samples:
+
+                        #
+                        #
+                        # -=-=-=-=-= Finish and calculate rotation center -=-=-=-=
+                        #
+                        #
+                        
+                        c_fit_params.end_center_calculation( &new_x_cent, &new_y_cent )
+                        arena_control.rotation_calculation_finish( new_x_cent, new_y_cent )
+                        rot_frame_number=-1 # stop averaging frames
+
                 tval3=time_func()
 
                 latency1 = (tval1 - timestamp)*1000.0
@@ -563,6 +602,9 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
 
     def get_diff_threshold(self,value):
         return self.globals['diff_threshold']
+
+    def find_rotation_center(self):
+        self.glonals['find_rotation_center_start'].set()
     
 cdef class App:
     cdef object globals
@@ -660,6 +702,7 @@ cdef class App:
             globals['incoming_frames_lock'] = threading.Lock()
             globals['collect_background_start'] = threading.Event()
             globals['clear_background_start'] = threading.Event()
+            globals['find_rotation_center_start'] = threading.Event()
             globals['record_status_lock'] = threading.Lock()
 
             globals['lbrt'] = 0,0,width-1,height-1

@@ -8,6 +8,8 @@
 #define MAX( a, b ) (a > b? a:b)
 
 IppiMomentState_64f *pState;
+double *x_pos_calc, *y_pos_calc;
+int curr_frame = -1;
 
 /****************************************************************
 ** print_img2 ***************************************************
@@ -114,19 +116,21 @@ int fit_params( double *x0, double *y0, double *orientation,
     *y0 = -1;
   }
 
-  /* square image for orientation calculation *
-  if( !CHK( ippiSqr_C1IRSfs( (Ipp8u*)(img + bottom*img_step + left), img_step, roi_size, 4 ) ) )
+#if 0
+  /* square image for orientation calculation */
+  if( !CHK( ippiSqr_C1IRSfs( (Ipp8u*)(img + bottom*img_step + left), img_step, roi_size, 5 ) ) )
   {
     printf( "failed squaring image\n" );
     return 60;
   }
 
-  /* get moments *
+  /* get moments */
   if( !CHK( ippiMoments64f_8u_C1R( (Ipp8u*)(img + bottom*img_step + left), img_step, roi_size, pState ) ) )
   {
     printf( "failed calculating moments 2\n" );
     return 61;
   }
+#endif
 
   /* calculate blob orientation from central moments */
   if( !CHK( ippiGetCentralMoment_64f( pState, 1, 1, 0, (Ipp64f*)&Uu11 ) ) )
@@ -238,3 +242,47 @@ int fit_params_once_char( double *x0, double *y0, double *orientation,
 
   return 0;
 }
+
+/****************************************************************
+** start_center_calculation *************************************
+****************************************************************/
+void start_center_calculation( int nframes )
+{
+  x_pos_calc = (double*)malloc( nframes * sizeof( double ) );
+  y_pos_calc = (double*)malloc( nframes * sizeof( double ) );
+  curr_frame = 0;
+}
+
+/****************************************************************
+** end_center_calculation ***************************************
+****************************************************************/
+void end_center_calcuation( double *x_center, double *y_center )
+{
+  int i;
+
+  /* arithmetic mean */
+  *x_center = 0.0;
+  *y_center = 0.0;
+  for( i = 0; i < curr_frame; i++ )
+  {
+    *x_center += x_pos_calc[i];
+    *y_center += y_pos_calc[i];
+  }
+  *x_center /= curr_frame;
+  *y_center /= curr_frame;
+
+  free( x_pos_calc );
+  free( y_pos_calc );
+  curr_frame = -1;
+}
+
+/****************************************************************
+** update_center_calculation ************************************
+****************************************************************/
+void update_center_calculation( double new_x_pos, double new_y_pos )
+{
+  x_pos_calc[curr_frame] = new_x_pos;
+  y_pos_calc[curr_frame] = new_y_pos;
+  curr_frame++;
+}
+
