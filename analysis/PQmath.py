@@ -18,13 +18,13 @@ def rotate_velocity_by_orientation(vel,orient):
     # this is backwards from a normal quaternion rotation
     return orient.inverse()*vel*orient
 
-def assert_unit_vector(U):
+def is_unit_vector(U):
     V = nx.array(U)
     if len(V.shape)==1:
         V = V[nx.NewAxis,:]
     V = V**2
     mag = nx.sqrt(nx.sum(V,axis=1))
-    assert nx.sum(nx.abs(mag-1.0)) < 1e-15
+    return nx.sum(nx.abs(mag-1.0)) < 1e-15
 
 def world2body( U, roll_angle = 0 ):
     """convert world coordinates to body-relative coordinates
@@ -38,7 +38,7 @@ def world2body( U, roll_angle = 0 ):
 
     M (3x3 matrix), get world coords via nx.dot(M,X)
     """
-    assert_unit_vector(U)
+    assert is_unit_vector(U)
     # notation from Wagner, 1986a, Appendix 1
     Bxy = math.atan2( U[1], U[0] ) # heading angle
     Bxz = math.asin( U[2] ) # pitch (body) angle
@@ -156,7 +156,7 @@ AssertionError
 
     if str(U[0]) == 'nan':
         return (nan,nan)
-    assert_unit_vector(U)
+    assert is_unit_vector(U)
         
     yaw = math.atan2( U[1],U[0] )
     xy_r = math.sqrt(U[0]**2+U[1]**2)
