@@ -72,6 +72,7 @@ M = P[:,:3]
 
 # do the work:
 K,R = rq(M)
+Knorm = K/K[2,2]
 
 t = matrixmultiply( -R, C_ )
 
@@ -90,6 +91,10 @@ if show_results:
 
     print 'K (calibration):'
     print K
+    print
+
+    print 'normalized K (calibration):'
+    print Knorm
     print
 
     print 'R (orientation):'

@@ -239,33 +239,61 @@ class ObjectiveFunctionPosition:
                 self.objective_function = objective_function
                 self.P = P
                 self.F_P = self.objective_function.eval(P)
+                self.ndims = P.shape[1]
             def eval_pd(self,i):
                 # evaluate 3 values (perturbations in x,y,z directions)
-                perturb = 1e-6 # perturbation amount (in meters)
-                
-                P_i_x = self.P[i,0]
-                # temporarily perturb P_i
-                self.P[i,0] = P_i_x+perturb
-                F_Px = self.objective_function.eval(P)
-                self.P[i,0] = P_i_x
-                
-                P_i_y = self.P[i,1]
-                self.P[i,1] = P_i_y+perturb
-                F_Py = self.objective_function.eval(P)
-                self.P[i,1] = P_i_y
-                
-                P_i_z = self.P[i,2]
-                self.P[i,2] = P_i_z+perturb
-                F_Pz = self.objective_function.eval(P)
-                self.P[i,2] = P_i_z
-                
-                dFdP = ((F_Px-self.F_P)/perturb,
-                        (F_Py-self.F_P)/perturb,
-                        (F_Pz-self.F_P)/perturb)
+                PERTURB = 1e-6 # perturbation amount (in meters)
+
+                dFdP = []
+                for j in range(self.ndims):
+                    P_i_j = self.P[i,j]
+                    # temporarily perturb P_i
+                    self.P[i,j] = P_i_j+PERTURB
+                    F_Pj = self.objective_function.eval(P)
+                    self.P[i,j] = P_i_j
+                    
+                    dFdP.append( (F_Pj-self.F_P)/PERTURB )
                 return dFdP
         _pd_finder = PDfinder(self,P)
         PDs = nx.array([ _pd_finder.eval_pd(i) for i in range(len(P)) ])
         return PDs
+
+def smooth_position( P, delta_t, alpha, lmbda, eps ):
+    """smooth a sequence of positions
+
+    see the following citation for details:
+    
+    "Noise Smoothing for VR Equipment in Quaternions," C.C. Hsieh,
+    Y.C. Fang, M.E. Wang, C.K. Wang, M.J. Kim, S.Y. Shin, and
+    T.C. Woo, IIE Transactions, vol. 30, no. 7, pp. 581-587, 1998
+    
+    P are the positions as in an n x m array, where n is the number of
+    data points and m is the number of dimensions in which the data is
+    measured.
+
+    inputs
+    ------
+
+    P       positions (m by n array, m = number of samples, n = dimensionality)
+    delta_t temporal interval, in seconds, between samples
+    alpha   relative importance of acceleration versus position
+    lmbda   step size when descending gradient
+    eps     termination criterion
+
+    output
+    ------
+
+    Pstar   smoothed positions (same format as P)
+    """
+    h = delta_t
+    Pstar = P
+    err = 2*eps # cycle at least once
+    of = ObjectiveFunctionPosition(P,h,alpha)
+    while err > eps:
+        del_F = of.get_del_F(Pstar)
+        err = nx.sum( nx.sum( del_F**2 ) )
+        Pstar = Pstar - lmbda*del_F
+    return Pstar
 
 class QuatSeq(list):
     def __abs__(self):
@@ -369,23 +397,23 @@ class ObjectiveFunctionQuats:
                 self.G_Q = self.objective_function.eval(Q) # G evaluated at Q
             def eval_pd(self,i):
                 # evaluate 3 values (perturbations in x,y,z directions)
-                perturb = 1e-6 # perturbation amount (must be less than sqrt(pi))
-                #perturb = 1e-10 # perturbation amount (must be less than sqrt(pi))
+                PERTURB = 1e-6 # perturbation amount (must be less than sqrt(pi))
+                #PERTURB = 1e-10 # perturbation amount (must be less than sqrt(pi))
 
                 q_i = self.Q[i]
                 q_i_inverse = q_i.inverse()
                 
-                qx = q_i*cgtypes.quat(0,perturb,0,0).exp()
+                qx = q_i*cgtypes.quat(0,PERTURB,0,0).exp()
                 self.Q[i] = qx
                 G_Qx = self.objective_function.eval(self.Q)
                 dist_x = abs((q_i_inverse*qx).log())
 
-                qy = q_i*cgtypes.quat(0,0,perturb,0).exp()
+                qy = q_i*cgtypes.quat(0,0,PERTURB,0).exp()
                 self.Q[i] = qy
                 G_Qy = self.objective_function.eval(self.Q)
                 dist_y = abs((q_i_inverse*qy).log())
 
-                qz = q_i*cgtypes.quat(0,0,0,perturb).exp()
+                qz = q_i*cgtypes.quat(0,0,0,PERTURB).exp()
                 self.Q[i] = qz
                 G_Qz = self.objective_function.eval(self.Q)
                 dist_z = abs((q_i_inverse*qz).log())
