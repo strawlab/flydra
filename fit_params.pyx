@@ -1,10 +1,9 @@
 #emacs, this is -*-Python-*- mode
 
-# this is meant to be included by other Pyrex sources which do all the
-# including required (probably just "cimport ipp")
-cimport ipp
-
 import numarray as na
+
+# Pyrex stuff:
+cimport ipp
 
 cdef extern from "stdlib.h":
     ctypedef int size_t
@@ -19,12 +18,18 @@ cdef void CHK(ipp.IppStatus status) except *:
     elif (status > ipp.ippStsNoErr):
         warnings.warn(IppStatus2str(status))
 
-    
+
+
 cdef void _fit_params( float *x0, float *y0, float *orientation,
                        int index_x, int index_y, int centroid_search_radius,
                        int width, int height, ipp.Ipp32f *im, int im_step,
                        ipp.IppiMomentState_64f *pState ):
     
+    # This function does the computation.
+    #
+    # This function could just as well be in C,
+    # but I prefer Pyrex.
+
     cdef int left, right, bottom, top
     cdef ipp.IppiSize roi_sz
     cdef ipp.Ipp32f *roi_start
@@ -64,11 +69,15 @@ cdef void _fit_params( float *x0, float *y0, float *orientation,
         x0[0]=Mu10/Mu00
         y0[0]=Mu01/Mu00
 
-    # compute orientation here
-    # least squares fit??
+    # dummy assignment as placeholder for orientation computation
     orientation[0]=1.0
 
 def fit_params(A, index_x=None, index_y=None, centroid_search_radius=10):
+    """find 'center of gravity' and orientation in image"""
+
+    # This function is a bridge between Python and C, getting the data
+    # from a numarray and converting it to an IPP image.
+    
     cdef int width, height
     cdef ipp.IppiSize sz
     cdef int im_step, im1_step
