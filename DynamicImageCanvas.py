@@ -1,4 +1,5 @@
-import numarray as na
+#import numarray as nx
+import Numeric as nx
 import math
 
 from wxPython.wx import *
@@ -22,6 +23,7 @@ class DynamicImageCanvas(wxGLCanvas):
         EVT_IDLE(self, self.OnDraw)
         self._gl_tex_info_dict = {}
         self.do_clipping = True
+        self.lbrt = {}
         self.draw_points = {}
 
     def set_clipping(self, value):
@@ -37,6 +39,9 @@ class DynamicImageCanvas(wxGLCanvas):
 
     def set_draw_points(self,id_val,points):
         self.draw_points[id_val]=points
+
+    def set_lbrt(self,id_val,lbrt):
+        self.lbrt[id_val]=lbrt
 
     def __del__(self, *args, **kwargs):
         for id_val in self._gl_tex_info_dict.keys():
@@ -82,12 +87,12 @@ class DynamicImageCanvas(wxGLCanvas):
         width_pow2  = next_power_of_2(width)
         height_pow2  = next_power_of_2(height)
         
-        buffer = na.zeros( (height_pow2,width_pow2,2), image.typecode() )+128
+        buffer = nx.zeros( (height_pow2,width_pow2,2), image.typecode() )+128
         buffer[0:height,0:width,0] = image
 
         if self.do_clipping:
-            clipped = na.greater(image,254) + na.less(image,1)
-            mask = na.choose(clipped, (255, 0) )
+            clipped = nx.greater(image,254) + nx.less(image,1)
+            mask = nx.choose(clipped, (255, 0) )
             buffer[0:height,0:width,1] = mask
         
         raw_data = buffer.tostring()
@@ -133,11 +138,11 @@ class DynamicImageCanvas(wxGLCanvas):
         else:
             # XXX allocating new memory...
             if not hasattr(self,'_buffer') or self._buffer.shape != (height,width,2):
-                self._buffer = na.zeros( (height,width,2), image.typecode() )
+                self._buffer = nx.zeros( (height,width,2), image.typecode() )
 
             if self.do_clipping:
-                clipped = na.greater(image,254) + na.less(image,1)
-                mask = na.choose(clipped, (255, 200) ) # alpha for transparency
+                clipped = nx.greater(image,254).astype(nx.UInt8) + nx.less(image,1).astype(nx.UInt8)
+                mask = nx.choose(clipped, (255, 200) ).astype(nx.UInt8) # alpha for transparency
                 self._buffer[:,:,0] = image
                 self._buffer[:,:,1] = mask
                 data_format = GL_LUMINANCE_ALPHA
@@ -258,5 +263,26 @@ class DynamicImageCanvas(wxGLCanvas):
                     glEnd()
                     glColor4f(1.0,1.0,1.0,1.0)                        
                     glEnable(GL_TEXTURE_2D)
-                    
+
+                if ids[i] in self.lbrt:
+                    # draw ROI
+                    l,b,r,t = self.lbrt[ids[i]]
+                    l = l/width*xg+xo
+                    r = r/width*xg+xo
+                    b = (height-b)/height*yg+yo
+                    t = (height-t)/height*yg+yo
+
+                    glDisable(GL_TEXTURE_2D)
+                    glColor4f(0.0,1.0,0.0,1.0)
+                    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+                    glBegin(GL_QUADS)
+                    glVertex2f(l,b)
+                    glVertex2f(l,t)
+                    glVertex2f(r,t)
+                    glVertex2f(r,b)
+                    glEnd()
+                    glColor4f(1.0,1.0,1.0,1.0)
+                    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+                    glEnable(GL_TEXTURE_2D)
+        
         self.SwapBuffers()

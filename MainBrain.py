@@ -9,7 +9,8 @@ import socket
 from flydra.reconstruct import Reconstructor
 import struct
 import math
-import numarray
+#import numarray
+import Numeric as nx
 
 import struct
 import math
@@ -283,6 +284,13 @@ class MainBrain:
             self.changed_cam_lock.release()
             return new_cam_ids, old_cam_ids
 
+        def external_get_cam_ids(self):
+            self.cam_info_lock.acquire()
+            cam_ids = self.cam_info.keys()
+            self.cam_info_lock.release()
+            cam_ids.sort()
+            return cam_ids
+
         def external_get_info(self, cam_id):
             self.cam_info_lock.acquire()
             cam = self.cam_info[cam_id]
@@ -493,7 +501,7 @@ class MainBrain:
         name = 'camera_server'
         
         camera_server_URI = "PYROLOC://%s:%d/%s" % (fqdn,port,name)
-        print 'connecting to',camera_server_URI,'at',time.strftime("%a, %d %b %Y %H:%M:%S",time.localtime())
+        print '  connecting to',camera_server_URI,'at',time.strftime("%a, %d %b %Y %H:%M:%S",time.localtime())
         camera_server = Pyro.core.getProxyForURI(camera_server_URI)
         camera_server._setOneway(['send_most_recent_frame',
                                   'quit',
@@ -510,10 +518,9 @@ class MainBrain:
 
             def run(self):
                 time.sleep(0.1) # give server a chance to get going
-                print 'testing camera server connection...'
+                print '  testing camera server connection...'
                 self.func(*self.args)
-                print 'camera server OK'
-                print
+                print '  camera server OK'
                 
         t=test_connection(
             self.camera_server[cam_id].no_op,())
@@ -549,12 +556,23 @@ class MainBrain:
         
         calib_data_lock.release()
 
-        IdMat = numarray.transpose(IdMat)
-        points = numarray.transpose(points)
+        IdMat = nx.transpose(IdMat)
+        points = nx.transpose(points)
         print 'saving to',self.calib_dir
         save_ascii_matrix(os.path.join(self.calib_dir,'IdMat.dat'),IdMat)
         save_ascii_matrix(os.path.join(self.calib_dir,'points.dat'),points)
-        Res = numarray.array([ [656,491] ]*IdMat.shape[0]) # XXX hardcoded resolution
+        cam_ids = self.main_brain.external_get_cam_ids()
+        if 1:
+            # new, untested code
+            Res = []
+            for cam_id in cam_ids:
+                sci = self.main_brain.external_get_info(cam_id)
+                width = sci['width']
+                height = sci['height']
+                Res.append( [width,height] )
+            Res = nx.array( Res )
+        else:
+            Res = nx.array([ [656,491] ]*IdMat.shape[0]) # XXX hardcoded resolution
         save_ascii_matrix(os.path.join(self.calib_dir,'Res.dat'),Res)
 
     def service_pending(self):
@@ -600,6 +618,12 @@ class MainBrain:
 
     def get_image_sync(self, cam_id):
         return self.camera_server[cam_id].get_most_recent_frame()
+
+    def get_roi(self, cam_id):
+        return self.camera_server[cam_id].get_roi()
+
+    def get_widthheight(self, cam_id):
+        return self.camera_server[cam_id].get_widthheight()
 
     def start_recording(self, cam_id,filename):
         return self.camera_server[cam_id].start_recording(filename)

@@ -27,12 +27,9 @@ cimport c_fit_params
 class IPPError(Exception):
     pass
 
-cdef object IppStatus2str(ipp.IppStatus status):
-    return 'IppStatus: %d'%status
-
-cdef void CHK( int errval ) except *:
+cdef void CHK( ipp.IppStatus errval ) except *:
     if errval != 0:
-        raise IPPError("IPP status %d"%IppStatus2str(errval))
+        raise IPPError("IPP status %d"%(errval,))
 
 cdef void print_info_8u(ipp.Ipp8u* im, int im_step, ipp.IppiSize sz, object prefix):
     cdef ipp.Ipp32f minVal, maxVal
@@ -453,6 +450,7 @@ cdef class GrabClass:
             globals['grab_thread_done'].set()
 
 class FromMainBrainAPI( Pyro.core.ObjBase ):
+    # "camera server"
     
     # ----------------------------------------------------------------
     #
@@ -497,6 +495,14 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
     def get_most_recent_frame(self):
         """Return (synchronous) image"""
         return self.globals['most_recent_frame_and_points']
+
+    def get_roi(self):
+        """Return region of interest"""
+        return self.globals['lbrt']
+
+    def get_widthheight(self):
+        """Return width and height of camera"""
+        return self.globals['width'], self.globals['height']
 
     def is_ipp_enabled(self):
         result = False
@@ -585,6 +591,8 @@ cdef class App:
         self.num_cams = c_cam_iface.cam_iface_get_num_cameras()
         print 'Number of cameras detected:', self.num_cams
         assert self.num_cams <= MAX_GRABBERS
+        if self.num_cams == 0:
+            return
 
         # ----------------------------------------------------------------
         #
@@ -650,6 +658,9 @@ cdef class App:
             globals['record_status_lock'] = threading.Lock()
 
             globals['diff_threshold'] = 8.1
+            globals['lbrt'] = 0,0,width-1,height-1
+            globals['width'] = width
+            globals['height'] = height
 
             # set defaults
             cam.set_camera_property(c_cam_iface.SHUTTER,300,0,0)
@@ -665,6 +676,8 @@ cdef class App:
                 max_value = tmp[2]
                 scalar_control_info[name] = (current_value, min_value, max_value)
             scalar_control_info['threshold'] = globals['diff_threshold']
+            scalar_control_info['width'] = globals['width']
+            scalar_control_info['height'] = globals['height']
 
             # register self with remote server
             port = 9834 + cam_no # for local Pyro server
@@ -685,6 +698,7 @@ cdef class App:
             hostname = socket.gethostname()
             if hostname == 'flygate':
                 hostname = 'mainbrain' # serve on internal network
+            print 'hostname',hostname
             host = socket.gethostbyname(hostname)
             daemon = Pyro.core.Daemon(host=host,port=port)
             self.from_main_brain_api.append( FromMainBrainAPI() )
@@ -738,6 +752,9 @@ cdef class App:
         last_return_info_check = []
         n_frames = []
         
+        if self.num_cams == 0:
+            return
+
         for cam_no in range(self.num_cams):
             grabbed_frames.append( [] )
 
@@ -809,11 +826,11 @@ cdef class App:
                                     grabber=self.grabber2
                                 # add more if MAX_GRABBERS increases
                                 l,b,r,t = cmds[key]
-                                print 'setting analysis window',l,b,r,t
                                 grabber.left = l
                                 grabber.bottom = b
                                 grabber.right = r
                                 grabber.top = t
+                                globals['lbrt']=l,b,r,t
                                 
                         # handle saving movie if needed
                         cmd=None

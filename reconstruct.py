@@ -1,13 +1,15 @@
 import os
 opj=os.path.join
-import numarray as na
-from numarray.linear_algebra import singular_value_decomposition
+#import numarray as nx
+#from numarray.linear_algebra import singular_value_decomposition
+import Numeric as nx
+from LinearAlgebra import singular_value_decomposition
 
 def load_ascii_matrix(filename):
     fd=open(filename,mode='rb')
     buf = fd.read()
     lines = buf.split('\n')[:-1]
-    return na.array([map(float,line.split()) for line in lines])
+    return nx.array([map(float,line.split()) for line in lines])
 
 class Reconstructor:
     def __init__(self,
@@ -17,12 +19,12 @@ class Reconstructor:
                  ):
         # load calibration matrices
         Pmat=[load_ascii_matrix(opj(calibration_dir,Pmat_name%(i+1))) for i in range(CAMS)]
-        self.Pmat=na.concatenate(Pmat,axis=0)
+        self.Pmat=nx.concatenate(Pmat,axis=0)
 
     def find3d(self,
                cam_idx_and_points2d):
         M=len(cam_idx_and_points2d) # number of views of single point
-        A=na.zeros((2*M,4),type=na.Float32)
+        A=nx.zeros((2*M,4),nx.Float32)
         
         for m,(cam,(xm,ym)) in enumerate(cam_idx_and_points2d):
             row2=self.Pmat[m*3+2,:]

@@ -327,7 +327,7 @@
           </object>
           <object class="sizeritem">
             <object class="wxStaticText">
-              <label>bottom</label>
+              <label>top</label>
             </object>
           </object>
           <object class="sizeritem">
@@ -337,7 +337,7 @@
           </object>
           <object class="sizeritem">
             <object class="wxStaticText">
-              <label>top</label>
+              <label>bottom</label>
             </object>
           </object>
           <object class="sizeritem">

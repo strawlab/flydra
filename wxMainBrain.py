@@ -11,7 +11,6 @@ from wxPython.wx import *
 from wxPython.lib.scrolledpanel import wxScrolledPanel
 from wxPython.xrc import *
 import ErrorDialog
-import numarray
 
 # TODO
 #
@@ -161,7 +160,7 @@ class App(wxApp):
         ##
         sizer = wxBoxSizer(wxHORIZONTAL)
         scrolled_container.SetSizer(sizer)
-        scrolled_container.SetAutoLayout(True)
+        #scrolled_container.SetAutoLayout(True)
         if isinstance(scrolled_container,wxScrolledPanel):
             scrolled_container.SetupScrolling()
         self.preview_per_cam_scrolled_container = scrolled_container
@@ -212,7 +211,7 @@ class App(wxApp):
         grid.AddGrowableCol(2)
 
         for param in scalar_control_info.keys():
-            if param == 'threshold':
+            if param in ('threshold','width','height'):
                 continue
             current_value, min_value, max_value = scalar_control_info[param]
             grid.Add( wxStaticText(per_cam_controls_panel,wxNewId(),param),
@@ -457,11 +456,21 @@ class App(wxApp):
     def OnSetROI(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         dlg = RES.LoadDialog(self.frame,"ROI_DIALOG") # make frame main panel
+        
         dlg_ok = XRCCTRL(dlg,"ROI_OK")
         dlg_cam_id = XRCCTRL(dlg,"ROI_cam_id")
         dlg_cam_id.SetLabel(cam_id)
+        
+        lbrt = self.main_brain.get_roi(cam_id)
+        width, height = self.main_brain.get_widthheight(cam_id)
+        
+        l,b,r,t = lbrt
+        XRCCTRL(dlg,"ROI_LEFT").SetValue(str(l))
+        XRCCTRL(dlg,"ROI_BOTTOM").SetValue(str(b))
+        XRCCTRL(dlg,"ROI_RIGHT").SetValue(str(r))
+        XRCCTRL(dlg,"ROI_TOP").SetValue(str(t))
+        
         def OnROIOK(event):
-            print 'OK'
             dlg.left = int(XRCCTRL(dlg,"ROI_LEFT").GetValue())
             dlg.right = int(XRCCTRL(dlg,"ROI_RIGHT").GetValue())
             dlg.bottom = int(XRCCTRL(dlg,"ROI_BOTTOM").GetValue())
@@ -471,8 +480,12 @@ class App(wxApp):
                    OnROIOK)
         try:
             if dlg.ShowModal() == wxID_OK:
-                print 'dlg.left',dlg.left
-                self.main_brain.send_roi(cam_id,dlg.left,dlg.bottom,dlg.right,dlg.top)
+                l,b,r,t = dlg.left,dlg.bottom,dlg.right,dlg.top
+                lbrt = l,b,r,t
+                if l >= r or b >= t or r >= width or t >= height:
+                    raise ValueError("ROI dimensions not possible")
+                self.main_brain.send_roi(cam_id,*lbrt)
+                self.cam_image_canvas.set_lbrt(cam_id,lbrt)
         finally:
             dlg.Destroy()
 
