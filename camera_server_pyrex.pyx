@@ -5,13 +5,16 @@ import time
 import socket
 import sys
 import numarray as na
-cimport c_numarray
 import Pyro.core, Pyro.errors
 import FlyMovieFormat
 import warnings
 import struct
-#cimport c_cam_iface
-include "../cam_iface/src/pyx_cam_iface.pyx" # CamIFaceError, Camera
+
+
+include "../cam_iface/src/pyx_cam_iface.pyx"
+# CamIFaceError, Camera, c_numarray
+#c_numarray.import_libnumarray()
+
 cimport c_lib
 
 # start of IPP-requiring code
@@ -40,10 +43,8 @@ cdef void print_info_8u(ipp.Ipp8u* im, int im_step, ipp.IppiSize sz, object pref
     print prefix,'min: %f, max: %f, minIdx: %d,%d, maxIdx: %d,%d'%(minVal,maxVal,
                                                                    minIdx.x,minIdx.y,
                                                                    maxIdx.x,maxIdx.y)
-    
 # end of IPP-requiring code
 
-c_numarray.import_libnumarray()
 
 if sys.platform == 'win32':
     time_func = time.clock
