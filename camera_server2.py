@@ -9,6 +9,8 @@ import pyx_cam_iface as cam_iface
 import reconstruct_utils
 import Queue
 
+REALTIME_UDP = False
+
 try:
     import realtime_image_analysis
 except ImportError, x:
@@ -47,9 +49,9 @@ except:
     main_brain_hostname = socket.gethostbyname(socket.gethostname())
 
 class GrabClass(object):
-    def __init__(self, cam, coord_port, cam_id):
+    def __init__(self, cam, cam2mainbrain_port, cam_id):
         self.cam = cam
-        self.coord_port = coord_port
+        self.cam2mainbrain_port = cam2mainbrain_port
         self.cam_id = cam_id
 
         # get coordinates for region of interest
@@ -123,7 +125,12 @@ class GrabClass(object):
         bg_changed = True
         use_roi2_isSet = globals['use_roi2'].isSet
 
-        coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        if REALTIME_UDP:
+            coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        else:
+            coord_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            coord_socket.connect((main_brain_hostname,self.cam2mainbrain_port))
+
         old_ts = time.time()
         old_fn = 0
         n_rot_samples = 101*60 # 1 minute
@@ -203,8 +210,11 @@ class GrabClass(object):
                 data = struct.pack('<dli',timestamp,framenumber,n_pts)
                 for i in range(n_pts):
                     data = data + struct.pack(pt_fmt,*points[i])
-                coord_socket.sendto(data,
-                                    (main_brain_hostname,self.coord_port))
+                if REALTIME_UDP:
+                    coord_socket.sendto(data,
+                                        (main_brain_hostname,self.cam2mainbrain_port))
+                else:
+                    coord_socket.send(data)
                 sleep(1e-6) # yield processor
         finally:
 
@@ -316,6 +326,7 @@ class App:
             scalar_control_info['width'] = width
             scalar_control_info['height'] = height
             scalar_control_info['roi'] = 0,0,width-1,height-1
+            scalar_control_info['max_framerate'] = cam.get_framerate()
 
             # register self with remote server
             port = 9834 + cam_no # for local Pyro server
@@ -325,7 +336,7 @@ class App:
                                                          port)
 
             self.all_cam_ids.append(cam_id)
-            coord_port = self.main_brain.get_coord_port(self.all_cam_ids[cam_no])
+            cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(self.all_cam_ids[cam_no])
             self.main_brain_lock.release()
             
             # ---------------------------------------------------------------
@@ -347,7 +358,7 @@ class App:
             #
             # ----------------------------------------------------------------
 
-            grabber = GrabClass(cam,coord_port,cam_id)
+            grabber = GrabClass(cam,cam2mainbrain_port,cam_id)
             self.all_grabbers.append( grabber )
             
             grabber.diff_threshold = diff_threshold
@@ -394,6 +405,8 @@ class App:
                     elif property_name == 'roi2':
                         if value: globals['use_roi2'].set()
                         else: globals['use_roi2'].clear()
+                    elif property_name == 'max_framerate':
+                        cam.set_framerate(value)
             elif key == 'get_im':
                 self.main_brain.set_image(cam_id, globals['most_recent_frame'])
             elif key == 'use_arena':

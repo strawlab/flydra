@@ -20,19 +20,4 @@ int fit_params( IppiMomentState_64f *pState, double *x0, double *y0,
 		double *Uu11, double *Uu20, double *Uu02,
 		int width, int height, unsigned char *img, int img_step );
 
-/**********************************************************
-* fill string with current time (pad with zeros)
-**********************************************************/
-void fill_time_string( char string[] );
-
-#define _c_FIT_PARAMS_data_prefix_ "/home/jbender/data/"
-
-/**********************************************************
-* save data points for nframes, then calculate center of
-* rotation from those data points
-**********************************************************/
-void start_center_calculation( int nframes );
-void end_center_calculation( double *x_center, double *y_center );
-void update_center_calculation( double new_x_pos, double new_y_pos, double new_orientation );
-
 #endif

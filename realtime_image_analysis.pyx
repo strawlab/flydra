@@ -17,17 +17,14 @@ cimport c_python
 
 # start of IPP-requiring code
 cimport ipp
-cimport arena_control
+cimport ArenaController
+import ArenaController
 
 cdef extern from "c_fit_params.h":
     int fit_params( ipp.IppiMomentState_64f *pState, double *x0, double *y0,
                     double *Mu00,
                     double *Uu11, double *Uu20, double *Uu02,
                     int width, int height, unsigned char *img, int img_step )
-
-    void start_center_calculation( int nframes )
-    void end_center_calculation( double *x_center, double *y_center )
-    void update_center_calculation( double new_x_pos, double new_y_pos, double new_orientation )
 
 cdef extern from "eigen.h":
     int eigen_2x2_real( double A, double B, double C, double D,
@@ -80,7 +77,6 @@ cdef class RealtimeAnalyzer:
     cdef int _use_arena
     
     cdef c_numarray._numarray last_image
-    cdef int arena_control_working
 
     # calibration matrix
     cdef c_numarray._numarray _pmat, _pmat_inv, camera_center
@@ -98,6 +94,7 @@ cdef class RealtimeAnalyzer:
 
     cdef ipp.IppiMomentState_64f *pState
 
+    cdef ArenaController.ArenaController arena_controller
     # end of IPP-requiring code
 
     def __init__(self, int w, int h, float alpha):
@@ -111,7 +108,7 @@ cdef class RealtimeAnalyzer:
         self._diff_threshold = 8.1
         self._clear_threshold = 0.0
         self._use_arena = 0
-
+        
         self._pmat = None
         self._pmat_inv = None
 
@@ -141,21 +138,14 @@ cdef class RealtimeAnalyzer:
         self.clear_background_image()
 
         try:
-            arena_error = arena_control.arena_initialize()
-            self.arena_control_working = True
-            if arena_error != 0:
-                print "WARNING: could not initialize arena control"
-                self.arena_control_working = False
-        except NameError:
-            self.arena_control_working = False
+            self.arena_controller = ArenaController.ArenaController()
+        except Exception, exc:
+            print 'WARNING: could not create ArenaController:',exc.__class__,str(exc)
+            self.arena_controller = None
         # end of IPP-requiring code
 
-    def __del__(self):
+    def __dealloc__(self):
         # start of IPP-requiring code
-        print 'de-allocating IPP memory'
-        if self.arena_control_working:
-            arena_control.arena_finish()
-
         CHK( ipp.ippiMomentFree_64f( self.pState ))
         ipp.ippiFree(self.im1)
         ipp.ippiFree(self.im2)
@@ -331,14 +321,14 @@ cdef class RealtimeAnalyzer:
                 x0_abs = x0+left2
                 y0_abs = y0+bottom2
 
-            if self._use_arena: # call out to arena feedback function
-                if self.arena_control_working:
-                    arena_control.arena_update(
-                        x0, y0, orientation, timestamp, framenumber )
+            if self._use_arena:
+                if self.arena_controller is not None:
+                    self.arena_controller.arena_update(x0, y0, orientation,
+                                                       timestamp, framenumber )
                     # JB: should maybe set found_point=0 here to avoid doing SVD?
                     # uncertain how this would affect camera server
-                else: SET_ERR(2)
-
+                else:
+                    SET_ERR(2)
         # grab GIL
         c_python.Py_END_ALLOW_THREADS
 
@@ -482,27 +472,29 @@ cdef class RealtimeAnalyzer:
 
     def rotation_calculation_init(self, int n_rot_samples):
         # start of IPP-requiring code
-        start_center_calculation( n_rot_samples )
-        arena_control.rotation_calculation_init()
+        if self.arena_controller is not None:
+            self.arena_controller.start_center_calculation( n_rot_samples )
+            self.arena_controller.rotation_calculation_init()
         # end of IPP-requiring code
         return
 
     def rotation_update(self, float x0, float y0, float orientation):
         # start of IPP-requiring code
         # convert back to ROI-relative coordinates
-        x0 = x0 - self._left
-        y0 = y0 - self._bottom
-        update_center_calculation( x0, y0, orientation )
-        arena_control.rotation_update()
+        if self.arena_controller is not None:
+            x0 = x0 - self._left
+            y0 = y0 - self._bottom
+            self.arena_controller.update_center_calculation( x0, y0, orientation )
+            self.arena_controller.arena_control.rotation_update()
         # end of IPP-requiring code
         return
 
     def rotation_end(self):
         # start of IPP-requiring code
         cdef double new_x_cent, new_y_cent
-        
-        end_center_calculation( &new_x_cent, &new_y_cent )
-        arena_control.rotation_calculation_finish( new_x_cent, new_y_cent )
+        if self.arena_controller is not None:
+            self.arena_controller.end_center_calculation( &new_x_cent, &new_y_cent )
+            self.arena_controller.arena_control.rotation_calculation_finish( new_x_cent, new_y_cent )
         # end of IPP-requiring code
         return
         

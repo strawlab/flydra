@@ -4,8 +4,8 @@
 #include <string.h>
 #include <time.h>
 #include "serial_comm/serial_comm.h"
-#include "c_fit_params.h"
 #include "arena_control.h"
+#include "arena_misc.h"
 #include "arena_utils.h"
 
 int serial_port;
@@ -26,7 +26,7 @@ long arena_initialize( void )
 
   /* open data file */
   fill_time_string( timestring );
-  sprintf( filename, "%sfly%s.dat", _c_FIT_PARAMS_data_prefix_, timestring );
+  sprintf( filename, "%sfly%s.dat", _ARENA_MISC_data_prefix_, timestring );
   datafile = fopen( filename, "w" );
   if( datafile == 0 )
   {

@@ -16,6 +16,9 @@ class FrameServer(Pyro.core.ObjBase):
         Pyro.core.ObjBase.__init__(self,*args,**kw)
         self._filename = None
         self._ts_dict = None
+
+    def get_timestamp2frame(self):
+        return self._ts_dict.copy()
         
     # not overriding Pyro's __init__ funciton...
     def load(self, movie_filename='/tmp/raw_video.fmf'):

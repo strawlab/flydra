@@ -354,6 +354,12 @@ class App(wxApp):
         EVT_TEXT(threshold_clear_value, threshold_clear_value.GetId(),
                  self.OnSetCameraClearThreshold)
 
+        max_framerate = XRCCTRL(previewPerCamPanel,"MAX_FRAMERATE")
+        val = scalar_control_info['max_framerate']
+        max_framerate.SetValue( str( val ) )
+        EVT_TEXT(max_framerate, max_framerate.GetId(),
+                 self.OnSetMaxFramerate)
+
         arena_control = XRCCTRL(previewPerCamPanel,
                              "ARENA_CONTROL")
         EVT_CHECKBOX(arena_control, arena_control.GetId(), self.OnArenaControl)
@@ -860,11 +866,11 @@ class App(wxApp):
             finally:
                 self.main_brain.stop_calibrating()
                 dlg.Destroy()
-        
+
     def OnQuit(self, event):
         self.timer.Stop()
         self.timer2.Stop()
-        
+      
         if hasattr(self,'main_brain'):
             self.main_brain.quit()
             del self.main_brain
@@ -881,51 +887,52 @@ class App(wxApp):
         if not hasattr(self,'main_brain'):
             return # quitting
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc
-        if self.current_page in ['tracking','preview','snapshot']:
-            realtime_data=MainBrain.get_best_realtime_data()
-            if realtime_data is not None:
-                data3d,line3d,cam_ids_used=realtime_data
+##        if self.current_page in ['tracking','preview','snapshot']:
+        realtime_data=MainBrain.get_best_realtime_data()
+        if realtime_data is not None:
+            data3d,line3d,cam_ids_used,min_mean_dist=realtime_data
+            if self.current_page == 'tracking':
+                XRCCTRL(self.tracking_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
+                XRCCTRL(self.tracking_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
+                XRCCTRL(self.tracking_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
+                XRCCTRL(self.tracking_panel,'err').SetValue('% 8.1f'%min_mean_dist)
+            if min_mean_dist <= 10.0:
                 if DETECT_SND is not None:
                     now = time.time()
                     if (now - self.last_sound_time) > 1.0:
                         DETECT_SND.Play()
                         self.last_sound_time = now
-                    
-                if self.current_page == 'tracking':
-                    XRCCTRL(self.tracking_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
-                    XRCCTRL(self.tracking_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
-                    XRCCTRL(self.tracking_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
-                elif self.current_page == 'preview':
+                if self.current_page == 'preview':
                     r=self.main_brain.reconstructor
                     for cam_id in self.cameras.keys():
                         pt,ln=r.find2d(cam_id,data3d,
                                        Lcoords=line3d,distorted=True)
                         self.cam_image_canvas.set_reconstructed_points(cam_id,([pt],[ln]))
-            if self.current_page == 'preview':
-                for cam_id in self.cameras.keys():
-                    cam = self.cameras[cam_id]
-                    if not cam.has_key('previewPerCamPanel'):
-                        # not added yet
-                        continue
-                    previewPerCamPanel = cam['previewPerCamPanel']
-                    image = None
-                    show_fps = None
-                    try:
-                        image, show_fps, points = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
-                    except KeyError:
-                        # unexpected disconnect
-                        pass # may have lost camera since call to service_pending
-                    if image is not None:
-                        self.cam_image_canvas.update_image(cam_id,image)
-                    if show_fps is not None:
-                        show_fps_label = XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
-                        show_fps_label.SetLabel('fps: %.1f'%show_fps)
-                    self.cam_image_canvas.set_draw_points(cam_id,points)
+        if self.current_page == 'preview':
+            for cam_id in self.cameras.keys():
+                cam = self.cameras[cam_id]
+                if not cam.has_key('previewPerCamPanel'):
+                    # not added yet
+                    continue
+                previewPerCamPanel = cam['previewPerCamPanel']
+                image = None
+                show_fps = None
+                try:
+                    image, show_fps, points = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
+                except KeyError:
+                    # unexpected disconnect
+                    pass # may have lost camera since call to service_pending
+                if image is not None:
+                    self.cam_image_canvas.update_image(cam_id,image)
+                if show_fps is not None:
+                    show_fps_label = XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
+                    show_fps_label.SetLabel('fps: %.1f'%show_fps)
+                self.cam_image_canvas.set_draw_points(cam_id,points)
 
-                self.cam_image_canvas.OnDraw()
+            self.cam_image_canvas.OnDraw()
 
-                if isinstance(event,wxIdleEventPtr):
-                    event.RequestMore()
+            if isinstance(event,wxIdleEventPtr):
+                event.RequestMore()
             
     def OnNewCamera(self, cam_id, scalar_control_info, fqdnport):
         # bookkeeping
@@ -981,6 +988,13 @@ class App(wxApp):
         if value:
             value = float(value)
             self.main_brain.send_set_camera_property(cam_id,'clear_threshold',value)
+
+    def OnSetMaxFramerate(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        value = event.GetString()
+        if value:
+            value = float(value)
+            self.main_brain.send_set_camera_property(cam_id,'max_framerate',value)
 
     def OnArenaControl(self, event):
         widget = event.GetEventObject()

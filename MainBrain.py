@@ -11,6 +11,7 @@ import Queue
 import tables as PT
 
 THRESHOLD_MEAN_DIST = 5.0 # cutoff acceptable pixel distance to stop searching camera combinations
+REALTIME_UDP = False
 
 Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here...
 
@@ -132,11 +133,13 @@ class CoordReceiver(threading.Thread):
         self.main_brain = main_brain
         
         self.cam_ids = []
-        self.UDP_ports = []
+        self.cam2mainbrain_data_ports = []
         self.absolute_cam_nos = []
         self.last_timestamps = []
-        self.last_framenumbers = []
-        self.listen_sockets = []
+        self.last_framenumbers_delay = []
+        self.last_framenumbers_skip = []
+        self.listen_sockets = {}
+        self.server_sockets = {}
         self.framenumber_offsets = []
         self.cam_id2cam_no = {}
         self.reconstructor = None
@@ -154,15 +157,15 @@ class CoordReceiver(threading.Thread):
         name = 'CoordReceiver thread'
         threading.Thread.__init__(self,name=name)
 
-    def get_UDP_port(self,cam_id):
+    def get_cam2mainbrain_data_port(self,cam_id):
         self.all_data_lock.acquire()
         try:
             i = self.cam_ids.index( cam_id )
-            UDP_port = self.UDP_ports[i]
+            cam2mainbrain_data_port = self.cam2mainbrain_data_ports[i]
         finally:
             self.all_data_lock.release()
 
-        return UDP_port
+        return cam2mainbrain_data_port
 
     def get_general_cam_info(self):
         self.all_data_lock.acquire()
@@ -185,12 +188,12 @@ class CoordReceiver(threading.Thread):
         self.all_data_lock.acquire()
         self.cam_ids.append(cam_id)
         
-        # find UDP_port
-        if len(self.UDP_ports)>0:
-            UDP_port = max(self.UDP_ports)+1
+        # find cam2mainbrain_data_port
+        if len(self.cam2mainbrain_data_ports)>0:
+            cam2mainbrain_data_port = max(self.cam2mainbrain_data_ports)+1
         else:
-            UDP_port = 34813
-        self.UDP_ports.append( UDP_port )
+            cam2mainbrain_data_port = 34813
+        self.cam2mainbrain_data_ports.append( cam2mainbrain_data_port )
         
         # find absolute_cam_no
         self.max_absolute_cam_nos += 1        
@@ -200,19 +203,27 @@ class CoordReceiver(threading.Thread):
         self.cam_id2cam_no[cam_id] = absolute_cam_no
 
         # create and bind socket to listen to
-        sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sockobj.bind((hostname, UDP_port))
-        sockobj.setblocking(0)
-        self.listen_sockets.append( sockobj )
+        if REALTIME_UDP:
+            sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sockobj.bind((hostname, cam2mainbrain_data_port))
+            sockobj.setblocking(0)
+            self.listen_sockets[ sockobj ] = cam_id
+        else:
+            sockobj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sockobj.bind((hostname, cam2mainbrain_data_port))
+            sockobj.listen(1)
+            sockobj.setblocking(0)
+            self.server_sockets[ sockobj ] = cam_id
         self.last_timestamps.append(IMPOSSIBLE_TIMESTAMP) # arbitrary impossible number
-        self.last_framenumbers.append(-1) # arbitrary impossible number
+        self.last_framenumbers_delay.append(-1) # arbitrary impossible number
+        self.last_framenumbers_skip.append(-1) # arbitrary impossible number
         self.framenumber_offsets.append(0)
         self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no,
                                           'frame0':IMPOSSIBLE_TIMESTAMP}
         self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, IMPOSSIBLE_TIMESTAMP) )
         self.all_data_lock.release()
 
-        return UDP_port
+        return cam2mainbrain_data_port
 
     def disconnect(self,cam_id):
         cam_idx = self.cam_ids.index( cam_id )
@@ -220,12 +231,19 @@ class CoordReceiver(threading.Thread):
         self.all_data_lock.acquire()
         
         del self.cam_ids[cam_idx]
-        del self.UDP_ports[cam_idx]
+        del self.cam2mainbrain_data_ports[cam_idx]
         del self.absolute_cam_nos[cam_idx]
-        self.listen_sockets[cam_idx].close()
-        del self.listen_sockets[cam_idx]
+        for sockobj, test_cam_id in self.listen_sockets.iteritems():
+            if cam_id == test_cam_id:
+                sockobj.close()
+                del self.listen_sockets[sockobj]
+        for sockobj, test_cam_id in self.server_sockets.iteritems():
+            if cam_id == test_cam_id:
+                sockobj.close()
+                del self.server_sockets[sockobj]
         del self.last_timestamps[cam_idx]
-        del self.last_framenumbers[cam_idx]
+        del self.last_framenumbers_delay[cam_idx]
+        del self.last_framenumbers_skip[cam_idx]
         del self.framenumber_offsets[cam_idx]
         del self.general_save_info[cam_id]
         self.all_data_lock.release()
@@ -277,24 +295,37 @@ class CoordReceiver(threading.Thread):
         realtime_coord_dict = {}        
         new_data_framenumbers = sets.Set()
 
-        ##last_select = time.time()
+##        tstamp_fd = open('tstamps.bin',mode='wb')
+
+        select_select = select.select
+        time_time = time.time
+        empty_list = []
+        old_data = {}
         while not self.quit_event.isSet():
+            if not REALTIME_UDP:
+                in_ready, out_ready, exc_ready = select_select( self.server_sockets.keys(),
+                                                                empty_list, empty_list, 0.0 )
+                for sockobj in in_ready:
+                    cam_id = self.server_sockets[sockobj]
+                    client_sockobj, addr = sockobj.accept()
+                    client_sockobj.setblocking(0)
+                    print cam_id, 'connected from',addr
+                    self.listen_sockets[client_sockobj]=cam_id
             try:
-                in_ready, out_ready, exc_ready = select.select( self.listen_sockets,
-                                                                [], [], timeout )
-                ##now = time.time()
-                ##print '%.1f msec since last select'%((now-last_select)*1000.0,)
-                ##last_select = now
+                in_ready, out_ready, exc_ready = select_select( self.listen_sockets.keys(),
+                                                                empty_list, empty_list, timeout )
             except Exception:
                 raise
             except:
                 print 'WARNING: CoordReceiver received an exception not derived from Exception'
                 continue
+##            now = time_time()
+##            tstamp_fd.write( struct.pack('d',now ) )
             new_data_framenumbers.clear()
             if self._fake_sync_event.isSet():
                 for cam_idx, cam_id in enumerate(self.cam_ids):
                     timestamp = self.last_timestamps[cam_idx]
-                    framenumber = self.last_framenumbers[cam_idx]
+                    framenumber = self.last_framenumbers_delay[cam_idx]
                     self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
                                         realtime_coord_dict, new_data_framenumbers )
                 self._fake_sync_event.clear()
@@ -305,70 +336,89 @@ class CoordReceiver(threading.Thread):
             deferred_2d_data = []
             for sockobj in in_ready:
                 try:
-                    cam_idx = self.listen_sockets.index(sockobj)
+                    cam_id = self.listen_sockets[sockobj]
                 except ValueError:
                     # camera was dropped?
                     continue
-                
-                cam_id = self.cam_ids[cam_idx]
+                cam_idx = self.cam_ids.index(cam_id)
+                #cam_id = self.cam_ids[cam_idx]
                 absolute_cam_no = self.absolute_cam_nos[cam_idx]
 
-                data, addr = sockobj.recvfrom(4096)                    
+                if REALTIME_UDP:
+                    newdata, addr = sockobj.recvfrom(4096)
+                else:
+                    newdata = sockobj.recv(4096)
+                data = old_data.get( sockobj, '')
+                data = data + newdata
                 while len(data):
                     header = data[:header_size]
+                    if len(header) != header_size:
+                        #print 'incomplete header buffer'
+                        break
                     timestamp, framenumber, n_pts = struct.unpack(header_fmt,header)
-                    start=header_size
                     points = []
+                    if len(data) < header_size + n_pts*pt_size:
+                        #print 'incomplete point info'
+                        break
+                    if framenumber-self.last_framenumbers_skip[cam_idx] > 1:
+                        print '  WARNING: frame data loss %s'%(cam_id,) # (or UDP out-of-order)
+                    self.last_framenumbers_skip[cam_idx]=framenumber
+                    start=header_size
                     for i in range(n_pts):
                         end=start+pt_size
                         x,y,area,slope,eccentricity,p1,p2,p3,p4 = struct.unpack(pt_fmt,data[start:end])
                         points.append( (x,y,area,slope,eccentricity, p1,p2,p3,p4) )
                         start=end
                     data = data[end:]
-                
-                # XXX hack? make data available via cam_dict
-                cam_dict = self.main_brain.remote_api.cam_info[cam_id]
-                cam_dict['lock'].acquire()
-                cam_dict['points']=points
-                cam_dict['lock'].release()
-                    
-                #if timestamp-self.last_timestamps[cam_idx] > 0.02:
-                #    print 'WARNING frame skipped %s?'%cam_id
 
-                if framenumber-self.last_framenumbers[cam_idx] > 1:
-                    print '  WARNING frame skip/out-of-order (may be UDP packet drop)'
+                    # -----------------------------------------------
                     
-                if timestamp-self.last_timestamps[cam_idx] > self.RESET_FRAMENUMBER_DURATION:
-                    self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
-                                        realtime_coord_dict, new_data_framenumbers )
-                        
-                self.last_timestamps[cam_idx]=timestamp
-                self.last_framenumbers[cam_idx]=framenumber
-                corrected_framenumber = framenumber-self.framenumber_offsets[cam_idx]
-                XXX_framenumber = corrected_framenumber
+                    # XXX hack? make data available via cam_dict
+                    cam_dict = self.main_brain.remote_api.cam_info[cam_id]
+                    cam_dict['lock'].acquire()
+                    cam_dict['points']=points
+                    cam_dict['lock'].release()
 
-                if self.main_brain.is_saving_data() or len(getnan(points[0][0])[0]):
-                    # Save 2D data (even when no point found) to allow
-                    # temporal correlation of movie frames to 2D data.
-                    deferred_2d_data.append((absolute_cam_no, # defer saving to later
-                                             corrected_framenumber,
-                                             timestamp,
-                                             points[0][0], # x
-                                             points[0][1], # y
-                                             points[0][2], # area
-                                             points[0][3], # slope
-                                             points[0][4], # eccentricity
-                                             points[0][5], # p1
-                                             points[0][6], # p2
-                                             points[0][7], # p3
-                                             points[0][8], # p4
-                                             ))
-                    
-                # save new frame data
-                # XXX for now, only attempt 3D reconstruction of 1st point
-                realtime_coord_dict.setdefault(corrected_framenumber,{})[cam_id]=points[0]
-                
-                new_data_framenumbers.add( corrected_framenumber ) # insert into set
+                    #if timestamp-self.last_timestamps[cam_idx] > 0.02:
+                    #    print 'WARNING frame skipped %s?'%cam_id
+
+    ##                if framenumber-self.last_framenumbers_delay[cam_idx] > 1:
+    ##                    print '  (frame delay/misorder %s)'%(cam_id,)
+
+                    if timestamp-self.last_timestamps[cam_idx] > self.RESET_FRAMENUMBER_DURATION:
+                        self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
+                                            realtime_coord_dict, new_data_framenumbers )
+
+                    self.last_timestamps[cam_idx]=timestamp
+                    self.last_framenumbers_delay[cam_idx]=framenumber
+                    corrected_framenumber = framenumber-self.framenumber_offsets[cam_idx]
+                    XXX_framenumber = corrected_framenumber
+
+                    if self.main_brain.is_saving_data() or len(getnan(points[0][0])[0]):
+                        # Save 2D data (even when no point found) to allow
+                        # temporal correlation of movie frames to 2D data.
+                        deferred_2d_data.append((absolute_cam_no, # defer saving to later
+                                                 corrected_framenumber,
+                                                 timestamp,
+                                                 points[0][0], # x
+                                                 points[0][1], # y
+                                                 points[0][2], # area
+                                                 points[0][3], # slope
+                                                 points[0][4], # eccentricity
+                                                 points[0][5], # p1
+                                                 points[0][6], # p2
+                                                 points[0][7], # p3
+                                                 points[0][8], # p4
+                                                 ))
+
+                    # save new frame data
+                    # XXX for now, only attempt 3D reconstruction of 1st point
+                    realtime_coord_dict.setdefault(corrected_framenumber,{})[cam_id]=points[0]
+
+                    new_data_framenumbers.add( corrected_framenumber ) # insert into set
+
+                # preserve unprocessed data
+                old_data[sockobj] = data
 
             # Now we've grabbed all data waiting on network. Now it's
             # time to calculate 3D info.
@@ -417,7 +467,7 @@ class CoordReceiver(threading.Thread):
                         data_packet = struct.pack('ifffffffffd',corrected_framenumber,*outgoing_data)
                     if num_good_images==2:
                         # fastest 3d data
-                        fastest_realtime_data = X, line3d, cam_ids_used
+                        fastest_realtime_data = X, line3d, cam_ids_used, min_mean_dist
                         try:
                             for downstream_hostname in downstream_hostnames:
                                 outgoing_UDP_socket.sendto(data_packet,(downstream_hostname,FASTEST_DATA_PORT))
@@ -431,7 +481,7 @@ class CoordReceiver(threading.Thread):
                                                                        min_mean_dist) )
                     if num_cams_arrived==len(self.cam_ids):
                         # realtime 3d data
-                        best_realtime_data = X, line3d, cam_ids_used
+                        best_realtime_data = X, line3d, cam_ids_used, min_mean_dist
                         try:
                             for downstream_hostname in downstream_hostnames:
                                 outgoing_UDP_socket.sendto(data_packet,(downstream_hostname,BEST_DATA_PORT))
@@ -482,7 +532,9 @@ class CoordReceiver(threading.Thread):
                 
                     
             self.all_data_lock.release()
-            
+        print 'quit coord reciever loop'
+##        tstamp_fd.close()
+    
 class MainBrain(object):
     """Handle all camera network stuff and interact with application"""
 
@@ -730,7 +782,7 @@ class MainBrain(object):
             cam_id = '%s:%d'%(fqdn,cam_no)
             print 'cam_id',cam_id,'connected'
             
-            UDP_port = self.main_brain.coord_receiver.connect(cam_id)
+            cam2mainbrain_data_port = self.main_brain.coord_receiver.connect(cam_id)
             self.cam_info_lock.acquire()            
             self.cam_info[cam_id] = {'commands':{}, # command queue for cam
                                      'lock':threading.Lock(), # prevent concurrent access
@@ -741,7 +793,7 @@ class MainBrain(object):
                                      'scalar_control_info':scalar_control_info,
                                      'fqdn':fqdn,
                                      'port':port,
-                                     'UDP_port':UDP_port,
+                                     'cam2mainbrain_data_port':cam2mainbrain_data_port,
                                      }
             self.cam_info_lock.release()
             self.no_cams_connected.clear()
@@ -783,10 +835,10 @@ class MainBrain(object):
             self.cam_info_lock.release()
             return cmds
 
-        def get_coord_port(self,cam_id):
-            """Send UDP port number to which camera should send realtime data"""
-            UDP_port = self.main_brain.coord_receiver.get_UDP_port(cam_id)
-            return UDP_port
+        def get_cam2mainbrain_port(self,cam_id):
+            """Send port number to which camera should send realtime data"""
+            cam2mainbrain_data_port = self.main_brain.coord_receiver.get_cam2mainbrain_data_port(cam_id)
+            return cam2mainbrain_data_port
 
         def close(self,cam_id):
             """gracefully say goodbye (caller: remote camera)"""
