@@ -242,6 +242,9 @@ class Reconstructor:
     def distort(self, cam_id, xl):
         return self._helper[cam_id].distort(xl[0],xl[1])
 
+    def get_recontruct_helper_dict(self):
+        return self._helper
+
     def find_best_3d(self, d2,
                           acceptable_distance_pixels = 10.0,
                           minimum_eccentricity = 2.0):

@@ -29,7 +29,7 @@ class FrameServer(Pyro.core.ObjBase):
 
     def load_timestamp_dict(self):
         result = {}
-        timestamp0 = self.fly_movie.get_frame(0)
+        frame0,timestamp0 = self.fly_movie.get_frame(0)
         result[timestamp0] = 0
         i = 0
         try:
@@ -44,6 +44,19 @@ class FrameServer(Pyro.core.ObjBase):
     def get_frame_by_timestamp(self, timestamp):
         return self.fly_movie.get_frame(self._ts_dict[timestamp])
         
+    def get_frame_prior_to_timestamp(self, target_timestamp):
+        timestamps = self._ts_dict.keys()
+        timestamps.sort()
+        real_timestamp = None
+        for ts in timestamps:
+            if ts <= target_timestamp:
+                real_timestamp = ts
+        if real_timestamp is None:
+            print 'could not find %s in:',repr(target_timestamp)
+            for ts in timestamps:
+                print ' ts',type(ts),ts
+        return self.fly_movie.get_frame(self._ts_dict[real_timestamp])
+        
     def get_frame(self, frame_number):
         return self.fly_movie.get_frame(frame_number)
 
@@ -55,12 +68,17 @@ class FrameServer(Pyro.core.ObjBase):
         return
 
 if __name__ == '__main__':
+    import sys
+    if len(sys.argv) > 1:
+        port = int(sys.argv[1])
+    else:
+        port = 9888
+        
     Pyro.core.initServer(banner=0,storageCheck=0)
     
     # start Pyro server
     hostname = socket.gethostbyname(socket.gethostname())
-    port = 9888
-    
+
     daemon = Pyro.core.Daemon(host=hostname,port=port)
     frame_server = FrameServer()
     URI=daemon.connect(frame_server,'frame_server')

@@ -71,6 +71,8 @@ cdef class RealtimeAnalyzer:
     
     # ROI size
     cdef int _left, _bottom, _right, _top
+
+    cdef int roi2_radius
     
     # runtime parameters
     cdef float _diff_threshold
@@ -105,6 +107,8 @@ cdef class RealtimeAnalyzer:
         self.alpha = alpha
         self.roi = ( 0, 0, self.width-1, self.height-1)
 
+
+        self.roi2_radius = 15
         self._diff_threshold = 8.1
         self._clear_threshold = 0.0
         self._use_arena = 0
@@ -184,6 +188,11 @@ cdef class RealtimeAnalyzer:
         # start of IPP-requiring code
         cdef ipp.Ipp8u max_val
         cdef int index_x,index_y
+
+        
+        cdef ipp.IppiSize roi2_sz
+        cdef int left2, right2, bottom2, top2
+        
         # end of IPP-requiring code
         cdef int found_point
         
@@ -225,10 +234,24 @@ cdef class RealtimeAnalyzer:
         CHK( ipp.ippiMaxIndx_8u_C1R(
             (self.im2 + self._bottom*self.im2_step + self._left), self.im2_step,
             self._roi_sz, &max_val, &index_x,&index_y))
-        # (to avoid big moment arm:) if pixel < self._clear_threshold*max(pixel): pixel=0
+
+        # find mini-ROI for further analysis (defined in non-ROI space)
+        left2 = index_x - self.roi2_radius + self._left
+        right2 = index_x + self.roi2_radius + self._left
+        bottom2 = index_y - self.roi2_radius + self._bottom
+        top2 = index_y + self.roi2_radius + self._bottom
+
+        if left2 < self._left: left2 = self._left
+        if right2 > self._right: right2 = self._right
+        if bottom2 < self._bottom: bottom2 = self._bottom
+        if top2 > self._top: top2 = self._top
+        roi2_sz.width = right2 - left2 + 1
+        roi2_sz.height = top2 - bottom2 + 1
+        
+        # (to reduce moment arm:) if pixel < self._clear_threshold*max(pixel): pixel=0
         CHK( ipp.ippiThreshold_Val_8u_C1IR(
-            (self.im2 + self._bottom*self.im2_step + self._left), self.im2_step,
-            self._roi_sz, self._clear_threshold*max_val, 0, ipp.ippCmpLess))
+            (self.im2 + bottom2*self.im2_step + left2), self.im2_step,
+            roi2_sz, self._clear_threshold*max_val, 0, ipp.ippCmpLess))
 
         found_point = 1
         if max_val < self._diff_threshold:
@@ -241,8 +264,8 @@ cdef class RealtimeAnalyzer:
             result = fit_params( self.pState, &x0, &y0,
                                  &Mu00,
                                  &Uu11, &Uu20, &Uu02,
-                                 self._roi_sz.width, self._roi_sz.height,
-                                 (self.im2 + self._bottom*self.im2_step + self._left),
+                                 roi2_sz.width, roi2_sz.height,
+                                 (self.im2 + bottom2*self.im2_step + left2),
                                  self.im2_step )
             # note that x0 and y0 are now relative to the ROI origin
             if result == 0:
@@ -281,8 +304,8 @@ cdef class RealtimeAnalyzer:
                 y0_abs = nan
                 found_point = 0
             else:
-                x0_abs = x0+self._left
-                y0_abs = y0+self._bottom
+                x0_abs = x0+left2
+                y0_abs = y0+bottom2
 
             if self._use_arena: # call out to arena feedback function
                 if self.arena_control_working:
@@ -319,7 +342,7 @@ cdef class RealtimeAnalyzer:
             Pt = vt[3,:] # plane parameters
 
             x0_abs = x0u
-            y1_abs = y0u
+            y0_abs = y0u
             
             p1,p2,p3,p4 = Pt[0:4]
         else:
@@ -368,6 +391,26 @@ cdef class RealtimeAnalyzer:
                          self.width)
         # end of IPP-requiring code
         return buf
+
+    def set_background_image(self, numbuf):
+        cdef c_numarray._numarray buf
+        cdef int i
+
+        buf = <c_numarray._numarray>nx.array( numbuf )
+        
+        assert buf.shape[0] == self.height
+        assert buf.shape[1] == self.width
+        assert len(buf.shape) == 2
+        assert buf.iscontiguous()
+        
+        # start of IPP-requiring code
+        # allocate new numarray memory
+        # copy image to numarray
+        for i from 0 <= i < self.height:
+            c_lib.memcpy(self.bg_img+self.bg_img_step*i,
+                         buf.data+self.width*i,
+                         self.width)
+        # end of IPP-requiring code
 
     def take_background_image(self):
         # start of IPP-requiring code

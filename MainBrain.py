@@ -1,6 +1,6 @@
 # $Id$
 import threading, time, socket, select, sys, os, copy, struct, math
-import sets
+import sets, traceback
 import Pyro.core
 import flydra.reconstruct
 import reconstruct_utils as ru
@@ -394,7 +394,14 @@ class CoordReceiver(threading.Thread):
                 if num_cams_arrived==len(self.cam_ids):
                     #X, line3d = self.reconstructor.find3d(d2.items())
                     #cam_ids_used = d2.keys()
-                    X, line3d, cam_ids_used, min_mean_dist = ru.find_best_3d(self.reconstructor,d2)
+                    try:
+                        X, line3d, cam_ids_used, min_mean_dist = ru.find_best_3d(self.reconstructor,d2)
+                    except:
+                        # this prevents us from bombing this thread...
+                        print 'WARNING:'
+                        traceback.print_last()
+                        print 'SKIPPED 3d calculation for this frame.'
+                        continue
                     cam_nos_used = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
 
                     if line3d is None:

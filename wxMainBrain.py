@@ -1,6 +1,22 @@
 #!/usr/bin/env python
 # $Id$
 
+# TODO:
+#
+# hotkeys for
+#   running average on all cameras
+#   take bg image on all cameras
+#   clean bg image on all cameras
+#   record data (auto filename)
+#   record movie (auto filename)
+# make sound when tracking
+# toggle for save movie only when point found
+
+# In other files:
+#  don't crash camera servers when hard-drives not mounted
+#  use ROI surrounding maximum point (DONE)
+#  save clear_threshold and diff_threshold camera settings(??)
+
 import sys
 import threading
 import time
@@ -106,6 +122,11 @@ class App(wxApp):
                         "Sets interval at which display is updated")
         EVT_MENU(self, ID_set_timer, self.OnSetTimer)
 
+        ID_set_timer2 = wxNewId()
+        viewmenu.Append(ID_set_timer2, "Set raw image update timer...",
+                        "Sets interval at which images are updated")
+        EVT_MENU(self, ID_set_timer2, self.OnSetTimer2)
+
         menuBar.Append(viewmenu, "&View")
 
         # finish menubar -----------------------------
@@ -166,6 +187,14 @@ class App(wxApp):
         self.update_interval=500
         self.timer.Start(self.update_interval) # call every n msec
         EVT_IDLE(self.frame, self.OnIdle)
+
+        # raw image update timer
+        ID_Timer2  = wxNewId() 	         
+        self.timer2 = wxTimer(self,      # object to send the event to 	 
+                              ID_Timer2)  # event id to use 	 
+        EVT_TIMER(self,  ID_Timer2, self.OnUpdateRawImages)
+        self.update_interval2=500
+        self.timer2.Start(self.update_interval2) # call every n msec
 
         self.cameras = {} #OrderedDict()
 
@@ -620,6 +649,16 @@ class App(wxApp):
         finally:
             dlg.Destroy()
 
+    def OnSetTimer2(self, event):
+        dlg=wxTextEntryDialog(self.frame, 'What interval should raw frames be grabbed (msec)?',
+                              'Set display update interval',str(self.update_interval2))
+        try:
+            if dlg.ShowModal() == wxID_OK:
+                self.update_interval2 = int(dlg.GetValue())
+                self.timer2.Start(self.update_interval2)
+        finally:
+            dlg.Destroy()
+
     def OnSetROI(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         dlg = RES.LoadDialog(self.frame,"ROI_DIALOG") # make frame main panel
@@ -752,6 +791,11 @@ class App(wxApp):
             del self.main_brain
         self.frame.Close(True)
 
+    def OnUpdateRawImages(self, event):
+        if self.current_page in ['preview','snapshot']:
+            for cam_id in self.cameras.keys():
+                self.main_brain.request_image_async(cam_id)
+
     def OnIdle(self, event):
         if not hasattr(self,'main_brain'):
             return # quitting
@@ -770,9 +814,6 @@ class App(wxApp):
                         pt,ln=r.find2d(cam_id,data3d,
                                        Lcoords=line3d,distorted=True)
                         self.cam_image_canvas.set_reconstructed_points(cam_id,([pt],[ln]))
-            if self.current_page in ['preview','snapshot']:
-                for cam_id in self.cameras.keys():
-                    self.main_brain.request_image_async(cam_id)
             if self.current_page == 'preview':
                 for cam_id in self.cameras.keys():
                     cam = self.cameras[cam_id]

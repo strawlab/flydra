@@ -501,6 +501,7 @@ class App:
                         except Queue.Empty:
                             pass
 
+                        # make sure a BG frame is saved at beginning of movie
                         if bg_movie is not None and not globals['saved_bg_frame']:
                             frame,timestamp = globals['current_bg_frame_and_timestamp']
                             bg_movie.add_frame(frame,timestamp)
