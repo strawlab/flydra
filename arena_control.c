@@ -119,6 +119,8 @@ long rotation_calculation_init( void )
   long errval;
   char cmd[8];
 
+  if( calcing ) return;
+
   /* open serial port */
   errval = sc_open_port( &serial_port, SC_COMM_PORT );
   if( errval != SC_SUCCESS_RC )
