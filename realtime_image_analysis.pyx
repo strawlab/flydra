@@ -6,9 +6,6 @@ import sys
 import numarray as nx
 import numarray.ieeespecial
 import numarray.linear_algebra
-import math
-
-argmax = nx.argmax
 
 cdef double nan
 nan = numarray.ieeespecial.nan
@@ -57,17 +54,6 @@ cdef void SET_ERR( int errval ):
     c_lib.printf("SET_ERR called!\n")
     c_lib.exit(2)
 
-cdef void print_info_8u(ipp.Ipp8u* im, int im_step, ipp.IppiSize sz, object prefix):
-    cdef ipp.Ipp32f minVal, maxVal
-    cdef ipp.IppiPoint minIdx, maxIdx
-    
-    CHK(
-        ipp.ippiMinMaxIndx_8u_C1R( im, im_step, sz,
-                                   &minVal, &maxVal,
-                                   &minIdx, &maxIdx ))
-    print prefix,'min: %f, max: %f, minIdx: %d,%d, maxIdx: %d,%d'%(minVal,maxVal,
-                                                                   minIdx.x,minIdx.y,
-                                                                   maxIdx.x,maxIdx.y)
 # end of IPP-requiring code
 
 if sys.platform == 'win32':
