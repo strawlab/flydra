@@ -443,6 +443,7 @@ class App:
         last_measurement_time = []
         last_return_info_check = []
         n_raw_frames = []
+        last_found_timestamp = [0.0]*self.num_cams
         
         if self.num_cams == 0:
             return
@@ -497,7 +498,10 @@ class App:
 #                                print '%s: qsize is %d'%(cam_id,qsize)
                             while 1:
                                 frame,timestamp,framenumber,found_anything = get_raw_frame_nowait() # this may raise Queue.Empty
-                                if found_anything and raw_movie is not None:
+                                if found_anything:
+                                    last_found_timestamp[cam_no] = timestamp
+                                # save movie for 1 second after I found anything
+                                if (timestamp - last_found_timestamp[cam_no]) < 1.0 and raw_movie is not None:
                                     raw_movie.add_frame(frame,timestamp)
                                 n_raw_frames[cam_no] += 1
                         except Queue.Empty:
