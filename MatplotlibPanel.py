@@ -7,6 +7,8 @@ from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
 from matplotlib.mlab import meshgrid
 from wxPython.wx import *
 
+origin = 'upper'
+
 class PlotPanel(wxPanel):
 
     def __init__(self, parent):
@@ -41,8 +43,7 @@ class PlotPanel(wxPanel):
         z = numarray.zeros(x.shape)
         self.im = a.imshow( z,
                             cmap=matplotlib.cm.jet,
-                            origin='lower',
-                            #origin='upper',
+                            origin=origin,
                             interpolation='nearest')
         #self.im.set_clim(0,255)
         
@@ -71,8 +72,10 @@ class PlotPanel(wxPanel):
     def set_points(self,points):
         zp = zip(*points)
         #self.lines[0].set_data(zp[0],zp[1])
-        #y = 491-numarray.asarray(zp[1])
-        y = zp[1]
+        if origin == 'upper':
+            y = 490-numarray.asarray(zp[1])
+        else:
+            y = zp[1]
         self.lines[0].set_data(zp[0],y)
 
     def draw(self):
