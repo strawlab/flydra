@@ -150,6 +150,7 @@ class Reconstructor:
                 P.append( (p1,p2,p3,p4) )
         
         # Calculate best point
+        A=A.copy() # force to be contiguous (XXX hack -- find out why it gets non-contiguous)
         u,d,vt=svd(A)
         X = vt[-1,0:3]/vt[-1,3] # normalize
 
