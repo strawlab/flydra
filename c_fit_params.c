@@ -85,38 +85,20 @@ int free_moment_state()
 ** fit_params ***************************************************
 ****************************************************************/
 int fit_params( double *x0, double *y0, double *orientation,
-                       int index_x, int index_y, int centroid_search_radius,
-                       int width, int height, unsigned char *img, int img_step )
+		int width, int height, unsigned char *img, int img_step )
 {
-  int left, bottom, right, top;
   double Mu00, Mu10, Mu01;
   double Uu11, Uu20, Uu02;
   IppiSize roi_size;
   IppiPoint roi_offset;
 
-  /* figure out ROI based on inputs */
-  left = index_x - centroid_search_radius;
-  if( left < 0 ) left = 0;
-  right = index_x + centroid_search_radius;
-  if( right >= width ) right = width - 1;
-  bottom = index_y - centroid_search_radius;
-  if( bottom < 0 ) bottom = 0;
-  top = index_y + centroid_search_radius;
-  if( top >= height ) top = height - 1;
-
-  /* ignoring centroid search radius! */
-  bottom = 0;
-  top = height - 1;
-  left = 0;
-  right = width - 1;
-
-  roi_offset.x = left;
-  roi_offset.y = bottom;
-  roi_size.width = right - left + 1;
-  roi_size.height = top - bottom + 1;
+  roi_offset.x = 0; 
+  roi_offset.y = 0;
+  roi_size.width = width;
+  roi_size.height = height;
 
   /* get moments */
-  if( !CHK( ippiMoments64f_8u_C1R( (Ipp8u*)(img + bottom*img_step + left), img_step, roi_size, pState ) ) )
+  if( !CHK( ippiMoments64f_8u_C1R( (Ipp8u*)img, img_step, roi_size, pState ) ) )
   {
     printf( "failed calculating moments\n" );
     return 11;
@@ -152,14 +134,14 @@ int fit_params( double *x0, double *y0, double *orientation,
 
 #if 1
   /* square image for orientation calculation */
-  if( !CHK( ippiSqr_8u_C1IRSfs( (Ipp8u*)(img + bottom*img_step + left), img_step, roi_size, 5 ) ) )
+  if( !CHK( ippiSqr_8u_C1IRSfs( (Ipp8u*)img, img_step, roi_size, 5 ) ) )
   {
     printf( "failed squaring image\n" );
     return 60;
   }
 
   /* get moments */
-  if( !CHK( ippiMoments64f_8u_C1R( (Ipp8u*)(img + bottom*img_step + left), img_step, roi_size, pState ) ) )
+  if( !CHK( ippiMoments64f_8u_C1R( (Ipp8u*)img, img_step, roi_size, pState ) ) )
   {
     printf( "failed calculating moments 2\n" );
     return 61;

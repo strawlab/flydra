@@ -96,7 +96,7 @@ cdef class GrabClass:
         cdef double timestamp
         cdef long framenumber
         cdef int have_arena_control
-
+        
         # start of IPP-requiring code
         cdef int index_x,index_y
 #        cdef ipp.Ipp32f max_val, std_val
@@ -142,6 +142,7 @@ cdef class GrabClass:
         clear_background_start_clear = globals['clear_background_start'].clear
         find_rotation_center_start_isSet = globals['find_rotation_center_start'].isSet
         find_rotation_center_start_clear = globals['find_rotation_center_start'].clear
+        debug_isSet = globals['debug'].isSet
         height = self.cam.get_max_height()
         width = self.cam.get_max_width()
         buf_ptr_step = width
@@ -237,25 +238,30 @@ cdef class GrabClass:
                     (bg_img + self.bottom*bg_img_step + self.left), bg_img_step,
                     (im1 + self.bottom*im1_step + self.left), im1_step,
                     (im2 + self.bottom*im2_step + self.left), im2_step, roi_sz))
+                # (to avoid big moment arm:) if pixel < .8*max(pixel): pixel=0
+                CHK( ipp.ippiThreshold_Val_8u_C1IR(
+                    (im2 + self.bottom*im2_step + self.left), im2_step,
+                    roi_sz, max_val*0.8, 0, ipp.ippCmpLess))
                 CHK( ipp.ippiMaxIndx_8u_C1R(
                     (im2 + self.bottom*im2_step + self.left), im2_step,
                     roi_sz, &max_val, &index_x,&index_y))
 #                CHK( ipp.ippiSqr_8u_C1IRSfs(
 #                    (im2 + self.bottom*im2_step + self.left), im2_step,
 #                    roi_sz, 4 ))
-                
+
                 if max_val < self.diff_threshold:
                     x0=-1
                     y0=-1
                 else:
                     # compute centroid -=-=-=-=-=-=-=-=-=-=-=-=
+                    
+                    # index_x, index_y, centroid_search_radius,
 
                     c_fit_params.fit_params( &x0, &y0, &orientation,
-                                index_x, index_y, centroid_search_radius,
                                 roi_sz.width, roi_sz.height,
                                 (im2 + self.bottom*im2_step + self.left), im2_step )
                     # note that x0 and y0 are now relative to the ROI origin
-                    orientation = orientation + 1.571
+                    orientation = orientation + 1.57079632679489661923 # (pi/2)
 
                 #print 'max_val %f (% 8.1f,% 8.1f)'%(max_val,x0,y0)
                 
@@ -290,6 +296,9 @@ cdef class GrabClass:
                 points = [ (x0 + self.left,
                             y0 + self.bottom,
                             orientation) ]
+
+##                if debug_isSet():
+##                    print points
 
                 if self.use_arena: # call out to arena feedback function
                     if have_arena_control:
@@ -562,6 +571,14 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
         # end of IPP-requiring code
         return result
 
+    def start_debug(self):
+        self.globals['debug'].set()
+        print '-='*20,'ENTERING DEBUG MODE'
+
+    def stop_debug(self):
+        self.globals['debug'].clear()
+        print '-='*20,'LEAVING DEBUG MODE'
+
     def start_recording(self,filename):
         fly_movie_lock = threading.Lock()
         self.globals['record_status_lock'].acquire()
@@ -576,8 +593,8 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
         cmd=None
         self.globals['record_status_lock'].acquire()
         try:
-            if self.globals['record_status']:
-                cmd,fly_movie,fly_movie_lock = self.globals['record_status']
+##            if self.globals['record_status']:
+##                cmd,fly_movie,fly_movie_lock = self.globals['record_status']
             self.globals['record_status'] = None
         finally:
             self.globals['record_status_lock'].release()
@@ -588,7 +605,9 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
             fly_movie_lock.release()
             print "stopping recording"
         else:
-            print "got stop recording command, but not recording!"
+            # still saving data...
+            #print "got stop recording command, but not recording!"
+            pass
 
     def no_op(self):
         """used to test connection"""
@@ -597,14 +616,13 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
     def quit(self):
         self.globals['cam_quit_event'].set()
 
-
     def collect_background(self):
         self.globals['collect_background_start'].set()
 
     def clear_background(self):
         self.globals['clear_background_start'].set()
 
-    def get_diff_threshold(self,value):
+    def get_diff_threshold(self):
         return self.globals['diff_threshold']
 
     def find_r_center(self):
@@ -707,6 +725,7 @@ cdef class App:
             globals['collect_background_start'] = threading.Event()
             globals['clear_background_start'] = threading.Event()
             globals['find_rotation_center_start'] = threading.Event()
+            globals['debug'] = threading.Event()
             globals['record_status_lock'] = threading.Lock()
 
             globals['lbrt'] = 0,0,width-1,height-1
@@ -727,9 +746,7 @@ cdef class App:
                 max_value = tmp[2]
                 scalar_control_info[name] = (current_value, min_value, max_value)
             diff_threshold = 8.1
-            scalar_control_info['threshold'] = diff_threshold
-            scalar_control_info['width'] = globals['width']
-            scalar_control_info['height'] = globals['height']
+            scalar_control_info['initial_diff_threshold'] = diff_threshold
 
             # register self with remote server
             port = 9834 + cam_no # for local Pyro server
@@ -781,7 +798,9 @@ cdef class App:
             grabber.set_camera_and_coord_port(cam,coord_port)
             
             grabber.diff_threshold = diff_threshold
+            # shadow grabber value
             globals['diff_threshold'] = grabber.diff_threshold
+            
             grabber.use_arena = 0
             globals['use_arena'] = grabber.use_arena
             
@@ -892,6 +911,7 @@ cdef class App:
                                     globals['lbrt']=l,b,r,t
                                 elif key == 'diff_threshold':
                                     grabber.diff_threshold = cmds[key]
+                                    # shadow grabber value
                                     globals['diff_threshold'] = grabber.diff_threshold
                                 elif key == 'use_arena':
                                     grabber.use_arena = cmds[key]
@@ -908,6 +928,7 @@ cdef class App:
 
                         if len(grabbed_frames[cam_no]):
                             if cmd=='save':
+                                #print 'saving %d frames'%(len(grabbed_frames[cam_no]),)
                                 fly_movie_lock.acquire()
                                 try:
                                     for frame,timestamp,framenumber in grabbed_frames[cam_no]:
