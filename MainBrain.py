@@ -173,6 +173,8 @@ class CoordReceiver(threading.Thread):
 
     def connect(self,cam_id):
         global hostname
+
+        assert self.main_brain.h5file is None
         
         self.all_data_lock.acquire()
         self.cam_ids.append(cam_id)
@@ -576,7 +578,9 @@ class MainBrain(object):
             cam['fps'] = None
             points = cam['points'][:]
             cam_lock.release()
-            self.cam_info_lock.release()            
+            self.cam_info_lock.release()
+            # NB: points are undistorted (and therefore do not align
+            # with distorted image)
             return image, fps, points
 
         def external_send_set_camera_property( self, cam_id, property_name, value):
@@ -978,7 +982,22 @@ class MainBrain(object):
         self._service_save_data()
 
     def get_last_image_fps(self, cam_id):
-        return self.remote_api.external_get_image_fps_points(cam_id)
+        
+        # Points are originally undistorted (and therefore do not
+        # align with distorted image). We must distort them.
+        
+        image, fps, points = self.remote_api.external_get_image_fps_points(cam_id)
+        if self.reconstructor is None:
+            distorted_points = points
+        else:
+            distorted_points = []
+            for pt in points:
+                xd,yd = self.reconstructor.distort(cam_id,pt[0],pt[1])
+                dp = list(pt)
+                dp[0] = xd
+                dp[1] = yd
+                distorted_points.append( dp )
+        return image, fps, distored_points
 
     def close_camera(self,cam_id):
         self.remote_api.external_quit( cam_id )
@@ -1114,6 +1133,14 @@ class MainBrain(object):
             for cam_id in self.remote_api.external_get_cam_ids():
                 self.h5file.createArray(res_group, cam_id,
                                         self.reconstructor.get_resolution(cam_id))
+            intlin_group = self.h5file.createGroup(cal_group,'intrinsic_linear')
+            for cam_id in self.remote_api.external_get_cam_ids():
+                self.h5file.createArray(intlin_group, cam_id,
+                                        self.reconstructor.get_intrinsic_linear(cam_id))
+            intnonlin_group = self.h5file.createGroup(cal_group,'intrinsic_nonlinear')
+            for cam_id in self.remote_api.external_get_cam_ids():
+                self.h5file.createArray(intnonlin_group, cam_id,
+                                        self.reconstructor.get_intrinsic_nonlinear(cam_id))
                 
             self.h5data3d_fastest = ct(root,'data3d_fastest', Info3D,
                                        "3d data (fastest)",

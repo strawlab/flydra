@@ -112,6 +112,8 @@ cdef class RealtimeAnalyzer:
         self._pmat = None
         self._pmat_inv = None
 
+        self._helper = None
+
         # start of IPP-requiring code
         self.n_rot_samples = 100*60 # 1 minute
 
@@ -159,9 +161,12 @@ cdef class RealtimeAnalyzer:
         # end of IPP-requiring code
         return
 
+    def set_reconstruct_helper( self, helper ):
+        self._helper = helper
+
     def do_work(self, c_numarray._numarray buf, double timestamp, int framenumber):
         cdef double x0, y0
-        cdef double x0_abs, y0_abs, area
+        cdef double x0_abs, y0_abs, area, x0u, y0u, x1u, y1u
         cdef double orientation
         cdef double slope, eccentricity
         cdef double p1, p2, p3, p4
@@ -223,11 +228,17 @@ cdef class RealtimeAnalyzer:
             (self.im2 + self._bottom*self.im2_step + self._left), self.im2_step,
             self._roi_sz, self._clear_threshold*max_val, 0, ipp.ippCmpLess))
 
+        found_point = True
         if max_val < self._diff_threshold:
             x0=-1
             y0=-1
-            x0_abs = -1
+
+            # XXX Must convert the following to nan. (With
+            # undistortion, values could conceivably be exactly -1.)
+            
+            x0_abs = -1 
             y0_abs = -1
+            found_point = False
         else:
             result = fit_params( self.pState, &x0, &y0,
                                  &Mu00,
@@ -267,7 +278,7 @@ cdef class RealtimeAnalyzer:
             # set x0 and y0 relative to whole frame
             x0_abs = x0+self._left
             y0_abs = y0+self._bottom
-            
+
             if self._use_arena: # call out to arena feedback function
                 if self.arena_control_working:
                     arena_control.arena_update(
@@ -277,23 +288,33 @@ cdef class RealtimeAnalyzer:
         # grab GIL
         c_python.Py_END_ALLOW_THREADS
 
-        if self._pmat_inv is not None and x0_abs != -1.0:
+        if self._pmat_inv is not None and found_point:
 
+            # (If we have self._pmat_inv, we can assume we have
+            # self._helper.)
+            
+            undistort = self._helper.undistort # shorthand
+            
             # calculate plane containing camera origin and found line
             # in 3D world coords
 
             # Step 1) Find world coordinates points defining plane:
             #    A) found point
-            X1=nx.dot(self._pmat_inv,[x0_abs,y0_abs,1.0])
+            x0u, y0u = undistort( x0_abs, y0_abs )
+            X0=nx.dot(self._pmat_inv,[x0u,y0u,1.0])
             #    B) another point on found line
-            X2=nx.dot(self._pmat_inv,[x0_abs+run,y0_abs+rise,1.0])
+            x1u, y1u = undistort(x0_abs+run,y0_abs+rise)
+            X1=nx.dot(self._pmat_inv,[x1u,y1u,1.0])
             #    C) world coordinates of camera center already known
 
             # Step 2) Find world coordinates of plane
             svd = numarray.linear_algebra.singular_value_decomposition
-            A = nx.array( [ X1, X2, self.camera_center] ) # 3 points define plane
+            A = nx.array( [ X0, X1, self.camera_center] ) # 3 points define plane
             u,d,vt=svd(A,full_matrices=True)
             Pt = vt[3,:] # plane parameters
+
+            x0_abs = x0u
+            y1_abs = y0u
             
             p1,p2,p3,p4 = Pt[0:4]
         else:

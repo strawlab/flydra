@@ -4,8 +4,8 @@ opj=os.path.join
 import numarray as nx
 import numarray.linear_algebra
 svd = numarray.linear_algebra.singular_value_decomposition
-Lstar_i = nx.array([2,3,1,0,0,0]) # Lstar to Pluecker line coords (i index)
-Lstar_j = nx.array([3,1,2,3,2,1]) # Lstar to Pluecker line coords (j index)
+import reconstruct_utils
+
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
 
@@ -137,8 +137,7 @@ class Reconstructor:
         self.Pmat = {}
         self.Res = {}
         self.pmat_inv = {}
-        self.K = {} # intrinsic parameters (CalTechCal format) (XXX should get from Pmat)
-        self.kc = {} # nonlinear distortion parameters (CalTechCal format)
+        self._helper = {}
         
         if calibration_data_source == 'normal files':
             res_fd = open(os.path.join(calibration_dir,'Res.dat'),'r')
@@ -157,19 +156,22 @@ class Reconstructor:
             for cam_id, filename in zip( cam_ids, rad_files ):
                 params = {}
                 execfile(filename,params)
-                self.K[cam_id] = nx.array( ((params['K11'],0,params['K13']),
-                                            (0,params['K22'],params['K23']),
-                                            (0,0,1)))
-                self.kc[cam_id] = (params['kc1'], params['kc2'],
-                                   params['kc3'], params['kc4'])
+                self._helper[cam_id] = reconstruct_utils.ReconstructHelper(
+                    params['K11'], params['K22'], params['K13'], params['K23'],
+                    params['kc1'], params['kc2'], params['kc3'], params['kc4'])
                 
         elif calibration_data_source == 'pytables':
             for cam_id in cam_ids:
                 pmat = nx.array(results.root.calibration.pmat.__getattr__(cam_id))
                 res = tuple(results.root.calibration.resolution.__getattr__(cam_id))
+                K = nx.array(results.root.calibration.intrinsic_linear.__getattr__(cam_id))
+                nlparams = tuple(results.root.calibration.intrinsic_nonlinear.__getattr__(cam_id))
                 self.Pmat[cam_id] = pmat
                 self.Res[cam_id] = res
                 self.pmat_inv[cam_id] = numarray.linear_algebra.generalized_inverse(pmat)
+                self._helper[cam_id] = reconstruct_utils.ReconstructHelper(
+                    K[0,0], K[1,1], K[0,2], K[1,2],
+                    nlparams[0], nlparams[1], nlparams[2], nlparams[3])
             
         self.cam_combinations = [s for s in setOfSubsets(cam_ids) if len(s) >=2]
         def cmpfunc(a,b):
@@ -186,35 +188,17 @@ class Reconstructor:
     def get_pmat(self, cam_id):
         return self.Pmat[cam_id]
 
+    def get_intrinsic_linear(self, cam_id):
+        self._helper[cam_id].get_K()
+        
+    def get_intrinsic_nonlinear(self, cam_id):
+        self._helper[cam_id].get_nlparams()
+
     def undistort(self, cam_id, x_kk):
-        # undoradial.m
-        K = self.K[cam_id]
-        kc = self.kc[cam_id]
-        k1 = kc[0]
-        k2 = kc[1]
-        p1 = kc[2]
-        p2 = kc[3]
-        fc1 = K[0,0]
-        fc2 = K[1,1]
-        cc1 = K[0,2]
-        cc2 = K[1,2]
+        return self._helper[cam_id].undistort(x_kk[0],x_kk[1])
 
-        xd = nx.array(((x_kk[0]-cc1)/fc1, (x_kk[1]-cc2)/fc2))
-        x = xd # initial guess
-        # comp_distortion_oulu.m
-        for kk in range(20):
-            r_2 = nx.sum(x**2)
-            k_radial = 1 + k1 * r_2 + k2 * r_2**2
-            delta_x = nx.array((2*p1*x[0]*x[1] + p2*(r_2 + 2*x[0]**2),
-                                p1 * (r_2 + 2*x[1]**2)+2*p2*x[0]*x[1]))
-            x = (xd-delta_x)/k_radial
-
-        # put back in original coords
-##        tmp = nx.array(((x[0]),(x[1]),(1.0)))
-##        xl = nx.matrixmultiply(K,tmp)
-##        return xl[:2]
-        xl = nx.matrixmultiply(K[:2,:],(x[0],x[1],1.0))
-        return xl
+    def distort(self, cam_id, xl):
+        return self._helper[cam_id].distort(xl[0],xl[1])
 
     def find3d(self, cam_ids_and_points2d ):
         # for info on SVD, see Hartley & Zisserman (2003) p. 593 (see

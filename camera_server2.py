@@ -10,6 +10,8 @@ import FlyMovieFormat
 import struct
 import numarray as nx
 import pyx_cam_iface as cam_iface
+import reconstruct_utils
+
 try:
     import realtime_image_analysis
 except ImportError, x:
@@ -89,6 +91,18 @@ class GrabClass(object):
     def set_roi(self, lbrt):
         self.realtime_analyzer.roi = lbrt
     roi = property( get_roi, set_roi )
+
+    def make_reconstruct_helper(self, intlin, intnonlin):
+        fc1 = intlin[0,0]
+        fc2 = intlin[1,1]
+        cc1 = intlin[0,2]
+        cc2 = intlin[1,2]
+        k1, k2, p1, p2 = intnonlin
+        
+        helper = reconstruct_utils.ReconstructHelper(
+            fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
+        
+        self.realtime_analyzer.set_reconstruct_helper( helper )
     
     def grab_func(self,globals):
         n_bg_samples = 100
@@ -133,7 +147,6 @@ class GrabClass(object):
                 old_ts = timestamp
                 
                 points = self.realtime_analyzer.do_work( buf, timestamp, framenumber )
-                x = points[0][0]
                 
                 if debug_isSet():
                     if flip:
@@ -395,8 +408,10 @@ class App:
             elif key == 'debug':
                 if cmds[key]: globals['debug'].set()
                 else: globals['debug'].clear()
-            elif key == 'pmat':
-                grabber.pmat = cmds[key]
+            elif key == 'cal':
+                pmat, intlin, intnonlin = cmds[key]
+                grabber.pmat = pmat
+                grabber.make_reconstruct_helper(intlin, intnonlin)
                 
     def mainloop(self):
         # per camera variables

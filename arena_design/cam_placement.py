@@ -1,97 +1,111 @@
 #!/usr/bin/env python
-import tempfile
+import tempfile, sets, os, sys
 from Numeric import *
 from LinearAlgebra import *
 ##import numarray as na
 ##from numarray import *
 ##from numarray.linear_algebra import *
-import os
+import RandomArray
 from OpenGLContext.quaternion import Quaternion
 import gts
 
-##GTS_SET = '/home/astraw/other-peoples-src/gts/examples/set'
-##class GTSObject:
-##    def __init__(self, filename, tmp=False):
-##        self.filename = filename
-##        self.tmp=tmp
+def combination2_w_index( alist ):
+    """make all unique 2-combinations of elements in list, with index"""
+    results = []
+    index_dict = {}
+    for i in range(len(alist)):
+        for j in range(i+1,len(alist)):
+            a = alist[i]
+            b = alist[j]
+            pair = a,b
+            results.append( pair )
+            index_dict.setdefault( a, [] ).append(pair)
+            index_dict.setdefault( b, [] ).append(pair)
+    for k in index_dict.keys():
+        index_dict[k] = list(sets.Set(index_dict[k])) # clear redundant tuples
+    return results, index_dict
 
-##    def get_buffer(self):
-##        return file(self.filename,'r').read()
-
-##    def __del__(self):
-##        if self.tmp:
-##            os.unlink(self.filename)
-
-##    def set_operation(self, op, other):
-##        assert isinstance(other,GTSObject)
-##        assert op in ('inter','union','diff')
-##        handle, tmpname = tempfile.mkstemp('.gts')
-##        cmd = '%s %s %s %s > %s'%(GTS_SET,op,self.filename,other.filename,tmpname)
-##        #print cmd
-##        stdin, stdout, stderr = os.popen3(cmd)
-##        e=stderr.read() # bizarre, but this seems necessary
-##        gts = GTSObject(tmpname,tmp=True)
-##        if len(gts.get_buffer()) == 0:
-##            return None
-##        else:
-##            return gts
-
-##    def save(self,filename,fmt='gts'):
-##        assert fmt=='gts'
-##        f=file(filename,mode='w')
-##        f.write(file(self.filename,mode='r').read())
-
-def fixup_gts(infilename,outfilename):
-    lines = file(infilename,mode="r").read().splitlines()
-    line_no=0
-    line0 = lines[line_no].split()
-    n_verts, n_edges, n_faces = map(int,line0)
-
-    verts=[]
-    for i in range(n_verts):
-        line_no+=1
-        verts.append( map(float,lines[line_no].split()))
-    edges=[]
-    edge_idx = 1
-    old_idx = {}
-    o=0
-    for i in range(n_edges):
-        line_no+=1
-        o+=1
-        this_edge = map(int,lines[line_no].split())
-        edge_ok = True
-        for vert_idx in this_edge:
-            if vert_idx > n_verts:
-                edge_ok=False
-                break
-        if not edge_ok:
-            continue
-        edges.append( this_edge )
-        old_idx[o]=edge_idx
-        edge_idx += 1
-    faces=[]
-    for i in range(n_faces):
-        line_no+=1
-        this_face = map(int,lines[line_no].split())
-        face_ok = True
-        new_face = []
-        for ei in this_face:
-            if ei not in old_idx:
-                face_ok=False
-                break
-            new_face.append( old_idx[ei] )
-        if not face_ok:
-            continue
-        faces.append( new_face )
-    fd = open(outfilename,mode="w")
-    fd.write("%d %d %d\n"%(len(verts),len(edges),len(faces)))
-    for v in verts:
-        fd.write( '%s\n'%( ' '.join(map(str,v)), ) )
-    for e in edges:
-        fd.write( '%s\n'%( ' '.join(map(str,e)), ) )
-    for f in faces:
-        fd.write( '%s\n'%( ' '.join(map(str,f)), ) )
+class CamPair:
+    def __init__(self,cam1,cam2):
+        print 'intersecting',cam1,cam2
+        print 'line',sys._getframe().f_lineno
+        self.cam1 = cam1
+        self.cam2 = cam2
         
+        qh = self.cam1.get_visible_space_qhull()
+        if qh is not None:
+            qh.cycle()
+            c1v = qh.to_gts()
+        else:
+            c1v = None
+
+        qh = self.cam2.get_visible_space_qhull()
+        if qh is not None:
+            qh.cycle()
+            c2v = qh.to_gts()
+        else:
+            c2v = None
+
+        if 0:
+            print 'line',sys._getframe().f_lineno
+            c1v = self.cam1.get_visible_space_gts()
+            c2v = self.cam2.get_visible_space_gts()
+
+            print 'line',sys._getframe().f_lineno
+            qh = self.cam1.get_visible_space_qhull()
+            print 'line',sys._getframe().f_lineno
+            qh.save('c1v.qhull')
+            qh.save('c1v.oogl')
+            qh.save('c1v.gts')
+            print 'line',sys._getframe().f_lineno
+            qh.cycle()
+            gts = qh.to_gts()
+            print 'line',sys._getframe().f_lineno
+            gts.save('cam1_qh.gts')
+
+            qh = self.cam2.get_visible_space_qhull()
+            qh.cycle()
+            gts = qh.to_gts()
+            gts.save('cam2_qh.gts')
+
+            print 'line',sys._getframe().f_lineno
+##        c1v.save('cam1.stl')
+##        c2v.save('cam2.stl')
+##        c1v.save('cam1.gts')
+##        c2v.save('cam2.gts')
+        print 'line',sys._getframe().f_lineno
+        if (c1v is None) or (c2v is None):
+            self.gts = None
+        else:
+            try:
+                self.gts = c1v & c2v
+            except gts.GTSIntersectionNotClosedError:
+                self.gts = None
+        print 'line',sys._getframe().f_lineno
+
+        if self.gts is not None:
+            self.gts.save(str(self)+'.stl')
+            self.gts.save(str(self)+'.gts')
+        else:
+            fd=file(str(self)+'.stl',mode='w') # clear file
+            fd=file(str(self)+'.gts',mode='w') # clear file
+        
+    def __repr__(self):
+        return repr(self.cam1)+'I'+repr(self.cam2)
+
+    def __or__(self,other):
+        if self.get_gts() is None:
+            return other.get_gts()
+        if other.get_gts() is None:
+            return self.get_gts()
+        try:
+            result = self.get_gts() | other.get_gts()
+        except gts.GTSIntersectionNotClosedError:
+            result = None
+        return result
+
+    def get_gts(self):
+        return self.gts
 
 class Halfspaces:
     def __init__(self, coeff_offs, dim=None, n=None):
@@ -180,8 +194,11 @@ class Vertices(object):
         vertices.
 
         """
-        self.v = asarray(verts)
-        
+        if len(verts) == 0:
+            self.v = zeros((3,0))
+        else:
+            self.v = asarray(verts)
+
         assert len(self.v.shape)==2
         if dim is not None:
             assert dim == self.v.shape[0]
@@ -247,12 +264,22 @@ class Vertices(object):
         #print 'stderr:',stderr.read()
         return Halfspaces(h)
 
-    def save(self,save_file,fmt='oogl'):
+    def save(self,save_file,fmt=None):
         if type(save_file) == file:
             fd = save_file
         else:
             fd=open(save_file,'w')
-        if fmt == 'oogl': # oogl is for geomview
+            if fmt is None:
+                if save_file[-6:]=='.qhull':
+                    fmt='qhull'
+                elif save_file[-5:]=='.oogl':
+                    fmt='oogl'
+                elif save_file[-4:]=='.gts':
+                    fmt='gts'
+        if fmt == 'qhull': 
+            stdout,stderr = self._raw_qhull('qconvex p')
+            fd.write(stdout)
+        elif fmt == 'oogl': # oogl is for geomview
             stdout,stderr = self._raw_qhull('qconvex G')
             fd.write(stdout)
         elif fmt == 'gts':
@@ -336,13 +363,18 @@ class Vertices(object):
                 fd.write( ' '.join(map(str,face)) )
                 fd.write( '\n' )
         else:
-            raise ValueError('unknown save format')
+            raise ValueError('unknown save format "%s"'%fmt)
+
+    def cycle(self):
+        # cycle through qhull XXX this is a big hack... why needed?
+        fd=tempfile.TemporaryFile()
+        self.save(fd,fmt='qhull')
+        fd.seek(0)
+        self.v=read_qhull_vertices(fd).v
             
     def _raw_qhull(self,cmd):
         cmd = cmd + ' -'
-        #print cmd
         stdin, stdout, stderr = os.popen3(cmd)
-        #print 'cmd:',cmd
         stdin.write( self.qhull() )
         stdin.close()
 
@@ -362,6 +394,28 @@ class Vertices(object):
         self.save(fd,fmt='gts')
         fd.seek(0)
         return gts.surface_read(fd)
+
+def gts2qhull(gtso):
+    qh_verts = Vertices([])
+    for v in gtso.get_vertices():
+        qh_verts.append(v)
+    return qh_verts
+        
+def read_qhull_vertices(readfile):
+    if type(readfile) == file:
+        fd = readfile
+    else:
+        fd = file(readfile,mode='b')
+    lines = fd.read().splitlines()
+    dim = int(lines[0])
+    n = int(lines[1])
+    line_no = 1
+    result = Vertices([])
+    for i in range(n):
+        line_no += 1
+        vert = map(float,lines[line_no].split())
+        result.append(vert)
+    return result
 
 class Point(Vertices):
     def __init__(self, origin=None):
@@ -418,6 +472,9 @@ class Arena:
 
     def get_verts(self):
         return self.verts
+
+    def get_gts_surface(self):
+        return self.verts.to_gts()
         
     def get_internal_halfspaces(self):
         return self.halfspaces
@@ -425,7 +482,7 @@ class Arena:
     def get_cam_halfspaces(self, cam_center):
         v = self.high_verts.copy()
         v.append(cam_center)
-        v.save('hat.gts',fmt='gts')
+        v.save('hat.gts')
         tmp = v.get_halfspaces()
         # remove "lid"
         lid = array( (0,0,-1) )
@@ -440,12 +497,29 @@ class Arena:
         return Vertices( array([[self.l/2.0],[self.w/2.0],[self.h/2.0]]) )
 
 class Cam:
-    def __init__(self,center,frustum_verts):
+    def __init__(self,name,center,frustum_verts):
+        self.name = name
         self.center = center
         self.frustum_verts = frustum_verts
 
     def get_frustum_verts(self):
         return Vertices(self.frustum_verts)
+    
+    def set_visible_space_gts(self,vv):
+        self.vv = vv
+        if self.vv is None:
+            self.qh_verts = None
+        else:
+            self.qh_verts = gts2qhull(self.vv)
+
+    def get_visible_space_gts(self):
+        return self.vv
+
+    def get_visible_space_qhull(self):
+        return self.qh_verts
+
+    def __repr__(self):
+        return "Cam"+self.name
 
 class System:
     def __init__(self, arena=None, K=None):
@@ -466,7 +540,7 @@ class System:
         # in image plane coordinates
         minx, maxx = 0.0, 655.0
         miny, maxy = 0.0, 490.0
-        minw, maxw = 1.0, 10.0
+        minw, maxw = 1.0, 2
         
         self.start_frustum = Vertices( zeros( (3,0), Float64 ) )
         for xi in minx, maxx:
@@ -485,6 +559,7 @@ class System:
         n_cams = len(parameters)/7
         cams = []
         for i in range(n_cams):
+            print 'cam',i
             C_    = parameters[i*7:i*7+3]   # cam center
             cam_q = parameters[i*7+3:i*7+7] # cam quaternion
             
@@ -495,19 +570,18 @@ class System:
             Xcam=self.start_frustum.copy() # world coords, not rotated or translated yet
             X = matrixmultiply(inverse(R),Xcam.as_array()-t) # frustum in world coords
 
-            cams.append( Cam(C_,X) )
+            cams.append( Cam(str(i+1),C_,X) )
 
             # 0. get camera frustum
             fname = 'frustum_cam%02d.gts'%i
-##            cams[i].get_frustum_verts().save(fname,fmt='gts')
-####            frustum = GTSObject(fname)
-##            frustum = gts.surface_read(fname)
             frustum = cams[i].get_frustum_verts().to_gts()
-
+            print ' frustum.volume',frustum.volume
             # 1. get total area of interest: determine non-occluded arena per cam
             DEBUG=1
             if DEBUG:
-                self.arena.get_verts().save('arena.gts',fmt='gts')
+                self.arena.get_gts_surface().save('arena.stl')
+                frustum.save('frustum%d.stl'%(i+1,))
+                cams[i].get_frustum_verts().save('frustum%d.qhull'%(i+1,))
             
             cam_to_arena_hs = self.arena.get_cam_halfspaces( cams[i].center )
             non_occluded_verts = cam_to_arena_hs.get_intersection_vertices(
@@ -517,43 +591,91 @@ class System:
                 if DEBUG: print 'all occluded'
                 continue # no part of the arena is visible
             
-            if DEBUG: 
-                non_occluded_verts.save('non_occluded_DEBUG')
-##            fname = 'non_occluded_cam%02d.gts'%i
-##            non_occluded_verts.save(fname,fmt='gts')
-##            #fixup_gts(fname,'fixed.gts')
-##            non_occluded = gts.surface_read(fname)
-####            non_occluded = GTSObject(fname)
+##            if DEBUG: 
+##                non_occluded_verts.save('non_occluded_DEBUG')
             non_occluded = non_occluded_verts.to_gts()
+            print ' non_occluded.volume',non_occluded.volume
             
-            # 2. intersect with camera's frustum
-            visible_area = frustum & non_occluded
-            if visible_area is not None:
-                fname = 'visible_cam%02d.gts'%i
-                visible_area.save(fname)
-            elif DEBUG:
-                print 'frustum not in visible arena'
+            # 2.   intersect with camera's frustum
+            # 2.a. easy way -- is non_occluded completely within frustum?
+            one_not_in = False
+            for pt in non_occluded.get_vertices():
+                one_not_in = not frustum.contains(pt)
+                if one_not_in:
+                    break
+            if one_not_in:
+                # 2.b. perform intersection using GTS
+                try:
+                    visible_area = frustum & non_occluded
+                except gts.GTSIntersectionNotClosedError,x:
+                    visible_area = None
+            else:
+                visible_area = non_occluded
+                
+            cams[i].set_visible_space_gts(visible_area)
             
-##        # generate 2-tuples of camera combinations of overlapping FOVs: cam_pairs
-##        unions = []
-##        for cam_pair in cam_pairs:
-##            found_union = False
-##            for i,joined_cam_pairs in enumerate(unions):
-##                new_joined_cam_pairs = union( cam_pair, joined_cam_pairs )
-##                if new_joined_cam_pairs is not None:
-##                    unions[i] = new_joined_cam_pairs
-##                    found_union = True
-##                    break
-##            if not found_union:
-##                unions.append( cam_pair )
-##        # total volume
-##        total_volume = 0
-##        for joined_cam_pairs in unions:
-##            total_volume += joined_cam_pairs.volume
+        # generate 2-tuples of camera combinations of overlapping FOVs: cam_pairs
+        print 'line',sys._getframe().f_lineno
+        cam_pairs, cam_pair_idx = combination2_w_index(cams)
+        print 'line',sys._getframe().f_lineno
+        cam_pairs = [ CamPair(*cam_pair) for cam_pair in cam_pairs ]
+        print 'line',sys._getframe().f_lineno
+        print cam_pairs
+        print 'line',sys._getframe().f_lineno
+
+        unions = []
+        for cam_pair in cam_pairs:
+            print cam_pair
+            cam_pair_gts = cam_pair.get_gts()
+            if cam_pair_gts is None:
+                continue
+            print 'line',sys._getframe().f_lineno
+            found_union = False
+            for i,joined_cam_pairs_gts in enumerate(unions):
+                print 'line',sys._getframe().f_lineno
+                
+                merge1 = gts2qhull(cam_pair_gts)
+                merge1.cycle()
+                merge1.cycle()
+                merge1=merge1.to_gts()
+                merge1.save('merge1.gts')
+                merge1.save('merge1.stl')
+                
+                merge2 = gts2qhull(joined_cam_pairs_gts)
+                merge2.cycle()
+                merge2.cycle()
+                merge2=merge2.to_gts()
+                merge2.save('merge2.gts')
+                merge2.save('merge2.stl')
+                
+                print 'IN'
+                merged_gts = cam_pair_gts | joined_cam_pairs_gts
+                print 'OUT'
+                if merged_gts is not None:
+                    print 'line',sys._getframe().f_lineno
+                    merged_gts.save('merged.stl')
+                    print 'line',sys._getframe().f_lineno
+                    unions[i] = merged_gts
+                    found_union = True
+                    break
+            if not found_union:
+                unions.append( cam_pair_gts )
+        # total volume
+        total_volume = 0
+        for joined_cam_pairs in unions:
+            total_volume += joined_cam_pairs.volume
             
-##        return -total_volume
+        return -total_volume
 
 if __name__=='__main__':
     s=System()
-    p = (250,0,2000,1,0,0,1)
-    s.get_badness(p)
+    n_cams = 4
+    params = []
+    for i in range(n_cams):
+        cam_params = zeros((7,),'d')
+        rnd_pos = RandomArray.normal(0.0, 200.0,(3,))
+        start_pos = array([250.0,250,2000])
+        cam_params[:3] = start_pos+rnd_pos
+        cam_params[3:] = 1,0,0,1
+        params.extend(cam_params)
+    s.get_badness(params)
