@@ -37,6 +37,64 @@ void fill_time_string( char string[] )
 }
 
 /****************************************************************
+** start_center_calculation *************************************
+****************************************************************/
+void start_center_calculation( int nframes )
+{
+  char timestring[64], filename[64];
+
+  fill_time_string( timestring );
+  sprintf( filename, "%scalib%s.dat", _ARENA_CONTROL_data_prefix_, timestring );
+  calibfile = fopen( filename, "w" );
+
+  printf( "==saving center calculation to %s\n", filename );
+
+  x_pos_calc = (double*)malloc( nframes * sizeof( double ) );
+  y_pos_calc = (double*)malloc( nframes * sizeof( double ) );
+  curr_frame = 0;
+}
+
+/****************************************************************
+** end_center_calculation ***************************************
+****************************************************************/
+void end_center_calculation( double *x_center, double *y_center )
+{
+  int i;
+  double x_min = 9999.9, x_max = -1.0;
+  double y_min = 9999.9, y_max = -1.0;
+
+  /* mean could be skewed; instead use middle, assuming a circle */
+  for( i = 0; i < curr_frame; i++ )
+  {
+    if( x_pos_calc[i] < x_min ) x_min = x_pos_calc[i];
+    else if( x_pos_calc[i] > x_max ) x_max = x_pos_calc[i];
+    if( y_pos_calc[i] < y_min ) y_min = y_pos_calc[i];
+    else if( y_pos_calc[i] > y_max ) y_max = y_pos_calc[i];
+  }
+  *x_center = (x_max - x_min)/2 + x_min;
+  *y_center = (y_max - y_min)/2 + y_min;
+
+  free( x_pos_calc );
+  free( y_pos_calc );
+  curr_frame = -1;
+
+  fclose( calibfile );
+  printf( "==done calculating center %.4lf %.4lf\n", *x_center, *y_center );
+}
+
+/****************************************************************
+** update_center_calculation ************************************
+****************************************************************/
+void update_center_calculation( double new_x_pos, double new_y_pos, double new_orientation )
+{
+  fprintf( calibfile, "%lf\t%lf\t%lf\n", new_x_pos, new_y_pos, new_orientation );
+
+  x_pos_calc[curr_frame] = new_x_pos;
+  y_pos_calc[curr_frame] = new_y_pos;
+  curr_frame++;
+}
+
+/****************************************************************
 ** unwrap *******************************************************
 ****************************************************************/
 void unwrap( double *th1, double *th2 )
@@ -168,68 +226,9 @@ void set_position_analog( int pos_x, int pos_y )
   comedi_data_write( cdi_dev, cdi_SUBDEV, cdi_CHAN_Y, 0, cdi_AREF, ana_y );
 
   /* in order for this to work with a single output range, the x and y gains must
-     be set on the controlle  in a ratio consistent with their possible values here; 
-     here; specifically, they must have a ratio equal to NPIXELS/PATTERN_DEPTH
-     (currently gains are 120 and 15 for NPIXELS=64 and PATTERN_DEPTH=8) -- more
-     accurately, instead of NPIXELS one should use the pattern width, but presumably
-     that will always equal the number of possible pattern positions, NPIXELS */
+     be set on the controller in a ratio consistent with their possible values here; 
+     specifically, they must have a ratio equal to NPIXELS/PATTERN_DEPTH
+     (for example, gains are 120 and 15 for NPIXELS=64 and PATTERN_DEPTH=8) --
+     more accurately, instead of NPIXELS one should use the pattern width, but
+     presumably that will always equal the number of possible pattern positions NPIXELS */
 }
-
-/****************************************************************
-** start_center_calculation *************************************
-****************************************************************/
-void start_center_calculation( int nframes )
-{
-  char timestring[64], filename[64];
-
-  fill_time_string( timestring );
-  sprintf( filename, "%scalib%s.dat", _ARENA_CONTROL_data_prefix_, timestring );
-  calibfile = fopen( filename, "w" );
-
-  printf( "==saving center calculation to %s\n", filename );
-
-  x_pos_calc = (double*)malloc( nframes * sizeof( double ) );
-  y_pos_calc = (double*)malloc( nframes * sizeof( double ) );
-  curr_frame = 0;
-}
-
-/****************************************************************
-** end_center_calculation ***************************************
-****************************************************************/
-void end_center_calculation( double *x_center, double *y_center )
-{
-  int i;
-  double x_min = 9999.9, x_max = -1.0;
-  double y_min = 9999.9, y_max = -1.0;
-
-  /* mean could be skewed; instead use middle, assuming a circle */
-  for( i = 0; i < curr_frame; i++ )
-  {
-    if( x_pos_calc[i] < x_min ) x_min = x_pos_calc[i];
-    else if( x_pos_calc[i] > x_max ) x_max = x_pos_calc[i];
-    if( y_pos_calc[i] < y_min ) y_min = y_pos_calc[i];
-    else if( y_pos_calc[i] > y_max ) y_max = y_pos_calc[i];
-  }
-  *x_center = (x_max - x_min)/2 + x_min;
-  *y_center = (y_max - y_min)/2 + y_min;
-
-  free( x_pos_calc );
-  free( y_pos_calc );
-  curr_frame = -1;
-
-  fclose( calibfile );
-  printf( "==done calculating center %.4lf %.4lf\n", *x_center, *y_center );
-}
-
-/****************************************************************
-** update_center_calculation ************************************
-****************************************************************/
-void update_center_calculation( double new_x_pos, double new_y_pos, double new_orientation )
-{
-  fprintf( calibfile, "%lf\t%lf\t%lf\n", new_x_pos, new_y_pos, new_orientation );
-
-  x_pos_calc[curr_frame] = new_x_pos;
-  y_pos_calc[curr_frame] = new_y_pos;
-  curr_frame++;
-}
-

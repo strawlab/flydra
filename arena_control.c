@@ -58,7 +58,7 @@ long arena_initialize( void )
 
   /* set initial position within pattern */
 /*  cmd[0] = 3; cmd[1] = 112; cmd[2] = 0; cmd[3] = PATTERN_DEPTH-1;
-  sc_send_cmd( &serial_port, cmd, 4 );  do later in analog  */
+  sc_send_cmd( &serial_port, cmd, 4 );  do later in analog */
 
   /* set gain and bias */
   cmd[0] = 5; cmd[1] = 128;
@@ -71,7 +71,7 @@ long arena_initialize( void )
   sc_send_cmd( &serial_port, cmd, 2 );
 
   /* set initial position within pattern */
-  set_position_analog( 0, PATTERN_DEPTH-1 );
+  set_position_analog( 0, 0 );
 
   /* close serial port */
   sc_close_port( &serial_port );

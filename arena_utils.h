@@ -15,14 +15,14 @@
    3 vert
    4 horiz
    5 diag */
-#define CALIBRATION_PATTERN 1
-#define ARENA_START_PATTERN 3
+#define CALIBRATION_PATTERN 2
+#define ARENA_START_PATTERN 1
 
 /* gain,bias in 2s complement (x=x; -x=256-x) */
 /* bias seems to be a percentage */
 #define EXP_GAIN_X 15
 #define EXP_BIAS_X 0
-#define EXP_GAIN_Y 120
+#define EXP_GAIN_Y 60
 #define EXP_BIAS_Y 0
 
 #define CAL_GAIN_X 0
@@ -36,10 +36,18 @@
 #define NPIXELS (NPIXELS_PER_PANEL*NPANELS_CIRCUMFERENCE)
 #define RAD2PIX ((double)NPIXELS/(2.0*PI))
 #define DEG2PIX ((double)NPIXELS/360.0)
+#define PIX2RAD (2.0*PI/(double)NPIXELS)
+#define PIX2DEG (360.0/(double)NPIXELS)
 
-#define PATTERN_DEPTH 8
-#define PATTERN_START_ANGLE 33.75
-#define PATTERN_END_ANGLE 112.5
+#if 0
+  #define PATTERN_DEPTH 8
+  #define PATTERN_START_ANGLE 33.75
+  #define PATTERN_END_ANGLE 112.5
+#else
+  #define PATTERN_DEPTH 16
+  #define PATTERN_START_ANGLE (2*PIX2DEG)
+  #define PATTERN_END_ANGLE (32*PIX2DEG)
+#endif
 #define PATTERN_DELTA_ANGLE (PATTERN_END_ANGLE - PATTERN_START_ANGLE)
 
 #define cdi_DEVICE "/dev/comedi0"
@@ -51,8 +59,14 @@
 #define cdi_RANGE (cdi_MAX-cdi_MIN)
 #define cdi_AREF AREF_GROUND
 
-/* some utility functions */
 void fill_time_string( char string[] );
+
+/* save data points for nframes, then calculate center of rotation from those data points */
+void start_center_calculation( int nframes );
+void end_center_calculation( double *x_center, double *y_center );
+void update_center_calculation( double new_x_pos, double new_y_pos, double new_orientation );
+
+/* some utility functions */
 void unwrap( double *th1, double *th2 );
 double disambiguate( double x, double y, double center_x, double center_y );
 void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f );
@@ -61,10 +75,5 @@ void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f );
 void init_analog_output( void );
 void finish_analog_output( void );
 void set_position_analog( int pos_x, int pos_y );
-
-/* save data points for nframes, then calculate center of rotation from those data points */
-void start_center_calculation( int nframes );
-void end_center_calculation( double *x_center, double *y_center );
-void update_center_calculation( double new_x_pos, double new_y_pos, double new_orientation );
 
 #endif
