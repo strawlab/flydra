@@ -1,5 +1,4 @@
-#import numarray as nx
-import Numeric as nx
+import numarray as nx
 import math
 
 from wxPython.wx import *

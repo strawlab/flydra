@@ -9,8 +9,8 @@ import socket
 from flydra.reconstruct import Reconstructor
 import struct
 import math
-#import numarray
-import Numeric as nx
+import numarray as nx
+#import Numeric as nx
 
 import struct
 import math

@@ -1,4 +1,5 @@
 #emacs, this is -*-Python-*- mode
+# $Id$
 
 import threading
 import time
@@ -8,15 +9,12 @@ import Pyro.core, Pyro.errors
 import FlyMovieFormat
 import warnings
 import struct
-import Numeric as na
+import numarray as nx
 
 include "../cam_iface/src/pyx_cam_iface.pyx"
 # this has the following side effects:
-## OLD # cimport c_numarray
-## OLD # CamIFaceError, Camera, c_numarray
-## OLD #c_numarray.import_libnumarray()
-# cimport c_numeric
-#c_numeric.import_array()
+# cimport c_numarray # CamIFaceError, Camera, c_numarray
+# c_numarray.import_libnumarray()
 
 cimport c_lib
 
@@ -82,8 +80,7 @@ cdef class GrabClass:
         
     def grab_func(self,globals):
         cdef unsigned char* buf_ptr
-        #cdef c_numarray._numarray buf
-        cdef c_numeric.ArrayType buf
+        cdef c_numarray._numarray buf
         cdef int height
         cdef int buf_ptr_step, width
         cdef int heightwidth[2]
@@ -272,23 +269,18 @@ cdef class GrabClass:
                 buf_ptr_step=im2_step
                 # end of IPP-requiring code                    
 
-                make_buf = True
-                if make_buf:
-                    # allocate new numarray memory
-                    #buf = <c_numarray._numarray>c_numarray.NA_NewArray(
-                    #    NULL, c_numarray.tUInt8, 2,
-                    #    height, width)
-                    heightwidth[0]=height
-                    heightwidth[1]=width
-                    buf = <c_numeric.ArrayType>c_numeric.PyArray_FromDims(
-                        2, heightwidth,
-                        c_numeric.PyArray_UBYTE);
+                # allocate new numarray memory
+                buf = <c_numarray._numarray>c_numarray.NA_NewArray(
+                    NULL, c_numarray.tUInt8, 2,
+                    height, width)
+                heightwidth[0]=height
+                heightwidth[1]=width
 
-                    # copy image to numarray
-                    for i from 0 <= i < height:
-                        c_lib.memcpy(buf.data+width*i,
-                                     buf_ptr+buf_ptr_step*i,
-                                     width)
+                # copy image to numarray
+                for i from 0 <= i < height:
+                    c_lib.memcpy(buf.data+width*i,
+                                 buf_ptr+buf_ptr_step*i,
+                                 width)
 
                 # return camwire's buffer
                 self.cam.unpoint_frame()
@@ -307,15 +299,7 @@ cdef class GrabClass:
                     else:
                         print 'ERROR: no arena control'
                     
-##                points = [ (x0,y0),
-##                           (index_x, index_y) ]
-                
                 # make appropriate references to our copy of the data
-                if not make_buf:
-                    # make some fake data
-                    buf = na.zeros( (height,width), na.UInt8 )
-                    buf[20:30,60:70]=255
-
                 globals['most_recent_frame'] = buf
                 globals['most_recent_frame_and_points'] = buf, points
                 acquire_lock()

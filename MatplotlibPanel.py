@@ -1,7 +1,7 @@
 
 import sys
 # force use of Numeric (numarray bug with SSE2 FPE?)
-sys.argv.append('--Numeric')
+#sys.argv.append('--Numeric')
 
 import matplotlib
 import matplotlib.numerix as nx
