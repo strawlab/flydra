@@ -2,6 +2,7 @@
 import thread
 import time
 import socket
+import os
 import numarray
 import Pyro.core
 import DynamicImageCanvas
@@ -16,7 +17,9 @@ from wxPython.wx import *
 from wxPython.lib import newevent
 from wxPython.xrc import *
 
-RESFILE = ("flydra_server.xrc")
+RESDIR = os.path.split(os.path.abspath(sys.argv[0]))[0]
+RESFILE = os.path.join(RESDIR,'flydra_server.xrc')
+hydra_image_file = os.path.join(RESDIR,'hydra.gif')
 RES = wxXmlResource(RESFILE)
 
 class FlydraBrainPyroServer( Pyro.core.ObjBase ):
@@ -181,6 +184,13 @@ class App(wxApp):
 
         panel = RES.LoadPanel(frame,"FlydraPanel") # frame main panel
         panel.SetFocus()
+
+##        hydra_bitmap = XRCCTRL(panel,'hydra_pic') # get wxStaticBitmap
+##        #if hydra_image_file.endswith('.gif'):
+##        if 1:
+##            tmp = wxImage(hydra_image_file, wxBITMAP_TYPE_GIF).ConvertToBitmap()
+##            hydra_bitmap.SetBitmap(tmp)
+##            #hydra_bitmap.SetSize((200,200))
 
         frame_box = wxBoxSizer(wxVERTICAL)
         frame_box.Add(panel,1,wxEXPAND)

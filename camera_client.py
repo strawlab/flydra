@@ -2,18 +2,21 @@
 import thread
 import time
 import socket
+import sys
 import numarray
 import Pyro.core, Pyro.errors
 
-DUMMY=1
+DUMMY=0
 
 if not DUMMY:
-    try:
+    if sys.platform == 'win32':
         import cam_iface_bcam
         cam_iface = cam_iface_bcam
-    except:
+    elif sys.platform.startswith('linux'):
         import cam_iface_dc1394
         cam_iface = cam_iface_dc1394
+    else:
+        raise NotImplementedError('only win32 and linux support implemented')
 else:
     import cam_iface_dummy
     cam_iface = cam_iface_dummy

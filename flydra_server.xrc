@@ -4,12 +4,12 @@
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
-        <object class="wxStaticText">
-          <label>Flydra Control Center</label>
+        <object class="wxStaticBitmap" name="hydra_pic">
+          <bitmap>flydra_server_art.png</bitmap>
         </object>
         <option>0</option>
-        <flag>wxALL</flag>
-        <border>10</border>
+        <flag>wxALL|wxALIGN_CENTRE</flag>
+        <border>3</border>
       </object>
       <object class="sizeritem">
         <object class="wxPanel">
