@@ -195,7 +195,7 @@ class App(wxApp):
         menuBar.Append(filemenu, "&File")
         frame.SetMenuBar(menuBar)
 
-        self.main_panel = RES.LoadPanel(frame,"FlydraPanel") # frame main panel
+        self.main_panel = RES.LoadPanel(frame,"FLYDRA_PANEL") # make frame main panel
         self.main_panel.SetFocus()
 
         frame_box = wxBoxSizer(wxVERTICAL)
@@ -203,9 +203,22 @@ class App(wxApp):
         frame.SetSizer(frame_box)
         frame.Layout()
 
+        nb = XRCCTRL(self.main_panel,"MAIN_NOTEBOOK")
+        self.cam_preview_panel = RES.LoadPanel(nb,"CAM_PREVIEW_PANEL") # make camera preview panel
+        nb.AddPage(self.cam_preview_panel,"Camera Preview/Settings")
+        
+        temp_panel = RES.LoadPanel(nb,"UNDER_CONSTRUCTION_PANEL") # make camera preview panel
+        nb.AddPage(temp_panel,"3D Calibration")
+
+        temp_panel = RES.LoadPanel(nb,"UNDER_CONSTRUCTION_PANEL") # make camera preview panel
+        nb.AddPage(temp_panel,"Record raw video")
+
+        temp_panel = RES.LoadPanel(nb,"UNDER_CONSTRUCTION_PANEL") # make camera preview panel
+        nb.AddPage(temp_panel,"Realtime 3D tracking")
+
         #####################################
 
-        self.all_cam_panel = XRCCTRL(self.main_panel,"AllCamPanel")
+        self.all_cam_panel = XRCCTRL(self.cam_preview_panel,"AllCamPanel")
 
         acp_box = wxBoxSizer(wxHORIZONTAL) # all camera panel (for camera controls, e.g. gain)
         self.all_cam_panel.SetSizer(acp_box)

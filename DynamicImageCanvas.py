@@ -1,11 +1,16 @@
 import numarray as na
 import math
-#import thread
 
 from wxPython.wx import *
 from wxPython.glcanvas import *
 from OpenGL.GL import *
-#from VisionEgg.GLTrace import *
+
+have_glue = False
+try:
+    from OpenGL.GLUT import *
+    have_glut = True
+except:
+    pass
 
 class DynamicImageCanvas(wxGLCanvas):
     def __init__(self, *args, **kw):
@@ -16,23 +21,18 @@ class DynamicImageCanvas(wxGLCanvas):
         EVT_PAINT(self, self.OnPaint)
         EVT_IDLE(self, self.OnDraw)
         self._gl_tex_info_dict = {}
-#        self._gl_lock = thread.allocate_lock()
 
     def delete_image(self,id_val):
-        print 'deleting id_val',id_val
         tex_id, gl_tex_xy_alloc, gl_tex_xyfrac = self._gl_tex_info_dict[id_val]
         glDeleteTextures( tex_id )
-        print 'len(self._gl_tex_info_dict)',len(self._gl_tex_info_dict)
         del self._gl_tex_info_dict[id_val]        
-        print 'len(self._gl_tex_info_dict)',len(self._gl_tex_info_dict)
-        print '-='*30
 
     def __del__(self, *args, **kwargs):
         for id_val in self._gl_tex_info_dict.keys():
             self.delete_image(id_val)
             
     def OnEraseBackground(self, event):
-        pass # Do nothing, to avoid flashing on MSW.
+        pass # Do nothing, to avoid flashing on MSW. (inhereted from wxDemo)
 
     def OnSize(self, event):
         size = self.GetClientSize()
@@ -61,7 +61,6 @@ class DynamicImageCanvas(wxGLCanvas):
         glColor4f(1.0,1.0,1.0,1.0)
         
     def create_texture_object(self,id_val,image):
-        print 'create',id_val
         def next_power_of_2(f):
             return int(math.pow(2.0,math.ceil(math.log(f)/math.log(2.0))))
 
@@ -134,49 +133,53 @@ class DynamicImageCanvas(wxGLCanvas):
                             GL_LUMINANCE_ALPHA, #data_format,
                             GL_UNSIGNED_BYTE, #data_type,
                             buffer.tostring())
-#        self._gl_lock.release() # serialize OpenGL access
 
     def OnDraw(self,*dummy_arg):
-        # clear color and depth buffers
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
-
+        glClear(GL_COLOR_BUFFER_BIT)
         N = len(self._gl_tex_info_dict)
-        #print 'draw',N
-        ids = self._gl_tex_info_dict.keys()
-        ids.sort()
-        x_border_pixels = 1
-        y_border_pixels = 1
-        size = self.GetClientSize()
+        if N == 0:
+            glDisable(GL_TEXTURE_2D)
+            glDisable(GL_BLEND)
+            glRasterPos3f(.01,.01,0)
+            for char in 'no cameras connected':
+                glutBitmapCharacter(5,ord(char))
+            glEnable(GL_TEXTURE_2D)
+            glEnable(GL_BLEND)
+        else:
+            ids = self._gl_tex_info_dict.keys()
+            ids.sort()
+            x_border_pixels = 1
+            y_border_pixels = 1
+            size = self.GetClientSize()
 
-        x_border = x_border_pixels/float(size[0])
-        y_border = y_border_pixels/float(size[1])
-        hx = x_border*0.5
-        hy = y_border*0.5
-        x_borders = x_border*(N+1)
-        y_borders = y_border*(N+1)
-        for i in range(N):
-            bottom = y_border
-            top = 1.0-y_border
-            left = (1.0-2*hx)*i/float(N)+hx+hx
-            right = (1.0-2*hx)*(i+1)/float(N)-hx+hx
-            
-            tex_id, gl_tex_xy_alloc, gl_tex_xyfrac = self._gl_tex_info_dict[ids[i]]
+            x_border = x_border_pixels/float(size[0])
+            y_border = y_border_pixels/float(size[1])
+            hx = x_border*0.5
+            hy = y_border*0.5
+            x_borders = x_border*(N+1)
+            y_borders = y_border*(N+1)
+            for i in range(N):
+                bottom = y_border
+                top = 1.0-y_border
+                left = (1.0-2*hx)*i/float(N)+hx+hx
+                right = (1.0-2*hx)*(i+1)/float(N)-hx+hx
 
-            xx,yy = gl_tex_xyfrac
+                tex_id, gl_tex_xy_alloc, gl_tex_xyfrac = self._gl_tex_info_dict[ids[i]]
 
-            glBindTexture(GL_TEXTURE_2D,tex_id)
-            glBegin(GL_QUADS)
-            glTexCoord2f( 0, yy) # texture is flipped upside down to fix OpenGL<->na
-            glVertex2f( left, bottom)
-        
-            glTexCoord2f( xx, yy)
-            glVertex2f( right, bottom)
-        
-            glTexCoord2f( xx, 0)
-            glVertex2f( right, top)
-        
-            glTexCoord2f( 0, 0)
-            glVertex2f( left,top)
-            glEnd()
-        
+                xx,yy = gl_tex_xyfrac
+
+                glBindTexture(GL_TEXTURE_2D,tex_id)
+                glBegin(GL_QUADS)
+                glTexCoord2f( 0, yy) # texture is flipped upside down to fix OpenGL<->na
+                glVertex2f( left, bottom)
+
+                glTexCoord2f( xx, yy)
+                glVertex2f( right, bottom)
+
+                glTexCoord2f( xx, 0)
+                glVertex2f( right, top)
+
+                glTexCoord2f( 0, 0)
+                glVertex2f( left,top)
+                glEnd()
         self.SwapBuffers()
