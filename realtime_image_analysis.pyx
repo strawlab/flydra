@@ -4,12 +4,10 @@
 import time
 import sys
 import numarray as nx
-import numarray.linear_algebra
 import numarray.ieeespecial
 import math
 
 argmax = nx.argmax
-eigenvectors = numarray.linear_algebra.eigenvectors
 
 cdef double nan
 nan = numarray.ieeespecial.nan
@@ -33,6 +31,12 @@ cdef extern from "c_fit_params.h":
     void start_center_calculation( int nframes )
     void end_center_calculation( double *x_center, double *y_center )
     void update_center_calculation( double new_x_pos, double new_y_pos, double new_orientation )
+
+cdef extern from "eigen.h":
+    int eigen_2x2_real( double A, double B, double C, double D,
+                        double *evalA, double *evecA1,
+                        double *evalB, double *evecB1 )
+
 
 class IPPError(Exception):
     pass
@@ -192,7 +196,10 @@ cdef class RealtimeAnalyzer:
         cdef double orientation
         cdef double slope, eccentricity
         cdef double eval1, eval2
-        cdef double rise,run
+        cdef double rise, run
+        cdef double evalA, evalB
+        cdef double evecA1, evecB1
+        
         cdef double Uu11, Uu02, Uu20
         cdef int i
         cdef int result
@@ -255,36 +262,21 @@ cdef class RealtimeAnalyzer:
                                  (self.im2 + self._bottom*self.im2_step + self._left),
                                  self.im2_step )
 
-            # Fill covariance matrix 
-            (<double*>self.covariance_matrix.data)[0] = Uu20
-            (<double*>self.covariance_matrix.data)[1] = Uu11
-            (<double*>self.covariance_matrix.data)[2] = Uu11
-            (<double*>self.covariance_matrix.data)[3] = Uu02
+            eigen_2x2_real( Uu20, Uu11,
+                            Uu11, Uu02,
+                            &evalA, &evalB,
+                            &evecA1, &evecB1 )
+            rise = 1.0 # 2nd component of eigenvectors will always be 1.0
+            if evalA > evalB:
+                run = evecA1
+                eccentricity = evalA/evalB
+            else:
+                run = evecB1
+                eccentricity = evalB/evalA
+            slope = rise/run
             
-        # grab GIL
-        c_python.Py_END_ALLOW_THREADS
-
-        # some Python calls:
-        if result == 0:
-            evals, evectors = eigenvectors(self.covariance_matrix)
-            #print 'evals',evals
-            #print 'evectors',evectors
-            #print
-            idx=argmax(evals)
-            eval1 = evals[idx] # max eigenvalue
-            eval2 = evals[not idx] # min eigenvalue
-            run,rise=evectors[idx]
-            
-            # no more Python API calls after here ( could release GIL a bit sooner... )
             # John -- I don't use orientation -- fix this however you need it.
             orientation = c_lib.atan2(rise,run)
-            slope = rise/run
-            eccentricity = eval1/eval2
-        
-        # release GIL
-        c_python.Py_BEGIN_ALLOW_THREADS
-
-        if not (x0 == -1 and y0 == -1):
             if result == 0:
                 # note that x0 and y0 are now relative to the ROI origin
                 orientation = orientation + 1.57079632679489661923 # (pi/2)

@@ -50,11 +50,14 @@ class Reconstructor:
 
     def find3d(self,
                cam_ids_and_points2d):
-        # see Hartley & Zisserman (2003) p. 593 (see also p. 587)
+        
+        # for info on SVD, see Hartley & Zisserman (2003) p. 593 (see
+        # also p. 587)
+        
         M=len(cam_ids_and_points2d) # number of views of single point
         A=nx.zeros((2*M,4),nx.Float64)
         
-        for m, (cam_id,(xm,ym)) in enumerate(cam_ids_and_points2d):
+        for m, (cam_id,(xm,ym,slope,eccentricity)) in enumerate(cam_ids_and_points2d):
             Pmat = self.Pmat[cam_id]
             row3 = Pmat[2,:]
             A[2*m  ,:]=xm*row3 - Pmat[0,:]

@@ -258,17 +258,14 @@ class DynamicImageCanvas(wxGLCanvas):
                     glColor4f(1.0,1.0,1.0,1.0)                        
                     glEnable(GL_TEXTURE_2D)
 
-                    for pt in draw_points:
+                    for ox0,oy0,slope,eccentricity in draw_points:
                         if len(numarray.ieeespecial.getnan(pt[2])[0]):
                             # no orientation information
                             continue
 
-                        ox0 = pt[0]
-                        oy0 = pt[1]
+                        angle_radians = -math.atan(slope)
 
-                        angle_radians = -math.atan(pt[2])
-
-                        r = pt[3]
+                        r = eccentricity
                         odx = r*math.cos( angle_radians )
                         ody = r*math.sin( angle_radians )
 

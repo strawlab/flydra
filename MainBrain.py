@@ -208,7 +208,7 @@ class CoordReceiver(threading.Thread):
             # save new frame record
             cur_framenumber_dict=realtime_coord_dict.setdefault(corrected_framenumber,{})
             # save x,y, not slope
-            cur_framenumber_dict[self.cam_id]=points[0][:2] # XXX for now, only attempt 3D reconstruction of 1st point
+            cur_framenumber_dict[self.cam_id]=points[0] # XXX for now, only attempt 3D reconstruction of 1st point
 
             # make thread-local copy of results if 3D reconstruction possible
             if len(cur_framenumber_dict)>=2:
