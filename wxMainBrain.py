@@ -13,6 +13,10 @@ from wxPython.xrc import *
 import ErrorDialog
 import numarray
 
+# TODO
+#
+# Add is_synchronized indicator on each camera panel
+
 RESDIR = os.path.split(os.path.abspath(sys.argv[0]))[0]
 RESFILE = os.path.join(RESDIR,'flydra_server.xrc')
 hydra_image_file = os.path.join(RESDIR,'hydra.gif')
@@ -362,6 +366,10 @@ class App(wxApp):
                     self.main_brain.stop_recording(tmp_cam_id)
                     self._currently_recording_cams.remove(tmp_cam_id)
             finally:
+                record_raw = XRCCTRL(self.record_raw_panel,
+                                     "record_raw")
+                record_raw.SetValue(False)
+
                 self.statusbar.SetStatusText(
                     'Failed to start recording (%s): see console'%(cam_id,),0)
                 raise x
