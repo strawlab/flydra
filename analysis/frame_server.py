@@ -45,9 +45,9 @@ class FrameServer(Pyro.core.ObjBase):
         try:
             return self.fly_movie.get_frame(self._ts_dict[timestamp])
         except KeyError:
-            print repr(timestamp)
+            print >> sys.stderr, repr(timestamp)
             for key in self._ts_dict:
-                print 
+                print >> sys.stderr, ' '
                 if abs(key-timestamp) < 0.02:
                     print >> sys.stderr, repr(key)
             raise
@@ -60,9 +60,9 @@ class FrameServer(Pyro.core.ObjBase):
             if ts <= target_timestamp:
                 real_timestamp = ts
         if real_timestamp is None:
-            print 'could not find %s in:',repr(target_timestamp)
+            print >> sys.stderr, 'could not find %s in:',repr(target_timestamp)
             for ts in timestamps:
-                print ' ts',type(ts),ts
+                print >> sys.stderr, ' ts',type(ts),ts
         return self.fly_movie.get_frame(self._ts_dict[real_timestamp])
         
     def get_frame(self, frame_number):
@@ -90,6 +90,6 @@ if __name__ == '__main__':
     daemon = Pyro.core.Daemon(host=hostname,port=port)
     frame_server = FrameServer()
     URI=daemon.connect(frame_server,'frame_server')
-    print 'listening on',URI
+    print >> sys.stderr, 'listening on',URI
     while 1:
         daemon.handleRequests(60.0) # block on select
