@@ -19,12 +19,11 @@ iren = vtkRenderWindowInteractor()
 iren.SetRenderWindow( renWin )
 
 camera = vtkCamera()
-camera.SetFocalPoint(0,0,300)
-#camera.SetFocalPoint(135.822, -15.4543, 231.17)
-camera.SetPosition(-1749.21, 741.993, 1339.98)
-camera.SetViewAngle( 20.0 )
-camera.SetViewUp(0.48599, -0.0662295, 0.871451)
-camera.SetClippingRange( 1108.07, 3026.28 )
+camera.SetFocalPoint(11.653, 118.202, 300.084)
+camera.SetPosition(-2176.26, -171.996, 537.824)
+camera.SetViewAngle( 30.0 )
+camera.SetViewUp(0.124543, -0.13351, 0.983191)
+camera.SetClippingRange( 1842.94, 2532.1)
 
 ren1 = vtkRenderer()
 lk = vtkLightKit()
@@ -40,7 +39,11 @@ imf.SetInput(renWin)
 imf.Update()
 writer = vtk.vtkPNGWriter()
 
-for CUR_PT in range(X.shape[0]):
+SAVE=1
+
+#for CUR_PT in range(X.shape[0]):
+#for CUR_PT in range(395,472):
+for CUR_PT in range(410,472):
 
     points = vtk.vtkPoints()
     pt = X[CUR_PT,:]
@@ -79,20 +82,36 @@ for CUR_PT in range(X.shape[0]):
 ##            lineActor.GetProperty().SetLineWidth(1)
 ##            ren1.AddActor( lineActor )
 
-    renWin.SetSize( 800, 600 )
+    renWin.SetSize( 160, 480 )
 
     renWin.Render()
 
-    imf.Modified()
-    writer.SetInput(imf.GetOutput())
-    fname = 'im%04d.png'%CUR_PT
-    print 'saving',fname
-    writer.SetFileName(fname)
-    writer.Write()
-    print 'done'
+    if SAVE:
+        imf.Modified()
+        writer.SetInput(imf.GetOutput())
+        fname = 'im%04d.png'%CUR_PT
+        print 'saving',fname
+        writer.SetFileName(fname)
+        writer.Write()
+        print 'done'
+    else:
+        iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+        iren.Initialize ()
+        iren.Start()
 
-##    iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
-##    iren.Initialize ()
-##    iren.Start()
+        #print camera
 
-##    print camera
+if SAVE:
+    inc=5.0
+    ii=0
+    for i in na.arange(0.0,720.0,inc):
+        ii+=1
+        renWin.Render()
+        ren1.GetActiveCamera().Azimuth( inc )
+        
+        imf.Modified()
+        writer.SetInput(imf.GetOutput())
+        fname = 'rot%03d.png'%(ii,)
+        print 'saving',fname
+        writer.SetFileName(fname)
+        writer.Write()
