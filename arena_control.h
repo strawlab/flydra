@@ -6,6 +6,7 @@ void arena_finish( void );
 
 long rotation_calculation_init( void );
 void rotation_calculation_finish( double new_x_cent, double new_y_cent );
+void rotation_update( void );
 
 void arena_update( double x, double y, double orientation,
     double timestamp, long framenumber );

@@ -40,6 +40,7 @@ realtime_coord_dict_lock=threading.Lock()
 
 SAVE_2D_DATA = False
 SAVE_2D_FMT = '<Bidddd'
+SAVE_2D_CAMS = 0
 save_2d_data_fd=open('raw_data.dat','wb')
 save_2d_data_lock=threading.Lock()
 
@@ -90,8 +91,11 @@ def DEBUG():
 
 class CoordReceiver(threading.Thread):
     def __init__(self,cam_id,main_brain):
+        global SAVE_2D_CAMS
+
+	SAVE_2D_CAMS +=1
         self.cam_id = cam_id
-        self.hack_cam_no = int(self.cam_id[3])
+        self.hack_cam_no = SAVE_2D_CAMS
         self.main_brain = main_brain
         self.last_timestamp=0.0
         self.reconstructor = None

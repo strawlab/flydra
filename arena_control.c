@@ -7,6 +7,8 @@
 #include "arena_control.h"
 
 #define PI 3.14159
+#define YES 1
+#define NO 0
 
 #define CLOSED_LOOP 0
 #define OPEN_LOOP 1
@@ -15,9 +17,12 @@
 #undef ARENA_PATTERN
 #if ARENA_CONTROL == OPEN_LOOP
   #define ARENA_PATTERN 1
-  /* gain,bias as percentages, in 2s complement (x=x; -x=256-x) */
-  #define PATTERN_BIAS_X 226
-  #define PATTERN_BIAS_Y 15
+  #define BIAS_AVAILABLE NO
+  #if BIAS_AVAILABLE == YES
+    /* gain,bias as percentages, in 2s complement (x=x; -x=256-x) */
+    #define PATTERN_BIAS_X 226
+    #define PATTERN_BIAS_Y 15
+  #endif
 #elif ARENA_CONTROL == CLOSED_LOOP
   #define ARENA_PATTERN 3
 #endif
@@ -26,9 +31,9 @@
 #define NPIXELS_PER_PANEL 8
 #define NPANELS_CIRCUMFERENCE 8
 #define NPIXELS (NPIXELS_PER_PANEL*NPANELS_CIRCUMFERENCE)
-
-#define NPIXELS_OFFSET 0
-/* number of pixels to add from pixel 0 to orientation 0 (= facing up?) */
+#if BIAS_AVAILABLE == NO
+  #define PATTERN_DEPTH 8.0
+#endif
 
 int serial_port;
 int is_port_open = 0;
@@ -86,7 +91,7 @@ long arena_initialize( void )
   cmd[0] = 3; cmd[1] = 112; cmd[2] = 0; cmd[3] = 0;
   sc_send_cmd( &serial_port, cmd, 4 );
 
-#if ARENA_CONTROL == OPEN_LOOP
+#if ARENA_CONTROL == OPEN_LOOP && BIAS_AVAILABLE == YES
   /* set gain and bias */
   cmd[0] = 5; cmd[1] = 128;
   cmd[2] = 0; cmd[3] = PATTERN_BIAS_X; /* x gain, bias */
@@ -114,7 +119,7 @@ void arena_finish( void )
 
   fclose( datafile );
 
-#if ARENA_CONTROL == OPEN_LOOP
+#if ARENA_CONTROL == OPEN_LOOP && BIAS_AVAILABLE == YES
   /* open serial port */
   sc_open_port( &serial_port, SC_COMM_PORT );
   is_port_open = 1;
@@ -168,6 +173,7 @@ long rotation_calculation_init( void )
   cmd[0] = 3; cmd[1] = 112; cmd[2] = 0; cmd[3] = 0;
   sc_send_cmd( &serial_port, cmd, 4 );
 
+#if BIAS_AVAILABLE == YES
   /* set gain and bias */
   cmd[0] = 5; cmd[1] = 128;
   /* gain,bias as percentages, in 2s complement (x=x; -x=256-x) */
@@ -182,6 +188,7 @@ long rotation_calculation_init( void )
   /* close serial port */
   sc_close_port( &serial_port );
   is_port_open = 0;
+#endif
 
   is_calculating = 1;
 
@@ -196,6 +203,7 @@ void rotation_calculation_finish( double new_x_cent, double new_y_cent )
   long errval;
   char cmd[8];
 
+#if BIAS_AVAILABLE == YES
   /* open serial port */
   if( !is_port_open )
   {
@@ -206,6 +214,7 @@ void rotation_calculation_finish( double new_x_cent, double new_y_cent )
   /* stop pattern */
   cmd[0] = 1; cmd[1] = 48;
   sc_send_cmd( &serial_port, cmd, 2 );
+#endif
 
   /* set pattern id to expt. pattern */
   cmd[0] = 2; cmd[1] = 3; cmd[2] = ARENA_PATTERN;
@@ -215,7 +224,7 @@ void rotation_calculation_finish( double new_x_cent, double new_y_cent )
   cmd[0] = 3; cmd[1] = 112; cmd[2] = 0; cmd[3] = 0;
   sc_send_cmd( &serial_port, cmd, 4 );
 
-#if ARENA_CONTROL == OPEN_LOOP
+#if ARENA_CONTROL == OPEN_LOOP && BIAS_AVAILABLE == YES
   /* set gain and bias */
   cmd[0] = 5; cmd[1] = 128;
   cmd[2] = 0; cmd[3] = PATTERN_BIAS_X;
@@ -238,20 +247,69 @@ void rotation_calculation_finish( double new_x_cent, double new_y_cent )
 }
 
 /****************************************************************
+** rotation update **********************************************
+****************************************************************/
+void rotation_update( void )
+{
+#if BIAS_AVAILABLE == NO
+  static double new_pos_x_f = 0.0, new_pos_y_f = 0.0;
+  int new_pos_x, new_pos_y;
+  long errval;
+  char cmd[8];
+  static int update = 1;
+
+  if( !is_calculating ) return;
+
+  new_pos_x_f += 0.20;
+  if( new_pos_x_f > (double)NPIXELS ) new_pos_x_f -= (double)NPIXELS;
+  else if( new_pos_x_f < 0.0 ) new_pos_x_f = 0.0;
+  new_pos_x = new_pos_x_f - (int)new_pos_x_f >= 0.5? (int)new_pos_x_f+1 : (int)new_pos_x_f;
+
+  new_pos_y_f += 0.35;
+  if( new_pos_y_f > PATTERN_DEPTH ) new_pos_y_f -= PATTERN_DEPTH;
+  else if( new_pos_y_f < 0.0 ) new_pos_y_f = 0.0;
+  new_pos_y = new_pos_y_f - (int)new_pos_y_f >= 0.5? (int)new_pos_y_f+1 : (int)new_pos_y_f;
+
+  /* ensure serial port is open */
+  if( !is_port_open )
+  {
+    printf( "**found serial port closed in calculation\n" );
+    errval = sc_open_port( &serial_port, SC_COMM_PORT );
+    if( errval == 0 ) is_port_open = 1;
+    else printf( "**failed opening serial port!\n" );
+  }
+
+  /* set pattern position */
+  cmd[0] = 3; cmd[1] = 112;
+  cmd[2] = new_pos_x; cmd[3] = new_pos_y;
+  if( update == 1 && is_port_open ) sc_send_cmd( &serial_port, cmd, 4 );  
+  update++;
+  if( update > 2 ) update = 0;
+#endif
+}
+
+/****************************************************************
 ** update *******************************************************
 ****************************************************************/
 void arena_update( double x, double y, double orientation,
     double timestamp, long framenumber )
 {
   int new_pos_x, new_pos_y;
-#if ARENA_CONTROL == CLOSED_LOOP
   char cmd[8];
-  double new_pos_x_f;
+  static double new_pos_x_f = 0.0, new_pos_y_f = 0.0;
   long errval;
-  static int ncalls = 0;
-  double o_orient = orientation;
+  static int update = 1;
+  static long ncalls = 0;
+  
+  /* experimental variables */
+  int n_calls_per_set = 101*60; /* 1 minute */
+  const int n_sets = 5;
+  int pix_offset_set[5] = {0,8,16,24,32};
+  static int cur_set = 0;
 
-  /* determine new position for pattern */
+#if ARENA_CONTROL == CLOSED_LOOP
+  #if 1
+  /* disambiguate fly's orientation using position data */
   if( center_x != center_y ) /* have been changed from -1 */
   {
     if( x >= center_x && y >= center_y ) /* quadrant I */
@@ -274,18 +332,44 @@ void arena_update( double x, double y, double orientation,
       while( orientation < 3*PI/2 ) orientation += PI/2;
       while( orientation >= 2*PI ) orientation -= PI/2;
     }
-    new_pos_x_f = NPIXELS * fabs( orientation/(2*PI) ) + NPIXELS_OFFSET;
-    new_pos_x = new_pos_x_f - (int)new_pos_x_f >= 0.5? (int)new_pos_x_f+1 : (int)new_pos_x_f;
-    new_pos_y = 0;    
+
+    /* set pattern position based on experimental variables */
+    new_pos_x_f = NPIXELS * fabs( orientation/(2*PI) );
+    new_pos_x_f += pix_offset_set[cur_set];
+
+    new_pos_y_f = 0.0;
+
+    ncalls++;
+    if( ncalls > (cur_set + 1)*n_calls_per_set )
+    {
+      cur_set++;
+      if( cur_set >= n_sets )
+      {
+        cur_set = 0;
+        ncalls = 0;
+      }
+      printf( "__current experiment: set %d\n", cur_set );
+    }
   }
   else /* no center found, wrap at 90 deg */
   {
-    orientation += PI/2;
-    new_pos_x_f = (NPIXELS/4) * fabs( orientation/(PI/2) ) + NPIXELS_OFFSET;
-    new_pos_x = new_pos_x_f - (int)new_pos_x_f >= 0.5? (int)new_pos_x_f+1 : (int)new_pos_x_f;
-    new_pos_y = 0;
+    new_pos_x_f = (NPIXELS/4) * fabs( orientation/(PI/2) );
+    new_pos_y_f = 0.0;
   }
 
+  #else
+  new_pos_x_f += 0.15;
+  new_pos_y_f = 0.0;
+  #endif /* 0 */
+
+#else /* open-loop */
+  #if BIAS_AVAILBLE == NO
+  new_pos_x_f -= 0.25;
+  new_pos_y_f += 0.15;
+  #endif
+#endif /* closed vs. open loop */
+
+#if ARENA_CONTROL == CLOSED_LOOP || BIAS_AVAILABLE == NO
   if( !is_calculating )
   {
     /* ensure serial port is open */
@@ -297,19 +381,26 @@ void arena_update( double x, double y, double orientation,
       else printf( "**failed opening serial port!\n" );
     }
 
+    /* condition and round pattern position */
+    while( new_pos_x_f > (double)NPIXELS ) new_pos_x_f -= (double)NPIXELS;
+    while( new_pos_x_f < 0.0 ) new_pos_x_f += (double)NPIXELS;
+    new_pos_x = new_pos_x_f - (int)new_pos_x_f >= 0.5? (int)new_pos_x_f+1 : (int)new_pos_x_f;
+    while( new_pos_y_f > (double)PATTERN_DEPTH ) new_pos_y_f -= (double)PATTERN_DEPTH;
+    while( new_pos_y_f < 0.0 ) new_pos_y_f += (double)PATTERN_DEPTH;
+    new_pos_y = new_pos_y_f - (int)new_pos_y_f >= 0.5? (int)new_pos_y_f+1 : (int)new_pos_y_f;
+
     /* set pattern position */
     cmd[0] = 3; cmd[1] = 112;
     cmd[2] = new_pos_x; cmd[3] = new_pos_y;
-    if( ncalls == 0 && is_port_open ) sc_send_cmd( &serial_port, cmd, 4 );
-  
-    ncalls++;
-    if( ncalls > 4 ) ncalls = 0;
-      /* 4 works, 2 doesn't, at 19200 baud */
-      /* 3 doesn't work at 57600 baud */
+    if( update == 1 && is_port_open ) sc_send_cmd( &serial_port, cmd, 4 );
+
+    update++;
+    if( update > 2 ) update = 0;
   }
 #endif
 
   /* write data to file */
-  fprintf( datafile, "%ld\t%.4lf\t%.4lf\t%.4lf\t%.4lf\t%.4lf\t%d\t%d\n",
-  framenumber, timestamp, x, y, o_orient, orientation, new_pos_x, new_pos_y );
+  fprintf( datafile, "%ld\t%.4lf\t%.4lf\t%.4lf\t%.4lf\t%d\t%d\t%ld\t%d\t%d\n",
+  framenumber, timestamp, x, y, orientation, new_pos_x, new_pos_y,
+  ncalls, cur_set, pix_offset_set[cur_set] );
 }

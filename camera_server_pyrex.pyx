@@ -244,7 +244,7 @@ cdef class GrabClass:
                     roi_sz, &max_val, &index_x,&index_y))
 #                CHK( ipp.ippiSqr_8u_C1IRSfs(
 #                    (im2 + self.bottom*im2_step + self.left), im2_step,
-#                    roi_sz, 4 ))
+#                    roi_sz, 5 ))
 
                 if max_val < self.diff_threshold:
                     x0=-1
@@ -437,6 +437,7 @@ cdef class GrabClass:
                 
                 if rot_frame_number>=0:
                     c_fit_params.update_center_calculation( x0, y0, orientation )
+                    arena_control.rotation_update()
 
                     rot_frame_number = rot_frame_number+1
                     if rot_frame_number>=n_rot_samples:

@@ -132,7 +132,7 @@ int fit_params( double *x0, double *y0, double *orientation,
     *y0 = -1;
   }
 
-#if 1
+#if 0
   /* square image for orientation calculation */
   if( !CHK( ippiSqr_8u_C1IRSfs( (Ipp8u*)img, img_step, roi_size, 5 ) ) )
   {
@@ -140,7 +140,7 @@ int fit_params( double *x0, double *y0, double *orientation,
     return 60;
   }
 
-  /* get moments */
+  /* get moments again */
   if( !CHK( ippiMoments64f_8u_C1R( (Ipp8u*)img, img_step, roi_size, pState ) ) )
   {
     printf( "failed calculating moments 2\n" );
