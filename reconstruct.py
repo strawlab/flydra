@@ -75,19 +75,27 @@ def pts2Lmatrix(A,B):
 def pts2Lcoords(A,B):
     return Lmatrix2Lcoords(pts2Lmatrix(A,B))
 
+def norm_vec(V):
+    Va = nx.asarray(V)
+    if len(Va.shape)==1:
+        # vector
+        U = Va/math.sqrt(Va[0]**2 + Va[1]**2 + Va[2]**2) # normalize
+    else:
+        assert Va.shape[1] == 3
+        Vamags = nx.sqrt(Va[:,0]**2 + Va[:,1]**2 + Va[:,2]**2)
+        U = Va/Vamags[:,nx.NewAxis]
+    return U
+        
 def line_direction(Lcoords):
     L = nx.asarray(Lcoords)
     if len(L.shape)==1:
         # single line coord
         U = nx.array((-L[2], L[4], -L[5]))
-        U = U/math.sqrt(U[0]**2 + U[1]**2 + U[2]**2) # normalize
     else:
         assert L.shape[1] == 6
-        U = nx.array((-L[:,2], L[:,4], -L[:,5]))
-        U = nx.transpose(U)
-        Umags = nx.sqrt(U[:,0]**2 + U[:,1]**2 + U[:,2]**2)
-        U = U/Umags[:,nx.NewAxis]
-    return U
+        # XXX could speed up with concatenate:
+        U = nx.transpose(nx.array((-L[:,2], L[:,4], -L[:,5]))) 
+    return norm_vec(U)
 
 def pmat2cam_center(P):
     assert P.shape == (3,4)

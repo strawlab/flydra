@@ -36,7 +36,7 @@ CAM_CONTROLS = {'shutter':cam_iface.SHUTTER,
                 'gain':cam_iface.GAIN,
                 'brightness':cam_iface.BRIGHTNESS}
 
-NUM_BG_IMAGES = 100 # the accumulator holds this many images
+ALPHA = 1.0/10 # relative importance of each new frame
 BG_FRAME_INTERVAL = 25 # every N frames, add a new BG image to the accumulator
 
 # where is the "main brain" server?
@@ -47,16 +47,17 @@ except:
     main_brain_hostname = socket.gethostbyname(socket.gethostname())
 
 class GrabClass(object):
-    def __init__(self, cam, coord_port):
+    def __init__(self, cam, coord_port, cam_id):
         self.cam = cam
         self.coord_port = coord_port
+        self.cam_id = cam_id
 
         # get coordinates for region of interest
         height = self.cam.get_max_height()
         width = self.cam.get_max_width()
         self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(width,
                                                                           height,
-                                                                          NUM_BG_IMAGES)
+                                                                          ALPHA)
 
     def get_clear_threshold(self):
         return self.realtime_analyzer.clear_threshold
@@ -127,23 +128,30 @@ class GrabClass(object):
         buf = nx.zeros( (self.cam.max_height,self.cam.max_width), nx.UInt8 ) # allocate buffer
         coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         old_ts = time.time()
+        old_fn = 0
         points = []
         try:
             while not cam_quit_event_isSet():
-                self.cam.grab_next_frame_blocking(buf) # grab frame and stick in buf
+                try:
+                    self.cam.grab_next_frame_blocking(buf) # grab frame and stick in buf
+                except cam_iface.BuffersOverflowed:
+                    print >> sys.stderr , 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
                 # get best guess as to when image was taken
                 timestamp=self.cam.get_last_timestamp()
                 framenumber=self.cam.get_last_framenumber()
 
                 diff = timestamp-old_ts
                 if diff > 0.02:
-                    print 'warning: IFI is',diff
+                    print >> sys.stderr, 'Warning: IFI is %f on %s at %s'%(diff,self.cam_id,time.asctime())
                     flip = False # reset to synchronize across all cameras
+                if framenumber-old_fn > 1:
+                    print >> sys.stderr, '  frames apparently skipped:', framenumber-old_fn
                 globals['last_frame_timestamp']=timestamp
                 old_ts = timestamp
+                old_fn = framenumber
                 
                 points = self.realtime_analyzer.do_work( buf, timestamp, framenumber )
-                
+                    
                 if debug_isSet():
                     if flip:
                         show_image = self.realtime_analyzer.get_working_image()
@@ -199,6 +207,8 @@ class GrabClass(object):
 
             globals['cam_quit_event'].set()
             globals['grab_thread_done'].set()
+            print 'camera quit',self.cam_id
+            sys.stdout.flush()
 
 class App:
     
@@ -246,7 +256,8 @@ class App:
         self.all_grabbers = []
         
         for cam_no in range(self.num_cams):
-            cam = cam_iface.CamContext(cam_no,30)
+            num_buffers = 100
+            cam = cam_iface.CamContext(cam_no,num_buffers)
             self.all_cams.append( cam )
 
             height = cam.get_max_height()
@@ -305,10 +316,11 @@ class App:
             # register self with remote server
             port = 9834 + cam_no # for local Pyro server
             self.main_brain_lock.acquire()
-            self.all_cam_ids.append(
-                self.main_brain.register_new_camera(cam_no,
-                                                    scalar_control_info,
-                                                    port))
+            cam_id = self.main_brain.register_new_camera(cam_no,
+                                                         scalar_control_info,
+                                                         port)
+
+            self.all_cam_ids.append(cam_id)
             coord_port = self.main_brain.get_coord_port(self.all_cam_ids[cam_no])
             self.main_brain_lock.release()
             
@@ -331,7 +343,7 @@ class App:
             #
             # ----------------------------------------------------------------
 
-            grabber = GrabClass(cam,coord_port)
+            grabber = GrabClass(cam,coord_port,cam_id)
             self.all_grabbers.append( grabber )
             
             grabber.diff_threshold = diff_threshold
@@ -343,6 +355,7 @@ class App:
             grab_thread=threading.Thread(target=grabber.grab_func,
                                          args=(globals,))
             cam.start_camera()  # start camera
+            grab_thread.setDaemon(True) # quit that thread if it's the only one left...
             grab_thread.start() # start grabbing frames from camera
 
     def handle_commands(self, cam_no, cmds):
@@ -379,6 +392,8 @@ class App:
                 globals['use_arena'] = grabber.use_arena
             elif key == 'quit':
                 globals['cam_quit_event'].set()
+                print "globals['cam_quit_event'].set()",cam_id
+                sys.stdout.flush()
             elif key == 'take_bg':
                 globals['take_background'].set()
             elif key == 'clear_bg':

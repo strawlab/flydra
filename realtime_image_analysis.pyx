@@ -100,10 +100,10 @@ cdef class RealtimeAnalyzer:
 
     # end of IPP-requiring code
 
-    def __init__(self, int w, int h, int n_bg_images):
+    def __init__(self, int w, int h, float alpha):
         self.width = w
         self.height = h
-        self.alpha = 1.0/n_bg_images
+        self.alpha = alpha
         self.roi = ( 0, 0, self.width-1, self.height-1)
 
         self._diff_threshold = 8.1
@@ -231,14 +231,10 @@ cdef class RealtimeAnalyzer:
 
         found_point = True
         if max_val < self._diff_threshold:
-            x0=-1
-            y0=-1
-
-            # XXX Must convert the following to nan. (With
-            # undistortion, values could conceivably be exactly -1.)
-            
-            x0_abs = -1 
-            y0_abs = -1
+            x0=nan
+            y0=nan
+            x0_abs = nan
+            y0_abs = nan
             found_point = False
         else:
             result = fit_params( self.pState, &x0, &y0,
@@ -277,8 +273,15 @@ cdef class RealtimeAnalyzer:
             else: SET_ERR(1)
                 
             # set x0 and y0 relative to whole frame
-            x0_abs = x0+self._left
-            y0_abs = y0+self._bottom
+            if x0 == -1 and y0 == -1:
+                x0 = nan
+                y0 = nan
+                x0_abs = nan
+                y0_abs = nan
+                found_point = False
+            else:
+                x0_abs = x0+self._left
+                y0_abs = y0+self._bottom
 
             if self._use_arena: # call out to arena feedback function
                 if self.arena_control_working:
@@ -320,7 +323,7 @@ cdef class RealtimeAnalyzer:
             p1,p2,p3,p4 = Pt[0:4]
         else:
             p1,p2,p3,p4 = nan, nan, nan, nan
-        
+
         # end of IPP-requiring code
         return [ (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4) ]
 

@@ -70,6 +70,20 @@ class App(wxApp):
 
         menuBar.Append(data_logging_menu, "Data &Logging")
         
+        #   Cameras
+        cammenu = wxMenu()
+        
+        ID_fake_sync = wxNewId()
+        cammenu.Append(ID_fake_sync, "Fake synchronization")
+        EVT_MENU(self, ID_fake_sync, self.OnFakeSync)
+
+        # XXX not finished
+        #ID_stop_all_collecting_bg = wxNewId()
+        #cammenu.Append(ID_stop_all_collecting_bg, "Stop all running background collection")
+        #EVT_MENU(self, ID_stop_all_collecting_bg, self.OnStopAllCollectingBg)
+        
+        menuBar.Append(cammenu, "&Cameras")
+
         #   View
         viewmenu = wxMenu()
         ID_debug_cameras = wxNewId()
@@ -553,6 +567,10 @@ class App(wxApp):
         self.plotpanel.set_points(points)
         self.plotpanel.draw()
 
+    def OnFakeSync(self, event):
+        print 'sending fake sync command...'
+        self.main_brain.fake_synchronize()
+
     def OnToggleDebugCameras(self, event):
         self.main_brain.set_all_cameras_debug_mode( event.IsChecked() )
 
@@ -669,6 +687,9 @@ class App(wxApp):
                     for property_name, value in params.iteritems():
                         self.main_brain.send_set_camera_property(cam_id,property_name,value)
                         self.PreviewPerCamUpdateSetting(cam_id,property_name,value)
+                        if property_name=='roi':
+                            lbrt = value
+                            self.cam_image_canvas.set_lbrt(cam_id,lbrt)
             except KeyError,x:
                 dlg2 = wxMessageDialog( self.frame, 'Error opening configuration data:\n'\
                                         '%s: %s'%(x.__class__,x),
@@ -723,6 +744,8 @@ class App(wxApp):
         
     def OnQuit(self, event):
         if hasattr(self,'main_brain'):
+            print 'calling self.main_brain.quit()'
+            self.main_brain.quit()
             del self.main_brain
         self.frame.Close(True)
 
@@ -792,6 +815,10 @@ class App(wxApp):
     def OnCollectingBackground(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         self.main_brain.set_collecting_background( cam_id, event.IsChecked() )
+
+    def OnStopAllCollectingBg(self, event):
+        # XXX not finished
+        pass
 
     def OnTakeBackground(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())

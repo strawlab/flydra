@@ -5,7 +5,7 @@ import Pyro.core
 import flydra.reconstruct
 import numarray as nx
 import numarray.records
-from numarray.ieeespecial import nan, inf
+from numarray.ieeespecial import nan, inf, getnan
 import Queue
 import tables as PT
 
@@ -134,6 +134,7 @@ class CoordReceiver(threading.Thread):
         self.UDP_ports = []
         self.absolute_cam_nos = []
         self.last_timestamps = []
+        self.last_framenumbers = []
         self.listen_sockets = []
         self.framenumber_offsets = []
         self.cam_id2cam_no = {}
@@ -146,6 +147,8 @@ class CoordReceiver(threading.Thread):
         self.RESET_FRAMENUMBER_DURATION=1.0 # seconds
         
         self.general_save_info = {}
+
+        self._fake_sync_event = threading.Event()
         
         name = 'CoordReceiver thread'
         threading.Thread.__init__(self,name=name)
@@ -201,6 +204,7 @@ class CoordReceiver(threading.Thread):
         sockobj.setblocking(0)
         self.listen_sockets.append( sockobj )
         self.last_timestamps.append(IMPOSSIBLE_TIMESTAMP) # arbitrary impossible number
+        self.last_framenumbers.append(-1) # arbitrary impossible number
         self.framenumber_offsets.append(0)
         self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no,
                                           'frame0':IMPOSSIBLE_TIMESTAMP}
@@ -220,12 +224,42 @@ class CoordReceiver(threading.Thread):
         self.listen_sockets[cam_idx].close()
         del self.listen_sockets[cam_idx]
         del self.last_timestamps[cam_idx]
+        del self.last_framenumbers[cam_idx]
         del self.framenumber_offsets[cam_idx]
         del self.general_save_info[cam_id]
         self.all_data_lock.release()
     
     def quit(self):
         self.quit_event.set()
+
+    def fake_synchronize(self):
+        self._fake_sync_event.set()
+
+    def OnSynchronize(self, cam_idx, cam_id, framenumber, timestamp,
+                      realtime_coord_dict, new_data_framenumbers):
+        self.framenumber_offsets[cam_idx] = framenumber
+        if self.last_timestamps[cam_idx] != IMPOSSIBLE_TIMESTAMP:
+            print cam_id,'(re)synchronized'
+            # discard all previous data
+            for k in realtime_coord_dict.keys():
+                del realtime_coord_dict[k]
+            new_data_framenumbers.clear()
+
+        #else:
+        #    print cam_id,'first 2D coordinates received'
+
+        # make new absolute_cam_no to indicate new synchronization state
+        self.max_absolute_cam_nos += 1        
+        absolute_cam_no = self.max_absolute_cam_nos
+        self.absolute_cam_nos[cam_idx] = absolute_cam_no
+
+        self.cam_id2cam_no[cam_id] = absolute_cam_no
+
+        self.general_save_info[cam_id]['absolute_cam_no']=absolute_cam_no
+        self.general_save_info[cam_id]['frame0']=timestamp
+
+        self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, timestamp) )
+
         
     def run(self):
         global downstream_hostnames, fastest_realtime_data, best_realtime_data
@@ -240,22 +274,34 @@ class CoordReceiver(threading.Thread):
         timeout = 0.1
         
         realtime_coord_dict = {}        
+        new_data_framenumbers = sets.Set()
 
+        ##last_select = time.time()
         while not self.quit_event.isSet():
             try:
                 in_ready, out_ready, exc_ready = select.select( self.listen_sockets,
                                                                 [], [], timeout )
+                ##now = time.time()
+                ##print '%.1f msec since last select'%((now-last_select)*1000.0,)
+                ##last_select = now
             except Exception:
                 raise
             except:
                 print 'WARNING: CoordReceiver received an exception not derived from Exception'
                 continue
+            new_data_framenumbers.clear()
+            if self._fake_sync_event.isSet():
+                for cam_idx, cam_id in enumerate(self.cam_ids):
+                    timestamp = self.last_timestamps[cam_idx]
+                    framenumber = self.last_framenumbers[cam_idx]
+                    self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
+                                        realtime_coord_dict, new_data_framenumbers )
+                self._fake_sync_event.clear()
             if not len(in_ready):
                 continue
             
             self.all_data_lock.acquire()
             deferred_2d_data = []
-            new_data_framenumbers = sets.Set()
             for sockobj in in_ready:
                 try:
                     cam_idx = self.listen_sockets.index(sockobj)
@@ -265,48 +311,38 @@ class CoordReceiver(threading.Thread):
                 
                 cam_id = self.cam_ids[cam_idx]
                 absolute_cam_no = self.absolute_cam_nos[cam_idx]
-                
-                data, addr = sockobj.recvfrom(1024)
 
-                header = data[:header_size]
-                timestamp, framenumber, n_pts = struct.unpack(header_fmt,header)
-                start=header_size
-                points = []
-                for i in range(n_pts):
-                    end=start+pt_size
-                    x,y,area,slope,eccentricity,p1,p2,p3,p4 = struct.unpack(pt_fmt,data[start:end])
-                    points.append( (x,y,area,slope,eccentricity, p1,p2,p3,p4) )
-                    start=end
+                data, addr = sockobj.recvfrom(4096)                    
+                while len(data):
+                    header = data[:header_size]
+                    timestamp, framenumber, n_pts = struct.unpack(header_fmt,header)
+                    start=header_size
+                    points = []
+                    for i in range(n_pts):
+                        end=start+pt_size
+                        x,y,area,slope,eccentricity,p1,p2,p3,p4 = struct.unpack(pt_fmt,data[start:end])
+                        points.append( (x,y,area,slope,eccentricity, p1,p2,p3,p4) )
+                        start=end
+                    data = data[end:]
+                
                 # XXX hack? make data available via cam_dict
                 cam_dict = self.main_brain.remote_api.cam_info[cam_id]
                 cam_dict['lock'].acquire()
                 cam_dict['points']=points
                 cam_dict['lock'].release()
                     
-                if timestamp-self.last_timestamps[cam_idx] > 0.02:
-                    print 'WARNING frame skipped %s?'%cam_id
+                #if timestamp-self.last_timestamps[cam_idx] > 0.02:
+                #    print 'WARNING frame skipped %s?'%cam_id
+
+                if framenumber-self.last_framenumbers[cam_idx] > 1:
+                    print '  WARNING frame skip/out-of-order (may be UDP packet drop)'
                     
                 if timestamp-self.last_timestamps[cam_idx] > self.RESET_FRAMENUMBER_DURATION:
-                    self.framenumber_offsets[cam_idx] = framenumber
-                    # XXX should delete everything in realtime_coord_dict
-                    if self.last_timestamps[cam_idx] != IMPOSSIBLE_TIMESTAMP:
-                        print cam_id,'(re)synchronized'
-                    #else:
-                    #    print cam_id,'first 2D coordinates received'
-                        
-                    # make new absolute_cam_no to indicate new synchronization state
-                    self.max_absolute_cam_nos += 1        
-                    absolute_cam_no = self.max_absolute_cam_nos
-                    self.absolute_cam_nos[cam_idx] = absolute_cam_no
-
-                    self.cam_id2cam_no[cam_id] = absolute_cam_no
-                    
-                    self.general_save_info[cam_id]['absolute_cam_no']=absolute_cam_no
-                    self.general_save_info[cam_id]['frame0']=timestamp
-                    
-                    self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, timestamp) )
+                    self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
+                                        realtime_coord_dict, new_data_framenumbers )
                         
                 self.last_timestamps[cam_idx]=timestamp
+                self.last_framenumbers[cam_idx]=framenumber
                 corrected_framenumber = framenumber-self.framenumber_offsets[cam_idx]
                 XXX_framenumber = corrected_framenumber
 
@@ -327,9 +363,9 @@ class CoordReceiver(threading.Thread):
                                          ))
                     
                 # save new frame data
-                cur_framenumber_dict=realtime_coord_dict.setdefault(corrected_framenumber,{})
-                cur_framenumber_dict[cam_id]=points[0] # XXX for now, only attempt 3D reconstruction of 1st point
-
+                # XXX for now, only attempt 3D reconstruction of 1st point
+                realtime_coord_dict.setdefault(corrected_framenumber,{})[cam_id]=points[0]
+                
                 new_data_framenumbers.add( corrected_framenumber ) # insert into set
 
             # Now we've grabbed all data waiting on network. Now it's
@@ -377,6 +413,7 @@ class CoordReceiver(threading.Thread):
                             dist = math.sqrt((orig_x-recon_x)**2 + (orig_y-recon_y)**2)
                             mean_dist += dist*alpha
                         min_mean_dist = mean_dist
+                        ##print '  3D found with %d views, mean dist %.1f pixels, frame %s'%(len(d2),min_mean_dist,str(corrected_framenumber))
                     else:
                         start_hypothesis_testing = time.time()
                         reached_threshold = False
@@ -483,7 +520,7 @@ class CoordReceiver(threading.Thread):
                         save_points = []
                         for cam_id in k:
                             pt = data_dict[cam_id]
-                            if pt[0]+1<1e-6: # pt[0] == -1
+                            if len(getnan(pt[:2])[0]):
                                 save_pt = nan, nan, nan
                                 id = 0
                             else:
@@ -498,6 +535,7 @@ class CoordReceiver(threading.Thread):
                         calib_data_lock.release()
                     
             # clean up old frame records to save RAM
+            # XXX does this drop unintended frames on re-sync?
             if len(realtime_coord_dict)>100:
                 k=realtime_coord_dict.keys()
                 k.sort()
@@ -647,6 +685,8 @@ class MainBrain(object):
                     cam_lock.release()
             finally:
                 self.cam_info_lock.release()
+            print 'sent camera quit event',cam_id
+            sys.stdout.flush()
 
         def external_set_use_arena( self, cam_id, value):
             self.cam_info_lock.acquire()            
@@ -875,6 +915,7 @@ class MainBrain(object):
         self.queue_data3d_best    = Queue.Queue()
 
         self.coord_receiver = CoordReceiver(self)
+        #self.coord_receiver.setDaemon(True)
         self.coord_receiver.start()
 
     def IncreaseCamCounter(self,*args):
@@ -907,6 +948,7 @@ class MainBrain(object):
 
     def start_listening(self):
         # start listen thread
+        #self.listen_thread.setDaemon(True)
         self.listen_thread.start()
 
     def set_new_camera_callback(self,handler):
@@ -999,7 +1041,12 @@ class MainBrain(object):
                 distorted_points.append( dp )
         return image, fps, distorted_points
 
+    def fake_synchronize(self):
+        self.coord_receiver.fake_synchronize()
+
     def close_camera(self,cam_id):
+        print 'close_camera',cam_id,'called'
+        sys.stdout.flush()
         self.remote_api.external_quit( cam_id )
 
     def set_use_arena(self, cam_id, value):
@@ -1062,6 +1109,7 @@ class MainBrain(object):
                 raise RuntimeError("could not find row to save movie stop frame.")
                     
     def quit(self):
+        print 'MainBrain.quit() called'
         # XXX ----- non-isolated calls to remote_api being done ----
         # this may be called twice: once explicitly and once by __del__
         self.remote_api.cam_info_lock.acquire()

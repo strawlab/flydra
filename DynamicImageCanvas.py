@@ -125,10 +125,10 @@ class DynamicImageCanvas(wxGLCanvas):
         glEnable(GL_TEXTURE_2D)
         glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE)
         glPixelStorei(GL_UNPACK_ALIGNMENT,1)
-##        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-##        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+##        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+##        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexImage2D(GL_TEXTURE_2D, # target
                      0, #mipmap_level
                      GL_LUMINANCE_ALPHA, #internal_format,
@@ -297,18 +297,6 @@ class DynamicImageCanvas(wxGLCanvas):
                             y2 = ymax
                             x2 = -(c+b*y2)/a                
 
-##                        angle_radians = -math.atan(slope)
-
-##                        r = eccentricity
-##                        odx = r*math.cos( angle_radians )
-##                        ody = r*math.sin( angle_radians )
-
-##                        x0 = (ox0-odx)/width*xg+xo
-##                        x1 = (ox0+odx)/width*xg+xo
-
-##                        y0 = (height-oy0-ody)/height*yg+yo
-##                        y1 = (height-oy0+ody)/height*yg+yo
-
                         x1 = x1/width*xg+xo
                         x2 = x2/width*xg+xo
 
@@ -320,8 +308,6 @@ class DynamicImageCanvas(wxGLCanvas):
                         glBegin(GL_LINES)
                         glVertex2f(x1,y1)
                         glVertex2f(x2,y2)
-##                        glVertex2f(x0,y0)
-##                        glVertex2f(x1,y1)
                         glEnd()
                         glColor4f(1.0,1.0,1.0,1.0)                        
                         glEnable(GL_TEXTURE_2D)

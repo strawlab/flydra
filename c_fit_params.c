@@ -102,7 +102,7 @@ int fit_params( IppiMomentState_64f *pState, double *x0, double *y0,
   }
   else
   {
-    *x0 = -1;
+    *x0 = -1; /* XXX These should really set nan. */
     *y0 = -1;
   }
 

@@ -12,6 +12,7 @@ if ENABLED:
     from matplotlib.mlab import meshgrid
 from wxPython.wx import *
 
+#origin = 'lower' # will have to change extent?
 origin = 'upper'
 
 class PlotPanel(wxPanel):
@@ -19,7 +20,7 @@ class PlotPanel(wxPanel):
     def __init__(self, parent):
         wxPanel.__init__(self, parent, -1)
         if ENABLED:
-            self.fig = pylab.Figure((5,4), 75)
+            self.fig = pylab.figure(figsize=(5,4), dpi=75)
             self.canvas = FigureCanvasWxAgg(self, -1, self.fig)
             self.toolbar = NavigationToolbar2Wx(self.canvas) #matplotlib toolbar
             self.toolbar.Realize()
