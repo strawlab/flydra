@@ -17,17 +17,89 @@ sum = __builtins__.sum
 round = __builtins__.round
 abs = __builtins__.abs
 
+def interpolate_P( results, start_frame, stop_frame, typ='best' ):
+    if typ == 'fast':
+        data3d = results.root.data3d_fast
+    elif typ == 'best':
+        data3d = results.root.data3d_best
+    fXl = [(row['frame'],
+            row['x'],row['y'],row['z'],
+            row['p0'],row['p1'],row['p2'],row['p3'],row['p4'],row['p5']) for row in
+           data3d if start_frame <= row['frame'] <= stop_frame ] # XXX
+#           data3d.where( start_frame <= data3d.cols.frame <= stop_frame )]
+    assert len(fXl) == 2
+    assert stop_frame > start_frame
+    assert (stop_frame - start_frame) > 1
+
+    fXl = nx.array(fXl)
+    frame = fXl[:,0].astype(nx.Int32)
+    P = fXl[:,1:4]
+
+    print '  ',start_frame, P[0,:]
+    
+    dPdt = (P[1,:]-P[0,:])/float(frame[1]-frame[0])
+    for frame_no in range(start_frame+1, stop_frame):
+        frac = float(frame_no-start_frame)/float(stop_frame-start_frame)
+        newP = P[0,:]+dPdt*frac
+
+        print '  ',frame_no,newP,'<- new value'
+        
+        # now save to disk
+        old_nrow = None
+#        for row in data3d.where( data3d.cols.frame == frame_no ):
+        for row in data3d:
+            if row['frame'] != frame_no: # XXX
+                continue 
+            if old_nrow is not None:
+                raise RuntimeError('more than row with frame number %d in data3d'%frame_no)
+            old_nrow = row.nrow()
+
+        # delete old row
+        if old_nrow is not None:
+            data3d.removeRows(start=old_nrow,stop=None)
+
+        X = newP
+        line3d = [nan]*6 # fill with nans
+        cam_nos_used_str = ''
+        new_row = data3d.row
+        new_row['frame'] = frame_no
+        new_row['x'] = X[0]
+        new_row['y'] = X[1]
+        new_row['z'] = X[2]
+        new_row['p0'] = line3d[0]
+        new_row['p1'] = line3d[1]
+        new_row['p2'] = line3d[2]
+        new_row['p3'] = line3d[3]
+        new_row['p4'] = line3d[4]
+        new_row['p5'] = line3d[5]
+        new_row['timestamp']=0.0
+        new_row['camns_used']=cam_nos_used_str
+        new_row['mean_dist']=0.0
+        new_row.append()
+        data3d.flush()
+
+    print '  ',stop_frame, P[1,:]
+    
+def sort_on_col0( a, b ):
+    a0 = a[0]
+    b0 = b[0]
+    if a0 < b0: return -1
+    elif a0 > b0: return 1
+    else: return 0
+
 def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9):
     # get data from file
-    start_frame = 176000
-    stop_frame = 176120
+    start_frame = 5784
+    stop_frame = 5947
 
     if type(results) == tables.File:
         data3d = results.root.data3d_best
         fXl = [(row['frame'],
                 row['x'],row['y'],row['z'],
                 row['p0'],row['p1'],row['p2'],row['p3'],row['p4'],row['p5']) for row in
-               data3d.where( start_frame <= data3d.cols.frame <= stop_frame )]
+               data3d if start_frame <= row['frame'] <= stop_frame ] # XXX
+##               data3d.where( start_frame <= data3d.cols.frame <= stop_frame )]
+        fXl.sort( sort_on_col0 )
     else:
         print 'assuming results are numeric'
         fXl = results
@@ -37,22 +109,52 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
     line3d = fXl[:,4:]
 
     t_P = (frame-frame[0])*1e-2 # put in seconds
-    P = nx.array(P)*1e-3 # put in meters
+    P = nx.array(P)*1e-2 # put in meters
+    print 'WARNING: assumed data in centimeters'
     line3d = nx.array(line3d)
+
+    # check timestamps
+    delta_ts = t_P[1:]-t_P[:-1]
+    try:
+        assert abs(min(delta_ts)-max(delta_ts)) < 1e-15
+    except:
+        print delta_ts
+        raise
+    delta_t = delta_ts[0]
 
     # get angular position phi
     phi_with_nans = reconstruct.line_direction(line3d) # unit vector
+    #print 'phi_with_nans[10]',phi_with_nans[10]
     bad_idxs = getnan(phi_with_nans[:,0])[0]
     Q = QuatSeq([ orientation_to_quat(U) for U in phi_with_nans ])
-    for bad_idx in bad_idxs:
-        print 'replacing missing quaternion using SLERP at time',bad_idx*1e-2
-        Q[bad_idx] = cgtypes.slerp(0.5, Q[bad_idx-1], Q[bad_idx+1])
-    
-    # check timestamps
-    delta_ts = t_P[1:]-t_P[:-1]
-    assert abs(min(delta_ts)-max(delta_ts)) < 1e-15
-    delta_t = delta_ts[0]
+    #print 'Q[10]',Q[10]
+    #print 'quat_to_euler(Q[10])',quat_to_euler(Q[10])
+    #return
+    for cur_idx in bad_idxs:
+        print 'replacing missing quaternion using SLERP at time',cur_idx*1e-2
+        
+        pre_idx = cur_idx-1
+        preQ = None
+        while preQ is None:
+            if pre_idx < 0:
+                raise IndexError
+            preQ = Q[pre_idx]
+            if len(getnan(nx.array((preQ.w,preQ.x,preQ.y,preQ.z)))[0]):
+                preQ = None
+                pre_idx -= 1
+                
+        post_idx = cur_idx+1
+        postQ = None
+        while postQ is None:
+            postQ = Q[post_idx]
+            if len(getnan(nx.array((postQ.w,postQ.x,postQ.y,postQ.z)))[0]):
+                postQ = None
+                post_idx += 1
 
+        frac = float(cur_idx-pre_idx)/float(post_idx-pre_idx)
+        print '  ',frac, cur_idx, pre_idx, post_idx
+        Q[cur_idx] = cgtypes.slerp(frac, preQ, postQ)
+    
     # first position derivative (velocity)
     dPdt = (P[2:]-P[:-2]) / (2*delta_t)
     t_dPdt = t_P[1:-1]
@@ -73,7 +175,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
     do_smooth_position = True
     do_smooth_quats = True
     
-    plot_pos_and_vel = False
+    plot_pos_and_vel = True
     plot_pos_err_histogram = False
     
     plot_xy = False; plot_xy_Qsmooth = True; plot_xy_Qraw = True
@@ -82,7 +184,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
     plot_accel = False
     plot_smooth_pos_and_vel = False
     plot_Q = False
-    plot_body_angular_vel = False
+    plot_body_angular_vel = True
     plot_error_angles = False
     plot_body_ground_V = False
     plot_body_air_V = False
@@ -752,11 +854,11 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
         vel_lines = plot(t_dPdt,nx.sqrt(nx.sum(dPdt_smooth_air**2,axis=1)),'k',lw=1.5)
         gca().yaxis.tick_right()
 
-        if 1:
-            print 'gca().dataLim',gca().dataLim
-            outputs.append( gca().dataLim )
-            print 'gca().viewLim',gca().viewLim
-            outputs.append( gca().viewLim )
+##        if 1:
+##            print 'gca().dataLim',gca().dataLim
+##            outputs.append( gca().dataLim )
+##            print 'gca().viewLim',gca().viewLim
+##            outputs.append( gca().viewLim )
             
 
         legend((aattack_lines[0],vel_lines[0]),('alpha','|V|'))
