@@ -255,6 +255,11 @@ cdef extern from "ippdefs.h":
     ctypedef struct IppiPoint:
         int x
         int y
+
+    ctypedef enum IppHintAlgorithm:
+        ippAlgHintNone
+        ippAlgHintFast
+        ippAlgHintAccurate
      
 cdef extern from "ippcore.h":
     IppStatus ippStaticInit()
@@ -268,6 +273,8 @@ cdef extern from "ippcore.h":
     IppCpuType ippCoreGetCpuType()
 
 cdef extern from "ippi.h":
+    ctypedef struct IppiMomentState_64f
+    
     Ipp8u* ippiMalloc_8u_C1( int widthPixels, int heightPixels, int* pStepBytes )
     Ipp32f* ippiMalloc_32f_C1( int widthPixels, int heightPixels, int* pStepBytes )
     void ippiFree(void* ptr)
@@ -307,6 +314,10 @@ cdef extern from "ippi.h":
                                   Ipp8u* pSrc2, int src2Step,
                                   Ipp8u* pDst,  int dstStep,
                                   IppiSize roiSize,   IppCmpOp ippCmpOp)
+    IppStatus ippiCompare_32f_C1R(Ipp32f* pSrc1, int src1Step,
+                                  Ipp32f* pSrc2, int src2Step,
+                                  Ipp8u* pDst,  int dstStep,
+                                  IppiSize roiSize,   IppCmpOp ippCmpOp)
     IppStatus ippiCompareEqualEps_32f_C1R( Ipp32f* pSrc1, int src1Step,
                                            Ipp32f* pSrc2, int src2Step,
                                            Ipp8u*  pDst,  int dstStep,
@@ -315,12 +326,28 @@ cdef extern from "ippi.h":
                                   int srcDstStep, IppiSize roiSize, int scaleFactor)
     IppStatus ippiMaxIndx_8u_C1R(Ipp8u* pSrc, int srcStep, IppiSize roiSize, Ipp8u* pMax,
                                  int* pIndexX, int* pIndexY)
-
+    IppStatus ippiMaxIndx_32f_C1R(Ipp32f* pSrc, int srcStep, IppiSize roiSize,
+                                  Ipp32f* pMax, int* pIndexX, int* pIndexY)
+    IppStatus ippiSqr_32f_C1R(Ipp32f* pSrc, int srcStep,
+                              Ipp32f* pDst, int dstStep, IppiSize roiSize)
+    IppStatus ippiSub_32f_C1IR(Ipp32f* pSrc, int srcStep, Ipp32f* pSrcDst,
+                               int srcDstStep, IppiSize roiSize)
+    IppStatus ippiSqrt_32f_C1IR(Ipp32f* pSrcDst, int srcDstStep,
+                                IppiSize roiSize)
+    IppStatus ippiMomentInitAlloc_64f(IppiMomentState_64f** pState, IppHintAlgorithm hint)
+    IppStatus ippiMomentFree_64f(IppiMomentState_64f* pState)
+    IppStatus ippiMoments64f_32f_C1R(Ipp32f* pSrc, int srcStep, IppiSize roiSize, IppiMomentState_64f* pCtx)
+    IppStatus ippiGetSpatialMoment_64f(IppiMomentState_64f* pState,
+                                       int mOrd, int nOrd, int nChannel,
+                                       IppiPoint roiOffset, Ipp64f* pValue)
     
 cdef extern from "ippcv.h":
     IppStatus ippiAdd_8u32f_C1IR(Ipp8u*  pSrc, int srcStep,
                                  Ipp32f* pSrcDst, int srcDstStep,
                                  IppiSize roiSize )
+    IppStatus ippiAddSquare_8u32f_C1IR(Ipp8u*  pSrc, int srcStep,
+                                       Ipp32f* pSrcDst, int srcDstStep,
+                                       IppiSize roiSize)
     IppStatus ippiAddWeighted_8u32f_C1IR( Ipp8u*  pSrc, int srcStep,
                                           Ipp32f* pSrcDst, int srcDstStep,
                                           IppiSize roiSize, Ipp32f alpha )
@@ -333,6 +360,9 @@ cdef extern from "ippcv.h":
     IppStatus ippiAbsDiff_8u_C1R( Ipp8u* pSrc1, int srcStep,
                                   Ipp8u* pSrc2, int src2Step,
                                   Ipp8u* pDst, int dstStep, IppiSize roiSize )
+    IppStatus ippiAbsDiff_32f_C1R(Ipp32f* pSrc1, int srcStep,
+                                  Ipp32f* pSrc2, int src2Step,
+                                  Ipp32f* pDst, int dstStep, IppiSize roiSize )
 
 cdef extern from "ipps.h":
     IppStatus ippSetFlushToZero( int value, unsigned int* pUMask )
