@@ -54,8 +54,8 @@ class App(wxApp):
         EVT_MENU(self, ID_toggle_image_tinting, self.OnToggleTint)
 
         ID_set_timer = wxNewId()
-        viewmenu.Append(ID_set_timer, "Set update timer",
-                        "Sets interval at which display is updated")#, wxITEM_CHECK)
+        viewmenu.Append(ID_set_timer, "Set update timer...",
+                        "Sets interval at which display is updated")
         EVT_MENU(self, ID_set_timer, self.OnSetTimer)
 
         menuBar.Append(viewmenu, "&View")
@@ -195,6 +195,9 @@ class App(wxApp):
         EVT_BUTTON(clear_background, clear_background.GetId(),
                    self.OnClearBackground)
         
+        set_roi = XRCCTRL(PreviewPerCamPanel,"set_roi")
+        EVT_BUTTON(set_roi, set_roi.GetId(), self.OnSetROI)
+
         quit_camera = XRCCTRL(PreviewPerCamPanel,"quit_camera")
         EVT_BUTTON(quit_camera, quit_camera.GetId(), self.OnCloseCamera)
 
@@ -448,6 +451,28 @@ class App(wxApp):
             if dlg.ShowModal() == wxID_OK:
                 self.update_interval = int(dlg.GetValue())
                 self.timer.Start(self.update_interval)
+        finally:
+            dlg.Destroy()
+
+    def OnSetROI(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        dlg = RES.LoadDialog(self.frame,"ROI_DIALOG") # make frame main panel
+        dlg_ok = XRCCTRL(dlg,"ROI_OK")
+        dlg_cam_id = XRCCTRL(dlg,"ROI_cam_id")
+        dlg_cam_id.SetLabel(cam_id)
+        def OnROIOK(event):
+            print 'OK'
+            dlg.left = int(XRCCTRL(dlg,"ROI_LEFT").GetValue())
+            dlg.right = int(XRCCTRL(dlg,"ROI_RIGHT").GetValue())
+            dlg.bottom = int(XRCCTRL(dlg,"ROI_BOTTOM").GetValue())
+            dlg.top = int(XRCCTRL(dlg,"ROI_TOP").GetValue())
+            dlg.EndModal( wxID_OK )
+        EVT_BUTTON(dlg_ok, dlg_ok.GetId(),
+                   OnROIOK)
+        try:
+            if dlg.ShowModal() == wxID_OK:
+                print 'dlg.left',dlg.left
+                self.main_brain.send_roi(cam_id,dlg.left,dlg.bottom,dlg.right,dlg.top)
         finally:
             dlg.Destroy()
 

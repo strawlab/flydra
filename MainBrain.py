@@ -327,6 +327,15 @@ class MainBrain:
             cam_lock.release()
             self.cam_info_lock.release()            
 
+        def external_send_roi( self, cam_id, l,b,r,t):
+            self.cam_info_lock.acquire()            
+            cam = self.cam_info[cam_id]
+            cam_lock = cam['lock']
+            cam_lock.acquire()
+            cam['commands']['roi']=l,b,r,t
+            cam_lock.release()
+            self.cam_info_lock.release()
+
         # --- thread boundary -----------------------------------------
 
         def listen(self,daemon):
@@ -585,6 +594,9 @@ class MainBrain:
 
     def request_image_async(self, cam_id):
         self.remote_api.external_request_image_async(cam_id)
+
+    def send_roi(self,cam_id,l,b,r,t):
+        self.remote_api.external_send_roi( cam_id, l,b,r,t)
 
     def get_image_sync(self, cam_id):
         return self.camera_server[cam_id].get_most_recent_frame()

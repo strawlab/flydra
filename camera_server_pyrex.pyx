@@ -73,6 +73,7 @@ except:
 cdef class GrabClass:
     cdef Camera cam
     cdef int coord_port
+    cdef int left, bottom, right, top
     
     cdef void set_camera_and_coord_port(self, Camera cam, object coord_port):
         self.cam = cam
@@ -117,6 +118,8 @@ cdef class GrabClass:
         cdef ipp.Ipp32f *im1_32f, *im2_32f
         cdef ipp.IppiSize sz
 
+        cdef ipp.IppiSize roi_sz
+        
         cdef double x0, y0 # centroid
         cdef double orientation
         # end of IPP-requiring code
@@ -223,25 +226,42 @@ cdef class GrabClass:
                 # copy image to IPP memory
                 for i from 0 <= i < height:
                     c_lib.memcpy(im1+im1_step*i,buf_ptr+width*i,width)
-                    
-                # do background subtraction
-                CHK(
-                    ipp.ippiConvert_8u32f_C1R(im1, im1_step,
-                                              im1_32f, im1_32f_step,sz))
+
+                # do background subtraction & find max pixel in ROI
+                if 0:
+                    # This is the ROI case.  Note implemented yet.
+
+                    # Not sure whether to do ROI immediately on 8u to
+                    # 32f data conversion or wait and just do it later on only 32f data.
+
+                    # I'm not sure about math for ROI start with 8u
+                    # type (32f type is funky and was found by
+                    # trial-and-error). (See fit_params.pyx from
+                    # subversion revision 237 for ROI calculation --
+                    # look for "roi_sz".)
+
+                    roi_sz.width = self.right-self.left+1
+                    roi_sz.height = self.top-self.bottom+1
+
+                    # THIS CODE IS UNFINISHED
+                else:
+                    CHK(
+                        ipp.ippiConvert_8u32f_C1R(im1, im1_step,
+                                                  im1_32f, im1_32f_step,sz))
                 
-                CHK(
-                    ipp.ippiAbsDiff_32f_C1R(mean_image, mean_image_step,
-                                            im1_32f,im1_32f_step,
-                                            im2_32f,im2_32f_step,sz))
-                CHK(
-                    ipp.ippiMaxIndx_32f_C1R(im2_32f,im2_32f_step,sz,
-                                            &max_val,
-                                            &index_x,&index_y))
-                CHK(
-                    ipp.ippiConvert_32f8u_C1R(im2_32f,im2_32f_step,
-                                              im2,im2_step,
-                                              sz,
-                                              ipp.ippRndNear))
+                    CHK(
+                        ipp.ippiAbsDiff_32f_C1R(mean_image, mean_image_step,
+                                                im1_32f,im1_32f_step,
+                                                im2_32f,im2_32f_step,sz))
+                    CHK(
+                        ipp.ippiMaxIndx_32f_C1R(im2_32f,im2_32f_step,sz,
+                                                &max_val,
+                                                &index_x,&index_y))
+                    CHK(
+                        ipp.ippiConvert_32f8u_C1R(im2_32f,im2_32f_step,
+                                                  im2,im2_step,
+                                                  sz,
+                                                  ipp.ippRndNear))
                 
                 if max_val < globals['diff_threshold']:
                     x0=-1
@@ -249,7 +269,6 @@ cdef class GrabClass:
                 else:
                     # compute centroid -=-=-=-=-=-=-=-=-=-=-=-=
 
-                    # start of IPP-requiring code
                     c_fit_params.fit_params( &x0, &y0, &orientation,
                                 index_x, index_y, centroid_search_radius,
                                 width, height, im2_32f, im2_32f_step )
@@ -510,6 +529,7 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
     def quit(self):
         self.globals['cam_quit_event'].set()
 
+
     def collect_background(self):
         self.globals['collect_background_start'].set()
 
@@ -523,10 +543,6 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
         return self.globals['diff_threshold']
 
 cdef class App:
-    cdef Camera cam0
-    cdef Camera cam1
-    cdef Camera cam2
-    
     cdef object globals
     cdef object cam_id
     cdef object from_main_brain_api
@@ -535,10 +551,20 @@ cdef class App:
     cdef object main_brain_lock
     cdef int num_cams
     
+    # MAX_GRABBERS = 3
+    cdef Camera cam0
+    cdef Camera cam1
+    cdef Camera cam2
+    
+    cdef GrabClass grabber0
+    cdef GrabClass grabber1
+    cdef GrabClass grabber2
+    
     def __init__(self):
         cdef Camera cam
         cdef GrabClass grabber
-        
+
+        MAX_GRABBERS = 3
         # ----------------------------------------------------------------
         #
         # Setup cameras
@@ -547,6 +573,7 @@ cdef class App:
 
         self.num_cams = c_cam_iface.cam_iface_get_num_cameras()
         print 'Number of cameras detected:', self.num_cams
+        assert self.num_cams <= MAX_GRABBERS
 
         # ----------------------------------------------------------------
         #
@@ -577,12 +604,16 @@ cdef class App:
         for cam_no in range(self.num_cams):
             cam = Camera(cam_no,30)
 
+            height = cam.get_max_height()
+            width = cam.get_max_width()
+
             if cam_no == 0:
                 self.cam0=cam
             elif cam_no == 1:
                 self.cam1=cam
             elif cam_no == 2:
                 self.cam2=cam
+            # add more if MAX_GRABBERS increases
                 
             # ----------------------------------------------------------------
             #
@@ -666,14 +697,29 @@ cdef class App:
             # ----------------------------------------------------------------
 
             grabber = GrabClass()
+            grabber.left = 0
+            grabber.right = width-1
+            grabber.bottom = 0
+            grabber.top = height-1
             grabber.set_camera_and_coord_port(cam,coord_port)
             grab_thread=threading.Thread(target=grabber.grab_func,
                                          args=(globals,))
             cam.start_camera()  # start camera
             grab_thread.start() # start grabbing frames from camera
 
+            print 'grab thread started'
+            if cam_no == 0:
+                self.grabber0=grabber
+            elif cam_no == 1:
+                self.grabber1=grabber
+            elif cam_no == 2:
+                self.grabber2=grabber
+            print 'set grabber'
+            # add more if MAX_GRABBERS increases
+
     def mainloop(self):
         cdef Camera cam
+        cdef GrabClass grabber
         # per camera variables
         grabbed_frames = []
 
@@ -743,6 +789,20 @@ cdef class App:
                                     cam.set_camera_property(enum,value,0,0)
                             elif key == 'get_im': # low priority get image (for streaming)
                                 self.from_main_brain_api[cam_no].send_most_recent_frame() # mimic call
+                            elif key == 'roi':
+                                if cam_no == 0:
+                                    grabber=self.grabber0
+                                elif cam_no == 1:
+                                    grabber=self.grabber1
+                                elif cam_no == 2:
+                                    grabber=self.grabber2
+                                # add more if MAX_GRABBERS increases
+                                l,b,r,t = cmds[key]
+                                print 'setting analysis window',l,b,r,t
+                                grabber.left = l
+                                grabber.bottom = b
+                                grabber.right = r
+                                grabber.top = t
                                 
                         # handle saving movie if needed
                         cmd=None

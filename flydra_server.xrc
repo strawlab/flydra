@@ -54,6 +54,11 @@
             <option>1</option>
           </object>
           <object class="sizeritem">
+            <object class="wxButton" name="set_roi">
+              <label>Set ROI...</label>
+            </object>
+          </object>
+          <object class="sizeritem">
             <object class="wxButton" name="quit_camera">
               <label>quit camera</label>
               <tooltip>quit this camera</tooltip>
@@ -263,10 +268,7 @@
               <object class="sizeritem">
                 <object class="wxCheckListBox" name="record_raw_cam_select_checklist">
                   <content>
-                    
-                    
-                    <item/>
-                  </content>
+                    <item/></content>
                 </object>
                 <option>1</option>
                 <flag>wxEXPAND</flag>
@@ -281,5 +283,83 @@
       </object>
     </object>
     <style></style>
+  </object>
+  <object class="wxDialog" name="ROI_DIALOG">
+    <title>Region of interest</title>
+    <object class="wxBoxSizer">
+      <orient>wxVERTICAL</orient>
+      <object class="sizeritem">
+        <object class="wxBoxSizer">
+          <orient>wxHORIZONTAL</orient>
+          <object class="sizeritem">
+            <object class="wxStaticText" name="ROI_cam_id">
+              <label>cam_id</label>
+              <style>wxALIGN_CENTRE</style>
+            </object>
+            <option>1</option>
+          </object>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxFlexGridSizer">
+          <cols>4</cols>
+          <rows>2</rows>
+          <object class="sizeritem">
+            <object class="wxStaticText">
+              <label>left</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxTextCtrl" name="ROI_LEFT">
+              <value>0</value>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxStaticText">
+              <label>right</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxTextCtrl" name="ROI_RIGHT">
+              <value>655</value>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxStaticText">
+              <label>bottom</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxTextCtrl" name="ROI_BOTTOM">
+              <value>0</value>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxStaticText">
+              <label>top</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxTextCtrl" name="ROI_TOP">
+              <value>490</value>
+            </object>
+          </object>
+        </object>
+      </object>
+      <object class="sizeritem">
+        <object class="wxBoxSizer">
+          <orient>wxHORIZONTAL</orient>
+          <object class="sizeritem">
+            <object class="wxButton" name="ROI_OK">
+              <label>OK</label>
+            </object>
+            <option>1</option>
+            <flag></flag>
+          </object>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+    </object>
   </object>
 </resource>
