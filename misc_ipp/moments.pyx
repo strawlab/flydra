@@ -52,24 +52,39 @@ ctypedef class MomentState:
         
     cdef void fill_moments_8u_C1R( self, ipp.Ipp8u* pSrc, int srcStep, ipp.IppiSize roiSize):
         CHK( ipp.ippiMoments64f_8u_C1R( pSrc, srcStep, roiSize, self.pState ) )
-    def get_moment(self, typ, int order_M, int order_N, int channel): 
+    def get_moment(self, typ, int order_M, int order_N, int channel,normalized=False): 
         cdef double result
         cdef ipp.IppiPoint roi_offset
         if typ=='central':
-            CHK( ipp.ippiGetCentralMoment_64f( self.pState,
-                                               order_M,
-                                               order_N,
-                                               channel,
-                                               &result ))
+            if normalized:
+                CHK( ipp.ippiGetNormalizedCentralMoment_64f( self.pState,
+                                                             order_M,
+                                                             order_N,
+                                                             channel,
+                                                             &result ))
+            else:
+                CHK( ipp.ippiGetCentralMoment_64f( self.pState,
+                                                   order_M,
+                                                   order_N,
+                                                   channel,
+                                                   &result ))
         elif typ=='spatial':
             roi_offset.x = 0 
             roi_offset.y = 0
-            CHK( ipp.ippiGetSpatialMoment_64f( self.pState,
-                                               order_M,
-                                               order_N,
-                                               channel,
-                                               roi_offset,
-                                               &result ))
+            if normalized:
+                CHK( ipp.ippiGetNormalizedSpatialMoment_64f( self.pState,
+                                                             order_M,
+                                                             order_N,
+                                                             channel,
+                                                             roi_offset,
+                                                             &result ))
+            else:
+                CHK( ipp.ippiGetSpatialMoment_64f( self.pState,
+                                                   order_M,
+                                                   order_N,
+                                                   channel,
+                                                   roi_offset,
+                                                   &result ))
         else:
             raise ValueError("don't understand moment type '%s'"%typ)
         return result

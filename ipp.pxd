@@ -275,6 +275,7 @@ cdef extern from "ippcore.h":
 
 cdef extern from "ippi.h":
     ctypedef struct IppiMomentState_64f
+    ctypedef Ipp64f IppiHuMoment_64f[7]
     
     Ipp8u* ippiMalloc_8u_C1( int widthPixels, int heightPixels, int* pStepBytes )
     Ipp32f* ippiMalloc_32f_C1( int widthPixels, int heightPixels, int* pStepBytes )
@@ -351,10 +352,14 @@ cdef extern from "ippi.h":
     IppStatus ippiGetCentralMoment_64f(IppiMomentState_64f* pState,
                                        int mOrd, int nOrd, int nChannel,
                                        Ipp64f* pValue)
+    IppStatus ippiGetNormalizedSpatialMoment_64f(IppiMomentState_64f* pState,
+                                                 int mOrd, int nOrd, int nChannel,
+                                                 IppiPoint roiOffset, Ipp64f* pValue)
     IppStatus ippiGetNormalizedCentralMoment_64f(IppiMomentState_64f* pState,
-                                       int mOrd, int nOrd, int nChannel,
-                                       Ipp64f* pValue)
-
+                                                 int mOrd, int nOrd, int nChannel,
+                                                 Ipp64f* pValue)
+    IppStatus ippiGetHuMoments_64f(IppiMomentState_64f* pState,
+                                   int nChannel, IppiHuMoment_64f pHm)
 cdef extern from "ippcv.h":
     IppStatus ippiAdd_8u32f_C1IR(Ipp8u*  pSrc, int srcStep,
                                  Ipp32f* pSrcDst, int srcDstStep,
