@@ -251,9 +251,12 @@ class wxMainBrainApp(wxApp):
                 event.SetEventObject( widget )
                 widget.Command( event )
             self.statusbar.SetStatusText('cleared BG images',0)
-        else:
-            # propagate event up the chain...
-            event.Skip()
+
+        # Propagate event up the chain. (We don't mind propagating
+        # keys that we've processed because normally wx doesn't do
+        # anything with these keys, but when we're in a text entry
+        # dialog box, we do want wx to grab them.)
+        event.Skip()
         
     def OnPageChanged(self, event):
         page = event.GetSelection()
