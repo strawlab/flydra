@@ -70,8 +70,11 @@ class GrabClass(object):
         self.realtime_analyzer.use_arena = value
     use_arena = property( get_use_arena, set_use_arena )
 
-    def set_roi(self, *args):
-        self.realtime_analyzer.set_roi(*args)
+    def get_roi(self):
+        return self.realtime_analyzer.roi
+    def set_roi(self, lbrt):
+        self.realtime_analyzer.roi = lbrt
+    roi = property( get_roi, set_roi )
     
     def grab_func(self,globals):
         n_bg_samples = 100
@@ -99,23 +102,24 @@ class GrabClass(object):
         try:
             while not cam_quit_event_isSet():
                 self.cam.grab_next_frame_blocking(buf) # grab frame and stick in buf
-                sys.stdout.write('.')
-                sys.stdout.flush()
-                
                 # get best guess as to when image was taken
                 timestamp=self.cam.get_last_timestamp()
                 framenumber=self.cam.get_last_framenumber()
                 globals['last_frame_timestamp']=timestamp
                 
                 points = self.realtime_analyzer.do_work( buf )
-                buf2 = self.realtime_analyzer.get_working_image()
+                
+                if debug_isSet():
+                    show_image = self.realtime_analyzer.get_working_image()
+                else:
+                    show_image = buf
                 
                 # make appropriate references to our copy of the data
-                globals['most_recent_frame'] = buf2
-                globals['most_recent_frame_and_points'] = buf2, points
+                globals['most_recent_frame'] = show_image
+                globals['most_recent_frame_and_points'] = show_image, points
                 acquire_lock()
                 globals['incoming_frames'].append(
-                    (buf2,timestamp,framenumber) ) # save it
+                    (show_image,timestamp,framenumber) ) # save it
                 release_lock()
 
                 if clear_background_start_isSet():
@@ -149,7 +153,7 @@ class GrabClass(object):
                 n_pts = len(points)
                 data = struct.pack('<dli',timestamp,framenumber,n_pts)
                 for i in range(n_pts):
-                    data = data + struct.pack('<fff',*points[i])
+                    data = data + struct.pack('fff',*points[i])
                 coord_socket.sendto(data,
                                     (main_brain_hostname,self.coord_port))
                 sleep(1e-6) # yield processor
@@ -158,155 +162,9 @@ class GrabClass(object):
             globals['cam_quit_event'].set()
             globals['grab_thread_done'].set()
 
-class FromMainBrainAPI( Pyro.core.ObjBase ):
-    # "camera server"
-    
-    # ----------------------------------------------------------------
-    #
-    # Methods called locally
-    #
-    # ----------------------------------------------------------------
-    
-    def post_init(self, cam_id, main_brain, main_brain_lock, globals):
-        if type(cam_id) != type(''):
-            raise TypeError('cam_id must be a string')
-        self.cam_id = cam_id
-        self.main_brain = main_brain
-        self.main_brain_lock = main_brain_lock
-        self.globals = globals
-        self.quit_listening_now = False
-
-    def listen(self,daemon):
-        """thread mainloop"""
-        self_cam_quit_event_isSet = self.globals['cam_quit_event'].isSet
-        hr = daemon.handleRequests
-        try:
-            while not self_cam_quit_event_isSet():
-                hr(5.0) # block on select for n seconds
-                sys.stdout.write('^')
-                sys.stdout.flush()
-                if self.quit_listening_now:
-                    break
-                
-        finally:
-            self.globals['listen_thread_done'].set()
-
-    # ----------------------------------------------------------------
-    #
-    # Methods called remotely from main_brain
-    #
-    # These all get called in their own thread.  Don't call across
-    # the thread boundary without using locks.
-    #
-    # ----------------------------------------------------------------
-
-    def send_most_recent_frame(self):
-        """Trigger asynchronous send of image"""
-        self.main_brain_lock.acquire()
-        self.main_brain.set_image(self.cam_id, self.globals['most_recent_frame'])
-        self.main_brain_lock.release()
-
-    def get_most_recent_frame(self):
-        """Return (synchronous) image"""
-        return self.globals['most_recent_frame_and_points']
-
-    def get_roi(self):
-        """Return region of interest"""
-        return self.globals['lbrt']
-
-    def get_widthheight(self):
-        """Return width and height of camera"""
-        return self.globals['width'], self.globals['height']
-
-    def is_ipp_enabled(self):
-        result = False
-        return result
-
-    def start_debug(self):
-        self.globals['debug'].set()
-        print '-='*20,'ENTERING DEBUG MODE'
-
-    def stop_debug(self):
-        self.globals['debug'].clear()
-        print '-='*20,'LEAVING DEBUG MODE'
-
-    def start_recording(self,filename):
-        self.quit_listening_now = True
-        
-        fly_movie_lock = threading.Lock()
-        self.globals['record_status_lock'].acquire()
-        try:
-            fly_movie = FlyMovieFormat.FlyMovieSaver(filename,version=1)
-            self.globals['record_status'] = ('save',fly_movie,fly_movie_lock)
-            print "starting to record to %s"%filename
-        finally:
-            self.globals['record_status_lock'].release()        
-
-    def stop_recording(self):
-        cmd=None
-        self.globals['record_status_lock'].acquire()
-        try:
-##            if self.globals['record_status']:
-##                cmd,fly_movie,fly_movie_lock = self.globals['record_status']
-            self.globals['record_status'] = None
-        finally:
-            self.globals['record_status_lock'].release()
-            
-        if cmd == 'save':
-            fly_movie_lock.acquire()
-            fly_movie.close()
-            fly_movie_lock.release()
-            print "stopping recording"
-        else:
-            # still saving data...
-            #print "got stop recording command, but not recording!"
-            pass
-
-    def no_op(self):
-        """used to test connection"""
-        return None
-
-    def quit(self):
-        self.globals['cam_quit_event'].set()
-
-    def collect_background(self):
-        print 'collect 1'
-        self.globals['collect_background_start'].set()
-
-    def clear_background(self):
-        print 'clear 1'
-        self.globals['clear_background_start'].set()
-
-    def get_diff_threshold(self):
-        return self.globals['diff_threshold']
-
-    def get_clear_threshold(self):
-        return self.globals['clear_threshold']
-
-    def find_r_center(self):
-        self.globals['find_rotation_center_start'].set()
-    
 class App:
-##    cdef object globals
-##    cdef object cam_id
-##    cdef object from_main_brain_api
-    
-##    cdef object main_brain
-##    cdef object main_brain_lock
-##    cdef int num_cams
-    
-##    # MAX_GRABBERS = 3
-##    cdef Camera cam0
-##    cdef Camera cam1
-##    cdef Camera cam2
-    
-##    cdef GrabClass grabber0
-##    cdef GrabClass grabber1
-##    cdef GrabClass grabber2
     
     def __init__(self):
-##        cdef Camera cam
-##        cdef GrabClass grabber
 
         MAX_GRABBERS = 3
         # ----------------------------------------------------------------
@@ -327,10 +185,10 @@ class App:
         #
         # ----------------------------------------------------------------
 
-        Pyro.core.initServer(banner=0,storageCheck=1)
+        Pyro.core.initClient(banner=0)
+        
         port = 9833
         name = 'main_brain'
-
         main_brain_URI = "PYROLOC://%s:%d/%s" % (main_brain_hostname,port,name)
         print 'connecting to',main_brain_URI
         self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
@@ -344,23 +202,18 @@ class App:
         # ----------------------------------------------------------------
 
         self.globals = []
-        self.cam_id = []
-        self.from_main_brain_api = []
+        self.all_cam_ids = []
+
+        self.all_cams = []
+        self.all_grabbers = []
         
         for cam_no in range(self.num_cams):
             cam = cam_iface.CamContext(cam_no,30)
+            self.all_cams.append( cam )
 
             height = cam.get_max_height()
             width = cam.get_max_width()
 
-            if cam_no == 0:
-                self.cam0=cam
-            elif cam_no == 1:
-                self.cam1=cam
-            elif cam_no == 2:
-                self.cam2=cam
-            # add more if MAX_GRABBERS increases
-                
             # ----------------------------------------------------------------
             #
             # Initialize "global" variables
@@ -386,9 +239,6 @@ class App:
             globals['debug'] = threading.Event()
             globals['record_status_lock'] = threading.Lock()
 
-            globals['lbrt'] = 0,0,width-1,height-1
-            globals['width'] = width
-            globals['height'] = height
             globals['last_frame_timestamp']=None
 
             # set defaults
@@ -405,18 +255,22 @@ class App:
                 max_value = tmp[2]
                 scalar_control_info[name] = (current_value, min_value, max_value)
             diff_threshold = 8.1
-            scalar_control_info['initial_diff_threshold'] = diff_threshold
+            scalar_control_info['diff_threshold'] = diff_threshold
             clear_threshold = 0.0
-            scalar_control_info['initial_clear_threshold'] = clear_threshold
+            scalar_control_info['clear_threshold'] = clear_threshold
+            
+            scalar_control_info['width'] = width
+            scalar_control_info['height'] = height
+            scalar_control_info['roi'] = 0,0,width-1,height-1
 
             # register self with remote server
             port = 9834 + cam_no # for local Pyro server
             self.main_brain_lock.acquire()
-            self.cam_id.append(
+            self.all_cam_ids.append(
                 self.main_brain.register_new_camera(cam_no,
                                                     scalar_control_info,
                                                     port))
-            coord_port = self.main_brain.get_coord_port(self.cam_id[cam_no])
+            coord_port = self.main_brain.get_coord_port(self.all_cam_ids[cam_no])
             self.main_brain_lock.release()
             
             # ---------------------------------------------------------------
@@ -431,23 +285,6 @@ class App:
             print 'hostname',hostname
             host = socket.gethostbyname(hostname)
             daemon = Pyro.core.Daemon(host=host,port=port)
-            self.from_main_brain_api.append( FromMainBrainAPI() )
-            self.from_main_brain_api[cam_no].post_init(
-                                                       self.cam_id[cam_no],
-                                                       self.main_brain,
-                                                       self.main_brain_lock,
-                                                       globals)
-            URI=daemon.connect(self.from_main_brain_api[cam_no],'camera_server')
-            print 'listening locally at',URI
-
-##            fly_movie = FlyMovieFormat.FlyMovieSaver('/tmp/cam.fmf',version=1)
-##            fly_movie_lock = threading.Lock()
-##            globals['record_status'] = ('save',fly_movie,fly_movie_lock)
-            
-            # create and start listen thread
-            listen_thread=threading.Thread(target=self.from_main_brain_api[cam_no].listen,
-                                           args=(daemon,))
-            listen_thread.start()
 
             # ----------------------------------------------------------------
             #
@@ -456,14 +293,10 @@ class App:
             # ----------------------------------------------------------------
 
             grabber = GrabClass(cam,coord_port)
+            self.all_grabbers.append( grabber )
             
             grabber.diff_threshold = diff_threshold
-            # shadow grabber value
-            globals['diff_threshold'] = grabber.diff_threshold
-            
             grabber.clear_threshold = clear_threshold
-            # shadow grabber value
-            globals['clear_threshold'] = grabber.clear_threshold
             
             grabber.use_arena = False
             globals['use_arena'] = grabber.use_arena
@@ -473,19 +306,73 @@ class App:
             cam.start_camera()  # start camera
             grab_thread.start() # start grabbing frames from camera
 
-            print 'grab thread started'
-            if cam_no == 0:
-                self.grabber0=grabber
-            elif cam_no == 1:
-                self.grabber1=grabber
-            elif cam_no == 2:
-                self.grabber2=grabber
-            print 'set grabber'
-            # add more if MAX_GRABBERS increases
-
+    def handle_commands(self, cam_no, cmds):
+        cam = self.all_cams[cam_no]
+        grabber = self.all_grabbers[cam_no]
+        cam_id = self.all_cam_ids[cam_no]
+        globals = self.globals[cam_no]
+        
+        for key in cmds.keys():
+            if key == 'set':
+                for property_name,value in cmds['set'].iteritems():
+                    if property_name in CAM_CONTROLS:
+                        enum = CAM_CONTROLS[property_name]
+                        if type(value) == tuple: # setting whole thing
+                            tmp = cam.get_camera_property_range(enum)
+                            assert value[1] == tmp[1]
+                            assert value[2] == tmp[2]
+                            value = value[0]
+                        cam.set_camera_property(enum,value,0,0)
+                    elif property_name == 'roi':
+                        grabber.roi = value 
+                    elif property_name == 'diff_threshold':
+                        grabber.diff_threshold = value
+                    elif property_name == 'clear_threshold':
+                        grabber.clear_threshold = value
+                    elif property_name == 'width':
+                        assert cam.get_max_width() == value
+                    elif property_name == 'height':
+                        assert cam.get_max_height() == value
+            elif key == 'get_im':
+                self.main_brain.set_image(cam_id, globals['most_recent_frame'])
+            elif key == 'use_arena':
+                grabber.use_arena = cmds[key]
+                globals['use_arena'] = grabber.use_arena
+            elif key == 'quit':
+                globals['cam_quit_event'].set()
+            elif key == 'collect_bg':
+                globals['collect_background_start'].set()
+            elif key == 'clear_bg':
+                globals['clear_background_start'].set()
+            elif key == 'find_r_center':
+                globals['find_rotation_center_start'].set()
+            elif key == 'stop_recording':
+                globals['record_status_lock'].acquire()
+                try:
+                    if globals['record_status']:
+                        cmd,fly_movie,fly_movie_lock = globals['record_status']
+                        fly_movie_lock.acquire()
+                        fly_movie.close()
+                        fly_movie_lock.release()
+                    globals['record_status'] = None
+                finally:
+                    globals['record_status_lock'].release()
+            elif key == 'start_recording':
+                filename = cmds[key]
+                fly_movie_lock = threading.Lock()
+                globals['record_status_lock'].acquire()
+                try:
+                    fly_movie = FlyMovieFormat.FlyMovieSaver(filename,version=1)
+                    globals['record_status'] = ('save',fly_movie,fly_movie_lock)
+                    print "starting to record to %s"%filename
+                finally:
+                    globals['record_status_lock'].release()
+            elif key == 'debug':
+                if cmds[key]: globals['debug'].set()
+                else: globals['debug'].clear()
+                    
+                
     def mainloop(self):
-##        cdef Camera cam
-##        cdef GrabClass grabber
         # per camera variables
         grabbed_frames = []
 
@@ -517,14 +404,8 @@ class App:
 
                         cams_in_operation = cams_in_operation + 1
 
-                        if cam_no == 0:
-                            cam=self.cam0
-                        elif cam_no == 1:
-                            cam=self.cam1
-                        elif cam_no == 2:
-                            cam=self.cam2
-
-                        cam_id = self.cam_id[cam_no]
+                        cam = self.all_cams[cam_no]
+                        cam_id = self.all_cam_ids[cam_no]
                         
                         now = time_func()
                         lft = globals['last_frame_timestamp']
@@ -564,38 +445,8 @@ class App:
                         self.main_brain_lock.acquire()
                         cmds=self.main_brain.get_and_clear_commands(cam_id)
                         self.main_brain_lock.release()
-                        for key in cmds.keys():
-                            if key == 'set':
-                                for property_name,value in cmds['set'].iteritems():
-                                    enum = CAM_CONTROLS[property_name]
-                                    cam.set_camera_property(enum,value,0,0)
-                            elif key == 'get_im': # low priority get image (for streaming)
-                                self.from_main_brain_api[cam_no].send_most_recent_frame() # mimic call
-                            else:
-                                if cam_no == 0:
-                                    grabber=self.grabber0
-                                elif cam_no == 1:
-                                    grabber=self.grabber1
-                                elif cam_no == 2:
-                                    grabber=self.grabber2
-                                # add more if MAX_GRABBERS increases
-                                if key == 'roi':
-                                    l,b,r,t = cmds[key]
-                                    grabber.set_roi( l,b,r,t )
-                                    # shadow grabber value
-                                    globals['lbrt']=l,b,r,t
-                                elif key == 'diff_threshold':
-                                    grabber.diff_threshold = cmds[key]
-                                    # shadow grabber value
-                                    globals['diff_threshold'] = grabber.diff_threshold
-                                elif key == 'clear_threshold':
-                                    grabber.clear_threshold = cmds[key]
-                                    # shadow grabber value
-                                    globals['clear_threshold'] = grabber.clear_threshold
-                                elif key == 'use_arena':
-                                    grabber.use_arena = cmds[key]
-                                    globals['use_arena'] = grabber.use_arena
-                                
+                        self.handle_commands(cam_no,cmds)
+                            
                         # handle saving movie if needed
                         cmd=None
                         globals['record_status_lock'].acquire()
@@ -634,19 +485,14 @@ class App:
                             grabbed_frames[cam_no] = []
 
                     time.sleep(0.05)
-                    sys.stdout.write('M')
-                    sys.stdout.flush()
 
             finally:
-##                self.globals[cam_no]['cam_quit_event'].set() # make sure other threads close
                 self.main_brain_lock.acquire()
-                for cam_id in self.cam_id:
+                for cam_id in self.all_cam_ids:
                     self.main_brain.close(cam_id)
                 self.main_brain_lock.release()
                 for cam_no in range(self.num_cams):
                     self.globals[cam_no]['cam_quit_event'].set()                    
-##                    self.globals[cam_no]['grab_thread_done'].wait() # block until thread is done...
-##                    self.globals[cam_no]['listen_thread_done'].wait() # block until thread is done...
         except Pyro.errors.ConnectionClosedError:
             print 'unexpected connection closure...'
 

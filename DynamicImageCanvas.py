@@ -6,6 +6,7 @@ import math
 from wxPython.wx import *
 from wxPython.glcanvas import *
 from OpenGL.GL import *
+from numarray.ieeespecial import nan
 
 have_glue = False
 try:
@@ -257,11 +258,12 @@ class DynamicImageCanvas(wxGLCanvas):
                     glEnable(GL_TEXTURE_2D)
 
                     for pt in draw_points:
+                        if pt[2] == nan:
+                            # no orientation information
+                            continue
+
                         ox0 = pt[0]
                         oy0 = pt[1]
-
-                        if ox0 < 0:
-                            continue
 
                         angle_radians = math.pi/2 - pt[2]
                         r = 20.0

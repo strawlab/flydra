@@ -40,13 +40,10 @@
         <object class="wxBoxSizer">
           <orient>wxHORIZONTAL</orient>
           <object class="sizeritem">
-            <object class="wxStaticText">
-              <label>Calibration status:</label>
-            </object>
-          </object>
-          <object class="sizeritem">
-            <object class="wxStaticBitmap" name="CAL_STATUS_LIGHT">
-              <bitmap>redlight.png</bitmap>
+            <object class="wxCheckBox" name="CAL_STATUS_CHECK">
+              <label>Calibration loaded</label>
+              <checked>0</checked>
+              <enabled>0</enabled>
             </object>
           </object>
         </object>
@@ -341,7 +338,10 @@
               <object class="sizeritem">
                 <object class="wxCheckListBox" name="record_raw_cam_select_checklist">
                   <content>
-                    <item/></content>
+                    
+                    
+                    <item/>
+                  </content>
                 </object>
                 <option>1</option>
                 <flag>wxEXPAND</flag>

@@ -32,12 +32,10 @@ class Reconstructor:
         cam_ids = fd.read().split('\n')
         if cam_ids[-1] == '': del cam_ids[-1] # remove blank line
         N = len(cam_ids)
-        print 'cam_ids',cam_ids
         # load calibration matrices
         self.Pmat = {}
         for i, cam_id in enumerate(cam_ids):
             fname = Pmat_name%(i+1)
-            print "Loading %s from %s"%(cam_id,fname)
             self.Pmat[cam_id] = load_ascii_matrix(opj(calibration_dir,fname))
 
     def find3d(self,
@@ -57,6 +55,7 @@ class Reconstructor:
         return X
 
     def find2d(self,cam_id,X):
+        # see Hartley & Zisserman (2003) p. 449
         if len(X) == 3:
             X = nx.array([[X[0]], [X[1]], [X[2]], [1.0]])
         Pmat = self.Pmat[cam_id]

@@ -14,18 +14,13 @@ import numarray as nx
 
 import struct
 import math
-if struct.unpack('d','\x18-DT\xfb!\t\xc0')[0] == -math.pi:
-    # Special case for Intel P4 (at least)
-    # import numarray.ieeespecial causes weird floating point exception
-    nan = struct.unpack('d','\x00\x00\x00\x00\x00\x00\xf8\xff')[0]
-else:
-    from numarray.ieeespecial import nan
+from numarray.ieeespecial import nan
 
 Pyro.config.PYRO_MULTITHREADED = 0 # No multithreading!
 
-Pyro.config.PYRO_TRACELEVEL = 3
-Pyro.config.PYRO_USER_TRACELEVEL = 3
-Pyro.config.PYRO_DETAILED_TRACEBACK = 1
+Pyro.config.PYRO_TRACELEVEL = 1
+Pyro.config.PYRO_USER_TRACELEVEL = 1
+Pyro.config.PYRO_DETAILED_TRACEBACK = 0
 Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
 
 # globals:
@@ -38,16 +33,20 @@ calib_points = []
 realtime_coord_dict={}
 realtime_coord_dict_lock=threading.Lock()
 
-SAVE_2D_DATA = False
+SAVE_2D_DATA = True
 SAVE_2D_FMT = '<Bidddd'
 SAVE_2D_CAMS = 0
+SAVE_GLOBALS_LOCK = threading.Lock()
+SAVE_GLOBALS = {}
 save_2d_data_fd=open('raw_data.dat','wb')
 save_2d_data_lock=threading.Lock()
 
-SAVE_3D_DATA = False
+SAVE_3D_DATA = True
 SAVE_3D_FMT = '<iddd'
-save_3d_data={}#_fd=open('raw_data_3d.dat','wb')
-save_3d_data_lock=threading.Lock()
+save_3d_data1={}
+save_3d_data1_lock=threading.Lock()
+save_3d_data2={}
+save_3d_data2_lock=threading.Lock()
 
 fastest_realtime_data=None
 best_realtime_data=None
@@ -88,13 +87,21 @@ def get_best_realtime_data():
 
 def DEBUG():
     print 'line',sys._getframe().f_back.f_lineno,', thread', threading.currentThread()
+    #for t in threading.enumerate():
+    #    print '   ',t
 
 class CoordReceiver(threading.Thread):
     def __init__(self,cam_id,main_brain):
-        global SAVE_2D_CAMS
+        global SAVE_2D_CAMS, SAVE_GLOBALS, SAVE_GLOBALS_LOCK
         
         self.cam_id = cam_id
         self.hack_cam_no = SAVE_2D_CAMS
+        print self.cam_id,'assigned to hack_cam_no',self.hack_cam_no
+        SAVE_GLOBALS_LOCK.acquire()
+        SAVE_GLOBALS[self.cam_id]={}
+        SAVE_GLOBALS[self.cam_id]['cam_no']=self.hack_cam_no
+        SAVE_GLOBALS_LOCK.release()
+
         SAVE_2D_CAMS += 1
         self.main_brain = main_brain
         self.last_timestamp=-10.0
@@ -133,6 +140,7 @@ class CoordReceiver(threading.Thread):
     def run(self):
         global fastest_realtime_data, best_realtime_data
         global calib_IdMat, calib_points, calib_data_lock
+        global SAVE_2D_CAMS, SAVE_2D_DATA, SAVE_GLOBALS, SAVE_GLOBALS_LOCK
         
         header_fmt = '<dli'
         header_size = struct.calcsize(header_fmt)
@@ -151,11 +159,12 @@ class CoordReceiver(threading.Thread):
                 points.append( (x,y,slope) )
                 start=end
 
-            now = time.time()
-            latency = now-timestamp
-            print (' '*self.hack_cam_no*10)+('% 11.1f'%( (now*1000.0)%1000.0, ))+(' '*(SAVE_2D_CAMS-self.hack_cam_no)*10),
-            print '% 6.1f'%((timestamp*1000)%1000.0,),
-            print '% 6.1f'%((latency*1000)%1000.0,)
+            if 0:
+                now = time.time()
+                latency = now-timestamp
+                print (' '*self.hack_cam_no*10)+('% 11.1f'%( (now*1000.0)%1000.0, ))+(' '*(SAVE_2D_CAMS-self.hack_cam_no-1)*10),
+                print '% 6.1f'%((timestamp*1000)%1000.0,),
+                print '% 6.1f'%((latency*1000)%1000.0,)
             
 
             if framenumber==-1:
@@ -164,7 +173,13 @@ class CoordReceiver(threading.Thread):
             if timestamp-self.last_timestamp > RESET_FRAMENUMBER_DURATION:
                 self.framenumber_offset = framenumber
                 if self.last_timestamp != -10.0:
-                    print self.cam_id,'synchronized(?)'
+                    print self.cam_id,'synchronized'
+                    SAVE_GLOBALS_LOCK.acquire()
+                    SAVE_GLOBALS[self.cam_id]['frame0']=timestamp
+                    SAVE_GLOBALS_LOCK.release()
+                else:
+                    print self.cam_id,'first 2D coordinates received'
+
             self.last_timestamp=timestamp
             corrected_framenumber = framenumber-self.framenumber_offset
 
@@ -213,7 +228,12 @@ class CoordReceiver(threading.Thread):
                             d2[cam_id] = PT
                     if len(d2) >=2:
                         X = self.reconstructor.find3d(d2.items())
+                        find3d_time = time.time()
                         x,y,z=X
+                        if len(d2) == 2 and SAVE_3D_DATA:
+                            save_3d_data1_lock.acquire()
+                            save_3d_data1[corrected_framenumber]=x,y,z,find3d_time,2
+                            save_3d_data1_lock.release()
                         data_packet = struct.pack('<fff',x,y,z)
                         try:
                             projector_socket.sendto(data_packet,
@@ -223,7 +243,7 @@ class CoordReceiver(threading.Thread):
                             print x.__class__, x
                             print
                         fastest_realtime_data = X
-                        if cams_in_count == len(self.main_brain.camera_server):
+                        if cams_in_count == self.main_brain.get_num_cams():
                             best_realtime_data = X
                             try:
                                 projector_socket.sendto(data_packet,
@@ -234,13 +254,13 @@ class CoordReceiver(threading.Thread):
                                 print
                             
                         if SAVE_3D_DATA:
-                            save_3d_data_lock.acquire()
-                            save_3d_data[corrected_framenumber]=x,y,z
-                            save_3d_data_lock.release()
+                            save_3d_data2_lock.acquire()
+                            save_3d_data2[corrected_framenumber]=x,y,z,find3d_time,len(d2)
+                            save_3d_data2_lock.release()
                             
                 # save calibration data -=-=-=-=-=-=-=-=
                 if self.main_brain.currently_calibrating.isSet():
-                    if len(data_dict) == len(self.main_brain.camera_server):
+                    if len(data_dict) == self.main_brain.get_num_cams():
                         k = data_dict.keys()
                         k.sort()
                         ids = []
@@ -267,33 +287,6 @@ class CoordReceiver(threading.Thread):
             cam_dict['points']=points
             cam_dict['lock'].release()
         UDP_ports.remove( self.port )
-
-class LockProxy:
-    def __init__(self):
-        self.count = 0
-        self.lock = threading.Lock()
-    
-    def acquire(self):
-        self.count +=1
-        print 'ACQUIRE vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv'
-        print 'count',self.count
-        print 'line',sys._getframe().f_back.f_lineno
-        print 'thread', threading.currentThread()
-        print '========='
-        res = self.lock.acquire()
-        print '          acquired ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^'
-        return res
-
-    def release(self):
-        self.count -=1
-        print 'RELEASE xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-        print 'count',self.count
-        print 'line',sys._getframe().f_back.f_lineno
-        print 'thread', threading.currentThread()
-        print '========='
-        res = self.lock.release()
-        print '          released ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
-        return res
 
 class MainBrain:
     """Handle all camera network stuff and interact with application"""
@@ -373,6 +366,12 @@ class MainBrain:
             cam_lock = cam['lock']
             cam_lock.acquire()
             cam['commands'].setdefault('set',{})[property_name]=value
+            old_value = cam['scalar_control_info'][property_name]
+            if type(old_value) == tuple and type(value) == int:
+                # brightness, gain, shutter
+                cam['scalar_control_info'][property_name] = (value, old_value[1], old_value[2])
+            else:
+                cam['scalar_control_info'][property_name] = value
             cam_lock.release()
             self.cam_info_lock.release()
 
@@ -385,30 +384,30 @@ class MainBrain:
             cam_lock.release()
             self.cam_info_lock.release()            
 
-        def external_send_roi( self, cam_id, l,b,r,t):
+        def external_start_recording( self, cam_id, filename):
             self.cam_info_lock.acquire()            
             cam = self.cam_info[cam_id]
             cam_lock = cam['lock']
             cam_lock.acquire()
-            cam['commands']['roi']=l,b,r,t
+            cam['commands']['start_recording']=filename
             cam_lock.release()
             self.cam_info_lock.release()
 
-        def external_set_diff_threshold( self, cam_id, value):
+        def external_stop_recording( self, cam_id):
             self.cam_info_lock.acquire()            
             cam = self.cam_info[cam_id]
             cam_lock = cam['lock']
             cam_lock.acquire()
-            cam['commands']['diff_threshold']=value
+            cam['commands']['stop_recording']=None
             cam_lock.release()
             self.cam_info_lock.release()
 
-        def external_set_clear_threshold( self, cam_id, value):
+        def external_quit( self, cam_id):
             self.cam_info_lock.acquire()            
             cam = self.cam_info[cam_id]
             cam_lock = cam['lock']
             cam_lock.acquire()
-            cam['commands']['clear_threshold']=value
+            cam['commands']['quit']=True
             cam_lock.release()
             self.cam_info_lock.release()
 
@@ -418,6 +417,42 @@ class MainBrain:
             cam_lock = cam['lock']
             cam_lock.acquire()
             cam['commands']['use_arena']=value
+            cam_lock.release()
+            self.cam_info_lock.release()
+
+        def external_find_r_center( self, cam_id):
+            self.cam_info_lock.acquire()            
+            cam = self.cam_info[cam_id]
+            cam_lock = cam['lock']
+            cam_lock.acquire()
+            cam['commands']['find_r_center']=None
+            cam_lock.release()
+            self.cam_info_lock.release()
+
+        def external_collect_background( self, cam_id):
+            self.cam_info_lock.acquire()            
+            cam = self.cam_info[cam_id]
+            cam_lock = cam['lock']
+            cam_lock.acquire()
+            cam['commands']['collect_bg']=None
+            cam_lock.release()
+            self.cam_info_lock.release()
+
+        def external_clear_background( self, cam_id):
+            self.cam_info_lock.acquire()            
+            cam = self.cam_info[cam_id]
+            cam_lock = cam['lock']
+            cam_lock.acquire()
+            cam['commands']['clear_bg']=None
+            cam_lock.release()
+            self.cam_info_lock.release()
+
+        def external_set_debug( self, cam_id, value):
+            self.cam_info_lock.acquire()            
+            cam = self.cam_info[cam_id]
+            cam_lock = cam['lock']
+            cam_lock.acquire()
+            cam['commands']['debug']=value
             cam_lock.release()
             self.cam_info_lock.release()
 
@@ -468,7 +503,6 @@ class MainBrain:
             self.cam_info[cam_id] = {'commands':{}, # command queue for cam
                                      'lock':threading.Lock(), # prevent concurrent access
                                      'image':None,  # most recent image from cam
-                                     'num_image_puts':0,
                                      'fps':None,    # most recept fps from cam
                                      'points':[], # 2D image points
                                      'caller':caller,    # most recept fps from cam
@@ -564,63 +598,83 @@ class MainBrain:
         self._new_camera_functions = []
         self._old_camera_functions = []
 
-        self.camera_server = {} # dict of Pyro servers for each camera
         self.last_requested_image = {}
         self.pending_requests = {}
         self.last_set_param_time = {}
-        self.set_new_camera_callback(self.AddCameraServer)
-        self.set_old_camera_callback(self.RemoveCameraServer)
         
+        self.num_cams = 0
+        self.set_new_camera_callback(self.IncreaseCamCounter)
+        self.set_old_camera_callback(self.DecreaseCamCounter)
         self.currently_calibrating = threading.Event()
 
-    def Save3dData(self,filename='raw_data_3d.dat'):
-        fd=open('raw_data_3d.dat','wb')
-        save_3d_data_lock.acquire()
-        dd=save_3d_data.copy()
-        save_3d_data_lock.release()
-        keys=dd.keys()
-        keys.sort()
-        for k in keys:
-            fd.write('%d %f %f %f\n'%(k,dd[k][0],dd[k][1],dd[k][2]))
+    def IncreaseCamCounter(self,*args):
+        print 'new camera:',args
+        self.num_cams += 1
+
+    def DecreaseCamCounter(self,*args):
+        print 'old camera:',args
+        self.num_cams -= 1
+
+    def get_num_cams(self):
+        return self.num_cams
+
+    def get_widthheight(self, cam_id):
+        sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+        w = sci['width']
+        h = sci['height']
+        return w,h
+
+    def get_roi(self, cam_id):
+        sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+        lbrt = sci['roi']
+        return lbrt
+
+    def get_all_params(self):
+        cam_ids = self.remote_api.external_get_cam_ids()
+        all = {}
+        for cam_id in cam_ids:
+            sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+            all[cam_id] = sci
+        return all
+
+    def Save3dData(self,fast_filename='raw_data_3d_fast.dat',best_filename='raw_data_3d_best.dat'):
+        for typ in ['fast','best']:
+            if typ == 'fast':
+                fname = fast_filename
+                lock = save_3d_data1_lock
+                dikt = save_3d_data1
+            elif typ == 'best':
+                fname = best_filename
+                lock = save_3d_data2_lock
+                dikt = save_3d_data2
+            fullpath = os.path.abspath(fname)
+            print 'saving %s 3d data to "%s"...'%(typ,fullpath)
+            fd=open(fname,'wb')
+            lock.acquire()
+            dd=dikt.copy()
+            lock.release()
+
+            keys=dd.keys()
+            keys.sort()
+            for k in keys:
+                fd.write('%d %s\n'%(k,' '.join(map( str, dd[k]))))
+            fd.close()
+            print '  done'
+
+    def SaveGlobals(self,filename='camera_data.dat'):
+        fullpath = os.path.abspath(filename)
+        print 'saving globals to',fullpath
+        fd=open(filename,'wb')
+        SAVE_GLOBALS_LOCK.acquire()
+        dd=SAVE_GLOBALS.copy()
+        SAVE_GLOBALS_LOCK.release()
+        cam_ids=dd.keys()
+        cam_ids.sort()
+        for cam_id in cam_ids:
+            fd.write('%s %d %s\n'%(cam_id,SAVE_GLOBALS[cam_id]['cam_no'],
+                                   repr(SAVE_GLOBALS[cam_id]['frame0'])))
         fd.close()
-
-    def AddCameraServer(self, cam_id, scalar_control_info,fqdnport):
-        fqdn, port = fqdnport
-        name = 'camera_server'
-        
-        camera_server_URI = "PYROLOC://%s:%d/%s" % (fqdn,port,name)
-        print '  connecting to',camera_server_URI,'at',time.strftime("%a, %d %b %Y %H:%M:%S",time.localtime())
-        camera_server = Pyro.core.getProxyForURI(camera_server_URI)
-        camera_server._setOneway(['send_most_recent_frame',
-                                  'quit',
-                                  'set_camera_property',
-                                  'start_debug',
-                                  'stop_debug',
-                                  'find_r_center',
-                                  'collect_background',
-                                  'clear_background',
-                                  ])
-        self.camera_server[cam_id] = camera_server
-
-        class test_connection(threading.Thread):
-            def __init__(self,func,args):
-                self.func = func
-                self.args = args
-                name = 'test_connection %s'%cam_id
-                threading.Thread.__init__(self,name=name)
-
-            def run(self):
-                time.sleep(0.1) # give server a chance to get going
-                print '    testing camera server connection...'
-                self.func(*self.args)
-                print '    camera server OK'
-                
-        t=test_connection(
-            self.camera_server[cam_id].no_op,())
-        t.start()
-    
-    def RemoveCameraServer(self, cam_id):
-        del self.camera_server[cam_id]
+        print 'globals saved'
 
     def start_listening(self):
         # start listen thread
@@ -663,7 +717,7 @@ class MainBrain:
 
         IdMat = nx.transpose(IdMat)
         points = nx.transpose(points)
-        print 'saving to',self.calib_dir
+        print 'saving %d points to %s'%(len(points),self.calib_dir)
         save_ascii_matrix(os.path.join(self.calib_dir,'IdMat.dat'),IdMat)
         save_ascii_matrix(os.path.join(self.calib_dir,'points.dat'),points)
         cam_ids = self.remote_api.external_get_cam_ids()
@@ -698,37 +752,22 @@ class MainBrain:
         return self.remote_api.external_get_image_fps_points(cam_id)
 
     def close_camera(self,cam_id):
-        self.camera_server[cam_id].quit()
-
-    def set_diff_threshold(self, cam_id, value):
-        self.remote_api.external_set_diff_threshold( cam_id, value)
-
-    def get_diff_threshold(self, cam_id):
-        return self.camera_server[cam_id].get_diff_threshold()
-
-    def set_clear_threshold(self, cam_id, value):
-        self.remote_api.external_set_clear_threshold( cam_id, value)
-
-    def get_clear_threshold(self, cam_id):
-        return self.camera_server[cam_id].get_clear_threshold()
+        self.remote_api.external_quit( cam_id )
 
     def set_use_arena(self, cam_id, value):
         self.remote_api.external_set_use_arena( cam_id, value)
 
     def set_debug_mode(self, cam_id, value):
-        if value:
-            self.camera_server[cam_id].start_debug()
-        else:
-            self.camera_server[cam_id].stop_debug()
+        self.remote_api.external_set_debug( cam_id, value)
 
     def collect_background(self,cam_id):
-        self.camera_server[cam_id].collect_background()
+        self.remote_api.external_collect_background(cam_id)
 
     def clear_background(self,cam_id):
-        self.camera_server[cam_id].clear_background()
+        self.remote_api.external_clear_background(cam_id)
 
     def find_r_center(self,cam_id):
-        self.camera_server[cam_id].find_r_center()
+        self.remote_api.external_find_r_center(cam_id)
 
     def send_set_camera_property(self, cam_id, property_name, value):
         self.remote_api.external_send_set_camera_property( cam_id, property_name, value)
@@ -736,23 +775,11 @@ class MainBrain:
     def request_image_async(self, cam_id):
         self.remote_api.external_request_image_async(cam_id)
 
-    def send_roi(self,cam_id,l,b,r,t):
-        self.remote_api.external_send_roi( cam_id, l,b,r,t)
-
-    def get_image_sync(self, cam_id):
-        return self.camera_server[cam_id].get_most_recent_frame()
-
-    def get_roi(self, cam_id):
-        return self.camera_server[cam_id].get_roi()
-
-    def get_widthheight(self, cam_id):
-        return self.camera_server[cam_id].get_widthheight()
-
     def start_recording(self, cam_id,filename):
-        return self.camera_server[cam_id].start_recording(filename)
+        self.remote_api.external_start_recording( cam_id, filename)
 
     def stop_recording(self, cam_id):
-        return self.camera_server[cam_id].stop_recording()
+        self.remote_api.external_stop_recording( cam_id)
 
     def quit(self):
         # XXX ----- non-isolated calls to remote_api being done ----

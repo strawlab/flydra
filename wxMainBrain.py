@@ -14,10 +14,6 @@ from wxPython.lib.scrolledpanel import wxScrolledPanel
 from wxPython.xrc import *
 import ErrorDialog
 
-# TODO
-#
-# Add is_synchronized indicator on each camera panel
-
 RESDIR = os.path.split(os.path.abspath(sys.argv[0]))[0]
 RESFILE = os.path.join(RESDIR,'flydra_server.xrc')
 hydra_image_file = os.path.join(RESDIR,'hydra.gif')
@@ -37,13 +33,25 @@ class App(wxApp):
         #   File
         filemenu = wxMenu()
         
+        ID_open_cam_config = wxNewId()
+        filemenu.Append(ID_open_cam_config, "Open Camera Configuration...\tCtrl-O")
+        EVT_MENU(self, ID_open_cam_config, self.OnOpenCamConfig)
+        
+        ID_save_cam_config = wxNewId()
+        filemenu.Append(ID_save_cam_config, "Save Camera Configuration...\tCtrl-S")
+        EVT_MENU(self, ID_save_cam_config, self.OnSaveCamConfig)
+
+        filemenu.AppendItem(wxMenuItem(kind=wxITEM_SEPARATOR))
+        
         ID_start_calibration = wxNewId()
         filemenu.Append(ID_start_calibration, "Start calibration...", "Start saving calibration points")
         EVT_MENU(self, ID_start_calibration, self.OnStartCalibration)
         
         ID_save_3d_data = wxNewId()
-        filemenu.Append(ID_save_3d_data, "Save 3D data...", "Start saving calibration points")
+        filemenu.Append(ID_save_3d_data, "Save 3D data...", "Saving all previously acquired 3d points")
         EVT_MENU(self, ID_save_3d_data, self.OnSave3dData)
+        
+        filemenu.AppendItem(wxMenuItem(kind=wxITEM_SEPARATOR))
         
         ID_quit = wxNewId()
         filemenu.Append(ID_quit, "Quit\tCtrl-Q", "Quit application")
@@ -186,63 +194,66 @@ class App(wxApp):
         scalar_control_info=self.cameras[cam_id]['scalar_control_info']
         
         # add self to WX
-        PreviewPerCamPanel = RES.LoadPanel(self.preview_per_cam_scrolled_container,
+        previewPerCamPanel = RES.LoadPanel(self.preview_per_cam_scrolled_container,
                                            "preview_per_cam_panel")
         acp_box = self.preview_per_cam_scrolled_container.GetSizer()
         all_cams = self.cameras.keys()
         all_cams.sort()
         cam_number = all_cams.index(cam_id)
-        acp_box.Insert(cam_number,PreviewPerCamPanel,1,wxEXPAND | wxALL,border=3)
+        acp_box.Insert(cam_number,previewPerCamPanel,1,wxEXPAND | wxALL,border=3)
 
         # set staticbox label
-        box = PreviewPerCamPanel.GetSizer()
+        box = previewPerCamPanel.GetSizer()
         static_box = box.GetStaticBox()
         static_box.SetLabel( cam_id )
 
-        collect_background = XRCCTRL(PreviewPerCamPanel,"collect_background")
+        collect_background = XRCCTRL(previewPerCamPanel,"collect_background")
         EVT_BUTTON(collect_background, collect_background.GetId(),
                    self.OnCollectBackground)
         
-        clear_background = XRCCTRL(PreviewPerCamPanel,"clear_background")
+        clear_background = XRCCTRL(previewPerCamPanel,"clear_background")
         EVT_BUTTON(clear_background, clear_background.GetId(),
                    self.OnClearBackground)
         
-        find_Rcenter = XRCCTRL(PreviewPerCamPanel,"find_Rcenter")
+        find_Rcenter = XRCCTRL(previewPerCamPanel,"find_Rcenter")
         EVT_BUTTON(find_Rcenter, find_Rcenter.GetId(),
                    self.OnFindRCenter)
         
-        set_roi = XRCCTRL(PreviewPerCamPanel,"set_roi")
+        set_roi = XRCCTRL(previewPerCamPanel,"set_roi")
         EVT_BUTTON(set_roi, set_roi.GetId(), self.OnSetROI)
 
-        quit_camera = XRCCTRL(PreviewPerCamPanel,"quit_camera")
+        quit_camera = XRCCTRL(previewPerCamPanel,"quit_camera")
         EVT_BUTTON(quit_camera, quit_camera.GetId(), self.OnCloseCamera)
 
-        threshold_value = XRCCTRL(PreviewPerCamPanel,"threshold_value")
-        val = scalar_control_info['initial_diff_threshold']
+        threshold_value = XRCCTRL(previewPerCamPanel,"threshold_value")
+        val = scalar_control_info['diff_threshold']
         threshold_value.SetValue( str( val ) )
         EVT_TEXT(threshold_value, threshold_value.GetId(), self.OnSetCameraThreshold)
 
-        threshold_clear_value = XRCCTRL(PreviewPerCamPanel,"threshold_clear_value")
-        val = scalar_control_info['initial_clear_threshold']
+        threshold_clear_value = XRCCTRL(previewPerCamPanel,"threshold_clear_value")
+        val = scalar_control_info['clear_threshold']
         threshold_clear_value.SetValue( str( val ) )
         EVT_TEXT(threshold_clear_value, threshold_clear_value.GetId(),
                  self.OnSetCameraClearThreshold)
 
-        arena_control = XRCCTRL(PreviewPerCamPanel,
+        arena_control = XRCCTRL(previewPerCamPanel,
                              "ARENA_CONTROL")
         EVT_CHECKBOX(arena_control, arena_control.GetId(), self.OnArenaControl)
         
-        debug_mode = XRCCTRL(PreviewPerCamPanel,
+        debug_mode = XRCCTRL(previewPerCamPanel,
                              "debug_mode")
         EVT_CHECKBOX(debug_mode, debug_mode.GetId(), self.OnDebugMode)
         
-        per_cam_controls_panel = XRCCTRL(PreviewPerCamPanel,
+        per_cam_controls_panel = XRCCTRL(previewPerCamPanel,
                                          "PerCameraControlsContainer")
         grid = wxFlexGridSizer(0,3,0,0) # 3 columns
         grid.AddGrowableCol(2)
 
-        for param in scalar_control_info.keys():
-            if param in ['initial_diff_threshold','initial_clear_threshold']:
+        params = scalar_control_info.keys()
+        params.sort()
+        params.reverse()
+        for param in params:
+            if param not in ['shutter','gain','brightness']:
                 continue
             current_value, min_value, max_value = scalar_control_info[param]
             grid.Add( wxStaticText(per_cam_controls_panel,wxNewId(),param),
@@ -267,7 +278,7 @@ class App(wxApp):
                     self.slider=slider
                     self.main_brain=main_brain
                     self.label_if_shutter=label_if_shutter
-                def change_param(self, value):
+                def update(self, value):
                     self.main_brain.send_set_camera_property(
                         self.cam_id,self.name,value)
                     if self.label_if_shutter is not None:
@@ -277,7 +288,7 @@ class App(wxApp):
                 def onScroll(self, event):
                     current_value = self.slider.GetValue()
                     self.txtctrl.SetValue(str(current_value))
-                    self.change_param(current_value)
+                    self.update(current_value)
                 def onText(self, event):
                     val = self.txtctrl.GetValue()
                     if val == '':
@@ -286,10 +297,14 @@ class App(wxApp):
                     if (current_value >= self.slider.GetMin() and
                         current_value <= self.slider.GetMax()):
                         self.slider.SetValue(current_value)
-                        self.change_param(current_value)
+                        self.update(current_value)
+                def external_set(self,new_value):
+                    self.slider.SetValue(new_value)
+                    self.txtctrl.SetValue(str(new_value))
+                    self.update(new_value)
 
             if param.lower() == 'shutter':
-                label_if_shutter = XRCCTRL(PreviewPerCamPanel,
+                label_if_shutter = XRCCTRL(previewPerCamPanel,
                                            'exposure_label') # get label
                 label_if_shutter.SetLabel(
                     'Exposure (msec): %.3f'%(current_value*0.02,))
@@ -299,16 +314,31 @@ class App(wxApp):
                                     self.main_brain,label_if_shutter)
             EVT_COMMAND_SCROLL(slider, slider.GetId(), psh.onScroll)
             EVT_TEXT(txtctrl, txtctrl.GetId(), psh.onText)
+            self.cameras[cam_id]['sliderHelper_%s'%param]=psh
       
         per_cam_controls_panel.SetSizer(grid)
         self.preview_per_cam_scrolled_container.Layout()
-        self.cameras[cam_id]['PreviewPerCamPanel']=PreviewPerCamPanel
+        self.cameras[cam_id]['previewPerCamPanel']=previewPerCamPanel
         self.cam_preview_panel.Layout()
+
+    def PreviewPerCamUpdateSetting(self,cam_id,property_name,value):
+        previewPerCamPanel=self.cameras[cam_id]['previewPerCamPanel']
+        param = property_name
+        if param in ['shutter','gain','brightness']:
+            current_value, min_value, max_value = value
+            psh = self.cameras[cam_id]['sliderHelper_%s'%param]
+            psh.external_set(current_value)
+        elif param == 'clear_threshold':
+            threshold_clear_value = XRCCTRL(previewPerCamPanel,"threshold_clear_value")
+            threshold_clear_value.SetValue( str( value ) )
+        elif param == 'diff_threshold':
+            threshold_diff_value = XRCCTRL(previewPerCamPanel,"threshold_value")
+            threshold_diff_value.SetValue( str( value ) )
         
     def PreviewPerCamClose(self,cam_id):
-        PreviewPerCamPanel=self.cameras[cam_id]['PreviewPerCamPanel']
-        PreviewPerCamPanel.DestroyChildren()
-        PreviewPerCamPanel.Destroy()
+        previewPerCamPanel=self.cameras[cam_id]['previewPerCamPanel']
+        previewPerCamPanel.DestroyChildren()
+        previewPerCamPanel.Destroy()
 
     def InitSnapshotPanel(self):
         snapshot_cam_choice = XRCCTRL(self.snapshot_panel,
@@ -478,10 +508,11 @@ class App(wxApp):
             dlg.Destroy()
         if doit:
             self.main_brain.load_calibration(calib_dir)
-            cal_status_light = XRCCTRL(self.tracking_panel,
-                                       "CAL_STATUS_LIGHT")
-            Img = wx.Image('greenlight.png', wxBITMAP_TYPE_PNG)
-            cal_status_light.SetBitmap(wx.BitmapFromImage(Img))
+            cal_status_check = XRCCTRL(self.tracking_panel,
+                                       "CAL_STATUS_CHECK")
+            cal_status_check.Enable(True)
+            cal_status_check.SetValue(True)
+            cal_status_check.Enable(False)
 
     def OnSnapshot(self,event):
         snapshot_cam_choice = XRCCTRL(self.snapshot_panel,
@@ -489,9 +520,11 @@ class App(wxApp):
         cam_id = snapshot_cam_choice.GetStringSelection()
         if cam_id == '':
             return
-        frame, points = self.main_brain.get_image_sync(cam_id)
-        height = frame.shape[0]
-        self.plotpanel.set_image(frame)
+        image, show_fps, points = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
+        if image is None:
+            return
+        height = image.shape[0]
+        self.plotpanel.set_image(image)
         self.plotpanel.set_points(points)
         self.plotpanel.draw()
             
@@ -518,7 +551,9 @@ class App(wxApp):
         dlg_ok = XRCCTRL(dlg,"ROI_OK")
         dlg_cam_id = XRCCTRL(dlg,"ROI_cam_id")
         dlg_cam_id.SetLabel(cam_id)
-        
+
+        # XXX
+        #lbrt = 0,0,655,490
         lbrt = self.main_brain.get_roi(cam_id)
         width, height = self.main_brain.get_widthheight(cam_id)
         
@@ -542,7 +577,8 @@ class App(wxApp):
                 lbrt = l,b,r,t
                 if l >= r or b >= t or r >= width or t >= height:
                     raise ValueError("ROI dimensions not possible")
-                self.main_brain.send_roi(cam_id,*lbrt)
+                self.main_brain.send_set_camera_property(cam_id,'roi',lbrt)
+                #self.main_brain.send_roi(cam_id,*lbrt)
                 self.cam_image_canvas.set_lbrt(cam_id,lbrt)
         finally:
             dlg.Destroy()
@@ -558,12 +594,65 @@ class App(wxApp):
 
     def OnSave3dData(self, event):
         self.main_brain.Save3dData()
+        self.main_brain.SaveGlobals('camera_data.dat')
+
+    def OnOpenCamConfig(self, event):
+        doit=False
+        dlg = wxFileDialog( self.frame, "Select file from which to open camera config data",
+                            style = wxDD_DEFAULT_STYLE,
+                            defaultDir = os.environ.get('HOME',''),
+                            defaultFile = 'flydra_cameras.cfg',
+                            wildcard = '*.cfg',
+                            )
+        try:
+            if dlg.ShowModal() == wxID_OK:
+                open_filename = dlg.GetPath()
+                doit = True
+        finally:
+            dlg.Destroy()
+        if doit:
+            fd = open(open_filename,'rb')
+            buf = fd.read()
+            all_params = eval(buf)
+            try:
+                for cam_id, params in all_params.iteritems():
+                    for property_name, value in params.iteritems():
+                        self.main_brain.send_set_camera_property(cam_id,property_name,value)
+                        self.PreviewPerCamUpdateSetting(cam_id,property_name,value)
+            except KeyError,x:
+                dlg2 = wxMessageDialog( self.frame, 'Error opening configuration data:\n'\
+                                        '%s: %s'%(x.__class__,x),
+                                        'Error', wxOK | wxICON_ERROR )
+                try:
+                    dlg2.ShowModal()
+                finally:
+                    dlg2.Destroy()
+                    
+    def OnSaveCamConfig(self, event):
+        all_params = self.main_brain.get_all_params()
+        doit=False
+        dlg = wxFileDialog( self.frame, "Select file to save camera config data",
+                            style = wxDD_DEFAULT_STYLE,
+                            defaultDir = os.environ.get('HOME',''),
+                            defaultFile = 'flydra_cameras.cfg',
+                            wildcard = '*.cfg',
+                            )
+        try:
+            if dlg.ShowModal() == wxID_OK:
+                save_filename = dlg.GetPath()
+                doit = True
+        finally:
+            dlg.Destroy()
+        if doit:
+            fd = open(save_filename,'wb')
+            fd.write(repr(all_params))
+            fd.close()
         
     def OnStartCalibration(self, event):
         doit = False
         dlg = wxDirDialog( self.frame, "Calibration save directory",
                            style = wxDD_DEFAULT_STYLE | wxDD_NEW_DIR_BUTTON,
-                           defaultPath = os.environ.get('HOME','')
+                           defaultPath = os.environ.get('HOME',''),
                            )
         try:
             if dlg.ShowModal() == wxID_OK:
@@ -589,27 +678,28 @@ class App(wxApp):
         if not hasattr(self,'main_brain'):
             return # quitting
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc
-        if self.current_page in ['tracking','preview']:
+        if self.current_page in ['tracking','preview','snapshot']:
             data3d=MainBrain.get_best_realtime_data()
             if data3d is not None:
                 if self.current_page == 'tracking':
                     XRCCTRL(self.tracking_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
                     XRCCTRL(self.tracking_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
                     XRCCTRL(self.tracking_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
-                else: # self.current_page == 'preview'
+                elif self.current_page == 'preview':
                     r=self.main_brain.reconstructor
                     for cam_id in self.cameras.keys():
                         pt=r.find2d(cam_id,data3d)
                         self.cam_image_canvas.set_reconstructed_points(cam_id,[pt])
-            if self.current_page == 'preview':
+            if self.current_page in ['preview','snapshot']:
                 for cam_id in self.cameras.keys():
                     self.main_brain.request_image_async(cam_id)
-
+            if self.current_page == 'preview':
+                for cam_id in self.cameras.keys():
                     cam = self.cameras[cam_id]
-                    if not cam.has_key('PreviewPerCamPanel'):
+                    if not cam.has_key('previewPerCamPanel'):
                         # not added yet
                         continue
-                    PreviewPerCamPanel = cam['PreviewPerCamPanel']
+                    previewPerCamPanel = cam['previewPerCamPanel']
                     image = None
                     show_fps = None
                     try:
@@ -620,7 +710,7 @@ class App(wxApp):
                     if image is not None:
                         self.cam_image_canvas.update_image(cam_id,image)
                     if show_fps is not None:
-                        show_fps_label = XRCCTRL(PreviewPerCamPanel,'acquired_fps_label') # get container
+                        show_fps_label = XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
                         show_fps_label.SetLabel('fps: %.1f'%show_fps)
                     self.cam_image_canvas.set_draw_points(cam_id,points)
 
@@ -628,10 +718,6 @@ class App(wxApp):
 
                 if isinstance(event,wxIdleEventPtr):
                     event.RequestMore()
-                
-        else:
-            # do other stuff
-            pass
             
     def OnNewCamera(self, cam_id, scalar_control_info, fqdnport):
         # bookkeeping
@@ -670,14 +756,14 @@ class App(wxApp):
         value = event.GetString()
         if value:
             value = float(value)
-            self.main_brain.set_diff_threshold(cam_id,value)
+            self.main_brain.send_set_camera_property(cam_id,'diff_threshold',value)
 
     def OnSetCameraClearThreshold(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         value = event.GetString()
         if value:
             value = float(value)
-            self.main_brain.set_clear_threshold(cam_id,value)
+            self.main_brain.send_set_camera_property(cam_id,'clear_threshold',value)
 
     def OnArenaControl(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
@@ -719,7 +805,6 @@ def main():
         # hand control to GUI
         app.MainLoop()
         del app
-
     finally:
         # stop main_brain server
         main_brain.quit()
