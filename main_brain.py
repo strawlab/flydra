@@ -21,7 +21,7 @@ RES = wxXmlResource(RESFILE)
 class App(wxApp):
     def OnInit(self,*args,**kw):
         wxInitAllImageHandlers()
-        frame = wxFrame(None, -1, "Flydra Main Brain",size=(1100,750))
+        frame = wxFrame(None, -1, "Flydra Main Brain",size=(600,725))
 
         # statusbar ----------------------------------
         self.statusbar = frame.CreateStatusBar()

@@ -77,17 +77,17 @@ cdef void _fit_params( float *x0, float *y0, float *slope,
         CHK( ipp.ippiGetSpatialMoment_64f( pState, 1, 1, 0, roi_offset, &Mu11 ) )
 
         slope[0] = (Mu00*Mu20 - Mu10*Mu10)
-        print 'denom',slope[0]
+#        print 'denom',slope[0]
         if slope[0] == 0.0:
             slope[0] = 9999
             # I'm not importing math.h just to get the INFINITY constant
             # besides, I've never had this case occur, and I've tried!
         else:
-            print 'num',(Mu00*Mu11 - Mu10*Mu01)
+#            print 'num',(Mu00*Mu11 - Mu10*Mu01)
             slope[0] = (Mu00*Mu11 - Mu10*Mu01) / slope[0]
 
             if abs( slope[0] ) > 1:
-                print 'inverting',slope[0]
+#                print 'inverting',slope[0]
                 # equations possibly ill-conditioned; calculate inversely
                 CHK( ipp.ippiGetSpatialMoment_64f( pState, 0, 2, 0, roi_offset, &Mu02 ) )
                 slope[0] = (Mu00*Mu02 - Mu01*Mu01)
