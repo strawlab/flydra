@@ -234,9 +234,9 @@ cdef class GrabClass:
                 CHK( ipp.ippiMaxIndx_8u_C1R(
                     (im2 + self.bottom*im2_step + self.left), im2_step,
                     roi_sz, &max_val, &index_x,&index_y))
-                CHK( ipp.ippiSqr_8u_C1IRSfs(
-                    (im2 + self.bottom*im2_step + self.left), im2_step,
-                    roi_sz, 4 ))
+#                CHK( ipp.ippiSqr_8u_C1IRSfs(
+#                    (im2 + self.bottom*im2_step + self.left), im2_step,
+#                    roi_sz, 4 ))
                 
                 if max_val < self.diff_threshold:
                     x0=-1
@@ -249,6 +249,7 @@ cdef class GrabClass:
                                 roi_sz.width, roi_sz.height,
                                 (im2 + self.bottom*im2_step + self.left), im2_step )
                     # note that x0 and y0 are now relative to the ROI origin
+                    orientation = orientation + 1.571
 
                 #print 'max_val %f (% 8.1f,% 8.1f)'%(max_val,x0,y0)
                 

@@ -8,7 +8,7 @@
 
 #define CLOSED_LOOP 0
 #define OPEN_LOOP 1
-#define ARENA_CONTROL CLOSED_LOOP
+#define ARENA_CONTROL OPEN_LOOP
 
 #if ARENA_CONTROL == OPEN_LOOP
   #define ARENA_PATTERN 1
@@ -92,7 +92,7 @@ long arena_initialize( void )
   cmd[0] = 5; cmd[1] = 128;
   /* gain,bias as percentages, in 2s complement (x=x; -x=256-x) */
   cmd[2] = 0; cmd[3] = 226; /* x gain, bias */
-  cmd[4] = 0; cmd[5] = 0; /* y gain, bias */
+  cmd[4] = 0; cmd[5] = 15; /* y gain, bias */
   sc_send_cmd( &serial_port, cmd, 6 );
 
   /* start pattern */

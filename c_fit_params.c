@@ -114,6 +114,20 @@ int fit_params( double *x0, double *y0, double *orientation,
     *y0 = -1;
   }
 
+  /* square image for orientation calculation *
+  if( !CHK( ippiSqr_C1IRSfs( (Ipp8u*)(img + bottom*img_step + left), img_step, roi_size, 4 ) ) )
+  {
+    printf( "failed squaring image\n" );
+    return 60;
+  }
+
+  /* get moments *
+  if( !CHK( ippiMoments64f_8u_C1R( (Ipp8u*)(img + bottom*img_step + left), img_step, roi_size, pState ) ) )
+  {
+    printf( "failed calculating moments 2\n" );
+    return 61;
+  }
+
   /* calculate blob orientation from central moments */
   if( !CHK( ippiGetCentralMoment_64f( pState, 1, 1, 0, (Ipp64f*)&Uu11 ) ) )
   {
