@@ -17,7 +17,7 @@ except ImportError, x:
         print 'WARNING: IPP not loaded, proceeding without it'
         import realtime_image_analysis_noipp as realtime_image_analysis
     else:
-        raise x
+        raise
 
 if sys.platform == 'win32':
     time_func = time.clock

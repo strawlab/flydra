@@ -23,6 +23,7 @@ cimport arena_control
 cdef extern from "c_fit_params.h":
 
     int fit_params( ipp.IppiMomentState_64f *pState, double *x0, double *y0,
+                    double *Mu00,
                     double *Uu11, double *Uu20, double *Uu02,
                     int width, int height, unsigned char *img, int img_step )
 
@@ -188,7 +189,7 @@ cdef class RealtimeAnalyzer:
         cdef double evalA, evalB
         cdef double evecA1, evecB1
         
-        cdef double Uu11, Uu02, Uu20
+        cdef double Mu00, Uu11, Uu02, Uu20
         cdef int i
         cdef int result, eigen_err
         
@@ -245,12 +246,14 @@ cdef class RealtimeAnalyzer:
             y0=-1
         else:
             result = fit_params( self.pState, &x0, &y0,
+                                 &Mu00,
                                  &Uu11, &Uu20, &Uu02,
                                  self._roi_sz.width, self._roi_sz.height,
                                  (self.im2 + self._bottom*self.im2_step + self._left),
                                  self.im2_step )
             # note that x0 and y0 are now relative to the ROI origin
             if result == 0:
+                area = Mu00
                 eigen_err = eigen_2x2_real( Uu20, Uu11,
                                             Uu11, Uu02,
                                             &evalA, &evecA1,
@@ -312,7 +315,6 @@ cdef class RealtimeAnalyzer:
         
         # end of IPP-requiring code
 
-        area = 0.123456
         return [ (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4) ]
 
     def get_working_image(self):

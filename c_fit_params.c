@@ -57,12 +57,12 @@ void fill_time_string( char string[] )
 /****************************************************************
 ** fit_params ***************************************************
 ****************************************************************/
-int fit_params( IppiMomentState_64f *pState, double *x0, double *y0, 
+int fit_params( IppiMomentState_64f *pState, double *x0, double *y0,
+		double *Mu00,
 		double *Uu11, double *Uu20, double *Uu02,
 		int width, int height, unsigned char *img, int img_step )
 {
-  double Mu00, Mu10, Mu01;
-  //  double Uu11, Uu20, Uu02;
+  double Mu10, Mu01;
   IppiSize roi_size;
   IppiPoint roi_offset;
 
@@ -79,7 +79,7 @@ int fit_params( IppiMomentState_64f *pState, double *x0, double *y0,
   }
 
   /* calculate center of gravity from spatial moments */
-  if( !CHK( ippiGetSpatialMoment_64f( pState, 0, 0, 0, roi_offset, (Ipp64f*)&Mu00 ) ) )
+  if( !CHK( ippiGetSpatialMoment_64f( pState, 0, 0, 0, roi_offset, (Ipp64f*)Mu00 ) ) )
   {
     printf( "failed getting spatial moment 0 0\n" );
     return 21;
@@ -94,10 +94,10 @@ int fit_params( IppiMomentState_64f *pState, double *x0, double *y0,
     printf( "failed getting spatial moment 0 1\n" );
     return 23;
   }
-  if( Mu00 != 0.f )
+  if( *Mu00 != 0.f )
   {
-    *x0 = Mu10 / Mu00;
-    *y0 = Mu01 / Mu00;
+    *x0 = Mu10 / *Mu00;
+    *y0 = Mu01 / *Mu00;
     /* relative to ROI origin */
   }
   else

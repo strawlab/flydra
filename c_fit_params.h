@@ -13,10 +13,10 @@
 * the image rows must be aligned to a 32-byte boundary (meaning
 * that img_step should be a multiple of 32).  The parameter img_step
 * is the number of bytes between the beginning of adjacent rows
-* in the image pointer.  init_moment_state() MUST BE called before
-* calling this function.
+* in the image pointer.
 **********************************************************/
 int fit_params( IppiMomentState_64f *pState, double *x0, double *y0,
+		double *Mu00,
 		double *Uu11, double *Uu20, double *Uu02,
 		int width, int height, unsigned char *img, int img_step );
 
