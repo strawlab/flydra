@@ -10,14 +10,7 @@ from wxPython.glcanvas import *
 from OpenGL.GL import *
 from numarray.ieeespecial import nan
 import numarray.ieeespecial
-from flydra.reconstruct import MINIMUM_ECCENTRICITY
-
-have_glue = False
-try:
-    from OpenGL.GLUT import *
-    have_glut = True
-except:
-    pass
+from common_variables import MINIMUM_ECCENTRICITY
 
 class DynamicImageCanvas(wxGLCanvas):
     def __init__(self, *args, **kw):
@@ -214,8 +207,8 @@ class DynamicImageCanvas(wxGLCanvas):
             glDisable(GL_TEXTURE_2D)
             glDisable(GL_BLEND)
             glRasterPos3f(.02,.02,0)
-            for char in 'no image sources':
-                glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18,ord(char))
+##            for char in 'no image sources':
+##                glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18,ord(char))
             glEnable(GL_TEXTURE_2D)
             glEnable(GL_BLEND)
             glClearColor(0.0, 1.0, 0.0, 0.0) # green

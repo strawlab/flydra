@@ -11,12 +11,11 @@ import LinearAlgebra
 fast_svd = LinearAlgebra.singular_value_decomposition
 import reconstruct_utils # in pyrex/C for speed
 import time
+from common_variables import MINIMUM_ECCENTRICITY
 
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
 
-MINIMUM_ECCENTRICITY = 1.4 # threshold to fit line
-    
 def load_ascii_matrix(filename):
     fd=open(filename,mode='rb')
     buf = fd.read()

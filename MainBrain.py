@@ -9,9 +9,9 @@ import numarray.records
 from numarray.ieeespecial import nan, inf, getnan
 import Queue
 import tables as PT
+from common_variables import REALTIME_UDP
 
 THRESHOLD_MEAN_DIST = 5.0 # cutoff acceptable pixel distance to stop searching camera combinations
-REALTIME_UDP = False
 
 Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here...
 

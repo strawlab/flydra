@@ -9,7 +9,7 @@ import pyx_cam_iface as cam_iface
 import reconstruct_utils
 import Queue
 
-REALTIME_UDP = False
+from common_variables import REALTIME_UDP
 
 try:
     import realtime_image_analysis
