@@ -226,7 +226,7 @@ class App:
         self.num_cams = cam_iface.get_num_cameras()
         print 'Number of cameras detected:', self.num_cams
         assert self.num_cams <= MAX_GRABBERS
-        if self.num_cams == 0:
+        if self.num_cams <= 0:
             return
 
         # ----------------------------------------------------------------
@@ -533,6 +533,8 @@ class App:
 
 def main():
     app=App()
+    if app.num_cams <= 0:
+        return
     app.mainloop()
     print
 
