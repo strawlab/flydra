@@ -6,10 +6,13 @@ import socket
 
 Pyro.config.PYRO_MULTITHREADED = 0 # No multithreading!
 
-Pyro.config.PYRO_TRACELEVEL = 0
-Pyro.config.PYRO_USER_TRACELEVEL = 0
-Pyro.config.PYRO_DETAILED_TRACEBACK = 0
+Pyro.config.PYRO_TRACELEVEL = 1
+Pyro.config.PYRO_USER_TRACELEVEL = 1
+Pyro.config.PYRO_DETAILED_TRACEBACK = 1
 Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
+
+def DEBUG():
+    print 'line',sys._getframe().f_back.f_lineno,', thread', threading.currentThread()
 
 class FrameServer(Pyro.core.ObjBase):
     def __init__(self,*args,**kw):
@@ -22,6 +25,8 @@ class FrameServer(Pyro.core.ObjBase):
         
     # not overriding Pyro's __init__ funciton...
     def load(self, movie_filename='/tmp/raw_video.fmf'):
+        if self._filename == movie_filename:
+            return
         self.fly_movie = FlyMovieFormat.FlyMovie( movie_filename )
         self._filename = movie_filename
         self._ts_dict = None

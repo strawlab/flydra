@@ -18,6 +18,9 @@ sum = __builtins__.sum
 round = __builtins__.round
 abs = __builtins__.abs
 
+def my_interp( A, B, frac ):
+    return frac*(B-A)+A
+
 def interpolate_P( results, start_frame, stop_frame, typ='best' ):
     if typ == 'fast':
         data3d = results.root.data3d_fast
@@ -121,16 +124,41 @@ def slerp_quats( Q, bad_idxs, allow_roll = True ):
             no_roll_quat = orientation_to_quat(ori)
             Q[cur_idx] = no_roll_quat
     
-def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9):
-    # get data from file
-#    start_frame = 48989 +400
+def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
+          interp_OK=False,
+          do_smooth_position = False,
+          do_smooth_quats = False,
+          start_frame = 18629,
+          stop_frame = 19032,
+          
+          plot_pos_and_vel = False,
+          plot_pos_err_histogram = False,
 
-    start_frame = 49048
-    stop_frame = 49377
+          
+          plot_xy = False, plot_xy_Qsmooth = False, plot_xy_Qraw = True,
+          plot_xz = False,
+          plot_xy_air = False,
     
-##    start_frame = 48989 +400
-##    stop_frame = start_frame + 500
+          plot_hist_horiz_vel = False,
+          plot_hist_vert_vel=False,
+          plot_forward_vel_vs_pitch_angle = False,
+          
+          plot_accel = False,
+          plot_smooth_pos_and_vel = False,
+          
+          plot_Q = False,
+          plot_body_angular_vel = False,
+          plot_error_angles = False,
+          plot_body_ground_V = False,
+          plot_body_air_V = False,
+          plot_forces = False,
     
+          had_post = True,
+          show_grid = False,
+
+          ):
+    # get data from file
+
     if type(results) == tables.File:
         data3d = results.root.data3d_best
         fXl = [(row['frame'],
@@ -157,27 +185,69 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
     # check timestamps
     delta_ts = t_P[1:]-t_P[:-1]
     frames_missing = False
+
+    interpolated_xyz_frames = []
     for i,delta_t in enumerate(delta_ts):
         if not (0.009 < delta_t < 0.011):
-            frames_missing = True
-            print 'are you missing frames between %d and %d?'%(frame[i], frame[i+1])
+            if interp_OK:
+                fXl = list(fXl)
+
+                first = frame[i]
+                last = frame[i+1]
+
+                N = last-first
+                #print 'first', fXl[i][1:4]
+                #print 'last', fXl[i+1][1:4]
+                for ii,fno in enumerate(range(first,last)):
+                    if ii == 0:
+                        continue
+                    frac = ii/float(N)
+
+                    # do interpolation
+                    new_x = my_interp( fXl[i][1], fXl[i+1][1], frac )
+                    new_y = my_interp( fXl[i][2], fXl[i+1][2], frac )
+                    new_z = my_interp( fXl[i][3], fXl[i+1][3], frac )
+                    new_row = nx.array( [fno, new_x, new_y, new_z, nan, nan, nan, nan, nan, nan],
+                                        type=fXl[0].type() )
+                    fXl.append( new_row )
+                    #print '  ',frac, new_row
+                    print 'linear interpolation (frame %d)'%(fno,)
+                    interpolated_xyz_frames.append( fno )
+            else:
+                frames_missing = True
+                print 'are you missing frames between %d and %d?'%(frame[i], frame[i+1])
     if frames_missing:
         raise ValueError("results have missing frames")
+
+    if len(interpolated_xyz_frames):
+        # re-sort and partition results
+        fXl.sort( sort_on_col0 )
+        
+        fXl = nx.array(fXl)
+        frame = fXl[:,0].astype(nx.Int32)
+        P = fXl[:,1:4]
+        line3d = fXl[:,4:]
+
+        t_P = (frame-frame[0])*1e-2 # put in seconds
+        to_meters = 1e-3 # put in meters (from mm)
+        P = nx.array(P)*to_meters 
+        if Psmooth is not None:
+            Psmooth = nx.array(Psmooth)*to_meters
+        line3d = nx.array(line3d)
+
+        frame_list = list(frame)
+        no_distance_penalty_idxs = [ frame_list.index( fno ) for fno in interpolated_xyz_frames ]
+    else:
+        no_distance_penalty_idxs = []
             
-##    try:
-##        assert abs(min(delta_ts)-max(delta_ts)) < 1e-15
-##    except:
-##        sort_idx = nx.argsort(delta_ts)
-##        print 'are you missing frames between %d and %d?'%(frame[sort_idx[-1]], frame[sort_idx[-1]+1])
-##        #print delta_ts
-##        raise
     delta_t = delta_ts[0]
 
     # get angular position phi
     phi_with_nans = reconstruct.line_direction(line3d) # unit vector
-    trouble_idx = nx.where(frame==start_frame+16)[0][0]
-    print 'trouble ori',phi_with_nans[trouble_idx-3:trouble_idx+3]
     bad_idxs = getnan(phi_with_nans[:,0])[0]
+    if bad_idxs[0] == 0:
+        print 'WARNING: no orientation for first point'
+    
     Q = QuatSeq([ orientation_to_quat(U) for U in phi_with_nans ])
     slerp_quats( Q, bad_idxs, allow_roll=False )
     for cur_idx in bad_idxs:
@@ -202,39 +272,18 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
                  (Q[:-2].inverse()*Q[1:-1]).log()) / (delta_t**2)
     t_omega_dot = t_P[1:-1]
     
-    do_smooth_position = True
-    do_smooth_quats = True
-
     xtitle = 'time'
     xtitle = None
     
-    plot_pos_and_vel = False
-    plot_pos_err_histogram = False
-    
-    plot_xy = True; plot_xy_Qsmooth = False; plot_xy_Qraw = True
-    plot_xz = True
-    plot_xy_air = False
-    
-    plot_accel = False
-    plot_smooth_pos_and_vel = False
-    plot_Q = False
-    plot_body_angular_vel = True
-    plot_error_angles = False
-    plot_body_ground_V = False
-    plot_body_air_V = True
-    plot_forces = True
-    
-    had_post = True
-    show_grid = False
-
     if had_post:
-        post_top_center=array([ 181.88106377,  221.06126383,  168.28886479])
+        post_top_center=array([ 130.85457512,  169.45421191,   50.53490689])
         post_radius=5 # mm
-        post_height=120 # mm
+        post_height=10 # mm
 
     outputs = []
     if Psmooth is None and do_smooth_position:
-        of = ObjectiveFunctionPosition(P, delta_t, alpha)
+        of = ObjectiveFunctionPosition(P, delta_t, alpha,
+                                       no_distance_penalty_idxs=no_distance_penalty_idxs)
         epsilon1 = 150e6
         #epsilon1 = 1.0
         Psmooth = P.copy()
@@ -321,21 +370,25 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
 
     # body-centric groundspeed (using quaternion rotation)
     body_ground_V = rotate_velocity_by_orientation( dPdt, Q[1:-1])
-    body_ground_V_smooth = rotate_velocity_by_orientation( dPdt_smooth, Qsmooth[1:-1])
+    if Qsmooth is not None:
+        body_ground_V_smooth = rotate_velocity_by_orientation( dPdt_smooth, Qsmooth[1:-1])
 
     airspeed = nx.array((-.4,0,0))
     dPdt_air = dPdt - airspeed # world centric airspeed
-    dPdt_smooth_air = dPdt_smooth - airspeed # world centric airspeed
+    if Psmooth is not None:
+        dPdt_smooth_air = dPdt_smooth - airspeed # world centric airspeed
     # body-centric airspeed (using quaternion rotation)
     body_air_V = rotate_velocity_by_orientation(dPdt_air,Q[1:-1])
-    body_air_V_smooth = rotate_velocity_by_orientation(dPdt_smooth_air,Qsmooth[1:-1])
+    if Qsmooth is not None:
+        body_air_V_smooth = rotate_velocity_by_orientation(dPdt_smooth_air,Qsmooth[1:-1])
 
     if 1: # compute body-centric angular velocity
         omega_body = rotate_velocity_by_orientation( omega, Q[:-1])
-        omega_smooth_body = rotate_velocity_by_orientation( omega_smooth, Qsmooth[:-1])
+        if Qsmooth is not None:
+            omega_smooth_body = rotate_velocity_by_orientation( omega_smooth, Qsmooth[:-1])
         t_omega_body = t_P[:-1]
 
-    if 1: # compute forces (for now, smooth data only)
+    if Qsmooth is not None: # compute forces (for now, smooth data only)
         rad2deg = 180/math.pi
         
         # vector for current orientation (use only indices with velocity info)
@@ -409,34 +462,63 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9)
         
         # smooth
 
-        flat_heading_smooth = dPdt_smooth_air.copy()
-        flat_heading_smooth[:,2] = 0 # no Z component
-        flat_heading_smooth = [ make_norm(f) for f in flat_heading_smooth ]
-        flat_heading_angle_smooth = nx.array([ math.atan2(f[1],f[0])*rad2deg for f in flat_heading_smooth ])
+        if Psmooth is not None and Qsmooth is not None:
+            flat_heading_smooth = dPdt_smooth_air.copy()
+            flat_heading_smooth[:,2] = 0 # no Z component
+            flat_heading_smooth = [ make_norm(f) for f in flat_heading_smooth ]
+            flat_heading_angle_smooth = nx.array([ math.atan2(f[1],f[0])*rad2deg for f in flat_heading_smooth ])
+
+            vel_smooth_air_dir = [ make_norm(v) for v in dPdt_smooth_air ]
+            vel_smooth_pitch_angle = nx.array([ math.asin(v[2])*rad2deg for v in vel_smooth_air_dir ])
+
+            flat_orientation_smooth = quat_to_orient(Qsmooth)
+            flat_orientation_smooth[:,2]=0
+            flat_orientation_smooth = [ make_norm(f) for f in flat_orientation_smooth ]
+            flat_orientation_angle_smooth = nx.array([ math.atan2(f[1],f[0])*rad2deg for f in flat_orientation_smooth ])
+
+            orient_pitch_angle_smooth = [quat_to_euler(q)[1]*rad2deg for q in Qsmooth]
+
+            heading_err_smooth = flat_orientation_angle_smooth[1:-1]-flat_heading_angle_smooth
+            t_heading_err_smooth = t_dPdt
+            pitch_body_err_smooth = orient_pitch_angle_smooth[1:-1]-vel_smooth_pitch_angle
+            t_pitch_body_err_smooth = t_dPdt
+            #pitch_body_err_smooth = nx.array([ math.asin(p[2])*rad2deg for p in quat_to_orient(Qsmooth) ])
+            #t_pitch_body_err_smooth = t_P
+
+            #   derivs
+            d_heading_err_smooth_dt = (heading_err_smooth[2:]-heading_err_smooth[:-2]) / (2*delta_t)
+            t_d_heading_err_smooth_dt = t_heading_err_smooth[1:-1]
+            d_pitch_body_err_smooth_dt = (pitch_body_err_smooth[2:]-pitch_body_err_smooth[:-2]) / (2*delta_t)
+            t_d_pitch_body_err_smooth_dt =t_pitch_body_err_smooth[1:-1]
+
+    if 1: # compute horizontal velocity
+        xvel, yvel = dPdt[:,0], dPdt[:,1]
+        horiz_vel = nx.sqrt( xvel**2 + yvel**2)
+        vert_vel = dPdt[:,2]
+
+    if plot_hist_horiz_vel:
+        hist( horiz_vel, bins=30 )
+        xlabel( 'horizontal velocity (m/sec)')
+        ylabel( 'count' )
         
-        vel_smooth_air_dir = [ make_norm(v) for v in dPdt_smooth_air ]
-        vel_smooth_pitch_angle = nx.array([ math.asin(v[2])*rad2deg for v in vel_smooth_air_dir ])
-      
-        flat_orientation_smooth = quat_to_orient(Qsmooth)
-        flat_orientation_smooth[:,2]=0
-        flat_orientation_smooth = [ make_norm(f) for f in flat_orientation_smooth ]
-        flat_orientation_angle_smooth = nx.array([ math.atan2(f[1],f[0])*rad2deg for f in flat_orientation_smooth ])
-
-        orient_pitch_angle_smooth = [quat_to_euler(q)[1]*rad2deg for q in Qsmooth]
+    if plot_hist_vert_vel:
+        hist( vert_vel, bins=30 )
+        xlabel( 'vertical velocity (m/sec)')
+        ylabel( 'count' )
         
-        heading_err_smooth = flat_orientation_angle_smooth[1:-1]-flat_heading_angle_smooth
-        t_heading_err_smooth = t_dPdt
-        pitch_body_err_smooth = orient_pitch_angle_smooth[1:-1]-vel_smooth_pitch_angle
-        t_pitch_body_err_smooth = t_dPdt
-        #pitch_body_err_smooth = nx.array([ math.asin(p[2])*rad2deg for p in quat_to_orient(Qsmooth) ])
-        #t_pitch_body_err_smooth = t_P
-
-        #   derivs
-        d_heading_err_smooth_dt = (heading_err_smooth[2:]-heading_err_smooth[:-2]) / (2*delta_t)
-        t_d_heading_err_smooth_dt = t_heading_err_smooth[1:-1]
-        d_pitch_body_err_smooth_dt = (pitch_body_err_smooth[2:]-pitch_body_err_smooth[:-2]) / (2*delta_t)
-        t_d_pitch_body_err_smooth_dt =t_pitch_body_err_smooth[1:-1]
-
+    if plot_forward_vel_vs_pitch_angle:
+        vert_vel_limit = 0.1 # meter/sec
+        hvels = []
+        pitches = []
+        for i in range(len(vert_vel)):
+            if abs( vert_vel[i] ) < vert_vel_limit:
+                hvels.append( horiz_vel[i] )
+                pitch = (orient_pitch_angle[i] + orient_pitch_angle[i+1])/2.0
+                pitches.append( pitch )
+        plot( hvels, pitches, 'k.' )
+        xlabel( 'horizontal velocity (m/sec)' )
+        ylabel( 'pitch angle (degrees)' )
+        
     if plot_pos_and_vel:
         linewidth = 1.5
         subplot(3,1,1)

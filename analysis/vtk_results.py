@@ -486,15 +486,13 @@ if __name__=='__main__':
 ##    except NameError:
 ##        results = result_browser.Results()
     if 1:
-        start_frame = 49048
-        stop_frame = 49378
-##        start_frame = 48989 +400
-##        stop_frame = start_frame + 500
+        start_frame = 25000
+        stop_frame = start_frame + 500
         
         renWin, renderers = init_vtk()
         #show_cameras(results,renderers)
 
-        if 1:
+        if 0:
             CT=array([ 181.88106377,  221.06126383,  168.28886479])
             CB=array([ 188.25655514,  218.76102605,   30.89531996])
             show_line(renderers,CT,CB,black,4)
@@ -502,6 +500,20 @@ if __name__=='__main__':
             NZ = array([   9.11331261,  117.08933803,   53.84209957])
             NY = array([  10.98416978,  392.19324712,   70.9049832 ])
             show_line(renderers,NZ,NY,blue,1)
+        if 1:
+            # cap
+            c1 = array([ 130.85457512,  169.45421191,   50.53490689])
+            show_line(renderers,c1,c1+array([0,0,-10]),black,4)
+
+            # bottom of area with pattern
+            corner = array([  4.91559111,  54.73864537,  32.58650871])
+            sfw = array([ -13.64048628,  335.36740794,   22.02908834])
+            lwe = array([ 285.12425295,   60.4681217 ,   40.7247129 ])
+            upc = array([   7.91709368,   64.14688249,  184.80049719])
+            
+            show_line(renderers,corner,sfw,blue,1)
+            show_line(renderers,corner,lwe,blue,1)
+            show_line(renderers,corner,upc,blue,1)
             
         show_frames_vtk(results,renderers,start_frame,stop_frame,1,
                         orientation_corrected=True,

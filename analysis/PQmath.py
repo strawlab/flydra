@@ -220,12 +220,24 @@ def quat_to_absroll(q):
 
 class ObjectiveFunctionPosition:
     """methods from Kim, Hsieh, Wang, Wang, Fang, Woo"""
-    def __init__(self, p, h, alpha):
+    def __init__(self, p, h, alpha, no_distance_penalty_idxs=None):
+        """
+
+        no_distance_penalty_idxs -- indexes into p where fit data
+            should not be penalized (probably because 'original data'
+            was interpolated and is of no value)
+        
+        """
         self.p = p
         self.h = h
         self.alpha = alpha
+        
+        self.p_err_weights = nx.ones( p.shape )
+        if no_distance_penalty_idxs is not None:
+            for i in no_distance_penalty_idxs:
+                self.p_err_weights[i] = 0
     def _getDistance(self, ps):
-        return nx.sum(nx.sum((self.p - ps)**2, axis=1))
+        return nx.sum(nx.sum(self.p_err_weights*((self.p - ps)**2), axis=1))
     def _getEnergy(self, ps):
         d2p = (ps[2:] - 2*ps[1:-1] + ps[:-2]) / (self.h**2)
         return  nx.sum( nx.sum(d2p**2,axis=1))
