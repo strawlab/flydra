@@ -11,7 +11,7 @@ import LinearAlgebra
 fast_svd = LinearAlgebra.singular_value_decomposition
 import reconstruct_utils # in pyrex/C for speed
 import time
-from common_variables import MINIMUM_ECCENTRICITY
+from flydra.common_variables import MINIMUM_ECCENTRICITY
 
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
@@ -243,136 +243,6 @@ class Reconstructor:
 
     def get_recontruct_helper_dict(self):
         return self._helper
-
-    def find_best_3d(self, d2,
-                          acceptable_distance_pixels = 10.0,
-                          minimum_eccentricity = 2.0):
-        """
-
-        Finds combination of cameras which uses the most number of
-        cameras while minimizing mean reprojection error. Algorithm
-        used accepts any camera combination with reprojection error
-        less than acceptable_distance_pixels.
-
-        """
-        
-        least_err_by_n_cameras = {}
-        cam_ids = self.cam_ids # shorthand
-        max_n_cams = len(cam_ids)
-        allA = fast_nx.zeros( (2*max_n_cams,4),'d')
-        bad_cam_ids = []
-        cam_id2idx = {}
-        all2d = {}
-        Pmat_fastnx = {}
-        Pmat_fastnx = self.Pmat_fastnx # shorthand
-        for i,cam_id in enumerate(cam_ids):
-            cam_id2idx[cam_id] = i
-
-            # do we have incoming data?
-            try:
-                value_tuple = d2[cam_id]
-            except KeyError:
-                bad_cam_ids.append( cam_id )
-                continue # don't build this row
-
-            # was a 2d point found?
-            values = value_tuple[:2]
-            if len( getnan(values)[0] ):
-                bad_cam_ids.append( cam_id )
-                continue # don't build this row
-            x,y = values
-
-            Pmat = Pmat_fastnx[cam_id] # Pmat is 3 rows x 4 columns
-            row3 = Pmat[2,:]
-            allA[ i*2, : ] = x*row3 - Pmat[0,:]
-            allA[ i*2+1, :]= y*row3 - Pmat[1,:]
-
-            all2d[cam_id] = values
-
-        #print allA
-        least_err_by_n_cameras = {}
-        cam_ids_for_least_err = {}
-        X_for_least_err = {}
-        for cam_ids_used in self.cam_combinations:
-            missing_cam_data = False
-            good_A_idx = []
-            for cam_id in cam_ids_used:
-                if cam_id in bad_cam_ids:
-                    missing_cam_data = True
-                    break
-                else:
-                    i = cam_id2idx[cam_id]
-                    good_A_idx.extend( (i*2, i*2+1) )
-            if missing_cam_data:
-                continue
-            A = fast_nx.take(allA,good_A_idx)
-            #print cam_ids_used
-            #print A
-            #print
-            n_cams = len(cam_ids_used)
-            u,d,vt=fast_svd(A)
-            X = vt[-1,:]/vt[-1,3] # normalize
-            
-            mean_dist = 0.0
-            n_cams = len(cam_ids_used)
-            alpha = 1.0/n_cams
-            for cam_id in cam_ids_used:
-                orig_x,orig_y = all2d[cam_id]
-                Pmat = Pmat_fastnx[cam_id]
-                new_xyw = fast_nx.matrixmultiply( Pmat, X )
-                new_x, new_y = new_xyw[0:2]/new_xyw[2]
-                
-                dist = math.sqrt((orig_x-new_x)**2 + (orig_y-new_y)**2)
-                mean_dist += dist*alpha
-
-            least_err = least_err_by_n_cameras.get(n_cams,1e16)
-            if mean_dist < least_err:
-                least_err_by_n_cameras[n_cams] = mean_dist
-                cam_ids_for_least_err[n_cams] = cam_ids_used
-                X_for_least_err[n_cams] = X[:3]
-
-        # now we have the best estimate for 2 views, 3 views, ...
-        best_n_cams = 2
-        least_err = least_err_by_n_cameras[2]
-        for n_cams in range(3,max_n_cams+1):
-            try:
-                least_err = least_err_by_n_cameras[n_cams]
-            except KeyError:
-                break # if we don't have 4, we won't have 5
-            if least_err < acceptable_distance_pixels:
-                best_n_cams = n_cams
-
-        # now calculate final values
-        cam_ids_used = cam_ids_for_least_err[best_n_cams]
-        X = X_for_least_err[best_n_cams]
-        
-        # calculate line3d
-        P = []
-        for cam_id in cam_ids_used:
-            x,y,area,slope,eccentricity, p1,p2,p3,p4 = d2[cam_id]
-            if eccentricity > minimum_eccentricity:
-                P.append( (p1,p2,p3,p4) )
-        if len(P) < 2:
-            Lcoords = None
-        else:
-            P = fast_nx.array(P)
-            try:
-                u,d,vt=fast_svd(P,full_matrices=True)
-                
-                P = vt[0,:] # P,Q are planes (take row because this is transpose(V))
-                Q = vt[1,:]
-                
-                # directly to Pluecker line coordinates
-                Lcoords = ( -(P[3]*Q[2]) + P[2]*Q[3],
-                              P[3]*Q[1]  - P[1]*Q[3],
-                            -(P[2]*Q[1]) + P[1]*Q[2],
-                            -(P[3]*Q[0]) + P[0]*Q[3],
-                            -(P[2]*Q[0]) + P[0]*Q[2],
-                            -(P[1]*Q[0]) + P[0]*Q[1] )
-            except numarray.linear_algebra.LinearAlgebra2.LinearAlgebraError, exc:
-                print 'WARNING:',str(exc)
-                Lcoords = None
-        return X, Lcoords, cam_ids_used
 
     def find3d(self, cam_ids_and_points2d, return_X_coords = True, return_line_coords = True ):
         # for info on SVD, see Hartley & Zisserman (2003) p. 593 (see
