@@ -6,15 +6,6 @@
       <object class="sizeritem">
         <object class="wxStaticText">
           <label>Flydra Control Center</label>
-          <font>
-            <size>18</size>
-            <style>swiss</style>
-            <weight>normal</weight>
-            <family>bold</family>
-            <underlined>0</underlined>
-            <face>Arial</face>
-            <encoding>windows-1252</encoding>
-          </font>
         </object>
         <option>0</option>
         <flag>wxALL</flag>

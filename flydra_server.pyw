@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import thread
 import time
 import socket

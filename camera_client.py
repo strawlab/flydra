@@ -1,16 +1,28 @@
+#!/usr/bin/env python
 import thread
 import time
 import socket
 import numarray
 import Pyro.core, Pyro.errors
 
-import cam_iface_bcam as cam_iface
+DUMMY=1
 
-incoming_frames = []
-
+if not DUMMY:
+    try:
+        import cam_iface_bcam
+        cam_iface = cam_iface_bcam
+    except:
+        import cam_iface_dc1394
+        cam_iface = cam_iface_dc1394
+else:
+    import cam_iface_dummy
+    cam_iface = cam_iface_dummy
+    
 CAM_CONTROLS = {'shutter':cam_iface.SHUTTER,
                 'gain':cam_iface.GAIN,
                 'brightness':cam_iface.BRIGHTNESS}
+
+incoming_frames = []
 
 def grab_thread(cam,quit_now,thread_done):
     # transfer data from camera
@@ -43,7 +55,7 @@ def main():
     flydra_brain = Pyro.core.getProxyForURI(flydra_brain_URI)
 
     cam = cam_iface.CamContext(device_number,num_buffers)
-    
+
     cam.set_camera_property(cam_iface.GAIN,28,0,0)
     cam.set_camera_property(cam_iface.SHUTTER,498,0,0)
     cam.set_camera_property(cam_iface.BRIGHTNESS,717,0,0)
