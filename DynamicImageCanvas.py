@@ -25,6 +25,7 @@ class DynamicImageCanvas(wxGLCanvas):
         self.do_clipping = True
         self.lbrt = {}
         self.draw_points = {}
+        self.reconstructed_points = {}
         self.do_draw_points = True
 
     def set_clipping(self, value):
@@ -46,6 +47,9 @@ class DynamicImageCanvas(wxGLCanvas):
 
     def set_draw_points(self,id_val,points):
         self.draw_points[id_val]=points
+
+    def set_reconstructed_points(self,id_val,points):
+        self.reconstructed_points[id_val]=points
 
     def set_lbrt(self,id_val,lbrt):
         self.lbrt[id_val]=lbrt
@@ -230,27 +234,33 @@ class DynamicImageCanvas(wxGLCanvas):
                     xo=left
                     yg=top-bottom
                     yo=bottom
+                    
                     draw_points = self.draw_points.get(ids[i],[])
-                    pts_mode = False
+                    
+                    glDisable(GL_TEXTURE_2D)
+                    glColor4f(0.0,1.0,0.0,1.0)                        
+                    glBegin(GL_POINTS)
+
                     width = float(widthheight[0])
                     height = float(widthheight[1])
+                    
                     for pt in draw_points:
+                        if pt[0] < 0:
+                            continue
                         x = pt[0]/width*xg+xo
                         y = (height-pt[1])/height*yg+yo
-                        if not pts_mode:
-                            glDisable(GL_TEXTURE_2D)
-                            glColor4f(0.0,1.0,0.0,1.0)                        
-                            glBegin(GL_POINTS)
-                            pts_mode = True
                         glVertex2f(x,y)
-                    if pts_mode:
-                        glEnd()
-                        glColor4f(1.0,1.0,1.0,1.0)                        
-                        glEnable(GL_TEXTURE_2D)
+                        
+                    glEnd()
+                    glColor4f(1.0,1.0,1.0,1.0)                        
+                    glEnable(GL_TEXTURE_2D)
 
                     for pt in draw_points:
                         ox0 = pt[0]
                         oy0 = pt[1]
+
+                        if ox0 < 0:
+                            continue
 
                         angle_radians = math.pi/2 - pt[2]
                         r = 20.0
@@ -271,6 +281,24 @@ class DynamicImageCanvas(wxGLCanvas):
                         glEnd()
                         glColor4f(1.0,1.0,1.0,1.0)                        
                         glEnable(GL_TEXTURE_2D)
+
+                    # reconstructed points
+                    draw_points = self.reconstructed_points.get(ids[i],[])
+                    
+                    glDisable(GL_TEXTURE_2D)
+                    glColor4f(1.0,0.0,0.0,1.0)                        
+                    glBegin(GL_POINTS)
+
+                    for pt in draw_points:
+                        if pt[0] < 0 or pt[0] >= width or pt[1] < 0 or pt[1] >= height:
+                            continue
+                        x = pt[0]/width*xg+xo
+                        y = (height-pt[1])/height*yg+yo
+                        glVertex2f(x,y)
+                        
+                    glEnd()
+                    glColor4f(1.0,1.0,1.0,1.0)                        
+                    glEnable(GL_TEXTURE_2D)
 
                 if ids[i] in self.lbrt:
                     # draw ROI

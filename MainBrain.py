@@ -38,7 +38,18 @@ calib_points = []
 realtime_coord_dict={}
 realtime_coord_dict_lock=threading.Lock()
 
-realtime_data=None
+SAVE_2D_DATA = False
+SAVE_2D_FMT = '<Bidddd'
+save_2d_data_fd=open('raw_data.dat','wb')
+save_2d_data_lock=threading.Lock()
+
+SAVE_3D_DATA = False
+SAVE_3D_FMT = '<iddd'
+save_3d_data={}#_fd=open('raw_data_3d.dat','wb')
+save_3d_data_lock=threading.Lock()
+
+fastest_realtime_data=None
+best_realtime_data=None
 
 RESET_FRAMENUMBER_DURATION=1.0 # seconds
 
@@ -47,12 +58,14 @@ try:
 except:
     hostname = socket.gethostbyname(socket.gethostname())
 
-try:
-    projector_hostname = socket.gethostbyname('projector')
-except:
-    projector_hostname = socket.gethostbyname(socket.gethostname())
+##try:
+##    projector_hostname = socket.gethostbyname('projector')
+##except:
+##    projector_hostname = socket.gethostbyname(socket.gethostname())
+projector_hostname = socket.gethostbyname(socket.gethostname())
 projector_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-PROJECTOR_PORT = 28931
+FASTEST_DATA_PORT = 28931
+BEST_DATA_PORT = 28932
 
 def save_ascii_matrix(filename,m):
     fd=open(filename,mode='wb')
@@ -60,10 +73,16 @@ def save_ascii_matrix(filename,m):
         fd.write( ' '.join(map(str,row)) )
         fd.write( '\n' )
 
-def get_realtime_data():
-    global realtime_data
-    data = realtime_data
-    realtime_data = None
+def get_fastest_realtime_data():
+    global fastest_realtime_data
+    data = fastest_realtime_data
+    fastest_realtime_data = None
+    return data 
+
+def get_best_realtime_data():
+    global best_realtime_data
+    data = best_realtime_data
+    best_realtime_data = None
     return data 
 
 def DEBUG():
@@ -72,13 +91,15 @@ def DEBUG():
 class CoordReceiver(threading.Thread):
     def __init__(self,cam_id,main_brain):
         self.cam_id = cam_id
+        self.hack_cam_no = int(self.cam_id[3])
         self.main_brain = main_brain
         self.last_timestamp=0.0
         self.reconstructor = None
 
         # set up threading stuff
         self.quit_event = threading.Event()
-        threading.Thread.__init__(self)
+        name = 'CoordReceiver for %s'%self.cam_id
+        threading.Thread.__init__(self,name=name)
 
         # find UDP port number
         if len(UDP_ports)>0:
@@ -106,7 +127,7 @@ class CoordReceiver(threading.Thread):
         tmp_socket.sendto(struct.pack('<dlii',0.0,-1,-1,-1),(hostname,self.port))
     
     def run(self):
-        global realtime_data
+        global fastest_realtime_data, best_realtime_data
         global calib_IdMat, calib_points, calib_data_lock
         
         header_fmt = '<dli'
@@ -114,10 +135,7 @@ class CoordReceiver(threading.Thread):
         pt_fmt = '<fff'
         pt_size = struct.calcsize(pt_fmt)
         while not self.quit_event.isSet():
-            t1=time.time()
             data, addr = self.recSocket.recvfrom(1024)
-            t2=time.time()
-            #print self.cam_id,'waited %.1d msec for network data'%( (t2-t1)*1000.0, )
             
             header = data[:header_size]
             timestamp, framenumber, n_pts = struct.unpack(header_fmt,header)
@@ -134,8 +152,22 @@ class CoordReceiver(threading.Thread):
             
             if timestamp-self.last_timestamp > RESET_FRAMENUMBER_DURATION:
                 self.framenumber_offset = framenumber
+                print self.cam_id,'synchronized(?)'
             self.last_timestamp=timestamp
             corrected_framenumber = framenumber-self.framenumber_offset
+
+            if SAVE_2D_DATA:
+                buf = struct.pack(SAVE_2D_FMT,
+                                  self.hack_cam_no,
+                                  corrected_framenumber,
+                                  timestamp,
+                                  points[0][0],
+                                  points[0][1],
+                                  points[0][2],
+                                  )
+                save_2d_data_lock.acquire()
+                save_2d_data_fd.write( buf )
+                save_2d_data_lock.release()
 
             realtime_coord_dict_lock.acquire()
             # clean up old frame records to save RAM
@@ -161,23 +193,39 @@ class CoordReceiver(threading.Thread):
                 
                 # do 3D reconstruction -=-=-=-=-=-=-=-=
                 if self.reconstructor is not None:
-                    t1 = time.time()
-#                    print 'time.time() % 15d'%t1
-#                    print ' framenumber %d:'%corrected_framenumber,cur_framenumber_dict
-                    X = self.reconstructor.find3d(data_dict.items())
-                    t2 = time.time()
-                    latency = (t2-t1)*1000.0
-#                    print ' 3d point:', X, '(3d calc duration % 4.1f msec)'%latency
-                    x,y,z=X
-                    try:
-                        projector_socket.sendto(struct.pack('<fff',x,y,z),
-                                                (projector_hostname,PROJECTOR_PORT))
-                    except x:
-                        print 'WARNING: could not send 3d point data to projector:'
-                        print x.__class__, x
-                        print
-                    realtime_data = X
-
+                    d2 = {}
+                    cams_in_count = 0
+                    for cam_id, PT in data_dict.iteritems():
+                        cams_in_count += 1
+                        if PT[0] + 1 > 1e-6: # only use found points
+                            d2[cam_id] = PT
+                    if len(d2) >=2:
+                        X = self.reconstructor.find3d(d2.items())
+                        x,y,z=X
+                        data_packet = struct.pack('<fff',x,y,z)
+                        try:
+                            projector_socket.sendto(data_packet,
+                                                    (projector_hostname,FASTEST_DATA_PORT))
+                        except x:
+                            print 'WARNING: could not send 3d point data to projector:'
+                            print x.__class__, x
+                            print
+                        fastest_realtime_data = X
+                        if cams_in_count == len(self.main_brain.camera_server):
+                            best_realtime_data = X
+                            try:
+                                projector_socket.sendto(data_packet,
+                                                        (projector_hostname,BEST_DATA_PORT))
+                            except x:
+                                print 'WARNING: could not send 3d point data to projector:'
+                                print x.__class__, x
+                                print
+                            
+                        if SAVE_3D_DATA:
+                            save_3d_data_lock.acquire()
+                            save_3d_data[corrected_framenumber]=x,y,z
+                            save_3d_data_lock.release()
+                            
                 # save calibration data -=-=-=-=-=-=-=-=
                 if self.main_brain.currently_calibrating.isSet():
                     if len(data_dict) == len(self.main_brain.camera_server):
@@ -201,14 +249,6 @@ class CoordReceiver(threading.Thread):
                         calib_points.append( save_points )
                         calib_data_lock.release()
                     
-##            timestamp, x0, y0 = incoming_data
-##            print "%s % 15f % 15f"%(self.cam_id, time.time(), timestamp)
-##            latency = (time.time()-timestamp)*1000.0
-##            print "% 15f %s% 6.1f: % 5d (% 3d % 3d)"%(time.time(),
-##                                               ' '*self.n_spaces,latency,corrected_framenumber,
-##                                                      x0,y0)
-            #print 'RECV on port %d (from %s): %s'%(self.port,addr,repr(data))
-
            # XXX hack? make data available via cam_dict
             cam_dict = self.main_brain.remote_api.cam_info[self.cam_id]
             cam_dict['lock'].acquire()
@@ -342,6 +382,15 @@ class MainBrain:
             cam_lock.release()
             self.cam_info_lock.release()
 
+        def external_set_diff_threshold( self, cam_id, value):
+            self.cam_info_lock.acquire()            
+            cam = self.cam_info[cam_id]
+            cam_lock = cam['lock']
+            cam_lock.acquire()
+            cam['commands']['diff_threshold']=value
+            cam_lock.release()
+            self.cam_info_lock.release()
+
         def external_set_use_arena( self, cam_id, value):
             self.cam_info_lock.acquire()            
             cam = self.cam_info[cam_id]
@@ -389,11 +438,11 @@ class MainBrain:
             caller_ip, caller_port = caller_addr
             fqdn = socket.getfqdn(caller_ip)
         
-            cam_id = '%s:%d:%d'%(fqdn,cam_no,caller_port)
+            #cam_id = '%s:%d:%d'%(fqdn,cam_no,caller_port)
+            cam_id = '%s:%d'%(fqdn,cam_no)
             print 'cam_id',cam_id,'connected'
             
             coord_receiver = CoordReceiver(cam_id,self.main_brain)
-
             self.cam_info_lock.acquire()            
             self.cam_info[cam_id] = {'commands':{}, # command queue for cam
                                      'lock':threading.Lock(), # prevent concurrent access
@@ -502,7 +551,18 @@ class MainBrain:
         self.set_old_camera_callback(self.RemoveCameraServer)
         
         self.currently_calibrating = threading.Event()
-        
+
+    def Save3dData(self,filename='raw_data_3d.dat'):
+        fd=open('raw_data_3d.dat','wb')
+        save_3d_data_lock.acquire()
+        dd=save_3d_data.copy()
+        save_3d_data_lock.release()
+        keys=dd.keys()
+        keys.sort()
+        for k in keys:
+            fd.write('%d %f %f %f\n'%(k,dd[k][0],dd[k][1],dd[k][2]))
+        fd.close()
+
     def AddCameraServer(self, cam_id, scalar_control_info,fqdnport):
         fqdn, port = fqdnport
         name = 'camera_server'
@@ -513,7 +573,11 @@ class MainBrain:
         camera_server._setOneway(['send_most_recent_frame',
                                   'quit',
                                   'set_camera_property',
-                                  'set_diff_threshold',
+                                  'start_debug',
+                                  'stop_debug',
+                                  'find_r_center',
+                                  'collect_background',
+                                  'clear_background',
                                   ])
         self.camera_server[cam_id] = camera_server
 
@@ -521,13 +585,14 @@ class MainBrain:
             def __init__(self,func,args):
                 self.func = func
                 self.args = args
-                threading.Thread.__init__(self)
+                name = 'test_connection %s'%cam_id
+                threading.Thread.__init__(self,name=name)
 
             def run(self):
                 time.sleep(0.1) # give server a chance to get going
-                print '  testing camera server connection...'
+                print '    testing camera server connection...'
                 self.func(*self.args)
-                print '  camera server OK'
+                print '    camera server OK'
                 
         t=test_connection(
             self.camera_server[cam_id].no_op,())
@@ -547,12 +612,24 @@ class MainBrain:
         self._old_camera_functions.append(handler)
 
     def start_calibrating(self, calib_dir):
+        self.calibration_cam_ids = self.remote_api.external_get_cam_ids()
         self.calib_dir = calib_dir
         self.currently_calibrating.set()
 
     def stop_calibrating(self):
         global calib_IdMat, calib_points, calib_data_lock
         self.currently_calibrating.clear()
+        
+        cam_ids = self.remote_api.external_get_cam_ids()
+        if len(cam_ids) != len(self.calibration_cam_ids):
+            raise RuntimeError("Number of cameras changed during calibration")
+
+        for cam_id in cam_ids:
+            if cam_id not in self.calibration_cam_ids:
+                raise RuntimeError("Cameras changed during calibration")
+
+        cam_ids.sort()
+                                
         calib_data_lock.acquire()
         
         IdMat = calib_IdMat
@@ -569,18 +646,18 @@ class MainBrain:
         save_ascii_matrix(os.path.join(self.calib_dir,'IdMat.dat'),IdMat)
         save_ascii_matrix(os.path.join(self.calib_dir,'points.dat'),points)
         cam_ids = self.remote_api.external_get_cam_ids()
-        if 1:
-            # new, untested code
-            Res = []
-            for cam_id in cam_ids:
-                sci, fqdn, port = self.remote_api.external_get_info(cam_id)
-                width = sci['width']
-                height = sci['height']
-                Res.append( [width,height] )
-            Res = nx.array( Res )
-        else:
-            Res = nx.array([ [656,491] ]*IdMat.shape[0]) # XXX hardcoded resolution
+        Res = []
+        for cam_id in cam_ids:
+            sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+            width, height = self.get_widthheight(cam_id)
+            Res.append( [width,height] )
+        Res = nx.array( Res )
         save_ascii_matrix(os.path.join(self.calib_dir,'Res.dat'),Res)
+        
+        fd = open(os.path.join(self.calib_dir,'camera_order.txt'),'w')
+        for cam_id in cam_ids:
+            fd.write('%s\n'%cam_id)
+        fd.close()
 
     def service_pending(self):
         new_cam_ids, old_cam_ids = self.remote_api.external_get_and_clear_pending_cams()
@@ -603,13 +680,19 @@ class MainBrain:
         self.camera_server[cam_id].quit()
 
     def set_diff_threshold(self, cam_id, value):
-        self.camera_server[cam_id].set_diff_threshold(value)
+        self.remote_api.external_set_diff_threshold( cam_id, value)
 
     def get_diff_threshold(self, cam_id):
         return self.camera_server[cam_id].get_diff_threshold()
 
     def set_use_arena(self, cam_id, value):
         self.remote_api.external_set_use_arena( cam_id, value)
+
+    def set_debug_mode(self, cam_id, value):
+        if value:
+            self.camera_server[cam_id].start_debug()
+        else:
+            self.camera_server[cam_id].stop_debug()
 
     def collect_background(self,cam_id):
         self.camera_server[cam_id].collect_background()
@@ -668,12 +751,12 @@ class MainBrain:
 
     def load_calibration(self,dirname):
         cam_ids = self.remote_api.external_get_cam_ids()
-        r = Reconstructor(CAMS=len(cam_ids), calibration_dir=dirname)
+        self.reconstructor = Reconstructor(calibration_dir=dirname)
 
         # XXX this is naughty accessing remote_api
         self.remote_api.cam_info_lock.acquire()
         for cam_id in cam_ids:
-            port = self.remote_api.cam_info[cam_id]['coord_receiver'].set_reconstructor(r)
+            port = self.remote_api.cam_info[cam_id]['coord_receiver'].set_reconstructor(self.reconstructor)
         self.remote_api.cam_info_lock.release()
     
     def __del__(self):

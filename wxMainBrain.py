@@ -39,6 +39,10 @@ class App(wxApp):
         filemenu.Append(ID_start_calibration, "Start calibration...", "Start saving calibration points")
         EVT_MENU(self, ID_start_calibration, self.OnStartCalibration)
         
+        ID_save_3d_data = wxNewId()
+        filemenu.Append(ID_save_3d_data, "Save 3D data...", "Start saving calibration points")
+        EVT_MENU(self, ID_save_3d_data, self.OnSave3dData)
+        
         ID_quit = wxNewId()
         filemenu.Append(ID_quit, "Quit\tCtrl-Q", "Quit application")
         EVT_MENU(self, ID_quit, self.OnQuit)
@@ -212,13 +216,17 @@ class App(wxApp):
         EVT_BUTTON(quit_camera, quit_camera.GetId(), self.OnCloseCamera)
 
         threshold_value = XRCCTRL(PreviewPerCamPanel,"threshold_value")
-        threshold_value.SetValue(
-            str( self.cameras[cam_id]['scalar_control_info']['threshold'] ) )
+        val = scalar_control_info['initial_diff_threshold']
+        threshold_value.SetValue( str( val ) )
         EVT_TEXT(threshold_value, threshold_value.GetId(), self.OnSetCameraThreshold)
 
         arena_control = XRCCTRL(PreviewPerCamPanel,
                              "ARENA_CONTROL")
         EVT_CHECKBOX(arena_control, arena_control.GetId(), self.OnArenaControl)
+        
+        debug_mode = XRCCTRL(PreviewPerCamPanel,
+                             "debug_mode")
+        EVT_CHECKBOX(debug_mode, debug_mode.GetId(), self.OnDebugMode)
         
         per_cam_controls_panel = XRCCTRL(PreviewPerCamPanel,
                                          "PerCameraControlsContainer")
@@ -226,7 +234,7 @@ class App(wxApp):
         grid.AddGrowableCol(2)
 
         for param in scalar_control_info.keys():
-            if param in ('threshold','width','height'):
+            if param == 'initial_diff_threshold':
                 continue
             current_value, min_value, max_value = scalar_control_info[param]
             grid.Add( wxStaticText(per_cam_controls_panel,wxNewId(),param),
@@ -539,6 +547,9 @@ class App(wxApp):
 
     def update_wx(self):
         self.statusbar.SetStatusText('%d camera(s)'%len(self.cameras),1)
+
+    def OnSave3dData(self, event):
+        self.main_brain.Save3dData()
         
     def OnStartCalibration(self, event):
         doit = False
@@ -570,40 +581,46 @@ class App(wxApp):
         if not hasattr(self,'main_brain'):
             return # quitting
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc
-        if self.current_page == 'preview':
-            for cam_id in self.cameras.keys():
-                self.main_brain.request_image_async(cam_id)
-
-                cam = self.cameras[cam_id]
-                if not cam.has_key('PreviewPerCamPanel'):
-                    # not added yet
-                    continue
-                PreviewPerCamPanel = cam['PreviewPerCamPanel']
-                image = None
-                show_fps = None
-                try:
-                    image, show_fps, points = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
-                except KeyError:
-                    # unexpected disconnect
-                    pass # may have lost camera since call to service_pending
-                if image is not None:
-                    self.cam_image_canvas.update_image(cam_id,image)
-                if show_fps is not None:
-                    show_fps_label = XRCCTRL(PreviewPerCamPanel,'acquired_fps_label') # get container
-                    show_fps_label.SetLabel('fps: %.1f'%show_fps)
-                self.cam_image_canvas.set_draw_points(cam_id,points)
-                
-            self.cam_image_canvas.OnDraw()
-
-            if isinstance(event,wxIdleEventPtr):
-                event.RequestMore()
-                
-        elif self.current_page == 'tracking':
-            data3d=MainBrain.get_realtime_data()
+        if self.current_page in ['tracking','preview']:
+            data3d=MainBrain.get_best_realtime_data()
             if data3d is not None:
-                XRCCTRL(self.tracking_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
-                XRCCTRL(self.tracking_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
-                XRCCTRL(self.tracking_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
+                if self.current_page == 'tracking':
+                    XRCCTRL(self.tracking_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
+                    XRCCTRL(self.tracking_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
+                    XRCCTRL(self.tracking_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
+                else: # self.current_page == 'preview'
+                    r=self.main_brain.reconstructor
+                    for cam_id in self.cameras.keys():
+                        pt=r.find2d(cam_id,data3d)
+                        self.cam_image_canvas.set_reconstructed_points(cam_id,[pt])
+            if self.current_page == 'preview':
+                for cam_id in self.cameras.keys():
+                    self.main_brain.request_image_async(cam_id)
+
+                    cam = self.cameras[cam_id]
+                    if not cam.has_key('PreviewPerCamPanel'):
+                        # not added yet
+                        continue
+                    PreviewPerCamPanel = cam['PreviewPerCamPanel']
+                    image = None
+                    show_fps = None
+                    try:
+                        image, show_fps, points = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
+                    except KeyError:
+                        # unexpected disconnect
+                        pass # may have lost camera since call to service_pending
+                    if image is not None:
+                        self.cam_image_canvas.update_image(cam_id,image)
+                    if show_fps is not None:
+                        show_fps_label = XRCCTRL(PreviewPerCamPanel,'acquired_fps_label') # get container
+                        show_fps_label.SetLabel('fps: %.1f'%show_fps)
+                    self.cam_image_canvas.set_draw_points(cam_id,points)
+
+                self.cam_image_canvas.OnDraw()
+
+                if isinstance(event,wxIdleEventPtr):
+                    event.RequestMore()
+                
         else:
             # do other stuff
             pass
@@ -645,11 +662,15 @@ class App(wxApp):
         value = event.GetString()
         if value:
             value = float(value)
-            self.main_brain.set_diff_threshold(cam_id,value) # eventually calls OnOldCamera
+            self.main_brain.set_diff_threshold(cam_id,value)
 
     def OnArenaControl(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         self.main_brain.set_use_arena( cam_id, event.IsChecked() )
+
+    def OnDebugMode(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        self.main_brain.set_debug_mode( cam_id, event.IsChecked() )
     
     def OnOldCamera(self, cam_id):
         try:

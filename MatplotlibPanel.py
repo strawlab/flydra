@@ -1,6 +1,10 @@
-##import numarray as nx
-import Numeric as nx
+
+import sys
+# force use of Numeric (numarray bug with SSE2 FPE?)
+sys.argv.append('--Numeric')
+
 import matplotlib
+import matplotlib.numerix as nx
 import matplotlib.matlab as mpl
 import matplotlib.cm
 from matplotlib.backends.backend_wx import NavigationToolbar2Wx
@@ -42,10 +46,14 @@ class PlotPanel(wxPanel):
 ##        mpl.set(a,'yticks',range(0,start_size[1],100))
         x, y = meshgrid(x, y)
         z = nx.zeros(x.shape)
+        frame = z
+        extent = 0, frame.shape[1]-1, frame.shape[0]-1, 0
         self.im = a.imshow( z,
                             cmap=matplotlib.cm.jet,
                             origin=origin,
-                            interpolation='nearest')
+                            interpolation='nearest',
+                            extent=extent,
+                            )
         #self.im.set_clim(0,255)
         
         self.lines = a.plot([0],[0],'o-') 	 
@@ -72,12 +80,7 @@ class PlotPanel(wxPanel):
         
     def set_points(self,points):
         zp = zip(*points)
-        #self.lines[0].set_data(zp[0],zp[1])
-        if origin == 'upper':
-            y = 490-nx.asarray(zp[1])
-        else:
-            y = zp[1]
-        self.lines[0].set_data(zp[0],y)
+        self.lines[0].set_data(zp[0],zp[1])
 
     def draw(self):
         self.canvas.draw()
