@@ -3,6 +3,8 @@
 import numarray as nx
 import math
 
+import imops
+
 from wxPython.wx import *
 from wxPython.glcanvas import *
 from OpenGL.GL import *
@@ -45,7 +47,7 @@ class DynamicImageCanvas(wxGLCanvas):
         return self.do_draw_points
 
     def delete_image(self,id_val):
-        tex_id, gl_tex_xy_alloc, gl_tex_xyfrac, widthheight = self._gl_tex_info_dict[id_val]
+        tex_id, gl_tex_xy_alloc, gl_tex_xyfrac, widthheight, internal_format, data_format = self._gl_tex_info_dict[id_val]
         glDeleteTextures( tex_id )
         del self._gl_tex_info_dict[id_val]
 
@@ -97,19 +99,33 @@ class DynamicImageCanvas(wxGLCanvas):
         def next_power_of_2(f):
             return int(math.pow(2.0,math.ceil(math.log(f)/math.log(2.0))))
 
-        height, width = image.shape
+        height, width = image.shape[:2]
+        if len(image.shape) == 3:
+            assert image.shape[2] == 3 # only support for RGB now...
+            has_color = True
+        else:
+            has_color = False
         
         width_pow2  = next_power_of_2(width)
         height_pow2  = next_power_of_2(height)
-        
-        buffer = nx.zeros( (height_pow2,width_pow2,2), image.typecode() )+128
-        buffer[0:height,0:width,0] = image
 
-        if self.do_clipping:
-            clipped = nx.greater(image,254) + nx.less(image,1)
-            mask = nx.choose(clipped, (255, 0) )
-            buffer[0:height,0:width,1] = mask
-        
+        if not has_color:
+            buffer = nx.zeros( (height_pow2,width_pow2,2), image.typecode() )+128
+            buffer[0:height,0:width,0] = image
+
+            if self.do_clipping:
+                clipped = nx.greater(image,254) + nx.less(image,1)
+                mask = nx.choose(clipped, (255, 0) )
+                buffer[0:height,0:width,1] = mask
+                
+            internal_format = GL_LUMINANCE_ALPHA
+            data_format = GL_LUMINANCE_ALPHA
+        else:
+            buffer = nx.zeros( (height_pow2,width_pow2,image.shape[2]), image.typecode() )
+            buffer[0:height, 0:width, :] = image
+            internal_format = GL_RGB
+            data_format = GL_RGB
+
         raw_data = buffer.tostring()
 
         tex_id = glGenTextures(1)
@@ -119,8 +135,8 @@ class DynamicImageCanvas(wxGLCanvas):
         widthheight = width, height
 
         self._gl_tex_info_dict[id_val] = (tex_id, gl_tex_xy_alloc, gl_tex_xyfrac,
-                                          widthheight)
-        
+                                          widthheight, internal_format, data_format)
+
         glBindTexture(GL_TEXTURE_2D, tex_id)
         glEnable(GL_TEXTURE_2D)
         glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE)
@@ -131,40 +147,51 @@ class DynamicImageCanvas(wxGLCanvas):
 ##        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexImage2D(GL_TEXTURE_2D, # target
                      0, #mipmap_level
-                     GL_LUMINANCE_ALPHA, #internal_format,
+                     internal_format,
                      width_pow2,
                      height_pow2,
                      0, #border,
-                     GL_LUMINANCE_ALPHA, #data_format,
+                     data_format,
                      GL_UNSIGNED_BYTE, #data_type,
-                     raw_data);
+                     raw_data)
 
-    def update_image(self,id_val,image):
+    def update_image(self,id_val,image,format='MONO8'):
+        if format == 'YUV422':
+            image = imops.yuv422_to_rgb888( image )
+        elif format == 'MONO8':
+            pass
+        else:
+            raise ValueError("Unknown format '%s'"%(format,))
+        
         if id_val not in self._gl_tex_info_dict:
             self.create_texture_object(id_val,image)
             return
-        height, width = image.shape
-        tex_id, gl_tex_xy_alloc, gl_tex_xyfrac, widthheight = self._gl_tex_info_dict[id_val]
+        height, width = image.shape[:2]
+        tex_id, gl_tex_xy_alloc, gl_tex_xyfrac, widthheight, internal_format, data_format = self._gl_tex_info_dict[id_val]
         
         max_x, max_y = gl_tex_xy_alloc 
         if width > max_x or height > max_y: 
             self.delete_image(id_val) 
             self.create_texture_object(id_val,image)
         else:
-            # XXX allocating new memory...
-            if not hasattr(self,'_buffer') or self._buffer.shape != (height,width,2):
-                self._buffer = nx.zeros( (height,width,2), image.typecode() )
-
-            if self.do_clipping:
-                clipped = nx.greater(image,254).astype(nx.UInt8) + nx.less(image,1).astype(nx.UInt8)
-                mask = nx.choose(clipped, (255, 200) ).astype(nx.UInt8) # alpha for transparency
-                self._buffer[:,:,0] = image
-                self._buffer[:,:,1] = mask
-                data_format = GL_LUMINANCE_ALPHA
-                buffer_string = self._buffer.tostring()
-            else:
-                data_format = GL_LUMINANCE
+            if len(image.shape) == 3:
+                # color image
                 buffer_string = image.tostring()
+            else:
+                # XXX allocating new memory...
+                if not hasattr(self,'_buffer') or self._buffer.shape != (height,width,2):
+                    self._buffer = nx.zeros( (height,width,2), image.typecode() )
+
+                if self.do_clipping:
+                    clipped = nx.greater(image,254).astype(nx.UInt8) + nx.less(image,1).astype(nx.UInt8)
+                    mask = nx.choose(clipped, (255, 200) ).astype(nx.UInt8) # alpha for transparency
+                    self._buffer[:,:,0] = image
+                    self._buffer[:,:,1] = mask
+                    data_format = GL_LUMINANCE_ALPHA
+                    buffer_string = self._buffer.tostring()
+                else:
+                    data_format = GL_LUMINANCE
+                    buffer_string = image.tostring()
             
             self._gl_tex_xyfrac = width/float(max_x),  height/float(max_y)
             glBindTexture(GL_TEXTURE_2D,tex_id)
@@ -213,7 +240,7 @@ class DynamicImageCanvas(wxGLCanvas):
                 left = (1.0-2*hx)*i/float(N)+hx+hx
                 right = (1.0-2*hx)*(i+1)/float(N)-hx+hx
 
-                tex_id, gl_tex_xy_alloc, gl_tex_xyfrac, widthheight = self._gl_tex_info_dict[ids[i]]
+                tex_id, gl_tex_xy_alloc, gl_tex_xyfrac, widthheight, internal_format, data_format = self._gl_tex_info_dict[ids[i]]
 
                 xx,yy = gl_tex_xyfrac
 
