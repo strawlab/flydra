@@ -6,7 +6,7 @@ import sys
 import numarray as na
 import Pyro.core, Pyro.errors
 
-DUMMY=0
+DUMMY=1
 
 if not DUMMY:
     if sys.platform == 'win32':
