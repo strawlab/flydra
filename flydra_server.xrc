@@ -72,26 +72,36 @@
         <object class="wxBoxSizer">
           <orient>wxHORIZONTAL</orient>
           <object class="sizeritem">
-            <object class="wxCheckBox" name="COLLECTING_BACKGROUND">
-              <label>Collect bg</label>
-              <checked>1</checked>
+            <object class="wxStaticBoxSizer">
+              <label>Background</label>
+              <orient>wxHORIZONTAL</orient>
+              <object class="sizeritem">
+                <object class="wxCheckBox" name="COLLECTING_BACKGROUND">
+                  <label>Running avg</label>
+                  <checked>1</checked>
+                </object>
+                <flag>wxTOP</flag>
+                <border>3</border>
+              </object>
+              <object class="sizeritem">
+                <object class="wxButton" name="take_background">
+                  <label>take</label>
+                </object>
+              </object>
+              <object class="sizeritem">
+                <object class="wxButton" name="clear_background">
+                  <label>clear</label>
+                </object>
+              </object>
             </object>
-            <flag>wxTOP</flag>
-            <border>3</border>
           </object>
           <object class="sizeritem">
-            <object class="wxButton" name="clear_background">
-              <label>clear bg</label>
-            </object>
+            <object class="wxPanel"/>
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="find_Rcenter">
               <label>find Rcenter</label>
             </object>
-          </object>
-          <object class="sizeritem">
-            <object class="wxPanel"/>
-            <option>1</option>
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="set_roi">

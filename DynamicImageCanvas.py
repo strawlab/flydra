@@ -8,6 +8,7 @@ from wxPython.glcanvas import *
 from OpenGL.GL import *
 from numarray.ieeespecial import nan
 import numarray.ieeespecial
+from flydra.reconstruct import MINIMUM_ECCENTRICITY
 
 have_glue = False
 try:
@@ -264,7 +265,7 @@ class DynamicImageCanvas(wxGLCanvas):
 ##                            # no orientation information
 ##                            continue
                         
-                        if eccentricity <= 2.0:
+                        if eccentricity <= MINIMUM_ECCENTRICITY:
                             # don't draw green lines -- not much orientation info
                             continue
                         

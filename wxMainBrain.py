@@ -58,22 +58,16 @@ class App(wxApp):
         #   Data logging
         data_logging_menu = wxMenu()
 
-        ID_collect_2d_info = wxNewId()
-        data_logging_menu.Append(ID_collect_2d_info, "Collect and log 2D info",
-                        "Collect & save to log file 2D points and orientation", wxITEM_CHECK)
-        EVT_MENU(self, ID_collect_2d_info, self.OnToggleCollect2dInfo)
+        ID_start_saving_data = wxNewId()
+        data_logging_menu.Append(ID_start_saving_data, "Start saving data...",
+                                 "Collect & save all 2D and 3D data")
+        EVT_MENU(self, ID_start_saving_data, self.OnStartSavingData)
 
-        ID_collect_3d_info = wxNewId()
-        data_logging_menu.Append(ID_collect_3d_info, "Collect 3D points",
-                                 "Collect 3D points", wxITEM_CHECK)
-        EVT_MENU(self, ID_collect_3d_info, self.OnToggleCollect3dInfo)
+        ID_stop_saving_data = wxNewId()
+        data_logging_menu.Append(ID_stop_saving_data, "Stop saving data",
+                                 "Stop saving data")
+        EVT_MENU(self, ID_stop_saving_data, self.OnStopSavingData)
 
-        data_logging_menu.AppendItem(wxMenuItem(kind=wxITEM_SEPARATOR))
-
-        ID_save_3d_data = wxNewId()
-        data_logging_menu.Append(ID_save_3d_data, "Save collected 3D points", "Saving all previously acquired 3d points")
-        EVT_MENU(self, ID_save_3d_data, self.OnSave3dData)
-        
         menuBar.Append(data_logging_menu, "Data &Logging")
         
         #   View
@@ -185,7 +179,7 @@ class App(wxApp):
         box = wxBoxSizer(wxVERTICAL)
         dynamic_image_panel.SetSizer(box)
         
-        self.cam_image_canvas = DynamicImageCanvas.DynamicImageCanvas(dynamic_image_panel,-1) # put GL window in container
+        self.cam_image_canvas = DynamicImageCanvas.DynamicImageCanvas(dynamic_image_panel,-1)
         box.Add(self.cam_image_canvas,1,wxEXPAND)
         dynamic_image_panel.Layout()
 
@@ -200,15 +194,12 @@ class App(wxApp):
             scrolled_container = wxPanel(container,-1)
         sizer.Add(scrolled_container,1,wxEXPAND)
         
-        ##
         sizer = wxBoxSizer(wxHORIZONTAL)
         scrolled_container.SetSizer(sizer)
         #scrolled_container.SetAutoLayout(True)
         if isinstance(scrolled_container,wxScrolledPanel):
             scrolled_container.SetupScrolling()
         self.preview_per_cam_scrolled_container = scrolled_container
-
-        ###
 
         self.preview_per_cam_scrolled_container.Layout()
 
@@ -233,9 +224,9 @@ class App(wxApp):
         EVT_CHECKBOX(collecting_background, collecting_background.GetId(),
                      self.OnCollectingBackground)
         
-##        collect_background = XRCCTRL(previewPerCamPanel,"collect_background")
-##        EVT_BUTTON(collect_background, collect_background.GetId(),
-##                   self.OnCollectBackground)
+        take_background = XRCCTRL(previewPerCamPanel,"take_background")
+        EVT_BUTTON(take_background, take_background.GetId(),
+                   self.OnTakeBackground)
         
         clear_background = XRCCTRL(previewPerCamPanel,"clear_background")
         EVT_BUTTON(clear_background, clear_background.GetId(),
@@ -565,12 +556,32 @@ class App(wxApp):
     def OnToggleDebugCameras(self, event):
         self.main_brain.set_all_cameras_debug_mode( event.IsChecked() )
 
-    def OnToggleCollect2dInfo(self, event):
-        self.main_brain.save_2d_data = event.IsChecked()
+    def OnStartSavingData(self, event):
+        doit=False
+        dlg = wxFileDialog( self.frame, "Select file to save data",
+                            style = wxDD_DEFAULT_STYLE,
+                            defaultDir = os.environ.get('HOME',''),
+                            wildcard = '*.h5',
+                            )
+        try:
+            if dlg.ShowModal() == wxID_OK:
+                save_filename = dlg.GetPath()
+                doit = True
+        finally:
+            dlg.Destroy()
             
-    def OnToggleCollect3dInfo(self, event):
-        self.main_brain.collect_3d_data = event.IsChecked()
-            
+        if doit:
+            try:
+                self.main_brain.start_saving_data(save_filename)
+                self.statusbar.SetStatusText("Saving data to '%s'"%save_filename)
+            except:
+                self.statusbar.SetStatusText("Error saving data to '%s', see console"%save_filename)
+                raise
+
+    def OnStopSavingData(self, event):
+        self.main_brain.stop_saving_data()
+        self.statusbar.SetStatusText("Saving stopped")        
+        
     def OnToggleTint(self, event):
         self.cam_image_canvas.set_clipping( event.IsChecked() )
 
@@ -635,14 +646,10 @@ class App(wxApp):
     def update_wx(self):
         self.statusbar.SetStatusText('%d camera(s)'%len(self.cameras),1)
 
-    def OnSave3dData(self, event):
-        self.main_brain.Save3dData()
-        self.main_brain.SaveGlobals('camera_data.dat')
-
     def OnOpenCamConfig(self, event):
         doit=False
         dlg = wxFileDialog( self.frame, "Select file from which to open camera config data",
-                            style = wxDD_DEFAULT_STYLE,
+                            style = wxOPEN,
                             defaultDir = os.environ.get('HOME',''),
                             defaultFile = 'flydra_cameras.cfg',
                             wildcard = '*.cfg',
@@ -675,6 +682,7 @@ class App(wxApp):
         all_params = self.main_brain.get_all_params()
         doit=False
         dlg = wxFileDialog( self.frame, "Select file to save camera config data",
+                            #style = wxSAVE | wxOVERWRITE_PROMPT,
                             style = wxDD_DEFAULT_STYLE,
                             defaultDir = os.environ.get('HOME',''),
                             defaultFile = 'flydra_cameras.cfg',
@@ -714,7 +722,8 @@ class App(wxApp):
                 dlg.Destroy()
         
     def OnQuit(self, event):
-        del self.main_brain
+        if hasattr(self,'main_brain'):
+            del self.main_brain
         self.frame.Close(True)
 
     def OnIdle(self, event):
@@ -724,7 +733,7 @@ class App(wxApp):
         if self.current_page in ['tracking','preview','snapshot']:
             realtime_data=MainBrain.get_best_realtime_data()
             if realtime_data is not None:
-                data3d,line3d=realtime_data
+                data3d,line3d,cam_ids_used=realtime_data
                 if self.current_page == 'tracking':
                     XRCCTRL(self.tracking_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
                     XRCCTRL(self.tracking_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
@@ -783,9 +792,9 @@ class App(wxApp):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         self.main_brain.set_collecting_background( cam_id, event.IsChecked() )
 
-##    def OnCollectBackground(self, event):
-##        cam_id = self._get_cam_id_for_button(event.GetEventObject())
-##        self.main_brain.collect_background(cam_id)
+    def OnTakeBackground(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        self.main_brain.take_background(cam_id)
 
     def OnClearBackground(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())

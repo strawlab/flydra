@@ -169,6 +169,7 @@ cdef class RealtimeAnalyzer:
         cdef double rise, run
         cdef double evalA, evalB
         cdef double evecA1, evecB1
+##        cdef double left_double, bottom_double
         
         cdef double Mu00, Uu11, Uu02, Uu20
         cdef int i
@@ -186,7 +187,7 @@ cdef class RealtimeAnalyzer:
         eccentricity = 0
         
         # start of IPP-requiring code
-        
+
         # release GIL
         c_python.Py_BEGIN_ALLOW_THREADS
         
@@ -225,6 +226,8 @@ cdef class RealtimeAnalyzer:
         if max_val < self._diff_threshold:
             x0=-1
             y0=-1
+            x0_abs = -1
+            y0_abs = -1
         else:
             result = fit_params( self.pState, &x0, &y0,
                                  &Mu00,
@@ -273,8 +276,8 @@ cdef class RealtimeAnalyzer:
 
         # grab GIL
         c_python.Py_END_ALLOW_THREADS
-        
-        if self._pmat_inv is not None:
+
+        if self._pmat_inv is not None and x0_abs != -1.0:
 
             # calculate plane containing camera origin and found line
             # in 3D world coords
@@ -293,9 +296,10 @@ cdef class RealtimeAnalyzer:
             Pt = vt[3,:] # plane parameters
             
             p1,p2,p3,p4 = Pt[0:4]
+        else:
+            p1,p2,p3,p4 = nan, nan, nan, nan
         
         # end of IPP-requiring code
-
         return [ (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4) ]
 
     def get_working_image(self):
@@ -317,6 +321,20 @@ cdef class RealtimeAnalyzer:
                          self.width)
         # end of IPP-requiring code
         return buf
+
+    def take_background_image(self):
+        # start of IPP-requiring code
+        CHK( ipp.ippiCopy_8u_C1R(
+            (self.im1 + self._bottom*self.im1_step + self._left), self.im1_step,
+            (self.bg_img + self._bottom*self.bg_img_step + self._left), self.bg_img_step,
+            self._roi_sz))
+        CHK( ipp.ippiConvert_8u32f_C1R(
+            (self.im1 + self._bottom*self.im1_step + self._left), self.im1_step,
+            (self.accum_image + self._bottom*self.accum_image_step/4 + self._left),
+            self.accum_image_step,
+            self._roi_sz))
+        # end of IPP-requiring code
+        return
 
     def clear_background_image(self):
         # start of IPP-requiring code

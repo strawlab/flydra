@@ -2,9 +2,14 @@
 import threading, time, socket, select, sys, os, copy, struct, math
 import sets
 import Pyro.core
-from flydra.reconstruct import Reconstructor
+import flydra.reconstruct
 import numarray as nx
+import numarray.records
 from numarray.ieeespecial import nan, inf
+import Queue
+import tables as PT
+
+THRESHOLD_MEAN_DIST = 5.0 # cutoff acceptable pixel distance to stop searching camera combinations
 
 Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here...
 
@@ -13,9 +18,13 @@ Pyro.config.PYRO_USER_TRACELEVEL = 3
 Pyro.config.PYRO_DETAILED_TRACEBACK = 1
 Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
 
+IMPOSSIBLE_TIMESTAMP = -10.0
+
 calib_data_lock = threading.Lock()
 calib_IdMat = []
 calib_points = []
+
+XXX_framenumber = 0
 
 fastest_realtime_data=None
 best_realtime_data=None
@@ -43,6 +52,54 @@ BEST_DATA_PORT = 28932
 if len(downstream_hostnames):
     outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
+# 2D data format for PyTables:
+class Info2D(PT.IsDescription):
+    camn         = PT.Int32Col(pos=0)
+    frame        = PT.Int32Col(pos=1)
+    timestamp    = PT.FloatCol(pos=2)
+    x            = PT.Float32Col(pos=3)
+    y            = PT.Float32Col(pos=4)
+    area         = PT.Float32Col(pos=5)
+    slope        = PT.Float32Col(pos=6)
+    eccentricity = PT.Float32Col(pos=7)
+    p1           = PT.Float32Col(pos=8)
+    p2           = PT.Float32Col(pos=9)
+    p3           = PT.Float32Col(pos=10)
+    p4           = PT.Float32Col(pos=11)
+
+class CamSyncInfo(PT.IsDescription):
+    cam_id = PT.StringCol(16,pos=0)
+    camn   = PT.Int32Col(pos=1)
+    frame0 = PT.FloatCol(pos=2)
+
+class MovieInfo(PT.IsDescription):
+    cam_id             = PT.StringCol(16,pos=0)
+    filename           = PT.StringCol(255,pos=1)
+    approx_start_frame = PT.Int32Col(pos=2)
+    approx_stop_frame  = PT.Int32Col(pos=3)
+
+class AdditionalInfo(PT.IsDescription):
+    minimum_eccentricity = PT.Float32Col() # record what parameter was used during reconstruction
+
+class Info3D(PT.IsDescription):
+    frame      = PT.Int32Col(pos=0)
+    
+    x          = PT.Float32Col(pos=1)
+    y          = PT.Float32Col(pos=2)
+    z          = PT.Float32Col(pos=3)
+    
+    p0         = PT.Float32Col(pos=4)
+    p1         = PT.Float32Col(pos=5)
+    p2         = PT.Float32Col(pos=6)
+    p3         = PT.Float32Col(pos=7)
+    p4         = PT.Float32Col(pos=8)
+    p5         = PT.Float32Col(pos=9)
+    
+    timestamp  = PT.FloatCol(pos=10)
+    
+    camns_used = PT.StringCol(32,pos=11)
+    mean_dist  = PT.Float32Col(pos=12) # mean 2D reconstruction error
+    
 def save_ascii_matrix(filename,m):
     fd=open(filename,mode='wb')
     for row in m:
@@ -77,7 +134,7 @@ class CoordReceiver(threading.Thread):
         self.last_timestamps = []
         self.listen_sockets = []
         self.framenumber_offsets = []
-        
+        self.cam_id2cam_no = {}
         self.reconstructor = None
 
         self.all_data_lock = threading.Lock()
@@ -87,9 +144,6 @@ class CoordReceiver(threading.Thread):
         self.RESET_FRAMENUMBER_DURATION=1.0 # seconds
         
         self.general_save_info = {}
-        self.save_2d_data_fd = None
-        self.save_3d_data_fastest = None
-        self.save_3d_data_best = None
         
         name = 'CoordReceiver thread'
         threading.Thread.__init__(self,name=name)
@@ -104,23 +158,6 @@ class CoordReceiver(threading.Thread):
 
         return UDP_port
 
-    def get_3d_data(self,typ):
-        if typ == 'fast':
-            d = self.save_3d_data_fastest
-        elif typ == 'best':
-            d = self.save_3d_data_best
-
-        self.all_data_lock.acquire()
-        try:
-            if d is not None:
-                result = d.copy()
-            else:
-                result = None
-        finally:
-            self.all_data_lock.release()
-
-        return result
-
     def get_general_cam_info(self):
         self.all_data_lock.acquire()
         try:
@@ -129,71 +166,11 @@ class CoordReceiver(threading.Thread):
             self.all_data_lock.release()
         return result
 
-    def is_saving_2d_data(self):
-        self.all_data_lock.acquire()
-        try:
-            result = self.save_2d_data_fd is not None
-        finally:
-            self.all_data_lock.release()
-        return result
-     
-    def set_saving_2d_data(self,value):
-        self.all_data_lock.acquire()
-        try:
-            if value:
-                self.save_2d_data_fd = open('raw_data.dat','wb')
-            else:
-                self.save_2d_data_fd = None
-        finally:
-            self.all_data_lock.release()
-    
-    def clear_saved_2d_data(self):
-        self.all_data_lock.acquire()
-        try:
-            if self.save_2d_data_fd is not None:
-                self.save_2d_data_fd.seek(0)
-                self.save_2d_data_fd.truncate()
-        finally:
-            self.all_data_lock.release()
-    
     def set_reconstructor(self,r):
         self.all_data_lock.acquire()
         self.reconstructor = r    
         self.all_data_lock.release()
 
-    def is_collecting_3d_data(self):
-        self.all_data_lock.acquire()
-        try:
-            result = self.save_3d_data_fastest is not None
-        finally:
-            self.all_data_lock.release()
-        return result
-    
-    def set_collect_3d_data(self,value):
-        self.all_data_lock.acquire()
-        try:
-            if value:
-                if self.save_3d_data_fastest is None:
-                    # do not clear data if already present
-                    self.save_3d_data_fastest = {}
-                if self.save_3d_data_best is None:
-                    self.save_3d_data_best = {}
-            else:
-                self.save_3d_data_fastest = None
-                self.save_3d_data_best = None
-        finally:
-            self.all_data_lock.release()
-
-    def clear_3d_data(self):
-        self.all_data_lock.acquire()
-        try:
-            if self.save_3d_data_fastest is not None:
-                self.save_3d_data_fastest = {}
-            if self.save_3d_data_best is not None:
-                self.save_3d_data_best = {}
-        finally:
-            self.all_data_lock.release()
-            
     def connect(self,cam_id):
         global hostname
         
@@ -211,33 +188,36 @@ class CoordReceiver(threading.Thread):
         self.max_absolute_cam_nos += 1        
         absolute_cam_no = self.max_absolute_cam_nos
         self.absolute_cam_nos.append( absolute_cam_no )
+        
+        self.cam_id2cam_no[cam_id] = absolute_cam_no
 
         # create and bind socket to listen to
         sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sockobj.bind((hostname, UDP_port))
         sockobj.setblocking(0)
         self.listen_sockets.append( sockobj )
-        self.last_timestamps.append(-10.0) # arbitrary impossible number
+        self.last_timestamps.append(IMPOSSIBLE_TIMESTAMP) # arbitrary impossible number
         self.framenumber_offsets.append(0)
-        self.general_save_info[cam_id] = {'cam_no':absolute_cam_no,
-                                          'frame0':self.last_timestamps[-1]}
+        self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no,
+                                          'frame0':IMPOSSIBLE_TIMESTAMP}
+        self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, IMPOSSIBLE_TIMESTAMP) )
         self.all_data_lock.release()
 
         return UDP_port
 
     def disconnect(self,cam_id):
-        i = self.cam_ids.index( cam_id )
+        cam_idx = self.cam_ids.index( cam_id )
 
         self.all_data_lock.acquire()
         
-        del self.cam_ids[i]
-        del self.UDP_ports[i]
-        del self.absolute_cam_nos[i]
-        self.listen_sockets[i].close()
-        del self.listen_sockets[i]
-        del self.last_timestamps[i]
-        del self.framenumber_offsets[i]
-        #del self.general_save_info[cam_id]
+        del self.cam_ids[cam_idx]
+        del self.UDP_ports[cam_idx]
+        del self.absolute_cam_nos[cam_idx]
+        self.listen_sockets[cam_idx].close()
+        del self.listen_sockets[cam_idx]
+        del self.last_timestamps[cam_idx]
+        del self.framenumber_offsets[cam_idx]
+        del self.general_save_info[cam_id]
         self.all_data_lock.release()
     
     def quit(self):
@@ -246,13 +226,14 @@ class CoordReceiver(threading.Thread):
     def run(self):
         global downstream_hostnames, fastest_realtime_data, best_realtime_data
         global outgoing_UDP_socket, calib_data_lock, calib_IdMat, calib_points
-        global calib_data_lock
+        global calib_data_lock, XXX_framenumber
         
         header_fmt = '<dli'
         header_size = struct.calcsize(header_fmt)
-        pt_fmt = '<fffffffff'
+        #pt_fmt = '<fffffffff'
+        pt_fmt = 'ddddddddd'
         pt_size = struct.calcsize(pt_fmt)
-        save_2d_fmt = 'Bidfffffffff'
+        #save_2d_fmt = 'Bidfffffffff'
         timeout = 0.1
         
         realtime_coord_dict = {}        
@@ -264,7 +245,6 @@ class CoordReceiver(threading.Thread):
             except Exception:
                 raise
             except:
-                # sometimes this code raises an old string error (not derived from Exception)
                 print 'WARNING: CoordReceiver received an exception not derived from Exception'
                 continue
             if not len(in_ready):
@@ -300,19 +280,37 @@ class CoordReceiver(threading.Thread):
                 cam_dict['points']=points
                 cam_dict['lock'].release()
                     
+                if timestamp-self.last_timestamps[cam_idx] > 0.02:
+                    print 'WARNING frame skipped %s?'%cam_id
+                    
                 if timestamp-self.last_timestamps[cam_idx] > self.RESET_FRAMENUMBER_DURATION:
                     self.framenumber_offsets[cam_idx] = framenumber
-                    if self.last_timestamps[cam_idx] != -10.0:
-                        print cam_id,'synchronized'
-                        self.general_save_info[cam_id]['frame0']=timestamp
-                        # XXX Could I make new absolute_cam_no to prevent data loss?
-##                    else:
-##                        print cam_id,'first 2D coordinates received'
+                    if self.last_timestamps[cam_idx] != IMPOSSIBLE_TIMESTAMP:
+                        print cam_id,'(re)synchronized'
+                    #else:
+                    #    print cam_id,'first 2D coordinates received'
+                        
+                    # make new absolute_cam_no to indicate new synchronization state
+                    self.max_absolute_cam_nos += 1        
+                    absolute_cam_no = self.max_absolute_cam_nos
+                    self.absolute_cam_nos[cam_idx] = absolute_cam_no
+
+                    self.cam_id2cam_no[cam_id] = absolute_cam_no
+                    
+                    self.general_save_info[cam_id]['absolute_cam_no']=absolute_cam_no
+                    self.general_save_info[cam_id]['frame0']=timestamp
+                    
+                    self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, timestamp) )
                         
                 self.last_timestamps[cam_idx]=timestamp
                 corrected_framenumber = framenumber-self.framenumber_offsets[cam_idx]
+                XXX_framenumber = corrected_framenumber
 
-                if self.save_2d_data_fd is not None:
+##                x = points[0][0]
+##                if x > -0.9: # only save 2D data if point is identified
+                if 1:
+                    # We must save 2D data (even when no point found)
+                    # if we want to correlate movie frames.
                     args = ( absolute_cam_no,
                              corrected_framenumber,
                              timestamp,
@@ -348,12 +346,92 @@ class CoordReceiver(threading.Thread):
                 num_cams_arrived = len(data_dict)
                 d2 = {} # old "good" points will go in here
                 for cam_id, PT in data_dict.iteritems():
-                    if PT[0] + 1 > 1e-6: # only use found points
+                    if PT[0] > -0.9: # only use found points
                         d2[cam_id] = PT
                 num_good_images = len(d2)
+                if num_good_images < 2:
+                    # no point in dealing with this frame!
+                    continue
+                #if num_cams_arrived==len(self.cam_ids):
                 if num_good_images==2 or num_cams_arrived==len(self.cam_ids):
                     # either first possible moment or all data present
-                    X, line3d = self.reconstructor.find3d(d2.items())
+##                    if num_cams_arrived==len(self.cam_ids):
+##                        use_hypothesis_testing=True
+##                    else:
+##                        use_hypothesis_testing=False
+
+                    use_hypothesis_testing=False
+
+                        
+                    if not use_hypothesis_testing:
+                        X, line3d = self.reconstructor.find3d(d2.items())
+                        cam_ids_used = d2.keys()
+                        cam_nos_used = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
+                        
+                        # find "min_mean_dist" (just mean_dist)
+                        alpha = 1.0/len(d2)
+                        mean_dist = 0.0
+                        for cam_id in d2.iterkeys():
+                            orig_x, orig_y = d2[cam_id][:2]
+                            recon_x, recon_y = self.reconstructor.find2d(cam_id,X)
+                            dist = math.sqrt((orig_x-recon_x)**2 + (orig_y-recon_y)**2)
+                            mean_dist += dist*alpha
+                        min_mean_dist = mean_dist
+                    else:
+                        start_hypothesis_testing = time.time()
+                        reached_threshold = False
+                        min_mean_dist = inf
+                        best_hypothesis_data = None
+                        for cam_ids_used in self.reconstructor.cam_combinations:
+                            start_hypothesis = time.time()
+
+                            #print 'cam_ids_used',len(cam_ids_used),cam_ids_used
+                            d3 = {}
+                            
+                            # check if data available from all camera combinations:
+                            try:
+                                for cam_id in cam_ids_used:
+                                    d3[cam_id] = d2[cam_id] # d2 only has points found in 2D image
+                            except KeyError:
+                                #print 'skipping cam_ids_used, camera not available'
+                                continue
+
+                            X, line3d = self.reconstructor.find3d(d3.items())
+                                                        
+                            #print 'X',X
+
+                            alpha = 1.0/len(d3)
+                            mean_dist = 0.0
+                            for cam_id in d3.iterkeys():
+                                orig_x, orig_y = d3[cam_id][:2]
+                                recon_x, recon_y = self.reconstructor.find2d(cam_id,X)
+
+                                dist = math.sqrt((orig_x-recon_x)**2 + (orig_y-recon_y)**2)
+                                mean_dist += dist*alpha
+                                #print cam_id,(orig_x, orig_y), (recon_x, recon_y), dist
+                                #print '  ',cam_id, dist
+                            #print ' ** mean **',mean_dist
+                            end_hypothesis = time.time()
+                            if mean_dist < min_mean_dist:
+                                min_mean_dist = mean_dist
+                                best_hypothesis_data = X, line3d, cam_ids_used
+                            if mean_dist < THRESHOLD_MEAN_DIST:
+                                reached_threshold = True
+                                break
+                        end_hypothesis_testing = time.time()
+                        ht_dur_msec = (end_hypothesis_testing-start_hypothesis_testing)*1000.0
+                        print 'ht_dur_msec',ht_dur_msec
+                        if not reached_threshold:
+                            #print 'WARNING: did not reach minimum threshold distance'
+                            if best_hypothesis_data is not None:
+                                X, line3d, cam_ids_used = best_hypothesis_data
+                                #print '  using data with mean_dist %f'%min_mean_dist,cam_ids_used
+                            else:
+                                #X, line3d, cam_ids_used = (nan,nan,nan), None, []
+                                #print '  no data...'
+                                continue # XXX (double check this) go to next frame: no useful data here
+                        cam_nos_used = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
+                    
                     if line3d is None:
                         line3d = nan, nan, nan, nan, nan, nan
                     find3d_time = time.time()
@@ -361,32 +439,38 @@ class CoordReceiver(threading.Thread):
                     x,y,z=X
                     outgoing_data = [x,y,z]
                     outgoing_data.extend( line3d ) # 6 component vector
-                    outgoing_data.extend( (find3d_time,num_good_images) )
+                    outgoing_data.append( find3d_time )
 
                     if len(downstream_hostnames):
-                        data_packet = struct.pack('ifffffffffdi',corrected_framenumber,*outgoing_data)
+                        data_packet = struct.pack('ifffffffffd',corrected_framenumber,*outgoing_data)
                     if num_good_images==2:
                         # fastest 3d data
-                        fastest_realtime_data = X, line3d
+                        fastest_realtime_data = X, line3d, cam_ids_used
                         try:
                             for downstream_hostname in downstream_hostnames:
                                 outgoing_UDP_socket.sendto(data_packet,(downstream_hostname,FASTEST_DATA_PORT))
                         except:
                             print 'WARNING: could not send 3d point data to projector:'
                             print
-                        if self.save_3d_data_fastest is not None:
-                            self.save_3d_data_fastest[corrected_framenumber]=outgoing_data
+                        if self.main_brain.h5file is not None:
+                            self.main_brain.queue_data3d_fastest.put( (corrected_framenumber,
+                                                                       outgoing_data,
+                                                                       cam_nos_used,
+                                                                       min_mean_dist) )
                     if num_cams_arrived==len(self.cam_ids):
                         # realtime 3d data
-                        best_realtime_data = X, line3d
+                        best_realtime_data = X, line3d, cam_ids_used
                         try:
                             for downstream_hostname in downstream_hostnames:
                                 outgoing_UDP_socket.sendto(data_packet,(downstream_hostname,BEST_DATA_PORT))
                         except:
                             print 'WARNING: could not send 3d point data to projector:'
                             print
-                        if self.save_3d_data_best is not None:
-                            self.save_3d_data_best[corrected_framenumber]=outgoing_data
+                        if self.main_brain.h5file is not None:
+                            self.main_brain.queue_data3d_best.put( (corrected_framenumber,
+                                                                    outgoing_data,
+                                                                    cam_nos_used,
+                                                                    min_mean_dist) )
 
             # save calibration data -=-=-=-=-=-=-=-=
             if self.main_brain.currently_calibrating.isSet():
@@ -420,10 +504,8 @@ class CoordReceiver(threading.Thread):
                 for ki in k[:-50]:
                     del realtime_coord_dict[ki]  
 
-            # save data deferred from earlier...
-            for args in deferred_2d_data:
-                buf = struct.pack(save_2d_fmt,*args)
-                self.save_2d_data_fd.write( buf )
+            if len(deferred_2d_data):
+                self.main_brain.queue_data2d.put( deferred_2d_data )
             self.all_data_lock.release()
             
 class MainBrain(object):
@@ -591,14 +673,14 @@ class MainBrain(object):
             cam_lock.release()
             self.cam_info_lock.release()
 
-##        def external_collect_background( self, cam_id):
-##            self.cam_info_lock.acquire()            
-##            cam = self.cam_info[cam_id]
-##            cam_lock = cam['lock']
-##            cam_lock.acquire()
-##            cam['commands']['collect_bg']=None
-##            cam_lock.release()
-##            self.cam_info_lock.release()
+        def external_take_background( self, cam_id):
+            self.cam_info_lock.acquire()            
+            cam = self.cam_info[cam_id]
+            cam_lock = cam['lock']
+            cam_lock.acquire()
+            cam['commands']['take_bg']=None
+            cam_lock.release()
+            self.cam_info_lock.release()        
 
         def external_clear_background( self, cam_id):
             self.cam_info_lock.acquire()            
@@ -771,6 +853,23 @@ class MainBrain(object):
         self.set_old_camera_callback(self.DecreaseCamCounter)
         self.currently_calibrating = threading.Event()
 
+        self._currently_recording_movies = {}
+
+        # Attributes which come in use when saving data occurs
+        self.h5file = None
+        self.h5data2d = None
+        self.h5cam_info = None
+        self.h5movie_info = None
+        self.h5data3d_fastest = None
+        self.h5data3d_best = None
+        self.h5additional_info = None
+
+        # Queues of information to save
+        self.queue_data2d         = Queue.Queue()
+        self.queue_cam_info       = Queue.Queue()
+        self.queue_data3d_fastest = Queue.Queue()
+        self.queue_data3d_best    = Queue.Queue()
+
         self.coord_receiver = CoordReceiver(self)
         self.coord_receiver.start()
 
@@ -801,36 +900,6 @@ class MainBrain(object):
             sci, fqdn, port = self.remote_api.external_get_info(cam_id)
             all[cam_id] = sci
         return all
-
-    def Save3dData(self,fast_filename='raw_data_3d_fast.dat',best_filename='raw_data_3d_best.dat'):
-        for typ in ['fast','best']:
-            if typ == 'fast': fname = fast_filename
-            elif typ == 'best': fname = best_filename
-            dikt = self.coord_receiver.get_3d_data(typ)
-            
-            fullpath = os.path.abspath(fname)
-            print 'saving %s 3d data to "%s"...'%(typ,fullpath)
-            fd=open(fname,'wb')
-
-            keys=dikt.keys()
-            keys.sort()
-            for k in keys:
-                fd.write('%d %s\n'%(k,' '.join(map( repr, dikt[k]))))
-            fd.close()
-            print '  done'
-
-    def SaveGlobals(self,filename='camera_data.dat'):
-        fullpath = os.path.abspath(filename)
-        print 'saving globals to',fullpath
-        fd=open(filename,'wb')
-        dd=self.coord_receiver.get_general_cam_info()
-        cam_ids=dd.keys()
-        cam_ids.sort()
-        for cam_id in cam_ids:
-            fd.write('%s %d %s\n'%(cam_id,dd[cam_id]['cam_no'],
-                                   repr(dd[cam_id]['frame0'])))
-        fd.close()
-        print 'globals saved'
 
     def start_listening(self):
         # start listen thread
@@ -896,6 +965,8 @@ class MainBrain(object):
         for cam_id in new_cam_ids:
             if cam_id in old_cam_ids:
                 continue # inserted and then removed
+            if self.h5file is not None:
+                raise RuntimeError("Cannot add new camera while saving data")
             scalar_control_info, fqdn, port = self.remote_api.external_get_info(cam_id)
             for new_cam_func in self._new_camera_functions:
                 new_cam_func(cam_id,scalar_control_info,(fqdn,port))
@@ -903,6 +974,8 @@ class MainBrain(object):
         for cam_id in old_cam_ids:
             for old_cam_func in self._old_camera_functions:
                 old_cam_func(cam_id)
+                
+        self._service_save_data()
 
     def get_last_image_fps(self, cam_id):
         return self.remote_api.external_get_image_fps_points(cam_id)
@@ -919,8 +992,8 @@ class MainBrain(object):
     def set_collecting_background(self, cam_id, value):
         self.remote_api.external_set_collecting_background( cam_id, value)
 
-##    def collect_background(self,cam_id):
-##        self.remote_api.external_collect_background(cam_id)
+    def take_background(self,cam_id):
+        self.remote_api.external_take_background(cam_id)
 
     def clear_background(self,cam_id):
         self.remote_api.external_clear_background(cam_id)
@@ -935,11 +1008,40 @@ class MainBrain(object):
         self.remote_api.external_request_image_async(cam_id)
 
     def start_recording(self, cam_id,filename):
+        global XXX_framenumber
+
         self.remote_api.external_start_recording( cam_id, filename)
+        approx_start_frame = XXX_framenumber
+        self._currently_recording_movies[ cam_id ] = (filename, approx_start_frame)
+        if self.h5file is not None:
+            self.h5movie_info.row['cam_id'] = cam_id
+            self.h5movie_info.row['filename'] = filename
+            self.h5movie_info.row['approx_start_frame'] = approx_start_frame
+            self.h5movie_info.row.append()
+            self.h5movie_info.flush()
         
     def stop_recording(self, cam_id):
-        self.remote_api.external_stop_recording( cam_id)
-
+        global XXX_framenumber
+        self.remote_api.external_stop_recording(cam_id)
+        approx_stop_frame = XXX_framenumber
+        filename, approx_start_frame = self._currently_recording_movies[ cam_id ]
+        del self._currently_recording_movies[ cam_id ]
+        # modify save file to include approximate movie stop time
+        if self.h5file is not None:
+            nrow = None
+            for r in self.h5movie_info:
+                # get row in table
+                if (r['cam_id'] == cam_id and r['filename'] == filename and
+                    r['approx_start_frame']==approx_start_frame):
+                    nrow =r.nrow()
+                    break
+            if nrow is not None:
+                nrowi = int(nrow) # pytables bug workaround...
+                assert nrowi == nrow # pytables bug workaround...
+                self.h5movie_info.cols.approx_stop_frame[nrowi] = approx_stop_frame
+            else:
+                raise RuntimeError("could not find row to save movie stop frame.")
+                    
     def quit(self):
         # XXX ----- non-isolated calls to remote_api being done ----
         # this may be called twice: once explicitly and once by __del__
@@ -963,10 +1065,16 @@ class MainBrain(object):
             #raise RuntimeError('cameras failed to quit cleanly: %s'%str(cam_ids))
 
         self.coord_receiver.quit()
+        if self.h5file is not None:
+            self._service_save_data()
+            self.h5file.close()
+            self.h5file = None
 
     def load_calibration(self,dirname):
+        if self.h5file is not None:
+            raise RuntimeError("Cannot (re)load calibration while saving data")
         cam_ids = self.remote_api.external_get_cam_ids()
-        self.reconstructor = Reconstructor(calibration_dir=dirname)
+        self.reconstructor = flydra.reconstruct.Reconstructor(calibration_dir=dirname)
 
         self.coord_receiver.set_reconstructor(self.reconstructor)
         
@@ -981,20 +1089,148 @@ class MainBrain(object):
         for cam_id in cam_ids:
             self.remote_api.external_set_debug( cam_id, value)
 
-    def get_save_2d_data(self):
-        return self.coord_receiver.is_saving_2d_data()
-    def set_save_2d_data(self,value):
-        self.coord_receiver.set_saving_2d_data(value)
-    save_2d_data = property( get_save_2d_data, set_save_2d_data )
-    
-    def clear_2d_data(self):
-        self.coord_receiver.clear_saved_2d_data()
+    def start_saving_data(self, filename):
+        if os.path.exists(filename):
+            raise RuntimeError("will not overwrite data file")
 
-    def is_collecting_3d_data(self):
-        return self.coord_receiver.is_collecting_3d_data()
-    def set_collect_3d_data(self,value):
-        self.coord_receiver.set_collect_3d_data(value)
-    collect_3d_data = property( is_collecting_3d_data, set_collect_3d_data )
-    
-    def clear_3d_data(self):
-        self.coord_receiver.clear_3d_data()
+        self.h5file = PT.openFile(filename, mode="w", title="Flydra data file")
+        expected_rows = int(1e6)
+        ct = self.h5file.createTable # shorthand
+        root = self.h5file.root # shorthand
+        self.h5data2d   = ct(root,'data2d', Info2D, "2d data",
+                             expectedrows=expected_rows*5)
+        self.h5cam_info = ct(root,'cam_info', CamSyncInfo, "Cam Sync Info",
+                             expectedrows=500)
+        self.h5movie_info = ct(root,'movie_info', MovieInfo, "Movie Info",
+                               expectedrows=500)
+        if self.reconstructor is not None:
+            cal_group = self.h5file.createGroup(root,'calibration')
+            
+            pmat_group = self.h5file.createGroup(cal_group,'pmat')
+            for cam_id in self.remote_api.external_get_cam_ids():
+                self.h5file.createArray(pmat_group, cam_id,
+                                        self.reconstructor.get_pmat(cam_id))
+            res_group = self.h5file.createGroup(cal_group,'resolution')
+            for cam_id in self.remote_api.external_get_cam_ids():
+                self.h5file.createArray(res_group, cam_id,
+                                        self.reconstructor.get_resolution(cam_id))
+                
+            self.h5data3d_fastest = ct(root,'data3d_fastest', Info3D,
+                                       "3d data (fastest)",
+                                       expectedrows=expected_rows)
+            self.h5data3d_best = ct(root,'data3d_best', Info3D,
+                                    "3d data (best)",
+                                    expectedrows=expected_rows)
+            self.h5additional_info = ct(root,'additional_info', AdditionalInfo,
+                                        '')
+            self.h5additional_info
+            row = self.h5additional_info.row
+            row['minimum_eccentricity'] = flydra.reconstruct.MINIMUM_ECCENTRICITY
+            row.append()
+            self.h5additional_info.flush()
+
+        general_save_info=self.coord_receiver.get_general_cam_info()
+        for cam_id,dd in general_save_info.iteritems():
+            self.h5cam_info.row['cam_id'] = cam_id
+            self.h5cam_info.row['camn']   = dd['absolute_cam_no']
+            self.h5cam_info.row['frame0'] = dd['frame0']
+            self.h5cam_info.row.append()
+        self.h5cam_info.flush()
+
+    def stop_saving_data(self):
+        self._service_save_data()
+        self.h5file.close()
+        self.h5file = None
+        self.h5data2d = None
+        self.h5cam_info = None
+        self.h5movie_info = None
+        self.h5data3d_fastest = None
+        self.h5data3d_best = None
+        self.h5additional_info = None
+
+    def _service_save_data(self):
+        # ** 2d data **
+        #   clear queue
+        list_of_rows_of_data2d = []
+        try:
+            while True:
+                tmp = self.queue_data2d.get(0)
+                list_of_rows_of_data2d.append( tmp )
+        except Queue.Empty:
+            pass
+        #   save
+        if self.h5data2d is not None:
+            #nrows = 0
+            for rows_of_data2d in list_of_rows_of_data2d:
+                #nrows += len(rows_of_data2d)
+                try:
+                    self.h5data2d.append( rows_of_data2d )
+                except ValueError:
+                    print 'ERROR following'
+                    print
+                    print 'rows_of_data2d='
+                    print rows_of_data2d
+                    print
+                    raise
+            self.h5data2d.flush()
+            #print 'saved %d rows of 2D data'%nrows
+
+        # ** camera info **
+        #   clear queue
+        list_of_cam_info = []
+        try:
+            while True:
+                list_of_cam_info.append( self.queue_cam_info.get(0) )
+        except Queue.Empty:
+            pass
+        #   save
+        if self.h5cam_info is not None:
+            cam_info_row = self.h5cam_info.row
+            for cam_info in list_of_cam_info:
+                cam_id, absolute_cam_no, frame0 = cam_info
+                cam_info_row['cam_id'] = cam_id
+                cam_info_row['camn']   = absolute_cam_no
+                cam_info_row['frame0'] = frame0
+                cam_info_row.append()
+                
+            self.h5cam_info.flush()
+
+        # ** 3d data **
+        for q, h5table in zip([self.queue_data3d_fastest, self.queue_data3d_best],
+                              [self.h5data3d_fastest, self.h5data3d_best]):
+            #   clear queue
+            list_of_3d_data = []
+            try:
+                while True:
+                    list_of_3d_data.append( q.get(0) )
+            except Queue.Empty:
+                pass
+            #   save
+            if h5table is not None:
+                row = h5table.row
+                for data3d in list_of_3d_data:
+                    corrected_framenumber, outgoing_data, cam_nos_used, mean_dist = data3d
+                    cam_nos_used.sort()
+                    cam_nos_used_str = ' '.join( map(str, cam_nos_used) )
+                    
+                    row['frame']=corrected_framenumber
+                    
+                    row['x']=outgoing_data[0]
+                    row['y']=outgoing_data[1]
+                    row['z']=outgoing_data[2]
+
+                    row['p0']=outgoing_data[3]
+                    row['p1']=outgoing_data[4]
+                    row['p2']=outgoing_data[5]
+                    row['p3']=outgoing_data[6]
+                    row['p4']=outgoing_data[7]
+                    row['p5']=outgoing_data[8]
+
+                    row['timestamp']=outgoing_data[9]
+                    
+                    row['camns_used']=cam_nos_used_str
+                    row['mean_dist']=mean_dist
+                    row.append()
+
+                h5table.flush()
+

@@ -10,6 +10,8 @@ Lstar_i = nx.array([2,3,1,0,0,0]) # Lstar to Pluecker line coords (i index)
 Lstar_j = nx.array([3,1,2,3,2,1]) # Lstar to Pluecker line coords (j index)
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
+
+MINIMUM_ECCENTRICITY = 2.0 # threshold to fit line
     
 def load_ascii_matrix(filename):
     fd=open(filename,mode='rb')
@@ -92,7 +94,19 @@ def pmat2cam_center(P):
 
     C_ = nx.transpose(nx.array( [[ X/T, Y/T, Z/T ]] ))
     return C_
-    
+
+
+def setOfSubsets(L):
+    """find all subsets of L
+
+    from Alex Martelli:
+    http://mail.python.org/pipermail/python-list/2001-January/027238.html
+    """
+    N = len(L)
+    return [ [ L[i] for i in range(N)
+                if X & (1L<<i) ]
+        for X in range(2**N) ]
+
 class Reconstructor:
     def __init__(self,
                  calibration_dir = '/home/astraw/mcsc_data',
@@ -100,26 +114,57 @@ class Reconstructor:
                  debug = False,
                  ):
         self._debug = debug
-        fd = open(os.path.join(calibration_dir,'camera_order.txt'),'r')
-        res_fd = open(os.path.join(calibration_dir,'Res.dat'),'r')
-        cam_ids = fd.read().split('\n')
-        fd.close()
-        if cam_ids[-1] == '': del cam_ids[-1] # remove blank line
+
+        if type(calibration_dir) in [str,unicode]:
+            calibration_data_source = 'normal files'
+        else:
+            calibration_data_source = 'pytables'
+
+        if calibration_data_source == 'normal files':
+            fd = open(os.path.join(calibration_dir,'camera_order.txt'),'r')
+            cam_ids = fd.read().split('\n')
+            fd.close()
+            if cam_ids[-1] == '': del cam_ids[-1] # remove blank line
+        elif calibration_data_source == 'pytables':
+            import tables as PT # PyTables
+            assert type(calibration_dir)==PT.File
+            results = calibration_dir
+            nodes = results.root.calibration.pmat._f_listNodes()
+            cam_ids = []
+            for node in nodes:
+                cam_ids.append( node.name )
+            
         N = len(cam_ids)
         # load calibration matrices
         self.Pmat = {}
         self.Res = {}
         self.pmat_inv = {}
         
-        for i, cam_id in enumerate(cam_ids):
-            fname = Pmat_name%(i+1)
-            pmat = load_ascii_matrix(opj(calibration_dir,fname))
-            self.Pmat[cam_id] = pmat
-            self.Res[cam_id] = map(int,res_fd.readline().split())
-            self.pmat_inv[cam_id] = numarray.linear_algebra.generalized_inverse(pmat)
+        if calibration_data_source == 'normal files':
+            res_fd = open(os.path.join(calibration_dir,'Res.dat'),'r')
+            for i, cam_id in enumerate(cam_ids):
+                fname = Pmat_name%(i+1)
+                pmat = load_ascii_matrix(opj(calibration_dir,fname)) # 3 rows x 4 columns
+                self.Pmat[cam_id] = pmat
+                self.Res[cam_id] = map(int,res_fd.readline().split())
+                self.pmat_inv[cam_id] = numarray.linear_algebra.generalized_inverse(pmat)
+            res_fd.close()
+        elif calibration_data_source == 'pytables':
+            for cam_id in cam_ids:
+                pmat = nx.array(results.root.calibration.pmat.__getattr__(cam_id))
+                res = tuple(results.root.calibration.resolution.__getattr__(cam_id))
+                self.Pmat[cam_id] = pmat
+                self.Res[cam_id] = res
+                self.pmat_inv[cam_id] = numarray.linear_algebra.generalized_inverse(pmat)
             
-        res_fd.close()
-        self.cam_order = cam_ids
+        self.cam_combinations = [s for s in setOfSubsets(cam_ids) if len(s) >=2]
+        def cmpfunc(a,b):
+            if len(a) > len(b):
+                return -1
+            else:
+                return 0
+        # order camera combinations from most cameras to least
+        self.cam_combinations.sort(cmpfunc)
 
     def get_resolution(self, cam_id):
         return self.Res[cam_id]
@@ -127,29 +172,32 @@ class Reconstructor:
     def get_pmat(self, cam_id):
         return self.Pmat[cam_id]
 
-    def find3d(self,
-               cam_ids_and_points2d):
-        
+    def find3d(self, cam_ids_and_points2d ):
         # for info on SVD, see Hartley & Zisserman (2003) p. 593 (see
         # also p. 587)
         
         M=len(cam_ids_and_points2d) # number of views of single point
 
         # Fill matrices
-        A=nx.zeros((2*M,4),nx.Float64) # for best point
+##        A=nx.zeros((2*M,4),nx.Float64) # for best point
+        A=[]
         P=[]
         for m, (cam_id,value_tuple) in enumerate(cam_ids_and_points2d):
-            x,y,area,slope,eccentricity, p1,p2,p3,p4 = value_tuple
-            Pmat = self.Pmat[cam_id]
+            # get shape information from each view of a blob:
+            x,y,area,slope,eccentricity, p1,p2,p3,p4 = value_tuple 
+            Pmat = self.Pmat[cam_id] # Pmat is 3 rows x 4 columns
             row3 = Pmat[2,:]
-            A[2*m  ,:]=x*row3 - Pmat[0,:]
-            A[2*m+1,:]=y*row3 - Pmat[1,:]
+            A.append( x*row3 - Pmat[0,:] )
+            A.append( y*row3 - Pmat[1,:] )
+##            A[2*m  ,:]=x*row3 - Pmat[0,:]
+##            A[2*m+1,:]=y*row3 - Pmat[1,:]
 
-            if eccentricity > 2.0: # require a bit of elongation
+            if eccentricity > MINIMUM_ECCENTRICITY: # require a bit of elongation
                 P.append( (p1,p2,p3,p4) )
         
         # Calculate best point
-        A=A.copy() # force to be contiguous (XXX hack -- find out why it gets non-contiguous)
+        A=nx.array(A)
+##        A=A.copy() # force to be contiguous (XXX hack -- find out why it gets non-contiguous)
         u,d,vt=svd(A)
         X = vt[-1,0:3]/vt[-1,3] # normalize
 
@@ -158,26 +206,31 @@ class Reconstructor:
         else:
             P = nx.asarray(P)
             # Calculate best line
-            u,d,vt=svd(P,full_matrices=True)
-            # "two columns of V corresponding to the two largest singular
-            # values span the best rank 2 approximation to A and may be
-            # used to define the line of intersection of the planes"
-            # (Hartley & Zisserman, p. 323)
-            P = vt[0,:] # P,Q are planes (take row because this is transpose(V))
-            Q = vt[1,:]
+            try:
+                u,d,vt=svd(P,full_matrices=True)
+                # "two columns of V corresponding to the two largest singular
+                # values span the best rank 2 approximation to A and may be
+                # used to define the line of intersection of the planes"
+                # (Hartley & Zisserman, p. 323)
+                P = vt[0,:] # P,Q are planes (take row because this is transpose(V))
+                Q = vt[1,:]
 
-    ##        # dual Pluecker representation: (Hartley & Zisserman, p. 71)
-    ##        Lstar = nx.outerproduct(P,Q) - nx.outerproduct(Q,P)
-    ##        # convert to Pluecker line coordinates
-    ##        Lcoords = Lstar[Lstar_i,Lstar_j]
+        ##        # dual Pluecker representation: (Hartley & Zisserman, p. 71)
+        ##        Lstar = nx.outerproduct(P,Q) - nx.outerproduct(Q,P)
+        ##        # convert to Pluecker line coordinates
+        ##        Lcoords = Lstar[Lstar_i,Lstar_j]
 
-            # directly to Pluecker line coordinates
-            Lcoords = ( -(P[3]*Q[2]) + P[2]*Q[3],
-                          P[3]*Q[1]  - P[1]*Q[3],
-                        -(P[2]*Q[1]) + P[1]*Q[2],
-                        -(P[3]*Q[0]) + P[0]*Q[3],
-                        -(P[2]*Q[0]) + P[0]*Q[2],
-                        -(P[1]*Q[0]) + P[0]*Q[1] )
+                # directly to Pluecker line coordinates
+                Lcoords = ( -(P[3]*Q[2]) + P[2]*Q[3],
+                              P[3]*Q[1]  - P[1]*Q[3],
+                            -(P[2]*Q[1]) + P[1]*Q[2],
+                            -(P[3]*Q[0]) + P[0]*Q[3],
+                            -(P[2]*Q[0]) + P[0]*Q[2],
+                            -(P[1]*Q[0]) + P[0]*Q[1] )
+            except:
+                #print 'WARNING: %s %s'%(x.__class__, str(x))
+                print 'WARNING: unknown error in reconstruct.py'
+                Lcoords = None
         return X, Lcoords    
 
     def find2d(self,cam_id,X,Lcoords=None):

@@ -18,6 +18,10 @@ class FrameServer(Pyro.core.ObjBase):
     def get_frame(self, frame_number):
         return self.fly_movie.get_frame(frame_number)
 
+    def get_timestamp(self, frame_number):
+        frame, timestamp = self.fly_movie.get_frame(frame_number)
+        return timestamp
+
     def noop(self):
         return
 

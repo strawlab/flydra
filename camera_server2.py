@@ -23,6 +23,9 @@ if sys.platform == 'win32':
     time_func = time.clock
 else:
     time_func = time.time
+
+#pt_fmt = '<fffffffff'
+pt_fmt = 'ddddddddd'
     
 Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here!
 
@@ -97,8 +100,10 @@ class GrabClass(object):
         sleep = time.sleep
         bg_frame_number = 0
         rot_frame_number = -1
-        clear_background_start_isSet = globals['clear_background_start'].isSet
-        clear_background_start_clear = globals['clear_background_start'].clear
+        clear_background_isSet = globals['clear_background'].isSet
+        clear_background_clear = globals['clear_background'].clear
+        take_background_isSet = globals['take_background'].isSet
+        take_background_clear = globals['take_background'].clear
         collecting_background_isSet = globals['collecting_background'].isSet
 ##        using_background_subtraction_isSet = globals['using_background_subtraction'].isSet
         find_rotation_center_start_isSet = globals['find_rotation_center_start'].isSet
@@ -128,6 +133,7 @@ class GrabClass(object):
                 old_ts = timestamp
                 
                 points = self.realtime_analyzer.do_work( buf, timestamp, framenumber )
+                x = points[0][0]
                 
                 if debug_isSet():
                     if flip:
@@ -152,9 +158,13 @@ class GrabClass(object):
                         bg_frame_number = 0
                     bg_frame_number += 1
                 
-                if clear_background_start_isSet():
+                if take_background_isSet():
+                    self.realtime_analyzer.take_background_image()
+                    take_background_clear()
+                    
+                if clear_background_isSet():
                     self.realtime_analyzer.clear_background_image()
-                    clear_background_start_clear()
+                    clear_background_clear()
                     
                 if find_rotation_center_start_isSet():
                     find_rotation_center_start_clear()
@@ -169,9 +179,10 @@ class GrabClass(object):
                         rot_frame_number=-1 # stop averaging frames
               
                 n_pts = len(points)
+                # XXX could speed this with a join operation I think
                 data = struct.pack('<dli',timestamp,framenumber,n_pts)
                 for i in range(n_pts):
-                    data = data + struct.pack('fffffffff',*points[i])
+                    data = data + struct.pack(pt_fmt,*points[i])
                 coord_socket.sendto(data,
                                     (main_brain_hostname,self.coord_port))
                 sleep(1e-6) # yield processor
@@ -251,7 +262,8 @@ class App:
             globals['listen_thread_done'] = threading.Event()
             globals['grab_thread_done'] = threading.Event()
             globals['incoming_frames_lock'] = threading.Lock()
-            globals['clear_background_start'] = threading.Event()
+            globals['take_background'] = threading.Event()
+            globals['clear_background'] = threading.Event()
             globals['collecting_background'] = threading.Event()
             globals['collecting_background'].set()
             globals['find_rotation_center_start'] = threading.Event()
@@ -358,8 +370,10 @@ class App:
                 globals['use_arena'] = grabber.use_arena
             elif key == 'quit':
                 globals['cam_quit_event'].set()
+            elif key == 'take_bg':
+                globals['take_background'].set()
             elif key == 'clear_bg':
-                globals['clear_background_start'].set()
+                globals['clear_background'].set()
             elif key == 'collecting_bg':
                 if cmds[key]:
                     globals['collecting_background'].set()
