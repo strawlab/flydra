@@ -151,7 +151,7 @@ class DynamicImageCanvas(wxGLCanvas):
             glDisable(GL_TEXTURE_2D)
             glDisable(GL_BLEND)
             glRasterPos3f(.01,.01,0)
-            for char in 'no cameras connected':
+            for char in 'no image sources':
                 glutBitmapCharacter(5,ord(char))
             glEnable(GL_TEXTURE_2D)
             glEnable(GL_BLEND)

@@ -13,14 +13,7 @@ Pyro.config.PYRO_MULTITHREADED = 0 # No multithreading!
 Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
 
 if not DUMMY:
-    if sys.platform == 'win32':
-        import cam_iface_bcam
-        cam_iface = cam_iface_bcam
-    elif sys.platform.startswith('linux'):
-        import cam_iface_camwire
-        cam_iface = cam_iface_camwire
-    else:
-        raise NotImplementedError('only win32 and linux support implemented')
+    import cam_iface
 else:
     import cam_iface_dummy
     cam_iface = cam_iface_dummy
@@ -41,8 +34,8 @@ def grab_func(cam,quit_now,thread_done,incoming_frames_lock):
         incoming_frames_lock.acquire()
         incoming_frames.append( buf.copy() ) # save a copy of the buffer
         incoming_frames_lock.release()
-        sys.stdout.write('_')
-        sys.stdout.flush()
+##        sys.stdout.write('_')
+##        sys.stdout.flush()
         time.sleep(0.00001) # yield processor
     thread_done.set()
 
@@ -51,7 +44,7 @@ def main():
 
     start = time.time()
     now = start
-    num_buffers = 3
+    num_buffers = 30
     
     grabbed_frames = []
 
@@ -71,7 +64,7 @@ def main():
     main_brain = Pyro.core.getProxyForURI(main_brain_URI)
     print 'found'
 
-    for device_number in range(cam_iface.get_num_cameras()):
+    for device_number in range(cam_iface.cam_iface_get_num_cameras()):
         try:
             cam = cam_iface.CamContext(device_number,num_buffers)
             break # found a camera
@@ -95,7 +88,7 @@ def main():
         scalar_control_info[name] = (current_value, min_value, max_value)
 
     hostname = socket.gethostbyname(socket.gethostname())
-    driver = cam_iface.get_driver_abbreviation()
+    driver = cam_iface.cam_iface_get_driver_name()
 
     # inform brain that we're connected before starting camera thread
     cam_id = main_brain.register_new_camera(scalar_control_info)
@@ -133,8 +126,8 @@ def main():
                     grabbed_frames.extend( incoming_frames )
                     incoming_frames = []
                     incoming_frames_lock.release()
-                    sys.stdout.write('y')
-                    sys.stdout.flush()
+##                    sys.stdout.write('y')
+##                    sys.stdout.flush()
 
                 # send most recent image
                 if len(grabbed_frames):

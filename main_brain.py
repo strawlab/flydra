@@ -124,8 +124,8 @@ class MainBrain:
                     if not self.cam_info[cam_id]['caller'].connected:
                         print 'WARNING: lost camera',cam_id
                         self.close(cam_id)
-                sys.stdout.write('.')
-                sys.stdout.flush()
+##                sys.stdout.write('.')
+##                sys.stdout.flush()
             self.thread_done.set()
                                              
         # ----------------------------------------------------------------
@@ -181,8 +181,8 @@ class MainBrain:
             cam_lock.acquire()
             self.cam_info[cam_id]['image'] = image
             cam_lock.release()
-            sys.stdout.write('Y')
-            sys.stdout.flush()
+##            sys.stdout.write('Y')
+##            sys.stdout.flush()
 
         def set_fps(self,cam_id,fps):
             """set most recent fps (caller: remote camera)"""
@@ -191,8 +191,8 @@ class MainBrain:
             cam_lock.acquire()
             self.cam_info[cam_id]['fps'] = fps
             cam_lock.release()
-            sys.stdout.write('F')
-            sys.stdout.flush()
+##            sys.stdout.write('F')
+##            sys.stdout.flush()
 
         def close(self,cam_id):
             """gracefully say goodbye (caller: remote camera)"""
