@@ -8,24 +8,73 @@ import numarray as na
 cimport c_numarray
 import Pyro.core, Pyro.errors
 import FlyMovieFormat
+import warnings
 cimport c_cam_iface
+cimport c_lib
 
 include "../cam_iface/src/pyx_cam_iface.pyx"
 
 # start of IPP-requiring code
 cimport ipp
 
-cdef IppStatus2str(ipp.IppStatus status):
-    return str(status)
+class IPPError(Exception):
+    pass
+
+cdef object IppStatus2str(ipp.IppStatus status):
+    return 'IppStatus: %d'%status
+
+cdef void _ipp_check(ipp.IppStatus status):
+    if (status < ipp.ippStsNoErr):
+        raise IPPError(IppStatus2str(status))
+    elif (status > ipp.ippStsNoErr):
+        warnings.warn(IppStatus2str(status))
+
+cdef object get_cpu_type():
+    cdef ipp.IppCpuType t
+    t=ipp.ippCoreGetCpuType()
+    if t==ipp.ippCpuUnknown:
+        s='ippCpuUnknown'
+    elif t==ipp.ippCpuPP:
+        s='ippCpuPP'
+    elif t==ipp.ippCpuPMX:
+        s='ippCpuPMX'
+    elif t==ipp.ippCpuPPR:
+        s='ippCpuPPR'
+    elif t==ipp.ippCpuPII:
+        s='ippCpuPII'
+    elif t==ipp.ippCpuPIII:
+        s='ippCpuPIII'
+    elif t==ipp.ippCpuP4:
+        s='ippCpuP4'
+    elif t==ipp.ippCpuP4HT:
+        s='ippCpuP4HT'
+    elif t==ipp.ippCpuP4HT2:
+        s='ippCpuP4HT2'
+    elif t==ipp.ippCpuCentrino:
+        s='ippCpuCentrino'
+    elif t==ipp.ippCpuITP:
+        s='ippCpuITP'
+    elif t==ipp.ippCpuITP2:
+        s='ippCpuITP2'
+    return s
+print 'CPU type:', get_cpu_type()
+
+
+cdef void print_info_8u(ipp.Ipp8u* im, int im_step, ipp.IppiSize sz, object prefix):
+    cdef ipp.Ipp32f minVal, maxVal
+    cdef ipp.IppiPoint minIdx, maxIdx
+    
+    _ipp_check(
+        ipp.ippiMinMaxIndx_8u_C1R( im, im_step, sz,
+                                   &minVal, &maxVal,
+                                   &minIdx, &maxIdx ))
+    print prefix,'min: %f, max: %f, minIdx: %d,%d, maxIdx: %d,%d'%(minVal,maxVal,
+                                                                   minIdx.x,minIdx.y,
+                                                                   maxIdx.x,maxIdx.y)
+    
 # end of IPP-requiring code
 
-# The Numeric API requires this function to be called before
-# using any Numeric facilities in an extension module.
 c_numarray.import_libnumarray()
-
-# start of IPP-requiring code
-print IppStatus2str(ipp.ippStaticInit())
-# end of IPP-requiring code
 
 if sys.platform == 'win32':
     time_func = time.clock
@@ -39,102 +88,6 @@ CAM_CONTROLS = {'shutter':c_cam_iface.SHUTTER,
                 'gain':c_cam_iface.GAIN,
                 'brightness':c_cam_iface.BRIGHTNESS}
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-##class CamIFaceError(Exception):
-##    pass
-
-##def _check_error():
-##    if c_cam_iface.cam_iface_have_error():
-##        err_str=c_cam_iface.cam_iface_get_error_string()
-##        c_cam_iface.cam_iface_clear_error()
-##        raise CamIFaceError(err_str)
-
-##ctypedef class Camera:
-##    cdef c_cam_iface.CamContext* cval
-
-##    def __init__(self,int device_number, int num_buffers):
-##        self.cval = c_cam_iface.new_CamContext(device_number,num_buffers)
-##        _check_error()
-        
-##    def __del__(self):
-##        c_cam_iface.delete_CamContext(self.cval)
-##        _check_error()
-        
-##    def set_camera_property(self,
-##                            cameraProperty,
-##                            long ValueA,
-##                            long ValueB,
-##                            int Auto):
-##        c_cam_iface.CamContext_set_camera_property(self.cval,
-##                                                   cameraProperty,
-##                                                   ValueA,
-##                                                   ValueB,
-##                                                   Auto )
-##        _check_error()
-
-##    def get_camera_property(self,cameraProperty):
-##        cdef long ValueA
-##        cdef long ValueB
-##        cdef int Auto
-##        c_cam_iface.CamContext_get_camera_property(self.cval,
-##                                                   cameraProperty,
-##                                                   &ValueA,
-##                                                   &ValueB,
-##                                                   &Auto )
-##        _check_error()
-##        return (ValueA, ValueB, Auto)
-
-##    def get_camera_property_range(self,
-##                                  cameraProperty):
-##        cdef int Present
-##        cdef long Min
-##        cdef long Max
-##        cdef long Default
-##        cdef int Auto
-##        cdef int Manual
-        
-##        c_cam_iface.CamContext_get_camera_property_range(self.cval,
-##                                                         cameraProperty,
-##                                                         &Present,
-##                                                         &Min,
-##                                                         &Max,
-##                                                         &Default,
-##                                                         &Auto,
-##                                                         &Manual)
-##        _check_error()
-##        return (Present,Min,Max,Default,Auto,Manual)
-    
-##    cdef grab_next_frame_blocking(self,unsigned char *out_bytes):
-##        c_cam_iface.CamContext_grab_next_frame_blocking(self.cval,
-##                                                        out_bytes)
-##        _check_error()
-    
-##    cdef point_next_frame_blocking(self,unsigned char **buf_ptr):
-##        c_cam_iface.CamContext_point_next_frame_blocking(self.cval,
-##                                                         buf_ptr)
-##        _check_error()
-
-##    cdef unpoint_frame(self):
-##        c_cam_iface.CamContext_unpoint_frame(self.cval)
-##        _check_error()
-
-##    def start_camera(self):
-##        c_cam_iface.CamContext_start_camera(self.cval)
-##        _check_error()
-
-##    def get_max_height(self):
-##        return self.cval.max_height
-
-##    def get_max_width(self):
-##        return self.cval.max_width    
-
-##    def get_last_timestamp(self):
-##        cdef double timestamp
-##        c_cam_iface.CamContext_get_last_timestamp(self.cval,&timestamp)
-##        _check_error()
-##        return timestamp
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-
 cdef class GrabClass:
     cdef Camera cam
 
@@ -146,103 +99,218 @@ cdef class GrabClass:
         cdef c_cam_iface.CamContext* cc
         cdef c_numarray._numarray buf
         cdef int height
-        cdef int width
+        cdef int buf_ptr_step, width
         cdef int collecting_background_frames
+        cdef int bg_frame_number
         cdef int n_frames4stats
-        cdef double pre_cpy, post_cpy, latency1, latency2
-        cdef int im1_step, avg_image_step
+        cdef double tval1, tval2, tval3, latency1, latency2
+        cdef int i, j
 
         # start of IPP-requiring code
-        cdef ipp.Ipp32f* im1, avg_image
+        cdef int index_x,index_y
+        cdef ipp.Ipp8u max_val
+        cdef int im1_step, im2_step, avg_image_step, bg_step
+        cdef int tmp1_step, tmp2_step
+        cdef int n_bg_samples
+        cdef ipp.Ipp32f alpha
+        
+        cdef ipp.Ipp32f v32f
+        cdef ipp.Ipp8u  v8u
+        
+        cdef ipp.Ipp8u *im1, *im2 # current image
+        cdef ipp.Ipp8u *tmp1, *tmp2 # current image
+        cdef ipp.Ipp8u* bg  # 8-bit background
+        cdef ipp.Ipp32f* avg_image # FP background
+        cdef ipp.IppiSize sz
         # end of IPP-requiring code
         
-
-        n_frames4stats = 20
-        # speed up by eliminating namespace lookups
+        n_bg_samples = 100
+        alpha = 1.0/n_bg_samples
+        # questionable optimization: speed up by eliminating namespace lookups
         app_quit_event_isSet = globals['app_quit_event'].isSet
         acquire_lock = globals['incoming_frames_lock'].acquire
         release_lock = globals['incoming_frames_lock'].release
         sleep = time.sleep
-        collecting_background_frames = -1
-        bg_image = None
+        bg_frame_number = -1
         collect_background_start_isSet = globals['collect_background_start'].isSet
         collect_background_start_clear = globals['collect_background_start'].clear
         height = self.cam.get_max_height()
         width = self.cam.get_max_width()
+        buf_ptr_step = width
 
         # start of IPP-requiring code
-        im1=ipp.ippiMalloc_32f_C1( width, height, &im1_step )
+        # allocate IPP memory
+        im1=ipp.ippiMalloc_8u_C1( width, height, &im1_step )
+        if im1==NULL:
+            raise MemoryError("Error allocating memory by IPP")
+        im2=ipp.ippiMalloc_8u_C1( width, height, &im2_step )
+        if im2==NULL:
+            raise MemoryError("Error allocating memory by IPP")
+        buf_ptr_step = im2_step
+
+        tmp1=ipp.ippiMalloc_8u_C1( width, height, &tmp1_step )
+        if tmp1==NULL:
+            raise MemoryError("Error allocating memory by IPP")
+        tmp2=ipp.ippiMalloc_8u_C1( width, height, &tmp2_step )
+        if tmp2==NULL:
+            raise MemoryError("Error allocating memory by IPP")
+        
+        bg=ipp.ippiMalloc_8u_C1( width, height, &bg_step )
+        if bg==NULL:
+            raise MemoryError("Error allocating memory by IPP")
+        
+        sz.width = width
+        sz.height = height
+        
+        avg_image=ipp.ippiMalloc_32f_C1( width, height,
+                                        &avg_image_step )
+        if avg_image==NULL:
+            raise MemoryError("Error allocating memory by IPP")
+
+        _ipp_check(
+            ipp.ippiSet_8u_C1R(0,bg,bg_step,sz))
+
         # end of IPP-requiring code
         
-        print 'im1_step',im1_step
-        #bg_frames = []
-        avg_frame = None
         try:
             while not app_quit_event_isSet():
                 # get pointer to data from camera driver
                 self.cam.point_next_frame_blocking(&buf_ptr)
 
-                # allow use of this memory area as numarray
-                buf = <c_numarray._numarray>c_numarray.NA_NewArray(
-                    buf_ptr, c_numarray.tUInt8, 2,
-                    height, width)
-
                 # get best guess as to when image was taken
                 timestamp=self.cam.get_last_timestamp()
-                print 'timestamp',timestamp
 
                 # now
-                pre_cpy=time_func()
+                tval1=time_func()
 
-                # copy the data out of camwire's buffer
-                raw_image = buf.copy()
+                # start of IPP-requiring code
+                # copy image to IPP memory
+                for i from 0 <= i < height:
+                    c_lib.memcpy(im1+im1_step*i,buf_ptr+width*i,width)
+                    
+                # do background subtraction
+
+                if 0:
+                    _ipp_check(
+                        ipp.ippiCompare_8u_C1R(im1,im1_step,
+                                               bg,bg_step,
+                                               tmp1,tmp1_step,
+                                               sz, ipp.ippCmpLess))
+                    _ipp_check(
+                        ipp.ippiDivC_8u_C1IRSfs(2, tmp1, tmp1_step, sz, 1))
+                    
+                    _ipp_check(
+                        ipp.ippiCompare_8u_C1R(im1,im1_step,
+                                               bg,bg_step,
+                                               im2,im2_step,
+                                               sz, ipp.ippCmpGreater))
+                    _ipp_check(
+                        ipp.ippiAdd_8u_C1IRSfs(tmp1,tmp1_step,im2,im2_step,sz,1))
+                elif 1:
+                    _ipp_check(
+                        ipp.ippiSub_8u_C1RSfs(bg,bg_step,
+                                              im1,im1_step,
+                                              im2,im2_step,
+                                              sz,1))
+                    
+                _ipp_check(
+                        ipp.ippiMaxIndx_8u_C1R(im2,im2_step,sz,
+                                               &max_val,
+                                               &index_x,&index_y))
+                print "x,y:",index_x,index_y
+                buf_ptr=im2
+                # end of IPP-requiring code                    
+                
+                # allocate new numarray memory
+                buf = <c_numarray._numarray>c_numarray.NA_NewArray(
+                    NULL, c_numarray.tUInt8, 2,
+                    height, width)
+                
+                # copy image to numarray
+                for i from 0 <= i < height:
+                    c_lib.memcpy(buf.data+width*i,buf_ptr+buf_ptr_step*i,width)
 
                 # XXX need to Py_DECREF(buf) ??
 
                 # return camwire's buffer
                 self.cam.unpoint_frame()
 
-                # do background subtraction
-                if avg_frame is not None:
-                    send_image = raw_image-avg_frame+globals['image_offset']
-                    send_image = na.clip(send_image,0.0,255.0).astype(na.UInt8)
-                else:
-                    send_image = raw_image
-
                 # make appropriate references to our copy of the data
-                globals['most_recent_frame'] = send_image
+                globals['most_recent_frame'] = buf
                 acquire_lock()
                 globals['incoming_frames'].append(
-                    (send_image,timestamp) ) # save it
+                    (buf,timestamp) ) # save it
                 release_lock()
 
                 # now
-                post_cpy=time_func()
+                tval2=time_func()
 
+                #
+                #
+                # -=-=-=-=-= Start collecting BG images -=-=-=-=
+                #
+                #
+                
                 if collect_background_start_isSet():
-                    print 'started collecting background'
-                    collecting_background_frames = 0
+                    bg_frame_number=0
                     collect_background_start_clear()
-                    #bg_frames = []
+                    # start of IPP-requiring code
+                    _ipp_check(
+                        ipp.ippiConvert_8u32f_C1R(im1,im1_step,
+                                                  avg_image,avg_image_step,
+                                                  sz))
+                    # end of IPP-requiring code
+                    
+                #
+                #
+                # -=-=-=-=-= Collect BG images -=-=-=-=
+                #
+                #
+                
+                if bg_frame_number>=0:
+                    
+                    # start of IPP-requiring code
 
-                if collecting_background_frames > -1:
-                    if collecting_background_frames >= n_frames4stats:
-                        collecting_background_frames = -1
-                        print 'stopped collecting background'
+                    if 1:
+                        _ipp_check(ipp.ippiAddWeighted_8u32f_C1IR(im1,im1_step,
+                                                                  avg_image,avg_image_step,
+                                                                  sz,alpha))
                     else:
-                        collecting_background_frames = collecting_background_frames+1
-                        #bg_frames.append( raw_image )
-                        if avg_frame is None:
-                            avg_frame = raw_image.astype(na.Float32)
-                        new_portion = raw_image*na.array([1.0/n_frames4stats],type=na.Float32)
-                        old_portion = avg_frame*((n_frames4stats-1.0)/n_frames4stats)
-                        avg_frame = new_portion + old_portion
+                        _ipp_check(
+                            ipp.ippiAdd_8u32f_C1IR(im1,im1_step,
+                                                   avg_image,avg_image_step,
+                                                   sz))
+                    _ipp_check(
+                        ipp.ippiConvert_32f8u_C1R(avg_image,avg_image_step,
+                                                  bg,bg_step,
+                                                  sz,
+                                                  ipp.ippRndNear))
+                    print 'conversion performed'
+                    # end of IPP-requiring code
+                    bg_frame_number = bg_frame_number+1
+                    if bg_frame_number>=n_bg_samples:
 
-                latency1 = (pre_cpy - timestamp)*1000.0
-                latency2 = (post_cpy - timestamp)*1000.0
-                print ('%.1f'%latency1).rjust(10),('%.1f'%latency2).rjust(10)
+                        #
+                        #
+                        # -=-=-=-=-= Finish collecting BG images -=-=-=-=
+                        #
+                        #
+                        
+                        bg_frame_number=-1 # stop averaging frames
+
+                tval3=time_func()
+
+                latency1 = (tval1 - timestamp)*1000.0
+                latency2 = (tval2 - timestamp)*1000.0
+                latency3 = (tval3 - timestamp)*1000.0
+                print ('%.1f'%latency1).rjust(10),('%.1f'%latency2).rjust(10),('%.1f'%latency3).rjust(10)
                 sleep(0.00001) # yield processor
         finally:
+            # start of IPP-requiring code
+            ipp.ippiFree(im1)
+            ipp.ippiFree(bg)
+            # end of IPP-requiring code
+
             globals['app_quit_event'].set()
             globals['grab_thread_done'].set()
 
