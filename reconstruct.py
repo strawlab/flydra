@@ -76,7 +76,6 @@ def pts2Lcoords(A,B):
     return Lmatrix2Lcoords(pts2Lmatrix(A,B))
 
 def line_direction(Lcoords):
-    #U = nx.array((-Lcoords[2], -Lcoords[4], Lcoords[5]))
     U = nx.array((-Lcoords[2], Lcoords[4], -Lcoords[5]))
     U = U/math.sqrt(U[0]**2 + U[1]**2 + U[2]**2) # normalize
     return U
