@@ -81,7 +81,7 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
 
     # ----------------------------------------------------------------
     #
-    # Methods called remotely from cameras
+    # Methods called remotely from main_brain
     #
     # These all get called in their own thread.  Don't call across
     # the thread boundary without using locks.
@@ -91,7 +91,14 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
     def send_most_recent_frame(self):
         global most_recent_frame
         self.main_brain.set_image(self.cam_id,most_recent_frame)
-        most_recent_frame=None
+##        most_recent_frame=None
+
+    def get_most_recent_frame(self):
+        global most_recent_frame
+        return most_recent_frame
+
+    def prints(self,value):
+        print value
 
     def quit(self):
         print 'received quit command'
@@ -184,12 +191,14 @@ def main():
     # start local Pyro server
     #
     # ---------------------------------------------------------------
-    
+
+    port=9834
     daemon = Pyro.core.Daemon(host=hostname,port=port)
     from_main_brain_api = FromMainBrainAPI();
     from_main_brain_api.post_init(cam,cam_id,main_brain,
                                   app_quit_event,listen_thread_done)
     URI=daemon.connect(from_main_brain_api,'camera_server')
+    print 'URI:',URI
     
     # create and start listen thread
     listen_thread=threading.Thread(target=from_main_brain_api.listen,

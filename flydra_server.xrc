@@ -4,11 +4,6 @@
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
-        <object class="wxStaticLine"/>
-        <option>0</option>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
         <object class="wxPanel" name="DynamicImagePanel"/>
         <option>2</option>
         <flag>wxEXPAND</flag>
@@ -46,12 +41,9 @@
         <object class="wxBoxSizer">
           <orient>wxHORIZONTAL</orient>
           <object class="sizeritem">
-            <object class="wxStaticText" name="cam_info_label">
-              <label>Camera info:</label>
-            </object>
+            <object class="wxPanel"/>
             <option>1</option>
-            <flag>wxTOP|wxEXPAND</flag>
-            <border>2</border>
+            <flag>wxEXPAND</flag>
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="quit_camera">
@@ -70,7 +62,7 @@
           <orient>wxVERTICAL</orient>
           <object class="sizeritem">
             <object class="wxStaticText" name="acquired_fps_label">
-              <label>Frames per second (acquired): --</label>
+              <label>fps: --</label>
             </object>
           </object>
           <object class="sizeritem">
@@ -126,5 +118,166 @@
         <flag>wxEXPAND</flag>
       </object>
     </object>
+  </object>
+  <object class="wxPanel" name="CALIBRATION_PANEL">
+    <object class="wxBoxSizer">
+      <orient>wxHORIZONTAL</orient>
+      <object class="sizeritem">
+        <object class="wxBoxSizer">
+          <orient>wxVERTICAL</orient>
+          <object class="sizeritem">
+            <object class="wxChoice" name="calibration_cam_choice">
+              <content/>
+            </object>
+            <option>0</option>
+            <flag></flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="find_chessboard_button">
+              <label>find chessboard</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxStaticBoxSizer">
+              <label>Etalon parameters</label>
+              <orient>wxVERTICAL</orient>
+              <object class="sizeritem">
+                <object class="wxFlexGridSizer">
+                  <cols>2</cols>
+                  <rows>2</rows>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>width</label>
+                    </object>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxTextCtrl" name="etalon_width">
+                      <value>7</value>
+                    </object>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>height</label>
+                    </object>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxTextCtrl" name="etalon_height">
+                      <value>11</value>
+                    </object>
+                  </object>
+                </object>
+              </object>
+            </object>
+          </object>
+        </object>
+        <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
+        <border>4</border>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel" name="calibration_plot">
+          <bg>#00FF00</bg>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+    </object>
+  </object>
+  <object class="wxPanel" name="RECORD_RAW_PANEL">
+    <object class="wxBoxSizer">
+      <orient>wxVERTICAL</orient>
+      <object class="sizeritem">
+        <object class="wxPanel"/>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxStaticText">
+          <label>Image display disabled</label>
+          <style>wxALIGN_CENTRE</style>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND|wxALIGN_BOTTOM</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxBoxSizer">
+          <orient>wxHORIZONTAL</orient>
+          <object class="sizeritem">
+            <object class="wxBoxSizer">
+              <orient>wxVERTICAL</orient>
+              <object class="sizeritem">
+                <object class="wxBoxSizer">
+                  <orient>wxHORIZONTAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxButton">
+                      <label>record</label>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton">
+                      <label>stop</label>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <option>0</option>
+                <flag>wxEXPAND</flag>
+              </object>
+              <object class="sizeritem">
+                <object class="wxBoxSizer">
+                  <orient>wxHORIZONTAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>filename</label>
+                      <style>wxALIGN_RIGHT</style>
+                    </object>
+                    <option>0</option>
+                    <flag>wxALL|wxEXPAND</flag>
+                    <border>4</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxTextCtrl">
+                      <value>/tmp/raw_video.fmf</value>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <option>0</option>
+                <flag>wxEXPAND</flag>
+              </object>
+            </object>
+            <option>1</option>
+            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxBoxSizer">
+              <orient>wxVERTICAL</orient>
+              <object class="sizeritem">
+                <object class="wxStaticText">
+                  <label>select cameras</label>
+                  <style>wxALIGN_CENTRE</style>
+                </object>
+                <flag>wxALIGN_CENTRE</flag>
+              </object>
+              <object class="sizeritem">
+                <object class="wxCheckListBox">
+                  <content/>
+                </object>
+                <option>1</option>
+                <flag>wxEXPAND</flag>
+              </object>
+            </object>
+            <option>0</option>
+            <flag>wxEXPAND</flag>
+          </object>
+        </object>
+        <option>0</option>
+        <flag>wxEXPAND</flag>
+      </object>
+    </object>
+    <style></style>
   </object>
 </resource>
