@@ -10,9 +10,22 @@ import Pyro.core, Pyro.errors
 import FlyMovieFormat
 cimport c_cam_iface
 
+include "../cam_iface/src/pyx_cam_iface.pyx"
+
+# start of IPP-requiring code
+cimport ipp
+
+cdef IppStatus2str(ipp.IppStatus status):
+    return str(status)
+# end of IPP-requiring code
+
 # The Numeric API requires this function to be called before
 # using any Numeric facilities in an extension module.
 c_numarray.import_libnumarray()
+
+# start of IPP-requiring code
+print IppStatus2str(ipp.ippStaticInit())
+# end of IPP-requiring code
 
 if sys.platform == 'win32':
     time_func = time.clock
@@ -27,99 +40,99 @@ CAM_CONTROLS = {'shutter':c_cam_iface.SHUTTER,
                 'brightness':c_cam_iface.BRIGHTNESS}
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-class CamIFaceError(Exception):
-    pass
+##class CamIFaceError(Exception):
+##    pass
 
-def _check_error():
-    if c_cam_iface.cam_iface_have_error():
-        err_str=c_cam_iface.cam_iface_get_error_string()
-        c_cam_iface.cam_iface_clear_error()
-        raise CamIFaceError(err_str)
+##def _check_error():
+##    if c_cam_iface.cam_iface_have_error():
+##        err_str=c_cam_iface.cam_iface_get_error_string()
+##        c_cam_iface.cam_iface_clear_error()
+##        raise CamIFaceError(err_str)
 
-ctypedef class Camera:
-    cdef c_cam_iface.CamContext* cval
+##ctypedef class Camera:
+##    cdef c_cam_iface.CamContext* cval
 
-    def __init__(self,int device_number, int num_buffers):
-        self.cval = c_cam_iface.new_CamContext(device_number,num_buffers)
-        _check_error()
+##    def __init__(self,int device_number, int num_buffers):
+##        self.cval = c_cam_iface.new_CamContext(device_number,num_buffers)
+##        _check_error()
         
-    def __del__(self):
-        c_cam_iface.delete_CamContext(self.cval)
-        _check_error()
+##    def __del__(self):
+##        c_cam_iface.delete_CamContext(self.cval)
+##        _check_error()
         
-    def set_camera_property(self,
-                            cameraProperty,
-                            long ValueA,
-                            long ValueB,
-                            int Auto):
-        c_cam_iface.CamContext_set_camera_property(self.cval,
-                                                   cameraProperty,
-                                                   ValueA,
-                                                   ValueB,
-                                                   Auto )
-        _check_error()
+##    def set_camera_property(self,
+##                            cameraProperty,
+##                            long ValueA,
+##                            long ValueB,
+##                            int Auto):
+##        c_cam_iface.CamContext_set_camera_property(self.cval,
+##                                                   cameraProperty,
+##                                                   ValueA,
+##                                                   ValueB,
+##                                                   Auto )
+##        _check_error()
 
-    def get_camera_property(self,cameraProperty):
-        cdef long ValueA
-        cdef long ValueB
-        cdef int Auto
-        c_cam_iface.CamContext_get_camera_property(self.cval,
-                                                   cameraProperty,
-                                                   &ValueA,
-                                                   &ValueB,
-                                                   &Auto )
-        _check_error()
-        return (ValueA, ValueB, Auto)
+##    def get_camera_property(self,cameraProperty):
+##        cdef long ValueA
+##        cdef long ValueB
+##        cdef int Auto
+##        c_cam_iface.CamContext_get_camera_property(self.cval,
+##                                                   cameraProperty,
+##                                                   &ValueA,
+##                                                   &ValueB,
+##                                                   &Auto )
+##        _check_error()
+##        return (ValueA, ValueB, Auto)
 
-    def get_camera_property_range(self,
-                                  cameraProperty):
-        cdef int Present
-        cdef long Min
-        cdef long Max
-        cdef long Default
-        cdef int Auto
-        cdef int Manual
+##    def get_camera_property_range(self,
+##                                  cameraProperty):
+##        cdef int Present
+##        cdef long Min
+##        cdef long Max
+##        cdef long Default
+##        cdef int Auto
+##        cdef int Manual
         
-        c_cam_iface.CamContext_get_camera_property_range(self.cval,
-                                                         cameraProperty,
-                                                         &Present,
-                                                         &Min,
-                                                         &Max,
-                                                         &Default,
-                                                         &Auto,
-                                                         &Manual)
-        _check_error()
-        return (Present,Min,Max,Default,Auto,Manual)
+##        c_cam_iface.CamContext_get_camera_property_range(self.cval,
+##                                                         cameraProperty,
+##                                                         &Present,
+##                                                         &Min,
+##                                                         &Max,
+##                                                         &Default,
+##                                                         &Auto,
+##                                                         &Manual)
+##        _check_error()
+##        return (Present,Min,Max,Default,Auto,Manual)
     
-    cdef grab_next_frame_blocking(self,unsigned char *out_bytes):
-        c_cam_iface.CamContext_grab_next_frame_blocking(self.cval,
-                                                        out_bytes)
-        _check_error()
+##    cdef grab_next_frame_blocking(self,unsigned char *out_bytes):
+##        c_cam_iface.CamContext_grab_next_frame_blocking(self.cval,
+##                                                        out_bytes)
+##        _check_error()
     
-    cdef point_next_frame_blocking(self,unsigned char **buf_ptr):
-        c_cam_iface.CamContext_point_next_frame_blocking(self.cval,
-                                                         buf_ptr)
-        _check_error()
+##    cdef point_next_frame_blocking(self,unsigned char **buf_ptr):
+##        c_cam_iface.CamContext_point_next_frame_blocking(self.cval,
+##                                                         buf_ptr)
+##        _check_error()
 
-    cdef unpoint_frame(self):
-        c_cam_iface.CamContext_unpoint_frame(self.cval)
-        _check_error()
+##    cdef unpoint_frame(self):
+##        c_cam_iface.CamContext_unpoint_frame(self.cval)
+##        _check_error()
 
-    def start_camera(self):
-        c_cam_iface.CamContext_start_camera(self.cval)
-        _check_error()
+##    def start_camera(self):
+##        c_cam_iface.CamContext_start_camera(self.cval)
+##        _check_error()
 
-    def get_max_height(self):
-        return self.cval.max_height
+##    def get_max_height(self):
+##        return self.cval.max_height
 
-    def get_max_width(self):
-        return self.cval.max_width    
+##    def get_max_width(self):
+##        return self.cval.max_width    
 
-    def get_last_timestamp(self):
-        cdef double timestamp
-        c_cam_iface.CamContext_get_last_timestamp(self.cval,&timestamp)
-        _check_error()
-        return timestamp
+##    def get_last_timestamp(self):
+##        cdef double timestamp
+##        c_cam_iface.CamContext_get_last_timestamp(self.cval,&timestamp)
+##        _check_error()
+##        return timestamp
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 cdef class GrabClass:
@@ -132,20 +145,38 @@ cdef class GrabClass:
         cdef unsigned char* buf_ptr
         cdef c_cam_iface.CamContext* cc
         cdef c_numarray._numarray buf
-        cdef long height
-        cdef long width
+        cdef int height
+        cdef int width
+        cdef int collecting_background_frames
+        cdef int n_frames4stats
+        cdef double pre_cpy, post_cpy, latency1, latency2
+        cdef int im1_step, avg_image_step
 
+        # start of IPP-requiring code
+        cdef ipp.Ipp32f* im1, avg_image
+        # end of IPP-requiring code
+        
+
+        n_frames4stats = 20
         # speed up by eliminating namespace lookups
         app_quit_event_isSet = globals['app_quit_event'].isSet
         acquire_lock = globals['incoming_frames_lock'].acquire
         release_lock = globals['incoming_frames_lock'].release
         sleep = time.sleep
-        collecting_background_frames = None
+        collecting_background_frames = -1
         bg_image = None
         collect_background_start_isSet = globals['collect_background_start'].isSet
         collect_background_start_clear = globals['collect_background_start'].clear
         height = self.cam.get_max_height()
         width = self.cam.get_max_width()
+
+        # start of IPP-requiring code
+        im1=ipp.ippiMalloc_32f_C1( width, height, &im1_step )
+        # end of IPP-requiring code
+        
+        print 'im1_step',im1_step
+        #bg_frames = []
+        avg_frame = None
         try:
             while not app_quit_event_isSet():
                 # get pointer to data from camera driver
@@ -158,23 +189,31 @@ cdef class GrabClass:
 
                 # get best guess as to when image was taken
                 timestamp=self.cam.get_last_timestamp()
+                print 'timestamp',timestamp
 
                 # now
                 pre_cpy=time_func()
 
                 # copy the data out of camwire's buffer
-                my_buffer = buf.copy()
+                raw_image = buf.copy()
 
                 # XXX need to Py_DECREF(buf) ??
 
                 # return camwire's buffer
                 self.cam.unpoint_frame()
 
+                # do background subtraction
+                if avg_frame is not None:
+                    send_image = raw_image-avg_frame+globals['image_offset']
+                    send_image = na.clip(send_image,0.0,255.0).astype(na.UInt8)
+                else:
+                    send_image = raw_image
+
                 # make appropriate references to our copy of the data
-                globals['most_recent_frame'] = my_buffer
+                globals['most_recent_frame'] = send_image
                 acquire_lock()
                 globals['incoming_frames'].append(
-                    (my_buffer,timestamp) ) # save it
+                    (send_image,timestamp) ) # save it
                 release_lock()
 
                 # now
@@ -184,14 +223,24 @@ cdef class GrabClass:
                     print 'started collecting background'
                     collecting_background_frames = 0
                     collect_background_start_clear()
+                    #bg_frames = []
 
-                if collecting_background_frames is not None:
-                    if collecting_background_frames >= 100: # average 100 frames
-                        collecting_background_frames = None
+                if collecting_background_frames > -1:
+                    if collecting_background_frames >= n_frames4stats:
+                        collecting_background_frames = -1
                         print 'stopped collecting background'
                     else:
                         collecting_background_frames = collecting_background_frames+1
+                        #bg_frames.append( raw_image )
+                        if avg_frame is None:
+                            avg_frame = raw_image.astype(na.Float32)
+                        new_portion = raw_image*na.array([1.0/n_frames4stats],type=na.Float32)
+                        old_portion = avg_frame*((n_frames4stats-1.0)/n_frames4stats)
+                        avg_frame = new_portion + old_portion
 
+                latency1 = (pre_cpy - timestamp)*1000.0
+                latency2 = (post_cpy - timestamp)*1000.0
+                print ('%.1f'%latency1).rjust(10),('%.1f'%latency2).rjust(10)
                 sleep(0.00001) # yield processor
         finally:
             globals['app_quit_event'].set()
@@ -310,7 +359,9 @@ cdef class App:
         self.globals['incoming_frames_lock'] = threading.Lock()
         self.globals['collect_background_start'] = threading.Event()
         self.globals['record_status_lock'] = threading.Lock()
-
+        
+        self.globals['image_offset'] = 127
+        
         # ----------------------------------------------------------------
         #
         # Setup cameras
@@ -473,10 +524,6 @@ cdef class App:
             print 'unexpected connection closure...'
 
 def main():
-    c_cam_iface.cam_iface_startup()
-    try:
-        app=App()
-        app.mainloop()
-    finally:
-        c_cam_iface.cam_iface_shutdown()
+    app=App()
+    app.mainloop()
         
