@@ -119,7 +119,7 @@ class Vertices(object):
         toappend.shape=(self.dim,1)
         self.v = concatenate( (self.v,toappend), axis=1 )
 
-    def get_halfspaces(self):
+    def get_halfspaces_old(self):
         cmd = 'qconvex n -'
         stdin, stdout, stderr = os.popen3(cmd)
         #print 'cmd:',cmd
@@ -136,6 +136,120 @@ class Vertices(object):
         #print 'stderr:',stderr.read()
         return Halfspaces(h)
 
+    def get_halfspaces(self):
+        stdout, stderr = self._raw_qhull('qconvex n')
+
+        lines = stdout.splitlines()
+        if not len(lines):
+            return
+        #print lines
+        dim = int(lines[0])
+        n = int(lines[1])
+        h = [ map(float,line.split()) for line in lines[2:]]
+        #print 'stderr:',stderr.read()
+        return Halfspaces(h)
+
+    def save(self,filename,fmt='geomview'):
+        if fmt == 'geomview':
+            fd=open(filename,'w')
+            stdout,stderr = self._raw_qhull('qconvex G')
+            fd.write(stdout)
+        elif fmt == 'gts':
+            # get triangulated points and face indices
+            stdout,stderr = self._raw_qhull('qconvex Qt p i')
+            lines = stdout.splitlines()
+            
+            line_no = 0
+            dim = int(lines[line_no])
+            if dim != 3:
+                raise NotImplementedError('can only handle 3D')
+
+            line_no += 1
+            n_verts = int(lines[line_no])
+            
+            verts = []
+            for i in range(n_verts):
+                line_no += 1
+                vert = map(float,lines[line_no].split())
+                verts.append(vert)
+                
+            line_no += 1
+            n_faces = int(lines[line_no])
+            
+            faces = []
+            for i in range(n_faces):
+                line_no += 1
+
+                face = map(int,lines[line_no].split())
+                faces.append(face)
+
+            # parsed data, now make .gts format
+
+            vert_faces = faces
+            all_edges_idx = {} # keeps track of edge index via vert indices
+            edges = [] # vert indices
+            faces = []
+            for vert_face in vert_faces:
+                this_edge_face = []
+                # get vertex-indexed edges (from face data)
+                vert_edges = [] 
+                for i in range(len(vert_face)-1):
+                    vert_edges.append( (vert_face[i], vert_face[i+1]) )
+                vert_edges.append( (vert_face[len(vert_face)-1], vert_face[0]) )
+
+                # generate edge-indexed faces
+                #   find all unique edges
+                for vert1, vert2 in vert_edges:
+                    found = False
+                    if vert1 in all_edges_idx:
+                        if vert2 in all_edges_idx[vert1]:
+                            idx = all_edges_idx[vert1][vert2]
+                            found = True
+                            
+                    if not found:
+                        if vert2 in all_edges_idx:
+                            if vert1 in all_edges_idx[vert2]:
+                                idx = all_edges_idx[vert2][vert1]
+                                found = True
+                                
+                    if not found:
+                        idx = len(edges)
+                        edges.append( (vert1, vert2) )
+                        all_edges_idx.setdefault(vert1,{})[vert2]=idx
+                        
+                    this_edge_face.append(idx)
+                faces.append(this_edge_face)
+                
+            # now save data
+            fd=open(filename,'w')
+            fd.write('%d %d %d\n'%(len(verts),len(edges),len(faces)))
+            for vert in verts:
+                fd.write( ' '.join(map(str,vert)) )
+                fd.write( '\n' )
+            for edge in edges:
+                edge = asarray(edge)+1 # deal with 1-based indexing
+                fd.write( ' '.join(map(str,edge)) )
+                fd.write( '\n' )
+            for face in faces:
+                face = asarray(face)+1 # deal with 1-based indexing
+                fd.write( ' '.join(map(str,face)) )
+                fd.write( '\n' )
+            fd.close()
+        else:
+            raise ValueError('unknown save format')
+            
+    def _raw_qhull(self,cmd):
+        cmd = cmd + ' -'
+        #print cmd
+        stdin, stdout, stderr = os.popen3(cmd)
+        #print 'cmd:',cmd
+        stdin.write( self.qhull() )
+        stdin.close()
+
+        stdout = stdout.read()
+        stderr = stderr.read()
+        return stdout, stderr
+
     def intersect(self,other,interior_point):
         assert isinstance(other,Vertices)
         my_hs = self.get_halfspaces()
@@ -145,7 +259,7 @@ class Vertices(object):
 
 class Point(Vertices):
     def __init__(self, origin=None):
-        v=asarray(origin)
+        v=array(origin)
         assert len(v.shape)==1
         v.shape=(v.shape[0],1)
         Vertices.__init__(self,v)
