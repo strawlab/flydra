@@ -9,6 +9,8 @@ import Pyro.core
 import DynamicImageCanvas
 
 from UserDict import UserDict
+if sys.version < '2.3':
+    from __future__ import generators
 
 Pyro.config.PYRO_MULTITHREADED = 0 # No multithreading!
 
