@@ -181,8 +181,6 @@ class MainBrain:
             cam_lock.acquire()
             self.cam_info[cam_id]['image'] = image
             cam_lock.release()
-##            sys.stdout.write('Y')
-##            sys.stdout.flush()
 
         def set_fps(self,cam_id,fps):
             """set most recent fps (caller: remote camera)"""
@@ -191,8 +189,6 @@ class MainBrain:
             cam_lock.acquire()
             self.cam_info[cam_id]['fps'] = fps
             cam_lock.release()
-##            sys.stdout.write('F')
-##            sys.stdout.flush()
 
         def close(self,cam_id):
             """gracefully say goodbye (caller: remote camera)"""
@@ -368,12 +364,8 @@ class App(wxApp):
         box.Add(self.cam_image_canvas,1,wxEXPAND)
         dynamic_image_panel.SetSizer(box)
         dynamic_image_panel.Layout()
-
-        ID_Timer  = wxNewId()
-        self.timer = wxTimer(self,      # object to send the event to
-                             ID_Timer)  # event id to use
-        EVT_TIMER(self,  ID_Timer, self.OnTimer)
-        self.timer.Start(20)
+        
+        EVT_IDLE(self.frame, self.OnIdle)
 
         self.cameras = OrderedDict()
         self.wx_id_2_cam_id = {}
@@ -393,29 +385,31 @@ class App(wxApp):
         
     def OnQuit(self, event):
         print 'wxApp quit'
-        self.timer.Stop()
         del self.main_brain
         self.frame.Close(True)
 
-    def OnTimer(self, event):
+    def OnIdle(self, event):
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc
         for cam_id in self.cameras.keys():
             cam = self.cameras[cam_id]
             camPanel = cam['camPanel']
             image = None
-            acquired_fps = None
+            show_fps = None
             try:
-                image, acquired_fps = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
+                image, show_fps = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
             except KeyError:
                 # unexpected disconnect
                 pass # may have lost camera since call to service_pending
             if image is not None:
                 self.cam_image_canvas.update_image(cam_id,image)
-            if acquired_fps is not None:
-                acquired_fps_label = XRCCTRL(camPanel,'acquired_fps_label') # get container
-                acquired_fps_label.SetLabel('Frames per second (acquired): %.1f'%acquired_fps)
+            if show_fps is not None:
+                show_fps_label = XRCCTRL(camPanel,'acquired_fps_label') # get container
+                show_fps_label.SetLabel('Frames per second (acquired): %.1f'%show_fps)
         self.cam_image_canvas.OnDraw()
-
+        
+        if isinstance(event,wxIdleEventPtr):
+            event.RequestMore()
+            
     def OnNewCamera(self, cam_id, scalar_control_info):
         # add self to WX
         camPanel = RES.LoadPanel(self.all_cam_panel,"PerCameraPanel")
