@@ -2,9 +2,10 @@
 from numarray import *
 import fit_params
 
-X = zeros((20,10),type=UInt8)
-X[6:8,3:6]=200
-X[8,6]=255
+X = zeros((8,8),type=UInt8)
+X[2:7,3:6]=200
+X[1,5]=193
+X[7,3] = 255
 
 print X
 

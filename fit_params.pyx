@@ -35,6 +35,7 @@ cdef void _fit_params( float *x0, float *y0, float *orientation,
     cdef ipp.Ipp32f *roi_start
     cdef ipp.IppiPoint roi_offset
     cdef ipp.Ipp64f Mu00, Mu10, Mu01
+    cdef ipp.Ipp64f S, S_x, S_y, S_xx, S_xy
     
     left   = index_x - centroid_search_radius
     right  = index_x + centroid_search_radius
@@ -69,8 +70,16 @@ cdef void _fit_params( float *x0, float *y0, float *orientation,
         x0[0]=Mu10/Mu00
         y0[0]=Mu01/Mu00
 
-    # dummy assignment as placeholder for orientation computation
-    orientation[0]=1.0
+    # determine orientation by the slope of a sum-of-squares best-fit line
+    # equations from Numerical Recipes, except that IPP only weights
+    # the pixel location by the pixel value, not the square of the value
+    orientation[0] = -5
+#    CHK( ipp.ippiGetCentralMoment_64f( pState, 0, 0, 0, &S ) )
+#    CHK( ipp.ippiGetCentralMoment_64f( pState, 1, 0, 0, &S_x ) )
+#    CHK( ipp.ippiGetCentralMoment_64f( pState, 0, 1, 0, &S_y ) )
+#    CHK( ipp.ippiGetCentralMoment_64f( pState, 2, 0, 0, &S_xx ) )
+#    CHK( ipp.ippiGetCentralMoment_64f( pState, 1, 1, 0, &S_xy ) )
+#    orientation[0] = (S*S_xy - S_x*S_y) / (S*S_xx - S_x*S_x)
 
 def fit_params(A, index_x=None, index_y=None, centroid_search_radius=10):
     """find 'center of gravity' and orientation in image"""
