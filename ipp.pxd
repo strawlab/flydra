@@ -340,9 +340,6 @@ cdef extern from "ippi.h":
     IppStatus ippiGetSpatialMoment_64f(IppiMomentState_64f* pState,
                                        int mOrd, int nOrd, int nChannel,
                                        IppiPoint roiOffset, Ipp64f* pValue)
-    IppStatus ippiGetCentralMoment_64f(IppiMomentState_64f* pState,
-                                       int mOrd, int nOrd, int nChannel,
-                                       Ipp64f* pValue)
     
 cdef extern from "ippcv.h":
     IppStatus ippiAdd_8u32f_C1IR(Ipp8u*  pSrc, int srcStep,

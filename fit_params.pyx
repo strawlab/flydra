@@ -20,7 +20,7 @@ cdef void CHK(ipp.IppStatus status) except *:
 
 
 
-cdef void _fit_params( float *x0, float *y0, float *orientation,
+cdef void _fit_params( float *x0, float *y0, float *slope,
                        int index_x, int index_y, int centroid_search_radius,
                        int width, int height, ipp.Ipp32f *im, int im_step,
                        ipp.IppiMomentState_64f *pState ):
@@ -34,8 +34,7 @@ cdef void _fit_params( float *x0, float *y0, float *orientation,
     cdef ipp.IppiSize roi_sz
     cdef ipp.Ipp32f *roi_start
     cdef ipp.IppiPoint roi_offset
-    cdef ipp.Ipp64f Mu00, Mu10, Mu01
-    cdef ipp.Ipp64f S, S_x, S_y, S_xx, S_xy
+    cdef ipp.Ipp64f Mu00, Mu10, Mu01, Mu20, Mu11
     
     left   = index_x - centroid_search_radius
     right  = index_x + centroid_search_radius
@@ -63,6 +62,7 @@ cdef void _fit_params( float *x0, float *y0, float *orientation,
     if Mu00 == 0.0:
         x0[0]=-1 # *x0=-1 (Pyrex has no * operator)
         y0[0]=-1
+        orientation[0] = -5
     else:
         CHK( ipp.ippiGetSpatialMoment_64f( pState, 1, 0, 0, roi_offset, &Mu10 ))
         CHK( ipp.ippiGetSpatialMoment_64f( pState, 0, 1, 0, roi_offset, &Mu01 ))
@@ -70,16 +70,19 @@ cdef void _fit_params( float *x0, float *y0, float *orientation,
         x0[0]=Mu10/Mu00
         y0[0]=Mu01/Mu00
 
-    # determine orientation by the slope of a sum-of-squares best-fit line
-    # equations from Numerical Recipes, except that IPP only weights
-    # the pixel location by the pixel value, not the square of the value
-    orientation[0] = -5
-#    CHK( ipp.ippiGetCentralMoment_64f( pState, 0, 0, 0, &S ) )
-#    CHK( ipp.ippiGetCentralMoment_64f( pState, 1, 0, 0, &S_x ) )
-#    CHK( ipp.ippiGetCentralMoment_64f( pState, 0, 1, 0, &S_y ) )
-#    CHK( ipp.ippiGetCentralMoment_64f( pState, 2, 0, 0, &S_xx ) )
-#    CHK( ipp.ippiGetCentralMoment_64f( pState, 1, 1, 0, &S_xy ) )
-#    orientation[0] = (S*S_xy - S_x*S_y) / (S*S_xx - S_x*S_x)
+        # determine orientation by the slope of a sum-of-squares best-fit line
+        # equations from Numerical Recipes, except that IPP only weights
+        # the pixel location by the pixel value, not the square of the value
+        CHK( ipp.ippiGetSpatialMoment_64f( pState, 2, 0, 0, roi_offset, &Mu20 ) )
+        CHK( ipp.ippiGetSpatialMoment_64f( pState, 1, 1, 0, roi_offset, &Mu11 ) )
+
+        slope[0] = (Mu00*Mu20 - Mu10*Mu10)
+        if slope[0] == 0.0:
+            slope[0] = 9999
+            # I'm not importing math.h just to get the INFINITY constant
+            # besides, I've never had this case occur, and I've tried!
+        else:
+            slope[0] = (Mu00*Mu11 - Mu10*Mu01) / slope[0]
 
 def fit_params(A, index_x=None, index_y=None, centroid_search_radius=10):
     """find 'center of gravity' and orientation in image"""
@@ -100,7 +103,7 @@ def fit_params(A, index_x=None, index_y=None, centroid_search_radius=10):
     cdef int i
     
     cdef float x0, y0 # centroid
-    cdef float orientation
+    cdef float slope
 
     assert A.type() == na.UInt8
     height,width = A.shape
@@ -133,15 +136,14 @@ def fit_params(A, index_x=None, index_y=None, centroid_search_radius=10):
                                   im, im_step, sz))
                
     # call into the C function
-    _fit_params( &x0, &y0, &orientation,
+    _fit_params( &x0, &y0, &slope,
                  index_x, index_y, centroid_search_radius,
                  width, height, im, im_step, pState )
                     
 
     # free memory
-    CHK(
-        ipp.ippiMomentFree_64f(pState))
+    CHK( ipp.ippiMomentFree_64f(pState) )
     ipp.ippiFree(im)
     ipp.ippiFree(im1)
     
-    return x0, y0, orientation
+    return x0, y0, slope
