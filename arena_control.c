@@ -304,7 +304,7 @@ void arena_update( double x, double y, double orientation,
   /* experimental variables */
   int n_calls_per_set = 101*60; /* 1 minute */
   const int n_sets = 5;
-  int pix_offset_set[5] = {0,8,16,24,32};
+  int pix_offset_set[5] = {4,12,20,28,36};
   static int cur_set = 0;
 
 #if ARENA_CONTROL == CLOSED_LOOP
