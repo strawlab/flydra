@@ -2,7 +2,6 @@
 import sys
 import threading
 import time
-import socket
 import os
 import copy
 import MainBrain
