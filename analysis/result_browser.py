@@ -18,6 +18,7 @@ import Pyro.core, Pyro.errors
 Pyro.core.initClient(banner=0)
 
 PROXY_PYRO = False
+REFINE_THRESH = 10.0 # used in "hypothesis testing"
 
 class ExactMovieInfo(PT.IsDescription):
     cam_id             = PT.StringCol(16,pos=0)
@@ -127,7 +128,7 @@ def auto_flip_line_direction(results,start_frame,stop_frame,typ='best',
     frame_and_dir_list.sort(sort_on_col0)
     frame_and_dir_list = nx.array( frame_and_dir_list )
     print frame_and_dir_list
-    bad_idx=list(numarray.ieeespecial.getnan(frame_and_dir_list[:,1])[0])
+    bad_idx=list(getnan(frame_and_dir_list[:,1])[0])
     good_idx = [i for i in range(len(frame_and_dir_list[:,1])) if i not in bad_idx]
     frame_and_dir_list = [ frame_and_dir_list[i] for i in good_idx]
     
@@ -298,7 +299,7 @@ def summarize(results):
     frame2camns_used = {}
     for row in data3d:
         camns_used = map(int,row['camns_used'].split())
-        if len(nx.ieeespecial.getnan(row['p0'])[0]):
+        if len(getnan(row['p0'])[0]):
             orient_info = False
         else:
             orient_info = True
@@ -517,7 +518,9 @@ def recompute_3d_from_2d(results,
     for row in cam_info:
         cam_id, camn = row['cam_id'], row['camn']
         camn2cam_id[camn]=cam_id
-
+        
+    max_n_cameras = len(reconstructor.cam_combinations[0])
+    
     if not hypothesis_test:
         print len(data3d),'rows to be processed'
         count = 0
@@ -562,70 +565,74 @@ def recompute_3d_from_2d(results,
 
         
         print stop_frame-start_frame+1,'rows to be processed'
-        count = 0
         for frame_no in range(start_frame,stop_frame+1):
-            if count%100==0:
-                print 'processing frame',frame_no
-            count += 1
-            
+            print 'frame_no',frame_no
             # load all 2D data
             d2 = {}
             cam_id2camn = {} # must be recomputed each frame
-            for x in data2d.where( data2d.cols.frame == frame_no ):
-                camn = x['camn']
-                cam_id = camn2cam_id[camn]
-                cam_id2camn[cam_id] = camn
-                d2[cam_id] = (x['x'], x['y'], x['area'], x['slope'],
-                              x['eccentricity'], x['p1'], x['p2'],
-                              x['p3'], x['p4'])
+            for x in data2d:
+                if x['frame'] == frame_no :
+                    camn = x['camn']
+                    cam_id = camn2cam_id[camn]
+                    cam_id2camn[cam_id] = camn
+                    d2[cam_id] = (x['x'], x['y'], x['area'], x['slope'],
+                                  x['eccentricity'], x['p1'], x['p2'],
+                                  x['p3'], x['p4'])
 
             # do hypothestis testing
-            min_mean_dist = inf
-            best_hypothesis_data = None
-            min_err_dist = inf # normalized to weight more cameras
+            least_err_by_n_cameras = {}
             for cam_ids_used in reconstructor.cam_combinations:
-                camns_used = [cam_id2camn[cam_id] for cam_id in cam_ids_used]
-                #print 'cam_ids_used',len(cam_ids_used),cam_ids_used
+                # make sure we have all data to test this combination:
+                if len(sets.Set(cam_ids_used) - sets.Set(d2.keys())) > 0:
+                    continue
+                
                 d3 = {}
-                # check if data available from all camera combinations:
-                try:
-                    for cam_id in cam_ids_used:
-                        d3[cam_id] = d2[cam_id] # d2 only has points found in 2D image
-                except KeyError:
-                    #print 'skipping cam_ids_used, camera not available'
+                missing_cam_data = False
+                for cam_id in cam_ids_used:
+                    values = d2[cam_id]
+                    if len( getnan(values[:2])[0] ):
+                        missing_cam_data = True
+                        break
+                    d3[cam_id] = values
+                if missing_cam_data:
                     continue
-                try:
-                    X, line3d = reconstructor.find3d(d3.items())
-                except numarray.linear_algebra.LinearAlgebra2.LinearAlgebraError, exc:
-                    #print 'WARNING:',str(exc),frame_no,len(d3)
-                    continue
-                alpha = 1.0/len(d3)
+                
+                camns_used = [cam_id2camn[cam_id] for cam_id in cam_ids_used]
+
+                n_cams = len(d3)
+                
+                # do 3d math
+                X, line3d = reconstructor.find3d(d3.items())
+
                 mean_dist = 0.0
+                alpha = 1.0/n_cams
                 for cam_id in d3.iterkeys():
                     orig_x, orig_y = d3[cam_id][:2]
                     recon_x, recon_y = reconstructor.find2d(cam_id,X)
 
                     dist = math.sqrt((orig_x-recon_x)**2 + (orig_y-recon_y)**2)
                     mean_dist += dist*alpha
-                    #print cam_id,(orig_x, orig_y), (recon_x, recon_y), dist
-                    #print '  ',cam_id, dist
-                err_dist = mean_dist / (1*float(len(camns_used))**2) # XXX weighting function to boost more camera views
-##                if mean_dist < min_mean_dist:
-##                    min_mean_dist = mean_dist
-##                    cam_ids_used_min_mean_dist = cam_ids_used
-####                    best_hypothesis_data = X, line3d, camns_used
-                if err_dist < min_err_dist:
-                    min_err_dist = err_dist
-                    min_mean_dist = mean_dist
-                    best_hypothesis_data = X, line3d, camns_used
-                    cam_ids_used_min_err_dist = cam_ids_used
-            print 'frame',frame_no,cam_ids_used_min_err_dist,min_err_dist
-                #print '  using data with mean_dist %f'%min_mean_dist,cam_ids_used
-##            else:
-##                #X, line3d, cam_ids_used = (nan,nan,nan), None, []
-##                #print '  no data...'
-##                continue # XXX (double check this) go to next frame: no useful data here
-            
+
+                #print '  ',cam_ids_used, mean_dist
+
+                least_err, tmp = least_err_by_n_cameras.get(n_cams,(inf,None))
+                if mean_dist < least_err:
+                    least_err_by_n_cameras[n_cams] = mean_dist, (X, line3d, camns_used)
+
+            #for n_cams, (dist, tmp) in least_err_by_n_cameras.iteritems():
+            #    print '     ',n_cams, dist
+
+            n_cams_list = least_err_by_n_cameras.keys()
+            n_cams_list.sort()
+
+            X, line3d, camns_used = None, None, []
+            for n_cams in n_cams_list:
+                least_err, tmp = least_err_by_n_cameras[n_cams]
+                if least_err < REFINE_THRESH:
+                    mean_dist = least_err
+                    X, line3d, camns_used = tmp
+
+            #print '        chose mean_dist',mean_dist
             # Now we have the best possible data
             
             if overwrite:
@@ -641,27 +648,25 @@ def recompute_3d_from_2d(results,
                     data3d.removeRows(start=old_nrow,stop=None)
                 
                 # insert new row if it meets threshold distance
-                if min_err_dist < 10.0 and best_hypothesis_data is not None:
-                    X, line3d, camns_used = best_hypothesis_data
-                    if line3d is None:
-                        line3d = [nan]*6 # fill with nans
-                    cam_nos_used_str = ' '.join( map(str, camns_used) )
-                    new_row = data3d.row
-                    new_row['frame'] = frame_no
-                    new_row['x'] = X[0]
-                    new_row['y'] = X[1]
-                    new_row['z'] = X[2]
-                    new_row['p0'] = line3d[0]
-                    new_row['p1'] = line3d[1]
-                    new_row['p2'] = line3d[2]
-                    new_row['p3'] = line3d[3]
-                    new_row['p4'] = line3d[4]
-                    new_row['p5'] = line3d[5]
-                    new_row['timestamp']=0.0
-                    new_row['camns_used']=cam_nos_used_str
-                    new_row['mean_dist']=min_mean_dist
-                    new_row.append()
-                    data3d.flush()
+                if line3d is None:
+                    line3d = [nan]*6 # fill with nans
+                cam_nos_used_str = ' '.join( map(str, camns_used) )
+                new_row = data3d.row
+                new_row['frame'] = frame_no
+                new_row['x'] = X[0]
+                new_row['y'] = X[1]
+                new_row['z'] = X[2]
+                new_row['p0'] = line3d[0]
+                new_row['p1'] = line3d[1]
+                new_row['p2'] = line3d[2]
+                new_row['p3'] = line3d[3]
+                new_row['p4'] = line3d[4]
+                new_row['p5'] = line3d[5]
+                new_row['timestamp']=0.0
+                new_row['camns_used']=cam_nos_used_str
+                new_row['mean_dist']=mean_dist
+                new_row.append()
+                data3d.flush()
 
 def plot_all_images(results,
                     frame_no,
@@ -674,6 +679,8 @@ def plot_all_images(results,
                     do_undistort=True,
                     fixed_im_centers=None,
                     plot_orientation=True,
+                    plot_true_3d_line=False, # show real line3d info (don't adjust to intersect 3d point)
+                    plot_3d_unit_vector=True,
                     origin='lower',
                     display_labels=True,
                     colormap='jet'):
@@ -877,10 +884,17 @@ def plot_all_images(results,
                     x2 = -(c+b*y2)/a                
 
                 if plot_orientation:
-                    lines=ax.plot([x1,x2],[y1,y2],':',linewidth=1.5)
+                    if origin == 'upper':
+                        lines=ax.plot([x1,x2],[height-y1,height-y2],':',linewidth=1.5)
+                    else:
+                        lines=ax.plot([x1,x2],[y1,y2],':',linewidth=1.5)
                     if show_raw_image:
                         green = (0,1,0)
-                        set(lines,'color',green)
+                        if camn in camns_used:
+                            set(lines,'color',green)
+                        elif camn not in camns_used:
+                            set(lines,'color',(0, 0.2, 0))
+                        #set(lines,'color',green)
                         #set(lines[0],'linewidth',0.8)
 
         if X is not None:
@@ -888,49 +902,69 @@ def plot_all_images(results,
                 x,y=reconstructor.find2d(cam_id,X)
                 l3=None
             else:
-                x,l3=reconstructor.find2d(cam_id,X,line3d)
-                x,y=x
+                if plot_true_3d_line:
+                    x,l3=reconstructor.find2d(cam_id,X,line3d)
+                else:
+                    U = flydra.reconstruct.line_direction(line3d)
+                    if plot_3d_unit_vector:
+                        x=reconstructor.find2d(cam_id,X)
+                        unit_x1, unit_y1=reconstructor.find2d(cam_id,X-5*U)
+                        unit_x2, unit_y2=reconstructor.find2d(cam_id,X+5*U)
+                    else:
+                        line3d_fake = flydra.reconstruct.pluecker_from_verts(X,X+U)
+                        x,l3=reconstructor.find2d(cam_id,X,line3d_fake)
+                    x,y=x
                 
             #near = 10
             if PLOT_RED:
                 if origin=='upper':
-                    lines=ax.plot([x],[height-y],'rx')
+                    lines=ax.plot([x],[height-y],'o')
                 else:
-                    lines=ax.plot([x],[y],'rx')
-                set(lines,'markeredgewidth',2.0)
+                    lines=ax.plot([x],[y],'o')
+                if 1:
+                    set(lines,'markerfacecolor',(1,0,0))
+                else:
+                    set(lines,'markerfacecolor',None)
+                    set(lines,'markeredgecolor',(1,0,0))
+                    set(lines,'markeredgewidth',2.0)
                 
-            if l3 is not None:
+            if PLOT_RED and line3d is not None:
                 if plot_orientation:
+                    if plot_3d_unit_vector:
+                        if origin == 'upper':
+                            lines=ax.plot([unit_x1,unit_x2],[height-unit_y1,height-unit_y2],'r-',linewidth=1.5)
+                        else:
+                            lines=ax.plot([unit_x1,unit_x2],[unit_y1,unit_y2],'r-',linewidth=1.5)
+                    else:
+                        a,b,c=l3
+                        # ax+by+c=0
 
-                    a,b,c=l3
-                    # ax+by+c=0
-
-                    # y = -(c+ax)/b
-                    # x = -(c+by)/a
+                        # y = -(c+ax)/b
+                        # x = -(c+by)/a
 
 
-                    x1=xmin
-                    y1=-(c+a*x1)/b
-                    if y1 < ymin:
-                        y1 = ymin
-                        x1 = -(c+b*y1)/a
-                    elif y1 > ymax:
-                        y1 = ymax
-                        x1 = -(c+b*y1)/a
+                        x1=xmin
+                        y1=-(c+a*x1)/b
+                        if y1 < ymin:
+                            y1 = ymin
+                            x1 = -(c+b*y1)/a
+                        elif y1 > ymax:
+                            y1 = ymax
+                            x1 = -(c+b*y1)/a
 
-                    x2=xmax
-                    y2=-(c+a*x2)/b
-                    if y2 < ymin:
-                        y2 = ymin
-                        x2 = -(c+b*y2)/a
-                    elif y2 > ymax:
-                        y2 = ymax
-                        x2 = -(c+b*y2)/a
+                        x2=xmax
+                        y2=-(c+a*x2)/b
+                        if y2 < ymin:
+                            y2 = ymin
+                            x2 = -(c+b*y2)/a
+                        elif y2 > ymax:
+                            y2 = ymax
+                            x2 = -(c+b*y2)/a
 
-                    if PLOT_RED:
-                        lines=ax.plot([x1,x2],[y1,y2],'r--',linewidth=1.5)
-                        #red = (1.0,0,0,0.5)
-                        #set(lines,'color',red)
+                        if origin == 'upper':
+                            lines=ax.plot([x1,x2],[height-y1,height-y2],'r--',linewidth=1.5)
+                        else:
+                            lines=ax.plot([x1,x2],[y1,y2],'r--',linewidth=1.5)
         labels=ax.get_xticklabels()
         set(labels, rotation=90)
         if display_labels:
@@ -940,6 +974,10 @@ def plot_all_images(results,
             ax.yaxis.set_major_locator( LinearLocator(numticks=5) )
             set(ax,'xlim',[xmin, xmax])
             set(ax,'ylim',[ymin, ymax])
+        else:
+            margin_pixels = 20
+            set(ax,'xlim',[-margin_pixels, width+margin_pixels])
+            set(ax,'ylim',[-margin_pixels, height+margin_pixels])
         if not display_labels:
             set(ax,'xticks',[])
             set(ax,'yticks',[])
@@ -979,7 +1017,8 @@ def save_movie(results):
     for cam_id in cam_ids:
         print 'getting frame server for',cam_id
         frame_server_dict[cam_id] = get_server(cam_id)
-    for frame in xrange(5783, 5948, 1):
+#    for frame in xrange(5813, 5945, 1):
+    for frame in xrange(5783, 5945, 1):
 #    for frame in xrange(5896,5898):
         clf()
         try:
@@ -988,12 +1027,12 @@ def save_movie(results):
                             #fixed_im_centers=fixed_im_centers,
                             colormap='grayscale',
                             zoomed=False,
-                            plot_orientation=False,
+                            plot_orientation=True,
                             origin='upper',
                             display_labels=False,
                             )
             
-            fname = 'raw_frame%04d.png'%frame
+            fname = 'ori_raw_frame%04d.png'%frame
             #fname = 'raw_frame%04d.png'%frame
             print ' saving',fname
             savefig(fname)
@@ -1015,7 +1054,10 @@ def get_data_array(results):
    
 if __name__=='__main__':
     results = get_results('hb124j.h5')
-    if 0:
+#    recompute_3d_from_2d(results, overwrite=True, start_stop=(5784,5945) )
+#    recompute_3d_from_2d(results, start_stop=(5944,5944) )
+#    recompute_3d_from_2d(results, start_stop=(5809,5809) )
+    if 1:
         save_movie(results)
     if 0:
         import pylab
