@@ -21,6 +21,13 @@ class DynamicImageCanvas(wxGLCanvas):
         EVT_PAINT(self, self.OnPaint)
         EVT_IDLE(self, self.OnDraw)
         self._gl_tex_info_dict = {}
+        self.do_clipping = True
+
+    def set_clipping(self, value):
+        self.do_clipping = value
+
+    def get_clipping(self):
+        return self.do_clipping
 
     def delete_image(self,id_val):
         tex_id, gl_tex_xy_alloc, gl_tex_xyfrac = self._gl_tex_info_dict[id_val]
@@ -71,10 +78,11 @@ class DynamicImageCanvas(wxGLCanvas):
         
         buffer = na.zeros( (height_pow2,width_pow2,2), image.typecode() )+128
         buffer[0:height,0:width,0] = image
-        
-        clipped = na.greater(image,254) + na.less(image,1)
-        mask = na.choose(clipped, (255, 0) )
-        buffer[0:height,0:width,1] = mask
+
+        if self.do_clipping:
+            clipped = na.greater(image,254) + na.less(image,1)
+            mask = na.choose(clipped, (255, 0) )
+            buffer[0:height,0:width,1] = mask
         
         raw_data = buffer.tostring()
 
@@ -120,17 +128,17 @@ class DynamicImageCanvas(wxGLCanvas):
             # XXX allocating new memory...
             if not hasattr(self,'_buffer') or self._buffer.shape != (height,width,2):
                 self._buffer = na.zeros( (height,width,2), image.typecode() )
-##            im_luminance = self._buffer[:,:,0] # view into buffer
-##            im_alpha = self._buffer[:,:,1] # view into buffer
-            
-##            im_luminance[:,:] = image
-##            im_alpha[:,:] = 255
-##            im_alpha[im_luminance == 0 | im_luminance==255] = 200 # reduce alpha where image is clipped
-            
-            clipped = na.greater(image,254) + na.less(image,1)
-            mask = na.choose(clipped, (255, 200) ) # alpha for transparency
-            self._buffer[:,:,0] = image
-            self._buffer[:,:,1] = mask
+
+            if self.do_clipping:
+                clipped = na.greater(image,254) + na.less(image,1)
+                mask = na.choose(clipped, (255, 200) ) # alpha for transparency
+                self._buffer[:,:,0] = image
+                self._buffer[:,:,1] = mask
+                data_format = GL_LUMINANCE_ALPHA
+                buffer_string = self._buffer.tostring()
+            else:
+                data_format = GL_LUMINANCE
+                buffer_string = image.tostring()
             
             self._gl_tex_xyfrac = width/float(max_x),  height/float(max_y)
             glBindTexture(GL_TEXTURE_2D,tex_id)
@@ -140,9 +148,9 @@ class DynamicImageCanvas(wxGLCanvas):
                             0, #y_offset,
                             width,
                             height,
-                            GL_LUMINANCE_ALPHA, #data_format,
+                            data_format,
                             GL_UNSIGNED_BYTE, #data_type,
-                            self._buffer.tostring())
+                            buffer_string)
 
     def OnDraw(self,*dummy_arg):
         glClear(GL_COLOR_BUFFER_BIT)

@@ -150,6 +150,7 @@ class MainBrain:
             self.cam_info[cam_id] = {'commands':{}, # command queue for cam
                                      'lock':threading.Lock(), # prevent concurrent access
                                      'image':None,  # most recent image from cam
+                                     'num_image_puts':0,
                                      'fps':None,    # most recept fps from cam
                                      'caller':caller,    # most recept fps from cam
                                      'scalar_control_info':scalar_control_info,
@@ -162,16 +163,6 @@ class MainBrain:
             self.changed_cam_lock.release()
             
             return cam_id
-
-        def get_commands(self,cam_id):
-            """get command queue from server (caller: remote camera)"""
-            cam = self.cam_info[cam_id]
-            cam_lock = cam['lock']
-            cam_lock.acquire()
-            commands = cam['commands']
-            cam['commands'] = {}
-            cam_lock.release()
-            return commands.items()
 
         def set_image(self,cam_id,image):
             """set most recent image (caller: remote camera)"""
@@ -188,6 +179,15 @@ class MainBrain:
             cam_lock.acquire()
             self.cam_info[cam_id]['fps'] = fps
             cam_lock.release()
+
+        def get_and_clear_commands(self,cam_id):
+            cam = self.cam_info[cam_id]
+            cam_lock = cam['lock']
+            cam_lock.acquire()
+            cmds = cam['commands']
+            cam['commands'] = {}
+            cam_lock.release()
+            return cmds
 
         def close(self,cam_id):
             """gracefully say goodbye (caller: remote camera)"""
@@ -227,6 +227,9 @@ class MainBrain:
         self._old_camera_functions = []
 
         self.camera_server = {} # dict of Pyro servers for each camera
+        self.last_requested_image = {}
+        self.pending_requests = {}
+        self.last_set_param_time = {}
         self.set_new_camera_callback(self.AddCameraServer)
         self.set_old_camera_callback(self.RemoveCameraServer)
 
@@ -239,7 +242,9 @@ class MainBrain:
         print 'resolving',camera_server_URI,'at',time.time()
         camera_server = Pyro.core.getProxyForURI(camera_server_URI)
         print 'found'
-        camera_server._setOneway(['ouch'])
+        camera_server._setOneway(['send_most_recent_frame',
+                                  'quit',
+                                  'set_camera_property'])
         self.camera_server[cam_id] = camera_server
     
     def RemoveCameraServer(self, cam_id):
@@ -275,12 +280,12 @@ class MainBrain:
                 scalar_control_info = copy.deepcopy(cam['scalar_control_info'])
                 cam_lock.release()
                 new_cam_func(cam_id,scalar_control_info)
-                
+
         for cam_id in old_cam_ids:
             for old_cam_func in self._old_camera_functions:
                 old_cam_func(cam_id)
 
-    def get_last_image_fps(self,cam_id):
+    def get_last_image_fps(self, cam_id):
         cam = self.remote_api.cam_info[cam_id]
         cam_lock = cam['lock']
         cam_lock.acquire()
@@ -291,18 +296,22 @@ class MainBrain:
         cam_lock.release()
         return image, fps
 
-    def send_commands(self,cam_id,commands):
+    def close_camera(self,cam_id):
+        self.camera_server[cam_id].quit()
+
+    def send_set_camera_property(self, cam_id, property_name, value):
         cam = self.remote_api.cam_info[cam_id]
         cam_lock = cam['lock']
         cam_lock.acquire()
-        cam['commands'].update(commands)
+        cam['commands'].setdefault('set',{})[property_name]=value
         cam_lock.release()
 
-    def close_camera(self,cam_id):
-        self.send_commands(cam_id,{'quit':True})
-
-    def ouch_camera(self,cam_id):
-        self.camera_server[cam_id].ouch()
+    def request_image_async(self, cam_id):
+        cam = self.remote_api.cam_info[cam_id]
+        cam_lock = cam['lock']
+        cam_lock.acquire()
+        cam['commands']['get_im']=None
+        cam_lock.release()
 
     def quit(self):
         # this may be called twice: once explicitly and once by __del__
@@ -328,17 +337,32 @@ class App(wxApp):
     
         wxInitAllImageHandlers()
         frame = wxFrame(None, -1, "Flydra Main Brain",size=(800,600))
-        
+
+        # statusbar ----------------------------------
         self.statusbar = frame.CreateStatusBar()
         self.statusbar.SetFieldsCount(3)
+        
+        # menubar ------------------------------------
         menuBar = wxMenuBar()
+        #   File
         filemenu = wxMenu()
         ID_quit = wxNewId()
         filemenu.Append(ID_quit, "Quit\tCtrl-Q", "Quit application")
         EVT_MENU(self, ID_quit, self.OnQuit)
         menuBar.Append(filemenu, "&File")
+
+        #   View
+        viewmenu = wxMenu()
+        ID_toggle_image_tinting = wxNewId()
+        viewmenu.Append(ID_toggle_image_tinting, "Tint clipped data",
+                        "Tints clipped pixels blue", wx.ITEM_CHECK)
+        EVT_MENU(self, ID_toggle_image_tinting, self.OnToggleTint)
+        menuBar.Append(viewmenu, "&View")
+
+        # finish menubar -----------------------------
         frame.SetMenuBar(menuBar)
 
+        # main panel ----------------------------------
         self.main_panel = RES.LoadPanel(frame,"FLYDRA_PANEL") # make frame main panel
         self.main_panel.SetFocus()
 
@@ -351,14 +375,18 @@ class App(wxApp):
         self.cam_preview_panel = RES.LoadPanel(nb,"CAM_PREVIEW_PANEL") # make camera preview panel
         nb.AddPage(self.cam_preview_panel,"Camera Preview/Settings")
         
-        temp_panel = RES.LoadPanel(nb,"UNDER_CONSTRUCTION_PANEL") # make camera preview panel
-        nb.AddPage(temp_panel,"3D Calibration")
+        self.calibration_panel = RES.LoadPanel(nb,"UNDER_CONSTRUCTION_PANEL") # make camera preview panel
+        nb.AddPage(self.calibration_panel,"3D Calibration")
 
-        temp_panel = RES.LoadPanel(nb,"UNDER_CONSTRUCTION_PANEL") # make camera preview panel
-        nb.AddPage(temp_panel,"Record raw video")
+        self.record_raw_panel = RES.LoadPanel(nb,"UNDER_CONSTRUCTION_PANEL") # make camera preview panel
+        nb.AddPage(self.record_raw_panel,"Record raw video")
 
         temp_panel = RES.LoadPanel(nb,"UNDER_CONSTRUCTION_PANEL") # make camera preview panel
         nb.AddPage(temp_panel,"Realtime 3D tracking")
+
+        nb.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnPageChanged)
+        self.main_notebook = nb
+        self.current_page = 'preview'
 
         #####################################
 
@@ -380,6 +408,7 @@ class App(wxApp):
 
         dynamic_image_panel = XRCCTRL(self.main_panel,"DynamicImagePanel") # get container
         self.cam_image_canvas = DynamicImageCanvas.DynamicImageCanvas(dynamic_image_panel,-1) # put GL window in container
+        viewmenu.Check(ID_toggle_image_tinting,self.cam_image_canvas.get_clipping())
         #self.cam_image_canvas = wxButton(dynamic_image_panel,-1,"Button") # put GL window in container
 
         box = wxBoxSizer(wxVERTICAL)
@@ -397,6 +426,24 @@ class App(wxApp):
 
         return True
 
+    def OnPageChanged(self, event):
+        page = event.GetSelection()
+        if page==0:
+            self.current_page = 'preview'
+            print 'cam preview'
+        elif page==1:
+            self.current_page = 'calibration'
+            print 'calibration'
+        elif page==2:
+            self.current_page = 'record'
+            print 'record raw video'
+        else:
+            self.current_page = 'unknown'
+            print 'unknown page'
+
+    def OnToggleTint(self, event):
+        self.cam_image_canvas.set_clipping( event.IsChecked() )
+
     def attach_and_start_main_brain(self,main_brain):
         self.main_brain = main_brain
         self.main_brain.set_new_camera_callback(self.OnNewCamera)
@@ -412,28 +459,37 @@ class App(wxApp):
         self.frame.Close(True)
 
     def OnIdle(self, event):
+        
         if not hasattr(self,'main_brain'):
             return # quitting
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc
-        for cam_id in self.cameras.keys():
-            cam = self.cameras[cam_id]
-            camPanel = cam['camPanel']
-            image = None
-            show_fps = None
-            try:
-                image, show_fps = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
-            except KeyError:
-                # unexpected disconnect
-                pass # may have lost camera since call to service_pending
-            if image is not None:
-                self.cam_image_canvas.update_image(cam_id,image)
-            if show_fps is not None:
-                show_fps_label = XRCCTRL(camPanel,'acquired_fps_label') # get container
-                show_fps_label.SetLabel('Frames per second (acquired): %.1f'%show_fps)
-        self.cam_image_canvas.OnDraw()
+        if self.current_page == 'preview':
+            for cam_id in self.cameras.keys():
+                self.main_brain.request_image_async(cam_id)
+
+                cam = self.cameras[cam_id]
+                camPanel = cam['camPanel']
+                image = None
+                show_fps = None
+                try:
+                    image, show_fps = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
+                except KeyError:
+                    # unexpected disconnect
+                    pass # may have lost camera since call to service_pending
+                if image is not None:
+                    self.cam_image_canvas.update_image(cam_id,image)
+                if show_fps is not None:
+                    show_fps_label = XRCCTRL(camPanel,'acquired_fps_label') # get container
+                    show_fps_label.SetLabel('Frames per second (acquired): %.1f'%show_fps)
+            self.cam_image_canvas.OnDraw()
+
         
-        if sys.platform != 'win32' or isinstance(event,wxIdleEventPtr):
-            event.RequestMore()
+            if sys.platform != 'win32' or isinstance(event,wxIdleEventPtr):
+                event.RequestMore()
+            
+        else:
+            # do other stuff
+            pass
             
     def OnNewCamera(self, cam_id, scalar_control_info):
         # add self to WX
@@ -447,10 +503,6 @@ class App(wxApp):
             static_box.SetLabel( 'Camera ID: %s'%cam_id )
 
         XRCCTRL(camPanel,'cam_info_label').SetLabel('camera %s'%(cam_id))
-        
-        ouch_camera = XRCCTRL(camPanel,"ouch_button") # get container
-        EVT_BUTTON(ouch_camera, ouch_camera.GetId(), self.OnOuchCamera)
-        self.wx_id_2_cam_id.update( {ouch_camera.GetId():cam_id} )
         
         quit_camera = XRCCTRL(camPanel,"quit_camera") # get container
         EVT_BUTTON(quit_camera, quit_camera.GetId(), self.OnCloseCamera)
@@ -481,8 +533,8 @@ class App(wxApp):
                     self.label_if_shutter=label_if_shutter
                 def onScroll(self, event):
                     current_value = self.slider.GetValue()
-                    self.main_brain.send_commands(self.cam_id,
-                                                  {self.name:current_value})
+                    self.main_brain.send_set_camera_property(
+                        self.cam_id,self.name,current_value)
                     if self.label_if_shutter is not None: # this is the shutter control
                         self.label_if_shutter.SetLabel('Exposure (msec): %.3f'%(current_value*0.02,))
 
@@ -507,10 +559,6 @@ class App(wxApp):
     def OnCloseCamera(self, event):
         cam_id = self.wx_id_2_cam_id[event.GetId()]
         self.main_brain.close_camera(cam_id) # eventually calls OnOldCamera
-    
-    def OnOuchCamera(self, event):
-        cam_id = self.wx_id_2_cam_id[event.GetId()]
-        self.main_brain.ouch_camera(cam_id)
     
     def OnOldCamera(self, cam_id):
         print 'a camera was unregistered:',cam_id
