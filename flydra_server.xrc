@@ -70,37 +70,57 @@
       </object>
       <object class="sizeritem">
         <object class="wxBoxSizer">
-          <orient>wxVERTICAL</orient>
+          <orient>wxHORIZONTAL</orient>
           <object class="sizeritem">
-            <object class="wxStaticText" name="acquired_fps_label">
-              <label>fps: --</label>
+            <object class="wxBoxSizer">
+              <orient>wxVERTICAL</orient>
+              <object class="sizeritem">
+                <object class="wxStaticText" name="acquired_fps_label">
+                  <label>fps: --</label>
+                </object>
+              </object>
+              <object class="sizeritem">
+                <object class="wxStaticText" name="exposure_label">
+                  <label>Exposure (msec): --</label>
+                </object>
+              </object>
             </object>
+            <option>1</option>
+            <flag>wxALIGN_CENTRE</flag>
           </object>
           <object class="sizeritem">
-            <object class="wxStaticText" name="exposure_label">
-              <label>Exposure (msec): --</label>
+            <object class="wxBoxSizer">
+              <orient>wxVERTICAL</orient>
+              <object class="sizeritem">
+                <object class="wxBoxSizer">
+                  <orient>wxHORIZONTAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Threshold for AbsDiff</label>
+                    </object>
+                    <flag>wxTOP|wxRIGHT</flag>
+                    <border>3</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxTextCtrl" name="threshold_value">
+                      <value>7.9</value>
+                    </object>
+                  </object>
+                </object>
+              </object>
+              <object class="sizeritem">
+                <object class="wxCheckBox" name="ARENA_CONTROL">
+                  <label>send LED arena signals</label>
+                  <checked>0</checked>
+                </object>
+              </object>
             </object>
+            <option>1</option>
+            <flag>wxALIGN_CENTRE</flag>
           </object>
         </object>
         <option>0</option>
-        <flag>wxALIGN_CENTRE</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxBoxSizer">
-          <orient>wxHORIZONTAL</orient>
-          <object class="sizeritem">
-            <object class="wxStaticText">
-              <label>Threshold for AbsDiff</label>
-            </object>
-            <flag>wxTOP|wxRIGHT</flag>
-            <border>3</border>
-          </object>
-          <object class="sizeritem">
-            <object class="wxTextCtrl" name="threshold_value">
-              <value>7.9</value>
-            </object>
-          </object>
-        </object>
+        <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="PerCameraControlsContainer"/>

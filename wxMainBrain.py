@@ -49,7 +49,7 @@ class App(wxApp):
         viewmenu = wxMenu()
         ID_toggle_image_tinting = wxNewId()
         viewmenu.Append(ID_toggle_image_tinting, "Tint clipped data",
-                        "Tints clipped pixels blue", wxITEM_CHECK)
+                        "Tints clipped pixels green", wxITEM_CHECK)
         EVT_MENU(self, ID_toggle_image_tinting, self.OnToggleTint)
 
         ID_set_timer = wxNewId()
@@ -204,6 +204,10 @@ class App(wxApp):
         threshold_value.SetValue(
             str( self.cameras[cam_id]['scalar_control_info']['threshold'] ) )
         EVT_TEXT(threshold_value, threshold_value.GetId(), self.OnSetCameraThreshold)
+
+        arena_control = XRCCTRL(PreviewPerCamPanel,
+                             "ARENA_CONTROL")
+        EVT_CHECKBOX(arena_control, arena_control.GetId(), self.OnArenaControl)
         
         per_cam_controls_panel = XRCCTRL(PreviewPerCamPanel,
                                          "PerCameraControlsContainer")
@@ -600,6 +604,10 @@ class App(wxApp):
         if value:
             value = float(value)
             self.main_brain.set_diff_threshold(cam_id,value) # eventually calls OnOldCamera
+
+    def OnArenaControl(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        self.main_brain.set_use_arena( cam_id, event.IsChecked() )
     
     def OnOldCamera(self, cam_id):
         try:

@@ -44,9 +44,7 @@ cdef void print_info_8u(ipp.Ipp8u* im, int im_step, ipp.IppiSize sz, object pref
                                                                    maxIdx.x,maxIdx.y)
 # end of IPP-requiring code
 
-use_arena = 1
-if use_arena:
-    cimport arena_control
+cimport arena_control
 
 if sys.platform == 'win32':
     time_func = time.clock
@@ -75,6 +73,8 @@ cdef class GrabClass:
     cdef Camera cam
     cdef int coord_port
     cdef int left, bottom, right, top
+    cdef float diff_threshold
+    cdef int use_arena
     
     cdef void set_camera_and_coord_port(self, Camera cam, object coord_port):
         self.cam = cam
@@ -94,6 +94,7 @@ cdef class GrabClass:
         cdef int i, j
         cdef double timestamp
         cdef long framenumber
+        cdef int have_arena_control
 
         # start of IPP-requiring code
         cdef int index_x,index_y
@@ -196,10 +197,13 @@ cdef class GrabClass:
 
         # end of IPP-requiring code
 
-        if use_arena:
+        try:
             arena_error = arena_control.arena_initialize()
             if arena_error != 0:
                 raise RuntimeError( "Error initializing arena control" )
+            have_arena_control = 1
+        except NameError:
+            have_arena_control = 0
 
         coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
@@ -234,7 +238,7 @@ cdef class GrabClass:
                     (im2 + self.bottom*im2_step + self.left), im2_step,
                     roi_sz, 4 ))
                 
-                if max_val < globals['diff_threshold']:
+                if max_val < self.diff_threshold:
                     x0=-1
                     y0=-1
                 else:
@@ -280,10 +284,13 @@ cdef class GrabClass:
                             y0 + self.bottom,
                             orientation) ]
 
-                if use_arena: # call out to arena feedback function
-                    arena_control.arena_update(
-                        x0+self.left, y0+self.bottom, orientation,
-                        timestamp, framenumber )
+                if self.use_arena: # call out to arena feedback function
+                    if have_arena_control:
+                        arena_control.arena_update(
+                            x0+self.left, y0+self.bottom, orientation,
+                            timestamp, framenumber )
+                    else:
+                        print 'ERROR: no arena control'
                     
 ##                points = [ (x0,y0),
 ##                           (index_x, index_y) ]
@@ -431,7 +438,7 @@ cdef class GrabClass:
 ##                                        (main_brain_hostname,COORD_PORT))
                 sleep(1e-6) # yield processor
         finally:
-            if use_arena:
+            if have_arena_control:
                 arena_control.arena_finish()
 
             # start of IPP-requiring code
@@ -553,12 +560,9 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
     def clear_background(self):
         self.globals['clear_background_start'].set()
 
-    def set_diff_threshold(self,value):
-        self.globals['diff_threshold'] = value
-
     def get_diff_threshold(self,value):
         return self.globals['diff_threshold']
-
+    
 cdef class App:
     cdef object globals
     cdef object cam_id
@@ -657,7 +661,6 @@ cdef class App:
             globals['clear_background_start'] = threading.Event()
             globals['record_status_lock'] = threading.Lock()
 
-            globals['diff_threshold'] = 8.1
             globals['lbrt'] = 0,0,width-1,height-1
             globals['width'] = width
             globals['height'] = height
@@ -675,7 +678,8 @@ cdef class App:
                 min_value = tmp[1]
                 max_value = tmp[2]
                 scalar_control_info[name] = (current_value, min_value, max_value)
-            scalar_control_info['threshold'] = globals['diff_threshold']
+            diff_threshold = 8.1
+            scalar_control_info['threshold'] = diff_threshold
             scalar_control_info['width'] = globals['width']
             scalar_control_info['height'] = globals['height']
 
@@ -727,6 +731,12 @@ cdef class App:
             grabber.bottom = 0
             grabber.top = height-1
             grabber.set_camera_and_coord_port(cam,coord_port)
+            
+            grabber.diff_threshold = diff_threshold
+            globals['diff_threshold'] = grabber.diff_threshold
+            grabber.use_arena = 0
+            globals['use_arena'] = grabber.use_arena
+            
             grab_thread=threading.Thread(target=grabber.grab_func,
                                          args=(globals,))
             cam.start_camera()  # start camera
@@ -817,7 +827,7 @@ cdef class App:
                                     cam.set_camera_property(enum,value,0,0)
                             elif key == 'get_im': # low priority get image (for streaming)
                                 self.from_main_brain_api[cam_no].send_most_recent_frame() # mimic call
-                            elif key == 'roi':
+                            else:
                                 if cam_no == 0:
                                     grabber=self.grabber0
                                 elif cam_no == 1:
@@ -825,12 +835,19 @@ cdef class App:
                                 elif cam_no == 2:
                                     grabber=self.grabber2
                                 # add more if MAX_GRABBERS increases
-                                l,b,r,t = cmds[key]
-                                grabber.left = l
-                                grabber.bottom = b
-                                grabber.right = r
-                                grabber.top = t
-                                globals['lbrt']=l,b,r,t
+                                if key == 'roi':
+                                    l,b,r,t = cmds[key]
+                                    grabber.left = l
+                                    grabber.bottom = b
+                                    grabber.right = r
+                                    grabber.top = t
+                                    globals['lbrt']=l,b,r,t
+                                elif key == 'diff_threshold':
+                                    grabber.diff_threshold = cmds[key]
+                                    globals['diff_threshold'] = grabber.diff_threshold
+                                elif key == 'use_arena':
+                                    grabber.use_arena = cmds[key]
+                                    globals['use_arena'] = grabber.use_arena
                                 
                         # handle saving movie if needed
                         cmd=None

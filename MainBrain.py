@@ -344,6 +344,15 @@ class MainBrain:
             cam_lock.release()
             self.cam_info_lock.release()
 
+        def external_set_use_arena( self, cam_id, value):
+            self.cam_info_lock.acquire()            
+            cam = self.cam_info[cam_id]
+            cam_lock = cam['lock']
+            cam_lock.acquire()
+            cam['commands']['use_arena']=value
+            cam_lock.release()
+            self.cam_info_lock.release()
+
         # --- thread boundary -----------------------------------------
 
         def listen(self,daemon):
@@ -599,7 +608,10 @@ class MainBrain:
         self.camera_server[cam_id].set_diff_threshold(value)
 
     def get_diff_threshold(self, cam_id):
-        return self.camera_server[cam_id].set_diff_threshold()
+        return self.camera_server[cam_id].get_diff_threshold()
+
+    def set_use_arena(self, cam_id, value):
+        self.remote_api.external_set_use_arena( cam_id, value)
 
     def collect_background(self,cam_id):
         self.camera_server[cam_id].collect_background()
