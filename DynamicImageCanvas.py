@@ -152,9 +152,9 @@ class DynamicImageCanvas(wxGLCanvas):
 
     def update_image(self,id_val,image,format='MONO8'):
         if format == 'YUV411':
-            image = imops.yuv411_to_rgb24( image )
+            image = imops.yuv411_to_rgb8( image )
         elif format == 'YUV422':
-            image = imops.yuv422_to_rgb24( image )
+            image = imops.yuv422_to_rgb8( image )
         elif format == 'MONO8':
             pass
         else:
