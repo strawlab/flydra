@@ -112,7 +112,7 @@ class CoordReceiver(threading.Thread):
         
         header_fmt = '<dli'
         header_size = struct.calcsize(header_fmt)
-        pt_fmt = '<ff'
+        pt_fmt = '<fff'
         pt_size = struct.calcsize(pt_fmt)
         while not self.quit_event.isSet():
             t1=time.time()
@@ -126,8 +126,8 @@ class CoordReceiver(threading.Thread):
             points = []
             for i in range(n_pts):
                 end=start+pt_size
-                x,y = struct.unpack(pt_fmt,data[start:end])
-                points.append( (x,y) )
+                x,y,slope = struct.unpack(pt_fmt,data[start:end])
+                points.append( (x,y,slope) )
                 start=end
 
             if framenumber==-1:
@@ -148,7 +148,8 @@ class CoordReceiver(threading.Thread):
                     
             # save new frame record
             cur_framenumber_dict=realtime_coord_dict.setdefault(corrected_framenumber,{})
-            cur_framenumber_dict[self.cam_id]=points[0] # XXX for now, only attempt 3D reconstruction of 1st point
+            # save x,y, not slope
+            cur_framenumber_dict[self.cam_id]=points[0][:2] # XXX for now, only attempt 3D reconstruction of 1st point
 
             # make thread-local copy of results if 3D reconstruction possible
             if len(cur_framenumber_dict)>=2:

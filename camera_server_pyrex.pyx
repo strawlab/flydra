@@ -112,7 +112,7 @@ cdef class GrabClass:
         cdef ipp.IppiMomentState_64f *pState
 
         cdef float x0, y0 # centroid
-        cdef float orientation
+        cdef float slope
         # end of IPP-requiring code
 
 ##        COORD_PORT = None
@@ -243,7 +243,7 @@ cdef class GrabClass:
                     # compute centroid -=-=-=-=-=-=-=-=-=-=-=-=
 
                     # start of IPP-requiring code
-                    _fit_params( &x0, &y0, &orientation,
+                    _fit_params( &x0, &y0, &slope,
                                  index_x, index_y, centroid_search_radius,
                                  width, height, im2_32f, im2_32f_step, pState )
                     
@@ -270,7 +270,7 @@ cdef class GrabClass:
                 # return camwire's buffer
                 self.cam.unpoint_frame()
 
-                points = [ (x0,y0) ]
+                points = [ (x0,y0,slope) ]
 
 ##                points = [ (x0,y0),
 ##                           (index_x, index_y) ]
@@ -388,7 +388,7 @@ cdef class GrabClass:
                     n_pts = len(points)
                     data = struct.pack('<dli',timestamp,framenumber,n_pts)
                     for i in range(n_pts):
-                        data = data + struct.pack('<ff',*points[i])
+                        data = data + struct.pack('<fff',*points[i])
                     coord_socket.sendto(data,
                                         (main_brain_hostname,self.coord_port))
 ##                    coord_socket.sendto(data,
