@@ -491,7 +491,7 @@ class FromMainBrainAPI( Pyro.core.ObjBase ):
         result = False
         # start of IPP-requiring code
         result = True
-        # stop of IPP-requiring code
+        # end of IPP-requiring code
         return result
 
     def start_recording(self,filename):
