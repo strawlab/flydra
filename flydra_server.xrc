@@ -4,7 +4,7 @@
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
-        <object class="wxStaticBitmap" name="hydra_pic">
+        <object class="wxStaticBitmap" name="">
           <bitmap>flydra_server_art.png</bitmap>
         </object>
         <option>0</option>
@@ -18,6 +18,13 @@
             <object class="sizeritem">
               <object class="wxStaticLine"/>
               <option>0</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="DynamicImagePanel">
+                <bg>#8080FF</bg>
+              </object>
+              <option>1</option>
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
@@ -52,17 +59,13 @@
           <object class="sizeritem">
             <object class="wxButton" name="quit_camera">
               <label>quit camera</label>
+              <tooltip>quit this camera</tooltip>
             </object>
             <option>0</option>
             <flag>wxALIGN_RIGHT</flag>
           </object>
         </object>
         <option>0</option>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel" name="DynamicImagePanel"/>
-        <option>1</option>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">

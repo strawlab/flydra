@@ -3,7 +3,6 @@ import thread
 import time
 import socket
 import os
-import numarray
 import Pyro.core
 import DynamicImageCanvas
 Pyro.config.PYRO_MULTITHREADED = 0 # No multithreading!
@@ -23,26 +22,34 @@ hydra_image_file = os.path.join(RESDIR,'hydra.gif')
 RES = wxXmlResource(RESFILE)
 
 class FlydraBrainPyroServer( Pyro.core.ObjBase ):
-    def set_wxApp(self,wxApp):
+    def post_init(self,wxApp):
         self.wxApp = wxApp
         self.servlets = {}
+        dynamic_image_panel = XRCCTRL(self.wxApp.main_panel,"DynamicImagePanel") # get container
+        self.cam_image_canvas = DynamicImageCanvas.DynamicImageCanvas(dynamic_image_panel,-1) # put GL window in container
+        #self.cam_image_canvas = wxButton(dynamic_image_panel,-1,"Button") # put GL window in container
+
+        box = wxBoxSizer(wxVERTICAL)
+        #box.Add(self.cam_image_canvas,1,wxEXPAND|wxSHAPED) # keep aspect ratio
+        box.Add(self.cam_image_canvas,1,wxEXPAND)
+        dynamic_image_panel.SetSizer(box)
+        dynamic_image_panel.Layout()
+
         self.update_wx()
     def update_wx(self):
         self.wxApp.statusbar.SetStatusText('%d camera servlet(s)'%len(self.servlets),2)
     def get_URI_for_new_camera_servlet(self):
         cam_serv = CameraServlet()
-        cam_serv.set_wxApp( self.wxApp )
+        cam_serv.post_init( self.wxApp, self )
         daemon = self.getDaemon()
         URI=daemon.connect(cam_serv) # start serving cam_serv
-        self.servlets[URI]=cam_serv
+        self.servlets[cam_serv]=None
         self.update_wx()
         return URI
-    def delete_servlet_by_URI(self,URI):
-        cam_serv = self.servlets[URI]
-        del self.servlets[URI]
-        cam_serv.close()
+    def close_servlet(self,servlet):
+        del self.servlets[servlet]
         self.update_wx()
-        
+
 class CameraServlet( Pyro.core.ObjBase ):
     """Communication between camPanel and Pyro"""
     
@@ -68,7 +75,7 @@ class CameraServlet( Pyro.core.ObjBase ):
         return result
 
     def push_image(self, image):
-        self.cam_image_canvas.update_texture(image)
+        self.dyn_canv.update_image(self.my_id,image)
         self.n_frames += 1
 
     def set_current_fps(self, acquired_fps):
@@ -87,11 +94,15 @@ class CameraServlet( Pyro.core.ObjBase ):
 
     # -=-=-=-=-= end remote access -=-=-=-=-=
         
-    def set_wxApp(self, wxApp):
+    def post_init(self, wxApp, parent):
+        self.parent = parent
         self.wxApp = wxApp
+        self.dyn_canv = self.parent.cam_image_canvas
+        self.my_id = id(self)
 
     def disconnect_camera(self, event):
         self.updates['quit']=True
+        self.parent.close_servlet(self)
 
     def init_gui(self):
         """build GUI"""
@@ -112,22 +123,12 @@ class CameraServlet( Pyro.core.ObjBase ):
         fqdn = socket.getfqdn(caller_ip)
 
         cam_info_label = XRCCTRL(self.camPanel,'cam_info_label')
-        cam_info_label.SetLabel('Camera: %s:%d'%(fqdn,caller_port))
+        cam_id_string = 'camera %s:%d'%(fqdn,caller_port)
+        cam_info_label.SetLabel(cam_id_string)
 
         quit_camera = XRCCTRL(self.camPanel,"quit_camera") # get container
         EVT_BUTTON(quit_camera, quit_camera.GetId(), self.disconnect_camera)
         
-        dynamic_image_panel = XRCCTRL(self.camPanel,"DynamicImagePanel") # get container
-
-        self.cam_image_canvas = DynamicImageCanvas.DynamicImageCanvas(dynamic_image_panel,-1) # put GL window in container
-        #self.cam_image_canvas = wxButton(dynamic_image_panel,-1,"Button") # put GL window in container
-
-        box = wxBoxSizer(wxVERTICAL)
-        #box.Add(self.cam_image_canvas,1,wxEXPAND|wxSHAPED) # keep aspect ratio
-        box.Add(self.cam_image_canvas,1,wxEXPAND)
-        dynamic_image_panel.SetSizer(box)
-        dynamic_image_panel.Layout()
-
         per_cam_controls_panel = XRCCTRL(self.camPanel,"PerCameraControlsContainer") # get container
         box = wxBoxSizer(wxVERTICAL)
 
@@ -140,6 +141,7 @@ class CameraServlet( Pyro.core.ObjBase ):
             label.SetLabel( param )
             
             slider = XRCCTRL(scalarPanel,'scalar_control_slider')
+            #slider.SetToolTip(wxToolTip('adjust %s'%param))
             slider.SetRange( min_value, max_value )
             slider.SetValue( current_value )
             
@@ -158,8 +160,8 @@ class CameraServlet( Pyro.core.ObjBase ):
         self.my_container.Layout()
 
     def close(self):
+        self.dyn_canv.delete_image(self.my_id)
         if hasattr(self,'camPanel'):
-            #print 'closing...'
             self.camPanel.DestroyChildren()
             self.camPanel.Destroy()
             del self.camPanel
@@ -170,7 +172,7 @@ class App(wxApp):
     def OnInit(self,*args,**kw):
     
         wxInitAllImageHandlers()
-        frame = wxFrame(None, -1, "Flydra Control Center",size=(700,500))
+        frame = wxFrame(None, -1, "Flydra Main Brain",size=(700,500))
         
         self.statusbar = frame.CreateStatusBar()
         self.statusbar.SetFieldsCount(3)
@@ -182,29 +184,22 @@ class App(wxApp):
         menuBar.Append(filemenu, "&File")
         frame.SetMenuBar(menuBar)
 
-        panel = RES.LoadPanel(frame,"FlydraPanel") # frame main panel
-        panel.SetFocus()
-
-##        hydra_bitmap = XRCCTRL(panel,'hydra_pic') # get wxStaticBitmap
-##        #if hydra_image_file.endswith('.gif'):
-##        if 1:
-##            tmp = wxImage(hydra_image_file, wxBITMAP_TYPE_GIF).ConvertToBitmap()
-##            hydra_bitmap.SetBitmap(tmp)
-##            #hydra_bitmap.SetSize((200,200))
+        self.main_panel = RES.LoadPanel(frame,"FlydraPanel") # frame main panel
+        self.main_panel.SetFocus()
 
         frame_box = wxBoxSizer(wxVERTICAL)
-        frame_box.Add(panel,1,wxEXPAND)
+        frame_box.Add(self.main_panel,1,wxEXPAND)
         frame.SetSizer(frame_box)
         frame.Layout()
 
         #####################################
 
-        self.all_cam_panel = XRCCTRL(panel,"AllCamPanel")
+        self.all_cam_panel = XRCCTRL(self.main_panel,"AllCamPanel")
 
         acp_box = wxBoxSizer(wxVERTICAL)
         self.all_cam_panel.SetSizer(acp_box)
         
-        acp_box.Add(wxStaticText(self.all_cam_panel,-1,"This is the main panel"),0,wxEXPAND)
+        #acp_box.Add(wxStaticText(self.all_cam_panel,-1,"This is the main panel"),0,wxEXPAND)
         self.all_cam_panel.Layout()
 
         #########################################
@@ -223,7 +218,7 @@ class App(wxApp):
         self.timer = wxTimer(self,      # object to send the event to
                              ID_Timer)  # event id to use
         EVT_TIMER(self,  ID_Timer, self.OnTimer)
-        self.timer.Start(10)
+        self.timer.Start(100)
         
         return True
     
@@ -240,14 +235,14 @@ class App(wxApp):
         port = 9832
         self.daemon = Pyro.core.Daemon(host=hostname,port=port)
         self.flydra_brain = FlydraBrainPyroServer()
-        self.flydra_brain.set_wxApp(self)
+        self.flydra_brain.post_init(self)
         URI=self.daemon.connect(self.flydra_brain,'flydra_brain')
         self.statusbar.SetStatusText("flydra_brain at %s:%d"%(fqdn,port), 1)
         self.frame.SetFocus()
 
 def main():
-    #app = App(redirect=1,filename='flydra_log.txt')
-    app = App()
+    app = App(redirect=1,filename='flydra_log.txt')
+    #app = App()
     app.MainLoop()
 
 if __name__ == '__main__':

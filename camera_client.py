@@ -3,10 +3,10 @@ import thread
 import time
 import socket
 import sys
-import numarray
+import numarray as na
 import Pyro.core, Pyro.errors
 
-DUMMY=0
+DUMMY=1
 
 if not DUMMY:
     if sys.platform == 'win32':
@@ -32,7 +32,7 @@ def grab_thread(cam,quit_now,thread_done):
     # (this could be in C)
     global incoming_frames
     thread_done.acquire()
-    buf = numarray.zeros( (cam.max_height,cam.max_width), numarray.UInt8 ) # allocate buffer
+    buf = na.zeros( (cam.max_height,cam.max_width), na.UInt8 ) # allocate buffer
     while quit_now.locked():
         cam.grab_next_frame_blocking(buf) # grab frame and stick in buf
         incoming_frames.append( buf.copy() ) # save a copy of the buffer
@@ -102,7 +102,7 @@ def main():
 
                 # calculate and send FPS
                 elapsed = now-last_measurement_time
-                if elapsed > 1.0:
+                if elapsed > 5.0:
                     fps = n_frames/elapsed
                     camera_servlet.set_current_fps(fps)
                     last_measurement_time = now
