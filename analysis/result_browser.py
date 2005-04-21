@@ -47,6 +47,12 @@ class SmoothData(PT.IsDescription):
     qy    = PT.FloatCol(pos=6)
     qz    = PT.FloatCol(pos=7)
 
+class TimedVectors(PT.IsDescription):
+    frame = PT.Int32Col(pos=0)
+    fx    = PT.FloatCol(pos=1)
+    fy    = PT.FloatCol(pos=2)
+    fz    = PT.FloatCol(pos=3)
+
 def status(status_string):
     print " status:",status_string
 
@@ -620,20 +626,84 @@ def plot_whole_range(results, start_frame, stop_frame, typ='best', show_err=Fals
 
 def save_smooth_data(results,frames,Psmooth,Qsmooth):
     assert len(frames)==len(Psmooth)==len(Qsmooth)
-    smooth_data = results.createTable(results.root,'smooth_data',SmoothData,'')
-    for i in range(len(frames)):
+    if not hasattr(results.root,'smooth_data'):
+        smooth_data = results.createTable(results.root,'smooth_data',SmoothData,'')
+    else:
+        smooth_data = results.root.smooth_data
+        
+    for i in range(len(frames)):        
+        frame = frames[i]
         P = Psmooth[i]
         Q = Qsmooth[i]
-        smooth_data.row['frame'] = frames[i]
-        smooth_data.row['x'] = P[0]
-        smooth_data.row['y'] = P[1]
-        smooth_data.row['z'] = P[2]
-        smooth_data.row['qw'] = Q.w
-        smooth_data.row['qx'] = Q.x
-        smooth_data.row['qy'] = Q.y
-        smooth_data.row['qz'] = Q.z
-        smooth_data.row.append()
+
+        old_nrow = None
+        for row in smooth_data:
+            if row['frame'] != frame:
+                    continue
+            print row.nrow()
+            if old_nrow is not None:
+                raise RuntimeError('more than row with frame number %d in smooth_data'%frame)
+            old_nrow = row.nrow()
+        
+        new_row = []
+        new_row_dict = {}
+        for colname in smooth_data.colnames:
+            if colname == 'frame': new_row.append( frame )
+            elif colname == 'x': new_row.append( P[0] )
+            elif colname == 'y': new_row.append( P[1] )
+            elif colname == 'z': new_row.append( P[2] )
+            elif colname == 'qw': new_row.append( Q.w )
+            elif colname == 'qx': new_row.append( Q.x )
+            elif colname == 'qy': new_row.append( Q.y )
+            elif colname == 'qz': new_row.append( Q.z )
+            else: raise KeyError("don't know column name '%s'"%colname)
+            new_row_dict[colname] = new_row[-1]
+        if old_nrow is None:
+            for k,v in new_row_dict.iteritems():
+                smooth_data.row[k] = v
+            smooth_data.row.append()
+        else:
+            smooth_data[old_nrow] = new_row
     smooth_data.flush()
+
+def save_resultant(results,frames,resultant):
+    return save_timed_forces('resultant_forces',results,frames,resultant)
+
+def save_timed_forces(table_name,results,frames,resultant):
+    assert len(frames)==len(resultant)
+    if not hasattr(results.root,table_name):
+        resultant_forces = results.createTable(results.root,table_name,TimedVectors,'')
+    else:
+        resultant_forces = results.root.resultant_forces
+        
+    for i in range(len(frames)):        
+        frame = frames[i]
+        fxyz = resultant[i]
+
+        old_nrow = None
+        for row in resultant_forces:
+            if row['frame'] != frame:
+                    continue
+            if old_nrow is not None:
+                raise RuntimeError('more than row with frame number %d in smooth_data'%frame)
+            old_nrow = row.nrow()
+        
+        new_row = []
+        new_row_dict = {}
+        for colname in resultant_forces.colnames:
+            if colname == 'frame': new_row.append( frame )
+            elif colname == 'fx': new_row.append( fxyz[0] )
+            elif colname == 'fy': new_row.append( fxyz[1] )
+            elif colname == 'fz': new_row.append( fxyz[2] )
+            else: raise KeyError("don't know column name '%s'"%colname)
+            new_row_dict[colname] = new_row[-1]
+        if old_nrow is None:
+            for k,v in new_row_dict.iteritems():
+                resultant_forces.row[k] = v
+            resultant_forces.row.append()
+        else:
+            resultant_forces[old_nrow] = new_row
+    resultant_forces.flush()
 
 def thread_make_exact_movie_info(results, nrow):
     movie_info = results.root.movie_info
@@ -1067,6 +1137,7 @@ def plot_all_images(results,
                     display_titles=True,
                     start_frame_offset=188191, # used to calculate time display
                     max_err=None,
+                    plot_red_ori_fixed=False,                    
                     colormap='jet'):
 
     #if origin == 'upper' and zoomed==True: raise NotImplementedError('')
@@ -1190,8 +1261,8 @@ def plot_all_images(results,
                     im = im.astype(nx.UInt8)
                 if (have_2d_data and not nan_in_2d_data and zoomed and x>=0
                     or fixed_im_lims.has_key(cam_id)):
-                    w = 26
-                    h = 39
+                    w = 13
+                    h = 20
                     xcenter, ycenter = fixed_im_centers.get(
                         cam_id, (x,y))
                     xmin = int(xcenter-w)
@@ -1365,16 +1436,22 @@ def plot_all_images(results,
                 else:
                     lines=ax.plot([x],[y],'o')
                 set(lines,'markerfacecolor',(1,0,0))
-                set(lines,'markeredgecolor',None)
+                set(lines,'markeredgewidth',0.0)
                 set(lines,'markersize',4.0)
                 
             if PLOT_RED and line3d is not None:
                 if plot_orientation:
                     if plot_3d_unit_vector:
                         if origin == 'upper':
-                            lines=ax.plot([unit_x1,unit_x2],[height-unit_y1,height-unit_y2],'r-',linewidth=1.5)
+                            if plot_red_ori_fixed:
+                                lines=ax.plot([x,unit_x1],[height-y,height-unit_y1],'r-',linewidth=1.5)
+                            else:
+                                lines=ax.plot([unit_x1,unit_x2],[height-unit_y1,height-unit_y2],'r-',linewidth=1.5)
                         else:
-                            lines=ax.plot([unit_x1,unit_x2],[unit_y1,unit_y2],'r-',linewidth=1.5)
+                            if plot_red_ori_fixed:
+                                lines=ax.plot([x,unit_x1],[y,unit_y1],'r-',linewidth=1.5)
+                            else:
+                                lines=ax.plot([unit_x1,unit_x2],[unit_y1,unit_y2],'r-',linewidth=1.5)
                     else:
                         a,b,c=l3
                         # ax+by+c=0
@@ -1405,35 +1482,35 @@ def plot_all_images(results,
                             lines=ax.plot([x1,x2],[height-y1,height-y2],'r--',linewidth=1.5)
                         else:
                             lines=ax.plot([x1,x2],[y1,y2],'r--',linewidth=1.5)
-            if PLOT_BLUE:
-                smooth_data = results.root.smooth_data
-                have_smooth_data = False
-                for row in smooth_data:
-                    if row['frame'] == frame_no:
-                        Psmooth = nx.array( (row['x'], row['y'], row['z']) )
-                        Qsmooth = cgtypes.quat( row['qw'], row['qx'], row['qy'], row['qz'] )
-                        have_smooth_data = True
-                        break
-                if not have_smooth_data:
-                    # make sure we don't use old data
-                    Psmooth = None
-                    Qsmooth = None
-                else:
-                    #x,l3=reconstructor.find2d(cam_id,Psmooth,line3d)
-                    U=nx.array(PQmath.quat_to_orient(Qsmooth))
-                    x,y            = reconstructor.find2d(cam_id,Psmooth)
-                    unit_x, unit_y = reconstructor.find2d(cam_id,(Psmooth-5.0*U))
-                    
-                    if origin=='upper':
-                        lines=ax.plot([x],[height-y],'o')
-                    else:
-                        lines=ax.plot([x],[y],'o')
-                    set(lines,'markerfacecolor',(0,0,1))
+        if PLOT_BLUE:
+            smooth_data = results.root.smooth_data
+            have_smooth_data = False
+            for row in smooth_data:
+                if row['frame'] == frame_no:
+                    Psmooth = nx.array( (row['x'], row['y'], row['z']) )
+                    Qsmooth = cgtypes.quat( row['qw'], row['qx'], row['qy'], row['qz'] )
+                    have_smooth_data = True
+                    break
+            if not have_smooth_data:
+                # make sure we don't use old data
+                Psmooth = None
+                Qsmooth = None
+            else:
+                #x,l3=reconstructor.find2d(cam_id,Psmooth,line3d)
+                U=nx.array(PQmath.quat_to_orient(Qsmooth))
+                x,y            = reconstructor.find2d(cam_id,Psmooth)
+                unit_x, unit_y = reconstructor.find2d(cam_id,(Psmooth-5.0*U))
 
-                    if origin == 'upper':
-                        lines=ax.plot([x,unit_x],[height-y,height-unit_y],'b-',linewidth=1.5)
-                    else:
-                        lines=ax.plot([x,unit_x],[y,unit_y],'b-',linewidth=1.5)
+                if origin=='upper':
+                    lines=ax.plot([x],[height-y],'o')
+                else:
+                    lines=ax.plot([x],[y],'o')
+                set(lines,'markerfacecolor',(0,0,1))
+
+                if origin == 'upper':
+                    lines=ax.plot([x,unit_x],[height-y,height-unit_y],'b-',linewidth=1.5)
+                else:
+                    lines=ax.plot([x,unit_x],[y,unit_y],'b-',linewidth=1.5)
                 
         labels=ax.get_xticklabels()
         set(labels, rotation=90)
@@ -1528,11 +1605,11 @@ def save_movie(results):
 ##                    'cam5:0':(196,370)}
     full_frame = ((0,655),(0,490))
     fixed_im_lims = {
-        'cam1:0':([233, 292], [208, 284]),
-        'cam2:0':([330, 400], [190, 250]),
-        'cam3:0':([171, 322], [150, 233]),
-        'cam4:0':([60, 260], [220, 340]),
-        'cam5:0':([300, 390], [230, 285]),
+        'cam1:0':((70,  170), (200, 270)),
+        'cam2:0':((350, 430), ( 80, 220)),
+        'cam3:0':((350, 450), (  0, 160)),
+        'cam4:0':((290, 400), ( 20, 180)),
+        'cam5:0':((355, 395), (130, 200)),
         }
 
     cam_ids = get_cam_ids(results,)
@@ -1540,11 +1617,13 @@ def save_movie(results):
     for cam_id in cam_ids:
         print 'getting frame server for',cam_id
         frame_server_dict[cam_id] = get_server(cam_id)
-    start_frame = 137820
-    for frame in xrange(start_frame+260, start_frame+270, 1):
+    start_frame = 68942
+    stop_frame = 69643
+        
+    for frame in xrange(68942+300, 68942+360, 1):
         clf()
         try:
-            fname = 'zoomed_%04d.png'%frame
+            fname = 'zoomed3_%04d.png'%frame
             #fname = 'full_frame_%04d.png'%frame
             print ' plotting',fname,'...',
             sys.stdout.flush()
@@ -1553,15 +1632,16 @@ def save_movie(results):
                             #fixed_im_centers=fixed_im_centers,
                             #fixed_im_lims=fixed_im_lims,
                             colormap='grayscale',
-                            zoomed=True,
+                            #zoomed=True,
                             plot_orientation=True,
                             origin='lower',
                             display_labels=False,
                             display_titles=False,
                             start_frame_offset=start_frame,
                             PLOT_RED=True,
-                            PLOT_BLUE=False,
+                            PLOT_BLUE=True,
                             max_err=10,
+                            plot_red_ori_fixed=True,                    
                             )
             
             print ' saving...',
@@ -1575,10 +1655,11 @@ def save_movie(results):
 def plot_camera_view(results,camn):
     ioff()
     try:
-        start_frame = 137820
-
-        f1 = start_frame+300
-        f2 = start_frame+350
+        start_frame = 68942+330
+        stop_frame = 68942+360
+        
+        f1 = start_frame
+        f2 = stop_frame
 
         for row in results.root.cam_info:
             if camn == row['camn']:
@@ -1954,8 +2035,8 @@ def gaussian(x,sigma):
 
 def cam_usage(results,typ='best'):
     
-    start_frame = 217220
-    stop_frame = start_frame+200
+    start_frame = 68942+330
+    stop_frame = 68942+360
     
     if typ=='best':
         data3d = results.root.data3d_best
@@ -2137,7 +2218,7 @@ def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
     return results
     
 if __name__=='__main__':
-    results = get_results('DATA20050325_140956.h5',mode='r+')
+    results = get_results('DATA20050325_165810.h5',mode='r+')
 ##    tmp3(results)
 ##    recompute_3d_from_2d(results, overwrite=True,
 ##                         start_stop=(24600,25200))

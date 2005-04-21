@@ -4,14 +4,16 @@ import os
 os.environ['__GL_FSAA_MODE']='5' # 4x gaussian multisampling on geForce3 linux
 opj=os.path.join
 from vtkpython import *
-from vtk.util.colors import tomato, banana, azure, blue, black
-import math
+from vtk.util.colors import tomato, banana, azure, blue, black, red, green
+from vtk.util.vtkImageImportFromArray import vtkImageImportFromArray
+import math, random
 
 import flydra.reconstruct as reconstruct
 import flydra.reconstruct as reconstruct
 
 import numarray as nx
 from numarray.ieeespecial import inf
+import Numeric # vtkImageImportFromArray needs Numeric
 
 def init_vtk():
 
@@ -192,6 +194,45 @@ def show_cameras(results,renderers,frustums=True,labels=True,centers=True):
             actors.append( textlabel )
     return actors
 
+def show_numpy_image(renderers,im,shared_vert,vert2,vert3):
+    if 1:
+        return
+    # compute 4th vertex
+    v1v2 = vert2 - shared_vert
+    vert4 = vert3 + v1v2
+
+    if len(im.shape) == 2:
+        im = nx.reshape( im, (im[0], im[1], 1) ) # returns view if possible
+    im = Numeric.asarray(im)
+    im = im.astype( Numeric.UInt8 )
+    iifa = vtkImageImportFromArray()
+    iifa.SetArray( im )
+
+    ia = vtk.vtkImageActor()
+    ia.SetInput(iifa.GetOutput())
+
+    # hmm
+    coords = nx.array([ shared_vert,
+                        vert2,
+                        vert3,
+                        vert4 ])
+    
+    ia.SetDisplayExtent( min(coords[:,0]),
+                         max(coords[:,0]),
+                         min(coords[:,1]),
+                         max(coords[:,1]),
+                         min(coords[:,2]),
+                         min(coords[:,2]) )
+    
+    # XXX not done
+    
+    for renderer in renderers:
+        renderer.AddActor( ia )
+        
+    actors = [ia]
+    
+    return actors
+
 def show_line(renderers,v1,v2,color,radius,nsides=20):
     actors = []
     
@@ -237,6 +278,10 @@ def show_frames_vtk(results,renderers,
                     typ=None,labels=True,
                     show_bounds=False,
                     use_timestamps=False,
+                    timed_force_table=None,
+#                    plot_timed_forces=False,
+                    timed_force_scaling_factor=1e6,
+                    timed_force_color=red,
                     orientation_corrected=True,
                     max_err=None):
     if typ is None:
@@ -247,14 +292,21 @@ def show_frames_vtk(results,renderers,
     elif typ == 'best':
         data3d = results.root.data3d_best
 
+    if timed_force_table is None:
+        plot_timed_forces=False
+    else:
+        plot_timed_forces=True
+
     actors = []
 
     # Initialize VTK data structures
     
     cog_points = vtk.vtkPoints() # 'center of gravity'
-    line_points = vtk.vtkPoints()
+    body_line_points = vtk.vtkPoints()
+    timed_force_line_points = vtk.vtkPoints()
     
-    lines = vtk.vtkCellArray()
+    body_lines = vtk.vtkCellArray()
+    timed_force_lines = vtk.vtkCellArray()
 
     # Get data from results
 
@@ -269,6 +321,7 @@ def show_frames_vtk(results,renderers,
     frame_nos = range(*seq_args)
     Xs=[]
     line3ds=[]
+    timed_forces=[]
     for frame_no in frame_nos:
         X = None
         line3d = None
@@ -293,16 +346,25 @@ def show_frames_vtk(results,renderers,
         Xs.append(X)
         line3ds.append(line3d)
 
+        fxyz = None
+        if plot_timed_forces:
+            for row in timed_force_table:
+                if row['frame'] != frame_no:
+                    continue
+                fxyz = nx.array( (row['fx'], row['fy'], row['fz']) )
+        timed_forces.append( fxyz )
+
     if show_bounds:
         tmp = nx.array(Xs)
         print 'x range:',min( tmp[:,0] ),max( tmp[:,0] )
         print 'y range:',min( tmp[:,1] ),max( tmp[:,1] )
         print 'z range:',min( tmp[:,2] ),max( tmp[:,2] )
-    point_num = 0
+    body_point_num = 0
+    timed_force_point_num = 0
     xlim = [inf,-inf]
     ylim = [inf,-inf]
     zlim = [inf,-inf]
-    for X,line3d in zip(Xs,line3ds):
+    for X,line3d,timed_force in zip(Xs,line3ds,timed_forces):
         if X is not None:
             cog_points.InsertNextPoint(*X)
             # workaround ipython -pylab mode:
@@ -321,21 +383,45 @@ def show_frames_vtk(results,renderers,
             U = reconstruct.line_direction(line3d)
             tube_length = 4
             if orientation_corrected:
-                line_points.InsertNextPoint(*(X-tube_length*U))
+                pt1 = X-tube_length*U
+                pt2 = X
             else:
-                line_points.InsertNextPoint(*(X-tube_length*.5*U))
-            point_num += 1
-            
-            if orientation_corrected:
-                line_points.InsertNextPoint(*X)
-            else:
-                line_points.InsertNextPoint(*(X+tube_length*.5*U))
-            #line_points.InsertNextPoint(*(X-tube_length*U))
-            point_num += 1
+                pt1 = X-tube_length*.5*U
+                pt2 = X+tube_length*.5*U
 
-            lines.InsertNextCell(2)
-            lines.InsertCellPoint(point_num-2)
-            lines.InsertCellPoint(point_num-1)
+            print 'body'
+            print pt1
+            print pt2
+            print
+            
+            body_line_points.InsertNextPoint(*pt1)
+            body_point_num += 1
+            body_line_points.InsertNextPoint(*pt2)
+            body_point_num += 1
+
+            body_lines.InsertNextCell(2)
+            body_lines.InsertCellPoint(body_point_num-2)
+            body_lines.InsertCellPoint(body_point_num-1)
+            
+        if plot_timed_forces and X is not None and timed_force is not None:
+            pt1 = X+timed_force_scaling_factor*timed_force
+            pt2 = X
+
+            print 'force'
+            print pt1
+            print pt2
+            print
+            print
+            
+            timed_force_line_points.InsertNextPoint(*pt1)
+            timed_force_point_num += 1
+            
+            timed_force_line_points.InsertNextPoint(*pt2)
+            timed_force_point_num += 1
+
+            timed_force_lines.InsertNextCell(2)
+            timed_force_lines.InsertCellPoint(timed_force_point_num-2)
+            timed_force_lines.InsertCellPoint(timed_force_point_num-1)
 
     # point rendering
     
@@ -358,13 +444,13 @@ def show_frames_vtk(results,renderers,
         renderer.AddActor( ballActor )
     actors.append( ballActor )
 
-    # line rendering 
+    # body line rendering 
     # ( see VTK demo Rendering/Python/CSpline.py )
     
     profileData = vtk.vtkPolyData()
     
-    profileData.SetPoints(line_points)
-    profileData.SetLines(lines)
+    profileData.SetPoints(body_line_points)
+    profileData.SetLines(body_lines)
     
     # Add thickness to the resulting line.
     profileTubes = vtk.vtkTubeFilter()
@@ -384,6 +470,34 @@ def show_frames_vtk(results,renderers,
     for renderer in renderers:
         renderer.AddActor( profile )
     actors.append( profile )
+
+    if plot_timed_forces:
+        # timed_force line rendering 
+        # ( see VTK demo Rendering/Python/CSpline.py )
+
+        profileData = vtk.vtkPolyData()
+
+        profileData.SetPoints(timed_force_line_points)
+        profileData.SetLines(timed_force_lines)
+
+        # Add thickness to the resulting line.
+        profileTubes = vtk.vtkTubeFilter()
+        profileTubes.SetNumberOfSides(8)
+        profileTubes.SetInput(profileData)
+        profileTubes.SetRadius(0.15)
+
+        profileMapper = vtk.vtkPolyDataMapper()
+        profileMapper.SetInput(profileTubes.GetOutput())
+
+        profile = vtk.vtkActor()
+        profile.SetMapper(profileMapper)
+        profile.GetProperty().SetDiffuseColor(timed_force_color)
+        profile.GetProperty().SetSpecular(.3)
+        profile.GetProperty().SetSpecularPower(30)
+
+        for renderer in renderers:
+            renderer.AddActor( profile )
+        actors.append( profile )
 
     # bounding box
     bbox_points = vtkPoints()
@@ -486,8 +600,10 @@ if __name__=='__main__':
 ##    except NameError:
 ##        results = result_browser.Results()
     if 1:
-        start_frame = 25000
-        stop_frame = start_frame + 500
+        start_frame = 68942
+        stop_frame = 69643
+        #start_frame = 2
+        #stop_frame = 50
         
         renWin, renderers = init_vtk()
         #show_cameras(results,renderers)
@@ -515,10 +631,36 @@ if __name__=='__main__':
             show_line(renderers,corner,lwe,blue,1)
             show_line(renderers,corner,upc,blue,1)
             
-        show_frames_vtk(results,renderers,start_frame,stop_frame,1,
-                        orientation_corrected=True,
-                        show_bounds=False,
-                        use_timestamps=True,max_err=10)
+            A = nx.zeros( (32,32,1), nx.UInt8 )
+            for row in range(A.shape[0]):
+                for col in range(A.shape[1]):
+                    if random.random() > 0.5:
+                        A[row,col,0] = 255
+                    else:
+                        A[row,col,0] = 0
+            show_numpy_image( renderers, A, corner, upc, lwe )
+            
+##        show_frames_vtk(results,renderers,start_frame,stop_frame,1,
+##                        orientation_corrected=True,
+##                        show_bounds=False,
+##                        #timed_force_table=results.root.resultant_forces,
+##                        #timed_force_color=red,
+##                        use_timestamps=True,max_err=10)
+        if 0:
+            show_frames_vtk(results,renderers,start_frame,stop_frame,1,
+                            orientation_corrected=True,
+                            show_bounds=False,
+                            timed_force_table=results.root.real_resultant_forces,
+                            timed_force_color=green,
+                            use_timestamps=True,max_err=10)
+        if 1:
+            show_frames_vtk(results,renderers,start_frame,stop_frame,1,
+                            orientation_corrected=True,
+                            show_bounds=False,
+                            timed_force_table=results.root.roll_guess,
+                            timed_force_color=green,
+                            timed_force_scaling_factor=4,
+                            use_timestamps=True,max_err=10)
         for renderer in renderers:
             renderer.ResetCameraClippingRange()
         interact_with_renWin(renWin,renderers)

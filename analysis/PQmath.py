@@ -3,6 +3,26 @@ import cgtypes
 from numarray.ieeespecial import nan
 import numarray as nx
 
+L_i = nx.array([0,0,0,1,3,2])
+L_j = nx.array([1,2,3,2,1,3])
+
+def Lmatrix2Lcoords(Lmatrix):
+    return Lmatrix[L_i,L_j]
+
+def pluecker_from_verts(A,B):
+    def cross(vec1,vec2):
+        return ( vec1[1]*vec2[2] - vec1[2]*vec2[1],
+                 vec1[2]*vec2[0] - vec1[0]*vec2[2],
+                 vec1[0]*vec2[1] - vec1[1]*vec2[0] )
+    if len(A)==3:
+        A = A[0], A[1], A[2], 1.0
+    if len(B)==3:
+        B = B[0], B[1], B[2], 1.0
+    A=nx.reshape(A,(4,1))
+    B=nx.reshape(B,(4,1))
+    L = nx.matrixmultiply(A,nx.transpose(B)) - nx.matrixmultiply(B,nx.transpose(A))
+    return Lmatrix2Lcoords(L)
+
 def norm_vec(V):
     Va = nx.asarray(V)
     if len(Va.shape)==1:
@@ -88,6 +108,10 @@ def euler_to_orientation( yaw=0.0, pitch = 0.0 ):
     return x, y, z
 
 def euler_to_quat(roll=0.0,pitch=0.0,yaw=0.0):
+    # see http://www.euclideanspace.com/maths/geometry/rotations/conversions/eulerToQuaternion/index.htm
+
+    # Supposedly the order is heading first, then attitude, the bank.
+    
     heading = yaw
     attitude = pitch
     bank = roll
@@ -198,18 +222,23 @@ def quat_to_euler(q):
 
     at singularities (north and south pole), assumes roll = 0
     """
+    
+    # See http://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToEuler/
+    
     eps=1e-14
     qw = q.w; qx = q.x; qy = q.z; qz = -q.y
     pitch_y = 2*qx*qy + 2*qz*qw
-    pitch = math.asin(pitch_y)
-    if pitch_y > (1.0-eps): # north pole
+    if pitch_y > (1.0-eps): # north pole]
         yaw = 2*math.atan2( qx, qw)
+        pitch = math.asin(1.0)
         roll = 0.0
     elif pitch_y < -(1.0-eps): # south pole
         yaw = -2*math.atan2( qx, qw)
+        pitch = math.asin(-1.0)
         roll = 0.0
     else:
         yaw = math.atan2(2*qy*qw-2*qx*qz , 1 - 2*qy**2 - 2*qz**2)
+        pitch = math.asin(pitch_y)
         roll = math.atan2(2*qx*qw-2*qy*qz , 1 - 2*qx**2 - 2*qz**2)
     return yaw, pitch, roll
 
@@ -232,12 +261,12 @@ class ObjectiveFunctionPosition:
         self.h = h
         self.alpha = alpha
         
-        self.p_err_weights = nx.ones( p.shape )
+        self.p_err_weights = nx.ones( (len(p),) )
         if no_distance_penalty_idxs is not None:
             for i in no_distance_penalty_idxs:
                 self.p_err_weights[i] = 0
     def _getDistance(self, ps):
-        return nx.sum(nx.sum(self.p_err_weights*((self.p - ps)**2), axis=1))
+        return nx.sum(self.p_err_weights*nx.sum((self.p - ps)**2, axis=1))
     def _getEnergy(self, ps):
         d2p = (ps[2:] - 2*ps[1:-1] + ps[:-2]) / (self.h**2)
         return  nx.sum( nx.sum(d2p**2,axis=1))
@@ -377,15 +406,21 @@ class QuatSeq(list):
 
 class ObjectiveFunctionQuats:
     """methods from Kim, Hsieh, Wang, Wang, Fang, Woo"""
-    def __init__(self, q, h, beta, gamma):
+    def __init__(self, q, h, beta, gamma, no_distance_penalty_idxs=None):
         self.q = q
         self.q_inverse = self.q.inverse()
         self.h = h
         self.h2 = self.h**2
         self.beta = beta
         self.gamma = gamma
+        
+        self.q_err_weights = nx.ones( (len(q),) )
+        if no_distance_penalty_idxs is not None:
+            for i in no_distance_penalty_idxs:
+                self.q_err_weights[i] = 0
+        
     def _getDistance(self, qs):
-        return sum( abs(    (self.q_inverse * qs).log() )**2)
+        return sum( self.q_err_weights* (abs(    (self.q_inverse * qs).log() )**2))
     def _getRoll(self, qs):
         return sum([quat_to_absroll(q) for q in qs])
     def _getEnergy(self, qs):
@@ -459,16 +494,27 @@ def _test():
                 print 'orientation problem at',repr((yaw,pitch))
                 had_err = True
 
-            # forward and backward test 2
-            yaw3, pitch3, roll3 = quat_to_euler( euler_to_quat( yaw=yaw, pitch=pitch ))
-            if abs(yaw-yaw3)>eps or abs(pitch-pitch3)>eps:
-                print 'quat problem at',repr((yaw,pitch))
-                #print ' ',yaw,pitch,0.0
-                print ' ',repr((yaw3, pitch3, roll3))
-                print '    ',abs(yaw-yaw3)
-                print '    ',abs(pitch-pitch3)
-                print
-                had_err = True
+            if 1:
+                # forward and backward test 2
+                rolls = list( nx.arange( -math.pi/2, math.pi/2, math.pi/16.0 ) )
+                rolls.append( math.pi/2 )
+                for roll in rolls:
+                    if pitch == math.pi/2 or pitch == -math.pi/2:
+                        at_singularity=True
+                    else:
+                        at_singularity=False
+                    yaw3, pitch3, roll3 = quat_to_euler( euler_to_quat( yaw=yaw, pitch=pitch, roll=roll ))
+                    # relax criteria at singularities
+                    singularity_is_ok = not (at_singularity and abs(pitch3)-abs(pitch)<eps)
+                    if abs(yaw-yaw3)>eps or abs(pitch-pitch3)>eps:
+                        if not (abs(yaw)==math.pi and (abs(yaw)-abs(yaw3)<eps)):
+                            if not (at_singularity or singularity_is_ok):
+                                print 'quat problem at',repr((yaw,pitch,roll))
+                                print '               ',repr((yaw3, pitch3, roll3))
+                                print '    ',abs(yaw-yaw3)
+                                print '    ',abs(pitch-pitch3)
+                                print
+                                had_err = True
 
             # triangle test 1
             xyz1=euler_to_orientation(yaw,pitch)
@@ -487,6 +533,7 @@ def _test():
                 print 'yet another problem at',repr((yaw,pitch))
                 print
                 had_err = True
+                
             total_count += 1
             if had_err:
                 err_count += 1
