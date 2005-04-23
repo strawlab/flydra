@@ -624,10 +624,10 @@ def plot_whole_range(results, start_frame, stop_frame, typ='best', show_err=Fals
     ##ax.xlabel('frame number')
     ion()
 
-def save_smooth_data(results,frames,Psmooth,Qsmooth):
+def save_smooth_data(results,frames,Psmooth,Qsmooth,table_name='smooth_data'):
     assert len(frames)==len(Psmooth)==len(Qsmooth)
-    if not hasattr(results.root,'smooth_data'):
-        smooth_data = results.createTable(results.root,'smooth_data',SmoothData,'')
+    if not hasattr(results.root,table_name):
+        smooth_data = results.createTable(results.root,table_name,SmoothData,'')
     else:
         smooth_data = results.root.smooth_data
         

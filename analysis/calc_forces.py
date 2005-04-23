@@ -134,9 +134,12 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
           interp_OK=False,
           return_frame_numbers=False,
           return_resultant_forces=False,
-          return_roll_guess=False,
+          return_roll_qsmooth=False,
+          return_coronal_dir=False,
           do_smooth_position = False,
+          return_smooth_position = False,
           do_smooth_quats = False,
+          return_smooth_quats = False,
           start_frame = 23878,
           stop_frame = 24447,
           
@@ -416,6 +419,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
                     break
             last_err = err
             Psmooth = Psmooth - lambda1*del_F
+    if do_smooth_position or return_smooth_position:
         outputs.append(Psmooth/to_meters)
     if Psmooth is not None:
         dPdt_smooth = (Psmooth[2:]-Psmooth[:-2]) / (2*delta_t)
@@ -471,6 +475,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
         if count>=max_iter2:
             print 'reached max_iter2'
         Qsmooth = Q_k
+    if do_smooth_quats or return_smooth_quats:
         outputs.append(Qsmooth)
     if Qsmooth is not None:
         omega_smooth = (Qsmooth[:-1].inverse()*Qsmooth[1:]).log()/delta_t
@@ -611,19 +616,107 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
         # Do this by eliminating component of thrust_force in body
         # axis direction.
 
+##        for op in orient_parallel:
+##            print '1=',math.sqrt(op[0]**2 + op[1]**2 + op[2]**2)
+        # subtract component of force in direction of fly's body
         coronal_thrust_force = nx.array([ tf - nx.dot(tf,op)*op for tf, op in zip(thrust_force, orient_parallel) ])
+        
+##        for ctf,op in zip(coronal_thrust_force,orient_parallel):
+##            print '0=',nx.dot(ctf,op)
+
+        # get direction of this force
         coronal_thrust_dir = nx.array([make_norm(ctf) for ctf in coronal_thrust_force])
 
-        u = cgtypes.quat(0,0,0,1) # fly up vector in fly coords
-        tmp_up = [ q*u*q.inverse() for q in Qsmooth[1:-1] ]
-        flybody_up_dir = nx.array([(v.x, v.y, v.z) for v in tmp_up])
+        fly_up = cgtypes.quat(0,0,0,1) # fly up vector in fly coords
+        if 0:
+            fly_up_world = [ q*fly_up*q.inverse() for q in Qsmooth[1:-1] ]
+        else:
+            Qsmooth_zero_roll = [ euler_to_quat( yaw=quat_to_euler(q)[0], pitch=quat_to_euler(q)[1], roll=0)  for q in Qsmooth ]
+            fly_up_world = [ q*fly_up*q.inverse() for q in Qsmooth_zero_roll[1:-1] ]
+        fly_up_world = nx.array([(v.x, v.y, v.z) for v in fly_up_world])
 
-        cos_roll = nx.array([ nx.dot( ctd, fud ) for ctd, fud in zip(coronal_thrust_dir, flybody_up_dir) ])
-        guess_roll = nx.arccos(cos_roll)
+        if 0:
+            cos_roll = nx.array([ nx.dot( ctd, fuw ) for ctd, fuw in zip(coronal_thrust_dir, fly_up_world) ])
+            guess_roll = nx.arccos(cos_roll)
 
-        if return_roll_guess:
-            #outputs.append( guess_roll )
+        if 1:
+            # mcp = | u x v | = |u||v|sin t
+            # dp = u . v =     |u||v|cos t
+            # atan2(mcp,dp) = t
+            cp = [ cross(u,v) for u,v in zip(fly_up_world, coronal_thrust_dir)]
+            mcp = nx.array([ math.sqrt(u[0]**2 + u[1]**2 + u[2]**2) for u in cp ])
+            dp = nx.array([ nx.dot(u,v) for u,v in zip(fly_up_world, coronal_thrust_dir)])
+
+            guess_roll2 = [math.atan2( num, denom ) for num,denom in zip(mcp,dp)]
+
+            if 0:
+                for r1, r2 in zip(guess_roll, guess_roll2):
+                    print r1,'?=',r2
+
+        if 1:
+            newQsmooth = Qsmooth[:]
+            for i in range(1,len(newQsmooth)-1):
+                q = Qsmooth[i]
+                yaw, pitch, old_roll = quat_to_euler(q)
+                new_roll = guess_roll2[i-1]
+                #roll = old_roll - new_roll
+                
+                roll = new_roll
+                qnew = euler_to_quat( yaw=yaw, pitch=pitch, roll=roll )
+                fly_up = cgtypes.quat(0,0,0,1) # fly up vector in fly coords
+                v = qnew*fly_up*qnew.inverse()
+                fly_up_world = nx.array((v.x, v.y, v.z))
+
+                ctd = coronal_thrust_dir[i-1]
+                dotprod = nx.dot( ctd, fly_up_world )
+                print '=== ROLL',roll*rad2deg, dotprod
+                if dotprod < 1-1e-10:
+                    roll = -new_roll
+                    qnew = euler_to_quat( yaw=yaw, pitch=pitch, roll=roll )
+                    fly_up = cgtypes.quat(0,0,0,1) # fly up vector in fly coords
+                    v = qnew*fly_up*qnew.inverse()
+                    fly_up_world = nx.array((v.x, v.y, v.z))
+
+                    dotprod = nx.dot( ctd, fly_up_world )
+                    print '   -ROLL',roll*rad2deg, dotprod
+                newQsmooth[i] = qnew
+                    
+                    
+##                vals = []
+##                roll_test = nx.arange(-180.0, 180.0, 1.0)
+##                for roll in roll_test:
+##                    roll = roll*deg2rad
+##                    qnew = euler_to_quat( yaw=yaw, pitch=pitch, roll=roll )
+##                    newQsmooth[i] = qnew
+##                    fly_up = cgtypes.quat(0,0,0,1) # fly up vector in fly coords
+##                    v = qnew*fly_up*qnew.inverse()
+##                    fly_up_world = nx.array((v.x, v.y, v.z))
+##                    vals.append(nx.dot( ctd, fly_up_world ))
+##                vals = nx.array(vals)
+##                idx = nx.argmax(vals)
+##                print '   ',roll_test[idx]
+##                #print vals
+
+####                        fuw = fly_up_world
+####                        if abs(math.sqrt(fuw[0]**2 + fuw[1]**2 + fuw[2]**2)-1.0) > 1e-15:
+####                            print 'hmm',fuw
+
+####                        ctd = coronal_thrust_dir[i-1]
+####                        fuw = ctd
+####                        if abs(math.sqrt(fuw[0]**2 + fuw[1]**2 + fuw[2]**2)-1.0) > 1e-15:
+####                            print 'hmm',fuw
+
+####                        if 0:
+####                            v1 = quat_to_orient(q)
+####                            v2 = quat_to_orient(qnew)
+####                            print '0 ?=',nx.array(v1)-nx.array(v2)
+
+        if return_roll_qsmooth:
+            outputs.append( newQsmooth )
+
+        if return_coronal_dir:
             outputs.append( (frame[1:-1], coronal_thrust_dir) ) # return frame numbers also
+            
 
         # define 2 planes, both containing the body axis
         # 1) goes through thrust vector ("thrust plane")

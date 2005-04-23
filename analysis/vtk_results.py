@@ -15,6 +15,8 @@ import numarray as nx
 from numarray.ieeespecial import inf
 import Numeric # vtkImageImportFromArray needs Numeric
 
+import cgtypes # tested with 1.2
+
 def init_vtk():
 
     renWin = vtkRenderWindow()
@@ -26,17 +28,11 @@ def init_vtk():
         if side_view:
 
             camera.SetParallelProjection(1)
-            camera.SetFocalPoint (180.46645292639732, 224.52830505371094, 176.89396047592163)
-            camera.SetPosition (44.00298175247319, 530.72541129307763, 395.11644594845245)
+            camera.SetFocalPoint (72.14166197180748, 303.57498168945312, 39.668309688568115)
+            camera.SetPosition (-225.40723294994916, 191.86856708907058, 282.53932909594647)
             camera.SetViewAngle(30.0)
-            camera.SetClippingRange (18.925321490682652, 913.86296121238297)
-            camera.SetParallelScale(24.3987052689)
-
-##            camera.SetFocalPoint (148.8128350675106, 243.92594909667969, 173.37159872055054)
-##            camera.SetPosition (-196.05324871445703, 54.975538082313001, 246.618622102937)
-##            camera.SetViewAngle(30.0)
-##            camera.SetClippingRange (9.3450693570905621, 934.50693570905617)
-##            camera.SetParallelScale(15.9151865864)
+            camera.SetClippingRange (10.191480368344633, 1019.1480368344634)
+            camera.SetParallelScale(13.7499648363)
             camera.SetViewUp (0,0,1)
 
 
@@ -283,7 +279,9 @@ def show_frames_vtk(results,renderers,
                     timed_force_scaling_factor=1e6,
                     timed_force_color=red,
                     orientation_corrected=True,
-                    max_err=None):
+                    render_mode='ball_and_stick', # 'ball_and_stick' or 'triangles'
+                    max_err=None): # only for 'ball_and_stick'
+    # 'triangles' render mode is always smoothed
     if typ is None:
         typ = 'best'
         
@@ -301,12 +299,23 @@ def show_frames_vtk(results,renderers,
 
     # Initialize VTK data structures
     
-    cog_points = vtk.vtkPoints() # 'center of gravity'
-    body_line_points = vtk.vtkPoints()
     timed_force_line_points = vtk.vtkPoints()
+
+    if render_mode.startswith('ball_and_stick'):
+        cog_points = vtk.vtkPoints() # 'center of gravity'
+        body_line_points = vtk.vtkPoints()
+        body_lines = vtk.vtkCellArray()
+        body_point_num = 0
+    elif render_mode.startswith('triangles'):
+        tri_points = vtk.vtkPoints()
+        tri_cells = vtk.vtkCellArray()
+        tri_point_num = 0
     
-    body_lines = vtk.vtkCellArray()
     timed_force_lines = vtk.vtkCellArray()
+
+    timed_force_point_num = 0
+    
+    unit_y_vector = nx.array([0,1,0],nx.Float)
 
     # Get data from results
 
@@ -319,33 +328,55 @@ def show_frames_vtk(results,renderers,
         print 'WARNING: fstep given, but not f2'
 
     frame_nos = range(*seq_args)
-    Xs=[]
-    line3ds=[]
-    timed_forces=[]
-    for frame_no in frame_nos:
-        X = None
-        line3d = None
-        for row in data3d:
-            if row['frame'] != frame_no:
-                continue
-            X = row['x'],row['y'],row['z']
-            if row['p0'] is nan:
-                line3d = None
-            else:
-                line3d = row['p0'],row['p1'],row['p2'],row['p3'],row['p4'],row['p5']
-            err = row['mean_dist']
-            break
-        if X is None:
-            print 'WARNING: frame %d not found'%frame_no
-        else:
-            if max_err is not None:
-                if err > max_err:
-                    print 'WARNING: frame %d err too large'%frame_no
-                    X = None
+    if render_mode.startswith('ball_and_stick'):
+        Xs=[]
+        line3ds=[]
+        for frame_no in frame_nos:
+            X = None
+            line3d = None
+            for row in data3d:
+                if row['frame'] != frame_no:
+                    continue
+                X = row['x'],row['y'],row['z']
+                if row['p0'] is nan:
                     line3d = None
-        Xs.append(X)
-        line3ds.append(line3d)
-
+                else:
+                    line3d = row['p0'],row['p1'],row['p2'],row['p3'],row['p4'],row['p5']
+                err = row['mean_dist']
+                break
+            if X is None:
+                print 'WARNING: frame %d not found'%frame_no
+            else:
+                if max_err is not None:
+                    if err > max_err:
+                        print 'WARNING: frame %d err too large'%frame_no
+                        X = None
+                        line3d = None
+            Xs.append(X)
+            line3ds.append(line3d)
+        orient_infos = line3ds
+    elif render_mode.startswith('triangles'):
+        Xs=[]
+        Qs = []
+        for frame_no in frame_nos:
+            X = None
+            Q = None
+#            for row in results.root.smooth_data_roll_fixed:
+            for row in results.root.smooth_data:
+                if row['frame'] != frame_no:
+                    continue
+                X = row['x'],row['y'],row['z']
+                if row['qw'] is not nan:
+                    Q = cgtypes.quat( row['qw'], row['qx'],
+                                      row['qy'], row['qz'] )
+                break
+            Xs.append( X )
+            Qs.append( Q )
+        orient_infos = Qs
+        
+    timed_forces=[]
+    fxyz = None
+    for frame_no in frame_nos:
         fxyz = None
         if plot_timed_forces:
             for row in timed_force_table:
@@ -353,66 +384,98 @@ def show_frames_vtk(results,renderers,
                     continue
                 fxyz = nx.array( (row['fx'], row['fy'], row['fz']) )
         timed_forces.append( fxyz )
-
-    if show_bounds:
-        tmp = nx.array(Xs)
-        print 'x range:',min( tmp[:,0] ),max( tmp[:,0] )
-        print 'y range:',min( tmp[:,1] ),max( tmp[:,1] )
-        print 'z range:',min( tmp[:,2] ),max( tmp[:,2] )
-    body_point_num = 0
-    timed_force_point_num = 0
-    xlim = [inf,-inf]
-    ylim = [inf,-inf]
-    zlim = [inf,-inf]
-    for X,line3d,timed_force in zip(Xs,line3ds,timed_forces):
-        if X is not None:
-            cog_points.InsertNextPoint(*X)
-            # workaround ipython -pylab mode:
-            max = sys.modules['__builtin__'].max
-            min = sys.modules['__builtin__'].min
-            xlim[0] = min( xlim[0], X[0] )
-            xlim[1] = max( xlim[1], X[0] )
-            ylim[0] = min( ylim[0], X[1] )
-            ylim[1] = max( ylim[1], X[1] )
-            zlim[0] = min( zlim[0], X[2] )
-            zlim[1] = max( zlim[1], X[2] )
     
-        if line3d is not None:
-            
-            L = line3d # Plucker coordinates
-            U = reconstruct.line_direction(line3d)
-            tube_length = 4
-            if orientation_corrected:
-                pt1 = X-tube_length*U
-                pt2 = X
-            else:
-                pt1 = X-tube_length*.5*U
-                pt2 = X+tube_length*.5*U
+    ok_Xs = nx.array([ X for X in Xs if X is not None ])
+    xlim = min( ok_Xs[:,0] ), max( ok_Xs[:,0] )
+    ylim = min( ok_Xs[:,1] ), max( ok_Xs[:,1] )
+    zlim = min( ok_Xs[:,2] ), max( ok_Xs[:,2] )
+        
+    if show_bounds:
+        print 'x range:',xlim
+        print 'y range:',ylim
+        print 'z range:',zlim
+    
+    for X,orient_info,timed_force in zip(Xs,orient_infos,timed_forces):
+        if X is not None:
+            if render_mode.startswith('ball_and_stick'):
+                cog_points.InsertNextPoint(*X)
 
-            print 'body'
-            print pt1
-            print pt2
-            print
-            
-            body_line_points.InsertNextPoint(*pt1)
-            body_point_num += 1
-            body_line_points.InsertNextPoint(*pt2)
-            body_point_num += 1
+        if render_mode.startswith('ball_and_stick'):
+            line3d = orient_info
+            if line3d is not None:
 
-            body_lines.InsertNextCell(2)
-            body_lines.InsertCellPoint(body_point_num-2)
-            body_lines.InsertCellPoint(body_point_num-1)
+                L = line3d # Plucker coordinates
+                U = reconstruct.line_direction(line3d)
+
+                tube_length = 4
+
+                if orientation_corrected:
+                    pt1 = X-tube_length*U
+                    pt2 = X
+                else:
+                    pt1 = X-tube_length*.5*U
+                    pt2 = X+tube_length*.5*U
+                body_line_points.InsertNextPoint(*pt1)
+                body_point_num += 1
+                body_line_points.InsertNextPoint(*pt2)
+                body_point_num += 1
+
+                body_lines.InsertNextCell(2)
+                body_lines.InsertCellPoint(body_point_num-2)
+                body_lines.InsertCellPoint(body_point_num-1)
+
+        elif render_mode.startswith('triangles'):
+            Q = orient_info
+
+            # unit vectors in fly orientation
+            fly_unit_x = cgtypes.quat(0, 1, 0, 0)
+            fly_unit_y = cgtypes.quat(0, 0, 1, 0)
+            fly_unit_z = cgtypes.quat(0, 0, 0, 1)
+
+            def rotate(S3,u):
+                V=S3*u*S3.inverse()
+                return nx.array((V.x, V.y, V.z))
             
+            fly_unit_x_world = rotate(Q,fly_unit_x)
+            fly_unit_y_world = rotate(Q,fly_unit_y)
+            fly_unit_z_world = rotate(Q,fly_unit_z)
+        
+            pt1 = X + 2*fly_unit_x_world
+            pt2 = X - 2*fly_unit_x_world + 0.5*fly_unit_y_world
+            pt3 = X - 2*fly_unit_x_world - 0.5*fly_unit_y_world
+
+            tri_points.InsertNextPoint(*pt1)
+            tri_point_num += 1
+            tri_points.InsertNextPoint(*pt2)
+            tri_point_num += 1
+            tri_points.InsertNextPoint(*pt3)
+            tri_point_num += 1
+
+            tri_cells.InsertNextCell(3)
+            tri_cells.InsertCellPoint(tri_point_num-3)
+            tri_cells.InsertCellPoint(tri_point_num-2)
+            tri_cells.InsertCellPoint(tri_point_num-1)
+
+            pt1 = X - 1*fly_unit_x_world
+            pt2 = X - 2*fly_unit_x_world + 0.5*fly_unit_z_world
+            pt3 = X - 2*fly_unit_x_world
+
+            tri_points.InsertNextPoint(*pt1)
+            tri_point_num += 1
+            tri_points.InsertNextPoint(*pt2)
+            tri_point_num += 1
+            tri_points.InsertNextPoint(*pt3)
+            tri_point_num += 1
+
+            tri_cells.InsertNextCell(3)
+            tri_cells.InsertCellPoint(tri_point_num-3)
+            tri_cells.InsertCellPoint(tri_point_num-2)
+            tri_cells.InsertCellPoint(tri_point_num-1)
+
         if plot_timed_forces and X is not None and timed_force is not None:
             pt1 = X+timed_force_scaling_factor*timed_force
             pt2 = X
 
-            print 'force'
-            print pt1
-            print pt2
-            print
-            print
-            
             timed_force_line_points.InsertNextPoint(*pt1)
             timed_force_point_num += 1
             
@@ -423,53 +486,77 @@ def show_frames_vtk(results,renderers,
             timed_force_lines.InsertCellPoint(timed_force_point_num-2)
             timed_force_lines.InsertCellPoint(timed_force_point_num-1)
 
-    # point rendering
-    
-    points_poly_data = vtkPolyData()
-    points_poly_data.SetPoints(cog_points)
+    if render_mode.startswith('ball_and_stick'):
+        # head rendering as ball
 
-    ball = vtk.vtkSphereSource()
-    ball.SetRadius(0.5)
-    ball.SetThetaResolution(15)
-    ball.SetPhiResolution(15)
-    balls = vtk.vtkGlyph3D()
-    balls.SetInput(points_poly_data)
-    balls.SetSource(ball.GetOutput())
-    mapBalls = vtkPolyDataMapper()
-    mapBalls.SetInput( balls.GetOutput())
-    ballActor = vtk.vtkActor()
-    ballActor.SetMapper(mapBalls)
+        points_poly_data = vtkPolyData()
+        points_poly_data.SetPoints(cog_points)
 
-    for renderer in renderers:
-        renderer.AddActor( ballActor )
-    actors.append( ballActor )
+        head = vtk.vtkSphereSource()
+        head.SetRadius(0.5)
+        head.SetThetaResolution(15)
+        head.SetPhiResolution(15)
 
-    # body line rendering 
-    # ( see VTK demo Rendering/Python/CSpline.py )
-    
-    profileData = vtk.vtkPolyData()
-    
-    profileData.SetPoints(body_line_points)
-    profileData.SetLines(body_lines)
-    
-    # Add thickness to the resulting line.
-    profileTubes = vtk.vtkTubeFilter()
-    profileTubes.SetNumberOfSides(8)
-    profileTubes.SetInput(profileData)
-    profileTubes.SetRadius(0.15)
+        head_glyphs = vtk.vtkGlyph3D()
+        head_glyphs.SetInput(points_poly_data)
+        head_glyphs.SetSource(head.GetOutput())
 
-    profileMapper = vtk.vtkPolyDataMapper()
-    profileMapper.SetInput(profileTubes.GetOutput())
-    
-    profile = vtk.vtkActor()
-    profile.SetMapper(profileMapper)
-    profile.GetProperty().SetDiffuseColor(banana)
-    profile.GetProperty().SetSpecular(.3)
-    profile.GetProperty().SetSpecularPower(30)
+        head_glyph_mapper = vtkPolyDataMapper()
+        head_glyph_mapper.SetInput( head_glyphs.GetOutput())
+        headGlyphActor = vtk.vtkLODActor()
+        headGlyphActor.SetMapper(head_glyph_mapper)
+        headGlyphActor.GetProperty().SetDiffuseColor(red)
+        headGlyphActor.GetProperty().SetSpecular(.3)
+        headGlyphActor.GetProperty().SetSpecularPower(30)
 
-    for renderer in renderers:
-        renderer.AddActor( profile )
-    actors.append( profile )
+        for renderer in renderers:
+            renderer.AddActor( headGlyphActor )
+        actors.append( headGlyphActor )
+        
+        # body line rendering 
+        # ( see VTK demo Rendering/Python/CSpline.py )
+
+        profileData = vtk.vtkPolyData()
+
+        profileData.SetPoints(body_line_points)
+        profileData.SetLines(body_lines)
+
+        # Add thickness to the resulting line.
+        profileTubes = vtk.vtkTubeFilter()
+        profileTubes.SetNumberOfSides(8)
+        profileTubes.SetInput(profileData)
+        profileTubes.SetRadius(0.15)
+
+        profileMapper = vtk.vtkPolyDataMapper()
+        profileMapper.SetInput(profileTubes.GetOutput())
+
+        profile = vtk.vtkActor()
+        profile.SetMapper(profileMapper)
+        profile.GetProperty().SetDiffuseColor(banana)
+        profile.GetProperty().SetSpecular(.3)
+        profile.GetProperty().SetSpecularPower(30)
+
+        for renderer in renderers:
+            renderer.AddActor( profile )
+        actors.append( profile )
+        
+    elif render_mode.startswith('triangles'):
+        profileData = vtk.vtkPolyData()
+        profileData.SetPoints(tri_points)
+        profileData.SetPolys(tri_cells)
+        
+        profileMapper = vtk.vtkPolyDataMapper()
+        profileMapper.SetInput(profileData)
+
+        profile = vtk.vtkActor()
+        profile.SetMapper(profileMapper)
+        profile.GetProperty().SetDiffuseColor(red)
+        profile.GetProperty().SetSpecular(.3)
+        profile.GetProperty().SetSpecularPower(30)
+    
+        for renderer in renderers:
+            renderer.AddActor( profile )
+        actors.append( profile )
 
     if plot_timed_forces:
         # timed_force line rendering 
@@ -656,10 +743,21 @@ if __name__=='__main__':
         if 1:
             show_frames_vtk(results,renderers,start_frame,stop_frame,1,
                             orientation_corrected=True,
-                            show_bounds=False,
-                            timed_force_table=results.root.roll_guess,
-                            timed_force_color=green,
-                            timed_force_scaling_factor=4,
+                            show_bounds=True,
+##                            timed_force_table=results.root.coronal_dir,
+##                            timed_force_color=azure,
+##                            timed_force_scaling_factor=4,
+                            render_mode='triangles',
+#                            render_mode='ball_and_stick',
+                            use_timestamps=True,max_err=10)
+            show_frames_vtk(results,renderers,start_frame,stop_frame,1,
+#                            orientation_corrected=True,
+                            show_bounds=True,
+##                            timed_force_table=results.root.coronal_dir,
+##                            timed_force_color=green,
+##                            timed_force_scaling_factor=4,
+#                            render_mode='triangles',
+                            render_mode='ball_and_stick',
                             use_timestamps=True,max_err=10)
         for renderer in renderers:
             renderer.ResetCameraClippingRange()
