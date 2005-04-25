@@ -147,9 +147,13 @@ def flip_line_direction(results,frame,typ='best'):
     elif typ=='fastest':
         data3d = results.root.data3d_fastest
 
+    nrow = None
     for row in data3d.where( data3d.cols.frame == frame ):
         nrow = row.nrow()
         p2, p4, p5 = row['p2'], row['p4'], row['p5']
+    if nrow is None:
+        raise ValueError('could not find frame')
+    nrow = int(nrow) # hmm weird pygame bug?
     data3d.cols.p2[nrow] = -p2
     data3d.cols.p4[nrow] = -p4
     data3d.cols.p5[nrow] = -p5
@@ -644,6 +648,7 @@ def save_smooth_data(results,frames,Psmooth,Qsmooth,table_name='smooth_data'):
             if old_nrow is not None:
                 raise RuntimeError('more than row with frame number %d in smooth_data'%frame)
             old_nrow = row.nrow()
+            old_nrow = int(old_nrow) # XXX pytables bug...
         
         new_row = []
         new_row_dict = {}
@@ -2219,16 +2224,6 @@ def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
     
 if __name__=='__main__':
     results = get_results('DATA20050325_165810.h5',mode='r+')
-##    tmp3(results)
-##    recompute_3d_from_2d(results, overwrite=True,
-##                         start_stop=(24600,25200))
+    #results = get_results('fake2.h5',mode='r+')
     if len(sys.argv) > 1:
         save_movie(results)
-#        tmp(results)
-    if 0:
-        import pylab
-        plot_whole_movie_3d(results)
-        #pylab.figure(2)
-        #plot_all_images(results,19783)
-        pylab.show()
-        raw_input()

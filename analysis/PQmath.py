@@ -9,11 +9,13 @@ L_j = nx.array([1,2,3,2,1,3])
 def Lmatrix2Lcoords(Lmatrix):
     return Lmatrix[L_i,L_j]
 
+def pluecker_to_quat(line3d):
+    '''cannot set roll angle'''
+    import flydra.reconstruct
+    orient = flydra.reconstruct.line_direction(line3d)
+    return orientation_to_quat(orient)
+
 def pluecker_from_verts(A,B):
-    def cross(vec1,vec2):
-        return ( vec1[1]*vec2[2] - vec1[2]*vec2[1],
-                 vec1[2]*vec2[0] - vec1[0]*vec2[2],
-                 vec1[0]*vec2[1] - vec1[1]*vec2[0] )
     if len(A)==3:
         A = A[0], A[1], A[2], 1.0
     if len(B)==3:

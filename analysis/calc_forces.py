@@ -178,6 +178,11 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
 
           xtitle=None,
           force_scaling = 1e7,
+
+          drag_model_for_roll = 'linear',
+          
+          return_drag_force=False,
+          return_thrust_force=False,
           ):
 
     rad2deg = 180/math.pi
@@ -274,7 +279,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
                 frames_missing = True
                 print 'are you missing frames between %d and %d?'%(frame[i], frame[i+1])
     if frames_missing:
-        raise ValueError("results have missing frames")
+        raise ValueError("results have missing frames (hint: interp_OK=True)")
 
     if len(interpolated_xyz_frames):
         # re-sort and partition results
@@ -512,13 +517,14 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
     if Qsmooth is not None:
         body_air_V_smooth = rotate_velocity_by_orientation(dPdt_smooth_air,Qsmooth[1:-1])
 
-    if 1: # compute body-centric angular velocity
-        omega_body = rotate_velocity_by_orientation( omega, Q[:-1])
-        if Qsmooth is not None:
-            omega_smooth_body = rotate_velocity_by_orientation( omega_smooth, Qsmooth[:-1])
-        t_omega_body = t_P[:-1]
+    # compute body-centric angular velocity
+    omega_body = rotate_velocity_by_orientation( omega, Q[:-1])
+    if Qsmooth is not None:
+        omega_smooth_body = rotate_velocity_by_orientation( omega_smooth, Qsmooth[:-1])
+    t_omega_body = t_P[:-1]
 
     if Qsmooth is not None: # compute forces (for now, smooth data only)
+        print 'Qsmooth is not None'
         
         # vector for current orientation (use only indices with velocity info)
         orient_parallel = quat_to_orient(Qsmooth)[1:-1]
@@ -530,9 +536,9 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
         #print aattack*rad2deg
 
         if 0:
-            V2 = body_air_V.x**2 + body_air_V.y**2 + body_air_V.z**2
+            Vmag_air2 = body_air_V.x**2 + body_air_V.y**2 + body_air_V.z**2
         else:
-            V2 = (body_air_V_smooth.x**2 + body_air_V_smooth.y**2 +
+            Vmag_air2 = (body_air_V_smooth.x**2 + body_air_V_smooth.y**2 +
                   body_air_V_smooth.z**2)
 
         make_norm = reconstruct.norm_vec # normalize vector
@@ -557,8 +563,8 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
             C_P=0.16664033221423064*nx.cos(aattack)+0.33552465566450407*nx.cos(aattack)**3
             C_N=0.75332031249999987*nx.sin(aattack)
 
-            F_P = 0.5*rho*A*C_P*V2
-            F_N = 0.5*rho*A*C_N*V2
+            F_P = 0.5*rho*A*C_P*Vmag_air2
+            F_N = 0.5*rho*A*C_N*Vmag_air2
             
             # convert normal and parallel forces back to world coords
             body_drag_world1 = nx.array([ orient_parallel[i] * -F_P[i] for i in range(len(F_P))])
@@ -592,23 +598,37 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
 
         
         # Calculate "drag" at given velocity.
-        
-        # Assume drag is linearly proportional to velocity as asserted
-        # by Charlie David, 1978, but with the appropriate
-        # coefficients, this makes little difference on the body angle
-        # vs. terminal velocity relationship.
 
-        # Cf_linear was calculated to produce angle of attack
-        # vs. terminal velocity relation roughly equal to curve of
-        # David 1978.
-        Cf_linear = -0.000012 
-
-        Vmag_air = nx.sqrt(V2)
+        Vmag_air = nx.sqrt(Vmag_air2)
         Vmag_air.shape = Vmag_air.shape[0], 1
         Vdir_air = dPdt_air/Vmag_air
-        linear_drag_force = Cf_linear * Vmag_air * Vdir_air
+        if drag_model_for_roll == 'linear':
+            
+            # Assume drag is linearly proportional to velocity as
+            # asserted # by Charlie David, 1978, but with the
+            # appropriate # coefficients, this makes little difference
+            # on the body angle # vs. terminal velocity relationship.
 
-        thrust_force = resultant - linear_drag_force
+            # Cf_linear was calculated to produce angle of attack
+            # vs. terminal velocity relation roughly equal to curve of
+            # # David 1978.
+        
+            Cf_linear = -0.000012 
+            drag_force = Cf_linear * Vmag_air * Vdir_air
+        elif drag_model_for_roll == 'v^2':
+            Cf_V2 = -0.000015
+            V2 = Vmag_air2[:,nx.NewAxis]
+            drag_force = Cf_V2 * V2 * Vdir_air
+
+        if return_drag_force:
+            outputs.append( (frame[1:-1], drag_force) ) # return frame numbers also
+
+        print 'used drag model:',drag_model_for_roll,'to compute roll angle'
+        thrust_force = resultant - drag_force
+        
+        if return_thrust_force:
+            outputs.append( (frame[1:-1], thrust_force) ) # return frame numbers also
+
 
         # 2 planes : saggital and coronal
         # Project thrust_force onto coronal plane.
@@ -616,30 +636,23 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
         # Do this by eliminating component of thrust_force in body
         # axis direction.
 
-##        for op in orient_parallel:
-##            print '1=',math.sqrt(op[0]**2 + op[1]**2 + op[2]**2)
         # subtract component of force in direction of fly's body
         coronal_thrust_force = nx.array([ tf - nx.dot(tf,op)*op for tf, op in zip(thrust_force, orient_parallel) ])
         
-##        for ctf,op in zip(coronal_thrust_force,orient_parallel):
-##            print '0=',nx.dot(ctf,op)
-
         # get direction of this force
         coronal_thrust_dir = nx.array([make_norm(ctf) for ctf in coronal_thrust_force])
 
         fly_up = cgtypes.quat(0,0,0,1) # fly up vector in fly coords
-        if 0:
-            fly_up_world = [ q*fly_up*q.inverse() for q in Qsmooth[1:-1] ]
-        else:
-            Qsmooth_zero_roll = [ euler_to_quat( yaw=quat_to_euler(q)[0], pitch=quat_to_euler(q)[1], roll=0)  for q in Qsmooth ]
-            fly_up_world = [ q*fly_up*q.inverse() for q in Qsmooth_zero_roll[1:-1] ]
+        # make sure there is no roll component to offset our results:
+        Qsmooth_zero_roll = [ euler_to_quat( yaw=quat_to_euler(q)[0], pitch=quat_to_euler(q)[1], roll=0)  for q in Qsmooth ]
+        fly_up_world = [ q*fly_up*q.inverse() for q in Qsmooth_zero_roll[1:-1] ]
         fly_up_world = nx.array([(v.x, v.y, v.z) for v in fly_up_world])
 
-        if 0:
+        if 1:
             cos_roll = nx.array([ nx.dot( ctd, fuw ) for ctd, fuw in zip(coronal_thrust_dir, fly_up_world) ])
             guess_roll = nx.arccos(cos_roll)
 
-        if 1:
+        if 0:
             # mcp = | u x v | = |u||v|sin t
             # dp = u . v =     |u||v|cos t
             # atan2(mcp,dp) = t
@@ -654,11 +667,14 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
                     print r1,'?=',r2
 
         if 1:
-            newQsmooth = Qsmooth[:]
-            for i in range(1,len(newQsmooth)-1):
+            # XXX hack to fix some sign error somewhere (ARGH!!)
+            # Note: may not be sign error -- quats represent same rotation
+            # with 2 quats...
+            Qsmooth_roll_guess = Qsmooth[:]
+            for i in range(1,len(Qsmooth_roll_guess)-1):
                 q = Qsmooth[i]
                 yaw, pitch, old_roll = quat_to_euler(q)
-                new_roll = guess_roll2[i-1]
+                new_roll = guess_roll[i-1]
                 #roll = old_roll - new_roll
                 
                 roll = new_roll
@@ -669,7 +685,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
 
                 ctd = coronal_thrust_dir[i-1]
                 dotprod = nx.dot( ctd, fly_up_world )
-                print '=== ROLL',roll*rad2deg, dotprod
+                #print '=== ROLL',roll*rad2deg, dotprod
                 if dotprod < 1-1e-10:
                     roll = -new_roll
                     qnew = euler_to_quat( yaw=yaw, pitch=pitch, roll=roll )
@@ -678,71 +694,16 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
                     fly_up_world = nx.array((v.x, v.y, v.z))
 
                     dotprod = nx.dot( ctd, fly_up_world )
-                    print '   -ROLL',roll*rad2deg, dotprod
-                newQsmooth[i] = qnew
+                    #print '   -ROLL',roll*rad2deg, dotprod
+                Qsmooth_roll_guess[i] = qnew
                     
-                    
-##                vals = []
-##                roll_test = nx.arange(-180.0, 180.0, 1.0)
-##                for roll in roll_test:
-##                    roll = roll*deg2rad
-##                    qnew = euler_to_quat( yaw=yaw, pitch=pitch, roll=roll )
-##                    newQsmooth[i] = qnew
-##                    fly_up = cgtypes.quat(0,0,0,1) # fly up vector in fly coords
-##                    v = qnew*fly_up*qnew.inverse()
-##                    fly_up_world = nx.array((v.x, v.y, v.z))
-##                    vals.append(nx.dot( ctd, fly_up_world ))
-##                vals = nx.array(vals)
-##                idx = nx.argmax(vals)
-##                print '   ',roll_test[idx]
-##                #print vals
-
-####                        fuw = fly_up_world
-####                        if abs(math.sqrt(fuw[0]**2 + fuw[1]**2 + fuw[2]**2)-1.0) > 1e-15:
-####                            print 'hmm',fuw
-
-####                        ctd = coronal_thrust_dir[i-1]
-####                        fuw = ctd
-####                        if abs(math.sqrt(fuw[0]**2 + fuw[1]**2 + fuw[2]**2)-1.0) > 1e-15:
-####                            print 'hmm',fuw
-
-####                        if 0:
-####                            v1 = quat_to_orient(q)
-####                            v2 = quat_to_orient(qnew)
-####                            print '0 ?=',nx.array(v1)-nx.array(v2)
-
         if return_roll_qsmooth:
-            outputs.append( newQsmooth )
+            outputs.append( Qsmooth_roll_guess )
 
         if return_coronal_dir:
             outputs.append( (frame[1:-1], coronal_thrust_dir) ) # return frame numbers also
             
-
-        # define 2 planes, both containing the body axis
-        # 1) goes through thrust vector ("thrust plane")
-        # 2) goes through vertical ("zero-roll plane")
-        
-        # roll angle is angle between these planes
-        
-
-        # find pitch_angle (angle of body long axis above horizontal)
-        
-        # find thrust angle
-        body2thrust_deg = 28 # from David, 1978 (Fig 2. shows pitch_angle = 62 for hovering)
-        body2thrust = body2thrust_deg*deg2rad
-        
-        # This will include fitting a roll angle to account for the
-        # component of the resultant vector out of the plane formed by
-        # the body axis and vertical.  This roll angle orients the
-        # "thrust" vector of of the plane.
-
-        # vertical/body plane = plane formed by body axis and vertical
-        # vertical/side plane = perpendicular to vertical/body plane, but through vertical
-        # project resultant onto vertical/side plane
-        # roll angle is angle between vertical and projected resultant
-
-
-    if 1: # compute error angles
+    if 1: # compute error angles (versus tangent line)
         make_norm = reconstruct.norm_vec
         rad2deg = 180/math.pi
 
@@ -1598,94 +1559,150 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
         rad2deg = 180/math.pi
         fontsize = 10
 
+        useQsmooth = Qsmooth
+
+        use_roll_guess = False
+
+        if use_roll_guess:
+            omega_smooth2 = (Qsmooth_roll_guess[:-1].inverse()*Qsmooth_roll_guess[1:]).log()/delta_t
+            
+            omega_dot_smooth2 = ((Qsmooth_roll_guess[1:-1].inverse()*Qsmooth_roll_guess[2:]).log() -
+                                 (Qsmooth_roll_guess[:-2].inverse()*Qsmooth_roll_guess[1:-1]).log()) / (delta_t**2)
+
         ax1 = subplot(3,1,1)
         title('angles and angular velocities')
-        euler_smooth = nx.array([quat_to_euler(q) for q in Qsmooth])*rad2deg
+        if use_roll_guess:
+            euler_smooth2 = nx.array([quat_to_euler(q) for q in Qsmooth_roll_guess])*rad2deg
+        euler_smooth = nx.array([quat_to_euler(q) for q in useQsmooth])*rad2deg
         euler = nx.array([quat_to_euler(q) for q in Q])*rad2deg
         yaw = euler[:,0]; pitch = euler[:,1]; roll = euler[:,2]
         yaw_smooth = euler_smooth[:,0]; pitch_smooth = euler_smooth[:,1]; roll_smooth = euler_smooth[:,2]
+        if use_roll_guess:
+            roll_smooth2 = euler_smooth2[:,2]
         if xtitle == 'time':
             xdata = t_P
         elif xtitle == 'frame':
             xdata = t_P*100 + start_frame
         lines = plot(xdata, yaw, 'r-', xdata, pitch, 'g-', xdata, roll, 'b-')
         lines_smooth = plot(xdata, yaw_smooth, 'r-', xdata, pitch_smooth, 'g-', xdata, roll_smooth, 'b-')
+        if use_roll_guess:
+            lines_smooth2 = plot(xdata, roll_smooth2, 'y-')
         if xtitle == 'time':
             plot(t_bad,[0.0]*len(t_bad),'ko')
         elif xtitle == 'frame':
             plot(frame_bad,[0.0]*len(frame_bad),'ko')
         set(lines_smooth,'lw',linewidth)
+        if use_roll_guess:
+            set(lines_smooth2,'lw',linewidth)
         legend(lines,['heading','pitch (body)','roll'])
         ylabel('angular position (global)\n(deg)')
         set(gca().yaxis.label,'size',fontsize)
-        set(gca(),'ylim',(-15,75))
+        #set(gca(),'ylim',(-15,75))
         grid()
 
-        plot_mag = False
-        plot_roll = False
+        plot_mag = True
+        plot_roll = True
         subplot(3,1,2, sharex=ax1)
         if xtitle == 'time':
             xdata = t_omega
         elif xtitle == 'frame':
             xdata = t_omega*100 + start_frame
-        if plot_mag:
-            mag_omega = nx.array([ abs(q) for q in omega ])*rad2deg
-            args = [ xdata, mag_omega, 'k-']
-            line_titles = ['mag']
+        if 0:
+            if plot_mag:
+                mag_omega = nx.array([ abs(q) for q in omega ])*rad2deg
+                args = [ xdata, mag_omega, 'k-']
+                line_titles = ['mag']
+            else:
+                args = []
+                line_titles = []
+            args.extend( [xdata, omega.z*rad2deg, 'r-', xdata, omega.y*rad2deg, 'g-'] )
+            line_titles.extend( ['heading','pitch (body)'] )
+            if plot_roll:
+                args.extend( [ xdata, omega.x*rad2deg, 'b-'] )
+                line_titles.extend( ['roll'] )
+            lines=plot( *args )
         else:
-            args = []
+            lines = []
             line_titles = []
-        args.extend( [xdata, omega.z*rad2deg, 'r-', xdata, omega.y*rad2deg, 'g-'] )
-        line_titles.extend( ['heading','pitch (body)'] )
-        if plot_roll:
-            args.extend( [ xdata, omega.x*rad2deg, 'b-'] )
-            line_titles.extend( ['roll'] )
-        lines=plot( *args )
+            
         if plot_mag:
             mag_omega = nx.array([ abs(q) for q in omega_smooth ])*rad2deg
             args = [xdata, mag_omega, 'k-' ]
+            if use_roll_guess:
+                mag_omega2 = nx.array([ abs(q) for q in omega_smooth2 ])*rad2deg
+                args.extend( [xdata, mag_omega2, 'g:' ] )
         else:
             args = []
         args.extend( [xdata, omega_smooth.z*rad2deg, 'r-', xdata, omega_smooth.y*rad2deg, 'g-'] )
         if plot_roll:
             args.extend( [xdata, omega_smooth.x*rad2deg, 'b-'] )
+        if use_roll_guess:
+            args.extend( [xdata, omega_smooth2.z*rad2deg, 'c-', xdata, omega_smooth2.y*rad2deg, 'm-'] )
+            if plot_roll:
+                args.extend( [xdata, omega_smooth2.x*rad2deg, 'y-'] )
+            
         lines_smooth=plot( *args )
         set(lines_smooth,'lw',linewidth)
-        legend(lines,line_titles)
+        if len(lines):
+            legend(lines,line_titles)
         ylabel('angular velocity\nglobal frame (deg/sec)')
         set(gca().yaxis.label,'size',fontsize)
-        set(gca(),'ylim',[-750,600])
+        #set(gca(),'ylim',[-750,600])
         grid()
 
         subplot(3,1,3, sharex=ax1)
-        if plot_mag:
-            mag_omega_body = nx.array([ abs(q) for q in omega_body ])*rad2deg
-            args = [ xdata, mag_omega_body, 'k-' ]
-            line_titles = ['mag']
-        else:
-            args = []
-            line_titles = []
-        args.extend([xdata, omega_body.z*rad2deg, 'r-', xdata, omega_body.y*rad2deg, 'g-'])
-        line_titles.extend( ['yaw','pitch'])
-        if plot_roll:
-            args.extend([xdata, omega_body.x*rad2deg, 'b-'])
-            line_titles.extend( ['roll'])
-        lines = plot(*args)
-        legend(lines,line_titles)
+        if 0:
+            if plot_mag:
+                mag_omega_body = nx.array([ abs(q) for q in omega_body ])*rad2deg
+                args = [ xdata, mag_omega_body, 'k-' ]
+                line_titles = ['mag']
+            else:
+                args = []
+                line_titles = []
+            args.extend([xdata, omega_body.z*rad2deg, 'r-', xdata, omega_body.y*rad2deg, 'g-'])
+            line_titles.extend( ['yaw','pitch'])
+            if plot_roll:
+                args.extend([xdata, omega_body.x*rad2deg, 'b-'])
+                line_titles.extend( ['roll'])
+            lines = plot(*args)
+            legend(lines,line_titles)
+
+        if use_roll_guess:
+            omega_smooth2_body = rotate_velocity_by_orientation( omega_smooth2, Qsmooth_roll_guess[:-1])
 
         if plot_mag:
             mag_omega_body = nx.array([ abs(q) for q in omega_smooth_body ])*rad2deg
             args = [ xdata, mag_omega_body, 'k-' ]
+            line_titles = ['mag']
+            
+            if use_roll_guess:
+                mag_omega2_body = nx.array([ abs(q) for q in omega_smooth2_body ])*rad2deg
+                args.extend( [ xdata, mag_omega2_body, 'g:' ] )
+                line_titles = ['mag (roll corrected)']                
         else:
             args = []
+            line_titles = []
+            
         args.extend( [ xdata, omega_smooth_body.z*rad2deg, 'r-', xdata, omega_smooth_body.y*rad2deg, 'g-'] )
+        line_titles.extend( ['yaw','pitch'])
         if plot_roll:
             args.extend( [ xdata, omega_smooth_body.x*rad2deg, 'b-' ])
+            line_titles.extend( ['roll'])
+                
+        if use_roll_guess:
+            args.extend( [ xdata, omega_smooth2_body.z*rad2deg, 'c-', xdata, omega_smooth2_body.y*rad2deg, 'm-'] )
+            line_titles.extend( ['yaw (roll corrected)','pitch (roll corrected)'])
+            if plot_roll:
+                args.extend( [ xdata, omega_smooth2_body.x*rad2deg, 'y-' ])
+                line_titles.extend( ['roll (roll corrected)'] )
+            
         lines_smooth=plot( *args)
         set(lines_smooth,'lw',linewidth)
         ylabel('angular velocity\nbody frame (deg/sec)')
         set(gca().yaxis.label,'size',fontsize)
-        set(gca(),'ylim',[-500,500])
+        legend(lines_smooth,line_titles)
+        
+        #set(gca(),'ylim',[-500,500])
         if xtitle == 'time':
             xlabel('time (sec)')
         elif xtitle == 'frame':
@@ -1789,3 +1806,41 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
         xlabel('time (sec)')
               
     return outputs
+
+
+def calculate_roll_and_save( results, start_frame, stop_frame ):
+    import result_browser
+    
+    frames,psmooth,qsmooth=do_it(results,
+                                 start_frame=start_frame,
+                                 stop_frame=stop_frame,
+                                 interp_OK=True,
+                                 return_frame_numbers=True,
+                                 do_smooth_position=True,
+                                 do_smooth_quats=True)
+    
+    result_browser.save_smooth_data(results,frames,psmooth,qsmooth)
+
+    # linear drag model
+    frames,psmooth,qlin=do_it(results,
+                              start_frame=start_frame,
+                              stop_frame=stop_frame,
+                              interp_OK=True,
+                              return_frame_numbers=True,
+                              return_smooth_position=True,
+                              drag_model_for_roll='linear',
+                              return_roll_qsmooth=True)
+    result_browser.save_smooth_data(results,frames,psmooth,qlin,
+                                    'smooth_data_roll_fixed_lin')
+
+    # v2 drag model
+    frames,psmooth,qv2=do_it(results,
+                             start_frame=start_frame,
+                             stop_frame=stop_frame,
+                             interp_OK=True,
+                             return_frame_numbers=True,
+                             return_smooth_position=True,
+                             drag_model_for_roll='v^2',
+                             return_roll_qsmooth=True)
+    result_browser.save_smooth_data(results,frames,psmooth,qv2,
+                                    'smooth_data_roll_fixed_v2')
