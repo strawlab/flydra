@@ -1823,17 +1823,17 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
 
 def calculate_roll_and_save( results, start_frame, stop_frame ):
     import result_browser
-    
-    frames,psmooth,qsmooth=do_it(results,
-                                 start_frame=start_frame,
-                                 stop_frame=stop_frame,
-                                 interp_OK=True,
-                                 return_frame_numbers=True,
-                                 do_smooth_position=True,
-                                 do_smooth_quats=True)
-    
-    result_browser.save_smooth_data(results,frames,psmooth,qsmooth)
-    if 1:
+    if 0:
+        frames,psmooth,qsmooth=do_it(results,
+                                     start_frame=start_frame,
+                                     stop_frame=stop_frame,
+                                     interp_OK=True,
+                                     return_frame_numbers=True,
+                                     do_smooth_position=True,
+                                     do_smooth_quats=True)
+
+        result_browser.save_smooth_data(results,frames,psmooth,qsmooth)
+    if 0:
         # linear drag model
         frames,psmooth,qlin=do_it(results,
                                   start_frame=start_frame,
@@ -1857,3 +1857,17 @@ def calculate_roll_and_save( results, start_frame, stop_frame ):
                                  return_roll_qsmooth=True)
         result_browser.save_smooth_data(results,frames,psmooth,qv2,
                                         'smooth_data_roll_fixed_v2')
+
+    if 1:
+        outputs=do_it(results,
+                      start_frame=start_frame,
+                      stop_frame=stop_frame,
+                      interp_OK=True,
+                      return_resultant_forces=True)
+        frames, resultants = outputs[0]
+        result_browser.save_timed_forces('resultants',
+                                         results,
+                                         frames,
+                                         resultants)
+        print 'saved resultants table'
+        

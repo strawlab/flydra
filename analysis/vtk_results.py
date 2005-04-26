@@ -213,44 +213,44 @@ def show_cameras(results,renderers,frustums=True,labels=True,centers=True):
             actors.append( textlabel )
     return actors
 
-def show_numpy_image(renderers,im,shared_vert,vert2,vert3):
-    if 1:
-        return
-    # compute 4th vertex
-    v1v2 = vert2 - shared_vert
-    vert4 = vert3 + v1v2
+##def show_numpy_image(renderers,im,shared_vert,vert2,vert3):
+##    if 1:
+##        return
+##    # compute 4th vertex
+##    v1v2 = vert2 - shared_vert
+##    vert4 = vert3 + v1v2
 
-    if len(im.shape) == 2:
-        im = nx.reshape( im, (im[0], im[1], 1) ) # returns view if possible
-    im = Numeric.asarray(im)
-    im = im.astype( Numeric.UInt8 )
-    iifa = vtkImageImportFromArray()
-    iifa.SetArray( im )
+##    if len(im.shape) == 2:
+##        im = nx.reshape( im, (im[0], im[1], 1) ) # returns view if possible
+##    im = Numeric.asarray(im)
+##    im = im.astype( Numeric.UInt8 )
+##    iifa = vtkImageImportFromArray()
+##    iifa.SetArray( im )
 
-    ia = vtk.vtkImageActor()
-    ia.SetInput(iifa.GetOutput())
+##    ia = vtk.vtkImageActor()
+##    ia.SetInput(iifa.GetOutput())
 
-    # hmm
-    coords = nx.array([ shared_vert,
-                        vert2,
-                        vert3,
-                        vert4 ])
+##    # hmm
+##    coords = nx.array([ shared_vert,
+##                        vert2,
+##                        vert3,
+##                        vert4 ])
     
-    ia.SetDisplayExtent( min(coords[:,0]),
-                         max(coords[:,0]),
-                         min(coords[:,1]),
-                         max(coords[:,1]),
-                         min(coords[:,2]),
-                         min(coords[:,2]) )
+##    ia.SetDisplayExtent( min(coords[:,0]),
+##                         max(coords[:,0]),
+##                         min(coords[:,1]),
+##                         max(coords[:,1]),
+##                         min(coords[:,2]),
+##                         min(coords[:,2]) )
     
-    # XXX not done
+##    # XXX not done
     
-    for renderer in renderers:
-        renderer.AddActor( ia )
+##    for renderer in renderers:
+##        renderer.AddActor( ia )
         
-    actors = [ia]
+##    actors = [ia]
     
-    return actors
+##    return actors
 
 def show_line(renderers,v1,v2,color,radius,nsides=20,opacity=1.0):
     actors = []
@@ -777,7 +777,7 @@ if __name__=='__main__':
 
     #results
     if 1:
-        if 0:
+        if 1:
             results = result_browser.get_results('DATA20050325_165810.h5',mode='r+')
             start_frame = 68942
             stop_frame = 69643
@@ -785,9 +785,9 @@ if __name__=='__main__':
             results = result_browser.get_results('DATA20050325_140956.h5',mode='r+')
             start_frame = 24996
             stop_frame = 25450
-        if 1:
+        if 0:
             results = result_browser.get_results('DATA20050325_154206.h5',mode='r+')
-            start_frame = 138161
+            start_frame = 138164
             stop_frame = 138710
         
     else:
@@ -861,14 +861,14 @@ if __name__=='__main__':
                 show_line(renderers,corner+sside+wside, corner+sside+wside+upside,line_color,1)
                 show_line(renderers,corner+wside,corner+wside+sside,line_color,1)
             
-            A = nx.zeros( (32,32,1), nx.UInt8 )
-            for row in range(A.shape[0]):
-                for col in range(A.shape[1]):
-                    if random.random() > 0.5:
-                        A[row,col,0] = 255
-                    else:
-                        A[row,col,0] = 0
-            show_numpy_image( renderers, A, corner, upc, lwe )
+##            A = nx.zeros( (32,32,1), nx.UInt8 )
+##            for row in range(A.shape[0]):
+##                for col in range(A.shape[1]):
+##                    if random.random() > 0.5:
+##                        A[row,col,0] = 255
+##                    else:
+##                        A[row,col,0] = 0
+##            show_numpy_image( renderers, A, corner, upc, lwe )
             
 ####        show_frames_vtk(results,renderers,start_frame,stop_frame,1,
 ####                        orientation_corrected=True,
@@ -884,7 +884,7 @@ if __name__=='__main__':
         if 0:
             show_frames_vtk(results,renderers,start_frame,stop_frame,1,
                             orientation_corrected=True,
-                            labels=False,
+                            labels=True,
                             #timed_force_table=results.root.drag_force_linear,
                             #timed_force_table=results.root.real_timed_forces,
                             timed_force_color=green,
@@ -893,23 +893,23 @@ if __name__=='__main__':
                             triangle_mode_data=results.root.smooth_data_roll_fixed_lin,
                             triangle_mode_color=red,
                             use_timestamps=True)
-        if 0:
+        if 1:
             show_frames_vtk(results,renderers,start_frame,stop_frame,1,
                             orientation_corrected=True,
-                            labels=False,
-                            #timed_force_table=results.root.drag_force_v2,
-                            #timed_force_color=blue,
-                            #timed_force_scaling_factor=5e5,
-                            #timed_force_radius=0.3,
+                            labels=True,
+                            timed_force_table=results.root.resultants,
+                            timed_force_color=blue,
+                            timed_force_scaling_factor=5e5,
+                            timed_force_radius=0.3,
                             render_mode='triangles',
                             triangle_mode_data=results.root.smooth_data,
                             #triangle_mode_data=results.root.smooth_data_real,
                             triangle_mode_color=green,
-                            )
+                            use_timestamps=True)
         if 1:
             show_frames_vtk(results,renderers,start_frame,stop_frame,1,
                             render_mode='ball_and_stick',
-                            labels=True,
+                            labels=False,
                             use_timestamps=True,max_err=10)
             
         for renderer in renderers:

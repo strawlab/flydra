@@ -1628,7 +1628,7 @@ def save_movie(results):
     for frame in xrange(68942+300, 68942+360, 1):
         clf()
         try:
-            fname = 'zoomed3_%04d.png'%frame
+            fname = 'zoomed/zoomed_%04d.png'%frame
             #fname = 'full_frame_%04d.png'%frame
             print ' plotting',fname,'...',
             sys.stdout.flush()
@@ -1638,12 +1638,15 @@ def save_movie(results):
                             #fixed_im_lims=fixed_im_lims,
                             colormap='grayscale',
                             #zoomed=True,
-                            plot_orientation=True,
+                            
+#                            plot_orientation=True,
+                            plot_orientation=False,
+                            
                             origin='lower',
                             display_labels=False,
                             display_titles=False,
                             start_frame_offset=start_frame,
-                            PLOT_RED=True,
+#                            PLOT_RED=True,
                             PLOT_BLUE=True,
                             max_err=10,
                             plot_red_ori_fixed=True,                    
@@ -2223,6 +2226,6 @@ def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
     return results
     
 if __name__=='__main__':
-    results = get_results('DATA20050325_154206.h5',mode='r+')
+    results = get_results('DATA20050325_165810.h5',mode='r+')
     if len(sys.argv) > 1:
         save_movie(results)
