@@ -132,6 +132,8 @@ def slerp_quats( Q, bad_idxs, allow_roll = True ):
     
 def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
           interp_OK=False,
+          return_err_tol=False,
+          force_err_tol=None,
           return_frame_numbers=False,
           return_resultant_forces=False,
           return_roll_qsmooth=False,
@@ -220,7 +222,23 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
     newline3d = [ line3d[0,:] ]
     cur_ptr = 0
     n_sigma = 5
-    err_tol = n_sigma*std_Pdiff_dist
+    if force_err_tol is None:
+        err_tol = n_sigma*std_Pdiff_dist
+        if err_tol < 30:
+            err_tol = 30
+            print 'at lower limit',# 30 mm/IFI = 3 meters/sec
+        else:
+            print 'calculated',
+    else:
+        err_tol = force_err_tol
+        print 'given',
+    print 'err_tol',err_tol
+    
+    outputs = []
+    
+    if return_err_tol:
+        outputs.append( err_tol )
+
     while (cur_ptr+1) < frame.shape[0]:
         cur_ptr += 1
         tmpP1 = newP[-1]
@@ -240,7 +258,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
     fXl = nx.concatenate( (frame[:,nx.NewAxis], P, line3d), axis=1 )
         
     t_P = (frame-frame[0])*1e-2 # put in seconds
-    
+
     to_meters = 1e-3 # put in meters (from mm)
     P = nx.array(P)*to_meters
     
@@ -299,12 +317,10 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
         interped_p_idxs = [ frame_list.index( fno ) for fno in interpolated_xyz_frames ]
     else:
         interped_p_idxs = []
-            
+
     delta_t = delta_ts[0]
 
     ################################################################
-
-    outputs = []
 
     if return_frame_numbers:
         outputs.append( frame )
@@ -371,6 +387,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
                 if Qsmooth is None and not do_smooth_quats:
                     Qsmooth = QuatSeq( [ cgtypes.quat( q_wxyz ) for q_wxyz in fPQ[:,4:] ])
                     print 'loaded cached Qsmooth from file',results.filename
+                print 'Psmooth.shape',Psmooth.shape
             except Exception, exc:
                 print 'WARNING:',str(exc)
                 print 'Not using cached smoothed data'
@@ -524,8 +541,6 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
     t_omega_body = t_P[:-1]
 
     if Qsmooth is not None: # compute forces (for now, smooth data only)
-        print 'Qsmooth is not None'
-        
         # vector for current orientation (use only indices with velocity info)
         orient_parallel = quat_to_orient(Qsmooth)[1:-1]
 
@@ -851,8 +866,6 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
             title('ground speed, global reference frame')
             plot( t_P, P[:,0], 'rx', t_P, P[:,1], 'gx', t_P, P[:,2], 'bx' )
             if Psmooth is not None:
-                print 't_P.shape',t_P.shape
-                print 'Psmooth.shape',Psmooth.shape
                 smooth_lines = plot( t_P, Psmooth[:,0], 'r-', t_P, Psmooth[:,1], 'g-', t_P, Psmooth[:,2], 'b-' )
                 set(smooth_lines,'linewidth',linewidth)
             ylabel('Position\n(m)')
@@ -1241,7 +1254,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
             horiz_dist_height = (P[1:,2]+P[:-1,2])*0.5 # average between 2 points
             height_offset = min( horiz_dist_height )
             horiz_dist_height = horiz_dist_height-height_offset
-            plot( horiz_dists_cum*1000.0, horiz_dist_height*1000.0, 'k*',
+            plot( horiz_dists_cum*1000.0, horiz_dist_height*1000.0, 'ko',
                   markersize=4)
             xlabel('Horizontal distance travelled (mm)')
             ylabel('Height (mm)')
@@ -1820,27 +1833,27 @@ def calculate_roll_and_save( results, start_frame, stop_frame ):
                                  do_smooth_quats=True)
     
     result_browser.save_smooth_data(results,frames,psmooth,qsmooth)
+    if 1:
+        # linear drag model
+        frames,psmooth,qlin=do_it(results,
+                                  start_frame=start_frame,
+                                  stop_frame=stop_frame,
+                                  interp_OK=True,
+                                  return_frame_numbers=True,
+                                  return_smooth_position=True,
+                                  drag_model_for_roll='linear',
+                                  return_roll_qsmooth=True)
+        result_browser.save_smooth_data(results,frames,psmooth,qlin,
+                                        'smooth_data_roll_fixed_lin')
 
-    # linear drag model
-    frames,psmooth,qlin=do_it(results,
-                              start_frame=start_frame,
-                              stop_frame=stop_frame,
-                              interp_OK=True,
-                              return_frame_numbers=True,
-                              return_smooth_position=True,
-                              drag_model_for_roll='linear',
-                              return_roll_qsmooth=True)
-    result_browser.save_smooth_data(results,frames,psmooth,qlin,
-                                    'smooth_data_roll_fixed_lin')
-
-    # v2 drag model
-    frames,psmooth,qv2=do_it(results,
-                             start_frame=start_frame,
-                             stop_frame=stop_frame,
-                             interp_OK=True,
-                             return_frame_numbers=True,
-                             return_smooth_position=True,
-                             drag_model_for_roll='v^2',
-                             return_roll_qsmooth=True)
-    result_browser.save_smooth_data(results,frames,psmooth,qv2,
-                                    'smooth_data_roll_fixed_v2')
+        # v2 drag model
+        frames,psmooth,qv2=do_it(results,
+                                 start_frame=start_frame,
+                                 stop_frame=stop_frame,
+                                 interp_OK=True,
+                                 return_frame_numbers=True,
+                                 return_smooth_position=True,
+                                 drag_model_for_roll='v^2',
+                                 return_roll_qsmooth=True)
+        result_browser.save_smooth_data(results,frames,psmooth,qv2,
+                                        'smooth_data_roll_fixed_v2')

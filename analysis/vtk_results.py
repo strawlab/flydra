@@ -777,9 +777,19 @@ if __name__=='__main__':
 
     #results
     if 1:
-        results = result_browser.get_results('DATA20050325_165810.h5',mode='r+')
-        start_frame = 68942
-        stop_frame = 69643
+        if 0:
+            results = result_browser.get_results('DATA20050325_165810.h5',mode='r+')
+            start_frame = 68942
+            stop_frame = 69643
+        if 0:
+            results = result_browser.get_results('DATA20050325_140956.h5',mode='r+')
+            start_frame = 24996
+            stop_frame = 25450
+        if 1:
+            results = result_browser.get_results('DATA20050325_154206.h5',mode='r+')
+            start_frame = 138161
+            stop_frame = 138710
+        
     else:
         results = result_browser.get_results('fake2.h5',mode='r+')
         start_frame = 1
@@ -871,10 +881,10 @@ if __name__=='__main__':
 ##                            timed_force_table=results.root.real_resultant_forces,
 ##                            timed_force_color=green,
 ##                            use_timestamps=True,max_err=10)
-        if 1:
+        if 0:
             show_frames_vtk(results,renderers,start_frame,stop_frame,1,
                             orientation_corrected=True,
-                            labels=True,
+                            labels=False,
                             #timed_force_table=results.root.drag_force_linear,
                             #timed_force_table=results.root.real_timed_forces,
                             timed_force_color=green,
@@ -883,7 +893,7 @@ if __name__=='__main__':
                             triangle_mode_data=results.root.smooth_data_roll_fixed_lin,
                             triangle_mode_color=red,
                             use_timestamps=True)
-        if 1:
+        if 0:
             show_frames_vtk(results,renderers,start_frame,stop_frame,1,
                             orientation_corrected=True,
                             labels=False,
@@ -899,7 +909,7 @@ if __name__=='__main__':
         if 1:
             show_frames_vtk(results,renderers,start_frame,stop_frame,1,
                             render_mode='ball_and_stick',
-                            labels=False,
+                            labels=True,
                             use_timestamps=True,max_err=10)
             
         for renderer in renderers:

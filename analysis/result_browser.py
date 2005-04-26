@@ -2223,7 +2223,6 @@ def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
     return results
     
 if __name__=='__main__':
-    results = get_results('DATA20050325_165810.h5',mode='r+')
-    #results = get_results('fake2.h5',mode='r+')
+    results = get_results('DATA20050325_154206.h5',mode='r+')
     if len(sys.argv) > 1:
         save_movie(results)
