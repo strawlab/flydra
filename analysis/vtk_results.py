@@ -881,7 +881,7 @@ if __name__=='__main__':
 ##                            timed_force_table=results.root.real_resultant_forces,
 ##                            timed_force_color=green,
 ##                            use_timestamps=True,max_err=10)
-        if 0:
+        if 1:
             show_frames_vtk(results,renderers,start_frame,stop_frame,1,
                             orientation_corrected=True,
                             labels=True,
@@ -897,7 +897,7 @@ if __name__=='__main__':
             show_frames_vtk(results,renderers,start_frame,stop_frame,1,
                             orientation_corrected=True,
                             labels=True,
-                            timed_force_table=results.root.resultants,
+                            #timed_force_table=results.root.resultants,
                             timed_force_color=blue,
                             timed_force_scaling_factor=5e5,
                             timed_force_radius=0.3,

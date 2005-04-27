@@ -130,7 +130,13 @@ def slerp_quats( Q, bad_idxs, allow_roll = True ):
             no_roll_quat = orientation_to_quat(ori)
             Q[cur_idx] = no_roll_quat
     
-def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
+def do_it(results,
+          start_frame = None,
+          stop_frame = None,
+          Psmooth=None,Qsmooth=None,
+          
+          alpha=0.2, beta=20.0, lambda1=2e-9,
+          
           interp_OK=False,
           return_err_tol=False,
           force_err_tol=None,
@@ -142,8 +148,6 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
           return_smooth_position = False,
           do_smooth_quats = False,
           return_smooth_quats = False,
-          start_frame = 23878,
-          stop_frame = 24447,
           
           plot_pos_and_vel = False,
           plot_ffts = False,
@@ -168,6 +172,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
           
           plot_Q = False,
           plot_body_angular_vel = False,
+          plot_body_angular_vel2 = False,
           plot_error_angles = False,
           plot_body_ground_V = False,
           plot_body_air_V = False,
@@ -178,7 +183,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
           had_post = True,
           show_grid = False,
 
-          xtitle=None,
+          xtitle='time',
           force_scaling = 1e7,
 
           drag_model_for_roll = 'linear',
@@ -288,7 +293,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
                     new_y = my_interp( fXl[i][2], fXl[i+1][2], frac )
                     new_z = my_interp( fXl[i][3], fXl[i+1][3], frac )
                     new_row = nx.array( [fno, new_x, new_y, new_z, nan, nan, nan, nan, nan, nan],
-                                        type=fXl[0].type() )
+                                        fXl[0].typecode() )
                     fXl.append( new_row )
                     print '  linear interpolation at time %0.2f (frame %d)'%((fno-start_frame)*0.01,fno,)
 
@@ -335,8 +340,9 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
     slerp_quats( Q, slerped_q_idxs, allow_roll=False )
     for cur_idx in slerped_q_idxs:
         print '  SLERPed missing quat at time %.2f (frame %d)'%(cur_idx*1e-2, frame[cur_idx])
-    t_bad = t_P[slerped_q_idxs]
-    frame_bad = frame[slerped_q_idxs]
+    t_bad = nx.take(t_P,slerped_q_idxs)
+    #frame_bad = frame[slerped_q_idxs]
+    frame_bad = nx.take(frame,slerped_q_idxs)
 
     #############################################################
     
@@ -1574,7 +1580,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
 
         useQsmooth = Qsmooth
 
-        use_roll_guess = False
+        use_roll_guess = True
 
         if use_roll_guess:
             omega_smooth2 = (Qsmooth_roll_guess[:-1].inverse()*Qsmooth_roll_guess[1:]).log()/delta_t
@@ -1582,7 +1588,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
             omega_dot_smooth2 = ((Qsmooth_roll_guess[1:-1].inverse()*Qsmooth_roll_guess[2:]).log() -
                                  (Qsmooth_roll_guess[:-2].inverse()*Qsmooth_roll_guess[1:-1]).log()) / (delta_t**2)
 
-        ax1 = subplot(3,1,1)
+        ax1 = subplot(3,1,1) ##########################
         title('angles and angular velocities')
         if use_roll_guess:
             euler_smooth2 = nx.array([quat_to_euler(q) for q in Qsmooth_roll_guess])*rad2deg
@@ -1615,7 +1621,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
 
         plot_mag = True
         plot_roll = True
-        subplot(3,1,2, sharex=ax1)
+        subplot(3,1,2, sharex=ax1)  ##########################
         if xtitle == 'time':
             xdata = t_omega
         elif xtitle == 'frame':
@@ -1663,7 +1669,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
         #set(gca(),'ylim',[-750,600])
         grid()
 
-        subplot(3,1,3, sharex=ax1)
+        subplot(3,1,3, sharex=ax1)  ##########################
         if 0:
             if plot_mag:
                 mag_omega_body = nx.array([ abs(q) for q in omega_body ])*rad2deg
@@ -1691,7 +1697,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
             if use_roll_guess:
                 mag_omega2_body = nx.array([ abs(q) for q in omega_smooth2_body ])*rad2deg
                 args.extend( [ xdata, mag_omega2_body, 'g:' ] )
-                line_titles = ['mag (roll corrected)']                
+                line_titles.extend( ['mag (roll corrected)'])
         else:
             args = []
             line_titles = []
@@ -1721,7 +1727,110 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
         elif xtitle == 'frame':
             xlabel('frame')
         grid()
+    elif plot_body_angular_vel2: # angular vels w and w/o roll guess
+        rad2deg = 180/math.pi
+        linewidth = 1.5
+        smooth = 1
+        rad2deg = 180/math.pi
+        fontsize = 10
 
+        useQsmooth = Qsmooth
+
+        omega_smooth2 = (Qsmooth_roll_guess[:-1].inverse()*Qsmooth_roll_guess[1:]).log()/delta_t
+
+        omega_dot_smooth2 = ((Qsmooth_roll_guess[1:-1].inverse()*Qsmooth_roll_guess[2:]).log() -
+                             (Qsmooth_roll_guess[:-2].inverse()*Qsmooth_roll_guess[1:-1]).log()) / (delta_t**2)
+        euler_smooth2 = nx.array([quat_to_euler(q) for q in Qsmooth_roll_guess])*rad2deg
+        euler_smooth = nx.array([quat_to_euler(q) for q in useQsmooth])*rad2deg
+        euler = nx.array([quat_to_euler(q) for q in Q])*rad2deg
+        
+        yaw = euler[:,0]
+        pitch = euler[:,1]
+        roll = euler[:,2]
+        
+        yaw_smooth = euler_smooth[:,0]
+        pitch_smooth = euler_smooth[:,1]
+        roll_smooth = euler_smooth[:,2]
+        
+        roll_smooth2 = euler_smooth2[:,2]
+            
+        if xtitle == 'time':
+            xdata = t_omega
+        elif xtitle == 'frame':
+            xdata = t_omega*100 + start_frame
+
+        omega_smooth2_body = rotate_velocity_by_orientation( omega_smooth2, Qsmooth_roll_guess[:-1])
+
+        ax1=subplot(3,1,1)  ##########################
+
+        args = []
+        line_titles = []
+
+        args.extend( [ xdata, omega_smooth_body.z*rad2deg, 'g-',
+                       xdata, omega_smooth2_body.z*rad2deg, 'r-'] )
+        line_titles.extend( ['yaw (without roll model)','yaw (w roll model)'])
+        lines_smooth=plot( *args)
+        set(lines_smooth,'lw',linewidth)
+        ylabel('yaw angular velocity\nbody frame (deg/sec)')
+        set(gca().yaxis.label,'size',fontsize)
+        legend(lines_smooth,line_titles)
+
+        if xtitle == 'time':
+            xlabel('time (sec)')
+        elif xtitle == 'frame':
+            xlabel('frame')
+        grid()
+
+        subplot(3,1,2,sharex=ax1,sharey=ax1)  ##########################
+
+        args = []
+        line_titles = []
+
+        args.extend( [ xdata, omega_smooth_body.y*rad2deg, 'g-',
+                       xdata, omega_smooth2_body.y*rad2deg, 'r-'] )
+        line_titles.extend( ['pitch (without roll model)','pitch (w roll model)'])
+        lines_smooth=plot( *args)
+        set(lines_smooth,'lw',linewidth)
+        ylabel('pitch angular velocity\nbody frame (deg/sec)')
+        set(gca().yaxis.label,'size',fontsize)
+        legend(lines_smooth,line_titles)
+
+        if xtitle == 'time':
+            xlabel('time (sec)')
+        elif xtitle == 'frame':
+            xlabel('frame')
+        grid()
+
+        subplot(3,1,3,sharex=ax1,sharey=ax1)  ##########################
+
+        args = []
+        line_titles = []
+
+        args.extend( [ xdata, omega_smooth_body.x*rad2deg, 'g-',
+                       xdata, omega_smooth2_body.x*rad2deg, 'r-'] )
+        line_titles.extend( ['roll (without roll model)','roll (w roll model)'])
+        lines_smooth=plot( *args)
+        set(lines_smooth,'lw',linewidth)
+        ylabel('roll angular velocity\nbody frame (deg/sec)')
+        set(gca().yaxis.label,'size',fontsize)
+        legend(lines_smooth,line_titles)
+
+        if xtitle == 'time':
+            xlabel('time (sec)')
+        elif xtitle == 'frame':
+            xlabel('frame')
+        grid()
+
+        ####################
+
+        if 1:
+            xlim = .09,.86
+            ylim = -1115,2270
+            print 'setting xlim to',xlim
+            print 'setting ylim to',ylim
+            set(gca(),'xlim',xlim)
+            set(gca(),'ylim',ylim)
+            
     elif plot_error_angles:
         # plot
         linewidth=1.5
@@ -1823,7 +1932,7 @@ def do_it(results,Psmooth=None,Qsmooth=None, alpha=0.2, beta=20.0, lambda1=2e-9,
 
 def calculate_roll_and_save( results, start_frame, stop_frame ):
     import result_browser
-    if 0:
+    if 1:
         frames,psmooth,qsmooth=do_it(results,
                                      start_frame=start_frame,
                                      stop_frame=stop_frame,
@@ -1833,7 +1942,7 @@ def calculate_roll_and_save( results, start_frame, stop_frame ):
                                      do_smooth_quats=True)
 
         result_browser.save_smooth_data(results,frames,psmooth,qsmooth)
-    if 0:
+    if 1:
         # linear drag model
         frames,psmooth,qlin=do_it(results,
                                   start_frame=start_frame,

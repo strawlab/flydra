@@ -1,7 +1,11 @@
 import math
 import cgtypes
 from numarray.ieeespecial import nan
-import numarray as nx
+#import numarray as nx
+import Numeric as nx
+import numarray
+import Numeric
+array_types = [Numeric.ArrayType, numarray.numarraycore.NumArray]
 
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
@@ -46,7 +50,8 @@ def is_unit_vector(U):
         V = V[nx.NewAxis,:]
     V = V**2
     mag = nx.sqrt(nx.sum(V,axis=1))
-    return nx.sum(nx.abs(mag-1.0)) < 1e-15
+#    return nx.sum(nx.abs(mag-1.0)) < 1e-15
+    return nx.sum(abs(mag-1.0)) < 1e-15
 
 def world2body( U, roll_angle = 0 ):
     """convert world coordinates to body-relative coordinates
@@ -204,10 +209,21 @@ def orientation_to_quat( U, roll_angle=0 ):
     if roll_angle != 0:
         # I presume this has an effect on the b component of the quaternion
         raise NotImplementedError('')
-    if str(U[0]) == 'nan':
-        return cgtypes.quat((nan,nan,nan,nan))
-    yaw, pitch = orientation_to_euler( U )
-    return euler_to_quat(yaw=yaw, pitch=pitch, roll=roll_angle)
+    #if type(U) == nx.NumArray and len(U.shape)==2: # array of vectors
+    if 0:
+        result = QuatSeq()
+        for u in U:
+            if str(u[0]) == 'nan':
+                result.append( cgtypes.quat((nan,nan,nan,nan)))
+            else:
+                yaw, pitch = orientation_to_euler( u )
+                result.append( euler_to_quat(yaw=yaw, pitch=pitch, roll=roll_angle))
+        return result
+    else:
+        if str(U[0]) == 'nan':
+            return cgtypes.quat((nan,nan,nan,nan))
+        yaw, pitch = orientation_to_euler( U )
+        return euler_to_quat(yaw=yaw, pitch=pitch, roll=roll_angle)
 
 def quat_to_orient(S3):
     """returns x, y, z for unit quaternions"""
@@ -357,7 +373,7 @@ class QuatSeq(list):
         if isinstance(other,QuatSeq):
             assert len(self) == len(other)
             return QuatSeq([ p*q for p,q in zip(self,other) ])
-        elif isinstance(other,nx.NumArray):
+        elif type(other) in array_types:
             assert len(other.shape)==2
             if other.shape[1] == 3:
                 other = nx.concatenate( (nx.zeros((other.shape[0],1)),
@@ -410,7 +426,16 @@ class ObjectiveFunctionQuats:
     """methods from Kim, Hsieh, Wang, Wang, Fang, Woo"""
     def __init__(self, q, h, beta, gamma, no_distance_penalty_idxs=None):
         self.q = q
-        self.q_inverse = self.q.inverse()
+        if 1:
+            if 0:
+                # convert back and forth from orientation to eliminate roll
+                #ori = quat_to_orient(self.q)
+                #no_roll_quat = orientation_to_quat(quat_to_orient(self.q))
+                self.q_inverse = orientation_to_quat(quat_to_orient(self.q)).inverse()
+            else:
+                self.qorients = quat_to_orient(self.q)
+        else:
+            self.q_inverse = self.q.inverse()
         self.h = h
         self.h2 = self.h**2
         self.beta = beta
@@ -422,7 +447,17 @@ class ObjectiveFunctionQuats:
                 self.q_err_weights[i] = 0
         
     def _getDistance(self, qs):
-        return sum( self.q_err_weights* (abs(    (self.q_inverse * qs).log() )**2))
+        if 0:
+            if 0:
+                # convert back and forth from orientation to eliminate roll
+                qs = orientation_to_quat(quat_to_orient(qs))
+            return sum( self.q_err_weights* (abs(    (self.q_inverse * qs).log() )**2))
+        else:
+            # test distance of orientations in R3 (L2 norm)
+            qtest_orients = quat_to_orient(qs)
+            L2dist = nx.sum((qtest_orients-self.qorients)**2,axis=1)
+            return nx.sum(L2dist)
+            
     def _getRoll(self, qs):
         return sum([quat_to_absroll(q) for q in qs])
     def _getEnergy(self, qs):
