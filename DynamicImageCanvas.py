@@ -22,6 +22,7 @@ class DynamicImageCanvas(wxGLCanvas):
         EVT_IDLE(self, self.OnDraw)
         self._gl_tex_info_dict = {}
         self.do_clipping = True
+        self.rotate_180 = False
         self.lbrt = {}
         self.draw_points = {}
         self.reconstructed_points = {}
@@ -31,6 +32,9 @@ class DynamicImageCanvas(wxGLCanvas):
 
     def set_clipping(self, value):
         self.do_clipping = value
+
+    def set_rotate_180(self, value):
+        self.rotate_180 = value
 
     def get_clipping(self):
         return self.do_clipping
@@ -240,19 +244,35 @@ class DynamicImageCanvas(wxGLCanvas):
                 xx,yy = gl_tex_xyfrac
 
                 glBindTexture(GL_TEXTURE_2D,tex_id)
-                glBegin(GL_QUADS)
-                glTexCoord2f( 0, yy) # texture is flipped upside down to fix OpenGL<->na
-                glVertex2f( left, bottom)
+                if not self.rotate_180:
+                    glBegin(GL_QUADS)
+                    glTexCoord2f( 0, yy) # texture is flipped upside down to fix OpenGL<->na
+                    glVertex2f( left, bottom)
 
-                glTexCoord2f( xx, yy)
-                glVertex2f( right, bottom)
+                    glTexCoord2f( xx, yy)
+                    glVertex2f( right, bottom)
 
-                glTexCoord2f( xx, 0)
-                glVertex2f( right, top)
+                    glTexCoord2f( xx, 0)
+                    glVertex2f( right, top)
 
-                glTexCoord2f( 0, 0)
-                glVertex2f( left,top)
-                glEnd()
+                    glTexCoord2f( 0, 0)
+                    glVertex2f( left,top)
+                    glEnd()
+                else:
+                    glBegin(GL_QUADS)
+                    glTexCoord2f( xx, 0)
+                    glVertex2f( left, bottom)
+
+                    glTexCoord2f( 0, 0)
+                    glVertex2f( right, bottom)
+
+                    glTexCoord2f( 0, yy)
+                    glVertex2f( right, top)
+
+                    glTexCoord2f( xx, yy)
+                    glVertex2f( left,top)
+                    glEnd()
+                    
 
                 if self.do_draw_points:
                     # draw points if needed
