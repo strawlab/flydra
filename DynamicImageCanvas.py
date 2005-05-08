@@ -154,7 +154,7 @@ class DynamicImageCanvas(wxGLCanvas):
                      GL_UNSIGNED_BYTE, #data_type,
                      raw_data)
 
-    def update_image(self,id_val,image,format='MONO8'):
+    def update_image(self,id_val,image,format='MONO8',xoffset=0,yoffset=0):
         if format == 'YUV411':
             image = imops.yuv411_to_rgb8( image )
         elif format == 'YUV422':
@@ -198,8 +198,8 @@ class DynamicImageCanvas(wxGLCanvas):
             glBindTexture(GL_TEXTURE_2D,tex_id)
             glTexSubImage2D(GL_TEXTURE_2D, #target,
                             0, #mipmap_level,
-                            0, #x_offset,
-                            0, #y_offset,
+                            xoffset, #x_offset,
+                            yoffset, #y_offset,
                             width,
                             height,
                             data_format,
@@ -408,10 +408,16 @@ class DynamicImageCanvas(wxGLCanvas):
                 if ids[i] in self.lbrt:
                     # draw ROI
                     l,b,r,t = self.lbrt[ids[i]]
-                    l = l/width*xg+xo
-                    r = r/width*xg+xo
-                    b = (height-b)/height*yg+yo
-                    t = (height-t)/height*yg+yo
+                    if not self.rotate_180:
+                        l = l/width*xg+xo
+                        r = r/width*xg+xo
+                        b = (height-b)/height*yg+yo
+                        t = (height-t)/height*yg+yo
+                    else:
+                        l = (width-l)/width*xg+xo
+                        r = (width-r)/width*xg+xo
+                        b = b/height*yg+yo
+                        t = t/height*yg+yo                        
 
                     glDisable(GL_TEXTURE_2D)
                     glColor4f(0.0,1.0,0.0,1.0)
