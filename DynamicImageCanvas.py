@@ -1,6 +1,7 @@
 # $Id$
 
 import numarray as nx
+#import Numeric as nx
 import math
 
 import imops
@@ -8,8 +9,6 @@ import imops
 from wxPython.wx import *
 from wxPython.glcanvas import *
 from OpenGL.GL import *
-from numarray.ieeespecial import nan
-import numarray.ieeespecial
 from common_variables import MINIMUM_ECCENTRICITY
 
 class DynamicImageCanvas(wxGLCanvas):
@@ -303,9 +302,6 @@ class DynamicImageCanvas(wxGLCanvas):
 
                     for draw_point in draw_points:
                         ox0,oy0,area,slope,eccentricity = draw_point[:5]
-##                        if len(numarray.ieeespecial.getnan(pt[2])[0]):
-##                            # no orientation information
-##                            continue
                         
                         if eccentricity <= MINIMUM_ECCENTRICITY:
                             # don't draw green lines -- not much orientation info
