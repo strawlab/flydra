@@ -78,6 +78,8 @@ cdef class RealtimeAnalyzer:
     
     cdef c_numarray._numarray last_image
 
+    cdef int hw_roi_w, hw_roi_h, hw_roi_l, hw_roi_b # hardware region of interest
+
     # calibration matrix
     cdef c_numarray._numarray _pmat, _pmat_inv, camera_center
     cdef object _helper
@@ -100,9 +102,14 @@ cdef class RealtimeAnalyzer:
     cdef ArenaController.ArenaController arena_controller
     # end of IPP-requiring code
 
-    def __init__(self, int w, int h, float alpha):
+    def __init__(self, int w, int h, int _hw_roi_w, int _hw_roi_h,
+                 int _hw_roi_l, int _hw_roi_b, float alpha):
         self.width = w
         self.height = h
+        self.hw_roi_w = _hw_roi_w # hardware region of interest
+        self.hw_roi_h = _hw_roi_h
+        self.hw_roi_l = _hw_roi_l
+        self.hw_roi_b = _hw_roi_b
         self.alpha = alpha
         self.roi = ( 0, 0, self.width-1, self.height-1)
 
@@ -158,6 +165,13 @@ cdef class RealtimeAnalyzer:
         # end of IPP-requiring code
         return
 
+    def set_hw_roi(self, int _hw_roi_w, int _hw_roi_h,
+                   int _hw_roi_l, int _hw_roi_b):
+        self.hw_roi_w = _hw_roi_w # hardware region of interest
+        self.hw_roi_h = _hw_roi_h
+        self.hw_roi_l = _hw_roi_l
+        self.hw_roi_b = _hw_roi_b
+        
     def set_reconstruct_helper( self, helper ):
         self._helper = helper
 
@@ -216,6 +230,7 @@ cdef class RealtimeAnalyzer:
         
         # start of IPP-requiring code
 
+##        print 'h,w',self.hw_roi_h,self.hw_roi_w,'fb.shape',framebuffer.shape
         # release GIL
         c_python.Py_BEGIN_ALLOW_THREADS
         
@@ -233,10 +248,14 @@ cdef class RealtimeAnalyzer:
         # function calls do not call the Python C API.
 
         # copy image to IPP memory
-        for i from 0 <= i < self.height:
-            c_lib.memcpy(self.im1+self.im1_step*i, # dest
-                         framebuffer.data+self.width*i, # src
-                         self.width) # length
+##        for i from 0 <= i < self.height:
+##            c_lib.memcpy(self.im1+self.im1_step*i, # dest
+##                         framebuffer.data+self.width*i, # src
+##                         self.width) # length
+        for i from 0 <= i < self.hw_roi_h:
+            c_lib.memcpy((self.im1 + self._bottom*self.im1_step + self._left)+self.im1_step*i,
+                         framebuffer.data+self.hw_roi_w*i, # src
+                         self.hw_roi_w)
 
         # do background subtraction & find max pixel in ROI
         CHK( ipp.ippiAbsDiff_8u_C1R(

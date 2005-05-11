@@ -1,13 +1,14 @@
 #emacs, this is -*-Python-*- mode
 # $Id$
 
-import threading, time, socket, sys, struct
+import threading, time, socket, sys, struct, os
 import Pyro.core, Pyro.errors
 import FlyMovieFormat
 import numarray as nx
-import pyx_cam_iface as cam_iface
+import pyx_cam_iface_numarray as cam_iface
 import reconstruct_utils
 import Queue
+import posix_sched
 
 from common_variables import REALTIME_UDP
 
@@ -55,10 +56,19 @@ class GrabClass(object):
         self.cam_id = cam_id
 
         # get coordinates for region of interest
-        height = self.cam.get_max_height()
-        width = self.cam.get_max_width()
-        self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(width,
-                                                                          height,
+        max_width = self.cam.get_max_width()
+        max_height = self.cam.get_max_height()
+
+        hw_roi_w, hw_roi_h = self.cam.get_frame_size()
+        hw_roi_l, hw_roi_b = self.cam.get_frame_offset()
+        self.new_roi = threading.Event()
+        self.new_roi_data = None
+        self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(max_width,
+                                                                          max_height,
+                                                                          hw_roi_w,
+                                                                          hw_roi_h,
+                                                                          hw_roi_l,
+                                                                          hw_roi_b,
                                                                           ALPHA)
 
     def get_clear_threshold(self):
@@ -88,7 +98,8 @@ class GrabClass(object):
     def get_roi(self):
         return self.realtime_analyzer.roi
     def set_roi(self, lbrt):
-        self.realtime_analyzer.roi = lbrt
+        self.new_roi_data = lbrt
+        self.new_roi.set()
     roi = property( get_roi, set_roi )
 
     def make_reconstruct_helper(self, intlin, intnonlin):
@@ -135,6 +146,18 @@ class GrabClass(object):
         old_fn = 0
         n_rot_samples = 101*60 # 1 minute
         points = []
+
+        if os.name == 'posix':
+            try:
+                max_priority = posix_sched.get_priority_max( posix_sched.FIFO )
+                sched_params = posix_sched.SchedParam(max_priority)
+                posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
+                print 'excellent, grab thread running in maximum prioity mode'
+            except Exception, x:
+                print 'WARNING: could not run in maximum priority mode:', str(x)
+        
+        self.cam.start_camera()  # start camera
+
         try:
             while not cam_quit_event_isSet():
                 try:
@@ -215,7 +238,28 @@ class GrabClass(object):
                                         (main_brain_hostname,self.cam2mainbrain_port))
                 else:
                     coord_socket.send(data)
-                sleep(1e-6) # yield processor
+                    
+                if self.new_roi.isSet():
+                    self.cam.stop_camera()  # start camera
+                    print 'stopped camera'
+                    lbrt = self.new_roi_data
+                    self.new_roi_data = None
+                    l,b,r,t=lbrt
+                    w = r-l
+                    h = t-b
+                    self.realtime_analyzer.roi = lbrt
+                    print 'camera setting size to',w,h
+                    print 'camera setting offset to',l,b
+                    self.cam.set_frame_size(w,h)
+                    self.cam.set_frame_offset(l,b)
+                    w,h = self.cam.get_frame_size()
+                    l,b= self.cam.get_frame_offset()
+                    print 'set to',w,h,l,b
+                    self.realtime_analyzer.set_hw_roi(w,h,l,b)
+
+                    print 're-starting camera'
+                    self.new_roi.clear()
+                    self.cam.start_camera()  # start camera
         finally:
 
             globals['cam_quit_event'].set()
@@ -372,7 +416,6 @@ class App:
             
             grab_thread=threading.Thread(target=grabber.grab_func,
                                          args=(globals,))
-            cam.start_camera()  # start camera
             grab_thread.setDaemon(True) # quit that thread if it's the only one left...
             grab_thread.start() # start grabbing frames from camera
 
