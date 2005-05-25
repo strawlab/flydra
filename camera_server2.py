@@ -8,7 +8,8 @@ import numarray as nx
 import pyx_cam_iface_numarray as cam_iface
 import reconstruct_utils
 import Queue
-import posix_sched
+if os.name == 'posix':
+    import posix_sched
 
 from common_variables import REALTIME_UDP
 
