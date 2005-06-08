@@ -25,6 +25,9 @@ long arena_initialize( void )
   /* seed random number generator with current time */
   srand( time( NULL ) );
 
+  /* unbuffer stdout */
+  setvbuf( stdout, NULL, _IONBF, 0 );
+
   /* open data file */
   fill_time_string( timestring );
   sprintf( filename, "%sfly%s.dat", _ARENA_CONTROL_data_prefix_, timestring );
@@ -242,6 +245,14 @@ void arena_update( double x, double y, double orientation,
   /* change to best match expected angle */
   while( orientation < theta_exp - PI/4 ) orientation += PI/2;
   while( orientation >= theta_exp + PI/4 ) orientation -= PI/2;
+  /* This gives output orientations between -45 and 405,
+     which kind of sucks but all data was collected this way
+     before 4/13/05 when I noticed it, so should continue?
+     It seems like it only matters when absolute orientation
+     is an issue (not relative orientation) and the rounding
+     done below should re-wrap it into 0<x<360.  It's just
+     a pain for analysis when absolute orientation matters
+     (like determining fly/camera offset). */
 
   /* find correct pattern position given current state */
   set_patt_position( orientation, timestamp, framenumber, &new_pos_x_f, 
