@@ -13,6 +13,8 @@
 # toggle for save movie only when point found
 # toggle for external trigger (DONE)
 # add various bells and whistles for John
+#   John's wishlist:
+#     ROI GUI to use top-left, width, height
 
 # In other files:
 #  don't crash camera servers when hard-drives not mounted
