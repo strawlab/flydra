@@ -10,7 +10,9 @@ from numarray.ieeespecial import nan, inf, getnan
 import Queue
 import tables as PT
 from common_variables import REALTIME_UDP
-
+if os.name == 'posix':
+    import posix_sched
+    
 Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here...
 
 Pyro.config.PYRO_TRACELEVEL = 3
@@ -314,6 +316,15 @@ class CoordReceiver(threading.Thread):
         global downstream_hostnames, fastest_realtime_data, best_realtime_data
         global outgoing_UDP_socket, calib_data_lock, calib_IdMat, calib_points
         global calib_data_lock, XXX_framenumber
+
+        if os.name == 'posix':
+            try:
+                max_priority = posix_sched.get_priority_max( posix_sched.FIFO )
+                sched_params = posix_sched.SchedParam(max_priority)
+                posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
+                print 'excellent, 3D reconstruction thread running in maximum prioity mode'
+            except Exception, x:
+                print 'WARNING: could not run in maximum priority mode:', str(x)
         
         header_fmt = '<dli'
         header_size = struct.calcsize(header_fmt)
@@ -653,7 +664,7 @@ class MainBrain(object):
                 cam_lock = cam['lock']
                 cam_lock.acquire()
                 try:
-                    image = cam['image']
+                    coord_and_image = cam['image']
                     cam['image'] = None
                     fps = cam['fps']
                     cam['fps'] = None
@@ -664,7 +675,11 @@ class MainBrain(object):
                 self.cam_info_lock.release()
             # NB: points are undistorted (and therefore do not align
             # with distorted image)
-            return image, fps, points
+            if coord_and_image is not None:
+                image_coords, image = coord_and_image
+            else:
+                image_coords, image = None, None
+            return image, fps, points, image_coords
 
         def external_send_set_camera_property( self, cam_id, property_name, value):
             self.cam_info_lock.acquire()
@@ -899,7 +914,7 @@ class MainBrain(object):
             
             return cam_id
 
-        def set_image(self,cam_id,image):
+        def set_image(self,cam_id,coord_and_image):
             """set most recent image (caller: remote camera)"""
             self.cam_info_lock.acquire()
             try:
@@ -907,7 +922,7 @@ class MainBrain(object):
                 cam_lock = cam['lock']
                 cam_lock.acquire()
                 try:
-                    self.cam_info[cam_id]['image'] = image
+                    self.cam_info[cam_id]['image'] = coord_and_image
                 finally:
                     cam_lock.release()
             finally:
@@ -1127,7 +1142,7 @@ class MainBrain(object):
         # Points are originally undistorted (and therefore do not
         # align with distorted image). We must distort them.
         
-        image, fps, points = self.remote_api.external_get_image_fps_points(cam_id)
+        image, fps, points, image_coords = self.remote_api.external_get_image_fps_points(cam_id)
         if self.reconstructor is None:
             distorted_points = points
         else:
@@ -1138,7 +1153,7 @@ class MainBrain(object):
                 dp[0] = xd
                 dp[1] = yd
                 distorted_points.append( dp )
-        return image, fps, distorted_points
+        return image, fps, distorted_points, image_coords
 
     def fake_synchronize(self):
         self.coord_receiver.fake_synchronize()

@@ -45,7 +45,7 @@ BG_FRAME_INTERVAL = 100 # every N frames, add a new BG image to the accumulator
 
 # where is the "main brain" server?
 try:
-    main_brain_hostname = socket.gethostbyname('mainbrain')
+    main_brain_hostname = socket.gethostbyname('brain1')
 except:
     # try localhost
     main_brain_hostname = socket.gethostbyname(socket.gethostname())
@@ -184,9 +184,10 @@ class GrabClass(object):
                 # make appropriate references to our copy of the data
                 if debug_isSet():
                     debug_image = self.realtime_analyzer.get_working_image()
-                    globals['most_recent_frame'] = debug_image
+                    globals['most_recent_frame'] = (0,0), debug_image
                 else:
-                    globals['most_recent_frame'] = raw_image
+                    l,b= self.cam.get_frame_offset()
+                    globals['most_recent_frame'] = (l,b), raw_image
                     
                 globals['incoming_raw_frames'].put(
                     (raw_image,timestamp,framenumber,found_anything) ) # save it

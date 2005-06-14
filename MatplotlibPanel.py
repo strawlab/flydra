@@ -42,10 +42,10 @@ class PlotPanel(wxPanel):
             start_size=656,491
             x = nx.arange(start_size[0])
             y = nx.arange(start_size[1])
-            pylab.set(a,'xlim',[0,start_size[0]])
-            pylab.set(a,'xticks',range(0,start_size[0],100))
-            pylab.set(a,'ylim',[0,start_size[1]])
-            pylab.set(a,'yticks',range(0,start_size[1],100))
+            pylab.setp(a,'xlim',[0,start_size[0]])
+            pylab.setp(a,'xticks',range(0,start_size[0],100))
+            pylab.setp(a,'ylim',[0,start_size[1]])
+            pylab.setp(a,'yticks',range(0,start_size[1],100))
             x, y = meshgrid(x, y)
             z = nx.zeros(x.shape)
             frame = z
@@ -60,12 +60,12 @@ class PlotPanel(wxPanel):
 
             self.lines = a.plot([0],[0],'o-') 	 
             #self.lines = a.plot([0,0,0],[0,0,0],'o-') 	 
-            pylab.set(self.lines[0],'markerfacecolor',None) 	 
+            pylab.setp(self.lines[0],'markerfacecolor',None) 	 
             white = (1.0,1.0,1.0) 	 
-            pylab.set(self.lines[0],'color',white) 	 
-            pylab.set(self.lines[0],'linewidth',2.0) 	 
-            pylab.set(self.lines[0],'markeredgecolor',white) 	 
-            pylab.set(self.lines[0],'markeredgewidth',2)
+            pylab.setp(self.lines[0],'color',white) 	 
+            pylab.setp(self.lines[0],'linewidth',2.0) 	 
+            pylab.setp(self.lines[0],'markeredgecolor',white) 	 
+            pylab.setp(self.lines[0],'markeredgewidth',2)
             a.grid('on')
             self.toolbar.update() # Not sure why this is needed - ADS
 
@@ -75,11 +75,12 @@ class PlotPanel(wxPanel):
             # unmanaged toolbar in your frame
             return self.toolbar
 
-    def set_image(self,image):
+    def set_image(self,image,image_coords):
         if ENABLED:
             orig_shape = self.im.get_size()
             if image.shape[0] != orig_shape[0] or image.shape[1] != orig_shape[1]:
                 print "main_brain WARNING: size changed to %s, don't know how to re-adjust"%str(image.shape)
+                return
             self.im.set_array(image)
         
     def set_points(self,points):

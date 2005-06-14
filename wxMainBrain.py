@@ -681,11 +681,10 @@ class wxMainBrainApp(wxApp):
         cam_id = snapshot_cam_choice.GetStringSelection()
         if cam_id == '':
             return
-        image, show_fps, points = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
+        image, show_fps, points, image_coords = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
         if image is None:
             return
-        height = image.shape[0]
-        self.plotpanel.set_image(image)
+        self.plotpanel.set_image(image, image_coords)
         self.plotpanel.set_points(points)
         self.plotpanel.draw()
 
@@ -944,9 +943,11 @@ class wxMainBrainApp(wxApp):
                 previewPerCamPanel = cam['previewPerCamPanel']
                 try:
                     # this may fail with a Key Error if unexpected disconnect:
-                    image, show_fps, points = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
+                    image, show_fps, points, image_coords = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
                     if image is not None:
-                        self.cam_image_canvas.update_image(cam_id,image)
+                        self.cam_image_canvas.update_image(cam_id,image,
+                                                           xoffset=image_coords[0],
+                                                           yoffset=image_coords[1])
                     if show_fps is not None:
                         show_fps_label = XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
                         show_fps_label.SetLabel('fps: %.1f'%show_fps)
