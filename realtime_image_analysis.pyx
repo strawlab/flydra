@@ -287,7 +287,7 @@ cdef class RealtimeAnalyzer:
         
         # (to reduce moment arm:) if pixel < self._clear_threshold*max(pixel): pixel=0
 
-        clear_despeckle_thresh = <ipp.Ipp8u>self._clear_threshold*max_val
+        clear_despeckle_thresh = <ipp.Ipp8u>(self._clear_threshold*max_val)
         if clear_despeckle_thresh < self._despeckle_threshold:
             clear_despeckle_thresh = self._despeckle_threshold
         
