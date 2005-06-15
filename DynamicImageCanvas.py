@@ -290,7 +290,7 @@ class DynamicImageCanvas(wxGLCanvas):
                     height = float(widthheight[1])
                     
                     for pt in draw_points:
-                        if pt[0] < 0:
+                        if not pt[9]: # found_anything is false
                             continue
                         x = pt[0]/width*xg+xo
                         y = (height-pt[1])/height*yg+yo
@@ -301,6 +301,10 @@ class DynamicImageCanvas(wxGLCanvas):
                     glEnable(GL_TEXTURE_2D)
 
                     for draw_point in draw_points:
+                        found_anything = draw_point[9]
+                        if not found_anything:
+                            continue
+                        
                         ox0,oy0,area,slope,eccentricity = draw_point[:5]
                         
                         if eccentricity <= MINIMUM_ECCENTRICITY:

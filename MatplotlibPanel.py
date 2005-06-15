@@ -85,8 +85,13 @@ class PlotPanel(wxPanel):
         
     def set_points(self,points):
         if ENABLED:
-            zp = zip(*points)
-            self.lines[0].set_data(zp[0],zp[1])
+            xs = []
+            ys = []
+            for pt in points:
+                if pt[9]: # if found_anything:
+                    xs.append( pt[0] )
+                    ys.append( pt[1] )
+            self.lines[0].set_data(xs,ys)
 
     def draw(self):
         if ENABLED:

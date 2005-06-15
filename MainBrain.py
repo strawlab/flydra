@@ -122,8 +122,8 @@ def get_best_realtime_data():
     best_realtime_data = None
     return data 
 
-def DEBUG():
-    print 'line',sys._getframe().f_back.f_lineno,', thread', threading.currentThread()
+def DEBUG(msg=''):
+    print msg,'line',sys._getframe().f_back.f_lineno,', thread', threading.currentThread()
     #for t in threading.enumerate():
     #    print '   ',t
 
@@ -420,11 +420,17 @@ class CoordReceiver(threading.Thread):
                             print '  WARNING: frame data loss %s'%(cam_id,) # (or UDP out-of-order)
                         self.last_framenumbers_skip[cam_idx]=framenumber
                         start=header_size
-                        for i in range(n_pts):
-                            end=start+pt_size
-                            x,y,area,slope,eccentricity,p1,p2,p3,p4 = struct.unpack(pt_fmt,data[start:end])
-                            points.append( (x,y,area,slope,eccentricity, p1,p2,p3,p4) )
-                            start=end
+                        if n_pts:
+                            # valid points
+                            for i in range(n_pts):
+                                end=start+pt_size
+                                x,y,area,slope,eccentricity,p1,p2,p3,p4 = struct.unpack(pt_fmt,data[start:end])
+                                points.append( (x,y,area,slope,eccentricity, p1,p2,p3,p4,True) )
+                                start=end
+                        else:
+                            # no points found
+                            end = start
+                            points.append( (nan,nan,nan,nan,nan,nan,nan,nan,nan,False) )
                         data = data[end:]
 
                         # -----------------------------------------------
@@ -450,7 +456,8 @@ class CoordReceiver(threading.Thread):
                         corrected_framenumber = framenumber-self.framenumber_offsets[cam_idx]
                         XXX_framenumber = corrected_framenumber
 
-                        if self.main_brain.is_saving_data() or len(getnan(points[0][0])[0]):
+                        #if self.main_brain.is_saving_data() or len(getnan(points[0][0])[0]):
+                        if self.main_brain.is_saving_data():
                             # Save 2D data (even when no point found) to allow
                             # temporal correlation of movie frames to 2D data.
                             deferred_2d_data.append((absolute_cam_no, # defer saving to later
@@ -490,7 +497,7 @@ class CoordReceiver(threading.Thread):
                     num_cams_arrived = len(data_dict)
                     d2 = {} # old "good" points will go in here
                     for cam_id, PT in data_dict.iteritems():
-                        if PT[0] > -0.9: # only use found points
+                        if PT[9]: # only use if found_anything
                             d2[cam_id] = PT
                     num_good_images = len(d2)
                     if num_good_images < 2:
@@ -561,7 +568,7 @@ class CoordReceiver(threading.Thread):
                             save_points = []
                             for cam_id in k:
                                 pt = data_dict[cam_id]
-                                if len(getnan(pt[:2])[0]):
+                                if not pt[9]: # found_anything
                                     save_pt = nan, nan, nan
                                     id = 0
                                 else:
@@ -1100,8 +1107,8 @@ class MainBrain(object):
         finally:
             calib_data_lock.release()
 
-        IdMat = nx.transpose(IdMat)
-        points = nx.transpose(points)
+        IdMat = nx.transpose(nx.array(IdMat))
+        points = nx.transpose(nx.array(points))
         print 'saving %d points to %s'%(points.shape[1],self.calib_dir)
         save_ascii_matrix(os.path.join(self.calib_dir,'IdMat.dat'),IdMat)
         save_ascii_matrix(os.path.join(self.calib_dir,'points.dat'),points)

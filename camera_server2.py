@@ -232,6 +232,8 @@ class GrabClass(object):
               
                 n_pts = len(points)
                 # XXX could speed this with a join operation I think
+                if not found_anything:
+                    n_pts = 0
                 data = struct.pack('<dli',timestamp,framenumber,n_pts)
                 for i in range(n_pts):
                     data = data + struct.pack(pt_fmt,*points[i])
@@ -247,8 +249,8 @@ class GrabClass(object):
                     lbrt = self.new_roi_data
                     self.new_roi_data = None
                     l,b,r,t=lbrt
-                    w = r-l
-                    h = t-b
+                    w = r-l+1
+                    h = t-b+1
                     self.realtime_analyzer.roi = lbrt
                     print 'camera setting size to',w,h
                     print 'camera setting offset to',l,b

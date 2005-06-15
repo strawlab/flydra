@@ -40,14 +40,14 @@ cdef void CHK( ipp.IppStatus errval ):
     # API cannot be made.  (This code is executed when we have
     # released the GIL.)
     if errval != 0:
-        c_lib.printf("ERROR on CHK!\n")
+        c_lib.printf("ERROR on CHK! (May not have GIL, cannot raise exception.)\n")
         c_lib.exit(1)
 
 cdef void SET_ERR( int errval ):
     # This is rather crude at the moment because calls to the Python C
     # API cannot be made.  (This code is executed when we have
     # released the GIL.)
-    c_lib.printf("SET_ERR called!\n")
+    c_lib.printf("SET_ERR called! (May not have GIL, cannot raise exception.)\n")
     c_lib.exit(2)
 
 # end of IPP-requiring code
@@ -265,7 +265,7 @@ cdef class RealtimeAnalyzer:
         CHK( ipp.ippiMaxIndx_8u_C1R(
             (self.im2 + self._bottom*self.im2_step + self._left), self.im2_step,
             self._roi_sz, &max_val, &self.index_x,&self.index_y))
-
+        
         if use_roi2:
             # find mini-ROI for further analysis (defined in non-ROI space)
             left2 = self.index_x - self._roi2_radius + self._left
@@ -398,6 +398,7 @@ cdef class RealtimeAnalyzer:
             found_anything = True
         else:
             found_anything = False
+
         return [ (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4) ], found_anything, orientation # XXX orientation is hack
 
     def get_working_image(self):
