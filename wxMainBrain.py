@@ -42,6 +42,7 @@ except NameError: #wxSound not in some versions of wx
 
 class wxMainBrainApp(wxApp):
     def OnInit(self,*args,**kw):
+        self.pass_all_keystrokes = False
         wxInitAllImageHandlers()
         frame = wxFrame(None, -1, "Flydra Main Brain",size=(650,600))
 
@@ -216,6 +217,11 @@ class wxMainBrainApp(wxApp):
         return True
 
     def OnKeyDown(self, event):
+        if self.pass_all_keystrokes:
+            # propagate event up the chain...
+            event.Skip()
+            return
+
         keycode = event.GetKeyCode()
         if not (27 < keycode < 256):
             # propagate event up the chain...
@@ -664,11 +670,13 @@ class wxMainBrainApp(wxApp):
                            defaultPath = os.environ.get('HOME','')
                            )
         try:
+            self.pass_all_keystrokes = True
             if dlg.ShowModal() == wxID_OK:
                 calib_dir = dlg.GetPath()
                 doit = True
         finally:
             dlg.Destroy()
+            self.pass_all_keystrokes = False
         if doit:
             self.main_brain.load_calibration(calib_dir)
             cal_status_check = XRCCTRL(self.tracking_panel,
@@ -729,21 +737,25 @@ class wxMainBrainApp(wxApp):
         dlg=wxTextEntryDialog(self.frame, 'What interval should the display be updated at (msec)?',
                               'Set display update interval',str(self.update_interval))
         try:
+            self.pass_all_keystrokes = True            
             if dlg.ShowModal() == wxID_OK:
                 self.update_interval = int(dlg.GetValue())
                 self.timer.Start(self.update_interval)
         finally:
             dlg.Destroy()
+            self.pass_all_keystrokes = False
 
     def OnSetTimer2(self, event):
         dlg=wxTextEntryDialog(self.frame, 'What interval should raw frames be grabbed (msec)?',
                               'Set display update interval',str(self.update_interval2))
         try:
+            self.pass_all_keystrokes = True            
             if dlg.ShowModal() == wxID_OK:
                 self.update_interval2 = int(dlg.GetValue())
                 self.timer2.Start(self.update_interval2)
         finally:
             dlg.Destroy()
+            self.pass_all_keystrokes = False            
 
     def OnSetROI(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
@@ -771,6 +783,7 @@ class wxMainBrainApp(wxApp):
         EVT_BUTTON(dlg_ok, dlg_ok.GetId(),
                    OnROIOK)
         try:
+            self.pass_all_keystrokes = True            
             if dlg.ShowModal() == wxID_OK:
                 l,b,r,t = dlg.left,dlg.bottom,dlg.right,dlg.top
                 lbrt = l,b,r,t
@@ -780,6 +793,7 @@ class wxMainBrainApp(wxApp):
                 self.cam_image_canvas.set_lbrt(cam_id,lbrt)
         finally:
             dlg.Destroy()
+            self.pass_all_keystrokes = False
 
     def attach_and_start_main_brain(self,main_brain):
         self.main_brain = main_brain
@@ -800,11 +814,13 @@ class wxMainBrainApp(wxApp):
                             wildcard = '*.cfg',
                             )
         try:
+            self.pass_all_keystrokes = True            
             if dlg.ShowModal() == wxID_OK:
                 open_filename = dlg.GetPath()
                 doit = True
         finally:
             dlg.Destroy()
+            self.pass_all_keystrokes = False            
         if doit:
             fd = open(open_filename,'rb')
             buf = fd.read()
@@ -822,9 +838,11 @@ class wxMainBrainApp(wxApp):
                                         '%s: %s'%(x.__class__,x),
                                         'Error', wxOK | wxICON_ERROR )
                 try:
+                    self.pass_all_keystrokes = True
                     dlg2.ShowModal()
                 finally:
                     dlg2.Destroy()
+                    self.pass_all_keystrokes = False
                     
     def OnSaveCamConfig(self, event):
         all_params = self.main_brain.get_all_params()
@@ -837,11 +855,13 @@ class wxMainBrainApp(wxApp):
                             wildcard = '*.cfg',
                             )
         try:
+            self.pass_all_keystrokes = True            
             if dlg.ShowModal() == wxID_OK:
                 save_filename = dlg.GetPath()
                 doit = True
         finally:
             dlg.Destroy()
+            self.pass_all_keystrokes = False
         if doit:
             fd = open(save_filename,'wb')
             fd.write(repr(all_params))
@@ -854,20 +874,25 @@ class wxMainBrainApp(wxApp):
                            defaultPath = os.environ.get('HOME',''),
                            )
         try:
+            self.pass_all_keystrokes = True
             if dlg.ShowModal() == wxID_OK:
                 calib_dir = dlg.GetPath()
                 doit = True
         finally:
             dlg.Destroy()
+            self.pass_all_keystrokes = False            
         if doit:
             self.main_brain.start_calibrating(calib_dir)
             dlg = wxMessageDialog( self.frame, 'Acquiring calibration points',
                                    'calibration', wxOK | wxICON_INFORMATION )
             try:
+                self.pass_all_keystrokes = True
                 dlg.ShowModal()
             finally:
                 self.main_brain.stop_calibrating()
                 dlg.Destroy()
+                self.pass_all_keystrokes = False
+
 
     def _on_common_quit(self):
         self.timer.Stop()
@@ -888,7 +913,7 @@ class wxMainBrainApp(wxApp):
         #print 'in OnWindowClose'
         self._on_common_quit()
         #print 'stopped timers'
-        print "why doesn't the app stop now?"
+        #print "why doesn't the app stop now?"
         event.Skip()
         #frame = sys._getframe()
         #traceback.print_stack(frame)
