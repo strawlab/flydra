@@ -66,15 +66,11 @@
 
 void fill_time_string( char string[] );
 
-/* save data points for nframes, then calculate center of rotation from those data points */
-void start_center_calculation( int nframes );
-void end_center_calculation( double *x_center, double *y_center );
-void update_center_calculation( double new_x_pos, double new_y_pos, double new_orientation );
-
 /* some utility functions */
 void unwrap( double *th1, double *th2 );
 double disambiguate( double x, double y, double center_x, double center_y );
 void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f, int max_x, int max_y );
+void fit_circle( double *x_data, double *y_data, int n_data, double *x_cent, double *y_cent );
 
 /* interface to analog output */
 void init_analog_output( void );

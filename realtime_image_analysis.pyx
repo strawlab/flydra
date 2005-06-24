@@ -505,8 +505,7 @@ cdef class RealtimeAnalyzer:
     def rotation_calculation_init(self, int n_rot_samples):
         # start of IPP-requiring code
         if self.arena_controller is not None:
-            self.arena_controller.start_center_calculation( n_rot_samples )
-            self.arena_controller.rotation_calculation_init()
+            self.arena_controller.rotation_calculation_init( n_rot_samples )
         # end of IPP-requiring code
         return
 
@@ -516,8 +515,7 @@ cdef class RealtimeAnalyzer:
         if self.arena_controller is not None:
             x0 = x0 - self._left
             y0 = y0 - self._bottom
-            self.arena_controller.update_center_calculation( x0, y0, orientation )
-            self.arena_controller.rotation_update()
+            self.arena_controller.rotation_update( x0, y0, orientation )
         # end of IPP-requiring code
         return
 
@@ -525,8 +523,7 @@ cdef class RealtimeAnalyzer:
         # start of IPP-requiring code
         cdef double new_x_cent, new_y_cent
         if self.arena_controller is not None:
-            self.arena_controller.end_center_calculation( &new_x_cent, &new_y_cent )
-            self.arena_controller.rotation_calculation_finish( new_x_cent, new_y_cent )
+            self.arena_controller.rotation_calculation_finish()
         # end of IPP-requiring code
         return
         

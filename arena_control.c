@@ -12,6 +12,9 @@ FILE *datafile;
 
 int calcing = 0;
 double center_x = -1, center_y = -1;
+double *x_pos_calc, *y_pos_calc;
+int curr_frame = -1;
+FILE *calibfile;
 
 /****************************************************************
 ** initialize ***************************************************
@@ -118,13 +121,14 @@ void arena_finish( void )
 /****************************************************************
 ** rotation init ************************************************
 ****************************************************************/
-long rotation_calculation_init( void )
+long rotation_calculation_init( int nframes )
 {
   long errval;
   int serial_port;
   char cmd[8];
+  char timestring[64], filename[64];
 
-  if( calcing ) return 0.0;
+  if( calcing ) return 0;
 
   /* open serial port */
   errval = sc_open_port( &serial_port, SC_COMM_PORT );
@@ -160,6 +164,17 @@ long rotation_calculation_init( void )
   /* close serial port */
   sc_close_port( &serial_port );
 
+  /* allocate for saving data */
+  fill_time_string( timestring );
+  sprintf( filename, "%scalib%s.dat", _ARENA_CONTROL_data_prefix_, timestring );
+  calibfile = fopen( filename, "w" );
+
+  printf( "==saving center calculation to %s\n", filename );
+
+  x_pos_calc = (double*)malloc( nframes * sizeof( double ) );
+  y_pos_calc = (double*)malloc( nframes * sizeof( double ) );
+  curr_frame = 0;
+
   calcing = 1;
 
   return 0;
@@ -168,7 +183,7 @@ long rotation_calculation_init( void )
 /****************************************************************
 ** rotation finish **********************************************
 ****************************************************************/
-void rotation_calculation_finish( double new_x_cent, double new_y_cent )
+void rotation_calculation_finish( void )
 {
   long errval;
   int serial_port;
@@ -200,9 +215,16 @@ void rotation_calculation_finish( double new_x_cent, double new_y_cent )
 
   /* close serial port */
   sc_close_port( &serial_port );
+ 
+  /* calculate center of circle */
+  fit_circle( x_pos_calc, y_pos_calc, curr_frame, &center_x, &center_y );
 
-  center_x = new_x_cent;
-  center_y = new_y_cent;
+  free( x_pos_calc );
+  free( y_pos_calc );
+  curr_frame = -1;
+
+  fclose( calibfile );
+  printf( "==done calculating center %.4lf %.4lf\n", center_x, center_y );
 
   calcing = 0;
 }
@@ -210,17 +232,23 @@ void rotation_calculation_finish( double new_x_cent, double new_y_cent )
 /****************************************************************
 ** rotation update **********************************************
 ****************************************************************/
-void rotation_update( void )
+void rotation_update( double fly_x_pos, double fly_y_pos, double new_orientation )
 {
-#if BIAS_AVAILABLE == NO
-  static double new_pos_x_f = 0.0, new_pos_y_f = 0.0;
   int new_pos_x, new_pos_y;
+  static double new_pos_x_f = 0.0, new_pos_y_f = 0.0; /* pattern variables */
+#if BIAS_AVAILABLE == NO
 
   new_pos_x_f -= 0.20; /* counterclockwise turn */
   new_pos_y_f += 0.35;
   round_position( &new_pos_x, &new_pos_x_f, &new_pos_y, &new_pos_y_f, NPIXELS, CALIB_PATTERN_DEPTH );
   set_position_analog( new_pos_x, NPIXELS, new_pos_y, CALIB_PATTERN_DEPTH );
 #endif
+  fprintf( calibfile, "%lf\t%lf\t%lf\t%lf\t%lf\n", fly_x_pos, fly_y_pos, 
+      new_orientation, new_pos_x_f, new_pos_y_f );
+
+  x_pos_calc[curr_frame] = fly_x_pos;
+  y_pos_calc[curr_frame] = fly_y_pos;
+  curr_frame++;
 }
 
 /****************************************************************
@@ -245,14 +273,16 @@ void arena_update( double x, double y, double orientation,
   /* change to best match expected angle */
   while( orientation < theta_exp - PI/4 ) orientation += PI/2;
   while( orientation >= theta_exp + PI/4 ) orientation -= PI/2;
-  /* This gives output orientations between -45 and 405,
-     which kind of sucks but all data was collected this way
-     before 4/13/05 when I noticed it, so should continue?
+  /* Before 4/13/05, this gave output orientations between
+     and 405, which kind of sucks.
      It seems like it only matters when absolute orientation
      is an issue (not relative orientation) and the rounding
      done below should re-wrap it into 0<x<360.  It's just
      a pain for analysis when absolute orientation matters
      (like determining fly/camera offset). */
+  /* return to [0 2*pi) */
+  while( orientation < 0 ) orientation += 2*PI;
+  while( orientation >= 2*PI ) orientation -= 2*PI;
 
   /* find correct pattern position given current state */
   set_patt_position( orientation, timestamp, framenumber, &new_pos_x_f, 

@@ -8,10 +8,6 @@
 
 comedi_t *cdi_dev = NULL;
 
-double *x_pos_calc, *y_pos_calc;
-int curr_frame = -1;
-FILE *calibfile;
-
 /****************************************************************
 ** fill_time string *********************************************
 ****************************************************************/
@@ -37,64 +33,6 @@ void fill_time_string( char string[] )
 }
 
 /****************************************************************
-** start_center_calculation *************************************
-****************************************************************/
-void start_center_calculation( int nframes )
-{
-  char timestring[64], filename[64];
-
-  fill_time_string( timestring );
-  sprintf( filename, "%scalib%s.dat", _ARENA_CONTROL_data_prefix_, timestring );
-  calibfile = fopen( filename, "w" );
-
-  printf( "==saving center calculation to %s\n", filename );
-
-  x_pos_calc = (double*)malloc( nframes * sizeof( double ) );
-  y_pos_calc = (double*)malloc( nframes * sizeof( double ) );
-  curr_frame = 0;
-}
-
-/****************************************************************
-** end_center_calculation ***************************************
-****************************************************************/
-void end_center_calculation( double *x_center, double *y_center )
-{
-  int i;
-  double x_min = 9999.9, x_max = -1.0;
-  double y_min = 9999.9, y_max = -1.0;
-
-  /* mean could be skewed; instead use middle, assuming a circle */
-  for( i = 0; i < curr_frame; i++ )
-  {
-    if( x_pos_calc[i] < x_min ) x_min = x_pos_calc[i];
-    else if( x_pos_calc[i] > x_max ) x_max = x_pos_calc[i];
-    if( y_pos_calc[i] < y_min ) y_min = y_pos_calc[i];
-    else if( y_pos_calc[i] > y_max ) y_max = y_pos_calc[i];
-  }
-  *x_center = (x_max - x_min)/2 + x_min;
-  *y_center = (y_max - y_min)/2 + y_min;
-
-  free( x_pos_calc );
-  free( y_pos_calc );
-  curr_frame = -1;
-
-  fclose( calibfile );
-  printf( "==done calculating center %.4lf %.4lf\n", *x_center, *y_center );
-}
-
-/****************************************************************
-** update_center_calculation ************************************
-****************************************************************/
-void update_center_calculation( double new_x_pos, double new_y_pos, double new_orientation )
-{
-  fprintf( calibfile, "%lf\t%lf\t%lf\n", new_x_pos, new_y_pos, new_orientation );
-
-  x_pos_calc[curr_frame] = new_x_pos;
-  y_pos_calc[curr_frame] = new_y_pos;
-  curr_frame++;
-}
-
-/****************************************************************
 ** unwrap *******************************************************
 ****************************************************************/
 void unwrap( double *th1, double *th2 )
@@ -112,7 +50,7 @@ void unwrap( double *th1, double *th2 )
 ** disambiguate *************************************************
 ****************************************************************/
 double disambiguate( double x, double y, double center_x, double center_y )
-/* orientation is returned with a 90-degree ambiguity from c_fit_params() */
+/* orientation has an inherent 180-degree ambiguity */
 {
   double theta1, theta2, theta3, theta4, theta5, theta6, theta7, theta8;
   double th_dist12, th_dist34, th_dist56, th_dist78;
@@ -125,7 +63,7 @@ double disambiguate( double x, double y, double center_x, double center_y )
   unwrap( &theta1, &theta2 );
   th_dist12 = fabs( theta1 - theta2 );
 
-  /* try different symmetries -- acos and asin are ambiguous, too */
+  /* try different symmetries -- acos and asin are 90-degree ambiguous */
   theta3 = 2*PI - theta1;
   theta4 = theta2;
   unwrap( &theta3, &theta4 );
@@ -150,6 +88,7 @@ double disambiguate( double x, double y, double center_x, double center_y )
     theta_f = (theta5 + theta6) / 2;
   else theta_f = (theta7 + theta8) / 2;
 
+  /* ensure it's on [0 2*pi) */
   while( theta_f < 0 ) theta_f += 2*PI;
   while( theta_f >= 2*PI ) theta_f -= 2*PI;
 
@@ -161,7 +100,13 @@ double disambiguate( double x, double y, double center_x, double center_y )
 ****************************************************************/
 void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f, int max_x, int max_y )
 {
-  *pos_x = *pos_x_f - (int)*pos_x_f >= 0.5? (int)*pos_x_f+1 : (int)*pos_x_f;
+  /* set int_x = round( double_x ) */
+  if( *pos_x_f >= 0.0 )
+    *pos_x = *pos_x_f - (int)*pos_x_f >= 0.5? (int)*pos_x_f+1 : (int)*pos_x_f;
+  else
+    *pos_x = *pos_x_f - (int)*pos_x_f <= -0.5? (int)*pos_x_f-1 : (int)*pos_x_f;
+
+  /* make sure int_x is on [0 max_x), wrap double_x if int_x wraps */
   while( *pos_x >= max_x )
   {
     *pos_x -= max_x;
@@ -172,9 +117,11 @@ void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f, i
     *pos_x += max_x;
     *pos_x_f += (double)max_x;
   }
-  *pos_x = *pos_x_f - (int)*pos_x_f >= 0.5? (int)*pos_x_f+1 : (int)*pos_x_f;
 
-  *pos_y = *pos_y_f - (int)*pos_y_f >= 0.5? (int)*pos_y_f+1 : (int)*pos_y_f;
+  if( *pos_y_f >= 0.0 )
+    *pos_y = *pos_y_f - (int)*pos_y_f >= 0.5? (int)*pos_y_f+1 : (int)*pos_y_f;
+  else
+    *pos_y = *pos_y_f - (int)*pos_y_f <= -0.5? (int)*pos_y_f-1 : (int)*pos_y_f;
   while( *pos_y >= max_y )
   {
     *pos_y -= max_y;
@@ -185,7 +132,53 @@ void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f, i
     *pos_y += max_y;
     *pos_y_f += (double)max_y;
   }
-  *pos_y = *pos_y_f - (int)*pos_y_f >= 0.5? (int)*pos_y_f+1 : (int)*pos_y_f;
+}
+
+/****************************************************************
+** fit_circle ***************************************************
+****************************************************************/
+void fit_circle( double *x_data, double *y_data, int n_data, double *x_cent, double *y_cent )
+{
+  double sum_x = 0.0, sum_y = 0.0;
+  double sum_sq_x = 0.0, sum_sq_y = 0.0;
+  double a,b,c,d,e,f;
+  int i;
+
+  /* least-squares fit of a circle to data */
+/* from matlab fit_circle.m
+for i=1:n,
+	a = a + data(1,i) * (2*n*data(1,i) - 2*sum_x);
+	b = b + data(2,i) * (2*n*data(1,i) - 2*sum_x);
+	c = c + data(1,i) * (2*n*data(2,i) - 2*sum_y);
+	d = d + data(2,i) * (2*n*data(2,i) - 2*sum_y);
+	e = e + data(1,i) * (n*data(1,i)^2 + n*data(2,i)^2 - sum_sq_x - sum_sq_y);
+	f = f + data(2,i) * (n*data(1,i)^2 + n*data(2,i)^2 - sum_sq_x - sum_sq_y);
+end
+x0 = (d*e - c*f) / (a*d - b*c);
+y0 = (a*f - b*e) / (a*d - b*c);
+r = sqrt( (1/n) * sum( (data(1,:) - x0).^2 + (data(2,:) - y0).^2 ) );
+*/
+  for( i = 0; i < n_data; i++ )
+  {
+    sum_x += x_data[i];
+    sum_sq_x += x_data[i] * x_data[i];
+    sum_y += y_data[i];
+    sum_sq_y += y_data[i] * y_data[i];
+  }
+
+  a=b=c=d=e=f = 0.0;
+  for( i = 0; i < n_data; i++ )
+  {
+    a += x_data[i] * (2*n_data*x_data[i] - 2*sum_x);
+    b += y_data[i] * (2*n_data*x_data[i] - 2*sum_x);
+    c += x_data[i] * (2*n_data*y_data[i] - 2*sum_y);
+    d += y_data[i] * (2*n_data*y_data[i] - 2*sum_y);
+    e += x_data[i] * (n_data*x_data[i]*x_data[i] + n_data*y_data[i]*y_data[i] - sum_sq_x - sum_sq_y);
+    f += y_data[i] * (n_data*x_data[i]*x_data[i] + n_data*y_data[i]*y_data[i] - sum_sq_x - sum_sq_y);
+  }
+
+  *x_cent = (d*e - c*f) / (a*d - b*c);
+  *y_cent = (a*f - b*e) / (a*d - b*c);
 }
 
 /****************************************************************
