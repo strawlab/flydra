@@ -4,7 +4,7 @@ import threading
 import time
 import sys
 
-RMT_HOSTNAME = '192.168.1.151'
+RMT_HOSTNAME = '192.168.1.199'
 RMT_PORT = 31422
 SERVER_PORT = 31423
 
@@ -26,6 +26,7 @@ def server_func():
     
     timeout = 5.0
 
+    last_i = 0
     while 1:
         try:
             in_ready, out_ready, exc_ready = select_select( listen_sockets,
@@ -48,11 +49,18 @@ def server_func():
             newdata, addr = sockobj.recvfrom(4096)
             recvtime = time_func()
             istr,timestr = newdata.split()
+            i = int(istr)
             sendtime = float(timestr)
             #print sendtime, recvtime
             tdelta = recvtime-sendtime
-            print '%s: %g msec'%(istr,tdelta*1000.0)
+            print '%d: %g msec'%(i,tdelta*1000.0)
             #print addr,':',newdata
+            if i-last_i != 1:
+                print '*******SKIP:',i
+            if tdelta > 0.005:
+                print '            tdelta > 5 msec'
+            last_i = i
+            print 'last_i',last_i
 
 server_thread = threading.Thread(target=server_func)
 server_thread.setDaemon(True)
