@@ -2,12 +2,16 @@ import socket
 import select
 import threading
 import time
+import sys
 
 RMT_HOSTNAME = '192.168.1.151'
 RMT_PORT = 31422
 SERVER_PORT = 31423
 
-time_func = time.clock
+if sys.platform.startswith('win'):
+    time_func = time.clock
+else:
+    time_func = time.time
 
 def server_func():
     hostname = ''
