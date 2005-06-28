@@ -19,6 +19,7 @@ def server_func():
     timeout = 5.0
 
     print 'listening for connections...'
+    outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     
     while 1:
         try:
@@ -43,10 +44,9 @@ def server_func():
             istr,server_port,timestr = newdata.split()
             server_port=int(server_port)
 
-            outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             outstr = istr + ' ' + timestr
             outgoing_UDP_socket.sendto(outstr,(addr[0],server_port))
-            outgoing_UDP_socket.close()
+    outgoing_UDP_socket.close()
 
             #print addr,':',newdata            
 
