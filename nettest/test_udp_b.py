@@ -2,8 +2,11 @@ import socket
 import select
 import threading
 import time
+import struct
+import sys
 
 RMT_PORT = 31422
+SERVER_PORT = 31423
 
 def server_func():
     hostname = ''
@@ -41,11 +44,12 @@ def server_func():
             continue
         for sockobj in in_ready:
             newdata, addr = sockobj.recvfrom(4096)
-            istr,server_port,timestr = newdata.split()
-            server_port=int(server_port)
+            outstr = newdata + struct.pack('d',time.time())
+##            istr,server_port,timestr = newdata.split()
+##            server_port=int(server_port)
 
-            outstr = istr + ' ' + timestr
-            outgoing_UDP_socket.sendto(outstr,(addr[0],server_port))
+##            outstr = istr + ' ' + timestr
+            outgoing_UDP_socket.sendto(outstr,(addr[0],SERVER_PORT))
     outgoing_UDP_socket.close()
 
             #print addr,':',newdata            
