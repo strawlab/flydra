@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 # $Id$
-import os
-os.environ['__GL_FSAA_MODE']='5' # 4x gaussian multisampling on geForce3 linux
-
 import numarray as nx
 import math
 from wxPython.wx import *
@@ -12,17 +9,10 @@ from vtk.util.colors import tomato, banana, azure
 import time, sys, threading, socket, struct
 import flydra.reconstruct as reconstruct
 
-#typ = 'best'
-typ = 'fastest'
-
 hostname = socket.gethostbyname('mainbrain')
 sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-FASTEST_DATA_PORT = 28931
-BEST_DATA_PORT = 28932
-if typ == 'best':
-    port = BEST_DATA_PORT
-elif typ == 'fastest':
-    port = FASTEST_DATA_PORT
+
+port = 28931
 
 listen_socket = sockobj.bind(( hostname, port))
 print 'listening on',hostname,port
@@ -34,7 +24,7 @@ class Listener(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
         self.quit_now = threading.Event()
-        self.is_done = threading.Event()
+##        self.is_done = threading.Event()
         self.fmt = '<ifffffffffdi'
     def run(self):
         global incoming_data_lock, incoming_data
@@ -51,15 +41,15 @@ class Listener(threading.Thread):
             incoming_data.append( (corrected_framenumber, (x,y,z), line3d, timestamp, n_cams ))
             incoming_data_lock.release()
                 
-        self.is_done.set()
+##        self.is_done.set()
     def quit(self):
         self.quit_now.set()
-        # send packet to self (allow blocking call to quit)
-        tmp_socket=socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        tmp_socket.sendto('x'*struct.calcsize(self.fmt),
-                          ( hostname, port))
-        self.is_done.wait(0.1)
-        print
+##        # send packet to self (allow blocking call to quit)
+##        tmp_socket=socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+##        tmp_socket.sendto('x'*struct.calcsize(self.fmt),
+##                          ( hostname, port))
+##        self.is_done.wait(0.1)
+##        print
             
 class App(wxApp):
     def OnInit(self,*args,**kw):
@@ -289,6 +279,7 @@ def print_cam_props(camera):
     
 def main():
     listener = Listener()
+    listener.setDaemon(True) # don't let this thread keep app alive
     listener.start()
     
     # initialize GUI
