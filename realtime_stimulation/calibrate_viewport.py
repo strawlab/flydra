@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# $Id: $
+# $Id$
 from __future__ import division
 import VisionEgg
 VisionEgg.start_default_logging(); VisionEgg.watch_exceptions()
@@ -29,7 +29,7 @@ rightwall = nx.array([[1000,0,0],
                       [1500,0,0]])
 leftwall = rightwall + nx.array([0,305,0])
 
-texture = Texture('grid.gif')
+texture = Texture('grid-shrunk.gif')
 
 wall_x = (leftwall[2][0]-leftwall[0][0])
 wall_z = (leftwall[2][2]-leftwall[0][2])
