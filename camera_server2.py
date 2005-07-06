@@ -222,6 +222,7 @@ class GrabClass(object):
                     self.realtime_analyzer.rotation_calculation_init( n_rot_samples )
                     
                 if rot_frame_number>=0:
+                    find_rotation_center_start_clear()
                     pt = points[0]
                     x0, y0 = pt[0],pt[1]
                     self.realtime_analyzer.rotation_update(x0,y0,orientation)

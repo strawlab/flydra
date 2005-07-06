@@ -56,6 +56,8 @@ double disambiguate( double x, double y, double center_x, double center_y )
   double th_dist12, th_dist34, th_dist56, th_dist78;
   double theta_f;
 
+  if( center_x == 0.0 || center_y == 0.0 ) return 0.0;
+
   /* find expected angle given center of mass */
   /* x = r*cos(t); y = r*sin(t) */
   theta1 = acos( (x - center_x) / DIST( x,y, center_x,center_y ) );
@@ -177,8 +179,19 @@ r = sqrt( (1/n) * sum( (data(1,:) - x0).^2 + (data(2,:) - y0).^2 ) );
     f += y_data[i] * (n_data*x_data[i]*x_data[i] + n_data*y_data[i]*y_data[i] - sum_sq_x - sum_sq_y);
   }
 
+  if( a*d == b*c ) printf( "**error fitting circle -- divide by zero\n" );
   *x_cent = (d*e - c*f) / (a*d - b*c);
   *y_cent = (a*f - b*e) / (a*d - b*c);
+  if( (unsigned long)*x_cent == (unsigned long)0x00000000 )
+  {
+    printf( "**warning: x center = nan\n" );
+    *x_cent = 0.0;
+  }
+  if( (unsigned long)*y_cent == (unsigned long)0x00000000 )
+  {
+    printf( "**warning: y center = nan\n" );
+    *y_cent = 0.0;
+  }
 }
 
 /****************************************************************

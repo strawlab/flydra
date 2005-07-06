@@ -274,7 +274,7 @@ void arena_update( double x, double y, double orientation,
   while( orientation < theta_exp - PI/4 ) orientation += PI/2;
   while( orientation >= theta_exp + PI/4 ) orientation -= PI/2;
   /* Before 4/13/05, this gave output orientations between
-     and 405, which kind of sucks.
+     -45 and 405, which kind of sucks.
      It seems like it only matters when absolute orientation
      is an issue (not relative orientation) and the rounding
      done below should re-wrap it into 0<x<360.  It's just

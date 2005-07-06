@@ -6,7 +6,7 @@
 #include "serial_comm/serial_comm.h"
 #include "arena_utils.h"
 
-/* full object w/ varying (const.) velocity, concenctric squares with const. velocity */
+/* parametric expansions -- diagonal, horizontal, vertical, full */
 
 #define THETA_DEG_FROM_R_A_V_T( r, a, v, t ) ((2 * atan( r / (v*t) )) * 180/PI) /* assuming a=0 */
 #define POS_Y_F_FROM_THETA( theta ) (theta * ((ARENA_PATTERN_DEPTH - 1.0)/180.0))
@@ -59,13 +59,11 @@ void set_patt_position( double orientation, double timestamp, long framenumber,
   static int cur_set = 0;
   static int expanding = 0;
   /* see /home/jbender/matlab/anal/calc_expanding_obj4.m */
-  const double time_to_collision = -650; /* ms, initial */
+  const double time_to_collision = -500; /* ms, initial */
   double theta;
   static double theta_init;
   const double r = 10.0		/100.0;		/* cm -> m */
-/*  const double v = -1.5		/1000.0;	/* m/s -> m/ms */
-  const double v_vals[3] = {-1.0,-2.0,-1.5};	/* m/s */
-  static double v;
+  const double v = -1.5		/1000.0;	/* m/s -> m/ms */
   const double a = 0.0		/1000000.0;	/* m/s^2 -> m/ms^2 */
   static double t;
   double x_calc;
@@ -88,8 +86,7 @@ void set_patt_position( double orientation, double timestamp, long framenumber,
     if( sc_open_port( &serial_port, SC_COMM_PORT ) == SC_SUCCESS_RC )
     {
       /* set pattern id to expt. pattern */
-      if( cur_set < 2 )	{	cmd[0] = 2; cmd[1] = 3; cmd[2] = 2; /* full square */ }
-      else {			cmd[0] = 2; cmd[1] = 3; cmd[2] = 3; /* conc. squares */ }
+      cmd[0] = 2; cmd[1] = 3; cmd[2] = cur_set + 2;
       sc_send_cmd( &serial_port, cmd, 3 );
       /* start pattern */
       cmd[0] = 1; cmd[1] = 32;
@@ -101,9 +98,6 @@ void set_patt_position( double orientation, double timestamp, long framenumber,
     
     t = time_to_collision;
     expanding = 0;
-    if( cur_set < 2 ) v = v_vals[cur_set]; /* variable vel. */
-    else v = v_vals[2]; /* old const vel. */
-    v /= 1000.0; /* -> m/ms */
     theta = theta_init = THETA_DEG_FROM_R_A_V_T( r, a, v, t );
     new_pos_y_f = POS_Y_F_FROM_THETA( theta );
 
@@ -151,7 +145,6 @@ void set_patt_position( double orientation, double timestamp, long framenumber,
 
         /* deg * pixels/deg * pattern_index/pixels = pattern index */
         new_pos_y_f = POS_Y_F_FROM_THETA( theta );
-//printf( "%.1f ", theta );
 
         /* increment time */
         t += avg_frametime * 1000.0;
