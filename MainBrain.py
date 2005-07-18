@@ -28,7 +28,6 @@ calib_points = []
 
 XXX_framenumber = 0
 
-fastest_realtime_data=None
 best_realtime_data=None
 
 try:
@@ -36,22 +35,14 @@ try:
 except:
     hostname = socket.gethostbyname(socket.gethostname())
 
-downstream_hostnames = []
+downstream_hosts = []
 
-use_projector = False
-realtime_display = True
+use_projector = True
 
 if use_projector:
-    projector_hostname = socket.gethostbyname('projector')
-    downstream_hostnames.append(projector_hostname)
-if realtime_display:
-    realtime_display_hostname = hostname
-    downstream_hostnames.append(realtime_display_hostname)
-
-FASTEST_DATA_PORT = 28931
-BEST_DATA_PORT = 28932
-
-if len(downstream_hostnames):
+    downstream_hosts.append( ('192.168.1.199',28931) )
+    
+if len(downstream_hosts):
     outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # 2D data format for PyTables:
@@ -68,6 +59,10 @@ class Info2D(PT.IsDescription):
     p2           = PT.Float32Col(pos=9)
     p3           = PT.Float32Col(pos=10)
     p4           = PT.Float32Col(pos=11)
+
+# allow rapid building of numarray.records.RecArray:
+Info2DColNames = PT.Description(Info2D().columns)._v_names
+Info2DColFormats = [PT.Description(Info2D().columns)._v_stypes[n] for n in Info2DColNames]
 
 class CamSyncInfo(PT.IsDescription):
     cam_id = PT.StringCol(16,pos=0)
@@ -103,18 +98,28 @@ class Info3D(PT.IsDescription):
     
     camns_used = PT.StringCol(32,pos=11)
     mean_dist  = PT.Float32Col(pos=12) # mean 2D reconstruction error
+
+def encode_data_packet( corrected_framenumber,
+                        line3d_valid,
+                        outgoing_data,
+                        min_mean_dist):
+    
+    fmt = '<iBfffffffffdf'
+    packable_data = list(outgoing_data)
+    if not line3d_valid:
+        packable_data[3:9] = 0,0,0,0,0,0
+    packable_data.append( min_mean_dist )
+    data_packet = struct.pack(fmt,
+                              corrected_framenumber,
+                              line3d_valid,
+                              *packable_data)
+    return data_packet
     
 def save_ascii_matrix(filename,m):
     fd=open(filename,mode='wb')
     for row in m:
         fd.write( ' '.join(map(str,row)) )
         fd.write( '\n' )
-
-def get_fastest_realtime_data():
-    global fastest_realtime_data
-    data = fastest_realtime_data
-    fastest_realtime_data = None
-    return data 
 
 def get_best_realtime_data():
     global best_realtime_data
@@ -133,7 +138,7 @@ class DebugLock:
         self._lock = threading.Lock()
         self.verbose = verbose
 
-    def acquire(self):
+    def acquire(self, latency_warn_msec = None):
         if self.verbose:
             print '-='*20
         print '*****',self.name,'request acquire by',threading.currentThread()
@@ -141,8 +146,15 @@ class DebugLock:
             frame = sys._getframe()
             traceback.print_stack(frame)
             print '-='*20
+        tstart = time.time()
         self._lock.acquire()
+        tstop = time.time()
         print '*****',self.name,'acquired by',threading.currentThread()
+        if latency_warn_msec is not None:
+            lat = (tstop-tstart)*1000.0
+            if lat > latency_warn_msec:
+                print '          **** WARNING acquisition time %.1f msec'%lat
+        
         if self.verbose:
             traceback.print_stack(frame)
             print '-='*20
@@ -169,6 +181,7 @@ class CoordReceiver(threading.Thread):
         self.reconstructor = None
 
         self.all_data_lock = threading.Lock()
+        #self.all_data_lock = DebugLock('all_data_lock',verbose=False)
         self.quit_event = threading.Event()
         
         self.max_absolute_cam_nos = -1
@@ -313,7 +326,7 @@ class CoordReceiver(threading.Thread):
 
         
     def run(self):
-        global downstream_hostnames, fastest_realtime_data, best_realtime_data
+        global downstream_hosts, best_realtime_data
         global outgoing_UDP_socket, calib_data_lock, calib_IdMat, calib_points
         global calib_data_lock, XXX_framenumber
 
@@ -335,6 +348,10 @@ class CoordReceiver(threading.Thread):
         
         realtime_coord_dict = {}        
         new_data_framenumbers = sets.Set()
+
+        no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False)
+
+##        remote_fmt = '<iffffffffffd'
 
 ##        tstamp_fd = open('tstamps.bin',mode='wb')
 
@@ -386,8 +403,9 @@ class CoordReceiver(threading.Thread):
                 self._fake_sync_event.clear()
             if not len(in_ready):
                 continue
-            
+
             self.all_data_lock.acquire()
+            #self.all_data_lock.acquire(latency_warn_msec=1.0)
             try:
                 deferred_2d_data = []
                 for sockobj in in_ready:
@@ -409,15 +427,15 @@ class CoordReceiver(threading.Thread):
                     while len(data):
                         header = data[:header_size]
                         if len(header) != header_size:
-                            #print 'incomplete header buffer'
+                            # incomplete header buffer
                             break
                         timestamp, framenumber, n_pts = struct.unpack(header_fmt,header)
                         points = []
                         if len(data) < header_size + n_pts*pt_size:
-                            #print 'incomplete point info'
+                            # incomplete point info
                             break
                         if framenumber-self.last_framenumbers_skip[cam_idx] > 1:
-                            print '  WARNING: frame data loss %s'%(cam_id,) # (or UDP out-of-order)
+                            print '  WARNING: frame data loss %s'%(cam_id,) # (or UDP out-of-order?)
                         self.last_framenumbers_skip[cam_idx]=framenumber
                         start=header_size
                         if n_pts:
@@ -430,7 +448,7 @@ class CoordReceiver(threading.Thread):
                         else:
                             # no points found
                             end = start
-                            points.append( (nan,nan,nan,nan,nan,nan,nan,nan,nan,False) )
+                            points.append( no_point_tuple )
                         data = data[end:]
 
                         # -----------------------------------------------
@@ -462,26 +480,29 @@ class CoordReceiver(threading.Thread):
                             # temporal correlation of movie frames to 2D data.
                             deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                                      corrected_framenumber,
-                                                     timestamp,
-                                                     points[0][0], # x
-                                                     points[0][1], # y
-                                                     points[0][2], # area
-                                                     points[0][3], # slope
-                                                     points[0][4], # eccentricity
-                                                     points[0][5], # p1
-                                                     points[0][6], # p2
-                                                     points[0][7], # p3
-                                                     points[0][8], # p4
-                                                     ))
+                                                     timestamp)
+                                                    +tuple(points[0][:9]))
+##                                                     points[0][0], # x
+##                                                     points[0][1], # y
+##                                                     points[0][2], # area
+##                                                     points[0][3], # slope
+##                                                     points[0][4], # eccentricity
+##                                                     points[0][5], # p1
+##                                                     points[0][6], # p2
+##                                                     points[0][7], # p3
+##                                                     points[0][8], # p4
+##                                                     ))
 
                         # save new frame data
-                        # XXX for now, only attempt 3D reconstruction of 1st point
+                        # XXX for now, only attempt 3D reconstruction of 1st point from each 2D view
                         realtime_coord_dict.setdefault(corrected_framenumber,{})[cam_id]=points[0]
 
                         new_data_framenumbers.add( corrected_framenumber ) # insert into set
 
                     # preserve unprocessed data
                     old_data[sockobj] = data
+
+                finished_corrected_framenumbers = [] # for quick deletion
 
                 # Now we've grabbed all data waiting on network. Now it's
                 # time to calculate 3D info.
@@ -490,35 +511,46 @@ class CoordReceiver(threading.Thread):
                 # on that data.
 
                 for corrected_framenumber in new_data_framenumbers:
-                    if self.reconstructor is None:
-                        # can't do any 3D math without calibration information
-                        break
                     data_dict = realtime_coord_dict[corrected_framenumber]
-                    num_cams_arrived = len(data_dict)
-                    d2 = {} # old "good" points will go in here
-                    for cam_id, PT in data_dict.iteritems():
-                        if PT[9]: # only use if found_anything
-                            d2[cam_id] = PT
-                    num_good_images = len(d2)
-                    if num_good_images < 2:
-                        # no point in dealing with this frame!
-                        continue
-                    #if num_good_images==2 or num_cams_arrived==len(self.cam_ids):
-                    if num_cams_arrived==len(self.cam_ids):
-                        #X, line3d = self.reconstructor.find3d(d2.items())
-                        #cam_ids_used = d2.keys()
+                    ##num_cams_arrived = len(data_dict)
+                    if len(data_dict)==len(self.cam_ids): # all camera data arrived
+                        
+                        # mark for deletion out of data queue
+                        finished_corrected_framenumbers.append( corrected_framenumber )
+
+                        if self.reconstructor is None:
+                            # can't do any 3D math without calibration information
+                            continue
+                            
+                        found_data_dict = {} # old "good" points will go in here
+                        for cam_id, PT in data_dict.iteritems():
+                            if PT[9]: # only use if found_anything
+                                # don't include 'found_anything' variable
+                                found_data_dict[cam_id] = PT[:9] 
+
+                        if len(found_data_dict) < 2:
+                            # Can't do any 3D math without at least 2
+                            # cameras giving good data.
+                            continue
+
                         try:
-                            X, line3d, cam_ids_used, min_mean_dist = ru.find_best_3d(self.reconstructor,d2)
+                            (X, line3d, cam_ids_used,
+                             min_mean_dist) = ru.find_best_3d(self.reconstructor,
+                                                              found_data_dict)
                         except:
                             # this prevents us from bombing this thread...
                             print 'WARNING:'
-                            traceback.print_last()
+                            traceback.print_exc()
                             print 'SKIPPED 3d calculation for this frame.'
                             continue
                         cam_nos_used = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
 
                         if line3d is None:
                             line3d = nan, nan, nan, nan, nan, nan
+                            line3d_valid = False
+                        else:
+                            line3d_valid = True
+                            
                         find3d_time = time.time()
 
                         x,y,z=X
@@ -526,37 +558,29 @@ class CoordReceiver(threading.Thread):
                         outgoing_data.extend( line3d ) # 6 component vector
                         outgoing_data.append( find3d_time )
 
-                        if len(downstream_hostnames):
-                            data_packet = struct.pack('ifffffffffd',corrected_framenumber,*outgoing_data)
-                        if num_good_images==2:
-                            # fastest 3d data
-                            fastest_realtime_data = X, line3d, cam_ids_used, min_mean_dist
-                            try:
-                                for downstream_hostname in downstream_hostnames:
-                                    outgoing_UDP_socket.sendto(data_packet,(downstream_hostname,FASTEST_DATA_PORT))
-                            except:
-                                print 'WARNING: could not send 3d point data to projector:'
-                                print
-                            if self.main_brain.is_saving_data():
-                                self.main_brain.queue_data3d_fastest.put( (corrected_framenumber,
-                                                                           outgoing_data,
-                                                                           cam_nos_used,
-                                                                           min_mean_dist) )
-                        if num_cams_arrived==len(self.cam_ids):
-                            # realtime 3d data
-                            best_realtime_data = X, line3d, cam_ids_used, min_mean_dist
-                            try:
-                                for downstream_hostname in downstream_hostnames:
-                                    outgoing_UDP_socket.sendto(data_packet,(downstream_hostname,BEST_DATA_PORT))
-                            except:
-                                print 'WARNING: could not send 3d point data to projector:'
-                                print
-                            if self.main_brain.is_saving_data():
-                                self.main_brain.queue_data3d_best.put( (corrected_framenumber,
-                                                                        outgoing_data,
-                                                                        cam_nos_used,
-                                                                        min_mean_dist) )
-
+                        if len(downstream_hosts):
+                            #data_packet = struct.pack(remote_fmt,*outgoing_data)
+                            data_packet = encode_data_packet(
+                                corrected_framenumber,
+                                line3d_valid,
+                                outgoing_data,
+                                min_mean_dist,
+                                )
+                            
+                        # realtime 3d data
+                        best_realtime_data = X, line3d, cam_ids_used, min_mean_dist
+                        try:
+                            for downstream_host in downstream_hosts:
+                                outgoing_UDP_socket.sendto(data_packet,downstream_host)
+                        except:
+                            print 'WARNING: could not send 3d point data over UDP'
+                            print
+                        if self.main_brain.is_saving_data():
+                            self.main_brain.queue_data3d_best.put( (corrected_framenumber,
+                                                                    outgoing_data,
+                                                                    cam_nos_used,
+                                                                    min_mean_dist) )
+                
                 # save calibration data -=-=-=-=-=-=-=-=
                 if self.main_brain.currently_calibrating.isSet():
                     for corrected_framenumber in new_data_framenumbers:
@@ -580,15 +604,27 @@ class CoordReceiver(threading.Thread):
                             calib_data_lock.acquire()
                             calib_IdMat.append( ids )
                             calib_points.append( save_points )
+                            print 'saving points for calibration:',save_points
                             calib_data_lock.release()
 
-                # clean up old frame records to save RAM
-                # XXX does this drop unintended frames on re-sync?
+
+                for finished in finished_corrected_framenumbers:
+                    del realtime_coord_dict[finished]
+
+                # Clean up old frame records to save RAM.
+                
+                # This is only needed when multiple cameras are not
+                # synchronized, (When camera-camera frame
+                # correspondences are unknown.)
+                
+                # XXX This probably drops unintended frames on
+                # re-sync, but who cares?
+                
                 if len(realtime_coord_dict)>100:
                     k=realtime_coord_dict.keys()
                     k.sort()
                     for ki in k[:-50]:
-                        del realtime_coord_dict[ki]  
+                        del realtime_coord_dict[ki]
 
                 if len(deferred_2d_data):
                     self.main_brain.queue_data2d.put( deferred_2d_data )
@@ -1025,14 +1061,12 @@ class MainBrain(object):
         self.h5data2d = None
         self.h5cam_info = None
         self.h5movie_info = None
-        self.h5data3d_fastest = None
         self.h5data3d_best = None
         self.h5additional_info = None
 
         # Queues of information to save
         self.queue_data2d         = Queue.Queue()
         self.queue_cam_info       = Queue.Queue()
-        self.queue_data3d_fastest = Queue.Queue()
         self.queue_data3d_best    = Queue.Queue()
 
         self.coord_receiver = CoordReceiver(self)
@@ -1329,9 +1363,6 @@ class MainBrain(object):
             row.append()
             self.h5additional_info.flush()
                 
-            self.h5data3d_fastest = ct(root,'data3d_fastest', Info3D,
-                                       "3d data (fastest)",
-                                       expectedrows=expected_rows)
             self.h5data3d_best = ct(root,'data3d_best', Info3D,
                                     "3d data (best)",
                                     expectedrows=expected_rows)
@@ -1346,12 +1377,14 @@ class MainBrain(object):
 
     def stop_saving_data(self):
         self._service_save_data()
-        self.h5file.close()
-        self.h5file = None
+        if self.h5file is not None:
+            self.h5file.close()
+            self.h5file = None
+        else:
+            DEBUG('saving already stopped, cannot stop again')
         self.h5data2d = None
         self.h5cam_info = None
         self.h5movie_info = None
-        self.h5data3d_fastest = None
         self.h5data3d_best = None
         self.h5additional_info = None
 
@@ -1362,26 +1395,19 @@ class MainBrain(object):
         try:
             while True:
                 tmp = self.queue_data2d.get(0)
-                list_of_rows_of_data2d.append( tmp )
+                list_of_rows_of_data2d.extend( tmp )
         except Queue.Empty:
             pass
         #   save
-        if self.h5data2d is not None:
-            #nrows = 0
-            for rows_of_data2d in list_of_rows_of_data2d:
-                #nrows += len(rows_of_data2d)
-                try:
-                    self.h5data2d.append( rows_of_data2d )
-                except ValueError:
-                    print 'ERROR following'
-                    print
-                    print 'rows_of_data2d='
-                    print rows_of_data2d
-                    print
-                    raise
+        if self.h5data2d is not None and len(list_of_rows_of_data2d):
+            # it's much faster to convert to numarray first:
+            recarray = numarray.records.array(
+                list_of_rows_of_data2d,
+                formats=Info2DColFormats,
+                names=Info2DColNames)
+            self.h5data2d.append( recarray )
             self.h5data2d.flush()
-            #print 'saved %d rows of 2D data'%nrows
-
+        
         # ** camera info **
         #   clear queue
         list_of_cam_info = []
@@ -1403,41 +1429,41 @@ class MainBrain(object):
             self.h5cam_info.flush()
 
         # ** 3d data **
-        for q, h5table in zip([self.queue_data3d_fastest, self.queue_data3d_best],
-                              [self.h5data3d_fastest, self.h5data3d_best]):
-            #   clear queue
-            list_of_3d_data = []
-            try:
-                while True:
-                    list_of_3d_data.append( q.get(0) )
-            except Queue.Empty:
-                pass
-            #   save
-            if h5table is not None:
-                row = h5table.row
-                for data3d in list_of_3d_data:
-                    corrected_framenumber, outgoing_data, cam_nos_used, mean_dist = data3d
-                    cam_nos_used.sort()
-                    cam_nos_used_str = ' '.join( map(str, cam_nos_used) )
-                    
-                    row['frame']=corrected_framenumber
-                    
-                    row['x']=outgoing_data[0]
-                    row['y']=outgoing_data[1]
-                    row['z']=outgoing_data[2]
+        q = self.queue_data3d_best
+        h5table = self.h5data3d_best
+        #   clear queue
+        list_of_3d_data = []
+        try:
+            while True:
+                list_of_3d_data.append( q.get(0) )
+        except Queue.Empty:
+            pass
+        #   save
+        if h5table is not None:
+            row = h5table.row
+            for data3d in list_of_3d_data:
+                corrected_framenumber, outgoing_data, cam_nos_used, mean_dist = data3d
+                cam_nos_used.sort()
+                cam_nos_used_str = ' '.join( map(str, cam_nos_used) )
 
-                    row['p0']=outgoing_data[3]
-                    row['p1']=outgoing_data[4]
-                    row['p2']=outgoing_data[5]
-                    row['p3']=outgoing_data[6]
-                    row['p4']=outgoing_data[7]
-                    row['p5']=outgoing_data[8]
+                row['frame']=corrected_framenumber
 
-                    row['timestamp']=outgoing_data[9]
-                    
-                    row['camns_used']=cam_nos_used_str
-                    row['mean_dist']=mean_dist
-                    row.append()
+                row['x']=outgoing_data[0]
+                row['y']=outgoing_data[1]
+                row['z']=outgoing_data[2]
 
-                h5table.flush()
+                row['p0']=outgoing_data[3]
+                row['p1']=outgoing_data[4]
+                row['p2']=outgoing_data[5]
+                row['p3']=outgoing_data[6]
+                row['p4']=outgoing_data[7]
+                row['p5']=outgoing_data[8]
+
+                row['timestamp']=outgoing_data[9]
+
+                row['camns_used']=cam_nos_used_str
+                row['mean_dist']=mean_dist
+                row.append()
+
+            h5table.flush()
 
