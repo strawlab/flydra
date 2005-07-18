@@ -31,16 +31,60 @@
             <flag>wxALIGN_CENTRE</flag>
           </object>
           <object class="sizeritem">
-            <object class="wxTextCtrl" name="x_pos"/>
+            <object class="wxTextCtrl" name="x_pos">
+              <font>
+                <size>24</size>
+                <style>default</style>
+                <weight>normal</weight>
+                <family>bold</family>
+                <underlined>0</underlined>
+                <face>helvetica</face>
+                <encoding>ISO-8859-1</encoding>
+              </font>
+            </object>
+            <minsize>130,40</minsize>
           </object>
           <object class="sizeritem">
-            <object class="wxTextCtrl" name="y_pos"/>
+            <object class="wxTextCtrl" name="y_pos">
+              <font>
+                <size>24</size>
+                <style>default</style>
+                <weight>normal</weight>
+                <family>bold</family>
+                <underlined>0</underlined>
+                <face>helvetica</face>
+                <encoding>ISO-8859-1</encoding>
+              </font>
+            </object>
+            <minsize>130,40</minsize>
           </object>
           <object class="sizeritem">
-            <object class="wxTextCtrl" name="z_pos"/>
+            <object class="wxTextCtrl" name="z_pos">
+              <font>
+                <size>24</size>
+                <style>default</style>
+                <weight>normal</weight>
+                <family>bold</family>
+                <underlined>0</underlined>
+                <face>helvetica</face>
+                <encoding>ISO-8859-1</encoding>
+              </font>
+            </object>
+            <minsize>130,40</minsize>
           </object>
           <object class="sizeritem">
-            <object class="wxTextCtrl" name="err"/>
+            <object class="wxTextCtrl" name="err">
+              <font>
+                <size>24</size>
+                <style>default</style>
+                <weight>normal</weight>
+                <family>bold</family>
+                <underlined>0</underlined>
+                <face>helvetica</face>
+                <encoding>ISO-8859-1</encoding>
+              </font>
+            </object>
+            <minsize>130,40</minsize>
           </object>
         </object>
         <flag>wxEXPAND</flag>
@@ -397,7 +441,9 @@
               <object class="sizeritem">
                 <object class="wxCheckListBox" name="record_raw_cam_select_checklist">
                   <content>
-                    <item/></content>
+                    
+                    <item/>
+                  </content>
                 </object>
                 <option>1</option>
                 <flag>wxEXPAND</flag>
