@@ -41,7 +41,7 @@ CAM_CONTROLS = {'shutter':cam_iface.SHUTTER,
                 'brightness':cam_iface.BRIGHTNESS}
 
 ALPHA = 1.0/10 # relative importance of each new frame
-BG_FRAME_INTERVAL = 100 # every N frames, add a new BG image to the accumulator
+BG_FRAME_INTERVAL = 20 # every N frames, add a new BG image to the accumulator
 
 # where is the "main brain" server?
 try:
