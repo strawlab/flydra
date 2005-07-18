@@ -41,13 +41,22 @@ def init_vtk():
 ##            camera.SetParallelScale(13.7499648363)
 
 
+##            camera.SetParallelProjection(1)
+##            camera.SetFocalPoint (183.28723427103145, 197.35179711218706, 179.54488158097655)
+##            camera.SetPosition (103.94839384485147, 1090.2877280742541, 238.19531097666248)
+##            camera.SetViewAngle(30.0)
+##            camera.SetClippingRange (8.503580819363231, 850.35808193632306)
+##            camera.SetParallelScale(161)
+
             camera.SetParallelProjection(1)
-            camera.SetFocalPoint (183.28723427103145, 197.35179711218706, 179.54488158097655)
-            camera.SetPosition (103.94839384485147, 1090.2877280742541, 238.19531097666248)
+            camera.SetFocalPoint (1355.1257952596316, 138.42352926242845, 241.79385230532296 )
+            camera.SetPosition (1616.5195986326066, -491.41719908620058, -343.05060371955983 )
             camera.SetViewAngle(30.0)
-            camera.SetClippingRange (8.503580819363231, 850.35808193632306)
-            camera.SetParallelScale(161)
-            if 0:
+            camera.SetViewUp (-8.2626711604279806e-05, -0.68046473229527904, 0.73278082758430629)
+            camera.SetClippingRange (144.95380212895483, 1548.6739768578886)
+            camera.SetParallelScale(319.400653668)
+            
+            if 1:
                 camera.SetViewUp (0,0,1)
             else:
                 corner = array([  4.91559111,  54.73864537,  32.58650871])
@@ -339,6 +348,9 @@ def show_frames_vtk(results,renderers,
                     render_mode='ball_and_stick', # 'ball_and_stick' or 'triangles'
                     triangle_mode_data=None,
                     triangle_mode_color=red,
+                    bounding_box=True,
+                    frame_no_offset=0, # for displaying frame numbers
+                    show_warnings=True,
                     max_err=None): # only for 'ball_and_stick'
     # 'triangles' render mode is always smoothed
     if typ is None:
@@ -390,33 +402,40 @@ def show_frames_vtk(results,renderers,
     elif fstep is not None:
         print 'WARNING: fstep given, but not f2'
 
+    if not data3d.cols.frame.index:
+        data3d.cols.frame.createIndex()
+
     frame_nos = range(*seq_args)
     if render_mode.startswith('ball_and_stick'):
         Xs=[]
         line3ds=[]
-        for frame_no in frame_nos:
-            X = None
-            line3d = None
-            for row in data3d:
-                if row['frame'] != frame_no:
-                    continue
-                X = row['x'],row['y'],row['z']
-                if row['p0'] is nan:
-                    line3d = None
-                else:
-                    line3d = row['p0'],row['p1'],row['p2'],row['p3'],row['p4'],row['p5']
-                err = row['mean_dist']
-                break
-            if X is None:
-                print 'WARNING: frame %d not found'%frame_no
+        # XXX table must be in order?
+        found_frame_nos = []
+        for row in data3d.where( frame_nos[0] <= data3d.cols.frame <= frame_nos[-1] ):
+            if row['frame'] not in frame_nos:
+                continue
+            X = row['x'],row['y'],row['z']
+            if row['p0'] is nan:
+                line3d = None
             else:
-                if max_err is not None:
-                    if err > max_err:
-                        print 'WARNING: frame %d err too large'%frame_no
-                        X = None
-                        line3d = None
+                line3d = row['p0'],row['p1'],row['p2'],row['p3'],row['p4'],row['p5']
+            err = row['mean_dist']
+            if max_err is not None:
+                if err > max_err:
+                    if show_warnings:
+                        print 'WARNING: frame %d err too large'%row['frame']
+                    X = None
+                    line3d = None
             Xs.append(X)
             line3ds.append(line3d)
+            found_frame_nos.append( row['frame'] )
+        for idx, frame_no in enumerate(frame_nos):
+            if frame_no not in found_frame_nos:
+                # XXX is idx right?
+                Xs.insert( idx, None )
+                line3ds.insert( idx, None )
+                if show_warnings:
+                    print 'WARNING: frame %d not found'%frame_no
         orient_infos = line3ds
     elif render_mode.startswith('triangles'):
         Xs=[]
@@ -451,6 +470,10 @@ def show_frames_vtk(results,renderers,
         timed_forces.append( fxyz )
     
     ok_Xs = nx.array([ X for X in Xs if X is not None ])
+    if len(ok_Xs)==0:
+        # no data, return empty list
+        return actors
+    
     xlim = min( ok_Xs[:,0] ), max( ok_Xs[:,0] )
     ylim = min( ok_Xs[:,1] ), max( ok_Xs[:,1] )
     zlim = min( ok_Xs[:,2] ), max( ok_Xs[:,2] )
@@ -680,32 +703,42 @@ def show_frames_vtk(results,renderers,
 
     # bounding box
     bbox_points = vtkPoints()
-    if 1:
+    if 0:
         bbox_points.InsertNextPoint( xlim[0], ylim[0], zlim[0] )
         bbox_points.InsertNextPoint( xlim[1], ylim[1], zlim[1] )
     else:
-        bbox_points.InsertNextPoint(-100,-75,-150)
-        bbox_points.InsertNextPoint(250,350,100)
+        bbox_points.InsertNextPoint(400,0,0)
+        bbox_points.InsertNextPoint(1000,300,300)
     bbox_poly_data = vtkPolyData()
     bbox_poly_data.SetPoints(bbox_points)
     bbox_mapper = vtk.vtkPolyDataMapper()
     bbox_mapper.SetInput(bbox_poly_data)
     bbox=vtk.vtkActor()
     bbox.SetMapper(bbox_mapper)
-    # (don't render)
+##    for renderer in renderers:
+##        renderer.AddActor( bbox )
+##    actors.append( bbox )
+##    print 'bbox drawn at',( xlim[0], ylim[0], zlim[0] )
+##    print ( xlim[1], ylim[1], zlim[1] )
 
     if labels:
         for frame_no, X in zip(frame_nos,Xs):
             if X is None:
                 continue
             if use_timestamps:
-                if (frame_no-f1)%10 != 0:
+                if frame_no_offset == 0:
+                    fdiff = f1
+                else:
+                    fdiff = frame_no_offset
+                if (frame_no-fdiff)%10 != 0:
                     continue
-                label = str((frame_no-f1)/100.0)
+                label = str((frame_no-fdiff)/100.0)
             else:
-                if frame_no%10 != 0:
+                if (frame_no-frame_no_offset)%10 != 0:
                     continue
-                label = str(frame_no)
+                print 'frame_no',frame_no
+                print 'frame_no_offset',frame_no_offset
+                label = str(frame_no-frame_no_offset)
 ##            X = X.flat
             # labels
             
@@ -724,13 +757,12 @@ def show_frames_vtk(results,renderers,
                 renderer.AddActor( tl )
             actors.append( tl )
 
-    if 0:
+    if bounding_box:
     #if (ren1 is not None) and (actor is not None):
         # from Annotation/Python/cubeAxes.py
         tprop = vtk.vtkTextProperty()
         tprop.SetColor(0,0,0)
         #tprop.ShadowOn()
-
         for renderer in renderers:
             axes2 = vtk.vtkCubeAxesActor2D()
             axes2.SetProp(bbox)
@@ -777,24 +809,10 @@ if __name__=='__main__':
 
     #results
     if 1:
-        if 1:
-            results = result_browser.get_results('DATA20050325_165810.h5',mode='r+')
-            start_frame = 68942
-            stop_frame = 69643
-        if 0:
-            results = result_browser.get_results('DATA20050325_140956.h5',mode='r+')
-            start_frame = 24996
-            stop_frame = 25450
-        if 0:
-            results = result_browser.get_results('DATA20050325_154206.h5',mode='r+')
-            start_frame = 138164
-            stop_frame = 138710
+        results = result_browser.get_results('DATA20050621_212042.h5',mode='r+')
+        start_frame = 1.5936e5
+        stop_frame = 1.5974e5
         
-    else:
-        results = result_browser.get_results('fake2.h5',mode='r+')
-        start_frame = 1
-        stop_frame = 300
-
     
     if 1:
 
@@ -812,7 +830,7 @@ if __name__=='__main__':
             NZ = array([   9.11331261,  117.08933803,   53.84209957])
             NY = array([  10.98416978,  392.19324712,   70.9049832 ])
             show_line(renderers,NZ,NY,blue,1)
-        if 1:
+        if 0:
             # bottom of area with pattern
             corner = array([  4.91559111,  54.73864537,  32.58650871])
             sfw = array([ -13.64048628,  335.36740794,   22.02908834])
@@ -881,7 +899,7 @@ if __name__=='__main__':
 ##                            timed_force_table=results.root.real_resultant_forces,
 ##                            timed_force_color=green,
 ##                            use_timestamps=True,max_err=10)
-        if 1:
+        if 0:
             show_frames_vtk(results,renderers,start_frame,stop_frame,1,
                             orientation_corrected=True,
                             labels=True,
@@ -893,7 +911,7 @@ if __name__=='__main__':
                             triangle_mode_data=results.root.smooth_data_roll_fixed_lin,
                             triangle_mode_color=red,
                             use_timestamps=True)
-        if 1:
+        if 0:
             show_frames_vtk(results,renderers,start_frame,stop_frame,1,
                             orientation_corrected=True,
                             labels=True,
@@ -910,6 +928,7 @@ if __name__=='__main__':
             show_frames_vtk(results,renderers,start_frame,stop_frame,1,
                             render_mode='ball_and_stick',
                             labels=False,
+                            orientation_corrected=False,
                             use_timestamps=True,max_err=10)
             
         for renderer in renderers:
