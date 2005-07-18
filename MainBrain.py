@@ -6,7 +6,8 @@ import flydra.reconstruct
 import reconstruct_utils as ru
 import numarray as nx
 import numarray.records
-from numarray.ieeespecial import nan, inf, getnan
+from numarray.ieeespecial import nan, inf
+near_inf = 9.999999e20
 import Queue
 import tables as PT
 from common_variables import REALTIME_UDP
@@ -341,8 +342,7 @@ class CoordReceiver(threading.Thread):
         
         header_fmt = '<dli'
         header_size = struct.calcsize(header_fmt)
-        #pt_fmt = '<fffffffff'
-        pt_fmt = 'ddddddddd'
+        pt_fmt = '<dddddddddBB'
         pt_size = struct.calcsize(pt_fmt)
         timeout = 0.1
         
@@ -350,10 +350,6 @@ class CoordReceiver(threading.Thread):
         new_data_framenumbers = sets.Set()
 
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False)
-
-##        remote_fmt = '<iffffffffffd'
-
-##        tstamp_fd = open('tstamps.bin',mode='wb')
 
         select_select = select.select
         time_time = time.time
@@ -391,8 +387,6 @@ class CoordReceiver(threading.Thread):
                 print 'ERROR: CoordReceiver received an exception not derived from Exception'
                 print '-='*10,'I should really quit now!','-='*10
                 continue
-##            now = time_time()
-##            tstamp_fd.write( struct.pack('d',now ) )
             new_data_framenumbers.clear()
             if self._fake_sync_event.isSet():
                 for cam_idx, cam_id in enumerate(self.cam_ids):
@@ -415,7 +409,6 @@ class CoordReceiver(threading.Thread):
                         # camera was dropped?
                         continue
                     cam_idx = self.cam_ids.index(cam_id)
-                    #cam_id = self.cam_ids[cam_idx]
                     absolute_cam_no = self.absolute_cam_nos[cam_idx]
 
                     if REALTIME_UDP:
@@ -442,12 +435,24 @@ class CoordReceiver(threading.Thread):
                             # valid points
                             for i in range(n_pts):
                                 end=start+pt_size
-                                x,y,area,slope,eccentricity,p1,p2,p3,p4 = struct.unpack(pt_fmt,data[start:end])
-                                points.append( (x,y,area,slope,eccentricity, p1,p2,p3,p4,True) )
+                                x,y,area,slope,eccentricity,p1,p2,p3,p4,line_found,slope_found = struct.unpack(pt_fmt,data[start:end])
+                                # nan cannot get sent across network in platform-independent way
+                                if not line_found:
+                                    p1,p2,p3,p4 = nan,nan,nan,nan
+                                if slope == near_inf:
+                                    slope = inf
+                                if eccentricity == near_inf:
+                                    eccentricity = inf
+                                if not slope_found:
+                                    slope = nan
+                                points.append( (x,y,area,slope,eccentricity,
+                                                p1,p2,p3,p4, True) )
                                 start=end
                         else:
                             # no points found
                             end = start
+                            # append non-point to allow correlation of
+                            # timestamps with frame number
                             points.append( no_point_tuple )
                         data = data[end:]
 
@@ -459,12 +464,6 @@ class CoordReceiver(threading.Thread):
                         cam_dict['points']=points
                         cam_dict['lock'].release()
 
-                        #if timestamp-self.last_timestamps[cam_idx] > 0.02:
-                        #    print 'WARNING frame skipped %s?'%cam_id
-
-        ##                if framenumber-self.last_framenumbers_delay[cam_idx] > 1:
-        ##                    print '  (frame delay/misorder %s)'%(cam_id,)
-
                         if timestamp-self.last_timestamps[cam_idx] > self.RESET_FRAMENUMBER_DURATION:
                             self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
                                                 realtime_coord_dict, new_data_framenumbers )
@@ -474,25 +473,14 @@ class CoordReceiver(threading.Thread):
                         corrected_framenumber = framenumber-self.framenumber_offsets[cam_idx]
                         XXX_framenumber = corrected_framenumber
 
-                        #if self.main_brain.is_saving_data() or len(getnan(points[0][0])[0]):
                         if self.main_brain.is_saving_data():
-                            # Save 2D data (even when no point found) to allow
-                            # temporal correlation of movie frames to 2D data.
-                            deferred_2d_data.append((absolute_cam_no, # defer saving to later
-                                                     corrected_framenumber,
-                                                     timestamp)
-                                                    +tuple(points[0][:9]))
-##                                                     points[0][0], # x
-##                                                     points[0][1], # y
-##                                                     points[0][2], # area
-##                                                     points[0][3], # slope
-##                                                     points[0][4], # eccentricity
-##                                                     points[0][5], # p1
-##                                                     points[0][6], # p2
-##                                                     points[0][7], # p3
-##                                                     points[0][8], # p4
-##                                                     ))
-
+                            for point_tuple in points:
+                                # Save 2D data (even when no point found) to allow
+                                # temporal correlation of movie frames to 2D data.
+                                deferred_2d_data.append((absolute_cam_no, # defer saving to later
+                                                         corrected_framenumber,
+                                                         timestamp)
+                                                        +point_tuple[:9])
                         # save new frame data
                         # XXX for now, only attempt 3D reconstruction of 1st point from each 2D view
                         realtime_coord_dict.setdefault(corrected_framenumber,{})[cam_id]=points[0]
@@ -512,7 +500,6 @@ class CoordReceiver(threading.Thread):
 
                 for corrected_framenumber in new_data_framenumbers:
                     data_dict = realtime_coord_dict[corrected_framenumber]
-                    ##num_cams_arrived = len(data_dict)
                     if len(data_dict)==len(self.cam_ids): # all camera data arrived
                         
                         # mark for deletion out of data queue
@@ -559,7 +546,6 @@ class CoordReceiver(threading.Thread):
                         outgoing_data.append( find3d_time )
 
                         if len(downstream_hosts):
-                            #data_packet = struct.pack(remote_fmt,*outgoing_data)
                             data_packet = encode_data_packet(
                                 corrected_framenumber,
                                 line3d_valid,
@@ -631,7 +617,6 @@ class CoordReceiver(threading.Thread):
 
             finally:
                 self.all_data_lock.release()
-    ##        tstamp_fd.close()
     
 class MainBrain(object):
     """Handle all camera network stuff and interact with application"""

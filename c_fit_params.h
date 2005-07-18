@@ -4,6 +4,13 @@
 
 #include "ippi.h"
 
+typedef enum {
+  CFitParamsNoError,
+  CFitParamsZeroMomentError,
+  CFitParamsOtherError,
+  CFitParamsCentralMomentError
+} CFitParamsReturnType;
+
 /**********************************************************
 * Function to find the center of gravity and orientation of the
 * shape found in an image within a region of interest defined by:
@@ -15,9 +22,9 @@
 * is the number of bytes between the beginning of adjacent rows
 * in the image pointer.
 **********************************************************/
-int fit_params( IppiMomentState_64f *pState, double *x0, double *y0,
-		double *Mu00,
-		double *Uu11, double *Uu20, double *Uu02,
-		int width, int height, unsigned char *img, int img_step );
+CFitParamsReturnType fit_params( IppiMomentState_64f *pState, double *x0, double *y0,
+				 double *Mu00,
+				 double *Uu11, double *Uu20, double *Uu02,
+				 int width, int height, unsigned char *img, int img_step );
 
 #endif

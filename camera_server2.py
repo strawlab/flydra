@@ -27,7 +27,7 @@ if sys.platform == 'win32':
 else:
     time_func = time.time
 
-pt_fmt = 'ddddddddd'
+pt_fmt = '<dddddddddBB'
     
 Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here!
 
@@ -177,8 +177,9 @@ class GrabClass(object):
                 old_ts = timestamp
                 old_fn = framenumber
                 
-                points, found_anything, orientation = self.realtime_analyzer.do_work(
+                points = self.realtime_analyzer.do_work(
                     framebuffer, timestamp, framenumber, use_roi2_isSet() )
+                n_pts = len(points)
                 raw_image = framebuffer
                 
                 # make appropriate references to our copy of the data
@@ -190,7 +191,7 @@ class GrabClass(object):
                     globals['most_recent_frame'] = (l,b), raw_image
                     
                 globals['incoming_raw_frames'].put(
-                    (raw_image,timestamp,framenumber,found_anything) ) # save it
+                    (raw_image,timestamp,framenumber,n_pts) ) # save it
 
                 if collecting_background_isSet():
                     if bg_frame_number % BG_FRAME_INTERVAL == 0:
@@ -224,20 +225,28 @@ class GrabClass(object):
                 if rot_frame_number>=0:
                     find_rotation_center_start_clear()
                     pt = points[0]
-                    x0, y0 = pt[0],pt[1]
+                    x0, y0, slope = pt[0],pt[1],pt[3]
+                    if slope != 0.0:
+                        rise = 1.0
+                        run = rise/slope
+                        orientation = math.atan2(rise,run)
+                        orientation = orientation + math.pi/2.0
+                    else:
+                        orientation = math.pi/2.0
                     self.realtime_analyzer.rotation_update(x0,y0,orientation)
                     rot_frame_number += 1
                     if rot_frame_number>=n_rot_samples:
                         self.realtime_analyzer.rotation_end()
                         rot_frame_number=-1 # stop averaging frames
               
-                n_pts = len(points)
                 # XXX could speed this with a join operation I think
-                if not found_anything:
-                    n_pts = 0
                 data = struct.pack('<dli',timestamp,framenumber,n_pts)
-                for i in range(n_pts):
-                    data = data + struct.pack(pt_fmt,*points[i])
+                for point_tuple in points:
+                    try:
+                        data = data + struct.pack(pt_fmt,*point_tuple)
+                    except:
+                        print 'error-causing data: ',point_tuple
+                        raise
                 if REALTIME_UDP:
                     coord_socket.sendto(data,
                                         (main_brain_hostname,self.cam2mainbrain_port))
@@ -558,11 +567,9 @@ class App:
                         get_raw_frame_nowait = globals['incoming_raw_frames'].get_nowait
                         try:
                             qsize = globals['incoming_raw_frames'].qsize()
-#                            if qsize > 30:
-#                                print '%s: qsize is %d'%(cam_id,qsize)
                             while 1:
-                                frame,timestamp,framenumber,found_anything = get_raw_frame_nowait() # this may raise Queue.Empty
-                                if found_anything:
+                                frame,timestamp,framenumber,n_pts = get_raw_frame_nowait() # this may raise Queue.Empty
+                                if n_pts>0:
                                     last_found_timestamp[cam_no] = timestamp
                                 # save movie for 1 second after I found anything
                                 if (timestamp - last_found_timestamp[cam_no]) < 1.0 and raw_movie is not None:

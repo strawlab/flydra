@@ -54,8 +54,8 @@ class PlotPanel(wxPanel):
             frame = z
             extent = 0, frame.shape[1]-1, frame.shape[0]-1, 0
             self.im = a.imshow( z,
-                                cmap=matplotlib.cm.hsv,
-                                #cmap=matplotlib.cm.jet,
+                                cmap=matplotlib.cm.pink,
+                                #cmap=matplotlib.cm.hsv,
                                 origin=origin,
                                 interpolation='nearest',
                                 extent=extent,
@@ -66,13 +66,13 @@ class PlotPanel(wxPanel):
             
             #self.im.set_clim(0,255)
 
-            self.lines = a.plot([0],[0],'o-') 	 
-            #self.lines = a.plot([0,0,0],[0,0,0],'o-') 	 
+            self.lines = a.plot([0],[0],'o') 	 
             pylab.setp(self.lines[0],'markerfacecolor',None) 	 
             white = (1.0,1.0,1.0) 	 
-            pylab.setp(self.lines[0],'color',white) 	 
-            pylab.setp(self.lines[0],'linewidth',2.0) 	 
-            pylab.setp(self.lines[0],'markeredgecolor',white) 	 
+            blue = (0.0,0.0,1.0)
+            #pylab.setp(self.lines[0],'color',white) 	 
+            #pylab.setp(self.lines[0],'linewidth',2.0) 	 
+            pylab.setp(self.lines[0],'markeredgecolor',blue) 	 
             pylab.setp(self.lines[0],'markeredgewidth',2)
             a.grid('on')
             self.toolbar.update() # Not sure why this is needed - ADS
