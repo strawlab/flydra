@@ -543,29 +543,32 @@ def plot_whole_movie_3d(results, typ='best', show_err=False, max_err=10):
     z = xyz[:,2]
 
     clf()
-    ax = pylab.axes([0.1,  0.35,  0.8, 0.55])
-    ax2 = pylab.axes([0.1, 0.25,  0.8, 0.1],sharex=ax)
-    ax3 = pylab.axes([0.1, 0.15,  0.8, 0.1],sharex=ax)
-    ax4 = pylab.axes([0.1, 0.05,  0.8, 0.1],sharex=ax)
+    yinc = .65/3
+    ax_x = pylab.axes([0.1,  0.25+2*yinc,  0.8, yinc])
+    ax_y = pylab.axes([0.1,  0.25+yinc,  0.8, yinc],sharex=ax_x)
+    ax_z = pylab.axes([0.1,  0.25,  0.8, yinc],sharex=ax_x)
+    ax_xlen = pylab.axes([0.1, 0.15,  0.8, 0.1],sharex=ax_x)
+    ax_err = pylab.axes([0.1, 0.05,  0.8, 0.1],sharex=ax_x)
     
     # plot it!
-    xl=ax.plot(f,x,'r.')
-    yl=ax.plot(f,y,'g.')
-    zl=ax.plot(f,z,'b.')
-    ax.legend( [xl[0], yl[0], zl[0]], ['x','y','z'] )
-    ax.set_ylabel('position (mm)')
-    if show_err:
-        ax.plot(f,err,'k.')
-    set(ax,'ylim',[-10,600])
+    xl=ax_x.plot(f,x,'r.')
+    ax_x.axhline(y=730)
+    yl=ax_y.plot(f,y,'g.')
+    ax_y.axhline(y=152.5)
+    zl=ax_z.plot(f,z,'b.')
+    ax_y.set_ylabel('position (mm)')
+##    if show_err:
+##        ax.plot(f,err,'k.')
+##    set(ax,'ylim',[-10,600])
 
     U = flydra.reconstruct.line_direction(L)
-    ax2.plot( f, U[:,0], 'r.')
-    ax2.plot()
-    ax2.set_ylabel('x len')
+    ax_xlen.plot( f, U[:,0], 'r.')
+    ax_xlen.plot()
+    ax_xlen.set_ylabel('x len')
         
-    ax3.plot(f,err,'k.')
-    ax3.set_xlabel('frame no.')
-    ax3.set_ylabel('err\n(pixels)')
+    ax_err.plot(f,err,'k.')
+    ax_err.set_xlabel('frame no.')
+    ax_err.set_ylabel('err\n(pixels)')
     ##ax.title(typ+' data')
     ##ax.xlabel('frame number')
 
@@ -1114,7 +1117,8 @@ def recompute_3d_from_2d(results,
                     data3d.row[k] = v
                 data3d.row.append()
             else:
-                data3d[old_nrow] = new_row
+                raise RuntimeError('This code path disabled because it de-orders the table')
+                #data3d[old_nrow] = new_row
             data3d.flush()
 
 def get_reconstructor(results):
@@ -1561,7 +1565,7 @@ def test():
 ##                       verify=False,overwrite=True)
 
 def get_results(filename,mode='r+'):
-    return PT.openFile(filename,mode='r+')
+    return PT.openFile(filename,mode=mode)
 
 def plot_simple_phase_plots(results,form='xy',max_err=10,typ='best',ori_180_ambig=True):
     from matplotlib.collections import LineCollection
@@ -1709,6 +1713,20 @@ def get_data_array(results):
     M = nx.array(M)
     return M
 
+def get_start_stop_times( results ):
+    data3d = results.root.data3d_best
+    
+    # XXX Assume all rows in table are in chronological
+    # order. (Messing with tables during analysis could have screwed
+    # this up.)
+    
+    return data3d.cols.timestamp[0], data3d.cols.timestamp[-1]
+
+##    all_times = data3d.cols.timestamp
+##    timin = nx.argmin(all_times)
+##    timax = nx.argmax(all_times)
+##    return all_times[timin], all_times[timax]
+    
 def get_timestamp( results, frame, cam):
     camn2cam_id = {}
     for row in results.root.cam_info:
@@ -2226,6 +2244,6 @@ def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
     return results
     
 if __name__=='__main__':
-    results = get_results('DATA20050325_165810.h5',mode='r+')
+    results = get_results('DATA20050711_155801.h5',mode='r')
     if len(sys.argv) > 1:
         save_movie(results)
