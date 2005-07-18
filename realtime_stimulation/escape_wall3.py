@@ -14,8 +14,11 @@ from VisionEgg.Text import Text
 import Numeric as nx
 import math, socket, struct, select, sys
 
+tf_hz_all = [0.0, 1.0, 5.0]
+tf_hz_idx = 0
+
 screen = Screen(
-    fullscreen=False,
+    fullscreen=True,#False,
     frameless=True,
     sync_swap=False, # vertical sync
     size=(1024,768),
@@ -29,16 +32,16 @@ rightwall = nx.array([[480,0,0],
                       [980,0,0]])
 leftwall = rightwall + nx.array([0,305,0])
 
-trigger_xyz = nx.array([730, 152.5, 152])
-trigger_radius = 50.0
+trigger_x = 730
+trigger_radius = 25 # mm
 
 downwind_left_wall = leftwall.copy()
-downwind_left_wall[2,0] = trigger_xyz[0]
-downwind_left_wall[3,0] = trigger_xyz[0]
+downwind_left_wall[2,0] = trigger_x
+downwind_left_wall[3,0] = trigger_x
 
 upwind_left_wall = leftwall.copy()
-upwind_left_wall[0,0] = trigger_xyz[0]
-upwind_left_wall[1,0] = trigger_xyz[0]
+upwind_left_wall[0,0] = trigger_x
+upwind_left_wall[1,0] = trigger_x
 
 downwind_wall_width = downwind_left_wall[2][0] - downwind_left_wall[0][0]
 upwind_wall_width = upwind_left_wall[2][0] - upwind_left_wall[0][0]
@@ -167,24 +170,22 @@ class NetChecker:
 def query_fly_in_trigger_volume(xyz):
     if xyz[0] is None:
         return False
-    xyz = nx.array(xyz)
-    # ignore Z component
-    dist = math.sqrt(nx.sum((trigger_xyz[:2] - xyz[:2])**2))
+    dist = abs(xyz[0]-trigger_x) # only consider x component
     if dist <= trigger_radius:
         return True
     else:
         return False
-
 
 stim_dur_sec = 1.0
 pause_dur_sec = 1.0
 
 log_file = open(time.strftime( 'escape_wall%Y%m%d_%H%M%S.log' ), mode='wb')
 #log_file = sys.stdout
-log_file.write( 'trigger_xyz = %s\n'%str(trigger_xyz))
-log_file.write( 'trigger_radius = %s\n'%str(trigger_radius))
-log_file.write( 'stim_dur_sec = %s\n'%str(stim_dur_sec) )
-log_file.write( 'pause_dur_sec = %s\n'%str(pause_dur_sec) )
+log_file.write( '#trigger_x = %s\n'%str(trigger_x))
+log_file.write( '#trigger_radius = %s\n'%str(trigger_radius))
+log_file.write( '#stim_dur_sec = %s\n'%str(stim_dur_sec) )
+log_file.write( '#pause_dur_sec = %s\n'%str(pause_dur_sec) )
+log_file.write( '## trig_frame trig_time tf_hz\n')
 
 nc = NetChecker()
 frame_timer = FrameTimer()
@@ -216,7 +217,10 @@ while not quit_now:
         query_fly_in_trigger_volume(xyz)) :
         status = 'triggered'
         timetime = time.time()
-        log_file.write('trigger_corrected_framenumber = %d; trigger_time = %s\n'%(cf,repr(timetime)))
+        tf_hz_idx += 1
+        tf_hz_idx = tf_hz_idx % len(tf_hz_all)
+        tf_hz = tf_hz_all[tf_hz_idx]
+        log_file.write('%d %s %f\n'%(cf,repr(timetime),tf_hz))
         mode_start_time = now
         trigger_corrected_framenumber = cf
     elif status == 'triggered':
@@ -224,10 +228,8 @@ while not quit_now:
             status = 'waiting'
             mode_start_time = now
         else:
-            tf_hz = 1.0
             IFI = last_frame-now
-            phase_change = 0.0
-            #phase_change = tf_hz*360.0*IFI
+            phase_change = tf_hz*360.0*IFI
             phase_downwind = grating_downwind.parameters.phase_at_t0 + phase_change
             phase_upwind = grating_upwind.parameters.phase_at_t0 + phase_change
             # move gratings

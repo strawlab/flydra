@@ -15,7 +15,7 @@ import Numeric as nx
 import math, socket, struct, select
 
 screen = Screen(
-    fullscreen=False,
+    fullscreen=True,#False,
     frameless=True,
     sync_swap=False, # vertical sync
     size=(1024,768),
@@ -23,13 +23,13 @@ screen = Screen(
 screen.parameters.bgcolor = (0.0,0.0,0.0) # black (RGB)
 
 # coordinates for tunnel in world coordinates
-rightwall = nx.array([[1000,0,0],
-                      [1000,0,304],
-                      [1500,0,304],
-                      [1500,0,0]])
+rightwall = nx.array([[480,0,0],
+                      [480,0,304],
+                      [980,0,304],
+                      [980,0,0]])
 leftwall = rightwall + nx.array([0,305,0])
 
-texture = Texture('grid.gif')
+texture = Texture('grid-shrunk.gif')
 
 wall_x = (leftwall[2][0]-leftwall[0][0])
 wall_z = (leftwall[2][2]-leftwall[0][2])
@@ -69,6 +69,10 @@ def fly_pos_to_verts(fly_xyz):
     X[1]=0
     return v1o+X, v2o+X, v3o+X, v4o+X
 
+pos_text = Text(anchor='center',
+                ignore_size_parameter=False,
+                size=(300,300),
+                )
 fake_fly = TextureStimulus3D(depth_test=False)
 fly_xyz = (1200,0,150)
 v1,v2,v3,v4 = fly_pos_to_verts( fly_xyz )
@@ -88,7 +92,7 @@ fake_fly.parameters.lowerright = v4
 ##projection.look_at( eye, center, up )
 
 ##viewport.set(projection=projection)
-viewport.set(stimuli=[grid,fake_fly])
+viewport.set(stimuli=[grid,fake_fly,pos_text])
 
 ####################
 
@@ -129,12 +133,13 @@ port = 28931
 
 sockobj.bind(( hostname, port))
 
-x = 1200
+x = 500
 y = 200
 z = 150
 
 data = ''
-fmt = 'ifffffffffd'
+
+fmt = '<iBfffffffffdf' # little endian
 fmt_size = struct.calcsize(fmt)
 def check_network():
     global x,y,z,data
@@ -152,10 +157,17 @@ def check_network():
         mytime = time.time()
         data = data + newdata
         while len(data) >= fmt_size:
-            tmp = struct.unpack(fmt,data[:fmt_size])
+            data_packet = data[:fmt_size]
             data = data[fmt_size:]
-            corrected_framenumber,x,y,z = tmp[:4]
-            find3d_time = tmp[-1]
+
+            print len(data_packet), repr(data_packet)
+            tmp = struct.unpack(fmt,data_packet)
+            corrected_framenumber = tmp[0]
+            find3d_time, repr_err = tmp[-2:]
+            print corrected_framenumber, repr_err
+            if repr_err < 10.0:
+                x,y,z = tmp[2:5]
+                #print x,y,z
 ##            approx_latency = (mytime-find3d_time)*1000.0
 ##            print 'approx_latency',(approx_latency-min_latency) # display only varying part of latency
 ##            if approx_latency < min_latency:
@@ -170,14 +182,14 @@ def check_network():
 
 
 
+# calibration data (20050706)
 
-
-# starting guess (from previous iteration)
-fov_x = 58.283267922
+fov_x = 60.1117038883
 aspect_ratio = 1.33333333333
-eye = (1250.0, 805.0, 191.19999999999777)
-center = (1250.0, 305.0, 195.59999999999752)
-up = (0.028000000000000018, 0.0, 1.0)
+eye = (766.80000000000155, 802.0, 179.09999999999914)
+center = (752.000000000005, 305.0, 182.09999999999928)
+up = (-0.0040000000000000001, 0.0, 1.0)
+
 projection = SimplePerspectiveProjection(fov_x=fov_x,
                                          aspect_ratio=aspect_ratio)
 projection.look_at( eye, center, up )
@@ -277,6 +289,9 @@ while not quit_now:
     ######################
     check_network()
 
+    pos_text.parameters.position=(x,y,z)
+    pos_text.parameters.text = '%.1f %.1f %.1f'%(x,y,z)
+    
     v1,v2,v3,v4 = fly_pos_to_verts( (x,y,z) )
     fake_fly.parameters.lowerleft = v1
     fake_fly.parameters.upperleft = v2

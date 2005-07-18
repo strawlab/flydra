@@ -14,6 +14,9 @@ from VisionEgg.Text import Text
 import Numeric as nx
 import math, socket, struct, select, sys
 
+tf_hz_all = [0.0, 1.0, 5.0]
+tf_hz_idx = 0
+
 screen = Screen(
     fullscreen=False,
     frameless=True,
@@ -181,10 +184,11 @@ pause_dur_sec = 1.0
 
 log_file = open(time.strftime( 'escape_wall%Y%m%d_%H%M%S.log' ), mode='wb')
 #log_file = sys.stdout
-log_file.write( 'trigger_xyz = %s\n'%str(trigger_xyz))
-log_file.write( 'trigger_radius = %s\n'%str(trigger_radius))
-log_file.write( 'stim_dur_sec = %s\n'%str(stim_dur_sec) )
-log_file.write( 'pause_dur_sec = %s\n'%str(pause_dur_sec) )
+log_file.write( '#trigger_xyz = %s\n'%str(trigger_xyz))
+log_file.write( '#trigger_radius = %s\n'%str(trigger_radius))
+log_file.write( '#stim_dur_sec = %s\n'%str(stim_dur_sec) )
+log_file.write( '#pause_dur_sec = %s\n'%str(pause_dur_sec) )
+log_file.write( '## trig_frame trig_time tf_hz\n')
 
 nc = NetChecker()
 frame_timer = FrameTimer()
@@ -216,7 +220,10 @@ while not quit_now:
         query_fly_in_trigger_volume(xyz)) :
         status = 'triggered'
         timetime = time.time()
-        log_file.write('trigger_corrected_framenumber = %d; trigger_time = %s\n'%(cf,repr(timetime)))
+        tf_hz_idx += 1
+        tf_hz_idx = tf_hz_idx % len(tf_hz_all)
+        tf_hz = tf_hz_all[tf_hz_idx]
+        log_file.write('%d %s %f\n'%(cf,repr(timetime),tf_hz))
         mode_start_time = now
         trigger_corrected_framenumber = cf
     elif status == 'triggered':
@@ -224,10 +231,8 @@ while not quit_now:
             status = 'waiting'
             mode_start_time = now
         else:
-            tf_hz = 1.0
             IFI = last_frame-now
-            phase_change = 0.0
-            #phase_change = tf_hz*360.0*IFI
+            phase_change = tf_hz*360.0*IFI
             phase_downwind = grating_downwind.parameters.phase_at_t0 + phase_change
             phase_upwind = grating_upwind.parameters.phase_at_t0 + phase_change
             # move gratings

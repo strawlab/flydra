@@ -19,14 +19,14 @@ screen = Screen(
     frameless=True,
     sync_swap=False, # vertical sync
     size=(1024,768),
+    bgcolor=(0,0,.5),
     )
-screen.parameters.bgcolor = (0.0,0.0,0.0) # black (RGB)
 
 # coordinates for tunnel in world coordinates
-rightwall = nx.array([[1000,0,0],
-                      [1000,0,304],
-                      [1500,0,304],
-                      [1500,0,0]])
+rightwall = nx.array([[480,0,0],
+                      [480,0,304],
+                      [980,0,304],
+                      [980,0,0]])
 leftwall = rightwall + nx.array([0,305,0])
 
 texture = Texture('grid-shrunk.gif')
@@ -59,6 +59,18 @@ stim = TextureStimulus3D(
     lowerright = wall[3],
     )
 
+if 0:
+    # draw vertex position labels (requires VisionEgg as of 2005-07-03)
+    text_labels = []
+    for vert in wall:
+        text_label = Text(text=str(vert),
+                          position=(vert[0],vert[1],vert[2]),
+                          anchor='center',
+                          )
+        text_labels.append(text_label)
+else:
+    text_labels = []
+
 ### starting guess
 ##projection = SimplePerspectiveProjection(fov_x=90.0)
 ##center = ((wall[0][0] + wall[2][0])/2,
@@ -70,16 +82,18 @@ stim = TextureStimulus3D(
 ##projection.look_at( eye, center, up )
 
 ##viewport.set(projection=projection)
-viewport.set(stimuli=[stim])
+viewport.set(stimuli=[stim]+text_labels)
 
 ####################
 
-status_text = Text()
+status_text = Text(
+    position=(200,300),
+    )
 viewport_overlay = Viewport(screen=screen,
-                            position=(200,300),
                             anchor='lowerleft',
                             size=screen.size,
                             stimuli=[status_text])
+
 status_var_main = 'None'
 status_var_sub = 'scalar'
 status_var_value = None
@@ -101,12 +115,11 @@ def get_vec( sub ):
 
 frame_timer = FrameTimer()
 
-# starting guess (from previous iteration)
-fov_x = 58.283267922
+fov_x = 60.1117038883
 aspect_ratio = 1.33333333333
-eye = (1250.0, 805.0, 191.19999999999777)
-center = (1250.0, 305.0, 195.59999999999752)
-up = (0.028000000000000018, 0.0, 1.0)
+eye = (766.80000000000155, 802.0, 179.09999999999914)
+center = (752.000000000005, 305.0, 182.09999999999928)
+up = (-0.0040000000000000001, 0.0, 1.0)
 
 quit_now = 0
 pressing_up = 0
@@ -196,7 +209,6 @@ while not quit_now:
     projection.look_at( eye, center, up )
 
     viewport.parameters.projection = projection
-
     status_text.parameters.text = ' '.join([status_var_main,status_var_sub,str(status_var_value)])
 
     ######################

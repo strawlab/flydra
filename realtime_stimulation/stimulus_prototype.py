@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 from __future__ import division
+import os
+print [(key, os.environ[key]) for key in os.environ if key.startswith('SDL')]
+
 import VisionEgg
 VisionEgg.start_default_logging(); VisionEgg.watch_exceptions()
 
