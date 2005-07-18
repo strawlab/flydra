@@ -81,6 +81,10 @@ class wxMainBrainApp(wxApp):
         #   Data logging
         data_logging_menu = wxMenu()
 
+        ID_change_save_data_dir = wxNewId()
+        data_logging_menu.Append(ID_change_save_data_dir, "Set save data dir...")
+        EVT_MENU(self, ID_change_save_data_dir, self.OnChangeSaveDataDir)
+
         ID_start_saving_data = wxNewId()
         data_logging_menu.Append(ID_start_saving_data, "Start saving data...",
                                  "Collect & save all 2D and 3D data")
@@ -213,6 +217,11 @@ class wxMainBrainApp(wxApp):
         self.take_background_buttons = {}
         self.clear_background_buttons = {}
         self.last_sound_time = time.time()
+
+        self.save_data_dir = os.environ.get('HOME','')
+        test_dir = os.path.join( self.save_data_dir, 'ORIGINAL_DATA' )
+        if os.path.exists(test_dir):
+            self.save_data_dir = test_dir
 
         return True
 
@@ -705,13 +714,22 @@ class wxMainBrainApp(wxApp):
     def OnToggleDebugCameras(self, event):
         self.main_brain.set_all_cameras_debug_mode( event.IsChecked() )
 
+    def OnChangeSaveDataDir(self, event):
+        dlg = wxDirDialog( self.frame, "Change save data directory",
+                           style = wxDD_DEFAULT_STYLE | wxDD_NEW_DIR_BUTTON,
+                           defaultPath = self.save_data_dir,
+                           )
+        try:
+            self.pass_all_keystrokes = True
+            if dlg.ShowModal() == wxID_OK:
+                self.save_data_dir = dlg.GetPath()
+        finally:
+            dlg.Destroy()
+            self.pass_all_keystrokes = False            
+
     def OnStartSavingData(self, event=None):
         display_save_filename = time.strftime( 'DATA%Y%m%d_%H%M%S.h5' )
-        save_dir = os.environ.get('HOME','')
-        test_dir = os.path.join( save_dir, 'ORIGINAL_DATA' )
-        if os.path.exists(test_dir):
-            save_dir = test_dir
-        save_filename = os.path.join( save_dir, display_save_filename )
+        save_filename = os.path.join( self.save_data_dir, display_save_filename )
         if 1:
             try:
                 self.main_brain.start_saving_data(save_filename)
@@ -913,7 +931,6 @@ class wxMainBrainApp(wxApp):
         #print 'in OnWindowClose'
         self._on_common_quit()
         #print 'stopped timers'
-        #print "why doesn't the app stop now?"
         event.Skip()
         #frame = sys._getframe()
         #traceback.print_stack(frame)
@@ -923,7 +940,6 @@ class wxMainBrainApp(wxApp):
         #print 'in OnQuit'
         self._on_common_quit()
         self.frame.Destroy()
-        print "why doesn't the app stop now??"
         #frame = sys._getframe()
         #traceback.print_stack(frame)
         sys.exit(0)
@@ -944,11 +960,10 @@ class wxMainBrainApp(wxApp):
         realtime_data=MainBrain.get_best_realtime_data()
         if realtime_data is not None:
             data3d,line3d,cam_ids_used,min_mean_dist=realtime_data
-            if self.current_page == 'tracking':
-                XRCCTRL(self.tracking_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
-                XRCCTRL(self.tracking_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
-                XRCCTRL(self.tracking_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
-                XRCCTRL(self.tracking_panel,'err').SetValue('% 8.1f'%min_mean_dist)
+            XRCCTRL(self.tracking_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
+            XRCCTRL(self.tracking_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
+            XRCCTRL(self.tracking_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
+            XRCCTRL(self.tracking_panel,'err').SetValue('% 8.1f'%min_mean_dist)
             if min_mean_dist <= 10.0:
                 if DETECT_SND is not None:
                     now = time.time()
