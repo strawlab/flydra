@@ -7,9 +7,11 @@ if ENABLED:
     import matplotlib.numerix as nx
     import pylab
     import matplotlib.cm
+    import matplotlib.figure
     from matplotlib.backends.backend_wx import NavigationToolbar2Wx
     from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
     from matplotlib.mlab import meshgrid
+    
 from wxPython.wx import *
 
 #origin = 'lower' # will have to change extent?
@@ -20,7 +22,7 @@ class PlotPanel(wxPanel):
     def __init__(self, parent):
         wxPanel.__init__(self, parent, -1)
         if ENABLED:
-            self.fig = pylab.figure(figsize=(5,4), dpi=75)
+            self.fig = matplotlib.figure.Figure(figsize=(5,4), dpi=75)
             self.canvas = FigureCanvasWxAgg(self, -1, self.fig)
             self.toolbar = NavigationToolbar2Wx(self.canvas) #matplotlib toolbar
             self.toolbar.Realize()
@@ -37,7 +39,7 @@ class PlotPanel(wxPanel):
 
     def init_plot_data(self):
         if ENABLED:
-            a = self.fig.add_axes([0.05,0.05,0.9,0.9])
+            a = self.fig.add_axes([0.075,0.1,0.75,0.85])
 
             start_size=656,491
             x = nx.arange(start_size[0])
@@ -48,14 +50,20 @@ class PlotPanel(wxPanel):
             pylab.setp(a,'yticks',range(0,start_size[1],100))
             x, y = meshgrid(x, y)
             z = nx.zeros(x.shape)
+            z[1,1]=255
             frame = z
             extent = 0, frame.shape[1]-1, frame.shape[0]-1, 0
             self.im = a.imshow( z,
-                                cmap=matplotlib.cm.jet,
+                                cmap=matplotlib.cm.hsv,
+                                #cmap=matplotlib.cm.jet,
                                 origin=origin,
                                 interpolation='nearest',
                                 extent=extent,
                                 )
+
+            cax = self.fig.add_axes([0.85,0.1,0.075,0.85])
+            self.fig.colorbar( self.im, cax=cax, orientation='vertical')
+            
             #self.im.set_clim(0,255)
 
             self.lines = a.plot([0],[0],'o-') 	 
