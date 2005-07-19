@@ -232,7 +232,7 @@ void rotation_calculation_finish( void )
 /****************************************************************
 ** rotation update **********************************************
 ****************************************************************/
-void rotation_update( double fly_x_pos, double fly_y_pos, double new_orientation )
+void rotation_update( double fly_x_pos, double fly_y_pos, double new_orientation, double timestamp )
 {
   int new_pos_x, new_pos_y;
   static double new_pos_x_f = 0.0, new_pos_y_f = 0.0; /* pattern variables */
@@ -243,8 +243,8 @@ void rotation_update( double fly_x_pos, double fly_y_pos, double new_orientation
   round_position( &new_pos_x, &new_pos_x_f, &new_pos_y, &new_pos_y_f, NPIXELS, CALIB_PATTERN_DEPTH );
   set_position_analog( new_pos_x, NPIXELS, new_pos_y, CALIB_PATTERN_DEPTH );
 #endif
-  fprintf( calibfile, "%lf\t%lf\t%lf\t%lf\t%lf\n", fly_x_pos, fly_y_pos, 
-      new_orientation, new_pos_x_f, new_pos_y_f );
+  fprintf( calibfile, "%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n", fly_x_pos, fly_y_pos, 
+      new_orientation, new_pos_x_f, new_pos_y_f, timestamp );
 
   x_pos_calc[curr_frame] = fly_x_pos;
   y_pos_calc[curr_frame] = fly_y_pos;

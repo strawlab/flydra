@@ -10,4 +10,4 @@ ctypedef public class ArenaController [object PyArenaControllerObject, type PyAr
                            double timestamp, long framenumber)
     cdef long rotation_calculation_init( self, int nframes )
     cdef void rotation_calculation_finish( self )
-    cdef void rotation_update( self, double fly_x_pos, double fly_y_pos, double new_orientation )
+    cdef void rotation_update( self, double fly_x_pos, double fly_y_pos, double new_orientation, double timestamp )

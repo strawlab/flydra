@@ -537,13 +537,13 @@ cdef class RealtimeAnalyzer:
         # end of IPP-requiring code
         return
 
-    def rotation_update(self, float x0, float y0, float orientation):
+    def rotation_update(self, float x0, float y0, float orientation, double timestamp):
         # start of IPP-requiring code
         # convert back to ROI-relative coordinates
         if self.arena_controller is not None:
             x0 = x0 - self._left
             y0 = y0 - self._bottom
-            self.arena_controller.rotation_update( x0, y0, orientation )
+            self.arena_controller.rotation_update( x0, y0, orientation, timestamp )
         # end of IPP-requiring code
         return
 

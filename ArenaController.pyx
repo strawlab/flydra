@@ -13,7 +13,7 @@ cdef extern from "arena_control.h":
 
     cdef long rotation_calculation_init( int nframes )
     cdef void rotation_calculation_finish()
-    cdef void rotation_update( double fly_x_pos, double fly_y_pos, double new_orientation )
+    cdef void rotation_update( double fly_x_pos, double fly_y_pos, double new_orientation, double timestamp )
 
     cdef void arena_update( double x, double y, double orientation,
                             double timestamp, long framenumber )
@@ -44,6 +44,6 @@ ctypedef public class ArenaController [object PyArenaControllerObject, type PyAr
         return rotation_calculation_init( nframes )
     cdef void rotation_calculation_finish( self ):
         rotation_calculation_finish()
-    cdef void rotation_update( self, double fly_x_pos, double fly_y_pos, double new_orientation ):
-        rotation_update( fly_x_pos, fly_y_pos, new_orientation )
+    cdef void rotation_update( self, double fly_x_pos, double fly_y_pos, double new_orientation, double timestamp ):
+        rotation_update( fly_x_pos, fly_y_pos, new_orientation, timestamp )
     

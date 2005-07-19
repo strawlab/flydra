@@ -233,7 +233,7 @@ class GrabClass(object):
                         orientation = orientation + math.pi/2.0
                     else:
                         orientation = math.pi/2.0
-                    self.realtime_analyzer.rotation_update(x0,y0,orientation)
+                    self.realtime_analyzer.rotation_update(x0,y0,orientation,timestamp)
                     rot_frame_number += 1
                     if rot_frame_number>=n_rot_samples:
                         self.realtime_analyzer.rotation_end()
