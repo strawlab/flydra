@@ -1,0 +1,13 @@
+
+Fuse Low Byte      = 0xff
+Fuse High Byte     = 0x99
+Fuse Extended Byte = 0xff
+Calibration Byte   = 0x97  --  Read Only
+Lock Bits          = 0xff
+    BLB12 -> 1
+    BLB11 -> 1
+    BLB02 -> 1
+    BLB01 -> 1
+      LB2 -> 1
+      LB1 -> 1
+
