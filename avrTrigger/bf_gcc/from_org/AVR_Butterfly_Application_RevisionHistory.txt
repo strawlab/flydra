@@ -1,0 +1,10 @@
+AVR Butterfly Application
+
+Revision history
+
+Rev	Changes
+--------------------------------
+05	First released revision
+06	Added calibration of the OSCCAL-byte 
+	(due to the increased BootBlock, the melodies "Minuet and "Auld Lang Syne"
+	 had to be left out)
