@@ -483,20 +483,40 @@ def get_f_xyz_L_err( results, max_err = 10, typ = 'best' ):
         
     return f,xyz,L,err
 
-def plot_whole_movie_2d(results, typ='best', show_err=False, max_err=10):
+def plot_movie_2d(results,
+                  start_idx=0,
+                  stop_idx=-1,
+                  typ='best',
+                  show_err=False,
+                  max_err=10):
     ioff()
     try:
         import flydra.reconstruct
         reconstructor = flydra.reconstruct.Reconstructor(results)
         f,X,L,err = get_f_xyz_L_err(results,max_err=max_err,typ=typ)
-
+        f=f[start_idx:stop_idx]
+        X=X[start_idx:stop_idx]
+        fstart = f[0]
+        fstop = f[-1]
         X = nx.concatenate( (X, nx.ones( (X.shape[0],1) )), axis=1 )
         X.transpose()
         camns = [ row['camn'] for row in results.root.cam_info]
         camn2cam_id = {}
+        cam_id2camn = {}
+        cam_ids_unique = True
         for row in results.root.cam_info:
-            camn2cam_id[ row['camn']] = row['cam_id']
+            cam_id = row['cam_id']
+            camn = row['camn']
+            camn2cam_id[ camn] = cam_id
+            if cam_id in cam_id2camn:
+                cam_ids_unique = False
+            cam_id2camn[ cam_id ] = camn
         cam_ids = [ camn2cam_id[camn] for camn in camns ]
+        cam_ids.sort()
+        cam_ids.reverse()
+        if cam_ids_unique:
+            # can order by cam_id
+            camns = [ cam_id2camn[cam_id] for cam_id in cam_ids ]
         ncams = len(camns)
         height = 0.8/ncams
         ax = None
@@ -509,21 +529,23 @@ def plot_whole_movie_2d(results, typ='best', show_err=False, max_err=10):
             x2 = []
             y2 = []
             for row in results.root.data2d.where(results.root.data2d.cols.camn == camn):
-                f2.append(row['frame'])
-                x2.append(row['x'])
-                y2.append(row['y'])
+                frame = row['frame']
+                if fstart <= frame <= fstop:
+                    f2.append(frame)
+                    x2.append(row['x'])
+                    y2.append(row['y'])
             f2 = nx.array(f2)
             x2 = nx.array(x2)
             y2 = nx.array(y2)
-            
-            pylab.plot( f,xy[0,:],'r.' )
-            pylab.plot( f,xy[1,:],'g.' )
-            
-            pylab.plot( f2,x2,'k.' ) # real data
-            #pylab.plot( f2,y2,'k.' ) # real data
+
+            lines = ax.plot( f2, x2,'k', # real data
+                             f2, y2,'b',
+                             
+                             f,  xy[0,:],'r', # projected from 3D reconstruction
+                             f,  xy[1,:],'g')
             
             pylab.ylabel( cam_id )
-            pylab.set(ax, 'ylim',[-10,660])
+            pylab.setp(ax, 'ylim',[-10,660])
     finally:
         ion()
 
