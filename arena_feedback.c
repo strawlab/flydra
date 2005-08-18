@@ -6,10 +6,8 @@
 #include "serial_comm/serial_comm.h"
 #include "arena_utils.h"
 
-/* parametric expansions -- diagonal, horizontal, vertical, full */
+/* saccade-triggered rotations: striped background and single-stripe foreground */
 
-#define THETA_DEG_FROM_R_A_V_T( r, a, v, t ) ((2 * atan( r / (v*t) )) * 180/PI) /* assuming a=0 */
-#define POS_Y_F_FROM_THETA( theta ) (theta * ((ARENA_PATTERN_DEPTH - 1.0)/180.0))
 #define LATENCY_FROM_TIMESTAMP( timestamp ) ((systime()-timestamp)*1000)
 
 int get_random_set( int cur_set, int n_sets )
@@ -40,148 +38,135 @@ void set_patt_position( double orientation, double timestamp, long framenumber,
 /* pattern x, y position */
 /* three arbitrary output variables */
 {
-  char cmd[8];
-  int serial_port;
-  const double new_pos_x_f = 0.0;
+  static double new_pos_x_f = 0.0;
   static double new_pos_y_f = 0.0;
   static double first_time = 0.0;
   static clock_t first_clock;
 
-  static int exp_flag = 0;
-  static int exp_frames = -1;
-  static double avg_frametime;
+  static int expt_flag = 0;
 
   /* experimental variables */
-  static double set_time = 0.0;
-  const double n_seconds_per_set = 10.0;
-  const int n_sets = 4;
+  static double trig_time = 0.0;
+  const double n_seconds_wait_after_trigger = 5.0;
+  const int n_sets = 9;
   /* positive is clockwise in arena */
+  static int trig_direction;
   static int cur_set = 0;
-  static int expanding = 0;
-  /* see /home/jbender/matlab/anal/calc_expanding_obj4.m */
-  const double time_to_collision = -500; /* ms, initial */
-  double theta;
-  static double theta_init;
-  const double r = 10.0		/100.0;		/* cm -> m */
-  const double v = -1.5		/1000.0;	/* m/s -> m/ms */
-  const double a = 0.0		/1000000.0;	/* m/s^2 -> m/ms^2 */
-  static double t;
-  double x_calc;
+  static double last_orientation;
+  static int move_flag = 0;
+  const double dor_thresh = 3.0; /* threshold, degrees */
+  /* rotation 40 deg in 80 ms */
+  const double rotation_amp = 40.0;
+  const double rotation_dur = 80.0;
+  static double start_pos_x, start_pos_y, end_pos_x, end_pos_y;
+  double time_frac;
 
   if( first_time == 0.0 )
   {
     first_time = timestamp;
     first_clock = clock();
-    set_time = 0.0;
     srand( time( NULL ) );
   }
 
-  exp_frames++;
-
   /* update experimental variables */
-  if( timestamp > set_time + n_seconds_per_set )
+  if( timestamp > trig_time + n_seconds_wait_after_trigger )
   {
+    move_flag = 0;
     cur_set = get_random_set( cur_set, n_sets );
-    /* set this pattern */
-    if( sc_open_port( &serial_port, SC_COMM_PORT ) == SC_SUCCESS_RC )
-    {
-      /* set pattern id to expt. pattern */
-      cmd[0] = 2; cmd[1] = 3; cmd[2] = cur_set + 2;
-      sc_send_cmd( &serial_port, cmd, 3 );
-      /* start pattern */
-      cmd[0] = 1; cmd[1] = 32;
-      sc_send_cmd( &serial_port, cmd, 2 );
-      /* close serial port */
-      sc_close_port( &serial_port );
-    }
-    else printf( "**error opening serial port\n" );
-    
-    t = time_to_collision;
-    expanding = 0;
-    theta = theta_init = THETA_DEG_FROM_R_A_V_T( r, a, v, t );
-    new_pos_y_f = POS_Y_F_FROM_THETA( theta );
-
-    if( set_time == 0.0 ) avg_frametime = 0.001780; /* estimate */
-    else avg_frametime = (timestamp - set_time) / exp_frames;
-    set_time = timestamp;
-    exp_frames = -1;
     printf( "__current experiment: set %d\n", cur_set );
-    if( !exp_flag && timestamp > first_time + 15.0*60.0 )
-    {
-      printf( "__15 minutes\n" );
-      exp_flag = 1;
-    }
+
+    /* bring positions back into range, to keep things from getting out of hand */
+    while( new_pos_x_f >= (double)NPIXELS ) new_pos_x_f -= (double)NPIXELS;
+    while( new_pos_x_f < 0.0 ) new_pos_x_f += (double)NPIXELS;
+    while( new_pos_y_f >= (double)NPIXELS ) new_pos_y_f -= (double)NPIXELS;
+    while( new_pos_y_f < 0.0 ) new_pos_y_f += (double)NPIXELS;
   }
   else if( cur_set >= 0 )
   {
-    switch( expanding )
+    if( !move_flag && fabs( orientation - last_orientation ) > dor_thresh*PI/180 )
     {
-      case 0: /* expand */
-        if( t >= 0.0 ) /* stop expanding */
-        {
-          theta = 180.0;
-          new_pos_y_f = POS_Y_F_FROM_THETA( theta );
-          t = 0.0;
-          expanding++;
+      move_flag = 1;
+      trig_time = timestamp;
+      trig_direction = (orientation > last_orientation? 1:-1);
+      start_pos_x = new_pos_x_f;
+      start_pos_y = new_pos_y_f;
+
+      switch( cur_set )
+      /* stripe rotates with pattern X, background with pattern Y */
+      /* 0: rotate stripe with saccade
+         1: rotate stripe against saccade
+         2: rotate background with saccade
+         3: rotate background against saccade
+         4: stripe with, background with
+         5: stripe with, background against
+         6: stripe against, background with
+         7: stripe against, background against
+         8: no rotation */
+      /* rotation 40 deg in 80 ms */
+      {
+        case( 0 ):
+          end_pos_x = start_pos_x + trig_direction*rotation_amp*DEG2PIX;
+          end_pos_y = start_pos_y;
           break;
-        }
-        /* from /home/jbender/matlab/anal/calc_expanding_obj4.m
-           for an object with radius 'r', inital velocity 'v', and constant acceleration 'a',
-           position 'x'=0 at time 't'=0 and beginning at t<0
-
-          % first find initial velocity at t=max(|t|)
-          v0 = a*max( abs( t ) ) + v;
-          % use this initial velocity at t=0, so v=v at t=max(|t|)
-          theta = 2.*atan( r./(v0.*(t) + 0.5*a.*t.^2));
-          x = r./tan(theta./2);
-          v = [diff( x ) 0]; % cheap derivative
-          theta = theta .* (180/pi); % deg
-          phi = -r.*(v0+a.*t)./( t.^2 .*( v0+0.5*a.*t).^2 + r^2 );
-          phi = phi .* (180/pi); % deg/s
-        */
-
-        theta = THETA_DEG_FROM_R_A_V_T( r, a, v, t );
-        x_calc = v*t;
-
-        /* deg * pixels/deg * pattern_index/pixels = pattern index */
-        new_pos_y_f = POS_Y_F_FROM_THETA( theta );
-
-        /* increment time */
-        t += avg_frametime * 1000.0;
-        break;
-      case 1:
-        if( timestamp > set_time + n_seconds_per_set/2.0 ) expanding++;
-      break;
-      case 2: /* contract */
-        if( t >= -time_to_collision ) /* stop contracting */
-        {
-          t = -time_to_collision;
-          theta = THETA_DEG_FROM_R_A_V_T( r, a, -v, t );
-          new_pos_y_f = POS_Y_F_FROM_THETA( theta );
-          expanding++;
+        case( 1 ):
+          end_pos_x = start_pos_x - trig_direction*rotation_amp*DEG2PIX;
+          end_pos_y = start_pos_y;
           break;
-        }
+        case( 2 ): 
+          end_pos_x = start_pos_x;
+          end_pos_y = start_pos_y + trig_direction*rotation_amp*DEG2PIX;
+          break;
+        case( 3 ): 
+          end_pos_x = start_pos_x;
+          end_pos_y = start_pos_y - trig_direction*rotation_amp*DEG2PIX;
+          break;
+        case( 4 ): 
+          end_pos_x = start_pos_x + trig_direction*rotation_amp*DEG2PIX;
+          end_pos_y = start_pos_y + trig_direction*rotation_amp*DEG2PIX;
+          break;
+        case( 5 ): 
+          end_pos_x = start_pos_x + trig_direction*rotation_amp*DEG2PIX;
+          end_pos_y = start_pos_y - trig_direction*rotation_amp*DEG2PIX;
+          break;
+        case( 6 ): 
+          end_pos_x = start_pos_x - trig_direction*rotation_amp*DEG2PIX;
+          end_pos_y = start_pos_y + trig_direction*rotation_amp*DEG2PIX;
+          break;
+        case( 7 ): 
+          end_pos_x = start_pos_x - trig_direction*rotation_amp*DEG2PIX;
+          end_pos_y = start_pos_y - trig_direction*rotation_amp*DEG2PIX;
+          break;
+        case( 8 ):
+          end_pos_x = start_pos_x;
+          end_pos_y = start_pos_y;
+      } /* switch cur_set */
+    } /* if saccade has just begun */
 
-        theta = THETA_DEG_FROM_R_A_V_T( r, a, -v, t );
-        x_calc = -v*t;
-
-        /* deg * pixels/deg * pattern_index/pixels = pattern index */
-        new_pos_y_f = POS_Y_F_FROM_THETA( theta );
-
-        /* increment time */
-        t += avg_frametime * 1000.0;
-      break;
-    } /* switch */
+    if( move_flag ) /* mid-experiment */
+    {
+      time_frac = (timestamp - trig_time)*1000 / rotation_dur;
+      if( time_frac > 1.0 ) time_frac = 1.0; /* done rotating */
+      new_pos_x_f = start_pos_x + time_frac*(end_pos_x - start_pos_x);
+      new_pos_y_f = start_pos_y + time_frac*(end_pos_y - start_pos_y);
+    }
   } /* if */
 
 /*
   if( exp_frames == -1 ) printf( "  latency this frame: %.3lf ms\n", LATENCY_FROM_TIMESTAMP( timestamp ) );
 */
 
+  last_orientation = orientation;
+
+  if( !expt_flag && timestamp > first_time + 15.0*60.0 )
+  {
+    printf( "__15 minutes\n" );
+    expt_flag = 1;
+  }
+
   /* set output variables */
   *patt_x = new_pos_x_f;
   *patt_y = new_pos_y_f;
-  *out1 = theta;
-  *out2 = t;
+  *out1 = 0.0;
+  *out2 = 0.0;
   *out3 = (double)cur_set;
 }

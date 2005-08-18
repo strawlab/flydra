@@ -10,19 +10,14 @@
 
 #define BIAS_AVAILABLE NO
 
-/* 1 poles
-   2 square
-   3 vert
-   4 horiz
-   5 diag */
-#define CALIBRATION_PATTERN 1
-#define ARENA_START_PATTERN 2
+#define CALIBRATION_PATTERN 2
+#define ARENA_START_PATTERN 1
 
 /* gain,bias in 2s complement (x=x; -x=256-x) */
 /* bias seems to be a percentage */
 #define EXP_GAIN_X 15
 #define EXP_BIAS_X 0
-#define EXP_GAIN_Y 60
+#define EXP_GAIN_Y EXP_GAIN_X
 #define EXP_BIAS_Y 0
 
 /*#define CAL_GAIN_X 0
@@ -48,12 +43,14 @@
   #define PATTERN_DEPTH 8
   #define PATTERN_START_ANGLE 33.75
   #define PATTERN_END_ANGLE 112.5
-#else
+else
   #define ARENA_PATTERN_DEPTH 16
   #define PATTERN_START_ANGLE (2*PIX2DEG)
   #define PATTERN_END_ANGLE (32*PIX2DEG)
-#endif
 #define PATTERN_DELTA_ANGLE (PATTERN_END_ANGLE - PATTERN_START_ANGLE)
+#else
+  #define ARENA_PATTERN_DEPTH NPIXELS
+#endif
 
 #define cdi_DEVICE "/dev/comedi0"
 #define cdi_SUBDEV 1
