@@ -47,6 +47,20 @@ void unwrap( double *th1, double *th2 )
 }
 
 /****************************************************************
+** unwrap_pi4 ***************************************************
+****************************************************************/
+void unwrap_pi4( double *th1, double *th2 )
+{
+  /* make both positive */
+  while( *th1 < 0 ) *th1 += 2*PI;
+  while( *th2 < 0 ) *th2 += 2*PI;
+
+  /* force th1 and th2 to be no more than PI/4 apart */
+  if( *th1 - *th2 > PI/4 ) *th2 += PI/2;
+  else if( *th2 - *th1 > PI/4 ) *th1 += PI/2;
+}
+
+/****************************************************************
 ** disambiguate *************************************************
 ****************************************************************/
 double disambiguate( double x, double y, double center_x, double center_y )
@@ -81,7 +95,7 @@ double disambiguate( double x, double y, double center_x, double center_y )
   unwrap( &theta7, &theta8 );
   th_dist78 = fabs( theta7 - theta8 );
 
-  /* average the best two possibilities */
+  /* average the best pair of possibilities */
   if( th_dist12 <= th_dist34 && th_dist12 <= th_dist56 && th_dist12 <= th_dist78 )
     theta_f = (theta1 + theta2) / 2;
   else if( th_dist34 <= th_dist56 && th_dist34 <= th_dist78 )

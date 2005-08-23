@@ -10,8 +10,8 @@
 
 #define BIAS_AVAILABLE NO
 
-#define CALIBRATION_PATTERN 2
-#define ARENA_START_PATTERN 1
+#define CALIBRATION_PATTERN 1
+#define ARENA_START_PATTERN 2
 
 /* gain,bias in 2s complement (x=x; -x=256-x) */
 /* bias seems to be a percentage */
@@ -56,8 +56,8 @@ else
 #define cdi_SUBDEV 1
 #define cdi_CHAN_X 0
 #define cdi_CHAN_Y 1
-#define cdi_MIN 2030
-#define cdi_MAX 2980
+#define cdi_MIN 2040
+#define cdi_MAX 3020
 #define cdi_RANGE (cdi_MAX-cdi_MIN)
 #define cdi_AREF AREF_GROUND
 
@@ -65,6 +65,7 @@ void fill_time_string( char string[] );
 
 /* some utility functions */
 void unwrap( double *th1, double *th2 );
+void unwrap_pi4( double *th1, double *th2 );
 double disambiguate( double x, double y, double center_x, double center_y );
 void round_position( int *pos_x, double *pos_x_f, int *pos_y, double *pos_y_f, int max_x, int max_y );
 void fit_circle( double *x_data, double *y_data, int n_data, double *x_cent, double *y_cent );

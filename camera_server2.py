@@ -146,7 +146,7 @@ class GrabClass(object):
 
         old_ts = time.time()
         old_fn = 0
-        n_rot_samples = 101*60 # 1 minute
+        n_rot_samples = 560*60 # 1 minute -- WARNING: not valid for all framerates!
         points = []
 
         if os.name == 'posix':

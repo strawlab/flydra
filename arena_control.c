@@ -67,10 +67,15 @@ long arena_initialize( void )
   sc_send_cmd( &serial_port, cmd, 4 );  do later in analog */
 
   /* set gain and bias */
-  cmd[0] = 5; cmd[1] = 128;
+  cmd[0] = 5; cmd[1] = 113;
   cmd[2] = EXP_GAIN_X; cmd[3] = EXP_BIAS_X;
   cmd[4] = EXP_GAIN_Y; cmd[5] = EXP_BIAS_Y;
   sc_send_cmd( &serial_port, cmd, 6 );
+
+  /* set closed-loop mode for X and Y */
+  cmd[0] = 3; cmd[1] = 16;
+  cmd[2] = 3; cmd[3] = 3;
+  sc_send_cmd( &serial_port, cmd, 4 );
 
   /* start pattern */
   cmd[0] = 1; cmd[1] = 32;
@@ -152,7 +157,7 @@ long rotation_calculation_init( int nframes )
   sc_send_cmd( &serial_port, cmd, 4 );
 
   /* set gain and bias */
-  cmd[0] = 5; cmd[1] = 128;
+  cmd[0] = 5; cmd[1] = 113;
   cmd[2] = CAL_GAIN_X; cmd[3] = CAL_BIAS_X;
   cmd[4] = CAL_GAIN_Y; cmd[5] = CAL_BIAS_Y;
   sc_send_cmd( &serial_port, cmd, 6 );
@@ -169,7 +174,7 @@ long rotation_calculation_init( int nframes )
   sprintf( filename, "%scalib%s.dat", _ARENA_CONTROL_data_prefix_, timestring );
   calibfile = fopen( filename, "w" );
 
-  printf( "==saving center calculation to %s\n", filename );
+  printf( "==saving %d calibration frames to %s\n", nframes, filename );
 
   x_pos_calc = (double*)malloc( nframes * sizeof( double ) );
   y_pos_calc = (double*)malloc( nframes * sizeof( double ) );
@@ -201,7 +206,7 @@ void rotation_calculation_finish( void )
   errval = sc_send_cmd( &serial_port, cmd, 3 );
 
   /* set gain and bias */
-  cmd[0] = 5; cmd[1] = 128;
+  cmd[0] = 5; cmd[1] = 113;
   cmd[2] = EXP_GAIN_X; cmd[3] = EXP_BIAS_X;
   cmd[4] = EXP_GAIN_Y; cmd[5] = EXP_BIAS_Y;
   sc_send_cmd( &serial_port, cmd, 6 );
@@ -217,6 +222,7 @@ void rotation_calculation_finish( void )
   sc_close_port( &serial_port );
  
   /* calculate center of circle */
+  printf( "==done collecting, calculating center\n" );
   fit_circle( x_pos_calc, y_pos_calc, curr_frame, &center_x, &center_y );
 
   free( x_pos_calc );
@@ -237,9 +243,22 @@ void rotation_update( double fly_x_pos, double fly_y_pos, double new_orientation
   int new_pos_x, new_pos_y;
   static double new_pos_x_f = 0.0, new_pos_y_f = 0.0; /* pattern variables */
 #if BIAS_AVAILABLE == NO
+  const double target_x_vel = -55.0; /* deg/s */
+  const double target_y_vel = -2.5*target_x_vel;
+  static double last_timestamp = 0.0;
 
-  new_pos_x_f -= 0.20; /* counterclockwise turn */
-  new_pos_y_f += 0.35;
+  if( last_timestamp == 0.0 )
+  { /* guess 101 fps, as of old */
+    new_pos_x_f -= 0.10; /* counterclockwise turn; 0.10 at 101 fps = 56.8 deg/s */
+    new_pos_y_f += 0.25;
+  }
+  else
+  { /* estimate frames/s from last 2 frames */
+    new_pos_x_f += target_x_vel*(timestamp - last_timestamp)*DEG2PIX;
+    new_pos_y_f += target_y_vel*(timestamp - last_timestamp)*DEG2PIX;
+  }
+  last_timestamp = timestamp;
+
   round_position( &new_pos_x, &new_pos_x_f, &new_pos_y, &new_pos_y_f, NPIXELS, CALIB_PATTERN_DEPTH );
   set_position_analog( new_pos_x, NPIXELS, new_pos_y, CALIB_PATTERN_DEPTH );
 #endif
@@ -271,15 +290,9 @@ void arena_update( double x, double y, double orientation,
   /* disambiguate fly's orientation using position data */
   theta_exp = disambiguate( x, y, center_x, center_y );
   /* change to best match expected angle */
-  while( orientation < theta_exp - PI/4 ) orientation += PI/2;
-  while( orientation >= theta_exp + PI/4 ) orientation -= PI/2;
-  /* Before 4/13/05, this gave output orientations between
-     -45 and 405, which kind of sucks.
-     It seems like it only matters when absolute orientation
-     is an issue (not relative orientation) and the rounding
-     done below should re-wrap it into 0<x<360.  It's just
-     a pain for analysis when absolute orientation matters
-     (like determining fly/camera offset). */
+  unwrap( &orientation, &theta_exp );
+  while( orientation < theta_exp - PI/2 ) orientation += PI;
+  while( orientation >= theta_exp + PI/2 ) orientation -= PI;
   /* return to [0 2*pi) */
   while( orientation < 0 ) orientation += 2*PI;
   while( orientation >= 2*PI ) orientation -= 2*PI;
