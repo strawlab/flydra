@@ -48,7 +48,7 @@ void set_patt_position( double orientation, double timestamp, long framenumber,
   const double fly_offset = -0.3415; /* estimated offset between camera and arena = 20 deg */
 
   /* experimental variables */
-  const double n_seconds_wait_after_trigger = 3.0;
+  const double n_seconds_wait_after_trigger = 1.0;
   static double trig_time = 0.0;
   static int cur_set = -1;
   const int n_sets = 9;
@@ -56,7 +56,7 @@ void set_patt_position( double orientation, double timestamp, long framenumber,
   static int trig_direction;
   static int move_flag = 1;
   const double vel_thresh = 350.0; /* threshold, degrees/s */
-  const double vel_thresh_factor = 4.0; /* noisiness or filter factor */
+  const double vel_thresh_factor = 2.0; /* noisiness or filter factor */
   /* rotation 40 deg in 80 ms */
   const double rotation_amp = 40.0;
   const double rotation_dur = 80.0;
@@ -87,8 +87,8 @@ void set_patt_position( double orientation, double timestamp, long framenumber,
   {
     move_flag = 0;
     cur_set = get_random_set( cur_set, n_sets );
-    printf( "; next expt. set: %d\n", cur_set );
-
+/*    printf( "; next expt. set: %d\n", cur_set );
+*/
     /* bring positions back into range, to keep things from getting out of hand */
     while( new_pos_x_f >= (double)NPIXELS ) new_pos_x_f -= (double)NPIXELS;
     while( new_pos_x_f < 0.0 ) new_pos_x_f += (double)NPIXELS;
@@ -102,13 +102,15 @@ void set_patt_position( double orientation, double timestamp, long framenumber,
     last_or = last_orientation;
     unwrap( &fly_or, &last_or );
     cur_vel = (fly_or - last_or) / (timestamp - last_timestamp); /* rad/s */
+    if( cur_vel > (PI/4) / (timestamp - last_timestamp) ) /* upper bound */
+      cur_vel = 0.0;
 
     if( !move_flag && fabs( cur_vel ) > vel_thresh*vel_thresh_factor*PI/180 )
     {
-      printf( "__triggering" );
+/*      printf( "__triggering" );
       printf( " at frame %ld, (%.3f-%.3f)/(%.1f-%.1f)=%.3f (>%.3f)",
         framenumber, fly_or, last_or, timestamp, last_timestamp, cur_vel, vel_thresh*vel_thresh_factor*PI/180 );
-      move_flag = 1;
+*/      move_flag = 1;
       trig_time = timestamp;
       trig_direction = (cur_vel > 0.0? 1:-1);
       start_pos_x = new_pos_x_f;

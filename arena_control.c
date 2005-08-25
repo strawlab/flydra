@@ -243,21 +243,11 @@ void rotation_update( double fly_x_pos, double fly_y_pos, double new_orientation
   int new_pos_x, new_pos_y;
   static double new_pos_x_f = 0.0, new_pos_y_f = 0.0; /* pattern variables */
 #if BIAS_AVAILABLE == NO
-  const double target_x_vel = -55.0; /* deg/s */
-  const double target_y_vel = -2.5*target_x_vel;
-  static double last_timestamp = 0.0;
 
-  if( last_timestamp == 0.0 )
-  { /* guess 101 fps, as of old */
-    new_pos_x_f -= 0.10; /* counterclockwise turn; 0.10 at 101 fps = 56.8 deg/s */
-    new_pos_y_f += 0.25;
-  }
-  else
-  { /* estimate frames/s from last 2 frames */
-    new_pos_x_f += target_x_vel*(timestamp - last_timestamp)*DEG2PIX;
-    new_pos_y_f += target_y_vel*(timestamp - last_timestamp)*DEG2PIX;
-  }
-  last_timestamp = timestamp;
+  new_pos_x_f -= 0.0175; /* counterclockwise turn */
+  new_pos_y_f += 0.43;
+  /* 0.10 at 101 fps = 56.8 deg/s */
+  /* 0.0175 at 560 fps = 55 deg/s */
 
   round_position( &new_pos_x, &new_pos_x_f, &new_pos_y, &new_pos_y_f, NPIXELS, CALIB_PATTERN_DEPTH );
   set_position_analog( new_pos_x, NPIXELS, new_pos_y, CALIB_PATTERN_DEPTH );

@@ -159,6 +159,7 @@ void fit_circle( double *x_data, double *y_data, int n_data, double *x_cent, dou
   double sum_sq_x = 0.0, sum_sq_y = 0.0;
   double a,b,c,d,e,f;
   int i;
+  int use_n_data = n_data; /* some data may be 0 */
 
   /* least-squares fit of a circle to data */
 /* from matlab fit_circle.m
@@ -180,17 +181,18 @@ r = sqrt( (1/n) * sum( (data(1,:) - x0).^2 + (data(2,:) - y0).^2 ) );
     sum_sq_x += x_data[i] * x_data[i];
     sum_y += y_data[i];
     sum_sq_y += y_data[i] * y_data[i];
+    if( x_data[i] == 0.0 && y_data[i] == 0.0 ) use_n_data--;
   }
 
   a=b=c=d=e=f = 0.0;
   for( i = 0; i < n_data; i++ )
   {
-    a += x_data[i] * (2*n_data*x_data[i] - 2*sum_x);
-    b += y_data[i] * (2*n_data*x_data[i] - 2*sum_x);
-    c += x_data[i] * (2*n_data*y_data[i] - 2*sum_y);
-    d += y_data[i] * (2*n_data*y_data[i] - 2*sum_y);
-    e += x_data[i] * (n_data*x_data[i]*x_data[i] + n_data*y_data[i]*y_data[i] - sum_sq_x - sum_sq_y);
-    f += y_data[i] * (n_data*x_data[i]*x_data[i] + n_data*y_data[i]*y_data[i] - sum_sq_x - sum_sq_y);
+    a += x_data[i] * (2*use_n_data*x_data[i] - 2*sum_x);
+    b += y_data[i] * (2*use_n_data*x_data[i] - 2*sum_x);
+    c += x_data[i] * (2*use_n_data*y_data[i] - 2*sum_y);
+    d += y_data[i] * (2*use_n_data*y_data[i] - 2*sum_y);
+    e += x_data[i] * (use_n_data*x_data[i]*x_data[i] + use_n_data*y_data[i]*y_data[i] - sum_sq_x - sum_sq_y);
+    f += y_data[i] * (use_n_data*x_data[i]*x_data[i] + use_n_data*y_data[i]*y_data[i] - sum_sq_x - sum_sq_y);
   }
 
   if( a*d == b*c ) printf( "**error fitting circle -- divide by zero\n" );

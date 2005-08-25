@@ -225,8 +225,11 @@ class GrabClass(object):
                     
                 if rot_frame_number>=0:
                     find_rotation_center_start_clear()
-                    pt = points[0]
-                    x0, y0, slope = pt[0],pt[1],pt[3]
+                    if n_pts != 0:
+                        pt = points[0]
+                        x0, y0, slope = pt[0],pt[1],pt[3]
+                    else:
+                        x0 = y0 = slope = 0.0
                     if slope != 0.0:
                         rise = 1.0
                         run = rise/slope
