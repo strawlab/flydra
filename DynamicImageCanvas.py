@@ -22,6 +22,7 @@ class DynamicImageCanvas(wxGLCanvas):
         self._gl_tex_info_dict = {}
         self.do_clipping = True
         self.rotate_180 = False
+        self.flip_LR = False
         self.lbrt = {}
         self.draw_points = {}
         self.reconstructed_points = {}
@@ -34,6 +35,9 @@ class DynamicImageCanvas(wxGLCanvas):
 
     def set_rotate_180(self, value):
         self.rotate_180 = value
+
+    def set_flip_LR(self, value):
+        self.flip_LR = value
 
     def get_clipping(self):
         return self.do_clipping
@@ -243,6 +247,8 @@ class DynamicImageCanvas(wxGLCanvas):
                 xx,yy = gl_tex_xyfrac
 
                 glBindTexture(GL_TEXTURE_2D,tex_id)
+                if self.flip_LR:
+                    left,right=right,left
                 if not self.rotate_180:
                     glBegin(GL_QUADS)
                     glTexCoord2f( 0, yy) # texture is flipped upside down to fix OpenGL<->na
