@@ -11,7 +11,6 @@ from vtk.util.colors import tomato, banana, azure, blue, \
      light_grey, dark_orange, brown, light_beige
 from vtk.util.vtkImageImportFromArray import vtkImageImportFromArray
 import math, random
-import result_browser
 
 import flydra.reconstruct as reconstruct
 
@@ -23,10 +22,16 @@ import RandomArray
 import cgtypes # tested with 1.2
 array = nx.array
 
-def init_vtk():
+def init_vtk(stereo=False):
 
     renWin = vtkRenderWindow()
-
+    if stereo:
+        print 'renWin.GetStereoCapableWindow()',renWin.GetStereoCapableWindow()
+        print 'renWin.StereoCapableWindowOn()',renWin.StereoCapableWindowOn()
+        print 'renWin.GetStereoCapableWindow()',renWin.GetStereoCapableWindow()
+        renWin.StereoRenderOn()
+        renWin.SetStereoTypeToRedBlue()
+        
     renderers = []
     for side_view in [True]:
         camera = vtkCamera()
@@ -78,8 +83,8 @@ def init_vtk():
             ren1.SetViewport(0.0,0,1.0,1.0)
         else:
             ren1.SetViewport(0.9,0.0,1.0,1)
-        #ren1.SetBackground( 1,1,1)
-        ren1.SetBackground( .6,.6,.75)
+        ren1.SetBackground( 1,1,1)
+        #ren1.SetBackground( .6,.6,.75)
         #ren1.SetBackground( 0, 0x33/255.0, 0x33/255.0)
 
         ren1.SetActiveCamera( camera )
@@ -92,6 +97,118 @@ def init_vtk():
 #    renWin.SetSize( 320,240)
 
     return renWin, renderers
+
+def set_lr_cams_from_center( left_cam, right_cam, center_cam ):
+    center = cgtypes.vec3(center_cam.GetPosition())
+    lookat = cgtypes.vec3(center_cam.GetFocalPoint())
+    #print 'center, lookat',center, lookat
+    approx_updir = cgtypes.vec3(0,0,1)
+
+    viewdir = center-lookat
+    viewdist = abs(viewdir)
+    viewdir = viewdir.normalize()
+    # find true updir
+    rightsidedir = viewdir.cross(approx_updir)
+    updir = rightsidedir.cross(viewdir)
+
+    center_cam.SetViewUp(updir[0],updir[1],updir[2])
+
+    right_eye_offset = -0.2*viewdist*viewdir.cross(updir)
+    left_eye_offset = 0.2*viewdist*viewdir.cross(updir)
+
+    right_eye_center = center+right_eye_offset
+    left_eye_center = center+left_eye_offset
+
+    right_eye_lookat = lookat#+right_eye_offset
+    left_eye_lookat = lookat#+left_eye_offset
+
+    left_cam.SetFocalPoint( left_eye_lookat[0], left_eye_lookat[1], left_eye_lookat[2] )
+    left_cam.SetPosition( left_eye_center[0], left_eye_center[1], left_eye_center[2] )
+    left_cam.SetViewUp(center_cam.GetViewUp())
+
+    right_cam.SetFocalPoint( right_eye_lookat[0], right_eye_lookat[1], right_eye_lookat[2] )
+    right_cam.SetPosition( right_eye_center[0], right_eye_center[1], right_eye_center[2] )
+    right_cam.SetViewUp(center_cam.GetViewUp())
+
+
+stereo_renWin = None
+iren = None
+left_ren = None
+center_ren = None
+right_ren = None
+left_cam = None
+center_cam = None
+right_cam = None
+def init_vtk_stereo(lookat,center,stereo=True):
+    global stereo_renWin, left_ren, center_ren, right_ren, left_cam, center_cam, right_cam
+    
+    stereo_renWin = vtkRenderWindow()
+
+    renderers = []
+
+    lookat = cgtypes.vec3(*lookat)
+    center = cgtypes.vec3(*center)
+    approx_updir = cgtypes.vec3(0,0,1)
+
+    viewdir = center-lookat
+    viewdist = abs(viewdir)
+    viewdir = viewdir.normalize()
+    # find true updir
+    rightsidedir = viewdir.cross(approx_updir)
+    updir = rightsidedir.cross(viewdir)
+
+    if 0:
+        right_eye_offset = 0.1*viewdist*viewdir.cross(updir)
+        left_eye_offset = -0.1*viewdist*viewdir.cross(updir)
+
+        right_eye_center = center+right_eye_offset
+        left_eye_center = center+left_eye_offset
+
+        right_eye_lookat = lookat#+right_eye_offset
+        left_eye_lookat = lookat#+left_eye_offset
+
+    center_cam = vtkCamera()
+    center_cam.SetFocalPoint(lookat[0],lookat[1],lookat[2])
+    center_cam.SetPosition(center[0],center[1],center[2])
+    center_cam.SetParallelProjection(1)
+    center_cam.SetViewAngle(30.0)
+    center_cam.SetParallelScale(319.400653668)
+    center_cam.SetClippingRange (1e-3, 1e6)
+    center_ren = vtkRenderer()
+    center_ren.SetActiveCamera( center_cam )
+    center_ren.SetViewport(.4,.6,.6,1) # not added to window but needed for Pan function
+    stereo_renWin.AddRenderer( center_ren )
+    renderers.append( center_ren )
+
+    left_cam = vtkCamera()
+    right_cam = vtkCamera()
+    left_ren = vtkRenderer()
+    right_ren = vtkRenderer()
+    
+    set_lr_cams_from_center( left_cam, right_cam, center_cam )
+
+    for camera, ren in [(left_cam,left_ren),(right_cam,right_ren)]:
+        camera.SetParallelProjection(1)
+        camera.SetViewAngle(30.0)
+        camera.SetParallelScale(319.400653668)
+        camera.SetClippingRange (1e-3, 1e6)
+
+        if ren is left_ren:
+            ren.SetViewport(0,0,.5,1)
+        else:
+            ren.SetViewport(.5,0,1,1)
+        ren.SetBackground( .6,.6,.75)
+        ren.SetActiveCamera( camera )
+
+        stereo_renWin.AddRenderer( ren )
+        renderers.append( ren )
+
+        #print_cam_props(ren.GetActiveCamera())
+    
+    #stereo_renWin.SetSize( 1024, 768 )
+    stereo_renWin.SetSize( 640, 480)
+
+    return stereo_renWin, renderers
 
 ##    iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
 ##    iren.Initialize ()
@@ -348,8 +465,10 @@ def show_frames_vtk(results,renderers,
                     render_mode='ball_and_stick', # 'ball_and_stick' or 'triangles'
                     triangle_mode_data=None,
                     triangle_mode_color=red,
+                    X_zero_frame=None,
                     bounding_box=True,
                     frame_no_offset=0, # for displaying frame numbers
+                    color_change_frame=None,
                     show_warnings=True,
                     max_err=None): # only for 'ball_and_stick'
     # 'triangles' render mode is always smoothed
@@ -377,6 +496,13 @@ def show_frames_vtk(results,renderers,
         body_line_points = vtk.vtkPoints()
         body_lines = vtk.vtkCellArray()
         body_point_num = 0
+        #         if color_change_frame is not None:
+            
+        cog_points2 = vtk.vtkPoints() # 'center of gravity'
+        body_line_points2 = vtk.vtkPoints()
+        body_lines2 = vtk.vtkCellArray()
+        body_point_num2 = 0
+            
     elif render_mode.startswith('triangles'):
         tri_points = vtk.vtkPoints()
         tri_cells = vtk.vtkCellArray()
@@ -409,10 +535,12 @@ def show_frames_vtk(results,renderers,
     if render_mode.startswith('ball_and_stick'):
         Xs=[]
         line3ds=[]
+        X_zero = None
         # XXX table must be in order?
         found_frame_nos = []
         for row in data3d.where( frame_nos[0] <= data3d.cols.frame <= frame_nos[-1] ):
-            if row['frame'] not in frame_nos:
+            frame_no = row['frame']
+            if frame_no not in frame_nos:
                 continue
             X = row['x'],row['y'],row['z']
             if row['p0'] is nan:
@@ -429,6 +557,27 @@ def show_frames_vtk(results,renderers,
             Xs.append(X)
             line3ds.append(line3d)
             found_frame_nos.append( row['frame'] )
+            if X_zero_frame == frame_no:
+                X_zero = X
+        if X_zero_frame is not None:
+            # remove offset
+            if X_zero is None:
+                print 'WARNING: wanted X offset for frame, but data does not exist at that frame, skipping'
+                return
+            try:
+                new_Xs = []
+                for X in Xs:
+                    if X is not None:
+                        new_Xs.append( (X[0]-X_zero[0],X[1]-X_zero[1],X[2]-X_zero[2]) )
+                    else:
+                        new_Xs.append( None )
+                Xs = new_Xs
+            except:
+                print 
+                print 'X',X
+                print 'X_zero',X_zero
+                print
+                raise
         for idx, frame_no in enumerate(frame_nos):
             if frame_no not in found_frame_nos:
                 # XXX is idx right?
@@ -483,10 +632,14 @@ def show_frames_vtk(results,renderers,
         print 'y range:',ylim
         print 'z range:',zlim
     
-    for X,orient_info,timed_force in zip(Xs,orient_infos,timed_forces):
+    for frame_no,X,orient_info,timed_force in zip(frame_nos,Xs,orient_infos,timed_forces):
+        in_orig_list = color_change_frame is None or (frame_no < color_change_frame)
         if X is not None:
             if render_mode.startswith('ball_and_stick'):
-                cog_points.InsertNextPoint(*X)
+                if in_orig_list:
+                    cog_points.InsertNextPoint(*X)
+                else:
+                    cog_points2.InsertNextPoint(*X)
 
         if render_mode.startswith('ball_and_stick'):
             line3d = orient_info
@@ -503,14 +656,25 @@ def show_frames_vtk(results,renderers,
                 else:
                     pt1 = X-tube_length*.5*U
                     pt2 = X+tube_length*.5*U
-                body_line_points.InsertNextPoint(*pt1)
-                body_point_num += 1
-                body_line_points.InsertNextPoint(*pt2)
-                body_point_num += 1
 
-                body_lines.InsertNextCell(2)
-                body_lines.InsertCellPoint(body_point_num-2)
-                body_lines.InsertCellPoint(body_point_num-1)
+                if in_orig_list:
+                    body_line_points.InsertNextPoint(*pt1)
+                    body_point_num += 1
+                    body_line_points.InsertNextPoint(*pt2)
+                    body_point_num += 1
+
+                    body_lines.InsertNextCell(2)
+                    body_lines.InsertCellPoint(body_point_num-2)
+                    body_lines.InsertCellPoint(body_point_num-1)
+                else:
+                    body_line_points2.InsertNextPoint(*pt1)
+                    body_point_num2 += 1
+                    body_line_points2.InsertNextPoint(*pt2)
+                    body_point_num2 += 1
+
+                    body_lines2.InsertNextCell(2)
+                    body_lines2.InsertCellPoint(body_point_num2-2)
+                    body_lines2.InsertCellPoint(body_point_num2-1)
 
         elif render_mode.startswith('triangles'):
             Q = orient_info
@@ -579,62 +743,75 @@ def show_frames_vtk(results,renderers,
     if render_mode.startswith('ball_and_stick'):
         # head rendering as ball
 
-        points_poly_data = vtkPolyData()
-        points_poly_data.SetPoints(cog_points)
+        for ptnum in [0,1]:
+            if ptnum==0:
+                points = cog_points
+                line_points = body_line_points
+                lines = body_lines
+                ball_color = red
+                line_color = ( 0xd6/255.0, 0xec/255.0, 0x1c/255.0)
+            else:
+                line_points = body_line_points2
+                points = cog_points2
+                lines = body_lines2
+                ball_color = blue
+                line_color = banana
+            points_poly_data = vtkPolyData()
+            points_poly_data.SetPoints(points)
 
-        head = vtk.vtkSphereSource()
-        head.SetRadius(.5)
-        #head.SetRadius(1.5)
-        head.SetThetaResolution(8)
-        head.SetPhiResolution(8)
-##        head.SetThetaResolution(15)
-##        head.SetPhiResolution(15)
+            head = vtk.vtkSphereSource()
+            head.SetRadius(.5)
+            #head.SetRadius(1.5)
+            head.SetThetaResolution(8)
+            head.SetPhiResolution(8)
+    ##        head.SetThetaResolution(15)
+    ##        head.SetPhiResolution(15)
 
-        head_glyphs = vtk.vtkGlyph3D()
-        head_glyphs.SetInput(points_poly_data)
-        head_glyphs.SetSource(head.GetOutput())
+            head_glyphs = vtk.vtkGlyph3D()
+            head_glyphs.SetInput(points_poly_data)
+            head_glyphs.SetSource(head.GetOutput())
 
-        head_glyph_mapper = vtkPolyDataMapper()
-        head_glyph_mapper.SetInput( head_glyphs.GetOutput())
-        headGlyphActor = vtk.vtkActor()
-        headGlyphActor.SetMapper(head_glyph_mapper)
-        headGlyphActor.GetProperty().SetDiffuseColor(red)
-        headGlyphActor.GetProperty().SetSpecular(.3)
-        headGlyphActor.GetProperty().SetSpecularPower(30)
+            head_glyph_mapper = vtkPolyDataMapper()
+            head_glyph_mapper.SetInput( head_glyphs.GetOutput())
+            headGlyphActor = vtk.vtkActor()
+            headGlyphActor.SetMapper(head_glyph_mapper)
+            headGlyphActor.GetProperty().SetDiffuseColor(ball_color)
+            headGlyphActor.GetProperty().SetSpecular(.3)
+            headGlyphActor.GetProperty().SetSpecularPower(30)
 
-        for renderer in renderers:
-            renderer.AddActor( headGlyphActor )
-        actors.append( headGlyphActor )
-        
-        # body line rendering 
-        # ( see VTK demo Rendering/Python/CSpline.py )
+            for renderer in renderers:
+                renderer.AddActor( headGlyphActor )
+            actors.append( headGlyphActor )
 
-        profileData = vtk.vtkPolyData()
+            # body line rendering 
+            # ( see VTK demo Rendering/Python/CSpline.py )
 
-        profileData.SetPoints(body_line_points)
-        profileData.SetLines(body_lines)
+            profileData = vtk.vtkPolyData()
 
-        # Add thickness to the resulting line.
-        profileTubes = vtk.vtkTubeFilter()
-        profileTubes.SetNumberOfSides(8)
-        profileTubes.SetInput(profileData)
-        profileTubes.SetRadius(.2)
-        #profileTubes.SetRadius(.8)
+            profileData.SetPoints(line_points)
+            profileData.SetLines(lines)
 
-        profileMapper = vtk.vtkPolyDataMapper()
-        profileMapper.SetInput(profileTubes.GetOutput())
+            # Add thickness to the resulting line.
+            profileTubes = vtk.vtkTubeFilter()
+            profileTubes.SetNumberOfSides(8)
+            profileTubes.SetInput(profileData)
+            profileTubes.SetRadius(.2)
+            #profileTubes.SetRadius(.8)
 
-        profile = vtk.vtkActor()
-        profile.SetMapper(profileMapper)
-        profile.GetProperty().SetDiffuseColor( 0xd6/255.0, 0xec/255.0, 0x1c/255.0)
-        #profile.GetProperty().SetDiffuseColor(cerulean)
-        #profile.GetProperty().SetDiffuseColor(banana)
-        profile.GetProperty().SetSpecular(.3)
-        profile.GetProperty().SetSpecularPower(30)
+            profileMapper = vtk.vtkPolyDataMapper()
+            profileMapper.SetInput(profileTubes.GetOutput())
 
-        for renderer in renderers:
-            renderer.AddActor( profile )
-        actors.append( profile )
+            profile = vtk.vtkActor()
+            profile.SetMapper(profileMapper)
+            profile.GetProperty().SetDiffuseColor( line_color ) #0xd6/255.0, 0xec/255.0, 0x1c/255.0)
+            #profile.GetProperty().SetDiffuseColor(cerulean)
+            #profile.GetProperty().SetDiffuseColor(banana)
+            profile.GetProperty().SetSpecular(.3)
+            profile.GetProperty().SetSpecularPower(30)
+
+            for renderer in renderers:
+                renderer.AddActor( profile )
+            actors.append( profile )
         
     elif render_mode.startswith('triangles'):
         profileData = vtk.vtkPolyData()
@@ -706,6 +883,9 @@ def show_frames_vtk(results,renderers,
     if 0:
         bbox_points.InsertNextPoint( xlim[0], ylim[0], zlim[0] )
         bbox_points.InsertNextPoint( xlim[1], ylim[1], zlim[1] )
+    elif 0:
+        bbox_points.InsertNextPoint(-100,-50,-50)
+        bbox_points.InsertNextPoint(100,50,50)
     else:
         bbox_points.InsertNextPoint(400,0,0)
         bbox_points.InsertNextPoint(1000,300,300)
@@ -758,6 +938,7 @@ def show_frames_vtk(results,renderers,
             actors.append( tl )
 
     if bounding_box:
+        print 'drawing bounding box'
     #if (ren1 is not None) and (actor is not None):
         # from Annotation/Python/cubeAxes.py
         tprop = vtk.vtkTextProperty()
@@ -782,8 +963,7 @@ def show_frames_vtk(results,renderers,
 ##    return bbox
     return actors
     
-def interact_with_renWin(renWin, ren1=None, actor=None):
-##def interact_with_renWin(renWin, iren, ren1=None, actor=None):
+def interact_with_renWin(renWin):
 
     iren = vtkRenderWindowInteractor()
     iren.SetRenderWindow( renWin )
@@ -792,6 +972,29 @@ def interact_with_renWin(renWin, ren1=None, actor=None):
     iren.Initialize ()
     
     renWin.Render()
+    
+    iren.Start()
+
+def interact_with_stereo_renWin():
+    global stereo_renWin, iren
+    
+    iren = vtkRenderWindowInteractor()
+    iren.SetInteractorStyle(None)
+    iren.SetRenderWindow( stereo_renWin )
+
+    #iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+
+    iren.AddObserver("LeftButtonPressEvent", ButtonEvent)
+    iren.AddObserver("LeftButtonReleaseEvent", ButtonEvent)
+    iren.AddObserver("MiddleButtonPressEvent", ButtonEvent)
+    iren.AddObserver("MiddleButtonReleaseEvent", ButtonEvent)
+    iren.AddObserver("RightButtonPressEvent", ButtonEvent)
+    iren.AddObserver("RightButtonReleaseEvent", ButtonEvent)
+    iren.AddObserver("MouseMoveEvent", MouseMove)
+    
+    iren.Initialize ()
+    
+    stereo_renWin.Render()
     
     iren.Start()
     
@@ -804,8 +1007,118 @@ def print_cam_props(camera):
     print 'camera.SetClippingRange',camera.GetClippingRange()
     print 'camera.SetParallelScale(%s)'%str(camera.GetParallelScale())
     print
+
+# Add the observers to watch for particular events. These invoke
+# Python functions.
+Rotating = 0
+Panning = 0
+Zooming = 0
+
+# Handle the mouse button events.
+def ButtonEvent(obj, event):
+    global Rotating, Panning, Zooming
+    if event == "LeftButtonPressEvent":
+        Rotating = 1
+    elif event == "LeftButtonReleaseEvent":
+        Rotating = 0
+    elif event == "MiddleButtonPressEvent":
+        Panning = 1
+    elif event == "MiddleButtonReleaseEvent":
+        Panning = 0
+    elif event == "RightButtonPressEvent":
+        Zooming = 1
+    elif event == "RightButtonReleaseEvent":
+        Zooming = 0
+
+# General high-level logic
+def MouseMove(obj, event):
+    global Rotating, Panning, Zooming
+    global iren, stereo_renWin, center_camera
+
+    lastXYpos = iren.GetLastEventPosition()
+    lastX = lastXYpos[0]
+    lastY = lastXYpos[1]
+
+    xypos = iren.GetEventPosition()
+    x = xypos[0]
+    y = xypos[1]
+
+    center = stereo_renWin.GetSize()
+    centerX = center[0]/2.0
+    centerY = center[1]/2.0
+
+    if Rotating:
+        Rotate(center_ren,center_cam, x, y, lastX, lastY,
+               centerX, centerY)
+    elif Panning:
+        Pan(center_ren, center_cam, x, y, lastX, lastY, centerX,
+            centerY)
+    elif Zooming:
+        Dolly(center_ren, center_cam, x, y, lastX, lastY,
+              centerX, centerY)
+    else:
+        return
+    set_lr_cams_from_center( left_cam, right_cam, center_cam )
+    stereo_renWin.Render()
+
+def Rotate(renderer, camera, x, y, lastX, lastY, centerX, centerY):    
+    camera.Azimuth(lastX-x)
+    camera.Elevation(lastY-y)
+    camera.OrthogonalizeViewUp()
+
+# Pan translates x-y motion into translation of the focal point and
+# position.
+def Pan(renderer, camera, x, y, lastX, lastY, centerX, centerY):
+    FPoint = camera.GetFocalPoint()
+    FPoint0 = FPoint[0]
+    FPoint1 = FPoint[1]
+    FPoint2 = FPoint[2]
+
+    PPoint = camera.GetPosition()
+    PPoint0 = PPoint[0]
+    PPoint1 = PPoint[1]
+    PPoint2 = PPoint[2]
+
+    renderer.SetWorldPoint(FPoint0, FPoint1, FPoint2, 1.0)
+    renderer.WorldToDisplay()
+    DPoint = renderer.GetDisplayPoint()
+    focalDepth = DPoint[2]
+
+    APoint0 = centerX+(x-lastX)
+    APoint1 = centerY+(y-lastY)
     
+    renderer.SetDisplayPoint(APoint0, APoint1, focalDepth)
+    renderer.DisplayToWorld()
+    RPoint = renderer.GetWorldPoint()
+    RPoint0 = RPoint[0]
+    RPoint1 = RPoint[1]
+    RPoint2 = RPoint[2]
+    RPoint3 = RPoint[3]
+    
+    if RPoint3 != 0.0:
+        RPoint0 = RPoint0/RPoint3
+        RPoint1 = RPoint1/RPoint3
+        RPoint2 = RPoint2/RPoint3
+
+    camera.SetFocalPoint( (FPoint0-RPoint0)/2.0 + FPoint0,
+                          (FPoint1-RPoint1)/2.0 + FPoint1,
+                          (FPoint2-RPoint2)/2.0 + FPoint2)
+    camera.SetPosition( (FPoint0-RPoint0)/2.0 + PPoint0,
+                        (FPoint1-RPoint1)/2.0 + PPoint1,
+                        (FPoint2-RPoint2)/2.0 + PPoint2)
+
+# Dolly converts y-motion into a camera dolly commands.
+def Dolly(renderer, camera, x, y, lastX, lastY, centerX, centerY):
+    dollyFactor = pow(1.02,(0.5*(y-lastY)))
+    if camera.GetParallelProjection():
+        parallelScale = camera.GetParallelScale()*dollyFactor
+        camera.SetParallelScale(parallelScale)
+    else:
+        camera.Dolly(dollyFactor)
+        renderer.ResetCameraClippingRange()
+
 if __name__=='__main__':
+    import result_browser
 
     #results
     if 1:
