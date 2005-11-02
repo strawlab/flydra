@@ -314,13 +314,20 @@ class Reconstructor:
 
     def find2d(self,cam_id,X,Lcoords=None,distorted=False):
         # see Hartley & Zisserman (2003) p. 449
-        if len(X) == 3:
-            X = nx.array([[X[0]], [X[1]], [X[2]], [1.0]])
+        if type(X)==tuple or type(X)==list:
+            rank1=True
+        else:
+            rank1 = len(X.shape)==1 # assuming array type
+        if rank1:
+            # make homogenous coords, rank2
+            if len(X) == 3:
+                X = nx.array([[X[0]], [X[1]], [X[2]], [1.0]])
+            else:
+                X = X[:,nx.NewAxis]
         Pmat = self.Pmat[cam_id]
         x=nx.dot(Pmat,X)
         
-        x = x[0:2,0]/x[2,0] # normalize (old 1 point version)
-        #x = x[0:2,:]/x[2,:] # normalize
+        x = x[0:2,:]/x[2,:] # normalize
         
         # XXX The rest of this function hasn't been checked for >1
         # points.
@@ -330,11 +337,17 @@ class Reconstructor:
             x[0] = xd
             x[1] = yd
 
-        # XXX Impossible to distort Lcoords. The image of the line
-        # should be distorted downstream, but this is not usually
-        # possible.
-        
         if Lcoords is not None:
+            if distorted:
+                
+                # Impossible to distort Lcoords. The image of the line
+                # could be distorted downstream.
+                
+                raise RuntimeError('cannot easily distort line')
+            
+            if not rank1:
+                raise NotImplementedError('Line reconstruction not yet implemented for rank-2 data')
+                
             # see Hartley & Zisserman (2003) p. 198, eqn 8.2
             L = Lcoords2Lmatrix(Lcoords)
             # XXX could be made faster by pre-computing line projection matrix
@@ -342,6 +355,9 @@ class Reconstructor:
             l3 = lx[2,1], lx[0,2], lx[1,0] #(p. 581)
             return x, l3
         else:
+            if rank1:
+                # convert back to rank1
+                return x[:,0]
             return x
 
     def find3d_single_cam(self,cam_id,x):
