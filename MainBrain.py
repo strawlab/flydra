@@ -38,10 +38,10 @@ except:
 
 downstream_hosts = []
 
-use_projector = True
-
-if use_projector:
-    downstream_hosts.append( ('192.168.1.199',28931) )
+if 0:
+    downstream_hosts.append( ('192.168.1.199',28931) ) # projector
+if 1:
+    downstream_hosts.append( ('192.168.1.151',28931) ) # brain1
     
 if len(downstream_hosts):
     outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -327,6 +327,7 @@ class CoordReceiver(threading.Thread):
 
         
     def run(self):
+        """main loop of CoordReceiver"""
         global downstream_hosts, best_realtime_data
         global outgoing_UDP_socket, calib_data_lock, calib_IdMat, calib_points
         global calib_data_lock, XXX_framenumber
@@ -590,7 +591,7 @@ class CoordReceiver(threading.Thread):
                             calib_data_lock.acquire()
                             calib_IdMat.append( ids )
                             calib_points.append( save_points )
-                            print 'saving points for calibration:',save_points
+                            #print 'saving points for calibration:',save_points
                             calib_data_lock.release()
 
 
@@ -686,6 +687,7 @@ class MainBrain(object):
             return scalar_control_info, fqdn, port
 
         def external_get_image_fps_points(self, cam_id):
+            ### XXX should extend to include lines
             self.cam_info_lock.acquire()
             try:
                 cam = self.cam_info[cam_id]
@@ -806,18 +808,18 @@ class MainBrain(object):
             finally:
                 self.cam_info_lock.release()
 
-        def external_set_collecting_background( self, cam_id, value):
-            self.cam_info_lock.acquire()
-            try:
-                cam = self.cam_info[cam_id]
-                cam_lock = cam['lock']
-                cam_lock.acquire()
-                try:
-                    cam['commands']['collecting_bg']=value
-                finally:
-                    cam_lock.release()
-            finally:
-                self.cam_info_lock.release()
+##        def external_set_collecting_background( self, cam_id, value):
+##            self.cam_info_lock.acquire()
+##            try:
+##                cam = self.cam_info[cam_id]
+##                cam_lock = cam['lock']
+##                cam_lock.acquire()
+##                try:
+##                    cam['commands']['collecting_bg']=value
+##                finally:
+##                    cam_lock.release()
+##            finally:
+##                self.cam_info_lock.release()
 
         def external_take_background( self, cam_id):
             self.cam_info_lock.acquire()
@@ -915,7 +917,6 @@ class MainBrain(object):
         
             #cam_id = '%s:%d:%d'%(fqdn,cam_no,caller_port)
             cam_id = '%s:%d'%(fqdn,cam_no)
-            print 'cam_id',cam_id,'connected'
             
             cam2mainbrain_data_port = self.main_brain.coord_receiver.connect(cam_id)
             self.cam_info_lock.acquire()
@@ -1067,6 +1068,10 @@ class MainBrain(object):
     def get_num_cams(self):
         return self.num_cams
 
+    def get_scalarcontrolinfo(self, cam_id):
+        sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+        return sci
+    
     def get_widthheight(self, cam_id):
         sci, fqdn, port = self.remote_api.external_get_info(cam_id)
         w = sci['width']
@@ -1163,7 +1168,8 @@ class MainBrain(object):
                 
         self._service_save_data()
 
-    def get_last_image_fps(self, cam_id):
+    def get_last_image_fps(self, cam_id, distort_points_to_align_with_image=True):
+        # XXX should extend to include lines
         
         # Points are originally undistorted (and therefore do not
         # align with distorted image). We must distort them.
@@ -1171,7 +1177,7 @@ class MainBrain(object):
         image, fps, points, image_coords = self.remote_api.external_get_image_fps_points(cam_id)
         if self.reconstructor is None:
             distorted_points = points
-        else:
+        elif distort_points_to_align_with_image:
             distorted_points = []
             for pt in points:
                 xd,yd = self.reconstructor.distort(cam_id,pt)
@@ -1179,6 +1185,8 @@ class MainBrain(object):
                 dp[0] = xd
                 dp[1] = yd
                 distorted_points.append( dp )
+        else:
+            distorted_points = points
         return image, fps, distorted_points, image_coords
 
     def fake_synchronize(self):
@@ -1196,7 +1204,8 @@ class MainBrain(object):
         self.remote_api.external_set_debug( cam_id, value)
 
     def set_collecting_background(self, cam_id, value):
-        self.remote_api.external_set_collecting_background( cam_id, value)
+        #self.remote_api.external_set_collecting_background( cam_id, value)
+        self.remote_api.external_send_set_camera_property( cam_id, 'collecting_background', value)
 
     def take_background(self,cam_id):
         self.remote_api.external_take_background(cam_id)

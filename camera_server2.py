@@ -14,14 +14,7 @@ import math
 
 from common_variables import REALTIME_UDP
 
-try:
-    import realtime_image_analysis
-except ImportError, x:
-    if str(x).startswith('libippcore.so: cannot open shared object file'):
-        print 'WARNING: IPP not loaded, proceeding without it'
-        import realtime_image_analysis_noipp as realtime_image_analysis
-    else:
-        raise
+import realtime_image_analysis
 
 if sys.platform == 'win32':
     time_func = time.clock
@@ -392,7 +385,8 @@ class App:
             scalar_control_info['height'] = height
             scalar_control_info['roi'] = 0,0,width-1,height-1
             scalar_control_info['max_framerate'] = cam.get_framerate()
-
+            scalar_control_info['collecting_background']=globals['collecting_background'].isSet()
+            
             # register self with remote server
             port = 9834 + cam_no # for local Pyro server
             self.main_brain_lock.acquire()

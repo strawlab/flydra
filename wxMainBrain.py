@@ -24,7 +24,9 @@
 import sys, threading, time, os, copy
 import traceback
 import MainBrain
-from MatplotlibPanel import PlotPanel
+PLOTPANEL = False
+if PLOTPANEL:
+    from MatplotlibPanel import PlotPanel
 import DynamicImageCanvas
 from wxPython.wx import *
 from wxPython.lib.scrolledpanel import wxScrolledPanel
@@ -294,7 +296,7 @@ class wxMainBrainApp(wxApp):
         dynamic_image_panel = XRCCTRL(self.cam_preview_panel,"PreviewDynamicImagePanel") # get container
         box = wxBoxSizer(wxVERTICAL)
         dynamic_image_panel.SetSizer(box)
-        
+
         self.cam_image_canvas = DynamicImageCanvas.DynamicImageCanvas(dynamic_image_panel,-1)
         box.Add(self.cam_image_canvas,1,wxEXPAND)
         dynamic_image_panel.Layout()
@@ -312,7 +314,7 @@ class wxMainBrainApp(wxApp):
         
         sizer = wxBoxSizer(wxHORIZONTAL)
         scrolled_container.SetSizer(sizer)
-        #scrolled_container.SetAutoLayout(True)
+        scrolled_container.SetAutoLayout(True)
         if isinstance(scrolled_container,wxScrolledPanel):
             scrolled_container.SetupScrolling()
         self.preview_per_cam_scrolled_container = scrolled_container
@@ -338,6 +340,7 @@ class wxMainBrainApp(wxApp):
 
         collecting_background = XRCCTRL(previewPerCamPanel,"COLLECTING_BACKGROUND")
         self.collecting_background_buttons[cam_id] = collecting_background
+        collecting_background.SetValue(scalar_control_info['collecting_background'])
         EVT_CHECKBOX(collecting_background, collecting_background.GetId(),
                      self.OnCollectingBackground)
         
@@ -516,11 +519,12 @@ class wxMainBrainApp(wxApp):
         sizer = wxBoxSizer(wxVERTICAL)
         
         # matplotlib panel itself
-        self.plotpanel = PlotPanel(snapshot_plot)
-        self.plotpanel.init_plot_data()
+        if PLOTPANEL:
+            self.plotpanel = PlotPanel(snapshot_plot)
+            self.plotpanel.init_plot_data()
         
-        # wx boilerplate
-        sizer.Add(self.plotpanel, 1, wxEXPAND)
+            # wx boilerplate
+            sizer.Add(self.plotpanel, 1, wxEXPAND)
         snapshot_plot.SetSizer(sizer)
 
     def SnapshotPerCamInit(self,cam_id):
@@ -703,9 +707,10 @@ class wxMainBrainApp(wxApp):
         image, show_fps, points, image_coords = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
         if image is None:
             return
-        self.plotpanel.set_image(image, image_coords)
-        self.plotpanel.set_points(points)
-        self.plotpanel.draw()
+        if PLOTPANEL:
+            self.plotpanel.set_image(image, image_coords)
+            self.plotpanel.set_points(points)
+            self.plotpanel.draw()
 
     def OnFakeSync(self, event):
         print 'sending fake sync command...'
@@ -956,8 +961,7 @@ class wxMainBrainApp(wxApp):
         if not hasattr(self,'main_brain'):
             return # quitting
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc
-##        if self.current_page in ['tracking','preview','snapshot']:
-        realtime_data=MainBrain.get_best_realtime_data()
+        realtime_data=MainBrain.get_best_realtime_data() # gets global data
         if realtime_data is not None:
             data3d,line3d,cam_ids_used,min_mean_dist=realtime_data
             XRCCTRL(self.tracking_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
@@ -973,8 +977,10 @@ class wxMainBrainApp(wxApp):
                 if self.current_page == 'preview':
                     r=self.main_brain.reconstructor
                     for cam_id in self.cameras.keys():
-                        pt,ln=r.find2d(cam_id,data3d,
-                                       Lcoords=line3d,distorted=True)
+                        pt=r.find2d(cam_id,data3d,
+                                    distorted=True)
+                        pt_undist,ln=r.find2d(cam_id,data3d,
+                                       Lcoords=line3d,distorted=False)
                         self.cam_image_canvas.set_reconstructed_points(cam_id,([pt],[ln]))
         if self.current_page == 'preview':
             for cam_id in self.cameras.keys():
@@ -1003,6 +1009,7 @@ class wxMainBrainApp(wxApp):
                 event.RequestMore()
             
     def OnNewCamera(self, cam_id, scalar_control_info, fqdnport):
+        print 'new camera attached: '+cam_id
         # bookkeeping
         self.cameras[cam_id] = {'scalar_control_info':scalar_control_info,
                                 }
@@ -1126,4 +1133,12 @@ def main():
         print '2nd(?) call to quit?'
     
 if __name__ == '__main__':
-    main()
+    if 0:
+        # profile
+        import hotshot
+        prof = hotshot.Profile("profile.hotshot")
+        res = prof.runcall(main)
+        prof.close()
+    else:
+        # don't profile
+        main()
