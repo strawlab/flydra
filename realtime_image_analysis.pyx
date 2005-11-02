@@ -39,6 +39,9 @@ cdef extern from "eigen.h":
                         double *evalA, double *evecA1,
                         double *evalB, double *evecB1 )
 
+cdef extern from "flydra_ipp_macros.h":
+    ipp.Ipp8u*  IMPOS8u(  ipp.Ipp8u*  im, int step, int bottom, int left)
+    ipp.Ipp32f* IMPOS32f( ipp.Ipp32f* im, int step, int bottom, int left)
 
 class IPPError(Exception):
     pass
@@ -243,9 +246,13 @@ cdef class RealtimeAnalyzer:
                          self.hw_roi_w)
         # do background subtraction
         CHK( ipp.ippiAbsDiff_8u_C1R(
-            (self.bg_img + self._bottom*self.bg_img_step + self._left), self.bg_img_step,
-            (self.im1 + self._bottom*self.im1_step + self._left), self.im1_step,
-            (self.im2 + self._bottom*self.im2_step + self._left), self.im2_step, self._roi_sz))
+            IMPOS8u(self.bg_img, self.bg_img_step, self._bottom, self._left), self.bg_img_step,
+            #(self.bg_img + self._bottom*self.bg_img_step + self._left), self.bg_img_step,
+            IMPOS8u(self.im1,    self.im1_step,    self._bottom,self._left),  self.im1_step,
+            #(self.im1 + self._bottom*self.im1_step + self._left), self.im1_step,
+            IMPOS8u(self.im2,    self.im2_step,    self._bottom,self._left),  self.im2_step,
+            #(self.im2 + self._bottom*self.im2_step + self._left), self.im2_step,
+            self._roi_sz))
         c_python.Py_END_ALLOW_THREADS
         
         #work_done = False
