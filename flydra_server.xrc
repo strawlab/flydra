@@ -415,7 +415,7 @@
                   </object>
                   <object class="sizeritem">
                     <object class="wxTextCtrl" name="record_raw_filename">
-                      <value>/tmp/raw_video.fmf</value>
+                      <value>/mnt/local/raw_video.fmf</value>
                     </object>
                     <option>1</option>
                     <flag>wxEXPAND</flag>
