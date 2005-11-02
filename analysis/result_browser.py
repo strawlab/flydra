@@ -7,7 +7,7 @@ import numarray.convolve as conv_mod
 import tables as PT
 import matplotlib
 import matplotlib.pylab as pylab
-from pylab import figure, plot, clf, imshow, cm, set, figtext
+from pylab import figure, plot, clf, imshow, cm, setp, figtext
 from pylab import gca, title, axes, ion, ioff, gcf, savefig
 from matplotlib.ticker import LinearLocator
 import PQmath
@@ -52,9 +52,34 @@ class TimedVectors(PT.IsDescription):
     fx    = PT.FloatCol(pos=1)
     fy    = PT.FloatCol(pos=2)
     fz    = PT.FloatCol(pos=3)
+    
+def make_new_fmt(results):
+    """convert all 2D data into camera-by-camera tables"""
+    Info2D = results.root.data2d.description # 2D data format for PyTables
+    if hasattr(results.root, 'cam_by_cam_2d'):
+        return # already made
+    status("making new cam_by_cam_2d tables...")
+    cam_by_cam_2d = results.createGroup( results.root, 'cam_by_cam_2d' )
+    tables_by_camn = {}
+    for oldrow in results.root.data2d:
+        camn = oldrow['camn']
+        if camn not in tables_by_camn:
+            table_name = 'camn'+str(camn)
+            tables_by_camn[camn] = results.createTable( cam_by_cam_2d, table_name,
+                                                        Info2D, "2d data" )
+        table = tables_by_camn[camn]
+        newrow = table.row
+        for attr in Info2D._v_names:
+            newrow[attr] = oldrow[attr] #copy all attributes
+        newrow.append()
+        
+    for camn,table in tables_by_camn.iteritems():
+        table.flush()
+    status("done")
 
 def status(status_string):
     print " status:",status_string
+    sys.stdout.flush()
 
 def my_subplot(n):
     x_space = 0.05
@@ -488,11 +513,16 @@ def plot_movie_2d(results,
                   stop_idx=-1,
                   typ='best',
                   show_err=False,
-                  max_err=10):
+                  max_err=10,
+                  onefigure=True):
+    if not hasattr(results.root, 'cam_by_cam_2d'):
+        make_new_fmt(results)
     ioff()
     try:
         import flydra.reconstruct
         reconstructor = flydra.reconstruct.Reconstructor(results)
+
+        # get 3D data
         f,X,L,err = get_f_xyz_L_err(results,max_err=max_err,typ=typ)
         f=f[start_idx:stop_idx]
         X=X[start_idx:stop_idx]
@@ -500,6 +530,8 @@ def plot_movie_2d(results,
         fstop = f[-1]
         X = nx.concatenate( (X, nx.ones( (X.shape[0],1) )), axis=1 )
         X.transpose()
+
+        # get camera information
         camns = [ row['camn'] for row in results.root.cam_info]
         camn2cam_id = {}
         cam_id2camn = {}
@@ -513,39 +545,59 @@ def plot_movie_2d(results,
             cam_id2camn[ cam_id ] = camn
         cam_ids = [ camn2cam_id[camn] for camn in camns ]
         cam_ids.sort()
-        cam_ids.reverse()
+        if onefigure:
+            # plots from the bottom up
+            cam_ids.reverse()
         if cam_ids_unique:
             # can order by cam_id
             camns = [ cam_id2camn[cam_id] for cam_id in cam_ids ]
-        ncams = len(camns)
-        height = 0.8/ncams
-        ax = None
+
+        if onefigure:
+            ncams = len(camns)
+            height = 0.8/ncams
         for i, camn in enumerate(camns):
             cam_id = camn2cam_id[camn]
-            ax = pylab.axes([0.1, height*i+0.05,  0.8, height],sharex=ax)
+            if onefigure:
+                ax = pylab.axes([0.1, height*i+0.05,  0.8, height],sharex=ax)
+            else:
+                pylab.figure() # new figure
+
+            # project 3D data through camera calibration to get 2D reprojection
             xy=reconstructor.find2d(cam_id,X)
 
+            # get original 2D points
             f2 = []
             x2 = []
             y2 = []
-            for row in results.root.data2d.where(results.root.data2d.cols.camn == camn):
-                frame = row['frame']
-                if fstart <= frame <= fstop:
-                    f2.append(frame)
-                    x2.append(row['x'])
-                    y2.append(row['y'])
+
+            table_name = 'camn'+str(camn)
+            table = getattr(results.root.cam_by_cam_2d,table_name)
+            for row in table.where( fstart <= table.cols.frame <= fstop ):
+                f2.append(row['frame'])
+                x2.append(row['x'])
+                y2.append(row['y'])
             f2 = nx.array(f2)
             x2 = nx.array(x2)
             y2 = nx.array(y2)
 
-            lines = ax.plot( f2, x2,'k', # real data
-                             f2, y2,'b',
-                             
-                             f,  xy[0,:],'r', # projected from 3D reconstruction
-                             f,  xy[1,:],'g')
-            
-            pylab.ylabel( cam_id )
-            pylab.setp(ax, 'ylim',[-10,660])
+            if onefigure:
+                lines = ax.plot( f2, x2,'ko', # real data
+                                 f2, y2,'bo',
+
+                                 f,  xy[0,:],'rx', # projected from 3D reconstruction
+                                 f,  xy[1,:],'gx')
+
+                pylab.ylabel( cam_id )
+                pylab.setp(ax, 'ylim',[-10,660])
+            else:
+                lines = pylab.plot( x2, y2, 'ko',
+                                    xy[0,:], xy[1,:], 'rx' ) # projected from 3D reconstruction
+                pylab.legend(lines,['original 2D data','reprojections'])
+                pylab.xlabel( 'X (pixels)' )
+                pylab.ylabel( 'Y (pixels)' )
+                pylab.title( cam_id )
+                pylab.setp(pylab.gca(), 'xlim',[-10,660])
+                pylab.setp(pylab.gca(), 'ylim',[-10,500])
     finally:
         ion()
 
@@ -581,7 +633,7 @@ def plot_whole_movie_3d(results, typ='best', show_err=False, max_err=10):
     ax_y.set_ylabel('position (mm)')
 ##    if show_err:
 ##        ax.plot(f,err,'k.')
-##    set(ax,'ylim',[-10,600])
+##    setp(ax,'ylim',[-10,600])
 
     U = flydra.reconstruct.line_direction(L)
     ax_xlen.plot( f, U[:,0], 'r.')
@@ -612,9 +664,9 @@ def plot_whole_movie_3d(results, typ='best', show_err=False, max_err=10):
                 plot( [start, stop], [y, y] )
             yticks.append( y )
             yticklabels.append( cam_id )
-        set( gca(), 'yticks', yticks )
-        set( gca(), 'yticklabels', yticklabels )
-        set( gca(), 'ylim', [-1, max(yticks)+1])
+        setp( gca(), 'yticks', yticks )
+        setp( gca(), 'yticklabels', yticklabels )
+        setp( gca(), 'ylim', [-1, max(yticks)+1])
 
     ion()
 
@@ -1232,7 +1284,7 @@ def plot_all_images(results,
         
         i = cam_ids.index(cam_id)
         ax=dougs_subplot(subplot_number)
-        set(ax,'frame_on',display_labels)
+        setp(ax,'frame_on',display_labels)
 
         have_2d_data = False
         nan_in_2d_data = False
@@ -1390,14 +1442,14 @@ def plot_all_images(results,
             
             if show_raw_image:
                 green = (0,1,0)
-                set(lines,'markerfacecolor',None)
+                setp(lines,'markerfacecolor',None)
                 if camn in camns_used:
-                    set(lines,'markeredgecolor',green)
+                    setp(lines,'markeredgecolor',green)
                 elif camn not in camns_used:
-                    set(lines,'markeredgecolor',(0, 0.2, 0))
+                    setp(lines,'markeredgecolor',(0, 0.2, 0))
                     #print 'setting alpha in',cam_id
-                    #set(lines,'alpha',0.2)
-                set(lines,'markeredgewidth',2.0)
+                    #setp(lines,'alpha',0.2)
+                setp(lines,'markeredgewidth',2.0)
 
             #if not len(numarray.ieeespecial.getnan(slope)[0]):
             if eccentricity > flydra.reconstruct.MINIMUM_ECCENTRICITY:
@@ -1436,11 +1488,11 @@ def plot_all_images(results,
                     if show_raw_image:
                         green = (0,1,0)
                         if camn in camns_used:
-                            set(lines,'color',green)
+                            setp(lines,'color',green)
                         elif camn not in camns_used:
-                            set(lines,'color',(0, 0.2, 0))
-                        #set(lines,'color',green)
-                        #set(lines[0],'linewidth',0.8)
+                            setp(lines,'color',(0, 0.2, 0))
+                        #setp(lines,'color',green)
+                        #setp(lines[0],'linewidth',0.8)
 
         if X is not None:
             if line3d is None:
@@ -1466,9 +1518,9 @@ def plot_all_images(results,
                     lines=ax.plot([x],[height-y],'o')
                 else:
                     lines=ax.plot([x],[y],'o')
-                set(lines,'markerfacecolor',(1,0,0))
-                set(lines,'markeredgewidth',0.0)
-                set(lines,'markersize',4.0)
+                setp(lines,'markerfacecolor',(1,0,0))
+                setp(lines,'markeredgewidth',0.0)
+                setp(lines,'markersize',4.0)
                 
             if PLOT_RED and line3d is not None:
                 if plot_orientation:
@@ -1536,7 +1588,7 @@ def plot_all_images(results,
                     lines=ax.plot([x],[height-y],'o')
                 else:
                     lines=ax.plot([x],[y],'o')
-                set(lines,'markerfacecolor',(0,0,1))
+                setp(lines,'markerfacecolor',(0,0,1))
 
                 if origin == 'upper':
                     lines=ax.plot([x,unit_x],[height-y,height-unit_y],'b-',linewidth=1.5)
@@ -1544,27 +1596,27 @@ def plot_all_images(results,
                     lines=ax.plot([x,unit_x],[y,unit_y],'b-',linewidth=1.5)
                 
         labels=ax.get_xticklabels()
-        set(labels, rotation=90)
+        setp(labels, rotation=90)
         if display_titles:
             title(title_str)
         if have_limit_data:
             ax.xaxis.set_major_locator( LinearLocator(numticks=5) )
             ax.yaxis.set_major_locator( LinearLocator(numticks=5) )
-            set(ax,'xlim',[xmin, xmax])
-            set(ax,'ylim',[show_ymin, show_ymax])
+            setp(ax,'xlim',[xmin, xmax])
+            setp(ax,'ylim',[show_ymin, show_ymax])
         elif fixed_im_lims.has_key(cam_id):
             (xmin, xmax), (ymin, ymax) = fixed_im_lims[cam_id]
             ax.xaxis.set_major_locator( LinearLocator(numticks=5) )
             ax.yaxis.set_major_locator( LinearLocator(numticks=5) )
-            set(ax,'xlim',[xmin, xmax])
-            set(ax,'ylim',[show_ymin, show_ymax])
+            setp(ax,'xlim',[xmin, xmax])
+            setp(ax,'ylim',[show_ymin, show_ymax])
         else:
             margin_pixels = 20
-            set(ax,'xlim',[-margin_pixels, width+margin_pixels])
-            set(ax,'ylim',[-margin_pixels, height+margin_pixels])
+            setp(ax,'xlim',[-margin_pixels, width+margin_pixels])
+            setp(ax,'ylim',[-margin_pixels, height+margin_pixels])
         if not display_labels:
-            set(ax,'xticks',[])
-            set(ax,'yticks',[])
+            setp(ax,'xticks',[])
+            setp(ax,'yticks',[])
     ion()
 
 def test():
@@ -1996,8 +2048,8 @@ def save_ecc(results):
                        interpolation='nearest',origin='lower')
                 plot([x0_abs],[y0_abs],'o',mfc=None,mec='white',mew=2)
                 plot([x1,x2],[y1,y2],'w-',lw=2)
-                set(gca(),'xlim',[xmin,xmax])
-                set(gca(),'ylim',[ymin,ymax])
+                setp(gca(),'xlim',[xmin,xmax])
+                setp(gca(),'ylim',[ymin,ymax])
                 savefig('roi%02d_ecc%d_%s.png'%(roi2_radius,fno,cam_id))
     finally:
         ion()
@@ -2266,6 +2318,6 @@ def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
     return results
     
 if __name__=='__main__':
-    results = get_results('DATA20050711_155801.h5',mode='r')
+    results = get_results('DATA20050816_174254.h5',mode='r+')
     if len(sys.argv) > 1:
         save_movie(results)
