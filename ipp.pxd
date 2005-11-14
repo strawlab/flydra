@@ -285,6 +285,8 @@ cdef extern from "ippi.h":
     IppStatus ippiSub_8u_C1RSfs( Ipp8u* pSrc1, int src1Step, Ipp8u* pSrc2,
                                  int src2Step, Ipp8u* pDst, int dstStep, IppiSize roiSize,
                                  int scaleFactor)
+    IppStatus ippiSub_32f_C1IR(Ipp32f* pSrc, int srcStep, Ipp32f* pSrcDst,
+                               int srcDstStep, IppiSize roiSize)
     IppStatus ippiAdd_8u_C1RSfs(Ipp8u* pSrc1, int src1Step, Ipp8u* pSrc2,
                                 int src2Step, Ipp8u* pDst, int dstStep, IppiSize roiSize,
                                 int scaleFactor)
@@ -304,6 +306,8 @@ cdef extern from "ippi.h":
                                         IppiSize roiSize, Ipp32f threshold)
     IppStatus ippiThreshold_Val_8u_C1IR(Ipp8u* pSrcDst, int srcDstStep,
                                         IppiSize roiSize, Ipp8u threshold, Ipp8u value, IppCmpOp ippCmpOp)
+    IppStatus ippiThreshold_Val_32f_C1IR(Ipp32f* pSrcDst, int srcDstStep,
+                                         IppiSize roiSize, Ipp32f threshold, Ipp32f value, IppCmpOp ippCmpOp)
     IppStatus ippiMin_8u_C1R(Ipp8u* pSrc, int srcStep, IppiSize roiSize, Ipp8u* pMin)
     IppStatus ippiMin_32f_C1R(Ipp32f* pSrc, int srcStep, IppiSize roiSize, Ipp32f* pMin)
     IppStatus ippiMax_8u_C1R(Ipp8u* pSrc, int srcStep, IppiSize roiSize, Ipp8u* pMax)
@@ -328,6 +332,8 @@ cdef extern from "ippi.h":
                                            IppiSize roiSize,    Ipp32f eps)
     IppStatus ippiDivC_8u_C1IRSfs(Ipp8u value, Ipp8u* pSrcDst,
                                   int srcDstStep, IppiSize roiSize, int scaleFactor)
+    IppStatus ippiDivC_32f_C1R(Ipp32f* pSrc, int srcStep, Ipp32f value,
+                               Ipp32f* pDst, int dstStep, IppiSize roiSize)
     IppStatus ippiMaxIndx_8u_C1R(Ipp8u* pSrc, int srcStep, IppiSize roiSize, Ipp8u* pMax,
                                  int* pIndexX, int* pIndexY)
     IppStatus ippiMaxIndx_32f_C1R(Ipp32f* pSrc, int srcStep, IppiSize roiSize,
@@ -338,8 +344,6 @@ cdef extern from "ippi.h":
                               IppiSize roiSize)
     IppStatus ippiSqr_8u_C1IRSfs(Ipp8u* pSrcDst, int srcDstStep,
                               IppiSize roiSize, int scaleFactor)
-    IppStatus ippiSub_32f_C1IR(Ipp32f* pSrc, int srcStep, Ipp32f* pSrcDst,
-                               int srcDstStep, IppiSize roiSize)
     IppStatus ippiSqrt_32f_C1IR(Ipp32f* pSrcDst, int srcDstStep,
                                 IppiSize roiSize)
     IppStatus ippiMomentInitAlloc_64f(IppiMomentState_64f** pState, IppHintAlgorithm hint)

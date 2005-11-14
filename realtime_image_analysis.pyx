@@ -18,7 +18,6 @@ cimport c_numarray
 cimport c_lib
 cimport c_python
 
-# start of IPP-requiring code
 cimport ipp
 cimport ArenaController
 import ArenaController
@@ -42,17 +41,18 @@ cdef extern from "eigen.h":
 cdef extern from "flydra_ipp_macros.h":
     ipp.Ipp8u*  IMPOS8u(  ipp.Ipp8u*  im, int step, int bottom, int left)
     ipp.Ipp32f* IMPOS32f( ipp.Ipp32f* im, int step, int bottom, int left)
-
+    void CHK( ipp.IppStatus errval )
+    
 class IPPError(Exception):
     pass
 
-cdef void CHK( ipp.IppStatus errval ):
-    # This is rather crude at the moment because calls to the Python C
-    # API cannot be made.  (This code is executed when we have
-    # released the GIL.)
-    if errval != 0:
-        c_lib.printf("ERROR on CHK! (May not have GIL, cannot raise exception.)\n")
-        c_lib.exit(1)
+##cdef void CHK( ipp.IppStatus errval ):
+##    # This is rather crude at the moment because calls to the Python C
+##    # API cannot be made.  (This code is executed when we have
+##    # released the GIL.)
+##    if errval != 0:
+##        c_lib.printf("ERROR on CHK! (May not have GIL, cannot raise exception.)\n")
+##        c_lib.exit(1)
 
 cdef void SET_ERR( int errval ):
     # This is rather crude at the moment because calls to the Python C
@@ -60,8 +60,6 @@ cdef void SET_ERR( int errval ):
     # released the GIL.)
     c_lib.printf("SET_ERR called! (May not have GIL, cannot raise exception.)\n")
     c_lib.exit(2)
-
-# end of IPP-requiring code
 
 if sys.platform == 'win32':
     time_func = time.clock
@@ -95,7 +93,6 @@ cdef class RealtimeAnalyzer:
     cdef c_numarray._numarray _pmat, _pmat_inv, camera_center
     cdef object _helper
 
-    # start of IPP-requiring code
     cdef int index_x,index_y
     cdef ipp.Ipp8u _despeckle_threshold
     
@@ -111,7 +108,6 @@ cdef class RealtimeAnalyzer:
     cdef ipp.IppiMomentState_64f *pState
 
     cdef ArenaController.ArenaController arena_controller
-    # end of IPP-requiring code
 
     def __init__(self, int w, int h, int _hw_roi_w, int _hw_roi_h,
                  int _hw_roi_l, int _hw_roi_b, float alpha):
@@ -135,7 +131,6 @@ cdef class RealtimeAnalyzer:
 
         self._helper = None
 
-        # start of IPP-requiring code
         self._despeckle_threshold = 5
         self.n_rot_samples = 100*60 # 1 minute
 
@@ -164,17 +159,13 @@ cdef class RealtimeAnalyzer:
         except Exception, exc:
             print 'WARNING: could not create ArenaController:',exc.__class__,str(exc)
             self.arena_controller = None
-        # end of IPP-requiring code
 
     def __dealloc__(self):
-        # start of IPP-requiring code
         CHK( ipp.ippiMomentFree_64f( self.pState ))
         ipp.ippiFree(self.im1)
         ipp.ippiFree(self.im2)
         ipp.ippiFree(self.bg_img)
         ipp.ippiFree(self.accum_image)
-        # end of IPP-requiring code
-        return
 
     def set_hw_roi(self, int _hw_roi_w, int _hw_roi_h,
                    int _hw_roi_l, int _hw_roi_b):
@@ -220,7 +211,6 @@ cdef class RealtimeAnalyzer:
         cdef int i
         cdef int result, eigen_err
         
-        # start of IPP-requiring code
         cdef ipp.Ipp8u max_val
         
         cdef ipp.Ipp8u clear_despeckle_thresh
@@ -228,15 +218,12 @@ cdef class RealtimeAnalyzer:
         cdef ipp.IppiSize roi2_sz
         cdef int left2, right2, bottom2, top2
         
-        # end of IPP-requiring code
         cdef int found_point
 
         self.last_image = framebuffer # useful when no IPP
 
         all_points_found = []
         
-        # start of IPP-requiring code
-
         # release GIL (SEE WARNING BELOW ABOUT RELEASING GIL)
         c_python.Py_BEGIN_ALLOW_THREADS
         # copy image to IPP memory
@@ -431,9 +418,6 @@ cdef class RealtimeAnalyzer:
             CHK( ipp.ippiSet_8u_C1R( 0, 
                 (self.im2 + bottom2*self.im2_step + left2), self.im2_step,
                 roi2_sz))
-            
-        # end of IPP-requiring code
-
         return all_points_found
 
     def get_working_image(self):
@@ -442,7 +426,6 @@ cdef class RealtimeAnalyzer:
 
         buf = self.last_image # useful when no IPP
         
-        # start of IPP-requiring code
         # allocate new numarray memory
         buf = nx.zeros( (self.height, self.width), nx.UInt8 )
 
@@ -451,7 +434,6 @@ cdef class RealtimeAnalyzer:
             c_lib.memcpy(buf.data+self.width*i,
                          self.im2+self.im2_step*i,
                          self.width)
-        # end of IPP-requiring code
         return buf
     
     def get_last_bright_point(self):
@@ -463,7 +445,6 @@ cdef class RealtimeAnalyzer:
 
         buf = self.last_image # useful when no IPP
         
-        # start of IPP-requiring code
         # allocate new numarray memory
         buf = nx.zeros( (self.height, self.width), nx.UInt8 )
 
@@ -472,7 +453,6 @@ cdef class RealtimeAnalyzer:
             c_lib.memcpy(buf.data+self.width*i,
                          self.bg_img+self.bg_img_step*i,
                          self.width)
-        # end of IPP-requiring code
         return buf
 
     def set_background_image(self, numbuf):
@@ -486,17 +466,14 @@ cdef class RealtimeAnalyzer:
         assert len(buf.shape) == 2
         assert buf.iscontiguous()
         
-        # start of IPP-requiring code
         # allocate new numarray memory
         # copy image to numarray
         for i from 0 <= i < self.height:
             c_lib.memcpy(self.bg_img+self.bg_img_step*i,
                          buf.data+self.width*i,
                          self.width)
-        # end of IPP-requiring code
 
     def take_background_image(self):
-        # start of IPP-requiring code
         CHK( ipp.ippiCopy_8u_C1R(
             (self.im1 + self._bottom*self.im1_step + self._left), self.im1_step,
             (self.bg_img + self._bottom*self.bg_img_step + self._left), self.bg_img_step,
@@ -506,8 +483,6 @@ cdef class RealtimeAnalyzer:
             (self.accum_image + self._bottom*self.accum_image_step/4 + self._left),
             self.accum_image_step,
             self._roi_sz))
-        # end of IPP-requiring code
-        return
 
     def clear_background_image(self):
         # start of IPP-requiring code
@@ -517,11 +492,8 @@ cdef class RealtimeAnalyzer:
         CHK( ipp.ippiSet_32f_C1R( 0,
                                   (self.accum_image + self._bottom*self.accum_image_step + self._left),
                                   self.accum_image_step, self._roi_sz))
-        # end of IPP-requiring code
-        return
 
     def accumulate_last_image(self):
-        # start of IPP-requiring code
         CHK( ipp.ippiAddWeighted_8u32f_C1IR(
             (self.im1 + self._bottom*self.im1_step + self._left), self.im1_step,
             (self.accum_image + self._bottom*self.accum_image_step/4 + self._left),
@@ -533,34 +505,22 @@ cdef class RealtimeAnalyzer:
             self.accum_image_step,
             (self.bg_img + self._bottom*self.bg_img_step + self._left),
             self.bg_img_step, self._roi_sz, ipp.ippRndNear ))
-        
-        # end of IPP-requiring code
-        return
 
     def rotation_calculation_init(self, int n_rot_samples):
-        # start of IPP-requiring code
         if self.arena_controller is not None:
             self.arena_controller.rotation_calculation_init( n_rot_samples )
-        # end of IPP-requiring code
-        return
 
     def rotation_update(self, float x0, float y0, float orientation, double timestamp):
-        # start of IPP-requiring code
         # convert back to ROI-relative coordinates
         if self.arena_controller is not None:
             x0 = x0 - self._left
             y0 = y0 - self._bottom
             self.arena_controller.rotation_update( x0, y0, orientation, timestamp )
-        # end of IPP-requiring code
-        return
 
     def rotation_end(self):
-        # start of IPP-requiring code
         cdef double new_x_cent, new_y_cent
         if self.arena_controller is not None:
             self.arena_controller.rotation_calculation_finish()
-        # end of IPP-requiring code
-        return
         
     property roi2_radius:
         def __get__(self):
@@ -618,7 +578,5 @@ cdef class RealtimeAnalyzer:
             assert self._right < self.width
             assert self._top < self.height
 
-            # start of IPP-requiring code
             self._roi_sz.width = self._right-self._left+1
             self._roi_sz.height = self._top-self._bottom+1
-            # end of IPP-requiring code
