@@ -172,7 +172,7 @@ class GrabClass(object):
         compareframe8u = nx.around(compareframe).astype(nx.UInt8)
         meanframe8u = nx.around(meanframe).astype(nx.UInt8)
         
-        self.realtime_analyzer.set_image('bg',meanframe8u)
+        self.realtime_analyzer.set_image('mean',meanframe8u)
         self.realtime_analyzer.set_image('compare',compareframe8u)
         print 'converted for realtime use'
         # done finding standard deviation ###################

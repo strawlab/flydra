@@ -90,11 +90,11 @@ cdef class RealtimeAnalyzer:
     
     cdef ipp.IppiSize _roi_sz
         
-    cdef int im1_step, im2_step, accum_image_step, bg_img_step, cmp_img_step
+    cdef int raw_im_step, absdiff_im_step, accum_image_step, mean_im_step, cmp_img_step
     cdef int n_rot_samples
 
-    cdef ipp.Ipp8u *im1, *im2 # current image
-    cdef ipp.Ipp8u *bg_img, *cmp_img # 8-bit background
+    cdef ipp.Ipp8u *raw_im, *absdiff_im # current image
+    cdef ipp.Ipp8u *mean_im, *cmp_img # 8-bit background
     cdef ipp.Ipp32f *accum_image # FP accumulator
 
     cdef ipp.IppiMomentState_64f *pState
@@ -127,14 +127,14 @@ cdef class RealtimeAnalyzer:
         self.n_rot_samples = 100*60 # 1 minute
 
         # pre- and post-processed images of every frame
-        self.im1=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.im1_step )
-        if self.im1==NULL: raise MemoryError("Error allocating memory by IPP")
-        self.im2=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.im2_step )
-        if self.im2==NULL: raise MemoryError("Error allocating memory by IPP")
+        self.raw_im=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.raw_im_step )
+        if self.raw_im==NULL: raise MemoryError("Error allocating memory by IPP")
+        self.absdiff_im=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.absdiff_im_step )
+        if self.absdiff_im==NULL: raise MemoryError("Error allocating memory by IPP")
 
         # 8u background
-        self.bg_img=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.bg_img_step )
-        if self.bg_img==NULL: raise MemoryError("Error allocating memory by IPP")
+        self.mean_im=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.mean_im_step )
+        if self.mean_im==NULL: raise MemoryError("Error allocating memory by IPP")
         self.cmp_img=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.cmp_img_step )
         if self.cmp_img==NULL: raise MemoryError("Error allocating memory by IPP")
 
@@ -156,9 +156,9 @@ cdef class RealtimeAnalyzer:
 
     def __dealloc__(self):
         CHK( ipp.ippiMomentFree_64f( self.pState ))
-        ipp.ippiFree(self.im1)
-        ipp.ippiFree(self.im2)
-        ipp.ippiFree(self.bg_img)
+        ipp.ippiFree(self.raw_im)
+        ipp.ippiFree(self.absdiff_im)
+        ipp.ippiFree(self.mean_im)
         ipp.ippiFree(self.cmp_img)
         ipp.ippiFree(self.accum_image)
 
@@ -224,14 +224,14 @@ cdef class RealtimeAnalyzer:
         c_python.Py_BEGIN_ALLOW_THREADS
         # copy image to IPP memory
         for i from 0 <= i < self.hw_roi_h:
-            c_lib.memcpy((self.im1 + self._bottom*self.im1_step + self._left)+self.im1_step*i,
+            c_lib.memcpy((self.raw_im + self._bottom*self.raw_im_step + self._left)+self.raw_im_step*i,
                          framebuffer.data+self.hw_roi_w*i, # src
                          self.hw_roi_w)
         # do background subtraction
         CHK( ipp.ippiAbsDiff_8u_C1R(
-            IMPOS8u(self.bg_img, self.bg_img_step, self._bottom, self._left), self.bg_img_step,
-            IMPOS8u(self.im1,    self.im1_step,    self._bottom,self._left),  self.im1_step,
-            IMPOS8u(self.im2,    self.im2_step,    self._bottom,self._left),  self.im2_step,
+            IMPOS8u(self.mean_im, self.mean_im_step, self._bottom, self._left), self.mean_im_step,
+            IMPOS8u(self.raw_im,    self.raw_im_step,    self._bottom,self._left),  self.raw_im_step,
+            IMPOS8u(self.absdiff_im,    self.absdiff_im_step,    self._bottom,self._left),  self.absdiff_im_step,
             self._roi_sz))
         c_python.Py_END_ALLOW_THREADS
         
@@ -257,7 +257,7 @@ cdef class RealtimeAnalyzer:
             
             # find max pixel in ROI
             CHK( ipp.ippiMaxIndx_8u_C1R(
-                (self.im2 + self._bottom*self.im2_step + self._left), self.im2_step,
+                (self.absdiff_im + self._bottom*self.absdiff_im_step + self._left), self.absdiff_im_step,
                 self._roi_sz, &max_val, &self.index_x,&self.index_y))
 
             if use_roi2:
@@ -286,7 +286,7 @@ cdef class RealtimeAnalyzer:
                 clear_despeckle_thresh = self._despeckle_threshold
 
             CHK( ipp.ippiThreshold_Val_8u_C1IR(
-                (self.im2 + bottom2*self.im2_step + left2), self.im2_step,
+                (self.absdiff_im + bottom2*self.absdiff_im_step + left2), self.absdiff_im_step,
                 roi2_sz, clear_despeckle_thresh, 0, ipp.ippCmpLess))
 
             found_point = 1
@@ -301,8 +301,8 @@ cdef class RealtimeAnalyzer:
                                      &Mu00,
                                      &Uu11, &Uu20, &Uu02,
                                      roi2_sz.width, roi2_sz.height,
-                                     (self.im2 + bottom2*self.im2_step + left2),
-                                     self.im2_step )
+                                     (self.absdiff_im + bottom2*self.absdiff_im_step + left2),
+                                     self.absdiff_im_step )
                 # note that x0 and y0 are now relative to the ROI origin
                 if result == CFitParamsNoError:
                     area = Mu00
@@ -409,7 +409,7 @@ cdef class RealtimeAnalyzer:
 
             # clear roi2 for next iteration
             CHK( ipp.ippiSet_8u_C1R( 0, 
-                (self.im2 + bottom2*self.im2_step + left2), self.im2_step,
+                (self.absdiff_im + bottom2*self.absdiff_im_step + left2), self.absdiff_im_step,
                 roi2_sz))
         return all_points_found
 
@@ -425,22 +425,22 @@ cdef class RealtimeAnalyzer:
         # copy image to numarray
         for i from 0 <= i < self.height:
             c_lib.memcpy(buf.data+self.width*i,
-                         self.im2+self.im2_step*i,
+                         self.absdiff_im+self.absdiff_im_step*i,
                          self.width)
         return buf
     
     def get_last_bright_point(self):
         return (self.index_x, self.index_y)
 
-    def get_image(self,which='bg'):
+    def get_image(self,which='mean'):
         cdef c_numarray._numarray buf
         cdef int i
         cdef ipp.Ipp8u* im_base
         cdef int im_step
 
-        if which=='bg':
-            im_base = self.bg_img
-            im_step = self.bg_img_step
+        if which=='mean':
+            im_base = self.mean_im
+            im_step = self.mean_im_step
         else:
             raise ValueError()
 
@@ -462,9 +462,9 @@ cdef class RealtimeAnalyzer:
         cdef ipp.Ipp8u* im_base
         cdef int im_step
         
-        if which=='bg':
-            im_base = self.bg_img
-            im_step = self.bg_img_step
+        if which=='mean':
+            im_base = self.mean_im
+            im_step = self.mean_im_step
         elif which=='compare':
             im_base = self.cmp_img
             im_step = self.cmp_img_step
@@ -488,11 +488,11 @@ cdef class RealtimeAnalyzer:
 
     def take_background_image(self):
         CHK( ipp.ippiCopy_8u_C1R(
-            (self.im1 + self._bottom*self.im1_step + self._left), self.im1_step,
-            (self.bg_img + self._bottom*self.bg_img_step + self._left), self.bg_img_step,
+            (self.raw_im + self._bottom*self.raw_im_step + self._left), self.raw_im_step,
+            (self.mean_im + self._bottom*self.mean_im_step + self._left), self.mean_im_step,
             self._roi_sz))
         CHK( ipp.ippiConvert_8u32f_C1R(
-            (self.im1 + self._bottom*self.im1_step + self._left), self.im1_step,
+            (self.raw_im + self._bottom*self.raw_im_step + self._left), self.raw_im_step,
             (self.accum_image + self._bottom*self.accum_image_step/4 + self._left),
             self.accum_image_step,
             self._roi_sz))
@@ -500,15 +500,15 @@ cdef class RealtimeAnalyzer:
     def clear_background_image(self):
         # start of IPP-requiring code
         CHK( ipp.ippiSet_8u_C1R( 0,
-                                 (self.bg_img + self._bottom*self.bg_img_step + self._left),
-                                 self.bg_img_step, self._roi_sz))
+                                 (self.mean_im + self._bottom*self.mean_im_step + self._left),
+                                 self.mean_im_step, self._roi_sz))
         CHK( ipp.ippiSet_32f_C1R( 0,
                                   (self.accum_image + self._bottom*self.accum_image_step + self._left),
                                   self.accum_image_step, self._roi_sz))
 
     def accumulate_last_image(self):
         CHK( ipp.ippiAddWeighted_8u32f_C1IR(
-            (self.im1 + self._bottom*self.im1_step + self._left), self.im1_step,
+            (self.raw_im + self._bottom*self.raw_im_step + self._left), self.raw_im_step,
             (self.accum_image + self._bottom*self.accum_image_step/4 + self._left),
             self.accum_image_step, self._roi_sz, self.alpha ))
 
@@ -516,8 +516,8 @@ cdef class RealtimeAnalyzer:
         CHK( ipp.ippiConvert_32f8u_C1R(
             (self.accum_image + self._bottom*self.accum_image_step/4 + self._left),
             self.accum_image_step,
-            (self.bg_img + self._bottom*self.bg_img_step + self._left),
-            self.bg_img_step, self._roi_sz, ipp.ippRndNear ))
+            (self.mean_im + self._bottom*self.mean_im_step + self._left),
+            self.mean_im_step, self._roi_sz, ipp.ippRndNear ))
 
     def rotation_calculation_init(self, int n_rot_samples):
         if self.arena_controller is not None:
