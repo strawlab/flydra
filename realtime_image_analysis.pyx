@@ -90,11 +90,11 @@ cdef class RealtimeAnalyzer:
     
     cdef ipp.IppiSize _roi_sz
         
-    cdef int im1_step, im2_step, accum_image_step, bg_img_step
+    cdef int im1_step, im2_step, accum_image_step, bg_img_step, cmp_img_step
     cdef int n_rot_samples
 
     cdef ipp.Ipp8u *im1, *im2 # current image
-    cdef ipp.Ipp8u *bg_img # 8-bit background
+    cdef ipp.Ipp8u *bg_img, *cmp_img # 8-bit background
     cdef ipp.Ipp32f *accum_image # FP accumulator
 
     cdef ipp.IppiMomentState_64f *pState
@@ -135,6 +135,8 @@ cdef class RealtimeAnalyzer:
         # 8u background
         self.bg_img=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.bg_img_step )
         if self.bg_img==NULL: raise MemoryError("Error allocating memory by IPP")
+        self.cmp_img=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.cmp_img_step )
+        if self.cmp_img==NULL: raise MemoryError("Error allocating memory by IPP")
 
         # 32f statistics and accumulator images for background collection
         self.accum_image=ipp.ippiMalloc_32f_C1( self.width, self.height, &self.accum_image_step )
@@ -157,6 +159,7 @@ cdef class RealtimeAnalyzer:
         ipp.ippiFree(self.im1)
         ipp.ippiFree(self.im2)
         ipp.ippiFree(self.bg_img)
+        ipp.ippiFree(self.cmp_img)
         ipp.ippiFree(self.accum_image)
 
     def set_hw_roi(self, int _hw_roi_w, int _hw_roi_h,
@@ -172,7 +175,8 @@ cdef class RealtimeAnalyzer:
     def do_work(self, c_numarray._numarray framebuffer,
                 double timestamp,
                 int framenumber,
-                int use_roi2):
+                int use_roi2,
+                int use_cmp):
         """find fly and orientation (fast enough for realtime use)
 
         inputs
@@ -452,21 +456,33 @@ cdef class RealtimeAnalyzer:
                          self.width)
         return buf
 
-    def set_background_image(self, numbuf):
+    def set_image(self, which, numbuf):
         cdef c_numarray._numarray buf
         cdef int i
+        cdef ipp.Ipp8u* im_base
+        cdef int im_step
+        
+        if which=='bg':
+            im_base = self.bg_img
+            im_step = self.bg_img_step
+        elif which=='compare':
+            im_base = self.cmp_img
+            im_step = self.cmp_img_step
+        else:
+            raise ValueError()
 
-        buf = <c_numarray._numarray>nx.array( numbuf )
+        buf = <c_numarray._numarray>nx.asarray( numbuf )
         
         assert buf.shape[0] == self.height
         assert buf.shape[1] == self.width
         assert len(buf.shape) == 2
         assert buf.iscontiguous()
+        assert buf.type() == nx.UInt8
         
         # allocate new numarray memory
         # copy image to numarray
         for i from 0 <= i < self.height:
-            c_lib.memcpy(self.bg_img+self.bg_img_step*i,
+            c_lib.memcpy(im_base+im_step*i,
                          buf.data+self.width*i,
                          self.width)
 
