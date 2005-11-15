@@ -205,7 +205,7 @@ class GrabClass(object):
                     clear_background_clear()
 
                 if bg_changed:
-                    bg_image = self.realtime_analyzer.get_background_image()
+                    bg_image = self.realtime_analyzer.get_image('bg')
                     globals['current_bg_frame_and_timestamp']=bg_image,timestamp
                     globals['incoming_bg_frames'].put(
                         (bg_image,timestamp,framenumber) ) # save it

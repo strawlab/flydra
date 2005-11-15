@@ -46,14 +46,6 @@ cdef extern from "flydra_ipp_macros.h":
 class IPPError(Exception):
     pass
 
-##cdef void CHK( ipp.IppStatus errval ):
-##    # This is rather crude at the moment because calls to the Python C
-##    # API cannot be made.  (This code is executed when we have
-##    # released the GIL.)
-##    if errval != 0:
-##        c_lib.printf("ERROR on CHK! (May not have GIL, cannot raise exception.)\n")
-##        c_lib.exit(1)
-
 cdef void SET_ERR( int errval ):
     # This is rather crude at the moment because calls to the Python C
     # API cannot be made.  (This code is executed when we have
@@ -234,11 +226,8 @@ cdef class RealtimeAnalyzer:
         # do background subtraction
         CHK( ipp.ippiAbsDiff_8u_C1R(
             IMPOS8u(self.bg_img, self.bg_img_step, self._bottom, self._left), self.bg_img_step,
-            #(self.bg_img + self._bottom*self.bg_img_step + self._left), self.bg_img_step,
             IMPOS8u(self.im1,    self.im1_step,    self._bottom,self._left),  self.im1_step,
-            #(self.im1 + self._bottom*self.im1_step + self._left), self.im1_step,
             IMPOS8u(self.im2,    self.im2_step,    self._bottom,self._left),  self.im2_step,
-            #(self.im2 + self._bottom*self.im2_step + self._left), self.im2_step,
             self._roi_sz))
         c_python.Py_END_ALLOW_THREADS
         
@@ -439,9 +428,17 @@ cdef class RealtimeAnalyzer:
     def get_last_bright_point(self):
         return (self.index_x, self.index_y)
 
-    def get_background_image(self):
+    def get_image(self,which='bg'):
         cdef c_numarray._numarray buf
         cdef int i
+        cdef ipp.Ipp8u* im_base
+        cdef int im_step
+
+        if which=='bg':
+            im_base = self.bg_img
+            im_step = self.bg_img_step
+        else:
+            raise ValueError()
 
         buf = self.last_image # useful when no IPP
         
@@ -451,7 +448,7 @@ cdef class RealtimeAnalyzer:
         # copy image to numarray
         for i from 0 <= i < self.height:
             c_lib.memcpy(buf.data+self.width*i,
-                         self.bg_img+self.bg_img_step*i,
+                         im_base+im_step*i,
                          self.width)
         return buf
 
