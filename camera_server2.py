@@ -5,7 +5,7 @@ import threading, time, socket, sys, struct, os
 import Pyro.core, Pyro.errors
 import FlyMovieFormat
 import numarray as nx
-import pyx_cam_iface_numarray as cam_iface
+import pyx_cam_iface as cam_iface
 import reconstruct_utils
 import Queue
 if os.name == 'posix':
@@ -155,10 +155,13 @@ class GrabClass(object):
 
         try:
             while not cam_quit_event_isSet():
+                # allocate RAM for new framebuffer in IPP format:
                 try:
-                    framebuffer = self.cam.grab_next_frame_blocking_numarray()
+                    raw_data = self.cam.grab_next_frame_blocking()
                 except cam_iface.BuffersOverflowed:
                     print >> sys.stderr , 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
+                #framebuffer = nx.asarray(raw_data) # numarray view of data
+                framebuffer = nx.array(raw_data) # numarray copy of data
                 # get best guess as to when image was taken
                 timestamp=self.cam.get_last_timestamp()
                 framenumber=self.cam.get_last_framenumber()
@@ -172,7 +175,7 @@ class GrabClass(object):
                 old_fn = framenumber
                 
                 points = self.realtime_analyzer.do_work(
-                    framebuffer, timestamp, framenumber, use_roi2_isSet() )
+                    framebuffer, timestamp, framenumber, use_roi2_isSet(), 0)
                 n_pts = len(points)
                 raw_image = framebuffer
                 
@@ -370,9 +373,9 @@ class App:
                 min_value = tmp[1]
                 max_value = tmp[2]
                 scalar_control_info[name] = (current_value, min_value, max_value)
-            diff_threshold = 8.1
+            diff_threshold = 11
             scalar_control_info['diff_threshold'] = diff_threshold
-            clear_threshold = 0.0
+            clear_threshold = 0.2
             scalar_control_info['clear_threshold'] = clear_threshold
 
             try:

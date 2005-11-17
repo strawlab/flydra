@@ -7,6 +7,9 @@ import numarray as nx
 import numarray.ieeespecial
 import numarray.linear_algebra
 
+cimport FastImage
+import FastImage
+
 cdef double nan
 nan = numarray.ieeespecial.nan
 
@@ -57,6 +60,17 @@ if sys.platform == 'win32':
     time_func = time.clock
 else:
     time_func = time.time
+
+
+cdef print_8u_arr(ipp.Ipp8u* src,int width,int height,int src_step):
+  cdef int row, col
+  cdef ipp.Ipp8u* src_rowstart
+  for row from 0 <= row < height:
+    src_rowstart = src+(row*src_step);
+    for col from 0 <= col < width:
+      print "%d"%src_rowstart[col],
+    print
+  print
     
 cdef class RealtimeAnalyzer:
 
@@ -77,32 +91,34 @@ cdef class RealtimeAnalyzer:
     
     cdef int _use_arena
     
-    cdef c_numarray._numarray last_image
-
     cdef int hw_roi_w, hw_roi_h, hw_roi_l, hw_roi_b # hardware region of interest
 
     # calibration matrix
     cdef c_numarray._numarray _pmat, _pmat_inv, camera_center
     cdef object _helper
 
-    cdef int index_x,index_y
     cdef ipp.Ipp8u _despeckle_threshold
     
     cdef ipp.IppiSize _roi_sz
         
-    cdef int raw_im_step, absdiff_im_step, accum_image_step, mean_im_step, cmp_img_step
+    cdef int raw_im_step, absdiff_im_step, accum_image_step,
+    cdef int mean_im_step, cmp_im_step, cmpdiff_im_step
     cdef int n_rot_samples
 
     cdef ipp.Ipp8u *raw_im, *absdiff_im # current image
-    cdef ipp.Ipp8u *mean_im, *cmp_img # 8-bit background
+    cdef ipp.Ipp8u *raw_im_orig # keep pointer to memory originally allocated
+    cdef ipp.Ipp8u *mean_im, *cmp_im # 8-bit background
+    cdef ipp.Ipp8u *cmpdiff_im
     cdef ipp.Ipp32f *accum_image # FP accumulator
 
     cdef ipp.IppiMomentState_64f *pState
 
     cdef ArenaController.ArenaController arena_controller
 
+    cdef object raw_im_FastImage_refkeeper
+
     def __init__(self, int w, int h, int _hw_roi_w, int _hw_roi_h,
-                 int _hw_roi_l, int _hw_roi_b, float alpha):
+                 int _hw_roi_l, int _hw_roi_b, float alpha=0.1):
         self.width = w
         self.height = h
         self.hw_roi_w = _hw_roi_w # hardware region of interest
@@ -114,8 +130,8 @@ cdef class RealtimeAnalyzer:
 
 
         self._roi2_radius = 10
-        self._diff_threshold = 8.1
-        self._clear_threshold = 0.0
+        self._diff_threshold = 11
+        self._clear_threshold = 0.2
         self._use_arena = 0
         
         self._pmat = None
@@ -129,15 +145,18 @@ cdef class RealtimeAnalyzer:
         # pre- and post-processed images of every frame
         self.raw_im=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.raw_im_step )
         if self.raw_im==NULL: raise MemoryError("Error allocating memory by IPP")
+        self.raw_im_orig = self.raw_im # keep pointer to originally allocated memory
         self.absdiff_im=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.absdiff_im_step )
         if self.absdiff_im==NULL: raise MemoryError("Error allocating memory by IPP")
 
         # 8u background
         self.mean_im=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.mean_im_step )
         if self.mean_im==NULL: raise MemoryError("Error allocating memory by IPP")
-        self.cmp_img=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.cmp_img_step )
-        if self.cmp_img==NULL: raise MemoryError("Error allocating memory by IPP")
-
+        self.cmp_im=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.cmp_im_step )
+        if self.cmp_im==NULL: raise MemoryError("Error allocating memory by IPP")
+        self.cmpdiff_im=ipp.ippiMalloc_8u_C1( self.width, self.height, &self.cmpdiff_im_step )
+        if self.cmpdiff_im==NULL: raise MemoryError("Error allocating memory by IPP")
+        
         # 32f statistics and accumulator images for background collection
         self.accum_image=ipp.ippiMalloc_32f_C1( self.width, self.height, &self.accum_image_step )
         if self.accum_image==NULL: raise MemoryError("Error allocating memory by IPP")
@@ -156,10 +175,11 @@ cdef class RealtimeAnalyzer:
 
     def __dealloc__(self):
         CHK( ipp.ippiMomentFree_64f( self.pState ))
-        ipp.ippiFree(self.raw_im)
+        ipp.ippiFree(self.raw_im_orig)
         ipp.ippiFree(self.absdiff_im)
         ipp.ippiFree(self.mean_im)
-        ipp.ippiFree(self.cmp_img)
+        ipp.ippiFree(self.cmp_im)
+        ipp.ippiFree(self.cmpdiff_im)
         ipp.ippiFree(self.accum_image)
 
     def set_hw_roi(self, int _hw_roi_w, int _hw_roi_h,
@@ -172,11 +192,14 @@ cdef class RealtimeAnalyzer:
     def set_reconstruct_helper( self, helper ):
         self._helper = helper
 
-    def do_work(self, c_numarray._numarray framebuffer,
+    def do_work(self, object framebuffer_in,
                 double timestamp,
                 int framenumber,
                 int use_roi2,
-                int use_cmp):
+                int use_cmp=0,
+                int return_first_xy=0,
+                int framebuffer_is_FastImage=0
+                ):
         """find fly and orientation (fast enough for realtime use)
 
         inputs
@@ -207,7 +230,11 @@ cdef class RealtimeAnalyzer:
         cdef int i
         cdef int result, eigen_err
         
+        cdef int index_x,index_y
+        
         cdef ipp.Ipp8u max_val
+        cdef ipp.Ipp8u* max_val_ptr
+        cdef ipp.Ipp8u max_std_diff
         
         cdef ipp.Ipp8u clear_despeckle_thresh
     
@@ -216,26 +243,54 @@ cdef class RealtimeAnalyzer:
         
         cdef int found_point
 
-        self.last_image = framebuffer # useful when no IPP
+        cdef c_numarray._numarray framebuffer
+        cdef FastImage.FastImage8u framebuffer_fast
 
         all_points_found = []
-        
+
         # release GIL (SEE WARNING BELOW ABOUT RELEASING GIL)
         c_python.Py_BEGIN_ALLOW_THREADS
-        # copy image to IPP memory
-        for i from 0 <= i < self.hw_roi_h:
-            c_lib.memcpy((self.raw_im + self._bottom*self.raw_im_step + self._left)+self.raw_im_step*i,
-                         framebuffer.data+self.hw_roi_w*i, # src
-                         self.hw_roi_w)
-        # do background subtraction
-        CHK( ipp.ippiAbsDiff_8u_C1R(
-            IMPOS8u(self.mean_im, self.mean_im_step, self._bottom, self._left), self.mean_im_step,
-            IMPOS8u(self.raw_im,    self.raw_im_step,    self._bottom,self._left),  self.raw_im_step,
-            IMPOS8u(self.absdiff_im,    self.absdiff_im_step,    self._bottom,self._left),  self.absdiff_im_step,
-            self._roi_sz))
-        c_python.Py_END_ALLOW_THREADS
+        if framebuffer_is_FastImage==0:
+            framebuffer = <c_numarray._numarray>framebuffer_in # cast to numarray type
         
-        #work_done = False
+            # copy image to IPP memory
+            for i from 0 <= i < self.hw_roi_h:
+                c_lib.memcpy((self.raw_im + self._bottom*self.raw_im_step + self._left)+self.raw_im_step*i,
+                             framebuffer.data+self.hw_roi_w*i, # src
+                             self.hw_roi_w)
+        else:
+            framebuffer_fast = <FastImage.FastImage8u>framebuffer_in # cast to FastImage type
+            self.raw_im = <ipp.Ipp8u*>framebuffer_fast.im
+            self.raw_im_step = framebuffer_fast.strides[0]
+            self.raw_im_FastImage_refkeeper = framebuffer
+
+        # find difference from mean
+        CHK( ipp.ippiAbsDiff_8u_C1R(
+            IMPOS8u(self.mean_im,   self.mean_im_step,   self._bottom,self._left),self.mean_im_step,
+            IMPOS8u(self.raw_im,    self.raw_im_step,    self._bottom,self._left),self.raw_im_step,
+            IMPOS8u(self.absdiff_im,self.absdiff_im_step,self._bottom,self._left),self.absdiff_im_step,
+            self._roi_sz))
+        
+        if use_cmp:
+            # standard deviation based approach
+            # subration in IPP 8u saturates instead of wrapping, so we can do this
+            CHK( ipp.ippiSub_8u_C1RSfs(
+                IMPOS8u(self.cmp_im,    self.cmp_im_step,    self._bottom,self._left), self.cmp_im_step,
+                IMPOS8u(self.absdiff_im,self.absdiff_im_step,self._bottom,self._left), self.absdiff_im_step,
+                IMPOS8u(self.cmpdiff_im,self.cmpdiff_im_step,self._bottom,self._left), self.cmpdiff_im_step,
+                self._roi_sz,0))
+        c_python.Py_END_ALLOW_THREADS
+
+##        print 'IPP absdiff:'
+##        print_8u_arr(self.absdiff_im, self.hw_roi_w, self.hw_roi_h, self.absdiff_im_step)
+                
+##        print 'IPP cmp_im:'
+##        print_8u_arr(self.cmp_im, self.hw_roi_w, self.hw_roi_h, self.cmp_im_step)
+                
+##        print 'IPP cmpdiff_im:'
+##        print_8u_arr(self.cmpdiff_im, self.hw_roi_w, self.hw_roi_h, self.cmpdiff_im_step)
+                
+##        #work_done = False
         #while not work_done:
         while len(all_points_found) < MAX_NUM_POINTS:
 
@@ -256,16 +311,23 @@ cdef class RealtimeAnalyzer:
             # function calls do not call the Python C API.
             
             # find max pixel in ROI
-            CHK( ipp.ippiMaxIndx_8u_C1R(
-                (self.absdiff_im + self._bottom*self.absdiff_im_step + self._left), self.absdiff_im_step,
-                self._roi_sz, &max_val, &self.index_x,&self.index_y))
+            if use_cmp:
+                CHK( ipp.ippiMaxIndx_8u_C1R(
+                    IMPOS8u(self.cmpdiff_im,self.cmpdiff_im_step,self._bottom,self._left), self.cmpdiff_im_step,
+                    self._roi_sz, &max_std_diff, &index_x, &index_y))
+                max_val_ptr = self.absdiff_im+self.absdiff_im_step*index_y+index_x
+                max_val = max_val_ptr[0] # value at maximum difference from std
+            else:
+                CHK( ipp.ippiMaxIndx_8u_C1R(
+                    IMPOS8u(self.absdiff_im,self.absdiff_im_step,self._bottom,self._left), self.absdiff_im_step,
+                    self._roi_sz, &max_val, &index_x,&index_y))
 
             if use_roi2:
                 # find mini-ROI for further analysis (defined in non-ROI space)
-                left2 = self.index_x - self._roi2_radius + self._left
-                right2 = self.index_x + self._roi2_radius + self._left
-                bottom2 = self.index_y - self._roi2_radius + self._bottom
-                top2 = self.index_y + self._roi2_radius + self._bottom
+                left2 = index_x - self._roi2_radius + self._left
+                right2 = index_x + self._roi2_radius + self._left
+                bottom2 = index_y - self._roi2_radius + self._bottom
+                top2 = index_y + self._roi2_radius + self._bottom
 
                 if left2 < self._left: left2 = self._left
                 if right2 > self._right: right2 = self._right
@@ -289,14 +351,31 @@ cdef class RealtimeAnalyzer:
                 (self.absdiff_im + bottom2*self.absdiff_im_step + left2), self.absdiff_im_step,
                 roi2_sz, clear_despeckle_thresh, 0, ipp.ippCmpLess))
 
+##            # seems OK to here, not as extensively debugged
+##            c_python.Py_END_ALLOW_THREADS
+##            if 1:
+##                             #(x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4, line_found, slope_found)
+##                return [(clear_despeckle_thresh, bottom2, max_std_diff, max_std_diff, eccentricity, p1, p2, p3, p4, 0, 0)]
+##            c_python.Py_BEGIN_ALLOW_THREADS
+
+
             found_point = 1
-            if max_val < self._diff_threshold:
-                x0=nan
-                y0=nan
-                x0_abs = nan
-                y0_abs = nan
-                found_point = 0 # c int (bool)
+
+            if not use_cmp:
+                if max_val < self._diff_threshold:
+                    x0=nan
+                    y0=nan
+                    x0_abs = nan
+                    y0_abs = nan
+                    found_point = 0 # c int (bool)
             else:
+                if max_std_diff == 0:
+                    x0=nan
+                    y0=nan
+                    x0_abs = nan
+                    y0_abs = nan
+                    found_point = 0 # c int (bool)
+            if found_point:
                 result = fit_params( self.pState, &x0, &y0,
                                      &Mu00,
                                      &Uu11, &Uu20, &Uu02,
@@ -348,8 +427,14 @@ cdef class RealtimeAnalyzer:
                                                            timestamp, framenumber )
                     else:
                         SET_ERR(2)
+
             # grab GIL
             c_python.Py_END_ALLOW_THREADS
+
+            if return_first_xy:
+##                             #(x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4, line_found, slope_found)
+                rval = [(index_x, index_y, max_std_diff, 0.0, eccentricity, p1, p2, p3, p4, 0, 0)]
+                return rval
 
             if not found_point:
                 #work_done = True
@@ -408,17 +493,22 @@ cdef class RealtimeAnalyzer:
                 )
 
             # clear roi2 for next iteration
-            CHK( ipp.ippiSet_8u_C1R( 0, 
-                (self.absdiff_im + bottom2*self.absdiff_im_step + left2), self.absdiff_im_step,
+            CHK( ipp.ippiSet_8u_C1R(
+                0, 
+                IMPOS8u(self.absdiff_im,self.absdiff_im_step,bottom2,left2), self.absdiff_im_step,
                 roi2_sz))
+            if use_cmp:
+                CHK( ipp.ippiSet_8u_C1R(
+                    0, 
+                    IMPOS8u(self.cmpdiff_im,self.cmpdiff_im_step,bottom2,left2), self.cmpdiff_im_step,
+                    roi2_sz))
+            
         return all_points_found
 
     def get_working_image(self):
         cdef c_numarray._numarray buf
         cdef int i
 
-        buf = self.last_image # useful when no IPP
-        
         # allocate new numarray memory
         buf = nx.zeros( (self.height, self.width), nx.UInt8 )
 
@@ -429,9 +519,6 @@ cdef class RealtimeAnalyzer:
                          self.width)
         return buf
     
-    def get_last_bright_point(self):
-        return (self.index_x, self.index_y)
-
     def get_image(self,which='mean'):
         cdef c_numarray._numarray buf
         cdef int i
@@ -444,8 +531,6 @@ cdef class RealtimeAnalyzer:
         else:
             raise ValueError()
 
-        buf = self.last_image # useful when no IPP
-        
         # allocate new numarray memory
         buf = nx.zeros( (self.height, self.width), nx.UInt8 )
 
@@ -465,18 +550,20 @@ cdef class RealtimeAnalyzer:
         if which=='mean':
             im_base = self.mean_im
             im_step = self.mean_im_step
-        elif which=='compare':
-            im_base = self.cmp_img
-            im_step = self.cmp_img_step
+        elif which=='cmp':
+            im_base = self.cmp_im
+            im_step = self.cmp_im_step
         else:
             raise ValueError()
 
         buf = <c_numarray._numarray>nx.asarray( numbuf )
+        if not buf.iscontiguous():
+            buf = nx.array(buf)
+            assert buf.iscontiguous()
         
         assert buf.shape[0] == self.height
         assert buf.shape[1] == self.width
         assert len(buf.shape) == 2
-        assert buf.iscontiguous()
         assert buf.type() == nx.UInt8
         
         # allocate new numarray memory

@@ -1,0 +1,1 @@
+../FastImage/src/FastImage.pxd
