@@ -1,10 +1,11 @@
 #emacs, this is -*-Python-*- mode
-# $Id: camera_server2.py 636 2005-11-15 01:14:21Z astraw $
+# $Id: $
 
 import threading, time, socket, sys, struct, os
 import Pyro.core, Pyro.errors
 import FlyMovieFormat
 import numarray as nx
+import Numeric as nx
 import pyx_cam_iface as cam_iface
 import reconstruct_utils
 import Queue
@@ -15,7 +16,7 @@ import math
 
 from common_variables import REALTIME_UDP
 
-import realtime_image_analysis
+import realtime_image_analysis4 as realtime_image_analysis
 
 if sys.platform == 'win32':
     time_func = time.clock
@@ -56,16 +57,11 @@ class GrabClass(object):
         max_height = self.cam.get_max_height()
 
         hw_roi_w, hw_roi_h = self.cam.get_frame_size()
-        hw_roi_l, hw_roi_b = self.cam.get_frame_offset()
         self.new_roi = threading.Event()
         self.new_roi_data = None
         self.cur_fisize = FastImage.Size(hw_roi_w, hw_roi_h)
         self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(max_width,
                                                                           max_height,
-                                                                          hw_roi_w,
-                                                                          hw_roi_h,
-                                                                          hw_roi_l,
-                                                                          hw_roi_b,
                                                                           ALPHA)
 
     def get_clear_threshold(self):
@@ -126,16 +122,17 @@ class GrabClass(object):
         collecting_background_isSet = globals['collecting_background'].isSet
         find_rotation_center_start_isSet = globals['find_rotation_center_start'].isSet
         find_rotation_center_start_clear = globals['find_rotation_center_start'].clear
-        debug_isSet = globals['debug'].isSet
         height = self.cam.get_max_height()
         width = self.cam.get_max_width()
         buf_ptr_step = width
         bg_changed = True
         use_roi2_isSet = globals['use_roi2'].isSet
-        fi8ufactory = FastImage.FastImage8u
+        #fi8ufactory = FastImage.FastImage8u
+        fi8ufactory = realtime_image_analysis.wrFastImage8u
         use_cmp = 0
         return_first_xy = 0
-        framebuffer_is_FastImage = 1
+        framebuffer_fast = fi8ufactory( self.cur_fisize )
+        allocated_fisize = self.cur_fisize
 
         if REALTIME_UDP:
             coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -159,15 +156,24 @@ class GrabClass(object):
         
         self.cam.start_camera()  # start camera
 
+        FastImage.set_debug(1) # let us see any images malloced
         try:
             while not cam_quit_event_isSet():
-                # allocate RAM for new framebuffer in IPP format:
-                framebuffer_fast = fi8ufactory( self.cur_fisize )
+                #if allocated_fisize != self.cur_fisize:
+                if allocated_fisize is not self.cur_fisize: # fast
+                    print 'allocated_fisize',allocated_fisize
+                    print 'self.cur_fisize',self.cur_fisize
+                    if allocated_fisize != self.cur_fisize: # slower
+                        # allocate RAM for new framebuffer in IPP format (slowest)
+                        framebuffer_fast = fi8ufactory( self.cur_fisize )
+                        allocated_fisize = self.cur_fisize
+                    else:
+                        allocated_fisize = self.cur_fisize # reassign to make "is" operation faster
                 try:
-                    self.cam.grab_next_frame_blocking_into_buf(framebuffer_fast)
+                    self.cam.grab_next_frame_into_buf_blocking(framebuffer_fast)
                 except cam_iface.BuffersOverflowed:
                     print >> sys.stderr , 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
-                framebuffer = nx.asarray(framebuffer_fast) # numarray view of data
+
                 # get best guess as to when image was taken
                 timestamp=self.cam.get_last_timestamp()
                 framenumber=self.cam.get_last_framenumber()
@@ -179,24 +185,20 @@ class GrabClass(object):
                     print >> sys.stderr, '  frames apparently skipped:', framenumber-old_fn
                 old_ts = timestamp
                 old_fn = framenumber
-                
+
+                self.realtime_analyzer.set_image_as_view('raw',framebuffer_fast)
                 points = self.realtime_analyzer.do_work(
-                    framebuffer_fast, timestamp, framenumber, use_roi2_isSet(),
-                    use_cmp, return_first_xy, framebuffer_is_FastImage)
-                    
+                    timestamp, framenumber, use_roi2_isSet(),
+                    use_cmp, return_first_xy)
                 n_pts = len(points)
-                raw_image = framebuffer
                 
                 # make appropriate references to our copy of the data
-                if debug_isSet():
-                    debug_image = self.realtime_analyzer.get_working_image()
-                    globals['most_recent_frame'] = (0,0), debug_image
-                else:
-                    l,b= self.cam.get_frame_offset()
-                    globals['most_recent_frame'] = (l,b), raw_image
+                imname = globals['export_image_name']
+                export_image = self.realtime_analyzer.get_image_view(imname)
+                globals['most_recent_frame'] = (0,0), export_image
                     
                 globals['incoming_raw_frames'].put(
-                    (raw_image,timestamp,framenumber,n_pts) ) # save it
+                    (framebuffer_fast,timestamp,framenumber,n_pts) ) # save it
 
                 if collecting_background_isSet():
                     if bg_frame_number % BG_FRAME_INTERVAL == 0:
@@ -206,17 +208,19 @@ class GrabClass(object):
                     bg_frame_number += 1
                 
                 if take_background_isSet():
+                    # reset background image with current frame as mean and 0 STD
                     self.realtime_analyzer.take_background_image()
                     bg_changed = True
                     take_background_clear()
                     
                 if clear_background_isSet():
+                    # reset background image with 0 mean and 0 STD
                     self.realtime_analyzer.clear_background_image()
                     bg_changed = True
                     clear_background_clear()
 
                 if bg_changed:
-                    bg_image = self.realtime_analyzer.get_image('mean')
+                    bg_image = self.realtime_analyzer.get_image_copy('mean')
                     globals['current_bg_frame_and_timestamp']=bg_image,timestamp # only used when starting to save
                     globals['incoming_bg_frames'].put(
                         (bg_image,timestamp,framenumber) ) # save it
@@ -263,28 +267,23 @@ class GrabClass(object):
                     
                 if self.new_roi.isSet():
                     self.cam.stop_camera()  # start camera
-                    print 'stopped camera'
                     lbrt = self.new_roi_data
                     self.new_roi_data = None
                     l,b,r,t=lbrt
                     w = r-l+1
                     h = t-b+1
                     self.realtime_analyzer.roi = lbrt
-                    print 'camera setting size to',w,h
-                    print 'camera setting offset to',l,b
                     self.cam.set_frame_size(w,h)
                     self.cam.set_frame_offset(l,b)
                     w,h = self.cam.get_frame_size()
                     l,b= self.cam.get_frame_offset()
-                    print 'set to',w,h,l,b
                     self.cur_fisize = FastImage.Size(w, h)
                     self.realtime_analyzer.set_hw_roi(w,h,l,b)
 
-                    print 're-starting camera'
                     self.new_roi.clear()
                     self.cam.start_camera()  # start camera
         finally:
-
+            FastImage.set_debug(0)
             globals['cam_quit_event'].set()
             globals['grab_thread_done'].set()
 
@@ -366,7 +365,7 @@ class App:
             globals['collecting_background'] = threading.Event()
             globals['collecting_background'].set()
             globals['find_rotation_center_start'] = threading.Event()
-            globals['debug'] = threading.Event()
+            globals['export_image_name'] = 'raw'
             globals['use_roi2'] = threading.Event()
 
             # set defaults
@@ -410,19 +409,6 @@ class App:
             cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(self.all_cam_ids[cam_no])
             self.main_brain_lock.release()
             
-            # ---------------------------------------------------------------
-            #
-            # start local Pyro server
-            #
-            # ---------------------------------------------------------------
-
-            hostname = socket.gethostname()
-            if hostname == 'flygate':
-                hostname = 'mainbrain' # serve on internal network
-            print 'hostname',hostname
-            host = socket.gethostbyname(hostname)
-            daemon = Pyro.core.Daemon(host=host,port=port)
-
             # ----------------------------------------------------------------
             #
             # start camera thread
@@ -478,7 +464,10 @@ class App:
                     elif property_name == 'max_framerate':
                         cam.set_framerate(value)
             elif key == 'get_im':
-                self.main_brain.set_image(cam_id, globals['most_recent_frame'])
+                lb, im = globals['most_recent_frame']
+                #nxim = nx.array(im) # copy to native nx form, not view of __array_struct__ form
+                nxim = nx.asarray(im) # copy to native nx form, not view of __array_struct__ form
+                self.main_brain.set_image(cam_id, (lb, nxim))
             elif key == 'use_arena':
                 grabber.use_arena = cmds[key]
                 globals['use_arena'] = grabber.use_arena
@@ -511,9 +500,9 @@ class App:
                 globals['saved_bg_frame']=False
                 print "starting to record to %s"%raw_filename
                 print "  background to %s"%bg_filename
-            elif key == 'debug':
-                if cmds[key]: globals['debug'].set()
-                else: globals['debug'].clear()
+            elif key == 'debug': # kept for backwards compatibility
+                if cmds[key]: globals['export_image_name'] = 'absdiff'
+                else: globals['export_image_name'] = 'raw'
             elif key == 'cal':
                 pmat, intlin, intnonlin = cmds[key]
                 grabber.pmat = pmat
@@ -576,7 +565,6 @@ class App:
                         # Get new raw frames from grab thread.
                         get_raw_frame_nowait = globals['incoming_raw_frames'].get_nowait
                         try:
-                            qsize = globals['incoming_raw_frames'].qsize()
                             while 1:
                                 frame,timestamp,framenumber,n_pts = get_raw_frame_nowait() # this may raise Queue.Empty
                                 if n_pts>0:
