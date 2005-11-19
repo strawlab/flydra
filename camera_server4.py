@@ -52,16 +52,10 @@ class GrabClass(object):
         self.cam2mainbrain_port = cam2mainbrain_port
         self.cam_id = cam_id
 
-        # get coordinates for region of interest
-        max_width = self.cam.get_max_width()
-        max_height = self.cam.get_max_height()
-
-        hw_roi_w, hw_roi_h = self.cam.get_frame_size()
         self.new_roi = threading.Event()
         self.new_roi_data = None
-        self.cur_fisize = FastImage.Size(hw_roi_w, hw_roi_h)
-        self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(max_width,
-                                                                          max_height,
+        self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(self.cam.get_max_width(),
+                                                                          self.cam.get_max_height(),
                                                                           ALPHA)
 
     def get_clear_threshold(self):
@@ -122,17 +116,17 @@ class GrabClass(object):
         collecting_background_isSet = globals['collecting_background'].isSet
         find_rotation_center_start_isSet = globals['find_rotation_center_start'].isSet
         find_rotation_center_start_clear = globals['find_rotation_center_start'].clear
-        height = self.cam.get_max_height()
-        width = self.cam.get_max_width()
-        buf_ptr_step = width
+        max_frame_size = FastImage.Size(self.cam.get_max_width(), self.cam.get_max_height())
+
+        hw_roi_w, hw_roi_h = self.cam.get_frame_size()
+        cur_fisize = FastImage.Size(hw_roi_w, hw_roi_h)
+        
         bg_changed = True
         use_roi2_isSet = globals['use_roi2'].isSet
-        #fi8ufactory = FastImage.FastImage8u
-        fi8ufactory = realtime_image_analysis.wrFastImage8u
+        fi8ufactory = FastImage.FastImage8u
         use_cmp = 0
         return_first_xy = 0
-        framebuffer_fast = fi8ufactory( self.cur_fisize )
-        allocated_fisize = self.cur_fisize
+        hw_roi_frame = fi8ufactory( cur_fisize )
 
         if REALTIME_UDP:
             coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -154,23 +148,26 @@ class GrabClass(object):
             except Exception, x:
                 print 'WARNING: could not run in maximum priority mode:', str(x)
         
+        FastImage.set_debug(1) # let us see any images malloced, should only happen on hardware ROI size change
+        
         self.cam.start_camera()  # start camera
 
-        FastImage.set_debug(1) # let us see any images malloced
+        # take first image to set background and so on
+        try:
+            self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
+        except cam_iface.BuffersOverflowed:
+            print >> sys.stderr , 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
+
+        mean8u_im = self.realtime_analyzer.get_image_view('mean')
+        
+        accum_im = hw_roi_frame.get_32f_copy(max_frame_size )
+        accum_im.get_8u_copy_put( mean8u_im, max_frame_size )
+        
         try:
             while not cam_quit_event_isSet():
-                #if allocated_fisize != self.cur_fisize:
-                if allocated_fisize is not self.cur_fisize: # fast
-                    print 'allocated_fisize',allocated_fisize
-                    print 'self.cur_fisize',self.cur_fisize
-                    if allocated_fisize != self.cur_fisize: # slower
-                        # allocate RAM for new framebuffer in IPP format (slowest)
-                        framebuffer_fast = fi8ufactory( self.cur_fisize )
-                        allocated_fisize = self.cur_fisize
-                    else:
-                        allocated_fisize = self.cur_fisize # reassign to make "is" operation faster
+                
                 try:
-                    self.cam.grab_next_frame_into_buf_blocking(framebuffer_fast)
+                    self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
                 except cam_iface.BuffersOverflowed:
                     print >> sys.stderr , 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
 
@@ -186,41 +183,52 @@ class GrabClass(object):
                 old_ts = timestamp
                 old_fn = framenumber
 
-                self.realtime_analyzer.set_image_as_view('raw',framebuffer_fast)
-                points = self.realtime_analyzer.do_work(
-                    timestamp, framenumber, use_roi2_isSet(),
-                    use_cmp, return_first_xy)
+                points = self.realtime_analyzer.do_work(hw_roi_frame,
+                                                        timestamp, framenumber, use_roi2_isSet(),
+                                                        use_cmp, return_first_xy)
                 n_pts = len(points)
                 
-                # make appropriate references to our copy of the data
-                imname = globals['export_image_name']
-                export_image = self.realtime_analyzer.get_image_view(imname)
-                globals['most_recent_frame'] = (0,0), export_image
-                    
+                # allow other thread to see images
+                imname = globals['export_image_name'] # figure out what is wanted # XXX theoretically could have threading issue
+                if imname == 'raw':
+                    export_image = hw_roi_frame
+                else:
+                    export_image = self.realtime_analyzer.get_image_view(imname) # get image
+                globals['most_recent_frame'] = (0,0), export_image # give it
+
+                # allow other thread to see raw image always (for saving)
                 globals['incoming_raw_frames'].put(
-                    (framebuffer_fast,timestamp,framenumber,n_pts) ) # save it
+                    (hw_roi_frame,timestamp,framenumber,n_pts) ) # save it
 
                 if collecting_background_isSet():
                     if bg_frame_number % BG_FRAME_INTERVAL == 0:
-                        self.realtime_analyzer.accumulate_last_image()
+                        if cur_fisize != max_frame_size:
+                            # set to full ROI and take full image if necessary
+                            raise NotImplementedError("")
+                        # maintain running average
+                        accum_im.toself_add_weighted( hw_roi_frame, max_frame_size, ALPHA )
+                        # maintain 8bit unsigned background image
+                        accum_im.get_8u_copy_put( mean8u_im, max_frame_size )
                         bg_changed = True
                         bg_frame_number = 0
                     bg_frame_number += 1
                 
                 if take_background_isSet():
                     # reset background image with current frame as mean and 0 STD
-                    self.realtime_analyzer.take_background_image()
+                    hw_roi_frame.get_32f_copy_put( accum_im, max_frame_size )
+                    accum_im.get_8u_copy_put( mean8u_im, max_frame_size )
                     bg_changed = True
                     take_background_clear()
                     
                 if clear_background_isSet():
                     # reset background image with 0 mean and 0 STD
-                    self.realtime_analyzer.clear_background_image()
+                    accum_im.set_val( 0, max_frame_size )
+                    mean8u_im.set_val(0, max_frame_size )
                     bg_changed = True
                     clear_background_clear()
 
                 if bg_changed:
-                    bg_image = self.realtime_analyzer.get_image_copy('mean')
+                    bg_image = nx.array(mean8u_im) # make copy (we don't want to send live versions of image
                     globals['current_bg_frame_and_timestamp']=bg_image,timestamp # only used when starting to save
                     globals['incoming_bg_frames'].put(
                         (bg_image,timestamp,framenumber) ) # save it
@@ -277,7 +285,8 @@ class GrabClass(object):
                     self.cam.set_frame_offset(l,b)
                     w,h = self.cam.get_frame_size()
                     l,b= self.cam.get_frame_offset()
-                    self.cur_fisize = FastImage.Size(w, h)
+                    cur_fisize = FastImage.Size(w, h)
+                    hw_roi_frame = fi8ufactory( cur_fisize )
                     self.realtime_analyzer.set_hw_roi(w,h,l,b)
 
                     self.new_roi.clear()

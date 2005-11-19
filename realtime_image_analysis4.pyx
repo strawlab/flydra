@@ -116,22 +116,33 @@ cdef class RealtimeAnalyzer:
         
     cdef int n_rot_samples
 
-    # FastImage images
-    cdef FastImage.FastImage8u raw_im, absdiff_im
-    cdef FastImage.FastImage8u mean_im, cmp_im, cmpdiff_im
-    cdef FastImage.FastImage32f accum_im
+    # class A images:
 
-    # ROI views of above
-    cdef FastImage.FastImage8u raw_im_roi_view, absdiff_im_roi_view, absdiff_im_roi2_view
+    # Portions of these images may be out of date. This is done
+    # because we only want to malloc each image once, despite changing
+    # input image size. The roi is a view of the active part. The roi2
+    # is a view of the sub-region of the active part.
+    
+    cdef FastImage.FastImage8u absdiff_im, cmpdiff_im # also raw_im
+
+    cdef FastImage.FastImage8u absdiff_im_roi_view
+    cdef FastImage.FastImage8u cmpdiff_im_roi_view
+    cdef FastImage.FastImage8u absdiff_im_roi2_view
     cdef FastImage.FastImage8u cmpdiff_im_roi2_view
-    cdef FastImage.FastImage8u mean_im_roi_view, cmp_im_roi_view, cmpdiff_im_roi_view
-    cdef FastImage.FastImage32f accum_im_roi_view
+
+    # class B images:
+
+    # These entirety of these images are always valid and have an roi
+    # into the active region.
+
+    cdef FastImage.FastImage8u mean_im, cmp_im
+
+    cdef FastImage.FastImage8u mean_im_roi_view, cmp_im_roi_view
     
     cdef ipp.IppiMomentState_64f *pState
 
     cdef ArenaController.ArenaController arena_controller
 
-    cdef object raw_im_FastImage_refkeeper
     cdef object imname2im
 
     def __new__(self,*args,**kw):
@@ -147,7 +158,7 @@ cdef class RealtimeAnalyzer:
         CHK_HAVEGIL( ipp.ippiMomentFree_64f( self.pState ))
 #        del self.arena_controller
 
-    def __init__(self, int maxwidth, int maxheight, float alpha=0.1):
+    def __init__(self,int maxwidth, int maxheight, float alpha=0.1):
         # software analysis ROI
         self.maxwidth = maxwidth
         self.maxheight = maxheight
@@ -169,7 +180,6 @@ cdef class RealtimeAnalyzer:
 
         sz = FastImage.Size(self.maxwidth,self.maxheight)
         # 8u images
-        self.raw_im=wrFastImage8u(sz)
         self.absdiff_im=wrFastImage8u(sz)
 
         # 8u background
@@ -177,20 +187,18 @@ cdef class RealtimeAnalyzer:
         self.cmp_im=wrFastImage8u(sz)
         self.cmpdiff_im=wrFastImage8u(sz)
         
-        # 32f statistics and accumulator images for background collection
-        self.accum_im=wrFastImage32f(sz)
-
         self.update_imname2im() # create and update self.imname2im dict
 
         self.roi = 0,0,maxwidth-1,maxheight-1 # sets self._roi_sz to l,b,r,t, assigns roi_views
         
-        # initializes background images
-        self.clear_background_image()
+        # initialize background images
+        self.mean_im_roi_view.set_val( 0, self._roi_sz )
 
     def set_reconstruct_helper( self, helper ):
         self._helper = helper
 
-    def do_work(self, 
+    def do_work(self,
+                FastImage.FastImage8u raw_im_small,
                 double timestamp,
                 int framenumber,
                 int use_roi2,
@@ -202,10 +210,14 @@ cdef class RealtimeAnalyzer:
         inputs
         ------
         
-        framebuffer
         timestamp
         framenumber
         use_roi2
+
+        optional inputs (default to 0)
+        ------------------------------
+        use_cmp -- perform more detailed analysis against cmp image (used with ongoing variance estimation)
+        return_first_xy -- for debugging
 
         outputs
         -------
@@ -235,31 +247,36 @@ cdef class RealtimeAnalyzer:
         
         cdef ipp.Ipp8u clear_despeckle_thresh
 
-        cdef FastImage.Size _roi2_sz
-        cdef ipp.IppiSize roi2_sz
+        cdef FastImage.Size roi2_sz
         cdef int left2, right2, bottom2, top2
         
         cdef int found_point
 
         all_points_found = []
 
+        # This is our near-hack to ensure users update .roi before calling .do_work()
+        if not ((self._roi_sz.sz.width == raw_im_small.imsiz.sz.width) and
+                (self._roi_sz.sz.height == raw_im_small.imsiz.sz.height)):
+            raise ValueError("input image size does not correspond to ROI "
+                             "(set RealtimeAnalyzer.roi before calling)")
+
         # find difference from mean
-        c_python.Py_BEGIN_ALLOW_THREADS
+        #c_python.Py_BEGIN_ALLOW_THREADS
         # absdiff_im = | raw_im - mean_im |
-        self.raw_im_roi_view.fast_get_absdiff_put( self.mean_im_roi_view,
-                                                   self.absdiff_im_roi_view,
-                                                   self._roi_sz)
+        raw_im_small.fast_get_absdiff_put( self.mean_im_roi_view,
+                                     self.absdiff_im_roi_view,
+                                     self._roi_sz)
         if use_cmp:
             # cmpdiff_im = absdiff_im - cmp_im (saturates 8u)
             self.absdiff_im_roi_view.fast_get_sub_put( self.cmp_im_roi_view,
                                                        self.cmpdiff_im_roi_view,
                                                        self._roi_sz )
-        c_python.Py_END_ALLOW_THREADS
+        #c_python.Py_END_ALLOW_THREADS
 
         while len(all_points_found) < MAX_NUM_POINTS:
 
             # release GIL
-            c_python.Py_BEGIN_ALLOW_THREADS
+            #c_python.Py_BEGIN_ALLOW_THREADS
 
             # WARNING WARNING WARNING WARNING WARNING WARNING WARNING
 
@@ -297,21 +314,17 @@ cdef class RealtimeAnalyzer:
                 if right2 > self._right: right2 = self._right
                 if bottom2 < self._bottom: bottom2 = self._bottom
                 if top2 > self._top: top2 = self._top
-                roi2_sz.width = right2 - left2 + 1
-                roi2_sz.height = top2 - bottom2 + 1
-                _roi2_sz = FastImage.Size(roi2_sz.width, roi2_sz.height)
+                roi2_sz = FastImage.Size(right2 - left2 + 1, top2 - bottom2 + 1)
             else:
                 left2 = self._left
                 right2 = self._right
                 bottom2 = self._bottom
                 top2 = self._top
-                roi2_sz.width = right2 - left2 + 1
-                roi2_sz.height = top2 - bottom2 + 1
-                _roi2_sz = self._roi_sz
+                roi2_sz = self._roi_sz
 
-            self.absdiff_im_roi2_view = self.absdiff_im.roi(left2,bottom2,_roi2_sz)
+            self.absdiff_im_roi2_view = self.absdiff_im.roi(left2,bottom2,roi2_sz)
             if use_cmp:
-                self.cmpdiff_im_roi2_view = self.cmpdiff_im.roi(left2,bottom2,_roi2_sz)
+                self.cmpdiff_im_roi2_view = self.cmpdiff_im.roi(left2,bottom2,roi2_sz)
 
             # (to reduce moment arm:) if pixel < self._clear_threshold*max(pixel): pixel=0
 
@@ -321,7 +334,7 @@ cdef class RealtimeAnalyzer:
 
             CHK( ipp.ippiThreshold_Val_8u_C1IR(
                 <ipp.Ipp8u*>self.absdiff_im_roi2_view.im,self.absdiff_im_roi2_view.step,
-                roi2_sz, clear_despeckle_thresh, 0, ipp.ippCmpLess))
+                roi2_sz.sz, clear_despeckle_thresh, 0, ipp.ippCmpLess))
 
             found_point = 1
 
@@ -343,7 +356,7 @@ cdef class RealtimeAnalyzer:
                 result = fit_params( self.pState, &x0, &y0,
                                      &Mu00,
                                      &Uu11, &Uu20, &Uu02,
-                                     roi2_sz.width, roi2_sz.height,
+                                     roi2_sz.sz.width, roi2_sz.sz.height,
                                      <unsigned char*>self.absdiff_im_roi2_view.im,
                                      self.absdiff_im_roi2_view.step)
                 # note that x0 and y0 are now relative to the ROI origin
@@ -393,7 +406,7 @@ cdef class RealtimeAnalyzer:
                         SET_ERR(2)
 
             # grab GIL
-            c_python.Py_END_ALLOW_THREADS
+            #c_python.Py_END_ALLOW_THREADS
 
             if return_first_xy:
                 #nominal: (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4, line_found, slope_found)
@@ -459,38 +472,29 @@ cdef class RealtimeAnalyzer:
                 0, 
                 <ipp.Ipp8u*>self.absdiff_im_roi2_view.im,
                 self.absdiff_im_roi2_view.step,
-                roi2_sz))
+                roi2_sz.sz))
             if use_cmp:
                 CHK( ipp.ippiSet_8u_C1R(
                     0,
                     <ipp.Ipp8u*>self.cmpdiff_im_roi2_view.im,self.cmpdiff_im_roi2_view.step,
-                    roi2_sz))
+                    roi2_sz.sz))
             
         return all_points_found
 
-    def set_image_as_view(self,which,FastImage.FastImageBase incoming):
-        if which=='raw':
-            self.raw_im = incoming
-            self.raw_im_roi_view = self.raw_im.roi(self._left,self._bottom,self._roi_sz)
-        else:
-            raise ValueError()
-
-    def get_image_copy(self,which='mean'):
-        if which=='mean':
-            return nx.array(self.mean_im)
-        elif which=='absdiff':
-            return nx.array(self.absdiff_im)
-        else:
-            raise ValueError()
+##    def get_image_copy(self,which='mean'):
+##        if which=='mean':
+##            return nx.array(self.mean_im)
+##        elif which=='absdiff':
+##            return nx.array(self.absdiff_im)
+##        else:
+##            raise ValueError()
 
     def update_imname2im(self):
         """refresh weak references"""
-        self.imname2im = {'raw'     :weakref.ref(self.raw_im),
-                          'absdiff' :weakref.ref(self.absdiff_im),
+        self.imname2im = {'absdiff' :weakref.ref(self.absdiff_im),
                           'mean'    :weakref.ref(self.mean_im),
                           'cmp'     :weakref.ref(self.cmp_im),
                           'cmpdiff' :weakref.ref(self.cmpdiff_im),
-                          'accum'   :weakref.ref(self.accum_im),
                           }
     
     def get_image_view(self,which='mean'):
@@ -502,36 +506,31 @@ cdef class RealtimeAnalyzer:
             im = self.imname2im[which]()
         return im
     
-    def take_background_image(self):
-##        c_python.Py_BEGIN_ALLOW_THREADS
-        CHK( ipp.ippiCopy_8u_C1R(
-            <ipp.Ipp8u*>self.raw_im_roi_view.im,self.raw_im_roi_view.step,
-            <ipp.Ipp8u*>self.mean_im_roi_view.im,self.mean_im_roi_view.step,
-            self._roi_sz.sz))
-        CHK( ipp.ippiConvert_8u32f_C1R(
-            <ipp.Ipp8u*>self.raw_im_roi_view.im,self.raw_im_roi_view.step,
-            <ipp.Ipp32f*>self.accum_im_roi_view.im,self.accum_im_roi_view.step,
-            self._roi_sz.sz))
-##        c_python.Py_END_ALLOW_THREADS
+##    def take_background_image(self):
+####        c_python.Py_BEGIN_ALLOW_THREADS
+##        CHK( ipp.ippiCopy_8u_C1R(
+##            <ipp.Ipp8u*>self.raw_im_roi_view.im,self.raw_im_roi_view.step,
+##            <ipp.Ipp8u*>self.mean_im_roi_view.im,self.mean_im_roi_view.step,
+##            self._roi_sz.sz))
+##        CHK( ipp.ippiConvert_8u32f_C1R(
+##            <ipp.Ipp8u*>self.raw_im_roi_view.im,self.raw_im_roi_view.step,
+##            <ipp.Ipp32f*>self.accum_im_roi_view.im,self.accum_im_roi_view.step,
+##            self._roi_sz.sz))
+####        c_python.Py_END_ALLOW_THREADS
 
-    def clear_background_image(self):
-        # this is called at __init__ to set all values to zero
-        self.mean_im_roi_view.set_val( 0, self._roi_sz )
-        self.accum_im_roi_view.set_val( 0, self._roi_sz )
+##    def accumulate_last_image(self):
+####        c_python.Py_BEGIN_ALLOW_THREADS
+##        CHK( ipp.ippiAddWeighted_8u32f_C1IR(
+##            <ipp.Ipp8u*>self.raw_im_roi_view.im,self.raw_im_roi_view.step,
+##            <ipp.Ipp32f*>self.accum_im_roi_view.im,self.accum_im_roi_view.step,
+##            self._roi_sz.sz, self.alpha ))
 
-    def accumulate_last_image(self):
-##        c_python.Py_BEGIN_ALLOW_THREADS
-        CHK( ipp.ippiAddWeighted_8u32f_C1IR(
-            <ipp.Ipp8u*>self.raw_im_roi_view.im,self.raw_im_roi_view.step,
-            <ipp.Ipp32f*>self.accum_im_roi_view.im,self.accum_im_roi_view.step,
-            self._roi_sz.sz, self.alpha ))
-
-        # maintain 8 bit unsigned background image
-        CHK( ipp.ippiConvert_32f8u_C1R(
-            <ipp.Ipp32f*>self.accum_im_roi_view.im,self.accum_im_roi_view.step,
-            <ipp.Ipp8u*>self.mean_im_roi_view.im,self.mean_im_roi_view.step,
-            self._roi_sz.sz, ipp.ippRndNear ))
-##        c_python.Py_END_ALLOW_THREADS
+##        # maintain 8 bit unsigned background image
+##        CHK( ipp.ippiConvert_32f8u_C1R(
+##            <ipp.Ipp32f*>self.accum_im_roi_view.im,self.accum_im_roi_view.step,
+##            <ipp.Ipp8u*>self.mean_im_roi_view.im,self.mean_im_roi_view.step,
+##            self._roi_sz.sz, ipp.ippRndNear ))
+####        c_python.Py_END_ALLOW_THREADS
 
     def rotation_calculation_init(self, int n_rot_samples):
         if self.arena_controller is not None:
@@ -576,8 +575,7 @@ cdef class RealtimeAnalyzer:
     property pmat:
         def __get__(self):
             return self._pmat
-#        def __set__(self,c_numarray._numarray value):
-        def __set__(self,object value):
+        def __set__(self,c_numarray._numarray value):
             self._pmat = value
 
             P = self._pmat
@@ -608,9 +606,7 @@ cdef class RealtimeAnalyzer:
 
             self._roi_sz = FastImage.Size( self._right-self._left+1, self._top-self._bottom+1 )
             
-            self.raw_im_roi_view = self.raw_im.roi(self._left,self._bottom,self._roi_sz)
             self.absdiff_im_roi_view = self.absdiff_im.roi(self._left,self._bottom,self._roi_sz)
             self.mean_im_roi_view = self.mean_im.roi(self._left,self._bottom,self._roi_sz)
             self.cmp_im_roi_view = self.cmp_im.roi(self._left,self._bottom,self._roi_sz)
             self.cmpdiff_im_roi_view = self.cmpdiff_im.roi(self._left,self._bottom,self._roi_sz)
-            self.accum_im_roi_view = self.accum_im.roi(self._left,self._bottom,self._roi_sz)
