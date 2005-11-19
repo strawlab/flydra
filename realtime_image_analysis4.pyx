@@ -256,7 +256,7 @@ cdef class RealtimeAnalyzer:
                              "(set RealtimeAnalyzer.roi before calling)")
 
         # find difference from mean
-#        c_python.Py_BEGIN_ALLOW_THREADS
+        c_python.Py_BEGIN_ALLOW_THREADS
         # absdiff_im = | raw_im - mean_im |
         raw_im_small.fast_get_absdiff_put( self.mean_im_roi_view,
                                      self.absdiff_im_roi_view,
@@ -266,12 +266,12 @@ cdef class RealtimeAnalyzer:
             self.absdiff_im_roi_view.fast_get_sub_put( self.cmp_im_roi_view,
                                                        self.cmpdiff_im_roi_view,
                                                        self._roi_sz )
-#        c_python.Py_END_ALLOW_THREADS
+        c_python.Py_END_ALLOW_THREADS
 
         while len(all_points_found) < MAX_NUM_POINTS:
 
             # release GIL
-#            c_python.Py_BEGIN_ALLOW_THREADS
+            c_python.Py_BEGIN_ALLOW_THREADS
 
             # WARNING WARNING WARNING WARNING WARNING WARNING WARNING
 
@@ -319,9 +319,11 @@ cdef class RealtimeAnalyzer:
                 roi2_sz.sz.width = self._roi_sz.sz.width
                 roi2_sz.sz.height = self._roi_sz.sz.height
 
+            c_python.Py_END_ALLOW_THREADS
             self.absdiff_im_roi2_view = self.absdiff_im.roi(left2,bottom2,roi2_sz)
             if use_cmp:
                 self.cmpdiff_im_roi2_view = self.cmpdiff_im.roi(left2,bottom2,roi2_sz)
+            c_python.Py_BEGIN_ALLOW_THREADS
 
             # (to reduce moment arm:) if pixel < self._clear_threshold*max(pixel): pixel=0
 
@@ -403,7 +405,7 @@ cdef class RealtimeAnalyzer:
                         SET_ERR(2)
 
             # grab GIL
-#            c_python.Py_END_ALLOW_THREADS
+            c_python.Py_END_ALLOW_THREADS
 
             if return_first_xy:
                 #nominal: (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4, line_found, slope_found)
