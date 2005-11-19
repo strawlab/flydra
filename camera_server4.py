@@ -55,8 +55,7 @@ class GrabClass(object):
         self.new_roi = threading.Event()
         self.new_roi_data = None
         self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(self.cam.get_max_width(),
-                                                                          self.cam.get_max_height(),
-                                                                          ALPHA)
+                                                                          self.cam.get_max_height())
 
     def get_clear_threshold(self):
         return self.realtime_analyzer.clear_threshold
@@ -124,7 +123,7 @@ class GrabClass(object):
         bg_changed = True
         use_roi2_isSet = globals['use_roi2'].isSet
         fi8ufactory = FastImage.FastImage8u
-        use_cmp = 0
+        use_cmp = 1
         return_first_xy = 0
         hw_roi_frame = fi8ufactory( cur_fisize )
 
@@ -156,12 +155,25 @@ class GrabClass(object):
         try:
             self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
         except cam_iface.BuffersOverflowed:
-            print >> sys.stderr , 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
+            print >> sys.stderr , 'On start warning: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
 
-        mean8u_im = self.realtime_analyzer.get_image_view('mean')
+        running_mean8u_im = self.realtime_analyzer.get_image_view('mean') # this is a view we write into
+
+        # allocate images and initialize if necessary
+        running_mean_im = hw_roi_frame.get_32f_copy(max_frame_size)
+        running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
+
+        #
+        fastframef32_tmp = FastImage.FastImage32f(max_frame_size)
+        mean2 = FastImage.FastImage32f(max_frame_size)
+        running_stdframe = FastImage.FastImage32f(max_frame_size)
+        compareframe = FastImage.FastImage32f(max_frame_size)
+        compareframe8u = self.realtime_analyzer.get_image_view('cmp') # this is a view we write into
         
-        accum_im = hw_roi_frame.get_32f_copy(max_frame_size )
-        accum_im.get_8u_copy_put( mean8u_im, max_frame_size )
+        running_sumsqf = FastImage.FastImage32f(max_frame_size)
+        running_sumsqf.set_val(0,max_frame_size)
+        
+        noisy_pixels_mask = FastImage.FastImage8u(max_frame_size)
         
         try:
             while not cam_quit_event_isSet():
@@ -205,30 +217,52 @@ class GrabClass(object):
                         if cur_fisize != max_frame_size:
                             # set to full ROI and take full image if necessary
                             raise NotImplementedError("")
+                        
                         # maintain running average
-                        accum_im.toself_add_weighted( hw_roi_frame, max_frame_size, ALPHA )
+                        running_mean_im.toself_add_weighted( hw_roi_frame, max_frame_size, ALPHA )
                         # maintain 8bit unsigned background image
-                        accum_im.get_8u_copy_put( mean8u_im, max_frame_size )
+                        running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
+
+                        # standard deviation calculation
+                        hw_roi_frame.get_32f_copy_put(fastframef32_tmp,max_frame_size)
+                        fastframef32_tmp.toself_square(max_frame_size) # current**2
+                        running_sumsqf.toself_add_weighted( fastframef32_tmp, max_frame_size, ALPHA)
+                        running_mean_im.get_square_put(mean2,max_frame_size)
+                        running_sumsqf.get_subtracted_put(mean2,running_stdframe,max_frame_size)
+
+                        # now create frame for comparison
+                        C = 6.0
+                        running_stdframe.toself_multiply(C,max_frame_size)
+                        running_stdframe.get_8u_copy_put(compareframe8u,max_frame_size)
+
+                        # now we do hack, erm, heuristic for bright points, which aren't gaussian.
+                        running_mean8u_im.get_compare_put( 200, noisy_pixels_mask, max_frame_size, FastImage.CmpGreater)
+                        compareframe8u.set_val_masked(25, noisy_pixels_mask, max_frame_size)
+                        # clip the minimum comparison value to diff_threshold
+                        compareframe8u.toself_threshold(self.realtime_analyzer.diff_threshold,
+                                                        self.realtime_analyzer.diff_threshold,
+                                                        max_frame_size, FastImage.CmpLess)
+                        
                         bg_changed = True
                         bg_frame_number = 0
                     bg_frame_number += 1
                 
                 if take_background_isSet():
                     # reset background image with current frame as mean and 0 STD
-                    hw_roi_frame.get_32f_copy_put( accum_im, max_frame_size )
-                    accum_im.get_8u_copy_put( mean8u_im, max_frame_size )
+                    hw_roi_frame.get_32f_copy_put( running_mean_im, max_frame_size )
+                    running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
                     bg_changed = True
                     take_background_clear()
                     
                 if clear_background_isSet():
                     # reset background image with 0 mean and 0 STD
-                    accum_im.set_val( 0, max_frame_size )
-                    mean8u_im.set_val(0, max_frame_size )
+                    running_mean_im.set_val( 0, max_frame_size )
+                    running_mean8u_im.set_val(0, max_frame_size )
                     bg_changed = True
                     clear_background_clear()
 
                 if bg_changed:
-                    bg_image = nx.array(mean8u_im) # make copy (we don't want to send live versions of image
+                    bg_image = nx.array(running_mean8u_im) # make copy (we don't want to send live versions of image
                     globals['current_bg_frame_and_timestamp']=bg_image,timestamp # only used when starting to save
                     globals['incoming_bg_frames'].put(
                         (bg_image,timestamp,framenumber) ) # save it
@@ -394,7 +428,8 @@ class App:
             scalar_control_info['diff_threshold'] = diff_threshold
             clear_threshold = 0.2
             scalar_control_info['clear_threshold'] = clear_threshold
-
+            scalar_control_info['visible_image_view'] = 'raw'
+            
             try:
                 scalar_control_info['trigger_source'] = cam.get_trigger_source()
             except cam_iface.CamIFaceError:
@@ -472,6 +507,12 @@ class App:
                         else: globals['use_roi2'].clear()
                     elif property_name == 'max_framerate':
                         cam.set_framerate(value)
+                    elif property_name == 'collecting_background':
+                        if value: globals['collecting_background'].set()
+                        else: globals['collecting_background'].clear()
+                    elif property_name == 'visible_image_view':
+                        globals['export_image_name'] = value
+                        print 'displaying',value,'image'
             elif key == 'get_im':
                 lb, im = globals['most_recent_frame']
                 #nxim = nx.array(im) # copy to native nx form, not view of __array_struct__ form
@@ -486,11 +527,13 @@ class App:
                 globals['take_background'].set()
             elif key == 'clear_bg':
                 globals['clear_background'].set()
-            elif key == 'collecting_bg':
-                if cmds[key]:
-                    globals['collecting_background'].set()
-                else:
-                    globals['collecting_background'].clear()
+##            elif key == 'collecting_bg':
+##                if cmds[key]:
+##                    globals['collecting_background'].set()
+##                    print 'set collecting'
+##                else:
+##                    globals['collecting_background'].clear()
+##                    print 'cleared collecting'
             elif key == 'find_r_center':
                 globals['find_rotation_center_start'].set()
             elif key == 'stop_recording':
@@ -509,9 +552,9 @@ class App:
                 globals['saved_bg_frame']=False
                 print "starting to record to %s"%raw_filename
                 print "  background to %s"%bg_filename
-            elif key == 'debug': # kept for backwards compatibility
-                if cmds[key]: globals['export_image_name'] = 'absdiff'
-                else: globals['export_image_name'] = 'raw'
+##            elif key == 'debug': # kept for backwards compatibility
+##                if cmds[key]: globals['export_image_name'] = 'absdiff'
+##                else: globals['export_image_name'] = 'raw'
             elif key == 'cal':
                 pmat, intlin, intnonlin = cmds[key]
                 grabber.pmat = pmat

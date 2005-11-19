@@ -128,10 +128,13 @@ def get_best_realtime_data():
     best_realtime_data = None
     return data 
 
+##def DEBUG(msg=''):
+##    print msg,'line',sys._getframe().f_back.f_lineno,', thread', threading.currentThread()
+##    #for t in threading.enumerate():
+##    #    print '   ',t
+
 def DEBUG(msg=''):
-    print msg,'line',sys._getframe().f_back.f_lineno,', thread', threading.currentThread()
-    #for t in threading.enumerate():
-    #    print '   ',t
+    return
 
 class DebugLock:
     def __init__(self,name,verbose=False):
@@ -373,6 +376,7 @@ class CoordReceiver(threading.Thread):
                     client_sockobj.setblocking(0)
                     print cam_id, 'connected from',addr
                     self.listen_sockets[client_sockobj]=cam_id
+            DEBUG('1')
             try:
                 in_ready, out_ready, exc_ready = select_select( self.listen_sockets.keys(),
                                                                 empty_list, empty_list, timeout )
@@ -881,6 +885,7 @@ class MainBrain(object):
             hr = daemon.handleRequests
             while not quit_now_isSet():
                 hr(0.1) # block on select for n seconds
+                DEBUG('2')
                 self.cam_info_lock.acquire()
                 try:
                     cam_ids = self.cam_info.keys()
@@ -1204,7 +1209,6 @@ class MainBrain(object):
         self.remote_api.external_set_debug( cam_id, value)
 
     def set_collecting_background(self, cam_id, value):
-        #self.remote_api.external_set_collecting_background( cam_id, value)
         self.remote_api.external_send_set_camera_property( cam_id, 'collecting_background', value)
 
     def take_background(self,cam_id):

@@ -24,7 +24,8 @@
 import sys, threading, time, os, copy
 import traceback
 import MainBrain
-PLOTPANEL = False
+from MainBrain import DEBUG
+PLOTPANEL = True
 if PLOTPANEL:
     from MatplotlibPanel import PlotPanel
 import DynamicImageCanvas
@@ -381,6 +382,10 @@ class wxMainBrainApp(wxApp):
         EVT_TEXT(max_framerate, max_framerate.GetId(),
                  self.OnSetMaxFramerate)
 
+        view_image_choice = XRCCTRL(previewPerCamPanel,"view_image_display")
+        EVT_CHOICE(view_image_choice, view_image_choice.GetId(),
+                   self.OnSetViewImageChoice)
+
         arena_control = XRCCTRL(previewPerCamPanel,
                              "ARENA_CONTROL")
         EVT_CHECKBOX(arena_control, arena_control.GetId(), self.OnArenaControl)
@@ -509,8 +514,12 @@ class wxMainBrainApp(wxApp):
                                          "snapshot_cam_choice")
         snapshot_button = XRCCTRL(self.snapshot_panel,
                                   "snapshot_button")
+        snapshot_colormap = XRCCTRL(self.snapshot_panel,
+                                  "snapshot_colormap")
         EVT_BUTTON(snapshot_button, snapshot_button.GetId(),
                    self.OnSnapshot)
+        EVT_CHOICE(snapshot_colormap, snapshot_colormap.GetId(),
+                   self.OnSnapshotColormap)
         EVT_LISTBOX(snapshot_cam_choice, snapshot_cam_choice.GetId(),
                    self.OnSnapshot)
         EVT_LISTBOX_DCLICK(snapshot_cam_choice, snapshot_cam_choice.GetId(),
@@ -697,6 +706,13 @@ class wxMainBrainApp(wxApp):
             cal_status_check.Enable(True)
             cal_status_check.SetValue(True)
             cal_status_check.Enable(False)
+
+    def OnSnapshotColormap(self,event):
+        print 'colormap',event.GetEventObject().GetStringSelection()
+        #print 'colormap',snapshot_colormap.GetValue()
+        #print event.GetValue()
+        if PLOTPANEL:
+            self.plotpanel.set_colormap(event.GetEventObject().GetStringSelection())
 
     def OnSnapshot(self,event):
         snapshot_cam_choice = XRCCTRL(self.snapshot_panel,
@@ -950,6 +966,7 @@ class wxMainBrainApp(wxApp):
         sys.exit(0)
 
     def OnUpdateRawImages(self, event):
+        DEBUG('5')
         if self.current_page in ['preview','snapshot']:
             for cam_id in self.cameras.keys():
                 try:
@@ -958,6 +975,7 @@ class wxMainBrainApp(wxApp):
                     pass
 
     def OnTimer(self, event):
+        DEBUG('4')
         if not hasattr(self,'main_brain'):
             return # quitting
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc
@@ -1070,6 +1088,13 @@ class wxMainBrainApp(wxApp):
         if value:
             value = float(value)
             self.main_brain.send_set_camera_property(cam_id,'max_framerate',value)
+
+
+    def OnSetViewImageChoice(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        widget = event.GetEventObject()
+        value = widget.GetStringSelection()
+        self.main_brain.send_set_camera_property(cam_id,'visible_image_view',value)
 
     def OnArenaControl(self, event):
         widget = event.GetEventObject()

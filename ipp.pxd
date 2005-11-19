@@ -287,13 +287,20 @@ cdef extern from "ippi.h":
                                  int scaleFactor)
     IppStatus ippiSub_32f_C1IR(Ipp32f* pSrc, int srcStep, Ipp32f* pSrcDst,
                                int srcDstStep, IppiSize roiSize)
+    IppStatus ippiSub_32f_C1R(Ipp32f* pSrc1, int src1Step, Ipp32f* pSrc2,
+                              int src2Step, Ipp32f* pDst, int dstStep, IppiSize roiSize)
     IppStatus ippiAdd_8u_C1RSfs(Ipp8u* pSrc1, int src1Step, Ipp8u* pSrc2,
                                 int src2Step, Ipp8u* pDst, int dstStep, IppiSize roiSize,
                                 int scaleFactor)
     IppStatus ippiAdd_8u_C1IRSfs(Ipp8u* pSrc, int srcStep, Ipp8u* pSrcDst,
                                  int srcDstStep, IppiSize roiSize, int scaleFactor)
+    IppStatus ippiAdd_32f_C1IR(Ipp32f* pSrc, int srcStep, Ipp32f* pSrcDst,
+                               int srcDstStep, IppiSize roiSize)
     IppStatus ippiSet_8u_C1R( Ipp8u value, Ipp8u* pDst, int dstStep,
                               IppiSize roiSize )
+    IppStatus ippiSet_8u_C1MR( Ipp8u value, Ipp8u* pDst, int dstStep,
+                               IppiSize roiSize,
+                               Ipp8u* pMask, int maskStep )
     IppStatus ippiSet_32f_C1R( Ipp32f value, Ipp32f* pDst, int dstStep,
                               IppiSize roiSize )
     IppStatus ippiConvert_8u32f_C1R(Ipp8u* pSrc, int srcStep, Ipp32f* pDst, int dstStep,
@@ -318,6 +325,9 @@ cdef extern from "ippi.h":
                                int dstStep, IppiSize roiSize)
     IppStatus ippiMulC_32f_C1IR(Ipp32f value, Ipp32f* pSrcDst, int srcDstStep,
                                 IppiSize roiSize)
+    IppStatus ippiCompareC_8u_C1R(Ipp8u* pSrc, int srcStep, Ipp8u value,
+                                  Ipp8u* pDst, int dstStep,
+                                  IppiSize roiSize,  IppCmpOp ippCmpOp)
     IppStatus ippiCompare_8u_C1R( Ipp8u* pSrc1, int src1Step,
                                   Ipp8u* pSrc2, int src2Step,
                                   Ipp8u* pDst,  int dstStep,
@@ -374,6 +384,9 @@ cdef extern from "ippcv.h":
     IppStatus ippiAddWeighted_8u32f_C1IR( Ipp8u*  pSrc, int srcStep,
                                           Ipp32f* pSrcDst, int srcDstStep,
                                           IppiSize roiSize, Ipp32f alpha )
+    IppStatus ippiAddWeighted_32f_C1IR(Ipp32f* pSrc, int srcStep,
+                                       Ipp32f* pSrcDst, int srcDstStep,
+                                       IppiSize roiSize, Ipp32f alpha )
     IppStatus ippiMean_StdDev_8u_C1R(Ipp8u* pSrc, int srcStep,
                                      IppiSize roiSize,
                                      Ipp64f* mean, Ipp64f* stddev )

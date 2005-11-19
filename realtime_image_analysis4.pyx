@@ -92,9 +92,6 @@ cdef class RealtimeAnalyzer:
     # full image size
     cdef int maxwidth, maxheight
 
-    # number of images in accumulator
-    cdef float alpha
-    
     # ROI size
     cdef int _left, _bottom, _right, _top
 
@@ -156,14 +153,11 @@ cdef class RealtimeAnalyzer:
             
     def __dealloc__(self):
         CHK_HAVEGIL( ipp.ippiMomentFree_64f( self.pState ))
-#        del self.arena_controller
 
-    def __init__(self,int maxwidth, int maxheight, float alpha=0.1):
+    def __init__(self,int maxwidth, int maxheight):
         # software analysis ROI
         self.maxwidth = maxwidth
         self.maxheight = maxheight
-
-        self.alpha = alpha
 
         self._roi2_radius = 10
         self._diff_threshold = 11
@@ -252,6 +246,7 @@ cdef class RealtimeAnalyzer:
         
         cdef int found_point
 
+        roi2_sz = FastImage.Size(21,21)
         all_points_found = []
 
         # This is our near-hack to ensure users update .roi before calling .do_work()
@@ -261,7 +256,7 @@ cdef class RealtimeAnalyzer:
                              "(set RealtimeAnalyzer.roi before calling)")
 
         # find difference from mean
-        #c_python.Py_BEGIN_ALLOW_THREADS
+#        c_python.Py_BEGIN_ALLOW_THREADS
         # absdiff_im = | raw_im - mean_im |
         raw_im_small.fast_get_absdiff_put( self.mean_im_roi_view,
                                      self.absdiff_im_roi_view,
@@ -271,12 +266,12 @@ cdef class RealtimeAnalyzer:
             self.absdiff_im_roi_view.fast_get_sub_put( self.cmp_im_roi_view,
                                                        self.cmpdiff_im_roi_view,
                                                        self._roi_sz )
-        #c_python.Py_END_ALLOW_THREADS
+#        c_python.Py_END_ALLOW_THREADS
 
         while len(all_points_found) < MAX_NUM_POINTS:
 
             # release GIL
-            #c_python.Py_BEGIN_ALLOW_THREADS
+#            c_python.Py_BEGIN_ALLOW_THREADS
 
             # WARNING WARNING WARNING WARNING WARNING WARNING WARNING
 
@@ -314,13 +309,15 @@ cdef class RealtimeAnalyzer:
                 if right2 > self._right: right2 = self._right
                 if bottom2 < self._bottom: bottom2 = self._bottom
                 if top2 > self._top: top2 = self._top
-                roi2_sz = FastImage.Size(right2 - left2 + 1, top2 - bottom2 + 1)
+                roi2_sz.sz.width = right2 - left2 + 1
+                roi2_sz.sz.height = top2 - bottom2 + 1
             else:
                 left2 = self._left
                 right2 = self._right
                 bottom2 = self._bottom
                 top2 = self._top
-                roi2_sz = self._roi_sz
+                roi2_sz.sz.width = self._roi_sz.sz.width
+                roi2_sz.sz.height = self._roi_sz.sz.height
 
             self.absdiff_im_roi2_view = self.absdiff_im.roi(left2,bottom2,roi2_sz)
             if use_cmp:
@@ -406,7 +403,7 @@ cdef class RealtimeAnalyzer:
                         SET_ERR(2)
 
             # grab GIL
-            #c_python.Py_END_ALLOW_THREADS
+#            c_python.Py_END_ALLOW_THREADS
 
             if return_first_xy:
                 #nominal: (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4, line_found, slope_found)
@@ -481,14 +478,6 @@ cdef class RealtimeAnalyzer:
             
         return all_points_found
 
-##    def get_image_copy(self,which='mean'):
-##        if which=='mean':
-##            return nx.array(self.mean_im)
-##        elif which=='absdiff':
-##            return nx.array(self.absdiff_im)
-##        else:
-##            raise ValueError()
-
     def update_imname2im(self):
         """refresh weak references"""
         self.imname2im = {'absdiff' :weakref.ref(self.absdiff_im),
@@ -506,32 +495,6 @@ cdef class RealtimeAnalyzer:
             im = self.imname2im[which]()
         return im
     
-##    def take_background_image(self):
-####        c_python.Py_BEGIN_ALLOW_THREADS
-##        CHK( ipp.ippiCopy_8u_C1R(
-##            <ipp.Ipp8u*>self.raw_im_roi_view.im,self.raw_im_roi_view.step,
-##            <ipp.Ipp8u*>self.mean_im_roi_view.im,self.mean_im_roi_view.step,
-##            self._roi_sz.sz))
-##        CHK( ipp.ippiConvert_8u32f_C1R(
-##            <ipp.Ipp8u*>self.raw_im_roi_view.im,self.raw_im_roi_view.step,
-##            <ipp.Ipp32f*>self.accum_im_roi_view.im,self.accum_im_roi_view.step,
-##            self._roi_sz.sz))
-####        c_python.Py_END_ALLOW_THREADS
-
-##    def accumulate_last_image(self):
-####        c_python.Py_BEGIN_ALLOW_THREADS
-##        CHK( ipp.ippiAddWeighted_8u32f_C1IR(
-##            <ipp.Ipp8u*>self.raw_im_roi_view.im,self.raw_im_roi_view.step,
-##            <ipp.Ipp32f*>self.accum_im_roi_view.im,self.accum_im_roi_view.step,
-##            self._roi_sz.sz, self.alpha ))
-
-##        # maintain 8 bit unsigned background image
-##        CHK( ipp.ippiConvert_32f8u_C1R(
-##            <ipp.Ipp32f*>self.accum_im_roi_view.im,self.accum_im_roi_view.step,
-##            <ipp.Ipp8u*>self.mean_im_roi_view.im,self.mean_im_roi_view.step,
-##            self._roi_sz.sz, ipp.ippRndNear ))
-####        c_python.Py_END_ALLOW_THREADS
-
     def rotation_calculation_init(self, int n_rot_samples):
         if self.arena_controller is not None:
             self.arena_controller.rotation_calculation_init( n_rot_samples )
