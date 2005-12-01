@@ -36,7 +36,7 @@ CAM_CONTROLS = {'shutter':cam_iface.SHUTTER,
                 'gain':cam_iface.GAIN,
                 'brightness':cam_iface.BRIGHTNESS}
 
-ALPHA = 1.0/10 # relative importance of each new frame
+ALPHA = 1.0/50 # relative importance of each new frame
 BG_FRAME_INTERVAL = 20 # every N frames, add a new BG image to the accumulator
 
 # where is the "main brain" server?
@@ -97,7 +97,8 @@ class GrabClass(object):
         
         helper = reconstruct_utils.ReconstructHelper(
             fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
-        
+
+        print 'received lens distortion information...'
         self.realtime_analyzer.set_reconstruct_helper( helper )
     
     def grab_func(self,globals):
@@ -123,7 +124,7 @@ class GrabClass(object):
         bg_changed = True
         use_roi2_isSet = globals['use_roi2'].isSet
         fi8ufactory = FastImage.FastImage8u
-        use_cmp = 1
+        use_cmp_isSet = globals['use_cmp'].isSet
         return_first_xy = 0
         hw_roi_frame = fi8ufactory( cur_fisize )
 
@@ -197,7 +198,7 @@ class GrabClass(object):
 
                 points = self.realtime_analyzer.do_work(hw_roi_frame,
                                                         timestamp, framenumber, use_roi2_isSet(),
-                                                        use_cmp, return_first_xy)
+                                                        use_cmp_isSet(), return_first_xy)
                 n_pts = len(points)
                 
                 # allow other thread to see images
@@ -209,8 +210,12 @@ class GrabClass(object):
                 globals['most_recent_frame'] = (0,0), export_image # give it
 
                 # allow other thread to see raw image always (for saving)
-                globals['incoming_raw_frames'].put(
-                    (hw_roi_frame,timestamp,framenumber,n_pts) ) # save it
+                if 1:
+                    globals['incoming_raw_frames'].put(
+                        (nx.array(hw_roi_frame),timestamp,framenumber,n_pts) ) # save a copy
+                else:
+                    globals['incoming_raw_frames'].put(
+                        (hw_roi_frame,timestamp,framenumber,n_pts) ) # save it
 
                 if collecting_background_isSet():
                     if bg_frame_number % BG_FRAME_INTERVAL == 0:
@@ -238,11 +243,6 @@ class GrabClass(object):
                         # now we do hack, erm, heuristic for bright points, which aren't gaussian.
                         running_mean8u_im.get_compare_put( 200, noisy_pixels_mask, max_frame_size, FastImage.CmpGreater)
                         compareframe8u.set_val_masked(25, noisy_pixels_mask, max_frame_size)
-                        # clip the minimum comparison value to diff_threshold
-                        compareframe8u.toself_threshold(self.realtime_analyzer.diff_threshold,
-                                                        self.realtime_analyzer.diff_threshold,
-                                                        max_frame_size, FastImage.CmpLess)
-                        
                         bg_changed = True
                         bg_frame_number = 0
                     bg_frame_number += 1
@@ -251,6 +251,20 @@ class GrabClass(object):
                     # reset background image with current frame as mean and 0 STD
                     hw_roi_frame.get_32f_copy_put( running_mean_im, max_frame_size )
                     running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
+
+                    if 1:
+                        running_sumsqf.set_val( 0, max_frame_size )
+                        compareframe8u.set_val(0, max_frame_size )
+                    else:
+                        # XXX TODO: cleanup
+                        hw_roi_frame.get_32f_copy_put(running_sumsqf,max_frame_size)
+                        running_sumsqf.toself_square(max_frame_size)
+                        
+                        running_mean_im.get_square_put(mean2,max_frame_size)
+                        running_sumsqf.get_subtracted_put(mean2,running_stdframe,max_frame_size)
+                        
+                        compareframe8u.set_val(0, max_frame_size )
+                    
                     bg_changed = True
                     take_background_clear()
                     
@@ -258,14 +272,21 @@ class GrabClass(object):
                     # reset background image with 0 mean and 0 STD
                     running_mean_im.set_val( 0, max_frame_size )
                     running_mean8u_im.set_val(0, max_frame_size )
+                    running_sumsqf.set_val( 0, max_frame_size )
+                    compareframe8u.set_val(0, max_frame_size )
                     bg_changed = True
                     clear_background_clear()
 
                 if bg_changed:
-                    bg_image = nx.array(running_mean8u_im) # make copy (we don't want to send live versions of image
-                    globals['current_bg_frame_and_timestamp']=bg_image,timestamp # only used when starting to save
+                    if 1:
+                        bg_image = nx.array(running_mean8u_im) # make copy (we don't want to send live versions of image
+                        std_image = nx.array(compareframe8u) # make copy (we don't want to send live versions of image
+                    else:
+                        bg_image = running_mean8u_im
+                        std_image = compareframe8u
+                    globals['current_bg_frame_and_timestamp']=bg_image,std_image,timestamp # only used when starting to save
                     globals['incoming_bg_frames'].put(
-                        (bg_image,timestamp,framenumber) ) # save it
+                        (bg_image,std_image,timestamp,framenumber) ) # save it
                     bg_changed = False
                     
                 if find_rotation_center_start_isSet():
@@ -321,7 +342,8 @@ class GrabClass(object):
                     l,b= self.cam.get_frame_offset()
                     cur_fisize = FastImage.Size(w, h)
                     hw_roi_frame = fi8ufactory( cur_fisize )
-                    self.realtime_analyzer.set_hw_roi(w,h,l,b)
+                    print 'setting hardware ROI not yet implemented in camera_server4'
+                    #sself.realtime_analyzer.set_hw_roi(w,h,l,b)
 
                     self.new_roi.clear()
                     self.cam.start_camera()  # start camera
@@ -410,6 +432,8 @@ class App:
             globals['find_rotation_center_start'] = threading.Event()
             globals['export_image_name'] = 'raw'
             globals['use_roi2'] = threading.Event()
+            globals['use_cmp'] = threading.Event()
+            globals['use_cmp'].set()
 
             # set defaults
             cam.set_camera_property(cam_iface.SHUTTER,300,0,0)
@@ -435,6 +459,7 @@ class App:
             except cam_iface.CamIFaceError:
                 scalar_control_info['trigger_source'] = 0
             scalar_control_info['roi2'] = globals['use_roi2'].isSet()
+            scalar_control_info['cmp'] = globals['use_cmp'].isSet()
             
             scalar_control_info['width'] = width
             scalar_control_info['height'] = height
@@ -493,6 +518,7 @@ class App:
                     elif property_name == 'roi':
                         grabber.roi = value 
                     elif property_name == 'diff_threshold':
+                        print 'setting diff_threshold',value
                         grabber.diff_threshold = value
                     elif property_name == 'clear_threshold':
                         grabber.clear_threshold = value
@@ -505,6 +531,9 @@ class App:
                     elif property_name == 'roi2':
                         if value: globals['use_roi2'].set()
                         else: globals['use_roi2'].clear()
+                    elif property_name == 'cmp':
+                        if value: globals['use_cmp'].set()
+                        else: globals['use_cmp'].clear()
                     elif property_name == 'max_framerate':
                         cam.set_framerate(value)
                     elif property_name == 'collecting_background':
@@ -538,20 +567,24 @@ class App:
                 globals['find_rotation_center_start'].set()
             elif key == 'stop_recording':
                 if globals['raw_fmf_and_bg_fmf'] is not None:
-                    raw_movie, bg_movie = globals['raw_fmf_and_bg_fmf']
+                    raw_movie, bg_movie, std_movie = globals['raw_fmf_and_bg_fmf']
                     raw_movie.close()
                     bg_movie.close()
+                    std_movie.close()
                     print 'stopped recording'
                     globals['saved_bg_frame']=False
                     globals['raw_fmf_and_bg_fmf'] = None
             elif key == 'start_recording':
                 raw_filename, bg_filename = cmds[key]
+                std_filename = bg_filename.replace('_bg','_std')
                 raw_movie = FlyMovieFormat.FlyMovieSaver(raw_filename,version=1)
                 bg_movie = FlyMovieFormat.FlyMovieSaver(bg_filename,version=1)
-                globals['raw_fmf_and_bg_fmf'] = raw_movie, bg_movie
+                std_movie = FlyMovieFormat.FlyMovieSaver(std_filename,version=1)
+                globals['raw_fmf_and_bg_fmf'] = raw_movie, bg_movie, std_movie
                 globals['saved_bg_frame']=False
                 print "starting to record to %s"%raw_filename
                 print "  background to %s"%bg_filename
+                print "  comparison frames to %s"%std_filename
 ##            elif key == 'debug': # kept for backwards compatibility
 ##                if cmds[key]: globals['export_image_name'] = 'absdiff'
 ##                else: globals['export_image_name'] = 'raw'
@@ -611,8 +644,9 @@ class App:
                         if raw_fmf_and_bg_fmf is None:
                             raw_movie = None
                             bg_movie = None
+                            std_movie = None
                         else:
-                            raw_movie, bg_movie = raw_fmf_and_bg_fmf
+                            raw_movie, bg_movie, std_movie = raw_fmf_and_bg_fmf
                             
                         # Get new raw frames from grab thread.
                         get_raw_frame_nowait = globals['incoming_raw_frames'].get_nowait
@@ -632,17 +666,19 @@ class App:
                         get_bg_frame_nowait = globals['incoming_bg_frames'].get_nowait
                         try:
                             while 1:
-                                frame,timestamp,framenumber = get_bg_frame_nowait() # this may raise Queue.Empty
+                                bg_frame,std_frame,timestamp,framenumber = get_bg_frame_nowait() # this may raise Queue.Empty
                                 if bg_movie is not None:
-                                    bg_movie.add_frame(frame,timestamp)
+                                    bg_movie.add_frame(bg_frame,timestamp)
+                                    std_movie.add_frame(std_frame,timestamp)
                                     globals['saved_bg_frame'] = True
                         except Queue.Empty:
                             pass
 
                         # make sure a BG frame is saved at beginning of movie
                         if bg_movie is not None and not globals['saved_bg_frame']:
-                            frame,timestamp = globals['current_bg_frame_and_timestamp']
-                            bg_movie.add_frame(frame,timestamp)
+                            bg_frame,std_frame,timestamp = globals['current_bg_frame_and_timestamp']
+                            bg_movie.add_frame(bg_frame,timestamp)
+                            std_movie.add_frame(std_frame,timestamp)
                             globals['saved_bg_frame'] = True
 
                         # process asynchronous commands

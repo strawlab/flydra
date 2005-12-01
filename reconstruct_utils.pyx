@@ -259,4 +259,6 @@ def find_best_3d( object recon, object d2):
                     -(P[3]*Q[0]) + P[0]*Q[3],
                     -(P[2]*Q[0]) + P[0]*Q[2],
                     -(P[1]*Q[0]) + P[0]*Q[1] )
+        if isnan(Lcoords[0]):
+            Lcoords = None
     return X, Lcoords, cam_ids_used, mean_dist

@@ -248,11 +248,8 @@ cdef class RealtimeAnalyzer:
 
         all_points_found = []
 
-        # release GIL (SEE WARNING BELOW ABOUT RELEASING GIL)
-        c_python.Py_BEGIN_ALLOW_THREADS
         if framebuffer_is_FastImage==0:
             framebuffer = <c_numarray._numarray>framebuffer_in # cast to numarray type
-        
             # copy image to IPP memory
             for i from 0 <= i < self.hw_roi_h:
                 c_lib.memcpy((self.raw_im + self._bottom*self.raw_im_step + self._left)+self.raw_im_step*i,
@@ -264,6 +261,8 @@ cdef class RealtimeAnalyzer:
             self.raw_im_step = framebuffer_fast.strides[0]
             self.raw_im_FastImage_refkeeper = framebuffer
 
+        # release GIL (SEE WARNING BELOW ABOUT RELEASING GIL)
+#        c_python.Py_BEGIN_ALLOW_THREADS
         # find difference from mean
         CHK( ipp.ippiAbsDiff_8u_C1R(
             IMPOS8u(self.mean_im,   self.mean_im_step,   self._bottom,self._left),self.mean_im_step,
@@ -279,23 +278,12 @@ cdef class RealtimeAnalyzer:
                 IMPOS8u(self.absdiff_im,self.absdiff_im_step,self._bottom,self._left), self.absdiff_im_step,
                 IMPOS8u(self.cmpdiff_im,self.cmpdiff_im_step,self._bottom,self._left), self.cmpdiff_im_step,
                 self._roi_sz,0))
-        c_python.Py_END_ALLOW_THREADS
+#        c_python.Py_END_ALLOW_THREADS
 
-##        print 'IPP absdiff:'
-##        print_8u_arr(self.absdiff_im, self.hw_roi_w, self.hw_roi_h, self.absdiff_im_step)
-                
-##        print 'IPP cmp_im:'
-##        print_8u_arr(self.cmp_im, self.hw_roi_w, self.hw_roi_h, self.cmp_im_step)
-                
-##        print 'IPP cmpdiff_im:'
-##        print_8u_arr(self.cmpdiff_im, self.hw_roi_w, self.hw_roi_h, self.cmpdiff_im_step)
-                
-##        #work_done = False
-        #while not work_done:
         while len(all_points_found) < MAX_NUM_POINTS:
 
             # release GIL
-            c_python.Py_BEGIN_ALLOW_THREADS
+#            c_python.Py_BEGIN_ALLOW_THREADS
 
             # WARNING WARNING WARNING WARNING WARNING WARNING WARNING
 
@@ -350,14 +338,6 @@ cdef class RealtimeAnalyzer:
             CHK( ipp.ippiThreshold_Val_8u_C1IR(
                 (self.absdiff_im + bottom2*self.absdiff_im_step + left2), self.absdiff_im_step,
                 roi2_sz, clear_despeckle_thresh, 0, ipp.ippCmpLess))
-
-##            # seems OK to here, not as extensively debugged
-##            c_python.Py_END_ALLOW_THREADS
-##            if 1:
-##                             #(x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4, line_found, slope_found)
-##                return [(clear_despeckle_thresh, bottom2, max_std_diff, max_std_diff, eccentricity, p1, p2, p3, p4, 0, 0)]
-##            c_python.Py_BEGIN_ALLOW_THREADS
-
 
             found_point = 1
 
@@ -429,7 +409,7 @@ cdef class RealtimeAnalyzer:
                         SET_ERR(2)
 
             # grab GIL
-            c_python.Py_END_ALLOW_THREADS
+#            c_python.Py_END_ALLOW_THREADS
 
             if return_first_xy:
 ##                             #(x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4, line_found, slope_found)
@@ -519,7 +499,7 @@ cdef class RealtimeAnalyzer:
                          self.width)
         return buf
     
-    def get_image(self,which='mean'):
+    def get_image_copy(self,which='mean'):
         cdef c_numarray._numarray buf
         cdef int i
         cdef ipp.Ipp8u* im_base
@@ -540,6 +520,24 @@ cdef class RealtimeAnalyzer:
                          im_base+im_step*i,
                          self.width)
         return buf
+    
+    def get_image_dangerous_view(self,which='mean'):
+        """return a FastImage view of an 8u buffer.
+
+        This is dangerout because the original image is out of our
+        control and could be de-allocated at any time, causing a
+        segfault.
+    
+        """
+        cdef ipp.IppiSize sz
+        
+        sz.height = self.height
+        sz.width = self.width
+        
+        if which=='mean':
+            return FastImage.dangerousview8u( self.mean_im, self.mean_im_step, sz )
+        else:
+            raise ValueError()
 
     def set_image(self, which, numbuf):
         cdef c_numarray._numarray buf

@@ -38,9 +38,9 @@ except:
 
 downstream_hosts = []
 
-if 0:
-    downstream_hosts.append( ('192.168.1.199',28931) ) # projector
 if 1:
+    downstream_hosts.append( ('192.168.1.199',28931) ) # projector
+if 0:
     downstream_hosts.append( ('192.168.1.151',28931) ) # brain1
     
 if len(downstream_hosts):
@@ -110,10 +110,17 @@ def encode_data_packet( corrected_framenumber,
     if not line3d_valid:
         packable_data[3:9] = 0,0,0,0,0,0
     packable_data.append( min_mean_dist )
-    data_packet = struct.pack(fmt,
-                              corrected_framenumber,
-                              line3d_valid,
-                              *packable_data)
+    try:
+        data_packet = struct.pack(fmt,
+                                  corrected_framenumber,
+                                  line3d_valid,
+                                  *packable_data)
+    except SystemError, x:
+        print 'fmt',fmt
+        print 'corrected_framenumber',corrected_framenumber
+        print 'line3d_valid',line3d_valid
+        print 'packable_data',packable_data
+        raise
     return data_packet
     
 def save_ascii_matrix(filename,m):

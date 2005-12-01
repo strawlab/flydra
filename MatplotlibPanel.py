@@ -5,6 +5,7 @@ if ENABLED:
     import matplotlib
     matplotlib.use('WXAgg')
     import matplotlib.numerix as nx
+    import matplotlib.numerix.mlab as mlab
     import pylab
     import matplotlib.cm
     import matplotlib.figure
@@ -21,6 +22,7 @@ class PlotPanel(wxPanel):
 
     def __init__(self, parent):
         wxPanel.__init__(self, parent, -1)
+        self.cmap_is_fixed = True
         if ENABLED:
             self.fig = matplotlib.figure.Figure(figsize=(5,4), dpi=75)
             self.canvas = FigureCanvasWxAgg(self, -1, self.fig)
@@ -50,7 +52,6 @@ class PlotPanel(wxPanel):
             pylab.setp(a,'yticks',range(0,start_size[1],100))
             x, y = meshgrid(x, y)
             z = nx.zeros(x.shape)
-            z[1,1]=255
             frame = z
             extent = 0, frame.shape[1]-1, frame.shape[0]-1, 0
             self.im = a.imshow( z,
@@ -60,12 +61,11 @@ class PlotPanel(wxPanel):
                                 interpolation='nearest',
                                 extent=extent,
                                 )
+            self.im.set_clim(0,255)
 
-            cax = self.fig.add_axes([0.85,0.1,0.075,0.85])
-            self.fig.colorbar( self.im, cax=cax, orientation='vertical')
+            self.cax = self.fig.add_axes([0.85,0.1,0.075,0.85])
+            self.fig.colorbar( self.im, cax=self.cax, orientation='vertical')
             
-            #self.im.set_clim(0,255)
-
             self.lines = a.plot([0],[0],'o') 	 
             pylab.setp(self.lines[0],'markerfacecolor',None) 	 
             white = (1.0,1.0,1.0) 	 
@@ -76,6 +76,15 @@ class PlotPanel(wxPanel):
             pylab.setp(self.lines[0],'markeredgewidth',2)
             a.grid('on')
             self.toolbar.update() # Not sure why this is needed - ADS
+
+    def set_colormap(self,cmap_str):
+        cmap = getattr( matplotlib.cm, cmap_str)
+        self.im.set_cmap( cmap )
+        # XXX probably a hack, because it generates a new instance
+        self.fig.colorbar( self.im, cax=self.cax, orientation='vertical') 
+
+    def set_fixed_color_range(self,is_fixed):
+        self.cmap_is_fixed = is_fixed
 
     def GetToolBar(self):
         if ENABLED:
@@ -89,6 +98,20 @@ class PlotPanel(wxPanel):
             if image.shape[0] != orig_shape[0] or image.shape[1] != orig_shape[1]:
                 print "main_brain WARNING: size changed to %s, don't know how to re-adjust"%str(image.shape)
                 return
+            if not self.cmap_is_fixed:
+                rval = nx.ravel(image)
+                vmin = mlab.amin(rval)
+                vmax = mlab.amax(rval)
+                if vmin==vmax:
+                    vmax=vmin+1
+                self.im.set_clim(vmin,vmax)
+                
+                # XXX probably a hack, because it generates a new
+                # instance.
+                # It seems to be necessary, though, because colorbar
+                # doesn't get notified of clim changes.
+                self.fig.colorbar( self.im, cax=self.cax, orientation='vertical')
+                
             self.im.set_array(image)
         
     def set_points(self,points):

@@ -26,7 +26,7 @@ nan = numarray.ieeespecial.nan
 near_inf = 9.999999e20
 MAX_NUM_POINTS = 5
 
-cimport c_numarray
+cimport c_numarray # TODO: use __array_atruct__ version of this?
 
 cimport c_lib
 cimport c_python
@@ -58,6 +58,7 @@ cdef extern from "flydra_ipp_macros.h":
     ipp.Ipp8u*  IMPOS8u(  ipp.Ipp8u*  im, int step, int bottom, int left)
     ipp.Ipp32f* IMPOS32f( ipp.Ipp32f* im, int step, int bottom, int left)
     void CHK( ipp.IppStatus errval )
+    void SET_ERR( int errval )
     
 class IppError(Exception):
     def __init__(self, int errval):
@@ -70,12 +71,12 @@ cdef void CHK_HAVEGIL( ipp.IppStatus errval ) except *:
     if (errval):
         raise IppError(errval)
 
-cdef void SET_ERR( int errval ):
-    # This is rather crude at the moment because calls to the Python C
-    # API cannot be made.  (This code is executed when we have
-    # released the GIL.)
-    c_lib.printf("SET_ERR called! (May not have GIL, cannot raise exception.)\n")
-    c_lib.exit(2)
+##cdef void SET_ERR( int errval ):
+##    # This is rather crude at the moment because calls to the Python C
+##    # API cannot be made.  (This code is executed when we have
+##    # released the GIL.)
+##    c_lib.printf("SET_ERR(%d) called! (May not have GIL, cannot raise exception.)\n",errval)
+##    c_lib.exit(2)
 
 cdef print_8u_arr(ipp.Ipp8u* src,int width,int height,int src_step):
   cdef int row, col
@@ -98,7 +99,7 @@ cdef class RealtimeAnalyzer:
     cdef int _roi2_radius
     
     # runtime parameters
-    cdef float _diff_threshold
+    cdef ipp.Ipp8u _diff_threshold
     cdef float _clear_threshold
     
     cdef int _use_arena
@@ -288,6 +289,11 @@ cdef class RealtimeAnalyzer:
             
             # find max pixel in ROI
             if use_cmp:
+                # clip the minimum comparison value to diff_threshold
+                CHK( ipp.ippiThreshold_Val_8u_C1IR(<ipp.Ipp8u*>self.cmp_im_roi_view.im,
+                                                   self.cmp_im_roi_view.step,
+                                                   self._roi_sz.sz,
+                                                   self._diff_threshold, self._diff_threshold, ipp.ippCmpLess))
                 CHK( ipp.ippiMaxIndx_8u_C1R(
                     <ipp.Ipp8u*>self.cmpdiff_im_roi_view.im,self.cmpdiff_im_roi_view.step,
                     self._roi_sz.sz, &max_std_diff, &index_x, &index_y))
@@ -401,8 +407,8 @@ cdef class RealtimeAnalyzer:
                     if self.arena_controller is not None:
                         self.arena_controller.arena_update(x0, y0, orientation,
                                                            timestamp, framenumber )
-                    else:
-                        SET_ERR(2)
+##                    else:
+##                        SET_ERR(2)
 
             # grab GIL
             c_python.Py_END_ALLOW_THREADS

@@ -516,6 +516,10 @@ class wxMainBrainApp(wxApp):
                                   "snapshot_button")
         snapshot_colormap = XRCCTRL(self.snapshot_panel,
                                   "snapshot_colormap")
+        fixed_color_range = XRCCTRL(self.snapshot_panel,
+                                    "fixed_color_range")
+        EVT_CHECKBOX(fixed_color_range, fixed_color_range.GetId(),
+                     self.OnFixedColorRange)
         EVT_BUTTON(snapshot_button, snapshot_button.GetId(),
                    self.OnSnapshot)
         EVT_CHOICE(snapshot_colormap, snapshot_colormap.GetId(),
@@ -707,10 +711,11 @@ class wxMainBrainApp(wxApp):
             cal_status_check.SetValue(True)
             cal_status_check.Enable(False)
 
+    def OnFixedColorRange(self, event):
+        if PLOTPANEL:
+            self.plotpanel.set_fixed_color_range(event.IsChecked())
+
     def OnSnapshotColormap(self,event):
-        print 'colormap',event.GetEventObject().GetStringSelection()
-        #print 'colormap',snapshot_colormap.GetValue()
-        #print event.GetValue()
         if PLOTPANEL:
             self.plotpanel.set_colormap(event.GetEventObject().GetStringSelection())
 
@@ -1072,7 +1077,7 @@ class wxMainBrainApp(wxApp):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         value = event.GetString()
         if value:
-            value = float(value)
+            value = int(value)
             self.main_brain.send_set_camera_property(cam_id,'diff_threshold',value)
 
     def OnSetCameraClearThreshold(self, event):

@@ -188,7 +188,19 @@
                   <object class="sizeritem">
                     <object class="wxTextCtrl" name="MAX_FRAMERATE">
                       <value>?</value>
-                      <size>50,20</size>
+                      <size>55,20</size>
+                    </object>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxChoice" name="view_image_display">
+                      <content>
+                        <item>raw</item>
+                        <item>absdiff</item>
+                        <item>mean</item>
+                        <item>cmp</item>
+                        <item>cmpdiff</item>
+                      </content>
+                      <selection>0</selection>
                     </object>
                   </object>
                 </object>
@@ -353,6 +365,28 @@
             <option>0</option>
             <flag>wxEXPAND</flag>
           </object>
+          <object class="sizeritem">
+            <object class="wxBoxSizer">
+              <orient>wxHORIZONTAL</orient>
+              <object class="sizeritem">
+                <object class="wxChoice" name="snapshot_colormap">
+                  <content>
+                    <item>pink</item>
+                    <item>jet</item>
+                    <item>gray</item>
+                    <item>bone</item>
+                  </content>
+                  <selection>0</selection>
+                </object>
+              </object>
+              <object class="sizeritem">
+                <object class="wxCheckBox" name="fixed_color_range">
+                  <label>fixed color range</label>
+                  <checked>1</checked>
+                </object>
+              </object>
+            </object>
+          </object>
         </object>
         <option>0</option>
         <flag>wxALL|wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
@@ -441,6 +475,9 @@
               <object class="sizeritem">
                 <object class="wxCheckListBox" name="record_raw_cam_select_checklist">
                   <content>
+                    
+                    
+                    
                     
                     <item/>
                   </content>
