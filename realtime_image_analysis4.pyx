@@ -4,6 +4,7 @@
 import numarray as nx
 import numarray.ieeespecial
 import numarray.linear_algebra
+svd = numarray.linear_algebra.singular_value_decomposition
 
 cimport FastImage
 import FastImage
@@ -24,7 +25,7 @@ cdef double nan
 nan = numarray.ieeespecial.nan
 
 near_inf = 9.999999e20
-MAX_NUM_POINTS = 5
+MAX_NUM_POINTS = 2
 
 cimport c_numarray # TODO: use __array_atruct__ version of this?
 
@@ -106,6 +107,7 @@ cdef class RealtimeAnalyzer:
     
     # calibration matrix
     cdef c_numarray._numarray _pmat, _pmat_inv, camera_center
+    cdef object _set_pmat
     cdef object _helper
 
     cdef ipp.Ipp8u _despeckle_threshold
@@ -167,6 +169,7 @@ cdef class RealtimeAnalyzer:
         
         self._pmat = None
         self._pmat_inv = None
+        self._set_pmat = False
 
         self._helper = None
 
@@ -421,10 +424,10 @@ cdef class RealtimeAnalyzer:
             if not found_point:
                 break
 
-            if self._pmat_inv is not None:
+            if self._helper is not None:
 
-                # (If we have self._pmat_inv, we can assume we have
-                # self._helper.)
+                # (If we have self._helper _pmat_inv, we can assume we have
+                # self._pmat_inv.)
 
                 undistort = self._helper.undistort # shorthand
 
@@ -441,7 +444,6 @@ cdef class RealtimeAnalyzer:
                 #    C) world coordinates of camera center already known
 
                 # Step 2) Find world coordinates of plane
-                svd = numarray.linear_algebra.singular_value_decomposition
                 A = nx.array( [ X0, X1, self.camera_center] ) # 3 points define plane
                 u,d,vt=svd(A,full_matrices=True)
                 Pt = vt[3,:] # plane parameters
@@ -451,9 +453,13 @@ cdef class RealtimeAnalyzer:
 
                 p1,p2,p3,p4 = Pt[0:4]
                 line_found = True
+                if c_lib.isnan(p1):
+                    print 'ERROR: SVD returned nan'
             else:
                 p1,p2,p3,p4 = -1, -1, -1, -1 # sentinel value (will be converted to nan)
                 line_found = False
+                if self._set_pmat:
+                    print 'ERROR: lost self._pmat_inv!'
 
             # prevent nan and inf from going across network
             if c_lib.isnan(slope):
@@ -560,7 +566,8 @@ cdef class RealtimeAnalyzer:
 
             self.camera_center = nx.array( [ X/T, Y/T, Z/T, 1.0 ] )
             self._pmat_inv = numarray.linear_algebra.generalized_inverse(self._pmat)
-
+            self._set_pmat = True
+            
     property roi:
         def __get__(self):
             return (self._left,self._bottom,self._right,self._top)

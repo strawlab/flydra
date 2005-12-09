@@ -577,6 +577,7 @@ class App:
             elif key == 'start_recording':
                 raw_filename, bg_filename = cmds[key]
                 std_filename = bg_filename.replace('_bg','_std')
+                print 'WARNING: fly movie filenames will conflict if > 1 camera per computer'
                 raw_movie = FlyMovieFormat.FlyMovieSaver(raw_filename,version=1)
                 bg_movie = FlyMovieFormat.FlyMovieSaver(bg_filename,version=1)
                 std_movie = FlyMovieFormat.FlyMovieSaver(std_filename,version=1)
