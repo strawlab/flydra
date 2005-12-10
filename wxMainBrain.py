@@ -28,7 +28,12 @@ from MainBrain import DEBUG
 PLOTPANEL = True
 if PLOTPANEL:
     from MatplotlibPanel import PlotPanel
-import DynamicImageCanvas
+import common_variables
+
+import pkg_resources
+pkg_resources.require('wxglvideo')
+
+import wxglvideo
 from wxPython.wx import *
 from wxPython.lib.scrolledpanel import wxScrolledPanel
 from wxPython.xrc import *
@@ -298,7 +303,8 @@ class wxMainBrainApp(wxApp):
         box = wxBoxSizer(wxVERTICAL)
         dynamic_image_panel.SetSizer(box)
 
-        self.cam_image_canvas = DynamicImageCanvas.DynamicImageCanvas(dynamic_image_panel,-1)
+        self.cam_image_canvas = wxglvideo.DynamicImageCanvas(dynamic_image_panel,-1)
+        self.cam_image_canvas.minimum_eccentricity = common_variables.MINIMUM_ECCENTRICITY
         box.Add(self.cam_image_canvas,1,wxEXPAND)
         dynamic_image_panel.Layout()
 
