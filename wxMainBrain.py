@@ -574,9 +574,31 @@ class wxMainBrainApp(wxApp):
                                   "record_raw")
         EVT_CHECKBOX(self.record_raw, self.record_raw.GetId(),
                      self.OnRecordRaw)
+
+        filename_text_entry = XRCCTRL(self.record_raw_panel,
+                                      "record_raw_filename")
+        EVT_SET_FOCUS(filename_text_entry,
+                      #filename_text_entry.GetId(),
+                      self.OnFilenameSetFocus)
+
+        EVT_KILL_FOCUS(filename_text_entry,
+                      #filename_text_entry.GetId(),
+                      self.OnFilenameKillFocus)
         
         self._currently_recording_cams = []
 
+    def OnFilenameSetFocus(self,event):
+        #print 'OnFilenameSetFocus'
+        self.pass_all_keystrokes = True
+        event.Skip()
+        return
+    
+    def OnFilenameKillFocus(self,event):
+        #print 'OnFilenameKillFocus'
+        self.pass_all_keystrokes = False
+        event.Skip()
+        return
+        
     def OnRecordRaw(self,event):
         if self.record_raw.IsChecked():
             self.OnRecordRawStart()

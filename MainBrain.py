@@ -1,4 +1,7 @@
 # $Id$
+import pkg_resources
+pkg_resources.require("kookaburra")  # latest installed version
+
 import threading, time, socket, select, sys, os, copy, struct, math
 import sets, traceback
 import Pyro.core

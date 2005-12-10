@@ -1,12 +1,17 @@
 #emacs, this is -*-Python-*- mode
 # $Id: $
 
+import pkg_resources
+pkg_resources.require("kookaburra")
+pkg_resources.require("FlyMovieFormat")
+pkg_resources.require("cam_iface")
+
 import threading, time, socket, sys, struct, os
 import Pyro.core, Pyro.errors
 import FlyMovieFormat
 import numarray as nx
 import Numeric as nx
-import pyx_cam_iface as cam_iface
+import cam_iface
 import reconstruct_utils
 import Queue
 import FastImage
