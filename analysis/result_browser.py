@@ -7,6 +7,7 @@ import numarray.convolve as conv_mod
 import tables as PT
 import matplotlib
 import matplotlib.pylab as pylab
+import matplotlib.ticker
 from pylab import figure, plot, clf, imshow, cm, setp, figtext
 from pylab import gca, title, axes, ion, ioff, gcf, savefig
 from matplotlib.ticker import LinearLocator
@@ -511,6 +512,8 @@ def get_f_xyz_L_err( results, max_err = 10, typ = 'best' ):
 def plot_movie_2d(results,
                   start_idx=0,
                   stop_idx=-1,
+                  fstart=None,
+                  fstop=None,
                   typ='best',
                   show_err=False,
                   max_err=10,
@@ -524,10 +527,20 @@ def plot_movie_2d(results,
 
         # get 3D data
         f,X,L,err = get_f_xyz_L_err(results,max_err=max_err,typ=typ)
+        if fstart is not None:
+            fstart = max(f[start_idx],fstart)
+            if fstart != f[start_idx]:
+                start_idx = numarray.nonzero(f>=fstart)[0][0]
+        else:
+            fstart = f[start_idx]
+        if fstop is not None:
+            fstop = min(f[stop_idx],fstop)
+            if fstop != f[stop_idx]:
+                stop_idx = numarray.nonzero(f<=fstop)[0][-1]
+        else:
+            fstop = f[stop_idx]
         f=f[start_idx:stop_idx]
         X=X[start_idx:stop_idx]
-        fstart = f[0]
-        fstop = f[-1]
         X = nx.concatenate( (X, nx.ones( (X.shape[0],1) )), axis=1 )
         X.transpose()
 
@@ -555,12 +568,10 @@ def plot_movie_2d(results,
         if onefigure:
             ncams = len(camns)
             height = 0.8/ncams
+        ax = None
+        useful_axes = {}
         for i, camn in enumerate(camns):
             cam_id = camn2cam_id[camn]
-            if onefigure:
-                ax = pylab.axes([0.1, height*i+0.05,  0.8, height],sharex=ax)
-            else:
-                pylab.figure() # new figure
 
             # project 3D data through camera calibration to get 2D reprojection
             xy=reconstructor.find2d(cam_id,X)
@@ -569,6 +580,7 @@ def plot_movie_2d(results,
             f2 = []
             x2 = []
             y2 = []
+            p1 = []
 
             table_name = 'camn'+str(camn)
             table = getattr(results.root.cam_by_cam_2d,table_name)
@@ -576,28 +588,60 @@ def plot_movie_2d(results,
                 f2.append(row['frame'])
                 x2.append(row['x'])
                 y2.append(row['y'])
+                p1.append(row['p1'])
             f2 = nx.array(f2)
             x2 = nx.array(x2)
             y2 = nx.array(y2)
+            p1 = nx.array(p1)
+            p1[~nx.ieeespecial.isnan(p1)]=1
 
-            if onefigure:
-                lines = ax.plot( f2, x2,'ko', # real data
-                                 f2, y2,'bo',
+            if len(f2)!=0:
+                if onefigure:
+                    ax = pylab.axes([0.1, height*i+0.05,  0.8, height],sharex=ax)
+                    useful_axes[cam_id] = ax
+                    ax.xaxis.set_major_formatter(matplotlib.ticker.OldScalarFormatter())
+                    xline3d,yline3d = ax.plot( f,  xy[0,:],'rx', # projected from 3D reconstruction
+                                               f,  xy[1,:],'gx',
+                                               ms=6.0,
+                                               )
 
-                                 f,  xy[0,:],'rx', # projected from 3D reconstruction
-                                 f,  xy[1,:],'gx')
+                    xline2d,yline2d = ax.plot( f2, x2,'ko', # real data
+                                               f2, y2,'bo', mfc='None', ms=2.0 )
+                    pylab.setp(xline2d,'markeredgecolor',(0.5,0.0,0.0))#'red')
+                    pylab.setp(yline2d,'markeredgecolor',(0.0,0.3,0.0))#'green')
 
-                pylab.ylabel( cam_id )
-                pylab.setp(ax, 'ylim',[-10,660])
-            else:
-                lines = pylab.plot( x2, y2, 'ko',
-                                    xy[0,:], xy[1,:], 'rx' ) # projected from 3D reconstruction
-                pylab.legend(lines,['original 2D data','reprojections'])
-                pylab.xlabel( 'X (pixels)' )
-                pylab.ylabel( 'Y (pixels)' )
-                pylab.title( cam_id )
-                pylab.setp(pylab.gca(), 'xlim',[-10,660])
-                pylab.setp(pylab.gca(), 'ylim',[-10,500])
+                    oriline, = ax.plot( f2, p1,'ko') # orientation data present
+
+                    pylab.ylabel( cam_id )
+                    pylab.setp(ax, 'ylim',[-10,660])
+                else:
+                    pylab.figure() # new figure
+                    lines = pylab.plot( x2, y2, 'ko',
+                                        xy[0,:], xy[1,:], 'rx' ) # projected from 3D reconstruction
+                    pylab.legend(lines,['original 2D data','reprojections'])
+                    pylab.xlabel( 'X (pixels)' )
+                    pylab.ylabel( 'Y (pixels)' )
+                    pylab.title( cam_id )
+                    pylab.setp(pylab.gca(), 'xlim',[-10,660])
+                    pylab.setp(pylab.gca(), 'ylim',[-10,500])
+        if onefigure:
+            useful_cam_ids = useful_axes.keys()
+            useful_cam_ids.sort()
+            useful_cam_ids.reverse()
+            height = 0.9/len(useful_cam_ids)
+            fbycid = {}
+            if hasattr(results.root,'exact_movie_info'):
+                for row in results.root.exact_movie_info:
+                    cam_id = row['cam_id']
+                    start_frame = row['start_frame']
+                    stop_frame = row['stop_frame']
+                    fbycid.setdefault(cam_id,[]).append( (start_frame,stop_frame))
+            for i, cam_id in enumerate(useful_cam_ids):
+                ax=useful_axes[cam_id]
+                ax.set_position([0.1, height*i+0.05,  0.8, height])
+                if cam_id in fbycid:
+                    for start_frame,stop_frame in fbycid[cam_id]:
+                        ax.axvspan( start_frame, stop_frame, fc=0.5, alpha=0.5 )
     finally:
         ion()
 
@@ -642,6 +686,7 @@ def plot_whole_movie_3d(results, typ='best', show_err=False, max_err=10):
         
     ax_err.plot(f,err,'k.')
     ax_err.set_xlabel('frame no.')
+    ax_err.xaxis.set_major_formatter(matplotlib.ticker.OldScalarFormatter())
     ax_err.set_ylabel('err\n(pixels)')
     ##ax.title(typ+' data')
     ##ax.xlabel('frame number')
@@ -787,68 +832,68 @@ def save_timed_forces(table_name,results,frames,resultant):
             resultant_forces[old_nrow] = new_row
     resultant_forces.flush()
 
-def thread_make_exact_movie_info(results, nrow):
-    movie_info = results.root.movie_info
-    data2d = results.root.data2d
-    cam_info = results.root.cam_info
+##def thread_make_exact_movie_info(results, nrow):
+##    movie_info = results.root.movie_info
+##    data2d = results.root.data2d
+##    cam_info = results.root.cam_info
 
-    for row in movie_info:
-        if row.nrow() != nrow:
-            continue
-        cam_id = row['cam_id']
-        filename = row['filename']
-        print 'filename',filename
-        frame_server = get_server(cam_id)
-        try:
-            frame_server.load( filename )
-        except IOError,exc:
-            status('WARNING: IOerror %s, skipping %s %s'%(str(exc),cam_id,filename))
-            return
-        except FlyMovieFormat.InvalidMovieFileException,exc:
-            status('WARNING: InvalidMovieFile %s, skipping %s %s'%(str(exc),cam_id,filename))
-            return
+##    for row in movie_info:
+##        if row.nrow() != nrow:
+##            continue
+##        cam_id = row['cam_id']
+##        filename = row['filename']
+##        print 'filename',filename
+##        frame_server = get_server(cam_id)
+##        try:
+##            frame_server.load( filename )
+##        except IOError,exc:
+##            status('WARNING: IOerror %s, skipping %s %s'%(str(exc),cam_id,filename))
+##            return
+##        except FlyMovieFormat.InvalidMovieFileException,exc:
+##            status('WARNING: InvalidMovieFile %s, skipping %s %s'%(str(exc),cam_id,filename))
+##            return
 
-        timestamp_movie_start = frame_server.get_timestamp( 0 )
-        timestamp_movie_stop = frame_server.get_timestamp( -1 )
-        status(' for %s %s:'%(cam_id,filename))
-        status('  %s %s'%(repr(timestamp_movie_start),repr(timestamp_movie_stop)))
-        camn_start_frame_list = [(x['camn'],x['frame']) for x in data2d
-                                 if x['timestamp'] == timestamp_movie_start ]
-##        camn_start_frame_list = [(x['camn'],x['frame']) for x in data2d.where(
-##            data2d.cols.timestamp == timestamp_movie_start )]
-        if len(camn_start_frame_list) == 0:
-            status('WARNING: movie for %s %s : start data not found'%(cam_id,filename))
-            #ts = nx.array(data2d.cols.timestamp)
-            #print 'min(ts),timestamp_movie_start,max(ts)',min(ts),timestamp_movie_start,max(ts)
-            return
-        else:
-            if len(camn_start_frame_list) > 1:
-                for camn, start_frame in camn_start_frame_list:
-                    if camn2cam_id[camn] == cam_id:
-                        break
-            else:
-                camn, start_frame = camn_start_frame_list[0]
-            assert camn2cam_id[camn] == cam_id
-        camn_stop_frame_list = [x['frame'] for x in data2d
-                                if x['timestamp'] == timestamp_movie_stop ]
-##        camn_stop_frame_list = [x['frame'] for x in data2d.where(
-##            data2d.cols.timestamp == timestamp_movie_stop )]
-        if len(camn_stop_frame_list) == 0:
-            status('WARNING: movie for %s %s : stop data not found in data2d, using last data2d as stop point'%(cam_id,filename))
-            camn_frame_list = [x['frame'] for x in data2d
-                               if x['timestamp'] >= timestamp_movie_start ]
-            stop_frame = max(camn_frame_list)
-        else:
-            stop_frame = camn_stop_frame_list[0]
+##        timestamp_movie_start = frame_server.get_timestamp( 0 )
+##        timestamp_movie_stop = frame_server.get_timestamp( -1 )
+##        status(' for %s %s:'%(cam_id,filename))
+##        status('  %s %s'%(repr(timestamp_movie_start),repr(timestamp_movie_stop)))
+##        camn_start_frame_list = [(x['camn'],x['frame']) for x in data2d
+##                                 if x['timestamp'] == timestamp_movie_start ]
+####        camn_start_frame_list = [(x['camn'],x['frame']) for x in data2d.where(
+####            data2d.cols.timestamp == timestamp_movie_start )]
+##        if len(camn_start_frame_list) == 0:
+##            status('WARNING: movie for %s %s : start data not found'%(cam_id,filename))
+##            #ts = nx.array(data2d.cols.timestamp)
+##            #print 'min(ts),timestamp_movie_start,max(ts)',min(ts),timestamp_movie_start,max(ts)
+##            return
+##        else:
+##            if len(camn_start_frame_list) > 1:
+##                for camn, start_frame in camn_start_frame_list:
+##                    if camn2cam_id[camn] == cam_id:
+##                        break
+##            else:
+##                camn, start_frame = camn_start_frame_list[0]
+##            assert camn2cam_id[camn] == cam_id
+##        camn_stop_frame_list = [x['frame'] for x in data2d
+##                                if x['timestamp'] == timestamp_movie_stop ]
+####        camn_stop_frame_list = [x['frame'] for x in data2d.where(
+####            data2d.cols.timestamp == timestamp_movie_stop )]
+##        if len(camn_stop_frame_list) == 0:
+##            status('WARNING: movie for %s %s : stop data not found in data2d, using last data2d as stop point'%(cam_id,filename))
+##            camn_frame_list = [x['frame'] for x in data2d
+##                               if x['timestamp'] >= timestamp_movie_start ]
+##            stop_frame = max(camn_frame_list)
+##        else:
+##            stop_frame = camn_stop_frame_list[0]
             
-        exact_movie_info.row['cam_id']=cam_id
-        exact_movie_info.row['filename']=filename
-        exact_movie_info.row['start_frame']=start_frame
-        exact_movie_info.row['stop_frame']=stop_frame
-        exact_movie_info.row['start_timestamp']=timestamp_movie_start
-        exact_movie_info.row['stop_timestamp']=timestamp_movie_stop
-        exact_movie_info.row.append()
-        exact_movie_info.flush()
+##        exact_movie_info.row['cam_id']=cam_id
+##        exact_movie_info.row['filename']=filename
+##        exact_movie_info.row['start_frame']=start_frame
+##        exact_movie_info.row['stop_frame']=stop_frame
+##        exact_movie_info.row['start_timestamp']=timestamp_movie_start
+##        exact_movie_info.row['stop_timestamp']=timestamp_movie_stop
+##        exact_movie_info.row.append()
+##        exact_movie_info.flush()
 
 def set_ignore_frames(results,start_frame,stop_frame):
     if not hasattr(results.root,'ignore_frames'):
@@ -861,38 +906,108 @@ def set_ignore_frames(results,start_frame,stop_frame):
     ignore_frames.row.append()
     ignore_frames.flush()
 
-def make_exact_movie_info_threaded(results):
-    status('making exact movie info')
+##def make_exact_movie_info_threaded(results):
+##    status('making exact movie info')
     
-    movie_info = results.root.movie_info
-    data2d = results.root.data2d
-    cam_info = results.root.cam_info
+##    movie_info = results.root.movie_info
+##    data2d = results.root.data2d
+##    cam_info = results.root.cam_info
 
-    camn2cam_id = {}
-    for row in cam_info:
-        cam_id, camn = row['cam_id'], row['camn']
-        camn2cam_id[camn]=cam_id
+##    camn2cam_id = {}
+##    for row in cam_info:
+##        cam_id, camn = row['cam_id'], row['camn']
+##        camn2cam_id[camn]=cam_id
 
-    exact_movie_info = results.createTable(results.root,'exact_movie_info',ExactMovieInfo,'')
+##    exact_movie_info = results.createTable(results.root,'exact_movie_info',ExactMovieInfo,'')
 
-    running_threads = []
-    for row in movie_info:
-        nrow = row.nrow()
-        row_thread = threading.Thread(target=thread_make_exact_movie_info,
-                                      args=(results, nrow))
-        row_thread.start()
-        running_threads.append( row_thread )
+##    running_threads = []
+##    for row in movie_info:
+##        nrow = row.nrow()
+##        row_thread = threading.Thread(target=thread_make_exact_movie_info,
+##                                      args=(results, nrow))
+##        row_thread.start()
+##        running_threads.append( row_thread )
 
-    while len(running_threads):
-        print 'Waiting for threads to terminate...'
-        for i in range(len(running_threads)):
-            rt = running_threads[i]
-            if not rt.isAlive():
-                del running_threads[i]
-                break
-        time.sleep(0.1)
+##    while len(running_threads):
+##        print 'Waiting for threads to terminate...'
+##        for i in range(len(running_threads)):
+##            rt = running_threads[i]
+##            if not rt.isAlive():
+##                del running_threads[i]
+##                break
+##        time.sleep(0.1)
         
-def make_exact_movie_info(results):
+##def make_exact_movie_info(results):
+##    status('making exact movie info')
+    
+##    movie_info = results.root.movie_info
+##    data2d = results.root.data2d
+##    cam_info = results.root.cam_info
+
+##    camn2cam_id = {}
+##    for row in cam_info:
+##        cam_id, camn = row['cam_id'], row['camn']
+##        camn2cam_id[camn]=cam_id
+
+##    exact_movie_info = results.createTable(results.root,'exact_movie_info',ExactMovieInfo,'')
+    
+##    for row in movie_info:
+##        cam_id = row['cam_id']
+##        filename = row['filename']
+##        print 'filename',filename
+##        frame_server = get_server(cam_id)
+##        try:
+##            frame_server.load( filename )
+##        except IOError,exc:
+##            status('WARNING: IOerror %s, skipping %s %s'%(str(exc),cam_id,filename))
+##            continue
+##        except FlyMovieFormat.InvalidMovieFileException,exc:
+##            status('WARNING: InvalidMovieFile %s, skipping %s %s'%(str(exc),cam_id,filename))
+##            continue
+
+##        status(' for %s %s:'%(cam_id,filename))
+##        timestamp_movie_start = frame_server.get_timestamp( 0 )
+##        timestamp_movie_stop = frame_server.get_timestamp( -1 )
+##        status('  %s %s'%(repr(timestamp_movie_start),repr(timestamp_movie_stop)))
+##        camn_start_frame_list = [(x['camn'],x['frame']) for x in data2d
+##                                 if x['timestamp'] == timestamp_movie_start ]
+####        camn_start_frame_list = [(x['camn'],x['frame']) for x in data2d.where(
+####            data2d.cols.timestamp == timestamp_movie_start )]
+##        if len(camn_start_frame_list) == 0:
+##            status('WARNING: movie for %s %s : start data not found'%(cam_id,filename))
+##            #ts = nx.array(data2d.cols.timestamp)
+##            #print 'min(ts),timestamp_movie_start,max(ts)',min(ts),timestamp_movie_start,max(ts)
+##            continue
+##        else:
+##            if len(camn_start_frame_list) > 1:
+##                for camn, start_frame in camn_start_frame_list:
+##                    if camn2cam_id[camn] == cam_id:
+##                        break
+##            else:
+##                camn, start_frame = camn_start_frame_list[0]
+##            assert camn2cam_id[camn] == cam_id
+##        camn_stop_frame_list = [x['frame'] for x in data2d
+##                                if x['timestamp'] == timestamp_movie_stop ]
+####        camn_stop_frame_list = [x['frame'] for x in data2d.where(
+####            data2d.cols.timestamp == timestamp_movie_stop )]
+##        if len(camn_stop_frame_list) == 0:
+##            status('WARNING: movie for %s %s : stop data not found in data2d, using last data2d as stop point'%(cam_id,filename))
+##            camn_frame_list = [x['frame'] for x in data2d
+##                               if x['timestamp'] >= timestamp_movie_start ]
+##            stop_frame = max(camn_frame_list)
+##        else:
+##            stop_frame = camn_stop_frame_list[0]
+            
+##        exact_movie_info.row['cam_id']=cam_id
+##        exact_movie_info.row['filename']=filename
+##        exact_movie_info.row['start_frame']=start_frame
+##        exact_movie_info.row['stop_frame']=stop_frame
+##        exact_movie_info.row['start_timestamp']=timestamp_movie_start
+##        exact_movie_info.row['stop_timestamp']=timestamp_movie_stop
+##        exact_movie_info.row.append()
+##        exact_movie_info.flush()
+
+def make_exact_movie_info2(results):
     status('making exact movie info')
     
     movie_info = results.root.movie_info
@@ -909,20 +1024,13 @@ def make_exact_movie_info(results):
     for row in movie_info:
         cam_id = row['cam_id']
         filename = row['filename']
+        computer_name = cam_id.split(':')[0]
+        filename = filename.replace('local',computer_name)
         print 'filename',filename
-        frame_server = get_server(cam_id)
-        try:
-            frame_server.load( filename )
-        except IOError,exc:
-            status('WARNING: IOerror %s, skipping %s %s'%(str(exc),cam_id,filename))
-            continue
-        except FlyMovieFormat.InvalidMovieFileException,exc:
-            status('WARNING: InvalidMovieFile %s, skipping %s %s'%(str(exc),cam_id,filename))
-            continue
-
+        frame_server = FlyMovieFormat.FlyMovie(filename,check_integrity=True)
         status(' for %s %s:'%(cam_id,filename))
-        timestamp_movie_start = frame_server.get_timestamp( 0 )
-        timestamp_movie_stop = frame_server.get_timestamp( -1 )
+        tmp_frame, timestamp_movie_start = frame_server.get_frame( 0 )
+        tmp_frame, timestamp_movie_stop = frame_server.get_frame( -1 )
         status('  %s %s'%(repr(timestamp_movie_start),repr(timestamp_movie_stop)))
         camn_start_frame_list = [(x['camn'],x['frame']) for x in data2d
                                  if x['timestamp'] == timestamp_movie_start ]
@@ -962,52 +1070,57 @@ def make_exact_movie_info(results):
         exact_movie_info.row.append()
         exact_movie_info.flush()
 
-def get_preloaded_frame_server(results, cam_timestamp, cam, frame_server_dict=None):
-    cam_info = results.root.cam_info
-    movie_info = results.root.movie_info
+##def get_preloaded_fly_movie(results, cam_timestamp, cam, fly_movie_dict=None):
+##    cam_info = results.root.cam_info
+##    movie_info = results.root.movie_info
 
-    if not hasattr(results.root,'exact_movie_info'):
-        make_exact_movie_info(results)
+##    if not hasattr(results.root,'exact_movie_info'):
+##        make_exact_movie_info(results)
 
-    exact_movie_info = results.root.exact_movie_info
+##    exact_movie_info = results.root.exact_movie_info
 
-    if type(cam) == int: # camn
-        camn = cam
-##        cam_id = [x['cam_id'] for x in cam_info.where( cam_info.cols.camn == camn) ][0]
-        cam_id = [x['cam_id'] for x in cam_info if x['camn'] == camn ][0]
-    elif type(cam) == str: # cam_id
-        cam_id = cam
+##    if type(cam) == int: # camn
+##        camn = cam
+####        cam_id = [x['cam_id'] for x in cam_info.where( cam_info.cols.camn == camn) ][0]
+##        cam_id = [x['cam_id'] for x in cam_info if x['camn'] == camn ][0]
+##    elif type(cam) == str: # cam_id
+##        cam_id = cam
         
-    if frame_server_dict is None:
-        frame_server = get_server(cam_id)
-    else:
-        frame_server = frame_server_dict[cam_id]
+##    found = False
+##    for row in exact_movie_info:
+##        if row['cam_id'] == cam_id:
+##            if row['start_timestamp'] <= cam_timestamp <= row['stop_timestamp']:
+##                filename = row['filename']
+##                found = True
+##                break
+##    if not found:
+##        raise ValueError('movie not found for %s'%(cam_id,))
 
-    found = False
-    for row in exact_movie_info:
-        if row['cam_id'] == cam_id:
-            if row['start_timestamp'] <= cam_timestamp <= row['stop_timestamp']:
-                filename = row['filename']
-                found = True
-                break
-    if not found:
-        raise ValueError('movie not found for %s'%(cam_id,))
+##    fullpath = '/mnt/%s/%s'%(cam_id.split(':')[0],filename)
 
-    if frame_server.get_filename() != filename:
-        frame_server.load( filename )
-    return frame_server
+##    if fly_movie_dict is None:
+##        fly_movie = FlyMovie(fullpath)
+##    else:
+##        fly_movie = fly_movie_dict[cam_id]
 
-def get_movie_frame(results, cam_timestamp_or_frame, cam, frame_server_dict=None):
-    if type(cam_timestamp_or_frame) == float:
-        cam_timestamp = cam_timestamp_or_frame
-    else:
-        frame = cam_timestamp_or_frame
-        camn, cam_timestamp = get_camn_and_timestamp(results,cam,frame)
-    frame_server = get_preloaded_frame_server(results, cam_timestamp, cam, frame_server_dict=frame_server_dict)
-    frame, movie_timestamp = frame_server.get_frame_by_timestamp( cam_timestamp )
-    return frame, movie_timestamp
+##    if fly_movie.filename != fullpath:
+##        fly_movie = FlyMovie(fullpath)
+##    return fly_movie
 
-def get_movie_bg_frame(results, cam_timestamp_or_frame, cam, frame_server_dict=None):
+##def get_movie_frame(results, cam_timestamp_or_frame, cam, fly_movie_dict=None):
+##    if type(cam_timestamp_or_frame) == float:
+##        cam_timestamp = cam_timestamp_or_frame
+##    else:
+##        frame = cam_timestamp_or_frame
+##        camn, cam_timestamp = get_camn_and_timestamp(results,cam,frame)
+##    fly_movie = get_preloaded_fly_movie(results, cam_timestamp, cam, fly_movie_dict=fly_movie_dict)
+##    frame, movie_timestamp = fly_movie.get_frame_by_timestamp( cam_timestamp )
+##    return frame, movie_timestamp
+
+def get_movie_frame2(results, cam_timestamp_or_frame, cam, suffix=None):
+    if suffix is None:
+        suffix = ''
+        
     if type(cam_timestamp_or_frame) == float:
         cam_timestamp = cam_timestamp_or_frame
     else:
@@ -1021,19 +1134,17 @@ def get_movie_bg_frame(results, cam_timestamp_or_frame, cam, frame_server_dict=N
 
     if type(cam) == int: # camn
         camn = cam
-##        cam_id = [x['cam_id'] for x in cam_info.where( cam_info.cols.camn == camn) ][0]
+        cam_id = [x['cam_id'] for x in cam_info.where( cam_info.cols.camn == camn) ][0]
         cam_id = [x['cam_id'] for x in cam_info if x['camn'] == camn ][0]
     elif type(cam) == str: # cam_id
         cam_id = cam
         
-    if frame_server_dict is None:
-        frame_server = get_server(cam_id,port=9899) # port 9889 for bg images
-    else:
-        frame_server = frame_server_dict[cam_id]
+    if not hasattr(results.root,'exact_movie_info'):
+        make_exact_movie_info2(results)
+    exact_movie_info = results.root.exact_movie_info
 
     # find normal (non background movie filename)
     found = False
-    exact_movie_info = results.root.exact_movie_info
     for row in exact_movie_info:
         if row['cam_id'] == cam_id:
             if row['start_timestamp'] < cam_timestamp < row['stop_timestamp']:
@@ -1043,11 +1154,10 @@ def get_movie_bg_frame(results, cam_timestamp_or_frame, cam, frame_server_dict=N
     if not found:
         raise ValueError('movie not found for %s'%(cam_id,))
 
-    filename = os.path.splitext(filename)[0] + '_bg.fmf' # alter to be background image
-    if frame_server.get_filename() != filename:
-        frame_server.load( filename )
+    filename = os.path.splitext(filename)[0] + '%s.fmf'%(suffix,) # alter to be background image
 
-    frame, movie_timestamp = frame_server.get_frame_prior_to_timestamp( cam_timestamp )
+    fly_movie = FlyMovieFormat.FlyMovie(filename)
+    frame, movie_timestamp = fly_movie.get_frame_at_or_before_timestamp( cam_timestamp )
     return frame, movie_timestamp
 
 def get_cam_ids(results):
@@ -1857,29 +1967,45 @@ def get_frame_ts_and_realtime_analyzer_state( results,
                                               diff_threshold=None,
                                               clear_threshold=None,
                                               ):
+    timestamp = None
     for row in results.root.data2d:
         if row['frame'] == frame and row['camn'] == camn:
             timestamp = row['timestamp']
+    if timestamp is None:
+        return None,None,None
+    print 'timestamp',timestamp
             
     cam_info = results.root.cam_info      
     cam_id = [x['cam_id'] for x in cam_info if x['camn'] == camn ][0]
+
+    import realtime_image_analysis4
+    import flydra.reconstruct
+    import FastImage
     
-    frame,timestamp2=get_movie_frame(results, timestamp, camn)
+    frame,timestamp2=get_movie_frame2(results, timestamp, camn, suffix='')
     assert timestamp2-timestamp < 1e-15
-    bg_frame,bg_timestamp=get_movie_bg_frame(results, timestamp, camn)
+    bg_frame,bg_timestamp=get_movie_frame2(results, timestamp, camn, suffix='_bg')
+    bg_frame_fi = FastImage.asfastimage(bg_frame)
+    std_frame,std_timestamp=get_movie_frame2(results, timestamp, camn, suffix='_std')
+    std_frame_fi = FastImage.asfastimage(std_frame)
+    
     if 0:
         diff = frame.astype(numarray.Int32) - bg_frame.astype(numarray.Int32)
         imshow(diff)
         colorbar()
-    import realtime_image_analysis
-    import flydra.reconstruct
     
     reconstructor = flydra.reconstruct.Reconstructor(results)
     
     ALPHA = 0.1
-    rt = realtime_image_analysis.RealtimeAnalyzer(frame.shape[1],frame.shape[0],ALPHA)
+    rt = realtime_image_analysis4.RealtimeAnalyzer(frame.shape[1],frame.shape[0])
+    
+    mean_im = rt.get_image_view('mean')
+    bg_frame_fi.get_8u_copy_put(mean_im,bg_frame_fi.size)
+
+    cmp_im = rt.get_image_view('cmp')
+    std_frame_fi.get_8u_copy_put(cmp_im,std_frame_fi.size)
+    
     rt.set_reconstruct_helper( reconstructor.get_recontruct_helper_dict()[cam_id] )
-    rt.set_background_image( bg_frame )
     rt.pmat = reconstructor.get_pmat(cam_id)
     if clear_threshold is None:
         clear_threshold = 0.9 # XXX should save to fmf file??
@@ -2318,6 +2444,53 @@ def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
     return results
     
 if __name__=='__main__':
-    results = get_results('DATA20050816_174254.h5',mode='r+')
+    #results = get_results('DATA20051130_184531.h5',mode='r+')
+    results = get_results('DATA20051212_190648.h5',mode='r+')
+    #del results.root.exact_movie_info
+    #results.close()
+    #make_exact_movie_info2(results)
+    if 0:
+        import FastImage
+        for camn in [13]:
+            for framenumber in range(10196,10199):
+                print
+                print 'camn',camn
+                print 'framenumber',framenumber
+                frame,timestamp,rt=get_frame_ts_and_realtime_analyzer_state(results,
+                                                                            frame=framenumber,
+                                                                            camn=camn,
+                                                                            clear_threshold=0.2,
+                                                                            diff_threshold=11,
+                                                                            )
+                print 'timestamp',timestamp
+                #print 'frame',frame
+                if frame is  None:
+                    print 'no reconstructor'
+                    continue
+                raw_im = FastImage.asfastimage(frame)
+
+                use_roi2=1
+                use_cmp=1
+                return_first_xy=0
+                points = rt.do_work(raw_im, timestamp,
+                                    framenumber,
+                                    use_roi2,
+                                    use_cmp,
+                                    return_first_xy)
+                for (x, y, area, slope, eccentricity, p1, p2, p3, p4, line_found, slope_found) in points:
+                    print 're: x,y,p1,eccentricity',x,y,p1,eccentricity
+
+                print
+
+                data2d = results.root.data2d
+                for r in data2d.where( data2d.cols.camn == camn ):
+                    if r['frame']==framenumber:
+                        print 'orig: x,y,p1,eccentricity',r['x'],r['y'],r['p1'],r['eccentricity']
+                
+##    if 1:
+##        del results.root.exact_movie_info
+##        results.close()
+##        results = get_results('DATA20051122_224900.h5',mode='r+')
+##        make_exact_movie_info2(results)
     if len(sys.argv) > 1:
         save_movie(results)
