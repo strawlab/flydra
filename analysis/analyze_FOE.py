@@ -4,7 +4,7 @@ from matplotlib.numerix.ma import array
 import matplotlib.numerix.mlab as mlab
 import matplotlib.numerix as nx
 import PQmath
-import math
+import math, glob
 
 #pylab_or_vtk = 'vtk'
 pylab_or_vtk = 'pylab'
@@ -13,21 +13,20 @@ if pylab_or_vtk == 'pylab':
     import pylab
 else:
     import vtk_results
+    
+if 0:
+    # still air
+    h5files = [
+        
+        ]
 
-h5files = [
-           'DATA20050713_132051.h5',
-           'DATA20050713_141410.h5',
-           'DATA20050713_161902.h5',
-           'DATA20050713_175021.h5',
-           'DATA20050713_183328.h5',
-           ]
+    logfiles = [
+                ]
+else:
+    # wind
+    h5files = glob.glob('*.h5')
+    logfiles = glob.glob('escape_wall2005*.log')
 
-logfiles = ['escape_wall20050713_131842.log',
-            'escape_wall20050713_141403.log',
-            'escape_wall20050713_161859.log',
-            'escape_wall20050713_174941.log',
-            'escape_wall20050713_183150.log',
-            ]
 trig_fnos = {}
 tf_hzs = {}
 all_tf_hzs = []
@@ -103,10 +102,12 @@ for trig_time in trig_times:
         else:
             continue
 
+        print
         if pylab_or_vtk == 'pylab':
             if ax_x is None:
                 fig_pos = pylab.figure()
                 ax_x = fig_pos.add_subplot(4,1,1)
+
                 ax_y = fig_pos.add_subplot(4,1,2, sharex=ax_x)
                 ax_z = fig_pos.add_subplot(4,1,3, sharex=ax_x)
                 ax_err = fig_pos.add_subplot(4,1,4, sharex=ax_x)
@@ -292,6 +293,8 @@ for trig_time in trig_times:
 print 'good_count',good_count
 if pylab_or_vtk == 'pylab':
 
+    leg_lines = {}
+    leg_labels = {}
     for (val_list,ax) in [(upwind_xs, ax_x),
                           (upwind_ys, ax_y),
                           (upwind_zs, ax_z),
@@ -310,7 +313,9 @@ if pylab_or_vtk == 'pylab':
             xdata = 10.0*frame_rels[:-1]
         else:
             xdata = 10.0*frame_rels
-        ax.plot( xdata, va_mean, 'r-', lw=3)
+        lines = ax.plot( xdata, va_mean, 'r-', lw=3)
+        leg_lines.setdefault(ax,[]).append( lines[0] )
+        leg_labels.setdefault(ax,[]).append('upwind')
         
     for (val_list,ax) in [(downwind_xs, ax_x),
                           (downwind_ys, ax_y),
@@ -330,13 +335,23 @@ if pylab_or_vtk == 'pylab':
             xdata = 10.0*frame_rels[:-1]
         else:
             xdata = 10.0*frame_rels
-        ax.plot( xdata, va_mean, 'b-', lw=3)
+        lines=ax.plot( xdata, va_mean, 'b-', lw=3)
+        leg_lines.setdefault(ax,[]).append( lines[0] )
+        leg_labels.setdefault(ax,[]).append('downwind')
+
+    for ax in leg_lines.keys():
+        ax.legend( leg_lines[ax], leg_labels[ax] )
         
     ax_x.set_ylabel('x position (mm)')
     ax_y.set_ylabel('y position (mm)')
     pylab.setp(ax_y,'ylim',[110,180])
     ax_z.set_ylabel('z position (mm)')
     ax_z.set_xlabel('time (msec)')
+    
+    ax_yvel.set_ylabel('yvel')
+    ax_heading.set_ylabel('heading')
+    ax_heading.set_xlabel('time (msec)')
+    
     pylab.setp(ax_z,'ylim',[50,350])
 
     fig_vel_hist = pylab.figure()
@@ -344,7 +359,9 @@ if pylab_or_vtk == 'pylab':
     ax_hist_downwind = fig_vel_hist.add_subplot(2,1,2,sharex=ax_hist_upwind)
     #print 'all_IFI_dist_mm',all_IFI_dist_mm
     ax_hist_upwind.hist(upwind_IFI_dist_mm, bins=100)
+    ax_hist_upwind.set_xlabel('IFI distance (mm)')
     ax_hist_downwind.hist(downwind_IFI_dist_mm, bins=100)
+    ax_hist_downwind.set_xlabel('IFI distance (mm)')
     
     pylab.show()
 else:
