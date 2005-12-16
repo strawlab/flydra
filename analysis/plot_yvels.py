@@ -6,23 +6,21 @@ import matplotlib.numerix as nx
 import PQmath
 import math
 
+import glob
 import pylab
 
+if 0:
+    # still air
+    h5files = [
+        
+        ]
 
-h5files = [
-           'DATA20050713_132051.h5',
-           'DATA20050713_141410.h5',
-           'DATA20050713_161902.h5',
-           'DATA20050713_175021.h5',
-           'DATA20050713_183328.h5',
-           ]
-
-logfiles = ['escape_wall20050713_131842.log',
-            'escape_wall20050713_141403.log',
-            'escape_wall20050713_161859.log',
-            'escape_wall20050713_174941.log',
-            'escape_wall20050713_183150.log',
-            ]
+    logfiles = [
+                ]
+else:
+    # wind
+    h5files = glob.glob('*.h5')
+    logfiles = glob.glob('escape_wall2005*.log')
 
 trig_fnos = {}
 tf_hzs = {}
@@ -87,8 +85,11 @@ for trig_time in trig_times:
         else:
             continue
 
-        pre_frames = 50
-        post_frames = 150
+        print
+        pre_frames = 10
+        post_frames = 50
+##        pre_frames = 50
+##        post_frames = 150
         fstart = trig_fno-pre_frames
         fend = trig_fno+post_frames
 
@@ -167,7 +168,7 @@ for trig_time in trig_times:
 ##            print
             continue
         else:
-            print 'trig_time %s OK'%(repr(trig_time),),count
+            print 'trig_time %s (fno %d) OK %d'%(repr(trig_time),trig_fno,count)
 
         mean_pretrig_z = mlab.mean( zm_time_of_interest.compressed())
         if type(mean_pretrig_z) != float:
@@ -197,7 +198,7 @@ for trig_time in trig_times:
             nonmaskedlist = list( IFI_dist_mm.compressed() )
 
         if max(nonmaskedlist) > 10:
-            print 'WARNING: skipping because >10 mm found between adjacent frames'
+            print 'WARNING: skipping because >10 mm found between adjacent frames (%d frames found)'%(len(xm),)
             continue
         
         all_IFI_dist_mm.extend( nonmaskedlist )
@@ -270,6 +271,9 @@ for doing_upwind in (True,False):
             if tf_hz == 1.0:
                 continue
 
+            print 'tf_hz', tf_hz
+            print 'doing_upwind', doing_upwind
+
             val_list = yvels_dict[tf_hz]
 
             val_array = M.concatenate( val_list, axis=0 )
@@ -284,7 +288,13 @@ for doing_upwind in (True,False):
                 N = len(col_compressed)
                 if N < minN: minN = N
                 if N > maxN: maxN = N
+                if N==0:
+                    print 'WARNING: mean not computed, N==0'
+                    continue
                 means[j] = mlab.mean( col_compressed )
+                if N==1:
+                    print 'WARNING: std not computed, N==1'
+                    continue
                 stds[j] = mlab.std( col_compressed )
 
             if yvels_dict is upwind_yvels or yvels_dict is downwind_yvels:
