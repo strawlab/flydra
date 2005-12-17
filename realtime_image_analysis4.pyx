@@ -33,7 +33,12 @@ cimport c_python
 
 cimport ipp
 cimport ArenaController
-import ArenaController
+
+try:
+    import ArenaController
+    have_ArenaController_module = True
+except ImportError:
+    have_ArenaController_module = False
 
 cdef extern from "unistd.h":
     ctypedef long intptr_t
@@ -148,11 +153,12 @@ cdef class RealtimeAnalyzer:
     def __new__(self,*args,**kw):
         # image moment calculation initialization
         CHK( ipp.ippiMomentInitAlloc_64f( &self.pState, ipp.ippAlgHintFast ) )
-        try:
-            self.arena_controller = ArenaController.ArenaController()
-        except Exception, exc:
-            print 'WARNING: could not create ArenaController:',exc.__class__,str(exc)
-            self.arena_controller = None
+        self.arena_controller = None
+        if have_ArenaController_module:
+            try:
+                self.arena_controller = ArenaController.ArenaController()
+            except Exception, exc:
+                print 'WARNING: could not create ArenaController:',exc.__class__,str(exc)
 
     def close(self):
         if self.arena_controller is not None:
