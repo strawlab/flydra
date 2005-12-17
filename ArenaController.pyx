@@ -25,7 +25,7 @@ class ArenaControlError(Exception):
     pass
 
 ctypedef public class ArenaController [object PyArenaControllerObject, type PyArenaControllerType]:
-    def __init__(self):
+    def __new__(self,*args,**kw):
         if is_initialized:
             raise ArenaControlError('arena_control already initialized')
         err = arena_initialize()
@@ -33,6 +33,7 @@ ctypedef public class ArenaController [object PyArenaControllerObject, type PyAr
             raise ArenaControlError('error %d initializing arena_control'%err)
         is_initialized = 1
     def __dealloc__(self):
+        'ArenaController.__dealloc__ called'
         if is_initialized:
             arena_finish()
             is_initialized = 0
