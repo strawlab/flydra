@@ -1,1 +1,1 @@
-../cam_iface/src/c_numarray.pxd
+../imops/src/c_numarray.pxd
