@@ -25,7 +25,6 @@ cdef double nan
 nan = numarray.ieeespecial.nan
 
 near_inf = 9.999999e20
-MAX_NUM_POINTS = 2
 
 cimport c_numarray # TODO: use __array_atruct__ version of this?
 
@@ -144,6 +143,7 @@ cdef class RealtimeAnalyzer:
     cdef ArenaController.ArenaController arena_controller
 
     cdef object imname2im
+    cdef int max_num_points
 
     def __new__(self,*args,**kw):
         # image moment calculation initialization
@@ -153,14 +153,21 @@ cdef class RealtimeAnalyzer:
         except Exception, exc:
             print 'WARNING: could not create ArenaController:',exc.__class__,str(exc)
             self.arena_controller = None
+
+    def close(self):
+        if self.arena_controller is not None:
+            self.arena_controller.close()
             
     def __dealloc__(self):
         CHK_HAVEGIL( ipp.ippiMomentFree_64f( self.pState ))
 
-    def __init__(self,int maxwidth, int maxheight):
+    def __init__(self,int maxwidth, int maxheight, int max_num_points):
         # software analysis ROI
         self.maxwidth = maxwidth
         self.maxheight = maxheight
+
+        self.max_num_points = max_num_points
+        print 'realtime analysis with %d points maximum starting'%self.max_num_points
 
         self._roi2_radius = 10
         self._diff_threshold = 11
@@ -272,7 +279,7 @@ cdef class RealtimeAnalyzer:
                                                        self._roi_sz )
         c_python.Py_END_ALLOW_THREADS
 
-        while len(all_points_found) < MAX_NUM_POINTS:
+        while len(all_points_found) < self.max_num_points:
 
             # release GIL
             c_python.Py_BEGIN_ALLOW_THREADS

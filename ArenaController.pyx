@@ -33,7 +33,11 @@ ctypedef public class ArenaController [object PyArenaControllerObject, type PyAr
             raise ArenaControlError('error %d initializing arena_control'%err)
         is_initialized = 1
     def __dealloc__(self):
-        'ArenaController.__dealloc__ called'
+        'ArenaController.__dealloc__() called'
+        if is_initialized:
+            self.close()
+    def close(self):
+        'ArenaController.close() called'
         if is_initialized:
             arena_finish()
             is_initialized = 0

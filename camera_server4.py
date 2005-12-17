@@ -3,8 +3,6 @@
 
 import pkg_resources
 pkg_resources.require("kookaburra")
-pkg_resources.require("FlyMovieFormat")
-pkg_resources.require("cam_iface")
 
 import threading, time, socket, sys, struct, os
 import Pyro.core, Pyro.errors
@@ -59,8 +57,10 @@ class GrabClass(object):
 
         self.new_roi = threading.Event()
         self.new_roi_data = None
+        max_num_points = 3
         self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(self.cam.get_max_width(),
-                                                                          self.cam.get_max_height())
+                                                                          self.cam.get_max_height(),
+                                                                          max_num_points)
 
     def get_clear_threshold(self):
         return self.realtime_analyzer.clear_threshold
@@ -348,11 +348,12 @@ class GrabClass(object):
                     cur_fisize = FastImage.Size(w, h)
                     hw_roi_frame = fi8ufactory( cur_fisize )
                     print 'setting hardware ROI not yet implemented in camera_server4'
-                    #sself.realtime_analyzer.set_hw_roi(w,h,l,b)
+                    #self.realtime_analyzer.set_hw_roi(w,h,l,b)
 
                     self.new_roi.clear()
                     self.cam.start_camera()  # start camera
         finally:
+            self.realtime_analyzer.close()
             FastImage.set_debug(0)
             globals['cam_quit_event'].set()
             globals['grab_thread_done'].set()
