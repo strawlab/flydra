@@ -597,13 +597,11 @@ class wxMainBrainApp(wxApp):
         #print 'OnFilenameSetFocus'
         self.pass_all_keystrokes = True
         event.Skip()
-        return
     
     def OnFilenameKillFocus(self,event):
         #print 'OnFilenameKillFocus'
         self.pass_all_keystrokes = False
         event.Skip()
-        return
         
     def OnRecordRaw(self,event):
         if self.record_raw.IsChecked():
