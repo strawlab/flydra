@@ -8,18 +8,6 @@ svd = numarray.linear_algebra.singular_value_decomposition
 
 cimport FastImage
 import FastImage
-import weakref
-
-# Define these classes to allow weak refs.
-
-# (It's good to keep these here because then we don't pollute
-# FastImage itself with such a hack.
-
-class wrFastImage8u(FastImage.FastImage8u):
-    __slots__ = ['__weakref__']
-
-class wrFastImage32f(FastImage.FastImage32f):
-    __slots__ = ['__weakref__']
 
 cdef double nan
 nan = numarray.ieeespecial.nan
@@ -142,13 +130,17 @@ cdef class RealtimeAnalyzer:
     cdef FastImage.FastImage8u mean_im, cmp_im
 
     cdef FastImage.FastImage8u mean_im_roi_view, cmp_im_roi_view
-    
+
+    # other stuff
     cdef ipp.IppiMomentState_64f *pState
 
     cdef ArenaController.ArenaController arena_controller
 
     cdef object imname2im
     cdef int max_num_points
+
+    cdef readonly int first_index_x, first_index_y, first_max_val, first_found_point
+    cdef readonly float first_max_std_diff
 
     def __new__(self,*args,**kw):
         # image moment calculation initialization
@@ -173,7 +165,7 @@ cdef class RealtimeAnalyzer:
         self.maxheight = maxheight
 
         self.max_num_points = max_num_points
-        print 'realtime analysis with %d points maximum starting'%self.max_num_points
+        #print 'realtime analysis with %d points maximum starting'%self.max_num_points
 
         self._roi2_radius = 10
         self._diff_threshold = 11
@@ -191,14 +183,19 @@ cdef class RealtimeAnalyzer:
 
         sz = FastImage.Size(self.maxwidth,self.maxheight)
         # 8u images
-        self.absdiff_im=wrFastImage8u(sz)
+        self.absdiff_im=FastImage.FastImage8u(sz)
 
         # 8u background
-        self.mean_im=wrFastImage8u(sz)
-        self.cmp_im=wrFastImage8u(sz)
-        self.cmpdiff_im=wrFastImage8u(sz)
+        self.mean_im=FastImage.FastImage8u(sz)
+        self.cmp_im=FastImage.FastImage8u(sz)
+        self.cmpdiff_im=FastImage.FastImage8u(sz)
         
-        self.update_imname2im() # create and update self.imname2im dict
+        # create and update self.imname2im dict
+        self.imname2im = {'absdiff' :self.absdiff_im,
+                          'mean'    :self.mean_im,
+                          'cmp'     :self.cmp_im,
+                          'cmpdiff' :self.cmpdiff_im,
+                          }
 
         self.roi = 0,0,maxwidth-1,maxheight-1 # sets self._roi_sz to l,b,r,t, assigns roi_views
         
@@ -262,9 +259,13 @@ cdef class RealtimeAnalyzer:
         cdef int left2, right2, bottom2, top2
         
         cdef int found_point
+        cdef int n_found_points
+
 
         roi2_sz = FastImage.Size(21,21)
-        all_points_found = []
+        
+        all_points_found = [] # len(all_points_found) == n_found_points
+        n_found_points = 0
 
         # This is our near-hack to ensure users update .roi before calling .do_work()
         if not ((self._roi_sz.sz.width == raw_im_small.imsiz.sz.width) and
@@ -276,8 +277,8 @@ cdef class RealtimeAnalyzer:
         c_python.Py_BEGIN_ALLOW_THREADS
         # absdiff_im = | raw_im - mean_im |
         raw_im_small.fast_get_absdiff_put( self.mean_im_roi_view,
-                                     self.absdiff_im_roi_view,
-                                     self._roi_sz)
+                                           self.absdiff_im_roi_view,
+                                           self._roi_sz)
         if use_cmp:
             # cmpdiff_im = absdiff_im - cmp_im (saturates 8u)
             self.absdiff_im_roi_view.fast_get_sub_put( self.cmp_im_roi_view,
@@ -285,7 +286,7 @@ cdef class RealtimeAnalyzer:
                                                        self._roi_sz )
         c_python.Py_END_ALLOW_THREADS
 
-        while len(all_points_found) < self.max_num_points:
+        while n_found_points < self.max_num_points:
 
             # release GIL
             c_python.Py_BEGIN_ALLOW_THREADS
@@ -366,6 +367,7 @@ cdef class RealtimeAnalyzer:
                     x0_abs = nan
                     y0_abs = nan
                     found_point = 0 # c int (bool)
+                    max_val = 0
             else:
                 if max_std_diff == 0:
                     x0=nan
@@ -431,8 +433,16 @@ cdef class RealtimeAnalyzer:
 
             if return_first_xy:
                 #nominal: (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4, line_found, slope_found)
-                rval = [(index_x, index_y, max_std_diff, 0.0, eccentricity, p1, p2, p3, p4, 0, 0)]
+                rval = [(index_x, index_y, max_std_diff, max_val, eccentricity, p1, p2, p3, p4, 0, found_point)]
                 return rval
+            
+            if n_found_points==0:
+                # we're on first point
+                self.first_index_x = index_x
+                self.first_index_y = index_y
+                self.first_max_std_diff = max_std_diff
+                self.first_max_val = max_val
+                self.first_found_point = found_point
 
             if not found_point:
                 break
@@ -490,36 +500,12 @@ cdef class RealtimeAnalyzer:
             all_points_found.append(
                 (x0_abs, y0_abs, area, slope, eccentricity, p1, p2, p3, p4, line_found, slope_found)
                 )
+            n_found_points = n_found_points+1
 
-            # clear roi2 for next iteration
-            CHK( ipp.ippiSet_8u_C1R(
-                0, 
-                <ipp.Ipp8u*>self.absdiff_im_roi2_view.im,
-                self.absdiff_im_roi2_view.step,
-                roi2_sz.sz))
-            if use_cmp:
-                CHK( ipp.ippiSet_8u_C1R(
-                    0,
-                    <ipp.Ipp8u*>self.cmpdiff_im_roi2_view.im,self.cmpdiff_im_roi2_view.step,
-                    roi2_sz.sz))
-            
         return all_points_found
 
-    def update_imname2im(self):
-        """refresh weak references"""
-        self.imname2im = {'absdiff' :weakref.ref(self.absdiff_im),
-                          'mean'    :weakref.ref(self.mean_im),
-                          'cmp'     :weakref.ref(self.cmp_im),
-                          'cmpdiff' :weakref.ref(self.cmpdiff_im),
-                          }
-    
     def get_image_view(self,which='mean'):
-        im = self.imname2im[which]()
-        if im is None:
-            print 'reference to image changed' # are we mallocing and freeing too much?
-            # weak reference allowed original source to be deallocated
-            self.update_imname2im()
-            im = self.imname2im[which]()
+        im = self.imname2im[which]
         return im
     
     def rotation_calculation_init(self, int n_rot_samples):
@@ -584,11 +570,19 @@ cdef class RealtimeAnalyzer:
     property roi:
         def __get__(self):
             return (self._left,self._bottom,self._right,self._top)
-        def __set__(self,lbrt):
-            self._left = lbrt[0]
-            self._bottom = lbrt[1]
-            self._right = lbrt[2]
-            self._top = lbrt[3]
+        def __set__(self,object lbrt):
+            cdef int l,b,r,t
+            
+            l,b,r,t = lbrt
+            if (l==self._left and b==self._bottom and
+                r==self._right and t==self._top):
+                # nothing to do
+                return
+            
+            self._left = l
+            self._bottom = b
+            self._right = r
+            self._top = t
 
             assert self._left >= 0
             assert self._bottom >= 0
