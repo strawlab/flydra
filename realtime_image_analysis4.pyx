@@ -127,7 +127,7 @@ cdef class RealtimeAnalyzer:
     # These entirety of these images are always valid and have an roi
     # into the active region.
 
-    cdef FastImage.FastImage8u mean_im, cmp_im
+    cdef FastImage.FastImage8u mask_im, mean_im, cmp_im
 
     cdef FastImage.FastImage8u mean_im_roi_view, cmp_im_roi_view
 
@@ -186,6 +186,9 @@ cdef class RealtimeAnalyzer:
         self.absdiff_im=FastImage.FastImage8u(sz)
 
         # 8u background
+        self.mask_im=FastImage.FastImage8u(sz)
+        self.mask_im.set_val(0,sz)
+        
         self.mean_im=FastImage.FastImage8u(sz)
         self.cmp_im=FastImage.FastImage8u(sz)
         self.cmpdiff_im=FastImage.FastImage8u(sz)
@@ -193,6 +196,7 @@ cdef class RealtimeAnalyzer:
         # create and update self.imname2im dict
         self.imname2im = {'absdiff' :self.absdiff_im,
                           'mean'    :self.mean_im,
+                          'mask'    :self.mask_im,
                           'cmp'     :self.cmp_im,
                           'cmpdiff' :self.cmpdiff_im,
                           }
@@ -279,6 +283,12 @@ cdef class RealtimeAnalyzer:
         raw_im_small.fast_get_absdiff_put( self.mean_im_roi_view,
                                            self.absdiff_im_roi_view,
                                            self._roi_sz)
+        
+        # mask unused part of absdiff_im to 0
+        self.absdiff_im.fast_set_val_masked( 0,
+                                             self.mask_im,
+                                             self.absdiff_im.imsiz)
+        
         if use_cmp:
             # cmpdiff_im = absdiff_im - cmp_im (saturates 8u)
             self.absdiff_im_roi_view.fast_get_sub_put( self.cmp_im_roi_view,
