@@ -1,20 +1,16 @@
 #emacs, this is -*-Python-*- mode
 # $Id: $
 
-import numarray as nx
-import numarray.ieeespecial
-import numarray.linear_algebra
-svd = numarray.linear_algebra.singular_value_decomposition
+import numpy as nx
+svd = nx.linalg.svd
 
 cimport FastImage
 import FastImage
 
 cdef double nan
-nan = numarray.ieeespecial.nan
+nan = nx.nan
 
 near_inf = 9.999999e20
-
-cimport c_numarray # TODO: use __array_atruct__ version of this?
 
 cimport c_lib
 cimport c_python
@@ -98,7 +94,7 @@ cdef class RealtimeAnalyzer:
     cdef int _use_arena
     
     # calibration matrix
-    cdef c_numarray._numarray _pmat, _pmat_inv, camera_center
+    cdef object _pmat, _pmat_inv, camera_center # ndarrays
     cdef object _set_pmat
     cdef object _helper
 
@@ -561,11 +557,11 @@ cdef class RealtimeAnalyzer:
     property pmat:
         def __get__(self):
             return self._pmat
-        def __set__(self,c_numarray._numarray value):
+        def __set__(self,value):
             self._pmat = value
 
             P = self._pmat
-            determinant = numarray.linear_algebra.determinant
+            determinant = nx.linalg.det
             
             # find camera center in 3D world coordinates
             X = determinant( [ P[:,1], P[:,2], P[:,3] ] )
@@ -574,7 +570,7 @@ cdef class RealtimeAnalyzer:
             T = -determinant( [ P[:,0], P[:,1], P[:,2] ] )
 
             self.camera_center = nx.array( [ X/T, Y/T, Z/T, 1.0 ] )
-            self._pmat_inv = numarray.linear_algebra.generalized_inverse(self._pmat)
+            self._pmat_inv = nx.linalg.generalized_inverse(self._pmat)
             self._set_pmat = True
             
     property roi:
@@ -594,10 +590,14 @@ cdef class RealtimeAnalyzer:
             self._right = r
             self._top = t
 
-            assert self._left >= 0
-            assert self._bottom >= 0
-            assert self._right < self.maxwidth
-            assert self._top < self.maxheight
+            if self._left < 0:
+                raise ValueError('attempting to set ROI left %d'%(self._left))
+            if self._bottom < 0:
+                raise ValueError('attempting to set ROI bottom %d'%(self._bottom))
+            if self._right >= self.maxwidth:
+                raise ValueError('attempting to set ROI right to %d (width %d)'%(self._right,self.maxwidth))
+            if self._top >= self.maxheight:
+                raise ValueError('attempting to set ROI top to %d (height %d)'%(self._top,self.maxheight))
 
             self._roi_sz = FastImage.Size( self._right-self._left+1, self._top-self._bottom+1 )
             
