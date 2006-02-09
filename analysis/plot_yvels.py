@@ -1,8 +1,12 @@
 import result_browser
-import matplotlib.numerix.ma as M
-from matplotlib.numerix.ma import array
+#import matplotlib.numerix.ma as M
+#from matplotlib.numerix.ma import array
 import matplotlib.numerix.mlab as mlab
-import matplotlib.numerix as nx
+#import matplotlib.numerix as nx
+import numpy
+nx = numpy
+M = numpy.ma
+import FOE_utils
 import PQmath
 import math
 
@@ -20,32 +24,37 @@ if 0:
 else:
     # wind
     h5files = glob.glob('*.h5')
-    logfiles = glob.glob('escape_wall2005*.log')
+    logfiles = glob.glob('escape_wall*.log')
 
-trig_fnos = {}
-tf_hzs = {}
-all_tf_hzs = []
-for logfile in logfiles:
-    fd = open(logfile,'rb')
-    for line in fd.readlines():
-        if line.startswith('#'):
-            continue
-        fno, ftime, tf_hz = line.split()
-        fno = int(fno)
-        ftime = float(ftime)
-        tf_hz = float(tf_hz)
-        trig_fnos[ftime] = fno
-        tf_hzs[ftime] = tf_hz
-        if tf_hz not in all_tf_hzs:
-            all_tf_hzs.append( tf_hz )
+if 1:
+    (all_results, all_results_times, trig_fnos,
+     trig_times, tf_hzs) = FOE_utils.get_results_and_times(logfiles,h5files)
+    print '%d FOE triggers'%len(trig_times)
+else:
+    trig_fnos = {}
+    tf_hzs = {}
+    all_tf_hzs = []
+    for logfile in logfiles:
+        fd = open(logfile,'rb')
+        for line in fd.readlines():
+            if line.startswith('#'):
+                continue
+            fno, ftime, tf_hz = line.split()
+            fno = int(fno)
+            ftime = float(ftime)
+            tf_hz = float(tf_hz)
+            trig_fnos[ftime] = fno
+            tf_hzs[ftime] = tf_hz
+            if tf_hz not in all_tf_hzs:
+                all_tf_hzs.append( tf_hz )
 
-print 'TFs of escape wall:', all_tf_hzs
+    print 'TFs of escape wall:', all_tf_hzs
 
-all_results = [result_browser.get_results(h5file,mode='r+') for h5file in h5files]
-all_results_times = [result_browser.get_start_stop_times( results ) for results in all_results ]
+    all_results = [result_browser.get_results(h5file,mode='r+') for h5file in h5files]
+    all_results_times = [result_browser.get_start_stop_times( results ) for results in all_results ]
 
-trig_times = trig_fnos.keys()
-trig_times.sort()
+    trig_times = trig_fnos.keys()
+    trig_times.sort()
 
 RAD2DEG = 180.0/math.pi
 
@@ -158,10 +167,13 @@ for trig_time in trig_times:
         yvels= (P[2:]-P[:-2]) / (2*delta_t)
         #yvels = (ym[1:]-ym[:-1])*100.0/1000.0 # m/sec
 
-        if type(sum_xdiff) != float:
-            print 'HMM, WARNING'
+        if not isinstance(sum_xdiff,float):
+            # not enough data
+            print 'trig_time %s (fno %d) missing tracking data %d'%(repr(trig_time),trig_fno,count)
+##            print 'HMM, WARNING'
 ##            print 'WARNING: at trig_time %s, repr(sum_xdiff)='%(repr(trig_time),)
 ##            print repr(sum_xdiff)
+##            print 'type(sum_xdiff)',type(sum_xdiff)
 ##            print 'xm=\n',xm
 ##            print 'xm_time_of_interest=\n',xm_time_of_interest
 ##            print 'xdiff=\n',xdiff
@@ -171,7 +183,7 @@ for trig_time in trig_times:
             print 'trig_time %s (fno %d) OK %d'%(repr(trig_time),trig_fno,count)
 
         mean_pretrig_z = mlab.mean( zm_time_of_interest.compressed())
-        if type(mean_pretrig_z) != float:
+        if not isinstance( mean_pretrig_z, float):
             print 'HMM, WARNING 2'
         else:
             if mean_pretrig_z <= 70.0:
@@ -186,16 +198,7 @@ for trig_time in trig_times:
 
         # find frame-to-frame distance in mm
         IFI_dist_mm = M.sqrt((xm[1:]-xm[:-1])**2 + (ym[1:]-ym[:-1])**2 + (zm[1:]-zm[:-1])**2)
-        if 0:
-            #print 'IFI_dist_mm',IFI_dist_mm
-            indices = nx.where(IFI_dist_mm.mask()==0)
-            #print 'indices',indices
-
-            # non-masked dists
-            nonmaskedlist = list( M.take(IFI_dist_mm,indices).filled()[0] )
-            #print 'nonmaskedlist',nonmaskedlist
-        else:
-            nonmaskedlist = list( IFI_dist_mm.compressed() )
+        nonmaskedlist = list( IFI_dist_mm.compressed() )
 
         if max(nonmaskedlist) > 10:
             print 'WARNING: skipping because >10 mm found between adjacent frames (%d frames found)'%(len(xm),)
@@ -210,6 +213,7 @@ for trig_time in trig_times:
         ym_tmp = ym[:]
         zm_tmp = zm[:]
         yvels_tmp = yvels[:]
+        
         headings_tmp = headings[:]
 
         xm_tmp.shape = 1,xm_tmp.shape[0]
@@ -272,19 +276,21 @@ for doing_upwind in (True,False):
                 continue
 
             print 'tf_hz', tf_hz
-            print 'doing_upwind', doing_upwind
+            print 'doing_upwind?', doing_upwind
 
             val_list = yvels_dict[tf_hz]
-
             val_array = M.concatenate( val_list, axis=0 )
-
             # each column is a timepoint
             means = nx.zeros( (val_array.shape[1],), nx.Float )
             stds = nx.zeros( (val_array.shape[1],), nx.Float )
             minN = 1e30
             maxN = 0
             for j in range( val_array.shape[1] ):
-                col_compressed = val_array[:,j].compressed()
+                col = val_array[:,j]
+                if isinstance(col,numpy.ma.MaskedArray):
+                    col_compressed = val_array[:,j].compressed()
+                else:
+                    col_compressed = col
                 N = len(col_compressed)
                 if N < minN: minN = N
                 if N > maxN: maxN = N

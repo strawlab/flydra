@@ -98,117 +98,117 @@ def init_vtk(stereo=False):
 
     return renWin, renderers
 
-def set_lr_cams_from_center( left_cam, right_cam, center_cam ):
-    center = cgtypes.vec3(center_cam.GetPosition())
-    lookat = cgtypes.vec3(center_cam.GetFocalPoint())
-    #print 'center, lookat',center, lookat
-    approx_updir = cgtypes.vec3(0,0,1)
+##def set_lr_cams_from_center( left_cam, right_cam, center_cam ):
+##    center = cgtypes.vec3(center_cam.GetPosition())
+##    lookat = cgtypes.vec3(center_cam.GetFocalPoint())
+##    #print 'center, lookat',center, lookat
+##    approx_updir = cgtypes.vec3(0,0,1)
 
-    viewdir = center-lookat
-    viewdist = abs(viewdir)
-    viewdir = viewdir.normalize()
-    # find true updir
-    rightsidedir = viewdir.cross(approx_updir)
-    updir = rightsidedir.cross(viewdir)
+##    viewdir = center-lookat
+##    viewdist = abs(viewdir)
+##    viewdir = viewdir.normalize()
+##    # find true updir
+##    rightsidedir = viewdir.cross(approx_updir)
+##    updir = rightsidedir.cross(viewdir)
 
-    center_cam.SetViewUp(updir[0],updir[1],updir[2])
+##    center_cam.SetViewUp(updir[0],updir[1],updir[2])
 
-    right_eye_offset = -0.2*viewdist*viewdir.cross(updir)
-    left_eye_offset = 0.2*viewdist*viewdir.cross(updir)
+##    right_eye_offset = -0.2*viewdist*viewdir.cross(updir)
+##    left_eye_offset = 0.2*viewdist*viewdir.cross(updir)
 
-    right_eye_center = center+right_eye_offset
-    left_eye_center = center+left_eye_offset
+##    right_eye_center = center+right_eye_offset
+##    left_eye_center = center+left_eye_offset
 
-    right_eye_lookat = lookat#+right_eye_offset
-    left_eye_lookat = lookat#+left_eye_offset
+##    right_eye_lookat = lookat#+right_eye_offset
+##    left_eye_lookat = lookat#+left_eye_offset
 
-    left_cam.SetFocalPoint( left_eye_lookat[0], left_eye_lookat[1], left_eye_lookat[2] )
-    left_cam.SetPosition( left_eye_center[0], left_eye_center[1], left_eye_center[2] )
-    left_cam.SetViewUp(center_cam.GetViewUp())
+##    left_cam.SetFocalPoint( left_eye_lookat[0], left_eye_lookat[1], left_eye_lookat[2] )
+##    left_cam.SetPosition( left_eye_center[0], left_eye_center[1], left_eye_center[2] )
+##    left_cam.SetViewUp(center_cam.GetViewUp())
 
-    right_cam.SetFocalPoint( right_eye_lookat[0], right_eye_lookat[1], right_eye_lookat[2] )
-    right_cam.SetPosition( right_eye_center[0], right_eye_center[1], right_eye_center[2] )
-    right_cam.SetViewUp(center_cam.GetViewUp())
+##    right_cam.SetFocalPoint( right_eye_lookat[0], right_eye_lookat[1], right_eye_lookat[2] )
+##    right_cam.SetPosition( right_eye_center[0], right_eye_center[1], right_eye_center[2] )
+##    right_cam.SetViewUp(center_cam.GetViewUp())
 
 
-stereo_renWin = None
-iren = None
-left_ren = None
-center_ren = None
-right_ren = None
-left_cam = None
-center_cam = None
-right_cam = None
-def init_vtk_stereo(lookat,center,stereo=True):
-    global stereo_renWin, left_ren, center_ren, right_ren, left_cam, center_cam, right_cam
+##stereo_renWin = None
+##iren = None
+##left_ren = None
+##center_ren = None
+##right_ren = None
+##left_cam = None
+##center_cam = None
+##right_cam = None
+##def init_vtk_stereo(lookat,center,stereo=True):
+##    global stereo_renWin, left_ren, center_ren, right_ren, left_cam, center_cam, right_cam
     
-    stereo_renWin = vtkRenderWindow()
+##    stereo_renWin = vtkRenderWindow()
 
-    renderers = []
+##    renderers = []
 
-    lookat = cgtypes.vec3(*lookat)
-    center = cgtypes.vec3(*center)
-    approx_updir = cgtypes.vec3(0,0,1)
+##    lookat = cgtypes.vec3(*lookat)
+##    center = cgtypes.vec3(*center)
+##    approx_updir = cgtypes.vec3(0,0,1)
 
-    viewdir = center-lookat
-    viewdist = abs(viewdir)
-    viewdir = viewdir.normalize()
-    # find true updir
-    rightsidedir = viewdir.cross(approx_updir)
-    updir = rightsidedir.cross(viewdir)
+##    viewdir = center-lookat
+##    viewdist = abs(viewdir)
+##    viewdir = viewdir.normalize()
+##    # find true updir
+##    rightsidedir = viewdir.cross(approx_updir)
+##    updir = rightsidedir.cross(viewdir)
 
-    if 0:
-        right_eye_offset = 0.1*viewdist*viewdir.cross(updir)
-        left_eye_offset = -0.1*viewdist*viewdir.cross(updir)
+##    if 0:
+##        right_eye_offset = 0.1*viewdist*viewdir.cross(updir)
+##        left_eye_offset = -0.1*viewdist*viewdir.cross(updir)
 
-        right_eye_center = center+right_eye_offset
-        left_eye_center = center+left_eye_offset
+##        right_eye_center = center+right_eye_offset
+##        left_eye_center = center+left_eye_offset
 
-        right_eye_lookat = lookat#+right_eye_offset
-        left_eye_lookat = lookat#+left_eye_offset
+##        right_eye_lookat = lookat#+right_eye_offset
+##        left_eye_lookat = lookat#+left_eye_offset
 
-    center_cam = vtkCamera()
-    center_cam.SetFocalPoint(lookat[0],lookat[1],lookat[2])
-    center_cam.SetPosition(center[0],center[1],center[2])
-    center_cam.SetParallelProjection(1)
-    center_cam.SetViewAngle(30.0)
-    center_cam.SetParallelScale(319.400653668)
-    center_cam.SetClippingRange (1e-3, 1e6)
-    center_ren = vtkRenderer()
-    center_ren.SetActiveCamera( center_cam )
-    center_ren.SetViewport(.4,.6,.6,1) # not added to window but needed for Pan function
-    stereo_renWin.AddRenderer( center_ren )
-    renderers.append( center_ren )
+##    center_cam = vtkCamera()
+##    center_cam.SetFocalPoint(lookat[0],lookat[1],lookat[2])
+##    center_cam.SetPosition(center[0],center[1],center[2])
+##    center_cam.SetParallelProjection(1)
+##    center_cam.SetViewAngle(30.0)
+##    center_cam.SetParallelScale(319.400653668)
+##    center_cam.SetClippingRange (1e-3, 1e6)
+##    center_ren = vtkRenderer()
+##    center_ren.SetActiveCamera( center_cam )
+##    center_ren.SetViewport(.4,.6,.6,1) # not added to window but needed for Pan function
+##    stereo_renWin.AddRenderer( center_ren )
+##    renderers.append( center_ren )
 
-    left_cam = vtkCamera()
-    right_cam = vtkCamera()
-    left_ren = vtkRenderer()
-    right_ren = vtkRenderer()
+##    left_cam = vtkCamera()
+##    right_cam = vtkCamera()
+##    left_ren = vtkRenderer()
+##    right_ren = vtkRenderer()
     
-    set_lr_cams_from_center( left_cam, right_cam, center_cam )
+##    set_lr_cams_from_center( left_cam, right_cam, center_cam )
 
-    for camera, ren in [(left_cam,left_ren),(right_cam,right_ren)]:
-        camera.SetParallelProjection(1)
-        camera.SetViewAngle(30.0)
-        camera.SetParallelScale(319.400653668)
-        camera.SetClippingRange (1e-3, 1e6)
+##    for camera, ren in [(left_cam,left_ren),(right_cam,right_ren)]:
+##        camera.SetParallelProjection(1)
+##        camera.SetViewAngle(30.0)
+##        camera.SetParallelScale(319.400653668)
+##        camera.SetClippingRange (1e-3, 1e6)
 
-        if ren is left_ren:
-            ren.SetViewport(0,0,.5,1)
-        else:
-            ren.SetViewport(.5,0,1,1)
-        ren.SetBackground( .6,.6,.75)
-        ren.SetActiveCamera( camera )
+##        if ren is left_ren:
+##            ren.SetViewport(0,0,.5,1)
+##        else:
+##            ren.SetViewport(.5,0,1,1)
+##        ren.SetBackground( .6,.6,.75)
+##        ren.SetActiveCamera( camera )
 
-        stereo_renWin.AddRenderer( ren )
-        renderers.append( ren )
+##        stereo_renWin.AddRenderer( ren )
+##        renderers.append( ren )
 
-        #print_cam_props(ren.GetActiveCamera())
+##        #print_cam_props(ren.GetActiveCamera())
     
-    #stereo_renWin.SetSize( 1024, 768 )
-    stereo_renWin.SetSize( 640, 480)
+##    #stereo_renWin.SetSize( 1024, 768 )
+##    stereo_renWin.SetSize( 640, 480)
 
-    return stereo_renWin, renderers
+##    return stereo_renWin, renderers
 
 ##    iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
 ##    iren.Initialize ()
@@ -975,28 +975,28 @@ def interact_with_renWin(renWin):
     
     iren.Start()
 
-def interact_with_stereo_renWin():
-    global stereo_renWin, iren
+##def interact_with_stereo_renWin():
+##    global stereo_renWin, iren
     
-    iren = vtkRenderWindowInteractor()
-    iren.SetInteractorStyle(None)
-    iren.SetRenderWindow( stereo_renWin )
+##    iren = vtkRenderWindowInteractor()
+##    iren.SetInteractorStyle(None)
+##    iren.SetRenderWindow( stereo_renWin )
 
-    #iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+##    #iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
 
-    iren.AddObserver("LeftButtonPressEvent", ButtonEvent)
-    iren.AddObserver("LeftButtonReleaseEvent", ButtonEvent)
-    iren.AddObserver("MiddleButtonPressEvent", ButtonEvent)
-    iren.AddObserver("MiddleButtonReleaseEvent", ButtonEvent)
-    iren.AddObserver("RightButtonPressEvent", ButtonEvent)
-    iren.AddObserver("RightButtonReleaseEvent", ButtonEvent)
-    iren.AddObserver("MouseMoveEvent", MouseMove)
+##    iren.AddObserver("LeftButtonPressEvent", ButtonEvent)
+##    iren.AddObserver("LeftButtonReleaseEvent", ButtonEvent)
+##    iren.AddObserver("MiddleButtonPressEvent", ButtonEvent)
+##    iren.AddObserver("MiddleButtonReleaseEvent", ButtonEvent)
+##    iren.AddObserver("RightButtonPressEvent", ButtonEvent)
+##    iren.AddObserver("RightButtonReleaseEvent", ButtonEvent)
+##    iren.AddObserver("MouseMoveEvent", MouseMove)
     
-    iren.Initialize ()
+##    iren.Initialize ()
     
-    stereo_renWin.Render()
+##    stereo_renWin.Render()
     
-    iren.Start()
+##    iren.Start()
     
 def print_cam_props(camera):
     print 'camera.SetParallelProjection(%s)'%str(camera.GetParallelProjection())
@@ -1008,123 +1008,123 @@ def print_cam_props(camera):
     print 'camera.SetParallelScale(%s)'%str(camera.GetParallelScale())
     print
 
-# Add the observers to watch for particular events. These invoke
-# Python functions.
-Rotating = 0
-Panning = 0
-Zooming = 0
+### Add the observers to watch for particular events. These invoke
+### Python functions.
+##Rotating = 0
+##Panning = 0
+##Zooming = 0
 
-# Handle the mouse button events.
-def ButtonEvent(obj, event):
-    global Rotating, Panning, Zooming
-    if event == "LeftButtonPressEvent":
-        Rotating = 1
-    elif event == "LeftButtonReleaseEvent":
-        Rotating = 0
-    elif event == "MiddleButtonPressEvent":
-        Panning = 1
-    elif event == "MiddleButtonReleaseEvent":
-        Panning = 0
-    elif event == "RightButtonPressEvent":
-        Zooming = 1
-    elif event == "RightButtonReleaseEvent":
-        Zooming = 0
+### Handle the mouse button events.
+##def ButtonEvent(obj, event):
+##    global Rotating, Panning, Zooming
+##    if event == "LeftButtonPressEvent":
+##        Rotating = 1
+##    elif event == "LeftButtonReleaseEvent":
+##        Rotating = 0
+##    elif event == "MiddleButtonPressEvent":
+##        Panning = 1
+##    elif event == "MiddleButtonReleaseEvent":
+##        Panning = 0
+##    elif event == "RightButtonPressEvent":
+##        Zooming = 1
+##    elif event == "RightButtonReleaseEvent":
+##        Zooming = 0
 
-# General high-level logic
-def MouseMove(obj, event):
-    global Rotating, Panning, Zooming
-    global iren, stereo_renWin, center_camera
+### General high-level logic
+##def MouseMove(obj, event):
+##    global Rotating, Panning, Zooming
+##    global iren, stereo_renWin, center_camera
 
-    lastXYpos = iren.GetLastEventPosition()
-    lastX = lastXYpos[0]
-    lastY = lastXYpos[1]
+##    lastXYpos = iren.GetLastEventPosition()
+##    lastX = lastXYpos[0]
+##    lastY = lastXYpos[1]
 
-    xypos = iren.GetEventPosition()
-    x = xypos[0]
-    y = xypos[1]
+##    xypos = iren.GetEventPosition()
+##    x = xypos[0]
+##    y = xypos[1]
 
-    center = stereo_renWin.GetSize()
-    centerX = center[0]/2.0
-    centerY = center[1]/2.0
+##    center = stereo_renWin.GetSize()
+##    centerX = center[0]/2.0
+##    centerY = center[1]/2.0
 
-    if Rotating:
-        Rotate(center_ren,center_cam, x, y, lastX, lastY,
-               centerX, centerY)
-    elif Panning:
-        Pan(center_ren, center_cam, x, y, lastX, lastY, centerX,
-            centerY)
-    elif Zooming:
-        Dolly(center_ren, center_cam, x, y, lastX, lastY,
-              centerX, centerY)
-    else:
-        return
-    set_lr_cams_from_center( left_cam, right_cam, center_cam )
-    stereo_renWin.Render()
+##    if Rotating:
+##        Rotate(center_ren,center_cam, x, y, lastX, lastY,
+##               centerX, centerY)
+##    elif Panning:
+##        Pan(center_ren, center_cam, x, y, lastX, lastY, centerX,
+##            centerY)
+##    elif Zooming:
+##        Dolly(center_ren, center_cam, x, y, lastX, lastY,
+##              centerX, centerY)
+##    else:
+##        return
+##    set_lr_cams_from_center( left_cam, right_cam, center_cam )
+##    stereo_renWin.Render()
 
-def Rotate(renderer, camera, x, y, lastX, lastY, centerX, centerY):    
-    camera.Azimuth(lastX-x)
-    camera.Elevation(lastY-y)
-    camera.OrthogonalizeViewUp()
+##def Rotate(renderer, camera, x, y, lastX, lastY, centerX, centerY):    
+##    camera.Azimuth(lastX-x)
+##    camera.Elevation(lastY-y)
+##    camera.OrthogonalizeViewUp()
 
-# Pan translates x-y motion into translation of the focal point and
-# position.
-def Pan(renderer, camera, x, y, lastX, lastY, centerX, centerY):
-    FPoint = camera.GetFocalPoint()
-    FPoint0 = FPoint[0]
-    FPoint1 = FPoint[1]
-    FPoint2 = FPoint[2]
+### Pan translates x-y motion into translation of the focal point and
+### position.
+##def Pan(renderer, camera, x, y, lastX, lastY, centerX, centerY):
+##    FPoint = camera.GetFocalPoint()
+##    FPoint0 = FPoint[0]
+##    FPoint1 = FPoint[1]
+##    FPoint2 = FPoint[2]
 
-    PPoint = camera.GetPosition()
-    PPoint0 = PPoint[0]
-    PPoint1 = PPoint[1]
-    PPoint2 = PPoint[2]
+##    PPoint = camera.GetPosition()
+##    PPoint0 = PPoint[0]
+##    PPoint1 = PPoint[1]
+##    PPoint2 = PPoint[2]
 
-    renderer.SetWorldPoint(FPoint0, FPoint1, FPoint2, 1.0)
-    renderer.WorldToDisplay()
-    DPoint = renderer.GetDisplayPoint()
-    focalDepth = DPoint[2]
+##    renderer.SetWorldPoint(FPoint0, FPoint1, FPoint2, 1.0)
+##    renderer.WorldToDisplay()
+##    DPoint = renderer.GetDisplayPoint()
+##    focalDepth = DPoint[2]
 
-    APoint0 = centerX+(x-lastX)
-    APoint1 = centerY+(y-lastY)
+##    APoint0 = centerX+(x-lastX)
+##    APoint1 = centerY+(y-lastY)
     
-    renderer.SetDisplayPoint(APoint0, APoint1, focalDepth)
-    renderer.DisplayToWorld()
-    RPoint = renderer.GetWorldPoint()
-    RPoint0 = RPoint[0]
-    RPoint1 = RPoint[1]
-    RPoint2 = RPoint[2]
-    RPoint3 = RPoint[3]
+##    renderer.SetDisplayPoint(APoint0, APoint1, focalDepth)
+##    renderer.DisplayToWorld()
+##    RPoint = renderer.GetWorldPoint()
+##    RPoint0 = RPoint[0]
+##    RPoint1 = RPoint[1]
+##    RPoint2 = RPoint[2]
+##    RPoint3 = RPoint[3]
     
-    if RPoint3 != 0.0:
-        RPoint0 = RPoint0/RPoint3
-        RPoint1 = RPoint1/RPoint3
-        RPoint2 = RPoint2/RPoint3
+##    if RPoint3 != 0.0:
+##        RPoint0 = RPoint0/RPoint3
+##        RPoint1 = RPoint1/RPoint3
+##        RPoint2 = RPoint2/RPoint3
 
-    camera.SetFocalPoint( (FPoint0-RPoint0)/2.0 + FPoint0,
-                          (FPoint1-RPoint1)/2.0 + FPoint1,
-                          (FPoint2-RPoint2)/2.0 + FPoint2)
-    camera.SetPosition( (FPoint0-RPoint0)/2.0 + PPoint0,
-                        (FPoint1-RPoint1)/2.0 + PPoint1,
-                        (FPoint2-RPoint2)/2.0 + PPoint2)
+##    camera.SetFocalPoint( (FPoint0-RPoint0)/2.0 + FPoint0,
+##                          (FPoint1-RPoint1)/2.0 + FPoint1,
+##                          (FPoint2-RPoint2)/2.0 + FPoint2)
+##    camera.SetPosition( (FPoint0-RPoint0)/2.0 + PPoint0,
+##                        (FPoint1-RPoint1)/2.0 + PPoint1,
+##                        (FPoint2-RPoint2)/2.0 + PPoint2)
 
-# Dolly converts y-motion into a camera dolly commands.
-def Dolly(renderer, camera, x, y, lastX, lastY, centerX, centerY):
-    dollyFactor = pow(1.02,(0.5*(y-lastY)))
-    if camera.GetParallelProjection():
-        parallelScale = camera.GetParallelScale()*dollyFactor
-        camera.SetParallelScale(parallelScale)
-    else:
-        camera.Dolly(dollyFactor)
-        renderer.ResetCameraClippingRange()
+### Dolly converts y-motion into a camera dolly commands.
+##def Dolly(renderer, camera, x, y, lastX, lastY, centerX, centerY):
+##    dollyFactor = pow(1.02,(0.5*(y-lastY)))
+##    if camera.GetParallelProjection():
+##        parallelScale = camera.GetParallelScale()*dollyFactor
+##        camera.SetParallelScale(parallelScale)
+##    else:
+##        camera.Dolly(dollyFactor)
+##        renderer.ResetCameraClippingRange()
 
 if __name__=='__main__':
     import result_browser
 
     #results
     if 1:
-        results = result_browser.get_results('DATA20050621_212042.h5',mode='r+')
-        start_frame = 1.5936e5
-        stop_frame = 1.5974e5
+        results = result_browser.get_results('DATA20051212_190648.h5',mode='r+')
+        start_frame = 1231000
+        stop_frame = 1231800
         
     
     if 1:
@@ -1132,7 +1132,7 @@ if __name__=='__main__':
         #start_frame = 2
         #stop_frame = 50
         
-        renWin, renderers = init_vtk()
+        renWin, renderers = init_vtk(stereo=True)
         #show_cameras(results,renderers)
 
         if 0:
@@ -1240,14 +1240,14 @@ if __name__=='__main__':
         if 1:
             show_frames_vtk(results,renderers,start_frame,stop_frame,1,
                             render_mode='ball_and_stick',
-                            labels=False,
+                            labels=True,#False,
                             orientation_corrected=False,
                             use_timestamps=True,max_err=10)
             
         for renderer in renderers:
             renderer.ResetCameraClippingRange()
         if 1:
-            interact_with_renWin(renWin,renderers)
+            interact_with_renWin(renWin)
             for renderer in renderers:
                 print_cam_props(renderer.GetActiveCamera())
         else:
