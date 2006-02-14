@@ -190,7 +190,6 @@ for trig_time in trig_times:
                 print 'Mean pretrigger altitude <= 70mm, discarding'
                 continue
         
-        
         if sum_xdiff >= 0:
             upwind = True
         else:
@@ -248,14 +247,11 @@ for trig_time in trig_times:
 
         good_count += 1
         
-print 'good_count',good_count
+print 'good_count',good_count,'(includes Ns excluded by ultra_strict)'
 
 for doing_upwind in (True,False):
     fig_yvel = pylab.figure()
     ax_yvel = fig_yvel.add_subplot(1,1,1)
-
-    all_lines = []
-    all_keys = []
 
     #for yvels_dict in (upwind_ys, downwind_ys):
     for yvels_dict in (upwind_yvels, downwind_yvels):
@@ -272,8 +268,8 @@ for doing_upwind in (True,False):
 
         for tf_hz in tf_hzs:
 
-            if tf_hz == 1.0:
-                continue
+##            if tf_hz == 1.0:
+##                continue
 
             print 'tf_hz', tf_hz
             print 'doing_upwind?', doing_upwind
@@ -307,14 +303,15 @@ for doing_upwind in (True,False):
                 xdata = 10.0*frame_rels[1:-1]
             else:
                 xdata = 10.0*frame_rels
-            line,=ax_yvel.plot( xdata, means, lw=2 )
 
             if upwind: key = 'upwind flight, '
             else: key = 'downwind flight, '
 
             Nstr = 'n=%d'%(minN,)
             if minN!=maxN:
+                # if ultra_strict = False, this can happen
                 print 'WARNING: minN!=MaxN (%d, %d)'%(minN,maxN)
+                Nstr = 'n=%d-%d'%(minN,maxN)
 
             if tf_hz == 0.0:
                 key += 'no expansion, '
@@ -324,8 +321,7 @@ for doing_upwind in (True,False):
                 key += '0.5 m/sec expanding pattern, '
             key += Nstr
 
-            all_lines.append( line )
-            all_keys.append( key )
+            line,=ax_yvel.plot( xdata, means, lw=2, label=key )
 
             x1 = xdata
             y1 = means+stds
@@ -342,9 +338,7 @@ for doing_upwind in (True,False):
     pylab.setp(ax_yvel, 'xlim',[-pre_frames*10,post_frames*10])
 
     pylab.setp(ax_yvel, 'ylabel','Lateral speed of fly in WT (m/sec)')
-    #pylab.setp(ax_yvel, 'ylabel','Fly lateral position in WT (mm)')
-    if len(all_lines):
-        pylab.legend(all_lines, all_keys)
+    pylab.legend()
     ax_yvel.grid(True)
 pylab.show()
 

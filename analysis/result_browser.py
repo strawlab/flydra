@@ -724,6 +724,7 @@ def plot_whole_movie_3d(results, typ='best', show_err=False, max_err=10,
     ax_err.set_xlabel('frame no.')
     ax_err.xaxis.set_major_formatter(matplotlib.ticker.OldScalarFormatter())
     ax_err.set_ylabel('err\n(pixels)')
+    pylab.setp(ax_err,'ylim',[0,10])
     ##ax.title(typ+' data')
     ##ax.xlabel('frame number')
 
@@ -2264,7 +2265,7 @@ def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
     return results
     
 if __name__=='__main__':
-    results = get_results('DATA20060130_125337.h5',mode='r+')
+    results = get_results('DATA20060213_213036.h5',mode='r+')
     #del results.root.exact_movie_info
     #results.close()
     #make_exact_movie_info2(results)
