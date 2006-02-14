@@ -58,24 +58,22 @@ else:
 
 RAD2DEG = 180.0/math.pi
 
-upwind_xs = {} # sort by tf
-upwind_ys = {}
-upwind_zs = {}
-upwind_heading = {}
-upwind_yvels = {}
+xs_dict = {} # sort by upwind
+ys_dict = {}
+zs_dict = {}
+heading_dict = {}
+xvels_dict = {}
+yvels_dict = {}
+zvels_dict = {}
 
-upwind_measures = [upwind_xs,
-                   upwind_ys,
-                   upwind_zs,
-                   upwind_heading,
-                   upwind_yvels,
-                   ]
-
-downwind_xs = {}
-downwind_ys = {}
-downwind_zs = {}
-downwind_heading = {}
-downwind_yvels = {}
+for upwind in [True,False]:
+    xs_dict[upwind] = {} # sort by tf
+    ys_dict[upwind] = {}
+    zs_dict[upwind] = {}
+    heading_dict[upwind] = {}
+    xvels_dict[upwind] = {}
+    yvels_dict[upwind] = {}
+    zvels_dict[upwind] = {}
 
 all_IFI_dist_mm = []
 
@@ -163,9 +161,12 @@ for trig_time in trig_times:
         sum_xdiff = M.sum( xdiff )
 
         delta_t = 0.01
-        P = ym/1000.0 # in meters
-        yvels= (P[2:]-P[:-2]) / (2*delta_t)
-        #yvels = (ym[1:]-ym[:-1])*100.0/1000.0 # m/sec
+        Px = xm/1000.0 # in meters
+        Py = ym/1000.0 # in meters
+        Pz = zm/1000.0 # in meters
+        xvels= (Px[2:]-Px[:-2]) / (2*delta_t)
+        yvels= (Py[2:]-Py[:-2]) / (2*delta_t)
+        zvels= (Pz[2:]-Pz[:-2]) / (2*delta_t)
 
         if not isinstance(sum_xdiff,float):
             # not enough data
@@ -211,70 +212,71 @@ for trig_time in trig_times:
         xm_tmp = xm[:]
         ym_tmp = ym[:]
         zm_tmp = zm[:]
+        xvels_tmp = xvels[:]
         yvels_tmp = yvels[:]
+        zvels_tmp = zvels[:]
         
         headings_tmp = headings[:]
 
         xm_tmp.shape = 1,xm_tmp.shape[0]
         ym_tmp.shape = 1,ym_tmp.shape[0]
         zm_tmp.shape = 1,zm_tmp.shape[0]
+        xvels_tmp.shape = 1,xvels_tmp.shape[0]
         yvels_tmp.shape = 1,yvels_tmp.shape[0]
+        zvels_tmp.shape = 1,zvels_tmp.shape[0]
         headings_tmp.shape = 1,headings_tmp.shape[0]
 
         ultra_strict = True
-        if upwind:
-            if not ultra_strict or xm_tmp.shape[1]==xm_tmp.count():
-                upwind_xs.setdefault( tf_hz, []).append( xm_tmp )
-            if not ultra_strict or ym_tmp.shape[1]==ym_tmp.count():
-                upwind_ys.setdefault( tf_hz, []).append( ym_tmp )
-            if not ultra_strict or zm_tmp.shape[1]==zm_tmp.count():
-                upwind_zs.setdefault( tf_hz, []).append( zm_tmp )
-            if not ultra_strict or yvels_tmp.shape[1]==yvels_tmp.count():
-                upwind_yvels.setdefault( tf_hz, []).append( yvels_tmp )
-            if not ultra_strict or headings_tmp.shape[1]==headings_tmp.count():
-                upwind_heading.setdefault( tf_hz, []).append( headings_tmp )
-        else:
-            if not ultra_strict or xm_tmp.shape[1]==xm_tmp.count():
-                downwind_xs.setdefault( tf_hz, []).append( xm_tmp )
-            if not ultra_strict or ym_tmp.shape[1]==ym_tmp.count():
-                downwind_ys.setdefault( tf_hz, []).append( ym_tmp )
-            if not ultra_strict or zm_tmp.shape[1]==zm_tmp.count():
-                downwind_zs.setdefault( tf_hz, []).append( zm_tmp )
-            if not ultra_strict or yvels_tmp.shape[1]==yvels_tmp.count():
-                downwind_yvels.setdefault( tf_hz, []).append( yvels_tmp )
-            if not ultra_strict or headings_tmp.shape[1]==headings_tmp.count():
-                downwind_heading.setdefault( tf_hz, []).append( headings_tmp )
-
+        if not ultra_strict or xm_tmp.shape[1]==xm_tmp.count():
+            xs_dict[upwind].setdefault( tf_hz, []).append( xm_tmp )
+        if not ultra_strict or ym_tmp.shape[1]==ym_tmp.count():
+            ys_dict[upwind].setdefault( tf_hz, []).append( ym_tmp )
+        if not ultra_strict or zm_tmp.shape[1]==zm_tmp.count():
+            zs_dict[upwind].setdefault( tf_hz, []).append( zm_tmp )
+            
+        if not ultra_strict or xvels_tmp.shape[1]==xvels_tmp.count():
+            xvels_dict[upwind].setdefault( tf_hz, []).append( xvels_tmp )
+        if not ultra_strict or yvels_tmp.shape[1]==yvels_tmp.count():
+            yvels_dict[upwind].setdefault( tf_hz, []).append( yvels_tmp )
+        if not ultra_strict or zvels_tmp.shape[1]==zvels_tmp.count():
+            zvels_dict[upwind].setdefault( tf_hz, []).append( zvels_tmp )
+            
+        if not ultra_strict or headings_tmp.shape[1]==headings_tmp.count():
+            heading_dict[upwind].setdefault( tf_hz, []).append( headings_tmp )
         good_count += 1
         
 print 'good_count',good_count,'(includes Ns excluded by ultra_strict)'
 
-for doing_upwind in (True,False):
-    fig_yvel = pylab.figure()
-    ax_yvel = fig_yvel.add_subplot(1,1,1)
+del upwind # make sure we don't use this
+del xs
+del ys
+del zs
+del xvels
+del yvels
+del zvels
+del headings
+del mean_dist
 
-    #for yvels_dict in (upwind_ys, downwind_ys):
-    for yvels_dict in (upwind_yvels, downwind_yvels):
-        tf_hzs = yvels_dict.keys()
+for yvals_upwind_and_downwind in [xs_dict,
+                                  ys_dict,
+                                  zs_dict,
+                                  xvels_dict,
+                                  yvels_dict,
+                                  zvels_dict,
+                                  heading_dict]:
+    for doing_upwind in (True,False):
+        fig_yvel = pylab.figure()
+        ax_yvel = fig_yvel.add_subplot(1,1,1)
 
-        upwind = False
-        for upwind_measure in upwind_measures:
-            if yvels_dict is upwind_measure:
-                upwind = True
-
-        if upwind != doing_upwind:
-            # don't do this direction
-            continue
+        yvals_dict = yvals_upwind_and_downwind[doing_upwind]
+        tf_hzs = yvals_dict.keys()
 
         for tf_hz in tf_hzs:
 
-##            if tf_hz == 1.0:
-##                continue
+            #if tf_hz == 1.0:
+            #    continue
 
-            print 'tf_hz', tf_hz
-            print 'doing_upwind?', doing_upwind
-
-            val_list = yvels_dict[tf_hz]
+            val_list = yvals_dict[tf_hz]
             val_array = M.concatenate( val_list, axis=0 )
             # each column is a timepoint
             means = nx.zeros( (val_array.shape[1],), nx.Float )
@@ -299,12 +301,15 @@ for doing_upwind in (True,False):
                     continue
                 stds[j] = mlab.std( col_compressed )
 
-            if yvels_dict is upwind_yvels or yvels_dict is downwind_yvels:
+            if (yvals_upwind_and_downwind is xvels_dict or
+                yvals_upwind_and_downwind is yvels_dict or
+                yvals_upwind_and_downwind is zvels_dict):
+                # velocities have fewer data points
                 xdata = 10.0*frame_rels[1:-1]
             else:
                 xdata = 10.0*frame_rels
 
-            if upwind: key = 'upwind flight, '
+            if doing_upwind: key = 'upwind flight, '
             else: key = 'downwind flight, '
 
             Nstr = 'n=%d'%(minN,)
@@ -334,11 +339,28 @@ for doing_upwind in (True,False):
             p = ax_yvel.fill(x, y, facecolor=pylab.getp(line,'color'), linewidth=0)
             pylab.setp(p, alpha=0.5)
 
-    pylab.setp(ax_yvel, 'xlabel','Time relative to expansion onset (msec)')
-    pylab.setp(ax_yvel, 'xlim',[-pre_frames*10,post_frames*10])
+        pylab.setp(ax_yvel, 'xlabel','Time relative to expansion onset (msec)')
+        pylab.setp(ax_yvel, 'xlim',[-pre_frames*10,post_frames*10])
 
-    pylab.setp(ax_yvel, 'ylabel','Lateral speed of fly in WT (m/sec)')
-    pylab.legend()
-    ax_yvel.grid(True)
+        if yvals_upwind_and_downwind is xvels_dict:
+            pylab.setp(ax_yvel, 'ylabel','Longitudinal speed of fly in WT (m/sec)')
+        elif yvals_upwind_and_downwind is yvels_dict:
+            pylab.setp(ax_yvel, 'ylabel','Lateral speed of fly in WT (m/sec)')
+        elif yvals_upwind_and_downwind is zvels_dict:
+            pylab.setp(ax_yvel, 'ylabel','Vertical speed of fly in WT (m/sec)')
+            
+        elif yvals_upwind_and_downwind is xs_dict:
+            pylab.setp(ax_yvel, 'ylabel','X pos fly in WT (mm)')
+        elif yvals_upwind_and_downwind is ys_dict:
+            pylab.setp(ax_yvel, 'ylabel','Y pos fly in WT (mm)')
+        elif yvals_upwind_and_downwind is zs_dict:
+            pylab.setp(ax_yvel, 'ylabel','Z pos fly in WT (mm)')
+            
+        elif yvals_upwind_and_downwind is heading_dict:
+            pylab.setp(ax_yvel, 'ylabel','heading of fly (?)')
+        else:
+            pylab.setp(ax_yvel, 'ylabel','unknown variable')
+        pylab.legend()
+        ax_yvel.grid(True)
 pylab.show()
 
