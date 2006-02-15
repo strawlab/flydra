@@ -27,6 +27,11 @@ def get_results_and_times(logfiles,h5files):
     all_results       = [all_results[i]       for i in range(len(all_results_times)) if all_results_times[i] is not None]
     all_results_times = [all_results_times[i] for i in range(len(all_results_times)) if all_results_times[i] is not None]
 
+    for trig_time in trig_fnos.keys():
+        # frame numbers off, can't trust data
+        if 1139987065<trig_time<1139990048:
+            del trig_fnos[trig_time]
+            
     trig_times = trig_fnos.keys()
     trig_times.sort()
     

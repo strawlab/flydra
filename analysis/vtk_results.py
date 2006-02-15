@@ -42,7 +42,6 @@ def init_vtk(stereo=False):
 ##            camera.SetFocalPoint (72.14166197180748, 303.57498168945312, 39.668309688568115)
 ##            camera.SetPosition (-225.40723294994916, 191.86856708907058, 282.53932909594647)
 ##            camera.SetViewAngle(30.0)
-##            camera.SetClippingRange (10.191480368344633, 1019.1480368344634)
 ##            camera.SetParallelScale(13.7499648363)
 
 
@@ -50,7 +49,6 @@ def init_vtk(stereo=False):
 ##            camera.SetFocalPoint (183.28723427103145, 197.35179711218706, 179.54488158097655)
 ##            camera.SetPosition (103.94839384485147, 1090.2877280742541, 238.19531097666248)
 ##            camera.SetViewAngle(30.0)
-##            camera.SetClippingRange (8.503580819363231, 850.35808193632306)
 ##            camera.SetParallelScale(161)
 
             camera.SetParallelProjection(1)
@@ -58,7 +56,6 @@ def init_vtk(stereo=False):
             camera.SetPosition (1616.5195986326066, -491.41719908620058, -343.05060371955983 )
             camera.SetViewAngle(30.0)
             camera.SetViewUp (-8.2626711604279806e-05, -0.68046473229527904, 0.73278082758430629)
-            camera.SetClippingRange (144.95380212895483, 1548.6739768578886)
             camera.SetParallelScale(319.400653668)
             
             if 1:
@@ -75,7 +72,8 @@ def init_vtk(stereo=False):
             camera.SetViewUp (0.0, 1.0, 0.0)
             camera.SetParallelScale(230.112510026)
         #camera.SetViewAngle(30.0)
-        camera.SetClippingRange (1e-3, 1e6)
+        #camera.SetClippingRange (1e-3, 1e6)
+        camera.SetClippingRange (1e-2, 1e5)
 
         ren1 = vtkRenderer()
         lk = vtkLightKit()
@@ -173,7 +171,6 @@ def init_vtk(stereo=False):
 ##    center_cam.SetParallelProjection(1)
 ##    center_cam.SetViewAngle(30.0)
 ##    center_cam.SetParallelScale(319.400653668)
-##    center_cam.SetClippingRange (1e-3, 1e6)
 ##    center_ren = vtkRenderer()
 ##    center_ren.SetActiveCamera( center_cam )
 ##    center_ren.SetViewport(.4,.6,.6,1) # not added to window but needed for Pan function
@@ -191,7 +188,6 @@ def init_vtk(stereo=False):
 ##        camera.SetParallelProjection(1)
 ##        camera.SetViewAngle(30.0)
 ##        camera.SetParallelScale(319.400653668)
-##        camera.SetClippingRange (1e-3, 1e6)
 
 ##        if ren is left_ren:
 ##            ren.SetViewport(0,0,.5,1)

@@ -9,52 +9,21 @@ M = numpy.ma
 import FOE_utils
 import PQmath
 import math
+import time
 
 import glob
 import pylab
 
-if 0:
-    # still air
-    h5files = [
-        
-        ]
+# wind
+h5files = glob.glob('*.h5')
+logfiles = glob.glob('escape_wall*.log')
 
-    logfiles = [
-                ]
-else:
-    # wind
-    h5files = glob.glob('*.h5')
-    logfiles = glob.glob('escape_wall*.log')
+(all_results, all_results_times, trig_fnos,
+ trig_times, tf_hzs) = FOE_utils.get_results_and_times(logfiles,h5files)
+print '%d FOE triggers'%len(trig_times)
 
-if 1:
-    (all_results, all_results_times, trig_fnos,
-     trig_times, tf_hzs) = FOE_utils.get_results_and_times(logfiles,h5files)
-    print '%d FOE triggers'%len(trig_times)
-else:
-    trig_fnos = {}
-    tf_hzs = {}
-    all_tf_hzs = []
-    for logfile in logfiles:
-        fd = open(logfile,'rb')
-        for line in fd.readlines():
-            if line.startswith('#'):
-                continue
-            fno, ftime, tf_hz = line.split()
-            fno = int(fno)
-            ftime = float(ftime)
-            tf_hz = float(tf_hz)
-            trig_fnos[ftime] = fno
-            tf_hzs[ftime] = tf_hz
-            if tf_hz not in all_tf_hzs:
-                all_tf_hzs.append( tf_hz )
-
-    print 'TFs of escape wall:', all_tf_hzs
-
-    all_results = [result_browser.get_results(h5file,mode='r+') for h5file in h5files]
-    all_results_times = [result_browser.get_start_stop_times( results ) for results in all_results ]
-
-    trig_times = trig_fnos.keys()
-    trig_times.sort()
+analysis_file = {True:open('upwind_strict_data.txt','w'),
+                 False:open('downwind_strict_data.txt','w')}
 
 RAD2DEG = 180.0/math.pi
 
@@ -181,8 +150,8 @@ for trig_time in trig_times:
 ##            print
             continue
         else:
-            print 'trig_time %s (fno %d) OK %d'%(repr(trig_time),trig_fno,count)
-
+            tts = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime(trig_time))
+            print 'trig_time %s (fno %d) OK %d'%(tts,trig_fno,count)
         mean_pretrig_z = mlab.mean( zm_time_of_interest.compressed())
         if not isinstance( mean_pretrig_z, float):
             print 'HMM, WARNING 2'
@@ -227,6 +196,9 @@ for trig_time in trig_times:
         headings_tmp.shape = 1,headings_tmp.shape[0]
 
         ultra_strict = True
+        if 4.9 < tf_hz < 5.1:
+            if xm_tmp.shape[1]==xm_tmp.count():
+                print >> analysis_file[upwind], fstart, trig_fno, fend, results.filename
         if not ultra_strict or xm_tmp.shape[1]==xm_tmp.count():
             xs_dict[upwind].setdefault( tf_hz, []).append( xm_tmp )
         if not ultra_strict or ym_tmp.shape[1]==ym_tmp.count():
@@ -245,17 +217,10 @@ for trig_time in trig_times:
             heading_dict[upwind].setdefault( tf_hz, []).append( headings_tmp )
         good_count += 1
         
-print 'good_count',good_count,'(includes Ns excluded by ultra_strict)'
+analysis_file[True].close()
+analysis_file[False].close()
 
-del upwind # make sure we don't use this
-del xs
-del ys
-del zs
-del xvels
-del yvels
-del zvels
-del headings
-del mean_dist
+print 'good_count',good_count,'(includes Ns excluded by ultra_strict)'
 
 for yvals_upwind_and_downwind in [xs_dict,
                                   ys_dict,
@@ -362,5 +327,6 @@ for yvals_upwind_and_downwind in [xs_dict,
             pylab.setp(ax_yvel, 'ylabel','unknown variable')
         pylab.legend()
         ax_yvel.grid(True)
+        
 pylab.show()
 

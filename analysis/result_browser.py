@@ -2265,7 +2265,7 @@ def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
     return results
     
 if __name__=='__main__':
-    results = get_results('DATA20060213_213036.h5',mode='r+')
+    results = get_results('DATA20060214_183428.h5',mode='r+')
     #del results.root.exact_movie_info
     #results.close()
     #make_exact_movie_info2(results)
