@@ -207,8 +207,8 @@ analysis_file.close()
 
 print 'good_count',good_count,'(includes Ns excluded by ultra_strict)'
 
-import pylab
 if 0:
+    import pylab
     for yvals_upwind_and_downwind in [xs_dict,
                                       ys_dict,
                                       zs_dict,
@@ -314,5 +314,5 @@ if 0:
             pylab.legend()
             ax_yvel.grid(True)
         
-pylab.show()
+    pylab.show()
 
