@@ -21,8 +21,12 @@ import FlyMovieFormat
 from numarray.ieeespecial import getnan, nan, inf
 import numarray.linear_algebra
 
-import Pyro.core, Pyro.errors
-Pyro.core.initClient(banner=0)
+try:
+    import Pyro.core, Pyro.errors
+except ImportError,x:
+    print 'skipping Pyro import:',x
+else:
+    Pyro.core.initClient(banner=0)
 
 PROXY_PYRO = False
 
