@@ -1,9 +1,6 @@
 #emacs, this is -*-Python-*- mode
 # $Id: $
 
-import pkg_resources
-pkg_resources.require("kookaburra")
-
 import threading, time, socket, sys, struct, os
 import Pyro.core, Pyro.errors
 import FlyMovieFormat
