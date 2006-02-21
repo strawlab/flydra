@@ -16,12 +16,6 @@ if sys.platform.startswith('linux'):
         os.path.exists('/usr/include/comedilib.h')):
         BUILD_FLYDRA_ARENA = True
 
-numarray_incs = []
-##if (os.environ['HOME']=='/home/flydra' and
-##    os.path.exists('/home/flydra/py23-site/include/python2.3') and
-##    sys.version[:3]=='2.3'):
-##    numarray_incs.append( '/home/flydra/py23-site/include/python2.3' )
-
 install_requires = ['FlyMovieFormat','cam_iface','FastImage','wxglvideo']
 
 FAKEIPP = False
@@ -75,28 +69,28 @@ ext_modules = []
 if 1:
     # Pyrex build of realtime_image_analysis
     realtime_image_analysis_extension_name='flydra.realtime_image_analysis4'
-    realtime_image_analysis_sources=['flydra/realtime_image_analysis4.pyx',
-                                     'flydra/c_fit_params.c',
-                                     'flydra/eigen.c',
+    realtime_image_analysis_sources=['src/realtime_image_analysis4.pyx',
+                                     'src/c_fit_params.c',
+                                     'src/eigen.c',
                                      ]+ipp_sources
     ext_modules.append(Extension(name=realtime_image_analysis_extension_name,
                                  sources=realtime_image_analysis_sources,
-                                 include_dirs=ipp_include_dirs+numarray_incs,
+                                 include_dirs=ipp_include_dirs,
                                  library_dirs=ipp_library_dirs,
                                  libraries=ipp_libraries, # + ['comedi'],
                                  extra_compile_args=ipp_extra_compile_args,
                                  ))
     
 ext_modules.append(Extension(name='flydra.reconstruct_utils',
-                             sources=['flydra/reconstruct_utils.pyx']))
+                             sources=['src/reconstruct_utils.pyx']))
 
 if BUILD_FLYDRA_ARENA:
     arena_control_extension_name='flydra.ArenaController'
-    arena_control_sources=['flydra/ArenaController.pyx',
-                           'flydra/arena_control.c',
-                           'flydra/arena_feedback.c',
-                           'flydra/arena_utils.c',
-                           'flydra/serial_comm/serial_comm.c',
+    arena_control_sources=['src/ArenaController.pyx',
+                           'src/arena_control.c',
+                           'src/arena_feedback.c',
+                           'src/arena_utils.c',
+                           'src/serial_comm/serial_comm.c',
                            ]
     arena_control_libraries = ['comedi','rt']
     ext_modules.append(Extension(name=arena_control_extension_name,
@@ -104,8 +98,8 @@ if BUILD_FLYDRA_ARENA:
                                  libraries=arena_control_libraries,
                                  ))
     ext_modules.append(Extension(name='flydra.scomm',
-                                 sources=['flydra/serial_comm/scomm.pyx',
-                                          'flydra/serial_comm/serial_comm.c',
+                                 sources=['src/serial_comm/scomm.pyx',
+                                          'src/serial_comm/serial_comm.c',
                                           ],
                                  ))
 
@@ -115,7 +109,7 @@ if os.name.startswith('posix'):
 setup(name='flydra',
       version=version,
       packages = ['flydra'],
-      package_dir = {'flydra':'flydra',
+      package_dir = {'flydra':'lib/flydra',
                      },
       ext_modules= ext_modules,
       

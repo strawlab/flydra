@@ -7,7 +7,7 @@ import threading, time, socket, select, sys, os, copy, struct, math
 import sets, traceback
 import Pyro.core
 import flydra.reconstruct
-import reconstruct_utils as ru
+import flydra.reconstruct_utils as ru
 import numarray as nx
 import numarray.records
 from numarray.ieeespecial import nan, inf

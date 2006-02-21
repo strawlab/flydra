@@ -7,7 +7,7 @@ import FlyMovieFormat
 import numarray as nx
 import Numeric as nx
 import cam_iface
-import reconstruct_utils
+import flydra.reconstruct_utils as reconstruct_utils
 import Queue
 import FastImage
 if os.name == 'posix':
@@ -16,7 +16,7 @@ import math
 
 from common_variables import REALTIME_UDP
 
-import realtime_image_analysis4 as realtime_image_analysis
+import flydra.realtime_image_analysis4 as realtime_image_analysis
 
 if sys.platform == 'win32':
     time_func = time.clock

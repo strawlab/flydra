@@ -94,7 +94,7 @@ cdef class RealtimeAnalyzer:
     cdef int _use_arena
     
     # calibration matrix
-    cdef object _pmat, _pmat_inv, camera_center # ndarrays
+    cdef object _pmat, _pmat_inv, camera_center # numpy ndarrays
     cdef object _set_pmat
     cdef object _helper
 
@@ -558,16 +558,21 @@ cdef class RealtimeAnalyzer:
         def __get__(self):
             return self._pmat
         def __set__(self,value):
-            self._pmat = value
+            self._pmat = nx.asarray(value)
 
             P = self._pmat
             determinant = nx.linalg.det
+            r_ = nx.r_
             
             # find camera center in 3D world coordinates
-            X = determinant( [ P[:,1], P[:,2], P[:,3] ] )
-            Y = -determinant( [ P[:,0], P[:,2], P[:,3] ] )
-            Z = determinant( [ P[:,0], P[:,1], P[:,3] ] )
-            T = -determinant( [ P[:,0], P[:,1], P[:,2] ] )
+            col0_asrow = P[nx.NewAxis,:,0]
+            col1_asrow = P[nx.NewAxis,:,1]
+            col2_asrow = P[nx.NewAxis,:,2]
+            col3_asrow = P[nx.NewAxis,:,3]
+            X = determinant(  r_[ col1_asrow, col2_asrow, col3_asrow ] )
+            Y = -determinant( r_[ col0_asrow, col2_asrow, col3_asrow ] )
+            Z = determinant(  r_[ col0_asrow, col1_asrow, col3_asrow ] )
+            T = -determinant( r_[ col0_asrow, col1_asrow, col2_asrow ] )
 
             self.camera_center = nx.array( [ X/T, Y/T, Z/T, 1.0 ] )
             self._pmat_inv = nx.linalg.generalized_inverse(self._pmat)
