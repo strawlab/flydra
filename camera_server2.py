@@ -208,7 +208,7 @@ class GrabClass(object):
                     clear_background_clear()
 
                 if bg_changed:
-                    bg_image = self.realtime_analyzer.get_image('mean')
+                    bg_image = self.realtime_analyzer.get_image_copy('mean')
                     globals['current_bg_frame_and_timestamp']=bg_image,timestamp # only used when starting to save
                     globals['incoming_bg_frames'].put(
                         (bg_image,timestamp,framenumber) ) # save it
@@ -401,19 +401,6 @@ class App:
             cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(self.all_cam_ids[cam_no])
             self.main_brain_lock.release()
             
-            # ---------------------------------------------------------------
-            #
-            # start local Pyro server
-            #
-            # ---------------------------------------------------------------
-
-            hostname = socket.gethostname()
-            if hostname == 'flygate':
-                hostname = 'mainbrain' # serve on internal network
-            print 'hostname',hostname
-            host = socket.gethostbyname(hostname)
-            daemon = Pyro.core.Daemon(host=host,port=port)
-
             # ----------------------------------------------------------------
             #
             # start camera thread
