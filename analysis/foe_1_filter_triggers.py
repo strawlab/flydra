@@ -1,3 +1,4 @@
+from __future__ import division
 import numpy
 import FOE_utils
 import glob, time, os, sys
@@ -22,13 +23,15 @@ if 1:
 N_triggers = len(trigger_fnos)
 print '%d FOE triggers'%N_triggers
 
-fname = 'trigger_roundtrip_data.txt'
+#fname = 'trigger_roundtrip_data.txt'
+fname = 'trigger_flip_data.txt'
 fd = open(fname,'r')
 A = numpy.asarray([map(float,line.strip().split()) for line in fd.readlines()])
 return_times = A[:,0]
 log_fnos = list(A[:,1].astype(numpy.int64))
 
 roundtrip_durs = []
+all_data_avail = []
 for idx in range(N_triggers):
     fno = trigger_fnos[idx]
 
@@ -41,47 +44,58 @@ for idx in range(N_triggers):
     
     orig_time = orig_times[idx]
     roundtrip = return_time-orig_time
-    print fno
-    print orig_time, time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime(orig_time))
-    print return_time, time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime(return_time))
-    
-    print roundtrip*1000.0
-    print
+    if 0:
+        print fno
+        print orig_time, time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime(orig_time))
+        print return_time, time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime(return_time))
+
+        print roundtrip*1000.0
+        print
     roundtrip_durs.append(roundtrip)
+    if not numpy.isnan(roundtrip):
+        all_data_avail.append(idx)
     
 roundtrip_durs=numpy.array(roundtrip_durs,dtype=numpy.float64)
 # this index is into log_fnos array
-accept = roundtrip_durs<0.015 # 15 msec
+accept = roundtrip_durs<0.035 # 35 msec
+
+n_orig = len(all_data_avail)
+n_accepted = len(numpy.nonzero(accept))
+print '%d original triggers with all data, %d accepted (%.2f)'%(
+    n_orig, n_accepted, n_accepted/n_orig)
 
 #print roundtrip_durs*1000.0
-mean_roundtrip = numpy.mean(roundtrip_durs)
-std_roundtrip = numpy.std(roundtrip_durs)
-print 'mean',mean_roundtrip*1000.0
-print 'std',std_roundtrip*1000.0
+mean_roundtrip = numpy.mean(roundtrip_durs[all_data_avail])
+std_roundtrip = numpy.std(roundtrip_durs[all_data_avail])
+print 'all data: mean %f +/- %f (msec)'%(mean_roundtrip*1000.0,
+                                         std_roundtrip*1000.0)
 
 mean_roundtrip = numpy.mean(roundtrip_durs[accept])
 std_roundtrip = numpy.std(roundtrip_durs[accept])
-print 'accepted mean',mean_roundtrip*1000.0
-print 'accepted std',std_roundtrip*1000.0
+print 'accepted: mean %f +/- %f (msec)'%(mean_roundtrip*1000.0,
+                                         std_roundtrip*1000.0)
 
 trigger_fnos = trigger_fnos[accept]
 projector_trig_times = projector_trig_times[accept]
 tf_hzs = tf_hzs[accept]
 orig_times = orig_times[accept]
-roundtrip_durs = roundtrip_durs[accept]
-print 'roundtrip_durs.shape',roundtrip_durs.shape
-print 'orig_times.shape',orig_times.shape
 
 fd = open('accepted_triggers.txt','w')
 print >> fd, '# filtered from %s'%(' '.join(logfiles),)
 for i in range(len(trigger_fnos)):
     print >>fd, trigger_fnos[i], projector_trig_times[i], tf_hzs[i]
-    print trigger_fnos[i], repr(orig_times[i]), roundtrip_durs[i]
 fd.close()
 
-if 0:
+if 1:
     import pylab
+    pylab.subplot(2,1,1)
+    pylab.hist(roundtrip_durs[all_data_avail]*1000.0,bins=100)
+    pylab.title('all data available')
+    pylab.subplot(2,1,2)
     pylab.hist(roundtrip_durs[accept]*1000.0,bins=100)
-    pylab.show()
+    pylab.title('accepted')
+    pylab.xlabel('latency (msec)')
+    #pylab.show()
+    pylab.savefig('roundtrip_latencies')
      
     

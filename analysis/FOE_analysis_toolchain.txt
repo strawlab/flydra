@@ -12,6 +12,12 @@ Selects triggered expansions based on a maximum roundtrip latency,
 which might throw away some usable data, but eliminates all unusable
 data due to long latencies before visual stimulus.
 
+Input files:
+------------
+ trigger_flip_data.txt -- ping from projector computer AFTER call to swap_buffers()
+or
+ trigger_roundtrip_data -- ping from projector computer ASAP on trigger decision
+
 Output files:
 -------------
  accepted_triggers.txt
