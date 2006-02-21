@@ -8,6 +8,7 @@ import numarray as nx
 import pyx_cam_iface_numarray as cam_iface
 import reconstruct_utils
 import Queue
+import cPickle as pickle
 if os.name == 'posix':
     import posix_sched
 import math
@@ -30,12 +31,22 @@ Pyro.config.PYRO_USER_TRACELEVEL = 3
 Pyro.config.PYRO_DETAILED_TRACEBACK = 1
 Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
 
+if 0:
+    def DEBUG(msg=''):
+        print msg,'line',sys._getframe().f_back.f_lineno#,', thread', threading.currentThread()
+        sys.stdout.flush()
+        #for t in threading.enumerate():
+        #    print '   ',t
+else:
+    def DEBUG(msg=''):
+        pass
+
 CAM_CONTROLS = {'shutter':cam_iface.SHUTTER,
                 'gain':cam_iface.GAIN,
                 'brightness':cam_iface.BRIGHTNESS}
 
-ALPHA = 1.0/10 # relative importance of each new frame
-BG_FRAME_INTERVAL = 20 # every N frames, add a new BG image to the accumulator
+##ALPHA = 1.0/10 # relative importance of each new frame
+##BG_FRAME_INTERVAL = 20 # every N frames, add a new BG image to the accumulator
 
 # where is the "main brain" server?
 try:
@@ -64,7 +75,8 @@ class GrabClass(object):
                                                                           hw_roi_h,
                                                                           hw_roi_l,
                                                                           hw_roi_b,
-                                                                          ALPHA)
+##                                                                          ALPHA,
+                                                                          )
 
     def get_clear_threshold(self):
         return self.realtime_analyzer.clear_threshold
@@ -119,8 +131,8 @@ class GrabClass(object):
         rot_frame_number = -1
 ##        clear_background_isSet = globals['clear_background'].isSet
 ##        clear_background_clear = globals['clear_background'].clear
-##        take_background_isSet = globals['take_background'].isSet
-##        take_background_clear = globals['take_background'].clear
+        take_background_isSet = globals['take_background'].isSet
+        take_background_clear = globals['take_background'].clear
 ##        collecting_background_isSet = globals['collecting_background'].isSet
         find_rotation_center_start_isSet = globals['find_rotation_center_start'].isSet
         find_rotation_center_start_clear = globals['find_rotation_center_start'].clear
@@ -148,33 +160,53 @@ class GrabClass(object):
         
         self.cam.start_camera()  # start camera
 
-        # find standard deviation ###################
-        N = 100
-        std_dtype = nx.Float32
-        sumf = nx.zeros( (height,width),std_dtype )
-        sumsqf = nx.zeros( (height,width),std_dtype )
-        print 'getting images and calculating mean & STD'
-        for i in range(N):
-            try:
-                framebuffer  = self.cam.grab_next_frame_blocking_numarray()
-                framebufferf = framebuffer.astype(std_dtype)
-                sumf += framebufferf
-                sumsqf += framebufferf*framebufferf
-            except cam_iface.BuffersOverflowed:
-                print >> sys.stderr , 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
-        
-        meanframe=sumf/N
-        stdframe=nx.sqrt(sumsqf/N - meanframe*meanframe)
-        print 'acquired images'
+        def local_recompute_std():
+            # find standard deviation ###################
+            N = 100
+            std_dtype = nx.Float32
+            sumf = nx.zeros( (height,width),std_dtype )
+            sumsqf = nx.zeros( (height,width),std_dtype )
+            print 'getting images and calculating mean & STD'
+            for i in range(N):
+                try:
+                    framebuffer  = self.cam.grab_next_frame_blocking_numarray()
+                    framebufferf = framebuffer.astype(std_dtype)
+                    sumf += framebufferf
+                    sumsqf += framebufferf*framebufferf
+                except cam_iface.BuffersOverflowed:
+                    print >> sys.stderr , 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
 
-        C=5.0
-        compareframe = nx.clip(C*stdframe,10.0,1e10)
-        compareframe8u = nx.around(compareframe).astype(nx.UInt8)
-        meanframe8u = nx.around(meanframe).astype(nx.UInt8)
-        
-        self.realtime_analyzer.set_image('mean',meanframe8u)
-        self.realtime_analyzer.set_image('compare',compareframe8u)
-        print 'converted for realtime use'
+            meanframe=sumf/N
+            stdframe=nx.sqrt(sumsqf/N - meanframe*meanframe)
+            print 'acquired images'
+
+            C=6.0
+            diff_threshold = self.realtime_analyzer.diff_threshold
+            print 'using C',C
+            print 'using diff_threshold',diff_threshold
+            compareframe = nx.clip(C*stdframe,diff_threshold,255)
+            compareframe8u = nx.around(compareframe).astype(nx.UInt8)
+            meanframe8u = nx.around(meanframe).astype(nx.UInt8)
+
+            if 1:
+                # bright pixels aren't gaussian, so here's a hack, erm, heuristic:
+                likely_noisy_points = nx.where(meanframe8u>200)
+                print 'applying bright-point non-gaussian correction to %d pixels'%len(likely_noisy_points)
+                bright_cmp = max(diff_threshold,25)
+                compareframe8u = nx.maximum( compareframe8u, bright_cmp )
+            
+            self.realtime_analyzer.set_image('mean',meanframe8u)
+            self.realtime_analyzer.set_image('cmp',compareframe8u)
+            print 'converted for realtime use'
+            bg_debug_info = dict( meanframe=meanframe,
+                                  C=C,
+                                  diff_threshold=diff_threshold,
+                                  stdframe=stdframe,
+                                  meanframe8u=meanframe8u,
+                                  compareframe8u=compareframe8u,
+                                  )
+            return bg_debug_info
+        bg_debug_info=local_recompute_std()
         # done finding standard deviation ###################
         
         old_ts = time.time()
@@ -187,7 +219,7 @@ class GrabClass(object):
         try:
             while not cam_quit_event_isSet():
                 try:
-                    framebuffer = self.cam.grab_next_frame_blocking_numarray()
+                    framebuffer = nx.asarray(self.cam.grab_next_frame_blocking())
                 except cam_iface.BuffersOverflowed:
                     print >> sys.stderr , 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
                 # get best guess as to when image was taken
@@ -203,7 +235,7 @@ class GrabClass(object):
                 old_fn = framenumber
                 
                 points = self.realtime_analyzer.do_work(
-                    framebuffer, timestamp, framenumber, use_roi2_isSet() )
+                    framebuffer, timestamp, framenumber, use_roi2_isSet(), 1)
                 n_pts = len(points)
                 raw_image = framebuffer
                 
@@ -214,9 +246,12 @@ class GrabClass(object):
                 else:
                     l,b= self.cam.get_frame_offset()
                     globals['most_recent_frame'] = (l,b), raw_image
-                    
-                globals['incoming_raw_frames'].put(
-                    (raw_image,timestamp,framenumber,n_pts) ) # save it
+
+                try:
+                    globals['incoming_raw_frames'].put_nowait(
+                        (raw_image,timestamp,framenumber,n_pts) ) # save it
+                except Queue.Full:
+                    print 'WARNING: incoming frame queue full, skipping frames... :('
 
 ##                if collecting_background_isSet():
 ##                    if bg_frame_number % BG_FRAME_INTERVAL == 0:
@@ -225,10 +260,11 @@ class GrabClass(object):
 ##                        bg_frame_number = 0
 ##                    bg_frame_number += 1
                 
-##                if take_background_isSet():
-##                    self.realtime_analyzer.take_background_image()
-##                    bg_changed = True
-##                    take_background_clear()
+                if take_background_isSet():
+                    bg_debug_info=local_recompute_std()
+                    #self.realtime_analyzer.take_background_image()
+                    #bg_changed = True
+                    take_background_clear()
                     
 ##                if clear_background_isSet():
 ##                    self.realtime_analyzer.clear_background_image()
@@ -236,7 +272,7 @@ class GrabClass(object):
 ##                    clear_background_clear()
 
 ##                if bg_changed:
-##                    bg_image = self.realtime_analyzer.get_image('bg')
+##                    bg_image = self.realtime_analyzer.get_image_copy('bg')
 ##                    globals['current_bg_frame_and_timestamp']=bg_image,timestamp # only used when starting to save
 ##                    globals['incoming_bg_frames'].put(
 ##                        (bg_image,timestamp,framenumber) ) # save it
@@ -303,7 +339,12 @@ class GrabClass(object):
                     self.new_roi.clear()
                     self.cam.start_camera()  # start camera
         finally:
-
+            print 'grab thread quitting...'
+            fname = '/mnt/local/camera_server3_debug.pkl'
+            fd = open(fname,'wb')
+            pickle.dump(bg_debug_info,fd)
+            fd.close()
+            print 'saved',fname
             globals['cam_quit_event'].set()
             globals['grab_thread_done'].set()
 
@@ -353,7 +394,7 @@ class App:
         self.all_grabbers = []
         
         for cam_no in range(self.num_cams):
-            num_buffers = 20
+            num_buffers = 100
             cam = cam_iface.Camera(cam_no,num_buffers,7,0,0) # last 3 parameters only used on window drivers for now
             self.all_cams.append( cam )
 
@@ -369,12 +410,12 @@ class App:
             self.globals.append({})
             globals = self.globals[cam_no] # shorthand
 
-            globals['incoming_raw_frames']=Queue.Queue()
-            globals['incoming_bg_frames']=Queue.Queue()
+            globals['incoming_raw_frames']=Queue.Queue(400) # similar to num_buffers...
+##            globals['incoming_bg_frames']=Queue.Queue()
             globals['raw_fmf_and_bg_fmf']=None
             globals['most_recent_frame']=None
-            globals['saved_bg_frame']=False
-            globals['current_bg_frame_and_timestamp']=None
+##            globals['saved_bg_frame']=False
+##            globals['current_bg_frame_and_timestamp']=None
 
             # control flow events for threading model
             globals['cam_quit_event'] = threading.Event()
@@ -401,9 +442,9 @@ class App:
                 min_value = tmp[1]
                 max_value = tmp[2]
                 scalar_control_info[name] = (current_value, min_value, max_value)
-            diff_threshold = 8.1
+            diff_threshold = 11
             scalar_control_info['diff_threshold'] = diff_threshold
-            clear_threshold = 0.0
+            clear_threshold = 0.2
             scalar_control_info['clear_threshold'] = clear_threshold
 
             try:
@@ -429,19 +470,6 @@ class App:
             cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(self.all_cam_ids[cam_no])
             self.main_brain_lock.release()
             
-            # ---------------------------------------------------------------
-            #
-            # start local Pyro server
-            #
-            # ---------------------------------------------------------------
-
-            hostname = socket.gethostname()
-            if hostname == 'flygate':
-                hostname = 'mainbrain' # serve on internal network
-            print 'hostname',hostname
-            host = socket.gethostbyname(hostname)
-            daemon = Pyro.core.Daemon(host=host,port=port)
-
             # ----------------------------------------------------------------
             #
             # start camera thread
@@ -467,78 +495,94 @@ class App:
         grabber = self.all_grabbers[cam_no]
         cam_id = self.all_cam_ids[cam_no]
         globals = self.globals[cam_no]
-        
-        for key in cmds.keys():
-            if key == 'set':
-                for property_name,value in cmds['set'].iteritems():
-                    if property_name in CAM_CONTROLS:
-                        enum = CAM_CONTROLS[property_name]
-                        if type(value) == tuple: # setting whole thing
-                            tmp = cam.get_camera_property_range(enum)
-                            assert value[1] == tmp[1]
-                            assert value[2] == tmp[2]
-                            value = value[0]
-                        cam.set_camera_property(enum,value,0,0)
-                    elif property_name == 'roi':
-                        grabber.roi = value 
-                    elif property_name == 'diff_threshold':
-                        grabber.diff_threshold = value
-                    elif property_name == 'clear_threshold':
-                        grabber.clear_threshold = value
-                    elif property_name == 'width':
-                        assert cam.get_max_width() == value
-                    elif property_name == 'height':
-                        assert cam.get_max_height() == value
-                    elif property_name == 'trigger_source':
-                        cam.set_trigger_source( value )
-                    elif property_name == 'roi2':
-                        if value: globals['use_roi2'].set()
-                        else: globals['use_roi2'].clear()
-                    elif property_name == 'max_framerate':
-                        cam.set_framerate(value)
-            elif key == 'get_im':
-                self.main_brain.set_image(cam_id, globals['most_recent_frame'])
-            elif key == 'use_arena':
-                grabber.use_arena = cmds[key]
-                globals['use_arena'] = grabber.use_arena
-            elif key == 'quit':
-                globals['cam_quit_event'].set()
-            elif key == 'take_bg':
-                globals['take_background'].set()
-            elif key == 'clear_bg':
-                globals['clear_background'].set()
-            elif key == 'collecting_bg':
-                if cmds[key]:
-                    globals['collecting_background'].set()
-                else:
-                    globals['collecting_background'].clear()
-            elif key == 'find_r_center':
-                globals['find_rotation_center_start'].set()
-            elif key == 'stop_recording':
-                if globals['raw_fmf_and_bg_fmf'] is not None:
-                    raw_movie, bg_movie = globals['raw_fmf_and_bg_fmf']
-                    raw_movie.close()
-                    bg_movie.close()
-                    print 'stopped recording'
-                    globals['saved_bg_frame']=False
-                    globals['raw_fmf_and_bg_fmf'] = None
-            elif key == 'start_recording':
-                raw_filename, bg_filename = cmds[key]
-                raw_movie = FlyMovieFormat.FlyMovieSaver(raw_filename,version=1)
-                bg_movie = FlyMovieFormat.FlyMovieSaver(bg_filename,version=1)
-                globals['raw_fmf_and_bg_fmf'] = raw_movie, bg_movie
-                globals['saved_bg_frame']=False
-                print "starting to record to %s"%raw_filename
-                print "  background to %s"%bg_filename
-            elif key == 'debug':
-                if cmds[key]: globals['debug'].set()
-                else: globals['debug'].clear()
-            elif key == 'cal':
-                pmat, intlin, intnonlin = cmds[key]
-                grabber.pmat = pmat
-                grabber.make_reconstruct_helper(intlin, intnonlin)
+
+        def set_func():
+            for property_name,value in cmds['set'].iteritems():
+                if property_name in CAM_CONTROLS:
+                    enum = CAM_CONTROLS[property_name]
+                    if type(value) == tuple: # setting whole thing
+                        tmp = cam.get_camera_property_range(enum)
+                        assert value[1] == tmp[1]
+                        assert value[2] == tmp[2]
+                        value = value[0]
+                    cam.set_camera_property(enum,value,0,0)
+                elif property_name == 'roi':
+                    grabber.roi = value 
+                elif property_name == 'diff_threshold':
+                    grabber.diff_threshold = value
+                elif property_name == 'clear_threshold':
+                    grabber.clear_threshold = value
+                elif property_name == 'width':
+                    assert cam.get_max_width() == value
+                elif property_name == 'height':
+                    assert cam.get_max_height() == value
+                elif property_name == 'trigger_source':
+                    cam.set_trigger_source( value )
+                elif property_name == 'roi2':
+                    if value: globals['use_roi2'].set()
+                    else: globals['use_roi2'].clear()
+                elif property_name == 'max_framerate':
+                    cam.set_framerate(value)
+        def get_im_func():
+            self.main_brain.set_image(cam_id, globals['most_recent_frame'])
+        def use_arena_func():
+            grabber.use_arena = cmds[key]
+            globals['use_arena'] = grabber.use_arena
+        def quit_func():
+            globals['cam_quit_event'].set()
+        def take_bg_func():
+            globals['take_background'].set()
+        def clear_bg_func():
+            globals['clear_background'].set()
+        def collecting_bg_func():
+            if cmds[key]:
+                globals['collecting_background'].set()
             else:
-                raise ValueError("Unknown key '%s'"%key)
+                globals['collecting_background'].clear()
+        def find_r_center_func():
+            globals['find_rotation_center_start'].set()
+        def stop_recording_func():
+            print 'stop called!'
+            if globals['raw_fmf_and_bg_fmf'] is not None:
+                raw_movie, bg_movie = globals['raw_fmf_and_bg_fmf']
+                raw_movie.close()
+                if bg_movie is not None:
+                    bg_movie.close()
+                print 'stopped recording'
+                globals['raw_fmf_and_bg_fmf'] = None
+        def start_recording_func():
+            raw_filename, bg_filename = cmds[key]
+            raw_movie = FlyMovieFormat.FlyMovieSaver(raw_filename,version=1)
+            record_start_time = time.time()
+##            bg_movie = FlyMovieFormat.FlyMovieSaver(bg_filename,version=1)
+            bg_movie = None
+            globals['raw_fmf_and_bg_fmf'] = raw_movie, bg_movie
+##            globals['saved_bg_frame']=False
+            print "starting to record to %s"%raw_filename
+##            print "  background to %s"%bg_filename
+        def debug_func():
+            if cmds[key]: globals['debug'].set()
+            else: globals['debug'].clear()
+        def cal_func():
+            pmat, intlin, intnonlin = cmds[key]
+            grabber.pmat = pmat
+            grabber.make_reconstruct_helper(intlin, intnonlin)
+            
+        func_dict = {'set'            : set_func,
+                     'get_im'         : get_im_func,
+                     'use_arena'      : use_arena_func,
+                     'quit'           : quit_func,
+                     'take_bg'        : take_bg_func,
+                     'clear_bg'       : clear_bg_func,
+                     'collecting_bg'  : collecting_bg_func,
+                     'find_r_center'  : find_r_center_func,
+                     'stop_recording' : stop_recording_func,
+                     'start_recording': start_recording_func,
+                     'debug'          : debug_func,
+                     'cal'            : cal_func,
+                     }
+        for key in cmds.keys():
+            func_dict[key]()
                 
     def mainloop(self):
         # per camera variables
@@ -562,11 +606,14 @@ class App:
                     cams_in_operation = 0
                     for cam_no in range(self.num_cams):
                         globals = self.globals[cam_no] # shorthand
-
+                        
+                        DEBUG()
+                        
                         # check if camera running
                         if globals['cam_quit_event'].isSet():
                             continue
 
+                        DEBUG()
                         cams_in_operation = cams_in_operation + 1
 
                         cam = self.all_cams[cam_no]
@@ -585,6 +632,7 @@ class App:
                             n_raw_frames[cam_no] = 0
 
                         # Are we saving movies?
+                        DEBUG()
                         raw_fmf_and_bg_fmf = globals['raw_fmf_and_bg_fmf']
                         if raw_fmf_and_bg_fmf is None:
                             raw_movie = None
@@ -593,42 +641,49 @@ class App:
                             raw_movie, bg_movie = raw_fmf_and_bg_fmf
                             
                         # Get new raw frames from grab thread.
+                        DEBUG()
                         get_raw_frame_nowait = globals['incoming_raw_frames'].get_nowait
                         try:
-                            qsize = globals['incoming_raw_frames'].qsize()
-                            while 1:
+                            nsaved=0
+                            while nsaved<100: # don't jam up on this...
                                 frame,timestamp,framenumber,n_pts = get_raw_frame_nowait() # this may raise Queue.Empty
                                 if n_pts>0:
                                     last_found_timestamp[cam_no] = timestamp
                                 # save movie for 1 second after I found anything
                                 if (timestamp - last_found_timestamp[cam_no]) < 1.0 and raw_movie is not None:
+                                    DEBUG()
                                     raw_movie.add_frame(frame,timestamp)
+                                    DEBUG()
                                 n_raw_frames[cam_no] += 1
+                                nsaved+=1
                         except Queue.Empty:
                             pass
+                        DEBUG()
 
-                        # Get new BG frames from grab thread.
-                        get_bg_frame_nowait = globals['incoming_bg_frames'].get_nowait
-                        try:
-                            while 1:
-                                frame,timestamp,framenumber = get_bg_frame_nowait() # this may raise Queue.Empty
-                                if bg_movie is not None:
-                                    bg_movie.add_frame(frame,timestamp)
-                                    globals['saved_bg_frame'] = True
-                        except Queue.Empty:
-                            pass
+##                        # Get new BG frames from grab thread.
+##                        get_bg_frame_nowait = globals['incoming_bg_frames'].get_nowait
+##                        try:
+##                            while 1:
+##                                frame,timestamp,framenumber = get_bg_frame_nowait() # this may raise Queue.Empty
+##                                if bg_movie is not None:
+##                                    bg_movie.add_frame(frame,timestamp)
+##                                    globals['saved_bg_frame'] = True
+##                        except Queue.Empty:
+##                            pass
 
-                        # make sure a BG frame is saved at beginning of movie
-                        if bg_movie is not None and not globals['saved_bg_frame']:
-                            frame,timestamp = globals['current_bg_frame_and_timestamp']
-                            bg_movie.add_frame(frame,timestamp)
-                            globals['saved_bg_frame'] = True
+##                        # make sure a BG frame is saved at beginning of movie
+##                        if bg_movie is not None and not globals['saved_bg_frame']:
+##                            frame,timestamp = globals['current_bg_frame_and_timestamp']
+##                            bg_movie.add_frame(frame,timestamp)
+##                            globals['saved_bg_frame'] = True
 
                         # process asynchronous commands
                         self.main_brain_lock.acquire()
                         cmds=self.main_brain.get_and_clear_commands(cam_id)
                         self.main_brain_lock.release()
+                        DEBUG('checking commands...')
                         self.handle_commands(cam_no,cmds)
+                        DEBUG('OK')
                             
                     time.sleep(0.05)
 
@@ -650,5 +705,13 @@ def main():
     print
 
 if __name__=='__main__':
-    main()
+    if 0:
+        # profile
+        import hotshot
+        prof = hotshot.Profile("/mnt/local/profile.hotshot")
+        res = prof.runcall(main)
+        prof.close()
+    else:
+        # don't profile
+        main()
         
