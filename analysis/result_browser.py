@@ -179,7 +179,7 @@ def flip_line_direction(results,frame,typ='best'):
         p2, p4, p5 = row['p2'], row['p4'], row['p5']
     if nrow is None:
         raise ValueError('could not find frame')
-    nrow = int(nrow) # hmm weird pygame bug?
+    nrow = int(nrow) # hmm weird pytables bug?
     data3d.cols.p2[nrow] = -p2
     data3d.cols.p4[nrow] = -p4
     data3d.cols.p5[nrow] = -p5
@@ -439,7 +439,7 @@ def summarize(results):
     res.seek(0)
     return res.read()
 
-def get_f_xyz_L_err( results, max_err = 10, typ = 'best'):
+def get_f_xyz_L_err( results, max_err = 10, typ = 'best', include_timestamps=False):
     if typ == 'fast':
         data3d = results.root.data3d_fast
     elif typ == 'best':
@@ -453,6 +453,7 @@ def get_f_xyz_L_err( results, max_err = 10, typ = 'best'):
         xyz=[]
         L = []
         err = []
+        timestamps = []
         for row in data3d.where( data3d.cols.mean_dist <= max_err ):
             f.append( row['frame'] )
             xyz.append( (row['x'],row['y'],row['z']) )
@@ -460,16 +461,19 @@ def get_f_xyz_L_err( results, max_err = 10, typ = 'best'):
                        row['p2'],row['p3'],
                        row['p4'],row['p5']))
             err.append( row['mean_dist'] )
+            timestamps.append( row['timestamp'] )
         f = nx.array(f)
         xyz = nx.array(xyz)
         L = nx.array(L)
         err = nx.array(err)
+        timestamps = nx.array(timestamps)
     else:
         frame_col = data3d.cols.frame
         if not len(frame_col):
             print 'no 3D data'
             return
         f = nx.array(frame_col)
+        timestamps = nx.array(timestamps)
         x = nx.array(data3d.cols.x)
         y = nx.array(data3d.cols.y)
         z = nx.array(data3d.cols.z)
@@ -506,8 +510,12 @@ def get_f_xyz_L_err( results, max_err = 10, typ = 'best'):
     xyz = nx.take(xyz,good_idx)
     L = nx.take(L,good_idx)
     err = nx.take(err,good_idx)
-        
-    return f,xyz,L,err
+    timestamps = nx.take(timestamps,good_idx)
+
+    rval = [f,xyz,L,err]
+    if include_timestamps:
+        rval.append( timestamps )
+    return tuple(rval)
 
 def plot_movie_2d(results,
                   start_idx=0,
@@ -1568,7 +1576,11 @@ def test():
             status('ERROR (frame %d): %s'%(frame,str(x)))
 
 def get_results(filename,mode='r+'):
-    return PT.openFile(filename,mode=mode)
+    h5file = PT.openFile(filename,mode=mode)
+    frame_col = h5file.root.data3d_best.cols.frame
+    if frame_col.index is None:
+        frame_col.createIndex()
+    return h5file
 
 def plot_simple_phase_plots(results,form='xy',max_err=10,typ='best',ori_180_ambig=True):
     from matplotlib.collections import LineCollection
