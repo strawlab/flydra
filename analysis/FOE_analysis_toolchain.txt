@@ -1,0 +1,41 @@
+FOE_utils.py
+============
+Utility module opens .h5 files and trigger log files.
+
+foe_1_filter_triggers.py
+========================
+
+What it does:
+-------------
+
+Selects triggered expansions based on a maximum roundtrip latency,
+which might throw away some usable data, but eliminates all unusable
+data due to long latencies before visual stimulus.
+
+Output files:
+-------------
+ accepted_triggers.txt
+
+foe_2_prelim_analysis.py
+========================
+
+What it does:
+-------------
+
+Selects only usable chunks of data from the original raw data
+files. Plots some prelinary figures.
+
+Input files:
+------------
+
+ *.h5                           -- raw data files saved by flydra
+ accepted_triggers.txt OR *.log -- list of visual stimulus triggers
+
+Output files:
+-------------
+
+ strict_data.txt                -- pre-processed data
+
+Notes:
+------
+This script was formerly known as 'plot_foe.py'.
