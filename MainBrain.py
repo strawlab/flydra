@@ -1,6 +1,7 @@
 # $Id$
-import pkg_resources
-pkg_resources.require("kookaburra")  # latest installed version
+
+# TODO:
+# 1. make variable eccentricity threshold dependent on area (bigger area = lower threshold)
 
 import threading, time, socket, select, sys, os, copy, struct, math
 import sets, traceback
