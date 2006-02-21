@@ -16,71 +16,10 @@ if sys.platform.startswith('linux'):
         os.path.exists('/usr/include/comedilib.h')):
         BUILD_FLYDRA_ARENA = True
 
-install_requires = ['FlyMovieFormat','cam_iface','FastImage','wxglvideo']
-
-FAKEIPP = False
-if FAKEIPP:
-    already_built_with_scons = os.path.exists('fakeipp/libfakeipp.a')
-    ipp_sources = []
-    ipp_include_dirs = ['fakeipp/include']
-    ipp_library_dirs = []
-    ipp_libraries = []
-    ipp_extra_compile_args = []
-    
-    if already_built_with_scons:
-        ipp_library_dirs = ['fakeipp']
-        ipp_libraries = ['fakeipp']
-    else:
-        ipp_sources = glob.glob('fakeipp/src/*.c')
-        if os.name == 'posix':
-            # assume we're using gcc... probably a better way to test...
-            # also assume we've got sse2
-            ipp_extra_compile_args = ['-march=pentium4',
-                                      #'-msse2',
-                                      #'-mfpmath=sse',
-                                      #'-funroll-loops',
-                                      ]
-        
-else:
-    ipp_include_dirs = ['/opt/intel/ipp40/include/']
-    if 1:
-        ipp_library_dirs = ['/opt/intel/ipp40/sharedlib/',
-                            '/opt/intel/ipp40/sharedlib/linux32']
-        ipp_libraries = ['ippcore',
-                         'ippi',
-                         'ipps',
-                         'ippcv',
-                         'guide']
-    else:
-        ipp_library_dirs = ['/opt/intel/ipp40/lib/']
-        ipp_libraries = ['ippcoremerged',
-                         'ippimerged',
-                         'ippsmerged',
-                         'ippcvmerged',
-                         'guidemerged']
-    ipp_sources = []
-    ipp_extra_compile_args = []
-    if not os.path.exists('/opt/intel/ipp40'):
-        print 'WARNING: no IPP present.'
+install_requires = ['FlyMovieFormat','cam_iface','wxglvideo']
 
 ext_modules = []
 
-
-if 1:
-    # Pyrex build of realtime_image_analysis
-    realtime_image_analysis_extension_name='flydra.realtime_image_analysis4'
-    realtime_image_analysis_sources=['src/realtime_image_analysis4.pyx',
-                                     'src/c_fit_params.c',
-                                     'src/eigen.c',
-                                     ]+ipp_sources
-    ext_modules.append(Extension(name=realtime_image_analysis_extension_name,
-                                 sources=realtime_image_analysis_sources,
-                                 include_dirs=ipp_include_dirs,
-                                 library_dirs=ipp_library_dirs,
-                                 libraries=ipp_libraries, # + ['comedi'],
-                                 extra_compile_args=ipp_extra_compile_args,
-                                 ))
-    
 ext_modules.append(Extension(name='flydra.reconstruct_utils',
                              sources=['src/reconstruct_utils.pyx']))
 
