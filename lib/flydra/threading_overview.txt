@@ -1,0 +1,33 @@
+threads in MainBrain application:
+
+= 1) CoordReceiver thread =
+
+Main work of flydra done here.
+
+Listens for realtime (UDP or TCP) data coming from the cameras,
+calculates 3D points and lines, puts new data in a queue.
+
+Blocks on select, with calls every 0.1 sec.
+
+= 2) Remote-API Listen thread =
+
+Thread is created and maintained by RemoteAPI class. It listens for
+and handles Pyro (TCP) requests from camera processes on the
+network. These are primarily non-realtime bits of information from the
+camera processes to MainBrain.
+
+Calls Pyro's handleRequests method every 0.1 sec, which blocks on
+select(). Between calls, it checks for connected/disconnected cameras.
+
+= 3) Main loop (application specific) =
+
+Responds to UI events. Initial process thread.
+
+= 4) Timer thread (application specific) =
+
+Allows periodic maintainance of MainBrain state by calling
+MainBrain.service_pending() method. 
+
+= 5) (optional) update raw image thread =
+
+Updates screen images in wxMainBrain.
