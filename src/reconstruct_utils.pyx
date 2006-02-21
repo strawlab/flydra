@@ -1,10 +1,11 @@
-import numarray as nx
-from numarray.ieeespecial import inf
+import numpy
+nx = numpy
+fast_nx = numpy
+inf = nx.inf
+
 cdef double cinf
 cinf = inf
 
-import Numeric as fast_nx
-import LinearAlgebra
 import flydra.common_variables 
 
 cdef float MINIMUM_ECCENTRICITY
@@ -13,7 +14,7 @@ MINIMUM_ECCENTRICITY = flydra.common_variables.MINIMUM_ECCENTRICITY
 cdef float ACCEPTABLE_DISTANCE_PIXELS
 ACCEPTABLE_DISTANCE_PIXELS = flydra.common_variables.ACCEPTABLE_DISTANCE_PIXELS
 
-fast_svd = LinearAlgebra.singular_value_decomposition
+fast_svd = numpy.linalg.svd
 
 cdef extern from "math.h":
     double sqrt(double)
