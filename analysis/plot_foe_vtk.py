@@ -6,8 +6,7 @@ import math, glob, time
 import vtk_results
     
 # find segments to use
-#analysis_file = open('downwind_strict_data.txt','r')
-analysis_file = open('upwind_strict_data.txt','r')
+analysis_file = open('strict_data.txt','r')
 f_segments = [line.strip().split() for line in analysis_file.readlines()]
 
 renWin, renderers = vtk_results.init_vtk(stereo=True)
@@ -25,10 +24,16 @@ h5files = {}
 
 did_bbox = False
 for line in f_segments:
-    fstart, trig_fno, fend, h5filename = line
+    upwind, fstart, trig_fno, fend, h5filename, tf_hz = line
+    upwind = bool(upwind)
     fstart = int(fstart)
     trig_fno = int(trig_fno)
     fend = int(fend)
+    tf_hz = float(tf_hz)
+    if not upwind:
+        continue
+    if tf_hz==0.0:
+        continue
     if h5filename not in h5files:
         h5files[h5filename] = result_browser.get_results(h5filename)
     results = h5files[h5filename]
