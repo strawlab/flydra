@@ -69,7 +69,8 @@ def fly_pos_to_verts(fly_xyz):
     X[1]=0
     return v1o+X, v2o+X, v3o+X, v4o+X
 
-pos_text = Text(anchor='center',
+#pos_text = Text(anchor='center',
+pos_text = Text(anchor='lowerleft',
                 ignore_size_parameter=False,
                 size=(300,300),
                 )
