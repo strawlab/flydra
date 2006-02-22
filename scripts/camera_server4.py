@@ -14,7 +14,7 @@ if os.name == 'posix':
     import posix_sched
 import math
 
-from common_variables import REALTIME_UDP
+from flydra.common_variables import REALTIME_UDP
 
 import flydra_ipp.realtime_image_analysis4 as realtime_image_analysis
 

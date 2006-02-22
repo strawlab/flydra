@@ -24,7 +24,8 @@ ext_modules.append(Extension(name='flydra.reconstruct_utils',
                              sources=['src/reconstruct_utils.pyx']))
 
 if BUILD_FLYDRA_ARENA:
-    arena_control_extension_name='flydra.ArenaController'
+    # not in "flydra" package namespace
+    arena_control_extension_name='ArenaController'
     arena_control_sources=['src/ArenaController.pyx',
                            'src/arena_control.c',
                            'src/arena_feedback.c',

@@ -1356,6 +1356,8 @@ class MainBrain(object):
             intlin_group = self.h5file.createGroup(cal_group,'intrinsic_linear')
             for cam_id in self.remote_api.external_get_cam_ids():
                 intlin = self.reconstructor.get_intrinsic_linear(cam_id)
+                # while pytables doesn't yet support numpy:
+                intlin = numarray.asarray(intlin)
                 self.h5file.createArray(intlin_group, cam_id, intlin)
                                         
             intnonlin_group = self.h5file.createGroup(cal_group,'intrinsic_nonlinear')
