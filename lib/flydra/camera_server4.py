@@ -16,7 +16,7 @@ import math
 
 from common_variables import REALTIME_UDP
 
-import flydra.realtime_image_analysis4 as realtime_image_analysis
+import flydra_ipp.realtime_image_analysis4 as realtime_image_analysis
 
 if sys.platform == 'win32':
     time_func = time.clock
