@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 import time, StringIO, sets, sys
 import math, os
-import numarray as nx
-import numarray.mlab as mlab
-import numarray.convolve as conv_mod
+import numpy as nx
+import numpy as mlab
 import tables as PT
 import matplotlib
 import matplotlib.pylab as pylab
@@ -2051,6 +2050,7 @@ def wi_test2(results):
     return res
     
 def get_wi(results):
+    import numarray.convolve as conv_mod
     import flydra.reconstruct, flydra.undistort
     rcn = flydra.reconstruct.Reconstructor(results)
     cam_id = 'cam4:0'

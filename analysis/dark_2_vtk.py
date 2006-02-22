@@ -4,7 +4,9 @@ import PQmath
 import math, glob, time
 
 import vtk_results
-    
+
+import vtk.util.colors as colors
+
 # find segments to use
 analysis_file = open('strict_data.txt','r')
 f_segments = [line.strip().split() for line in analysis_file.readlines()]
@@ -25,6 +27,7 @@ h5files = {}
 did_bbox = False
 for line in f_segments:
     upwind_orig, fstart, trig_fno, fend, h5filename, tf_hz = line
+
     if upwind_orig == 'False':
         upwind = False
     elif upwind_orig == 'True':
@@ -32,14 +35,20 @@ for line in f_segments:
     else:
         raise ValueError('hmm')
     
+    if not upwind:
+        continue
+
     fstart = int(fstart)
     trig_fno = int(trig_fno)
     fend = int(fend)
+    
     tf_hz = float(tf_hz)
-    if not upwind:
-        continue
-    if tf_hz==0.0:
-        continue
+    if tf_hz==1.0:
+        ball_color1 = colors.white
+        ball_color2 = colors.black
+    else:
+        ball_color1 = colors.white
+        ball_color2 = colors.white
     if h5filename not in h5files:
         h5files[h5filename] = result_browser.get_results(h5filename)
     results = h5files[h5filename]
@@ -49,11 +58,17 @@ for line in f_segments:
                                 render_mode='ball_and_stick',
                                 labels=False,#True,
                                 orientation_corrected=False,
-                                use_timestamps=True,
+                                #use_timestamps=True,
                                 bounding_box=not did_bbox,#bbox,
-                            #frame_no_offset=fstart+pre_frames,
+                                #frame_no_offset=fstart+pre_frames,
                                 show_warnings=False,
-                                max_err=10)
+                                max_err=10,
+                                color_change_frame=trig_fno,
+                                ball_color1=ball_color1,
+                                line_color1=ball_color1,
+                                ball_color2=ball_color2,
+                                line_color2=ball_color2,
+                                )
     if not did_bbox:
         did_bbox=True
 

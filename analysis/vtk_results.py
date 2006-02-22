@@ -466,7 +466,23 @@ def show_frames_vtk(results,renderers,
                     frame_no_offset=0, # for displaying frame numbers
                     color_change_frame=None,
                     show_warnings=True,
-                    max_err=None): # only for 'ball_and_stick'
+                    max_err=None,
+                    # before trigger or all:
+                    ball_color1=None,
+                    line_color1=None,
+                    # after trigger
+                    ball_color2=None,
+                    line_color2=None,
+                    ): # only for 'ball_and_stick'
+
+    if ball_color1 is None:
+        ball_color1 = red
+    if line_color1 is None:
+        line_color1 = ( 0xd6/255.0, 0xec/255.0, 0x1c/255.0)        
+    if ball_color2 is None:
+        ball_color2 = blue
+    if line_color2 is None:
+        line_color2 = banana
     # 'triangles' render mode is always smoothed
     if typ is None:
         typ = 'best'
@@ -744,14 +760,14 @@ def show_frames_vtk(results,renderers,
                 points = cog_points
                 line_points = body_line_points
                 lines = body_lines
-                ball_color = red
-                line_color = ( 0xd6/255.0, 0xec/255.0, 0x1c/255.0)
+                ball_color = ball_color1
+                line_color = line_color1
             else:
                 line_points = body_line_points2
                 points = cog_points2
                 lines = body_lines2
-                ball_color = blue
-                line_color = banana
+                ball_color = ball_color2
+                line_color = line_color2
             points_poly_data = vtkPolyData()
             points_poly_data.SetPoints(points)
 
@@ -912,8 +928,8 @@ def show_frames_vtk(results,renderers,
             else:
                 if (frame_no-frame_no_offset)%10 != 0:
                     continue
-                print 'frame_no',frame_no
-                print 'frame_no_offset',frame_no_offset
+                #print 'frame_no',frame_no
+                #print 'frame_no_offset',frame_no_offset
                 label = str(frame_no-frame_no_offset)
 ##            X = X.flat
             # labels
