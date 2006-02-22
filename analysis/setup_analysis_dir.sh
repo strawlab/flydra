@@ -8,3 +8,6 @@ ln -s ~/kookaburra/flydra/analysis/foe_1_filter_triggers.py
 ln -s ~/kookaburra/flydra/analysis/foe_2_prelim_analysis.py
 ln -s ~/kookaburra/flydra/analysis/foe_3_vtk.py
 ln -s ~/kookaburra/flydra/analysis/foe_4_stats_play.py
+
+ln -s ~/kookaburra/flydra/analysis/dark_1_prelim.py
+ln -s ~/kookaburra/flydra/analysis/dark_2_vtk.py
