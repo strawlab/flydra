@@ -1,15 +1,13 @@
 # $Id$
 import os, glob, sys, math
 opj=os.path.join
-import numarray as nx
-import numarray.linear_algebra
-svd = numarray.linear_algebra.singular_value_decomposition
-from numarray.ieeespecial import getnan # XXX could I use something faster?
+import numpy as nx
+import numpy
+svd = numpy.linalg.svd
 # Numeric (for speed)
-import Numeric as fast_nx
-import LinearAlgebra
-fast_svd = LinearAlgebra.singular_value_decomposition
-import reconstruct_utils # in pyrex/C for speed
+import numpy as fast_nx
+fast_svd = numpy.linalg.svd
+import flydra.reconstruct_utils # in pyrex/C for speed
 import time
 from flydra.common_variables import MINIMUM_ECCENTRICITY
 
@@ -118,7 +116,7 @@ def pluecker_from_verts(A,B):
 
 def pmat2cam_center(P):
     assert P.shape == (3,4)
-    determinant = numarray.linear_algebra.determinant
+    determinant = numpy.linalg.determinant
     
     # camera center
     X = determinant( [ P[:,1], P[:,2], P[:,3] ] )
@@ -182,7 +180,7 @@ class Reconstructor:
                 self.Pmat[cam_id] = pmat
                 self.Pmat_fastnx[cam_id] = fast_nx.array(pmat)
                 self.Res[cam_id] = map(int,res_fd.readline().split())
-                self.pmat_inv[cam_id] = numarray.linear_algebra.generalized_inverse(pmat)
+                self.pmat_inv[cam_id] = numpy.linalg.generalized_inverse(pmat)
             res_fd.close()
 
             # load non linear parameters
@@ -205,7 +203,7 @@ class Reconstructor:
                 self.Pmat[cam_id] = pmat
                 self.Pmat_fastnx[cam_id] = fast_nx.array(pmat)
                 self.Res[cam_id] = res
-                self.pmat_inv[cam_id] = numarray.linear_algebra.generalized_inverse(pmat)
+                self.pmat_inv[cam_id] = numpy.linalg.generalized_inverse(pmat)
                 self._helper[cam_id] = reconstruct_utils.ReconstructHelper(
                     K[0,0], K[1,1], K[0,2], K[1,2],
                     nlparams[0], nlparams[1], nlparams[2], nlparams[3])
@@ -272,6 +270,7 @@ class Reconstructor:
         # Calculate best point
         if return_X_coords:
             A=nx.array(A)
+            print 'repr(A)',repr(A)
             u,d,vt=svd(A)
             X = vt[-1,0:3]/vt[-1,3] # normalize
             if not return_line_coords:
@@ -298,8 +297,8 @@ class Reconstructor:
                             -(P[3]*Q[0]) + P[0]*Q[3],
                             -(P[2]*Q[0]) + P[0]*Q[2],
                             -(P[1]*Q[0]) + P[0]*Q[1] )
-            except numarray.linear_algebra.LinearAlgebra2.LinearAlgebraError, exc:
-                print 'WARNING:',str(exc)
+            except Exception, exc:
+                print 'WARNING svd exception:',str(exc)
                 Lcoords = None
             except:
                 print 'WARNING: unknown error in reconstruct.py'
