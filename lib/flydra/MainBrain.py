@@ -44,6 +44,8 @@ downstream_hosts = []
 
 if 1:
     downstream_hosts.append( ('192.168.1.199',28931) ) # projector
+if 1:
+    downstream_hosts.append( ('127.0.0.1',28931) ) # self
 if 0:
     downstream_hosts.append( ('192.168.1.151',28931) ) # brain1
     
