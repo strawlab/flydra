@@ -2,7 +2,7 @@
 #define SWHIGH  0
 #define SWLOW   6
 // mt
-#define SWLOWLOW 5
+#define SWLOWLOW 6
 
 // main.h
 
@@ -26,8 +26,9 @@ void OSCCAL_calibration(void);
 
 // Macro definitions
 //mtA - 
-// sbi and cbi will not be supported by future avr-libc
-// version - changed to sbiBF/cbiBF "everywhere"
+// sbi and cbi are not longer supported by the avr-libc
+// to avoid version-conflicts the macro-names have been 
+// changed to sbiBF/cbiBF "everywhere"
 #define sbiBF(port,bit)  (port |= (1<<bit))   //set bit in port
 #define cbiBF(port,bit)  (port &= ~(1<<bit))  //clear bit in port
 //mtE
@@ -79,11 +80,3 @@ void OSCCAL_calibration(void);
 #define ST_OPTIONS_KEYCLICK_FUNC        101
 
 
-//Button definitions
-
-#define KEY_NULL    0
-#define KEY_ENTER   1
-#define KEY_NEXT    2
-#define KEY_PREV    3
-#define KEY_PLUS    4
-#define KEY_MINUS   5

@@ -17,6 +17,7 @@
 //  20030116 - 1.0  - Created                                       - LHM
 //  20031009          port to avr-gcc/avr-libc                      - M.Thomas
 //  20031205          fixed store length to eeprom from RS232       - mt
+//  20060106          fixed length-check in vCard()                 - mt
 //
 //***************************************************************************
 
@@ -35,16 +36,16 @@
 #include "eeprom.h"
 #include "vcard.h"
 
-// mt no support for Mega169 in avr-libc:
+// mt no eeprom-support for Mega169 in avr-libc (at least up to V1.2.3):
 // no! // #include <avr/eeprom.h>
 // include workaround:
 #include "eeprom169.h"
 
 // mt s/index/indexps
-//char indexps = 0;         //variable to keep the lenght of the present string
+//char index = 0;         //variable to keep the lenght of the present string
 uint8_t indexps = 0;
 
-extern char gUART;      //global variable from "main.c"
+char gUART = FALSE;
 
 char Name[STRLENGHT];
 
@@ -66,16 +67,16 @@ char Name[STRLENGHT];
 char vCard(char input)
 {
     static char enter = 1;
-	const uint16_t lenAddr=EEPROM_START;
+    const uint16_t lenAddr=EEPROM_START;
 
     if (enter)
     {
         enter = 0;
 
         // mt __EEGET(indexps, EEPROM_START);           // Load the length if the name
-		indexps=eeprom_read_byte_169(&lenAddr);
+        indexps=eeprom_read_byte_169(&lenAddr);
         
-        if((indexps < 1) | (indexps > STRLENGHT))   // if illegal length     
+        if((indexps < 1) || (indexps > STRLENGHT))   // if illegal length / mt: fixed, was: |    
         {
             indexps = 0;
             Name[0] = 'A';
@@ -86,7 +87,7 @@ char vCard(char input)
         else
         {
             LoadEEPROM(Name, indexps, EEPROM_START + 1);  // Load name 
-			LCD_puts(Name, 1);
+            LCD_puts(Name, 1);
         }
     }
 
@@ -123,12 +124,12 @@ char EnterName(char input)
     static char enter = 1;
 
     // mt static char temp_index = 0;
-	static uint8_t temp_index = 0;
+    static uint8_t temp_index = 0;
     static char temp_name[6];
     
     // mt char i;
-	static uint8_t i;
-	uint16_t lenAddr=EEPROM_START;
+    static uint8_t i;
+    uint16_t lenAddr=EEPROM_START;
 
     if (enter)
     {
@@ -168,7 +169,7 @@ char EnterName(char input)
     if (input != KEY_NULL)
         LCD_FlashReset();
 
-    if (input == KEY_PLUS)
+    if ( input == KEY_MINUS ) // mt 1/06 (input == KEY_PLUS)
     {
        
         Name[indexps]--;
@@ -183,7 +184,7 @@ char EnterName(char input)
             Name[indexps] = 'Z';
 
     }
-    else if (input == KEY_MINUS)
+    else if ( input == KEY_PLUS ) // mt 1/06 (input == KEY_MINUS)
     {
         Name[indexps]++;
 
@@ -207,8 +208,9 @@ char EnterName(char input)
     {
         if(indexps < STRLENGHT)
         {
+			i = Name[indexps]; // ext. mt 1/2006
             indexps++;
-            Name[indexps] = 'A';            
+            Name[indexps] = i; // Name[indexps] = 'A';
         }
     }
     else if (input == KEY_ENTER)
@@ -218,7 +220,7 @@ char EnterName(char input)
         Name[indexps] = '\0';
         
         // mt __EEPUT(EEPROM_START, indexps);   //store the length of name in EEPROM
-		eeprom_write_byte_169(&lenAddr,indexps);
+        eeprom_write_byte_169(&lenAddr,indexps);
     
         StoreEEPROM(Name, indexps, EEPROM_START + 1);  //store the Name in EEPROM
         
@@ -248,8 +250,8 @@ char RS232(char input)
     char c;
     static char buffer[STRLENGHT];
     //static char temp_index;
-	static uint8_t temp_index;
-	uint16_t lenAddr=EEPROM_START;
+    static uint8_t temp_index;
+    uint16_t lenAddr=EEPROM_START;
     
     if (enter)
     {
@@ -263,7 +265,7 @@ char RS232(char input)
         sei(); // mt __enable_interrupt();
         
         // mt jw-meth: LCD_puts_f(TEXT_WAIT, 0);
-		LCD_puts_f(PSTR("waiting for input on RS232"), 0);
+        LCD_puts_f(PSTR("waiting for input on RS232"), 0);
         enter = 0;
         temp_index = 0;
         c = UDR;                       // Dummy read to clear receive buffer
@@ -298,7 +300,7 @@ char RS232(char input)
                 enter = 1;
                         
                 // mt __EEPUT(EEPROM_START, temp_index);   //store the length of name in EEPROM
-				eeprom_write_byte_169(&lenAddr,temp_index);
+                eeprom_write_byte_169(&lenAddr,temp_index);
                 StoreEEPROM(Name, temp_index, EEPROM_START + 1);  //store the Name in EEPROM
                 
                 indexps = temp_index;
@@ -319,7 +321,7 @@ char RS232(char input)
     {
         enter = 1;
         
-		cli(); // mt __disable_interrupt();
+        cli(); // mt __disable_interrupt();
         
         CLKPR = (1<<CLKPCE);        // set Clock Prescaler Change Enable
         // set prescaler = 8, Inter RC 8Mhz / 8 = 1Mhz

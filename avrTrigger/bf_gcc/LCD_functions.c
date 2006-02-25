@@ -29,6 +29,7 @@
 #include "BCD.h"
 // mt only for KEY_* and ST_OPTIONS_DISPLAY* definitions:
 #include "main.h"
+#include "button.h"
 
 
 #define FALSE   0
@@ -57,15 +58,15 @@ extern char gLCD_Start_Scroll_Timer;
 void LCD_puts_f(const char *pFlashStr, char scrollmode)
 {
     // char i;
-	uint8_t i;
+    uint8_t i;
 
     while (gLCD_Update_Required);      // Wait for access to buffer
 
     // mt: for (i = 0; pFlashStr[i] && i < TEXTBUFFER_SIZE; i++)
-	for (i = 0; (const char)(pgm_read_byte(&pFlashStr[i])) && i < TEXTBUFFER_SIZE; i++)
+    for (i = 0; (const char)(pgm_read_byte(&pFlashStr[i])) && i < TEXTBUFFER_SIZE; i++)
     {
         // mt: gTextBuffer[i] = pFlashStr[i];
-		gTextBuffer[i] = pgm_read_byte(&pFlashStr[i]);
+        gTextBuffer[i] = pgm_read_byte(&pFlashStr[i]);
     }
 
     gTextBuffer[i] = '\0';
@@ -100,9 +101,9 @@ void LCD_puts_f(const char *pFlashStr, char scrollmode)
 *****************************************************************************/
 void LCD_puts(char *pStr, char scrollmode)
 {
-	uint8_t i; // char i;
-	
-	while (gLCD_Update_Required);      // Wait for access to buffer
+    uint8_t i; // char i;
+
+    while (gLCD_Update_Required);      // Wait for access to buffer
 
     for (i = 0; pStr[i] && i < TEXTBUFFER_SIZE; i++)
     {
@@ -161,7 +162,7 @@ void LCD_putc(uint8_t digit, char character)
 void LCD_Clear(void)
 {
     uint8_t i; // char i;
-	   
+
     for (i=0; i<TEXTBUFFER_SIZE; i++)
         gTextBuffer[i] = ' ';
 }

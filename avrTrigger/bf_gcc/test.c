@@ -16,10 +16,9 @@
 //
 //  20030116 - 1.0  - Created                                       - LHM
 //  20031009          port to avr-gcc/avr-libc                      - M.Thomas
+//  20060107          TestWaitEnter()                               - mt
 //
 //***************************************************************************
-
-// mt: gcc port of "test.c" is untested !??
 
 //mtA
 //#include <inavr.h>
@@ -39,6 +38,17 @@
 
 #define pLCDREG_test (*(char *)(0xEC))
 
+// mtA
+static void TestWaitEnter(void)
+{
+	char input = 0;
+    while(input != KEY_ENTER)
+    {
+        input = getkey();           // Read buttons
+    }
+}
+// mtE
+
 void Test(void)
 {
     char input = 0;
@@ -50,15 +60,18 @@ void Test(void)
     
     TIMSK2 = 0; // Stop clock, the interrupt will disturb the sound-test cause
                 // the play-routine doesn't use interrupt...
-    
+
+//mtA    
     LCD_puts_f(PSTR("Test"),0); // mt LCD_puts("Test",0);
-        
+
+#if 0        
     while(input != KEY_ENTER)
     {
         input = getkey();           // Read buttons
     }
-        
-
+#endif
+	TestWaitEnter();
+//mtE
 
 
 //// //// //// //// JOYSTICK TEST //// //// //// ////
@@ -96,13 +109,19 @@ void Test(void)
 //// //// //// //// SOUND TEST //// //// //// ////
     
     LCD_puts_f(PSTR("Sound"),0);// mt LCD_puts("Sound",0);
-    
+
+//mtA
+#if 0    
     input = 0;
     
     while(input != KEY_ENTER)
     {
         input = getkey();           // Read buttons
-    }        
+    }
+#endif
+	TestWaitEnter();
+//mtE
+        
     
     TCCR1A = (1<<COM1A1);// | (1<<COM1A0); // Set OC1A when upcounting, clear when downcounting
     TCCR1B = (1<<WGM13) | (1<<CS10);        // Phase/Freq-correct PWM, top value = ICR1
@@ -133,14 +152,18 @@ void Test(void)
     
     // mt while(!(PINB & (1<<PORTB4)));
 	while(!(PINB & (1<<PINB4)));
-    
+
+//mtA
+#if 0
     input = 0;
-    
     
     while(input != KEY_ENTER)
     {
         input = getkey();           // Read buttons
     }
+#endif
+	TestWaitEnter();
+//mtE
     
     cbiBF(LCDCRA, LCDIE);
     
@@ -176,22 +199,33 @@ void Test(void)
 		
         ErrorBeep();
     
-        input = 0;
+//mtA
+#if 0
+	    input = 0;
     
-        while(input != KEY_ENTER)
-        {
-            input = getkey();           // Read buttons
-        } 
+	    while(input != KEY_ENTER)
+	    {
+	        input = getkey();           // Read buttons
+	    }
+#endif
+		TestWaitEnter();
+//mtE
+
         ADC_periphery();
   
         LCD_UpdateRequired(TRUE, 0);   
     
-        input = 0;
+//mtA
+#if 0
+	    input = 0;
     
-        while(input != KEY_ENTER)
-        {
-            input = getkey();           // Read buttons
-        }         
+	    while(input != KEY_ENTER)
+	    {
+	        input = getkey();           // Read buttons
+	    }
+#endif
+		TestWaitEnter();
+//mtE
     }
     
  
@@ -209,23 +243,33 @@ void Test(void)
 
         ErrorBeep();
 
-        input = 0;
+//mtA
+#if 0
+	    input = 0;
     
-        while(input != KEY_ENTER)
-        {
-            input = getkey();           // Read buttons
-        } 
+	    while(input != KEY_ENTER)
+	    {
+	        input = getkey();           // Read buttons
+	    }
+#endif
+		TestWaitEnter();
+//mtE
                 
         ADC_periphery();
   
         LCD_UpdateRequired(TRUE, 0);   
     
-        input = 0;
+//mtA
+#if 0
+	    input = 0;
     
-        while(input != KEY_ENTER)
-        {
-            input = getkey();           // Read buttons
-        } 
+	    while(input != KEY_ENTER)
+	    {
+	        input = getkey();           // Read buttons
+	    }
+#endif
+		TestWaitEnter();
+//mtE
     }
 
     
@@ -233,12 +277,17 @@ void Test(void)
 
     LCD_puts_f(PSTR("Light"),0);// mt LCD_puts("Light",0);
 
+//mtA
+#if 0
     input = 0;
-    
+
     while(input != KEY_ENTER)
     {
         input = getkey();           // Read buttons
-    } 
+    }
+#endif
+	TestWaitEnter();
+//mtE
     
     ADC_init(2);
 
@@ -283,12 +332,17 @@ void Test(void)
 
             ErrorBeep();
 
-            input = 0;
-        
-            while(input != KEY_ENTER)
-            {
-                input = getkey();           // Read buttons
-            } 
+//mtA
+#if 0
+		    input = 0;
+
+    		while(input != KEY_ENTER)
+    		{
+        		input = getkey();           // Read buttons
+    		}
+#endif
+			TestWaitEnter();
+//mtE
             
             break;
         }
@@ -302,12 +356,17 @@ void Test(void)
 
     i = Revision(1); // dummy readout
 
+//mtA
+#if 0
     input = 0;
-    
+
     while(input != KEY_ENTER)
     {
         input = getkey();           // Read buttons
-    } 
+    }
+#endif
+	TestWaitEnter();
+//mtE
 
 
 //// //// //// //// RESET //// //// //// ////

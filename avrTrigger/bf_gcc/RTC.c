@@ -16,18 +16,16 @@
 //
 //  20021015 - 1.0  - Created                                       - LHM
 //  20031009          port to avr-gcc/avr-libc                      - M.Thomas
-//
+//  20051107          minior correction (volatiles)                 - mt
 //*****************************************************************************
 
-//  Include files
 //mtA
-//#include <inavr.h>
-//#include "iom169.h"
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <inttypes.h>
 #include <avr/signal.h>
 #include <avr/pgmspace.h>
+#include "button.h"
 //mtE
 #include "main.h"
 #include "RTC.h"
@@ -40,14 +38,13 @@
 //char gHOUR;
 //char gDAY;
 //char gMONTH;
-uint8_t gSECOND;
-uint8_t gMINUTE;
-uint8_t gHOUR;
-uint8_t gDAY;
-uint8_t gMONTH;
-// mtE
-unsigned int gYEAR;
-// mtA
+volatile uint8_t  gSECOND;
+volatile uint8_t  gMINUTE;
+volatile uint8_t  gHOUR;
+volatile uint8_t  gDAY;
+volatile uint8_t  gMONTH;
+volatile uint16_t gYEAR;
+
 //char gPowerSaveTimer = 0;
 //char dateformat = 0;
 volatile uint8_t gPowerSaveTimer = 0;
@@ -134,9 +131,9 @@ void RTC_init(void)
     gMINUTE  = 0;
     gHOUR    = 12;
     // mt release timestamp
-    gDAY     = 27;
-    gMONTH   = 8;
-    gYEAR    = 4;
+    gDAY     = 7;
+    gMONTH   = 1;
+    gYEAR    = 6;
 }
 
 
@@ -154,7 +151,7 @@ void RTC_init(void)
 char ShowClock(char input)
 {
     //char HH, HL, MH, ML, SH, SL;
-	uint8_t HH, HL, MH, ML, SH, SL;
+    uint8_t HH, HL, MH, ML, SH, SL;
 
     if (clockformat == CLOCK_12)    // if 12H clock
         HH = CHAR2BCD2(TBL_CLOCK_12[gHOUR]);   
@@ -211,14 +208,14 @@ char ShowClock(char input)
 char SetClock(char input)
 {
     static char enter_function = 1;
-	// mtA
+    // mtA
     // static char time[3];    // table holding the temporary clock setting
     // static char mode = HOUR;
     // char HH, HL, MH, ML, SH, SL;
-	static uint8_t time[3];
-	static uint8_t mode = HOUR;
-	uint8_t HH, HL, MH, ML, SH, SL;
-	// mtE
+    static uint8_t time[3];
+    static uint8_t mode = HOUR;
+    uint8_t HH, HL, MH, ML, SH, SL;
+    // mtE
 
     if (enter_function)
     {
@@ -404,24 +401,24 @@ char ShowDate(char input)
     DH = (DH >> 4) + '0';
 
 
-	// mtA - based on jw
-	// TODO: check poss. opt. with pgm_read_word
+    // mtA - based on jw
+    // TODO: check poss. opt. with pgm_read_word
     // LCD_putc( *(DATE_FORMAT_NR[dateformat] + 0), YH);
     // LCD_putc( *(DATE_FORMAT_NR[dateformat] + 1), YL);
-	LCD_putc( pgm_read_byte(DATE_FORMAT_NR[dateformat] + 0), YH);
+    LCD_putc( pgm_read_byte(DATE_FORMAT_NR[dateformat] + 0), YH);
     LCD_putc( pgm_read_byte(DATE_FORMAT_NR[dateformat] + 1), YL);
 
     // LCD_putc( *(DATE_FORMAT_NR[dateformat] + 2), MH);
     // LCD_putc( *(DATE_FORMAT_NR[dateformat] + 3), ML);
-	LCD_putc( pgm_read_byte(DATE_FORMAT_NR[dateformat] + 2), MH);
+    LCD_putc( pgm_read_byte(DATE_FORMAT_NR[dateformat] + 2), MH);
     LCD_putc( pgm_read_byte(DATE_FORMAT_NR[dateformat] + 3), ML);
 
 
     // LCD_putc( *(DATE_FORMAT_NR[dateformat] + 4), DH);
     // LCD_putc( *(DATE_FORMAT_NR[dateformat] + 5), DL);
-	LCD_putc( pgm_read_byte(DATE_FORMAT_NR[dateformat] + 4), DH);
+    LCD_putc( pgm_read_byte(DATE_FORMAT_NR[dateformat] + 4), DH);
     LCD_putc( pgm_read_byte(DATE_FORMAT_NR[dateformat] + 5), DL);
-	// mtE
+    // mtE
 
 
     LCD_putc(6, '\0');
@@ -457,13 +454,13 @@ char ShowDate(char input)
 *****************************************************************************/
 char SetDate(char input)
 {
-    static char enter_function = 1;
-    // mtA
+	static char enter_function = 1;
+	// mtA
 	// static char date[3];    // table holding the temporary date setting
 	// static char mode = DAY;
 	// char YH, YL, MH, ML, DH, DL;
 	// char MonthLength_temp;
-    // char LeapMonth;
+	// char LeapMonth;
 	static uint8_t date[3];    // table holding the temporary date setting
 	static uint8_t mode = DAY;
 	uint8_t YH, YL, MH, ML, DH, DL;
@@ -619,12 +616,12 @@ char SetDate(char input)
 char SetDateFormat(char input)
 {
     static char enter = 1;
-    
+
     if(enter)
     {
         enter = 0;
-        
-		LCD_puts_f(DATEFORMAT_TEXT[dateformat], 1);
+
+        LCD_puts_f(DATEFORMAT_TEXT[dateformat], 1);
     }
     if (input == KEY_PLUS)
     {

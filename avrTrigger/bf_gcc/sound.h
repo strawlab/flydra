@@ -5,6 +5,9 @@ void Play_Tune(void);
 
 void PlayClick(void); // mt
 
+// global variable to prevent entering power save, when playing.
+extern volatile char gPlaying; 
+
 #define DURATION_SEED 32  
 
 /*****************************************************************************

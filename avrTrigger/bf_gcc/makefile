@@ -58,7 +58,7 @@ button.c \
 BCD.c \
 ADC.c \
 eeprom169.c
-# mt: test.c no longer linked to free flash-space for keyklick
+
 SRC += test.c
 
 # List Assembler source files here.
@@ -80,7 +80,7 @@ OPT = s
 # Debugging format.
 # Native formats for AVR-GCC's -g are stabs [default], or dwarf-2.
 # AVR (extended) COFF requires stabs, plus an avr-objcopy run.
-DEBUG = stabs
+#DEBUG = stabs
 #DEBUG = dwarf-2
 
 # List any extra directories to look for include files here.
@@ -182,7 +182,7 @@ LDFLAGS += $(PRINTF_LIB) $(SCANF_LIB) $(MATH_LIB)
 # Type: avrdude -c ?
 # to get a full listing.
 #
-#AVRDUDE_PROGRAMMER = stk500
+#AVRDUDE_PROGRAMMER = stk500v2
 AVRDUDE_PROGRAMMER = butterfly
 
 # com1 = serial port. Use lpt1 to connect to parallel port.

@@ -54,7 +54,7 @@ uint8_t CountDownTimers[TIMER0_NUM_COUNTDOWNTIMERS];
 void Timer0_Init(void)
 {
     //mt char i;
-	uint8_t i;
+    uint8_t i;
 
     // Initialize array of callback functions
     for (i=0; i<TIMER0_NUM_CALLBACKS; i++)
@@ -65,17 +65,17 @@ void Timer0_Init(void)
         CountDownTimers[i] = 255;
 
 
-	// Initialize Timer0.
-	// Used to give the correct time-delays in the song
+    // Initialize Timer0.
+    // Used to give the correct time-delays in the song
 
     // Enable timer0 compare interrupt
-	TIMSK0 = (1<<OCIE0A);
+    TIMSK0 = (1<<OCIE0A);
 
     // Sets the compare value
-	OCR0A = 38;
+    OCR0A = 38;
 
-	// Set Clear on Timer Compare (CTC) mode, CLK/256 prescaler
-	TCCR0A = (1<<WGM01)|(0<<WGM00)|(4<<CS00);
+    // Set Clear on Timer Compare (CTC) mode, CLK/256 prescaler
+    TCCR0A = (1<<WGM01)|(0<<WGM00)|(4<<CS00);
 }
 
 
@@ -98,7 +98,7 @@ SIGNAL(SIG_OUTPUT_COMPARE0)
 // mtE
 {
     // mt char i;
-	uint8_t i;
+    uint8_t i;
     
     for (i=0; i<TIMER0_NUM_CALLBACKS; i++)
         if (CallbackFunc[i] != NULL)
@@ -127,7 +127,7 @@ SIGNAL(SIG_OUTPUT_COMPARE0)
 BOOL Timer0_RegisterCallbackFunction(TIMER_CALLBACK_FUNC pFunc)
 {
     // mt char i;
-	uint8_t i;
+    uint8_t i;
     
     for (i=0; i<TIMER0_NUM_CALLBACKS; i++)
     {
@@ -163,7 +163,7 @@ BOOL Timer0_RegisterCallbackFunction(TIMER_CALLBACK_FUNC pFunc)
 BOOL Timer0_RemoveCallbackFunction(TIMER_CALLBACK_FUNC pFunc)
 {
     // mt char i;
-	uint8_t i;
+    uint8_t i;
     
     for (i=0; i<TIMER0_NUM_CALLBACKS; i++)
     {
@@ -181,8 +181,8 @@ BOOL Timer0_RemoveCallbackFunction(TIMER_CALLBACK_FUNC pFunc)
 char Timer0_AllocateCountdownTimer()
 {
     // mt char i;
-	uint8_t i;
-	
+    uint8_t i;
+
     for (i=0; i<TIMER0_NUM_COUNTDOWNTIMERS; i++)
         if (CountDownTimers[i] == 255)
         {

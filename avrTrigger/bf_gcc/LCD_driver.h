@@ -50,13 +50,13 @@
 /************************************************************************/
 // mt: volatiles added (based on jw patch)
 extern volatile char gLCD_Update_Required;
-extern char LCD_Data[LCD_REGISTER_COUNT];
-extern char gTextBuffer[TEXTBUFFER_SIZE];
+// mt: extern char LCD_Data[LCD_REGISTER_COUNT];
+extern volatile char gTextBuffer[TEXTBUFFER_SIZE];
 extern volatile char gScrollMode;
-extern char gFlashTimer;
+extern volatile char gFlashTimer;
 extern char gColon;
 extern volatile signed char gScroll;
-
+extern volatile char gAutoPressJoystick;
 
 /************************************************************************/
 // Global functions

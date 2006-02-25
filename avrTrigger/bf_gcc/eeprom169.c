@@ -40,6 +40,6 @@ void eeprom_write_byte_169(uint16_t *addr, uint8_t val)
 	EECR |= (1<<EEMWE);
 	/* Start eeprom write by setting EEWE */
 	EECR |= (1<<EEWE);
-	while(EECR & (1<<EEWE));
+	while(EECR & (1<<EEWE)); // paranoia
 	sei();
 }

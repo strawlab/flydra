@@ -32,25 +32,27 @@
 #include "button.h"
 #include "LCD_driver.h"
 
+#ifndef BOOL
 #define BOOL    char
 #define FALSE   0
 #define TRUE    (!FALSE)
+#endif
 
 // Variable from "button.c" to prevent button-bouncing
 extern unsigned char gButtonTimeout;    
 
-extern BOOL gAutoPressJoystick;
+volatile char gAutoPressJoystick = FALSE;
 
 // Used to indicate when the LCD interrupt handler should update the LCD
 // mt jw char gLCD_Update_Required = FALSE;
 volatile char gLCD_Update_Required = FALSE;
 
 // LCD display buffer (for double buffering).
-char LCD_Data[LCD_REGISTER_COUNT];
+volatile char LCD_Data[LCD_REGISTER_COUNT];
 
 // Buffer that contains the text to be displayed
 // Note: Bit 7 indicates that this character is flashing
-char gTextBuffer[TEXTBUFFER_SIZE];
+volatile char gTextBuffer[TEXTBUFFER_SIZE];
 
 // Only six letters can be shown on the LCD.
 // With the gScroll and gScrollMode variables,
@@ -63,7 +65,7 @@ char gLCD_Start_Scroll_Timer = 0;
 
 // The gFlashTimer is used to determine the on/off
 // timing of flashing characters
-char gFlashTimer = 0;
+volatile char gFlashTimer = 0;
 
 // Turns on/off the colons on the LCD
 char gColon = 0;
@@ -188,7 +190,7 @@ void LCD_WriteDigit(char c, char digit)
 
     unsigned int seg = 0x0000;                  // Holds the segment pattern
     char mask, nibble;
-    char *ptr;
+    volatile char *ptr;
     char i;
 
 
@@ -204,9 +206,9 @@ void LCD_WriteDigit(char c, char digit)
 
         c -= '*';
 
-		//mt seg = LCD_character_table[c];
-		seg = (unsigned int) pgm_read_word(&LCD_character_table[(uint8_t)c]); 
-	}
+        //mt seg = LCD_character_table[c];
+        seg = (unsigned int) pgm_read_word(&LCD_character_table[(uint8_t)c]); 
+    }
 
     // Adjust mask according to LCD segment mapping
     if (digit & 0x01)
@@ -277,8 +279,8 @@ SIGNAL(SIG_LCD)
 
     static char timeout_count;
     static char auto_joystick_count;
-	
-	c_flash=0; // mt
+
+    c_flash=0; // mt
     
 /**************** Button timeout for the button.c, START ****************/
     if(!gButtonTimeout)

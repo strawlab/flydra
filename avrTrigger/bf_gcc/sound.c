@@ -17,6 +17,8 @@
 //  20030116 - 1.0  - Created                                       - LHM
 //  20031009          port to gcc/avr-libc                          - M.Thomas
 //  20040123          added temp.-var.                              - n.n./mt
+//  20050727          added local helper-function                   - mt
+//  20060107          fixed or in pause-if                          - mt
 //
 //***************************************************************************
 
@@ -28,6 +30,7 @@
 #include "sound.h"
 #include "timer0.h"
 #include "LCD_functions.h"
+#include "button.h"
 
 
 /******************************************************************************
@@ -160,9 +163,10 @@ PGM_P TEXT_SONG_TBL[] PROGMEM   = { TEXT_SONG1, TEXT_SONG2, TEXT_SONG3, TEXT_SON
 const char PLAYING[] PROGMEM   = "PLAYING";
 
 // mt: int __flash *pSong;     // pointer to the different songs in flash
-const int *pSong;	// mt point to a ram location (pointer array Songs)
+const int *pSong;	// mt - pointer to the different songs in flash
 
-extern char gPlaying;      // global variable from "main.c"
+volatile char gPlaying = FALSE;
+
 static char Volume = 80;
 static char Duration = 0;
 static char Tone = 0;
@@ -187,10 +191,9 @@ void Sound_Init(void)
     
     sbiBF(TCCR1B, CS10);             // start Timer1, prescaler(1)    
     
-	// mtA
-    OCR1AH = 0; //OCR1AH = 0;     // Set a initial value in the OCR1A-register
-    OCR1AL = Volume; //OCR1AL = Volume;     // This will adjust the volume on the buzzer, lower value => higher volume
-    // mtE
+    OCR1AH = 0;        // Set a initial value in the OCR1A-register
+    OCR1AL = Volume;   // This will adjust the volume on the buzzer, lower value => higher volume
+    
     
     Timer0_RegisterCallbackFunction(Play_Tune);     // Timer/Counter0 keeps the right beat
 }
@@ -207,16 +210,16 @@ void Sound_Init(void)
 *
 *****************************************************************************/
 // mt inserted local helper to save some flash-space
-void showSongName(unsigned char song)
+static void showSongName(unsigned char songnum)
 {
-	LCD_puts_f((PGM_P)pgm_read_word(&TEXT_SONG_TBL[song]), 1);  // mt   // Set up the a song in the LCD
+	LCD_puts_f((PGM_P)pgm_read_word(&TEXT_SONG_TBL[songnum]), 1);  // mt   // Set up the a song in the LCD
 }
 
 char SelectSound(char input)
 {
     static char enter = 1;
     // mt static char song = 0;
-	static uint8_t song = 0;
+    static uint8_t song = 0;
     
     
     if (enter)
@@ -224,10 +227,10 @@ char SelectSound(char input)
         enter = 0;
         
         // mt LCD_puts_f((PGM_P)pgm_read_word(&TEXT_SONG_TBL[song]), 1);  // mt   // Set up the a song in the LCD
-		showSongName(song);
+        showSongName(song);
 
         // mt pSong = Songs[song];            // point to this song             
-		pSong=(int*)pgm_read_word(&Songs[song]); // looks too complicated...
+        pSong=(int*)pgm_read_word(&Songs[song]); // looks too complicated...
 
     }      
         
@@ -243,10 +246,10 @@ char SelectSound(char input)
             song--;
 
         // mt LCD_puts_f((PGM_P)pgm_read_word(&TEXT_SONG_TBL[song]), 1); // mt
-		showSongName(song);
+        showSongName(song);
         
         // mt pSong = Songs[song];
-		pSong=(int*)pgm_read_word(&Songs[song]); 
+        pSong=(int*)pgm_read_word(&Songs[song]); 
 
     }    
     else if (input == KEY_MINUS)    // shift to next song
@@ -257,10 +260,10 @@ char SelectSound(char input)
             song = 0;
         
         // mt LCD_puts_f((PGM_P)pgm_read_word(&TEXT_SONG_TBL[song]), 1);
-		showSongName(song);
+        showSongName(song);
         
         // mt pSong = Songs[song];
-		pSong=(int*)pgm_read_word(&Songs[song]);
+        pSong=(int*)pgm_read_word(&Songs[song]);
     }  
     else if(input == KEY_ENTER)     // start playing
     {
@@ -314,10 +317,9 @@ char Sound(char input)
             Volume = 80;
         else
             Volume += 5;
-        // mtA       
-		OCR1AH = 0;	// OCR1AH = 0;
-        OCR1AL = Volume;	// OCR1AL = Volume;
-		// mtE
+
+        OCR1AH = 0;
+        OCR1AL = Volume;
     }
     else if (input == KEY_MINUS)    // decrease the volum
     {
@@ -326,7 +328,7 @@ char Sound(char input)
         else
             Volume -= 5;   
         
-		OCR1AH = 0;
+        OCR1AH = 0;
         OCR1AL = Volume;
     }         
     
@@ -399,17 +401,17 @@ void Play_Tune(void)
             Duration--;
         }
         // mt: else if(*(pSong + Tone))    // If not the end of the song
-		else if(pgm_read_word(pSong + Tone))  // If not the end of the song
+        else if(pgm_read_word(pSong + Tone))  // If not the end of the song
         {
             // mt: Duration = ( DURATION_SEED / *(pSong + Tone) );  // store the duration
             Duration = ( DURATION_SEED / pgm_read_word(pSong + Tone) );  // store the duration
         
-			Tone++;                     // point to the next tone in the Song-table        
+            Tone++;                     // point to the next tone in the Song-table        
 
-			temp_tone=pgm_read_word(pSong + Tone); // mt 200301
-			// mt: if( (*(pSong + Tone) == p) | (*(pSong + Tone) == P) ) // if pause
-			// if( (pgm_read_word(pSong + Tone) == p) | (pgm_read_word(pSong + Tone) == P) ) // if pause
-            if( (temp_tone == p) | (temp_tone == P) ) // if pause
+            temp_tone=pgm_read_word(pSong + Tone); // mt 200301
+            // mt: if( (*(pSong + Tone) == p) | (*(pSong + Tone) == P) ) // if pause
+            // if( (pgm_read_word(pSong + Tone) == p) | (pgm_read_word(pSong + Tone) == P) ) // if pause
+            if( (temp_tone == p) || (temp_tone == P) ) // if pause
                 cbiBF(TCCR1B, CS10);             // stop Timer1, prescaler(1)    
             else 
                 sbiBF(TCCR1B, CS10);             // start Timer1, prescaler(1)  
@@ -417,8 +419,8 @@ void Play_Tune(void)
             cli(); // mt __disable_interrupt();
             
             // mt temp_hi = *(pSong + Tone);      // read out the PWM-value
-			// temp_hi = pgm_read_word(pSong + Tone);      // read out the PWM-value
-			temp_hi = temp_tone;			// mt 200301
+            // temp_hi = pgm_read_word(pSong + Tone);      // read out the PWM-value
+            temp_hi = temp_tone;   // mt 200301
             temp_hi >>= 8;                  // move integer 8 bits to the rigth
                 
             TCNT1H = 0;                     // reset TCNT1H/L
@@ -426,8 +428,8 @@ void Play_Tune(void)
             
             ICR1H = temp_hi;                // load ICR1H/L
             // mt: ICR1L = *(pSong + Tone);        
-			// ICR1L = pgm_read_word(pSong + Tone);
-			ICR1L = temp_tone;
+            // ICR1L = pgm_read_word(pSong + Tone);
+            ICR1L = temp_tone;
             
             sei(); // mt: __enable_interrupt();
             
@@ -438,7 +440,7 @@ void Play_Tune(void)
             Tone++;         // point to the next tone in the Song-table        
             
             // mt: loop = *(pSong + Tone); // get the byte that tells if the song should loop or not
-			loop = (uint8_t)pgm_read_word(pSong + Tone); // get the byte that tells if the song should loop or not
+            loop = (uint8_t)pgm_read_word(pSong + Tone); // get the byte that tells if the song should loop or not
             
             if( loop )  
             {
@@ -457,7 +459,7 @@ void Play_Tune(void)
         }
         
         // mt: Tempo = *(pSong + 0);
-		Tempo = (uint8_t)pgm_read_word(pSong + 0);
+        Tempo = (uint8_t)pgm_read_word(pSong + 0);
     }
     else
         Tempo--;
@@ -467,12 +469,12 @@ void Play_Tune(void)
 //mtA
 void PlayClick(void)
 {
-        unsigned char i;
-        for (i = 0; i < 10; i++) {
-                sbiBF(PORTB, 5);
-                Delay(1);
-                cbiBF(PORTB, 5);
-                Delay(1);
-        }
+	unsigned char i;
+	for (i = 0; i < 10; i++) {
+		cbiBF(PORTB, 5);
+		Delay(1);
+		sbiBF(PORTB, 5);
+		Delay(1);
+	}
 }
 //mtE

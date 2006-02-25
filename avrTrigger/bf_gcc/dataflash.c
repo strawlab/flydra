@@ -1,7 +1,3 @@
-/*
-	Last change:  RM   17 Jan 2001   20:15
-*/
-
 //*****************************************************************************
 //
 //      COPYRIGHT (c) ATMEL Norway, 1996-2001
@@ -91,7 +87,7 @@ void DF_SPI_init (void)
 	// mtE
 	SPSR = (1<<SPI2X);                                      //SPI double speed settings
 	SPCR = (1<<SPE) | (1<<MSTR) | (1<<CPHA) | (1<<CPOL);	//Enable SPI in Master mode, mode 3, Fosc/4
-// mt: the following line was already commeted out in the original code
+// mt: the following line was already commented out in the original code
 //	SPCR = (1<<SPE) | (1<<MSTR) | (1<<CPHA) | (1<<CPOL) | (1<<SPR1) | (1<<SPR0);	//Enable SPI in Master mode, mode 3, Fosc/2
 }
 
@@ -306,7 +302,8 @@ void Buffer_Read_Str (unsigned char BufferNo, unsigned int IntPageAdr, unsigned 
 #endif
 }
 //NB : Sjekk at (IntAdr + No_of_bytes) < buffersize, hvis ikke blir det bare ball..
-
+// mt: Could somebody who knows Norwegian please send a translation of
+//     the above line - just curious
 
 
 /*****************************************************************************
@@ -448,7 +445,7 @@ void Buffer_Write_Str (unsigned char BufferNo, unsigned int IntPageAdr, unsigned
 }
 //NB : Monitorer busy-flag i status-reg.
 //NB : Sjekk at (IntAdr + No_of_bytes) < buffersize, hvis ikke blir det bare ball..
-
+// mt : Norwegian comments - important? - Please send translation.
 
 
 /*****************************************************************************

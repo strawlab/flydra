@@ -1,7 +1,3 @@
-/*
-    Last change:  RM   17 Jan 2001    11:35 
-*/
-
 //*****************************************************************************
 //
 //      COPYRIGHT (c) ATMEL Norway, 1996-2001
@@ -40,7 +36,7 @@
 // #define MTEXTRAS
 
 //General macro definitions
-//changed to *DF for avr-libc future compatiblity
+//changed to *DF for avr-libc compatiblity
 #define sbiDF(port,bit)	(port |=  (1<<bit))
 #define cbiDF(port,bit)	(port &= ~(1<<bit))
 //mtE
@@ -96,7 +92,6 @@ void Cont_Flash_Read_Enable (unsigned int PageAdr, unsigned int IntPageAdr);
 void Page_Erase (unsigned int PageAdr); // added by mthomas
 unsigned char Page_Buffer_Compare(unsigned char BufferNo, unsigned int PageAdr); // added by mthomas
 #endif
-// *****************************[ End Of DATAFLASH.H ]*****************************
 
- 
 #endif
+// *****************************[ End Of DATAFLASH.H ]*****************************

@@ -25,6 +25,7 @@
 #include <avr/io.h>
 #include <avr/pgmspace.h>
 #include "pgmspacehlp.h"
+#include "button.h"
 //mtE
 
 #include "main.h"
@@ -511,4 +512,4 @@ char LightFunc(char input)
     }
     else
         return ST_LIGHT_FUNC;    
-}    
+}

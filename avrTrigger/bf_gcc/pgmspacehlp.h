@@ -6,9 +6,10 @@
 	done by Martin Thomas, KL, .de
 */
 
-#ifndef _pgmspacehlp_h_
-#define _pgmspacehlp_h_
+#ifndef pgmspacehlp_h_
+#define pgmspacehlp_h_
 
+#include <inttypes.h>
 #include <avr/pgmspace.h>
 
 /* Read a float (4 Bytes) from PROGMEM
@@ -21,7 +22,7 @@ static inline float pgm_read_float_hlp(const float *addr)
 {	
 	union
 	{
-		int i[2];	// uint16_t 
+		uint16_t i[2];
 		float f;
 	} u;
 	

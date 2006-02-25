@@ -33,7 +33,8 @@
 // for keyclick:
 #include "sound.h"
 
-extern BOOL KeyClickStatus;
+// mt/v6 - keyclick (see main.c)
+extern volatile BOOL gKeyClickStatus;
 
 // extern char gPowerSaveTimer;
 extern volatile uint8_t gPowerSaveTimer;
@@ -154,7 +155,7 @@ void PinChangeInterrupt(void)
             {
                 KEY = key;          // Store key in global key buffer
                 KEY_VALID = TRUE;
-                if (KeyClickStatus)
+                if (gKeyClickStatus)
                   PlayClick();
             }
 

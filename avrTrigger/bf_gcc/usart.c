@@ -6,7 +6,7 @@
 //
 //  Target(s)...: ATmega169
 //
-//  Compiler....: IAR EWAAVR 2.28a
+//  Compiler....: avr-gcc / avr-libc
 //
 //  Description.: AVR Butterfly USART routines
 //
@@ -15,11 +15,11 @@
 //  YYYYMMDD - VER. - COMMENT                                       - SIGN.
 //
 //  20030116 - 1.0  - Created                                       - LHM
+//  2004            - corrected comment (only receiver enabled)     - mt
 //
 //***************************************************************************
 
 //mtA
-// only changed the includes here
 //#include <inavr.h>
 //#include "iom169.h"
 #include <avr/io.h>
@@ -48,7 +48,8 @@ void USART_Init(unsigned int baudrate)
     // Enable 2x speed
     UCSRA = (1<<U2X);
 
-    // Enable receiver 
+    // Enable receiver. Transmitter stays disabled since
+    // no data gets send in this application (only receive in vcard).
     UCSRB = (1<<RXEN)|(0<<TXEN)|(0<<RXCIE)|(0<<UDRIE);
 
     // Async. mode, 8N1

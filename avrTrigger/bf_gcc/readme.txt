@@ -2,9 +2,9 @@
 ===================================================
 
   A Port of the ATMEL AVR Butterfly Application 
-  Code to AVR-GCC/avr-libc
+  Code to avr-gcc/avr-libc
   
-  Development Diary of the GCC-port
+  Development Diary of the gcc-port
 
   by Martin Thomas, Kaiserslautern, Germany
   mthomas@rhrk.uni-kl.de 
@@ -22,6 +22,39 @@ Initialy I marked my changes with "// mt" or enclosed them with "// mtA" and
 the original code to see everything that has been changed.
 
 
+7. Jan. 2006
+
+Summary: AVR-Studio project-workspace, small fixes and changes
+
+- added volatile for data, buffer and timer in lcd_driver
+- exchanged cbi/sbiBF(PORTB, 5) in sound.c/PlayClick()
+- added volatile sound.c/gPlaying (PlayTune called by timer0-isr) 
+- moved gPlaying from main.c to sound.c
+- moved gUart to vcard.c
+- moved gPowerSaveTimer to RTC.c
+- removed extern ... LCD_charcter_table from main.c
+- moved gAutoPressJoystick from main.c to LCD_driver.c, 
+  changed type from bool to char 
+- prevent unneeded LCD refreshs in main.c/KeyClick()
+- gKeyClickStatus volatile since used in pinchange-ISR
+- added local helper function AutoPowerShowMin(); in main.c
+- updated/corrected some comments
+- main.c/Init. corrected DIDR1 to DIDR0
+- moved button definitions from main.c to button.h
+- added volatile to time and date global variables (rtc.h/rtc.c)
+- corrections/additions in this readme
+- added an AVRStudio "project-file", compile with -Os and 
+  link with -lm since the binary will not fit into the 14kBytes 
+  application-section with -O0 and the standard gcc FP-functions,
+  tested with AVRStudio V4.12SP1
+- fixed length-check in vcard.c/vCard() ( repl. | by || )
+- fixed pause if-condition in sound.c/Play_Tune() ( repl. | by || )
+- gimmik in name-input: initial-value for an appended char is the
+  same as the previous char. flipped plus/minus
+- gcc-port of Test() now tested, added TestWaitEnter() to 
+  save some flash-space
+-> 5th public release Version 0.6.6 (timestamp 20060107)
+
 27. Aug. 2004
 
 THIS VERSION WILL NOT BUILD WITH AVR-LIBC VERSIONS BELOW 1.0.4.
@@ -32,7 +65,7 @@ application for the Butterfly using the Dataflash.
 
 In the iom169.h-file from avr-libc 1.0.4 as included in 
 WinAVR 20040720 the special-function-register-names match those in the
-datasheet of the ATmega169 (12/2003). While some old names have been kept
+datasheet for the ATmega169 (12/2003). While some old names have been kept
 for compatibility this has not been done for all. This version of the port
 should only use "official" SFR- and bit-labels now.
 
@@ -45,16 +78,16 @@ should only use "official" SFR- and bit-labels now.
   the logger application
 * dataflash.c: added comment about dataflash chip select and powersaving;
   added comment about PageBits/PageSize near DF_status
-* sound.c: added a local variable to save some pgm_pace accesses, as proposed
+* sound.c: added a local variable to save some pgm_space accesses, as proposed
   by [TODO: namen raussuchen] in the avr-gcc mailing-list
 * main.c/OSCCAL_calibration: two "&&" where not correct. Reported by
   Steve Hippisley-Cox. Changed to "&". A test on the Butterfly did now show
   any difference in the calibration. "Wrong" and "correct" code result in the
   same OSCCAL value.
-* Information: Colin O'Flyn measured the current draw of V 0.6.4. Current
+* Information: Colin O'Flynn measured the current draw of V 0.6.4. Current
   draw is now the same (a little less in some functions) as the original
   IAR-Code.
-* Added batch-file ("shell-script") for flash upload with avrdude.
+* Added batch-file ("shell-script") for flash upload thru bootloader with avrdude.
 * all: adapted register-names as defined in the avr-libc iom169.h file based
   on the ATmega169 datasheet 12/2003
   (avr-libc-tag: $Id: iom169.h,v 1.13.2.2 2004/04/20 23:54:56 troth Exp $) 
@@ -65,10 +98,10 @@ should only use "official" SFR- and bit-labels now.
 * menu.h: Gimmik - let "GCC"-flash/blink in the welcome message
 * all: changed sbi/cbi makro-names to sbiBF/cbiBF in main.h and thruout
   the code to keep compatiblity with future versions of the avr-libc
-* makefile based on sample from WinAVR 20040720, used avrdude programmer
+* makefile based on template from WinAVR 20040720, used avrdude programmer
   option butterfly, if avrdude does not work for you try the 
   version available at www.siwawi.arubi.uni-kl.de/avr_projects
-* Programmers Notepad project file
+* Programmers-Notepad project file
 * made eeprom169.c a separate module (not inline any more) - saves flash
 -> 4th public release Version 0.6.5 (timestamp 20040827)
 
@@ -76,19 +109,20 @@ should only use "official" SFR- and bit-labels now.
 
 - Fixed a small error in the vcard-module ("NAME") when downloading via RS232.
 - Report from Randy Ott in the avrfreaks forum. BF with GCC port current
-drain is much higher than the original application which cuts battery life. 
-There seems to be a problem/incompatibility with avr-libc sleep-functions and the 
-ATmega169. Fixed by using the original ATMEL approach and "sleep" via inline-
-assembler. Current drain of version 0.6.4 is much lower now (the old code never 
-entered power-save-mode) Needs testing and better current measuring.
-- Made powersavetimer volatile because of interaction with rtc-timer-interrupt-handler.
+  drain is much higher than the original application which cuts battery life. 
+  There seems to be a problem/incompatibility with avr-libc sleep-functions and the 
+  ATmega169. Fixed by using the original ATMEL approach and "sleep" via inline-
+  assembler. Current drain of version 0.6.4 is much lower now (the old code never 
+  entered power-save-mode) Needs testing and better current measuring.
+- Made powersavetimer volatile because of interaction with 
+  rtc-timer-interrupt-handler.
 -> Third public release Version 0.6.4 (timestamp 20031205)
 
 15. Oct. 2003
 
-Second public release. Since ATMEL accepted to distribute gcc-port
+Second public release. Since ATMEL accepted to distribute the gcc-port
 as long as "the ported code call[s] attention to that this is ported Atmel
-code", the ported dataflash sources are included now. This is 
+code", the ported dataflash-sources are included now. This is 
 Version 0.6.3 (timestamp 20031016).
 Build hints: 
 - the path in the makefile may have to be changed.
@@ -105,11 +139,11 @@ available on request.
 
 14. Oct. 2003
 
-No Message from ATMEL. The only copyright is in
+No Message from ATMEL. The only copyright-notice is in
 dataflash.h/c which is only used in the hardware-test
 routine. Started to rewrite this code to get a clean 
 implementation. Stopped the rewrite at some point - 
-it's too silly doing a clean up or rewrite of code which 
+it's to silly doing a cleanup or rewrite of code which 
 I do not fully understand. 
 
 About 12 requests for the code via e-mail. Will wait one more 
@@ -118,7 +152,8 @@ day for response from ATMEL.
 The modified code leaves 8 words of free space in the program-
 flash. Since the possibility to use the 2nd buffer on the 
 dataflash has been enabled. Shortend some flash-text constants
-to make the binary fit into the memory.
+to make the binary fit into the memory. (1/2006: this has been
+reverted in all of the newer releases)
 For own extension the files test.c and dataflash.c can be removed from 
 the makefile. And the files test.c/test.h and dataflash.c/dataflash.h 
 should be deleted or moved. After a compiler-attempt the output will 
@@ -127,7 +162,10 @@ they can be removed without loss of functionality compared to the
 original application without hardware extension (see comment in code 
 how test-subroutine is activated)
 
-Will prepared a the source-package to work without test and dataflash 
+(update 1/2006: check firmware-usage with avr-size it changes
+from version to version of compiler and application)
+
+Will prepared a source-package to work without test and dataflash 
 just in case.
 
 10. Oct. 2003
@@ -146,6 +184,12 @@ the seminar today told me to ask ATMEL/Norway.
 or producing small series with these devices is 
 too difficult for a one-man-show.)
 
+(update 1/2006: Since 10/03 I have developed 
+different dataloggers, some based on the 
+Butterfly-hardware. I'm now also using 
+ARM7 controllers from Atmel and Philips)
+
+
 9.Oct.2003
 
 Wrote an e-mail to ATMEL today, hopefully they do 
@@ -163,8 +207,8 @@ Songs ;-).
 The whole libc-progmem thing is a pain,
 hopefully the avr-gcc/libc people can implement
 the IAR/codevision FLASH method sometime.
-(Although Joerg Wunsch writes that its inefficient
-in some forum threads.)
+(Although Joerg Wunsch writes that it is inefficient
+in some forum-threads.)
 
 I call this Version 0.6.1 the Butterfly welcome
 Message is "AVR Butterfly GCC", Version is "REV061",
@@ -198,11 +242,15 @@ I don't write them down here - does not put me in a good light.
 
 Separated some code to stand-alone projects during debugging.
 
-New special eeprom handler since ATmega169 is not
+New special eeprom-handler since ATmega169 is not
 supported by the avr-libc via eeprom.h, main code is from
 the ATmega169 databook with small changes to  make them 
 compatible to the usual avr-libc interface. A lot of
 other things had to be changed.
+
+(update 1/2006: Newer versions of the avr-libc support
+the ATmega169 so functions from eeprom.h could be
+used. But I will leave the eeprom-code as it is)
 
 The following does work:
 - LCD
@@ -213,10 +261,10 @@ The following does work:
 - Music - selection and start tune (see below), Volume control
 - Name - input via Joystick and RS232 
 - Temparature - seems reasonable (at least Celsius ;-),
-  its getting cold in Germany)
-- Voltage - shows 0,0 if no current attached - no more tests done
+  it is getting cold in Germany
+- Voltage - shows 0,0 if no voltage source attached - no more tests done
 - Light - seems to be ok
-- Options - Display contrast works, Jump to bootloader too,
+- Options - Display contrast works, Jump to bootloader too
 - Sleep mode-settings should work 
  
 NO "go" with Sound playback - although the Butterfly produces some
@@ -238,27 +286,27 @@ work in his code) - no success. Found the
 Codevision port but its pretty much
 like the IAR code. Nevertheless all the "dirty" 
 work for the avr-gcc should be done... (esp. progmem) 
-stuff - will send a Mail-for-help to the avr-gcc list.
+stuff - will send a mail-for-help to the avr-gcc list.
 
 3.Oct.2003
 
-Progspace-Variable-Handling improved. Na, not improved
+Progspace-Variable-Handling improved. Na, not improved:
 changed the complete accessing. Simply replacing 
 __FLASH with PROGMEM isn't enough (by far).
 A lot of hints found in a message
 on the avr-gcc ML from Joerg Wunsch.
-- but Joergs changes (patch) are not 
+- but Joerg's changes (patch) are not 
 based on the Atmel-Code but on the code from
-"DESI"/Mexiko who sent Joerg a version of the ATMEL
+"DESI"/Mexiko who has sent Joerg a version of the ATMEL
 source which he had already modified. So the 
-"state-machine"/Menu does not work. To say it correctly 
+"state-machine"/Menu does not work. To say it correctly: 
 nothing beside of the LCD works as it should. 
 Joerg patched a lot but obviously not everything that 
-is needed. credits to Joerg.
+is needed. Credits to Joerg.
 New function prg_read_float_hlp is an improved 
 (?) version of the routine found in the jw-
 patch. Still not tested with the hardware,
-but some simple tests with the simulators.
+but some simple tests with the simulator.
 More changes not documented here.
 
 1.Oct.2003
@@ -271,15 +319,15 @@ of the ATMEL AVR Butterfly application code
 2003 edition.
 
 I hope this does not violate any copyrights.
-But I could not find a copyright notice in ATMELs
-code.
+But I could not find a copyright notice in ATMEL's
+code. (1/2006 - this is wrong, so above)
 
 There exists some code from "DESI, Mexico"
-which I found in the AVRFREAKS forum.
+which I found in the AVRFREAKS gcc forum.
 (18AGO2003.zip) This code produced a lot 
 of warnings and did not cover all functions 
 of the original Butterfly application. 
-So I restartet from ATMELS code. 
+So I restarted from ATMEL's code. 
 Credits to DESI.
 
 Changes:
@@ -299,7 +347,7 @@ By the time of writing this I don't have
 my Butterfly board at hand. When I get it 
 back I have to solder a connection for
 an extrnal power source first since the 
-battery drains very fast if the Board is 
+battery drains very fast if the board is 
 accessed via RS232. 
 Well, since "someone" said: "publish early,
 quick" in open source - here it is. I hope 
