@@ -15,7 +15,7 @@ import glob
 
 # wind
 h5files = glob.glob('*.h5')
-logfiles = ['lights_out1_20060221_190658.log']
+logfiles = glob.glob('*.log')
 
 (all_results, all_results_times, trigger_fnos,
  projector_trig_times, tf_hzs) = FOE_utils.get_results_and_times(logfiles,h5files)
@@ -138,7 +138,7 @@ for idx in range(N_triggers):
         continue
     else:
         tts = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime(projector_trig_time))
-        print 'projector_trig_time %s (fno %d) OK %d'%(tts,trig_fno,count)
+        print 'projector_trig_time %s (fno %d) OK %d (%s)'%(tts,trig_fno,count,repr(projector_trig_time))
     mean_pretrig_z = mlab.mean( zm_time_of_interest.compressed())
     if not isinstance( mean_pretrig_z, float):
         print 'HMM, WARNING 2'

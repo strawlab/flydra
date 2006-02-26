@@ -1,6 +1,16 @@
 import numpy
 import result_browser
 
+def reject_data( projector_trig_times ):
+    # update here to reflect data which is unusable for whatever reason
+
+    # 2006-02-24 datae:
+    # Sat, 25 Feb 2006 06:20:33 AM - 10:40 AM
+    reject_idx = (projector_trig_times > 1140877233.0) & (projector_trig_times < 1140893467)
+
+    unrejected = ~reject_idx
+    return unrejected
+
 def get_results_and_times(logfiles,h5files,get_orig_times=False):
     # open H5 files
     all_results = [result_browser.get_results(h5file,mode='r+') for h5file in h5files]
@@ -23,17 +33,21 @@ def get_results_and_times(logfiles,h5files,get_orig_times=False):
             fno, projector_time, tf_hz = line.split()
             fno = int(fno)
             projector_time = float(projector_time)
-            
+            tf_hz = float(tf_hz)
+
             fnos.append(fno)
             projector_trig_times.append(projector_time)
-            
-            tf_hz = float(tf_hz)
-            #fno_by_projector_trig_time[projector_time] = fno
             tf_hzs.append( tf_hz )
 
     fnos = numpy.array(fnos,dtype=numpy.int64)
     projector_trig_times = numpy.array(projector_trig_times,dtype=numpy.float64)
     tf_hzs = numpy.array(tf_hzs,dtype=numpy.float64)
+
+    unrejected_idx = reject_data( projector_trig_times )
+    
+    fnos = fnos[unrejected_idx]
+    projector_trig_times = projector_trig_times[unrejected_idx]
+    tf_hzs = tf_hzs[unrejected_idx]
 
     # get original time of each frame
     if get_orig_times:

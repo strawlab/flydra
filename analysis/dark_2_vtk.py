@@ -43,12 +43,29 @@ for line in f_segments:
     fend = int(fend)
     
     tf_hz = float(tf_hz)
-    if tf_hz==1.0:
-        ball_color1 = colors.white
-        ball_color2 = colors.black
+
+    ball_color1 = colors.purple
+    ball_color2 = colors.purple
+
+    if 0:
+        # pre 2006-02-24
+        if tf_hz==1.0:
+            ball_color1 = colors.white
+            ball_color2 = colors.black
+        else:
+            ball_color1 = colors.white
+            ball_color2 = colors.white
     else:
-        ball_color1 = colors.white
-        ball_color2 = colors.white
+        if tf_hz==1.0:
+            ball_color1 = colors.white
+            ball_color2 = colors.white
+        elif tf_hz==0.0:
+            ball_color1 = colors.white
+            ball_color2 = colors.black
+        elif tf_hz==0.5:
+            ball_color1 = colors.white
+            ball_color2 = colors.red
+
     if h5filename not in h5files:
         h5files[h5filename] = result_browser.get_results(h5filename)
     results = h5files[h5filename]
