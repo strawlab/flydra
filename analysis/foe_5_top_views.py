@@ -140,69 +140,86 @@ if 0:
             pylab.plot(X,Y,fmt)
             
 # "horsetail" top views
+    
 if 1:
-    pylab.figure()#figsize=(8,8/(2/3)))
-    ax = None
-    for tf_hz, col, title in [(0.0,0,'no FOE'),
-                              (5.0,1,'FOE'),
-                              ]:
-        ax=pylab.subplot(2,1,col+1,sharex=ax,sharey=ax)
-        if tf_hz not in early_xvel:
-            continue
-        for i in range(len(early_xvel[tf_hz])):
-            this_early_xvel = early_xvel[tf_hz][i]
-            if not (-.2<=this_early_xvel<=0.2):
+    for slowest_xvel, fastest_xvel, frame_title in [
+        (-.2,.2,'slow (upwind, hovering, downwind)'),
+        
+        (.2,1000,'fast upwind'),
+        (.05,.2,'slow upwind'),
+        (-.05,.05,'hovering'),
+        (-.2,-0.05,'slow downwind'),
+        (-1000,-.2,'fast downwind'),
+        ]:
+        pylab.figure()#figsize=(8,8/(2/3)))
+        ax = None
+        for tf_hz, col, axtitle in [(0.0,0,'static'),
+                                    (5.0,1,'FOE'),
+                                    ]:
+            ax=pylab.subplot(2,1,col+1,sharex=ax,sharey=ax)
+            if col==0:
+                pylab.title(frame_title)
+            if tf_hz not in early_xvel:
                 continue
-            X = xs_pre[tf_hz][i]
-            Y = ys_pre[tf_hz][i]
-            X0 = X[-1]
-            Y0 = Y[-1]
-            pylab.plot(X-X0,Y-Y0,'k-')
-            
-            X = xs_post[tf_hz][i]
-            Y = ys_post[tf_hz][i]
-            if 0:
-                if tf_hz == 0.0:
-                    fmt = 'k-'
+            for i in range(len(early_xvel[tf_hz])):
+                this_early_xvel = early_xvel[tf_hz][i]
+                if not (slowest_xvel<=this_early_xvel<fastest_xvel):
+                    continue
+                X = xs_pre[tf_hz][i]
+                Y = ys_pre[tf_hz][i]
+                X0 = X[-1]
+                Y0 = Y[-1]
+                pylab.plot(X-X0,Y-Y0,'k-')
+
+                X = xs_post[tf_hz][i]
+                Y = ys_post[tf_hz][i]
+                if 0:
+                    if tf_hz == 0.0:
+                        fmt = 'k-'
+                    else:
+                        fmt = 'r-'
                 else:
                     fmt = 'r-'
-            else:
-                fmt = 'r-'
-            pylab.plot(X-X0,Y-Y0,fmt)
+                pylab.plot(X-X0,Y-Y0,fmt)
+                pylab.text(0,1,axtitle,
+                           transform = ax.transAxes,
+                           horizontalalignment='left',
+                           verticalalignment='top',
+                           )
             
-# "horsetail" top views only for upwind fliers
-if 1:
-    pylab.figure()#figsize=(8,8/(2/3)))
-    ax = None
-    for tf_hz, col, title in [(0.0,0,'no FOE'),
-                              (5.0,1,'FOE'),
-                              ]:
-        ax=pylab.subplot(2,1,col+1,sharex=ax,sharey=ax)
-        if tf_hz not in early_xvel:
-            continue
-        for i in range(len(early_xvel[tf_hz])):
-            this_early_xvel = early_xvel[tf_hz][i]
-            trig_fno = trig_fnos[tf_hz][i]
-            h5filename = h5filenames[tf_hz][i]
-            if not (0.05<=this_early_xvel<=0.2):
-                continue
-            X = xs_pre[tf_hz][i]
-            Y = ys_pre[tf_hz][i]
-            X0 = X[-1]
-            Y0 = Y[-1]
-            pylab.plot(X-X0,Y-Y0,'k-')
+### "horsetail" top views only for upwind fliers
+##if 1:
+##    pylab.figure()#figsize=(8,8/(2/3)))
+##    ax = None
+##    for tf_hz, col, title in [(0.0,0,'no FOE'),
+##                              (5.0,1,'FOE'),
+##                              ]:
+##        ax=pylab.subplot(2,1,col+1,sharex=ax,sharey=ax)
+##        if tf_hz not in early_xvel:
+##            continue
+##        for i in range(len(early_xvel[tf_hz])):
+##            this_early_xvel = early_xvel[tf_hz][i]
+##            trig_fno = trig_fnos[tf_hz][i]
+##            h5filename = h5filenames[tf_hz][i]
+##            if not (0.05<=this_early_xvel<=0.2):
+##                continue
+##            X = xs_pre[tf_hz][i]
+##            Y = ys_pre[tf_hz][i]
+##            X0 = X[-1]
+##            Y0 = Y[-1]
+##            pylab.plot(X-X0,Y-Y0,'k-')
             
-            X = xs_post[tf_hz][i]
-            Y = ys_post[tf_hz][i]
-            if 0:
-                if tf_hz == 0.0:
-                    fmt = 'k-'
-                else:
-                    fmt = 'r-'
-            else:
-                fmt = 'r-'
-            pylab.plot(X-X0,Y-Y0,fmt)
-            pylab.text( X[-1]-X0, Y[-1]-Y0, '%d'%trig_fno )
+##            X = xs_post[tf_hz][i]
+##            Y = ys_post[tf_hz][i]
+##            if 0:
+##                if tf_hz == 0.0:
+##                    fmt = 'k-'
+##                else:
+##                    fmt = 'r-'
+##            else:
+##                fmt = 'r-'
+##            pylab.plot(X-X0,Y-Y0,fmt)
+##            pylab.text( X[-1]-X0, Y[-1]-Y0, '%d'%trig_fno )
     
 if 0:
     pylab.figure()#figsize=(8,8/(2/3)))
