@@ -14,8 +14,8 @@ import math, random
 
 import flydra.reconstruct as reconstruct
 
+import numpy
 import numarray as nx
-from numarray.ieeespecial import getnan, nan, inf
 import Numeric # vtkImageImportFromArray needs Numeric
 import RandomArray
 
@@ -95,121 +95,6 @@ def init_vtk(stereo=False):
 #    renWin.SetSize( 320,240)
 
     return renWin, renderers
-
-##def set_lr_cams_from_center( left_cam, right_cam, center_cam ):
-##    center = cgtypes.vec3(center_cam.GetPosition())
-##    lookat = cgtypes.vec3(center_cam.GetFocalPoint())
-##    #print 'center, lookat',center, lookat
-##    approx_updir = cgtypes.vec3(0,0,1)
-
-##    viewdir = center-lookat
-##    viewdist = abs(viewdir)
-##    viewdir = viewdir.normalize()
-##    # find true updir
-##    rightsidedir = viewdir.cross(approx_updir)
-##    updir = rightsidedir.cross(viewdir)
-
-##    center_cam.SetViewUp(updir[0],updir[1],updir[2])
-
-##    right_eye_offset = -0.2*viewdist*viewdir.cross(updir)
-##    left_eye_offset = 0.2*viewdist*viewdir.cross(updir)
-
-##    right_eye_center = center+right_eye_offset
-##    left_eye_center = center+left_eye_offset
-
-##    right_eye_lookat = lookat#+right_eye_offset
-##    left_eye_lookat = lookat#+left_eye_offset
-
-##    left_cam.SetFocalPoint( left_eye_lookat[0], left_eye_lookat[1], left_eye_lookat[2] )
-##    left_cam.SetPosition( left_eye_center[0], left_eye_center[1], left_eye_center[2] )
-##    left_cam.SetViewUp(center_cam.GetViewUp())
-
-##    right_cam.SetFocalPoint( right_eye_lookat[0], right_eye_lookat[1], right_eye_lookat[2] )
-##    right_cam.SetPosition( right_eye_center[0], right_eye_center[1], right_eye_center[2] )
-##    right_cam.SetViewUp(center_cam.GetViewUp())
-
-
-##stereo_renWin = None
-##iren = None
-##left_ren = None
-##center_ren = None
-##right_ren = None
-##left_cam = None
-##center_cam = None
-##right_cam = None
-##def init_vtk_stereo(lookat,center,stereo=True):
-##    global stereo_renWin, left_ren, center_ren, right_ren, left_cam, center_cam, right_cam
-    
-##    stereo_renWin = vtkRenderWindow()
-
-##    renderers = []
-
-##    lookat = cgtypes.vec3(*lookat)
-##    center = cgtypes.vec3(*center)
-##    approx_updir = cgtypes.vec3(0,0,1)
-
-##    viewdir = center-lookat
-##    viewdist = abs(viewdir)
-##    viewdir = viewdir.normalize()
-##    # find true updir
-##    rightsidedir = viewdir.cross(approx_updir)
-##    updir = rightsidedir.cross(viewdir)
-
-##    if 0:
-##        right_eye_offset = 0.1*viewdist*viewdir.cross(updir)
-##        left_eye_offset = -0.1*viewdist*viewdir.cross(updir)
-
-##        right_eye_center = center+right_eye_offset
-##        left_eye_center = center+left_eye_offset
-
-##        right_eye_lookat = lookat#+right_eye_offset
-##        left_eye_lookat = lookat#+left_eye_offset
-
-##    center_cam = vtkCamera()
-##    center_cam.SetFocalPoint(lookat[0],lookat[1],lookat[2])
-##    center_cam.SetPosition(center[0],center[1],center[2])
-##    center_cam.SetParallelProjection(1)
-##    center_cam.SetViewAngle(30.0)
-##    center_cam.SetParallelScale(319.400653668)
-##    center_ren = vtkRenderer()
-##    center_ren.SetActiveCamera( center_cam )
-##    center_ren.SetViewport(.4,.6,.6,1) # not added to window but needed for Pan function
-##    stereo_renWin.AddRenderer( center_ren )
-##    renderers.append( center_ren )
-
-##    left_cam = vtkCamera()
-##    right_cam = vtkCamera()
-##    left_ren = vtkRenderer()
-##    right_ren = vtkRenderer()
-    
-##    set_lr_cams_from_center( left_cam, right_cam, center_cam )
-
-##    for camera, ren in [(left_cam,left_ren),(right_cam,right_ren)]:
-##        camera.SetParallelProjection(1)
-##        camera.SetViewAngle(30.0)
-##        camera.SetParallelScale(319.400653668)
-
-##        if ren is left_ren:
-##            ren.SetViewport(0,0,.5,1)
-##        else:
-##            ren.SetViewport(.5,0,1,1)
-##        ren.SetBackground( .6,.6,.75)
-##        ren.SetActiveCamera( camera )
-
-##        stereo_renWin.AddRenderer( ren )
-##        renderers.append( ren )
-
-##        #print_cam_props(ren.GetActiveCamera())
-    
-##    #stereo_renWin.SetSize( 1024, 768 )
-##    stereo_renWin.SetSize( 640, 480)
-
-##    return stereo_renWin, renderers
-
-##    iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
-##    iren.Initialize ()
-    
-##    return renWin, iren, ren1
 
 def show_cameras(results,renderers,frustums=True,labels=True,centers=True):
     import flydra.reconstruct
@@ -555,7 +440,7 @@ def show_frames_vtk(results,renderers,
             if frame_no not in frame_nos:
                 continue
             X = row['x'],row['y'],row['z']
-            if row['p0'] is nan:
+            if numpy.isnan(row['p0']):
                 line3d = None
             else:
                 line3d = row['p0'],row['p1'],row['p2'],row['p3'],row['p4'],row['p5']
@@ -611,7 +496,7 @@ def show_frames_vtk(results,renderers,
                 if row['frame'] != frame_no:
                     continue
                 X = row['x'],row['y'],row['z']
-                if row['qw'] is not nan:
+                if not numpy.isnan(row['qw']):
                     Q = cgtypes.quat( row['qw'], row['qx'],
                                       row['qy'], row['qz'] )
                 break

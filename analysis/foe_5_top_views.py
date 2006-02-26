@@ -11,7 +11,7 @@ D2R = pi/180
 
 # find segments to use
 analysis_file = open('strict_data.txt','r')
-f_segments = [line.strip().split() for line in analysis_file.readlines()]
+f_segments = [line.strip().split() for line in analysis_file.readlines() if not line.strip().startswith('#')]
 
 h5files = {}
 parsed = {}
@@ -30,6 +30,10 @@ ys_pre = {}
 xs_post= {}
 ys_post= {}
 
+trig_fnos = {}
+h5filenames = {}
+
+print 'loading data...'
 for line in f_segments:
     upwind, fstart, trig_fno, fend, h5filename, tf_hz = line
     upwind = bool(upwind)
@@ -88,6 +92,10 @@ for line in f_segments:
     ys_pre.setdefault(tf_hz,[]).append( pre_xyz[:,1] )    
     xs_post.setdefault(tf_hz,[]).append( post_xyz[:,0] )
     ys_post.setdefault(tf_hz,[]).append( post_xyz[:,1] )    
+
+    trig_fnos.setdefault(tf_hz,[]).append( trig_fno )
+    h5filenames.setdefault(tf_hz,[]).append( h5filename )
+print 'done'
     
 # convert data to numpy
 for d in [heading_early,
@@ -139,6 +147,8 @@ if 1:
                               (5.0,1,'FOE'),
                               ]:
         ax=pylab.subplot(2,1,col+1,sharex=ax,sharey=ax)
+        if tf_hz not in early_xvel:
+            continue
         for i in range(len(early_xvel[tf_hz])):
             this_early_xvel = early_xvel[tf_hz][i]
             if not (-.2<=this_early_xvel<=0.2):
@@ -168,8 +178,12 @@ if 1:
                               (5.0,1,'FOE'),
                               ]:
         ax=pylab.subplot(2,1,col+1,sharex=ax,sharey=ax)
+        if tf_hz not in early_xvel:
+            continue
         for i in range(len(early_xvel[tf_hz])):
             this_early_xvel = early_xvel[tf_hz][i]
+            trig_fno = trig_fnos[tf_hz][i]
+            h5filename = h5filenames[tf_hz][i]
             if not (0.05<=this_early_xvel<=0.2):
                 continue
             X = xs_pre[tf_hz][i]
@@ -188,6 +202,7 @@ if 1:
             else:
                 fmt = 'r-'
             pylab.plot(X-X0,Y-Y0,fmt)
+            pylab.text( X[-1]-X0, Y[-1]-Y0, '%d'%trig_fno )
     
 if 0:
     pylab.figure()#figsize=(8,8/(2/3)))

@@ -7,6 +7,10 @@ import vtk_results
 
 import vtk.util.colors as colors
 
+import datetime
+import pytz # from http://pytz.sourceforge.net/
+pacific = pytz.timezone('US/Pacific')
+
 # find segments to use
 analysis_file = open('strict_data.txt','r')
 f_segments = [line.strip().split() for line in analysis_file.readlines()]
@@ -23,9 +27,12 @@ camera.SetClippingRange (127.81089961095051, 1824.5666015625093)
 camera.SetParallelScale(349.904794877)
 
 h5files = {}
+rough_timestamps = {}
 
 did_bbox = False
-for line in f_segments:
+for line_no,line in enumerate(f_segments):
+    if line.strip().startswith('#'):
+        continue
     upwind_orig, fstart, trig_fno, fend, h5filename, tf_hz = line
 
     if upwind_orig == 'False':
@@ -46,8 +53,23 @@ for line in f_segments:
 
     ball_color1 = colors.purple
     ball_color2 = colors.purple
+    
+    if h5filename not in h5files:
+        h5files[h5filename] = result_browser.get_results(h5filename)
+        results = h5files[h5filename]
+        if 1:
+            data3d = results.root.data3d_best
+            for row in data3d:
+                ts_float = row['timestamp']
+                dt_ts = datetime.datetime.fromtimestamp(ts_float,pacific)
+                rough_timestamps[h5filename] = dt_ts
+                break
+    results = h5files[h5filename]
+    rough_timestamp = rough_timestamps[h5filename]
 
-    if 0:
+    if (rough_timestamp < datetime.datetime(2006, 2, 24, 18, 0, 0,
+                                            tzinfo=pacific)):
+        print 'old scheme'
         # pre 2006-02-24
         if tf_hz==1.0:
             ball_color1 = colors.white
@@ -65,12 +87,7 @@ for line in f_segments:
         elif tf_hz==0.5:
             ball_color1 = colors.white
             ball_color2 = colors.red
-
-    if h5filename not in h5files:
-        h5files[h5filename] = result_browser.get_results(h5filename)
-    results = h5files[h5filename]
-
-    
+            
     vtk_results.show_frames_vtk(results,renderers,fstart,fend,1,
                                 render_mode='ball_and_stick',
                                 labels=False,#True,
@@ -85,6 +102,8 @@ for line in f_segments:
                                 line_color1=ball_color1,
                                 ball_color2=ball_color2,
                                 line_color2=ball_color2,
+
+                                X_zero_frame=trig_fno,
                                 )
     if not did_bbox:
         did_bbox=True

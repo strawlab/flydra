@@ -381,9 +381,7 @@ def get_3d_frame_range_with_2d_info(results):
     frame_max = frames_3d[-1]
     return frame_min, frame_max
 
-def summarize(results):
-    res = StringIO.StringIO()
-
+def get_caminfo_dicts(results):
     # camera info
     cam_info = results.root.cam_info
     cam_id2camns = {}
@@ -393,6 +391,21 @@ def summarize(results):
         cam_id, camn = row['cam_id'], row['camn']
         cam_id2camns.setdefault(cam_id,[]).append(camn)
         camn2cam_id[camn]=cam_id
+    return camn2cam_id, cam_id2camns
+
+def summarize(results):
+    res = StringIO.StringIO()
+
+    camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
+##    # camera info
+##    cam_info = results.root.cam_info
+##    cam_id2camns = {}
+##    camn2cam_id = {}
+    
+##    for row in cam_info:
+##        cam_id, camn = row['cam_id'], row['camn']
+##        cam_id2camns.setdefault(cam_id,[]).append(camn)
+##        camn2cam_id[camn]=cam_id
 
     # 2d data
     data2d = results.root.data2d
@@ -1582,7 +1595,15 @@ def get_results(filename,mode='r+'):
     h5file = PT.openFile(filename,mode=mode)
     frame_col = h5file.root.data3d_best.cols.frame
     if frame_col.index is None:
+        print 'creating index on data3d_best...'
         frame_col.createIndex()
+        print 'done'
+        
+    frame_col = h5file.root.data2d.cols.frame
+    if frame_col.index is None:
+        print 'creating index on data2d...'
+        frame_col.createIndex()
+        print 'done'
     return h5file
 
 def plot_simple_phase_plots(results,form='xy',max_err=10,typ='best',ori_180_ambig=True):
@@ -2281,7 +2302,7 @@ def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
     return results
     
 if __name__=='__main__':
-    results = get_results('DATA20060214_183428.h5',mode='r+')
+    results = get_results('DATA20060224_225118.h5',mode='r+')
     #del results.root.exact_movie_info
     #results.close()
     #make_exact_movie_info2(results)

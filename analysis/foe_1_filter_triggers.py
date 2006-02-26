@@ -3,6 +3,8 @@ import numpy
 import FOE_utils
 import glob, time, os, sys
 
+MAX_LATENCY = 0.035 # 35 msec
+
 # wind
 h5files = glob.glob('*.h5')
 logfiles = glob.glob('escape_wall*.log')
@@ -11,20 +13,11 @@ logfiles = glob.glob('escape_wall*.log')
  projector_trig_times, tf_hzs, orig_times) = FOE_utils.get_results_and_times(logfiles,h5files,
                                                                              get_orig_times=True)
 
-if 1:
-    #  filter out bad data (frame numbers off, can't trust data)
-    good_cond = ~(  (1139987065<orig_times) & (orig_times<1139990048)  )
-    trigger_fnos = trigger_fnos[good_cond]
-    orig_times = orig_times[good_cond]
-    projector_trig_times = projector_trig_times[good_cond]
-    tf_hzs = tf_hzs[good_cond]
-    del good_cond
-
 N_triggers = len(trigger_fnos)
 print '%d FOE triggers'%N_triggers
 
-#fname = 'trigger_roundtrip_data.txt'
-fname = 'trigger_flip_data.txt'
+#fname = 'trigger_roundtrip_data.txt' # received on other computer
+fname = 'trigger_flip_data.txt' # swap buffers command sent from other computer
 fd = open(fname,'r')
 A = numpy.asarray([map(float,line.strip().split()) for line in fd.readlines()])
 return_times = A[:,0]
@@ -57,7 +50,7 @@ for idx in range(N_triggers):
     
 roundtrip_durs=numpy.array(roundtrip_durs,dtype=numpy.float64)
 # this index is into log_fnos array
-accept = roundtrip_durs<0.035 # 35 msec
+accept = roundtrip_durs<MAX_LATENCY # 35 msec
 
 n_orig = len(all_data_avail)
 n_accepted = len(numpy.nonzero(accept))

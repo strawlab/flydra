@@ -1,12 +1,42 @@
 import numpy
 import result_browser
+import datetime
+import pytz # from http://pytz.sourceforge.net/
+time_fmt = '%Y-%m-%d %H:%M:%S %Z%z'
 
-def reject_data( projector_trig_times ):
+def reject_data( trig_times ):
+    pacific = pytz.timezone('US/Pacific')
+
+    # convert to datetime objects
+    att = numpy.array( [datetime.datetime.fromtimestamp(x,pacific)
+                        for x in trig_times] )
+    
     # update here to reflect data which is unusable for whatever reason
+    dt = datetime.datetime
+    reject_idx = numpy.zeros( att.shape, dtype=numpy.Bool) # all false
+    
+    # 2006-02-14 data: # frame numbers off, can't trust data
+    bad_start = dt(2006, 2, 14, 23, 4, 25, tzinfo=pacific)
+    bad_stop = dt(2006, 2, 14, 23, 54, 8, tzinfo=pacific)
+    reject_idx = reject_idx | ((att > bad_start) & (att < bad_stop))
+    
+    # 2006-02-20 data:
+    # Sat, 25 Feb 2006 06:20:33 AM - 10:51:07 AM # tail end of experiments
+    bad_start = dt(2006, 2, 21,  6, 20, 33, tzinfo=pacific)
+    bad_stop  = dt(2006, 2, 21, 12, 00, 00, tzinfo=pacific)
+    reject_idx = reject_idx | ((att > bad_start) & (att < bad_stop))
 
-    # 2006-02-24 datae:
-    # Sat, 25 Feb 2006 06:20:33 AM - 10:40 AM
-    reject_idx = (projector_trig_times > 1140877233.0) & (projector_trig_times < 1140893467)
+    # 2006-02-24 data:
+    # Sat, 25 Feb 2006 06:20:33 AM - 10:51:07 AM # tail end of experiments
+    bad_start = dt(2006, 2, 25,  6, 20, 33, tzinfo=pacific)
+    bad_stop  = dt(2006, 2, 25, 10, 51, 07, tzinfo=pacific)
+    reject_idx = reject_idx | ((att > bad_start) & (att < bad_stop))
+
+    # 2006-02-25 data:
+    # Sat, 25 Feb 2006 01:03:00 PM - 6:30 PM # missed frames on cam5:0
+    bad_start = dt(2006, 2, 25, 13, 03, 00, tzinfo=pacific)
+    bad_stop  = dt(2006, 2, 25, 18, 30, 00, tzinfo=pacific)
+    reject_idx = reject_idx | ((att > bad_start) & (att < bad_stop))
 
     unrejected = ~reject_idx
     return unrejected
@@ -21,9 +51,9 @@ def get_results_and_times(logfiles,h5files,get_orig_times=False):
     all_results_times = [all_results_times[i] for i in range(len(all_results_times)) if all_results_times[i] is not None]
 
     # parse log file
-    fno_by_projector_trig_time = {}
+    fno_by_logfile_trig_time = {}
     tf_hzs = []
-    projector_trig_times = []
+    logfile_trig_times = []
     fnos = []
     for logfile in logfiles:
         fd = open(logfile,'rb')
@@ -36,17 +66,17 @@ def get_results_and_times(logfiles,h5files,get_orig_times=False):
             tf_hz = float(tf_hz)
 
             fnos.append(fno)
-            projector_trig_times.append(projector_time)
+            logfile_trig_times.append(projector_time)
             tf_hzs.append( tf_hz )
 
     fnos = numpy.array(fnos,dtype=numpy.int64)
-    projector_trig_times = numpy.array(projector_trig_times,dtype=numpy.float64)
+    logfile_trig_times = numpy.array(logfile_trig_times,dtype=numpy.float64)
     tf_hzs = numpy.array(tf_hzs,dtype=numpy.float64)
 
-    unrejected_idx = reject_data( projector_trig_times )
+    unrejected_idx = reject_data( logfile_trig_times )
     
     fnos = fnos[unrejected_idx]
-    projector_trig_times = projector_trig_times[unrejected_idx]
+    logfile_trig_times = logfile_trig_times[unrejected_idx]
     tf_hzs = tf_hzs[unrejected_idx]
 
     # get original time of each frame
@@ -65,12 +95,12 @@ def get_results_and_times(logfiles,h5files,get_orig_times=False):
         print 'done'
 
         assert len(fnos)==len(orig_times)
-        assert len(fnos)==len(projector_trig_times)
+        assert len(fnos)==len(logfile_trig_times)
 
         orig_times = numpy.array(orig_times,dtype=numpy.float64)
 
     rval = [all_results, all_results_times, fnos, 
-            projector_trig_times, tf_hzs]
+            logfile_trig_times, tf_hzs]
     
     if get_orig_times:
         rval.append( orig_times )

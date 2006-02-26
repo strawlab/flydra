@@ -1,15 +1,12 @@
 import result_browser
-#import matplotlib.numerix.ma as M
-#from matplotlib.numerix.ma import array
-import matplotlib.numerix.mlab as mlab
-#import matplotlib.numerix as nx
 import numpy
 nx = numpy
-M = numpy.ma
+ma = numpy.ma
 import FOE_utils
 import PQmath
 import math
 import time
+time_fmt = '%Y-%m-%d %H:%M:%S %Z%z'
 
 import glob
 
@@ -18,7 +15,7 @@ h5files = glob.glob('*.h5')
 logfiles = ['accepted_triggers.txt']
 
 (all_results, all_results_times, trigger_fnos,
- projector_trig_times, tf_hzs) = FOE_utils.get_results_and_times(logfiles,h5files)
+ logfile_trig_times, tf_hzs) = FOE_utils.get_results_and_times(logfiles,h5files)
 N_triggers = len(trigger_fnos)
 print '%d FOE triggers'%N_triggers
 
@@ -47,10 +44,11 @@ all_IFI_dist_mm = []
 
 count = 0
 good_count = 0
+strict_count = 0
 for idx in range(N_triggers):
     tf_hz = tf_hzs[idx]
     trig_fno = int(trigger_fnos[idx])
-    projector_trig_time = projector_trig_times[idx]
+    logfile_trig_time = logfile_trig_times[idx]
     found_results = None
     for results in all_results:
         data3d = results.root.data3d_best
@@ -64,28 +62,39 @@ for idx in range(N_triggers):
         continue
     results = found_results
     data3d = results.root.data3d_best
+    camn2cam_id, cam_id2camns = result_browser.get_caminfo_dicts(results)
     
     pre_frames = 10
     post_frames = 30
     fstart = trig_fno-pre_frames
     fend = trig_fno+post_frames
 
-    frame_rels = []
-
     frame_rels = nx.arange(pre_frames+post_frames+1)-pre_frames
-    xs = nx.ones(frame_rels.shape,nx.Float)*-10000
-    ys = nx.ones(frame_rels.shape,nx.Float)*-10000
-    zs = nx.ones(frame_rels.shape,nx.Float)*-10000
-    headings = nx.ones(frame_rels.shape,nx.Float)*-10000
-    mean_dist = nx.ones(frame_rels.shape,nx.Float)*-10000
+    
+    tmp_array = nx.ones(frame_rels.shape,nx.Float)
+    tmp_mask = tmp_array>0
+    
+    xs = ma.masked_array( tmp_array.copy(), mask=tmp_mask.copy())
+    ys = ma.masked_array( tmp_array.copy(), mask=tmp_mask.copy())
+    zs = ma.masked_array( tmp_array.copy(), mask=tmp_mask.copy())
+    headings = ma.masked_array( tmp_array.copy(), mask=tmp_mask.copy())
+    mean_dist = ma.masked_array( tmp_array.copy(), mask=tmp_mask.copy())
+    timestamps = ma.masked_array( tmp_array.copy(), mask=tmp_mask.copy())
+    del tmp_array
+    del tmp_mask    
+
+    camns_used = ['']*len(frame_rels)
 
     have_data = False
     for row in data3d.where( fstart <= data3d.cols.frame <= fend ):
         j = row['frame']-fstart
+        # these unset the mask in the masked array:
         xs[j] = row['x']
         ys[j] = row['y']
         zs[j] = row['z']
-        mean_dist[j] = row['mean_dist']
+        mean_dist[j] = row['mean_dist'] # 3d reconstruction error estimate
+        timestamps[j] = row['timestamp']
+        camns_used[j] = row['camns_used']
 
         # get angular position phi
         orientation = nx.array((-row['p2'],row['p4'],-row['p5']))
@@ -100,29 +109,56 @@ for idx in range(N_triggers):
                'from those frames saved.')
         continue
 
-    count += 1
     if 0:
-        xm = M.masked_where(xs < -9999, xs)
-        ym = M.masked_where(ys < -9999, ys)
-        zm = M.masked_where(zs < -9999, zs)
-    else:
-        # This is a hack. I shouldn't have to do this.
-        xm = M.masked_outside(xs, -9999, 9999)
-        ym = M.masked_outside(ys, -9999, 9999)
-        zm = M.masked_outside(zs, -9999, 9999)
-    headings = M.masked_where(headings < -9999, headings)
+        data2d = results.root.data2d
+        
+        for i in range(len(frame_rels)):
+            camns = map(int,camns_used[i].split())
+            s_cams_used = [ camn2cam_id[camn] for camn in camns]
+            s_cams_used.sort()
+            fno = int(frame_rels[i]+trig_fno) # cast from numpy scalar
+            if timestamps[i] == ma.masked:
+                timestamp_str = 'nan'
+            else:
+                timestamp_str = repr(timestamps[i])
+            if xs[i] == ma.masked:
+                xs_str = 'nan'
+            else:
+                xs_str = '%f'%xs[i]
+            if mean_dist[i] == ma.masked:
+                mean_dist_str = 'nan'
+            else:
+                mean_dist_str = '%f'%mean_dist[i]
+            try:
+                print '%s %d (%d), x %s, (err %s), %s'%(timestamp_str,
+                                                        fno, frame_rels[i], xs_str,
+                                                        mean_dist_str,
+                                                        ' '.join(s_cams_used))
+            except TypeError,x:
+                print 'type(xs[i]),xs[i]',type(xs[i]),xs[i]
+                print 'type(mean_dist[i]),mean_dist[i]',type(mean_dist[i]),mean_dist[i]
+                raise
+            apparent_recon_latencies = []
+            did_camns = []
+            for row in data2d.where( data2d.cols.frame == fno):
+                camn = row['camn']
+                print '  ',camn2cam_id[camn],row
+                if camn not in did_camns:
+                    apparent_recon_latencies.append( timestamps[i] - row['timestamp'] )
+                    did_camns.append( camn )
+            print '  apparent latencies (msec):',numpy.array(apparent_recon_latencies)*1000.0
 
-    xm = M.masked_where(mean_dist > 10, xm)
-    ym = M.masked_where(mean_dist > 10, ym)
-    zm = M.masked_where(mean_dist > 10, zm)
+    count += 1
+    if 1:
+        # old names
+        xm = xs
+        ym = ys
+        zm = zs
 
-    mean_dist = M.masked_where(mean_dist < -9999, mean_dist)
-    mean_dist = M.masked_where(mean_dist > 10, mean_dist)
-
-    xm_time_of_interest = M.masked_where( frame_rels >0, xm )
-    zm_time_of_interest = M.masked_where( frame_rels >0, zm )
-    xdiff = xm_time_of_interest[1:]-xm_time_of_interest[:-1]
-    sum_xdiff = M.sum( xdiff )
+    xm_pretrig = ma.masked_where( frame_rels >0, xm )
+    zm_pretrig = ma.masked_where( frame_rels >0, zm )
+    xdiff = xm_pretrig[1:]-xm_pretrig[:-1]
+    sum_xdiff = ma.sum( xdiff )
 
     delta_t = 0.01
     Px = xm/1000.0 # in meters
@@ -134,18 +170,14 @@ for idx in range(N_triggers):
 
     if not isinstance(sum_xdiff,float):
         # not enough data
-        print 'projector_trig_time %s (fno %d) missing tracking data %d'%(repr(projector_trig_time),trig_fno,count)
+        print 'logfile_trig_time %s (fno %d) missing pretrigger tracking data'%(repr(logfile_trig_time),trig_fno)
         continue
     else:
-        tts = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime(projector_trig_time))
-        print 'projector_trig_time %s (fno %d) OK %d'%(tts,trig_fno,count)
-    mean_pretrig_z = mlab.mean( zm_time_of_interest.compressed())
-    if not isinstance( mean_pretrig_z, float):
-        print 'HMM, WARNING 2'
-    else:
-        if mean_pretrig_z <= 70.0:
-            print 'Mean pretrigger altitude <= 70mm, discarding'
-            continue
+        tts = time.strftime(time_fmt, time.localtime(logfile_trig_time))
+        print 'logfile_trig_time %s (fno %d):'%(tts,trig_fno),
+    mean_pretrig_z = numpy.mean( zm_pretrig.compressed())
+
+    assert isinstance( mean_pretrig_z, float)
 
     if sum_xdiff >= 0:
         upwind = True
@@ -153,12 +185,17 @@ for idx in range(N_triggers):
         upwind = False
 
     # find frame-to-frame distance in mm
-    IFI_dist_mm = M.sqrt((xm[1:]-xm[:-1])**2 + (ym[1:]-ym[:-1])**2 + (zm[1:]-zm[:-1])**2)
+    IFI_dist_mm = ma.sqrt((xm[1:]-xm[:-1])**2 + (ym[1:]-ym[:-1])**2 + (zm[1:]-zm[:-1])**2)
     nonmaskedlist = list( IFI_dist_mm.compressed() )
 
-    if max(nonmaskedlist) > 10:
-        print 'WARNING: skipping because >10 mm found between adjacent frames (%d frames found)'%(len(xm),)
+    if max(nonmaskedlist) > 20:
+        print '>20 mm found between adjacent frames (%d frames found)'%(len(xm),)
         continue
+    elif mean_pretrig_z <= 70.0:
+        print 'Mean pretrigger altitude <= 70mm, discarding'
+        continue
+    else:
+        print 'OK'
 
     all_IFI_dist_mm.extend( nonmaskedlist )
 
@@ -184,6 +221,8 @@ for idx in range(N_triggers):
 
     ultra_strict = True
     if xm_tmp.shape[1]==xm_tmp.count():
+        # meets ultra_strict requirements
+        strict_count += 1
         print >> analysis_file, upwind, fstart, trig_fno, fend, results.filename, tf_hz
     if not ultra_strict or xm_tmp.shape[1]==xm_tmp.count():
         xs_dict[upwind].setdefault( tf_hz, []).append( xm_tmp )
@@ -202,10 +241,13 @@ for idx in range(N_triggers):
     if not ultra_strict or headings_tmp.shape[1]==headings_tmp.count():
         heading_dict[upwind].setdefault( tf_hz, []).append( headings_tmp )
     good_count += 1
-        
+    
+print >> analysis_file, '# %d triggers in this file because they met all strictness criteria'%strict_count
+print >> analysis_file, '# %d triggers would be possible if willing to accept missing data'%good_count
 analysis_file.close()
 
-print 'good_count',good_count,'(includes Ns excluded by ultra_strict)'
+print '%d triggers in this file because they met all strictness criteria'%strict_count
+print '%d triggers would be possible if willing to accept missing data'%good_count
 
 if 0:
     import pylab
@@ -229,7 +271,7 @@ if 0:
                 #    continue
 
                 val_list = yvals_dict[tf_hz]
-                val_array = M.concatenate( val_list, axis=0 )
+                val_array = ma.concatenate( val_list, axis=0 )
                 # each column is a timepoint
                 means = nx.zeros( (val_array.shape[1],), nx.Float )
                 stds = nx.zeros( (val_array.shape[1],), nx.Float )
@@ -237,7 +279,7 @@ if 0:
                 maxN = 0
                 for j in range( val_array.shape[1] ):
                     col = val_array[:,j]
-                    if isinstance(col,numpy.ma.MaskedArray):
+                    if isinstance(col,ma.MaskedArray):
                         col_compressed = val_array[:,j].compressed()
                     else:
                         col_compressed = col
@@ -247,10 +289,10 @@ if 0:
                     if N==0:
                         print 'WARNING: mean not computed, N==0'
                         continue
-                    means[j] = mlab.mean( col_compressed )
+                    means[j] = numpy.mean( col_compressed )
                     if N==1:
                         continue
-                    stds[j] = mlab.std( col_compressed )
+                    stds[j] = numpy.std( col_compressed )
 
                 if (yvals_upwind_and_downwind is xvels_dict or
                     yvals_upwind_and_downwind is yvels_dict or
