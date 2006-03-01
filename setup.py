@@ -11,10 +11,10 @@ import os, glob, time, sys, StringIO
 # flydra stuff
 BUILD_FLYDRA_ARENA = False # test for comedilib below
 
-if sys.platform.startswith('linux'):
-    if (os.path.exists('/usr/local/include/comedilib.h') or
-        os.path.exists('/usr/include/comedilib.h')):
-        BUILD_FLYDRA_ARENA = True
+#if sys.platform.startswith('linux'):
+#    if (os.path.exists('/usr/local/include/comedilib.h') or
+#        os.path.exists('/usr/include/comedilib.h')):
+#        BUILD_FLYDRA_ARENA = True
 
 install_requires = ['FlyMovieFormat','cam_iface','wxglvideo']
 
