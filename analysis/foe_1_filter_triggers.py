@@ -8,6 +8,8 @@ MAX_LATENCY = 0.035 # 35 msec
 # wind
 h5files = glob.glob('*.h5')
 logfiles = glob.glob('escape_wall*.log')
+logfiles.sort()
+h5files.sort()
 
 (all_results, all_results_times, trigger_fnos,
  projector_trig_times, tf_hzs, orig_times) = FOE_utils.get_results_and_times(logfiles,h5files,

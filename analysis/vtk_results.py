@@ -333,6 +333,44 @@ def show_texture(renderers,origin,ax_vert1,ax_vert2,shape):
         renderer.AddActor( profile )
     return [profile]
 
+def show_spheres(renderers,
+                 sphere_coords=None,
+                 sphere_radius=2.0,
+                 sphere_color=blue,
+                 theta_resolution=8,
+                 phi_resolution=8,
+                 ):
+    points = vtk.vtkPoints()
+    
+    actors = []
+    for X in sphere_coords:
+        points.InsertNextPoint(*X)
+
+    points_poly_data = vtkPolyData()
+    points_poly_data.SetPoints(points)
+
+    sphere = vtk.vtkSphereSource()
+    sphere.SetRadius(sphere_radius)
+    sphere.SetThetaResolution(theta_resolution)
+    sphere.SetPhiResolution(phi_resolution)
+
+    sphere_glyphs = vtk.vtkGlyph3D()
+    sphere_glyphs.SetInput(points_poly_data)
+    sphere_glyphs.SetSource(sphere.GetOutput())
+
+    sphere_glyph_mapper = vtkPolyDataMapper()
+    sphere_glyph_mapper.SetInput( sphere_glyphs.GetOutput())
+    sphereGlyphActor = vtk.vtkActor()
+    sphereGlyphActor.SetMapper(sphere_glyph_mapper)
+    sphereGlyphActor.GetProperty().SetDiffuseColor(sphere_color)
+    sphereGlyphActor.GetProperty().SetSpecular(.3)
+    sphereGlyphActor.GetProperty().SetSpecularPower(30)
+
+    for renderer in renderers:
+        renderer.AddActor( sphereGlyphActor )
+    actors.append( sphereGlyphActor )
+    return actors
+
 def show_frames_vtk(results,renderers,
                     f1,f2=None,fstep=None,
                     typ=None,labels=True,
@@ -653,6 +691,7 @@ def show_frames_vtk(results,renderers,
                 lines = body_lines2
                 ball_color = ball_color2
                 line_color = line_color2
+                            
             points_poly_data = vtkPolyData()
             points_poly_data.SetPoints(points)
 
@@ -777,15 +816,12 @@ def show_frames_vtk(results,renderers,
 
     # bounding box
     bbox_points = vtkPoints()
-    if 0:
-        bbox_points.InsertNextPoint( xlim[0], ylim[0], zlim[0] )
-        bbox_points.InsertNextPoint( xlim[1], ylim[1], zlim[1] )
-    elif 0:
-        bbox_points.InsertNextPoint(-100,-50,-50)
-        bbox_points.InsertNextPoint(100,50,50)
-    else:
+    if X_zero_frame is None:
         bbox_points.InsertNextPoint(400,0,0)
         bbox_points.InsertNextPoint(1000,300,300)
+    else:
+        bbox_points.InsertNextPoint(-150,-150,-150)
+        bbox_points.InsertNextPoint(150,150,150)
     bbox_poly_data = vtkPolyData()
     bbox_poly_data.SetPoints(bbox_points)
     bbox_mapper = vtk.vtkPolyDataMapper()
@@ -835,7 +871,6 @@ def show_frames_vtk(results,renderers,
             actors.append( tl )
 
     if bounding_box:
-        print 'drawing bounding box'
     #if (ren1 is not None) and (actor is not None):
         # from Annotation/Python/cubeAxes.py
         tprop = vtk.vtkTextProperty()

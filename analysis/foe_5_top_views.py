@@ -1,7 +1,6 @@
 from __future__ import division
 import result_browser
 import pylab
-import matplotlib.axes
 import numpy as nx
 import math, glob, time
 from math import pi
@@ -11,145 +10,19 @@ D2R = pi/180
 
 # find segments to use
 analysis_file = open('strict_data.txt','r')
-f_segments = [line.strip().split() for line in analysis_file.readlines() if not line.strip().startswith('#')]
-
-h5files = {}
-parsed = {}
-
-heading_early = {}
-heading_late = {}
-turn_angle = {}
-early_xvel = {}
-early_yvel = {}
-
-late_xvel = {}
-late_yvel = {}
-
-xs_pre = {}
-ys_pre = {}
-xs_post= {}
-ys_post= {}
-
-trig_fnos = {}
-h5filenames = {}
-
-print 'loading data...'
-for line in f_segments:
-    upwind, fstart, trig_fno, fend, h5filename, tf_hz = line
-    upwind = bool(upwind)
-    fstart = int(fstart)
-    trig_fno = int(trig_fno)
-    fend = int(fend)
-    tf_hz = float(tf_hz)
-    if h5filename not in h5files:
-        h5files[h5filename] = result_browser.get_results(h5filename)
-        f,xyz,L,err,ts = result_browser.get_f_xyz_L_err( h5files[h5filename],include_timestamps=True )
-        parsed[h5filename] = f,xyz,L,err,ts
-
-    results = h5files[h5filename]
-    f,xyz,L,err,timestamps = parsed[h5filename]
-
-    early_start = trig_fno-10
-    early_end = trig_fno
-
-    late_start = trig_fno+15
-    late_end = trig_fno+25
-
-    early_cond = (early_start <= f) & (f<=early_end)
-    late_cond = (late_start <= f) & (f<=late_end)
-
-    latency = 5 # n frames
-    pre_idx = (fstart <= f) & (f<=(trig_fno+latency))
-    post_idx = ((trig_fno+latency) <= f) & (f<=fend)
-    pre_xyz = xyz[pre_idx]
-    post_xyz = xyz[post_idx]
-    
-    early_times = timestamps[early_cond]
-    late_times = timestamps[late_cond]
-
-    early_dur = early_times[-1]-early_times[0]
-    late_dur = late_times[-1]-late_times[0]
-    
-    early_xyz = xyz[early_cond]
-    late_xyz = xyz[late_cond]
-    
-    xyz_dist_early = (early_xyz[-1]-early_xyz[0])/1000.0
-    xyz_dist_late = (late_xyz[-1]-late_xyz[0])/1000.0
-
-    heading_early.setdefault(tf_hz,[]).append( math.atan2( xyz_dist_early[1], xyz_dist_early[0] ) )
-    heading_late.setdefault(tf_hz,[]).append( math.atan2( xyz_dist_late[1], xyz_dist_late[0] ) )
-
-    turn_angle.setdefault(tf_hz,[]).append(  (heading_late[tf_hz][-1] -
-                                              heading_early[tf_hz][-1])%(2*pi) )
-
-    scalar_early_xvel = float( xyz_dist_early[0]/early_dur )
-    early_xvel.setdefault(tf_hz,[]).append( scalar_early_xvel )
-    early_yvel.setdefault(tf_hz,[]).append( xyz_dist_early[1]/early_dur )
-    late_xvel.setdefault(tf_hz,[]).append( xyz_dist_late[0]/late_dur )
-    late_yvel.setdefault(tf_hz,[]).append( xyz_dist_late[1]/late_dur )
-
-    xs_pre.setdefault(tf_hz,[]).append( pre_xyz[:,0] )
-    ys_pre.setdefault(tf_hz,[]).append( pre_xyz[:,1] )    
-    xs_post.setdefault(tf_hz,[]).append( post_xyz[:,0] )
-    ys_post.setdefault(tf_hz,[]).append( post_xyz[:,1] )    
-
-    trig_fnos.setdefault(tf_hz,[]).append( trig_fno )
-    h5filenames.setdefault(tf_hz,[]).append( h5filename )
-print 'done'
-    
-# convert data to numpy
-for d in [heading_early,
-          heading_late,
-          turn_angle,
-          early_xvel,
-          early_yvel,
-          late_xvel,
-          late_yvel,
-          xs_pre,
-          ys_pre,
-          xs_post,
-          ys_post]:
-    for tf_hz in d.keys():
-        d[tf_hz] = nx.asarray(d[tf_hz])
+execfile('triggered_loaddata.py')
+tf_hz = condition_float
 
 # top views
-if 0:
-    pylab.figure()#figsize=(8,8/(2/3)))
-    ax = None
-    for tf_hz, col, title in [(0.0,0,'no FOE'),
-                              (5.0,1,'FOE'),
-                              ]:
-        ax=pylab.subplot(2,1,col+1,sharex=ax,sharey=ax)
-        for i in range(len(early_xvel[tf_hz])):
-            this_early_xvel = early_xvel[tf_hz][i]
-            if not (-.2<=this_early_xvel<=0.2):
-                continue
-            X = xs_pre[tf_hz][i]
-            Y = ys_pre[tf_hz][i]
-            pylab.plot(X,Y,'k-')
-            
-            X = xs_post[tf_hz][i]
-            Y = ys_post[tf_hz][i]
-            if 0:
-                if tf_hz == 0.0:
-                    fmt = 'k-'
-                else:
-                    fmt = 'r-'
-            else:
-                fmt = 'r-'
-            pylab.plot(X,Y,fmt)
-            
-# "horsetail" top views
-    
-if 1:
+for horsetail in [True,False]:
     for slowest_xvel, fastest_xvel, frame_title in [
-        (-.2,.2,'slow (upwind, hovering, downwind)'),
+        (-.2,.2,'slow (up-tunnel, hovering, down-tunnel)'),
         
-        (.2,1000,'fast upwind'),
-        (.05,.2,'slow upwind'),
+        (.2,1000,'fast up-tunnel'),
+        (.05,.2,'slow up-tunnel'),
         (-.05,.05,'hovering'),
-        (-.2,-0.05,'slow downwind'),
-        (-1000,-.2,'fast downwind'),
+        (-.2,-0.05,'slow down-tunnel'),
+        (-1000,-.2,'fast down-tunnel'),
         ]:
         pylab.figure()#figsize=(8,8/(2/3)))
         ax = None
@@ -167,8 +40,12 @@ if 1:
                     continue
                 X = xs_pre[tf_hz][i]
                 Y = ys_pre[tf_hz][i]
-                X0 = X[-1]
-                Y0 = Y[-1]
+                if horsetail:
+                    X0 = X[-1]
+                    Y0 = Y[-1]
+                else:
+                    X0 = 0.0
+                    Y0 = 0.0
                 pylab.plot(X-X0,Y-Y0,'k-')
 
                 X = xs_post[tf_hz][i]
@@ -181,46 +58,18 @@ if 1:
                 else:
                     fmt = 'r-'
                 pylab.plot(X-X0,Y-Y0,fmt)
-                pylab.text(0,1,axtitle,
-                           transform = ax.transAxes,
-                           horizontalalignment='left',
-                           verticalalignment='top',
-                           )
+            if not horsetail:
+                ax.set_xlim([500,850])
+                ax.set_ylim([30,330])
+            else:
+                ax.set_xlim([-75,75])
+                ax.set_ylim([-50,50])
+            pylab.text(0.01,0.98,axtitle,
+                       transform = ax.transAxes,
+                       horizontalalignment='left',
+                       verticalalignment='top',
+                       )
             
-### "horsetail" top views only for upwind fliers
-##if 1:
-##    pylab.figure()#figsize=(8,8/(2/3)))
-##    ax = None
-##    for tf_hz, col, title in [(0.0,0,'no FOE'),
-##                              (5.0,1,'FOE'),
-##                              ]:
-##        ax=pylab.subplot(2,1,col+1,sharex=ax,sharey=ax)
-##        if tf_hz not in early_xvel:
-##            continue
-##        for i in range(len(early_xvel[tf_hz])):
-##            this_early_xvel = early_xvel[tf_hz][i]
-##            trig_fno = trig_fnos[tf_hz][i]
-##            h5filename = h5filenames[tf_hz][i]
-##            if not (0.05<=this_early_xvel<=0.2):
-##                continue
-##            X = xs_pre[tf_hz][i]
-##            Y = ys_pre[tf_hz][i]
-##            X0 = X[-1]
-##            Y0 = Y[-1]
-##            pylab.plot(X-X0,Y-Y0,'k-')
-            
-##            X = xs_post[tf_hz][i]
-##            Y = ys_post[tf_hz][i]
-##            if 0:
-##                if tf_hz == 0.0:
-##                    fmt = 'k-'
-##                else:
-##                    fmt = 'r-'
-##            else:
-##                fmt = 'r-'
-##            pylab.plot(X-X0,Y-Y0,fmt)
-##            pylab.text( X[-1]-X0, Y[-1]-Y0, '%d'%trig_fno )
-    
 if 0:
     pylab.figure()#figsize=(8,8/(2/3)))
     for tf_hz, col, title in [(0.0,0,'no FOE'),

@@ -5,7 +5,7 @@ import numpy as nx
 import numpy as mlab
 import tables as PT
 import matplotlib
-import matplotlib.pylab as pylab
+import pylab
 import matplotlib.ticker
 from pylab import figure, plot, clf, imshow, cm, setp, figtext
 from pylab import gca, title, axes, ion, ioff, gcf, savefig

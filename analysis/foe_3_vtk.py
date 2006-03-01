@@ -1,13 +1,18 @@
 import result_browser
 import numpy as nx
 import PQmath
-import math, glob, time
+import math, glob, time, sys
 
 import vtk_results
     
 # find segments to use
-analysis_file = open('strict_data.txt','r')
-f_segments = [line.strip().split() for line in analysis_file.readlines()]
+if len(sys.argv) > 1:
+    fname = sys.argv[1]
+else:
+    fname = 'strict_data.txt'
+print 'opening',fname
+analysis_file = open(fname,'r')
+f_segments = [line.strip().split() for line in analysis_file.readlines() if not line.strip().startswith('#')]
 
 renWin, renderers = vtk_results.init_vtk()#stereo=True)
 

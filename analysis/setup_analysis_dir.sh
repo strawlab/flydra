@@ -3,6 +3,11 @@ ln -s ~/kookaburra/flydra/analysis/PQmath.py
 ln -s ~/kookaburra/flydra/analysis/vtk_results.py
 
 ln -s ~/kookaburra/flydra/analysis/FOE_utils.py
+ln -s ~/kookaburra/flydra/analysis/triggered_loaddata.py
+ln -s ~/kookaburra/flydra/analysis/triggered_prelim.py
+
+ln -s ~/kookaburra/flydra/analysis/circstats.py
+
 ln -s ~/kookaburra/flydra/analysis/FOE_analysis_toolchain.txt
 ln -s ~/kookaburra/flydra/analysis/foe_1_filter_triggers.py
 ln -s ~/kookaburra/flydra/analysis/foe_2_prelim_analysis.py
@@ -12,3 +17,6 @@ ln -s ~/kookaburra/flydra/analysis/foe_5_top_views.py
 
 ln -s ~/kookaburra/flydra/analysis/dark_1_prelim.py
 ln -s ~/kookaburra/flydra/analysis/dark_2_vtk.py
+ln -s ~/kookaburra/flydra/analysis/dark_3_stats.py
+
+ln -s ~/kookaburra/flydra/analysis/create_movie.sh
