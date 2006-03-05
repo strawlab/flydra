@@ -42,8 +42,8 @@ void Handler_Init(void)
         mask[lcv] = FALSE;
     }
     
-    outp(TCCR0_VAL,TCCR0);              /* write timer prescaler */
-    sbi(TIMSK,TOIE0);                   /* enable timer ovf irq */
+    TCCR0 = TCCR0;                      /* write timer prescaler */
+    TIMSK |= TOIE0;                     /* enable timer ovf irq */
     sei();                              /* enable interrupts */
 }
 
@@ -57,7 +57,7 @@ SIGNAL(SIG_OVERFLOW0)
 {
     unsigned char lcv;
 
-    cbi(TIMSK,TOIE0);                             /* disable timer ovf irq */
+    TIMSK &= ~TOIE0;                              /* disable timer ovf irq */
 
     for(lcv=0;lcv<HANDLER_MAX;lcv++)              /* check and act on all vectors */
     {
@@ -72,7 +72,7 @@ SIGNAL(SIG_OVERFLOW0)
         }
     }
 
-    sbi(TIMSK,TOIE0);                             /* enable timer ovf irq */
+    TIMSK |= TOIE0;                               /* enable timer ovf irq */
 }
 
 /*
