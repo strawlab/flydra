@@ -1,3 +1,4 @@
 #!/bin/bash
 #uisp -dprog=stk500 -dserial=/dev/ttyS0 -dpart=ATMEGA128 --erase --upload --verify if=./trigger_main.hex
-uisp -dprog=stk500 -dserial=/dev/ttyS0 -dpart=ATMEGA128 --erase --upload if=./trigger_main.hex
+#uisp -dprog=stk500 -dserial=/dev/ttyS0 -dpart=ATMEGA128 --erase --upload if=./trigger_main.hex
+uisp -dprog=stk500 -dserial=/dev/ttyUSB0 -dpart=ATMEGA169 --erase --upload if=./blink.hex
