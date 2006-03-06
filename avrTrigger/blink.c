@@ -2,11 +2,12 @@
 #include <avr/interrupt.h>
 #include "blink.h"
 
-#define LIGHTS_ON 0
-#define LIGHTS_OFF 1
-#define LIGHTS_BLINK 2
+#define LIGHTS_ON '1'
+#define LIGHTS_OFF '0'
+#define LIGHTS_STROBE 'S'
+#define LIGHTS_FOCALSTROBE 'F'
 
-volatile char gState  = LIGHTS_ON;
+volatile unsigned char gState  = LIGHTS_ON;
 
 void delayms(unsigned int millisec)
 {
@@ -23,7 +24,7 @@ void USART_init(void) {
   unsigned int ubrr;
 
   // Set baud rate
-  ubrr = 25; // 2400 bps, see atmega169 manual pg. 174
+  ubrr = 12; // 4800 bps, see atmega169 manual pg. 174
   UBRRH = (unsigned char)(ubrr>>8);
   UBRRL = (unsigned char)ubrr;
 
@@ -31,64 +32,55 @@ void USART_init(void) {
   UCSRB = (1<<RXEN) | (1<<TXEN);
   
   // Set frame format 8N1
-  // UCSRC defaults to 8N1
+  // UCSRC defaults to 8N1 = (3<<UCSZ0)
+
+  // Set frame format 7E1
+  UCSRC = (1<<UPM1)|(1<<UCSZ1);
 }
 
 
 void Initialization(void) {
   OSCCAL_calibration();
   USART_init();
+  DDRB = 0xFF; // port B is all output
 }
 
 
 int main(void) {
-  unsigned char data;
-
   Initialization();
-  //  DDRB = 0xFF; // port B is all output
-  sbiBF(DDRB,0); // B0 is output
-  cbiBF(DDRB,2); // B2 is input
-  cbiBF(DDRB,4); // B2 is input
+
   while(1) {
     
-    if (UCSRA & (1<<RXC)) {
-      // read USART, got byte
-      data = UDR;
-      UDR=data; // echo (transmit) back on USART
+    if (UCSRA & (1<<RXC)) { // USART received byte
+      gState = UDR; // get byte
+      UDR=gState; // echo (transmit) back on USART
     }
     
-    if (gState==LIGHTS_ON) {
-      sbiBF(PORTB, 0);
-    } else {
-      if (gState==LIGHTS_OFF) {
-	cbiBF(PORTB, 0);
-      } else {
-	if (gState==LIGHTS_BLINK) {
-	  // toggle port B
-	  cbiBF(PORTB, 0);
-	  delayms(50); // off 50 msec
-	  sbiBF(PORTB, 0);
-	  delayms(5); // on 5 msec
-	}
-      }
+    switch (gState) {
+      case LIGHTS_ON:  
+	//sbiBF(PORTB, 0); sbiBF(PORTB, 2);
+	PORTB = 0x05;
+	break;
+      case LIGHTS_OFF: 
+	//cbiBF(PORTB, 0); cbiBF(PORTB, 2);
+	PORTB = 0x00;
+	break;
+      case LIGHTS_STROBE: 
+	//cbiBF(PORTB, 0); cbiBF(PORTB, 2);
+	PORTB = 0x00;
+	delayms(50); // off 50 msec
 
-    }
+	//sbiBF(PORTB, 0); sbiBF(PORTB, 2);
+	PORTB = 0x05;
+	delayms(5); // on 5 msec
+	break;
+      case LIGHTS_FOCALSTROBE:
+	PORTB = 0x01;
+	delayms(50); // off 50 msec
 
-    if((PINB & (1<<PINB2))) {
-      // pins float high
-
-      // b2 high
-      if ((PINB & (1<<PINB4))) {
-	// b4 high
-	gState=LIGHTS_ON;
-      }
-      else {
-	// b4 low
-	gState=LIGHTS_OFF;
-      }
-    } else {
-      // b2 low
-      gState=LIGHTS_BLINK;
+	PORTB = 0x05;
+	delayms(5); // on 5 msec
+	break;
     }
 
   }
