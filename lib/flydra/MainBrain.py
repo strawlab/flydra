@@ -466,7 +466,7 @@ class CoordReceiver(threading.Thread):
                                                                  start_timestamp,
                                                                  remote_timestamp,
                                                                  stop_timestamp) )
-                    if 1:
+                    if 0:
                         measurement_duration = roundtrip_duration[rowidx]
                         clock_diff = stop_timestamp-remote_timestamp
                     
