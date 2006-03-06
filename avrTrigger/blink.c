@@ -14,7 +14,7 @@ void delayms(unsigned int millisec)
 	uint8_t i;
 
 	while (millisec--) {
-	  for (i=0; i<169; i++) { // ads calibrated 2006 02 24
+	  for (i=0; i<199; i++) { // ads calibrated 2006 03 05
 			asm volatile ("nop"::);
 		}
 	}
@@ -35,7 +35,7 @@ void USART_init(void) {
   // UCSRC defaults to 8N1 = (3<<UCSZ0)
 
   // Set frame format 7E1
-  UCSRC = (1<<UPM1)|(1<<UCSZ1);
+  //UCSRC = (1<<UPM1)|(1<<UCSZ1);
 }
 
 
@@ -47,13 +47,18 @@ void Initialization(void) {
 
 
 int main(void) {
+  unsigned char msg_ready;
+  unsigned char to_echo;
+
+  msg_ready=0;
   Initialization();
 
   while(1) {
     
     if (UCSRA & (1<<RXC)) { // USART received byte
       gState = UDR; // get byte
-      UDR=gState; // echo (transmit) back on USART
+      to_echo = gState;
+      msg_ready=1;
     }
     
     switch (gState) {
@@ -81,7 +86,16 @@ int main(void) {
 	PORTB = 0x05;
 	delayms(5); // on 5 msec
 	break;
+      default:
+	to_echo = 'X';
+	break;
     }
+    
+    if (msg_ready) {
+      UDR=to_echo; // echo (transmit) back on USART
+      msg_ready = 0;
+    }
+
 
   }
   return 0;
