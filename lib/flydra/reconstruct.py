@@ -7,7 +7,7 @@ svd = numpy.linalg.svd
 # Numeric (for speed)
 import numpy as fast_nx
 fast_svd = numpy.linalg.svd
-import flydra.reconstruct_utils # in pyrex/C for speed
+import flydra.reconstruct_utils as reconstruct_utils # in pyrex/C for speed
 import time
 from flydra.common_variables import MINIMUM_ECCENTRICITY
 
@@ -239,7 +239,7 @@ class Reconstructor:
     def distort(self, cam_id, xl):
         return self._helper[cam_id].distort(xl[0],xl[1])
 
-    def get_recontruct_helper_dict(self):
+    def get_reconstruct_helper_dict(self):
         return self._helper
 
     def find3d(self, cam_ids_and_points2d, return_X_coords = True, return_line_coords = True ):
