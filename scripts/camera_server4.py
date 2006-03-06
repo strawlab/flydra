@@ -1,7 +1,7 @@
 #emacs, this is -*-Python-*- mode
 # $Id: $
 
-import threading, time, socket, sys, struct, os
+import threading, time, socket, sys, struct, os, select
 import Pyro.core, Pyro.errors
 import FlyMovieFormat
 import numarray as nx
@@ -14,7 +14,8 @@ if os.name == 'posix':
     import posix_sched
 import math
 
-from flydra.common_variables import REALTIME_UDP
+import flydra.common_variables
+REALTIME_UDP = flydra.common_variables.REALTIME_UDP
 
 import flydra_ipp.realtime_image_analysis4 as realtime_image_analysis
 
@@ -45,6 +46,25 @@ try:
 except:
     # try localhost
     main_brain_hostname = socket.gethostbyname(socket.gethostname())
+
+def TimestampEcho():
+    # create listening socket
+    sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sockobj.setblocking(0)
+    hostname = ''
+    port = flydra.common_variables.timestamp_echo_listener_port
+    sockobj.bind(( hostname, port))
+    print 'TimestampEcho listening at',hostname,port
+    sendto_port = flydra.common_variables.timestamp_echo_gatherer_port
+    fmt = flydra.common_variables.timestamp_echo_fmt_diff
+    while 1:
+        in_ready, trash1, trash2 = select.select( [sockobj], [], [], 0.0 )
+        if not len(in_ready):
+            continue
+        buf, (orig_host,orig_port) = sockobj.recvfrom(4096)
+        newbuf = buf + struct.pack( fmt, time.time() )
+        sender.sendto(newbuf,(orig_host,sendto_port))
 
 class GrabClass(object):
     def __init__(self, cam, cam2mainbrain_port, cam_id):
@@ -201,6 +221,9 @@ class GrabClass(object):
                 points = self.realtime_analyzer.do_work(hw_roi_frame,
                                                         timestamp, framenumber, use_roi2_isSet(),
                                                         use_cmp_isSet(), return_first_xy)
+##                for p in points:
+##                    print p
+##                print
                 n_pts = len(points)
                 
                 # allow other thread to see images
@@ -399,6 +422,10 @@ class App:
 
         self.all_cams = []
         self.all_grabbers = []
+        
+        timestamp_echo_thread=threading.Thread(target=TimestampEcho)
+        timestamp_echo_thread.setDaemon(True) # quit that thread if it's the only one left...
+        timestamp_echo_thread.start()
         
         for cam_no in range(self.num_cams):
             num_buffers = 20

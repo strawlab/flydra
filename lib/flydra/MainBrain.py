@@ -8,13 +8,19 @@ import sets, traceback
 import Pyro.core
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
+import numpy
 import numarray as nx
 import numarray.records
 from numarray.ieeespecial import nan, inf
 near_inf = 9.999999e20
 import Queue
 import tables as PT
-from common_variables import REALTIME_UDP
+import numarray
+pytables_filt = numarray.asarray
+
+import flydra.common_variables
+REALTIME_UDP = flydra.common_variables.REALTIME_UDP
+
 if os.name == 'posix':
     import posix_sched
     
@@ -67,14 +73,16 @@ class Info2D(PT.IsDescription):
     p3           = PT.Float32Col(pos=10)
     p4           = PT.Float32Col(pos=11)
 
-# allow rapid building of numarray.records.RecArray:
-Info2DColNames = PT.Description(Info2D().columns)._v_names
-Info2DColFormats = [PT.Description(Info2D().columns)._v_stypes[n] for n in Info2DColNames]
-
 class CamSyncInfo(PT.IsDescription):
     cam_id = PT.StringCol(16,pos=0)
     camn   = PT.Int32Col(pos=1)
     frame0 = PT.FloatCol(pos=2)
+
+class HostClockInfo(PT.IsDescription):
+    remote_hostname  = PT.StringCol(255,pos=0)
+    start_timestamp  = PT.FloatCol(pos=1)
+    remote_timestamp = PT.FloatCol(pos=2)
+    stop_timestamp   = PT.FloatCol(pos=3)
 
 class MovieInfo(PT.IsDescription):
     cam_id             = PT.StringCol(16,pos=0)
@@ -105,6 +113,10 @@ class Info3D(PT.IsDescription):
     
     camns_used = PT.StringCol(32,pos=11)
     mean_dist  = PT.Float32Col(pos=12) # mean 2D reconstruction error
+    
+# allow rapid building of numarray.records.RecArray:
+Info2DColNames = PT.Description(Info2D().columns)._v_names
+Info2DColFormats = [PT.Description(Info2D().columns)._v_stypes[n] for n in Info2DColNames]
 
 def encode_data_packet( corrected_framenumber,
                         line3d_valid,
@@ -182,7 +194,7 @@ class DebugLock:
 
 class CoordReceiver(threading.Thread):
     def __init__(self,main_brain):
-        
+        global hostname
         self.main_brain = main_brain
         
         self.cam_ids = []
@@ -196,6 +208,14 @@ class CoordReceiver(threading.Thread):
         self.framenumber_offsets = []
         self.cam_id2cam_no = {}
         self.reconstructor = None
+        
+        self.last_clock_diff_measurements = {}
+        self.ip2hostname = {}
+        
+        self.timestamp_echo_gatherer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        port = flydra.common_variables.timestamp_echo_gatherer_port
+        self.timestamp_echo_gatherer.bind((hostname, port))
+        self.timestamp_echo_gatherer.setblocking(0)
 
         self.all_data_lock = threading.Lock()
         #self.all_data_lock = DebugLock('all_data_lock',verbose=False)
@@ -249,7 +269,7 @@ class CoordReceiver(threading.Thread):
             if len(self.cam2mainbrain_data_ports)>0:
                 cam2mainbrain_data_port = max(self.cam2mainbrain_data_ports)+1
             else:
-                cam2mainbrain_data_port = 34813
+                cam2mainbrain_data_port = flydra.common_variables.min_cam2mainbrain_data_port # arbitrary number
             self.cam2mainbrain_data_ports.append( cam2mainbrain_data_port )
 
             # find absolute_cam_no
@@ -340,7 +360,6 @@ class CoordReceiver(threading.Thread):
         self.general_save_info[cam_id]['frame0']=timestamp
 
         self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, timestamp) )
-
         
     def run(self):
         """main loop of CoordReceiver"""
@@ -367,7 +386,10 @@ class CoordReceiver(threading.Thread):
         new_data_framenumbers = sets.Set()
 
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False)
+        
+        timestamp_echo_fmt2 = flydra.common_variables.timestamp_echo_fmt2
 
+        struct_unpack = struct.unpack
         select_select = select.select
         time_time = time.time
         empty_list = []
@@ -390,8 +412,10 @@ class CoordReceiver(threading.Thread):
                     print cam_id, 'connected from',addr
                     self.listen_sockets[client_sockobj]=cam_id
             DEBUG('1')
+            listen_sockets = self.listen_sockets.keys()
+            listen_sockets.append(self.timestamp_echo_gatherer)
             try:
-                in_ready, out_ready, exc_ready = select_select( self.listen_sockets.keys(),
+                in_ready, out_ready, exc_ready = select_select( listen_sockets,
                                                                 empty_list, empty_list, timeout )
             except select.error, exc:
                 print 'select.error on listen socket, ignoring...'
@@ -415,6 +439,42 @@ class CoordReceiver(threading.Thread):
                 self._fake_sync_event.clear()
             if not len(in_ready):
                 continue
+
+            if self.timestamp_echo_gatherer in in_ready:
+                buf, (remote_ip,cam_port) = self.timestamp_echo_gatherer.recvfrom(4096)
+                stop_timestamp = time_time()
+                start_timestamp,remote_timestamp = struct_unpack(timestamp_echo_fmt2,buf)
+                #measurement_duration = stop_timestamp-start_timestamp
+                #clock_diff = stop_timestamp-remote_timestamp
+
+                tlist = self.last_clock_diff_measurements.setdefault(remote_ip,[])
+                tlist.append( (start_timestamp,remote_timestamp,stop_timestamp) )
+                if len(tlist)==100:
+                    remote_hostname = self.ip2hostname.setdefault(remote_ip, socket.getfqdn(remote_ip))
+                    tarray = numpy.array(tlist)
+                    del tlist[0:-1] # clear list
+                    start_timestamps = tarray[:,0]
+                    stop_timestamps = tarray[:,2]
+                    roundtrip_duration = stop_timestamps-start_timestamps
+                    # find best measurement (that with shortest roundtrip_duration)
+                    rowidx = numpy.argmin(roundtrip_duration)
+                    srs = tarray[rowidx,:]
+                    srs = map(float,srs) # make sure pytables doesn't freak out on numpy scalar
+                    start_timestamp, remote_timestamp, stop_timestamp = srs
+
+                    self.main_brain.queue_host_clock_info.put(  (remote_hostname,
+                                                                 start_timestamp,
+                                                                 remote_timestamp,
+                                                                 stop_timestamp) )
+                    if 1:
+                        measurement_duration = roundtrip_duration[rowidx]
+                        clock_diff = stop_timestamp-remote_timestamp
+                    
+                        print '%s: the remote diff is %.1f msec (within 0-%.1f msec accuracy)'%(
+                            remote_hostname, clock_diff*1000, measurement_duration*1000)
+
+                idx = in_ready.index(self.timestamp_echo_gatherer)
+                del in_ready[idx]
 
             self.all_data_lock.acquire()
             #self.all_data_lock.acquire(latency_warn_msec=1.0)
@@ -556,7 +616,7 @@ class CoordReceiver(threading.Thread):
                         else:
                             line3d_valid = True
                             
-                        find3d_time = time.time()
+                        find3d_time = time_time()
 
                         x,y,z=X
                         outgoing_data = [x,y,z]
@@ -1003,7 +1063,7 @@ class MainBrain(object):
             finally:
                 self.cam_info_lock.release()
             return cmds
-
+        
         def get_cam2mainbrain_port(self,cam_id):
             """Send port number to which camera should send realtime data"""
             cam2mainbrain_data_port = self.main_brain.coord_receiver.get_cam2mainbrain_data_port(cam_id)
@@ -1027,6 +1087,10 @@ class MainBrain(object):
             finally:
                 self.cam_info_lock.release()
             
+    #------- end of RemoteAPI class
+
+    # main MainBrain class
+    
     def __init__(self):
         Pyro.core.initServer(banner=0)
 
@@ -1050,8 +1114,14 @@ class MainBrain(object):
         self.last_requested_image = {}
         self.pending_requests = {}
         self.last_set_param_time = {}
+
+        self.outgoing_latency_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.timestamp_echo_listener_port = flydra.common_variables.timestamp_echo_listener_port
+        self.timestamp_echo_fmt1 = flydra.common_variables.timestamp_echo_fmt1
         
         self.num_cams = 0
+        self.MainBrain_cam_ids_copy = [] # keep a copy of all cam_ids connected
+        self._fqdns_by_cam_id = {}        
         self.set_new_camera_callback(self.IncreaseCamCounter)
         self.set_old_camera_callback(self.DecreaseCamCounter)
         self.currently_calibrating = threading.Event()
@@ -1064,24 +1134,29 @@ class MainBrain(object):
         self.h5file = None
         self.h5data2d = None
         self.h5cam_info = None
+        self.h5host_clock_info = None
         self.h5movie_info = None
         self.h5data3d_best = None
         self.h5additional_info = None
 
         # Queues of information to save
-        self.queue_data2d         = Queue.Queue()
-        self.queue_cam_info       = Queue.Queue()
-        self.queue_data3d_best    = Queue.Queue()
+        self.queue_data2d          = Queue.Queue()
+        self.queue_cam_info        = Queue.Queue()
+        self.queue_host_clock_info = Queue.Queue()
+        self.queue_data3d_best     = Queue.Queue()
 
         self.coord_receiver = CoordReceiver(self)
         self.coord_receiver.setDaemon(True)
         self.coord_receiver.start()
 
-    def IncreaseCamCounter(self,*args):
+    def IncreaseCamCounter(self,cam_id,scalar_control_info,fqdn_and_port):
         self.num_cams += 1
+        self.MainBrain_cam_ids_copy.append( cam_id )
 
-    def DecreaseCamCounter(self,*args):
+    def DecreaseCamCounter(self,cam_id):
         self.num_cams -= 1
+        idx = self.MainBrain_cam_ids_copy.index( cam_id )
+        del self.MainBrain_cam_ids_copy[idx]
 
     def get_num_cams(self):
         return self.num_cams
@@ -1169,6 +1244,7 @@ class MainBrain(object):
         fd.close()
 
     def service_pending(self):
+        """the MainBrain application calls this fairly frequently (e.g. every 100 msec)"""
         new_cam_ids, old_cam_ids = self.remote_api.external_get_and_clear_pending_cams()
 
         for cam_id in new_cam_ids:
@@ -1185,6 +1261,17 @@ class MainBrain(object):
                 old_cam_func(cam_id)
                 
         self._service_save_data()
+        self._check_latencies()
+
+    def _check_latencies(self):
+        for cam_id in self.MainBrain_cam_ids_copy:
+            if cam_id not in self._fqdns_by_cam_id:
+                sci, fqdn, cam2mainbrain_port = self.remote_api.external_get_info(cam_id)
+                self._fqdns_by_cam_id[cam_id] = fqdn
+            else:
+                fqdn = self._fqdns_by_cam_id[cam_id]
+            buf = struct.pack( self.timestamp_echo_fmt1, time.time() )
+            self.outgoing_latency_UDP_socket.sendto(buf,(fqdn,self.timestamp_echo_listener_port))
 
     def get_last_image_fps(self, cam_id, distort_points_to_align_with_image=True):
         # XXX should extend to include lines
@@ -1341,6 +1428,8 @@ class MainBrain(object):
                              expectedrows=expected_rows*5)
         self.h5cam_info = ct(root,'cam_info', CamSyncInfo, "Cam Sync Info",
                              expectedrows=500)
+        self.h5host_clock_info = ct(root,'host_clock_info', HostClockInfo, "Host Clock Info",
+                                    expectedrows=6*60*24) # 24 hours
         self.h5movie_info = ct(root,'movie_info', MovieInfo, "Movie Info",
                                expectedrows=500)
         if self.reconstructor is not None:
@@ -1349,23 +1438,23 @@ class MainBrain(object):
             pmat_group = self.h5file.createGroup(cal_group,'pmat')
             for cam_id in self.remote_api.external_get_cam_ids():
                 self.h5file.createArray(pmat_group, cam_id,
-                                        self.reconstructor.get_pmat(cam_id))
+                                        pytables_filt(self.reconstructor.get_pmat(cam_id)))
             res_group = self.h5file.createGroup(cal_group,'resolution')
             for cam_id in self.remote_api.external_get_cam_ids():
                 res = self.reconstructor.get_resolution(cam_id)
-                self.h5file.createArray(res_group, cam_id, res)
+                self.h5file.createArray(res_group, cam_id, pytables_filt(res))
                                         
             intlin_group = self.h5file.createGroup(cal_group,'intrinsic_linear')
             for cam_id in self.remote_api.external_get_cam_ids():
                 intlin = self.reconstructor.get_intrinsic_linear(cam_id)
                 # while pytables doesn't yet support numpy:
                 intlin = numarray.asarray(intlin)
-                self.h5file.createArray(intlin_group, cam_id, intlin)
+                self.h5file.createArray(intlin_group, cam_id, pytables_filt(intlin))
                                         
             intnonlin_group = self.h5file.createGroup(cal_group,'intrinsic_nonlinear')
             for cam_id in self.remote_api.external_get_cam_ids():
                 self.h5file.createArray(intnonlin_group, cam_id,
-                                        self.reconstructor.get_intrinsic_nonlinear(cam_id))
+                                        pytables_filt(self.reconstructor.get_intrinsic_nonlinear(cam_id)))
 
             self.h5additional_info = ct(cal_group,'additional_info', AdditionalInfo,
                                         '')
@@ -1397,6 +1486,7 @@ class MainBrain(object):
             DEBUG('saving already stopped, cannot stop again')
         self.h5data2d = None
         self.h5cam_info = None
+        self.h5host_clock_info = None
         self.h5movie_info = None
         self.h5data3d_best = None
         self.h5additional_info = None
@@ -1480,3 +1570,23 @@ class MainBrain(object):
 
             h5table.flush()
 
+        # ** camera info **
+        #   clear queue
+        list_of_host_clock_info = []
+        try:
+            while True:
+                list_of_host_clock_info.append( self.queue_host_clock_info.get(0) )
+        except Queue.Empty:
+            pass
+        #   save
+        if self.h5host_clock_info is not None:
+            host_clock_info_row = self.h5host_clock_info.row
+            for host_clock_info in list_of_host_clock_info:
+                remote_hostname, start_timestamp, remote_timestamp, stop_timestamp = host_clock_info
+                host_clock_info_row['remote_hostname'] = remote_hostname
+                host_clock_info_row['start_timestamp'] = start_timestamp
+                host_clock_info_row['remote_timestamp'] = remote_timestamp
+                host_clock_info_row['stop_timestamp'] = stop_timestamp
+                host_clock_info_row.append()
+                
+            self.h5host_clock_info.flush()

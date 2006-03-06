@@ -79,6 +79,12 @@ class wxMainBrainApp(wxApp):
         
         filemenu.AppendItem(wxMenuItem(kind=wxITEM_SEPARATOR))
         
+        ID_about = wxNewId()
+        filemenu.Append(ID_about, "About", "About wxMainBrain")
+        EVT_MENU(self, ID_about, self.OnAboutMainBrain)
+
+        filemenu.AppendItem(wxMenuItem(kind=wxITEM_SEPARATOR))
+        
         ID_quit = wxNewId()
         filemenu.Append(ID_quit, "Quit\tCtrl-Q", "Quit application")
         EVT_MENU(self, ID_quit, self.OnQuit)
@@ -232,6 +238,17 @@ class wxMainBrainApp(wxApp):
             self.save_data_dir = test_dir
 
         return True
+
+    def OnAboutMainBrain(self, event):
+        disp = 'Loaded modules (.eggs):\n'
+        disp += '----------------------\n'
+        for d in pkg_resources.working_set:
+            disp += str(d) + '\n'
+        dlg = wx.MessageDialog(self.frame, disp,
+                               'About wxMainBrain',
+                               wx.OK | wx.ICON_INFORMATION)
+        dlg.ShowModal()
+        dlg.Destroy()
 
     def OnKeyDown(self, event):
         if self.pass_all_keystrokes:
