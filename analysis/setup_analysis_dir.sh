@@ -17,6 +17,7 @@ ln -s ~/kookaburra/flydra/analysis/foe_5_top_views.py
 
 ln -s ~/kookaburra/flydra/analysis/dark_1_prelim.py
 ln -s ~/kookaburra/flydra/analysis/dark_2_vtk.py
+ln -s ~/kookaburra/flydra/analysis/dark_2b_vtk.py
 ln -s ~/kookaburra/flydra/analysis/dark_3_stats.py
 
 ln -s ~/kookaburra/flydra/analysis/create_movie.sh

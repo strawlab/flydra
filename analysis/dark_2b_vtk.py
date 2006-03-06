@@ -26,11 +26,11 @@ renWin, renderers = vtk_results.init_vtk()#stereo=True)
 horsetail = False
 #horsetail = True
 
-#condition = 'light'
 condition = 'dark'
-#condition = 'blink'
+#condition = 'strobe_once'
+#condition = 'focal_once'
 
-dir = 'upwind'
+#dir = 'upwind'
 #dir = 'downwind'
 
 if 1:
@@ -65,29 +65,28 @@ for line_no,line in enumerate(f_segments):
     else:
         raise ValueError('hmm')
 
-    if dir=='upwind' and not upwind:
-        continue
+##    if dir=='upwind' and not upwind:
+##        continue
     
-    if dir=='downwind' and upwind:
-        continue
+##    if dir=='downwind' and upwind:
+##        continue
 
     fstart = int(fstart)
     trig_fno = int(trig_fno)
     fend = int(fend)
     n_frames = fend-fstart
     max_n_frames = max(n_frames,max_n_frames)
-    
-    stimulus_condition = float(stimulus_condition)
 
-    if condition == 'light':
-        if stimulus_condition!=1.0:
-            continue
-    elif condition == 'dark':
-        if stimulus_condition!=0.0:
-            continue
-    elif condition == 'blink':
-        if stimulus_condition!=0.5:
-            continue
+    if 0:
+        if condition == 'dark':
+            if stimulus_condition!='0':
+                continue
+        elif condition == 'strobe_once':
+            if stimulus_condition!='S1':
+                continue
+        elif condition == 'focal_once':
+            if stimulus_condition!='F1':
+                continue
 
     ball_color1 = colors.purple
     ball_color2 = colors.purple
@@ -105,27 +104,16 @@ for line_no,line in enumerate(f_segments):
     results = h5files[h5filename]
     rough_timestamp = rough_timestamps[h5filename]
 
-    if (rough_timestamp < datetime.datetime(2006, 2, 24, 18, 0, 0,
-                                            tzinfo=pacific)):
-        print 'old scheme'
-        raise NotImplementedError('')
-        # pre 2006-02-24
-        if stimulus_condition==1.0:
-            ball_color1 = colors.white
-            ball_color2 = colors.black
-        else:
-            ball_color1 = colors.white
-            ball_color2 = colors.white
-    else:
-        if stimulus_condition==1.0:
-            ball_color1 = colors.white
-            ball_color2 = colors.white
-        elif stimulus_condition==0.0:
-            ball_color1 = colors.white
-            ball_color2 = colors.black
-        elif stimulus_condition==0.5:
-            ball_color1 = colors.white
-            ball_color2 = colors.red
+    if stimulus_condition=='0':
+        ball_color1 = colors.white
+        ball_color2 = colors.black
+    elif stimulus_condition=='S1':
+        ball_color1 = colors.white
+        ball_color2 = colors.red
+    elif stimulus_condition=='F1':
+        ball_color1 = colors.white
+        ball_color2 = colors.purple
+        
 
     if horsetail:
         X_zero_frame=trig_fno
@@ -261,7 +249,7 @@ if 1:
 if 0:
     vtk_results.show_cameras(results,renderers)
     
-if 0:
+if 1:
     vtk_results.interact_with_renWin(renWin)#,renderers)
     for renderer in renderers:
         vtk_results.print_cam_props(renderer.GetActiveCamera())
@@ -315,7 +303,8 @@ else:
                 writer.Write()
     if 1:
         w,h = renWin.GetSize()
-        mpeg_name = 'movie_%s_%s.mpeg'%(condition,dir)
+        #mpeg_name = 'movie_%s_%s.mpeg'%(condition,dir)
+        mpeg_name = 'movie_%s.mpeg'%(condition,)
         cmd = 'ffmpeg -hq -b 20000 -f mpeg2video -r 30 -s %dx%d -i %s %s'%(
             w,h,fname_base,mpeg_name)
         print 'executing:',cmd

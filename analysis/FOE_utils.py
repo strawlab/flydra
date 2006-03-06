@@ -57,7 +57,7 @@ def get_results_and_times(logfiles,h5files,get_orig_times=False):
 
     # parse log file
     fno_by_logfile_trig_time = {}
-    tf_hzs = []
+    stimulus_conditions = []
     logfile_trig_times = []
     fnos = []
     for logfile in logfiles:
@@ -65,24 +65,23 @@ def get_results_and_times(logfiles,h5files,get_orig_times=False):
         for line in fd.readlines():
             if line.startswith('#'):
                 continue
-            fno, projector_time, tf_hz = line.split()
+            fno, projector_time, stimulus_condition = line.split()
             fno = int(fno)
             projector_time = float(projector_time)
-            tf_hz = float(tf_hz)
 
             fnos.append(fno)
             logfile_trig_times.append(projector_time)
-            tf_hzs.append( tf_hz )
+            stimulus_conditions.append( stimulus_condition )
 
     fnos = numpy.array(fnos,dtype=numpy.int64)
     logfile_trig_times = numpy.array(logfile_trig_times,dtype=numpy.float64)
-    tf_hzs = numpy.array(tf_hzs,dtype=numpy.float64)
+    stimulus_conditions = numpy.array(stimulus_conditions)#,dtype=numpy.float64)
 
     unrejected_idx = reject_data( logfile_trig_times )
     
     fnos = fnos[unrejected_idx]
     logfile_trig_times = logfile_trig_times[unrejected_idx]
-    tf_hzs = tf_hzs[unrejected_idx]
+    stimulus_conditions = stimulus_conditions[unrejected_idx]
 
     # get original time of each frame
     if get_orig_times:
@@ -105,7 +104,7 @@ def get_results_and_times(logfiles,h5files,get_orig_times=False):
         orig_times = numpy.array(orig_times,dtype=numpy.float64)
 
     rval = [all_results, all_results_times, fnos, 
-            logfile_trig_times, tf_hzs]
+            logfile_trig_times, stimulus_conditions]
     
     if get_orig_times:
         rval.append( orig_times )
