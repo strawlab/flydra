@@ -10,7 +10,6 @@ volatile char gState  = LIGHTS_ON;
 
 void delayms(unsigned int millisec)
 {
-	// mt, int i did not work in the simulator:  int i; 
 	uint8_t i;
 
 	while (millisec--) {
@@ -20,18 +19,44 @@ void delayms(unsigned int millisec)
 	}
 }
 
+void USART_init(void) {
+  unsigned int ubrr;
+
+  // Set baud rate
+  ubrr = 25; // 2400 bps, see atmega169 manual pg. 174
+  UBRRH = (unsigned char)(ubrr>>8);
+  UBRRL = (unsigned char)ubrr;
+
+  // Enable receiver and transmitter
+  UCSRB = (1<<RXEN) | (1<<TXEN);
+  
+  // Set frame format 8N1
+  // UCSRC defaults to 8N1
+}
+
+
 void Initialization(void) {
   OSCCAL_calibration();
+  USART_init();
 }
 
 
 int main(void) {
+  unsigned char data;
+
   Initialization();
   //  DDRB = 0xFF; // port B is all output
   sbiBF(DDRB,0); // B0 is output
   cbiBF(DDRB,2); // B2 is input
   cbiBF(DDRB,4); // B2 is input
   while(1) {
+    
+    if (UCSRA & (1<<RXC)) {
+      // read USART, got byte
+      data = UDR;
+      UDR=data; // echo (transmit) back on USART
+    }
+    
     if (gState==LIGHTS_ON) {
       sbiBF(PORTB, 0);
     } else {
@@ -92,8 +117,9 @@ void OSCCAL_calibration(void)
     unsigned char tempL;
 
     CLKPR = (1<<CLKPCE);        // set Clock Prescaler Change Enable
-    // set prescaler = 8, Inter RC 8Mhz / 8 = 1Mhz
-    CLKPR = (1<<CLKPS1) | (1<<CLKPS0);
+
+    CLKPR = (1<<CLKPS1) | (1<<CLKPS0); // ADS - sets clock division factor to 8
+    // ADS - thus, with calibrated internal crystal at * MHz, this gives us 1 MHz
     
     TIMSK2 = 0;             //disable OCIE2A and TOIE2
 
