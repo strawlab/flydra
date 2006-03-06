@@ -1593,17 +1593,19 @@ def test():
 
 def get_results(filename,mode='r+'):
     h5file = PT.openFile(filename,mode=mode)
-    frame_col = h5file.root.data3d_best.cols.frame
-    if frame_col.index is None:
-        print 'creating index on data3d_best...'
-        frame_col.createIndex()
-        print 'done'
+    if hasattr(h5file.root,'data3d_best'):
+        frame_col = h5file.root.data3d_best.cols.frame
+        if frame_col.index is None:
+            print 'creating index on data3d_best...'
+            frame_col.createIndex()
+            print 'done'
         
-    frame_col = h5file.root.data2d.cols.frame
-    if frame_col.index is None:
-        print 'creating index on data2d...'
-        frame_col.createIndex()
-        print 'done'
+    if hasattr(h5file.root,'data2d'):
+        frame_col = h5file.root.data2d.cols.frame
+        if frame_col.index is None:
+            print 'creating index on data2d...'
+            frame_col.createIndex()
+            print 'done'
     return h5file
 
 def plot_simple_phase_plots(results,form='xy',max_err=10,typ='best',ori_180_ambig=True):
@@ -2300,9 +2302,20 @@ def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
         # for next loop
         start_frame = good_frames[break_idx+1]
     return results
-    
+
+def print_clock_diffs(results):
+    table = results.root.host_clock_info
+    hostnames = list(sets.Set(table.cols.remote_hostname))
+    for hostname in hostnames:
+        print '--',hostname,'--'
+        for row in table.where( table.cols.remote_hostname == hostname ):
+            diff = row['stop_timestamp'] - row['remote_timestamp']
+            dur = row['stop_timestamp'] - row['start_timestamp']
+            print '  %.1f msec (within %.1f msec)'%(diff*1e3,dur*1e3)
+        print
+
 if __name__=='__main__':
-    results = get_results('DATA20060224_225118.h5',mode='r+')
+    results = get_results('DATA20060305_211736.h5',mode='r+')
     #del results.root.exact_movie_info
     #results.close()
     #make_exact_movie_info2(results)
