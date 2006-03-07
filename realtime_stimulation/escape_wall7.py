@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# $Id: calibrate_viewport.py 561 2005-06-30 23:22:01Z astraw $
+# $Id: $
 
 # echos back the trigger time for roundtrip latency estimation
 
