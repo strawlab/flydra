@@ -73,7 +73,7 @@ int main(void) {
       case LIGHTS_STROBE: 
 	//cbiBF(PORTB, 0); cbiBF(PORTB, 2);
 	PORTB = 0x00;
-	delayms(50); // off 50 msec
+	delayms(100); // off 50 msec
 
 	//sbiBF(PORTB, 0); sbiBF(PORTB, 2);
 	PORTB = 0x05;
@@ -81,7 +81,7 @@ int main(void) {
 	break;
       case LIGHTS_FOCALSTROBE:
 	PORTB = 0x01;
-	delayms(50); // off 50 msec
+	delayms(100); // off 50 msec
 
 	PORTB = 0x05;
 	delayms(5); // on 5 msec
