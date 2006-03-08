@@ -16,6 +16,7 @@ near_inf = 9.999999e20
 import Queue
 import tables as PT
 import numarray
+import atexit
 pytables_filt = numarray.asarray
 
 import flydra.common_variables
@@ -33,11 +34,26 @@ Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
 
 IMPOSSIBLE_TIMESTAMP = -10.0
 
+# these calibration data are global, but that's a hack...
 calib_data_lock = threading.Lock()
 calib_IdMat = []
 calib_points = []
 
 XXX_framenumber = 0
+
+class MainBrainKeeper:
+    def __init__(self):
+        self.kept = []
+        atexit.register(self.atexit)
+    def register(self, mainbrain_instance ):
+        self.kept.append( mainbrain_instance )
+    def atexit(self):
+        print 'MainBrainKeeper.atexit() called'
+        for k in self.kept:
+            print '  MainBrainKeeper.atexit() calling MainBrain.quit() for',k
+            k.quit() # closes hdf5 file and closes cameras
+
+main_brain_keeper = MainBrainKeeper() # global to close MainBrain instances upon exit
 
 best_realtime_data=None
 
@@ -1092,6 +1108,8 @@ class MainBrain(object):
     # main MainBrain class
     
     def __init__(self):
+        global main_brain_keeper
+        
         Pyro.core.initServer(banner=0)
 
         port = 9833
@@ -1148,6 +1166,8 @@ class MainBrain(object):
         self.coord_receiver = CoordReceiver(self)
         self.coord_receiver.setDaemon(True)
         self.coord_receiver.start()
+
+        main_brain_keeper.register( self )
 
     def IncreaseCamCounter(self,cam_id,scalar_control_info,fqdn_and_port):
         self.num_cams += 1
@@ -1362,6 +1382,7 @@ class MainBrain(object):
                 raise RuntimeError("could not find row to save movie stop frame.")
                     
     def quit(self):
+        """closes any files being saved and closes camera connections"""
         # XXX ----- non-isolated calls to remote_api being done ----
         # this may be called twice: once explicitly and once by __del__
         self.remote_api.cam_info_lock.acquire()
@@ -1385,11 +1406,8 @@ class MainBrain(object):
             print 'cameras failed to quit cleanly: %s'%str(cam_ids)
             #raise RuntimeError('cameras failed to quit cleanly: %s'%str(cam_ids))
 
+        self.stop_saving_data()
         self.coord_receiver.quit()
-        if self.is_saving_data():
-            self._service_save_data()
-            self.h5file.close()
-            self.h5file = None
 
     def load_calibration(self,dirname):
         if self.is_saving_data():
@@ -1479,7 +1497,7 @@ class MainBrain(object):
 
     def stop_saving_data(self):
         self._service_save_data()
-        if self.h5file is not None:
+        if self.is_saving_data():
             self.h5file.close()
             self.h5file = None
         else:
