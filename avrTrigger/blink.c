@@ -3,9 +3,11 @@
 #include "blink.h"
 
 #define LIGHTS_ON '1'
-#define LIGHTS_OFF '0'
-#define LIGHTS_STROBE 'S'
-#define LIGHTS_FOCALSTROBE 'F'
+#define LIGHTS_OFF_LONG '0'
+#define LIGHTS_OFF_050MSEC 'R'
+#define LIGHTS_OFF_100MSEC 'S'
+#define LIGHTS_FOCAL_OFF_050MSEC 'A'
+#define LIGHTS_FOCAL_OFF_100MSEC 'B'
 
 volatile unsigned char gState  = LIGHTS_ON;
 
@@ -62,32 +64,35 @@ int main(void) {
     }
     
     switch (gState) {
+
       case LIGHTS_ON:  
-	//sbiBF(PORTB, 0); sbiBF(PORTB, 2);
 	PORTB = 0x05;
 	break;
-      case LIGHTS_OFF: 
-	//cbiBF(PORTB, 0); cbiBF(PORTB, 2);
+
+      case LIGHTS_OFF_LONG: 
 	PORTB = 0x00;
 	break;
-      case LIGHTS_STROBE: 
-	//cbiBF(PORTB, 0); cbiBF(PORTB, 2);
+
+      case LIGHTS_OFF_050MSEC:
+	PORTB = 0x00;
+	delayms( 50); // off 50 msec
+	break;
+      case LIGHTS_OFF_100MSEC:
 	PORTB = 0x00;
 	delayms(100); // off 50 msec
-
-	//sbiBF(PORTB, 0); sbiBF(PORTB, 2);
-	PORTB = 0x05;
-	delayms(5); // on 5 msec
 	break;
-      case LIGHTS_FOCALSTROBE:
+
+      case LIGHTS_FOCAL_OFF_050MSEC:
+	PORTB = 0x01;
+	delayms( 50); // off 50 msec
+	break;
+      case LIGHTS_FOCAL_OFF_100MSEC:
 	PORTB = 0x01;
 	delayms(100); // off 50 msec
-
-	PORTB = 0x05;
-	delayms(5); // on 5 msec
 	break;
+
       default:
-	to_echo = 'X';
+	//to_echo = 'X';
 	break;
     }
     
