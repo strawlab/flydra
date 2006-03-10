@@ -55,7 +55,6 @@ def TimestampEcho():
     hostname = ''
     port = flydra.common_variables.timestamp_echo_listener_port
     sockobj.bind(( hostname, port))
-    print 'TimestampEcho listening at',hostname,port
     sendto_port = flydra.common_variables.timestamp_echo_gatherer_port
     fmt = flydra.common_variables.timestamp_echo_fmt_diff
     while 1:

@@ -9,15 +9,14 @@ import Pyro.core
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
 import numpy
-import numarray as nx
-import numarray.records
-from numarray.ieeespecial import nan, inf
+import numpy as nx
+from numpy import nan, inf
 near_inf = 9.999999e20
 import Queue
 import tables as PT
-import numarray
+import numarray.records
+pytables_filt = numpy.asarray
 import atexit
-pytables_filt = numarray.asarray
 
 import flydra.common_variables
 REALTIME_UDP = flydra.common_variables.REALTIME_UDP
@@ -475,7 +474,6 @@ class CoordReceiver(threading.Thread):
                     # find best measurement (that with shortest roundtrip_duration)
                     rowidx = numpy.argmin(roundtrip_duration)
                     srs = tarray[rowidx,:]
-                    srs = map(float,srs) # make sure pytables doesn't freak out on numpy scalar
                     start_timestamp, remote_timestamp, stop_timestamp = srs
 
                     self.main_brain.queue_host_clock_info.put(  (remote_hostname,
@@ -1246,22 +1244,25 @@ class MainBrain(object):
 
         IdMat = nx.transpose(nx.array(IdMat))
         points = nx.transpose(nx.array(points))
-        print 'saving %d points to %s'%(points.shape[1],self.calib_dir)
-        save_ascii_matrix(os.path.join(self.calib_dir,'IdMat.dat'),IdMat)
-        save_ascii_matrix(os.path.join(self.calib_dir,'points.dat'),points)
-        cam_ids = self.remote_api.external_get_cam_ids()
-        Res = []
-        for cam_id in cam_ids:
-            sci, fqdn, port = self.remote_api.external_get_info(cam_id)
-            width, height = self.get_widthheight(cam_id)
-            Res.append( [width,height] )
-        Res = nx.array( Res )
-        save_ascii_matrix(os.path.join(self.calib_dir,'Res.dat'),Res)
-        
-        fd = open(os.path.join(self.calib_dir,'camera_order.txt'),'w')
-        for cam_id in cam_ids:
-            fd.write('%s\n'%cam_id)
-        fd.close()
+        if len(points.shape)>1:
+            print 'saving %d points to %s'%(points.shape[1],self.calib_dir)
+            save_ascii_matrix(os.path.join(self.calib_dir,'IdMat.dat'),IdMat)
+            save_ascii_matrix(os.path.join(self.calib_dir,'points.dat'),points)
+            cam_ids = self.remote_api.external_get_cam_ids()
+            Res = []
+            for cam_id in cam_ids:
+                sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+                width, height = self.get_widthheight(cam_id)
+                Res.append( [width,height] )
+            Res = nx.array( Res )
+            save_ascii_matrix(os.path.join(self.calib_dir,'Res.dat'),Res)
+
+            fd = open(os.path.join(self.calib_dir,'camera_order.txt'),'w')
+            for cam_id in cam_ids:
+                fd.write('%s\n'%cam_id)
+            fd.close()
+        else:
+            raise RuntimeError('No points collected!')
 
     def service_pending(self):
         """the MainBrain application calls this fairly frequently (e.g. every 100 msec)"""
@@ -1466,7 +1467,6 @@ class MainBrain(object):
             for cam_id in self.remote_api.external_get_cam_ids():
                 intlin = self.reconstructor.get_intrinsic_linear(cam_id)
                 # while pytables doesn't yet support numpy:
-                intlin = numarray.asarray(intlin)
                 self.h5file.createArray(intlin_group, cam_id, pytables_filt(intlin))
                                         
             intnonlin_group = self.h5file.createGroup(cal_group,'intrinsic_nonlinear')

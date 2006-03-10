@@ -244,9 +244,9 @@ class wxMainBrainApp(wxApp):
         disp += '----------------------\n'
         for d in pkg_resources.working_set:
             disp += str(d) + '\n'
-        dlg = wx.MessageDialog(self.frame, disp,
+        dlg = wxMessageDialog(self.frame, disp,
                                'About wxMainBrain',
-                               wx.OK | wx.ICON_INFORMATION)
+                               wxOK | wxICON_INFORMATION)
         dlg.ShowModal()
         dlg.Destroy()
 
