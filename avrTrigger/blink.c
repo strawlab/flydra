@@ -6,6 +6,7 @@
 #define LIGHTS_OFF_LONG '0'
 #define LIGHTS_OFF_050MSEC 'R'
 #define LIGHTS_OFF_100MSEC 'S'
+#define LIGHTS_OFF_250MSEC 'T'
 #define LIGHTS_FOCAL_OFF_050MSEC 'A'
 #define LIGHTS_FOCAL_OFF_100MSEC 'B'
 
@@ -79,7 +80,11 @@ int main(void) {
 	break;
       case LIGHTS_OFF_100MSEC:
 	PORTB = 0x00;
-	delayms(100); // off 50 msec
+	delayms(100); // off 100 msec
+	break;
+      case LIGHTS_OFF_250MSEC:
+	PORTB = 0x00;
+	delayms(250); // off 250 msec
 	break;
 
       case LIGHTS_FOCAL_OFF_050MSEC:
@@ -88,7 +93,7 @@ int main(void) {
 	break;
       case LIGHTS_FOCAL_OFF_100MSEC:
 	PORTB = 0x01;
-	delayms(100); // off 50 msec
+	delayms(100); // off 100 msec
 	break;
 
       default:
