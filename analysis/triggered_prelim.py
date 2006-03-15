@@ -13,15 +13,17 @@ time_fmt = '%Y-%m-%d %H:%M:%S %Z%z'
 N_triggers = len(trigger_fnos)
 print '%d FOE triggers'%N_triggers
 
-analysis_file = open('strict_data.txt','w')
-print >> analysis_file, '#pre_frames = %d; post_frames = %d; max_IFI_dist_mm = %f'%(
-    pre_frames, post_frames, max_IFI_dist_mm)
-print >> analysis_file, '#landed_check_OK=%s; landed_max_z=%f'%(
-    landed_check_OK,landed_max_z)
-print >> analysis_file, '#h5files = %s'%(repr(h5files),)
-print >> analysis_file, '#logfiles = %s'%(repr(logfiles),)
-print >> analysis_file, '#'
-print >> analysis_file, '#upwind, fstart, trig_fno, fend, results.filename, condition_float'
+strict_file = open('strict_data.txt','w')
+lax_file = open('lax_data.txt','w')
+for analysis_file in [strict_file, lax_file]:
+    print >> analysis_file, '#pre_frames = %d; post_frames = %d; max_IFI_dist_mm = %f'%(
+        pre_frames, post_frames, max_IFI_dist_mm)
+    print >> analysis_file, '#landed_check_OK=%s; landed_max_z=%f'%(
+        landed_check_OK,landed_max_z)
+    print >> analysis_file, '#h5files = %s'%(repr(h5files),)
+    print >> analysis_file, '#logfiles = %s'%(repr(logfiles),)
+    print >> analysis_file, '#'
+    print >> analysis_file, '#upwind, fstart, trig_fno, fend, results.filename, condition_float'
 
 RAD2DEG = 180.0/math.pi
 
@@ -289,7 +291,10 @@ for idx in range(N_triggers):
     if xm.shape[1]==xm.count():
         # meets ultra_strict requirements
         strict_count += 1
-        print >> analysis_file, upwind, fstart, trig_fno, fend, results.filename, condition_float
+        print >> strict_file, upwind, fstart, trig_fno, fend, results.filename, condition_float
+    strict_file.flush()
+    print >> lax_file, upwind, fstart, trig_fno, fend, results.filename, condition_float
+    lax_file.flush()
     if not ultra_strict or xm.shape[1]==xm.count():
         xs_dict[upwind].setdefault( condition_float, []).append( xm )
     if not ultra_strict or ym.shape[1]==ym.count():
@@ -308,9 +313,12 @@ for idx in range(N_triggers):
         heading_dict[upwind].setdefault( condition_float, []).append( headings )
     good_count += 1
     
-print >> analysis_file, '# %d triggers in this file because they met all strictness criteria'%strict_count
-print >> analysis_file, '# %d triggers would be possible if willing to accept missing data'%good_count
-analysis_file.close()
+print >> strict_file, '# %d triggers in this file because they met all strictness criteria'%strict_count
+print >> strict_file, '# %d triggers would be possible if willing to accept missing data'%good_count
+strict_file.close()
+
+print >> lax_file, '# lax data -- all accepted'
+lax_file.close()
 
 print '%d triggers in this file because they met all strictness criteria'%strict_count
 print '%d triggers would be possible if willing to accept missing data'%good_count

@@ -2315,7 +2315,7 @@ def print_clock_diffs(results):
         print
 
 if __name__=='__main__':
-    results = get_results('DATA20060305_211736.h5',mode='r+')
+    results = get_results('DATA20060309_190142.h5',mode='r+')
     #del results.root.exact_movie_info
     #results.close()
     #make_exact_movie_info2(results)

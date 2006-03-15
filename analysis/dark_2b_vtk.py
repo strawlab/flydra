@@ -26,12 +26,17 @@ renWin, renderers = vtk_results.init_vtk()#stereo=True)
 horsetail = False
 #horsetail = True
 
-condition = 'dark'
+use_condition=1
+#condition = 'dark'
 #condition = 'strobe_once'
 #condition = 'focal_once'
 
+#condition='SSS1'
+conditions=['1','0','SSS1']
+conditions=['T1','TT1','TTT1']
+
 #dir = 'upwind'
-#dir = 'downwind'
+dir = 'downwind'
 
 if 1:
     # draw 3-color axes
@@ -57,6 +62,7 @@ count = 0
 max_n_frames = 0
 for line_no,line in enumerate(f_segments):
     upwind_orig, fstart, trig_fno, fend, h5filename, stimulus_condition = line
+    print line
 
     if upwind_orig == 'False':
         upwind = False
@@ -65,11 +71,12 @@ for line_no,line in enumerate(f_segments):
     else:
         raise ValueError('hmm')
 
-##    if dir=='upwind' and not upwind:
-##        continue
-    
-##    if dir=='downwind' and upwind:
-##        continue
+    if 0:
+        if dir=='upwind' and not upwind:
+            continue
+
+        if dir=='downwind' and upwind:
+            continue
 
     fstart = int(fstart)
     trig_fno = int(trig_fno)
@@ -77,19 +84,12 @@ for line_no,line in enumerate(f_segments):
     n_frames = fend-fstart
     max_n_frames = max(n_frames,max_n_frames)
 
-    if 0:
-        if condition == 'dark':
-            if stimulus_condition!='0':
-                continue
-        elif condition == 'strobe_once':
-            if stimulus_condition!='S1':
-                continue
-        elif condition == 'focal_once':
-            if stimulus_condition!='F1':
-                continue
+    if use_condition:
+        if stimulus_condition not in conditions:
+            continue
 
-    ball_color1 = colors.purple
-    ball_color2 = colors.purple
+    ball_color1 = colors.green # dummy values
+    ball_color2 = colors.green
     
     if h5filename not in h5files:
         h5files[h5filename] = result_browser.get_results(h5filename)
@@ -109,7 +109,25 @@ for line_no,line in enumerate(f_segments):
         ball_color2 = colors.black
     elif stimulus_condition=='S1':
         ball_color1 = colors.white
+        ball_color2 = colors.yellow
+    elif stimulus_condition=='SS1':
+        ball_color1 = colors.white
+        ball_color2 = colors.orange
+    elif stimulus_condition=='SSS1':
+        ball_color1 = colors.white
         ball_color2 = colors.red
+    elif stimulus_condition=='T1':
+        ball_color1 = colors.white
+        ball_color2 = colors.yellow
+    elif stimulus_condition=='TT1':
+        ball_color1 = colors.white
+        ball_color2 = colors.orange
+    elif stimulus_condition=='TTT1':
+        ball_color1 = colors.white
+        ball_color2 = colors.red
+    elif stimulus_condition=='1':
+        ball_color1 = colors.white
+        ball_color2 = colors.white
     elif stimulus_condition=='F1':
         ball_color1 = colors.white
         ball_color2 = colors.purple

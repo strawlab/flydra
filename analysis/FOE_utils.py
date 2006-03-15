@@ -43,6 +43,16 @@ def reject_data( trig_times ):
     bad_stop  = dt(2006, 2, 26, 18, 30, 00, tzinfo=pacific)
     reject_idx = reject_idx | ((att > bad_start) & (att < bad_stop))
 
+    # 10 Mar 2006 00:35:00 AM - 2:00 PM # missed frames on cam1:0
+    bad_start = dt(2006, 3, 10,  0, 35, 00, tzinfo=pacific)
+    bad_stop  = dt(2006, 3, 10, 14, 00, 00, tzinfo=pacific)
+    reject_idx = reject_idx | ((att > bad_start) & (att < bad_stop))
+
+    # Mon, 13 Mar 2006 10:30:00 AM - 4:00 PM # missed frames on cam3:0
+    bad_start = dt(2006, 3, 13, 10, 30, 00, tzinfo=pacific)
+    bad_stop  = dt(2006, 3, 13, 16, 00, 00, tzinfo=pacific)
+    reject_idx = reject_idx | ((att > bad_start) & (att < bad_stop))
+
     unrejected = ~reject_idx
     return unrejected
 
