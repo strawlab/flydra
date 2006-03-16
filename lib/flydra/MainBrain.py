@@ -1373,7 +1373,7 @@ class MainBrain(object):
                 # get row in table
                 if (r['cam_id'] == cam_id and r['filename'] == raw_filename and
                     r['approx_start_frame']==approx_start_frame):
-                    nrow =r.nrow()
+                    nrow =r.nrow
                     break
             if nrow is not None:
                 nrowi = int(nrow) # pytables bug workaround...
