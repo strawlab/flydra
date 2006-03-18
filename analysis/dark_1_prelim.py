@@ -7,7 +7,7 @@ logfiles.sort()
 h5files.sort()
 
 pre_frames = 10
-post_frames = 200
+post_frames = 50
 landed_check_OK = True # relax post_frame requirement iff z<10mm
 landed_max_z = 5.0
 

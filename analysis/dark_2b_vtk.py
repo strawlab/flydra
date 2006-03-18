@@ -26,7 +26,7 @@ renWin, renderers = vtk_results.init_vtk()#stereo=True)
 horsetail = False
 #horsetail = True
 
-use_condition=1
+use_condition=0
 #condition = 'dark'
 #condition = 'strobe_once'
 #condition = 'focal_once'
@@ -62,6 +62,8 @@ count = 0
 max_n_frames = 0
 for line_no,line in enumerate(f_segments):
     upwind_orig, fstart, trig_fno, fend, h5filename, stimulus_condition = line
+    if stimulus_condition.startswith("'") and stimulus_condition.endswith("'"):
+        stimulus_condition = eval(stimulus_condition)
     print line
 
     if upwind_orig == 'False':
@@ -104,33 +106,22 @@ for line_no,line in enumerate(f_segments):
     results = h5files[h5filename]
     rough_timestamp = rough_timestamps[h5filename]
 
-    if stimulus_condition=='0':
-        ball_color1 = colors.white
-        ball_color2 = colors.black
-    elif stimulus_condition=='S1':
-        ball_color1 = colors.white
-        ball_color2 = colors.yellow
-    elif stimulus_condition=='SS1':
-        ball_color1 = colors.white
-        ball_color2 = colors.orange
-    elif stimulus_condition=='SSS1':
-        ball_color1 = colors.white
-        ball_color2 = colors.red
-    elif stimulus_condition=='T1':
-        ball_color1 = colors.white
-        ball_color2 = colors.yellow
-    elif stimulus_condition=='TT1':
-        ball_color1 = colors.white
-        ball_color2 = colors.orange
-    elif stimulus_condition=='TTT1':
-        ball_color1 = colors.white
-        ball_color2 = colors.red
-    elif stimulus_condition=='1':
-        ball_color1 = colors.white
-        ball_color2 = colors.white
-    elif stimulus_condition=='F1':
-        ball_color1 = colors.white
-        ball_color2 = colors.purple
+    c2c = {'0':(colors.white,colors.black),
+           'S1':(colors.white,colors.yellow),
+           'SS1':(colors.white,colors.orange),
+           'SSS1':(colors.white,colors.red),
+           'T1':(colors.white,colors.yellow),
+           'TT1':(colors.white,colors.orange),
+           'TTT1':(colors.white,colors.red),
+           '1':(colors.white,colors.white),
+           'F1':(colors.white,colors.purple),
+           
+           't\x08':(colors.white,colors.yellow),
+           't\x10':(colors.white,colors.orange),
+           't\x18':(colors.white,colors.red),
+           
+           }
+    ball_color1,ball_color2 = c2c[stimulus_condition]
         
 
     if horsetail:

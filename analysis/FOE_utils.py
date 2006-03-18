@@ -1,6 +1,7 @@
 import numpy
 import result_browser
 import datetime
+import time
 import pytz # from http://pytz.sourceforge.net/
 time_fmt = '%Y-%m-%d %H:%M:%S %Z%z'
 
@@ -70,10 +71,18 @@ def get_results_and_times(logfiles,h5files,get_orig_times=False):
     stimulus_conditions = []
     logfile_trig_times = []
     fnos = []
+    film_trig_fnos = []
+    film_trig_times = []
     for logfile in logfiles:
         fd = open(logfile,'rb')
         for line in fd.readlines():
             if line.startswith('#'):
+                if line.startswith('# film trigger'):
+                    tmp, tmp2, tmp3, fno, projector_time = line.split()
+                    fno = int(fno)
+                    projector_time = float(projector_time)
+                    film_trig_fnos.append( fno )
+                    film_trig_times.append( projector_time )
                 continue
             fno, projector_time, stimulus_condition = line.split()
             fno = int(fno)
@@ -82,7 +91,9 @@ def get_results_and_times(logfiles,h5files,get_orig_times=False):
             fnos.append(fno)
             logfile_trig_times.append(projector_time)
             stimulus_conditions.append( stimulus_condition )
-
+            
+    #film_trig_fnos = numpy.array(film_trig_fnos)
+    #film_trig_times = numpy.array(film_trig_times)
     fnos = numpy.array(fnos,dtype=numpy.int64)
     logfile_trig_times = numpy.array(logfile_trig_times,dtype=numpy.float64)
     stimulus_conditions = numpy.array(stimulus_conditions)#,dtype=numpy.float64)
@@ -92,6 +103,14 @@ def get_results_and_times(logfiles,h5files,get_orig_times=False):
     fnos = fnos[unrejected_idx]
     logfile_trig_times = logfile_trig_times[unrejected_idx]
     stimulus_conditions = stimulus_conditions[unrejected_idx]
+
+    for fno,ts in zip(film_trig_fnos,film_trig_times):
+        for results in all_results:
+            data3d = results.root.data3d_best
+            for row in data3d.where( data3d.cols.frame == int(fno) ):
+                tts = time.strftime(time_fmt, time.localtime(ts))
+                print 'trigger at frame %d (%s): %.1f %.1f %.1f'%(
+                    fno, tts, row['x'], row['y'], row['z'])
 
     # get original time of each frame
     if get_orig_times:
