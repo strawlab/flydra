@@ -25,9 +25,11 @@ TARGET = blink
 
 # Optimization level (can be 0, 1, 2, 3, s) 
 # (Note: 3 is not always the best optimization level. See avr-libc FAQ)
-OPT = s
+#OPT = s
+OPT = 2
 
 # List C source files here. (C dependencies are automatically generated.)
+# LCD_driver.c LCD_functions.c BCD.c
 SRC = $(TARGET).c
 
 # List Assembler source files here.

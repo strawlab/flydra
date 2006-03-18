@@ -17,11 +17,14 @@
 
 #define MSG_STATE_READY 0
 #define MSG_STATE_READ_DUR 1
+#define MSG_STATE_READ_FOCAL_DUR 2
+
 #define ACTION_NONE 'a'
 #define ACTION_TRIGGER 'b'
 #define ACTION_DARK 'c'
 #define ACTION_LIGHT 'd'
 #define ACTION_TIMED_DARK 'e'
+#define ACTION_TIMED_FOCAL_DARK 'f'
 
 void delayms(unsigned int millisec)
 {
@@ -99,7 +102,9 @@ int main(void) {
   unsigned char last_char_input;
   unsigned char do_action;
 
+#ifdef USELCD
   unsigned char CH,CL;
+#endif
     
   msg_state=MSG_STATE_READY;
   Initialization();
@@ -127,12 +132,18 @@ int main(void) {
       case 't':
 	msg_state = MSG_STATE_READ_DUR;
 	break;
+      case 'f':
+	msg_state = MSG_STATE_READ_FOCAL_DUR;
+	break;
       default:
 	break;
       }
       break;
     case MSG_STATE_READ_DUR:
       do_action = ACTION_TIMED_DARK;
+      break;
+    case MSG_STATE_READ_FOCAL_DUR:
+      do_action = ACTION_TIMED_FOCAL_DARK;
       break;
     default:
       break;
@@ -170,6 +181,7 @@ int main(void) {
 
 
     case ACTION_TIMED_DARK:
+    case ACTION_TIMED_FOCAL_DARK:
 #ifdef USELCD
       LCD_puts("ATD", SCROLLMODE_LOOP);
 #endif
@@ -191,8 +203,12 @@ int main(void) {
 						      // prescaling by
 						      // 1024 (WGM is
 						      // 0 = normal)
-      
-      PORTB &= ~((1<<DDB0) | (1<<DDB2)); // lights out
+      if (do_action==ACTION_TIMED_DARK) {
+	PORTB &= ~((1<<DDB0) | (1<<DDB2)); // all lights out
+      }
+      else { //if (do_action==ACTION_TIMED_FOCAL_DARK) {
+	PORTB &= ~(1<<DDB2);               // focal lights out
+      }
 
 #ifdef USELCD
       LCD_puts("T ?", SCROLLMODE_LOOP);
