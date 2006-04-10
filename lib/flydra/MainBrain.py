@@ -1018,7 +1018,7 @@ class MainBrain(object):
                                          'image':None,  # most recent image from cam
                                          'fps':None,    # most recept fps from cam
                                          'points':[], # 2D image points
-                                         'caller':caller,    # most recept fps from cam
+                                         'caller':caller,
                                          'scalar_control_info':scalar_control_info,
                                          'fqdn':fqdn,
                                          'port':port,
@@ -1142,6 +1142,8 @@ class MainBrain(object):
         self.set_old_camera_callback(self.DecreaseCamCounter)
         self.currently_calibrating = threading.Event()
 
+        self.last_saved_data_time = 0.0
+
         self._currently_recording_movies = {}
         
         self.reconstructor = None
@@ -1153,7 +1155,6 @@ class MainBrain(object):
         self.h5host_clock_info = None
         self.h5movie_info = None
         self.h5data3d_best = None
-        self.h5additional_info = None
 
         # Queues of information to save
         self.queue_data2d          = Queue.Queue()
@@ -1280,8 +1281,12 @@ class MainBrain(object):
         for cam_id in old_cam_ids:
             for old_cam_func in self._old_camera_functions:
                 old_cam_func(cam_id)
-                
-        self._service_save_data()
+
+        now = time.time()
+        diff = now - self.last_saved_data_time
+        if diff >= 5.0: # save every 5 seconds
+            self._service_save_data()
+            self.last_saved_data_time = now
         self._check_latencies()
 
     def _check_latencies(self):
@@ -1474,14 +1479,14 @@ class MainBrain(object):
                 self.h5file.createArray(intnonlin_group, cam_id,
                                         pytables_filt(self.reconstructor.get_intrinsic_nonlinear(cam_id)))
 
-            self.h5additional_info = ct(cal_group,'additional_info', AdditionalInfo,
+            h5additional_info = ct(cal_group,'additional_info', AdditionalInfo,
                                         '')
-            row = self.h5additional_info.row
+            row = h5additional_info.row
             row['cal_source_type'] = self.reconstructor.cal_source_type
             row['cal_source'] = self.reconstructor.cal_source
             row['minimum_eccentricity'] = flydra.reconstruct.MINIMUM_ECCENTRICITY
             row.append()
-            self.h5additional_info.flush()
+            h5additional_info.flush()
                 
             self.h5data3d_best = ct(root,'data3d_best', Info3D,
                                     "3d data (best)",
@@ -1507,7 +1512,6 @@ class MainBrain(object):
         self.h5host_clock_info = None
         self.h5movie_info = None
         self.h5data3d_best = None
-        self.h5additional_info = None
 
     def _service_save_data(self):
         # ** 2d data **
@@ -1608,3 +1612,21 @@ class MainBrain(object):
                 host_clock_info_row.append()
                 
             self.h5host_clock_info.flush()
+            
+        if self.h5file is not None:
+            
+            # Close and re-open file to keep its contents non-corrupt.
+            # (HDF5 don't buffer everything to a self-consistent disk
+            # state between calls.)
+            
+            filename = self.h5file.filename
+            had_h5data3d_best = self.h5data3d_best is not None
+            self.h5file.close()
+            self.h5file = PT.openFile(filename, mode="r+")
+            
+            self.h5data2d = getattr(self.h5file.root,'data2d')
+            self.h5cam_info = getattr(self.h5file.root,'cam_info')
+            self.h5host_clock_info = getattr(self.h5file.root,'host_clock_info')
+            self.h5movie_info = getattr(self.h5file.root,'movie_info')
+            if had_h5data3d_best:
+                self.h5data3d_best = getattr(self.h5file.root,'data3d_best')
