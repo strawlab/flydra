@@ -1514,6 +1514,8 @@ class MainBrain(object):
         self.h5data3d_best = None
 
     def _service_save_data(self):
+        changed = False
+        
         # ** 2d data **
         #   clear queue
         list_of_rows_of_data2d = []
@@ -1532,6 +1534,7 @@ class MainBrain(object):
                 names=Info2DColNames)
             self.h5data2d.append( recarray )
             self.h5data2d.flush()
+            changed = True
         
         # ** camera info **
         #   clear queue
@@ -1552,6 +1555,7 @@ class MainBrain(object):
                 cam_info_row.append()
                 
             self.h5cam_info.flush()
+            changed = True
 
         # ** 3d data **
         q = self.queue_data3d_best
@@ -1591,6 +1595,7 @@ class MainBrain(object):
                 row.append()
 
             h5table.flush()
+            changed = True
 
         # ** camera info **
         #   clear queue
@@ -1612,8 +1617,9 @@ class MainBrain(object):
                 host_clock_info_row.append()
                 
             self.h5host_clock_info.flush()
+            changed = True
             
-        if self.h5file is not None:
+        if self.h5file is not None and changed:
             
             # Close and re-open file to keep its contents non-corrupt.
             # (HDF5 don't buffer everything to a self-consistent disk
