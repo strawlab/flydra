@@ -25,6 +25,7 @@ else:
     time_func = time.time
 
 pt_fmt = '<dddddddddBB'
+small_datafile_fmt = '<dII'
     
 Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here!
 
@@ -123,8 +124,6 @@ class GrabClass(object):
         self.realtime_analyzer.set_reconstruct_helper( helper )
     
     def grab_func(self,globals):
-        n_bg_samples = 100
-        
         # questionable optimization: speed up by eliminating namespace lookups
         cam_quit_event_isSet = globals['cam_quit_event'].isSet
         sleep = time.sleep
@@ -220,10 +219,6 @@ class GrabClass(object):
                 points = self.realtime_analyzer.do_work(hw_roi_frame,
                                                         timestamp, framenumber, use_roi2_isSet(),
                                                         use_cmp_isSet(), return_first_xy)
-##                for p in points:
-##                    print p
-##                print
-                n_pts = len(points)
                 
                 # allow other thread to see images
                 imname = globals['export_image_name'] # figure out what is wanted # XXX theoretically could have threading issue
@@ -234,18 +229,19 @@ class GrabClass(object):
                 globals['most_recent_frame'] = (0,0), export_image # give it
 
                 # allow other thread to see raw image always (for saving)
-                if 1:
-                    globals['incoming_raw_frames'].put(
-                        (nx.array(hw_roi_frame),timestamp,framenumber,n_pts) ) # save a copy
-                else:
-                    globals['incoming_raw_frames'].put(
-                        (hw_roi_frame,timestamp,framenumber,n_pts) ) # save it
+                globals['incoming_raw_frames'].put(
+                    (nx.array(hw_roi_frame), # save a copy
+                     timestamp,
+                     framenumber,
+                     points,
+                     self.realtime_analyzer.roi,
+                     ) )
 
                 if collecting_background_isSet():
                     if bg_frame_number % BG_FRAME_INTERVAL == 0:
                         if cur_fisize != max_frame_size:
                             # set to full ROI and take full image if necessary
-                            raise NotImplementedError("")
+                            raise NotImplementedError("background collection while using hardware ROI not implemented")
                         
                         # maintain running average
                         running_mean_im.toself_add_weighted( hw_roi_frame, max_frame_size, ALPHA )
@@ -320,7 +316,7 @@ class GrabClass(object):
                     
                 if rot_frame_number>=0:
                     find_rotation_center_start_clear()
-                    if n_pts != 0:
+                    if len(points) > 0:
                         pt = points[0]
                         x0, y0, slope = pt[0],pt[1],pt[3]
                     else:
@@ -339,7 +335,7 @@ class GrabClass(object):
                         rot_frame_number=-1 # stop averaging frames
               
                 # XXX could speed this with a join operation I think
-                data = struct.pack('<dli',timestamp,framenumber,n_pts)
+                data = struct.pack('<dli',timestamp,framenumber,len(points))
                 for point_tuple in points:
                     try:
                         data = data + struct.pack(pt_fmt,*point_tuple)
@@ -353,7 +349,7 @@ class GrabClass(object):
                     coord_socket.send(data)
                     
                 if self.new_roi.isSet():
-                    self.cam.stop_camera()  # start camera
+                    self.cam.stop_camera()  # stop camera
                     lbrt = self.new_roi_data
                     self.new_roi_data = None
                     l,b,r,t=lbrt
@@ -366,8 +362,7 @@ class GrabClass(object):
                     l,b= self.cam.get_frame_offset()
                     cur_fisize = FastImage.Size(w, h)
                     hw_roi_frame = fi8ufactory( cur_fisize )
-                    print 'setting hardware ROI not yet implemented in camera_server4'
-                    #self.realtime_analyzer.set_hw_roi(w,h,l,b)
+                    self.realtime_analyzer.roi = (l,b,r,t)
 
                     self.new_roi.clear()
                     self.cam.start_camera()  # start camera
@@ -446,6 +441,7 @@ class App:
             globals['incoming_raw_frames']=Queue.Queue()
             globals['incoming_bg_frames']=Queue.Queue()
             globals['raw_fmf_and_bg_fmf']=None
+            globals['small_fmf']=None
             globals['most_recent_frame']=None
             globals['saved_bg_frame']=False
             globals['current_bg_frame_and_timestamp']=None
@@ -463,7 +459,7 @@ class App:
             globals['use_roi2'] = threading.Event()
             globals['use_cmp'] = threading.Event()
             globals['use_cmp'].set()
-
+            
             # set defaults
             cam.set_camera_property(cam_iface.SHUTTER,300,0,0)
             cam.set_camera_property(cam_iface.GAIN,72,0,0)
@@ -603,6 +599,13 @@ class App:
                     print 'stopped recording'
                     globals['saved_bg_frame']=False
                     globals['raw_fmf_and_bg_fmf'] = None
+            elif key == 'stop_small_recording':
+                if globals['small_fmf'] is not None:
+                    small_movie, small_datafile = globals['small_fmf']
+                    small_movie.close()
+                    small_datafile.close()
+                    print 'stopped small recording'
+                    globals['small_fmf'] = None
             elif key == 'start_recording':
                 raw_filename, bg_filename = cmds[key]
                 std_filename = bg_filename.replace('_bg','_std')
@@ -615,6 +618,13 @@ class App:
                 print "starting to record to %s"%raw_filename
                 print "  background to %s"%bg_filename
                 print "  comparison frames to %s"%std_filename
+            elif key == 'start_small_recording':
+                small_movie_filename, small_datafile_filename = cmds[key]
+                print 'WARNING: fly small movie filenames will conflict if > 1 camera per computer'
+                small_movie = FlyMovieFormat.FlyMovieSaver(small_movie_filename,version=1)
+                small_datafile = file( small_datafile_filename, mode='wb' )
+                globals['small_fmf'] = small_movie, small_datafile
+                print "starting to record small movies to %s"%small_movie_filename
 ##            elif key == 'debug': # kept for backwards compatibility
 ##                if cmds[key]: globals['export_image_name'] = 'absdiff'
 ##                else: globals['export_image_name'] = 'raw'
@@ -631,6 +641,7 @@ class App:
         last_return_info_check = []
         n_raw_frames = []
         last_found_timestamp = [0.0]*self.num_cams
+        last_frames_by_cam = [ [] for c in range(self.num_cams) ]
         
         if self.num_cams == 0:
             return
@@ -647,6 +658,7 @@ class App:
                     cams_in_operation = 0
                     for cam_no in range(self.num_cams):
                         globals = self.globals[cam_no] # shorthand
+                        last_frames = last_frames_by_cam[cam_no]
 
                         # check if camera running
                         if globals['cam_quit_event'].isSet():
@@ -678,16 +690,68 @@ class App:
                         else:
                             raw_movie, bg_movie, std_movie = raw_fmf_and_bg_fmf
                             
+                        # Are we saving small movies?
+                        small_fmf_and_small_datafile = globals['small_fmf']
+                        if small_fmf_and_small_datafile is None:
+                            small_movie = None
+                            small_datafile = None
+                        else:
+                            small_movie, small_datafile = small_fmf_and_small_datafile
+                            
                         # Get new raw frames from grab thread.
                         get_raw_frame_nowait = globals['incoming_raw_frames'].get_nowait
                         try:
                             while 1:
-                                frame,timestamp,framenumber,n_pts = get_raw_frame_nowait() # this may raise Queue.Empty
+                                frame,timestamp,framenumber,points,lbrt = get_raw_frame_nowait() # this may raise Queue.Empty
+                                last_frames.append( (frame,timestamp,framenumber,points) )
+                                while len(last_frames)>1000:
+                                    del last_frames[0]
+                                n_pts = len(points)
                                 if n_pts>0:
                                     last_found_timestamp[cam_no] = timestamp
                                 # save movie for 1 second after I found anything
-                                if (timestamp - last_found_timestamp[cam_no]) < 1.0 and raw_movie is not None:
+                                if ((raw_movie is not None) and
+                                    (timestamp - last_found_timestamp[cam_no]) < 1.0):
                                     raw_movie.add_frame(frame,timestamp)
+                                if small_movie is not None and n_pts>0:
+                                    pt = points[0]
+                                    x0, y0 = pt[0],pt[1] # absolute values
+                                    l,b,r,t = lbrt # absolute values
+                                    hw_roi_w = r-l
+                                    hw_roi_h = t-b
+                                    small_width2 = 10 # half of total width
+                                    small_height2 = 10 # half of total height
+                                    if (((small_width2*2) > hw_roi_w) or
+                                        ((small_height2*2) > hw_roi_h)):
+                                        raise RuntimeError('FMF frame size (for small movie) is bigger than hardware ROI')
+                                    
+                                    save_l = int(round(x0 - small_width2))
+                                    if save_l < l:
+                                        save_l = l
+                                    save_r = save_l+(small_width2*2)
+                                    if save_r > r:
+                                        save_r = r
+                                        save_l = save_r-(small_width2*2)
+
+                                    save_b = int(round(y0 - small_height2))
+                                    if save_b < b:
+                                        save_b = b
+                                    save_t = save_b+(small_height2*2)
+                                    if save_t > t:
+                                        save_t = t
+                                        save_b = save_t-(small_height2*2)
+
+                                    small_frame = frame[save_b:save_t,save_l:save_r]
+                                    try:
+                                        small_movie.add_frame(small_frame,timestamp)
+                                    except:
+                                        print 'save_b,save_t',save_b,save_t
+                                        print 'save_l,save_r',save_l,save_r
+                                        print
+                                        raise
+                                    small_datafile.write(
+                                        struct.pack( small_datafile_fmt,
+                                                     timestamp, save_l, save_b) )
                                 n_raw_frames[cam_no] += 1
                         except Queue.Empty:
                             pass
@@ -737,5 +801,15 @@ def main():
     print
 
 if __name__=='__main__':
-    main()
+    if 0:
+        # profile
+
+        # seems useless -- doesn't profile other threads?
+        import hotshot
+        prof = hotshot.Profile("profile.hotshot")
+        res = prof.runcall(main)
+        prof.close()
+    else:
+        # don't profile
+        main()
         

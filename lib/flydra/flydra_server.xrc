@@ -458,6 +458,50 @@
                 <option>0</option>
                 <flag>wxEXPAND</flag>
               </object>
+              <object class="sizeritem">
+                <object class="wxStaticBoxSizer">
+                  <label>small FMFs (software ROI)</label>
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <orient>wxHORIZONTAL</orient>
+                      <object class="sizeritem">
+                        <object class="wxCheckBox" name="record_small">
+                          <label>Record</label>
+                          <checked>0</checked>
+                        </object>
+                        <option>1</option>
+                      </object>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <orient>wxHORIZONTAL</orient>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>filename</label>
+                          <style>wxALIGN_RIGHT</style>
+                        </object>
+                        <option>0</option>
+                        <flag>wxALL|wxEXPAND</flag>
+                        <border>4</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxTextCtrl" name="record_small_filename">
+                          <value>/mnt/local/small_video.fmf</value>
+                        </object>
+                        <option>1</option>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <flag>wxEXPAND</flag>
+              </object>
             </object>
             <option>1</option>
             <flag>wxEXPAND</flag>
@@ -475,6 +519,7 @@
               <object class="sizeritem">
                 <object class="wxCheckListBox" name="record_raw_cam_select_checklist">
                   <content>
+                    
                     
                     
                     

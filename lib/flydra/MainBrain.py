@@ -860,6 +860,34 @@ class MainBrain(object):
             finally:
                 self.cam_info_lock.release()
 
+        def external_start_small_recording( self, cam_id,
+                                            small_filename,
+                                            small_datafile_filename):
+            self.cam_info_lock.acquire()
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    cam['commands']['start_small_recording']=small_filename, small_datafile_filename
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()
+
+        def external_stop_small_recording( self, cam_id):
+            self.cam_info_lock.acquire()            
+            try:
+                cam = self.cam_info[cam_id]
+                cam_lock = cam['lock']
+                cam_lock.acquire()
+                try:
+                    cam['commands']['stop_small_recording']=None
+                finally:
+                    cam_lock.release()
+            finally:
+                self.cam_info_lock.release()
+
         def external_quit( self, cam_id):
             self.cam_info_lock.acquire()
             try:
@@ -1386,6 +1414,14 @@ class MainBrain(object):
                 self.h5movie_info.cols.approx_stop_frame[nrowi] = approx_stop_frame
             else:
                 raise RuntimeError("could not find row to save movie stop frame.")
+                    
+    def start_small_recording(self, cam_id, small_filename, small_datafile_filename):
+        self.remote_api.external_start_small_recording( cam_id,
+                                                        small_filename,
+                                                        small_datafile_filename)
+        
+    def stop_small_recording(self, cam_id):
+        self.remote_api.external_stop_small_recording(cam_id)
                     
     def quit(self):
         """closes any files being saved and closes camera connections"""

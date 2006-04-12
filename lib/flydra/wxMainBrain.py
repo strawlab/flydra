@@ -600,15 +600,29 @@ class wxMainBrainApp(wxApp):
 
         filename_text_entry = XRCCTRL(self.record_raw_panel,
                                       "record_raw_filename")
+
+        self.record_small = XRCCTRL(self.record_raw_panel,
+                                  "record_small")
+        EVT_CHECKBOX(self.record_small, self.record_small.GetId(),
+                     self.OnRecordSmall)
+
+        small_filename_text_entry = XRCCTRL(self.record_raw_panel,
+                                            "record_small_filename")
+
         EVT_SET_FOCUS(filename_text_entry,
-                      #filename_text_entry.GetId(),
                       self.OnFilenameSetFocus)
 
         EVT_KILL_FOCUS(filename_text_entry,
-                      #filename_text_entry.GetId(),
+                      self.OnFilenameKillFocus)
+        
+        EVT_SET_FOCUS(small_filename_text_entry,
+                      self.OnFilenameSetFocus)
+
+        EVT_KILL_FOCUS(small_filename_text_entry,
                       self.OnFilenameKillFocus)
         
         self._currently_recording_cams = []
+        self._currently_recording_small_cams = []
 
     def OnFilenameSetFocus(self,event):
         #print 'OnFilenameSetFocus'
@@ -625,6 +639,12 @@ class wxMainBrainApp(wxApp):
             self.OnRecordRawStart()
         else:
             self.OnRecordRawStop()
+
+    def OnRecordSmall(self,event):
+        if self.record_small.IsChecked():
+            self.OnRecordSmallStart()
+        else:
+            self.OnRecordSmallStop()
 
     def OnRecordRawStart(self):
         if len(self._currently_recording_cams) != 0:
@@ -644,9 +664,7 @@ class wxMainBrainApp(wxApp):
             if cam_choice.IsChecked(i):
                 cam_ids.append(cam_choice.GetString(i))
         if len(cam_ids)==0:
-            record_raw = XRCCTRL(self.record_raw_panel,
-                                 "record_raw")
-            record_raw.SetValue(False)
+            self.record_raw.SetValue(False)
             return
         try:
             for cam_id in cam_ids:
@@ -660,12 +678,50 @@ class wxMainBrainApp(wxApp):
                     self.main_brain.stop_recording(tmp_cam_id)
                     self._currently_recording_cams.remove(tmp_cam_id)
             finally:
-                record_raw = XRCCTRL(self.record_raw_panel,
-                                     "record_raw")
-                record_raw.SetValue(False)
+                self.record_raw.SetValue(False)
 
                 self.statusbar.SetStatusText(
                     'Failed to start recording (%s): see console'%(cam_id,),0)
+                raise exc
+
+    def OnRecordSmallStart(self):
+        if len(self._currently_recording_small_cams) != 0:
+            raise RuntimeError("currently recording!")
+        
+        cam_choice = XRCCTRL(self.record_raw_panel,
+                             "record_raw_cam_select_checklist")
+        filename_text_entry = XRCCTRL(self.record_raw_panel,
+                                      "record_small_filename")
+        small_filename = filename_text_entry.GetValue()
+        if small_filename.endswith('.fmf'):
+            small_datafile_filename = small_filename[:-4] + '.smd'
+        else:
+            small_datafile_filename = small_filename + '.smd'
+        cam_ids = []
+        for i in range(cam_choice.GetCount()):
+            if cam_choice.IsChecked(i):
+                cam_ids.append(cam_choice.GetString(i))
+        if len(cam_ids)==0:
+            self.record_small.SetValue(False)
+            return
+        try:
+            for cam_id in cam_ids:
+                self.main_brain.start_small_recording(cam_id,
+                                                      small_filename,
+                                                      small_datafile_filename)
+                self._currently_recording_small_cams.append(cam_id)
+            self.statusbar.SetStatusText('Small recording started on %d cameras'%(
+                len(self._currently_recording_small_cams),),0)
+        except Exception, exc:
+            try:
+                for tmp_cam_id in self._currently_recording_small_cams[:]:
+                    self.main_brain.stop_small_recording(tmp_cam_id)
+                    self._currently_recording_small_cams.remove(tmp_cam_id)
+            finally:
+                self.record_small.SetValue(False)
+
+                self.statusbar.SetStatusText(
+                    'Failed to start small recording (%s): see console'%(cam_id,),0)
                 raise exc
 
     def OnRecordRawStop(self,warn=True):
@@ -684,11 +740,30 @@ class wxMainBrainApp(wxApp):
                 n_stopped+=1
             self.statusbar.SetStatusText('Recording stopped on %d cameras'%(
                 n_stopped,))
-            record_raw = XRCCTRL(self.record_raw_panel,
-                                 "record_raw")
-            record_raw.SetValue(False)
+            self.record_raw.SetValue(False)
         except:
             self.statusbar.SetStatusText('Failed to stop recording: see console',0)
+            raise
+        
+    def OnRecordSmallStop(self,warn=True):
+        if warn and not len(self._currently_recording_small_cams):
+            self.statusbar.SetStatusText('Not recording small FMFs - cannot stop',0)
+            return
+        try:
+            n_stopped = 0
+            for cam_id in self._currently_recording_small_cams[:]:
+                try:
+                    self.main_brain.stop_small_recording(cam_id)
+                except KeyError, x:
+                    print '%s: %s'%(x.__class__,str(x)),
+                    MainBrain.DEBUG()
+                self._currently_recording_small_cams.remove(cam_id)
+                n_stopped+=1
+            self.statusbar.SetStatusText('Small recording stopped on %d cameras'%(
+                n_stopped,))
+            self.record_small.SetValue(False)
+        except:
+            self.statusbar.SetStatusText('Failed to stop small recording: see console',0)
             raise
 
     def RecordRawPerCamInit(self,cam_id):
