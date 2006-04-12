@@ -1,0 +1,338 @@
+#LyX 1.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 221
+\textclass article
+\language english
+\inputencoding auto
+\fontscheme default
+\graphics default
+\paperfontsize default
+\papersize Default
+\paperpackage a4
+\use_geometry 0
+\use_amsmath 0
+\use_natbib 0
+\use_numerical_citations 0
+\paperorientation portrait
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\defskip medskip
+\quotes_language english
+\quotes_times 2
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+
+\layout Title
+
+Technical description of a multi-camera system for tracking freely-flying
+ animals in realtime
+\layout Author
+
+Andrew D.
+ Straw and Michael H.
+ Dickinson
+\layout Date
+
+April 7, 2006
+\layout Section
+
+Introduction
+\layout Standard
+
+While two cameras are sufficient to reconstruct 3D information and have
+ previously been used in the Dickinson lab to the position track fruit flies
+ in realtime as they fly freely through large (e.g.
+ 1m diameter) arenas, several issues prompted the development of a new realtime
+ camera tracking system.
+ Foremost among these were two desires: 1) an increase in spatial resolving
+ power sufficient to determine body axis direction and 2) an increase in
+ the spatial extent of the tracking volume.
+ We recently developed a multiple camera system to meet these needs that
+ extracts fly position and orientation in soft realtime.
+ Currently, this system functions with 5 cameras at 100 frames per second
+ with about 30 msec latency.
+ This document outlines the structure and function of this multiple-headed
+ fly tracking beast we call 
+\begin_inset Quotes eld
+\end_inset 
+
+flydra
+\begin_inset Quotes erd
+\end_inset 
+
+.
+\layout Standard
+
+The imaging front end of the system consists of five monochrome digital
+ cameras.
+ Each camera is connected to a dedicated image processing computer, which
+ performs a glorified background-subtraction algorithm to extract local
+ 2D points and, for each point where the 
+\begin_inset Quotes eld
+\end_inset 
+
+eccentricity
+\begin_inset Quotes erd
+\end_inset 
+
+ (oriented luminance) exceeds some criterion, an orientation is also extracted.
+ These data are sent over gigabit ethernet to a central 
+\begin_inset Quotes eld
+\end_inset 
+
+mainbrain
+\begin_inset Quotes erd
+\end_inset 
+
+ computer where data from all cameras are combined into 3D position and
+ orientation.
+ The algorithm used
+\begin_inset LatexCommand \cite{hartley_zisserman}
+
+\end_inset 
+
+ constructs an observation matrix from each 2D image point and the camera
+ calibration matrices, and the linear least squares fit for 3D position
+ calculated using a singular value decomposition of this observation matrix.
+ A similar operation is performed to extract 3D orientation.
+ Currently, the cameras are calibrated using a simultaneous multi-camera
+ calibration method
+\begin_inset LatexCommand \cite{Svoboda}
+
+\end_inset 
+
+.
+\layout Section
+
+Implementation details
+\layout Subsection
+
+Operating system and computer topology
+\layout Standard
+
+The computers run Debian sarge GNU/Linux in a private gigabit LAN.
+ The 
+\begin_inset Quotes eld
+\end_inset 
+
+mainbrain
+\begin_inset Quotes erd
+\end_inset 
+
+ and camera computers boot over the network and use a network mounted disk
+ system for all operating system and application files, leaving the local
+ disk for saving data.
+ The fileserver computer acts to coordinate the network and serves as a
+ NAT gateway for computers within the LAN to access the internet.
+\layout Subsection
+
+Software used
+\layout Standard
+
+The primary language used in the system is Python, but libraries in Python,
+ C, and FORTRAN are used.
+ The 2D point extraction makes heavy use of the Intel Integrated Performance
+ Primatives (IPP) library.
+ The linear algebra operations utilize ATLAS optimized versions of the LAPACK
+ algorithms through the NumPy Python interface.
+\layout Subsection
+
+Algorithms in more detail
+\layout Standard
+
+Currently, the system extracts 2D and 3D coordinates from each frame 
+\shape italic 
+de novo
+\shape default 
+, maintaining no state information from prior frames.
+ This affords the current system simplicity compared to history-dependent
+ tracking algorithms, but also increases the computational load and probably
+ results in worse tracking than would be possible if this information was
+ stored and used.
+\layout Standard
+
+The 2D point extraction algorithm is inspired by a simple background subtraction
+ technique but is enhanced by maintaining an ongoing estimate of per-pixel
+ variance in addition to a slowly adapting mean image.
+ Each image is scanned for a few points (currently 3) that differ most from
+ the mean background image subject to a constraint that the distance to
+ other detected points must be greater than some threshold.
+ By tracking multiple 2D points in each image, the first step in tracking
+ multiple objects simultaneously is already implemented.
+\layout Standard
+
+The 3D reconstruction algorithm utilizes a combinatorial 
+\begin_inset Quotes eld
+\end_inset 
+
+hypothesis testing
+\begin_inset Quotes erd
+\end_inset 
+
+ algorithm.
+ Every possible combination of 2 or more cameras is chosen from all cameras
+ returning 2D points on a given frame is tested.
+ The winning combination is the one that uses most cameras while maintaining
+ a low 3D->2D reprojection error from the original 2D tracked points is
+ used.
+ If a history-dependent algorithm were implemented, this would drastically
+ cut down on the number of cominations that need to be tested.
+ Furthermore, maintaining state information seems to be the easiest way
+ to implement multiple-body tracking.
+\layout Subsection
+
+Why one computer per camera?
+\layout Standard
+
+Theoretically, a fast computer (particularly a multi-core computer) may
+ be able to handle the computational load of processing images from more
+ than one camera.
+ The 1394a firewire bus is operating at near full bandwidth with a single
+ camera, but additional firewire cards could be added to the system to create
+ an additional firewire bus.
+ Two firewire cards reach near the limit of the 32-bit PCI bus, and when
+ two cameras were tried on two PCI firewire cards in a single system, frames
+ were sometimes garbled.
+ Its possible this was a software bug of some sort rather than a hardware
+ issue, but given that additional computers are not particularly expensive,
+ the easiest solution was to simply use one computer per camera.
+\layout Subsection
+
+Future improvements
+\layout Standard
+
+As mentioned above, the most obvious significant improvement to the system
+ would be to maintain an ongoing estimate of state variables.
+ Although this would increase the complexity of the program by requiring
+ information from previous frames when operating on the current frame, it
+ should dramatically reduce the computational load required for tracking
+ in addition to enabling simultaneous multi-body tracking.
+\layout Section
+
+Parts list
+\layout Subsection
+
+General
+\layout Itemize
+
+mainbrain computer:
+\begin_deeper 
+\layout Itemize
+
+the faster the better (e.g.
+ dual core Athlon64)
+\layout Itemize
+
+ethernet: gigabit ethernet, PXE boot support
+\layout Itemize
+
+video: nVidia graphics (exact card doesn't matter)
+\layout Itemize
+
+large display, the more pixels the better
+\layout Itemize
+
+keyboard and mouse
+\layout Itemize
+
+at least 1 GB RAM
+\end_deeper 
+\layout Itemize
+
+central fileserver/gateway computer (only modest computing needs):
+\begin_deeper 
+\layout Itemize
+
+ethernet: gigabit ethernet and a 2nd ethernet channel (speed not important)
+\layout Itemize
+
+CD-ROM drive
+\end_deeper 
+\layout Itemize
+
+rack or storage space for all computers
+\layout Itemize
+
+gigabit ethernet switch
+\layout Itemize
+
+external trigger for synchronizing cameras:
+\begin_deeper 
+\layout Itemize
+
+AVR butterfly
+\layout Itemize
+
+power supply for AVR butterfly
+\end_deeper 
+\layout Subsection
+
+Per camera
+\layout Itemize
+
+camera:
+\begin_deeper 
+\layout Itemize
+
+currently using Basler A602f for large pixels and low noise (656x491x102
+ fps), 1394a camera
+\layout Itemize
+
+Point Grey Dragonfly Express may be of interest for high speed (640x480x200
+ fps), 1394b camera
+\layout Itemize
+
+there may be other cameras of interest, see http://damien.douxchamps.net/ieee1394/
+cameras/index.php
+\end_deeper 
+\layout Itemize
+
+compter:
+\begin_deeper 
+\layout Itemize
+
+ethernet: gigabit ethernet, PXE boot support
+\layout Itemize
+
+firewire: 6-pin 1394a (or 1394b if using 1394b cameras)
+\layout Itemize
+
+at least 512 MB RAM
+\end_deeper 
+\layout Itemize
+
+long firewire cable, e.g.
+ SanMax 5m cable (firewire spec says max is 3m, but 5m cables seem to work)
+\layout Itemize
+
+cable for external trigger
+\layout Itemize
+
+camera mounting hardware, including tripod head
+\layout Bibliography
+\bibitem {hartley_zisserman}
+
+Hartley, R.
+ and Zisserman, A.
+ (2003) 
+\shape italic 
+Multiple View Geometry in Computer Vision.
+
+\shape default 
+ Cambridge, UK: Cambridge University Press
+\layout Bibliography
+\bibitem {Svoboda}
+
+Svoboda, T., Martinec, D., and Pajla, T.
+ (2005) A convenient multicamera self-calibration for virtual environments.
+ 
+\shape italic 
+Presence-Teleoperators and Virtual Environments
+\shape default 
+ 
+\series bold 
+14
+\series default 
+, 407-422.
+\the_end
