@@ -34,7 +34,7 @@ Andrew D.
  Dickinson
 \layout Date
 
-April 7, 2006
+April 13, 2006
 \layout Section
 
 Introduction
@@ -266,6 +266,12 @@ AVR butterfly
 
 power supply for AVR butterfly
 \end_deeper 
+\layout Itemize
+
+Intel Integrated Performance Primitives (IPP) software license
+\layout Itemize
+
+MATLAB license (used for Multi-Camera Calibration algorithm)
 \layout Subsection
 
 Per camera
