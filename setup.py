@@ -4,7 +4,7 @@ from distutils.core import Extension
 
 from kookutils import get_svnversion
 svnversion = get_svnversion()
-version = '0.1.dev%s'%svnversion
+version = '0.2.dev%s'%svnversion
 
 import os, glob, time, sys, StringIO
 
