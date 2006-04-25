@@ -2,9 +2,9 @@
 from setuptools import setup
 from distutils.core import Extension
 
-from kookutils import get_svnversion
-svnversion = get_svnversion()
-version = '0.2.dev%s'%svnversion
+from kookutils import get_svnversion_persistent
+version_str = '0.2.dev%(svnversion)s'
+version = get_svnversion_persistent('lib/flytrax/version.py',version_str)
 
 import os, glob, time, sys, StringIO
 
@@ -49,7 +49,8 @@ if os.name.startswith('posix'):
 setup(name='flydra',
       version=version,
       packages = ['flydra'],
-      package_dir = {'flydra':'lib/flydra',
+      package_dir = {'':'lib',
+                     'flydra':'lib/flydra',
                      },
       ext_modules= ext_modules,
       
