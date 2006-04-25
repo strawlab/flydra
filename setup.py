@@ -4,7 +4,7 @@ from distutils.core import Extension
 
 from kookutils import get_svnversion_persistent
 version_str = '0.2.dev%(svnversion)s'
-version = get_svnversion_persistent('lib/flytrax/version.py',version_str)
+version = get_svnversion_persistent('lib/flydra/version.py',version_str)
 
 import os, glob, time, sys, StringIO
 
