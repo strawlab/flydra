@@ -14,8 +14,6 @@ MINIMUM_ECCENTRICITY = flydra.common_variables.MINIMUM_ECCENTRICITY
 cdef float ACCEPTABLE_DISTANCE_PIXELS
 ACCEPTABLE_DISTANCE_PIXELS = flydra.common_variables.ACCEPTABLE_DISTANCE_PIXELS
 
-fast_svd = numpy.linalg.svd
-
 cdef extern from "math.h":
     double sqrt(double)
     int isnan(double x)
@@ -130,6 +128,8 @@ def find_best_3d( object recon, object d2):
     
     MAX_CAMERAS = 10 # should be a compile-time define
     
+    fast_svd = numpy.linalg.svd # eliminate global name lookup
+    
     cam_ids = recon.cam_ids # shorthand
     max_n_cams = len(cam_ids)
     if max_n_cams > MAX_CAMERAS:
@@ -210,7 +210,7 @@ def find_best_3d( object recon, object d2):
             for cam_id in cam_ids_used:
                 orig_x,orig_y = all2d[cam_id]
                 Pmat = Pmat_fastnx[cam_id]
-                new_xyw = fast_nx.matrixmultiply( Pmat, X )
+                new_xyw = fast_nx.matrixmultiply( Pmat, X ) # reproject 3d to 2d
                 new_x, new_y = new_xyw[0:2]/new_xyw[2]
 
                 dist = sqrt((orig_x-new_x)**2 + (orig_y-new_y)**2)
