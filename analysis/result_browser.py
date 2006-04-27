@@ -4,6 +4,8 @@ import math, os
 import numpy as nx
 import numpy as mlab
 import tables as PT
+print 'using pytables',PT.__version__
+print '  from',PT.__file__
 import matplotlib
 import pylab
 import matplotlib.ticker
@@ -62,8 +64,11 @@ def make_new_fmt(results):
     Info2D = results.root.data2d.description # 2D data format for PyTables
     if hasattr(results.root, 'cam_by_cam_2d'):
         return # already made
+    # (can delete with results.root.cam_by_cam_2d._f_remove() )
+    # or results.removeNode( results.root.cam_by_cam_2d, recursive=True)
     status("making new cam_by_cam_2d tables...")
     cam_by_cam_2d = results.createGroup( results.root, 'cam_by_cam_2d' )
+    
     tables_by_camn = {}
     for oldrow in results.root.data2d:
         camn = oldrow['camn']
@@ -629,7 +634,7 @@ def plot_movie_2d(results,
             x2 = nx.array(x2)
             y2 = nx.array(y2)
             p1 = nx.array(p1)
-            p1[~nx.ieeespecial.isnan(p1)]=1 # nans and 1s
+            p1[~nx.isnan(p1)]=1 # nans and 1s
             if show_cam_usage:
                 camn_used = nx.array(camn_used)
 
@@ -2315,7 +2320,7 @@ def print_clock_diffs(results):
         print
 
 if __name__=='__main__':
-    results = get_results('DATA20060309_190142.h5',mode='r+')
+    results = get_results('DATA20060424_193238.h5',mode='r+')
     #del results.root.exact_movie_info
     #results.close()
     #make_exact_movie_info2(results)
