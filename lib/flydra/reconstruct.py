@@ -322,7 +322,9 @@ class Reconstructor:
             if len(X) == 3:
                 X = nx.array([[X[0]], [X[1]], [X[2]], [1.0]])
             else:
-                X = X[:,nx.NewAxis]
+                X = X[:,nx.NewAxis] # 4 rows, 1 column
+        else:
+            X = nx.transpose(X) # 4 rows, N columns
         Pmat = self.Pmat[cam_id]
         x=nx.dot(Pmat,X)
         
