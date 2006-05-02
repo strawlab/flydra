@@ -1135,6 +1135,12 @@ class MainBrain(object):
     
     def __init__(self):
         global main_brain_keeper
+
+        if PT.__version__ >= '1.3.1':
+            # bug was fixed in pytables 1.3.1
+            self.close_and_reopen_HDF5_file = False
+        else:
+            self.close_and_reopen_HDF5_file = True
         
         Pyro.core.initServer(banner=0)
 
@@ -1655,7 +1661,9 @@ class MainBrain(object):
             self.h5host_clock_info.flush()
             changed = True
             
-        if self.h5file is not None and changed:
+        if (self.close_and_reopen_HDF5_file and
+            self.h5file is not None and
+            changed):
             
             # Close and re-open file to keep its contents non-corrupt.
             # (HDF5 don't buffer everything to a self-consistent disk
