@@ -39,7 +39,7 @@ CAM_CONTROLS = {'shutter':cam_iface.SHUTTER,
                 'brightness':cam_iface.BRIGHTNESS}
 
 ALPHA = 1.0/50 # relative importance of each new frame
-BG_FRAME_INTERVAL = 20 # every N frames, add a new BG image to the accumulator
+BG_FRAME_INTERVAL = 50 # every N frames, add a new BG image to the accumulator
 
 # where is the "main brain" server?
 try:
@@ -199,6 +199,10 @@ class GrabClass(object):
         running_sumsqf.set_val(0,max_frame_size)
         
         noisy_pixels_mask = FastImage.FastImage8u(max_frame_size)
+        mean_duration_no_bg = 0.0053 # starting value
+        mean_duration_bg = 0.020 # starting value
+        
+        incoming_raw_frames_queue_put = globals['incoming_raw_frames'].put
         
         try:
             while not cam_quit_event_isSet():
@@ -210,8 +214,8 @@ class GrabClass(object):
                     msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
                     self.log_message_queue.put((self.cam_id,now,msg))
                     print >> sys.stderr, msg
-                    continue
-                #received_time = time.time()
+
+                received_time = time.time()
 
                 # get best guess as to when image was taken
                 timestamp=self.cam.get_last_timestamp()
@@ -229,10 +233,13 @@ class GrabClass(object):
                 old_ts = timestamp
                 old_fn = framenumber
 
+                work_start_time = time.time()
                 points = self.realtime_analyzer.do_work(hw_roi_frame,
                                                         timestamp, framenumber, use_roi2_isSet(),
-                                                        use_cmp_isSet(), return_first_xy)
-                #work_done_time = time.time()
+                                                        use_cmp_isSet(), return_first_xy,
+                                                        0.010, # maximum 10 msec in here
+                                                        )
+                work_done_time = time.time()
                 
                 # allow other thread to see images
                 imname = globals['export_image_name'] # figure out what is wanted # XXX theoretically could have threading issue
@@ -242,8 +249,10 @@ class GrabClass(object):
                     export_image = self.realtime_analyzer.get_image_view(imname) # get image
                 globals['most_recent_frame_potentially_corrupt'] = (0,0), export_image # give view of image, receiver must be careful
 
+                tp1 = time.time()
+                
                 # allow other thread to see raw image always (for saving)
-                globals['incoming_raw_frames'].put(
+                incoming_raw_frames_queue_put(
                     (hw_roi_frame.get_8u_copy(hw_roi_frame.size), # save a copy
                      timestamp,
                      framenumber,
@@ -251,35 +260,53 @@ class GrabClass(object):
                      self.realtime_analyzer.roi,
                      ) )
 
+                tp2 = time.time()
+                did_expensive = False
                 if collecting_background_isSet():
                     if bg_frame_number % BG_FRAME_INTERVAL == 0:
                         if cur_fisize != max_frame_size:
                             # set to full ROI and take full image if necessary
                             raise NotImplementedError("background collection while using hardware ROI not implemented")
-                        
-                        # maintain running average
-                        running_mean_im.toself_add_weighted( hw_roi_frame, max_frame_size, ALPHA )
-                        # maintain 8bit unsigned background image
-                        running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
+                        if 1:
 
-                        # standard deviation calculation
-                        hw_roi_frame.get_32f_copy_put(fastframef32_tmp,max_frame_size)
-                        fastframef32_tmp.toself_square(max_frame_size) # current**2
-                        running_sumsqf.toself_add_weighted( fastframef32_tmp, max_frame_size, ALPHA)
-                        running_mean_im.get_square_put(mean2,max_frame_size)
-                        running_sumsqf.get_subtracted_put(mean2,running_stdframe,max_frame_size)
+                            # maintain running average
+                            running_mean_im.toself_add_weighted( hw_roi_frame, max_frame_size, ALPHA )
+                            # maintain 8bit unsigned background image
+                            running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
 
-                        # now create frame for comparison
-                        C = 6.0
-                        running_stdframe.toself_multiply(C,max_frame_size)
-                        running_stdframe.get_8u_copy_put(compareframe8u,max_frame_size)
+                            # standard deviation calculation
+                            hw_roi_frame.get_32f_copy_put(fastframef32_tmp,max_frame_size)
+                            fastframef32_tmp.toself_square(max_frame_size) # current**2
+                            running_sumsqf.toself_add_weighted( fastframef32_tmp, max_frame_size, ALPHA)
+                            running_mean_im.get_square_put(mean2,max_frame_size)
+                            running_sumsqf.get_subtracted_put(mean2,running_stdframe,max_frame_size)
 
-                        # now we do hack, erm, heuristic for bright points, which aren't gaussian.
-                        running_mean8u_im.get_compare_put( 200, noisy_pixels_mask, max_frame_size, FastImage.CmpGreater)
-                        compareframe8u.set_val_masked(25, noisy_pixels_mask, max_frame_size)
+                            # now create frame for comparison
+                            running_stdframe.toself_multiply(6.0,max_frame_size)
+                            running_stdframe.get_8u_copy_put(compareframe8u,max_frame_size)
+
+                            # now we do hack, erm, heuristic for bright points, which aren't gaussian.
+                            running_mean8u_im.get_compare_put( 200, noisy_pixels_mask, max_frame_size, FastImage.CmpGreater)
+                            compareframe8u.set_val_masked(25, noisy_pixels_mask, max_frame_size)
+                        else:
+                            realtime_image_analysis.bg_help( running_mean_im,
+                                                             fastframef32_tmp,
+                                                             running_sumsqf,
+                                                             mean2,
+                                                             running_stdframe,
+                                                             running_mean8u_im,
+                                                             hw_roi_frame,
+                                                             noisy_pixels_mask,
+                                                             compareframe8u,
+                                                             max_frame_size,
+                                                             ALPHA,
+                                                             6.0)
+                        did_expensive = True
                         bg_changed = True
                         bg_frame_number = 0
                     bg_frame_number += 1
+                
+                tp3 = time.time()
                 
                 if take_background_isSet():
                     # reset background image with current frame as mean and 0 STD
@@ -302,6 +329,8 @@ class GrabClass(object):
                     bg_changed = True
                     take_background_clear()
                     
+                tp4 = time.time()
+                
                 if clear_background_isSet():
                     # reset background image with 0 mean and 0 STD
                     running_mean_im.set_val( 0, max_frame_size )
@@ -383,6 +412,34 @@ class GrabClass(object):
 
                     self.new_roi.clear()
                     self.cam.start_camera()  # start camera
+                    
+                bookkeeping_done_time = time.time()
+                bookkeeping_dur = bookkeeping_done_time-received_time
+
+                alpha = 0.01
+                if did_expensive:
+                    mean_duration_bg = (1-alpha)*mean_duration_bg + alpha*bookkeeping_dur
+                else:
+                    mean_duration_no_bg = (1-alpha)*mean_duration_no_bg + alpha*bookkeeping_dur
+
+                if bookkeeping_dur > 0.050:
+                    print 'TIME BUDGET:'
+                    print '   % 5.1f start of work'%((work_start_time-received_time)*1000.0,)
+                    print '   % 5.1f done with work'%((work_done_time-received_time)*1000.0,)
+                    
+                    print '   % 5.1f tp1'%((tp1-received_time)*1000.0,)
+                    print '   % 5.1f tp2'%((tp2-received_time)*1000.0,)
+                    if did_expensive:
+                        print '     (did background/variance estimate)'
+                    print '   % 5.1f tp3'%((tp3-received_time)*1000.0,)
+                    print '   % 5.1f tp4'%((tp4-received_time)*1000.0,)
+                    
+                    print '   % 5.1f end of all'%(bookkeeping_dur*1000.0,)
+                    print
+                    print 'mean_duration_bg',mean_duration_bg*1000
+                    print 'mean_duration_no_bg',mean_duration_no_bg*1000
+                    print
+                    
         finally:
             self.realtime_analyzer.close()
             FastImage.set_debug(0)
@@ -739,37 +796,39 @@ class App:
                                     l,b,r,t = lbrt # absolute values
                                     hw_roi_w = r-l
                                     hw_roi_h = t-b
-                                    small_width2 = 10 # half of total width
-                                    small_height2 = 10 # half of total height
-                                    if (((small_width2*2) > hw_roi_w) or
-                                        ((small_height2*2) > hw_roi_h)):
+                                    small_width = 20 # width
+                                    small_height = 20 # height
+                                    small_width2 = small_width//2 # half of total width
+                                    small_height2 = small_height//2 # half of total height
+                                    if ((small_width > hw_roi_w) or
+                                        (small_height > hw_roi_h)):
                                         raise RuntimeError('FMF frame size (for small movie) is bigger than hardware ROI')
                                     
                                     save_l = int(round(x0 - small_width2))
                                     if save_l < l:
                                         save_l = l
-                                    save_r = save_l+(small_width2*2)
+                                    save_r = save_l+small_width
                                     if save_r > r:
                                         save_r = r
-                                        save_l = save_r-(small_width2*2)
+                                        save_l = save_r-small_width
 
                                     save_b = int(round(y0 - small_height2))
                                     if save_b < b:
                                         save_b = b
-                                    save_t = save_b+(small_height2*2)
+                                    save_t = save_b+small_height
                                     if save_t > t:
                                         save_t = t
-                                        save_b = save_t-(small_height2*2)
+                                        save_b = save_t-small_height
 
-                                    nxframe = nx.asarray(frame)
-                                    small_frame = nxframe[save_b:save_t,save_l:save_r]
-                                    try:
-                                        small_movie.add_frame(small_frame,timestamp)
-                                    except:
-                                        print 'save_b,save_t',save_b,save_t
-                                        print 'save_l,save_r',save_l,save_r
-                                        print
-                                        raise
+                                    if isinstance(frame,FastImage.FastImageBase):
+                                        small_frame = frame.roi( save_l, save_b,
+                                                                 FastImage.Size( small_width, small_height ) )
+                                    else:
+                                        warnings.warn('memory leak!')
+                                        nxframe = nx.asarray(frame)
+                                        small_frame = nxframe[save_b:save_t,save_l:save_r]
+                                        
+                                    small_movie.add_frame(small_frame,timestamp)
                                     small_datafile.write(
                                         struct.pack( small_datafile_fmt,
                                                      timestamp, save_l, save_b) )
