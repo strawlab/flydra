@@ -240,11 +240,11 @@ class GrabClass(object):
                     export_image = hw_roi_frame
                 else:
                     export_image = self.realtime_analyzer.get_image_view(imname) # get image
-                globals['most_recent_frame'] = (0,0), export_image # give it
+                globals['most_recent_frame_potentially_corrupt'] = (0,0), export_image # give view of image, receiver must be careful
 
                 # allow other thread to see raw image always (for saving)
                 globals['incoming_raw_frames'].put(
-                    (nx.array(hw_roi_frame), # save a copy
+                    (hw_roi_frame.get_8u_copy(hw_roi_frame.size), # save a copy
                      timestamp,
                      framenumber,
                      points,
@@ -313,6 +313,9 @@ class GrabClass(object):
 
                 if bg_changed:
                     if 1:
+                        bg_image = running_mean8u_im.get_8u_copy(running_mean8u_im.size)
+                        std_image = compareframe8u.get_8u_copy(compareframe8u.size)
+                    elif 0:
                         bg_image = nx.array(running_mean8u_im) # make copy (we don't want to send live versions of image
                         std_image = nx.array(compareframe8u) # make copy (we don't want to send live versions of image
                     else:
@@ -456,7 +459,7 @@ class App:
             globals['incoming_bg_frames']=Queue.Queue()
             globals['raw_fmf_and_bg_fmf']=None
             globals['small_fmf']=None
-            globals['most_recent_frame']=None
+            globals['most_recent_frame_potentially_corrupt']=None
             globals['saved_bg_frame']=False
             globals['current_bg_frame_and_timestamp']=None
 
@@ -583,7 +586,7 @@ class App:
                         globals['export_image_name'] = value
                         print 'displaying',value,'image'
             elif key == 'get_im':
-                lb, im = globals['most_recent_frame']
+                lb, im = globals['most_recent_frame_potentially_corrupt']
                 #nxim = nx.array(im) # copy to native nx form, not view of __array_struct__ form
                 nxim = nx.asarray(im) # copy to native nx form, not view of __array_struct__ form
                 self.main_brain.set_image(cam_id, (lb, nxim))
@@ -624,15 +627,17 @@ class App:
             elif key == 'start_recording':
                 raw_filename, bg_filename = cmds[key]
                 std_filename = bg_filename.replace('_bg','_std')
-                print 'WARNING: fly movie filenames will conflict if > 1 camera per computer'
+                msg = 'WARNING: fly movie filenames will conflict if > 1 camera per computer'
+                print msg
                 raw_movie = FlyMovieFormat.FlyMovieSaver(raw_filename,version=1)
                 bg_movie = FlyMovieFormat.FlyMovieSaver(bg_filename,version=1)
                 std_movie = FlyMovieFormat.FlyMovieSaver(std_filename,version=1)
                 globals['raw_fmf_and_bg_fmf'] = raw_movie, bg_movie, std_movie
                 globals['saved_bg_frame']=False
-                print "starting to record to %s"%raw_filename
-                print "  background to %s"%bg_filename
-                print "  comparison frames to %s"%std_filename
+                msg = "starting to record to %s\n"%raw_filename
+                msg += "  background to %s\n"%bg_filename
+                msg += "  comparison frames to %s"%std_filename
+                print msg
             elif key == 'start_small_recording':
                 small_movie_filename, small_datafile_filename = cmds[key]
                 print 'WARNING: fly small movie filenames will conflict if > 1 camera per computer'
@@ -756,7 +761,8 @@ class App:
                                         save_t = t
                                         save_b = save_t-(small_height2*2)
 
-                                    small_frame = frame[save_b:save_t,save_l:save_r]
+                                    nxframe = nx.asarray(frame)
+                                    small_frame = nxframe[save_b:save_t,save_l:save_r]
                                     try:
                                         small_movie.add_frame(small_frame,timestamp)
                                     except:
