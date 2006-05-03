@@ -128,6 +128,12 @@ class Info3D(PT.IsDescription):
     
     camns_used = PT.StringCol(32,pos=11)
     mean_dist  = PT.Float32Col(pos=12) # mean 2D reconstruction error
+
+class TextLogDescription(PT.IsDescription):
+    mainbrain_timestamp = PT.FloatCol(pos=0)
+    cam_id = PT.StringCol(255,pos=1)
+    host_timestamp = PT.FloatCol(pos=2)
+    message = PT.StringCol(255,pos=3)
     
 # allow rapid building of numarray.records.RecArray:
 Info2DColNames = PT.Description(Info2D().columns)._v_names
@@ -740,6 +746,7 @@ class MainBrain(object):
             # threading control locks
             self.quit_now = threading.Event()
             self.thread_done = threading.Event()
+            self.message_queue = Queue.Queue()
 
         def external_get_and_clear_pending_cams(self):
             self.changed_cam_lock.acquire()
@@ -1111,6 +1118,10 @@ class MainBrain(object):
             cam2mainbrain_data_port = self.main_brain.coord_receiver.get_cam2mainbrain_data_port(cam_id)
             return cam2mainbrain_data_port
 
+        def log_message(self,cam_id,host_timestamp,message):
+            mainbrain_timestamp = time.time()
+            self.message_queue.put( (mainbrain_timestamp,cam_id,host_timestamp,message) )
+
         def close(self,cam_id):
             """gracefully say goodbye (caller: remote camera)"""
             self.cam_info_lock.acquire()
@@ -1188,6 +1199,7 @@ class MainBrain(object):
         self.h5cam_info = None
         self.h5host_clock_info = None
         self.h5movie_info = None
+        self.h5textlog = None
         self.h5data3d_best = None
 
         # Queues of information to save
@@ -1498,6 +1510,8 @@ class MainBrain(object):
                                     expectedrows=6*60*24) # 24 hours
         self.h5movie_info = ct(root,'movie_info', MovieInfo, "Movie Info",
                                expectedrows=500)
+        self.h5textlog = ct(root,'textlog', TextLogDescription,
+                            "text log")
         if self.reconstructor is not None:
             cal_group = self.h5file.createGroup(root,'calibration')
             
@@ -1534,6 +1548,7 @@ class MainBrain(object):
                                     "3d data (best)",
                                     expectedrows=expected_rows)
 
+
         general_save_info=self.coord_receiver.get_general_cam_info()
         for cam_id,dd in general_save_info.iteritems():
             self.h5cam_info.row['cam_id'] = cam_id
@@ -1553,6 +1568,7 @@ class MainBrain(object):
         self.h5cam_info = None
         self.h5host_clock_info = None
         self.h5movie_info = None
+        self.h5textlog = None
         self.h5data3d_best = None
 
     def _service_save_data(self):
@@ -1576,6 +1592,33 @@ class MainBrain(object):
                 names=Info2DColNames)
             self.h5data2d.append( recarray )
             self.h5data2d.flush()
+            changed = True
+
+        # ** textlog **
+        # clear queue
+        list_of_textlog_data = []
+        try:
+            while True:
+                tmp = self.remote_api.message_queue.get(0)
+                list_of_textlog_data.append( tmp )
+        except Queue.Empty:
+            pass
+        if 1:
+            for textlog_data in list_of_textlog_data:
+                (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
+                print 'MESSAGE: %s %s "%s"'%(cam_id, time.asctime(time.localtime(host_timestamp)), message)
+        #   save
+        if self.h5textlog is not None and len(list_of_textlog_data):
+            textlog_row = self.h5textlog.row
+            for textlog_data in list_of_textlog_data:
+                (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
+                textlog_row['mainbrain_timestamp'] = mainbrain_timestamp
+                textlog_row['cam_id'] = cam_id
+                textlog_row['host_timestamp'] = host_timestamp
+                textlog_row['message'] = message
+                textlog_row.append()
+                
+            self.h5textlog.flush()
             changed = True
         
         # ** camera info **
@@ -1678,5 +1721,6 @@ class MainBrain(object):
             self.h5cam_info = getattr(self.h5file.root,'cam_info')
             self.h5host_clock_info = getattr(self.h5file.root,'host_clock_info')
             self.h5movie_info = getattr(self.h5file.root,'movie_info')
+            self.h5textlog = getattr(self.h5file.root,'textlog')
             if had_h5data3d_best:
                 self.h5data3d_best = getattr(self.h5file.root,'data3d_best')

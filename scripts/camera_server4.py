@@ -67,10 +67,11 @@ def TimestampEcho():
         sender.sendto(newbuf,(orig_host,sendto_port))
 
 class GrabClass(object):
-    def __init__(self, cam, cam2mainbrain_port, cam_id):
+    def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue):
         self.cam = cam
         self.cam2mainbrain_port = cam2mainbrain_port
         self.cam_id = cam_id
+        self.log_message_queue = log_message_queue
 
         self.new_roi = threading.Event()
         self.new_roi_data = None
@@ -164,9 +165,12 @@ class GrabClass(object):
                 max_priority = posix_sched.get_priority_max( posix_sched.FIFO )
                 sched_params = posix_sched.SchedParam(max_priority)
                 posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
-                print 'excellent, grab thread running in maximum prioity mode'
+                msg = 'excellent, grab thread running in maximum prioity mode'
             except Exception, x:
-                print 'WARNING: could not run in maximum priority mode:', str(x)
+                msg = 'WARNING: could not run in maximum priority mode:', str(x)
+            self.log_message_queue.put((self.cam_id,time.time(),msg))
+            print msg
+
         
         FastImage.set_debug(1) # let us see any images malloced, should only happen on hardware ROI size change
         
@@ -202,7 +206,12 @@ class GrabClass(object):
                 try:
                     self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
                 except cam_iface.BuffersOverflowed:
-                    print >> sys.stderr , 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
+                    now = time.time()
+                    msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
+                    self.log_message_queue.put((self.cam_id,now,msg))
+                    print >> sys.stderr, msg
+                    continue
+                #received_time = time.time()
 
                 # get best guess as to when image was taken
                 timestamp=self.cam.get_last_timestamp()
@@ -210,15 +219,20 @@ class GrabClass(object):
 
                 diff = timestamp-old_ts
                 if diff > 0.02:
-                    print >> sys.stderr, 'Warning: IFI is %f on %s at %s'%(diff,self.cam_id,time.asctime())
+                    msg = 'Warning: IFI is %f on %s at %s'%(diff,self.cam_id,time.asctime())
+                    self.log_message_queue.put((self.cam_id,time.time(),msg))
+                    print >> sys.stderr, msg
                 if framenumber-old_fn > 1:
-                    print >> sys.stderr, '  frames apparently skipped:', framenumber-old_fn
+                    msg = '  frames apparently skipped: %d'%(framenumber-old_fn,)
+                    self.log_message_queue.put((self.cam_id,time.time(),msg))
+                    print >> sys.stderr, msg
                 old_ts = timestamp
                 old_fn = framenumber
 
                 points = self.realtime_analyzer.do_work(hw_roi_frame,
                                                         timestamp, framenumber, use_roi2_isSet(),
                                                         use_cmp_isSet(), return_first_xy)
+                #work_done_time = time.time()
                 
                 # allow other thread to see images
                 imname = globals['export_image_name'] # figure out what is wanted # XXX theoretically could have threading issue
@@ -402,7 +416,7 @@ class App:
         main_brain_URI = "PYROLOC://%s:%d/%s" % (main_brain_hostname,port,name)
         print 'connecting to',main_brain_URI
         self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
-        self.main_brain._setOneway(['set_image','set_fps','close'])
+        self.main_brain._setOneway(['set_image','set_fps','close','log_message'])
         self.main_brain_lock = threading.Lock()
 
         # ----------------------------------------------------------------
@@ -509,7 +523,8 @@ class App:
             #
             # ----------------------------------------------------------------
 
-            grabber = GrabClass(cam,cam2mainbrain_port,cam_id)
+            self.log_message_queue = Queue.Queue()
+            grabber = GrabClass(cam,cam2mainbrain_port,cam_id,self.log_message_queue)
             self.all_grabbers.append( grabber )
             
             grabber.diff_threshold = diff_threshold
@@ -765,6 +780,13 @@ class App:
                                     bg_movie.add_frame(bg_frame,timestamp)
                                     std_movie.add_frame(std_frame,timestamp)
                                     globals['saved_bg_frame'] = True
+                        except Queue.Empty:
+                            pass
+
+                        try:
+                            while 1:
+                                args = self.log_message_queue.get_nowait()
+                                self.main_brain.log_message(*args)
                         except Queue.Empty:
                             pass
 
