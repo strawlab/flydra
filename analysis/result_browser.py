@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import time, StringIO, sets, sys
-import math, os
+import math, os, struct
+import numpy
 import numpy as nx
 import numpy as mlab
 import tables as PT
@@ -38,6 +39,16 @@ class ExactMovieInfo(PT.IsDescription):
     stop_frame         = PT.Int32Col(pos=3)
     start_timestamp    = PT.FloatCol(pos=4)
     stop_timestamp     = PT.FloatCol(pos=5)
+
+class ExactROIFrameMovieInfo(PT.IsDescription):
+    cam_id             = PT.StringCol(16,pos=0)
+    camn               = PT.Int32Col(pos=1)#,indexed=True)
+    filename           = PT.StringCol(255,pos=2)
+    frame              = PT.Int32Col(pos=3)#,indexed=True)
+    fmf_frame          = PT.Int32Col(pos=4)
+    timestamp          = PT.FloatCol(pos=5,indexed=True)
+    left               = PT.Int32Col(pos=6)
+    bottom             = PT.Int32Col(pos=7)
 
 class IgnoreFrames(PT.IsDescription):
     start_frame        = PT.Int32Col(pos=0)
@@ -151,7 +162,7 @@ def get_server(cam_id,port=9888):
         
     return frame_server
 
-def get_camn_and_timestamp(results, cam, frame):
+def get_camn_and_remote_timestamp(results, cam, frame):
 
     if isinstance(cam,str):
         cam_id = cam
@@ -164,16 +175,40 @@ def get_camn_and_timestamp(results, cam, frame):
         possible_camns = [camn]
         
     found = False
-    for row in results.root.data2d:
-        if row['frame'] == frame:
-            camn = row['camn']
-            if camn in possible_camns:
-                timestamp = row['timestamp']
-                found = True
-                break
+    for row in results.root.data2d.where( results.root.data2d.cols.frame==frame ):
+#    for row in results.root.data2d:
+#        if row['frame'] == frame:
+        camn = row['camn']
+        if camn in possible_camns:
+            timestamp = row['timestamp']
+            found = True
+            break
     if not found:
         raise ValueError("No data found for cam_id and frame")
     return camn, timestamp
+        
+def get_camn_and_frame(results, cam, timestamp):
+
+    if isinstance(cam,str):
+        cam_id = cam
+        possible_camns = []
+        for row in results.root.cam_info:
+            if row['cam_id'] == cam_id:
+                possible_camns.append( row['camn'] )
+    else:
+        camn = cam
+        possible_camns = [camn]
+        
+    found = False
+    for row in results.root.data2d.where( results.root.data2d.cols.timestamp==timestamp ):
+        camn = row['camn']
+        if camn in possible_camns:
+            frame = row['frame']
+            found = True
+            break
+    if not found:
+        raise ValueError("No data found for cam_id and timestamp")
+    return camn, frame
         
 def flip_line_direction(results,frame,typ='best'):
     if typ=='best':
@@ -316,13 +351,13 @@ def from_table_by_frame(table,frame,colnames=None):
     return rows
 
 def get_pmat(results,cam_id):
-    return nx.array(results.root.calibration.pmat.__getattr__(cam_id))
+    return nx.asarray(results.root.calibration.pmat.__getattr__(cam_id))
 
 def get_intlin(results,cam_id):
-    return nx.array(results.root.calibration.intrinsic_linear.__getattr__(cam_id))
+    return nx.asarray(results.root.calibration.intrinsic_linear.__getattr__(cam_id))
 
 def get_intnonlin(results,cam_id):
-    return nx.array(results.root.calibration.intrinsic_nonlinear.__getattr__(cam_id))
+    return nx.asarray(results.root.calibration.intrinsic_nonlinear.__getattr__(cam_id))
 
 def get_resolution(results,cam_id):
     return tuple(results.root.calibration.resolution.__getattr__(cam_id))
@@ -910,6 +945,62 @@ def set_ignore_frames(results,start_frame,stop_frame):
     ignore_frames.row.append()
     ignore_frames.flush()
 
+def update_exact_roi_movie_info(results,cam_id,roi_movie_basename):
+    status('making exact ROI movie info')
+    
+    data2d = results.root.data2d
+    cam_info = results.root.cam_info
+
+    if hasattr(results.root,'exact_roi_movie_info'):
+        exact_roi_movie_info = results.root.exact_roi_movie_info
+    else:
+        exact_roi_movie_info = results.createTable(results.root,'exact_roi_movie_info',ExactROIFrameMovieInfo,'')
+
+    fmf_filename = roi_movie_basename + '.fmf'
+    smd_filename = roi_movie_basename + '.smd'
+
+    fmf = FlyMovieFormat.FlyMovie(fmf_filename,check_integrity=True)
+    smd_fd = open(smd_filename,mode='r')
+    smd = smd_fd.read()
+    smd_fd.close()
+    small_datafile_fmt = '<dII'
+    row_sz = struct.calcsize(small_datafile_fmt)
+    all_timestamps = fmf.get_all_timestamps()
+    idx = 0
+    n_frames = len(all_timestamps)
+    try:
+        for fmf_frame, timestamp in enumerate(all_timestamps):
+            if fmf_frame%100==0:
+                print '  frame % 9d of % 9d'%(fmf_frame,n_frames)
+            buf = smd[idx:idx+row_sz]
+            idx += row_sz
+            cmp_ts, left, bottom = struct.unpack(small_datafile_fmt,buf)
+            if timestamp != cmp_ts:
+                raise RuntimeError("timestamps not equal in .fmf and .smd files")
+
+            try:
+                camn,frame = get_camn_and_frame(results,cam_id,timestamp)
+            except ValueError:
+                #no data found
+                continue
+
+            for row in exact_roi_movie_info.where( exact_roi_movie_info.cols.frame==frame ):
+                if row['camn']==camn:
+                    raise RuntimeError('data already in table for cam_id %s, timestamp %s, camn %d, frame %d'%(cam_id,str(timestamp),camn,frame))
+            newrow = exact_roi_movie_info.row
+            newrow['cam_id'] = cam_id
+            newrow['camn'] = camn
+            newrow['filename'] = fmf_filename
+            newrow['frame'] = frame
+            newrow['fmf_frame'] = fmf_frame
+            newrow['timestamp'] = timestamp
+            newrow['left'] = left
+            newrow['bottom'] = bottom
+            newrow.append()
+    finally:
+        exact_roi_movie_info.flush()
+    print 'done'
+    
 def make_exact_movie_info2(results):
     status('making exact movie info')
     
@@ -973,7 +1064,118 @@ def make_exact_movie_info2(results):
         exact_movie_info.row.append()
         exact_movie_info.flush()
 
-def get_movie_frame2(results, cam_timestamp_or_frame, cam, suffix=None):
+class CachingMovieOpener:
+    def __init__(self):
+        self.cache = {}
+
+    def load_fmf(self,indexes):
+        results, camn, frame_type, remote_timestamp = indexes
+        if frame_type == 'full_frame_fmf':
+            if not hasattr(results.root,'exact_movie_info'):
+                make_exact_movie_info2(results)
+            exact_movie_info = results.root.exact_movie_info
+
+            # find normal (non background movie filename)
+            found = False
+            for row in exact_movie_info:
+                if row['cam_id'] == cam_id:
+                    if row['start_timestamp'] < remote_timestamp < row['stop_timestamp']:
+                        filename = row['filename']
+                        found = True
+                        break
+            if not found:
+                raise ValueError('movie not found for %s'%(cam_id,))
+
+            filename = os.path.splitext(filename)[0] + '%s.fmf'%(suffix,) # alter to be background image
+        else:
+            raise NotImplemented('')
+        fly_movie = FlyMovieFormat.FlyMovie(filename)
+        return fly_movie
+        
+    def get_movie_frame3(self,
+                         results,
+                         remote_timestamp_or_frame,
+                         cam,
+                         suffix=None,
+                         frame_type=None,
+                         ):
+        if frame_type is None:
+            frame_type = 'full_frame_fmf'
+            
+        if frame_type not in ['small_frame_and_bg',
+                              'small_frame_only',
+                              'full_frame_fmf']:
+            raise ValueError('unsupported frame_type')
+
+        if frame_type != 'full_frame_fmf' and suffix is not None:
+            raise ValueError("suffix has no meaning unless frame_type is full_frame_fmf")
+        
+        if suffix is None:
+            suffix = ''
+
+        camn = None
+        frame = None
+        if isinstance(remote_timestamp_or_frame,float):
+            remote_timestamp = remote_timestamp_or_frame
+        else:
+            frame = remote_timestamp_or_frame
+            camn, remote_timestamp = get_camn_and_remote_timestamp(results,cam,frame)
+
+        cam_info = results.root.cam_info
+        movie_info = results.root.movie_info
+        data2d = results.root.data2d
+        data3d = results.root.data3d_best
+
+        if isinstance(cam,int): # camn
+            camn = cam
+            cam_id = [x['cam_id'] for x in cam_info.where( cam_info.cols.camn == camn) ][0]
+            cam_id = [x['cam_id'] for x in cam_info if x['camn'] == camn ][0]
+        elif isinstance(cam,str): # cam_id
+            cam_id = cam
+
+        if camn is None:
+            camn, remote_timestamp = get_camn_and_remote_timestamp(results,cam_id,frame)
+
+        indexes = (results, camn, frame_type, remote_timestamp)
+        if indexes in self.cache:
+            fmf = self.cache[indexes]
+        else:
+            fmf = self.load_fmf(indexes)
+            self.cache[indexes] = fmf
+
+
+        if frame_type == 'small_frame_and_bg':
+            # get background frame
+            camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
+            cam_id = camn2cam_id[camn]
+            bg_frame = nx.asarray(results.root.backgrounds.__getattr__(cam_id))
+        elif frame_type == 'small_frame_only':
+            bg_frame = 255*nx.ones((491,656),nx.UInt8)
+
+        # get frame
+        frame, movie_timestamp = fmf.get_frame_at_or_before_timestamp( remote_timestamp )
+
+        # make full frame
+        if frame_type != 'full_frame_fmf':
+            small_frame = frame
+            del frame
+            height,width = small_frame.shape
+            # find offset
+            table = results.root.exact_roi_movie_info
+            for r in table.where(table.cols.timestamp==movie_timestamp):
+                if r['camn']==camn:
+                    left = r['left']
+                    bottom = r['bottom']
+            frame = bg_frame.copy()
+            frame[bottom:bottom+height,left:left+width] = small_frame
+        
+        return frame, movie_timestamp
+
+_caching_movie_opener = CachingMovieOpener()
+get_movie_frame2 = _caching_movie_opener.get_movie_frame3
+
+def get_movie_frame2_orig(results, cam_timestamp_or_frame, cam, suffix=None):
+    # OLD, delete me
     if suffix is None:
         suffix = ''
         
@@ -981,7 +1183,7 @@ def get_movie_frame2(results, cam_timestamp_or_frame, cam, suffix=None):
         cam_timestamp = cam_timestamp_or_frame
     else:
         frame = cam_timestamp_or_frame
-        camn, cam_timestamp = get_camn_and_timestamp(results,cam,frame)
+        camn, cam_timestamp = get_camn_and_remote_timestamp(results,cam,frame)
     
     cam_info = results.root.cam_info
     movie_info = results.root.movie_info
@@ -1173,7 +1375,6 @@ def plot_all_images(results,
                     PLOT_RED=True,  # raw 3d data
                     PLOT_BLUE=True, # smoothed 3d data
                     ##recompute_3d=False,
-                    frame_server_dict=None,
                     do_undistort=True,
                     fixed_im_centers=None,
                     fixed_im_lims=None,
@@ -1252,34 +1453,35 @@ def plot_all_images(results,
         ax=dougs_subplot(subplot_number)
         setp(ax,'frame_on',display_labels)
 
-        have_2d_data = False
         nan_in_2d_data = False
+        xs=[]
+        ys=[]
+        slopes=[]
+        eccentricities=[]
+        remote_timestamps=[]
+        
 ##        for row in data2d.where( data2d.cols.frame == frame_no ):        
-        for row in data2d:
-            if row['frame'] != frame_no:
-                # XXX ARGH!!! some weird bug in my code or pytables??
-                # it means I can't do "in kernel", e.g.:
-                #        for row in data2d.where( data2d.cols.frame == frame_no ):
-                continue
+        for row in data2d.where(data2d.cols.frame==frame_no):
             camn = row['camn']
             if camn2cam_id[camn] == cam_id:
-                have_2d_data = True
-                x=row['x']
-                y=row['y']
-                slope=row['slope']
-                eccentricity=row['eccentricity']
-                remote_timestamp = row['timestamp']
-                if len(getnan([x])[0]):
+                xs.append(row['x'])
+                ys.append(row['y'])
+                slopes.append(row['slope'])
+                eccentricities.append(row['eccentricity'])
+                remote_timestamps.append(row['timestamp'])
+                if nx.isnan(row['x']):
                     nan_in_2d_data = True
-                break
+
+        have_2d_data = bool(len(xs))
+
         if not have_2d_data:
-            camn=None
-            x=None
-            y=None
-            slope=None
-            eccentricity=None
-            remote_timestamp = None
             nan_in_2d_data = True
+##            camn=None
+##            x=None
+##            y=None
+##            slope=None
+##            eccentricity=None
+##            remote_timestamp = None
             
         title_str = cam_id
 
@@ -1289,7 +1491,7 @@ def plot_all_images(results,
             if have_2d_data:
                 try:
                     # XXXXX
-                    im, movie_timestamp = get_movie_frame2(results, remote_timestamp, cam_id)#, frame_server_dict=frame_server_dict)
+                    im, movie_timestamp = get_movie_frame2(results, remote_timestamp, cam_id)
                     have_raw_image = True
                 except ValueError,exc:
                     print 'WARNING: skipping frame for %s because ValueError: %s'%(cam_id,str(exc))
@@ -1601,15 +1803,21 @@ def get_results(filename,mode='r+'):
     if hasattr(h5file.root,'data3d_best'):
         frame_col = h5file.root.data3d_best.cols.frame
         if frame_col.index is None:
-            print 'creating index on data3d_best...'
+            print 'creating index on data3d_best.cols.frame ...'
             frame_col.createIndex()
             print 'done'
         
     if hasattr(h5file.root,'data2d'):
         frame_col = h5file.root.data2d.cols.frame
         if frame_col.index is None:
-            print 'creating index on data2d...'
+            print 'creating index on data2d.cols.frame ...'
             frame_col.createIndex()
+            print 'done'
+
+        timestamp_col = h5file.root.data2d.cols.timestamp
+        if timestamp_col.index is None:
+            print 'creating index on data2d.cols.timestamp ...'
+            timestamp_col.createIndex()
             print 'done'
     return h5file
 
@@ -1680,7 +1888,6 @@ def save_movie(results):
             print ' plotting',fname,'...',
             sys.stdout.flush()
             plot_all_images(results, frame,
-                            #frame_server_dict=frame_server_dict,
                             #fixed_im_centers=fixed_im_centers,
                             #fixed_im_lims=fixed_im_lims,
                             colormap='grayscale',
@@ -2319,8 +2526,29 @@ def print_clock_diffs(results):
             print '  %.1f msec (within %.1f msec)'%(diff*1e3,dur*1e3)
         print
 
+def add_backgrounds_to_results(results,cam_id,bg_fmf_filename,frame=-1):
+    fmf = FlyMovieFormat.FlyMovie(bg_fmf_filename,check_integrity=True)
+    fmf.seek(frame)
+    frame,timestamp = fmf.get_next_frame()
+    
+    if not hasattr(results.root,'backgrounds'):
+        backgrounds_group = results.createGroup(results.root,'backgrounds')
+    else:
+        backgrounds_group = results.root.backgrounds
+        
+    pytables_filt = numpy.asarray
+    results.createArray(backgrounds_group, cam_id,
+                        pytables_filt(frame))
+
+def simple_add_backgrounds(results):
+    camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
+    for cam_id in cam_id2camns:
+        dirname = cam_id.split(':')[0]
+        fname = os.path.join(dirname,'landing_20060502_full_bg.fmf')
+        add_backgrounds_to_results(results,cam_id,fname,frame=-1)
+
 if __name__=='__main__':
-    results = get_results('DATA20060424_193238.h5',mode='r+')
+    results = get_results('DATA20060502_211811.h5',mode='r+')
     #del results.root.exact_movie_info
     #results.close()
     #make_exact_movie_info2(results)
