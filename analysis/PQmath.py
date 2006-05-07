@@ -1,8 +1,11 @@
 import math
 import cgtypes
-import numpy as nx
-
-nan = nx.nan
+from numarray.ieeespecial import nan
+#import numarray as nx
+import Numeric as nx
+import numarray
+import Numeric
+array_types = [Numeric.ArrayType, numarray.numarraycore.NumArray]
 
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
@@ -370,7 +373,7 @@ class QuatSeq(list):
         if isinstance(other,QuatSeq):
             assert len(self) == len(other)
             return QuatSeq([ p*q for p,q in zip(self,other) ])
-        elif hasattr(other,'shape'): # an array
+        elif type(other) in array_types:
             assert len(other.shape)==2
             if other.shape[1] == 3:
                 other = nx.concatenate( (nx.zeros((other.shape[0],1)),
