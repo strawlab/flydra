@@ -791,8 +791,11 @@ class App:
                                     (timestamp - last_found_timestamp[cam_no]) < 1.0):
                                     raw_movie.add_frame(frame,timestamp)
                                 if small_movie is not None and n_pts>0:
-                                    pt = points[0]
-                                    x0, y0 = pt[0],pt[1] # absolute values
+                                    pt = points[0] # save only first found point currently
+                                    
+                                    x0, y0 = pt[0],pt[1] # absolute values, undistorted
+                                    # re-distort to image coordinates
+                                    x0, y0 = self.realtime_analyzer.distort(x0,y0)
                                     l,b,r,t = lbrt # absolute values
                                     hw_roi_w = r-l
                                     hw_roi_h = t-b
