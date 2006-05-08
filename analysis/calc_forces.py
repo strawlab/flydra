@@ -10,6 +10,7 @@ import cgtypes # tested with cgkit 1.2
 import tables # pytables
 import scipy.signal
 import scipy_utils
+import scipy.io
 
 from PQmath import *
 
@@ -137,6 +138,7 @@ def do_it(results,
           Psmooth=None,Qsmooth=None,
           
           alpha=0.2, beta=20.0, lambda1=2e-9, lambda2 = 1e-11,
+          percent_error_eps_quats = 9,
           
           interp_OK=False,
           return_err_tol=False,
@@ -458,15 +460,13 @@ def do_it(results,
         d2Pdt2_smooth = (Psmooth[2:] - 2*Psmooth[1:-1] + Psmooth[:-2]) / (delta_t**2)
         
     if Qsmooth is None and do_smooth_quats:
-        #gamma = 1000
-        gamma = 0.0
+        gamma = 1000
+        #gamma = 0.0
         of = ObjectiveFunctionQuats(Q, delta_t, beta, gamma,
                                     no_distance_penalty_idxs=slerped_q_idxs)
 
         #epsilon2 = 200e6
         epsilon2 = 0
-        #percent_error_eps = 2
-        percent_error_eps = 9
         #lambda2 = 2e-9
         #lambda2 = 1e-9
         #lambda2 = 1e-11
@@ -496,8 +496,8 @@ def do_it(results,
                 if err > last_err:
                     print 'ERROR: error is increasing, aborting'
                     break
-                if pct_err < percent_error_eps:
-                    print 'reached percent_error_eps'
+                if pct_err < percent_error_eps_quats:
+                    print 'reached percent_error_eps_quats'
                     break
             else:
                 print 'Q elapsed: % 6.2f secs,'%(stop-start,),
@@ -802,15 +802,15 @@ def do_it(results,
         print 'plot_hists'
         ax1 = subplot(3,1,1)
         n,bins,patches = hist( dPdt[:,0], bins=30)
-        set(patches,'facecolor',(1,0,0))
+        setp(patches,'facecolor',(1,0,0))
         
         ax2 = subplot(3,1,2,sharex=ax1)
         n,bins,patches = hist( dPdt[:,1], bins=30)
-        set(patches,'facecolor',(0,1,0))
+        setp(patches,'facecolor',(0,1,0))
         
         ax3 = subplot(3,1,3,sharex=ax1)
         n,bins,patches = hist( dPdt[:,2], bins=30)
-        set(patches,'facecolor',(0,0,1))
+        setp(patches,'facecolor',(0,0,1))
 
     elif plot_force_angle_info:
         print 'plot_force_angle_info'
@@ -884,7 +884,7 @@ def do_it(results,
             print 't_P, P[:,0]',len(t_P), len(P[:,0])
             if Psmooth is not None:
                 smooth_lines = plot( t_P, Psmooth[:,0], 'r-', t_P, Psmooth[:,1], 'g-', t_P, Psmooth[:,2], 'b-' )
-                set(smooth_lines,'linewidth',linewidth)
+                setp(smooth_lines,'linewidth',linewidth)
             ylabel('Position\n(m)')
             grid()
 
@@ -893,7 +893,7 @@ def do_it(results,
             if Psmooth is not None:
                 smooth_lines = plot( t_dPdt, dPdt_smooth[:,0], 'r-', t_dPdt, dPdt_smooth[:,1], 'g-', t_dPdt, dPdt_smooth[:,2], 'b-', t_dPdt, nx.sqrt(nx.sum(dPdt_smooth**2,axis=1)), 'k-')
                 legend(smooth_lines,('x','y','z','mag'))
-                set(smooth_lines,'linewidth',linewidth)
+                setp(smooth_lines,'linewidth',linewidth)
             ylabel('Velocity\n(m/sec)')
             grid()
 
@@ -904,7 +904,7 @@ def do_it(results,
                                      t_d2Pdt2, d2Pdt2_smooth[:,2], 'b-',
                                      t_d2Pdt2, nx.sqrt(nx.sum(d2Pdt2_smooth**2,axis=1)), 'k-')
                                      
-                set(smooth_lines,'linewidth',linewidth)
+                setp(smooth_lines,'linewidth',linewidth)
             else:
                 plot( t_d2Pdt2, d2Pdt2[:,0], 'r-', t_d2Pdt2, d2Pdt2[:,1], 'g-', t_d2Pdt2, d2Pdt2[:,2], 'b-' )
 
@@ -1158,23 +1158,23 @@ def do_it(results,
 ##        ylabel('counts')
 ##        set(gca(),'ylim',ylim)
 ##        set(gca(),'xlim',xlim)
-        set(xlines,'alpha',color_alpha)
-        set(xlines,'facecolor',(1,0,0))
+        setp(xlines,'alpha',color_alpha)
+        setp(xlines,'facecolor',(1,0,0))
 
         ylines = hist(y_err, bins = 19)[2]
 ##        ylabel('counts')
-##        set(gca(),'xlim',xlim)
-##        set(gca(),'ylim',ylim)
-        set(ylines,'alpha',color_alpha)
-        set(ylines,'facecolor',(0,1,0))
+##        setp(gca(),'xlim',xlim)
+##        setp(gca(),'ylim',ylim)
+        setp(ylines,'alpha',color_alpha)
+        setp(ylines,'facecolor',(0,1,0))
 
         zlines = hist(z_err, bins = 50)[2]
         legend((xlines[0],ylines[0],zlines[0]),['X','Y','Z'])
         ylabel('counts')
-        set(gca(),'ylim',ylim)
-        set(gca(),'xlim',xlim)
-        set(zlines,'alpha',color_alpha)
-        set(zlines,'facecolor',(0,0,1))
+        setp(gca(),'ylim',ylim)
+        setp(gca(),'xlim',xlim)
+        setp(zlines,'alpha',color_alpha)
+        setp(zlines,'facecolor',(0,0,1))
 
         grid()
         xlabel('distance from smoothed data (mm)')
@@ -1195,27 +1195,27 @@ def do_it(results,
         
         yawlines = hist(yaw_err, bins = 25)[2]
         ylabel('counts')
-##        set(gca(),'ylim',ylim)
-##        set(gca(),'xlim',xlim)
-        set(yawlines,'alpha',color_alpha)
-        set(yawlines,'facecolor',(1,0,0))
+##        setp(gca(),'ylim',ylim)
+##        setp(gca(),'xlim',xlim)
+        setp(yawlines,'alpha',color_alpha)
+        setp(yawlines,'facecolor',(1,0,0))
 
         pitchlines = hist(pitch_err, bins = 50)[2]
 ##        ylabel('counts')
-        set(gca(),'xlim',xlim)
-        set(gca(),'ylim',ylim)
-        set(pitchlines,'alpha',color_alpha)
-        set(pitchlines,'facecolor',(0,1,0))
+        setp(gca(),'xlim',xlim)
+        setp(gca(),'ylim',ylim)
+        setp(pitchlines,'alpha',color_alpha)
+        setp(pitchlines,'facecolor',(0,1,0))
 
         legend([yawlines[0],pitchlines[0]],['yaw','pitch'])
 
 ##        rolllines = hist(roll_err, bins = 5)[2]
 ##        legend((xlines[0],ylines[0],rolllines[0]),['yaw','pitch','roll'])
 ##        ylabel('counts')
-##        set(gca(),'ylim',ylim)
-##        set(gca(),'xlim',xlim)
-##        set(rolllines,'alpha',color_alpha)
-##        set(rolllines,'facecolor',(0,0,1))
+##        setp(gca(),'ylim',ylim)
+##        setp(gca(),'xlim',xlim)
+##        setp(rolllines,'alpha',color_alpha)
+##        setp(rolllines,'facecolor',(0,0,1))
 
         grid()
         xlabel('distance from smoothed data (deg)')
@@ -1521,21 +1521,21 @@ def do_it(results,
         raw_lines = plot( t_P, P[:,0], 'rx', t_P, P[:,1], 'gx', t_P, P[:,2], 'bx' )
         smooth_lines = plot( t_P, Psmooth[:,0], 'r-', t_P, Psmooth[:,1], 'g-', t_P, Psmooth[:,2], 'b-' )
         legend(smooth_lines,('X','Y','Z'),2)
-        set(smooth_lines,'linewidth',linewidth)
+        setp(smooth_lines,'linewidth',linewidth)
         ylabel('Position (m)')
         grid()
         
         subplot(3,1,2)
         raw_lines = plot( t_dPdt, dPdt[:,0], 'rx', t_dPdt, dPdt[:,1], 'gx', t_dPdt, dPdt[:,2], 'bx' )
         smooth_lines = plot( t_dPdt, dPdt_smooth[:,0], 'r-', t_dPdt, dPdt_smooth[:,1], 'g-', t_dPdt, dPdt_smooth[:,2], 'b-' )
-        set(smooth_lines,'linewidth',linewidth)
+        setp(smooth_lines,'linewidth',linewidth)
         ylabel('Velocity (m/sec)')
         grid()
 
         subplot(3,1,3)
         raw_lines = plot( t_d2Pdt2, d2Pdt2[:,0], 'rx', t_d2Pdt2, d2Pdt2[:,1], 'gx', t_d2Pdt2, d2Pdt2[:,2], 'bx' )
         smooth_lines = plot( t_d2Pdt2, d2Pdt2_smooth[:,0], 'r-', t_d2Pdt2, d2Pdt2_smooth[:,1], 'g-', t_d2Pdt2, d2Pdt2_smooth[:,2], 'b-' )
-        set(smooth_lines,'linewidth',linewidth)
+        setp(smooth_lines,'linewidth',linewidth)
         ylabel('Acceleration (m/sec/sec)')
         xlabel('Time (sec)')
         grid()
@@ -1549,7 +1549,7 @@ def do_it(results,
         if do_smooth_quats:
             smooth_lines = plot( t_P, Qsmooth.w, 'k', t_P, Qsmooth.x, 'r',
                                  t_P, Qsmooth.y, 'g', t_P, Qsmooth.z, 'b')
-            set(smooth_lines,'linewidth',linewidth)
+            setp(smooth_lines,'linewidth',linewidth)
             legend(smooth_lines,['w','x','y','z'])
         else:
             legend(raw_lines,['w','x','y','z'])
@@ -1570,7 +1570,7 @@ def do_it(results,
 ##            smooth_lines = plot( t_omega, nx.arctan2(omega_smooth.y, omega_smooth.x)*rad2deg, 'k-')
             smooth_lines = plot( t_omega, omega_smooth.w, 'k', t_omega, omega_smooth.x, 'r',
                                  t_omega, omega_smooth.y, 'g', t_omega, omega_smooth.z, 'b')
-            set(smooth_lines,'linewidth',linewidth)
+            setp(smooth_lines,'linewidth',linewidth)
             legend(smooth_lines,['w','x','y','z'])
         else:
             legend(raw_lines,['w','x','y','z'])
@@ -1586,7 +1586,7 @@ def do_it(results,
         if do_smooth_quats:
             smooth_lines = plot( t_omega_dot, omega_dot_smooth.w, 'k', t_omega_dot, omega_dot_smooth.x, 'r',
                                  t_omega_dot, omega_dot_smooth.y, 'g', t_omega_dot, omega_dot_smooth.z, 'b')
-            set(smooth_lines,'linewidth',linewidth)
+            setp(smooth_lines,'linewidth',linewidth)
             legend(smooth_lines,['w','x','y','z'])
         else:
             legend(raw_lines,['w','x','y','z'])
@@ -1640,13 +1640,13 @@ def do_it(results,
             plot(t_bad,[0.0]*len(t_bad),'ko')
         elif xtitle == 'frame':
             plot(frame_bad,[0.0]*len(frame_bad),'ko')
-        set(lines_smooth,'lw',linewidth)
+        setp(lines_smooth,'lw',linewidth)
         if use_roll_guess:
-            set(lines_smooth2,'lw',linewidth)
+            setp(lines_smooth2,'lw',linewidth)
         legend(lines,['heading','pitch (body)','roll'])
         ylabel('angular position (global)\n(deg)')
-        set(gca().yaxis.label,'size',fontsize)
-        #set(gca(),'ylim',(-15,75))
+        setp(gca().yaxis.label,'size',fontsize)
+        #setp(gca(),'ylim',(-15,75))
         grid()
 
         plot_mag = True
@@ -1691,12 +1691,12 @@ def do_it(results,
                 args.extend( [xdata, omega_smooth2.x*rad2deg, 'y-'] )
             
         lines_smooth=plot( *args )
-        set(lines_smooth,'lw',linewidth)
+        setp(lines_smooth,'lw',linewidth)
         if len(lines):
             legend(lines,line_titles)
         ylabel('angular velocity\nglobal frame (deg/sec)')
-        set(gca().yaxis.label,'size',fontsize)
-        #set(gca(),'ylim',[-750,600])
+        setp(gca().yaxis.label,'size',fontsize)
+        #setp(gca(),'ylim',[-750,600])
         grid()
 
         subplot(3,1,3, sharex=ax1)  ##########################
@@ -1746,12 +1746,12 @@ def do_it(results,
                 line_titles.extend( ['roll (roll corrected)'] )
             
         lines_smooth=plot( *args)
-        set(lines_smooth,'lw',linewidth)
+        setp(lines_smooth,'lw',linewidth)
         ylabel('angular velocity\nbody frame (deg/sec)')
-        set(gca().yaxis.label,'size',fontsize)
+        setp(gca().yaxis.label,'size',fontsize)
         legend(lines_smooth,line_titles)
         
-        #set(gca(),'ylim',[-500,500])
+        #setp(gca(),'ylim',[-500,500])
         if xtitle == 'time':
             xlabel('time (sec)')
         elif xtitle == 'frame':
@@ -1809,9 +1809,9 @@ def do_it(results,
                        xdata, omega_smooth2_body.z*rad2deg, 'r-'] )
         line_titles.extend( ['yaw (roll=0)','yaw (w roll model)'])
         lines_smooth=plot( *args)
-        set(lines_smooth,'lw',linewidth)
+        setp(lines_smooth,'lw',linewidth)
         ylabel('yaw angular velocity\nbody frame (deg/sec)')
-        set(gca().yaxis.label,'size',fontsize)
+        setp(gca().yaxis.label,'size',fontsize)
         legend(lines_smooth,line_titles)
 
         grid()
@@ -1825,9 +1825,9 @@ def do_it(results,
                        xdata, omega_smooth2_body.y*rad2deg, 'r-'] )
         line_titles.extend( ['pitch (roll=0)','pitch (w roll model)'])
         lines_smooth=plot( *args)
-        set(lines_smooth,'lw',linewidth)
+        setp(lines_smooth,'lw',linewidth)
         ylabel('pitch angular velocity\nbody frame (deg/sec)')
-        set(gca().yaxis.label,'size',fontsize)
+        setp(gca().yaxis.label,'size',fontsize)
         legend(lines_smooth,line_titles)
 
         grid()
@@ -1841,9 +1841,9 @@ def do_it(results,
                        xdata, omega_smooth2_body.x*rad2deg, 'r-'] )
         line_titles.extend( ['roll (roll=0)','roll (w roll model)'])
         lines_smooth=plot( *args)
-        set(lines_smooth,'lw',linewidth)
+        setp(lines_smooth,'lw',linewidth)
         ylabel('roll angular velocity\nbody frame (deg/sec)')
-        set(gca().yaxis.label,'size',fontsize)
+        setp(gca().yaxis.label,'size',fontsize)
         legend(lines_smooth,line_titles)
 
         if xtitle == 'time':
@@ -1859,8 +1859,8 @@ def do_it(results,
             ylim = -1115,2270
             print 'setting xlim to',xlim
             print 'setting ylim to',ylim
-            set(gca(),'xlim',xlim)
-            set(gca(),'ylim',ylim)
+            setp(gca(),'xlim',xlim)
+            setp(gca(),'ylim',ylim)
             
     elif plot_error_angles:
         print 'plot_error_angles'
@@ -1881,7 +1881,7 @@ def do_it(results,
         plot( t_d_heading_err_smooth_dt, d_heading_err_smooth_dt,'b-',lw=linewidth)
         plot(t_d_pitch_body_err_dt,d_pitch_body_err_dt,'r-')
         plot(t_d_pitch_body_err_smooth_dt,d_pitch_body_err_smooth_dt,'r-',lw=linewidth)
-        set(gca(),'ylim',[-2000,2000])
+        setp(gca(),'ylim',[-2000,2000])
         ylabel('anglular velocity (deg/sec)')
         xlabel('time (sec)')
         grid()
@@ -1944,7 +1944,7 @@ def do_it(results,
         ylabel('force (N)')
         legend(lines,['parallel','normal'])
         ylim = get(gca(),'ylim')
-        set(gca(),'ylim',[0,ylim[1]])
+        setp(gca(),'ylim',[0,ylim[1]])
         text( .1, .9, 'Force to keep 1 mg aloft: %.1e'%aloft_force,
               transform = gca().transAxes)
 
@@ -1965,6 +1965,44 @@ def do_it(results,
     print 'returning...'
     return outputs
 
+
+def test_icb():
+    import result_browser
+    filename = 'DATA20060315_170142.h5'
+    results = result_browser.get_results(filename,mode='r+')
+    fstart = 993900
+    fend = 994040
+    if 1:
+        frames,psmooth,qsmooth=do_it(results,
+                                     start_frame=fstart,
+                                     stop_frame=fend,
+                                     interp_OK=True,
+                                     return_frame_numbers=True,
+
+                                     beta = 1000.0,
+                                     lambda2 = 1e-13,
+                                     percent_error_eps_quats = 2.0,                                     
+                                     
+                                     do_smooth_position=True,
+                                     do_smooth_quats=True,
+
+                                     
+##                                     plot_xy_Psmooth=True,
+##                                     plot_xy_Qsmooth=True,
+##                                     #plot_xy_Praw=False,
+##                                     plot_xy_Qraw=False,
+                                     plot_xy=False,
+                                     
+                                     plot_body_angular_vel2=True,
+                                     )
+        result_browser.save_smooth_data(results,frames,psmooth,qsmooth)
+        
+        results = {}
+        results['frames']=frames
+        results['psmooth']=psmooth
+        results['qsmooth']=qsmooth
+        scipy.io.savemat('smoothed',results)
+        show()
 
 def calculate_roll_and_save( results, start_frame, stop_frame, **kwargs):
     import result_browser
@@ -2030,3 +2068,5 @@ def delete_calculated_roll(results):
     del results.root.smooth_data_roll_fixed_lin
     del results.root.resultants
     
+if __name__=='__main__':
+    test_icb()

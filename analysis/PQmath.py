@@ -2,10 +2,11 @@ import math
 import cgtypes
 from numarray.ieeespecial import nan
 #import numarray as nx
-import Numeric as nx
+import numpy as nx
+import numpy
 import numarray
 import Numeric
-array_types = [Numeric.ArrayType, numarray.numarraycore.NumArray]
+array_types = [numpy.ndarray, Numeric.ArrayType, numarray.numarraycore.NumArray]
 
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
@@ -45,7 +46,7 @@ def rotate_velocity_by_orientation(vel,orient):
     return orient.inverse()*vel*orient
 
 def is_unit_vector(U):
-    V = nx.array(U)
+    V = nx.asarray(U)
     if len(V.shape)==1:
         V = V[nx.NewAxis,:]
     V = V**2

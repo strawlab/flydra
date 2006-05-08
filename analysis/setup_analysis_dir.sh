@@ -1,5 +1,6 @@
 ln -s ~/kookaburra/flydra/analysis/result_browser.py
 ln -s ~/kookaburra/flydra/analysis/PQmath.py
+ln -s ~/kookaburra/flydra/analysis/calc_forces.py
 ln -s ~/kookaburra/flydra/analysis/vtk_results.py
 
 ln -s ~/kookaburra/flydra/analysis/FOE_utils.py
@@ -21,3 +22,8 @@ ln -s ~/kookaburra/flydra/analysis/dark_2b_vtk.py
 ln -s ~/kookaburra/flydra/analysis/dark_3_stats.py
 
 ln -s ~/kookaburra/flydra/analysis/create_movie.sh
+
+ln -s ~/kookaburra/flydra/analysis/create_movie.sh
+
+ln -s ~/kookaburra/flydra/analysis/landing_01.py
+ln -s ~/kookaburra/flydra/analysis/landing_02_vtk.py

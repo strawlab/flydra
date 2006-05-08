@@ -69,7 +69,7 @@ class TimedVectors(PT.IsDescription):
     fx    = PT.FloatCol(pos=1)
     fy    = PT.FloatCol(pos=2)
     fz    = PT.FloatCol(pos=3)
-    
+
 def make_new_fmt(results):
     """convert all 2D data into camera-by-camera tables"""
     Info2D = results.root.data2d.description # 2D data format for PyTables
@@ -175,14 +175,18 @@ def get_camn_and_remote_timestamp(results, cam, frame):
         possible_camns = [camn]
         
     found = False
-    for row in results.root.data2d.where( results.root.data2d.cols.frame==frame ):
-#    for row in results.root.data2d:
-#        if row['frame'] == frame:
-        camn = row['camn']
-        if camn in possible_camns:
-            timestamp = row['timestamp']
-            found = True
-            break
+    try:
+        for row in results.root.data2d.where( results.root.data2d.cols.frame==frame ):
+            camn = row['camn']
+            if camn in possible_camns:
+                timestamp = row['timestamp']
+                found = True
+                break
+    except TypeError:
+        print 'frame',frame
+        print 'repr(frame)',repr(frame)
+        print 'type(frame)',type(frame)
+        raise
     if not found:
         raise ValueError("No data found for cam_id and frame")
     return camn, timestamp
@@ -218,7 +222,8 @@ def flip_line_direction(results,frame,typ='best'):
 
     nrow = None
     for row in data3d.where( data3d.cols.frame == frame ):
-        nrow = row.nrow()
+        #nrow = row.nrow()
+        nrow = row.nrow
         p2, p4, p5 = row['p2'], row['p4'], row['p5']
     if nrow is None:
         raise ValueError('could not find frame')
@@ -317,7 +322,7 @@ def auto_flip_line_direction_hang(results,start_frame,stop_frame,typ='best',
     frames_flipped = []
     
     for frame_and_dir in frame_and_dir_list:
-        this_frame = frame_and_dir[0]
+        this_frame = int(frame_and_dir[0])
         this_dir = my_normalize(frame_and_dir[1:4])
         if this_dir[2] < -0.1:
             flip_line_direction(results,this_frame,typ=typ)
@@ -865,14 +870,12 @@ def save_smooth_data(results,frames,Psmooth,Qsmooth,table_name='smooth_data'):
         Q = Qsmooth[i]
 
         old_nrow = None
-        for row in smooth_data:
-            if row['frame'] != frame:
-                    continue
-            print row.nrow()
+        for row in smooth_data.where(smooth_data.cols.frame==frame):
+            print row.nrow
             if old_nrow is not None:
                 raise RuntimeError('more than row with frame number %d in smooth_data'%frame)
-            old_nrow = row.nrow()
-            old_nrow = int(old_nrow) # XXX pytables bug...
+            old_nrow = row.nrow
+            old_nrow = int(old_nrow) # XXX pytables bug ?
         
         new_row = []
         new_row_dict = {}
@@ -889,6 +892,10 @@ def save_smooth_data(results,frames,Psmooth,Qsmooth,table_name='smooth_data'):
             new_row_dict[colname] = new_row[-1]
         if old_nrow is None:
             for k,v in new_row_dict.iteritems():
+                if k=='frame':
+                    v = int(v)
+                else:
+                    v = float(v)
                 smooth_data.row[k] = v
             smooth_data.row.append()
         else:
@@ -1064,12 +1071,18 @@ def make_exact_movie_info2(results):
         exact_movie_info.row.append()
         exact_movie_info.flush()
 
+class NoFrameRecordedHere(Exception):
+    pass
+
 class CachingMovieOpener:
     def __init__(self):
         self.cache = {}
-
+        self.fmfs_by_filename = {}
+        self.bg_image_cache = {}
+        self.undistorted_bg_image_cache = {}
+        
     def load_fmf(self,indexes):
-        results, camn, frame_type, remote_timestamp = indexes
+        results, camn, cam_id, frame_type, remote_timestamp = indexes
         if frame_type == 'full_frame_fmf':
             if not hasattr(results.root,'exact_movie_info'):
                 make_exact_movie_info2(results)
@@ -1077,27 +1090,40 @@ class CachingMovieOpener:
 
             # find normal (non background movie filename)
             found = False
-            for row in exact_movie_info:
-                if row['cam_id'] == cam_id:
-                    if row['start_timestamp'] < remote_timestamp < row['stop_timestamp']:
-                        filename = row['filename']
-                        found = True
-                        break
+            for row in exact_movie_info.where( exact_movie_info.cols.cam_id == cam_id ):
+                if row['start_timestamp'] < remote_timestamp < row['stop_timestamp']:
+                    filename = row['filename']
+                    found = True
+                    break
             if not found:
                 raise ValueError('movie not found for %s'%(cam_id,))
 
             filename = os.path.splitext(filename)[0] + '%s.fmf'%(suffix,) # alter to be background image
         else:
-            raise NotImplemented('')
-        fly_movie = FlyMovieFormat.FlyMovie(filename)
-        return fly_movie
-        
+            found = False
+            exact_roi_movie_info = results.root.exact_roi_movie_info
+            for row in exact_roi_movie_info.where( exact_roi_movie_info.cols.timestamp == remote_timestamp ):
+                if row['cam_id'] == cam_id:
+                    filename=row['filename']
+                    found=True
+                break
+            if not found:
+                raise NoFrameRecordedHere("frame not found for %s, %s"%(cam_id,repr(remote_timestamp)))
+
+        if filename not in self.fmfs_by_filename:
+            self.fmfs_by_filename[filename] = FlyMovieFormat.FlyMovie(filename)
+        fmf = self.fmfs_by_filename[filename]
+
+        return fmf
+    
     def get_movie_frame3(self,
                          results,
                          remote_timestamp_or_frame,
                          cam,
                          suffix=None,
                          frame_type=None,
+                         width=None,
+                         height=None,
                          ):
         if frame_type is None:
             frame_type = 'full_frame_fmf'
@@ -1133,16 +1159,22 @@ class CachingMovieOpener:
         elif isinstance(cam,str): # cam_id
             cam_id = cam
 
-        if camn is None:
-            camn, remote_timestamp = get_camn_and_remote_timestamp(results,cam_id,frame)
+        if frame is None or camn is None:
+            camn, frame = get_camn_and_frame(results,cam_id,remote_timestamp)
+##        if camn is None:
+##            camn, remote_timestamp = get_camn_and_remote_timestamp(results,cam_id,frame)
 
-        indexes = (results, camn, frame_type, remote_timestamp)
-        if indexes in self.cache:
-            fmf = self.cache[indexes]
-        else:
-            fmf = self.load_fmf(indexes)
-            self.cache[indexes] = fmf
+        indexes = (results, camn, cam_id, frame_type, remote_timestamp)
 
+        if indexes not in self.cache:
+            try:
+                self.cache[indexes] = self.load_fmf(indexes)
+            except NoFrameRecordedHere:
+                self.cache[indexes] = None
+        fmf = self.cache[indexes]
+
+        if fmf is None:
+            raise NoFrameRecordedHere("")
 
         if frame_type == 'small_frame_and_bg':
             # get background frame
@@ -1150,7 +1182,9 @@ class CachingMovieOpener:
             cam_id = camn2cam_id[camn]
             bg_frame = nx.asarray(results.root.backgrounds.__getattr__(cam_id))
         elif frame_type == 'small_frame_only':
-            bg_frame = 255*nx.ones((491,656),nx.UInt8)
+            if height is None or width is None:
+                raise ValueError('for frame_type="small_frame_only" must specify width and height')
+            bg_frame = 255*nx.ones((height,width),nx.UInt8)
 
         # get frame
         frame, movie_timestamp = fmf.get_frame_at_or_before_timestamp( remote_timestamp )
@@ -1170,9 +1204,37 @@ class CachingMovieOpener:
             frame[bottom:bottom+height,left:left+width] = small_frame
         
         return frame, movie_timestamp
+    
+    def get_background_image(self,results, cam_id):
+        idx = (results,cam_id)
+        if idx not in self.bg_image_cache:
+            self.bg_image_cache[idx] = nx.asarray(
+                results.root.backgrounds.__getattr__(cam_id))
+        bg = self.bg_image_cache[idx]
+        return bg
+
+    def _undist(self,idx,im):
+        (results,reconstructor,cam_id) = idx
+        intrin = reconstructor.get_intrinsic_linear(cam_id)
+        k = reconstructor.get_intrinsic_nonlinear(cam_id)
+        f = intrin[0,0], intrin[1,1] # focal length
+        c = intrin[0,2], intrin[1,2] # camera center
+        undist_im = undistort.rect(im, f=f, c=c, k=k)
+        return undist_im
+        
+    def get_undistorted_background_image(self,results,reconstructor,cam_id):
+        im = self.get_background_image(results, cam_id)
+        idx = (results,reconstructor,cam_id)
+        if idx not in self.undistorted_bg_image_cache:
+            self.undistorted_bg_image_cache[idx] = (
+                self._undist(idx,im))                
+        undist = self.undistorted_bg_image_cache[idx]
+        return undist
 
 _caching_movie_opener = CachingMovieOpener()
 get_movie_frame2 = _caching_movie_opener.get_movie_frame3
+get_background_image = _caching_movie_opener.get_background_image
+get_undistorted_background_image = _caching_movie_opener.get_undistorted_background_image
 
 def get_movie_frame2_orig(results, cam_timestamp_or_frame, cam, suffix=None):
     # OLD, delete me
@@ -1376,6 +1438,7 @@ def plot_all_images(results,
                     PLOT_BLUE=True, # smoothed 3d data
                     ##recompute_3d=False,
                     do_undistort=True,
+                    frame_type='full_frame_fmf',
                     fixed_im_centers=None,
                     fixed_im_lims=None,
                     plot_orientation=True,
@@ -1387,19 +1450,41 @@ def plot_all_images(results,
                     display_titles=True,
                     start_frame_offset=188191, # used to calculate time display
                     max_err=None,
-                    plot_red_ori_fixed=False,                    
+                    plot_red_ori_fixed=False,
+                    no_2d_data_mode=None,
+                    plot_all_images_locals_cache=None,
                     colormap='jet'):
 
+    if plot_all_images_locals_cache is None:
+        plot_all_images_locals_cache = {}
+
+    if no_2d_data_mode==None:
+        no_2d_data_mode='fullframe_plot_reproj'
+
+    if no_2d_data_mode not in ['fullframe_plot_reproj',
+                               'blank',
+                               'plot_reproj_with_bg',
+                               ]:
+        raise ValueError('invalid no_2d_data_mode')
+
     #if origin == 'upper' and zoomed==True: raise NotImplementedError('')
+    if plot_true_3d_line and plot_3d_unit_vector:
+        raise ValueError('options plot_true_3d_line and plot_3d_unit_vector are mutually exclusive')
     
     if fixed_im_centers is None:
         fixed_im_centers = {}
     if fixed_im_lims is None:
         fixed_im_lims = {}
     ioff()
+    
     import flydra.reconstruct
-    reconstructor = flydra.reconstruct.Reconstructor(results)
 
+    if 'reconstructor' not in plot_all_images_locals_cache:
+        plot_all_images_locals_cache['reconstructor'] = (
+            flydra.reconstruct.Reconstructor(results))
+    reconstructor = plot_all_images_locals_cache['reconstructor']
+    assert reconstructor.cal_source == results # make sure cache is valid
+    
     if typ == 'fast':
         data3d = results.root.data3d_fast
     elif typ == 'best':
@@ -1410,6 +1495,8 @@ def plot_all_images(results,
 
     if colormap == 'jet':
         cmap = cm.jet
+    elif colormap == 'pink':
+        cmap = cm.pink
     elif colormap.startswith('gray'):
         cmap = cm.gray
     else:
@@ -1424,10 +1511,10 @@ def plot_all_images(results,
     cam_ids=list(sets.Set(cam_info.cols.cam_id))
     cam_ids.sort()
 
-    tmp = [((x['x'],x['y'],x['z']),
-            (x['p0'],x['p1'],x['p2'],x['p3'],x['p4'],x['p5']),
-            x['camns_used'], x['mean_dist']
-            ) for x in data3d.where( data3d.cols.frame == frame_no) ]
+    tmp = [((tmpx['x'],tmpx['y'],tmpx['z']),
+            (tmpx['p0'],tmpx['p1'],tmpx['p2'],tmpx['p3'],tmpx['p4'],tmpx['p5']),
+            tmpx['camns_used'], tmpx['mean_dist']
+            ) for tmpx in data3d.where( data3d.cols.frame == frame_no) ]
     if len(tmp) == 0:
         X, line3d = None, None
         camns_used = ()
@@ -1439,6 +1526,8 @@ def plot_all_images(results,
             if err > max_err:
                 X, line3d = None, None
                 camns_used = ()
+                
+    undistorted_bgs = {}
         
     clf()
     figtext( 0.5, 0.99, '% 5.2f sec'%( (frame_no-start_frame_offset)/100.0,),
@@ -1446,57 +1535,86 @@ def plot_all_images(results,
              verticalalignment='top',
              )
     for subplot_number,cam_id in enumerate(cam_ids):
-#        print cam_id
         width, height = reconstructor.get_resolution(cam_id)
         
         i = cam_ids.index(cam_id)
         ax=dougs_subplot(subplot_number)
         setp(ax,'frame_on',display_labels)
 
-        nan_in_2d_data = False
         xs=[]
         ys=[]
         slopes=[]
         eccentricities=[]
         remote_timestamps=[]
         
-##        for row in data2d.where( data2d.cols.frame == frame_no ):        
         for row in data2d.where(data2d.cols.frame==frame_no):
-            camn = row['camn']
-            if camn2cam_id[camn] == cam_id:
+            test_camn = row['camn']
+            if camn2cam_id[test_camn] == cam_id:
+                camn=test_camn
+                if nx.isnan(row['x']):
+                    continue
                 xs.append(row['x'])
                 ys.append(row['y'])
                 slopes.append(row['slope'])
                 eccentricities.append(row['eccentricity'])
                 remote_timestamps.append(row['timestamp'])
-                if nx.isnan(row['x']):
-                    nan_in_2d_data = True
-
-        have_2d_data = bool(len(xs))
-
-        if not have_2d_data:
-            nan_in_2d_data = True
-##            camn=None
-##            x=None
-##            y=None
-##            slope=None
-##            eccentricity=None
-##            remote_timestamp = None
+                    
+        # check to make sure they're from the same time
+        if len(sets.Set(remote_timestamps))>1:
+            raise RuntimeError("somehow more than one timestamp from same frame!?")
+        if len(remote_timestamps):
+            remote_timestamp = remote_timestamps[0]
             
+        have_2d_data = bool(len(xs))
+        if no_2d_data_mode=='blank' and not have_2d_data:
+            setp(ax,'frame_on',False)
+            setp(ax,'xticks',[])
+            setp(ax,'yticks',[])
+            continue
+
         title_str = cam_id
+        
+        im, movie_timestamp = None, None # make sure these aren't falsely set
+        del im, movie_timestamp          # make sure these aren't falsely set
+        undistorted_im = None
+
+        if X is not None:
+            if line3d is None:
+                reproj_x,reproj_y=reconstructor.find2d(cam_id,X)
+                reproj_l3=None
+            else:
+                if plot_true_3d_line:
+                    reproj_xy,reproj_l3=reconstructor.find2d(cam_id,X,line3d)
+                else:
+                    U = flydra.reconstruct.line_direction(line3d)
+                    if plot_3d_unit_vector:
+                        reproj_xy=reconstructor.find2d(cam_id,X)
+                        unit_x1, unit_y1=reconstructor.find2d(cam_id,X-5*U)
+                        unit_x2, unit_y2=reconstructor.find2d(cam_id,X+5*U)
+                    else:
+                        line3d_fake = flydra.reconstruct.pluecker_from_verts(X,X+U)
+                        reproj_xy,reproj_l3=reconstructor.find2d(cam_id,X,line3d_fake)
+                reproj_x,reproj_y=reproj_xy
 
         have_limit_data = False
         if show_raw_image:
             have_raw_image = False
             if have_2d_data:
                 try:
-                    # XXXXX
-                    im, movie_timestamp = get_movie_frame2(results, remote_timestamp, cam_id)
+                    im, movie_timestamp = get_movie_frame2(results, remote_timestamp, cam_id, frame_type=frame_type, width=width, height=height)
                     have_raw_image = True
-                except ValueError,exc:
-                    print 'WARNING: skipping frame for %s because ValueError: %s'%(cam_id,str(exc))
+##                except ValueError,exc:
+##                    print 'WARNING: skipping frame for %s because ValueError: %s'%(cam_id,str(exc))
                 except KeyError,exc:
                     print 'WARNING: skipping frame for %s because KeyError: %s'%(cam_id,str(exc))
+                except NoFrameRecordedHere,exc:
+                    # probably small FMF file not recorded for this camera, which is not really worth printing error
+                    pass
+            elif no_2d_data_mode=='plot_reproj_with_bg':
+                im = get_background_image(results, cam_id)
+                have_raw_image = True
+                if do_undistort:
+                    undistorted_im = get_undistorted_background_image(results, reconstructor, cam_id)
             if have_2d_data and have_raw_image:
                 if remote_timestamp != movie_timestamp:
                     print 'Whoa! timestamps are not equal!',cam_id
@@ -1504,18 +1622,36 @@ def plot_all_images(results,
             if have_raw_image:
 #                print cam_id,'have_raw_image True'
                 if do_undistort:
-                    intrin = reconstructor.get_intrinsic_linear(cam_id)
-                    k = reconstructor.get_intrinsic_nonlinear(cam_id)
-                    f = intrin[0,0], intrin[1,1] # focal length
-                    c = intrin[0,2], intrin[1,2] # camera center
-                    im = undistort.rect(im, f=f, c=c, k=k)
-                    im = im.astype(nx.UInt8)
-                if (have_2d_data and not nan_in_2d_data and zoomed and x>=0
-                    or fixed_im_lims.has_key(cam_id)):
+                    if undistorted_im is not None:
+                        im = undistorted_im # use cached image
+                    else:
+                        intrin = reconstructor.get_intrinsic_linear(cam_id)
+                        k = reconstructor.get_intrinsic_nonlinear(cam_id)
+                        f = intrin[0,0], intrin[1,1] # focal length
+                        c = intrin[0,2], intrin[1,2] # camera center
+                        im = undistort.rect(im, f=f, c=c, k=k)
+                        #im = im.astype(nx.UInt8)
+
+                code_path_0 = False
+                
+                if have_2d_data and zoomed:
+                    code_path_0 = True
+                    xcenter, ycenter = xs[0],ys[0]
+                if fixed_im_lims.has_key(cam_id):
+                    code_path_0 = True
+                if no_2d_data_mode=='plot_reproj_with_bg':
+                    if 0<=reproj_x<=width:
+                        if 0<=reproj_y<=height:
+                            xcenter,ycenter = reproj_x,reproj_y
+                            code_path_0 = True
+                    
+                if code_path_0:
+                    #print 'XXX code path 0',cam_id
+                
                     w = 13
                     h = 20
                     xcenter, ycenter = fixed_im_centers.get(
-                        cam_id, (x,y))
+                        cam_id, (xcenter,ycenter))
                     xmin = int(xcenter-w)
                     xmax = int(xcenter+w)
                     ymin = int(ycenter-h)
@@ -1556,10 +1692,18 @@ def plot_all_images(results,
                               interpolation='nearest',
                               cmap=cmap,
                               extent = extent,
+                              vmin=0,vmax=255,
                               )
                     
                 else:
-                    #print 'XXX code path 1',cam_id
+                    if no_2d_data_mode=='plot_reproj_with_bg' and zoomed:
+                        # plot nothing and continue...
+                        setp(ax,'frame_on',False)
+                        setp(ax,'xticks',[])
+                        setp(ax,'yticks',[])
+                        continue
+                    
+                    print 'XXX code path 1',cam_id
                     xmin=0
                     xmax=width-1
                     ymin=0
@@ -1580,9 +1724,12 @@ def plot_all_images(results,
                               origin=origin,
                               interpolation='nearest',
                               extent=extent,
-                              cmap=cmap)
+                              cmap=cmap,
+                              vmin=0,vmax=255,
+                              )
+
             else:
-                #print 'XXX code path 2',cam_id
+                print 'XXX code path 2',cam_id
                     
                 xmin=0
                 xmax=width-1
@@ -1595,97 +1742,96 @@ def plot_all_images(results,
                 show_ymin = ymin
                 show_ymax = ymax
 
-        if have_2d_data and not nan_in_2d_data and camn is not None:
-                
-            # raw 2D
-            try:
-                if origin == 'upper':
-                    lines=ax.plot([x],[height-y],'o')
-                else:
-                    lines=ax.plot([x],[y],'o')
-            except:
-                print 'x, y',x, y
-                sys.stdout.flush()
-                raise
-            
-            if show_raw_image:
-                green = (0,1,0)
-                setp(lines,'markerfacecolor',None)
-                if camn in camns_used:
-                    setp(lines,'markeredgecolor',green)
-                elif camn not in camns_used:
-                    setp(lines,'markeredgecolor',(0, 0.2, 0))
-                    #print 'setting alpha in',cam_id
-                    #setp(lines,'alpha',0.2)
-                setp(lines,'markeredgewidth',2.0)
-
-            #if not len(numarray.ieeespecial.getnan(slope)[0]):
-            if eccentricity > flydra.reconstruct.MINIMUM_ECCENTRICITY:
-                #title_str = cam_id + ' %.1f'%eccentricity
-                
-                #eccentricity = min(eccentricity,100.0) # bound it
-
-                # ax+by+c=0
-                a=slope
-                b=-1
-                c=y-a*x
-
-                x1=xmin
-                y1=-(c+a*x1)/b
-                if y1 < ymin:
-                    y1 = ymin
-                    x1 = -(c+b*y1)/a
-                elif y1 > ymax:
-                    y1 = ymax
-                    x1 = -(c+b*y1)/a
-                
-                x2=xmax
-                y2=-(c+a*x2)/b
-                if y2 < ymin:
-                    y2 = ymin
-                    x2 = -(c+b*y2)/a
-                elif y2 > ymax:
-                    y2 = ymax
-                    x2 = -(c+b*y2)/a                
-
-                if plot_orientation:
+        if have_2d_data and camn is not None:
+            for x,y,eccentricity,slope in zip(xs,ys,eccentricities,slopes):
+                # raw 2D
+                try:
                     if origin == 'upper':
-                        lines=ax.plot([x1,x2],[height-y1,height-y2],':',linewidth=1.5)
+                        lines=ax.plot([x],[height-y],'o')
                     else:
-                        lines=ax.plot([x1,x2],[y1,y2],':',linewidth=1.5)
-                    if show_raw_image:
-                        green = (0,1,0)
-                        if camn in camns_used:
-                            setp(lines,'color',green)
-                        elif camn not in camns_used:
-                            setp(lines,'color',(0, 0.2, 0))
-                        #setp(lines,'color',green)
-                        #setp(lines[0],'linewidth',0.8)
+                        lines=ax.plot([x],[y],'o')
+                except:
+                    print 'x, y',x, y
+                    sys.stdout.flush()
+                    raise
 
+                if show_raw_image:
+                    green = (0,1,0)
+                    dark_green = (0, 0.2, 0)
+                    setp(lines,'markerfacecolor',None)
+                    if camn in camns_used:
+                        setp(lines,'markeredgecolor',green)
+                    elif camn not in camns_used:
+                        setp(lines,'markeredgecolor',dark_green)
+                    setp(lines,'markeredgewidth',2.0)
+
+                #if not len(numarray.ieeespecial.getnan(slope)[0]):
+                if eccentricity > flydra.reconstruct.MINIMUM_ECCENTRICITY:
+                    #title_str = cam_id + ' %.1f'%eccentricity
+
+                    #eccentricity = min(eccentricity,100.0) # bound it
+
+                    # ax+by+c=0
+                    a=slope
+                    b=-1
+                    c=y-a*x
+
+                    x1=xmin
+                    y1=-(c+a*x1)/b
+                    if y1 < ymin:
+                        y1 = ymin
+                        x1 = -(c+b*y1)/a
+                    elif y1 > ymax:
+                        y1 = ymax
+                        x1 = -(c+b*y1)/a
+
+                    x2=xmax
+                    y2=-(c+a*x2)/b
+                    if y2 < ymin:
+                        y2 = ymin
+                        x2 = -(c+b*y2)/a
+                    elif y2 > ymax:
+                        y2 = ymax
+                        x2 = -(c+b*y2)/a                
+
+                    if plot_orientation:
+                        if origin == 'upper':
+                            lines=ax.plot([x1,x2],[height-y1,height-y2],':',linewidth=1.5)
+                        else:
+                            lines=ax.plot([x1,x2],[y1,y2],':',linewidth=1.5)
+                        if show_raw_image:
+                            green = (0,1,0)
+                            if camn in camns_used:
+                                setp(lines,'color',green)
+                            elif camn not in camns_used:
+                                setp(lines,'color',(0, 0.2, 0))
+                            #setp(lines,'color',green)
+                            #setp(lines[0],'linewidth',0.8)
+            del x,y,eccentricity,slope # remove loop variables
+                            
         if X is not None:
-            if line3d is None:
-                x,y=reconstructor.find2d(cam_id,X)
-                l3=None
-            else:
-                if plot_true_3d_line:
-                    x,l3=reconstructor.find2d(cam_id,X,line3d)
-                else:
-                    U = flydra.reconstruct.line_direction(line3d)
-                    if plot_3d_unit_vector:
-                        x=reconstructor.find2d(cam_id,X)
-                        unit_x1, unit_y1=reconstructor.find2d(cam_id,X-5*U)
-                        unit_x2, unit_y2=reconstructor.find2d(cam_id,X+5*U)
-                    else:
-                        line3d_fake = flydra.reconstruct.pluecker_from_verts(X,X+U)
-                        x,l3=reconstructor.find2d(cam_id,X,line3d_fake)
-                    x,y=x
-                
+##            if line3d is None:
+##                reproj_x,reproj_y=reconstructor.find2d(cam_id,X)
+##                reproj_l3=None
+##            else:
+##                if plot_true_3d_line:
+##                    reproj_xy,reproj_l3=reconstructor.find2d(cam_id,X,line3d)
+##                else:
+##                    U = flydra.reconstruct.line_direction(line3d)
+##                    if plot_3d_unit_vector:
+##                        reproj_xy=reconstructor.find2d(cam_id,X)
+##                        unit_x1, unit_y1=reconstructor.find2d(cam_id,X-5*U)
+##                        unit_x2, unit_y2=reconstructor.find2d(cam_id,X+5*U)
+##                    else:
+##                        line3d_fake = flydra.reconstruct.pluecker_from_verts(X,X+U)
+##                        reproj_xy,reproj_l3=reconstructor.find2d(cam_id,X,line3d_fake)
+##                reproj_x,reproj_y=reproj_xy
             #near = 10
             if PLOT_RED:
                 if origin=='upper':
-                    lines=ax.plot([x],[height-y],'o')
+                    lines=ax.plot([reproj_x],[height-reproj_y],'o')
                 else:
-                    lines=ax.plot([x],[y],'o')
+                    lines=ax.plot([reproj_x],[reproj_y],'o')
                 setp(lines,'markerfacecolor',(1,0,0))
                 setp(lines,'markeredgewidth',0.0)
                 setp(lines,'markersize',4.0)
@@ -1695,16 +1841,16 @@ def plot_all_images(results,
                     if plot_3d_unit_vector:
                         if origin == 'upper':
                             if plot_red_ori_fixed:
-                                lines=ax.plot([x,unit_x1],[height-y,height-unit_y1],'r-',linewidth=1.5)
+                                lines=ax.plot([reproj_x,unit_x1],[height-reproj_y,height-unit_y1],'r-',linewidth=1.5)
                             else:
                                 lines=ax.plot([unit_x1,unit_x2],[height-unit_y1,height-unit_y2],'r-',linewidth=1.5)
                         else:
                             if plot_red_ori_fixed:
-                                lines=ax.plot([x,unit_x1],[y,unit_y1],'r-',linewidth=1.5)
+                                lines=ax.plot([reproj_x,unit_x1],[reproj_y,unit_y1],'r-',linewidth=1.5)
                             else:
                                 lines=ax.plot([unit_x1,unit_x2],[unit_y1,unit_y2],'r-',linewidth=1.5)
                     else:
-                        a,b,c=l3
+                        a,b,c=reproj_l3
                         # ax+by+c=0
 
                         # y = -(c+ax)/b
@@ -1733,6 +1879,7 @@ def plot_all_images(results,
                             lines=ax.plot([x1,x2],[height-y1,height-y2],'r--',linewidth=1.5)
                         else:
                             lines=ax.plot([x1,x2],[y1,y2],'r--',linewidth=1.5)
+                        del a,b,c # keep namespace clean(er)
         if PLOT_BLUE:
             smooth_data = results.root.smooth_data
             have_smooth_data = False
@@ -1877,33 +2024,49 @@ def save_movie(results):
 
     cam_ids = get_cam_ids(results,)
 
-    start_frame = 1231000
-    stop_frame = 1231800
-        
-    for frame in xrange(start_frame+240, 1231000+300, 1):
+    start_frame = 69370
+    stop_frame = 69430
+    
+    #start_frame = 69373
+    #stop_frame = 69374
+    
+    #start_frame = 69613
+    #stop_frame = 69614
+
+    plot_all_images_locals_cache = {}
+    for frame in range(start_frame, stop_frame, 1):
         clf()
         try:
-            fname = 'zoomed/zoomed_%04d.png'%frame
+            fname = 'pitch_test_d_%04d.png'%frame
             #fname = 'full_frame_%04d.png'%frame
+            try: os.unlink(fname)
+            except OSError, err: pass
             print ' plotting',fname,'...',
             sys.stdout.flush()
             plot_all_images(results, frame,
                             #fixed_im_centers=fixed_im_centers,
                             #fixed_im_lims=fixed_im_lims,
-                            colormap='grayscale',
+                            #colormap='grayscale',
+                            colormap='jet',
                             #zoomed=True,
+                            frame_type='small_frame_and_bg',
+                            
+                            plot_true_3d_line=True,
+                            plot_3d_unit_vector=False,
                             
                             plot_orientation=True,
 #                            plot_orientation=False,
                             
                             origin='lower',
-                            display_labels=False,
+                            #display_labels=False,
                             display_titles=True,
                             start_frame_offset=start_frame,
                             PLOT_RED=True,
                             PLOT_BLUE=False,
                             max_err=10,
-                            plot_red_ori_fixed=False,                    
+                            plot_red_ori_fixed=False,
+                            no_2d_data_mode='plot_reproj_with_bg',
+                            plot_all_images_locals_cache=plot_all_images_locals_cache,
                             )
             
             print ' saving...',
@@ -2548,7 +2711,7 @@ def simple_add_backgrounds(results):
         add_backgrounds_to_results(results,cam_id,fname,frame=-1)
 
 if __name__=='__main__':
-    results = get_results('DATA20060502_211811.h5',mode='r+')
+    results = get_results('DATA20060315_170142.h5',mode='r+')
     #del results.root.exact_movie_info
     #results.close()
     #make_exact_movie_info2(results)
