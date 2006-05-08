@@ -180,7 +180,7 @@ class Reconstructor:
                 self.Pmat[cam_id] = pmat
                 self.Pmat_fastnx[cam_id] = fast_nx.array(pmat)
                 self.Res[cam_id] = map(int,res_fd.readline().split())
-                self.pmat_inv[cam_id] = numpy.linalg.generalized_inverse(pmat)
+                self.pmat_inv[cam_id] = numpy.linalg.pinv(pmat)
             res_fd.close()
 
             # load non linear parameters
@@ -203,7 +203,7 @@ class Reconstructor:
                 self.Pmat[cam_id] = pmat
                 self.Pmat_fastnx[cam_id] = fast_nx.array(pmat)
                 self.Res[cam_id] = res
-                self.pmat_inv[cam_id] = numpy.linalg.generalized_inverse(pmat)
+                self.pmat_inv[cam_id] = numpy.linalg.pinv(pmat)
                 self._helper[cam_id] = reconstruct_utils.ReconstructHelper(
                     K[0,0], K[1,1], K[0,2], K[1,2],
                     nlparams[0], nlparams[1], nlparams[2], nlparams[3])

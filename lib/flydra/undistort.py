@@ -97,9 +97,9 @@ class CachedUndistorter:
     ##    b = nx.array( [px,
     ##                   py,
     ##                   nx.ones(px.shape)])
-        rays = nx.matrixmultiply(linalg.inverse(KK_new),nx.array( [px,
-                                                                   py,
-                                                                   nx.ones(px.shape)]))
+        rays = nx.matrixmultiply(linalg.inv(KK_new),nx.array( [px,
+                                                               py,
+                                                               nx.ones(px.shape)]))
         #print 'rays',rays
 
         # Rotation: (or affine transformation):
