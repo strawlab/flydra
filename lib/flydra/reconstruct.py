@@ -101,10 +101,6 @@ def line_direction(Lcoords):
     return norm_vec(U)
 
 def pluecker_from_verts(A,B):
-    def cross(vec1,vec2):
-        return ( vec1[1]*vec2[2] - vec1[2]*vec2[1],
-                 vec1[2]*vec2[0] - vec1[0]*vec2[2],
-                 vec1[0]*vec2[1] - vec1[1]*vec2[0] )
     if len(A)==3:
         A = A[0], A[1], A[2], 1.0
     if len(B)==3:
@@ -270,7 +266,6 @@ class Reconstructor:
         # Calculate best point
         if return_X_coords:
             A=nx.array(A)
-            print 'repr(A)',repr(A)
             u,d,vt=svd(A)
             X = vt[-1,0:3]/vt[-1,3] # normalize
             if not return_line_coords:
