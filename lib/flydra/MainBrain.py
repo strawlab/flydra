@@ -1043,7 +1043,7 @@ class MainBrain(object):
             fqdn = socket.getfqdn(caller_ip)
         
             #cam_id = '%s:%d:%d'%(fqdn,cam_no,caller_port)
-            cam_id = '%s:%d'%(fqdn,cam_no)
+            cam_id = '%s_%d'%(fqdn,cam_no)
             
             cam2mainbrain_data_port = self.main_brain.coord_receiver.connect(cam_id)
             self.cam_info_lock.acquire()
