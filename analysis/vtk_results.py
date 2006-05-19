@@ -871,7 +871,6 @@ def show_frames_vtk(results,renderers,
             actors.append( tl )
 
     if bounding_box:
-    #if (ren1 is not None) and (actor is not None):
         # from Annotation/Python/cubeAxes.py
         tprop = vtk.vtkTextProperty()
         tprop.SetColor(0,0,0)
@@ -881,8 +880,8 @@ def show_frames_vtk(results,renderers,
             axes2.SetProp(bbox)
             axes2.SetCamera(renderer.GetActiveCamera())
             axes2.SetLabelFormat("%6.4g")
-            axes2.SetFlyModeToOuterEdges()
-            #axes2.SetFlyModeToClosestTriad()
+            #axes2.SetFlyModeToOuterEdges()
+            axes2.SetFlyModeToClosestTriad()
             axes2.SetFontFactor(0.8)
             axes2.ScalingOff()
             axes2.SetAxisTitleTextProperty(tprop)
@@ -890,7 +889,6 @@ def show_frames_vtk(results,renderers,
             axes2.GetProperty().SetColor(0,0,0)
             renderer.AddActor(axes2)
             actors.append( axes2 )
-        #renderer.AddProp(axes2)
         
 ##    return bbox
     return actors

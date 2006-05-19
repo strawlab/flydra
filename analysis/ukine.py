@@ -6,11 +6,9 @@ import flydra.reconstruct
 import numpy
 
 # base file names
-base_fname = 'landing_20060502_full_bg.fmf'
+base_fname = 'full_20060515_190909_%s_bg.fmf'
 # hdf5 file containing calibration data
-cal_source = 'DATA20060502_211811.h5'
-
-cams = ['cam%d'%i for i in range(1,6)]
+cal_source = 'DATA20060515_190905.h5'
 
 h5file = tables.openFile(cal_source,mode='r')
 recon = flydra.reconstruct.Reconstructor(h5file)
@@ -27,14 +25,8 @@ class ClickGetter:
                 self.coords = event.xdata, event.ydata
 
 click_locations = []
-for cam in cams:
-    cam_id = None
-    for c in recon.cam_ids:
-        if c.startswith(cam):
-            if cam_id is not None:
-                raise RuntimeError('>1 camera per host not yet supported')
-            cam_id = c
-    fname = os.path.join(cam,base_fname)
+for cam_id in recon.cam_ids:
+    fname = base_fname%cam_id
     print >> sys.stderr, cam_id,fname
     
     fmf = FlyMovieFormat.FlyMovie(fname)

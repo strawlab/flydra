@@ -12,7 +12,7 @@ def main(max_err=10.0):
         filename = 'DATA20060502_211811.h5'
         post = [( 466.8, 191.6, 15.8),# bottom
                 ( 467.6, 212.7, 223.4)] # top
-    elif 1:
+    elif 0:
         filename = 'DATA20060315_170142.h5'
         # guess 20060325
         x=820
@@ -44,14 +44,38 @@ def main(max_err=10.0):
             # flight F.  very good
             fstart = 993890
             fend = 994070
+    elif 0:
+        # 20060515
+        filename = 'DATA20060515_190905.h5'
+        post = [( 471.5, 191.2, 22.7),
+                ( 479.7, 205.1, 225.2),
+                
+                ]
+        if 0:
+            fstart = 369430
+            fend = 377515
+        elif 1:
+            fstart = 374420
+            fend = 374720
+    elif 1:
+        # 20060516 head fixed
+        filename = 'DATA20060516_194920.h5'
+        post = [( 471.5, 191.2, 22.7),
+                ( 479.7, 205.1, 225.2),
+                
+                ]
+        if 1:
+            fstart = 345796
+            fend = 345998
     
+        
     results = result_browser.get_results(filename,mode='r')
     post_top = numpy.array(post[1])
     
     renWin, renderers = vtk_results.init_vtk()#stereo=True)
     if 1:
         camera = renderers[0].GetActiveCamera()
-        if 0:
+        if 1:
             camera.SetFocalPoint (*tuple(post_top))
             camera.SetPosition (*tuple(post_top+numpy.array((100.0,0,0))))
             camera.SetViewUp (0,0,1)
@@ -89,14 +113,18 @@ def main(max_err=10.0):
 
     vtk_results.show_frames_vtk(results,renderers,fstart,fend,1,
                                 render_mode='ball_and_stick',
+                                
                                 labels=True,
-                                #orientation_corrected=False,
-                                orientation_corrected=True,
-                                #use_timestamps=True,
-                                #bounding_box=bounding_box,
+                                #labels=False,
+                                
+                                orientation_corrected=False,
+                                #orientation_corrected=True,
+                                
+                                bounding_box=False,
                                 #frame_no_offset=fstart+pre_frames,
                                 show_warnings=False,
                                 max_err=max_err,
+                                
                                 #color_change_frame=trig_fno,
                                 #ball_color1=ball_color1,
                                 #line_color1=ball_color1,
@@ -104,6 +132,7 @@ def main(max_err=10.0):
                                 #line_color2=ball_color2,
                                 #X_zero_frame=X_zero_frame,
                                 )
+    results.close()
     vtk_results.show_line(renderers,post[0],post[1],colors.black,post_diameter/2)
     vtk_results.interact_with_renWin(renWin)
     
