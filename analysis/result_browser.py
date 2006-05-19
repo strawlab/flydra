@@ -1508,7 +1508,7 @@ def recompute_3d_from_2d(results,
 
     See also redo_3d_calc() for single frames.
     
-    Last used 2006-05-16.
+    Last used 2006-05-19.
     """
     import flydra.reconstruct
     import flydra.reconstruct_utils as ru
@@ -1607,6 +1607,58 @@ def recompute_3d_from_2d(results,
         if hasattr(results.root,'data3d_fast'):
             print 'deleting old data3d_fast'
             results.removeNode( results.root.data3d_fast )
+
+        ############################################
+        def do_3d_stuff(do_d2,
+                        do_frame_no,
+                        do_idxs_in_comp,
+                        do_cam_id2camn,
+                        list_of_row_tup3d,
+                        absolutely_save=False
+                        ):
+            n_saved = 0            
+            if 0:
+                print 'computing 3d for frame %d'%do_frame_no
+                print 'do_idxs_in_comp',do_idxs_in_comp
+                print 'do_d2',do_d2
+                print
+            if len(do_d2)>=2:
+
+                (X, line3d, cam_ids_used,
+                 mean_dist) = ru.find_best_3d(reconstructor,do_d2)
+
+                camns_used = [ do_cam_id2camn[cam_id] for cam_id in cam_ids_used ]
+                camns_used_str = ' '.join(map(str,camns_used))
+                if line3d is None:
+                    line3d = (numpy.nan,numpy.nan,numpy.nan,
+                              numpy.nan,numpy.nan,numpy.nan)
+                if 0:
+                    print 'repr(camns_used)',repr(camns_used)
+                    print 'camns_used_str',camns_used_str
+                    print 'X',X
+                    print 'line3d',line3d
+                    print 'mean_dist',mean_dist
+                row_tup3d = (do_frame_no,X[0],X[1],X[2],
+                             line3d[0],line3d[1],line3d[2],
+                             line3d[3],line3d[4],line3d[5],
+                             time.time(),
+                             camns_used_str, mean_dist)
+                    
+                list_of_row_tup3d.append( row_tup3d )
+                # save to disk every 100 rows
+                if ((absolutely_save and len(list_of_row_tup3d)) or
+                    len(list_of_row_tup3d) >= 100):
+                    n_saved = len(list_of_row_tup3d)
+                    recarray = numarray.records.array(
+                        buffer=list_of_row_tup3d,
+                        formats=Info3DColFormats,
+                        names=Info3DColNames)
+                    data3d.append(recarray)
+                    data3d.flush()
+                    del list_of_row_tup3d[:]
+            return n_saved
+        ############################################
+
             
         # create new data3d
         if 0:
@@ -1624,17 +1676,19 @@ def recompute_3d_from_2d(results,
         n_2d_rows = len(all_frames)
         approx_chunksize = 10000
         next_chunk_start = 0
+        total_n_saved = 0
         while 1:
+            # ----- indexing calculations
             chunk_start = next_chunk_start
             if chunk_start>=n_2d_rows:
                 break
-            # chunk_stop is index
+            #        chunk_stop is index x[y] (not slice x[:y])
             chunk_stop = chunk_start+approx_chunksize 
             chunk_stop = min(chunk_stop,n_2d_rows-1) # make sure we're not off end
             next_chunk_stop = chunk_stop+1
             chunk_stop_idx = stably_sorted_idxs[chunk_stop]
             stop_frame = all_frames[chunk_stop_idx]
-            # find contiguous chunk of frames
+            # ----- find contiguous chunk of frames
             while 1:
                 if next_chunk_stop>=n_2d_rows:
                     break # at end of list
@@ -1650,8 +1704,7 @@ def recompute_3d_from_2d(results,
                 next_chunk_stop = chunk_stop+1
             next_chunk_start = chunk_stop+1
 
-            if 1:
-                chunk_start_idx = stably_sorted_idxs[chunk_start]
+            if 0:
                 print
                 print "chunk_start",  chunk_start,  stably_sorted_idxs[chunk_start],  all_frames[stably_sorted_idxs[chunk_start]]
                 print "chunk_stop-1", chunk_stop-1, stably_sorted_idxs[chunk_stop-1], all_frames[stably_sorted_idxs[chunk_stop-1]]
@@ -1661,62 +1714,69 @@ def recompute_3d_from_2d(results,
                 print "stop_frame",stop_frame
                 print
 
+            if 1:
+                #print
+                print 'chunk %d-%d (of %d total) approx frame %d'%(
+                    chunk_start, chunk_stop,n_2d_rows,stop_frame)
+
             chunk_idxs=stably_sorted_idxs[chunk_start:chunk_stop+1]
             
             # get contiguous block of 2D table
             first_chunk_idx = chunk_idxs.min()
             last_chunk_idx  = chunk_idxs.max()
-            if 1:
+            if 0:
                 print 'first_chunk_idx,last_chunk_idx+1',first_chunk_idx,last_chunk_idx+1
                 print 'last_chunk_idx+1-first_chunk_idx',last_chunk_idx+1-first_chunk_idx
             chunk = data2d[first_chunk_idx:last_chunk_idx+1]
             chunk_relative_idxs = chunk_idxs-first_chunk_idx
 
+            # intialize state variables for loop
+            # chunks are sorted by frames, so we don't have to carry
+            # over into next chunk
+            last_frame_no = None
+            d2 = {}
+            cam_id2camn = {}
+            did_camns = []
+            list_of_row_tup3d = []
+            idxs_in_comp = []
+
             for idx in chunk_relative_idxs:
                 row = chunk[idx]
                 
-                last_frame_no = None
-                d2 = {}
-                cam_id2camn = {}
-                did_camns = []
-                list_of_row_tup3d = []
                 frame_no = row['frame']
+                if 0:
+                    print
+                    print 'idx',idx
+                    print 'row',row
+                    print 'frame_no',     type(frame_no),      frame_no
+                    print 'last_frame_no',type(last_frame_no), last_frame_no
                 if frame_no != last_frame_no:
                     # previous frame data collection over -- compute 3D
-                    if len(d2):
-                        try:
-                            (X, line3d, cam_ids_used,
-                             mean_dist) = ru.find_best_3d(reconstructor,d2)
-                        except Exception, exc:
-                            print 'ERROR:',exc
-                            print
-                            continue
-                        camns_used = [ cam_id2camn[cam_id] for cam_id in cam_ids_used ]
-                        row_tup3d = (frame_no,X[0],X[1],X[2],
-                                     line3d[0],line3d[1],line3d[2],
-                                     line3d[3],line3d[4],line3d[5],
-                                     time.time(),
-                                     camns_used, mean_dist)
-                        list_of_row_tup3d.append( row_tup3d )
-                        # save to disk every 100 rows
-                        if len(list_of_row_tup3d) >= 100:
-                            recarray = numarray.records.array(
-                                buffer=list_of_row_tup3d,
-                                formats=Info3DColFormats,
-                                names=Info3DColNames)
-                            data3d.append(recarray)
-                            data3d.flush()
-                            list_of_row_tup3d = []
-
                     # clear data collection apparatus
+                    
                     #print 'frame_no',frame_no,'(% 5d of %d)'%(count,n_rows)
+                    do_d2 = d2 # save for 3D calc
+                    do_frame_no = last_frame_no
+                    do_idxs_in_comp = idxs_in_comp
+                    do_cam_id2camn = cam_id2camn
+                    
                     last_frame_no = frame_no
                     d2 = {}
                     cam_id2camn = {} # must be recomputed each frame
                     did_camns = []
+                    idxs_in_comp = []
+
+                    if do_frame_no is not None:
+                        total_n_saved += do_3d_stuff(do_d2,
+                                                     do_frame_no,
+                                                     do_idxs_in_comp,
+                                                     do_cam_id2camn,
+                                                     list_of_row_tup3d)
                     
                 # collect all data from data2d row for this frame
                 # load all 2D data
+                idxs_in_comp.append(int(idx))
+                
                 camn = row['camn']
                 if camn in did_camns:
                     # only take 1st found point... XXX should fix (with Kalman?)
@@ -1725,126 +1785,29 @@ def recompute_3d_from_2d(results,
                 did_camns.append(camn)
                 cam_id = camn2cam_id[camn]
                 cam_id2camn[cam_id] = camn
-                d2[cam_id] = (row['x'], row['y'],
-                              row['area'], row['slope'],
-                              row['eccentricity'],
-                              row['p1'], row['p2'],
-                              row['p3'], row['p4'])
-
-        if 0:
-            
-            data2d_in_ram = data2d[:]
-            all_frames = data2d_in_ram.field('frame')
-            if PT.__version__ <= '1.3.1':
-                data2d_ordered_idxs = numarray.argsort(all_frames)
-            else:
-                raise NotImplementedError('someday this will be a numpy path.')
-
-            n_rows = len(data2d_ordered_idxs)
-            last_frame_no = None
-            d2 = {}
-            cam_id2camn = {}
-            did_camns = []
-            list_of_row_tup3d = []
-            for count, data2d_idx in enumerate(data2d_ordered_idxs):
-                frame_no = all_frames[data2d_idx]
-                if frame_no != last_frame_no:
-                    # previous frame data collection over -- compute 3D
-                    if len(d2):
-                        try:
-                            (X, line3d, cam_ids_used,
-                             mean_dist) = ru.find_best_3d(reconstructor,d2)
-                        except Exception, exc:
-                            print 'ERROR:',exc
-                            print
-                            continue
-                        camns_used = [ cam_id2camn[cam_id] for cam_id in cam_ids_used ]
-                        row_tup3d = (frame_no,X[0],X[1],X[2],
-                                     line3d[0],line3d[1],line3d[2],
-                                     line3d[3],line3d[4],line3d[5],
-                                     time.time(),
-                                     camns_used, mean_dist)
-                        list_of_row_tup3d.append( row_tup3d )
-                        # save to disk every 100 rows
-                        if len(list_of_row_tup3d) >= 100:
-                            recarray = numarray.records.array(
-                                buffer=list_of_row_tup3d,
-                                formats=Info3DColFormats,
-                                names=Info3DColNames)
-                            data3d.append(recarray)
-                            data3d.flush()
-                            list_of_row_tup3d = []
-
-                    # clear data collection apparatus
-                    print 'frame_no',frame_no,'(% 5d of %d)'%(count,n_rows)
-                    last_frame_no = frame_no
-                    d2 = {}
-                    cam_id2camn = {} # must be recomputed each frame
-                    did_camns = []
-
-                # collect all data from data2d row for this frame
-                x = data2d_in_ram[data2d_idx]
-
-                # load all 2D data
-                camn = x.field('camn')
-                if camn in did_camns:
-                    # only take 1st found point... XXX should fix (with Kalman?)
-                    continue
-
-                did_camns.append(camn)
-                cam_id = camn2cam_id[camn]
-                cam_id2camn[cam_id] = camn
-                d2[cam_id] = (x.field('x'), x.field('y'),
-                              x.field('area'), x.field('slope'),
-                              x.field('eccentricity'),
-                              x.field('p1'), x.field('p2'),
-                              x.field('p3'), x.field('p4'))
-
-    ##            if not overwrite:
-    ##                continue
-
-    ##            # find old row
-    ##            old_nrow = None
-    ##            #for row in data3d.where( data3d.cols.frame == frame_no ):
-    ##            for row in data3d:
-    ##                if row['frame'] != frame_no:
-    ##                    continue
-
-    ##                if old_nrow is not None:
-    ##                    raise RuntimeError('more than row with frame number %d in data3d'%frame_no)
-    ##                old_nrow = row.nrow()
-
-    ##            # modify row
-    ##            if line3d is None:
-    ##                line3d = [nan]*6 # fill with nans
-    ##            cam_nos_used_str = ' '.join( map(str, camns_used) )
-    ##            new_row = []
-    ##            new_row_dict = {}
-    ##            for colname in data3d.colnames:
-    ##                if colname == 'frame': new_row.append( frame_no )
-    ##                elif colname == 'x': new_row.append( X[0] )
-    ##                elif colname == 'y': new_row.append( X[1] )
-    ##                elif colname == 'z': new_row.append( X[2] )
-    ##                elif colname == 'p0': new_row.append( line3d[0] )
-    ##                elif colname == 'p1': new_row.append( line3d[1] )
-    ##                elif colname == 'p2': new_row.append( line3d[2] )
-    ##                elif colname == 'p3': new_row.append( line3d[3] )
-    ##                elif colname == 'p4': new_row.append( line3d[4] )
-    ##                elif colname == 'p5': new_row.append( line3d[5] )
-    ##                elif colname == 'timestamp': new_row.append( 0.0 )
-    ##                elif colname == 'camns_used': new_row.append(cam_nos_used_str)
-    ##                elif colname == 'mean_dist': new_row.append(mean_dist)
-    ##                else: raise KeyError("don't know column name '%s'"%colname)
-    ##                new_row_dict[colname] = new_row[-1]
-    ##            if old_nrow is None:
-    ##                for k,v in new_row_dict.iteritems():
-    ##                    data3d.row[k] = v
-    ##                data3d.row.append()
-    ##            else:
-    ##                raise RuntimeError('This code path disabled because it de-orders the table')
-    ##                #data3d[old_nrow] = new_row
-    ##            data3d.flush()
-
+                rx = row['x']
+                if not numpy.isnan(rx):
+                    d2[cam_id] = (rx, row['y'],
+                                  row['area'], row['slope'],
+                                  row['eccentricity'],
+                                  row['p1'], row['p2'],
+                                  row['p3'], row['p4'])
+                    
+            # repeat 3d calcs on last idx in chunk:
+            #print 'frame_no',frame_no,'(% 5d of %d)'%(count,n_rows)
+            do_d2 = d2 # save for 3D calc
+            do_frame_no = last_frame_no
+            do_idxs_in_comp = idxs_in_comp
+            do_cam_id2camn = cam_id2camn
+            total_n_saved += do_3d_stuff(do_d2,
+                                         do_frame_no,
+                                         do_idxs_in_comp,
+                                         do_cam_id2camn,
+                                         list_of_row_tup3d,
+                                         absolutely_save=True)
+            print 'running total: %d 3d frames found'%(total_n_saved,)
+        print     '        total: %d 3d frames found'%(total_n_saved,)
+      
 def get_reconstructor(results):
     import flydra.reconstruct
     return flydra.reconstruct.Reconstructor(results)
