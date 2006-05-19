@@ -4,7 +4,6 @@ opj=os.path.join
 import numpy as nx
 import numpy
 svd = numpy.linalg.svd
-# Numeric (for speed)
 import numpy as fast_nx
 fast_svd = numpy.linalg.svd
 import flydra.reconstruct_utils as reconstruct_utils # in pyrex/C for speed
@@ -217,6 +216,54 @@ class Reconstructor:
             self.cam_combinations_by_size.setdefault(len(cc),[]).append(cc)
         self.cam_ids = cam_ids
 
+    def save_to_h5file(self, h5file, OK_to_delete_old=False):
+        """create groups with calibration information"""
+
+        import tables as PT # pytables
+        class AdditionalInfo(PT.IsDescription):
+            cal_source_type      = PT.StringCol(20)
+            cal_source           = PT.StringCol(80)
+            minimum_eccentricity = PT.Float32Col() # record what parameter was used during reconstruction
+        pytables_filt = numpy.asarray
+        ct = h5file.createTable # shorthand
+        root = h5file.root # shorthand
+        
+        cam_ids = self.Pmat.keys()
+        cam_ids.sort()
+
+        if OK_to_delete_old:
+            if hasattr(root,'calibration'):
+                h5file.removeNode( root.calibration, recursive=True )
+        cal_group = h5file.createGroup(root,'calibration')
+            
+        pmat_group = h5file.createGroup(cal_group,'pmat')
+        for cam_id in cam_ids:
+            h5file.createArray(pmat_group, cam_id,
+                               pytables_filt(self.get_pmat(cam_id)))
+        res_group = h5file.createGroup(cal_group,'resolution')
+        for cam_id in cam_ids:
+            res = self.get_resolution(cam_id)
+            h5file.createArray(res_group, cam_id, pytables_filt(res))
+
+        intlin_group = h5file.createGroup(cal_group,'intrinsic_linear')
+        for cam_id in cam_ids:
+            intlin = self.get_intrinsic_linear(cam_id)
+            h5file.createArray(intlin_group, cam_id, pytables_filt(intlin))
+
+        intnonlin_group = h5file.createGroup(cal_group,'intrinsic_nonlinear')
+        for cam_id in cam_ids:
+            h5file.createArray(intnonlin_group, cam_id,
+                               pytables_filt(self.get_intrinsic_nonlinear(cam_id)))
+
+        h5additional_info = ct(cal_group,'additional_info', AdditionalInfo,
+                               '')
+        row = h5additional_info.row
+        row['cal_source_type'] = self.cal_source_type
+        row['cal_source'] = self.cal_source
+        row['minimum_eccentricity'] = MINIMUM_ECCENTRICITY
+        row.append()
+        h5additional_info.flush()
+                
     def get_resolution(self, cam_id):
         return self.Res[cam_id]
 

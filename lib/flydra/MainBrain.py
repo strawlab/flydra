@@ -105,11 +105,6 @@ class MovieInfo(PT.IsDescription):
     approx_start_frame = PT.Int32Col(pos=2)
     approx_stop_frame  = PT.Int32Col(pos=3)
 
-class AdditionalInfo(PT.IsDescription):
-    cal_source_type      = PT.StringCol(20)
-    cal_source           = PT.StringCol(80)
-    minimum_eccentricity = PT.Float32Col() # record what parameter was used during reconstruction
-
 class Info3D(PT.IsDescription):
     frame      = PT.Int32Col(pos=0)
     
@@ -137,7 +132,7 @@ class TextLogDescription(PT.IsDescription):
     
 # allow rapid building of numarray.records.RecArray:
 Info2DColNames = PT.Description(Info2D().columns)._v_names
-Info2DColFormats = [PT.Description(Info2D().columns)._v_stypes[n] for n in Info2DColNames]
+Info2DColFormats = PT.Description(Info2D().columns)._v_nestedFormats
 
 def encode_data_packet( corrected_framenumber,
                         line3d_valid,
@@ -1513,37 +1508,7 @@ class MainBrain(object):
         self.h5textlog = ct(root,'textlog', TextLogDescription,
                             "text log")
         if self.reconstructor is not None:
-            cal_group = self.h5file.createGroup(root,'calibration')
-            
-            pmat_group = self.h5file.createGroup(cal_group,'pmat')
-            for cam_id in self.remote_api.external_get_cam_ids():
-                self.h5file.createArray(pmat_group, cam_id,
-                                        pytables_filt(self.reconstructor.get_pmat(cam_id)))
-            res_group = self.h5file.createGroup(cal_group,'resolution')
-            for cam_id in self.remote_api.external_get_cam_ids():
-                res = self.reconstructor.get_resolution(cam_id)
-                self.h5file.createArray(res_group, cam_id, pytables_filt(res))
-                                        
-            intlin_group = self.h5file.createGroup(cal_group,'intrinsic_linear')
-            for cam_id in self.remote_api.external_get_cam_ids():
-                intlin = self.reconstructor.get_intrinsic_linear(cam_id)
-                # while pytables doesn't yet support numpy:
-                self.h5file.createArray(intlin_group, cam_id, pytables_filt(intlin))
-                                        
-            intnonlin_group = self.h5file.createGroup(cal_group,'intrinsic_nonlinear')
-            for cam_id in self.remote_api.external_get_cam_ids():
-                self.h5file.createArray(intnonlin_group, cam_id,
-                                        pytables_filt(self.reconstructor.get_intrinsic_nonlinear(cam_id)))
-
-            h5additional_info = ct(cal_group,'additional_info', AdditionalInfo,
-                                        '')
-            row = h5additional_info.row
-            row['cal_source_type'] = self.reconstructor.cal_source_type
-            row['cal_source'] = self.reconstructor.cal_source
-            row['minimum_eccentricity'] = flydra.reconstruct.MINIMUM_ECCENTRICITY
-            row.append()
-            h5additional_info.flush()
-                
+            self.reconstructor.save_to_h5file(self.h5file)
             self.h5data3d_best = ct(root,'data3d_best', Info3D,
                                     "3d data (best)",
                                     expectedrows=expected_rows)
