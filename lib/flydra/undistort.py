@@ -191,7 +191,7 @@ class CachedUndistorter:
             self.vals[val] = indexes # cache for next time
         ind_new, ind_lu, ind_ru, ind_ld, ind_rd, a1, a2, a3, a4 = indexes
 
-        # put I in matlab uni-dimensional index format
+        # put image into matlab uni-dimensional index format
         Ir = nx.ravel(nx.transpose(I))
 
         Irec = 255.0*nx.ones((nr*nc,))
@@ -200,7 +200,7 @@ class CachedUndistorter:
         # convert to UInt8 format
         Irec = Irec.astype(nx.UInt8)
 
-        # convert matlab unidimensional format into numarray format
+        # convert matlab unidimensional format into numpy format
         Irec = nx.reshape(Irec,(nc,nr))
         Irec = nx.transpose(Irec)
 
