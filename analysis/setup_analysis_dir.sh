@@ -30,3 +30,5 @@ ln -s ~/kookaburra/flydra/analysis/landing_02_vtk.py
 ln -s ~/kookaburra/flydra/analysis/landing_03_findem.py
 
 ln -s ~/kookaburra/flydra/analysis/ukine.py
+ln -s ~/kookaburra/flydra/analysis/ukine_line.py
+ln -s ~/kookaburra/flydra/analysis/ukine_redisplay.py

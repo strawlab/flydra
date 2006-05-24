@@ -7,19 +7,20 @@ import numpy
 import numarray
 import flydra.undistort as undistort
 
-# base file names
-base_fname = 'landing_20060502_full_bg.fmf'
-# hdf5 file containing calibration data
-cal_source = 'DATA20060502_211811.h5'
+# last used 2006-05-19
 
-verts = [( 466.8, 191.6, 15.8),# bottom
-        ( 467.6, 212.7, 223.4)] # top
+# base file names
+base_fname = 'full_20060516_191746_%s_bg.fmf'
+# hdf5 file containing calibration data
+cal_source = 'newDATA20060516_194920.h5'
+verts = [( 443.9, 247.1,  7.8),
+         ( 456.9, 243.2, 226.7)
+         ]
 linesegs = [[0,1]]
 
 # Pluecker coordinates
-lines = [(0.094779836509674989, 0.99467657888647865, 0.022775459998087867,
-          -0.033385095420257797, 0.00087061695304787039, -0.0011143866774977608)]
-intersect_line_planes = [('yz',466)]
+lines = [(-0.42616909392791952, -0.9033477045229068, -0.045123578401282435,
+          0.017456206233934717, -0.0012089233634138012, 0.0007142508901631997)]
 
 cams = ['cam%d'%i for i in range(1,6)]
 
@@ -35,7 +36,7 @@ if 1:
                 if cam_id is not None:
                     raise RuntimeError('>1 camera per host not yet supported')
                 cam_id = c
-        fname = os.path.join(cam,base_fname)
+        fname = base_fname%cam_id
 
         fmf = FlyMovieFormat.FlyMovie(fname)
         frame,timestamp = fmf.get_frame(0)
@@ -43,32 +44,13 @@ if 1:
 
         pylab.figure()
         pylab.title( cam_id )
-        if 0:
-            pylab.imshow(frame,origin='lower')
-            verts2d = [ recon.find2d(cam_id,X,distorted=True) for X in verts ]
-            for lineseg in linesegs:
-                x = [ verts2d[i][0] for i in lineseg ]
-                y = [ verts2d[i][1] for i in lineseg ]
-                pylab.plot( x, y, 'w-' )
-        else:
-            # undistort image
-            if 0:
-                undistorted = flydra.undistort.undistort(recon,frame,cam_id)
-            else:
-                #naa = numarray.asarray
-                #naa = numpy.asarray
-                intrin = recon.get_intrinsic_linear(cam_id)
-                k = recon.get_intrinsic_nonlinear(cam_id)
-                f = intrin[0,0], intrin[1,1] # focal length
-                c = intrin[0,2], intrin[1,2] # camera center
-                im = undistort.rect(frame, f=f, c=c, k=k)
-                im = numpy.asarray(im)
-                undistorted = im.astype(numpy.UInt8)
-            pylab.imshow(undistorted,origin='lower')
-            verts2d = [ recon.find2d(cam_id,X,distorted=False) for X in verts ]
-            for lineseg in linesegs:
-                x = [ verts2d[i][0] for i in lineseg ]
-                y = [ verts2d[i][1] for i in lineseg ]
-                pylab.plot( x, y, 'w-' )
+        # undistort image
+        undistorted = flydra.undistort.undistort(recon,frame,cam_id)
+        pylab.imshow(undistorted,origin='lower')
+        verts2d = [ recon.find2d(cam_id,X,distorted=False) for X in verts ]
+        for lineseg in linesegs:
+            x = [ verts2d[i][0] for i in lineseg ]
+            y = [ verts2d[i][1] for i in lineseg ]
+            pylab.plot( x, y, 'w-' )
         
 pylab.show()

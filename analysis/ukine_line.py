@@ -7,9 +7,9 @@ import numpy
 nan = numpy.nan
 
 # base file names
-base_fname = 'landing_20060502_full_bg.fmf'
+base_fname = 'full_20060516_191746_%s_bg.fmf'
 # hdf5 file containing calibration data
-cal_source = 'DATA20060502_211811.h5'
+cal_source = 'newDATA20060516_194920.h5'
 
 cams = ['cam%d'%i for i in range(1,6)]
 
@@ -39,7 +39,7 @@ for cam in cams:
             if cam_id is not None:
                 raise RuntimeError('>1 camera per host not yet supported')
             cam_id = c
-    fname = os.path.join(cam,base_fname)
+    fname = base_fname%cam_id
     print >> sys.stderr, cam_id,fname
     
     fmf = FlyMovieFormat.FlyMovie(fname)
