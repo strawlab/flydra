@@ -155,8 +155,11 @@ def status(status_string):
     print " status:",status_string
     sys.stdout.flush()
 
-def save_ascii_matrix(filename,m):
-    fd=open(filename,mode='wb')
+def save_ascii_matrix(thefile,m):
+    if hasattr(thefile,'write'):
+        fd=thefile
+    else:
+        fd=open(thefile,mode='wb')
     for row in m:
         fd.write( ' '.join(map(str,row)) )
         fd.write( '\n' )
@@ -2544,6 +2547,14 @@ def emit_recalibration_data(results,calib_dir):
     seq = (0, int(1.3e6), 100)
     seqs = [seq]
     reconstructor = flydra.reconstruct.Reconstructor(results)
+
+    if 1:
+        cam_centers = nx.asarray([reconstructor.get_camera_center(cam_id)[:,0]
+                                  for cam_id in reconstructor.get_cam_ids()])
+        print 'OLD camera centers (may be useful for recalibration):'
+        save_ascii_matrix(sys.stdout,cam_centers)
+        print
+    
     data3d = results.root.data3d_best
     data2d = results.root.data2d
     max_err = 10

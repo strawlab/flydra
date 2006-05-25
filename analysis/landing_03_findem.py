@@ -54,7 +54,7 @@ def save_post_distances(results,post,
     table.flush()
     
 if 1:
-    if 1:
+    if 0:
         # 20060515
         filename = 'DATA20060515_190905.h5'
         post = [( 471.5, 191.2, 22.7),
@@ -68,7 +68,20 @@ if 1:
         
         good_start = datetime.datetime(2006, 5, 15, 12, 0, 0, tzinfo=pacific)
         good_stop  = datetime.datetime(2006, 5, 16,  8, 0, 0, tzinfo=pacific)
+    else:
+        filename = 'DATA20060315_170142.h5'
+        
+        # do for all frames
+        good_start = None
+        good_stop  = None
+        
+        # from ukine with recalibration
+        post = [( 864.1, 230.0, 17.6) ,
+                ( 857.2, 225.2, 221.8)]
         
     results = result_browser.get_results(filename)
-    save_post_distances(results,post,start=good_start,stop=good_stop)
+    if not hasattr( results.root,'post_distance'):
+        save_post_distances(results,post,start=good_start,stop=good_stop)
+
+    
     results.close()

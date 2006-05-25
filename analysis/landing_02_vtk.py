@@ -14,11 +14,7 @@ def main(max_err=10.0):
                 ( 467.6, 212.7, 223.4)] # top
     elif 1:
         filename = 'DATA20060315_170142.h5'
-        # guess 20060325
-        x=820
-        y=199
-        post = [( x, y, 0),# bottom
-                ( x, y, 205)] # top
+        # from ukine with recalibration
         post = [( 864.1, 230.0, 17.6) ,
                 ( 857.2, 225.2, 221.8)]
         flight = 'F'
@@ -61,7 +57,7 @@ def main(max_err=10.0):
             fend = 374720
     elif 0:
         # 20060516 head fixed
-        filename = 'DATA20060516_194920.h5'
+        filename = 'newDATA20060516_194920.h5'
         post = [( 443.9, 247.1,  7.8),
                 ( 456.9, 243.2, 226.7)
                 ]
