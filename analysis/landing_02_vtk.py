@@ -12,13 +12,15 @@ def main(max_err=10.0):
         filename = 'DATA20060502_211811.h5'
         post = [( 466.8, 191.6, 15.8),# bottom
                 ( 467.6, 212.7, 223.4)] # top
-    elif 0:
+    elif 1:
         filename = 'DATA20060315_170142.h5'
         # guess 20060325
         x=820
         y=199
         post = [( x, y, 0),# bottom
                 ( x, y, 205)] # top
+        post = [( 864.1, 230.0, 17.6) ,
+                ( 857.2, 225.2, 221.8)]
         flight = 'F'
         if flight=='A':
             # flight A.  bounce off post!!
@@ -57,7 +59,7 @@ def main(max_err=10.0):
         elif 1:
             fstart = 374420
             fend = 374720
-    elif 1:
+    elif 0:
         # 20060516 head fixed
         filename = 'DATA20060516_194920.h5'
         post = [( 443.9, 247.1,  7.8),
