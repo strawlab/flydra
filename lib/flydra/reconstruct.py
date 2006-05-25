@@ -115,7 +115,7 @@ def pluecker_from_verts(A,B):
 
 def pmat2cam_center(P):
     assert P.shape == (3,4)
-    determinant = numpy.linalg.determinant
+    determinant = numpy.linalg.det
     
     # camera center
     X = determinant( [ P[:,1], P[:,2], P[:,3] ] )
@@ -220,6 +220,9 @@ class Reconstructor:
             self.cam_combinations_by_size.setdefault(len(cc),[]).append(cc)
         self.cam_ids = cam_ids
 
+    def get_cam_ids(self):
+        return self.cam_ids
+
     def save_to_h5file(self, h5file, OK_to_delete_old=False):
         """create groups with calibration information"""
 
@@ -273,6 +276,9 @@ class Reconstructor:
 
     def get_pmat(self, cam_id):
         return self.Pmat[cam_id]
+    
+    def get_camera_center(self, cam_id):
+        return pmat2cam_center(self.Pmat[cam_id])
 
     def get_intrinsic_linear(self, cam_id):
         return self._helper[cam_id].get_K()
