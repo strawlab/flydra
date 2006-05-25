@@ -100,6 +100,10 @@ def line_direction(Lcoords):
     return norm_vec(U)
 
 def pluecker_from_verts(A,B):
+    """
+
+    See Hartley & Zisserman (2003) p. 70
+    """
     if len(A)==3:
         A = A[0], A[1], A[2], 1.0
     if len(B)==3:
