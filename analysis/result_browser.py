@@ -299,7 +299,7 @@ def get_camn_and_frame(results, cam, remote_timestamp):
 ##        possible_camns = [camn]
         
     found = False
-    if PT.__version__ <= '1.3.1':
+    if PT.__version__ <= '1.3.2':
         #if type(remote_timestamp)==numpy.float64scalar:
         remote_timestamp=float(remote_timestamp)
     for row in results.root.data2d.where( results.root.data2d.cols.timestamp==remote_timestamp ):
@@ -783,7 +783,7 @@ def plot_movie_2d(results,
 
             table_name = 'camn'+str(camn)
             table = getattr(results.root.cam_by_cam_2d,table_name)
-            if PT.__version__ <= '1.3.1':
+            if PT.__version__ <= '1.3.2':
                 fstart = int(fstart)
                 fstop = int(fstop)
             for row in table.where( fstart <= table.cols.frame <= fstop ):
@@ -2541,7 +2541,7 @@ def emit_recalibration_data(results,calib_dir):
     
     #seq = (2412304, 2412730, 5)
     #seq = (0, int(6e6), 5)
-    seq = (0, int(2.3e6), 5)
+    seq = (0, int(1.3e6), 100)
     seqs = [seq]
     reconstructor = flydra.reconstruct.Reconstructor(results)
     data3d = results.root.data3d_best
@@ -2564,10 +2564,12 @@ def emit_recalibration_data(results,calib_dir):
         for i in range(len(framelist)):
             frame_idx = frame_idxs[i]
             desired_frame = framelist[i]
+            if frame_idx >= len(coords_frames):
+                # desired frame isn't in data3d
+                continue
             frame = coords_frames[ frame_idx ]
             if frame != desired_frame:
-                #raise ValueError("frame mismatch")
-                #print "frame mismatch"
+                # sanity check
                 continue
             
             camns_used = map(int,coords_camns_used[frame_idx].split())
@@ -2577,7 +2579,7 @@ def emit_recalibration_data(results,calib_dir):
                 #print 'row:',data3d[coords[frame_idx]]
                 cam_ids = [camn2cam_id[camn] for camn in camns_used]
                 row_dict = {}
-                if PT.__version__ <= '1.3.1':
+                if PT.__version__ <= '1.3.2':
                     oldframe=frame
                     frame=int(frame)
                     assert frame==oldframe # check for rounding error
@@ -2604,30 +2606,49 @@ def emit_recalibration_data(results,calib_dir):
     # make output format matrices
     IdMat = []
     points = []
+    useful_points = 0
+
+    count_by_cam_id = {}
+    for cam_id in all_cam_ids:
+        count_by_cam_id[cam_id]=0
+        
     for row_dict in to_output:
         ids = []
         save_points = []
+        n_cams = 0
+        this_cam_ids = []
         for cam_id in all_cam_ids:
             if cam_id in row_dict:
                 pt = row_dict[cam_id]
                 save_pt = pt[0],pt[1],1.0
                 id = 1
+                n_cams += 1
+                this_cam_ids.append(cam_id)
             else:
                 save_pt = nan,nan,nan
                 id = 0
             ids.append(id)
             save_points.extend(save_pt)
+        if n_cams>=3:
+            useful_points += 1
+            for cam_id in this_cam_ids:
+                count_by_cam_id[cam_id]+=1
+
         IdMat.append(ids)
         points.append( save_points )
-        
+
+    print '  %d points total with 3 or more cameras'%useful_points
+    for cam_id in all_cam_ids:
+        print '    %s: %d points with 3 or more cameras'%(cam_id,count_by_cam_id[cam_id])
+    print 'saving to disk...'
+
     IdMat = nx.transpose(nx.array(IdMat))
     points = nx.transpose(nx.array(points))
 
-    width = 656; height=491
-    print 'XXX hack to set width and height to %d, %d'%(width,height)
+    # resolution
     Res = []
-    for i in range(len(all_cam_ids)):
-        Res.append( [width,height] )
+    for cam_id in all_cam_ids:
+        Res.append( reconstructor.get_resolution(cam_id) )
     Res = nx.array( Res )
 
     # save the data
@@ -3386,7 +3407,7 @@ if __name__=='__main__':
         results.close()
         del results
         
-    results = get_results('newDATA20060516_194920.h5',mode='r+')
+    results = get_results('DATA20060315_170142.h5',mode='r+')
     #del results.root.exact_movie_info
     #results.close()
     #make_exact_movie_info2(results)
