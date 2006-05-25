@@ -1,14 +1,20 @@
 import glob, os, sys
 import FlyMovieFormat
+import matplotlib
+matplotlib.use('GTKAgg') # TkAgg doesn't work, at least without ioff(), which I haven't tried
 import pylab
 import tables
 import flydra.reconstruct
 import numpy
 
 # base file names
-base_fname = 'full_20060516_191746_%s_bg.fmf'
-# hdf5 file containing calibration data
-cal_source = 'newDATA20060516_194920.h5'
+if 1:
+    base_fname = 'full_20060315_202300_%s_bg.fmf'
+    cal_source = 'DATA20060315_170142.h5'
+elif 0:
+    base_fname = 'full_20060516_191746_%s_bg.fmf'
+    # hdf5 file containing calibration data
+    cal_source = 'newDATA20060516_194920.h5'
 
 h5file = tables.openFile(cal_source,mode='r')
 recon = flydra.reconstruct.Reconstructor(h5file)
