@@ -318,7 +318,7 @@ class ObjectiveFunctionPosition:
         PDs = nx.array([ _pd_finder.eval_pd(i) for i in range(len(P)) ])
         return PDs
 
-def smooth_position( P, delta_t, alpha, lmbda, eps ):
+def smooth_position( P, delta_t, alpha, lmbda, eps, verbose=False ):
     """smooth a sequence of positions
 
     see the following citation for details:
@@ -353,6 +353,8 @@ def smooth_position( P, delta_t, alpha, lmbda, eps ):
         del_F = of.get_del_F(Pstar)
         err = nx.sum( nx.sum( del_F**2 ) )
         Pstar = Pstar - lmbda*del_F
+        if verbose:
+            print 'err %g (eps %g)'%(err,eps)
     return Pstar
 
 class QuatSeq(list):

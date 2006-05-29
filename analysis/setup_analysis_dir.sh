@@ -25,6 +25,7 @@ ln -s ~/kookaburra/flydra/analysis/dark_3_stats.py
 
 ln -s ~/kookaburra/flydra/analysis/create_movie.sh
 
+ln -s ~/kookaburra/flydra/analysis/landing_00_parse_log.py
 ln -s ~/kookaburra/flydra/analysis/landing_01.py
 ln -s ~/kookaburra/flydra/analysis/landing_02_vtk.py
 ln -s ~/kookaburra/flydra/analysis/landing_03_findem.py
@@ -32,3 +33,8 @@ ln -s ~/kookaburra/flydra/analysis/landing_03_findem.py
 ln -s ~/kookaburra/flydra/analysis/ukine.py
 ln -s ~/kookaburra/flydra/analysis/ukine_line.py
 ln -s ~/kookaburra/flydra/analysis/ukine_redisplay.py
+
+ln -s ~/kookaburra/flydra/analysis/point_n_click.py
+
+ln -s ~/kookaburra/flydra/analysis/highspeed_01_view_flydra_through_photron.py
+ln -s ~/kookaburra/flydra/analysis/find_cam_matrix.py

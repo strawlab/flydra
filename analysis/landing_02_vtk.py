@@ -1,6 +1,5 @@
 import result_browser
 import numpy
-import pylab
 import vtk_results
 import vtk.util.colors as colors
 
@@ -17,7 +16,7 @@ def main(max_err=10.0):
         # from ukine with recalibration
         post = [( 864.1, 230.0, 17.6) ,
                 ( 857.2, 225.2, 221.8)]
-        flight = 'F'
+        flight = 'A'
         if flight=='A':
             # flight A.  bounce off post!!
             fstart = 148500
@@ -65,14 +64,13 @@ def main(max_err=10.0):
             fstart = 345796
             fend = 345998
     
-        
     results = result_browser.get_results(filename,mode='r')
     post_top = numpy.array(post[1])
     
     renWin, renderers = vtk_results.init_vtk()#stereo=True)
     if 1:
         camera = renderers[0].GetActiveCamera()
-        if 1:
+        if 0:
             camera.SetFocalPoint (*tuple(post_top))
             camera.SetPosition (*tuple(post_top+numpy.array((100.0,0,0))))
             camera.SetViewUp (0,0,1)
@@ -99,7 +97,7 @@ def main(max_err=10.0):
             camera.SetViewUp (0.0097668683103851132, 0.0021127590084137594, 0.99995007101993849)
             camera.SetClippingRange (8.090446917224277, 809.04469172242773)
             camera.SetParallelScale(319.400653668)
-        elif 1:
+        elif 0:
             camera.SetParallelProjection(0)
             camera.SetFocalPoint (803.1303085674632, 187.51926171773758, 153.83304155478751)
             camera.SetPosition (848.74023523537619, 299.96934187210161, 152.04723226142741)
@@ -107,6 +105,41 @@ def main(max_err=10.0):
             camera.SetViewUp (0.013526602921373277, 0.010392185583130462, 0.99985450616187799)
             camera.SetClippingRange (7.8983022785496155, 789.83022785496155)
             camera.SetParallelScale(319.400653668)
+        elif 1:
+            import flydra.reconstruct
+            import flydra.geom
+            if 1:
+                cam_cal_filename = 'photron.scc'
+                scci = flydra.reconstruct.SingleCameraCalibration_fromfile(cam_cal_filename)
+            else:
+                recon = flydra.reconstruct.Reconstructor(results)
+                scci = recon.get_SingleCameraCalibration('cam2:0')
+                #scci = recon.get_SingleCameraCalibration('cam1_0')
+            center = scci.get_cam_center()[:,0]
+            up = scci.get_up_vector()
+            optical_axis = scci.get_optical_axis()
+
+            if 1:
+                # find point on optical axis closest to post top
+                post_top_tt = flydra.geom.ThreeTuple( post_top )
+                shifted_optical_axis = optical_axis.translate(-post_top_tt)
+                nearest_post_top_shifted = shifted_optical_axis.closest()
+                nearest_post_top = nearest_post_top_shifted + post_top_tt
+                focal = nearest_post_top
+            else:
+                tunnel_midplane = flydra.geom.Plane(
+                    flydra.geom.ThreeTuple((0,-1,0)), 150)
+                focal = optical_axis.intersect(tunnel_midplane)
+
+            print 'center',center
+            print 'focal',focal
+            print 'up',up
+
+            camera.SetPosition(*center)
+            camera.SetFocalPoint(*focal)
+            camera.SetViewUp(*up)
+            camera.SetParallelProjection(0)
+            camera.SetViewAngle(15)
 
     vtk_results.show_frames_vtk(results,renderers,fstart,fend,1,
                                 render_mode='ball_and_stick',
