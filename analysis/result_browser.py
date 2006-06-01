@@ -182,9 +182,10 @@ def dougs_subplot(n,n_rows=2,n_cols=3):
     col = n % n_cols
     
     x_space = (0.02/n_cols)
-    y_space = 0.0125
+    #y_space = 0.0125
+    y_space = 0.07
 
-    y_size = 0.48
+    y_size = 0.42
     
     left = col*(1.0/n_cols) + x_space
     bottom = row*y_size + y_space
@@ -302,10 +303,11 @@ def get_camn_and_frame(results, cam, remote_timestamp):
 ##        possible_camns = [camn]
         
     found = False
+    data2d = results.root.data2d_distorted
     if PT.__version__ <= '1.3.2':
         #if type(remote_timestamp)==numpy.float64scalar:
         remote_timestamp=float(remote_timestamp)
-    for row in results.root.data2d.where( results.root.data2d.cols.timestamp==remote_timestamp ):
+    for row in data2d.where( data2d.cols.timestamp==remote_timestamp ):
         test_camn = row['camn']
         if test_camn==camn:
             frame = row['frame']
@@ -1361,7 +1363,7 @@ class CachingMovieOpener:
 
         cam_info = results.root.cam_info
         movie_info = results.root.movie_info
-        data2d = results.root.data2d
+#        data2d = results.root.data2d
         data3d = results.root.data3d_best
 
         if isinstance(cam,int): # camn
@@ -1408,13 +1410,6 @@ class CachingMovieOpener:
             height,width = small_frame.shape
 
             left,bottom = smd.get_left_bottom(movie_timestamp)
-            if 0:
-                # find offset
-                table = results.root.exact_roi_movie_info
-                for r in table.where(table.cols.timestamp==movie_timestamp):
-                    if r['camn']==camn:
-                        left = r['left']
-                        bottom = r['bottom']
             frame = bg_frame.copy()
             frame[bottom:bottom+height,left:left+width] = small_frame
         
@@ -1522,7 +1517,7 @@ def recompute_3d_from_2d(results,
     Info3DColFormats = PT.Description(mb.Info3D().columns)._v_nestedFormats
     reconstructor = flydra.reconstruct.Reconstructor(results)
 
-    data2d = results.root.data2d
+    data2d = results.root.data2d_distorted
     cam_info = results.root.cam_info
 
     camn2cam_id = {}
@@ -1664,10 +1659,6 @@ def recompute_3d_from_2d(results,
 
             
         # create new data3d
-        if 0:
-            import copy
-            IndexedInfo3D = copy.copy(mb.Info3D)
-            IndexedInfo3D.frame = PT.Int32Col(pos=0,indexed=True)
         data3d = results.createTable(results.root,
                                      'data3d_best', mb.Info3D,
                                      "3d data (best)")
@@ -1790,7 +1781,9 @@ def recompute_3d_from_2d(results,
                 cam_id2camn[cam_id] = camn
                 rx = row['x']
                 if not numpy.isnan(rx):
-                    d2[cam_id] = (rx, row['y'],
+                    ry = row['y']
+                    rx,ry=reconstructor.undistort(cam_id,(rx,ry))
+                    d2[cam_id] = (rx, ry,
                                   row['area'], row['slope'],
                                   row['eccentricity'],
                                   row['p1'], row['p2'],
@@ -1815,11 +1808,65 @@ def get_reconstructor(results):
     import flydra.reconstruct
     return flydra.reconstruct.Reconstructor(results)
 
+def switch_data2d_to_data2d_distorted(results):
+    """
+
+    This is only valid if the reconstructor has the original
+    undistortion parameters. (In other words, this only produces valid
+    data if the calibration data in the results file is that which was
+    used to construct data2d.)
+    
+    """
+    import flydra.MainBrain as MainBrain
+    
+    reconstructor = get_reconstructor(results)
+    camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
+
+    data2d = results.root.data2d
+    
+    # remove any old data2d_distorted structures
+    if hasattr(results.root,'data2d_distorted'):
+        print 'deleting old data2d_distorted'
+        results.removeNode( results.root.data2d_distorted )
+        
+    # create new data3d
+    data2d_distorted = results.createTable(
+        results.root,
+        'data2d_distorted', MainBrain.Info2D,
+        "2D data (re-distorted from undistorted points)")
+
+    chunk_len = 1000
+    for chunk_start in range(0,len(data2d),1000):
+        chunk_stop = chunk_start+chunk_len
+        chunk_stop = min(chunk_stop,len(data2d))
+        print '%d (of %d)'%(chunk_start,len(data2d))
+
+        nra = data2d[chunk_start:chunk_stop] # pytables' NestedRecArray
+        chunk = nra.asRecArray() # numarray RecArray
+
+        chunk_x = chunk.field('x')
+        chunk_y = chunk.field('y')
+        chunk_camn = chunk.field('camn')
+
+        chunk_cam_id = [camn2cam_id[camn] for camn in chunk_camn]
+        for i,(cam_id,x_undistorted,y_undistorted) in enumerate(
+            zip(chunk_cam_id,chunk_x,chunk_y)):
+            x_distorted, y_distorted = reconstructor.distort(cam_id,
+                                                             (x_undistorted,
+                                                              y_undistorted))
+            chunk_x[i] = x_distorted
+            chunk_y[i] = y_distorted
+        data2d_distorted.append(chunk)
+        data2d_distorted.flush()
+        
+    print 'should now delete results.root.data2d'
+
 def plot_all_images(results,
                     frame_no,
                     show_raw_image=True,
                     zoomed=True,
                     typ='best',
+                    PLOT_GREEN=True,# raw 2d data
                     PLOT_RED=True,  # raw 3d data
                     PLOT_BLUE=True, # smoothed 3d data
                     ##recompute_3d=False,
@@ -1880,7 +1927,7 @@ def plot_all_images(results,
     elif typ == 'best':
         data3d = results.root.data3d_best
 
-    data2d = results.root.data2d
+    data2d = results.root.data2d_distorted
     cam_info = results.root.cam_info
 
     if colormap == 'jet':
@@ -1941,10 +1988,13 @@ def plot_all_images(results,
             test_camn = row['camn']
             if camn2cam_id[test_camn] == cam_id:
                 camn=test_camn
-                if nx.isnan(row['x']):
+                rx = row['x']
+                if nx.isnan(rx):
                     continue
-                xs.append(row['x'])
-                ys.append(row['y'])
+                ry = row['y']
+                rx,ry=reconstructor.undistort(cam_id,(rx,ry))
+                xs.append(rx)
+                ys.append(ry)
                 slopes.append(row['slope'])
                 eccentricities.append(row['eccentricity'])
                 remote_timestamps.append(row['timestamp'])
@@ -2162,42 +2212,38 @@ def plot_all_images(results,
         if have_2d_data and camn is not None:
             for point_number,(x,y,eccentricity,slope) in enumerate(
                 zip(xs,ys,eccentricities,slopes)):
-                
+
                 if not do_undistort:
                     x,y = reconstructor.distort(cam_id,(x,y))
                 
                 # raw 2D
-                try:
+                if PLOT_GREEN:
                     if origin == 'upper':
                         lines=ax.plot([x],[height-y],'o')
                     else:
                         lines=ax.plot([x],[y],'o')
-                except:
-                    print 'x, y',x, y
-                    sys.stdout.flush()
-                    raise
 
-                if show_raw_image:
-                    green = (0,1,0)
-                    dark_green = (0, 0.2, 0)
-                    dark_blue = (0, 0, 0.3)
+                    if show_raw_image:
+                        green = (0,1,0)
+                        dark_green = (0, 0.2, 0)
+                        dark_blue = (0, 0, 0.3)
 
-                    used_camera_used_point_color = green
-                    unused_camera_point_color = dark_green
-                    used_camera_unused_point_color = dark_blue
-                    
-                    setp(lines,'markerfacecolor',None)
-                    if camn in camns_used:
-                        if point_number==0:
+                        used_camera_used_point_color = green
+                        unused_camera_point_color = dark_green
+                        used_camera_unused_point_color = dark_blue
+
+                        setp(lines,'markerfacecolor',None)
+                        if camn in camns_used:
+                            if point_number==0:
+                                setp(lines,'markeredgecolor',
+                                     used_camera_used_point_color)
+                            else:
+                                setp(lines,'markeredgecolor',
+                                     used_camera_unused_point_color)
+                        elif camn not in camns_used:
                             setp(lines,'markeredgecolor',
-                                 used_camera_used_point_color)
-                        else:
-                            setp(lines,'markeredgecolor',
-                                 used_camera_unused_point_color)
-                    elif camn not in camns_used:
-                        setp(lines,'markeredgecolor',
-                             unused_camera_point_color)
-                    setp(lines,'markeredgewidth',2.0)
+                                 unused_camera_point_color)
+                        setp(lines,'markeredgewidth',2.0)
 
                 #if not len(numarray.ieeespecial.getnan(slope)[0]):
                 if eccentricity > flydra.reconstruct.MINIMUM_ECCENTRICITY:
@@ -2344,19 +2390,17 @@ def plot_all_images(results,
                 else:
                     lines=ax.plot([x,unit_x],[y,unit_y],'b-',linewidth=1.5)
                 
-        labels=ax.get_xticklabels()
-        setp(labels, rotation=90)
         if display_titles:
             title(title_str)
         if have_limit_data:
-            ax.xaxis.set_major_locator( LinearLocator(numticks=5) )
-            ax.yaxis.set_major_locator( LinearLocator(numticks=5) )
+            ax.xaxis.set_major_locator( LinearLocator(numticks=2) )
+            ax.yaxis.set_major_locator( LinearLocator(numticks=2) )
             setp(ax,'xlim',[xmin, xmax])
             setp(ax,'ylim',[show_ymin, show_ymax])
         elif fixed_im_lims.has_key(cam_id):
             (xmin, xmax), (ymin, ymax) = fixed_im_lims[cam_id]
-            ax.xaxis.set_major_locator( LinearLocator(numticks=5) )
-            ax.yaxis.set_major_locator( LinearLocator(numticks=5) )
+            ax.xaxis.set_major_locator( LinearLocator(numticks=2) )
+            ax.yaxis.set_major_locator( LinearLocator(numticks=2) )
             setp(ax,'xlim',[xmin, xmax])
             setp(ax,'ylim',[show_ymin, show_ymax])
         else:
@@ -2366,6 +2410,8 @@ def plot_all_images(results,
         if not display_labels:
             setp(ax,'xticks',[])
             setp(ax,'yticks',[])
+        labels=ax.get_xticklabels()
+        setp(labels, rotation=90)
     ion()
 
 def test():
@@ -2432,7 +2478,7 @@ def update_small_fmf_summary(results,cam_id,roi_movie_basename):
     table.flush()
         
 def create_data2d_camera_summary(results):
-    data2d = results.root.data2d # make sure we have 2d data table
+    data2d = results.root.data2d_distorted # make sure we have 2d data table
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
     table = results.createTable( results.root, 'data2d_camera_summary',
                                  Data2DCameraSummary, 'data2d camera summary' )
@@ -2481,6 +2527,19 @@ def get_results(filename,mode='r+'):
         timestamp_col = h5file.root.data2d.cols.timestamp
         if timestamp_col.index is None:
             print 'creating index on data2d.cols.timestamp ...'
+            timestamp_col.createIndex()
+            print 'done'
+
+    if hasattr(h5file.root,'data2d_distorted'):
+        frame_col = h5file.root.data2d_distorted.cols.frame
+        if frame_col.index is None:
+            print 'creating index on data2d_distorted.cols.frame ...'
+            frame_col.createIndex()
+            print 'done'
+
+        timestamp_col = h5file.root.data2d_distorted.cols.timestamp
+        if timestamp_col.index is None:
+            print 'creating index on data2d_distorted.cols.timestamp ...'
             timestamp_col.createIndex()
             print 'done'
 
@@ -2543,10 +2602,15 @@ def emit_recalibration_data(results,calib_dir):
     import flydra.reconstruct
     
     #seq = (2412304, 2412730, 5)
-    #seq = (0, int(6e6), 5)
-    seq = (0, int(1.3e6), 100)
-    seqs = [seq]
+    seq = (0, int(6e6), 5*20)
+    #seq = (0, int(1.3e6), 100)
     reconstructor = flydra.reconstruct.Reconstructor(results)
+
+    data2d = results.root.data2d_distorted
+
+    if hasattr(results.root,'data2d'):
+        # this is a precaution against screwing up later...
+        raise RuntimeError("will not continue unless undistorted data2d removed")
 
     if 1:
         cam_centers = nx.asarray([reconstructor.get_camera_center(cam_id)[:,0]
@@ -2556,7 +2620,6 @@ def emit_recalibration_data(results,calib_dir):
         print
     
     data3d = results.root.data3d_best
-    data2d = results.root.data2d
     max_err = 10
     coords = data3d.getWhereList(data3d.cols.mean_dist <= max_err)
     coords_frames = nx.asarray(data3d.readCoordinates( coords, 'frame' ))
@@ -2569,10 +2632,12 @@ def emit_recalibration_data(results,calib_dir):
 
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
     to_output = []
-    for seq in seqs:
+    if 1:
         framelist = nx.arange(seq[0],seq[1],seq[2])
         frame_idxs = coords_frames.searchsorted(framelist)
         for i in range(len(framelist)):
+            if i%100==0:
+                print '%d of %d'%(i,len(framelist))
             frame_idx = frame_idxs[i]
             desired_frame = framelist[i]
             if frame_idx >= len(coords_frames):
@@ -2607,7 +2672,6 @@ def emit_recalibration_data(results,calib_dir):
                             print 'skipping frame %d because > 1 point per camera'%frame
                             row_dict = {}
                             break
-                        x,y = reconstructor.distort(cam_id,(x,y))
                         row_dict[cam_id] = (x,y)
                 to_output.append(row_dict)
     all_cam_ids = cam_id2camns.keys()
@@ -2696,16 +2760,26 @@ def save_movie(results):
 
     #start_frame = 374420
     #stop_frame = 374720
-    
-    start_frame = 2412304
-    stop_frame = 2412730
+
+    if 0:
+        start_frame = 1019640
+        stop_frame = 1019700
+    elif 0: # near landing
+        start_frame = 873910
+        stop_frame =  874020
+    elif 0: # take off
+        start_frame = 295160
+        stop_frame =  295180
+    elif 1: #jerky
+        start_frame = 1021340
+        stop_frame =  1021350
+        
     
     plt_all_images_locals_cache = {}
     for frame in range(start_frame, stop_frame, 1):
         clf()
         try:
-            fname = 'distorted_images/frame_%04d.png'%frame
-            #fname = 'full_frame_%04d.png'%frame
+            fname = 'jerky/frame_%07d.png'%frame
             try: os.unlink(fname)
             except OSError, err: pass
             print ' plotting',fname,'...',
@@ -2720,20 +2794,23 @@ def save_movie(results):
                             #frame_type='small_frame_only',
                             frame_type='small_frame_and_bg',
 
-                            do_undistort=False, # leave images untouched, but drawn lines are undistorted, while everything else is distorted
-                            #do_undistort=True, # for alignment with points
+                            #do_undistort=False, # leave images untouched, but drawn lines are undistorted, while everything else is distorted
+                            do_undistort=True, # for alignment with points
                             
-                            plot_true_3d_line=True,
+                            plot_true_3d_line=False,
                             plot_3d_unit_vector=False,
                             
-                            plot_orientation=True,
-#                            plot_orientation=False,
+                            #plot_orientation=True,
+                            plot_orientation=False,
                             
                             origin='lower',
-                            #display_labels=False,
-                            display_titles=True,
+                            display_labels=False,
+                            display_titles=False,
+                            #display_titles=True,
                             start_frame_offset=start_frame,
+                            #PLOT_GREEN=False,
                             PLOT_RED=True,
+                            #PLOT_RED=False,
                             PLOT_BLUE=False,
                             max_err=10,
                             plot_red_ori_fixed=False,
@@ -3418,7 +3495,9 @@ if __name__=='__main__':
         results.close()
         del results
         
-    results = get_results('DATA20060315_170142.h5',mode='r+')
+    results = get_results('DATA20060515_190905.h5',mode='r+')
+    #results = get_results('DATA20060315_170142.h5',mode='r+')
+
     #del results.root.exact_movie_info
     #results.close()
     #make_exact_movie_info2(results)
