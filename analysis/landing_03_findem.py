@@ -22,6 +22,10 @@ def save_post_distances(results,post,
     print 'loading data...'
     (f,X,L,err,ts)=result_browser.get_f_xyz_L_err(results,include_timestamps=True)
     print 'done'
+
+    if start is not None:
+        # since timestamps get recomputed when 3D data is recomputed
+        raise NotImplementedError("need to switch to frame-based system")
     
     if start is not None or stop is not None:
         print 'converting timestamps...'
@@ -176,7 +180,7 @@ def shade_angle_interval(ax,lower0=-90,upper0=90):
         if cur_lower > ax.dataLim.ymax():
             break
     ax.set_ylim(orig_ylim)
-        
+    return orig_ylim
     
 if 0:
     a = [0, pi/4, pi/2, pi, 3*pi/2]
@@ -184,21 +188,7 @@ if 0:
     print center_angles( a )
     
 if 1:
-    if 0:
-        # 20060515
-        filename = 'DATA20060515_190905.h5'
-        post = [( 471.5, 191.2, 22.7),
-                ( 479.7, 205.1, 225.2),
-                
-                ]
-        if 1:
-            fstart = 369430
-            fend = 377515
-        pacific = pytz.timezone('US/Pacific')
-        
-        good_start = datetime.datetime(2006, 5, 15, 12, 0, 0, tzinfo=pacific)
-        good_stop  = datetime.datetime(2006, 5, 16,  8, 0, 0, tzinfo=pacific)
-    else:
+    if 1:
         filename = 'DATA20060315_170142.h5'
         
         # do for all frames
@@ -206,9 +196,37 @@ if 1:
         good_stop  = None
         
         # from ukine with recalibration
-        post = [( 864.1, 230.0, 17.6) ,
-                ( 857.2, 225.2, 221.8)]
+        post = [
+            ( 863.6, 248.0,-22.5),
+            ( 854.6, 239.2, 210.7)]
 
+    elif 0:
+        # 20060515
+        filename = 'DATA20060515_190905.h5'
+        # from ukine with recalibration
+        post = [( 418.3, 192.3, 18.4),
+                (434.3, 205.6, 222.2),
+                ]
+        pacific = pytz.timezone('US/Pacific')
+        
+        good_start = None
+        good_stop  = None
+        #good_start = datetime.datetime(2006, 5, 15, 12, 0, 0, tzinfo=pacific)
+        #good_stop  = datetime.datetime(2006, 5, 16,  8, 0, 0, tzinfo=pacific)
+    elif 0:
+        # head glued
+        filename = 'DATA20060516_194920.h5'
+        
+        # do for all frames
+        good_start = None
+        good_stop  = None
+        
+        # from ukine with recalibration
+        1/0 # this data below is bad
+        post = [( 444.9, 246.9,  8.9),
+                ( 457.2, 243.3, 227.2),
+                ]
+                
     post = numpy.array(post)
     postx=numpy.mean(post[:,0])
     posty=numpy.mean(post[:,1])
@@ -218,24 +236,27 @@ if 1:
     if not hasattr( results.root,'post_distance'):
         save_post_distances(results,post,start=good_start,stop=good_stop)
 
-    #plot = None
-    #plot = 'position_histogram'
-    
-    plot = 'traces_top_view'
-    plot = 'traces_side_view'
-    #plot = 'horiz_flight_direction'
-    #plot = 'horiz_approach_angle'
-    
-    #plot = 'dist_vs_approach_angle'
-    #plot = 'dist_vs_approach_angle_hist'
-    #plot = 'dist_vs_approach_angle_hist_normalized'
-
-    # ideas:
-    # distance from post vs. approach angle (scatter plot)
-    # angle from post vs. flight direction
-    # angle from post vs. flight direction (as function of dist)
-
     if 1:
+        #plot = None
+        #plot = 'position_histogram'
+
+        #plot = 'traces_top_view_raw'
+
+        #plot = 'traces_top_view'
+        #plot = 'traces_side_view'
+        plot = 'traces_both_views'
+        #plot = 'horiz_flight_direction'
+        #plot = 'horiz_approach_angle'
+
+        #plot = 'dist_vs_approach_angle'
+        plot = 'dist_vs_approach_angle_hist'
+        #plot = 'dist_vs_approach_angle_hist_normalized'
+
+        # ideas:
+        # distance from post vs. approach angle (scatter plot)
+        # angle from post vs. flight direction
+        # angle from post vs. flight direction (as function of dist)
+
         if plot is not None:
             import pylab
             #pylab.close('all')
@@ -263,6 +284,7 @@ if 1:
                 post_angles_rad = numpy.arctan2( post_dir_y, post_dir_x)
                 assert post_angles_rad.shape == (len(ybins),len(xbins))
         elif plot in ['traces_top_view',
+                      'traces_top_view_raw',
                       'traces_side_view',
                       'dist_vs_approach_angle',
                       'dist_vs_approach_angle_hist',
@@ -272,6 +294,10 @@ if 1:
                       'dist_vs_approach_angle_hist_normalized']:
                 all_dist = []
                 all_approach_angle = []
+        elif plot in ['traces_both_views',
+                      ]:
+            ax1 = pylab.subplot(2,1,1)
+            ax2 = pylab.subplot(2,1,2,sharex=ax1)
         else:
             print plot
             print plot in ['dist_vs_approach_angle_hist']
@@ -290,12 +316,21 @@ if 1:
         if 0:
             print 'WARNING: limiting analysis to first N traces'
             idxs = idxs[90:100]
-        
+
+        all_lens = []
+        all_starts = []
         for start,stop in idxs:
+            this_len = stop-start
+            all_lens.append(this_len)
+            all_starts.append(start)
             #if start != 12392: continue
             #if start not in [162198,22489,24490]:
-            if start not in [22489,24490]:
-                continue
+            #if start not in [22498,24490]:
+            if 0:
+                if start not in [19263]:
+                    continue
+                else:
+                    print 'start-stop',start,stop
             #xs = ccf.get_X()[start:stop,0]
             #ys = ccf.get_X()[start:stop,1]
 
@@ -303,6 +338,11 @@ if 1:
             xs = smoothed[0]
             ys = smoothed[1]
             zs = smoothed[2]
+
+            start_frame = ccf.get_frames()[start:stop][0]
+            stop_frame = ccf.get_frames()[start:stop][-1]
+            print 'start_frame,stop_frame %d,%d (%d)'%(start_frame,stop_frame,start)
+            #continue
 
             xdiff = xs[1:]-xs[:-1]
             ydiff = ys[1:]-ys[:-1]
@@ -320,7 +360,8 @@ if 1:
                 mean_accel = sum_accel/N
                 #print mean_accel
                 if mean_accel > 2000:
-                    print 'WARNING: skipping trace %d-%d because too jerky'%(start,stop)
+                    print 'WARNING: skipping trace %d-%d (frames %d-%d) because too jerky'%(
+                        start,stop,start_frame,stop_frame)
                     continue
                 
                 # trajectory angle criterion
@@ -329,7 +370,8 @@ if 1:
                 mean_ang_diff = numpy.sum(abs(ang_diff))/len(ang_diff)
                 #print mean_ang_diff
                 if mean_ang_diff > 0.8:
-                    print 'WARNING: skipping trace %d-%d because too turny'%(start,stop)
+                    print 'WARNING: skipping trace %d-%d (frames %d-%d) because too turny'%(
+                        start,stop,start_frame,stop_frame)
                     continue
             
             if plot == 'position_histogram':
@@ -339,21 +381,50 @@ if 1:
                 for i,j in zip(yidx,xidx):
                     hist2d[i,j]+=1
             elif plot == 'traces_top_view':
-                ax.text(xs[0],ys[0],str(start))
-                pylab.plot(xs,ys,'bo')
-                
+                if 1:
+                    # smoothed data
+                    #ax.text(xs[0],ys[0],str(start))
+                    #pylab.plot(xs,ys,'bo')
+                    pylab.plot(xs,ys)
+                    
+                    pylab.plot(xs[::10],ys[::10],'b.')
+
+                if 0:
+                    # original data
+                    xs2 = ccf.get_X()[start:stop,0]
+                    ys2 = ccf.get_X()[start:stop,1]
+                    pylab.plot(xs2,ys2,'r.')
+            elif plot == 'traces_top_view_raw':
+                # original data
                 xs2 = ccf.get_X()[start:stop,0]
                 ys2 = ccf.get_X()[start:stop,1]
-                pylab.plot(xs2,ys2,'r.')
+                pylab.plot(xs2,ys2)
                 
             elif plot == 'traces_side_view':
-                ax.text(xs[0],zs[0],str(start))
-                pylab.plot(xs,zs,'bo')
-                
-                xs2 = ccf.get_X()[start:stop,0]
-                zs2 = ccf.get_X()[start:stop,2]
-                pylab.plot(xs2,zs2,'r.')
-                
+                if 1:
+                    #ax.text(xs[0],zs[0],str(start))
+                    #pylab.plot(xs,zs,'bo')
+                    pylab.plot(xs,zs)
+                    
+                if 0:
+                    xs2 = ccf.get_X()[start:stop,0]
+                    zs2 = ccf.get_X()[start:stop,2]
+                    pylab.plot(xs2,zs2,'r.')
+            elif plot == 'traces_both_views':
+                if 1:
+                    ax1.plot(xs,ys)
+                    ax2.plot(xs,zs)
+                    if 0:
+                        ax1.plot(xs[::10],ys[::10],'b.')
+                        ax2.plot(xs[::10],zs[::10],'b.')
+                elif 0:
+                    ax1.plot(xs,ys,'.')
+                    ax2.plot(xs,zs,'.')
+                elif 0:
+                    interv = 5
+                    print xs[::interv], ys[::interv]
+                    ax1.plot(xs[::interv],ys[::interv],'.')
+                    ax2.plot(xs[::interv],zs[::interv],'.')
             elif plot in ['dist_vs_approach_angle',
                           'dist_vs_approach_angle_hist',
                           'dist_vs_approach_angle_hist_normalized']:
@@ -385,10 +456,11 @@ if 1:
                     if 1:
                         unwrap(approach_angle)
                     pylab.plot(dist,approach_angle*R2D)
+                    pylab.plot(dist[::10],(approach_angle*R2D)[::10],'b.')
                     #ax.text(dist[0],approach_angle[0]*R2D,str(start))
-                    ax.text(dist[-1],approach_angle[-1]*R2D,str(start))
+                    #ax.text(dist[-1],approach_angle[-1]*R2D,str(start))
                     
-                    pylab.xlabel('distance (mm)')
+                    pylab.xlabel('horizontal distance (mm)')
                     pylab.ylabel('approach angle (deg)')
                                         
                 elif plot in ['dist_vs_approach_angle_hist',
@@ -408,24 +480,59 @@ if 1:
                     i = yidx[idx]; j = xidx[idx]
                     accum[i][j].append( (dir_x[idx],
                                          dir_y[idx]) )
-        if plot == 'traces_top_view':
+                    
+        all_lens = numpy.array(all_lens)
+        sort_idxs = numpy.argsort(all_lens)
+        for si in sort_idxs[-10:]:
+            long_len = all_lens[ si ]
+            longest_start = all_starts[ si ]
+            tmp = ccf.get_frames()[longest_start]
+            print 'longest start %d (frame %d, %d frames)'%(longest_start,tmp,long_len)
+        
+        if plot in ['traces_top_view',
+                    'traces_top_view_raw']:
             pylab.plot([postx],[posty],'ko')
-            #ax.set_aspect( 'equal', adjustable='datalim' ) 
+            ax.set_aspect( 'equal', adjustable='datalim' )
+            pylab.xlabel('X (mm)')
+            pylab.ylabel('Y (mm)')
         elif plot == 'traces_side_view':
             pylab.plot([postx,postx],
-                       [postz0,postz1],'k-')
-            #ax.set_aspect( 'equal', adjustable='datalim' ) 
+                       [postz0,postz1],'k-',lw=5)
+            ax.set_aspect( 'equal', adjustable='datalim' )
+            pylab.xlabel('X (mm)')
+            pylab.ylabel('Z (mm)')
+        elif plot == 'traces_both_views':
+            ax1.plot([postx],[posty],'ko')
+            ax1.set_xlabel('X (mm)')
+            ax1.set_ylabel('Y (mm)')
+            ax1.set_aspect( 'equal', adjustable='datalim' )
+            
+            ax2.plot([postx,postx],
+                     [postz0,postz1],'k-',lw=5)
+            ax2.set_xlabel('X (mm)')
+            ax2.set_ylabel('Z (mm)')
+            ax2.set_aspect( 'equal', adjustable='datalim' )
+            
         elif plot == 'position_histogram':
             X,Y = pylab.meshgrid(xbins,ybins)
             pylab.pcolor(X,Y,hist2d,shading='flat')
             pylab.plot([postx],[posty],'wo')
         elif plot == 'dist_vs_approach_angle':
-            shade_angle_interval(ax)
+            ylim = shade_angle_interval(ax,lower0=-10,upper0=10)
+            shade_angle_interval(ax,lower0=-90,upper0=90)
+
+            ylabel_start = 90*round(ylim[0]/90.0)
+            ylabel_stop =  90*round(ylim[1]/90.0)
+            yticks = [ angle for angle in range(ylabel_start,ylabel_stop+1,90)]
+            yticklabels = [ repr((angle+180)%360.0-180) for angle in yticks ]
+            ax.set_yticks(yticks)
+            ax.set_yticklabels(yticklabels)
+            
         elif plot in ['dist_vs_approach_angle_hist',
                       'dist_vs_approach_angle_hist_normalized']:
             all_dist = numpy.hstack(all_dist)
             all_approach_angle = numpy.hstack(all_approach_angle)
-            dist_bin_size = 10.0 # mm
+            dist_bin_size = 2.0 # mm
             dist_bins = numpy.arange(0.0,
                                      all_dist.max()+dist_bin_size,
                                      dist_bin_size )
@@ -450,8 +557,26 @@ if 1:
                 hist2d = numpy.ma.masked_where( numpy.isnan(hist2d), hist2d )
             DIST,ANGLE = pylab.meshgrid(dist_bins,angle_bins)
             pylab.pcolor(DIST,ANGLE*R2D,hist2d,shading='flat')
-            pylab.xlabel('distance (mm)')
+            pylab.xlabel('horizontal distance (mm)')
             pylab.ylabel('approach angle (deg)')
+
+            ax = pylab.gca()
+            if 1:
+                ylim = [-180,180]
+                ax.set_ylim(ylim)
+
+                xlim = [dist_bins[0],dist_bins[-1]]
+                ax.set_xlim(xlim)
+            else:
+                ylim = ax.get_ylim()
+            ylabel_start = 90*round(ylim[0]/90.0)
+            ylabel_stop =  90*round(ylim[1]/90.0)
+            yticks = [ angle for angle in range(ylabel_start,ylabel_stop+1,90)]
+            #yticklabels = [ repr((angle+180)%360.0-180) for angle in yticks ]
+            yticklabels = [ repr(angle) for angle in yticks ]
+            ax.set_yticks(yticks)
+            ax.set_yticklabels(yticklabels)
+            
         elif (plot == 'horiz_flight_direction' or
               plot == 'horiz_approach_angle'):
             horiz_flight_angles_rad = nan*numpy.ones(
@@ -507,4 +632,3 @@ if 1:
         if plot is not None:
             #pylab.savefig('topview.png')
             pylab.show()
-    results.close()

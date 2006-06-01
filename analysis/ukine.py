@@ -8,13 +8,17 @@ import flydra.reconstruct
 import numpy
 
 # base file names
-if 1:
+if 0:
     base_fname = 'full_20060315_202300_%s_bg.fmf'
     cal_source = 'DATA20060315_170142.h5'
+elif 1:
+    base_fname = 'full_20060515_190909_%s_bg.fmf'
+    # hdf5 file containing calibration data
+    cal_source = 'DATA20060515_190905.h5'
 elif 0:
     base_fname = 'full_20060516_191746_%s_bg.fmf'
     # hdf5 file containing calibration data
-    cal_source = 'newDATA20060516_194920.h5'
+    cal_source = 'DATA20060516_194920.h5'
 
 h5file = tables.openFile(cal_source,mode='r')
 recon = flydra.reconstruct.Reconstructor(h5file)

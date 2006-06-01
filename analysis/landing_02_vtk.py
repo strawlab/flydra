@@ -11,59 +11,112 @@ def main(max_err=10.0):
         filename = 'DATA20060502_211811.h5'
         post = [( 466.8, 191.6, 15.8),# bottom
                 ( 467.6, 212.7, 223.4)] # top
-    elif 1:
+    elif 0:
         filename = 'DATA20060315_170142.h5'
         # from ukine with recalibration
-        post = [( 864.1, 230.0, 17.6) ,
-                ( 857.2, 225.2, 221.8)]
-        flight = 'A'
-        if flight=='A':
-            # flight A.  bounce off post!!
-            fstart = 148500
-            fend = 149000
-        elif flight=='B':
-            # flight B
-            fstart = 349300
-            fend = fstart+400
-        elif flight=='C':
-            # flight C
-            fstart = 421400
-            fend = fstart+400
-        elif flight=='D':
-            # flight D.  very good
-            fstart = 485000
-            fend = fstart+400
-        elif flight=='E':
-            # flight E.  very good
-            fstart = 725500
-            fend = fstart+400
-        elif flight=='F':
-            # flight F.  very good
-            fstart = 993890
-            fend = 994070
-    elif 0:
+        post = [
+            ( 863.6, 248.0,-22.5),
+            ( 854.6, 239.2, 210.7)]
+        if 1:
+            fstart = 168235-100
+            fend = fstart+1000
+        else:
+            flight = 'A'
+            if flight=='A':
+                # flight A.  bounce off post!!
+                fstart = 148500
+                fend = 149000
+            elif flight=='B':
+                # flight B
+                fstart = 349300
+                fend = fstart+400
+            elif flight=='C':
+                # flight C
+                fstart = 421400
+                fend = fstart+400
+            elif flight=='D':
+                # flight D.  very good
+                fstart = 485000
+                fend = fstart+400
+            elif flight=='E':
+                # flight E.  very good
+                fstart = 725500
+                fend = fstart+400
+            elif flight=='F':
+                # flight F.  very good
+                fstart = 993890
+                fend = 994070
+    elif 1:
         # 20060515
         filename = 'DATA20060515_190905.h5'
-        post = [( 471.5, 191.2, 22.7),
-                ( 479.7, 205.1, 225.2),
-                
+        post = [( 418.3, 192.3, 18.4),
+                (434.3, 205.6, 222.2),
                 ]
+##        if 0:
+##            fstart = 811962
+##            fend = fstart+1612
+            
+##        elif 0:
+##            fstart = 123757-100
+##            fend = fstart+400
+##        elif 0:
+##            fstart = 137555-16000
+##            fend = fstart+18400
+##        elif 0:
+##            fstart = 212541-500
+##            fend = fstart+400
+##        elif 0:
+##            fstart = 5454018-100
+##            fend = fstart+400
+
         if 0:
-            fstart = 369430
-            fend = 377515
+            pass
+        elif 0: # "near_landing"
+            fstart = 873955-200
+            fend = fstart+600
+
+        elif 0: # "descent"
+            fstart = 1019607-200
+            fend = fstart+600
+            
+        elif 0:
+            fstart = 800887-200
+            fend = fstart+600
+        elif 0:
+            fstart = 565708-200
+            fend = fstart+600
+            
+        elif 0: # nice slow approach towards post
+            fstart,fend = 86354,86994
+        elif 0: # take off
+            fstart = 295161-200
+            fend = fstart+600
+        elif 0: # ascent
+            fstart = 429129-200
+            fend = fstart+600
+        elif 0: # nice slow approach towards post
+            fstart = 440493-200
+            fend = fstart+600
+        elif 0:
+            fstart,fend = 1021266,1021378
         elif 1:
-            fstart = 374420
-            fend = 374720
+            fstart,fend = 316418,317533
     elif 0:
         # 20060516 head fixed
-        filename = 'newDATA20060516_194920.h5'
-        post = [( 443.9, 247.1,  7.8),
-                ( 456.9, 243.2, 226.7)
+        filename = 'DATA20060516_194920.h5'
+        # from ukine with recalibration
+        1/0
+        post = [( 444.9, 246.9,  8.9),
+                ( 457.2, 243.3, 227.2),
                 ]
-        if 1:
-            fstart = 345796
-            fend = 345998
-    
+        if 0:
+            fstart = 4989909
+            fend = 4990076
+        elif 0:
+            fstart,fend = 4885653,4885782 # bouncing off ceiling
+        elif 1:
+            fstart,fend = 4676487,4676678
+            
     results = result_browser.get_results(filename,mode='r')
     post_top = numpy.array(post[1])
     
@@ -106,15 +159,24 @@ def main(max_err=10.0):
             camera.SetClippingRange (7.8983022785496155, 789.83022785496155)
             camera.SetParallelScale(319.400653668)
         elif 1:
+            camera = renderers[0].GetActiveCamera()
+            camera.SetParallelProjection(0)
+            camera.SetFocalPoint (426.50702447336062, 165.88903952531726, 168.54898337291434)
+            camera.SetPosition (897.11470783001005, -423.58860888119352, 368.86388791475287)
+            camera.SetViewAngle(15.0)
+            camera.SetViewUp (-0.06424622629673464, 0.27472176826859618, 0.95937499052560493)
+            camera.SetClippingRange (476.57608671532716, 1161.5197421319072)
+            camera.SetParallelScale(319.400653668)
+        elif 0:
             import flydra.reconstruct
             import flydra.geom
-            if 1:
+            if 0:
                 cam_cal_filename = 'photron.scc'
                 scci = flydra.reconstruct.SingleCameraCalibration_fromfile(cam_cal_filename)
             else:
                 recon = flydra.reconstruct.Reconstructor(results)
-                scci = recon.get_SingleCameraCalibration('cam2:0')
-                #scci = recon.get_SingleCameraCalibration('cam1_0')
+                #scci = recon.get_SingleCameraCalibration('cam2:0')
+                scci = recon.get_SingleCameraCalibration('cam5_0')
             center = scci.get_cam_center()[:,0]
             up = scci.get_up_vector()
             optical_axis = scci.get_optical_axis()
@@ -154,6 +216,7 @@ def main(max_err=10.0):
                                 #frame_no_offset=fstart+pre_frames,
                                 show_warnings=False,
                                 max_err=max_err,
+                                show_debug_info=True,
                                 
                                 #color_change_frame=trig_fno,
                                 #ball_color1=ball_color1,

@@ -2,17 +2,22 @@ import result_browser
 import glob
 import sets
 import FlyMovieFormat
+import tables as PT
 
 def main():
     small_fmfs = glob.glob('small_*smd')
     basenames = [ '_'.join(fname.split('_')[:3])+'_%s' for fname in small_fmfs ]
     basenames = list(sets.Set(basenames)) # find unique only
     print basenames
-    h5files = glob.glob('*.h5')
+    #h5files = glob.glob('*.h5')
+    h5files = glob.glob('*.h5.orig')
     print h5files
     for fname in h5files:
         results = result_browser.get_results(fname,mode='r+')
-        result_browser.simple_add_backgrounds(results)
+        try:
+            result_browser.simple_add_backgrounds(results)
+        except PT.exceptions.NodeError, err:
+            print 'warning: ignoring error:',str(err)
         results.close()
 
         for basename in basenames:

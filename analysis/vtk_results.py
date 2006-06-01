@@ -371,6 +371,8 @@ def show_spheres(renderers,
     actors.append( sphereGlyphActor )
     return actors
 
+class NotGiven: pass
+
 def show_frames_vtk(results,renderers,
                     f1,f2=None,fstep=None,
                     typ=None,labels=True,
@@ -392,19 +394,20 @@ def show_frames_vtk(results,renderers,
                     max_err=None,
                     # before trigger or all:
                     ball_color1=None,
-                    line_color1=None,
+                    line_color1=NotGiven,
                     # after trigger
                     ball_color2=None,
-                    line_color2=None,
+                    line_color2=NotGiven,
+                    show_debug_info=False,
                     ): # only for 'ball_and_stick'
 
     if ball_color1 is None:
         ball_color1 = red
-    if line_color1 is None:
+    if line_color1 == NotGiven:
         line_color1 = ( 0xd6/255.0, 0xec/255.0, 0x1c/255.0)        
     if ball_color2 is None:
         ball_color2 = blue
-    if line_color2 is None:
+    if line_color2 == NotGiven:
         line_color2 = banana
     # 'triangles' render mode is always smoothed
     if typ is None:
@@ -473,6 +476,7 @@ def show_frames_vtk(results,renderers,
         X_zero = None
         # XXX table must be in order?
         found_frame_nos = []
+
         for row in data3d.where( frame_nos[0] <= data3d.cols.frame <= frame_nos[-1] ):
             frame_no = row['frame']
             if frame_no not in frame_nos:
@@ -494,6 +498,10 @@ def show_frames_vtk(results,renderers,
             found_frame_nos.append( row['frame'] )
             if X_zero_frame == frame_no:
                 X_zero = X
+        if show_debug_info:
+            print 'found %d frames of 3d data'%(len(Xs),)
+            #print '  mean position',numpy.mean(numpy.asarray(Xs),axis=0)
+                
         if X_zero_frame is not None:
             # remove offset
             if X_zero is None:
@@ -719,35 +727,36 @@ def show_frames_vtk(results,renderers,
                 renderer.AddActor( headGlyphActor )
             actors.append( headGlyphActor )
 
-            # body line rendering 
-            # ( see VTK demo Rendering/Python/CSpline.py )
+            if line_color is not None:
+                # body line rendering 
+                # ( see VTK demo Rendering/Python/CSpline.py )
 
-            profileData = vtk.vtkPolyData()
+                profileData = vtk.vtkPolyData()
 
-            profileData.SetPoints(line_points)
-            profileData.SetLines(lines)
+                profileData.SetPoints(line_points)
+                profileData.SetLines(lines)
 
-            # Add thickness to the resulting line.
-            profileTubes = vtk.vtkTubeFilter()
-            profileTubes.SetNumberOfSides(8)
-            profileTubes.SetInput(profileData)
-            profileTubes.SetRadius(.2)
-            #profileTubes.SetRadius(.8)
+                # Add thickness to the resulting line.
+                profileTubes = vtk.vtkTubeFilter()
+                profileTubes.SetNumberOfSides(8)
+                profileTubes.SetInput(profileData)
+                profileTubes.SetRadius(.2)
+                #profileTubes.SetRadius(.8)
 
-            profileMapper = vtk.vtkPolyDataMapper()
-            profileMapper.SetInput(profileTubes.GetOutput())
+                profileMapper = vtk.vtkPolyDataMapper()
+                profileMapper.SetInput(profileTubes.GetOutput())
 
-            profile = vtk.vtkActor()
-            profile.SetMapper(profileMapper)
-            profile.GetProperty().SetDiffuseColor( line_color ) #0xd6/255.0, 0xec/255.0, 0x1c/255.0)
-            #profile.GetProperty().SetDiffuseColor(cerulean)
-            #profile.GetProperty().SetDiffuseColor(banana)
-            profile.GetProperty().SetSpecular(.3)
-            profile.GetProperty().SetSpecularPower(30)
+                profile = vtk.vtkActor()
+                profile.SetMapper(profileMapper)
+                profile.GetProperty().SetDiffuseColor( line_color ) #0xd6/255.0, 0xec/255.0, 0x1c/255.0)
+                #profile.GetProperty().SetDiffuseColor(cerulean)
+                #profile.GetProperty().SetDiffuseColor(banana)
+                profile.GetProperty().SetSpecular(.3)
+                profile.GetProperty().SetSpecularPower(30)
 
-            for renderer in renderers:
-                renderer.AddActor( profile )
-            actors.append( profile )
+                for renderer in renderers:
+                    renderer.AddActor( profile )
+                actors.append( profile )
         
     elif render_mode.startswith('triangles'):
         profileData = vtk.vtkPolyData()
