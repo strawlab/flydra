@@ -24,6 +24,15 @@ cdef class ReconstructHelper:
     cdef float k1, k2, p1, p2
 
     def __init__(self, fc1, fc2, cc1, cc2, k1, k2, p1, p2 ):
+        """create instance of ReconstructHelper
+
+        ReconstructHelper(fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
+        where:
+        fc - focal length
+        cc - camera center
+        k - radial distortion parameters (non-linear)
+        p - tangential distortion parameters (non-linear)
+        """
         self.fc1 = fc1
         self.fc2 = fc2
         self.cc1 = cc1
@@ -145,7 +154,7 @@ def find_best_3d( object recon, object d2):
     cam_id2idx = {}
     all2d = {}
     Pmat_fastnx = {}
-    Pmat_fastnx = recon.Pmat_fastnx # shorthand
+    Pmat_fastnx = recon.Pmat # shorthand
     for i,cam_id in enumerate(cam_ids):
         cam_id2idx[cam_id] = i
 
