@@ -13,6 +13,38 @@ from flydra.common_variables import MINIMUM_ECCENTRICITY
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
 
+def rq(X):
+    def cross(a,b):
+        return numpy.array( (( a[1]*b[2]-a[2]*b[1] ),
+                             ( a[2]*b[0]-a[0]*b[2] ),
+                             ( a[0]*b[1]-a[1]*b[0] )) )
+
+    def norm(a):
+        return numpy.sqrt(numpy.sum(a**2))
+
+    import scipy.linalg
+    
+    Qt, Rt = scipy.linalg.qr(X.transpose())
+    Rt = Rt.transpose()
+    Qt = Qt.transpose()
+
+    Qu = []
+
+    Qu.append( cross(Rt[1,:], Rt[2,:] ) )
+    Qu[0] = Qu[0]/norm(Qu[0])
+
+    Qu.append( cross(Qu[0], Rt[2,:] ) )
+    Qu[1] = Qu[1]/norm(Qu[1])
+
+    Qu.append( cross(Qu[0], Qu[1] ) )
+
+    Qu = numpy.asarray(Qu)
+
+    R = numpy.matrixmultiply( Rt, Qu.transpose())
+    Q = numpy.matrixmultiply( Qu, Qt )
+
+    return R, Q
+
 def load_ascii_matrix(filename):
     fd=open(filename,mode='rb')
     buf = fd.read()
@@ -126,7 +158,6 @@ def pmat2cam_center(P):
     C_ = nx.transpose(nx.array( [[ X/T, Y/T, Z/T ]] ))
     return C_
 
-
 def setOfSubsets(L):
     """find all subsets of L
 
@@ -137,15 +168,164 @@ def setOfSubsets(L):
     return [ [ L[i] for i in range(N)
                 if X & (1L<<i) ]
         for X in range(2**N) ]
+        
+class SingleCameraCalibration:
+    def __init__(self,
+                 cam_id=None,
+                 Pmat=None,
+                 res=None,
+                 pp=None,
+                 helper=None):
+        """
 
+        Required arguments
+        ------------------
+        cam_id - string identifying camera
+        Pmat - camera calibration matrix (3 x 4)
+        res - resolution (width,height)
+        pp - pricipal point (point on image plane on optical axis) (x,y)
+
+        Optional arguments
+        ------------------
+        helper - has camera distortion parameters
+        """
+        if type(cam_id) != str:
+            raise TypeError('cam_id must be string')
+        pm = numpy.asarray(Pmat)
+        if pm.shape != (3,4):
+            raise ValueError('Pmat must have shape (3,4)')
+        if len(res) != 2:
+            raise ValueError('len(res) must be 2')
+        
+        self.cam_id=cam_id
+        self.Pmat=Pmat
+        self.res=res
+
+        if pp is None:
+            pp = self.res[0]/2.0,self.res[1]/2.0
+        if len(pp) != 2:
+            raise ValueError('len(pp) must be 2')
+        self.pp = pp
+
+        if helper is None:
+            helper = reconstruct_utils.ReconstructHelper(1,1, # focal length
+                                                         0,0, # image center
+                                                         0,0, # radial distortion
+                                                         0,0) # tangential distortion
+        if not isinstance(helper,reconstruct_utils.ReconstructHelper):
+            raise TypeError('helper must be reconstruct_utils.ReconstructHelper instance')
+        self.helper = helper
+
+        self.pmat_inv = numpy.linalg.pinv(self.Pmat)
+        
+    def get_cam_center(self):
+        return pmat2cam_center(self.Pmat)
+    def get_M(self):
+        """return parameters except extrinsic translation params"""
+        return self.Pmat[:,:3]
+    def get_KR(self):
+        """return intrinsic params (K) and extrinsic rotation/scale params (R)"""
+        M = self.get_M()
+        K,R = rq(M)
+        if K[2,2] != 0.0:
+            # normalize K
+            K = K/K[2,2]
+        return K,R
+    def get_extrinsic_parameter_matrix(self):
+        """contains rotation and translation information"""
+        C_ = self.get_cam_center()
+        K,R = self.get_KR()
+        t = numpy.matrixmultiply( -R, C_ )
+        ext = numpy.concatenate( (R, t), axis=1 )
+        return ext
+    def get_optical_axis(self):
+        # project back through principal point to get 3D line
+        import flydra.geom
+        c1 = self.get_cam_center()[:,0]
+        
+        x2d = (self.pp[0],self.pp[1],1.0)
+        c2 = numpy.matrixmultiply(self.pmat_inv, as_column(x2d))[:,0]
+        c2 = c2[:3]/c2[3]
+        c1 = flydra.geom.ThreeTuple(c1)
+        c2 = flydra.geom.ThreeTuple(c2)
+        return flydra.geom.line_from_points( c1, c2 )
+        
+    def get_up_vector(self):
+        # create up vector from image plane
+        x2d_a = (self.pp[0],self.pp[1],1.0)
+        c2_a = numpy.matrixmultiply(self.pmat_inv, as_column(x2d_a))[:,0]
+        c2_a = c2_a[:3]/c2_a[3]
+        
+        x2d_b = (self.pp[0],self.pp[1]+1,1.0)
+        c2_b = numpy.matrixmultiply(self.pmat_inv, as_column(x2d_b))[:,0]
+        c2_b = c2_b[:3]/c2_b[3]
+
+        up_dir = c2_b-c2_a
+        return norm_vec(up_dir)
+
+    def to_file(self,filename):
+        fd = open(filename,'wb')
+        fd.write(    'cam_id = "%s"\n'%self.cam_id)
+        
+        fd.write(    'pmat = [\n')
+        for row in self.Pmat:
+            fd.write('        [%s, %s, %s, %s],\n'%tuple([repr(x) for x in row]))
+        fd.write(    '       ]\n')
+        
+        fd.write(    'res = (%d,%d)\n'%(self.res[0],self.res[1]))
+        fd.write(    'pp = (%s,%s)\n'%(repr(self.pp[0]),repr(self.pp[1])))
+                     
+        fd.write(    'K = [\n')
+        for row in self.helper.get_K():
+            fd.write('     [%s, %s, %s],\n'%tuple([repr(x) for x in row]))
+        fd.write(    '    ]\n')
+
+        k1,k2,p1,p2 = self.helper.get_nlparams()
+        fd.write(    'radial_params = %s, %s\n'%(repr(k1),repr(k2)))
+        fd.write(    'tangential_params = %s, %s\n'%(repr(p1),repr(p2)))
+        
+def SingleCameraCalibration_fromfile(filename):
+    params={}
+    execfile(filename,params)
+    pmat = numpy.asarray(params['pmat'])
+    K = numpy.asarray(params['K'])
+    cam_id = params['cam_id']
+    res = params['res']
+    pp = params['pp']
+    k1,k2 = params['radial_params']
+    p1,p2 = params['tangential_params']
+    
+    fc1 = K[0,0]
+    cc1 = K[0,2]
+    fc2 = K[1,1]
+    cc2 = K[1,2]
+
+    helper = reconstruct_utils.ReconstructHelper(fc1,fc2, # focal length
+                                                 cc1,cc2, # image center
+                                                 k1, k2, # radial distortion
+                                                 p1, p2) # tangential distortion
+    return SingleCameraCalibration(cam_id=cam_id,
+                                   Pmat=pmat,
+                                   res=res,
+                                   pp=pp,
+                                   helper=helper)
+    
 class Reconstructor:
     def __init__(self,
-                 cal_source = '/home/astraw/mcsc_data',
+                 cal_source = None,
                  ):
         self.cal_source = cal_source
 
         if type(self.cal_source) in [str,unicode]:
             self.cal_source_type = 'normal files'
+        elif hasattr(self.cal_source,'__len__'): # is sequence
+            for i in range(len(self.cal_source)):
+                if not isinstance(self.cal_source[i],SingleCameraCalibration):
+                    raise TypeError('If calsource is a sequence, it must '
+                                    'be a string specifying calibration '
+                                    'directory or a sequence of '
+                                    'SingleCameraCalibration instances.')
+            self.cal_source_type = 'SingleCameraCalibration instances'
         else:
             self.cal_source_type = 'pytables'
 
@@ -162,13 +342,13 @@ class Reconstructor:
             cam_ids = []
             for node in nodes:
                 cam_ids.append( node.name )
+        elif self.cal_source_type=='SingleCameraCalibration instances':
+            cam_ids = [scci.cam_id for scci in self.cal_source]
             
         N = len(cam_ids)
         # load calibration matrices
         self.Pmat = {}
-        self.Pmat_fastnx = {}
         self.Res = {}
-        self.pmat_inv = {}
         self._helper = {}
         
         if self.cal_source_type == 'normal files':
@@ -177,9 +357,7 @@ class Reconstructor:
                 fname = 'camera%d.Pmat.cal'%(i+1)
                 pmat = load_ascii_matrix(opj(self.cal_source,fname)) # 3 rows x 4 columns
                 self.Pmat[cam_id] = pmat
-                self.Pmat_fastnx[cam_id] = fast_nx.array(pmat)
                 self.Res[cam_id] = map(int,res_fd.readline().split())
-                self.pmat_inv[cam_id] = numpy.linalg.pinv(pmat)
             res_fd.close()
 
             # load non linear parameters
@@ -200,13 +378,27 @@ class Reconstructor:
                 K = nx.array(results.root.calibration.intrinsic_linear.__getattr__(cam_id))
                 nlparams = tuple(results.root.calibration.intrinsic_nonlinear.__getattr__(cam_id))
                 self.Pmat[cam_id] = pmat
-                self.Pmat_fastnx[cam_id] = fast_nx.array(pmat)
                 self.Res[cam_id] = res
-                self.pmat_inv[cam_id] = numpy.linalg.pinv(pmat)
                 self._helper[cam_id] = reconstruct_utils.ReconstructHelper(
                     K[0,0], K[1,1], K[0,2], K[1,2],
                     nlparams[0], nlparams[1], nlparams[2], nlparams[3])
+        elif self.cal_source_type=='SingleCameraCalibration instances':
+            # find instance
+            for cam_id in cam_ids:
+                for scci in self.cal_source:
+                    if scci.cam_id==cam_id:
+                        break
+                self.Pmat[cam_id] = scci.Pmat
+                self.Res[cam_id] = scci.res
+                self._helper[cam_id] = scci.helper
+
+        self.pmat_inv = {}
+        for cam_id in cam_ids:
+            # For speed reasons, make sure self.Pmat has only numpy arrays.
+            self.Pmat[cam_id] = numpy.array(self.Pmat[cam_id])
             
+            self.pmat_inv[cam_id] = numpy.linalg.pinv(self.Pmat[cam_id])
+
         self.cam_combinations = [s for s in setOfSubsets(cam_ids) if len(s) >=2]
         def cmpfunc(a,b):
             if len(a) > len(b):
@@ -223,7 +415,7 @@ class Reconstructor:
     def get_cam_ids(self):
         return self.cam_ids
 
-    def save_to_h5file(self, h5file, OK_to_delete_old=False):
+    def save_to_h5file(self, h5file, OK_to_delete_old_calibration=False):
         """create groups with calibration information"""
 
         import tables as PT # pytables
@@ -238,9 +430,12 @@ class Reconstructor:
         cam_ids = self.Pmat.keys()
         cam_ids.sort()
 
-        if OK_to_delete_old:
-            if hasattr(root,'calibration'):
+        if hasattr(root,'calibration'):
+            if OK_to_delete_old_calibration:
                 h5file.removeNode( root.calibration, recursive=True )
+            else:
+                raise RuntimeError('not deleting old calibration.')
+            
         cal_group = h5file.createGroup(root,'calibration')
             
         pmat_group = h5file.createGroup(cal_group,'pmat')
@@ -355,7 +550,7 @@ class Reconstructor:
             except:
                 print 'WARNING: unknown error in reconstruct.py'
                 print '(you probably have an old version of numarray'
-                print 'and SVD did not converge'
+                print 'and SVD did not converge)'
                 Lcoords = None
         if return_line_coords:
             if return_X_coords:
@@ -382,21 +577,29 @@ class Reconstructor:
         
         x = x[0:2,:]/x[2,:] # normalize
         
-        # XXX The rest of this function hasn't been checked for >1
-        # points.
-        
         if distorted:
-            xd, yd = self.distort(cam_id, x)
-            x[0] = xd
-            x[1] = yd
+            if rank1:
+                xd, yd = self.distort(cam_id, x)
+                x[0] = xd
+                x[1] = yd
+            else:
+                N_pts = x.shape[1]
+                for i in range(N_pts):
+                    xpt = x[:,i]
+                    xd, yd = self.distort(cam_id, xpt)
+                    x[0,i]=xd
+                    x[1,i]=yd
 
+        # XXX The rest of this function hasn't been (recently) checked
+        # for >1 points. (i.e. not rank1)
+        
         if Lcoords is not None:
             if distorted:
                 
                 # Impossible to distort Lcoords. The image of the line
                 # could be distorted downstream.
                 
-                raise RuntimeError('cannot easily distort line')
+                raise RuntimeError('cannot (easily) distort line')
             
             if not rank1:
                 raise NotImplementedError('Line reconstruction not yet implemented for rank-2 data')
@@ -415,3 +618,9 @@ class Reconstructor:
 
     def find3d_single_cam(self,cam_id,x):
         return nx.dot(self.pmat_inv[cam_id], as_column(x))
+
+    def get_SingleCameraCalibration(self,cam_id):
+        return SingleCameraCalibration(cam_id=cam_id,
+                                       Pmat=self.Pmat[cam_id],
+                                       res=self.Res[cam_id],
+                                       helper=self._helper[cam_id])
