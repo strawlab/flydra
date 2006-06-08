@@ -1,7 +1,11 @@
 import math
 import numpy
 
-__all__=['ThreeTuple','PlueckerLine','line_from_points','LineSegment']
+__all__=['ThreeTuple',
+         'PlueckerLine',
+         'line_from_points',
+         'LineSegment',
+         'Plane']
 
 # see http://web.mit.edu/thouis/pluecker.txt
 
@@ -14,13 +18,17 @@ class ThreeTuple:
     def __init__(self,vals):
         self.vals = numpy.asarray(vals)
         if self.vals.shape != (3,):
-            ValueError('shape must be (3,)')
+            raise ValueError('shape must be (3,)')
     def __repr__(self):
         return 'ThreeTuple(%s,%s,%s)'%tuple(map(repr,self.vals))
     def __sub__(self,other):
         return ThreeTuple(self.vals-other.vals)
     def __add__(self,other):
         return ThreeTuple(self.vals+other.vals)
+    def __mul__(self,other):
+        return ThreeTuple(self.vals*other)
+    def __neg__(self):
+        return ThreeTuple(-self.vals)
     def cross(self,other):
         return ThreeTuple(cross(self.vals,other.vals))
     def dot(self,other):
@@ -55,6 +63,25 @@ class PlueckerLine:
         UdotU = self.u.dot(self.u)
         h = Homogeneous3D(VxU,UdotU)
         return h.to_3tup()
+    def intersect(self,plane):
+        if not isinstance(plane,Plane):
+            raise NotImplementedError('only Plane intersections implemented')
+        N = plane.N
+        n = plane.n
+
+        VxN = self.v.cross(N)
+        Un = self.u*n
+        
+        U_N = self.u.dot(N)
+        pt = (VxN-Un)*(1.0/U_N)
+        return pt
+    def translate(self,threetuple):
+        if not isinstance(threetuple,ThreeTuple):
+            raise ValueError('expected ThreeTuple instance')
+        on_line = self.closest()
+        on_new_line_a = on_line+threetuple
+        on_new_line_b = on_new_line_a + self.u
+        return line_from_points(on_new_line_a,on_new_line_b)
     
 def line_from_points(p,q):
     """create PlueckerLine instance given 2 distinct points
@@ -144,6 +171,13 @@ class LineSegment:
         
     def get_distance_from_point(self,r):
         return self.get_closest_point(r).dist_from(r)
+
+class Plane:
+    def __init__(self, normal_vec, dist_from_origin):
+        if not isinstance(normal_vec,ThreeTuple):
+            raise ValueError('must be ThreeTuple')
+        self.N = normal_vec
+        self.n = float(dist_from_origin)
             
 def _test():
     import doctest
