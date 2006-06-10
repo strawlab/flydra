@@ -1,7 +1,13 @@
+ln -s ~/kookaburra/flydra/analysis/caching_movie_opener.py
+ln -s ~/kookaburra/flydra/analysis/result_utils.py
+ln -s ~/kookaburra/flydra/analysis/smdfile.py
 ln -s ~/kookaburra/flydra/analysis/result_browser.py
 ln -s ~/kookaburra/flydra/analysis/PQmath.py
 ln -s ~/kookaburra/flydra/analysis/calc_forces.py
 ln -s ~/kookaburra/flydra/analysis/vtk_results.py
+
+ln -s ~/kookaburra/flydra/analysis/guf_view1.py
+ln -s ~/kookaburra/flydra/analysis/guf_view_save_receptors.py
 
 ln -s ~/kookaburra/flydra/analysis/add_small_fmfs.py
 
@@ -38,3 +44,5 @@ ln -s ~/kookaburra/flydra/analysis/point_n_click.py
 
 ln -s ~/kookaburra/flydra/analysis/highspeed_01_view_flydra_through_photron.py
 ln -s ~/kookaburra/flydra/analysis/find_cam_matrix.py
+
+ln -s ~/kookaburra/flydra/analysis/flydra2kine.py

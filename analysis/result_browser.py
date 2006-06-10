@@ -4,8 +4,6 @@ import numpy
 import numpy as nx
 import numpy as mlab
 import tables as PT
-print 'using pytables',PT.__version__
-print '  from',PT.__file__
 import matplotlib
 import pylab
 import matplotlib.ticker
@@ -22,14 +20,21 @@ import FlyMovieFormat
 from numarray.ieeespecial import getnan, nan, inf
 import numarray.linear_algebra
 
-try:
-    import Pyro.core, Pyro.errors
-except ImportError,x:
-    print 'skipping Pyro import:',x
-else:
-    Pyro.core.initClient(banner=0)
+# flydra analysis tools:
+import caching_movie_opener 
+from result_utils import get_camn, get_camn_and_frame, \
+     get_camn_and_remote_timestamp, get_cam_ids, \
+     get_caminfo_dicts, get_results, get_f_xyz_L_err, \
+     get_reconstructor, get_resolution
 
-PROXY_PYRO = False
+##try:
+##    import Pyro.core, Pyro.errors
+##except ImportError,x:
+##    print 'skipping Pyro import:',x
+##else:
+##    Pyro.core.initClient(banner=0)
+
+##PROXY_PYRO = False
 
 class ExactMovieInfo(PT.IsDescription):
     cam_id             = PT.StringCol(16,pos=0)
@@ -83,46 +88,6 @@ class TimedVectors(PT.IsDescription):
     fx    = PT.FloatCol(pos=1)
     fy    = PT.FloatCol(pos=2)
     fz    = PT.FloatCol(pos=3)
-
-class SMDFile:
-    def __init__(self,filename):
-        self.filename = filename
-        self.fd = open(filename,mode='r')
-        self.fmt = '<dII'
-        self.row_sz = struct.calcsize(self.fmt)
-        ts = []
-        print 'loading SMD file',filename
-        smd = self.fd.read()
-        print ' read buffer, parsing...'
-        len_smd = len(smd)
-        idx = 0
-        last_ts = None
-        while 1:
-            stop_idx = idx+self.row_sz
-            if stop_idx > len_smd:
-                break
-            cmp_ts, left, bottom = struct.unpack(self.fmt,smd[idx:stop_idx])
-            ts.append(cmp_ts)
-            idx = stop_idx
-        print ' done parsing buffer'
-        self.timestamps = nx.array(ts)
-        
-        check_monotonic=True
-        if check_monotonic:
-            tdiff = self.timestamps[1:]-self.timestamps[:-1]
-            if nx.amin(tdiff) <0:
-                raise ValueError("timestamps are not monotonic")
-            
-    def get_left_bottom(self,timestamp):
-        idx = self.timestamps.searchsorted( [timestamp] )[0]
-        self.fd.seek(idx*self.row_sz)
-        row_buf = self.fd.read(self.row_sz)
-        cmp_ts, left, bottom = struct.unpack(self.fmt,row_buf)
-        assert cmp_ts == timestamp
-        return left,bottom
-    
-    def close(self):
-        self.fd.close()
         
 def make_new_fmt(results):
     """convert all 2D data into camera-by-camera tables"""
@@ -193,129 +158,38 @@ def dougs_subplot(n,n_rows=2,n_cols=3):
     h = y_size - 2*y_space
     return axes([left,bottom,w,h])
 
-proxy_spawner = None
-def get_server(cam_id,port=9888):
-    if PROXY_PYRO:
-        import urlparse, socket
-        global proxy_spawner
+##proxy_spawner = None
+##def get_server(cam_id,port=9888):
+##    if PROXY_PYRO:
+##        import urlparse, socket
+##        global proxy_spawner
 
-        if proxy_spawner is None:
-            hostname = 'localhost' # requires tunnelling (e.g. over ssh)
+##        if proxy_spawner is None:
+##            hostname = 'localhost' # requires tunnelling (e.g. over ssh)
 
-            proxy_URI = "PYROLOC://%s:%d/%s" % (hostname,port,'proxy_spawner')
-            print 'connecting to',proxy_URI,'...',
-            proxy_spawner = Pyro.core.getProxyForURI(proxy_URI)
+##            proxy_URI = "PYROLOC://%s:%d/%s" % (hostname,port,'proxy_spawner')
+##            print 'connecting to',proxy_URI,'...',
+##            proxy_spawner = Pyro.core.getProxyForURI(proxy_URI)
 
-        # make sure URI is local (so we can forward through tunnel)
-        URI = str(proxy_spawner.spawn_proxy(cam_id))
-        URI=URI.replace('PYRO','http') # urlparse chokes on PYRO://
-        URIlist = list( urlparse.urlsplit(str(URI)) )
-        network_location = URIlist[1]
-        localhost = socket.gethostbyname(socket.gethostname())
-        port = network_location.split(':')[1]
-        URIlist[1] = '%s:%s'%(localhost,port)
-        URI = urlparse.urlunsplit(URIlist)
-        URI=URI.replace('http','PYRO')
-    else:
-        hostname = cam_id.split(':')[0]
-
-        URI = "PYROLOC://%s:%d/%s" % (hostname,port,'frame_server')
-
-    frame_server = Pyro.core.getProxyForURI(URI)
-    frame_server.noop()
-        
-    return frame_server
-
-def get_camn(results, cam, remote_timestamp=None, frame=None):
-    """helper function to get camn given timestamp or frame number
-
-    last used 2006-05-17
-    
-    """
-    if not isinstance(cam,str):
-        camn = cam
-        return camn
-
-    cam_id = cam
-    possible_camns = []
-    for row in results.root.cam_info:
-        if row['cam_id'] == cam_id:
-                possible_camns.append( row['camn'] )
-
-    table = results.root.data2d_camera_summary
-    for row in table.where(table.cols.cam_id==cam_id):
-        camn = None
-        if row['camn'] in possible_camns:
-            if remote_timestamp is not None:
-                if row['start_timestamp'] <= remote_timestamp <= row['stop_timestamp']:
-                    if camn is not None:
-                        if camn != row['camn']:
-                            raise RuntimeError('Found camn already! (Is frame from different run than timestamp?)')
-                    camn=row['camn']
-            if frame is not None:
-                if row['start_frame'] <= frame <= row['stop_frame']:
-                    if camn is not None:
-                        if camn != row['camn']:
-                            raise RuntimeError('Found camn already! (Is frame from different run than timestamp?)')
-                    camn=row['camn']
-    if camn is None:
-        raise RuntimeError("could not find frame or timestamp")
-    return camn
-    
-def get_camn_and_remote_timestamp(results, cam, frame):
-    """helper function
-
-    last used 2006-05-08
-    """
-    camn = get_camn(results, cam, frame=frame)
-    found = False
-    try:
-        for row in results.root.data2d.where( results.root.data2d.cols.frame==frame ):
-            test_camn = row['camn']
-            if test_camn==camn:
-                timestamp = row['timestamp']
-                found = True
-                break
-    except TypeError:
-        print 'frame',frame
-        print 'repr(frame)',repr(frame)
-        print 'type(frame)',type(frame)
-        raise
-    if not found:
-        raise ValueError("No data found for cam and frame")
-    return camn, timestamp
-        
-def get_camn_and_frame(results, cam, remote_timestamp):
-    """helper function
-
-    last used 2006-05-08
-    """
-    camn = get_camn(results, cam, remote_timestamp=remote_timestamp)
-    
-##    if isinstance(cam,str):
-##        cam_id = cam
-##        possible_camns = []
-##        for row in results.root.cam_info:
-##            if row['cam_id'] == cam_id:
-##                possible_camns.append( row['camn'] )
+##        # make sure URI is local (so we can forward through tunnel)
+##        URI = str(proxy_spawner.spawn_proxy(cam_id))
+##        URI=URI.replace('PYRO','http') # urlparse chokes on PYRO://
+##        URIlist = list( urlparse.urlsplit(str(URI)) )
+##        network_location = URIlist[1]
+##        localhost = socket.gethostbyname(socket.gethostname())
+##        port = network_location.split(':')[1]
+##        URIlist[1] = '%s:%s'%(localhost,port)
+##        URI = urlparse.urlunsplit(URIlist)
+##        URI=URI.replace('http','PYRO')
 ##    else:
-##        camn = cam
-##        possible_camns = [camn]
+##        hostname = cam_id.split(':')[0]
+
+##        URI = "PYROLOC://%s:%d/%s" % (hostname,port,'frame_server')
+
+##    frame_server = Pyro.core.getProxyForURI(URI)
+##    frame_server.noop()
         
-    found = False
-    data2d = results.root.data2d_distorted
-    if PT.__version__ <= '1.3.2':
-        #if type(remote_timestamp)==numpy.float64scalar:
-        remote_timestamp=float(remote_timestamp)
-    for row in data2d.where( data2d.cols.timestamp==remote_timestamp ):
-        test_camn = row['camn']
-        if test_camn==camn:
-            frame = row['frame']
-            found = True
-            break
-    if not found:
-        raise ValueError("No data found for cam and remote_timestamp")
-    return camn, frame
+##    return frame_server    
         
 def flip_line_direction(results,frame,typ='best'):
     if typ=='best':
@@ -467,9 +341,6 @@ def get_intlin(results,cam_id):
 def get_intnonlin(results,cam_id):
     return nx.asarray(results.root.calibration.intrinsic_nonlinear.__getattr__(cam_id))
 
-def get_resolution(results,cam_id):
-    return tuple(results.root.calibration.resolution.__getattr__(cam_id))
-
 def get_frames_with_3d(results):
     table = results.root.data3d_best
     return [x['frame'] for x in table]
@@ -537,18 +408,6 @@ def get_3d_frame_range_with_2d_info(results):
     frame_max = frames_3d[-1]
     return frame_min, frame_max
 
-def get_caminfo_dicts(results):
-    # camera info
-    cam_info = results.root.cam_info
-    cam_id2camns = {}
-    camn2cam_id = {}
-    
-    for row in cam_info:
-        cam_id, camn = row['cam_id'], row['camn']
-        cam_id2camns.setdefault(cam_id,[]).append(camn)
-        camn2cam_id[camn]=cam_id
-    return camn2cam_id, cam_id2camns
-
 def summarize(results):
     res = StringIO.StringIO()
 
@@ -610,100 +469,6 @@ def summarize(results):
     
     res.seek(0)
     return res.read()
-
-def get_f_xyz_L_err( results, max_err = 10, typ = 'best', include_timestamps=False):
-    """workhorse function to get 3D data from file
-
-    returns:
-    (f,X,L,err)
-    if include_timestamps is True:
-    (f,X,L,err,timestamps)
-    
-    where:
-    f is frame numbers
-    X is 3D position coordinates
-    L is Pluecker line coordinates
-    err is mean reprojection distance
-    timestamps are the timestamps on the 3D reconstruction computer
-
-    last used 2006-05-16
-    """
-    if typ == 'fast':
-        data3d = results.root.data3d_fast
-    elif typ == 'best':
-        data3d = results.root.data3d_best
-
-    if max_err is not None:
-        f = []
-        x = []
-        y = []
-        z = []
-        xyz=[]
-        L = []
-        err = []
-        timestamps = []
-        for row in data3d.where( data3d.cols.mean_dist <= max_err ):
-            f.append( row['frame'] )
-            xyz.append( (row['x'],row['y'],row['z']) )
-            L.append( (row['p0'],row['p1'],
-                       row['p2'],row['p3'],
-                       row['p4'],row['p5']))
-            err.append( row['mean_dist'] )
-            timestamps.append( row['timestamp'] )
-        f = nx.array(f)
-        xyz = nx.array(xyz)
-        L = nx.array(L)
-        err = nx.array(err)
-        timestamps = nx.array(timestamps)
-    else:
-        frame_col = data3d.cols.frame
-        if not len(frame_col):
-            print 'no 3D data'
-            return
-        f = nx.array(frame_col)
-        timestamps = nx.array(timestamps)
-        x = nx.array(data3d.cols.x)
-        y = nx.array(data3d.cols.y)
-        z = nx.array(data3d.cols.z)
-        xyz = nx.concatenate( (x[:,nx.NewAxis],
-                               y[:,nx.NewAxis],
-                               z[:,nx.NewAxis]),
-                              axis = 1)
-        p0 = nx.array(data3d.cols.p0)[:,nx.NewAxis]
-        p1 = nx.array(data3d.cols.p1)[:,nx.NewAxis]
-        p2 = nx.array(data3d.cols.p2)[:,nx.NewAxis]
-        p3 = nx.array(data3d.cols.p3)[:,nx.NewAxis]
-        p4 = nx.array(data3d.cols.p4)[:,nx.NewAxis]
-        p5 = nx.array(data3d.cols.p5)[:,nx.NewAxis]
-        L = nx.concatenate( (p0,p1,p2,p3,p4,p5), axis=1 )
-        err = nx.array(data3d.cols.mean_dist)
-
-    if hasattr(results.root,'ignore_frames'):
-        good = nx.argsort(f)
-        good_set = sets.Set( nx.argsort( f ) )
-        for row in results.root.ignore_frames:
-            start_frame, stop_frame = row['start_frame'], row['stop_frame']
-            head = nx.where( f < start_frame )
-            tail = nx.where( f > stop_frame )
-            head_set = sets.Set(head[0])
-            tail_set = sets.Set(tail[0])
-
-            good_set = (good_set & head_set) | (good_set & tail_set)
-        good_idx = list( good_set )
-        good_idx.sort()
-    else:
-        good_idx = nx.argsort(f)
-        
-    f = nx.take(f,good_idx)
-    xyz = nx.take(xyz,good_idx)
-    L = nx.take(L,good_idx)
-    err = nx.take(err,good_idx)
-    timestamps = nx.take(timestamps,good_idx)
-
-    rval = [f,xyz,L,err]
-    if include_timestamps:
-        rval.append( timestamps )
-    return tuple(rval)
 
 def plot_movie_2d(results,
                   start_idx=0,
@@ -1145,7 +910,7 @@ def update_exact_roi_movie_info(results,cam_id,roi_movie_basename):
     smd_filename = roi_movie_basename + '.smd'
 
     fmf = FlyMovieFormat.FlyMovie(fmf_filename,check_integrity=True)
-    # XXX should update to use SMDFile
+    # XXX should update to use smdfile.SMDFile
     smd_fd = open(smd_filename,mode='r')
     smd = smd_fd.read()
     smd_fd.close()
@@ -1262,187 +1027,8 @@ def make_exact_movie_info2(results):
         exact_movie_info.row.append()
         exact_movie_info.flush()
 
-class NoFrameRecordedHere(Exception):
-    pass
-
-class CachingMovieOpener:
-    """
-
-    last used 2006-05-17
-
-    """
-    
-    def __init__(self):
-        self.cache = {}
-        self.fmfs_by_filename = {}
-        self.smds_by_fmf_filename = {}
-        self.bg_image_cache = {}
-        self.undistorted_bg_image_cache = {}
-        
-    def load_fmf_smd(self,indexes):
-        results, camn, cam_id, frame_type, remote_timestamp = indexes
-        if frame_type == 'full_frame_fmf':
-            if not hasattr(results.root,'exact_movie_info'):
-                make_exact_movie_info2(results)
-            exact_movie_info = results.root.exact_movie_info
-
-            # find normal (non background movie filename)
-            found = False
-            for row in exact_movie_info.where( exact_movie_info.cols.cam_id == cam_id ):
-                if row['start_timestamp'] < remote_timestamp < row['stop_timestamp']:
-                    filename = row['filename']
-                    found = True
-                    break
-            if not found:
-                raise ValueError('movie not found for %s'%(cam_id,))
-
-            filename = os.path.splitext(filename)[0] + '%s.fmf'%(suffix,) # alter to be background image
-        else:
-            if hasattr(results.root,'small_fmf_summary'):
-                found = False
-                small_fmf_summary = results.root.small_fmf_summary
-                for row in small_fmf_summary.where( small_fmf_summary.cols.camn == camn ):
-                    if row['start_timestamp'] <= remote_timestamp <= row['stop_timestamp']:
-                        found = True
-                        basename = row['basename']
-                        filename = basename+'.fmf'
-                        break
-                    
-            elif hasattr(results.root,'exact_roi_movie_info'):
-                found = False
-                exact_roi_movie_info = results.root.exact_roi_movie_info
-                for row in exact_roi_movie_info.where( exact_roi_movie_info.cols.timestamp == remote_timestamp ):
-                    if row['cam_id'] == cam_id:
-                        filename=row['filename']
-                        found=True
-                    break
-            else:
-                raise RuntimeError('need "small_fmf_summary" or "exact_roi_movie_info" table')
-            
-            if not found:
-                raise NoFrameRecordedHere("frame not found for %s, %s"%(cam_id,repr(remote_timestamp)))
-
-        if filename not in self.fmfs_by_filename:
-            self.fmfs_by_filename[filename] = FlyMovieFormat.FlyMovie(filename)
-        if filename not in self.smds_by_fmf_filename:
-            self.smds_by_fmf_filename[filename] = SMDFile(filename[:-4]+'.smd')
-        fmf = self.fmfs_by_filename[filename]
-        smd = self.smds_by_fmf_filename[filename]
-        return (fmf, smd)
-    
-    def get_movie_frame3(self,
-                         results,
-                         remote_timestamp_or_frame,
-                         cam,
-                         suffix=None,
-                         frame_type=None,
-                         width=None,
-                         height=None,
-                         ):
-        if frame_type is None:
-            frame_type = 'full_frame_fmf'
-            
-        if frame_type not in ['small_frame_and_bg',
-                              'small_frame_only',
-                              'full_frame_fmf']:
-            raise ValueError('unsupported frame_type')
-
-        if frame_type != 'full_frame_fmf' and suffix is not None:
-            raise ValueError("suffix has no meaning unless frame_type is full_frame_fmf")
-        
-        if suffix is None:
-            suffix = ''
-
-        camn = None
-        frame = None
-        if isinstance(remote_timestamp_or_frame,float):
-            remote_timestamp = remote_timestamp_or_frame
-        else:
-            frame = remote_timestamp_or_frame
-            camn, remote_timestamp = get_camn_and_remote_timestamp(results,cam,frame)
-
-        cam_info = results.root.cam_info
-        movie_info = results.root.movie_info
-#        data2d = results.root.data2d
-        data3d = results.root.data3d_best
-
-        if isinstance(cam,int): # camn
-            camn = cam
-            cam_id = [x['cam_id'] for x in cam_info.where( cam_info.cols.camn == camn) ][0]
-            cam_id = [x['cam_id'] for x in cam_info if x['camn'] == camn ][0]
-        elif isinstance(cam,str): # cam_id
-            cam_id = cam
-
-        if frame is None or camn is None:
-            camn, frame = get_camn_and_frame(results,cam_id,remote_timestamp)
-##        if camn is None:
-##            camn, remote_timestamp = get_camn_and_remote_timestamp(results,cam_id,frame)
-
-        indexes = (results, camn, cam_id, frame_type, remote_timestamp)
-
-        if indexes not in self.cache:
-            try:
-                self.cache[indexes] = self.load_fmf_smd(indexes)
-            except NoFrameRecordedHere:
-                self.cache[indexes] = None
-        (fmf,smd) = self.cache[indexes]
-
-        if fmf is None:
-            raise NoFrameRecordedHere("")
-
-        if frame_type == 'small_frame_and_bg':
-            # get background frame
-            camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
-            cam_id = camn2cam_id[camn]
-            bg_frame = nx.asarray(results.root.backgrounds.__getattr__(cam_id))
-        elif frame_type == 'small_frame_only':
-            if height is None or width is None:
-                raise ValueError('for frame_type="small_frame_only" must specify width and height')
-            bg_frame = 255*nx.ones((height,width),nx.UInt8)
-
-        # get frame
-        frame, movie_timestamp = fmf.get_frame_at_or_before_timestamp( remote_timestamp )
-
-        # make full frame
-        if frame_type != 'full_frame_fmf':
-            small_frame = frame
-            del frame
-            height,width = small_frame.shape
-
-            left,bottom = smd.get_left_bottom(movie_timestamp)
-            frame = bg_frame.copy()
-            frame[bottom:bottom+height,left:left+width] = small_frame
-        
-        return frame, movie_timestamp
-    
-    def get_background_image(self,results, cam_id):
-        idx = (results,cam_id)
-        if idx not in self.bg_image_cache:
-            self.bg_image_cache[idx] = nx.asarray(
-                results.root.backgrounds.__getattr__(cam_id))
-        bg = self.bg_image_cache[idx]
-        return bg
-
-    def _undist(self,idx,im):
-        (results,reconstructor,cam_id) = idx
-        intrin = reconstructor.get_intrinsic_linear(cam_id)
-        k = reconstructor.get_intrinsic_nonlinear(cam_id)
-        f = intrin[0,0], intrin[1,1] # focal length
-        c = intrin[0,2], intrin[1,2] # camera center
-        undist_im = undistort.rect(im, f=f, c=c, k=k)
-        return undist_im
-        
-    def get_undistorted_background_image(self,results,reconstructor,cam_id):
-        im = self.get_background_image(results, cam_id)
-        idx = (results,reconstructor,cam_id)
-        if idx not in self.undistorted_bg_image_cache:
-            self.undistorted_bg_image_cache[idx] = (
-                self._undist(idx,im))                
-        undist = self.undistorted_bg_image_cache[idx]
-        return undist
-
-_caching_movie_opener = CachingMovieOpener()
-get_movie_frame2 = _caching_movie_opener.get_movie_frame3
+_caching_movie_opener = caching_movie_opener.CachingMovieOpener()
+get_movie_frame2 = _caching_movie_opener.get_movie_frame
 get_background_image = _caching_movie_opener.get_background_image
 get_undistorted_background_image = _caching_movie_opener.get_undistorted_background_image
 
@@ -1489,12 +1075,6 @@ def get_movie_frame2_orig(results, cam_timestamp_or_frame, cam, suffix=None):
     fly_movie = FlyMovieFormat.FlyMovie(filename)
     frame, movie_timestamp = fly_movie.get_frame_at_or_before_timestamp( cam_timestamp )
     return frame, movie_timestamp
-
-def get_cam_ids(results):
-    cam_info = results.root.cam_info
-    cam_ids=list(sets.Set(cam_info.cols.cam_id))
-    cam_ids.sort()
-    return cam_ids
 
 def recompute_3d_from_2d(results,
                          overwrite=False,
@@ -1804,10 +1384,6 @@ def recompute_3d_from_2d(results,
             print 'running total: %d 3d frames found'%(total_n_saved,)
         print     '        total: %d 3d frames found'%(total_n_saved,)
       
-def get_reconstructor(results):
-    import flydra.reconstruct
-    return flydra.reconstruct.Reconstructor(results)
-
 def switch_data2d_to_data2d_distorted(results):
     """
 
@@ -2049,7 +1625,7 @@ def plot_all_images(results,
 ##                    print 'WARNING: skipping frame for %s because ValueError: %s'%(cam_id,str(exc))
                 except KeyError,exc:
                     print 'WARNING: skipping frame for %s because KeyError: %s'%(cam_id,str(exc))
-                except NoFrameRecordedHere,exc:
+                except caching_movie_opener.NoFrameRecordedHere,exc:
                     # probably small FMF file not recorded for this camera, which is not really worth printing error
                     pass
                 except PT.exceptions.NoSuchNodeError:
@@ -2507,47 +2083,6 @@ def create_data2d_camera_summary(results):
         newrow['stop_timestamp']=stop_timestamp
         newrow.append()
     table.flush()
-
-def get_results(filename,mode='r+'):
-    h5file = PT.openFile(filename,mode=mode)
-    if hasattr(h5file.root,'data3d_best'):
-        frame_col = h5file.root.data3d_best.cols.frame
-        if frame_col.index is None:
-            print 'creating index on data3d_best.cols.frame ...'
-            frame_col.createIndex()
-            print 'done'
-        
-    if hasattr(h5file.root,'data2d'):
-        frame_col = h5file.root.data2d.cols.frame
-        if frame_col.index is None:
-            print 'creating index on data2d.cols.frame ...'
-            frame_col.createIndex()
-            print 'done'
-
-        timestamp_col = h5file.root.data2d.cols.timestamp
-        if timestamp_col.index is None:
-            print 'creating index on data2d.cols.timestamp ...'
-            timestamp_col.createIndex()
-            print 'done'
-
-    if hasattr(h5file.root,'data2d_distorted'):
-        frame_col = h5file.root.data2d_distorted.cols.frame
-        if frame_col.index is None:
-            print 'creating index on data2d_distorted.cols.frame ...'
-            frame_col.createIndex()
-            print 'done'
-
-        timestamp_col = h5file.root.data2d_distorted.cols.timestamp
-        if timestamp_col.index is None:
-            print 'creating index on data2d_distorted.cols.timestamp ...'
-            timestamp_col.createIndex()
-            print 'done'
-
-        if not hasattr(h5file.root,'data2d_camera_summary'):
-            print 'creating data2d camera summary ...'
-            create_data2d_camera_summary(h5file)
-            print 'done'
-    return h5file
 
 def plot_simple_phase_plots(results,form='xy',max_err=10,typ='best',ori_180_ambig=True):
     from matplotlib.collections import LineCollection
@@ -3305,98 +2840,98 @@ def cam_usage(results,typ='best'):
             print '% 3.1f'%err
 
 
-def calculate_3d_point(results, frame_server_dict=None):
-    by_cam_id = {}
-    for row in results.root.exact_movie_info:
-        print row
-        cam_id = row['cam_id']
-        if by_cam_id.has_key( cam_id ):
-            continue # already did this camera
+##def calculate_3d_point(results, frame_server_dict=None):
+##    by_cam_id = {}
+##    for row in results.root.exact_movie_info:
+##        print row
+##        cam_id = row['cam_id']
+##        if by_cam_id.has_key( cam_id ):
+##            continue # already did this camera
 
-        if frame_server_dict is None:
-            frame_server = get_server(cam_id)
-        else:
-            frame_server = frame_server_dict[cam_id]
+##        if frame_server_dict is None:
+##            frame_server = get_server(cam_id)
+##        else:
+##            frame_server = frame_server_dict[cam_id]
 
-        frame_server.load( row['filename'] )
-        frame, timestamp = frame_server.get_frame(0)
-        by_cam_id[cam_id] = frame
+##        frame_server.load( row['filename'] )
+##        frame, timestamp = frame_server.get_frame(0)
+##        by_cam_id[cam_id] = frame
 
-    clf()
-    i = 0
-    for cam_id, frame in by_cam_id.iteritems():
-        i += 1
-        subplot(2,3,i)
+##    clf()
+##    i = 0
+##    for cam_id, frame in by_cam_id.iteritems():
+##        i += 1
+##        subplot(2,3,i)
 
-        cla()
-        imshow(frame)
-        title(cam_id)
+##        cla()
+##        imshow(frame)
+##        title(cam_id)
 
-    return
+##    return
 
-def plot_3d_point(results, X=None, frame_server_dict=None):
-    if X is not None:
-        import flydra.reconstruct
-        reconstructor = flydra.reconstruct.Reconstructor(results)
+##def plot_3d_point(results, X=None, frame_server_dict=None):
+##    if X is not None:
+##        import flydra.reconstruct
+##        reconstructor = flydra.reconstruct.Reconstructor(results)
         
-    by_cam_id = {}
-    for row in results.root.exact_movie_info:
-        print row
-        cam_id = row['cam_id']
-        if by_cam_id.has_key( cam_id ):
-            continue # already did this camera
+##    by_cam_id = {}
+##    for row in results.root.exact_movie_info:
+##        print row
+##        cam_id = row['cam_id']
+##        if by_cam_id.has_key( cam_id ):
+##            continue # already did this camera
 
-        if frame_server_dict is None:
-            frame_server = get_server(cam_id)
-        else:
-            frame_server = frame_server_dict[cam_id]
+##        if frame_server_dict is None:
+##            frame_server = get_server(cam_id)
+##        else:
+##            frame_server = frame_server_dict[cam_id]
 
-        frame_server.load( row['filename'] )
-        frame, timestamp = frame_server.get_frame(0)
-        by_cam_id[cam_id] = frame
+##        frame_server.load( row['filename'] )
+##        frame, timestamp = frame_server.get_frame(0)
+##        by_cam_id[cam_id] = frame
 
-    clf()
-    i = 0
-    for cam_id, frame in by_cam_id.iteritems():
-        i += 1
-        subplot(2,3,i)
+##    clf()
+##    i = 0
+##    for cam_id, frame in by_cam_id.iteritems():
+##        i += 1
+##        subplot(2,3,i)
 
-        cla()
-        undistorted = flydra.undistort.undistort(reconstructor,frame,cam_id)
-        imshow(undistorted)
-        title(cam_id)
+##        cla()
+##        undistorted = flydra.undistort.undistort(reconstructor,frame,cam_id)
+##        imshow(undistorted)
+##        title(cam_id)
 
-        if X is not None:
-            xy=reconstructor.find2d(cam_id,X)
-            print xy
-            x,y=xy[:2]
-            plot( [x], [y], 'wo')
-        #ion()
-    return
+##        if X is not None:
+##            xy=reconstructor.find2d(cam_id,X)
+##            print xy
+##            x,y=xy[:2]
+##            plot( [x], [y], 'wo')
+##        #ion()
+##    return
 
-if 0:
-        class MyPickClass:
-            def __init__(self, d, cam_id):
-                self.d = d
-                self.cam_id = cam_id
-            def pick(self,event):
-                if event.key=='p' and event.inaxes is not None:
-                    ax = event.inaxes
-                    print self.cam_id, (event.x, event.y)
-                    self.d[self.cam_id] = (event.x, event.y)
+##if 0:
+##        class MyPickClass:
+##            def __init__(self, d, cam_id):
+##                self.d = d
+##                self.cam_id = cam_id
+##            def pick(self,event):
+##                if event.key=='p' and event.inaxes is not None:
+##                    ax = event.inaxes
+##                    print self.cam_id, (event.x, event.y)
+##                    self.d[self.cam_id] = (event.x, event.y)
 
-        picker = MyPickClass(by_cam_id,cam_id)
-        mpl_id = pylab.connect('key_press_event',picker.pick)
+##        picker = MyPickClass(by_cam_id,cam_id)
+##        mpl_id = pylab.connect('key_press_event',picker.pick)
                          
-        try:
-            print 'connected MPL event',mpl_id
-            pylab.show()
-            print 'Press "p" to display cursor coordinates, press enter for next frame',mpl_id
-            raw_input()
-        finally:
-            pylab.disconnect( mpl_id )
-            print 'disconnected MPL event',mpl_id
-        print by_cam_id
+##        try:
+##            print 'connected MPL event',mpl_id
+##            pylab.show()
+##            print 'Press "p" to display cursor coordinates, press enter for next frame',mpl_id
+##            raw_input()
+##        finally:
+##            pylab.disconnect( mpl_id )
+##            print 'disconnected MPL event',mpl_id
+##        print by_cam_id
 
 def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
     f,xyz,L,err = get_f_xyz_L_err(results,max_err=max_err,typ=typ)
