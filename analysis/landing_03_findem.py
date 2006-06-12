@@ -188,7 +188,7 @@ if 0:
     print center_angles( a )
     
 if 1:
-    if 1:
+    if 0:
         filename = 'DATA20060315_170142.h5'
         
         # do for all frames
@@ -200,7 +200,7 @@ if 1:
             ( 863.6, 248.0,-22.5),
             ( 854.6, 239.2, 210.7)]
 
-    elif 0:
+    elif 1:
         # 20060515
         filename = 'DATA20060515_190905.h5'
         # from ukine with recalibration
@@ -249,8 +249,10 @@ if 1:
         #plot = 'horiz_approach_angle'
 
         #plot = 'dist_vs_approach_angle'
-        plot = 'dist_vs_approach_angle_hist'
+        #plot = 'dist_vs_approach_angle_hist'
         #plot = 'dist_vs_approach_angle_hist_normalized'
+        
+        plot = 'approach_angle_dur_hist'
 
         # ideas:
         # distance from post vs. approach angle (scatter plot)
@@ -288,7 +290,8 @@ if 1:
                       'traces_side_view',
                       'dist_vs_approach_angle',
                       'dist_vs_approach_angle_hist',
-                      'dist_vs_approach_angle_hist_normalized']:
+                      'dist_vs_approach_angle_hist_normalized',
+                      ]:
             ax = pylab.subplot(1,1,1)
             if plot in ['dist_vs_approach_angle_hist',
                       'dist_vs_approach_angle_hist_normalized']:
@@ -298,6 +301,14 @@ if 1:
                       ]:
             ax1 = pylab.subplot(2,1,1)
             ax2 = pylab.subplot(2,1,2,sharex=ax1)
+        elif plot in ['approach_angle_dur_hist',
+                      ]:
+            ax1 = pylab.subplot(3,1,1)
+            ax2 = pylab.subplot(3,1,2,sharex=ax1,sharey=ax1)
+            ax3 = pylab.subplot(3,1,3,sharex=ax1,sharey=ax1)
+            all_approach_angle_close = []
+            all_approach_angle_far = []
+            all_approach_angle_farther = []
         else:
             print plot
             print plot in ['dist_vs_approach_angle_hist']
@@ -327,7 +338,8 @@ if 1:
             #if start not in [162198,22489,24490]:
             #if start not in [22498,24490]:
             if 0:
-                if start not in [19263]:
+                if start not in [2899]:
+                #if start not in [19263]:
                     continue
                 else:
                     print 'start-stop',start,stop
@@ -414,9 +426,9 @@ if 1:
                 if 1:
                     ax1.plot(xs,ys)
                     ax2.plot(xs,zs)
-                    if 0:
-                        ax1.plot(xs[::10],ys[::10],'b.')
-                        ax2.plot(xs[::10],zs[::10],'b.')
+                    if 1:
+                        ax1.plot(xs[::10],ys[::10],'b.',markersize=6)
+                        ax2.plot(xs[::10],zs[::10],'b.',markersize=6)
                 elif 0:
                     ax1.plot(xs,ys,'.')
                     ax2.plot(xs,zs,'.')
@@ -427,7 +439,9 @@ if 1:
                     ax2.plot(xs[::interv],zs[::interv],'.')
             elif plot in ['dist_vs_approach_angle',
                           'dist_vs_approach_angle_hist',
-                          'dist_vs_approach_angle_hist_normalized']:
+                          'dist_vs_approach_angle_hist_normalized',
+                          'approach_angle_dur_hist',
+                          ]:
 
                 # 1) calculate distance
                 #  a) make same length as approach angle vector:
@@ -456,7 +470,7 @@ if 1:
                     if 1:
                         unwrap(approach_angle)
                     pylab.plot(dist,approach_angle*R2D)
-                    pylab.plot(dist[::10],(approach_angle*R2D)[::10],'b.')
+                    pylab.plot(dist[::10],(approach_angle*R2D)[::10],'b.',markersize=6)
                     #ax.text(dist[0],approach_angle[0]*R2D,str(start))
                     #ax.text(dist[-1],approach_angle[-1]*R2D,str(start))
                     
@@ -467,7 +481,17 @@ if 1:
                               'dist_vs_approach_angle_hist_normalized']:
                     all_dist.append( dist )
                     all_approach_angle.append( approach_angle )
-                
+                elif plot in ['approach_angle_dur_hist']:
+                    close_condition = dist < 50
+                    far_condition = (dist >= 50) & (dist < 100)
+                    farther_condition = (dist >= 100)
+                    close_idx = numpy.nonzero(close_condition)
+                    far_idx = numpy.nonzero(far_condition)
+                    farther_idx = numpy.nonzero(farther_condition)
+
+                    all_approach_angle_close.append(approach_angle[close_idx])
+                    all_approach_angle_far.append(approach_angle[far_idx])
+                    all_approach_angle_farther.append(approach_angle[farther_idx])
             elif (plot == 'horiz_flight_direction' or
                   plot == 'horiz_approach_angle'):
             
@@ -576,6 +600,35 @@ if 1:
             yticklabels = [ repr(angle) for angle in yticks ]
             ax.set_yticks(yticks)
             ax.set_yticklabels(yticklabels)
+        elif plot in ['approach_angle_dur_hist']:
+            angle_bins = numpy.linspace(-pi,pi,100)*R2D
+            normed = True
+            
+            all_approach_angle_close = numpy.hstack(all_approach_angle_close)
+            ax1.hist(all_approach_angle_close*R2D,
+                     bins=angle_bins,
+                     normed=normed,
+                     )
+            pylab.ylabel('probability')
+            pylab.xlabel('approach angle (deg)')
+
+            all_approach_angle_far = numpy.hstack(all_approach_angle_far)
+            ax2.hist(all_approach_angle_far*R2D,
+                     bins=angle_bins,
+                     normed=normed,
+                     )
+            pylab.ylabel('probability')
+            pylab.xlabel('approach angle (deg)')
+
+            all_approach_angle_farther = numpy.hstack(
+                all_approach_angle_farther)
+            ax3.hist(all_approach_angle_farther*R2D,
+                     bins=angle_bins,
+                     normed=normed,
+                     )
+            pylab.ylabel('probability')
+            pylab.xlabel('approach angle (deg)')
+
             
         elif (plot == 'horiz_flight_direction' or
               plot == 'horiz_approach_angle'):

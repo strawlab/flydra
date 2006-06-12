@@ -91,7 +91,7 @@ def main(max_err=10.0):
         elif 0: # take off
             fstart = 295161-200
             fend = fstart+600
-        elif 0: # ascent
+        elif 0: # descent
             fstart = 429129-200
             fend = fstart+600
         elif 0: # nice slow approach towards post
