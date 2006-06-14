@@ -4,7 +4,7 @@ from distutils.core import Extension
 
 from kookutils import get_svnversion_persistent
 version_str = '0.2.dev%(svnversion)s'
-version = get_svnversion_persistent('lib/flydra/version.py',version_str)
+version = get_svnversion_persistent('flydra/version.py',version_str)
 
 import os, glob, time, sys, StringIO
 
@@ -48,10 +48,10 @@ if os.name.startswith('posix'):
 
 setup(name='flydra',
       version=version,
+      author='Andrew Straw',
+      author_email='strawman@astraw.com',
+      description='multi-headed fly-tracking beast',
       packages = ['flydra'],
-      package_dir = {'':'lib',
-                     'flydra':'lib/flydra',
-                     },
       ext_modules= ext_modules,
       
       install_requires = install_requires,
