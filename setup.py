@@ -16,7 +16,7 @@ BUILD_FLYDRA_ARENA = False # test for comedilib below
 #        os.path.exists('/usr/include/comedilib.h')):
 #        BUILD_FLYDRA_ARENA = True
 
-install_requires = ['FlyMovieFormat','cam_iface','wxglvideo']
+install_requires = ['FlyMovieFormat','cam_iface']
 
 ext_modules = []
 
