@@ -53,7 +53,14 @@ setup(name='flydra',
       description='multi-headed fly-tracking beast',
       packages = ['flydra'],
       ext_modules= ext_modules,
-      
+      entry_points = {
+    'console_scripts': [
+    'flydra_camera_node = flydra.flydra_camera_node:main',
+    ],
+    'gui_scripts': [
+    'flydra_mainbrain = flydra.wxMainBrain:main',
+    ],
+    },
       install_requires = install_requires,
       zip_safe = True,
       )
