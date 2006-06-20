@@ -4,8 +4,7 @@
 import threading, time, socket, sys, struct, os, select
 import Pyro.core, Pyro.errors
 import FlyMovieFormat
-import numarray as nx
-import Numeric as nx
+import numpy as nx
 import cam_iface
 import flydra.reconstruct_utils as reconstruct_utils
 import Queue
