@@ -38,10 +38,19 @@ from wxPython.wx import *
 from wxPython.lib.scrolledpanel import wxScrolledPanel
 from wxPython.xrc import *
 
-RESDIR = os.path.split(os.path.abspath(sys.argv[0]))[0]
+RESDIR = os.path.split(__file__)[0]
 RESFILE = os.path.join(RESDIR,'flydra_server.xrc')
-hydra_image_file = os.path.join(RESDIR,'hydra.gif')
-RES = wxXmlResource(RESFILE)
+RES = wxEmptyXmlResource()
+RES.LoadFromString(open(RESFILE).read())
+
+def my_loadpanel(parent,panel_name):
+    orig_dir = os.path.abspath(os.curdir)
+    os.chdir(RESDIR)
+    try:
+        result = RES.LoadPanel(parent,panel_name)
+    finally:
+        os.chdir(orig_dir)
+    return result
 
 class wxMainBrainApp(wxApp):
     def OnInit(self,*args,**kw):
@@ -160,7 +169,7 @@ class wxMainBrainApp(wxApp):
 
 
         # main panel ----------------------------------
-        self.main_panel = RES.LoadPanel(frame,"APP_PANEL") # make frame main panel
+        self.main_panel = my_loadpanel(frame,"APP_PANEL") # make frame main panel
         self.main_panel.SetFocus()
 
         frame_box = wxBoxSizer(wxVERTICAL)
@@ -172,7 +181,7 @@ class wxMainBrainApp(wxApp):
 
         # setup notebook pages
         
-        self.cam_preview_panel = RES.LoadPanel(nb,"PREVIEW_PANEL")
+        self.cam_preview_panel = my_loadpanel(nb,"PREVIEW_PANEL")
         self.cam_preview_panel.SetAutoLayout(True)
         nb.AddPage(self.cam_preview_panel,"Camera Preview/Settings")
         self.InitPreviewPanel()
@@ -180,19 +189,19 @@ class wxMainBrainApp(wxApp):
         viewmenu.Check(ID_toggle_image_tinting,self.cam_image_canvas.get_clipping())
         viewmenu.Check(ID_draw_points,self.cam_image_canvas.get_display_points())
         
-        self.snapshot_panel = RES.LoadPanel(nb,"SNAPSHOT_PANEL")
+        self.snapshot_panel = my_loadpanel(nb,"SNAPSHOT_PANEL")
         nb.AddPage(self.snapshot_panel,"Snapshot")
         self.InitSnapshotPanel()
         
-        self.record_raw_panel = RES.LoadPanel(nb,"RECORD_RAW_PANEL")
+        self.record_raw_panel = my_loadpanel(nb,"RECORD_RAW_PANEL")
         nb.AddPage(self.record_raw_panel,"Record raw video")
         self.InitRecordRawPanel()
 
-        self.tracking_panel = RES.LoadPanel(nb,"REALTIME_TRACKING_PANEL")
+        self.tracking_panel = my_loadpanel(nb,"REALTIME_TRACKING_PANEL")
         nb.AddPage(self.tracking_panel,"Realtime 3D tracking")
         self.InitTrackingPanel()
         
-        #temp_panel = RES.LoadPanel(nb,"UNDER_CONSTRUCTION_PANEL")
+        #temp_panel = my_loadpanel(nb,"UNDER_CONSTRUCTION_PANEL")
         #nb.AddPage(temp_panel,"Under construction")
         
         EVT_NOTEBOOK_PAGE_CHANGED(nb,nb.GetId(),self.OnPageChanged)
@@ -351,7 +360,7 @@ class wxMainBrainApp(wxApp):
         scalar_control_info=self.cameras[cam_id]['scalar_control_info']
         
         # add self to WX
-        previewPerCamPanel = RES.LoadPanel(self.preview_per_cam_scrolled_container,
+        previewPerCamPanel = my_loadpanel(self.preview_per_cam_scrolled_container,
                                            "preview_per_cam_panel")
         acp_box = self.preview_per_cam_scrolled_container.GetSizer()
         all_cams = self.cameras.keys()
