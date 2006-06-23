@@ -42,11 +42,6 @@ RESDIR = os.path.split(os.path.abspath(sys.argv[0]))[0]
 RESFILE = os.path.join(RESDIR,'flydra_server.xrc')
 hydra_image_file = os.path.join(RESDIR,'hydra.gif')
 RES = wxXmlResource(RESFILE)
-try:
-    DETECT_SND = wxSound(os.path.join(RESDIR,'detect.wav'))
-    DETECT_SND.Play()
-except NameError: #wxSound not in some versions of wx
-    DETECT_SND = None
 
 class wxMainBrainApp(wxApp):
     def OnInit(self,*args,**kw):
@@ -156,6 +151,13 @@ class wxMainBrainApp(wxApp):
 
         # finish menubar -----------------------------
         frame.SetMenuBar(menuBar)
+
+        try:
+            self.detect_sound = wxSound(os.path.join(RESDIR,'detect.wav'))
+            self.detect_sound.Play()
+        except NameError: #wxSound not in some versions of wx
+            self.detect_sound = None
+
 
         # main panel ----------------------------------
         self.main_panel = RES.LoadPanel(frame,"APP_PANEL") # make frame main panel
@@ -1110,10 +1112,10 @@ class wxMainBrainApp(wxApp):
             XRCCTRL(self.tracking_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
             XRCCTRL(self.tracking_panel,'err').SetValue('% 8.1f'%min_mean_dist)
             if min_mean_dist <= 10.0:
-                if DETECT_SND is not None:
+                if self.detect_sound is not None:
                     now = time.time()
                     if (now - self.last_sound_time) > 1.0:
-                        DETECT_SND.Play()
+                        self.detect_sound.Play()
                         self.last_sound_time = now
                 if self.current_page == 'preview':
                     r=self.main_brain.reconstructor
