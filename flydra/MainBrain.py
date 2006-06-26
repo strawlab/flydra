@@ -390,7 +390,7 @@ class CoordReceiver(threading.Thread):
                 posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
                 print 'excellent, 3D reconstruction thread running in maximum prioity mode'
             except Exception, x:
-                print 'WARNING: could not run in maximum priority mode:', str(x)
+                print 'WARNING: could not run in maximum priority mode (PID %d): %s'%(os.getpid(),str(x))
         
         header_fmt = '<dli'
         header_size = struct.calcsize(header_fmt)
