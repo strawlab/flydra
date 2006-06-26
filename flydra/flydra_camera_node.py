@@ -489,6 +489,7 @@ class App:
 
         self.all_cams = []
         self.all_grabbers = []
+        self.reconstruct_helper = []        
         
         timestamp_echo_thread=threading.Thread(target=TimestampEcho)
         timestamp_echo_thread.setDaemon(True) # quit that thread if it's the only one left...
@@ -575,6 +576,14 @@ class App:
             self.all_cam_ids.append(cam_id)
             cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(self.all_cam_ids[cam_no])
             self.main_brain_lock.release()
+
+            # ----------------------------------------------------------------
+            #
+            # Misc
+            #
+            # ----------------------------------------------------------------
+            
+            self.reconstruct_helper.append( None )
             
             # ----------------------------------------------------------------
             #
@@ -602,7 +611,7 @@ class App:
         grabber = self.all_grabbers[cam_no]
         cam_id = self.all_cam_ids[cam_no]
         globals = self.globals[cam_no]
-        
+
         for key in cmds.keys():
             if key == 'set':
                 for property_name,value in cmds['set'].iteritems():
@@ -696,7 +705,6 @@ class App:
                 print msg
             elif key == 'start_small_recording':
                 small_movie_filename, small_datafile_filename = cmds[key]
-                print 'WARNING: fly small movie filenames will conflict if > 1 camera per computer'
                 small_movie = FlyMovieFormat.FlyMovieSaver(small_movie_filename,version=1)
                 small_datafile = file( small_datafile_filename, mode='wb' )
                 globals['small_fmf'] = small_movie, small_datafile
@@ -707,7 +715,18 @@ class App:
             elif key == 'cal':
                 pmat, intlin, intnonlin = cmds[key]
                 grabber.pmat = pmat
-                grabber.make_reconstruct_helper(intlin, intnonlin)
+                grabber.make_reconstruct_helper(intlin, intnonlin) # let grab thread make one
+
+                ######
+                fc1 = intlin[0,0]
+                fc2 = intlin[1,1]
+                cc1 = intlin[0,2]
+                cc2 = intlin[1,2]
+                k1, k2, p1, p2 = intnonlin
+
+                # we make one, too
+                self.reconstruct_helper[cam_no] = reconstruct_utils.ReconstructHelper(
+                    fc1, fc2, cc1, cc2, k1, k2, p1, p2 )                
             else:
                 raise ValueError("Unknown key '%s'"%key)
                 
@@ -779,6 +798,7 @@ class App:
                         try:
                             while 1:
                                 frame,timestamp,framenumber,points,lbrt = get_raw_frame_nowait() # this may raise Queue.Empty
+                                # XXX could have option to skip frames if a newer frame is available
                                 last_frames.append( (frame,timestamp,framenumber,points) )
                                 while len(last_frames)>1000:
                                     del last_frames[0]
@@ -794,7 +814,9 @@ class App:
                                     
                                     x0, y0 = pt[0],pt[1] # absolute values, undistorted
                                     # re-distort to image coordinates
-                                    x0, y0 = self.realtime_analyzer.distort(x0,y0)
+                                    helper = self.reconstruct_helper[cam_no]
+                                    if helper is not None:
+                                        x0, y0 = helper.distort(x0,y0)
                                     l,b,r,t = lbrt # absolute values
                                     hw_roi_w = r-l
                                     hw_roi_h = t-b
