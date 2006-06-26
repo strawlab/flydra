@@ -663,13 +663,13 @@ class wxMainBrainApp(wxApp):
         
         cam_choice = XRCCTRL(self.record_raw_panel,
                              "record_raw_cam_select_checklist")
-        filename_text_entry = XRCCTRL(self.record_raw_panel,
-                                      "record_raw_filename")
-        raw_filename = filename_text_entry.GetValue()
-        if raw_filename.endswith('.fmf'):
-            bg_filename = raw_filename[:-4] + '_bg.fmf'
-        else:
-            bg_filename = raw_filename + '.bg.fmf'
+##        filename_text_entry = XRCCTRL(self.record_raw_panel,
+##                                      "record_raw_filename")
+##        raw_filename = filename_text_entry.GetValue()
+##        if raw_filename.endswith('.fmf'):
+##            bg_filename = raw_filename[:-4] + '_bg.fmf'
+##        else:
+##            bg_filename = raw_filename + '.bg.fmf'
         cam_ids = []
         for i in range(cam_choice.GetCount()):
             if cam_choice.IsChecked(i):
@@ -678,8 +678,12 @@ class wxMainBrainApp(wxApp):
             self.record_raw.SetValue(False)
             return
         try:
+            nowstr = time.strftime( '%Y%m%d_%H%M%S' )
             for cam_id in cam_ids:
-                self.main_brain.start_recording(cam_id, raw_filename, bg_filename)
+                basename = '/mnt/local/full_%s_%s'%(nowstr,cam_id)
+                self.main_brain.start_recording(cam_id,
+                                                basename+'.fmf',
+                                                basename+'_bg.fmf')
                 self._currently_recording_cams.append(cam_id)
             self.statusbar.SetStatusText('Recording started on %d cameras'%(
                 len(self._currently_recording_cams),),0)
@@ -701,13 +705,13 @@ class wxMainBrainApp(wxApp):
         
         cam_choice = XRCCTRL(self.record_raw_panel,
                              "record_raw_cam_select_checklist")
-        filename_text_entry = XRCCTRL(self.record_raw_panel,
-                                      "record_small_filename")
-        small_filename = filename_text_entry.GetValue()
-        if small_filename.endswith('.fmf'):
-            small_datafile_filename = small_filename[:-4] + '.smd'
-        else:
-            small_datafile_filename = small_filename + '.smd'
+##        filename_text_entry = XRCCTRL(self.record_raw_panel,
+##                                      "record_small_filename")
+##        small_filename = filename_text_entry.GetValue()
+##        if small_filename.endswith('.fmf'):
+##            small_datafile_filename = small_filename[:-4] + '.smd'
+##        else:
+##            small_datafile_filename = small_filename + '.smd'
         cam_ids = []
         for i in range(cam_choice.GetCount()):
             if cam_choice.IsChecked(i):
@@ -716,10 +720,12 @@ class wxMainBrainApp(wxApp):
             self.record_small.SetValue(False)
             return
         try:
+            nowstr = time.strftime( '%Y%m%d_%H%M%S' )
             for cam_id in cam_ids:
+                basename = '/mnt/local/small_%s_%s'%(nowstr,cam_id)
                 self.main_brain.start_small_recording(cam_id,
-                                                      small_filename,
-                                                      small_datafile_filename)
+                                                      basename+'.fmf',
+                                                      basename+'.smd')
                 self._currently_recording_small_cams.append(cam_id)
             self.statusbar.SetStatusText('Small recording started on %d cameras'%(
                 len(self._currently_recording_small_cams),),0)
