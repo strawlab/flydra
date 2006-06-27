@@ -305,7 +305,6 @@
       <object class="sizeritem">
         <object class="wxPanel" name="PreviewPerCamPanel">
           <size>10,200</size>
-          <bg>#00FF00</bg>
         </object>
         <flag>wxEXPAND</flag>
       </object>
@@ -324,7 +323,6 @@
       </object>
       <object class="sizeritem">
         <object class="wxNotebook" name="MAIN_NOTEBOOK">
-          <bg>#00FFFF</bg>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>
