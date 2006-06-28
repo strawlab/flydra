@@ -27,7 +27,7 @@ def apply_distortion(x,k):
     cdist = 1 + k[0]*r2 + k[1]*r4 + k[4]*r6
 
     #print 'cdist',cdist
-    xd1 = x * nx.matrixmultiply(nx.ones((2,1)),cdist[nx.NewAxis,:])
+    xd1 = x * nx.matrixmultiply(nx.ones((2,1)),cdist[nx.newaxis,:])
     #print 'xd1',xd1
 
     coeff = nx.matrixmultiply(nx.reshape( nx.transpose(nx.array([ cdist, cdist])),(2*n,1)),
@@ -44,9 +44,9 @@ def apply_distortion(x,k):
                          k[2]*a3 + k[3]*a1])
 
     if 0:
-        aa = nx.matrixmultiply((2*k[2]*x[1,:] + 6*k[3]*x[0,:])[:,nx.NewAxis], nx.ones((1,3)))
-        bb = nx.matrixmultiply((2*k[2]*x[0,:] + 2*k[3]*x[1,:])[:,nx.NewAxis], nx.ones((1,3)))
-        cc = nx.matrixmultiply((6*k[2]*x[1,:] + 2*k[3]*x[0,:])[:,nx.NewAxis], nx.ones((1,3)))
+        aa = nx.matrixmultiply((2*k[2]*x[1,:] + 6*k[3]*x[0,:])[:,nx.newaxis], nx.ones((1,3)))
+        bb = nx.matrixmultiply((2*k[2]*x[0,:] + 2*k[3]*x[1,:])[:,nx.newaxis], nx.ones((1,3)))
+        cc = nx.matrixmultiply((6*k[2]*x[1,:] + 2*k[3]*x[0,:])[:,nx.newaxis], nx.ones((1,3)))
     #print 'aa',aa
     #print 'bb',bb
     #print 'cc',cc
@@ -197,8 +197,8 @@ class CachedUndistorter:
         Irec = 255.0*nx.ones((nr*nc,))
         Irec[ind_new] = a1 * Ir[ind_lu] + a2 * Ir[ind_ru] + a3 * Ir[ind_ld] + a4 * Ir[ind_rd]
 
-        # convert to UInt8 format
-        Irec = Irec.astype(nx.UInt8)
+        # convert to uint8 format
+        Irec = Irec.astype(nx.uint8)
 
         # convert matlab unidimensional format into numpy format
         Irec = nx.reshape(Irec,(nc,nr))
@@ -352,5 +352,5 @@ def undistort( reconstructor, distorted_image, cam_id ):
     f = intrin[0,0], intrin[1,1] # focal length
     c = intrin[0,2], intrin[1,2] # camera center
     im = rect(distorted_image, f=f, c=c, k=k) # perform the undistortion
-    im = im.astype(nx.UInt8)
+    im = im.astype(nx.uint8)
     return im

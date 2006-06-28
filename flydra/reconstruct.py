@@ -92,7 +92,7 @@ def as_vec(x):
 
 def Lcoords2Lmatrix(Lcoords):
     Lcoords = nx.asarray(Lcoords)
-    Lmatrix = nx.zeros((4,4),nx.Float64)
+    Lmatrix = nx.zeros((4,4),nx.float64)
     Lmatrix[L_i,L_j]=Lcoords
     Lmatrix[L_j,L_i]=-Lcoords
     return Lmatrix
@@ -117,7 +117,7 @@ def norm_vec(V):
     else:
         assert Va.shape[1] == 3
         Vamags = nx.sqrt(Va[:,0]**2 + Va[:,1]**2 + Va[:,2]**2)
-        U = Va/Vamags[:,nx.NewAxis]
+        U = Va/Vamags[:,nx.newaxis]
     return U
         
 def line_direction(Lcoords):
@@ -569,7 +569,7 @@ class Reconstructor:
             if len(X) == 3:
                 X = nx.array([[X[0]], [X[1]], [X[2]], [1.0]])
             else:
-                X = X[:,nx.NewAxis] # 4 rows, 1 column
+                X = X[:,nx.newaxis] # 4 rows, 1 column
         else:
             X = nx.transpose(X) # 4 rows, N columns
         Pmat = self.Pmat[cam_id]
