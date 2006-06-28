@@ -651,10 +651,12 @@ class App:
                         globals['export_image_name'] = value
                         print 'displaying',value,'image'
             elif key == 'get_im':
-                lb, im = globals['most_recent_frame_potentially_corrupt']
-                #nxim = nx.array(im) # copy to native nx form, not view of __array_struct__ form
-                nxim = nx.asarray(im) # copy to native nx form, not view of __array_struct__ form
-                self.main_brain.set_image(cam_id, (lb, nxim))
+                val = globals['most_recent_frame_potentially_corrupt']
+                if val is not None: # prevent race condition
+                    lb, im = val
+                    #nxim = nx.array(im) # copy to native nx form, not view of __array_struct__ form
+                    nxim = nx.asarray(im) # view of __array_struct__ form
+                    self.main_brain.set_image(cam_id, (lb, nxim))
             elif key == 'use_arena':
                 grabber.use_arena = cmds[key]
                 globals['use_arena'] = grabber.use_arena
