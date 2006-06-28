@@ -28,8 +28,8 @@ small_datafile_fmt = '<dII'
     
 Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here!
 
-Pyro.config.PYRO_TRACELEVEL = 3
-Pyro.config.PYRO_USER_TRACELEVEL = 3
+Pyro.config.PYRO_TRACELEVEL = 0
+Pyro.config.PYRO_USER_TRACELEVEL = 0
 Pyro.config.PYRO_DETAILED_TRACEBACK = 1
 Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
 
@@ -146,6 +146,7 @@ class GrabClass(object):
         fi8ufactory = FastImage.FastImage8u
         use_cmp_isSet = globals['use_cmp'].isSet
         return_first_xy = 0
+        
         hw_roi_frame = fi8ufactory( cur_fisize )
 
         if REALTIME_UDP:
@@ -171,7 +172,7 @@ class GrabClass(object):
             print msg
 
         
-        FastImage.set_debug(1) # let us see any images malloced, should only happen on hardware ROI size change
+        #FastImage.set_debug(1) # let us see any images malloced, should only happen on hardware ROI size change
         
         self.cam.start_camera()  # start camera
 
@@ -187,8 +188,8 @@ class GrabClass(object):
         running_mean_im = hw_roi_frame.get_32f_copy(max_frame_size)
         running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
 
-        #
         fastframef32_tmp = FastImage.FastImage32f(max_frame_size)
+        
         mean2 = FastImage.FastImage32f(max_frame_size)
         running_stdframe = FastImage.FastImage32f(max_frame_size)
         compareframe = FastImage.FastImage32f(max_frame_size)
@@ -205,7 +206,6 @@ class GrabClass(object):
         
         try:
             while not cam_quit_event_isSet():
-                
                 try:
                     self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
                 except cam_iface.BuffersOverflowed:
@@ -441,7 +441,7 @@ class GrabClass(object):
                     
         finally:
             self.realtime_analyzer.close()
-            FastImage.set_debug(0)
+            #FastImage.set_debug(0)
             globals['cam_quit_event'].set()
             globals['grab_thread_done'].set()
 
