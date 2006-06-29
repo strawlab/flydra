@@ -1001,7 +1001,11 @@ class MainBrain(object):
             quit_now_isSet = self.quit_now.isSet
             hr = daemon.handleRequests
             while not quit_now_isSet():
-                hr(0.1) # block on select for n seconds
+                try:
+                    hr(0.1) # block on select for n seconds
+                except select.error, err:
+                    print 'select.error on RemoteAPI.listen(), ignoring...'
+                    continue
                 DEBUG('2')
                 self.cam_info_lock.acquire()
                 try:
