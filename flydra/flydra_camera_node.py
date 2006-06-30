@@ -693,6 +693,14 @@ class App:
                     globals['small_fmf'] = None
             elif key == 'start_recording':
                 raw_filename, bg_filename = cmds[key]
+                
+                raw_filename = os.path.expanduser(raw_filename)
+                bg_filename = os.path.expanduser(bg_filename)
+                
+                save_dir = os.path.split(raw_filename)[0]
+                if not os.path.exists(save_dir):
+                    os.makedirs(save_dir)
+                    
                 std_filename = bg_filename.replace('_bg','_std')
                 msg = 'WARNING: fly movie filenames will conflict if > 1 camera per computer'
                 print msg
@@ -707,6 +715,14 @@ class App:
                 print msg
             elif key == 'start_small_recording':
                 small_movie_filename, small_datafile_filename = cmds[key]
+                
+                small_movie_filename = os.path.expanduser(small_movie_filename)
+                small_datafile_filename = os.path.expanduser(small_datafile_filename)
+                
+                save_dir = os.path.split(small_movie_filename)[0]
+                if not os.path.exists(save_dir):
+                    os.makedirs(save_dir)
+                    
                 small_movie = FlyMovieFormat.FlyMovieSaver(small_movie_filename,version=1)
                 small_datafile = file( small_datafile_filename, mode='wb' )
                 globals['small_fmf'] = small_movie, small_datafile

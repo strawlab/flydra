@@ -609,28 +609,28 @@ class wxMainBrainApp(wxApp):
         EVT_CHECKBOX(self.record_raw, self.record_raw.GetId(),
                      self.OnRecordRaw)
 
-        filename_text_entry = XRCCTRL(self.record_raw_panel,
-                                      "record_raw_filename")
+##        filename_text_entry = XRCCTRL(self.record_raw_panel,
+##                                      "record_raw_filename")
 
         self.record_small = XRCCTRL(self.record_raw_panel,
                                   "record_small")
         EVT_CHECKBOX(self.record_small, self.record_small.GetId(),
                      self.OnRecordSmall)
 
-        small_filename_text_entry = XRCCTRL(self.record_raw_panel,
-                                            "record_small_filename")
+##        small_filename_text_entry = XRCCTRL(self.record_raw_panel,
+##                                            "record_small_filename")
 
-        EVT_SET_FOCUS(filename_text_entry,
-                      self.OnFilenameSetFocus)
+##        EVT_SET_FOCUS(filename_text_entry,
+##                      self.OnFilenameSetFocus)
 
-        EVT_KILL_FOCUS(filename_text_entry,
-                      self.OnFilenameKillFocus)
+##        EVT_KILL_FOCUS(filename_text_entry,
+##                      self.OnFilenameKillFocus)
         
-        EVT_SET_FOCUS(small_filename_text_entry,
-                      self.OnFilenameSetFocus)
+##        EVT_SET_FOCUS(small_filename_text_entry,
+##                      self.OnFilenameSetFocus)
 
-        EVT_KILL_FOCUS(small_filename_text_entry,
-                      self.OnFilenameKillFocus)
+##        EVT_KILL_FOCUS(small_filename_text_entry,
+##                      self.OnFilenameKillFocus)
         
         self._currently_recording_cams = []
         self._currently_recording_small_cams = []
@@ -680,7 +680,7 @@ class wxMainBrainApp(wxApp):
         try:
             nowstr = time.strftime( '%Y%m%d_%H%M%S' )
             for cam_id in cam_ids:
-                basename = '/mnt/local/full_%s_%s'%(nowstr,cam_id)
+                basename = '~/FLYDRA_LARGE_MOVIES/full_%s_%s'%(nowstr,cam_id)
                 self.main_brain.start_recording(cam_id,
                                                 basename+'.fmf',
                                                 basename+'_bg.fmf')
@@ -722,7 +722,7 @@ class wxMainBrainApp(wxApp):
         try:
             nowstr = time.strftime( '%Y%m%d_%H%M%S' )
             for cam_id in cam_ids:
-                basename = '/mnt/local/small_%s_%s'%(nowstr,cam_id)
+                basename = '~/FLYDRA_SMALL_MOVIES/small_%s_%s'%(nowstr,cam_id)
                 self.main_brain.start_small_recording(cam_id,
                                                       basename+'.fmf',
                                                       basename+'.smd')
