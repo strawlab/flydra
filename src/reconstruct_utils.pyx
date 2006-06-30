@@ -219,7 +219,7 @@ def find_best_3d( object recon, object d2):
             for cam_id in cam_ids_used:
                 orig_x,orig_y = all2d[cam_id]
                 Pmat = Pmat_fastnx[cam_id]
-                new_xyw = fast_nx.matrixmultiply( Pmat, X ) # reproject 3d to 2d
+                new_xyw = fast_nx.dot( Pmat, X ) # reproject 3d to 2d
                 new_x, new_y = new_xyw[0:2]/new_xyw[2]
 
                 dist = sqrt((orig_x-new_x)**2 + (orig_y-new_y)**2)
