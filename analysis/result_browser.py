@@ -53,15 +53,7 @@ class ExactROIFrameMovieInfo(PT.IsDescription):
     timestamp          = PT.FloatCol(pos=5,indexed=True)
     left               = PT.Int32Col(pos=6)
     bottom             = PT.Int32Col(pos=7)
-    
-class Data2DCameraSummary(PT.IsDescription):
-    cam_id             = PT.StringCol(16,pos=0)
-    camn               = PT.Int32Col(pos=1)
-    start_frame        = PT.Int32Col(pos=2)
-    stop_frame         = PT.Int32Col(pos=3)
-    start_timestamp    = PT.FloatCol(pos=4)
-    stop_timestamp     = PT.FloatCol(pos=5)
-    
+
 class SmallFMFSummary(PT.IsDescription):
     cam_id             = PT.StringCol(16,pos=0)
     camn               = PT.Int32Col(pos=1,indexed=True)
@@ -2053,37 +2045,6 @@ def update_small_fmf_summary(results,cam_id,roi_movie_basename):
         newrow.append()
     table.flush()
         
-def create_data2d_camera_summary(results):
-    data2d = results.root.data2d_distorted # make sure we have 2d data table
-    camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
-    table = results.createTable( results.root, 'data2d_camera_summary',
-                                 Data2DCameraSummary, 'data2d camera summary' )
-    for camn in camn2cam_id:
-        cam_id = camn2cam_id[camn]
-        print 'creating 2d camera summary for camn %d, cam_id %s'%(camn,cam_id)
-
-        first_row = True
-        for row_data2d in data2d.where( data2d.cols.camn == camn ):
-            ts = row_data2d['timestamp']
-            f = row_data2d['frame']
-            if first_row:
-                start_timestamp = ts; stop_timestamp = ts
-                start_frame = f;      stop_frame = f
-                first_row = False
-            start_timestamp = min(start_timestamp,ts)
-            stop_timestamp = max(stop_timestamp,ts)
-            start_frame = min(start_frame,f)
-            stop_frame = max(stop_frame,f)
-        newrow = table.row
-        newrow['cam_id'] = cam_id
-        newrow['camn'] = camn
-        newrow['start_frame']=start_frame
-        newrow['stop_frame']=stop_frame
-        newrow['start_timestamp']=start_timestamp
-        newrow['stop_timestamp']=stop_timestamp
-        newrow.append()
-    table.flush()
-
 def plot_simple_phase_plots(results,form='xy',max_err=10,typ='best',ori_180_ambig=True):
     from matplotlib.collections import LineCollection
     f,xyz,L,err = get_f_xyz_L_err(results,max_err=max_err,typ=typ)
@@ -3030,7 +2991,7 @@ if __name__=='__main__':
         results.close()
         del results
         
-    results = get_results('DATA20060515_190905.h5',mode='r+')
+    results = get_results('DATA20060630_134737.h5',mode='r+')
     #results = get_results('DATA20060315_170142.h5',mode='r+')
 
     #del results.root.exact_movie_info
