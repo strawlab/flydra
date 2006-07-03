@@ -376,6 +376,10 @@ class CoordReceiver(threading.Thread):
         self.general_save_info[cam_id]['frame0']=timestamp
 
         self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, timestamp) )
+
+    def _null_distort(self,cam_id,pt_undistorted):
+        """imitate (re)distorting points (used when no calibration data loaded)"""
+        return pt_undistorted
         
     def run(self):
         """main loop of CoordReceiver"""
@@ -491,6 +495,11 @@ class CoordReceiver(threading.Thread):
                 idx = in_ready.index(self.timestamp_echo_gatherer)
                 del in_ready[idx]
 
+
+            if self.reconstructor is None:
+                redistort = self._null_distort
+            else:
+                redistort = self.reconstructor.distort
             self.all_data_lock.acquire()
             #self.all_data_lock.acquire(latency_warn_msec=1.0)
             try:
@@ -516,7 +525,8 @@ class CoordReceiver(threading.Thread):
                             # incomplete header buffer
                             break
                         timestamp, framenumber, n_pts = struct.unpack(header_fmt,header)
-                        points = []
+                        points_undistorted = []
+                        points_distorted = []
                         if len(data) < header_size + n_pts*pt_size:
                             # incomplete point info
                             break
@@ -538,15 +548,19 @@ class CoordReceiver(threading.Thread):
                                     eccentricity = inf
                                 if not slope_found:
                                     slope = nan
-                                points.append( (x,y,area,slope,eccentricity,
-                                                p1,p2,p3,p4, True) )
+                                pt_undistorted = (x,y,area,slope,eccentricity,
+                                                   p1,p2,p3,p4, True)
+                                pt_distorted = redistort(cam_id,pt_undistorted)
+                                points_undistorted.append( pt_undistorted )
+                                points_distorted.append( pt_distorted )
                                 start=end
                         else:
                             # no points found
                             end = start
                             # append non-point to allow correlation of
                             # timestamps with frame number
-                            points.append( no_point_tuple )
+                            points_distorted.append( no_point_tuple )
+                            points_undistorted.append( no_point_tuple )
                         data = data[end:]
 
                         # -----------------------------------------------
@@ -554,7 +568,7 @@ class CoordReceiver(threading.Thread):
                         # XXX hack? make data available via cam_dict
                         cam_dict = self.main_brain.remote_api.cam_info[cam_id]
                         cam_dict['lock'].acquire()
-                        cam_dict['points']=points
+                        cam_dict['points_distorted']=points_distorted
                         cam_dict['lock'].release()
 
                         if timestamp-self.last_timestamps[cam_idx] > self.RESET_FRAMENUMBER_DURATION:
@@ -567,7 +581,7 @@ class CoordReceiver(threading.Thread):
                         XXX_framenumber = corrected_framenumber
 
                         if self.main_brain.is_saving_data():
-                            for point_tuple in points:
+                            for point_tuple in points_distorted:
                                 # Save 2D data (even when no point found) to allow
                                 # temporal correlation of movie frames to 2D data.
                                 deferred_2d_data.append((absolute_cam_no, # defer saving to later
@@ -576,7 +590,7 @@ class CoordReceiver(threading.Thread):
                                                         +point_tuple[:9])
                         # save new frame data
                         # XXX for now, only attempt 3D reconstruction of 1st point from each 2D view
-                        realtime_coord_dict.setdefault(corrected_framenumber,{})[cam_id]=points[0]
+                        realtime_coord_dict.setdefault(corrected_framenumber,{})[cam_id]=points_undistorted[0]
 
                         new_data_framenumbers.add( corrected_framenumber ) # insert into set
 
@@ -791,18 +805,18 @@ class MainBrain(object):
                     cam['image'] = None
                     fps = cam['fps']
                     cam['fps'] = None
-                    points = cam['points'][:]
+                    points_distorted = cam['points_distorted'][:]
                 finally:
                     cam_lock.release()
             finally:
                 self.cam_info_lock.release()
-            # NB: points are undistorted (and therefore do not align
+            # NB: points are distorted (and therefore align
             # with distorted image)
             if coord_and_image is not None:
                 image_coords, image = coord_and_image
             else:
                 image_coords, image = None, None
-            return image, fps, points, image_coords
+            return image, fps, points_distorted, image_coords
 
         def external_send_set_camera_property( self, cam_id, property_name, value):
             self.cam_info_lock.acquire()
@@ -1051,7 +1065,7 @@ class MainBrain(object):
                                          'lock':threading.Lock(), # prevent concurrent access
                                          'image':None,  # most recent image from cam
                                          'fps':None,    # most recept fps from cam
-                                         'points':[], # 2D image points
+                                         'points_distorted':[], # 2D image points
                                          'caller':caller,
                                          'scalar_control_info':scalar_control_info,
                                          'fqdn':fqdn,
@@ -1344,26 +1358,14 @@ class MainBrain(object):
             buf = struct.pack( self.timestamp_echo_fmt1, time.time() )
             self.outgoing_latency_UDP_socket.sendto(buf,(fqdn,self.timestamp_echo_listener_port))
 
-    def get_last_image_fps(self, cam_id, distort_points_to_align_with_image=True):
+    def get_last_image_fps(self, cam_id):
         # XXX should extend to include lines
         
-        # Points are originally undistorted (and therefore do not
-        # align with distorted image). We must distort them.
-        
-        image, fps, points, image_coords = self.remote_api.external_get_image_fps_points(cam_id)
-        if self.reconstructor is None:
-            distorted_points = points
-        elif distort_points_to_align_with_image:
-            distorted_points = []
-            for pt in points:
-                xd,yd = self.reconstructor.distort(cam_id,pt)
-                dp = list(pt)
-                dp[0] = xd
-                dp[1] = yd
-                distorted_points.append( dp )
-        else:
-            distorted_points = points
-        return image, fps, distorted_points, image_coords
+        # Points are originally distorted (and align with distorted
+        # image).
+        (image, fps, points_distorted,
+         image_coords) = self.remote_api.external_get_image_fps_points(cam_id)
+        return image, fps, points_distorted, image_coords
 
     def fake_synchronize(self):
         self.coord_receiver.fake_synchronize()
@@ -1501,7 +1503,7 @@ class MainBrain(object):
         expected_rows = int(1e6)
         ct = self.h5file.createTable # shorthand
         root = self.h5file.root # shorthand
-        self.h5data2d   = ct(root,'data2d', Info2D, "2d data",
+        self.h5data2d   = ct(root,'data2d_distorted', Info2D, "2d data",
                              expectedrows=expected_rows*5)
         self.h5cam_info = ct(root,'cam_info', CamSyncInfo, "Cam Sync Info",
                              expectedrows=500)
@@ -1686,7 +1688,7 @@ class MainBrain(object):
             self.h5file.close()
             self.h5file = PT.openFile(filename, mode="r+")
             
-            self.h5data2d = getattr(self.h5file.root,'data2d')
+            self.h5data2d = getattr(self.h5file.root,'data2d_distorted')
             self.h5cam_info = getattr(self.h5file.root,'cam_info')
             self.h5host_clock_info = getattr(self.h5file.root,'host_clock_info')
             self.h5movie_info = getattr(self.h5file.root,'movie_info')
