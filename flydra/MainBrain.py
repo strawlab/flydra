@@ -1019,7 +1019,7 @@ class MainBrain(object):
                     finally:
                         self.cam_info_lock.release()                    
                     if not connected:
-                        print 'main_brain WARNING: lost camera',cam_id
+                        print 'main_brain WARNING: lost %s at %s'%(cam_id,time.asctime())
                         self.close(cam_id)
             self.thread_done.set()
                                              
