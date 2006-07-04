@@ -23,7 +23,7 @@ if sys.platform == 'win32':
 else:
     time_func = time.time
 
-pt_fmt = '<dddddddddBB'
+pt_fmt = '<dddddddddBBdd'
 small_datafile_fmt = '<dII'
     
 Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here!
@@ -830,11 +830,7 @@ class App:
                                 if small_movie is not None and n_pts>0:
                                     pt = points[0] # save only first found point currently
                                     
-                                    x0, y0 = pt[0],pt[1] # absolute values, undistorted
-                                    # re-distort to image coordinates
-                                    helper = self.reconstruct_helper[cam_no]
-                                    if helper is not None:
-                                        x0, y0 = helper.distort(x0,y0)
+                                    x0, y0 = pt[0],pt[1] # absolute values, distorted
                                     l,b,r,t = lbrt # absolute values
                                     hw_roi_w = r-l
                                     hw_roi_h = t-b

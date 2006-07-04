@@ -377,10 +377,6 @@ class CoordReceiver(threading.Thread):
 
         self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, timestamp) )
 
-    def _null_distort(self,cam_id,pt_undistorted):
-        """imitate (re)distorting points (used when no calibration data loaded)"""
-        return pt_undistorted
-        
     def run(self):
         """main loop of CoordReceiver"""
         global downstream_hosts, best_realtime_data
@@ -398,7 +394,7 @@ class CoordReceiver(threading.Thread):
         
         header_fmt = '<dli'
         header_size = struct.calcsize(header_fmt)
-        pt_fmt = '<dddddddddBB'
+        pt_fmt = '<dddddddddBBdd'
         pt_size = struct.calcsize(pt_fmt)
         timeout = 0.1
         
@@ -496,10 +492,6 @@ class CoordReceiver(threading.Thread):
                 del in_ready[idx]
 
 
-            if self.reconstructor is None:
-                redistort = self._null_distort
-            else:
-                redistort = self.reconstructor.distort
             self.all_data_lock.acquire()
             #self.all_data_lock.acquire(latency_warn_msec=1.0)
             try:
@@ -538,7 +530,9 @@ class CoordReceiver(threading.Thread):
                             # valid points
                             for i in range(n_pts):
                                 end=start+pt_size
-                                x,y,area,slope,eccentricity,p1,p2,p3,p4,line_found,slope_found = struct.unpack(pt_fmt,data[start:end])
+                                (x_distorted,y_distorted,area,slope,eccentricity,
+                                 p1,p2,p3,p4,line_found,slope_found,
+                                 x_undistorted,y_undistorted)= struct.unpack(pt_fmt,data[start:end])
                                 # nan cannot get sent across network in platform-independent way
                                 if not line_found:
                                     p1,p2,p3,p4 = nan,nan,nan,nan
@@ -548,9 +542,12 @@ class CoordReceiver(threading.Thread):
                                     eccentricity = inf
                                 if not slope_found:
                                     slope = nan
-                                pt_undistorted = (x,y,area,slope,eccentricity,
-                                                   p1,p2,p3,p4, True)
-                                pt_distorted = redistort(cam_id,pt_undistorted)
+                                pt_undistorted = (x_undistorted,y_undistorted,
+                                                  area,slope,eccentricity,
+                                                  p1,p2,p3,p4, True)
+                                pt_distorted = (x_distorted,y_distorted,
+                                                area,slope,eccentricity,
+                                                p1,p2,p3,p4, True)
                                 points_undistorted.append( pt_undistorted )
                                 points_distorted.append( pt_distorted )
                                 start=end
