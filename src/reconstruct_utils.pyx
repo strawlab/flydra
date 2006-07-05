@@ -1,3 +1,6 @@
+#emacs, this is -*-Python-*- mode
+# $Id: $
+
 import numpy
 nx = numpy
 fast_nx = numpy
