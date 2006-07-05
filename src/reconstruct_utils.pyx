@@ -2,9 +2,8 @@
 # $Id: $
 
 import numpy
-nx = numpy
-fast_nx = numpy
-inf = nx.inf
+import numpy.dual
+inf = numpy.inf
 
 cdef double cinf
 cinf = inf
@@ -46,9 +45,9 @@ cdef class ReconstructHelper:
         self.p2 = p2
 
     def get_K(self):
-        K = nx.array((( self.fc1, 0, self.cc1),
-                      ( 0, self.fc2, self.cc2),
-                      ( 0, 0, 1)))
+        K = numpy.array((( self.fc1, 0, self.cc1),
+                         ( 0, self.fc2, self.cc2),
+                         ( 0, 0, 1)))
         return K
 
     def get_nlparams(self):
@@ -140,7 +139,7 @@ def find_best_3d( object recon, object d2):
     
     MAX_CAMERAS = 10 # should be a compile-time define
     
-    fast_svd = numpy.linalg.svd # eliminate global name lookup
+    svd = numpy.dual.svd # eliminate global name lookup
     
     cam_ids = recon.cam_ids # shorthand
     max_n_cams = len(cam_ids)
@@ -152,7 +151,7 @@ def find_best_3d( object recon, object d2):
     for i from 0 <= i <= max_n_cams:
         least_err_by_n_cameras[i] = cinf
     
-    allA = fast_nx.zeros( (2*max_n_cams,4),'d')
+    allA = numpy.zeros( (2*max_n_cams,4),'d')
     bad_cam_ids = []
     cam_id2idx = {}
     all2d = {}
@@ -214,15 +213,15 @@ def find_best_3d( object recon, object d2):
                     good_A_idx.extend( (i*2, i*2+1) )
             if missing_cam_data == 1:
                 continue
-            A = fast_nx.take(allA,good_A_idx)
-            u,d,vt=fast_svd(A)
+            A = numpy.take(allA,good_A_idx)
+            u,d,vt=svd(A)
             X = vt[-1,:]/vt[-1,3] # normalize
 
             mean_dist = 0.0
             for cam_id in cam_ids_used:
                 orig_x,orig_y = all2d[cam_id]
                 Pmat = Pmat_fastnx[cam_id]
-                new_xyw = fast_nx.dot( Pmat, X ) # reproject 3d to 2d
+                new_xyw = numpy.dot( Pmat, X ) # reproject 3d to 2d
                 new_x, new_y = new_xyw[0:2]/new_xyw[2]
 
                 dist = sqrt((orig_x-new_x)**2 + (orig_y-new_y)**2)
@@ -259,8 +258,8 @@ def find_best_3d( object recon, object d2):
     if len(P) < 2:
         Lcoords = None
     else:
-        P = fast_nx.array(P)
-        u,d,vt=fast_svd(P,full_matrices=True)
+        P = numpy.array(P)
+        u,d,vt=svd(P,full_matrices=True)
 
         P = vt[0,:] # P,Q are planes (take row because this is transpose(V))
         Q = vt[1,:]
