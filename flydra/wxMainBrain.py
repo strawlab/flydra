@@ -38,8 +38,12 @@ from wxPython.wx import *
 from wxPython.lib.scrolledpanel import wxScrolledPanel
 from wxPython.xrc import *
 
-RESDIR = os.path.split(__file__)[0]
-RESFILE = os.path.join(RESDIR,'flydra_server.xrc')
+ # trigger extraction
+RESFILE = pkg_resources.resource_filename(__name__,"flydra_server.xrc")
+pkg_resources.resource_filename(__name__,"flydra_server_art.png")
+pkg_resources.resource_filename(__name__,"detect.wav")
+
+RESDIR = os.path.split(RESFILE)[0]
 RES = wxEmptyXmlResource()
 RES.LoadFromString(open(RESFILE).read())
 
