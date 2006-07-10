@@ -238,7 +238,7 @@ class CoordReceiver(threading.Thread):
         self.quit_event = threading.Event()
         
         self.max_absolute_cam_nos = -1
-        self.RESET_FRAMENUMBER_DURATION=1.0 # seconds
+        self.RESET_FRAMENUMBER_DURATION=2.0 # seconds
         
         self.general_save_info = {}
 

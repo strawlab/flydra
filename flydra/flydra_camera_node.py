@@ -496,8 +496,9 @@ class App:
         timestamp_echo_thread.start()
         
         for cam_no in range(self.num_cams):
-            num_buffers = 20
+            num_buffers = 200
             cam = cam_iface.Camera(cam_no,num_buffers,7,0,0) # last 3 parameters only used on window drivers for now
+            print 'allocated DMA interface with %d buffers'%num_buffers
             self.all_cams.append( cam )
 
             height = cam.get_max_height()
