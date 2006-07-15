@@ -238,6 +238,7 @@ class GrabClass(object):
         incoming_raw_frames_queue_put = globals['incoming_raw_frames'].put
         if BENCHMARK:
             benchmark_start_time = time.time()
+            min_100_frame_time = 1e99
         try:
             while not cam_quit_event_isSet():
                 try:
@@ -257,7 +258,8 @@ class GrabClass(object):
                 if BENCHMARK:
                     if (framenumber%100) == 0:
                         dur = received_time-benchmark_start_time
-                        print '%.1f msec for 100 frames'%(dur*1000.0)
+                        min_100_frame_time = min(min_100_frame_time,dur)
+                        print '%.1f msec for 100 frames (min: %.1f)'%(dur*1000.0,min_100_frame_time*1000.0)
                         benchmark_start_time = received_time
                 else:
                     diff = timestamp-old_ts
@@ -507,12 +509,10 @@ class App:
         # Initialize network connections
         #
         # ----------------------------------------------------------------
-        if not BENCHMARK:
-            Pyro.core.initClient(banner=0)
-        
         if BENCHMARK:
             self.main_brain = DummyMainBrain()
         else:
+            Pyro.core.initClient(banner=0)
             port = 9833
             name = 'main_brain'
             main_brain_URI = "PYROLOC://%s:%d/%s" % (main_brain_hostname,port,name)
