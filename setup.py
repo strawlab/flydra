@@ -63,7 +63,7 @@ setup(name='flydra',
     ],
     },
       install_requires = install_requires,
-      zip_safe = True,
+      zip_safe = False, # must be false for flydra_bench
       package_data={'flydra':['flydra_server.xrc',
                               'flydra_server_art.png',
                               'detect.wav',
