@@ -56,6 +56,7 @@ setup(name='flydra',
       entry_points = {
     'console_scripts': [
     'flydra_camera_node = flydra.flydra_camera_node:main',
+    'flydra_bench = flydra.flydra_bench:main',
     ],
     'gui_scripts': [
     'flydra_mainbrain = flydra.wxMainBrain:main',
