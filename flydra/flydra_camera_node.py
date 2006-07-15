@@ -1,17 +1,54 @@
 #emacs, this is -*-Python-*- mode
 # $Id: $
 
-import threading, time, socket, sys, struct, os, select
-import Pyro.core, Pyro.errors
-import FlyMovieFormat
-import numpy as nx
-import cam_iface
-import flydra.reconstruct_utils as reconstruct_utils
+import os
+BENCHMARK = int(os.environ.get('FLYDRA_BENCHMARK',0))
+
+import threading, time, socket, sys, struct, select, math
 import Queue
+import numpy as nx
+
+import FlyMovieFormat
+import cam_iface
+if not BENCHMARK:
+    import Pyro.core, Pyro.errors
+    Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here!
+    Pyro.config.PYRO_TRACELEVEL = 0
+    Pyro.config.PYRO_USER_TRACELEVEL = 0
+    Pyro.config.PYRO_DETAILED_TRACEBACK = 1
+    Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
+    ConnectionClosedError = Pyro.errors.ConnectionClosedError
+else:
+    class NonExistantError(Exception):
+        pass
+    ConnectionClosedError = NonExistantError
+import flydra.reconstruct_utils as reconstruct_utils
 import FastImage
 if os.name == 'posix':
     import posix_sched
-import math
+
+class DummyMainBrain:
+    def __init__(self,*args,**kw):
+        self.set_image = self.noop
+        self.set_fps = self.noop
+        self.log_message = self.noop
+        self.close = self.noop
+    def noop(self,*args,**kw):
+        return
+    def get_cam2mainbrain_port(self,*args,**kw):
+        return 12345
+    def register_new_camera(self,*args,**kw):
+        return 'camdummy_0'
+    def get_and_clear_commands(self,*args,**kw):
+        return {}
+    
+class DummySocket:
+    def __init__(self,*args,**kw):
+        self.connect = self.noop
+        self.send = self.noop
+        self.sendto = self.noop
+    def noop(self,*args,**kw):
+        return
 
 import flydra.common_variables
 REALTIME_UDP = flydra.common_variables.REALTIME_UDP
@@ -26,13 +63,6 @@ else:
 pt_fmt = '<dddddddddBBdd'
 small_datafile_fmt = '<dII'
     
-Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here!
-
-Pyro.config.PYRO_TRACELEVEL = 0
-Pyro.config.PYRO_USER_TRACELEVEL = 0
-Pyro.config.PYRO_DETAILED_TRACEBACK = 1
-Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
-
 CAM_CONTROLS = {'shutter':cam_iface.SHUTTER,
                 'gain':cam_iface.GAIN,
                 'brightness':cam_iface.BRIGHTNESS}
@@ -149,11 +179,14 @@ class GrabClass(object):
         
         hw_roi_frame = fi8ufactory( cur_fisize )
 
-        if REALTIME_UDP:
-            coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        if BENCHMARK:
+            coord_socket = DummySocket()
         else:
-            coord_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            coord_socket.connect((main_brain_hostname,self.cam2mainbrain_port))
+            if REALTIME_UDP:
+                coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            else:
+                coord_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                coord_socket.connect((main_brain_hostname,self.cam2mainbrain_port))
 
         old_ts = time.time()
         old_fn = 0
@@ -203,7 +236,8 @@ class GrabClass(object):
         mean_duration_bg = 0.020 # starting value
         
         incoming_raw_frames_queue_put = globals['incoming_raw_frames'].put
-        
+        if BENCHMARK:
+            benchmark_start_time = time.time()
         try:
             while not cam_quit_event_isSet():
                 try:
@@ -220,15 +254,21 @@ class GrabClass(object):
                 timestamp=self.cam.get_last_timestamp()
                 framenumber=self.cam.get_last_framenumber()
 
-                diff = timestamp-old_ts
-                if diff > 0.02:
-                    msg = 'Warning: IFI is %f on %s at %s'%(diff,self.cam_id,time.asctime())
-                    self.log_message_queue.put((self.cam_id,time.time(),msg))
-                    print >> sys.stderr, msg
-                if framenumber-old_fn > 1:
-                    msg = '  frames apparently skipped: %d'%(framenumber-old_fn,)
-                    self.log_message_queue.put((self.cam_id,time.time(),msg))
-                    print >> sys.stderr, msg
+                if BENCHMARK:
+                    if (framenumber%100) == 0:
+                        dur = received_time-benchmark_start_time
+                        print '%.1f msec for 100 frames'%(dur*1000.0)
+                        benchmark_start_time = received_time
+                else:
+                    diff = timestamp-old_ts
+                    if diff > 0.02:
+                        msg = 'Warning: IFI is %f on %s at %s'%(diff,self.cam_id,time.asctime())
+                        self.log_message_queue.put((self.cam_id,time.time(),msg))
+                        print >> sys.stderr, msg
+                    if framenumber-old_fn > 1:
+                        msg = '  frames apparently skipped: %d'%(framenumber-old_fn,)
+                        self.log_message_queue.put((self.cam_id,time.time(),msg))
+                        print >> sys.stderr, msg
                 old_ts = timestamp
                 old_fn = framenumber
 
@@ -421,7 +461,7 @@ class GrabClass(object):
                 else:
                     mean_duration_no_bg = (1-alpha)*mean_duration_no_bg + alpha*bookkeeping_dur
 
-                if bookkeeping_dur > 0.050:
+                if bookkeeping_dur > 0.050 and not BENCHMARK:
                     print 'TIME BUDGET:'
                     print '   % 5.1f start of work'%((work_start_time-received_time)*1000.0,)
                     print '   % 5.1f done with work'%((work_done_time-received_time)*1000.0,)
@@ -467,15 +507,18 @@ class App:
         # Initialize network connections
         #
         # ----------------------------------------------------------------
-
-        Pyro.core.initClient(banner=0)
+        if not BENCHMARK:
+            Pyro.core.initClient(banner=0)
         
-        port = 9833
-        name = 'main_brain'
-        main_brain_URI = "PYROLOC://%s:%d/%s" % (main_brain_hostname,port,name)
-        print 'connecting to',main_brain_URI
-        self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
-        self.main_brain._setOneway(['set_image','set_fps','close','log_message'])
+        if BENCHMARK:
+            self.main_brain = DummyMainBrain()
+        else:
+            port = 9833
+            name = 'main_brain'
+            main_brain_URI = "PYROLOC://%s:%d/%s" % (main_brain_hostname,port,name)
+            print 'connecting to',main_brain_URI
+            self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
+            self.main_brain._setOneway(['set_image','set_fps','close','log_message'])
         self.main_brain_lock = threading.Lock()
 
         # ----------------------------------------------------------------
@@ -916,7 +959,7 @@ class App:
                 self.main_brain_lock.release()
                 for cam_no in range(self.num_cams):
                     self.globals[cam_no]['cam_quit_event'].set()                    
-        except Pyro.errors.ConnectionClosedError:
+        except ConnectionClosedError:
             print 'unexpected connection closure...'
 
 def main():
