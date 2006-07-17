@@ -193,7 +193,7 @@ class GrabClass(object):
         n_rot_samples = 560*60 # 1 minute -- WARNING: not valid for all framerates!
         points = []
 
-        if os.name == 'posix':
+        if os.name == 'posix' and not BENCHMARK:
             try:
                 max_priority = posix_sched.get_priority_max( posix_sched.FIFO )
                 sched_params = posix_sched.SchedParam(max_priority)
