@@ -205,7 +205,7 @@ class GrabClass(object):
             print msg
 
         
-        #FastImage.set_debug(1) # let us see any images malloced, should only happen on hardware ROI size change
+        #FastImage.set_debug(3) # let us see any images malloced, should only happen on hardware ROI size change
         
         self.cam.start_camera()  # start camera
 
@@ -291,15 +291,15 @@ class GrabClass(object):
                 globals['most_recent_frame_potentially_corrupt'] = (0,0), export_image # give view of image, receiver must be careful
 
                 tp1 = time.time()
-                
-                # allow other thread to see raw image always (for saving)
-                incoming_raw_frames_queue_put(
-                    (hw_roi_frame.get_8u_copy(hw_roi_frame.size), # save a copy
-                     timestamp,
-                     framenumber,
-                     points,
-                     self.realtime_analyzer.roi,
-                     ) )
+                if not BENCHMARK:
+                    # allow other thread to see raw image always (for saving)
+                    incoming_raw_frames_queue_put(
+                        (hw_roi_frame.get_8u_copy(hw_roi_frame.size), # save a copy
+                         timestamp,
+                         framenumber,
+                         points,
+                         self.realtime_analyzer.roi,
+                         ) )
 
                 tp2 = time.time()
                 did_expensive = False
@@ -392,8 +392,9 @@ class GrabClass(object):
                         bg_image = running_mean8u_im
                         std_image = compareframe8u
                     globals['current_bg_frame_and_timestamp']=bg_image,std_image,timestamp # only used when starting to save
-                    globals['incoming_bg_frames'].put(
-                        (bg_image,std_image,timestamp,framenumber) ) # save it
+                    if not BENCHMARK:
+                        globals['incoming_bg_frames'].put(
+                            (bg_image,std_image,timestamp,framenumber) ) # save it
                     bg_changed = False
                     
                 if find_rotation_center_start_isSet():
