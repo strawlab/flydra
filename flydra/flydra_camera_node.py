@@ -534,9 +534,11 @@ class App:
         self.all_grabbers = []
         self.reconstruct_helper = []        
         
-        timestamp_echo_thread=threading.Thread(target=TimestampEcho)
-        timestamp_echo_thread.setDaemon(True) # quit that thread if it's the only one left...
-        timestamp_echo_thread.start()
+        if not BENCHMARK:
+            # run in single-thread for benchmark
+            timestamp_echo_thread=threading.Thread(target=TimestampEcho)
+            timestamp_echo_thread.setDaemon(True) # quit that thread if it's the only one left...
+            timestamp_echo_thread.start()
         
         for cam_no in range(self.num_cams):
             num_buffers = 205
@@ -644,12 +646,16 @@ class App:
             
             grabber.use_arena = False
             globals['use_arena'] = grabber.use_arena
-            
-            grab_thread=threading.Thread(target=grabber.grab_func,
-                                         args=(globals,))
-            grab_thread.setDaemon(True) # quit that thread if it's the only one left...
-            grab_thread.start() # start grabbing frames from camera
 
+            if not BENCHMARK:
+                grab_thread=threading.Thread(target=grabber.grab_func,
+                                             args=(globals,))
+                grab_thread.setDaemon(True) # quit that thread if it's the only one left...
+                grab_thread.start() # start grabbing frames from camera
+            else:
+                # run in single-thread for benchmark
+                grabber.grab_func(globals)
+                
     def handle_commands(self, cam_no, cmds):
         cam = self.all_cams[cam_no]
         grabber = self.all_grabbers[cam_no]
