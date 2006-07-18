@@ -1,6 +1,13 @@
-scp -p -r flydra@flygate.caltech.edu:/mnt/brain1/home/flydra/ORIGINAL_DATA/*$DATE* .
-scp -p -r flydra@flygate.caltech.edu:/mnt/cam1/*$DATE* .
-scp -p -r flydra@flygate.caltech.edu:/mnt/cam2/*$DATE* .
-scp -p -r flydra@flygate.caltech.edu:/mnt/cam3/*$DATE* .
-scp -p -r flydra@flygate.caltech.edu:/mnt/cam4/*$DATE* .
-scp -p -r flydra@flygate.caltech.edu:/mnt/cam5/*$DATE* .
+scp -p -r flygate.caltech.edu:DATA*$DATE*.h5 .
+# the following are mounted on brain1 using sshfs
+scp -p -r flygate.caltech.edu:cam1/FLYDRA_LARGE_MOVIES/*$DATE* .
+scp -p -r flygate.caltech.edu:cam2/FLYDRA_LARGE_MOVIES/*$DATE* .
+scp -p -r flygate.caltech.edu:cam3/FLYDRA_LARGE_MOVIES/*$DATE* .
+scp -p -r flygate.caltech.edu:cam4/FLYDRA_LARGE_MOVIES/*$DATE* .
+scp -p -r flygate.caltech.edu:cam5/FLYDRA_LARGE_MOVIES/*$DATE* .
+
+scp -p -r flygate.caltech.edu:cam1/FLYDRA_SMALL_MOVIES/*$DATE* .
+scp -p -r flygate.caltech.edu:cam2/FLYDRA_SMALL_MOVIES/*$DATE* .
+scp -p -r flygate.caltech.edu:cam3/FLYDRA_SMALL_MOVIES/*$DATE* .
+scp -p -r flygate.caltech.edu:cam4/FLYDRA_SMALL_MOVIES/*$DATE* .
+scp -p -r flygate.caltech.edu:cam5/FLYDRA_SMALL_MOVIES/*$DATE* .
