@@ -218,6 +218,10 @@ class GrabClass(object):
         running_mean8u_im = self.realtime_analyzer.get_image_view('mean') # this is a view we write into
 
         # allocate images and initialize if necessary
+
+        bg_image = FastImage.FastImage8u(max_frame_size)
+        std_image = FastImage.FastImage8u(max_frame_size)
+        
         running_mean_im = hw_roi_frame.get_32f_copy(max_frame_size)
         running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
 
@@ -239,8 +243,29 @@ class GrabClass(object):
         if BENCHMARK:
             benchmark_start_time = time.time()
             min_100_frame_time = 1e99
+            tA = 0.0
+            tB = 0.0
+            tC = 0.0
+            tD = 0.0
+            tE = 0.0
+            tF = 0.0
+            t4A = 0.0
+            t4B = 0.0
+            t4C = 0.0
+            t4D = 0.0
+            t4E = 0.0
+            t4F = 0.0
+            t4G = 0.0
+            t4H = 0.0
+            t4I = 0.0
+            t4J = 0.0
+            t4K = 0.0
+            t4L = 0.0
+            numT = 0                    
         try:
             while not cam_quit_event_isSet():
+                if BENCHMARK:
+                    t1 = time.time()
                 try:
                     self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
                 except cam_iface.BuffersOverflowed:
@@ -250,6 +275,8 @@ class GrabClass(object):
                     print >> sys.stderr, msg
 
                 received_time = time.time()
+                if BENCHMARK:
+                    t2 = received_time
 
                 # get best guess as to when image was taken
                 timestamp=self.cam.get_last_timestamp()
@@ -260,6 +287,7 @@ class GrabClass(object):
                         dur = received_time-benchmark_start_time
                         min_100_frame_time = min(min_100_frame_time,dur)
                         print '%.1f msec for 100 frames (min: %.1f)'%(dur*1000.0,min_100_frame_time*1000.0)
+                        sys.stdout.flush()
                         benchmark_start_time = received_time
                 else:
                     diff = timestamp-old_ts
@@ -281,6 +309,8 @@ class GrabClass(object):
                                                         0.010, # maximum 10 msec in here
                                                         )
                 work_done_time = time.time()
+                if BENCHMARK:
+                    t3 = work_done_time
                 
                 # allow other thread to see images
                 imname = globals['export_image_name'] # figure out what is wanted # XXX theoretically could have threading issue
@@ -302,6 +332,21 @@ class GrabClass(object):
                          ) )
 
                 tp2 = time.time()
+                if BENCHMARK:
+                    t4 = tp2
+                    #FastImage.set_debug(3) # let us see any images malloced, should only happen on hardware ROI size change
+                    t41=t4
+                    t42=t4
+                    t43=t4
+                    t44=t4
+                    t45=t4
+                    t46=t4
+                    t47=t4
+                    t48=t4
+                    t49=t4
+                    t491=t4
+                    t492=t4
+                
                 did_expensive = False
                 if collecting_background_isSet():
                     if bg_frame_number % BG_FRAME_INTERVAL == 0:
@@ -309,26 +354,76 @@ class GrabClass(object):
                             # set to full ROI and take full image if necessary
                             raise NotImplementedError("background collection while using hardware ROI not implemented")
                         if 1:
-
+                            mybench = 1
+                            res = realtime_image_analysis.do_bg_maint( running_mean_im,
+                                                                       hw_roi_frame,
+                                                                       max_frame_size,
+                                                                       ALPHA,
+                                                                       running_mean8u_im,
+                                                                       fastframef32_tmp,
+                                                                       running_sumsqf,
+                                                                       mean2,
+                                                                       running_stdframe,
+                                                                       6.0,
+                                                                       compareframe8u,
+                                                                       200,
+                                                                       noisy_pixels_mask,
+                                                                       25, bench=mybench )
+                            if mybench:
+                                t41, t42, t43, t44, t45, t46, t47, t48, t49, t491, t492 = res
+                            del res
+                        elif 1:
                             # maintain running average
+                            ### GETS SLOWER
                             running_mean_im.toself_add_weighted( hw_roi_frame, max_frame_size, ALPHA )
+                            if BENCHMARK:
+                                t41 = time.time()
+                                
                             # maintain 8bit unsigned background image
+                            ### GETS SLOWER
                             running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
+                            
+                            if BENCHMARK:
+                                t42 = time.time()
 
                             # standard deviation calculation
                             hw_roi_frame.get_32f_copy_put(fastframef32_tmp,max_frame_size)
+                            if BENCHMARK:
+                                t43 = time.time()
                             fastframef32_tmp.toself_square(max_frame_size) # current**2
+                            if BENCHMARK:
+                                t44 = time.time()
+                            ### GETS SLOWER
                             running_sumsqf.toself_add_weighted( fastframef32_tmp, max_frame_size, ALPHA)
+                            if BENCHMARK:
+                                t45 = time.time()
+                            ### GETS SLOWER
                             running_mean_im.get_square_put(mean2,max_frame_size)
+                            if BENCHMARK:
+                                t46 = time.time()
+                            ### GETS SLOWER
                             running_sumsqf.get_subtracted_put(mean2,running_stdframe,max_frame_size)
 
+                            if BENCHMARK:
+                                t47 = time.time()
                             # now create frame for comparison
+                            ### GETS SLOWER
                             running_stdframe.toself_multiply(6.0,max_frame_size)
+                            if BENCHMARK:
+                                t48 = time.time()
                             running_stdframe.get_8u_copy_put(compareframe8u,max_frame_size)
 
+                            if BENCHMARK:
+                                t49 = time.time()
                             # now we do hack, erm, heuristic for bright points, which aren't gaussian.
                             running_mean8u_im.get_compare_put( 200, noisy_pixels_mask, max_frame_size, FastImage.CmpGreater)
+                            if BENCHMARK:
+                                t491 = time.time()
+                                
                             compareframe8u.set_val_masked(25, noisy_pixels_mask, max_frame_size)
+                            
+                            if BENCHMARK:
+                                t492 = time.time()
                         else:
                             realtime_image_analysis.bg_help( running_mean_im,
                                                              fastframef32_tmp,
@@ -348,7 +443,10 @@ class GrabClass(object):
                     bg_frame_number += 1
                 
                 tp3 = time.time()
-                
+                if BENCHMARK:
+                    t5 = tp3
+                    #FastImage.set_debug(0) # let us see any images malloced, should only happen on hardware ROI size change
+                    
                 if take_background_isSet():
                     # reset background image with current frame as mean and 0 STD
                     hw_roi_frame.get_32f_copy_put( running_mean_im, max_frame_size )
@@ -371,6 +469,8 @@ class GrabClass(object):
                     take_background_clear()
                     
                 tp4 = time.time()
+                if BENCHMARK:
+                    t6 = tp4
                 
                 if clear_background_isSet():
                     # reset background image with 0 mean and 0 STD
@@ -383,8 +483,10 @@ class GrabClass(object):
 
                 if bg_changed:
                     if 1:
-                        bg_image = running_mean8u_im.get_8u_copy(running_mean8u_im.size)
-                        std_image = compareframe8u.get_8u_copy(compareframe8u.size)
+##                        bg_image = running_mean8u_im.get_8u_copy(running_mean8u_im.size)
+##                        std_image = compareframe8u.get_8u_copy(compareframe8u.size)
+                        running_mean8u_im.get_8u_copy_put(bg_image, running_mean8u_im.size)
+                        compareframe8u.get_8u_copy_put(std_image, compareframe8u.size)
                     elif 0:
                         bg_image = nx.array(running_mean8u_im) # make copy (we don't want to send live versions of image
                         std_image = nx.array(compareframe8u) # make copy (we don't want to send live versions of image
@@ -481,7 +583,76 @@ class GrabClass(object):
                     print 'mean_duration_bg',mean_duration_bg*1000
                     print 'mean_duration_no_bg',mean_duration_no_bg*1000
                     print
+                if BENCHMARK:
+                    t7 = time.time()
+                    tA += t2-t1
+                    tB += t3-t2
+                    tC += t4-t3
+                    tD += t5-t4
+                    tE += t6-t5
+                    tF += t7-t6
+                    numT += 1
+
+                    t4A += t41-t4
+                    t4B += t42-t41
+                    t4C += t43-t42
+                    t4D += t44-t43
+                    t4E += t45-t44
+                    t4F += t46-t45
+                    t4G += t47-t46
+                    t4H += t48-t47
+                    t4I += t49-t48
+                    t4J += t491-t49
+                    t4K += t492-t491
+                    t4L += t5-t492
                     
+                    if numT == 1000:
+                        tA *= 1000.0
+                        tB *= 1000.0
+                        tC *= 1000.0
+                        tD *= 1000.0
+                        tE *= 1000.0
+                        tF *= 1000.0
+                        print ' '.join(["% 6.1f"]*6)%(tA,tB,tC,
+                                                      tD,tE,tF)
+
+                        t4A *= 1000.0
+                        t4B *= 1000.0
+                        t4C *= 1000.0
+                        t4D *= 1000.0
+                        t4E *= 1000.0
+                        t4F *= 1000.0
+                        t4G *= 1000.0
+                        t4H *= 1000.0
+                        t4I *= 1000.0
+                        t4J *= 1000.0
+                        t4K *= 1000.0
+                        t4L *= 1000.0
+                        print ' '.join(["% 6.1f"]*12)%(t4A,t4B,t4C,
+                                                       t4D,t4E,t4F,
+                                                       t4G,t4H,t4I,
+                                                       t4J,t4K,t4L,
+                                                       )
+                        sys.stdout.flush()
+                        tA = 0.0
+                        tB = 0.0
+                        tC = 0.0
+                        tD = 0.0
+                        tE = 0.0
+                        tF = 0.0
+                        t4A = 0.0
+                        t4B = 0.0
+                        t4C = 0.0
+                        t4D = 0.0
+                        t4E = 0.0
+                        t4F = 0.0
+                        t4G = 0.0
+                        t4H = 0.0
+                        t4I = 0.0
+                        t4J = 0.0
+                        t4K = 0.0
+                        t4L = 0.0
+                        numT = 0                    
         finally:
             self.realtime_analyzer.close()
             #FastImage.set_debug(0)
