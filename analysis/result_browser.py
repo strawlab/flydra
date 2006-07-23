@@ -2089,16 +2089,26 @@ def switch_calibration_data(results,new_caldir):
     new_reconstructor = flydra.reconstruct.Reconstructor(new_caldir)
     new_reconstructor.save_to_h5file( results, OK_to_delete_old=True )
 
-def emit_recalibration_data(results,calib_dir):
+def emit_recalibration_data(results, calib_dir,
+                            ignore_camns_used=False,
+                            use_frames_with_multiple_tracked_points=False,
+                            max_err=10.0,
+                            debug=False,
+                            force_cam_ids=None
+                            ):
     """
     take found 2D points and generate calibration data
 
     last used 2006-05-18
     """
     import flydra.reconstruct
+
+    if not os.path.exists(calib_dir):
+        os.makedirs(calib_dir)
     
     #seq = (2412304, 2412730, 5)
-    seq = (0, int(6e6), 5*20)
+    seq = (0, int(5e5), 5)
+    print 'Using start %f, stop %f, inc %f'%seq
     #seq = (0, int(1.3e6), 100)
     reconstructor = flydra.reconstruct.Reconstructor(results)
 
@@ -2116,10 +2126,10 @@ def emit_recalibration_data(results,calib_dir):
         print
     
     data3d = results.root.data3d_best
-    max_err = 10
     coords = data3d.getWhereList(data3d.cols.mean_dist <= max_err)
     coords_frames = nx.asarray(data3d.readCoordinates( coords, 'frame' ))
-    coords_camns_used = nx.asarray(data3d.readCoordinates( coords, 'camns_used' ))
+    if not ignore_camns_used:
+        coords_camns_used = nx.asarray(data3d.readCoordinates( coords, 'camns_used' ))
 
     # make sure it's ascending
     cfdiff = coords_frames[1:]-coords_frames[:-1]
@@ -2127,6 +2137,8 @@ def emit_recalibration_data(results,calib_dir):
         raise RuntimeError('not ascending frames in data3d (needed for searchsorted)')
 
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
+    if debug:
+        print 'cam_id2camns',cam_id2camns
     to_output = []
     if 1:
         framelist = nx.arange(seq[0],seq[1],seq[2])
@@ -2143,33 +2155,66 @@ def emit_recalibration_data(results,calib_dir):
             if frame != desired_frame:
                 # sanity check
                 continue
-            
-            camns_used = map(int,coords_camns_used[frame_idx].split())
 
-            if len(camns_used) >= 3:
+            if not ignore_camns_used:
+                camns_used = map(int,coords_camns_used[frame_idx].split())
+
+            if ignore_camns_used or len(camns_used) >= 3:
                 #print '\nframe',frame
                 #print 'row:',data3d[coords[frame_idx]]
-                cam_ids = [camn2cam_id[camn] for camn in camns_used]
                 row_dict = {}
                 if PT.__version__ <= '1.3.2':
                     oldframe=frame
                     frame=int(frame)
                     assert frame==oldframe # check for rounding error
+                if debug:
+                    print 'frame',frame
                 for row in data2d.where( data2d.cols.frame == frame ):
                     camn = row['camn']
-                    if camn in camns_used:
+                    if ignore_camns_used or (camn in camns_used):
                         cam_id = camn2cam_id[camn]
                         x=row['x']
                         y=row['y']
                         if nx.isnan(x):
                             continue
                         #print camn2cam_id[row['camn']],x,y
+                        if debug:
+                            print '  %s: % 5.1f, % 5.1f (camn %d) -- '%(cam_id,x,y,camn),
                         if cam_id in row_dict:
-                            print 'skipping frame %d because > 1 point per camera'%frame
-                            row_dict = {}
-                            break
+                            if use_frames_with_multiple_tracked_points:
+                                if debug:
+                                    print 'not used'
+                                continue
+                            else:
+                                print 'multiple tracked points, skipping frame %d'%frame
+                                row_dict = {}
+                                break
+                        else:
+                            if debug:
+                                print 'used'
                         row_dict[cam_id] = (x,y)
+                forced_ignore = False
+                for cam_id in force_cam_ids:
+                    if cam_id not in row_dict:
+                        forced_ignore = True
+                        break
+                if forced_ignore:
+                    print 'forcing ignore because cam_id is missing'
+                    if debug:
+                        print
+                    continue
+                if debug:
+                    if len(row_dict)<3:
+                        print 'not saving -- less than 3 points'
+                        print
+                        continue
+                    else:
+                        cam_ids = row_dict.keys()
+                        cam_ids.sort()
+                        print '  saving %d cameras:'%len(cam_ids),' '.join(cam_ids)
+                        print
                 to_output.append(row_dict)
+                
     all_cam_ids = cam_id2camns.keys()
     all_cam_ids.sort()
     print '%d calibration points found'%len(to_output)
@@ -2991,7 +3036,7 @@ if __name__=='__main__':
         results.close()
         del results
         
-    results = get_results('DATA20060630_134737.h5',mode='r+')
+    results = get_results('DATA20060717_185535.h5',mode='r+')
     #results = get_results('DATA20060315_170142.h5',mode='r+')
 
     #del results.root.exact_movie_info
