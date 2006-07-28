@@ -1,3 +1,16 @@
+/* 
+
+Program to control green lights and trigger external (Photron) cameras
+under control serial port (for use with flydra).
+
+DDB0 - main lights (through most of arena)
+DDB2 - focal lights (in one area near trigger volume)
+DDB4 - creates trigger signal for Photron cameras
+
+Serial port parameters: 4800 baud, 8N1.
+
+*/
+
 #include <avr/io.h>
 #include <avr/signal.h>
 #include <avr/interrupt.h>
@@ -5,7 +18,11 @@
 #include "LCD_driver.h"
 #include "LCD_functions.h"
 #endif
-#include "blink.h"
+
+#define FALSE 0
+#define TRUE 1
+void OSCCAL_calibration(void); /* forward decl. */
+void Delay(unsigned int millisec); /* forward decl. */
 
 //#define LIGHTS_ON '1'
 //#define LIGHTS_OFF_LONG '0'

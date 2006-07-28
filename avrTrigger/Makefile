@@ -21,7 +21,8 @@ FORMAT = ihex
 
 # Target file name (without extension).
 #TARGET = trigger_main
-TARGET = trig_serial
+TARGET = blink
+#TARGET = trig_serial
 
 # Optimization level (can be 0, 1, 2, 3, s) 
 # (Note: 3 is not always the best optimization level. See avr-libc FAQ)
