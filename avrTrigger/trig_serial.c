@@ -1,41 +1,26 @@
+/* 
+
+Program to control green lights and trigger external (Photron) cameras
+under control serial port (for use with flydra).
+
+DDB0 - trigger source output to cameras
+
+Serial port parameters: 4800 baud, 8N1.
+
+*/
+
 #include <avr/io.h>
 #include <avr/signal.h>
 #include <avr/interrupt.h>
-#ifdef USELCD
-#include "LCD_driver.h"
-#include "LCD_functions.h"
-#endif
-#include "blink.h"
 
-//#define LIGHTS_ON '1'
-//#define LIGHTS_OFF_LONG '0'
-//#define LIGHTS_OFF_050MSEC 'R'
-//#define LIGHTS_OFF_100MSEC 'S'
-//#define LIGHTS_OFF_250MSEC 'T'
-//#define LIGHTS_FOCAL_OFF_050MSEC 'A'
-//#define LIGHTS_FOCAL_OFF_100MSEC 'B'
+#define FALSE 0
+#define TRUE 1
+void OSCCAL_calibration(void); /* forward decl. */
+void Delay(unsigned int millisec); /* forward decl. */
 
-#define MSG_STATE_READY 0
-#define MSG_STATE_READ_DUR 1
-#define MSG_STATE_READ_FOCAL_DUR 2
-
-#define ACTION_NONE 'a'
-#define ACTION_TRIGGER 'b'
-#define ACTION_DARK 'c'
-#define ACTION_LIGHT 'd'
-#define ACTION_TIMED_DARK 'e'
-#define ACTION_TIMED_FOCAL_DARK 'f'
-
-void delayms(unsigned int millisec)
-{
-	uint8_t i;
-
-	while (millisec--) {
-	  for (i=0; i<199; i++) { // ads calibrated 2006 03 05
-			asm volatile ("nop"::);
-		}
-	}
-}
+#define ACTION_NONE 0
+#define ACTION_GO   'g'
+#define ACTION_STOP 's'
 
 void USART_init(void) {
   unsigned int ubrr;
@@ -59,170 +44,79 @@ void USART_init(void) {
 void Initialization(void) {
   OSCCAL_calibration();
 
-#ifdef USELCD
-  LCD_Init();
-#endif
-
   // USART
   USART_init();
 
-  DDRB = (1<<DDB0) | (1<<DDB2) | (1<<DDB4); // output pins enabled
-  PORTB |= ((1<<DDB0) | (1<<DDB2)); // turn lights on
+  DDRB = (1<<DDB0); // output pin enabled
+  PORTB |= (1<<DDB0); // set high
 
   // timer2
   ASSR = (1<<AS2);        //select asynchronous operation of timer2 (32,768kHz)
   TIMSK2=(1<<OCIE2A); // enable interrupt
   TCCR2A = 0; //stop timer2
 
-  // timer0
-  TIMSK0=(1<<TOIE0); // enable interrupt
-  TCCR0A = 0; //stop timer0
+  OCR2A = 161;    // set timer2 compare value, calibrated on 2006-07-28 to give 10.0 msec period
+
+  TCNT2 = 0;                      
+  // clear timer2 counter, (do
+  // after setting ocr2a because
+  // compare is blocked for one
+  // clock after setting)
+
+  TCCR2A = (1<<CS20);     // start timer2 with no prescaling
 }
 
 SIGNAL(SIG_OUTPUT_COMPARE2)
 {
-
-  PORTB |= ((1<<DDB0) | (1<<DDB2)); // turn lights on
-  TCCR2A = 0; //stop timer2
-#ifdef USELCD
-  LCD_puts("t over", SCROLLMODE_LOOP);
-#endif
-
-}
-
-SIGNAL(SIG_OVERFLOW0)
-{
-  PORTB &= ~(1<<DDB4); // turn off trigger pin
-  TCCR0A = 0; //stop timer0
+  if (PORTB && (1<<DDB0) ) {
+    // value was high, set low
+    PORTB &= ~(1<<DDB0); // turn off trigger pin
+  } else {
+    // value was low, set high
+    PORTB |= (1<<DDB0); // turn on trigger pin
+  }
+  TCNT2 = 0;                      // clear timer2 counter
 }
 
 int main(void) {
-  unsigned char msg_state;
-
   unsigned char last_char_input;
   unsigned char do_action;
 
-#ifdef USELCD
-  unsigned char CH,CL;
-#endif
-    
-  msg_state=MSG_STATE_READY;
   Initialization();
-#ifdef USELCD
-  LCD_puts("READY", SCROLLMODE_LOOP);
-#endif
+
   while(1) {
     
     while (!(UCSRA & (1<<RXC))) {} // wait until USART received byte
     last_char_input = UDR; // get byte
     do_action = ACTION_NONE;
     
-    switch (msg_state) {
-    case MSG_STATE_READY:
-      switch (last_char_input) {
-      case 'X':
-	do_action = ACTION_TRIGGER;
-	break;
-      case '0':
-	do_action = ACTION_DARK;
-	break;
-      case '1':
-	do_action = ACTION_LIGHT;
-	break;
-      case 't':
-	msg_state = MSG_STATE_READ_DUR;
-	break;
-      case 'f':
-	msg_state = MSG_STATE_READ_FOCAL_DUR;
-	break;
-      default:
-	break;
-      }
+    switch (last_char_input) {
+    case 'g':
+      do_action = ACTION_GO;
       break;
-    case MSG_STATE_READ_DUR:
-      do_action = ACTION_TIMED_DARK;
-      break;
-    case MSG_STATE_READ_FOCAL_DUR:
-      do_action = ACTION_TIMED_FOCAL_DARK;
+    case 's':
+      do_action = ACTION_STOP;
       break;
     default:
+      last_char_input = '?'; // echo back '?'
       break;
     }
 
     switch (do_action) {
 
-    case ACTION_TRIGGER:
-#ifdef USELCD
-      LCD_puts("trig", SCROLLMODE_LOOP);
-#endif
-      PORTB |= (1<<DDB4); // turn on trigger pin
-
-      TCNT0 = 0;              // clear timer0 counter
-      TCCR0A = (1<<CS00);     // start timer0 (no prescaling)
+    case ACTION_GO:
+      TCCR2A = (1<<CS20);     // start timer2 (with no prescaling)
       break;
 
-
-    case ACTION_DARK:
-      TCCR2A = 0; //stop timer2
-      PORTB &= ~((1<<DDB0) | (1<<DDB2)); // lights out
-#ifdef USELCD
-      LCD_puts("dark", SCROLLMODE_LOOP);
-#endif
+    case ACTION_STOP:
+      TCCR2A = 0;             // stop  timer2 (with no prescaling)
+      PORTB &= ~(1<<DDB0); // turn off trigger pin
       break;
-
-
-    case ACTION_LIGHT:
-      TCCR2A = 0; //stop timer2
-      PORTB |= ((1<<DDB0) | (1<<DDB2)); // turn lights on
-#ifdef USELCD
-      LCD_puts("light", SCROLLMODE_LOOP);
-#endif
-      break;
-
-
-    case ACTION_TIMED_DARK:
-    case ACTION_TIMED_FOCAL_DARK:
-#ifdef USELCD
-      LCD_puts("ATD", SCROLLMODE_LOOP);
-#endif
-
-      msg_state = MSG_STATE_READY;
-
-
-      OCR2A = (last_char_input-1);    // set timer2 compare value (for
-				      // some reason, it takes 1 tick
-				      // extra, so subtract that)
-
-      TCNT2 = 0;                      // clear timer2 counter, (do
-				      // after setting ocr2a because
-				      // compare is blocked for one
-				      // clock after setting)
-
-      TCCR2A = (1<<CS22) | (1<<CS21) | (1<<CS20);     // start timer2
-						      // with
-						      // prescaling by
-						      // 1024 (WGM is
-						      // 0 = normal)
-      if (do_action==ACTION_TIMED_DARK) {
-	PORTB &= ~((1<<DDB0) | (1<<DDB2)); // all lights out
-      }
-      else { //if (do_action==ACTION_TIMED_FOCAL_DARK) {
-	PORTB &= ~(1<<DDB2);               // focal lights out
-      }
-
-#ifdef USELCD
-      LCD_puts("T ?", SCROLLMODE_LOOP);
-#endif
-      break;
-
 
     case ACTION_NONE:
     default:
-#ifdef USELCD
-      LCD_puts("????", SCROLLMODE_LOOP);
-#endif
       break;
-
+      
     }
       
     UDR=last_char_input; // echo (transmit) back on USART
