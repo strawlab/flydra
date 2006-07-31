@@ -13,14 +13,30 @@ Serial port parameters: 4800 baud, 8N1.
 #include <avr/signal.h>
 #include <avr/interrupt.h>
 
+#define TEMPERATURE_SENSOR  0
 #define FALSE 0
 #define TRUE 1
 void OSCCAL_calibration(void); /* forward decl. */
 void Delay(unsigned int millisec); /* forward decl. */
 
+// Macro definitions
+//mtA - 
+// sbi and cbi are not longer supported by the avr-libc
+// to avoid version-conflicts the macro-names have been 
+// changed to sbiBF/cbiBF "everywhere"
+#define sbiBF(port,bit)  (port |= (1<<bit))   //set bit in port
+#define cbiBF(port,bit)  (port &= ~(1<<bit))  //clear bit in port
+
 #define ACTION_NONE 0
 #define ACTION_GO   'g'
 #define ACTION_STOP 's'
+#define ACTION_GETTEMP 't'
+
+// global vars
+char ADC_temp_low =0;
+char ADC_temp_high=0;
+
+
 
 void USART_init(void) {
   unsigned int ubrr;
@@ -40,15 +56,43 @@ void USART_init(void) {
   //UCSRC = (1<<UPM1)|(1<<UCSZ1);
 }
 
+void ADC_read2(void)
+{
+    // To save power, the voltage over the LDR and the NTC is turned off when not used
+    // This is done by controlling the voltage from a I/O-pin (PORTF3)
+    sbiBF(PORTF, PF3); // mt sbi(PORTF, PORTF3);     // Enable the VCP (VC-peripheral)
+    sbiBF(DDRF, DDF3); // sbi(DDRF, PORTF3);        
+
+    sbiBF(ADCSRA, ADEN);     // Enable the ADC
+
+    //do a dummy readout first
+    ADCSRA |= (1<<ADSC);        // do single conversion
+    while(!(ADCSRA & 0x10));    // wait for conversion done, ADIF flag active
+        
+    ADCSRA |= (1<<ADSC);        // do single conversion
+    while(!(ADCSRA & 0x10));    // wait for conversion done, ADIF flag active
+        
+    ADC_temp_low = ADCL;            // read out ADCL register
+    ADC_temp_high= ADCH;    // read out ADCH register        
+
+    cbiBF(PORTF,PF3); // mt cbi(PORTF, PORTF3);     // disable the VCP
+    cbiBF(DDRF,DDF3); // mt cbi(DDRF, PORTF3);  
+    
+    cbiBF(ADCSRA, ADEN);      // disable the ADC
+
+}
 
 void Initialization(void) {
   OSCCAL_calibration();
 
+  ADMUX = TEMPERATURE_SENSOR;
+  ADCSRA = (1<<ADEN) | (1<<ADPS1) | (1<<ADPS0);    // set ADC prescaler to , 1MHz / 8 = 125kHz    
+
   // USART
   USART_init();
 
-  DDRB = (1<<DDB0); // output pin enabled
-  PORTB |= (1<<DDB0); // set high
+  DDRB = ~(1<<DDB5); // all pins but 5 (piezo) are trigger output
+  PORTB |= ~(1<<DDB5); // set all trigger pins high
 
   // timer2
   ASSR = (1<<AS2);        //select asynchronous operation of timer2 (32,768kHz)
@@ -68,12 +112,12 @@ void Initialization(void) {
 
 SIGNAL(SIG_OUTPUT_COMPARE2)
 {
-  if (PORTB && (1<<DDB0) ) {
+  if (PORTB && (1<<DDB0)) {
     // value was high, set low
-    PORTB &= ~(1<<DDB0); // turn off trigger pin
+    PORTB &= (1<<DDB5); // turn off trigger pins
   } else {
     // value was low, set high
-    PORTB |= (1<<DDB0); // turn on trigger pin
+    PORTB |= ~(1<<DDB5); // turn on trigger pins
   }
   TCNT2 = 0;                      // clear timer2 counter
 }
@@ -81,6 +125,7 @@ SIGNAL(SIG_OUTPUT_COMPARE2)
 int main(void) {
   unsigned char last_char_input;
   unsigned char do_action;
+  int temperature;
 
   Initialization();
 
@@ -97,8 +142,10 @@ int main(void) {
     case 's':
       do_action = ACTION_STOP;
       break;
+    case 't':
+      do_action = ACTION_GETTEMP;
+      break;
     default:
-      last_char_input = '?'; // echo back '?'
       break;
     }
 
@@ -106,20 +153,28 @@ int main(void) {
 
     case ACTION_GO:
       TCCR2A = (1<<CS20);     // start timer2 (with no prescaling)
+      UDR = 'g';
       break;
 
     case ACTION_STOP:
       TCCR2A = 0;             // stop  timer2 (with no prescaling)
-      PORTB &= ~(1<<DDB0); // turn off trigger pin
+      PORTB &= (1<<DDB5); // turn off trigger pins
+      UDR = 's';
       break;
+
+    case ACTION_GETTEMP:
+      ADC_read2();
+      UDR = ADC_temp_high;
+      UDR = ADC_temp_low;
+      break;      
 
     case ACTION_NONE:
     default:
+      UDR='?';
       break;
       
     }
       
-    UDR=last_char_input; // echo (transmit) back on USART
   }
 }
 
