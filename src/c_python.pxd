@@ -1,1 +1,0 @@
-../../cam_iface/src/c_python.pxd
