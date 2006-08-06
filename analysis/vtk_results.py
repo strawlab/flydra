@@ -1061,9 +1061,9 @@ if __name__=='__main__':
 
     #results
     if 1:
-        results = result_browser.get_results('DATA20051212_190648.h5',mode='r+')
-        start_frame = 1231000
-        stop_frame = 1231800
+        results = result_browser.get_results('DATA20060717_185535.h5',mode='r+')
+        start_frame = 609150
+        stop_frame = 609800
         
     
     if 1:

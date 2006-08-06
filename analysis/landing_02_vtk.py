@@ -46,7 +46,7 @@ def main(max_err=10.0):
                 # flight F.  very good
                 fstart = 993890
                 fend = 994070
-    elif 1:
+    elif 0:
         # 20060515
         filename = 'DATA20060515_190905.h5'
         post = [( 418.3, 192.3, 18.4),
@@ -116,6 +116,12 @@ def main(max_err=10.0):
             fstart,fend = 4885653,4885782 # bouncing off ceiling
         elif 1:
             fstart,fend = 4676487,4676678
+    elif 1:
+        filename = 'DATA20060717_185535.h5'
+        post=[( 444.6, 192.8, 222.1),#from all 5: 449.5, 169.9, 223.6), but big reconst error
+              ( 434.2, 181.0, 33.4),
+              ]
+        fstart, fend = 609150, 609800
             
     results = result_browser.get_results(filename,mode='r')
     post_top = numpy.array(post[1])

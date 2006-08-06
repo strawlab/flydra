@@ -122,7 +122,7 @@ def get_results(filename,mode='r+'):
             frame_col.createIndex()
             print 'done'
         
-    if hasattr(h5file.root,'data2d'):
+    if False and hasattr(h5file.root,'data2d'):
         frame_col = h5file.root.data2d.cols.frame
         if frame_col.index is None:
             print 'creating index on data2d.cols.frame ...'
