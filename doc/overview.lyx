@@ -41,8 +41,8 @@ Introduction
 \layout Standard
 
 While two cameras are sufficient to reconstruct 3D information and have
- previously been used in the Dickinson lab to the position track fruit flies
- in realtime as they fly freely through large (e.g.
+ previously been used in the Dickinson lab to track the position of fruit
+ flies in realtime as they fly freely through large (e.g.
  1m diameter) arenas, several issues prompted the development of a new realtime
  camera tracking system.
  Foremost among these were two desires: 1) an increase in spatial resolving
