@@ -17,8 +17,8 @@ import threading
 import flydra.undistort as undistort
 import FlyMovieFormat
 
-from numarray.ieeespecial import getnan, nan, inf
-import numarray.linear_algebra
+from numpy import nan,inf
+import numarray # needed for pytables
 
 # flydra analysis tools:
 import caching_movie_opener 
@@ -1078,7 +1078,7 @@ def recompute_3d_from_2d(results,
 
     See also redo_3d_calc() for single frames.
     
-    Last used 2006-05-19.
+    Last used 2006-07-23.
     """
     import flydra.reconstruct
     import flydra.reconstruct_utils as ru
@@ -2087,7 +2087,7 @@ def plot_simple_phase_plots(results,form='xy',max_err=10,typ='best',ori_180_ambi
 def switch_calibration_data(results,new_caldir):
     import flydra.reconstruct
     new_reconstructor = flydra.reconstruct.Reconstructor(new_caldir)
-    new_reconstructor.save_to_h5file( results, OK_to_delete_old=True )
+    new_reconstructor.save_to_h5file( results, OK_to_delete_old_calibration=True )
 
 def emit_recalibration_data(results, calib_dir,
                             ignore_camns_used=False,
@@ -3036,7 +3036,7 @@ if __name__=='__main__':
         results.close()
         del results
         
-    results = get_results('DATA20060717_185535.h5',mode='r+')
+    results = get_results('DATA20060719_180955.h5',mode='r+')
     #results = get_results('DATA20060315_170142.h5',mode='r+')
 
     #del results.root.exact_movie_info
