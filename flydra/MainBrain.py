@@ -614,10 +614,10 @@ class CoordReceiver(threading.Thread):
                             continue
                             
                         found_data_dict = {} # old "good" points will go in here
-                        for cam_id, PT in data_dict.iteritems():
-                            if PT[9]: # only use if found_anything
+                        for cam_id, this_point in data_dict.iteritems():
+                            if this_point[9]: # only use if found_anything
                                 # don't include 'found_anything' variable
-                                found_data_dict[cam_id] = PT[:9] 
+                                found_data_dict[cam_id] = this_point[:9] 
 
                         if len(found_data_dict) < 2:
                             # Can't do any 3D math without at least 2
