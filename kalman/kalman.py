@@ -64,11 +64,8 @@ class KalmanFilter:
 
         # calculate a posteri state estimate
         if y is not None:
-            print 'KALMAN y',y
             residuals = y-dot(self.C,xhatminus) # error/innovation
-            print 'KALMAN residuals',residuals
             xhat = xhatminus+dot(K, residuals)
-            print 'KALMAN xhat',xhat
         else:
             xhat = xhatminus
             

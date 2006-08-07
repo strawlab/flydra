@@ -70,7 +70,6 @@ class TrackedObject:
         # XXX Need to test if error for this object has grown beyond a
         # threshold at which it should be terminated.
         if Pmean > self.max_variance_dist_meters:
-            print '************* Killing tro %s because Pmean = %f (mm)'%(self,Pmean*1000.0)
             self.kill_me = True
 
         ############ save outputs ###############
@@ -168,11 +167,12 @@ class Tracker:
 ###############################
 
 import numpy
-import copy
 import params
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
 import geom
+import time
+from result_utils import get_results, get_f_xyz_L_err, get_caminfo_dicts
 
 def convert_format(current_data):
     found_data_dict = {}
@@ -185,7 +185,31 @@ def convert_format(current_data):
             found_data_dict[cam_id] = this_point[:9]
     return found_data_dict
 
-from result_utils import get_results, get_f_xyz_L_err, get_caminfo_dicts
+
+def process_frame(tracker,frame,frame_data):
+    tracker.gobble_2d_data_and_calculate_a_posteri_estimates(frame,frame_data)
+
+    # Now, tracked objects have been updated (and their 2D data points
+    # removed from consideration), so we can use old flydra
+    # "hypothesis testing" algorithm on remaining data to see if there
+    # are new objects.
+
+    # Convert to format accepted by find_best_3d()
+    found_data_dict = convert_format(frame_data)
+    if len(found_data_dict) < 2:
+        # Can't do any 3D math without at least 2 cameras giving good
+        # data.
+        return
+    (this_observation_mm, line3d, cam_ids_used,
+     min_mean_dist) = ru.find_best_3d(reconstructor_mm,
+                                      found_data_dict)
+    max_err=10.0 # mm
+    if min_mean_dist<max_err:
+        ####################################
+        #  Now join found point into Tracker
+        tracker.join_new_obj( frame, this_observation_mm )
+
+
 
 try:
     results
@@ -198,80 +222,81 @@ camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
 frame_range = range(858535,859340)
 reconstructor_meters = reconstructor_mm.get_scaled(1e-3)
 
-frame_array = numpy.asarray(results.root.data2d_distorted.cols.frame)
-tmp_diff = frame_array[1:]-frame_array[:-1]
-if numpy.minimum(tmp_diff) < 0:
-    raise ValueError("frames not continuously increasing")
-1/0
-
-try:
-    data2d_struct
-except NameError:   
-    data2d_struct = {}
-    for frame in frame_range:
-        if frame%100==0:
-            print 'loading',frame
-        # get all 2D points for frame
-        data2d = results.root.data2d_distorted
-        for row in data2d.where( data2d.cols.frame == frame ):
-            camn = row['camn']
-            cam_id = camn2cam_id[camn]
-            x_distorted = row['x']
-            if numpy.isnan(x_distorted):
-                # drop point -- not found
-                continue
-            y_distorted = row['y']
-            
-            (x_undistorted,y_undistorted) = reconstructor_mm.undistort(
-                cam_id,(x_distorted,y_distorted))
-
-            area,slope,eccentricity,p1,p2,p3,p4 = (row['area'],
-                                                   row['slope'],row['eccentricity'],
-                                                   row['p1'],row['p2'],row['p3'],row['p4'])
-            pt_undistorted = (x_undistorted,y_undistorted,
-                              area,slope,eccentricity,
-                              p1,p2,p3,p4, True)
-
-            pluecker_hz_meters=reconstructor_meters.get_projected_line_from_2d(
-                cam_id,(x_undistorted,y_undistorted))
-            
-            projected_line_meters=geom.line_from_HZline(pluecker_hz_meters)
-
-            data2d_struct.setdefault(frame,{}).setdefault(cam_id,[]).append((
-                pt_undistorted,projected_line_meters))
-
 tracker = Tracker(reconstructor_meters)
 
-for frame in frame_range:
-    if frame not in data2d_struct:
-        # no data
-        continue
-    print 'frame',frame
-    
-    current_data = copy.deepcopy(data2d_struct[frame])
-    
-    tracker.gobble_2d_data_and_calculate_a_posteri_estimates(frame,current_data)
-    
-    # Now, tracked objects have been updated (and their 2D data points
-    # removed from consideration), so we can use old flydra
-    # "hypothesis testing" algorithm on remaining data to see if there
-    # are new objects.
 
-    # Convert to format accepted by find_best_3d()
-    found_data_dict = convert_format(current_data)
-    if len(found_data_dict) < 2:
-        # Can't do any 3D math without at least 2 cameras giving good
-        # data.
-        continue
-    (this_observation_mm, line3d, cam_ids_used,
-     min_mean_dist) = ru.find_best_3d(reconstructor_mm,
-                                      found_data_dict)
-    max_err=10.0 # mm
-    if min_mean_dist<max_err:
-        ####################################
-        #  Now join found point into Tracker
-        tracker.join_new_obj( frame, this_observation_mm )
+data2d = results.root.data2d_distorted
 
+done_frames = []
+
+time1 = time.time()
+print 'loading all frame numbers...'
+frames_array = data2d.read(field='frame',flavor='numpy')#,stop=5000)
+time2 = time.time()
+print 'done in %.1f sec'%(time2-time1)
+row_idxs = numpy.argsort(frames_array)
+
+frame_count = 0
+accum_time = 0.0
+last_frame = None
+frame_data = {}
+time1 = time.time()
+for row_idx in row_idxs:
+    time3 = time.time()
+    row = data2d[row_idx]
+    time4 = time.time()
+    accum_time += (time4-time3)
+    new_frame = row['frame']
+    if last_frame != new_frame:
+        if new_frame < last_frame:
+            print 'new_frame',new_frame
+            print 'last_frame',last_frame
+            raise RuntimeError("expected continuously increasing frame numbers")
+        # new frame
+        ########################################
+        # Data for this frame is complete
+        if last_frame is not None:
+            process_frame(tracker,last_frame,frame_data)
+            frame_count += 1
+            if frame_count%1000==0:
+                time2 = time.time()
+                dur = time2-time1
+                fps = frame_count/dur
+                dur2 = dur-accum_time
+                fps2 = frame_count/dur2
+                print 'frame % 10d, mean speed so far: %.1f fps (%.1f fps without pytables)'%(last_frame,fps,fps2)
+
+        ########################################
+        frame_data = {}
+        last_frame = new_frame
+        
+    camn = row['camn']
+    cam_id = camn2cam_id[camn]
+
+    x_distorted = row['x']
+    if numpy.isnan(x_distorted):
+        # drop point -- not found
+        continue
+    y_distorted = row['y']
+
+    (x_undistorted,y_undistorted) = reconstructor_mm.undistort(
+        cam_id,(x_distorted,y_distorted))
+
+    area,slope,eccentricity,p1,p2,p3,p4 = (row['area'],
+                                           row['slope'],row['eccentricity'],
+                                           row['p1'],row['p2'],row['p3'],row['p4'])
+    pt_undistorted = (x_undistorted,y_undistorted,
+                      area,slope,eccentricity,
+                      p1,p2,p3,p4, True)
+
+    
+    pluecker_hz_meters=reconstructor_meters.get_projected_line_from_2d(
+        cam_id,(x_undistorted,y_undistorted))
+            
+    projected_line_meters=geom.line_from_HZline(pluecker_hz_meters)
+            
+    frame_data.setdefault(cam_id,[]).append((pt_undistorted,projected_line_meters))
+        
 tracker.kill_all_trackers() # done tracking
 
 #############################
@@ -325,57 +350,7 @@ if 1:
         names = PT.Description(FilteredObservations().columns)._v_names
         recarray = numpy.rec.fromarrays([tro.observations_frames]+list_of_obs,
                                         names = names)
-        print recarray.dtype
-        print recarray.shape
-        print 'formats',PT.Description(FilteredObservations().columns)._v_nestedFormats
         h5_obs.append(recarray)
         h5_obs.flush()
         
     h5file.close()
-
-#############################
-
-if 0:
-    import pylab
-
-    colorlist = 'b','g','r','k','c','m'
-
-
-    pylab.figure()
-    ax = None
-    varnames = ['X','Y','Z','X vel','Y vel','Z vel','X accel','Y accel','Z accel']
-    for i in range(ss):
-        ax = pylab.subplot(ss,1,i+1,sharex=ax)
-        var = varnames[i]
-        for tro_idx,tro in enumerate(tracker.dead_tracked_objects):
-            color_idx = tro_idx%len(colorlist)
-            this_color = colorlist[color_idx]
-
-            if i==0: print 'tro',this_color,tro
-            tro.observations_data = numpy.asarray(tro.observations_data)
-            if i<os:
-                if i==0: print tro.observations_frames[0],'-',tro.observations_frames[-1]
-                ax.plot(tro.observations_frames,tro.observations_data[:,i],this_color+'+',label='observations of %s'%var)
-            tro.xhats = numpy.asarray(tro.xhats)
-            ax.plot(tro.frames,tro.xhats[:,i],this_color+'-',label='estimates of %s'%var)
-        pylab.ylabel(var)       
-    pylab.xlabel('frame')
-
-
-
-    pylab.figure()
-    ax = None
-    varnames = ['X','Y','Z','X vel','Y vel','Z vel','X accel','Y accel','Z accel']
-    for i in range(ss):
-        ax = pylab.subplot(ss,1,i+1,sharex=ax)
-        var = varnames[i]
-        for tro_idx,tro in enumerate(tracker.dead_tracked_objects):
-            color_idx = tro_idx%len(colorlist)
-            this_color = colorlist[color_idx]
-
-            tro.Ps = numpy.asarray(tro.Ps)
-            ax.plot(tro.frames,numpy.sqrt(tro.Ps[:,i,i]),this_color+'-',label='estimates of %s'%var)
-        pylab.ylabel(var)       
-    pylab.xlabel('frame')
-
-    pylab.show()
