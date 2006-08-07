@@ -118,7 +118,7 @@ cdef class ReconstructHelper:
         return (xd, yd)
         
 def find_best_3d( object recon, object d2):
-    """
+    """Use hypothesis testing algorithm to find best 3D point
     
     Finds combination of cameras which uses the most number of cameras
     while minimizing mean reprojection error. Algorithm used accepts
@@ -155,7 +155,6 @@ def find_best_3d( object recon, object d2):
     bad_cam_ids = []
     cam_id2idx = {}
     all2d = {}
-    Pmat_fastnx = {}
     Pmat_fastnx = recon.Pmat # shorthand
     for i,cam_id in enumerate(cam_ids):
         cam_id2idx[cam_id] = i
@@ -173,6 +172,7 @@ def find_best_3d( object recon, object d2):
         if isnan(x):
             bad_cam_ids.append( cam_id )
             continue # don't build this row
+
 
         Pmat = Pmat_fastnx[cam_id] # Pmat is 3 rows x 4 columns
         row3 = Pmat[2,:]
