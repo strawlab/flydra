@@ -16,21 +16,25 @@ while 1:
     idx+=1
 
     tro = TrackedObject()
-    tro.frames = numpy.asarray(xhats_table.read(flavor='numpy',field='frame'))
-    tro.xhats = numpy.hstack((numpy.asarray(xhats_table.read(flavor='numpy',field='x'))[:,numpy.newaxis],
-                              numpy.asarray(xhats_table.read(flavor='numpy',field='y'))[:,numpy.newaxis],
-                              numpy.asarray(xhats_table.read(flavor='numpy',field='z'))[:,numpy.newaxis],
-                              numpy.asarray(xhats_table.read(flavor='numpy',field='xvel'))[:,numpy.newaxis],
-                              numpy.asarray(xhats_table.read(flavor='numpy',field='yvel'))[:,numpy.newaxis],
-                              numpy.asarray(xhats_table.read(flavor='numpy',field='zvel'))[:,numpy.newaxis],
-                              numpy.asarray(xhats_table.read(flavor='numpy',field='xaccel'))[:,numpy.newaxis],
-                              numpy.asarray(xhats_table.read(flavor='numpy',field='yaccel'))[:,numpy.newaxis],
-                              numpy.asarray(xhats_table.read(flavor='numpy',field='zaccel'))[:,numpy.newaxis]))
     tro.observations_frames = numpy.asarray(obs_table.read(flavor='numpy',field='frame'))
-    tro.observations_data = numpy.hstack((numpy.asarray(obs_table.read(flavor='numpy',field='x'))[:,numpy.newaxis],
-                                          numpy.asarray(obs_table.read(flavor='numpy',field='y'))[:,numpy.newaxis],
-                                          numpy.asarray(obs_table.read(flavor='numpy',field='z'))[:,numpy.newaxis]))
-    tros.append(tro)
+    if len(tro.observations_frames) > 10:
+        tro.observations_data = numpy.hstack((numpy.asarray(obs_table.read(flavor='numpy',field='x'))[:,numpy.newaxis],
+                                              numpy.asarray(obs_table.read(flavor='numpy',field='y'))[:,numpy.newaxis],
+                                              numpy.asarray(obs_table.read(flavor='numpy',field='z'))[:,numpy.newaxis]))
+        tro.frames = numpy.asarray(xhats_table.read(flavor='numpy',field='frame'))
+        tro.xhats = numpy.hstack((numpy.asarray(xhats_table.read(flavor='numpy',field='x'))[:,numpy.newaxis],
+                                  numpy.asarray(xhats_table.read(flavor='numpy',field='y'))[:,numpy.newaxis],
+                                  numpy.asarray(xhats_table.read(flavor='numpy',field='z'))[:,numpy.newaxis],
+                                  numpy.asarray(xhats_table.read(flavor='numpy',field='xvel'))[:,numpy.newaxis],
+                                  numpy.asarray(xhats_table.read(flavor='numpy',field='yvel'))[:,numpy.newaxis],
+                                  numpy.asarray(xhats_table.read(flavor='numpy',field='zvel'))[:,numpy.newaxis],
+                                  numpy.asarray(xhats_table.read(flavor='numpy',field='xaccel'))[:,numpy.newaxis],
+                                  numpy.asarray(xhats_table.read(flavor='numpy',field='yaccel'))[:,numpy.newaxis],
+                                  numpy.asarray(xhats_table.read(flavor='numpy',field='zaccel'))[:,numpy.newaxis]))
+        tros.append(tro)
+    print 'loaded',idx
+    if idx==300:
+        break
     
 if 1:
     import pylab
