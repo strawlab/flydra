@@ -40,8 +40,8 @@ def rq(X):
 
     Qu = numpy.asarray(Qu)
 
-    R = numpy.matrixmultiply( Rt, Qu.transpose())
-    Q = numpy.matrixmultiply( Qu, Qt )
+    R = numpy.dot( Rt, Qu.transpose())
+    Q = numpy.dot( Qu, Qt )
 
     return R, Q
 
@@ -142,7 +142,7 @@ def pluecker_from_verts(A,B):
         B = B[0], B[1], B[2], 1.0
     A=nx.reshape(A,(4,1))
     B=nx.reshape(B,(4,1))
-    L = nx.matrixmultiply(A,nx.transpose(B)) - nx.matrixmultiply(B,nx.transpose(A))
+    L = nx.dot(A,nx.transpose(B)) - nx.dot(B,nx.transpose(A))
     return Lmatrix2Lcoords(L)
 
 def pmat2cam_center(P):
@@ -217,6 +217,21 @@ class SingleCameraCalibration:
         self.helper = helper
 
         self.pmat_inv = numpy.linalg.pinv(self.Pmat)
+
+    def get_scaled(self,scale_factor):
+        """change units (e.g. from mm to meters)
+        
+        Note: some of the data structures are shared with the unscaled original
+        """
+        scale_array = numpy.ones((3,4))
+        scale_array[:,3] = scale_factor # mulitply last column by scale_factor
+        scaled_Pmat = scale_array*self.Pmat # element-wise multiplication
+        scaled = SingleCameraCalibration(self.cam_id,
+                                         scaled_Pmat,
+                                         self.res,
+                                         self.pp,
+                                         self.helper)
+        return scaled
         
     def get_cam_center(self):
         return pmat2cam_center(self.Pmat)
@@ -235,7 +250,7 @@ class SingleCameraCalibration:
         """contains rotation and translation information"""
         C_ = self.get_cam_center()
         K,R = self.get_KR()
-        t = numpy.matrixmultiply( -R, C_ )
+        t = numpy.dot( -R, C_ )
         ext = numpy.concatenate( (R, t), axis=1 )
         return ext
     def get_optical_axis(self):
@@ -244,7 +259,7 @@ class SingleCameraCalibration:
         c1 = self.get_cam_center()[:,0]
         
         x2d = (self.pp[0],self.pp[1],1.0)
-        c2 = numpy.matrixmultiply(self.pmat_inv, as_column(x2d))[:,0]
+        c2 = numpy.dot(self.pmat_inv, as_column(x2d))[:,0]
         c2 = c2[:3]/c2[3]
         c1 = flydra.geom.ThreeTuple(c1)
         c2 = flydra.geom.ThreeTuple(c2)
@@ -253,11 +268,11 @@ class SingleCameraCalibration:
     def get_up_vector(self):
         # create up vector from image plane
         x2d_a = (self.pp[0],self.pp[1],1.0)
-        c2_a = numpy.matrixmultiply(self.pmat_inv, as_column(x2d_a))[:,0]
+        c2_a = numpy.dot(self.pmat_inv, as_column(x2d_a))[:,0]
         c2_a = c2_a[:3]/c2_a[3]
         
         x2d_b = (self.pp[0],self.pp[1]+1,1.0)
-        c2_b = numpy.matrixmultiply(self.pmat_inv, as_column(x2d_b))[:,0]
+        c2_b = numpy.dot(self.pmat_inv, as_column(x2d_b))[:,0]
         c2_b = c2_b[:3]/c2_b[3]
 
         up_dir = c2_b-c2_a
@@ -411,6 +426,20 @@ class Reconstructor:
         for cc in self.cam_combinations:
             self.cam_combinations_by_size.setdefault(len(cc),[]).append(cc)
         self.cam_ids = cam_ids
+        # fill self._cam_centers_cache
+        self._cam_centers_cache = {}
+        for cam_id in self.cam_ids:
+            self._cam_centers_cache[cam_id] = self.get_camera_center(cam_id)[:,0] # make rank-1
+
+    def get_scaled(self,scale_factor):
+        """change units (e.g. from mm to meters)
+
+        Note: some of the data structures are shared with the unscaled original
+        """
+        # get original calibration
+        orig_sccs = [self.get_SingleCameraCalibration(cam_id) for cam_id in self.cam_ids]
+        scaled_sccs = [scc.get_scaled(scale_factor) for scc in orig_sccs]
+        return Reconstructor(scaled_sccs)
 
     def get_cam_ids(self):
         return self.cam_ids
@@ -491,6 +520,14 @@ class Reconstructor:
         return self._helper
 
     def find3d(self, cam_ids_and_points2d, return_X_coords = True, return_line_coords = True ):
+        """Find 3D coordinate using all data given
+
+        For a function which does hyptothesis testing to selectively
+        choose 2D to incorporate, see find_best_3d() in
+        reconstruct_utils.
+
+        """
+        
         # for info on SVD, see Hartley & Zisserman (2003) p. 593 (see
         # also p. 587)
         
@@ -619,6 +656,14 @@ class Reconstructor:
     def find3d_single_cam(self,cam_id,x):
         return nx.dot(self.pmat_inv[cam_id], as_column(x))
 
+    def get_projected_line_from_2d(self,cam_id,xy):
+        # XXX Could use nullspace method?
+        # image of 2d point in 3d space (on optical ray)
+        XY = self.find3d_single_cam(cam_id,(xy[0],xy[1],1.0))
+        XY = XY[:3,0]/XY[3] # convert to rank1
+        C = self._cam_centers_cache[cam_id]
+        return pluecker_from_verts(XY,C)
+    
     def get_SingleCameraCalibration(self,cam_id):
         return SingleCameraCalibration(cam_id=cam_id,
                                        Pmat=self.Pmat[cam_id],
