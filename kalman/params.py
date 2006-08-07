@@ -1,5 +1,4 @@
 import numpy
-numpy.set_printoptions(linewidth = 150,precision=1)
 
 # distance units are in m
 # time units are in sec
