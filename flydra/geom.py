@@ -113,9 +113,8 @@ def line_from_points(p,q):
 
 def line_from_HZline(P):
     """line from Hartley & Zisserman Pluecker coordinates"""
-    u = ThreeTuple( (P[0], P[1], P[2] ) )
-    v = ThreeTuple( (P[3], P[4], P[5] ) )
-    raise RuntimeError("not sure if this is correct!")
+    u = ThreeTuple( (P[2], -P[4], P[5] ) )
+    v = ThreeTuple( (P[3], -P[1], P[0] ) )
     return PlueckerLine(u,v)
 
 class LineSegment:
