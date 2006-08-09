@@ -1,9 +1,9 @@
 import tables
 import numpy
-
+import sys
 class TrackedObject: pass
 
-filename = 'DATA20060719_180955.tracked.resaved-tracked.h5'
+filename = sys.argv[1]
 results = tables.openFile(filename,mode='r')
 xhats_table = getattr(results.root,'kalman_estimates')
 obs_table = getattr(results.root,'observations')
