@@ -9,6 +9,8 @@ import tables as PT
 import os, sys
 from flydra_tracker import Tracker
 
+assert params.A_model_name == 'fixed_accel'
+
 class KalmanEstimates(PT.IsDescription):
     obj_id     = PT.Int32Col(pos=0,indexed=True)
     frame      = PT.Int32Col(pos=1)
@@ -118,7 +120,7 @@ def kalmanize(src_filename,dest_filename=None):
     tracker = Tracker(reconstructor_meters)
     
     if dest_filename is None:
-        dest_filename = os.path.splitext(results.filename)[0]+'.tracked.h5'
+        dest_filename = os.path.splitext(results.filename)[0]+'.tracked_fixed_accel.h5'
     if os.path.exists(dest_filename):
         raise ValueError('%s already exists, quitting'%dest_filename)
         #os.unlink(dest_filename)

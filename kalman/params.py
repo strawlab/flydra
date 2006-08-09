@@ -8,18 +8,19 @@ ss = 9 # length of state vector (state size)
 os = 3 # length of observation vector (observation size)
 
 dt = 0.01 # sec
-dt2 = dt**2
+half_dt2 = 0.5*dt**2
 
 # process update matrix (time evolution update matrix)
-A = numpy.array([[   1. ,    0. ,    0. ,   dt  ,    0. ,    0. ,  dt2  ,    0. ,    0. ],
-                 [   0. ,    1. ,    0. ,    0. ,   dt  ,    0. ,    0. ,  dt2  ,    0. ],
-                 [   0. ,    0. ,    1. ,    0. ,    0. ,   dt  ,    0. ,    0. ,  dt2  ],
-                 [   0. ,    0. ,    0. ,    1. ,    0. ,    0. ,   dt  ,    0. ,    0. ],
-                 [   0. ,    0. ,    0. ,    0. ,    1. ,    0. ,    0. ,   dt  ,    0. ],
-                 [   0. ,    0. ,    0. ,    0. ,    0. ,    1. ,    0. ,    0. ,   dt  ],
-                 [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,    0.1,    0. ,    0. ],
-                 [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,    0. ,    0.1,    0. ],
-                 [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,    0. ,    0. ,    0.1]])
+A = numpy.array([[   1. ,    0. ,    0. ,   dt  ,    0. ,    0. , half_dt2 ,   0.     ,    0. ],
+                 [   0. ,    1. ,    0. ,    0. ,   dt  ,    0. ,   0.     , half_dt2 ,    0. ],
+                 [   0. ,    0. ,    1. ,    0. ,    0. ,   dt  ,   0.     ,   0.     ,  half_dt2  ],
+                 [   0. ,    0. ,    0. ,    1. ,    0. ,    0. ,  dt      ,   0.     ,    0. ],
+                 [   0. ,    0. ,    0. ,    0. ,    1. ,    0. ,   0.     ,  dt      ,    0. ],
+                 [   0. ,    0. ,    0. ,    0. ,    0. ,    1. ,   0.     ,   0.     ,   dt  ],
+                 [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,   1.     ,   0.     ,    0. ],
+                 [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,   0.     ,   1.     ,    0. ],
+                 [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,   0.     ,   0.     ,    1.]])
+A_model_name = 'fixed_accel'
 
 # measurement prediction matrix
 C = numpy.zeros((os,ss))
