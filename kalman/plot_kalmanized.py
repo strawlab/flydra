@@ -9,19 +9,16 @@ xhats_table = getattr(results.root,'kalman_estimates')
 obs_table = getattr(results.root,'observations')
 flavor = 'numarray' # numpy not working yet
 
-obj_ids = xhats_table.read(field='obj_id',flavor=flavor)
-
-idx = 1
-print 'XXX WARNING: skipping first track for temporary reasons!'
+obj_id = 0
 tros = []
 while 1:
-    xhat_coords = xhats_table.getWhereList(xhats_table.cols.obj_id==idx,flavor=flavor)
-    obs_coords = obs_table.getWhereList(obs_table.cols.obj_id==idx,flavor=flavor)
+    xhat_coords = xhats_table.getWhereList(xhats_table.cols.obj_id==obj_id,flavor=flavor)
+    obs_coords = obs_table.getWhereList(obs_table.cols.obj_id==obj_id,flavor=flavor)
 
     if len(obs_coords)==0:
         break
-    
-    idx+=1
+    print 'loaded',obj_id
+    obj_id+=1
 
     obs_recarray = obs_table.readCoordinates(obs_coords,flavor=flavor)
     
@@ -45,9 +42,6 @@ while 1:
                                   xhat_recarray.field('zaccel')[:,numpy.newaxis]))
                                   
         tros.append(tro)
-    print 'loaded',idx
-##    if idx==300:
-##        break
     
 if 1:
     import pylab
