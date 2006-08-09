@@ -9,6 +9,7 @@ os = 3 # length of observation vector (observation size)
 
 dt = 0.01 # sec
 half_dt2 = 0.5*dt**2
+ad = 0.1 # acceleration decay
 
 # process update matrix (time evolution update matrix)
 A = numpy.array([[   1. ,    0. ,    0. ,   dt  ,    0. ,    0. , half_dt2 ,   0.     ,    0. ],
@@ -17,9 +18,9 @@ A = numpy.array([[   1. ,    0. ,    0. ,   dt  ,    0. ,    0. , half_dt2 ,   0
                  [   0. ,    0. ,    0. ,    1. ,    0. ,    0. ,  dt      ,   0.     ,    0. ],
                  [   0. ,    0. ,    0. ,    0. ,    1. ,    0. ,   0.     ,  dt      ,    0. ],
                  [   0. ,    0. ,    0. ,    0. ,    0. ,    1. ,   0.     ,   0.     ,   dt  ],
-                 [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,   1.     ,   0.     ,    0. ],
-                 [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,   0.     ,   1.     ,    0. ],
-                 [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,   0.     ,   0.     ,    1.]])
+                 [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,   ad     ,   0.     ,    0. ],
+                 [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,   0.     ,   ad     ,    0. ],
+                 [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,   0.     ,   0.     ,    ad]])
 A_model_name = 'fixed_accel'
 
 # measurement prediction matrix
