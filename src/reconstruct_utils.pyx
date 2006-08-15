@@ -151,7 +151,7 @@ def find_best_3d( object recon, object d2):
     for i from 0 <= i <= max_n_cams:
         least_err_by_n_cameras[i] = cinf
     
-    allA = numpy.zeros( (2*max_n_cams,4),'d')
+    allA = numpy.zeros( (2*max_n_cams,4), dtype=numpy.float64)
     bad_cam_ids = []
     cam_id2idx = {}
     all2d = {}
@@ -213,7 +213,7 @@ def find_best_3d( object recon, object d2):
                     good_A_idx.extend( (i*2, i*2+1) )
             if missing_cam_data == 1:
                 continue
-            A = numpy.take(allA,good_A_idx)
+            A = allA[good_A_idx,:]
             u,d,vt=svd(A)
             X = vt[-1,:]/vt[-1,3] # normalize
 
