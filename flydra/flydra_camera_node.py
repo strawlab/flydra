@@ -75,7 +75,10 @@ try:
     main_brain_hostname = socket.gethostbyname('brain1')
 except:
     # try localhost
-    main_brain_hostname = socket.gethostbyname(socket.gethostname())
+    try:
+        main_brain_hostname = socket.gethostbyname(socket.gethostname())
+    except: #socket.gaierror?
+        main_brain_hostname = ''
 
 def TimestampEcho():
     # create listening socket
