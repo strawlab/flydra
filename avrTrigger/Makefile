@@ -31,7 +31,7 @@ OPT = 2
 
 # List C source files here. (C dependencies are automatically generated.)
 # LCD_driver.c LCD_functions.c BCD.c
-SRC = $(TARGET).c
+SRC = $(TARGET).c ser169.c
 
 # List Assembler source files here.
 ASRC = 

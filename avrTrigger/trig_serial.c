@@ -12,6 +12,7 @@ Serial port parameters: 4800 baud, 8N1.
 #include <avr/io.h>
 #include <avr/signal.h>
 #include <avr/interrupt.h>
+#include "ser169.h"
 
 #define TEMPERATURE_SENSOR  0
 #define FALSE 0
@@ -35,26 +36,6 @@ void Delay(unsigned int millisec); /* forward decl. */
 // global vars
 char ADC_temp_low =0;
 char ADC_temp_high=0;
-
-
-
-void USART_init(void) {
-  unsigned int ubrr;
-
-  // Set baud rate
-  ubrr = 12; // 4800 bps, see atmega169 manual pg. 174
-  UBRRH = (unsigned char)(ubrr>>8);
-  UBRRL = (unsigned char)ubrr;
-
-  // Enable receiver and transmitter
-  UCSRB = (1<<RXEN) | (1<<TXEN);
-  
-  // Set frame format 8N1
-  // UCSRC defaults to 8N1 = (3<<UCSZ0)
-
-  // Set frame format 7E1
-  //UCSRC = (1<<UPM1)|(1<<UCSZ1);
-}
 
 void ADC_read2(void)
 {
@@ -82,44 +63,43 @@ void ADC_read2(void)
 
 }
 
+void RTC_init(void)
+{
+  cli(); // mt __disable_interrupt();  // disabel global interrupt
+
+  cbiBF(TIMSK2, TOIE2);             // disable OCIE2A and TOIE2
+  
+  ASSR = (1<<AS2);        // select asynchronous operation of Timer2
+  
+  TCNT2 = 0;              // clear TCNT2A
+  TCCR2A |= (1<<CS22) | (1<<CS20);             // select precaler: 32.768 kHz / 128 = 1 sec between each overflow
+  
+  while((ASSR & 0x01) | (ASSR & 0x04));       // wait for TCN2UB and TCR2UB to be cleared
+  
+  TIFR2 = 0xFF;           // clear interrupt-flags
+  sbiBF(TIMSK2, TOIE2);     // enable Timer2 overflow interrupt
+  
+  sei(); // mt __enable_interrupt();                 // enable global interrupt
+}
+
+SIGNAL(SIG_OVERFLOW2)
+{
+  // nothing
+  //gSECONDS++; // increment second
+}
+
 void Initialization(void) {
   OSCCAL_calibration();
 
   ADMUX = TEMPERATURE_SENSOR;
   ADCSRA = (1<<ADEN) | (1<<ADPS1) | (1<<ADPS0);    // set ADC prescaler to , 1MHz / 8 = 125kHz    
 
+  RTC_init();
+
   // USART
-  USART_init();
+  UART_init();
 
   DDRB = ~(1<<DDB5); // all pins but 5 (piezo) are trigger output
-  PORTB |= ~(1<<DDB5); // set all trigger pins high
-
-  // timer2
-  ASSR = (1<<AS2);        //select asynchronous operation of timer2 (32,768kHz)
-  TIMSK2=(1<<OCIE2A); // enable interrupt
-  TCCR2A = 0; //stop timer2
-
-  OCR2A = 161;    // set timer2 compare value, calibrated on 2006-07-28 to give 10.0 msec period
-
-  TCNT2 = 0;                      
-  // clear timer2 counter, (do
-  // after setting ocr2a because
-  // compare is blocked for one
-  // clock after setting)
-
-  TCCR2A = (1<<CS20);     // start timer2 with no prescaling
-}
-
-SIGNAL(SIG_OUTPUT_COMPARE2)
-{
-  if (PORTB && (1<<DDB0)) {
-    // value was high, set low
-    PORTB &= (1<<DDB5); // turn off trigger pins
-  } else {
-    // value was low, set high
-    PORTB |= ~(1<<DDB5); // turn on trigger pins
-  }
-  TCNT2 = 0;                      // clear timer2 counter
 }
 
 int main(void) {
@@ -129,10 +109,11 @@ int main(void) {
 
   Initialization();
 
+  PORTB |= ~(1<<DDB5); // set all trigger pins high
+
   while(1) {
+    last_char_input = UART_Getchar();
     
-    while (!(UCSRA & (1<<RXC))) {} // wait until USART received byte
-    last_char_input = UDR; // get byte
     do_action = ACTION_NONE;
     
     switch (last_char_input) {
@@ -152,25 +133,22 @@ int main(void) {
     switch (do_action) {
 
     case ACTION_GO:
-      TCCR2A = (1<<CS20);     // start timer2 (with no prescaling)
-      UDR = 'g';
+      UART_Putchar('g');
       break;
 
     case ACTION_STOP:
-      TCCR2A = 0;             // stop  timer2 (with no prescaling)
-      PORTB &= (1<<DDB5); // turn off trigger pins
-      UDR = 's';
+      UART_Putchar('s');
       break;
 
     case ACTION_GETTEMP:
       ADC_read2();
-      UDR = ADC_temp_high;
-      UDR = ADC_temp_low;
+      UART_Putchar(ADC_temp_high);
+      UART_Putchar(ADC_temp_low);
       break;      
 
     case ACTION_NONE:
     default:
-      UDR='?';
+      UART_Putchar('?');
       break;
       
     }
