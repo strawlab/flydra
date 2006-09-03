@@ -21,24 +21,20 @@ void UART_init(void) {
   cli();
 
   // Set baud rate
-  ubrr = 12; // 4800 bps, see atmega169 manual pg. 174
+  // see atmega169 manual pg. 174
+  //ubrr = 12; // for f_osc=1MHz this is 4800 bps
+  //ubrr = 8; // for f_osc=16MHz, this is 230.4k bps with U2X
+  //ubrr = 3; // for f_osc=14.7456MHz, this is 230.4k bps
+  //ubrr = 7; // for f_osc=14.7456MHz, this is 115.2k bps
+  ubrr = 15; // for f_osc=14.7456MHz, this is 57.6k bps
   UBRRH = (unsigned char)(ubrr>>8);
   UBRRL = (unsigned char)ubrr;
 
-  //  outp((0<<UMSEL)|(0<<UPM1)|(0<<UPM0)|(0<<USBS)|(1<<UCSZ1)|(1<<UCSZ0),UCSR0C);
-  //  outp(0x00,UCSR0A);
-  //  UCSRC = (0<<UMSEL)|(0<<UPM1)|(0<<UPM0)|(0<<USBS)|(1<<UCSZ1)|(1<<UCSZ0);
   UCSRA = 0x00;
-
   // Enable receiver, transmitter, and interrupts
   UCSRB = (1<<RXEN) | (1<<TXEN) | (1<<RXCIE);
-  //UCSRB = (1<<RXEN) | (1<<TXEN);
-  
-  // Set frame format 8N1
-  // UCSRC defaults to 8N1 = (3<<UCSZ0)
-
-  // Set frame format 7E1
-  //UCSRC = (1<<UPM1)|(1<<UCSZ1);
+  // frame format 8N1
+  UCSRC = (0<<UPM1)|(0<<UPM0)|(1<<UCSZ1)|(1<<UCSZ0);
 
   /* set-up buffers */
   uart_tx_tail_ptr  = uart_tx_head_ptr = uart_tx_buffer;

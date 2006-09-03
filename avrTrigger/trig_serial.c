@@ -5,8 +5,6 @@ under control serial port (for use with flydra).
 
 DDB0 - trigger source output to cameras
 
-Serial port parameters: 4800 baud, 8N1.
-
 */
 
 #include <avr/io.h>
@@ -176,14 +174,23 @@ void OSCCAL_calibration(void)
 
     CLKPR = (1<<CLKPCE);        // set Clock Prescaler Change Enable
 
-    CLKPR = (1<<CLKPS1) | (1<<CLKPS0); // ADS - sets clock division factor to 8
-    // ADS - thus, with calibrated internal crystal at * MHz, this gives us 1 MHz
+    // CLKPR = (1<<CLKPS1) | (1<<CLKPS0); // ADS - sets clock division factor to 8
+    // ADS - thus, with calibrated internal crystal at 8 MHz, this gives us 1 MHz
     
     TIMSK2 = 0;             //disable OCIE2A and TOIE2
 
-    ASSR = (1<<AS2);        //select asynchronous operation of timer2 (32,768kHz)
-    
-    OCR2A = 200;            // set timer2 compare value 
+    ASSR = (1<<AS2);        //select asynchronous operation of timer2 (32.768kHz)
+    /*
+      Calculation of internal RC oscillator value - ADS
+
+      f_xtal = external quartz crystal = 32768 Hz = 32.768 kHz
+      ticks_xtal = compare value of timer2
+      f_osc = internal RC oscillator frequency = 14745600 = 14.7456 MHz
+      ticks_osc = f_osc/f_xtal*ticks_xtal
+     */
+#define ticks_xtal 60
+
+    OCR2A = ticks_xtal;            // set timer2 compare value 
 
     TIMSK0 = 0;             // delete any interrupt sources
         
@@ -224,12 +231,12 @@ void OSCCAL_calibration(void)
             temp = (temp << 8);
             temp += tempL;
         }
-    
-        if (temp > 6250)
+
+        if (temp > 27135)	  // ticks_osc + 0.5%
         {
             OSCCAL--;   // the internRC oscillator runs to fast, decrease the OSCCAL
         }
-        else if (temp < 6120)
+        else if (temp < 26865)	  // ticks_osc - 0.5%
         {
             OSCCAL++;   // the internRC oscillator runs to slow, increase the OSCCAL
         }
