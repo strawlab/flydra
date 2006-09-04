@@ -259,18 +259,22 @@ def find_best_3d( object recon, object d2):
         Lcoords = None
     else:
         P = numpy.array(P)
-        u,d,vt=svd(P,full_matrices=True)
-
-        P = vt[0,:] # P,Q are planes (take row because this is transpose(V))
-        Q = vt[1,:]
-
-        # directly to Pluecker line coordinates
-        Lcoords = ( -(P[3]*Q[2]) + P[2]*Q[3],
-                      P[3]*Q[1]  - P[1]*Q[3],
-                    -(P[2]*Q[1]) + P[1]*Q[2],
-                    -(P[3]*Q[0]) + P[0]*Q[3],
-                    -(P[2]*Q[0]) + P[0]*Q[2],
-                    -(P[1]*Q[0]) + P[0]*Q[1] )
-        if isnan(Lcoords[0]):
+        try:
+            u,d,vt=svd(P,full_matrices=True)
+        except numpy.linalg.LinAlgError, err:
+            print 'SVD error, P=',repr(P)
             Lcoords = None
+        else:
+            P = vt[0,:] # P,Q are planes (take row because this is transpose(V))
+            Q = vt[1,:]
+
+            # directly to Pluecker line coordinates
+            Lcoords = ( -(P[3]*Q[2]) + P[2]*Q[3],
+                          P[3]*Q[1]  - P[1]*Q[3],
+                        -(P[2]*Q[1]) + P[1]*Q[2],
+                        -(P[3]*Q[0]) + P[0]*Q[3],
+                        -(P[2]*Q[0]) + P[0]*Q[2],
+                        -(P[1]*Q[0]) + P[0]*Q[1] )
+            if isnan(Lcoords[0]):
+                Lcoords = None
     return X, Lcoords, cam_ids_used, mean_dist
