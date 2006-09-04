@@ -16,7 +16,7 @@ DDB0 - trigger source output to cameras
 #define FALSE 0
 #define TRUE 1
 void OSCCAL_calibration(void); /* forward decl. */
-void Delay(unsigned int millisec); /* forward decl. */
+void Delay(uint32_t millisec); /* forward decl. */
 
 // Macro definitions
 //mtA - 
@@ -30,13 +30,115 @@ void Delay(unsigned int millisec); /* forward decl. */
 #define ACTION_GO   'g'
 #define ACTION_STOP 's'
 #define ACTION_GETTEMP 't'
+#define ACTION_GETTIME 'T'
+#define ACTION_GETFREQ 'f'
 
 // global vars
-char ADC_temp_low =0;
-char ADC_temp_high=0;
+volatile uint8_t gSUBSECTICKS=0;
 
-void ADC_read2(void)
+volatile uint32_t gTIME_HIGH=0;
+volatile uint8_t gTIME_LOW=0;
+
+typedef struct timespec timespec;
+struct timespec {
+  uint32_t sec_high;
+  uint8_t sec_low;
+  uint8_t ticks_high;
+  uint8_t ticks_med;
+  uint8_t ticks_low;
+};
+
+/* 
+
+Design:
+
+System clock
+============
+
+timer2 increments with external crystal with a prescalar dividing it
+by 128, and it 8 bits wide. Thus, it rolls over (and generates an
+interrupt) once a second. (gTIME_HIGH*0x10+gTIME_LOW) counts how
+many seconds have elapsed since the power was cycled.
+
+timer1 increments at the system clock frequency (f_osc), which is
+14.7456MHz. It is 16 bits wide and thus rolls over about 225 times per
+second. (14745600./0xFFFF=225.003) gSUBSECTICKS keeps track of how
+often this has occurred so far during the current second. Timer1 can
+provide the finer detail of the current time.
+
+*/
+
+void send_freq_packet( ) {
+  //14.7456 MHz
+  UART_Putchar('f');
+  UART_Putchar(4);
+  UART_Putchar(0x00);
+  UART_Putchar(0xe1);
+  UART_Putchar(0x00);
+  UART_Putchar(0x00);
+  UART_Putchar('X');
+}
+
+void send_temperature_packet( uint16_t temperature ) {
+  uint8_t tmp;
+
+  UART_Putchar('t');
+  UART_Putchar(2);
+  tmp = (temperature>>8);
+  UART_Putchar(tmp);
+  tmp = (temperature&0xFF);
+  UART_Putchar(tmp);
+  UART_Putchar('X');
+}
+
+void send_timestamp_packet( timespec t ) {
+  uint8_t tmp;
+
+  UART_Putchar('T');
+  UART_Putchar(8);
+
+  tmp = (t.sec_high>>24) & 0xFF;
+  UART_Putchar(tmp);
+  tmp = (t.sec_high>>16) & 0xFF;
+  UART_Putchar(tmp);
+  tmp = (t.sec_high>>8) & 0xFF;
+  UART_Putchar(tmp);
+  tmp = t.sec_high & 0xFF;
+  UART_Putchar(tmp);
+
+  UART_Putchar(t.sec_low);
+  UART_Putchar(t.ticks_high);
+  UART_Putchar(t.ticks_med);
+  UART_Putchar(t.ticks_low);
+  UART_Putchar('X');
+}
+
+timespec get_time(void) {
+  timespec result;
+  uint8_t b2,b1,b0; // tmp copies are just registers
+
+  cli();
+  // first grab timer1 low then high (temp variables speed assembly)
+  b0 = TCNT1L;
+  b1 = TCNT1H;
+  b2 = gSUBSECTICKS;
+
+  result.sec_high=gTIME_HIGH;
+  result.sec_low=gTIME_LOW;
+  sei();
+
+  result.ticks_low = b0; // copy from register (to stack?)
+  result.ticks_med = b1;
+  result.ticks_high = b2;
+
+  return result;
+}
+
+uint16_t ADC_read(void)
 {
+  uint16_t result;
+  uint8_t tmp0, tmp1;
+
     // To save power, the voltage over the LDR and the NTC is turned off when not used
     // This is done by controlling the voltage from a I/O-pin (PORTF3)
     sbiBF(PORTF, PF3); // mt sbi(PORTF, PORTF3);     // Enable the VCP (VC-peripheral)
@@ -51,19 +153,23 @@ void ADC_read2(void)
     ADCSRA |= (1<<ADSC);        // do single conversion
     while(!(ADCSRA & 0x10));    // wait for conversion done, ADIF flag active
         
-    ADC_temp_low = ADCL;            // read out ADCL register
-    ADC_temp_high= ADCH;    // read out ADCH register        
+    tmp0 = ADCL;            // read out ADCL register
+    tmp1 = ADCH;    // read out ADCH register        
+
+    result = tmp1*0x10 + tmp0;
 
     cbiBF(PORTF,PF3); // mt cbi(PORTF, PORTF3);     // disable the VCP
     cbiBF(DDRF,DDF3); // mt cbi(DDRF, PORTF3);  
     
     cbiBF(ADCSRA, ADEN);      // disable the ADC
-
+    return result;
 }
 
 void RTC_init(void)
 {
-  cli(); // mt __disable_interrupt();  // disabel global interrupt
+  cli(); // mt __disable_interrupt();  // disable global interrupt
+
+  // START TIMER2
 
   cbiBF(TIMSK2, TOIE2);             // disable OCIE2A and TOIE2
   
@@ -77,13 +183,33 @@ void RTC_init(void)
   TIFR2 = 0xFF;           // clear interrupt-flags
   sbiBF(TIMSK2, TOIE2);     // enable Timer2 overflow interrupt
   
+  // START TIMER1
+  TCNT1H = 0;     // clear timer1 counter
+  TCNT1L = 0;
+  TCCR1B = (1<<CS10);     // start timer1 with no prescaling
+
   sei(); // mt __enable_interrupt();                 // enable global interrupt
+}
+
+SIGNAL(SIG_OVERFLOW1)
+{
+  gSUBSECTICKS++;
 }
 
 SIGNAL(SIG_OVERFLOW2)
 {
-  // nothing
-  //gSECONDS++; // increment second
+  // reset timer1 so it was 0 when timer2 overflowed
+  TCNT1H = 0;     // clear timer1 counter, write high byte first
+  TCNT1L = 21;    // set time to number of clock cycles (as computed from looking at assembly) since timer2 overflow
+  sei();  // allow the rest to be interruptable
+  gSUBSECTICKS=0; // do this after enabling interrupts to clear any results of timer1 overflow during this interrupt
+
+  if (gTIME_LOW==0xFF) {
+    gTIME_LOW=0;
+    gTIME_HIGH++;
+  } else {
+    gTIME_LOW++;
+  }
 }
 
 void Initialization(void) {
@@ -103,7 +229,6 @@ void Initialization(void) {
 int main(void) {
   unsigned char last_char_input;
   unsigned char do_action;
-  int temperature;
 
   Initialization();
 
@@ -115,17 +240,12 @@ int main(void) {
     do_action = ACTION_NONE;
     
     switch (last_char_input) {
-    case 'g':
-      do_action = ACTION_GO;
-      break;
-    case 's':
-      do_action = ACTION_STOP;
-      break;
-    case 't':
-      do_action = ACTION_GETTEMP;
-      break;
-    default:
-      break;
+    case 'g': do_action = ACTION_GO;      break;
+    case 's': do_action = ACTION_STOP;    break;
+    case 'f': do_action = ACTION_GETFREQ; break;
+    case 't': do_action = ACTION_GETTEMP; break;
+    case 'T': do_action = ACTION_GETTIME; break;
+    default:                              break;
     }
 
     switch (do_action) {
@@ -138,10 +258,16 @@ int main(void) {
       UART_Putchar('s');
       break;
 
+    case ACTION_GETFREQ:
+      send_freq_packet();
+      break;      
+
     case ACTION_GETTEMP:
-      ADC_read2();
-      UART_Putchar(ADC_temp_high);
-      UART_Putchar(ADC_temp_low);
+      send_temperature_packet(ADC_read());
+      break;      
+
+    case ACTION_GETTIME:
+      send_timestamp_packet(get_time());
       break;      
 
     case ACTION_NONE:
@@ -168,11 +294,11 @@ int main(void) {
 *****************************************************************************/
 void OSCCAL_calibration(void)
 {
-    unsigned char calibrate = FALSE;
-    int temp;
-    unsigned char tempL;
+    uint8_t calibrate = FALSE;
+    uint16_t temp;
+    uint8_t tempL;
 
-    CLKPR = (1<<CLKPCE);        // set Clock Prescaler Change Enable
+    // CLKPR = (1<<CLKPCE);        // set Clock Prescaler Change Enable
 
     // CLKPR = (1<<CLKPS1) | (1<<CLKPS0); // ADS - sets clock division factor to 8
     // ADS - thus, with calibrated internal crystal at 8 MHz, this gives us 1 MHz
@@ -199,7 +325,7 @@ void OSCCAL_calibration(void)
 
     while((ASSR & 0x01) | (ASSR & 0x04));       //wait for TCN2UB and TCR2UB to be cleared
 
-    Delay(1000);    // wait for external crystal to stabilise
+    Delay(16000);    // wait for external crystal to stabilise
     
     while(!calibrate)
     {
@@ -232,11 +358,11 @@ void OSCCAL_calibration(void)
             temp += tempL;
         }
 
-        if (temp > 27135)	  // ticks_osc + 0.5%
+        if (temp > 27135)	  // ticks_osc + slop
         {
             OSCCAL--;   // the internRC oscillator runs to fast, decrease the OSCCAL
         }
-        else if (temp < 26865)	  // ticks_osc - 0.5%
+        else if (temp < 26865)	  // ticks_osc - slop
         {
             OSCCAL++;   // the internRC oscillator runs to slow, increase the OSCCAL
         }
@@ -247,25 +373,14 @@ void OSCCAL_calibration(void)
     }
 }
 
-/*****************************************************************************
-*
-*   Function name : Delay
-*
-*   Returns :       None
-*
-*   Parameters :    unsigned int millisec
-*
-*   Purpose :       Delay-loop
-*
-*****************************************************************************/
-void Delay(unsigned int millisec)
+void Delay(uint32_t duration)
+     // duration depends on clock speed
 {
-	// mt, int i did not work in the simulator:  int i; 
-	uint8_t i;
+  uint8_t i;
 
-	while (millisec--) {
-		for (i=0; i<125; i++) {
-			asm volatile ("nop"::);
-		}
-	}
+  while (duration--) {
+    for (i=0; i<125; i++) {
+      asm volatile ("nop"::);
+    }
+  }
 }
