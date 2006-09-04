@@ -25,8 +25,10 @@ void UART_init(void) {
   //ubrr = 12; // for f_osc=1MHz this is 4800 bps
   //ubrr = 8; // for f_osc=16MHz, this is 230.4k bps with U2X
   //ubrr = 3; // for f_osc=14.7456MHz, this is 230.4k bps
-  //ubrr = 7; // for f_osc=14.7456MHz, this is 115.2k bps
-  ubrr = 15; // for f_osc=14.7456MHz, this is 57.6k bps
+  ubrr = 7; // for f_osc=14.7456MHz, this is 115.2k bps
+
+  //ubrr = 15; // for f_osc=14.7456MHz, this is 57.6k bps
+  //ubrr = 23; // for f_osc=14.7456MHz, this is 38.4k bps
   UBRRH = (unsigned char)(ubrr>>8);
   UBRRL = (unsigned char)ubrr;
 

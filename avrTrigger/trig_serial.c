@@ -33,11 +33,21 @@ void Delay(uint32_t millisec); /* forward decl. */
 #define ACTION_GETTIME 'T'
 #define ACTION_GETFREQ 'f'
 
+// trig count 72 = 100 Hz, 36 = 200 Hz
+#define TRIG_COUNT_VAL 72
+
+//#define DEBUGTRIG
+
+// set to half of TRIG_COUNT_VAL for 50/50 duty cycle, set to 1 for minimal duration
+#define TRIG_COUNT_CMP 36
+
 // global vars
 volatile uint8_t gSUBSECTICKS=0;
 
 volatile uint32_t gTIME_HIGH=0;
 volatile uint8_t gTIME_LOW=0;
+
+uint8_t trig_count=0;
 
 typedef struct timespec timespec;
 struct timespec {
@@ -68,7 +78,14 @@ provide the finer detail of the current time.
 
 */
 
-void send_freq_packet( ) {
+void send_state_packet(uint8_t val) {
+  UART_Putchar('r');
+  UART_Putchar(0x01);
+  UART_Putchar(val);
+  UART_Putchar('X');
+}
+
+void send_freq_packet( void ) {
   //14.7456 MHz
   UART_Putchar('f');
   UART_Putchar(4);
@@ -191,6 +208,30 @@ void RTC_init(void)
   sei(); // mt __enable_interrupt();                 // enable global interrupt
 }
 
+SIGNAL(SIG_OVERFLOW0) {
+  // timer1 controls trigger
+  if (trig_count == TRIG_COUNT_CMP) {
+    sbiBF(TCCR0A,COM0A0); // next output compare sets trigger
+#ifdef DEBUGTRIG
+    UART_Putchar('!');
+#endif
+  } else {
+    if (trig_count == 0) {
+      cbiBF(TCCR0A,COM0A0); // next output compare clears trigger
+      trig_count = TRIG_COUNT_VAL; // reset counter
+    }
+    // do nothing
+  }
+  trig_count--;
+}
+
+SIGNAL(SIG_OUTPUT_COMPARE0) {
+  if (trig_count==1) {
+    // we would get timestamps of the trigger pulses here
+    asm volatile ("nop"::);
+  }
+}
+
 SIGNAL(SIG_OVERFLOW1)
 {
   gSUBSECTICKS++;
@@ -212,6 +253,13 @@ SIGNAL(SIG_OVERFLOW2)
   }
 }
 
+void timer0_init(void) {
+  // user's guide says to make sure to perform before setting DDRB
+  OCR0A = 0x7F; // output compare value, halfway between top and bottom (arbitrary)
+  //TIMSK0 = (1<<OCIE0A)|(1<<TOIE0); // ouput compare interrupt enable, overflow interrupt enable
+  TIMSK0 = (1<<TOIE0); // timer overflow interrupt enable
+}
+
 void Initialization(void) {
   OSCCAL_calibration();
 
@@ -223,6 +271,7 @@ void Initialization(void) {
   // USART
   UART_init();
 
+  timer0_init();
   DDRB = ~(1<<DDB5); // all pins but 5 (piezo) are trigger output
 }
 
@@ -251,11 +300,20 @@ int main(void) {
     switch (do_action) {
 
     case ACTION_GO:
-      UART_Putchar('g');
+      // start timer0
+      TCCR0A = (1<<COM0A1)|(0<<COM0A0)|(0<<CS02)|(1<<CS01)|(0<<CS00); // clear pin on OCR match, clock prescalar=8
+#ifdef DEBUGTRIG
+      UART_Putchar('G');
+#endif
+      send_state_packet(1);
       break;
 
     case ACTION_STOP:
-      UART_Putchar('s');
+      TCCR0A = (1<<COM0A1)|(0<<COM0A0)|(0<<CS02)|(0<<CS01)|(0<<CS00); // stop timer0
+#ifdef DEBUGTRIG
+      UART_Putchar('S');
+#endif
+      send_state_packet(0);
       break;
 
     case ACTION_GETFREQ:
@@ -272,7 +330,6 @@ int main(void) {
 
     case ACTION_NONE:
     default:
-      UART_Putchar('?');
       break;
       
     }
@@ -325,7 +382,7 @@ void OSCCAL_calibration(void)
 
     while((ASSR & 0x01) | (ASSR & 0x04));       //wait for TCN2UB and TCR2UB to be cleared
 
-    Delay(16000);    // wait for external crystal to stabilise
+    Delay(32000);    // wait for external crystal to stabilise
     
     while(!calibrate)
     {
