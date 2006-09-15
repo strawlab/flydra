@@ -46,3 +46,6 @@ ln -s ~/kookaburra/flydra/analysis/highspeed_01_view_flydra_through_photron.py
 ln -s ~/kookaburra/flydra/analysis/find_cam_matrix.py
 
 ln -s ~/kookaburra/flydra/analysis/flydra2kine.py
+
+ln -s ~/kookaburra/flydra/analysis/plot_kalmanized.py
+ln -s ~/kookaburra/flydra/analysis/kalmanized_landing_01.py

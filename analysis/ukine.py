@@ -11,23 +11,36 @@ import numpy
 if 0:
     base_fname = 'full_20060315_202300_%s_bg.fmf'
     cal_source = 'DATA20060315_170142.h5'
+    reconstructor_source = tables.openFile(cal_source,mode='r')
 elif 0:
     base_fname = 'full_20060515_190909_%s_bg.fmf'
     # hdf5 file containing calibration data
     cal_source = 'DATA20060515_190905.h5'
+    reconstructor_source = tables.openFile(cal_source,mode='r')
 elif 0:
     base_fname = 'full_20060516_191746_%s_bg.fmf'
     # hdf5 file containing calibration data
     cal_source = 'DATA20060516_194920.h5'
-elif 1:
+    reconstructor_source = tables.openFile(cal_source,mode='r')
+elif 0:
     base_fname = 'full_20060717_185549_%s_bg.fmf'
     # hdf5 file containing calibration data
     cal_source = 'DATA20060717_185535.h5'
+    reconstructor_source = tables.openFile(cal_source,mode='r')
 
-h5file = tables.openFile(cal_source,mode='r')
-recon = flydra.reconstruct.Reconstructor(h5file)
-h5file.close()
-del h5file
+    
+elif 0:
+    base_fname = 'full_20060830_184358_%s_bg.fmf'
+    # hdf5 file containing calibration data
+    cal_source = 'DATA20060830_184701.h5'
+    reconstructor_source = tables.openFile(cal_source,mode='r')
+elif 1:
+    base_fname = 'full_20060724_173446_%s_bg.fmf'
+    # hdf5 file containing calibration data
+    cal_source = 'DATA20060724_173517.h5'
+    reconstructor_source = tables.openFile(cal_source,mode='r')
+
+recon = flydra.reconstruct.Reconstructor(reconstructor_source)
 
 class ClickGetter:
     def on_click(self,event):
