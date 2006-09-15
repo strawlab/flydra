@@ -237,11 +237,11 @@ def get_f_xyz_L_err( results, max_err = 10, typ = 'best', include_timestamps=Fal
     else:
         good_idx = nx.argsort(f)
         
-    f = nx.take(f,good_idx)
-    xyz = nx.take(xyz,good_idx)
-    L = nx.take(L,good_idx)
-    err = nx.take(err,good_idx)
-    timestamps = nx.take(timestamps,good_idx)
+    f = nx.take(f,good_idx,axis=0)
+    xyz = nx.take(xyz,good_idx,axis=0)
+    L = nx.take(L,good_idx,axis=0)
+    err = nx.take(err,good_idx,axis=0)
+    timestamps = nx.take(timestamps,good_idx,axis=0)
 
     rval = [f,xyz,L,err]
     if include_timestamps:
@@ -271,7 +271,7 @@ def create_data2d_camera_summary(results):
                                  Data2DCameraSummary, 'data2d camera summary' )
     for camn in camn2cam_id:
         cam_id = camn2cam_id[camn]
-        print 'creating 2d camera summary for camn %d, cam_id %s'%(camn,cam_id)
+        print 'creating 2d camera index for camn %d, cam_id %s'%(camn,cam_id)
 
         first_row = True
         for row_data2d in data2d.where( data2d.cols.camn == camn ):

@@ -637,16 +637,16 @@ def plot_whole_movie_3d(results, typ='best', show_err=False, max_err=10,
 
     if fstart is not None:
         idx = nx.where( f >= fstart )[0]
-        f = nx.take(f,idx)
-        xyz = nx.take(xyz,idx)
-        L = nx.take(L,idx)
-        err = nx.take(err,idx)
+        f = nx.take(f,idx,axis=0)
+        xyz = nx.take(xyz,idx,axis=0)
+        L = nx.take(L,idx,axis=0)
+        err = nx.take(err,idx,axis=0)
     if fstop is not None:
         idx = nx.where( f <= fstop )[0]
-        f = nx.take(f,idx)
-        xyz = nx.take(xyz,idx)
-        L = nx.take(L,idx)
-        err = nx.take(err,idx)
+        f = nx.take(f,idx,axis=0)
+        xyz = nx.take(xyz,idxx,axis=0)
+        L = nx.take(L,idxx,axis=0)
+        err = nx.take(err,idxx,axis=0)
 
     x = xyz[:,0]
     y = xyz[:,1]
@@ -2105,10 +2105,14 @@ def emit_recalibration_data(results, calib_dir,
 
     if not os.path.exists(calib_dir):
         os.makedirs(calib_dir)
+        
+    if force_cam_ids is None:
+        force_cam_ids = []
     
     #seq = (2412304, 2412730, 5)
-    seq = (0, int(5e5), 5)
-    print 'Using start %f, stop %f, inc %f'%seq
+    #seq = (0, int(5e5), 5)
+    seq = (0, int(1.2e6), 20)
+    print 'Using start, stop, step',seq
     #seq = (0, int(1.3e6), 100)
     reconstructor = flydra.reconstruct.Reconstructor(results)
 
@@ -2141,7 +2145,7 @@ def emit_recalibration_data(results, calib_dir,
         print 'cam_id2camns',cam_id2camns
     to_output = []
     if 1:
-        framelist = nx.arange(seq[0],seq[1],seq[2])
+        framelist = nx.arange(seq[0],seq[1],seq[2],dtype=int)
         frame_idxs = coords_frames.searchsorted(framelist)
         for i in range(len(framelist)):
             if i%100==0:
@@ -2163,12 +2167,12 @@ def emit_recalibration_data(results, calib_dir,
                 #print '\nframe',frame
                 #print 'row:',data3d[coords[frame_idx]]
                 row_dict = {}
-                if PT.__version__ <= '1.3.2':
+                if PT.__version__ <= '1.3.3':
                     oldframe=frame
                     frame=int(frame)
                     assert frame==oldframe # check for rounding error
                 if debug:
-                    print 'frame',frame
+                    print 'frame',repr(frame),type(frame)
                 for row in data2d.where( data2d.cols.frame == frame ):
                     camn = row['camn']
                     if ignore_camns_used or (camn in camns_used):
@@ -2948,7 +2952,7 @@ def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
     f = f[sort_order]
     err = err[sort_order]
     
-    good_frames = nx.take(f,nx.where( err < 10.0 ))
+    good_frames = nx.take(f,nx.where( err < 10.0 ),axis=0)
     good_frames = good_frames[0] # make 1D array
 
     f_diff = good_frames[1:] - good_frames[:-1]
@@ -3036,7 +3040,7 @@ if __name__=='__main__':
         results.close()
         del results
         
-    results = get_results('DATA20060719_180955.h5',mode='r+')
+    results = get_results('DATA20060904_174700.h5',mode='r+')
     #results = get_results('DATA20060315_170142.h5',mode='r+')
 
     #del results.root.exact_movie_info
