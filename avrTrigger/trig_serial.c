@@ -1,9 +1,12 @@
 /* 
 
-Program to control green lights and trigger external (Photron) cameras
-under control serial port (for use with flydra).
+Theory of operation:
 
-DDB0 - trigger source output to cameras
+timer1 is the lowest 16 bits of the "master clock" and counts time
+accordingly.
+
+timer2 is used for the trigger output (because its interrupts are
+processed first).
 
 */
 
@@ -15,16 +18,19 @@ DDB0 - trigger source output to cameras
 #define TEMPERATURE_SENSOR  0
 #define FALSE 0
 #define TRUE 1
-void OSCCAL_calibration(void); /* forward decl. */
-void Delay(uint32_t millisec); /* forward decl. */
 
 // Macro definitions
-//mtA - 
 // sbi and cbi are not longer supported by the avr-libc
 // to avoid version-conflicts the macro-names have been 
 // changed to sbiBF/cbiBF "everywhere"
 #define sbiBF(port,bit)  (port |= (1<<bit))   //set bit in port
 #define cbiBF(port,bit)  (port &= ~(1<<bit))  //clear bit in port
+
+#define PT_STATE 'r'
+#define PT_FREQ 'f'
+#define PT_TEMP 't'
+#define PT_TRIG_TS 'T'
+#define PT_QUERY_TS 'Q'
 
 #define ACTION_NONE 0
 #define ACTION_GO   'g'
@@ -33,13 +39,22 @@ void Delay(uint32_t millisec); /* forward decl. */
 #define ACTION_GETTIME 'T'
 #define ACTION_GETFREQ 'f'
 
-// trig count 72 = 100 Hz, 36 = 200 Hz
-#define TRIG_COUNT_VAL 72
+// output compare value, halfway between top and bottom (arbitrary)
+#define TIMER2_COMPARE 0x7F
+
+// calibrated on oscilloscope to give 10.0 msec interval
+#define TRIG_COUNT_PERIOD 625
+
+// make rate come to exactly (32 = 100.0 Hz, 16 = 200 Hz)
+// IMPORTANT: make sure TRIG_COUNT_REMAINDER is less than TIMER2_COMPARE
+
+// Must be uint8
+#define TRIG_COUNT_REMAINDER 22
 
 //#define DEBUGTRIG
 
-// set to half of TRIG_COUNT_VAL for 50/50 duty cycle, set to 1 for minimal duration
-#define TRIG_COUNT_CMP 36
+// set to half of TRIG_COUNT_PERIOD for 50/50 duty cycle, set to 1 for minimal duration
+#define TRIG_COUNT_CMP 10
 
 // global vars
 volatile uint8_t gSUBSECTICKS=0;
@@ -47,7 +62,8 @@ volatile uint8_t gSUBSECTICKS=0;
 volatile uint32_t gTIME_HIGH=0;
 volatile uint8_t gTIME_LOW=0;
 
-uint8_t trig_count=0;
+uint16_t trig_count=0;
+uint8_t doing_remainder=0;
 
 typedef struct timespec timespec;
 struct timespec {
@@ -58,40 +74,23 @@ struct timespec {
   uint8_t ticks_low;
 };
 
-/* 
-
-Design:
-
-System clock
-============
-
-timer2 increments with external crystal with a prescalar dividing it
-by 128, and it 8 bits wide. Thus, it rolls over (and generates an
-interrupt) once a second. (gTIME_HIGH*0x10+gTIME_LOW) counts how
-many seconds have elapsed since the power was cycled.
-
-timer1 increments at the system clock frequency (f_osc), which is
-14.7456MHz. It is 16 bits wide and thus rolls over about 225 times per
-second. (14745600./0xFFFF=225.003) gSUBSECTICKS keeps track of how
-often this has occurred so far during the current second. Timer1 can
-provide the finer detail of the current time.
-
-*/
+volatile uint8_t new_trigger_timestamp=0;
+volatile timespec trigger_timestamp;
 
 void send_state_packet(uint8_t val) {
-  UART_Putchar('r');
+  UART_Putchar(PT_STATE);
   UART_Putchar(0x01);
   UART_Putchar(val);
   UART_Putchar('X');
 }
 
 void send_freq_packet( void ) {
-  //14.7456 MHz
-  UART_Putchar('f');
+  //16.0 MHz
+  UART_Putchar(PT_FREQ);
   UART_Putchar(4);
   UART_Putchar(0x00);
-  UART_Putchar(0xe1);
-  UART_Putchar(0x00);
+  UART_Putchar(0xf4);
+  UART_Putchar(0x24);
   UART_Putchar(0x00);
   UART_Putchar('X');
 }
@@ -99,7 +98,7 @@ void send_freq_packet( void ) {
 void send_temperature_packet( uint16_t temperature ) {
   uint8_t tmp;
 
-  UART_Putchar('t');
+  UART_Putchar(PT_TEMP);
   UART_Putchar(2);
   tmp = (temperature>>8);
   UART_Putchar(tmp);
@@ -108,10 +107,10 @@ void send_temperature_packet( uint16_t temperature ) {
   UART_Putchar('X');
 }
 
-void send_timestamp_packet( timespec t ) {
+void send_timestamp_packet( unsigned char packet_type, timespec t ) {
   uint8_t tmp;
 
-  UART_Putchar('T');
+  UART_Putchar(packet_type);
   UART_Putchar(8);
 
   tmp = (t.sec_high>>24) & 0xFF;
@@ -182,96 +181,95 @@ uint16_t ADC_read(void)
     return result;
 }
 
-void RTC_init(void)
+void timer1_init(void)
 {
-  cli(); // mt __disable_interrupt();  // disable global interrupt
-
-  // START TIMER2
-
-  cbiBF(TIMSK2, TOIE2);             // disable OCIE2A and TOIE2
-  
-  ASSR = (1<<AS2);        // select asynchronous operation of Timer2
-  
-  TCNT2 = 0;              // clear TCNT2A
-  TCCR2A |= (1<<CS22) | (1<<CS20);             // select precaler: 32.768 kHz / 128 = 1 sec between each overflow
-  
-  while((ASSR & 0x01) | (ASSR & 0x04));       // wait for TCN2UB and TCR2UB to be cleared
-  
-  TIFR2 = 0xFF;           // clear interrupt-flags
-  sbiBF(TIMSK2, TOIE2);     // enable Timer2 overflow interrupt
-  
   // START TIMER1
   TCNT1H = 0;     // clear timer1 counter
   TCNT1L = 0;
   TCCR1B = (1<<CS10);     // start timer1 with no prescaling
 
-  sei(); // mt __enable_interrupt();                 // enable global interrupt
+  TIMSK1 = (1<<TOIE1); // timer overflow interrupt enable
+
 }
 
-SIGNAL(SIG_OVERFLOW0) {
-  // timer1 controls trigger
+SIGNAL(SIG_OVERFLOW2) {
+  // timer2
   if (trig_count == TRIG_COUNT_CMP) {
-    sbiBF(TCCR0A,COM0A0); // next output compare sets trigger
+    //sbiBF(TCCR2A,COM2A0); // next output compare sets trigger
 #ifdef DEBUGTRIG
     UART_Putchar('!');
 #endif
   } else {
     if (trig_count == 0) {
-      cbiBF(TCCR0A,COM0A0); // next output compare clears trigger
-      trig_count = TRIG_COUNT_VAL; // reset counter
+      //cbiBF(TCCR2A,COM2A0); // next output compare clears trigger
+      PORTB = 0x00;
+      trig_count = TRIG_COUNT_PERIOD; // reset counter
     }
     // do nothing
   }
   trig_count--;
 }
 
-SIGNAL(SIG_OUTPUT_COMPARE0) {
-  if (trig_count==1) {
-    // we would get timestamps of the trigger pulses here
-    asm volatile ("nop"::);
+SIGNAL(SIG_OUTPUT_COMPARE2) {
+  // timer2
+  if (trig_count==0) {
+    if (doing_remainder==0) {
+      // first pass through
+      TCNT2 -= TRIG_COUNT_REMAINDER;
+      doing_remainder=1;
+      return;
+    } else {
+      // second pass through
+      doing_remainder=0;
+    }
+  } 
+
+  if (trig_count==(TRIG_COUNT_CMP-1)) {
+    PORTB = 0xFF;
+    trigger_timestamp = get_time();
+    new_trigger_timestamp = 1;
   }
 }
 
 SIGNAL(SIG_OVERFLOW1)
 {
-  gSUBSECTICKS++;
-}
-
-SIGNAL(SIG_OVERFLOW2)
-{
-  // reset timer1 so it was 0 when timer2 overflowed
-  TCNT1H = 0;     // clear timer1 counter, write high byte first
-  TCNT1L = 21;    // set time to number of clock cycles (as computed from looking at assembly) since timer2 overflow
-  sei();  // allow the rest to be interruptable
-  gSUBSECTICKS=0; // do this after enabling interrupts to clear any results of timer1 overflow during this interrupt
-
-  if (gTIME_LOW==0xFF) {
-    gTIME_LOW=0;
-    gTIME_HIGH++;
-  } else {
-    gTIME_LOW++;
+  //PORTB = 0xFF;
+  if (gSUBSECTICKS==0xFF) {
+    gSUBSECTICKS=0;
+    if (gTIME_LOW==0xFF) {
+      gTIME_LOW=0;
+      gTIME_HIGH++;
+    } else {
+      gTIME_LOW++;
+    }
+  }
+  else {
+    gSUBSECTICKS++;
   }
 }
 
-void timer0_init(void) {
+void timer2_init(void) {
   // user's guide says to make sure to perform before setting DDRB
-  OCR0A = 0x7F; // output compare value, halfway between top and bottom (arbitrary)
-  //TIMSK0 = (1<<OCIE0A)|(1<<TOIE0); // ouput compare interrupt enable, overflow interrupt enable
-  TIMSK0 = (1<<TOIE0); // timer overflow interrupt enable
+  OCR2A = TIMER2_COMPARE;
+  TIMSK2 = (1<<OCIE2A)|(1<<TOIE2); // ouput compare interrupt enable, overflow interrupt enable
+  //TIMSK2 = (1<<TOIE2); // timer overflow interrupt enable
 }
 
 void Initialization(void) {
-  OSCCAL_calibration();
-
   ADMUX = TEMPERATURE_SENSOR;
-  ADCSRA = (1<<ADEN) | (1<<ADPS1) | (1<<ADPS0);    // set ADC prescaler to , 1MHz / 8 = 125kHz    
+  ADCSRA = (1<<ADEN) | (1<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);    // set ADC prescaler to 128, 16MHz / 128 = 125kHz    
 
-  RTC_init();
+  timer1_init();
 
   // USART
   UART_init();
 
-  timer0_init();
+  timer2_init();
+
+  DDRD = 0x05; // for LEDs
+  //DDRD = 0xFF; // for LEDs
+  PORTD = 0x01; // red
+
   DDRB = ~(1<<DDB5); // all pins but 5 (piezo) are trigger output
 }
 
@@ -281,163 +279,70 @@ int main(void) {
 
   Initialization();
 
-  PORTB |= ~(1<<DDB5); // set all trigger pins high
+  //PORTB |= ~(1<<DDB5); // set all trigger pins high
+  PORTB = 0;
 
   while(1) {
-    last_char_input = UART_Getchar();
-    
-    do_action = ACTION_NONE;
-    
-    switch (last_char_input) {
-    case 'g': do_action = ACTION_GO;      break;
-    case 's': do_action = ACTION_STOP;    break;
-    case 'f': do_action = ACTION_GETFREQ; break;
-    case 't': do_action = ACTION_GETTEMP; break;
-    case 'T': do_action = ACTION_GETTIME; break;
-    default:                              break;
+
+    if (new_trigger_timestamp) {
+      send_timestamp_packet(PT_TRIG_TS,trigger_timestamp);
+      new_trigger_timestamp=0;
     }
 
-    switch (do_action) {
-
-    case ACTION_GO:
-      // start timer0
-      TCCR0A = (1<<COM0A1)|(0<<COM0A0)|(0<<CS02)|(1<<CS01)|(0<<CS00); // clear pin on OCR match, clock prescalar=8
-#ifdef DEBUGTRIG
-      UART_Putchar('G');
-#endif
-      send_state_packet(1);
-      break;
-
-    case ACTION_STOP:
-      TCCR0A = (1<<COM0A1)|(0<<COM0A0)|(0<<CS02)|(0<<CS01)|(0<<CS00); // stop timer0
-#ifdef DEBUGTRIG
-      UART_Putchar('S');
-#endif
-      send_state_packet(0);
-      break;
-
-    case ACTION_GETFREQ:
-      send_freq_packet();
-      break;      
-
-    case ACTION_GETTEMP:
-      send_temperature_packet(ADC_read());
-      break;      
-
-    case ACTION_GETTIME:
-      send_timestamp_packet(get_time());
-      break;      
-
-    case ACTION_NONE:
-    default:
-      break;
+    if (UART_CharReady()) {
+      last_char_input = UART_Getchar();
+    
+      do_action = ACTION_NONE;
       
-    }
+      switch (last_char_input) {
+      case 'g': do_action = ACTION_GO;      break;
+      case 's': do_action = ACTION_STOP;    break;
+      case 'f': do_action = ACTION_GETFREQ; break;
+      case 't': do_action = ACTION_GETTEMP; break;
+      case 'T': do_action = ACTION_GETTIME; break;
+      default:                              break;
+      }
+
+      switch (do_action) {
+	
+      case ACTION_GO:
+	// start timer2
+	//TCCR2A = (1<<COM2A1)|(0<<COM2A0)|(0<<CS22)|(0<<CS21)|(1<<CS20); // clear pin on OCR match, clock prescalar=8
+	TCCR2A = (0<<COM2A1)|(0<<COM2A0)|(0<<CS22)|(0<<CS21)|(1<<CS20); // clear pin on OCR match, clock prescalar=8
+#ifdef DEBUGTRIG
+	UART_Putchar('G');
+#endif
+	send_state_packet(1);
+	PORTD = 0x04; // green
+	break;
+	
+      case ACTION_STOP:
+	//TCCR2A = (1<<COM2A1)|(0<<COM2A0)|(0<<CS22)|(0<<CS21)|(0<<CS20); // stop timer2
+	TCCR2A = (0<<COM2A1)|(0<<COM2A0)|(0<<CS22)|(0<<CS21)|(0<<CS20); // stop timer2
+#ifdef DEBUGTRIG
+	UART_Putchar('S');
+#endif
+	send_state_packet(0);
+	PORTD = 0x01; // red
+	break;
+	
+      case ACTION_GETFREQ:
+	send_freq_packet();
+	break;      
+	
+      case ACTION_GETTEMP:
+	send_temperature_packet(ADC_read());
+	break;      
       
-  }
-}
-
-/*****************************************************************************
-*
-*   Function name : OSCCAL_calibration
-*
-*   Returns :       None
-*
-*   Parameters :    None
-*
-*   Purpose :       Calibrate the internal OSCCAL byte, using the external 
-*                   32,768 kHz crystal as reference
-*
-*****************************************************************************/
-void OSCCAL_calibration(void)
-{
-    uint8_t calibrate = FALSE;
-    uint16_t temp;
-    uint8_t tempL;
-
-    // CLKPR = (1<<CLKPCE);        // set Clock Prescaler Change Enable
-
-    // CLKPR = (1<<CLKPS1) | (1<<CLKPS0); // ADS - sets clock division factor to 8
-    // ADS - thus, with calibrated internal crystal at 8 MHz, this gives us 1 MHz
-    
-    TIMSK2 = 0;             //disable OCIE2A and TOIE2
-
-    ASSR = (1<<AS2);        //select asynchronous operation of timer2 (32.768kHz)
-    /*
-      Calculation of internal RC oscillator value - ADS
-
-      f_xtal = external quartz crystal = 32768 Hz = 32.768 kHz
-      ticks_xtal = compare value of timer2
-      f_osc = internal RC oscillator frequency = 14745600 = 14.7456 MHz
-      ticks_osc = f_osc/f_xtal*ticks_xtal
-     */
-#define ticks_xtal 60
-
-    OCR2A = ticks_xtal;            // set timer2 compare value 
-
-    TIMSK0 = 0;             // delete any interrupt sources
-        
-    TCCR1B = (1<<CS10);     // start timer1 with no prescaling
-    TCCR2A = (1<<CS20);     // start timer2 with no prescaling
-
-    while((ASSR & 0x01) | (ASSR & 0x04));       //wait for TCN2UB and TCR2UB to be cleared
-
-    Delay(32000);    // wait for external crystal to stabilise
-    
-    while(!calibrate)
-    {
-        cli(); // mt __disable_interrupt();  // disable global interrupt
-        
-        TIFR1 = 0xFF;   // delete TIFR1 flags
-        TIFR2 = 0xFF;   // delete TIFR2 flags
-        
-        TCNT1H = 0;     // clear timer1 counter
-        TCNT1L = 0;
-        TCNT2 = 0;      // clear timer2 counter
-           
-        // shc/mt while ( !(TIFR2 && (1<<OCF2A)) );   // wait for timer2 compareflag    
-        while ( !(TIFR2 & (1<<OCF2A)) );   // wait for timer2 compareflag
-
-        TCCR1B = 0; // stop timer1
-
-        sei(); // __enable_interrupt();  // enable global interrupt
-    
-        // shc/mt if ( (TIFR1 && (1<<TOV1)) )
-        if ( (TIFR1 & (1<<TOV1)) )
-        {
-            temp = 0xFFFF;      // if timer1 overflows, set the temp to 0xFFFF
-        }
-        else
-        {   // read out the timer1 counter value
-            tempL = TCNT1L;
-            temp = TCNT1H;
-            temp = (temp << 8);
-            temp += tempL;
-        }
-
-        if (temp > 27135)	  // ticks_osc + slop
-        {
-            OSCCAL--;   // the internRC oscillator runs to fast, decrease the OSCCAL
-        }
-        else if (temp < 26865)	  // ticks_osc - slop
-        {
-            OSCCAL++;   // the internRC oscillator runs to slow, increase the OSCCAL
-        }
-        else
-            calibrate = TRUE;   // the interRC is correct
-
-        TCCR1B = (1<<CS10); // start timer1
-    }
-}
-
-void Delay(uint32_t duration)
-     // duration depends on clock speed
-{
-  uint8_t i;
-
-  while (duration--) {
-    for (i=0; i<125; i++) {
-      asm volatile ("nop"::);
+      case ACTION_GETTIME:
+	send_timestamp_packet(PT_QUERY_TS,get_time());
+	break;      
+	
+      case ACTION_NONE:
+      default:
+	break;
+	
+      }
     }
   }
 }

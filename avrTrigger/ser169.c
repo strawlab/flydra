@@ -5,7 +5,7 @@
 #define sbiBF(port,bit)  (port |= (1<<bit))   //set bit in port
 #define cbiBF(port,bit)  (port &= ~(1<<bit))  //clear bit in port
 
-#define UART_BUF_SIZE 16           /* size of Tx buffer */
+#define UART_BUF_SIZE 128           /* size of Tx buffer */
 
 /* UART Routine Variables */
 volatile unsigned int uart_tx_buf_cnt;   /* number of buffer slots used */
@@ -22,17 +22,22 @@ void UART_init(void) {
 
   // Set baud rate
   // see atmega169 manual pg. 174
+  //ubrr = 3; // for f_osc=16.0, this is 230.4k bps + 8.5%
+
   //ubrr = 12; // for f_osc=1MHz this is 4800 bps
   //ubrr = 8; // for f_osc=16MHz, this is 230.4k bps with U2X
+  ubrr = 16; // for f_osc=16MHz, this is 115.2k bps with U2X + 2.1%
   //ubrr = 3; // for f_osc=14.7456MHz, this is 230.4k bps
-  ubrr = 7; // for f_osc=14.7456MHz, this is 115.2k bps
+  //ubrr = 7; // for f_osc=14.7456MHz, this is 115.2k bps
 
   //ubrr = 15; // for f_osc=14.7456MHz, this is 57.6k bps
   //ubrr = 23; // for f_osc=14.7456MHz, this is 38.4k bps
   UBRRH = (unsigned char)(ubrr>>8);
   UBRRL = (unsigned char)ubrr;
 
-  UCSRA = 0x00;
+  //UCSRA = 0x00;
+  UCSRA = (1<<U2X);
+
   // Enable receiver, transmitter, and interrupts
   UCSRB = (1<<RXEN) | (1<<TXEN) | (1<<RXCIE);
   // frame format 8N1
