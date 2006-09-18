@@ -49,3 +49,4 @@ ln -s ~/kookaburra/flydra/analysis/flydra2kine.py
 
 ln -s ~/kookaburra/flydra/analysis/plot_kalmanized.py
 ln -s ~/kookaburra/flydra/analysis/kalmanized_landing_01.py
+ln -s ~/kookaburra/flydra/analysis/kalmanized_02_vtk.py

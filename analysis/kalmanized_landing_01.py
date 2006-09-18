@@ -1,12 +1,10 @@
 from __future__ import division
 from flydra.geom import LineSegment, ThreeTuple
-import result_browser
 import numpy
 from numpy import nan, pi
 import tables as PT
 import pytz # from http://pytz.sourceforge.net/
 import datetime
-time_fmt = '%Y-%m-%d %H:%M:%S %Z%z'
 R2D = 180/pi
 
 class Distance(PT.IsDescription):

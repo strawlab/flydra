@@ -300,6 +300,51 @@ def show_line(renderers,v1,v2,color,radius,nsides=20,opacity=1.0):
     actors.append( profile )
     return actors
 
+def show_longline(renderers,verts,
+                  color=black,
+                  radius=0.005,
+                  nsides=20,
+                  opacity=1.0):
+    if len(verts)<2:
+        raise ValueError("line must have 2 or more vertices")
+
+    actors = []
+    
+    line_points = vtk.vtkPoints()
+    lines = vtk.vtkCellArray()
+
+    lines.InsertNextCell(len(verts))
+
+    for i,vert in enumerate(verts):
+        line_points.InsertNextPoint(*vert)
+        lines.InsertCellPoint(i)
+
+    profileData = vtk.vtkPolyData()
+    
+    profileData.SetPoints(line_points)
+    profileData.SetLines(lines)
+    
+    # Add thickness to the resulting line.
+    profileTubes = vtk.vtkTubeFilter()
+    profileTubes.SetNumberOfSides(nsides)
+    profileTubes.SetInput(profileData)
+    profileTubes.SetRadius(radius)
+
+    profileMapper = vtk.vtkPolyDataMapper()
+    profileMapper.SetInput(profileTubes.GetOutput())
+    
+    profile = vtk.vtkActor()
+    profile.SetMapper(profileMapper)
+    profile.GetProperty().SetDiffuseColor(color)
+    profile.GetProperty().SetOpacity(opacity)
+    profile.GetProperty().SetSpecular(.3)
+    profile.GetProperty().SetSpecularPower(30)
+    
+    for renderer in renderers:
+        renderer.AddActor( profile )
+    actors.append( profile )
+    return actors
+
 def show_texture(renderers,origin,ax_vert1,ax_vert2,shape):
 
     im = RandomArray.randint(0,2,shape=shape)

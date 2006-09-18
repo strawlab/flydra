@@ -344,6 +344,8 @@ def redo_3d_calc(results,frame,reconstructor=None,verify=True,overwrite=False):
 
     last used a long time ago... probably doesn't work
 
+    There's a new function, find_best_3d. This one doesn't use it.
+
     """
     
     import flydra.reconstruct
@@ -2105,14 +2107,13 @@ def emit_recalibration_data(results, calib_dir,
 
     if not os.path.exists(calib_dir):
         os.makedirs(calib_dir)
-        
+
     if force_cam_ids is None:
         force_cam_ids = []
-    
-    #seq = (2412304, 2412730, 5)
-    #seq = (0, int(5e5), 5)
-    seq = (0, int(1.2e6), 20)
-    print 'Using start, stop, step',seq
+
+    seq = (int(5e5), int(2e6), 100)
+    print 'Using start %f, stop %f, inc %f'%seq
+
     #seq = (0, int(1.3e6), 100)
     reconstructor = flydra.reconstruct.Reconstructor(results)
 
@@ -3040,7 +3041,7 @@ if __name__=='__main__':
         results.close()
         del results
         
-    results = get_results('DATA20060904_174700.h5',mode='r+')
+    results = get_results('DATA20060914_181401.h5',mode='r+')
     #results = get_results('DATA20060315_170142.h5',mode='r+')
 
     #del results.root.exact_movie_info
