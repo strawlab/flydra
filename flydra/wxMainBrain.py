@@ -201,8 +201,8 @@ class wxMainBrainApp(wxApp):
         nb.AddPage(self.record_raw_panel,"Record raw video")
         self.InitRecordRawPanel()
 
-        self.tracking_panel = my_loadpanel(nb,"STATUS_PANEL")
-        nb.AddPage(self.tracking_panel,"Status")
+        self.status_panel = my_loadpanel(nb,"STATUS_PANEL")
+        nb.AddPage(self.status_panel,"Status")
         self.InitStatusPanel()
         
         #temp_panel = my_loadpanel(nb,"UNDER_CONSTRUCTION_PANEL")
@@ -847,7 +847,7 @@ class wxMainBrainApp(wxApp):
             self.pass_all_keystrokes = False
         if doit:
             self.main_brain.load_calibration(calib_dir)
-            cal_status_check = XRCCTRL(self.tracking_panel,
+            cal_status_check = XRCCTRL(self.cam_preview_panel,
                                        "CAL_STATUS_CHECK")
             cal_status_check.Enable(True)
             cal_status_check.SetValue(True)
@@ -1129,10 +1129,10 @@ class wxMainBrainApp(wxApp):
         realtime_data=MainBrain.get_best_realtime_data() # gets global data
         if realtime_data is not None:
             data3d,line3d,cam_ids_used,min_mean_dist=realtime_data
-            XRCCTRL(self.tracking_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
-            XRCCTRL(self.tracking_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
-            XRCCTRL(self.tracking_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
-            XRCCTRL(self.tracking_panel,'err').SetValue('% 8.1f'%min_mean_dist)
+            XRCCTRL(self.status_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
+            XRCCTRL(self.status_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
+            XRCCTRL(self.status_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
+            XRCCTRL(self.status_panel,'err').SetValue('% 8.1f'%min_mean_dist)
             if min_mean_dist <= 10.0:
                 if self.detect_sound is not None:
                     now = time.time()

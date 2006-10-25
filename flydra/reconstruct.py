@@ -3,6 +3,7 @@ import os, glob, sys, math
 opj=os.path.join
 import numpy as nx
 import numpy
+import sets
 svd = numpy.linalg.svd
 import numpy as fast_nx
 fast_svd = numpy.linalg.svd
@@ -175,7 +176,9 @@ class SingleCameraCalibration:
                  Pmat=None,
                  res=None,
                  pp=None,
-                 helper=None):
+                 helper=None,
+                 scale_factor=None # scale_factor is for conversion to meters (e.g. should be 1e-3 if your units are mm)
+                 ):
         """
 
         Required arguments
@@ -217,6 +220,7 @@ class SingleCameraCalibration:
         self.helper = helper
 
         self.pmat_inv = numpy.linalg.pinv(self.Pmat)
+        self.scale_factor = scale_factor
 
     def get_scaled(self,scale_factor):
         """change units (e.g. from mm to meters)
@@ -226,11 +230,18 @@ class SingleCameraCalibration:
         scale_array = numpy.ones((3,4))
         scale_array[:,3] = scale_factor # mulitply last column by scale_factor
         scaled_Pmat = scale_array*self.Pmat # element-wise multiplication
+
+        if self.scale_factor is not None:
+            new_scale_factor = self.scale_factor/scale_factor
+        else:
+            new_scale_factor = None
+        
         scaled = SingleCameraCalibration(self.cam_id,
                                          scaled_Pmat,
                                          self.res,
                                          self.pp,
-                                         self.helper)
+                                         self.helper,
+                                         scale_factor=new_scale_factor)
         return scaled
         
     def get_cam_center(self):
@@ -365,6 +376,11 @@ class Reconstructor:
         self.Pmat = {}
         self.Res = {}
         self._helper = {}
+
+        # values for converting to meters
+        known_units2scale_factor = {
+            'millimeters':1e-3,
+            }
         
         if self.cal_source_type == 'normal files':
             res_fd = open(os.path.join(self.cal_source,'Res.dat'),'r')
@@ -385,20 +401,51 @@ class Reconstructor:
                 self._helper[cam_id] = reconstruct_utils.ReconstructHelper(
                     params['K11'], params['K22'], params['K13'], params['K23'],
                     params['kc1'], params['kc2'], params['kc3'], params['kc4'])
+
+            filename = os.path.join(self.cal_source,'calibration_units.txt')
+            if os.path.exists(filename):
+                fd = file(filename,'r')
+                value = fd.read()
+                fd.close()
+                value = value.strip()
+            else:
+                print 'Assuming scale_factor units are millimeters in %s: file %s does not exist'%(
+                    __file__,filename)
+                value = 'millimeters'
+                
+            if value in known_units2scale_factor:
+                self.scale_factor = known_units2scale_factor[value]
+            else:
+                raise ValueError('Unknown unit "%s"'%value)
+
                 
         elif self.cal_source_type == 'pytables':
+            scale_factors = []
             for cam_id in cam_ids:
                 pmat = nx.array(results.root.calibration.pmat.__getattr__(cam_id))
                 res = tuple(results.root.calibration.resolution.__getattr__(cam_id))
                 K = nx.array(results.root.calibration.intrinsic_linear.__getattr__(cam_id))
                 nlparams = tuple(results.root.calibration.intrinsic_nonlinear.__getattr__(cam_id))
+                if hasattr(results.root.calibration,'scale_factor2meters'):
+                    scale_factors.append(results.root.calibration.scale_factor2meters.__getattr__(cam_id))
                 self.Pmat[cam_id] = pmat
                 self.Res[cam_id] = res
                 self._helper[cam_id] = reconstruct_utils.ReconstructHelper(
                     K[0,0], K[1,1], K[0,2], K[1,2],
                     nlparams[0], nlparams[1], nlparams[2], nlparams[3])
+
+            unique_scale_factors = list(sets.Set(scale_factors))
+            if len(unique_scale_factors)==0:
+                print 'Assuming scale_factor units are millimeters in pytables',__file__
+                self.scale_factor = known_units2scale_factor['millimeters']
+            elif len(unique_scale_factors)==1:
+                self.scale_factor = unique_scale_factors[0]
+            else:
+                raise NotImplementedError('cannot handle case where each camera has a different scale factor')
+            
         elif self.cal_source_type=='SingleCameraCalibration instances':
             # find instance
+            scale_factors = []
             for cam_id in cam_ids:
                 for scci in self.cal_source:
                     if scci.cam_id==cam_id:
@@ -406,6 +453,17 @@ class Reconstructor:
                 self.Pmat[cam_id] = scci.Pmat
                 self.Res[cam_id] = scci.res
                 self._helper[cam_id] = scci.helper
+                if scci.scale_factor is not None:
+                    scale_factors.append( scci.scale_factor )
+            unique_scale_factors = list(sets.Set(scale_factors))
+            if len(unique_scale_factors)==0:
+                print 'Assuming scale_factor units are millimeters in SingleCameraCalibration instances (%s)'%(
+                    __file__,)
+                self.scale_factor = known_units2scale_factor['millimeters']
+            elif len(unique_scale_factors)==1:
+                self.scale_factor = unique_scale_factors[0]
+            else:
+                raise NotImplementedError('cannot handle case where each camera has a different scale factor')
 
         self.pmat_inv = {}
         for cam_id in cam_ids:
@@ -444,6 +502,59 @@ class Reconstructor:
     def get_cam_ids(self):
         return self.cam_ids
 
+    def save_to_files_in_new_directory(self, new_dirname):
+        if os.path.exists(new_dirname):
+            raise RuntimeError('directory "%s" already exists'%new_dirname)
+        os.mkdir(new_dirname)
+
+        fd = open(os.path.join(new_dirname,'camera_order.txt'),'w')
+        for cam_id in self.cam_ids:
+            fd.write(cam_id+'\n')
+        fd.close()
+
+        res_fd = open(os.path.join(new_dirname,'Res.dat'),'w')
+        for cam_id in self.cam_ids:
+            res_fd.write( ' '.join(map(str,self.Res[cam_id])) + '\n' )
+        res_fd.close()
+
+        for i, cam_id in enumerate(self.cam_ids):
+            fname = 'camera%d.Pmat.cal'%(i+1)
+            pmat_fd = open(os.path.join(new_dirname,fname),'w')
+            save_ascii_matrix(self.Pmat[cam_id],pmat_fd)
+            pmat_fd.close()
+
+        # non linear parameters
+        for i, cam_id in enumerate(self.cam_ids):
+            fname = 'basename%d.rad'%(i+1)
+            rad_fd = open(os.path.join(new_dirname,fname),'w')
+            K = self._helper[cam_id].get_K()
+            nlparams = self._helper[cam_id].get_nlparams()
+            k1, k2, p1, p2 = nlparams
+            rad_fd.write('K11 = %s\n'%repr(K[0,0]))
+            rad_fd.write('K12 = %s\n'%repr(K[0,1]))
+            rad_fd.write('K13 = %s\n'%repr(K[0,2]))
+            rad_fd.write('K21 = %s\n'%repr(K[1,0]))
+            rad_fd.write('K22 = %s\n'%repr(K[1,1]))
+            rad_fd.write('K23 = %s\n'%repr(K[1,2]))
+            rad_fd.write('K31 = %s\n'%repr(K[2,0]))
+            rad_fd.write('K32 = %s\n'%repr(K[2,1]))
+            rad_fd.write('K33 = %s\n'%repr(K[2,2]))
+            rad_fd.write('\n')
+            rad_fd.write('kc1 = %s\n'%repr(k1))
+            rad_fd.write('kc2 = %s\n'%repr(k2))
+            rad_fd.write('kc3 = %s\n'%repr(p1))
+            rad_fd.write('kc4 = %s\n'%repr(p2))
+            rad_fd.close()
+            
+        fd = open(os.path.join(new_dirname,'calibration_units.txt'),mode='w')
+        if self.scale_factor == 1e-3:
+            fd.write('millimeters\n')
+        elif self.scale_factor == 1:
+            fd.write('meters\n')
+        else:
+            raise ValueError('unknown units for scale factor')
+        fd.close()
+        
     def save_to_h5file(self, h5file, OK_to_delete_old_calibration=False):
         """create groups with calibration information"""
 
@@ -490,7 +601,10 @@ class Reconstructor:
                                '')
         row = h5additional_info.row
         row['cal_source_type'] = self.cal_source_type
-        row['cal_source'] = self.cal_source
+        if isinstance(self.cal_source,list):
+            row['cal_source'] = '(originally was list - not saved here)'
+        else:
+            row['cal_source'] = self.cal_source
         row['minimum_eccentricity'] = MINIMUM_ECCENTRICITY
         row.append()
         h5additional_info.flush()
@@ -664,8 +778,13 @@ class Reconstructor:
         C = self._cam_centers_cache[cam_id]
         return pluecker_from_verts(XY,C)
     
+    def get_scale_factor(self):
+        return self.scale_factor
+    
     def get_SingleCameraCalibration(self,cam_id):
         return SingleCameraCalibration(cam_id=cam_id,
                                        Pmat=self.Pmat[cam_id],
                                        res=self.Res[cam_id],
-                                       helper=self._helper[cam_id])
+                                       helper=self._helper[cam_id],
+                                       scale_factor=self.scale_factor,
+                                       )

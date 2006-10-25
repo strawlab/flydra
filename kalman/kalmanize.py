@@ -112,10 +112,15 @@ class KalmanSaver:
         self.h5_xhat.append(xhats_recarray)
         self.h5_xhat.flush()
 
-def kalmanize(src_filename,dest_filename=None):
+def kalmanize(src_filename,dest_filename=None,reconstructor_filename=None):
     results = get_results(src_filename)
-    
-    reconstructor_mm = flydra.reconstruct.Reconstructor(results)
+
+    if reconstructor_filename is None:
+        reconstructor_mm = flydra.reconstruct.Reconstructor(results)
+    else:
+        reconstructor_file = PT.openFile(reconstructor_filename,mode='r')
+        reconstructor_mm = flydra.reconstruct.Reconstructor(reconstructor_file)
+        
     reconstructor_meters = reconstructor_mm.get_scaled(1e-3)
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
     
@@ -140,6 +145,14 @@ def kalmanize(src_filename,dest_filename=None):
     print 'done in %.1f sec'%(time2-time1)
     row_idxs = numpy.argsort(frames_array)
 
+    if 1:
+        print '-='*40
+        print '-='*40
+        print 'using only first 2000 rows'
+        row_idxs = row_idxs[:2000]
+        print '-='*40
+        print '-='*40
+
     frame_count = 0
     accum_time = 0.0
     last_frame = None
@@ -160,6 +173,13 @@ def kalmanize(src_filename,dest_filename=None):
             ########################################
             # Data for this frame is complete
             if last_frame is not None:
+
+                if 1:
+                    print
+                    print 'frame_data'
+                    print frame_data
+                    print
+                
                 process_frame(reconstructor_mm,tracker,last_frame,frame_data)
                 frame_count += 1
                 if frame_count%1000==0:
@@ -207,7 +227,11 @@ def kalmanize(src_filename,dest_filename=None):
 
 def main():
     src_filename = sys.argv[1]
-    kalmanize(src_filename)
+    if len(sys.argv)>2:
+        reconstructor_filename = sys.argv[2]
+    else:
+        reconstructor_filename = None
+    kalmanize(src_filename,reconstructor_filename=reconstructor_filename)
 
 if __name__=='__main__':
     main()

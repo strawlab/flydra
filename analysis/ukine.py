@@ -34,11 +34,17 @@ elif 0:
     # hdf5 file containing calibration data
     cal_source = 'DATA20060830_184701.h5'
     reconstructor_source = tables.openFile(cal_source,mode='r')
-elif 1:
+elif 0:
     base_fname = 'full_20060724_173446_%s_bg.fmf'
     # hdf5 file containing calibration data
     cal_source = 'DATA20060724_173517.h5'
     reconstructor_source = tables.openFile(cal_source,mode='r')
+elif 1:
+    base_fname = 'full_20060915_171705_%s_bg.fmf'
+    # hdf5 file containing calibration data
+    cal_source = 'DATA20060915_173304.h5'
+    reconstructor_source = tables.openFile(cal_source,mode='r')
+
 
 recon = flydra.reconstruct.Reconstructor(reconstructor_source)
 

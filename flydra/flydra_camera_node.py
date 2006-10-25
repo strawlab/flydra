@@ -60,7 +60,7 @@ if sys.platform == 'win32':
 else:
     time_func = time.time
 
-pt_fmt = '<dddddddddBBdd'
+pt_fmt = '<dddddddddBBddBdddddd'
 small_datafile_fmt = '<dII'
     
 CAM_CONTROLS = {'shutter':cam_iface.SHUTTER,
@@ -129,6 +129,12 @@ class GrabClass(object):
     def set_pmat(self,value):
         self.realtime_analyzer.pmat = value
     pmat = property( get_pmat, set_pmat )
+
+    def get_scale_factor(self):
+        return self.realtime_analyzer.scale_factor
+    def set_scale_factor(self,value):
+        self.realtime_analyzer.scale_factor = value
+    scale_factor = property( get_scale_factor, set_scale_factor )
 
     def get_use_arena(self):
         return self.realtime_analyzer.use_arena
@@ -717,7 +723,7 @@ class App:
         
         for cam_no in range(self.num_cams):
             num_buffers = 205
-            cam = cam_iface.Camera(cam_no,num_buffers,7,0,0) # last 3 parameters only used on window drivers for now
+            cam = cam_iface.Camera(cam_no,num_buffers,0) # get fastest mode, which should be 0
             print 'allocated %d buffers'%num_buffers
             self.all_cams.append( cam )
 
@@ -849,7 +855,8 @@ class App:
                             value = value[0]
                         cam.set_camera_property(enum,value,0,0)
                     elif property_name == 'roi':
-                        grabber.roi = value 
+                        print 'flydra_camera_node.py: ignoring ROI command for now...'
+                        #grabber.roi = value 
                     elif property_name == 'diff_threshold':
                         print 'setting diff_threshold',value
                         grabber.diff_threshold = value
@@ -868,7 +875,8 @@ class App:
                         if value: globals['use_cmp'].set()
                         else: globals['use_cmp'].clear()
                     elif property_name == 'max_framerate':
-                        cam.set_framerate(value)
+                        print 'flydra_camera_node.py: ignoring set_framerate() command for now...'
+                        #cam.set_framerate(value)
                     elif property_name == 'collecting_background':
                         if value: globals['collecting_background'].set()
                         else: globals['collecting_background'].clear()
@@ -956,7 +964,10 @@ class App:
 ##                if cmds[key]: globals['export_image_name'] = 'absdiff'
 ##                else: globals['export_image_name'] = 'raw'
             elif key == 'cal':
-                pmat, intlin, intnonlin = cmds[key]
+                pmat, intlin, intnonlin, scale_factor = cmds[key]
+
+                # these three should always be done together in this order:
+                grabber.scale_factor = scale_factor
                 grabber.pmat = pmat
                 grabber.make_reconstruct_helper(intlin, intnonlin) # let grab thread make one
 

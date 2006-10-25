@@ -20,6 +20,8 @@ import atexit
 
 import kalman.kalmanize # flydra.kalman.kalmanize
 
+DO_KALMAN= False
+
 import flydra.common_variables
 REALTIME_UDP = flydra.common_variables.REALTIME_UDP
 
@@ -271,6 +273,10 @@ class CoordReceiver(threading.Thread):
             self.reconstructor = r
         finally:
             self.all_data_lock.release()
+            
+        # get version that operates in meters
+        scale_factor = self.reconstructor.get_scale_factor()
+        self.reconstructor_meters = self.reconstructor.get_scaled(scale_factor)
 
     def connect(self,cam_id):
         global hostname
@@ -353,13 +359,16 @@ class CoordReceiver(threading.Thread):
         self._fake_sync_event.set()
 
     def OnSynchronize(self, cam_idx, cam_id, framenumber, timestamp,
-                      realtime_coord_dict, new_data_framenumbers):
+                      realtime_coord_dict, realtime_kalman_coord_dict,
+                      new_data_framenumbers):
         self.framenumber_offsets[cam_idx] = framenumber
         if self.last_timestamps[cam_idx] != IMPOSSIBLE_TIMESTAMP:
             print cam_id,'(re)synchronized'
             # discard all previous data
             for k in realtime_coord_dict.keys():
                 del realtime_coord_dict[k]
+            for k in realtime_kalman_coord_dict.keys():
+                del realtime_kalman_coord_dict[k]
             new_data_framenumbers.clear()
 
         #else:
@@ -394,11 +403,12 @@ class CoordReceiver(threading.Thread):
         
         header_fmt = '<dli'
         header_size = struct.calcsize(header_fmt)
-        pt_fmt = '<dddddddddBBdd'
+        pt_fmt = '<dddddddddBBddBdddddd'
         pt_size = struct.calcsize(pt_fmt)
         timeout = 0.1
         
         realtime_coord_dict = {}        
+        realtime_kalman_coord_dict = {}        
         new_data_framenumbers = sets.Set()
 
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False)
@@ -413,11 +423,6 @@ class CoordReceiver(threading.Thread):
         
         while not self.quit_event.isSet():
 
-
-            #####################################################################
-
-            network_listener.listen( )
-            
             #####################################################################
             
             if not REALTIME_UDP:
@@ -460,8 +465,11 @@ class CoordReceiver(threading.Thread):
                     timestamp = self.last_timestamps[cam_idx]
                     framenumber = self.last_framenumbers_delay[cam_idx]
                     self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
-                                        realtime_coord_dict, new_data_framenumbers )
+                                        realtime_coord_dict,
+                                        realtime_kalman_coord_dict,
+                                        new_data_framenumbers )
                 self._fake_sync_event.clear()
+                
             if not len(in_ready):
                 continue
 
@@ -500,8 +508,8 @@ class CoordReceiver(threading.Thread):
                 idx = in_ready.index(self.timestamp_echo_gatherer)
                 del in_ready[idx]
 
-
             self.all_data_lock.acquire()
+            
             #self.all_data_lock.acquire(latency_warn_msec=1.0)
             try:
                 deferred_2d_data = []
@@ -541,7 +549,10 @@ class CoordReceiver(threading.Thread):
                                 end=start+pt_size
                                 (x_distorted,y_distorted,area,slope,eccentricity,
                                  p1,p2,p3,p4,line_found,slope_found,
-                                 x_undistorted,y_undistorted)= struct.unpack(pt_fmt,data[start:end])
+                                 x_undistorted,y_undistorted,
+                                 ray_valid,
+                                 ray0, ray1, ray2, ray3, ray4, ray5 # pluecker coords from cam center to detected point
+                                 )= struct.unpack(pt_fmt,data[start:end])
                                 # nan cannot get sent across network in platform-independent way
                                 if not line_found:
                                     p1,p2,p3,p4 = nan,nan,nan,nan
@@ -551,6 +562,8 @@ class CoordReceiver(threading.Thread):
                                     eccentricity = inf
                                 if not slope_found:
                                     slope = nan
+                                if not ray_valid:
+                                    ray0, ray1, ray2, ray3, ray4, ray5 = (nan, nan, nan, nan, nan, nan)
                                 pt_undistorted = (x_undistorted,y_undistorted,
                                                   area,slope,eccentricity,
                                                   p1,p2,p3,p4, True)
@@ -579,7 +592,9 @@ class CoordReceiver(threading.Thread):
 
                         if timestamp-self.last_timestamps[cam_idx] > self.RESET_FRAMENUMBER_DURATION:
                             self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
-                                                realtime_coord_dict, new_data_framenumbers )
+                                                realtime_coord_dict,
+                                                realtime_kalman_coord_dict,
+                                                new_data_framenumbers )
 
                         self.last_timestamps[cam_idx]=timestamp
                         self.last_framenumbers_delay[cam_idx]=framenumber
@@ -637,11 +652,18 @@ class CoordReceiver(threading.Thread):
                             # cameras giving good data.
                             continue
 
+                        if DO_KALMAN:
+                            get_line = self.reconstructor_meters.get_projected_line_from_2d
+                            for cam_id, this_point in found_data_dict.iteritems():
+                                pluecker_hz_meters=get_line(
+                                    cam_id,(x_undistorted,y_undistorted))
+                                
+                            
                         try:
-                            if 1:
+                            if not DO_KALMAN:
                                 # hypothesis testing algorithm
-                                (X, line3d, cam_ids_used,
-                                 min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
+                                (X, line3d, cam_ids_used,min_mean_dist
+                                 ) = ru.hypothesis_testing_algorithm__find_best_3d(
                                     self.reconstructor,
                                     found_data_dict)
 
@@ -742,6 +764,12 @@ class CoordReceiver(threading.Thread):
                     k.sort()
                     for ki in k[:-50]:
                         del realtime_coord_dict[ki]
+
+                if len(realtime_kalman_coord_dict)>100:
+                    k=realtime_kalman_coord_dict.keys()
+                    k.sort()
+                    for ki in k[:-50]:
+                        del realtime_kalman_coord_dict[ki]
 
                 if len(deferred_2d_data):
                     self.main_brain.queue_data2d.put( deferred_2d_data )
@@ -1019,14 +1047,14 @@ class MainBrain(object):
             finally:
                 self.cam_info_lock.release()
 
-        def external_set_cal( self, cam_id, pmat, intlin, intnonlin):
+        def external_set_cal( self, cam_id, pmat, intlin, intnonlin, scale_factor):
             self.cam_info_lock.acquire()
             try:
                 cam = self.cam_info[cam_id]
                 cam_lock = cam['lock']
                 cam_lock.acquire()
                 try:
-                    cam['commands']['cal']= pmat, intlin, intnonlin
+                    cam['commands']['cal']= pmat, intlin, intnonlin, scale_factor
                 finally:
                     cam_lock.release()
             finally:
@@ -1506,7 +1534,8 @@ class MainBrain(object):
             pmat = self.reconstructor.get_pmat(cam_id)
             intlin = self.reconstructor.get_intrinsic_linear(cam_id)
             intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
-            self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin )
+            scale_factor = self.reconstructor.get_scale_factor()
+            self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin, scale_factor )
     
     def __del__(self):
         self.quit()
