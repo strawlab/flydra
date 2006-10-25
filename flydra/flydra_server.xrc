@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <resource>
-  <object class="wxPanel" name="REALTIME_TRACKING_PANEL">
+  <object class="wxPanel" name="STATUS_PANEL">
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
@@ -9,164 +9,178 @@
           <object class="sizeritem">
             <object class="wxStaticText">
               
+              
               <label>x</label>
             </object>
+            
             
             <flag>wxALIGN_CENTRE</flag>
           </object>
           <object class="sizeritem">
             <object class="wxStaticText">
+              
               
               <label>y</label>
             </object>
             
-            <flag>wxALIGN_CENTRE</flag>
-          </object>
-          <object class="sizeritem">
-            <object class="wxStaticText">
-              
-              <label>z</label>
-            </object>
             
             <flag>wxALIGN_CENTRE</flag>
           </object>
           <object class="sizeritem">
             <object class="wxStaticText">
               
+              
+              <label>z</label>
+            </object>
+            
+            
+            <flag>wxALIGN_CENTRE</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxStaticText">
+              
+              
               <label>err</label>
             </object>
+            
             
             <flag>wxALIGN_CENTRE</flag>
           </object>
           <object class="sizeritem">
             <object class="wxTextCtrl" name="x_pos">
               
+              
               <font>
+                
                 
                 <size>24</size>
                 
+                
                 <style>default</style>
+                
                 
                 <weight>normal</weight>
                 
+                
                 <family>bold</family>
+                
                 
                 <underlined>0</underlined>
                 
+                
                 <face>helvetica</face>
+                
                 
                 <encoding>ISO-8859-1</encoding>
               </font>
             </object>
+            
             
             <minsize>130,40</minsize>
           </object>
           <object class="sizeritem">
             <object class="wxTextCtrl" name="y_pos">
               
+              
               <font>
+                
                 
                 <size>24</size>
                 
+                
                 <style>default</style>
+                
                 
                 <weight>normal</weight>
                 
+                
                 <family>bold</family>
+                
                 
                 <underlined>0</underlined>
                 
+                
                 <face>helvetica</face>
+                
                 
                 <encoding>ISO-8859-1</encoding>
               </font>
             </object>
+            
             
             <minsize>130,40</minsize>
           </object>
           <object class="sizeritem">
             <object class="wxTextCtrl" name="z_pos">
               
+              
               <font>
+                
                 
                 <size>24</size>
                 
+                
                 <style>default</style>
+                
                 
                 <weight>normal</weight>
                 
+                
                 <family>bold</family>
+                
                 
                 <underlined>0</underlined>
                 
+                
                 <face>helvetica</face>
+                
                 
                 <encoding>ISO-8859-1</encoding>
               </font>
             </object>
+            
             
             <minsize>130,40</minsize>
           </object>
           <object class="sizeritem">
             <object class="wxTextCtrl" name="err">
               
+              
               <font>
+                
                 
                 <size>24</size>
                 
+                
                 <style>default</style>
+                
                 
                 <weight>normal</weight>
                 
+                
                 <family>bold</family>
+                
                 
                 <underlined>0</underlined>
                 
+                
                 <face>helvetica</face>
+                
                 
                 <encoding>ISO-8859-1</encoding>
               </font>
             </object>
             
+            
             <minsize>130,40</minsize>
           </object>
         </object>
-        
-        <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxBoxSizer">
-          <orient>wxHORIZONTAL</orient>
-          <object class="sizeritem">
-            <object class="wxCheckBox" name="CAL_STATUS_CHECK">
-              
-              <label>Calibration loaded</label>
-              
-              <checked>0</checked>
-              
-              <enabled>0</enabled>
-            </object>
-          </object>
+        <object class="wxCheckBox">
+          <label>grab thread has maximum priority (this checkbox not yet implemented)</label>
+          <enabled>0</enabled>
         </object>
-        
-        <flag>wxTOP|wxEXPAND</flag>
-        
-        <border>5</border>
-      </object>
-      <object class="sizeritem">
-        <object class="wxBoxSizer">
-          <orient>wxHORIZONTAL</orient>
-          <object class="sizeritem">
-            <object class="wxButton" name="LOAD_CAL">
-              
-              <label>Load calibration...</label>
-            </object>
-            
-            <option>1</option>
-          </object>
-        </object>
-        
-        <flag>wxEXPAND</flag>
       </object>
     </object>
   </object>
@@ -184,23 +198,29 @@
               <object class="sizeritem">
                 <object class="wxCheckBox" name="COLLECTING_BACKGROUND">
                   
+                  
                   <label>Running avg</label>
+                  
                   
                   <checked>1</checked>
                 </object>
                 
+                
                 <flag>wxTOP</flag>
+                
                 
                 <border>3</border>
               </object>
               <object class="sizeritem">
                 <object class="wxButton" name="take_background">
                   
+                  
                   <label>take</label>
                 </object>
               </object>
               <object class="sizeritem">
                 <object class="wxButton" name="clear_background">
+                  
                   
                   <label>clear</label>
                 </object>
@@ -219,11 +239,13 @@
                   <object class="sizeritem">
                     <object class="wxButton" name="find_Rcenter">
                       
+                      
                       <label>find Rcenter</label>
                     </object>
                   </object>
                   <object class="sizeritem">
                     <object class="wxButton" name="set_roi">
+                      
                       
                       <label>Set ROI...</label>
                     </object>
@@ -231,7 +253,9 @@
                   <object class="sizeritem">
                     <object class="wxButton" name="quit_camera">
                       
+                      
                       <label>quit camera</label>
+                      
                       
                       <tooltip>quit this camera</tooltip>
                     </object>
@@ -244,23 +268,29 @@
                   <object class="sizeritem">
                     <object class="wxStaticText" name="">
                       
+                      
                       <label>Max framerate:</label>
                     </object>
                     
+                    
                     <flag>wxTOP|wxRIGHT</flag>
+                    
                     
                     <border>3</border>
                   </object>
                   <object class="sizeritem">
                     <object class="wxTextCtrl" name="MAX_FRAMERATE">
                       
+                      
                       <value>?</value>
+                      
                       
                       <size>55,20</size>
                     </object>
                   </object>
                   <object class="sizeritem">
                     <object class="wxChoice" name="view_image_display">
+                      
                       
                       <content>
                         <item>raw</item>
@@ -269,6 +299,7 @@
                         <item>cmp</item>
                         <item>cmpdiff</item>
                       </content>
+                      
                       
                       <selection>0</selection>
                     </object>
@@ -279,6 +310,7 @@
           </object>
         </object>
         
+        
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
@@ -287,6 +319,7 @@
           <rows>2</rows>
           <object class="sizeritem">
             <object class="wxStaticText" name="acquired_fps_label">
+              
               
               <label>approx. fps: --</label>
             </object>
@@ -297,17 +330,22 @@
               <object class="sizeritem">
                 <object class="wxStaticText">
                   
+                  
                   <label>Threshold for AbsDiff</label>
                 </object>
                 
+                
                 <flag>wxTOP|wxRIGHT</flag>
+                
                 
                 <border>3</border>
               </object>
               <object class="sizeritem">
                 <object class="wxTextCtrl" name="threshold_value">
                   
+                  
                   <value>?</value>
+                  
                   
                   <size>40,20</size>
                 </object>
@@ -320,17 +358,22 @@
               <object class="sizeritem">
                 <object class="wxStaticText">
                   
+                  
                   <label>Threshold for Clear</label>
                 </object>
                 
+                
                 <flag>wxTOP|wxRIGHT</flag>
+                
                 
                 <border>3</border>
               </object>
               <object class="sizeritem">
                 <object class="wxTextCtrl" name="threshold_clear_value">
                   
+                  
                   <value>?</value>
+                  
                   
                   <size>40,20</size>
                 </object>
@@ -340,17 +383,22 @@
           <object class="sizeritem">
             <object class="wxStaticText" name="exposure_label">
               
+              
               <label>Exposure (msec): --</label>
             </object>
             
+            
             <flag>wxRIGHT</flag>
+            
             
             <border>20</border>
           </object>
           <object class="sizeritem">
             <object class="wxCheckBox" name="ARENA_CONTROL">
               
+              
               <label>send LED arena signals</label>
+              
               
               <checked>0</checked>
             </object>
@@ -362,11 +410,13 @@
               <object class="sizeritem">
                 <object class="wxCheckBox" name="EXT_TRIG">
                   
+                  
                   <label>external trigger</label>
                 </object>
               </object>
               <object class="sizeritem">
                 <object class="wxCheckBox" name="ROI2">
+                  
                   
                   <label>use roi2</label>
                 </object>
@@ -375,12 +425,15 @@
           </object>
         </object>
         
+        
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="PerCameraControlsContainer"/>
         
+        
         <option>1</option>
+        
         
         <flag>wxEXPAND</flag>
       </object>
@@ -392,7 +445,51 @@
       <object class="sizeritem">
         <object class="wxPanel" name="PreviewDynamicImagePanel"/>
         
+        
         <option>5</option>
+        
+        
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxBoxSizer">
+          <orient>wxHORIZONTAL</orient>
+          <object class="sizeritem">
+            <object class="wxCheckBox" name="CAL_STATUS_CHECK">
+              
+              
+              <label>Calibration loaded</label>
+              
+              
+              <checked>0</checked>
+              
+              
+              <enabled>0</enabled>
+            </object>
+          </object>
+        </object>
+        
+        
+        <flag>wxTOP|wxEXPAND</flag>
+        
+        
+        <border>5</border>
+      </object>
+      <object class="sizeritem">
+        <object class="wxBoxSizer">
+          <orient>wxHORIZONTAL</orient>
+          <object class="sizeritem">
+            <object class="wxButton" name="LOAD_CAL">
+              
+              
+              <label>Load calibration...</label>
+            </object>
+            
+            
+            <option>1</option>
+          </object>
+        </object>
+        
         
         <flag>wxEXPAND</flag>
       </object>
@@ -400,6 +497,7 @@
         <object class="wxPanel" name="PreviewPerCamPanel">
           <size>10,200</size>
         </object>
+        
         
         <flag>wxEXPAND</flag>
       </object>
@@ -411,19 +509,25 @@
       <object class="sizeritem">
         <object class="wxStaticBitmap" name="">
           
+          
           <bitmap>flydra_server_art.png</bitmap>
+          
           
           <bg>#FFFFFF</bg>
         </object>
         
+        
         <option>0</option>
+        
         
         <flag>wxALIGN_CENTRE</flag>
       </object>
       <object class="sizeritem">
         <object class="wxNotebook" name="MAIN_NOTEBOOK"/>
         
+        
         <option>1</option>
+        
         
         <flag>wxEXPAND</flag>
       </object>
@@ -435,12 +539,16 @@
       <object class="sizeritem">
         <object class="wxStaticText">
           
+          
           <label>Under construction...</label>
+          
           
           <style>wxALIGN_CENTRE</style>
         </object>
         
+        
         <option>1</option>
+        
         
         <flag>wxEXPAND</flag>
       </object>
@@ -455,21 +563,27 @@
           <object class="sizeritem">
             <object class="wxListBox" name="snapshot_cam_choice">
               
+              
               <content>
                 <item/></content>
             </object>
             
+            
             <option>1</option>
+            
             
             <flag>wxEXPAND</flag>
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="snapshot_button">
               
+              
               <label>refresh view</label>
             </object>
             
+            
             <option>0</option>
+            
             
             <flag>wxEXPAND</flag>
           </object>
@@ -479,6 +593,7 @@
               <object class="sizeritem">
                 <object class="wxChoice" name="snapshot_colormap">
                   
+                  
                   <content>
                     <item>pink</item>
                     <item>jet</item>
@@ -486,13 +601,16 @@
                     <item>bone</item>
                   </content>
                   
+                  
                   <selection>0</selection>
                 </object>
               </object>
               <object class="sizeritem">
                 <object class="wxCheckBox" name="fixed_color_range">
                   
+                  
                   <label>fixed color range</label>
+                  
                   
                   <checked>1</checked>
                 </object>
@@ -501,16 +619,21 @@
           </object>
         </object>
         
+        
         <option>0</option>
         
+        
         <flag>wxALL|wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
+        
         
         <border>4</border>
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="snapshot_plot"/>
         
+        
         <option>1</option>
+        
         
         <flag>wxEXPAND</flag>
       </object>
@@ -522,19 +645,25 @@
       <object class="sizeritem">
         <object class="wxPanel"/>
         
+        
         <option>1</option>
+        
         
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
         <object class="wxStaticText">
           
+          
           <label>Image display disabled for speed</label>
+          
           
           <style>wxALIGN_CENTRE</style>
         </object>
         
+        
         <option>1</option>
+        
         
         <flag>wxEXPAND|wxALIGN_BOTTOM</flag>
       </object>
@@ -554,16 +683,21 @@
                       <object class="sizeritem">
                         <object class="wxCheckBox" name="record_small">
                           
+                          
                           <label>Record</label>
+                          
                           
                           <checked>0</checked>
                         </object>
+                        
                         
                         <option>1</option>
                       </object>
                     </object>
                     
+                    
                     <option>0</option>
+                    
                     
                     <flag>wxEXPAND</flag>
                   </object>
@@ -573,36 +707,48 @@
                       <object class="sizeritem">
                         <object class="wxStaticText">
                           
+                          
                           <label>filename</label>
+                          
                           
                           <style>wxALIGN_RIGHT</style>
                         </object>
                         
+                        
                         <option>0</option>
                         
+                        
                         <flag>wxALL|wxEXPAND</flag>
+                        
                         
                         <border>4</border>
                       </object>
                       <object class="sizeritem">
                         <object class="wxTextCtrl" name="record_small_filename">
                           
+                          
                           <value>XXX CHANGE ME!</value>
                         
+                          
                           <enabled>0</enabled>
                         </object>
                         
+                        
                         <option>1</option>
+                        
                         
                         <flag>wxEXPAND</flag>
                       </object>
                     </object>
                     
+                    
                     <option>0</option>
+                    
                     
                     <flag>wxEXPAND</flag>
                   </object>
                 </object>
+                
                 
                 <flag>wxEXPAND</flag>
               </object>
@@ -616,17 +762,22 @@
                       <object class="sizeritem">
                         <object class="wxCheckBox" name="record_raw">
                       
+                          
                           <label>Record</label>
                       
+                          
                           <checked>0</checked>
                     </object>
                     
+                        
                         <option>1</option>
                   </object>
                     </object>
                 
+                    
                     <option>0</option>
                 
+                    
                     <flag>wxEXPAND</flag>
               </object>
                   <object class="sizeritem">
@@ -635,41 +786,55 @@
                       <object class="sizeritem">
                         <object class="wxStaticText">
                           
+                          
                           <label>filename</label>
+                          
                           
                           <style>wxALIGN_RIGHT</style>
                         </object>
                         
+                        
                         <option>0</option>
                         
+                        
                         <flag>wxALL|wxEXPAND</flag>
+                        
                         
                         <border>4</border>
                       </object>
                       <object class="sizeritem">
                         <object class="wxTextCtrl" name="record_filename">
                           
+                          
                           <value>XXX CHANGE ME!</value>
                         
+                          
                           <enabled>0</enabled>
                         </object>
                         
+                        
                         <option>1</option>
+                        
                         
                         <flag>wxEXPAND</flag>
                       </object>
                     </object>
                     
+                    
                     <option>0</option>
+                    
                     
                     <flag>wxEXPAND</flag>
                   </object>
                 </object>
+                
                 <flag>wxEXPAND</flag>
               </object>
             </object>
             
+            
             <option>1</option>
+            
             
             <flag>wxEXPAND</flag>
           </object>
@@ -679,33 +844,43 @@
               <object class="sizeritem">
                 <object class="wxStaticText">
                   
+                  
                   <label>select cameras</label>
+                  
                   
                   <style>wxALIGN_CENTRE</style>
                 </object>
+                
                 
                 <flag>wxALIGN_CENTRE</flag>
               </object>
               <object class="sizeritem">
                 <object class="wxCheckListBox" name="record_raw_cam_select_checklist">
                   
+                  
                   <content>
                     <item/></content>
                 </object>
                 
+                
                 <option>1</option>
+                
                 
                 <flag>wxEXPAND</flag>
               </object>
             </object>
             
+            
             <option>0</option>
+            
             
             <flag>wxEXPAND</flag>
           </object>
         </object>
         
+        
         <option>0</option>
+        
         
         <flag>wxEXPAND</flag>
       </object>
@@ -722,14 +897,18 @@
           <object class="sizeritem">
             <object class="wxStaticText" name="ROI_cam_id">
               
+              
               <label>cam_id</label>
+              
               
               <style>wxALIGN_CENTRE</style>
             </object>
             
+            
             <option>1</option>
           </object>
         </object>
+        
         
         <flag>wxEXPAND</flag>
       </object>
@@ -740,17 +919,20 @@
           <object class="sizeritem">
             <object class="wxStaticText">
               
+              
               <label>left</label>
             </object>
           </object>
           <object class="sizeritem">
             <object class="wxTextCtrl" name="ROI_LEFT">
               
+              
               <value>0</value>
             </object>
           </object>
           <object class="sizeritem">
             <object class="wxStaticText">
+              
               
               <label>right</label>
             </object>
@@ -758,11 +940,13 @@
           <object class="sizeritem">
             <object class="wxTextCtrl" name="ROI_RIGHT">
               
+              
               <value>655</value>
             </object>
           </object>
           <object class="sizeritem">
             <object class="wxStaticText">
+              
               
               <label>top</label>
             </object>
@@ -770,17 +954,20 @@
           <object class="sizeritem">
             <object class="wxTextCtrl" name="ROI_BOTTOM">
               
+              
               <value>0</value>
             </object>
           </object>
           <object class="sizeritem">
             <object class="wxStaticText">
               
+              
               <label>bottom</label>
             </object>
           </object>
           <object class="sizeritem">
             <object class="wxTextCtrl" name="ROI_TOP">
+              
               
               <value>490</value>
             </object>
@@ -793,14 +980,18 @@
           <object class="sizeritem">
             <object class="wxButton" name="ROI_OK">
               
+              
               <label>OK</label>
             </object>
             
+            
             <option>1</option>
+            
             
             <flag></flag>
           </object>
         </object>
+        
         
         <flag>wxEXPAND</flag>
       </object>
@@ -816,11 +1007,13 @@
           <object class="sizeritem">
             <object class="wxButton" name="&lt;&lt;">
               
+              
               <label>&lt;&lt;</label>
             </object>
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="|&lt;">
+              
               
               <label>|&lt;</label>
             </object>
@@ -828,11 +1021,13 @@
           <object class="sizeritem">
             <object class="wxButton" name="&gt;|">
               
+              
               <label>&gt;|</label>
             </object>
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="&gt;&gt;">
+              
               
               <label>&gt;&gt;</label>
             </object>
@@ -840,21 +1035,26 @@
           <object class="sizeritem">
             <object class="wxStaticText">
               
+              
               <label></label>
             </object>
             
+            
             <flag>wxLEFT|wxRIGHT</flag>
+            
             
             <border>3</border>
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="o">
               
+              
               <label>o</label>
             </object>
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="&gt;">
+              
               
               <label>&gt;</label>
             </object>

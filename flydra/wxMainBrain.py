@@ -201,9 +201,9 @@ class wxMainBrainApp(wxApp):
         nb.AddPage(self.record_raw_panel,"Record raw video")
         self.InitRecordRawPanel()
 
-        self.tracking_panel = my_loadpanel(nb,"REALTIME_TRACKING_PANEL")
-        nb.AddPage(self.tracking_panel,"Realtime 3D tracking")
-        self.InitTrackingPanel()
+        self.tracking_panel = my_loadpanel(nb,"STATUS_PANEL")
+        nb.AddPage(self.tracking_panel,"Status")
+        self.InitStatusPanel()
         
         #temp_panel = my_loadpanel(nb,"UNDER_CONSTRUCTION_PANEL")
         #nb.AddPage(temp_panel,"Under construction")
@@ -330,6 +330,11 @@ class wxMainBrainApp(wxApp):
             self.current_page = 'unknown'
 
     def InitPreviewPanel(self):
+        # init "load calibration..." button
+        load_cal = XRCCTRL(self.cam_preview_panel,
+                           "LOAD_CAL")
+        EVT_BUTTON(load_cal, load_cal.GetId(), self.OnLoadCal)
+        
         # setup dynamic image (OpenGL) panel
         dynamic_image_panel = XRCCTRL(self.cam_preview_panel,"PreviewDynamicImagePanel") # get container
         box = wxBoxSizer(wxVERTICAL)
@@ -823,10 +828,8 @@ class wxMainBrainApp(wxApp):
         i=cam_choice.FindString(cam_id)
         cam_choice.Delete(i)
     
-    def InitTrackingPanel(self):
-        load_cal = XRCCTRL(self.tracking_panel,
-                           "LOAD_CAL")
-        EVT_BUTTON(load_cal, load_cal.GetId(), self.OnLoadCal)
+    def InitStatusPanel(self):
+        pass
 
     def OnLoadCal(self,event):
         doit=False

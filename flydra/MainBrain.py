@@ -18,6 +18,8 @@ import numarray.records
 pytables_filt = numpy.asarray
 import atexit
 
+import kalman.kalmanize # flydra.kalman.kalmanize
+
 import flydra.common_variables
 REALTIME_UDP = flydra.common_variables.REALTIME_UDP
 
@@ -47,9 +49,7 @@ class MainBrainKeeper:
     def register(self, mainbrain_instance ):
         self.kept.append( mainbrain_instance )
     def atexit(self):
-        print 'MainBrainKeeper.atexit() called'
         for k in self.kept:
-            print '  MainBrainKeeper.atexit() calling MainBrain.quit() for',k
             k.quit() # closes hdf5 file and closes cameras
 
 main_brain_keeper = MainBrainKeeper() # global to close MainBrain instances upon exit
@@ -410,11 +410,20 @@ class CoordReceiver(threading.Thread):
         time_time = time.time
         empty_list = []
         old_data = {}
+        
         while not self.quit_event.isSet():
+
+
+            #####################################################################
+
+            network_listener.listen( )
+            
+            #####################################################################
+            
             if not REALTIME_UDP:
                 try:
                     in_ready, out_ready, exc_ready = select_select( self.server_sockets.keys(),
-                                                                    empty_list, empty_list, 0.0 )
+                                                                    empty_list, empty_list, 0.0)
                 except select.error, exc:
                     print 'select.error on server socket, ignoring...'
                     continue
@@ -596,11 +605,15 @@ class CoordReceiver(threading.Thread):
 
                 finished_corrected_framenumbers = [] # for quick deletion
 
+                ########################################################################
+
                 # Now we've grabbed all data waiting on network. Now it's
                 # time to calculate 3D info.
 
                 # XXX could go for latest data first to minimize latency
                 # on that data.
+
+                ########################################################################
 
                 for corrected_framenumber in new_data_framenumbers:
                     data_dict = realtime_coord_dict[corrected_framenumber]
