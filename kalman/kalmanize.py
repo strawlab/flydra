@@ -58,8 +58,9 @@ def process_frame(reconstructor_mm,tracker,frame,frame_data):
         # data.
         return
     (this_observation_mm, line3d, cam_ids_used,
-     min_mean_dist) = ru.find_best_3d(reconstructor_mm,
-                                      found_data_dict)
+     min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
+        reconstructor_mm,
+        found_data_dict)
     max_err=10.0 # mm
     if min_mean_dist<max_err:
         ####################################
@@ -117,7 +118,6 @@ def kalmanize(src_filename,dest_filename=None):
     reconstructor_mm = flydra.reconstruct.Reconstructor(results)
     reconstructor_meters = reconstructor_mm.get_scaled(1e-3)
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
-    tracker = Tracker(reconstructor_meters)
     
     if dest_filename is None:
         dest_filename = os.path.splitext(results.filename)[0]+'.tracked_fixed_accel.h5'

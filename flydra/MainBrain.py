@@ -638,9 +638,23 @@ class CoordReceiver(threading.Thread):
                             continue
 
                         try:
-                            (X, line3d, cam_ids_used,
-                             min_mean_dist) = ru.find_best_3d(self.reconstructor,
-                                                              found_data_dict)
+                            if 1:
+                                # hypothesis testing algorithm
+                                (X, line3d, cam_ids_used,
+                                 min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
+                                    self.reconstructor,
+                                    found_data_dict)
+
+                                # XXX need to compare format of
+                                # found_data_dict and format needed by
+                                # flydra.kalman.flydra_tracker.gobble...(data_dict).
+                                
+                            else:
+                                # kalman filter
+                                tracker.gobble_2d_data_and_calculate_a_posteri_estimates(
+                                    frame,
+                                    frame_data)
+                                
                         except:
                             # this prevents us from bombing this thread...
                             print 'WARNING:'

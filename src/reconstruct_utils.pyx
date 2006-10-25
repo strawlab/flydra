@@ -116,8 +116,8 @@ cdef class ReconstructHelper:
         yd = (self.fc2)*yd + (self.cc2)
         
         return (xd, yd)
-        
-def find_best_3d( object recon, object d2):
+    
+def hypothesis_testing_algorithm__find_best_3d( object recon, object d2):
     """Use hypothesis testing algorithm to find best 3D point
     
     Finds combination of cameras which uses the most number of cameras
@@ -278,3 +278,5 @@ def find_best_3d( object recon, object d2):
             if isnan(Lcoords[0]):
                 Lcoords = None
     return X, Lcoords, cam_ids_used, mean_dist
+
+find_best_3d = hypothesis_testing_algorithm__find_best_3d # old name
