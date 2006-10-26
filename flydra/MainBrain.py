@@ -239,6 +239,7 @@ class CoordReceiver(threading.Thread):
         self.timestamp_echo_gatherer.bind((hostname, port))
         self.timestamp_echo_gatherer.setblocking(0)
 
+        self.tracker_lock = threading.Lock()
         self.all_data_lock = threading.Lock()
         #self.all_data_lock = DebugLock('all_data_lock',verbose=False)
         self.quit_event = threading.Event()
@@ -272,6 +273,7 @@ class CoordReceiver(threading.Thread):
         return result
 
     def set_reconstructor(self,r):
+        # called from main thread, must lock to send to realtime coord thread
         self.all_data_lock.acquire()
         try:
             self.reconstructor = r
@@ -281,10 +283,24 @@ class CoordReceiver(threading.Thread):
         # get version that operates in meters
         scale_factor = self.reconstructor.get_scale_factor()
         self.reconstructor_meters = self.reconstructor.get_scaled(scale_factor)
-        self.tracker = flydra.kalman.flydra_tracker.Tracker(self.reconstructor_meters,
-                                                     scale_factor=scale_factor)
-        self.tracker.set_killed_tracker_callback( self.enqueue_finished_tracked_object )
+        tracker = flydra.kalman.flydra_tracker.Tracker(self.reconstructor_meters,
+                                                       scale_factor=scale_factor)
+        tracker.set_killed_tracker_callback( self.enqueue_finished_tracked_object )
+        self.tracker_lock.acquire()
+        self.tracker = tracker # bind to name, replacing old tracker
+        self.tracker_lock.release()
 
+    def set_new_tracker_defaults(self,kw_dict):
+        # called from main thread, must lock to send to realtime coord thread
+        self.tracker_lock.acquire()
+        if self.tracker is None:
+            self.tracker_lock.release()
+            return
+        for attr in kw_dict:
+            setattr(self.tracker,attr,kw_dict[attr])
+        self.tracker_lock.release()
+        print 'set tracker values',kw_dict
+        
     def enqueue_finished_tracked_object(self, tracked_object ):
         # XXX TODO DO_KALMAN stuff
         print 'enqueue_finished_tracked_object() called'
@@ -427,6 +443,8 @@ class CoordReceiver(threading.Thread):
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False)
         
         timestamp_echo_fmt2 = flydra.common_variables.timestamp_echo_fmt2
+        
+        convert_format = flydra.kalman.flydra_kalman_utils.convert_format # shorthand
 
         struct_unpack = struct.unpack
         select_select = select.select
@@ -664,7 +682,9 @@ class CoordReceiver(threading.Thread):
                             continue
 
                         if DO_KALMAN:
+                            self.tracker_lock.acquire()
                             if self.tracker is None:
+                                self.tracker_lock.release()
                                 # tracker isn't instantiated yet...
                                 continue
                             
@@ -683,7 +703,7 @@ class CoordReceiver(threading.Thread):
                             # are new objects.
 
                             # Convert to format accepted by find_best_3d()
-                            found_data_dict = flydra.kalman.flydra_kalman_utils.convert_format(pluecker_coords_by_cam_id)
+                            found_data_dict = convert_format(pluecker_coords_by_cam_id)
                             if len(found_data_dict) < 2:
                                 # Can't do any 3D math without at least 2 cameras giving good
                                 # data.
@@ -707,6 +727,7 @@ class CoordReceiver(threading.Thread):
                                     last_xhat = obj0.xhats[-1]
                                     X = last_xhat[0]/scale_factor, last_xhat[1]/scale_factor, last_xhat[2]/scale_factor
                                     best_realtime_data = X, 0.0
+                            self.tracker_lock.release()
                         else:
                             
                             found_data_dict = {} # old "good" points will go in here
@@ -726,10 +747,6 @@ class CoordReceiver(threading.Thread):
                                  ) = ru.hypothesis_testing_algorithm__find_best_3d(
                                     self.reconstructor,
                                     found_data_dict)
-
-                                # XXX need to compare format of
-                                # found_data_dict and format needed by
-                                # flydra.flydra.kalman.flydra_tracker.gobble...(data_dict).
                             except:
                                 # this prevents us from bombing this thread...
                                 print 'WARNING:'
@@ -1594,6 +1611,10 @@ class MainBrain(object):
             intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
             scale_factor = self.reconstructor.get_scale_factor()
             self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin, scale_factor )
+
+    def set_new_tracker_defaults(self,kw_dict):
+        # send params over to realtime coords thread
+        self.coord_receiver.set_new_tracker_defaults(kw_dict)
     
     def __del__(self):
         self.quit()

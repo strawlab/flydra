@@ -38,6 +38,8 @@ from wxPython.wx import *
 from wxPython.lib.scrolledpanel import wxScrolledPanel
 from wxPython.xrc import *
 
+import numpy
+
  # trigger extraction
 RESFILE = pkg_resources.resource_filename(__name__,"flydra_server.xrc")
 pkg_resources.resource_filename(__name__,"flydra_server_art.png")
@@ -546,6 +548,50 @@ class wxMainBrainApp(wxApp):
         else:
             if param not in ('roi','width','height'):
                 print 'WARNING: could not update panel display for',param
+
+    def OnKalmanParametersChange(self,event=None):
+        ctrl = XRCCTRL(self.status_panel,
+                       "kalman_parameters_choice")
+        kalman_param_string = ctrl.GetStringSelection()
+        
+        ss = 9 # length of state vector (state size)
+        os = 3 # length of observation vector (observation size)
+
+        if kalman_param_string == u'fly dynamics, high precision calibration, units: mm':
+            # process covariance
+            Q = numpy.zeros((ss,ss))
+            for i in range(6,9):
+                Q[i,i] = 10.0 # acceleration noise (near (3.16m*sec**-2)**2)
+
+            # measurement noise covariance matrix
+            R = 1e-6*numpy.eye(os) # (1mm)**2 = (0.001m)**2
+
+            kws = dict(scale_factor=1e-3,
+                       n_sigma_accept=3.0,
+                       max_variance_dist_meters=0.010, # allow error to grow to 10 mm before dropping
+                       initial_position_covariance_estimate=1e-6, #1mm ( (1e-3)**2 meters)
+                       initial_acceleration_covariance_estimate=15,
+                       Q=Q,
+                       R=R)
+        elif kalman_param_string == u'fly dynamics, low precision calibration, units: mm':
+            # process covariance
+            Q = numpy.zeros((ss,ss))
+            for i in range(6,9):
+                Q[i,i] = 10.0 # acceleration noise (near (3.16m*sec**-2)**2)
+
+            # measurement noise covariance matrix
+            R = 1e-4*numpy.eye(os) # (10mm)**2 = (0.01m)**2
+
+            kws = dict(scale_factor=1e-3,
+                       n_sigma_accept=3.0,
+                       max_variance_dist_meters=0.010, # allow error to grow to 10 mm before dropping
+                       initial_position_covariance_estimate=1e-4, #10mm ( (1e-2)**2 meters)
+                       initial_acceleration_covariance_estimate=15,
+                       Q=Q,
+                       R=R)
+        else:
+            raise ValueError('did not understand kalman parameters %s'%repr(kalman_param_string))
+        self.main_brain.set_new_tracker_defaults(kws)
         
     def PreviewPerCamClose(self,cam_id):
         previewPerCamPanel=self.cameras[cam_id]['previewPerCamPanel']
@@ -829,7 +875,10 @@ class wxMainBrainApp(wxApp):
         cam_choice.Delete(i)
     
     def InitStatusPanel(self):
-        pass
+        ctrl = XRCCTRL(self.status_panel,
+                       "kalman_parameters_choice")
+        EVT_CHOICE(ctrl, ctrl.GetId(),
+                   self.OnKalmanParametersChange)
 
     def OnLoadCal(self,event):
         doit=False
@@ -852,6 +901,7 @@ class wxMainBrainApp(wxApp):
             cal_status_check.Enable(True)
             cal_status_check.SetValue(True)
             cal_status_check.Enable(False)
+            self.OnKalmanParametersChange() # send current Kalman parameters
 
     def OnFixedColorRange(self, event):
         if PLOTPANEL:
