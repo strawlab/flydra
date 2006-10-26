@@ -1128,7 +1128,7 @@ class wxMainBrainApp(wxApp):
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc
         realtime_data=MainBrain.get_best_realtime_data() # gets global data
         if realtime_data is not None:
-            data3d,line3d,cam_ids_used,min_mean_dist=realtime_data
+            data3d,min_mean_dist=realtime_data
             XRCCTRL(self.status_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
             XRCCTRL(self.status_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
             XRCCTRL(self.status_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
@@ -1144,9 +1144,10 @@ class wxMainBrainApp(wxApp):
                     for cam_id in self.cameras.keys():
                         pt=r.find2d(cam_id,data3d,
                                     distorted=True)
-                        pt_undist,ln=r.find2d(cam_id,data3d,
-                                       Lcoords=line3d,distorted=False)
-                        self.cam_image_canvas.set_reconstructed_points(cam_id,([pt],[ln]))
+                        #pt_undist,ln=r.find2d(cam_id,data3d,
+                        #               Lcoords=line3d,distorted=False)
+                        #self.cam_image_canvas.set_reconstructed_points(cam_id,([pt],[ln]))
+                        self.cam_image_canvas.set_reconstructed_points(cam_id,([pt],[]))
         if self.current_page == 'preview':
             for cam_id in self.cameras.keys():
                 cam = self.cameras[cam_id]

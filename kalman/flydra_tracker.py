@@ -7,14 +7,23 @@ import math
 __all__ = ['TrackedObject','Tracker']
 
 class TrackedObject:
-    """TrackedObject handles all internal units in meters, but external interfaces are mm"""
-    def __init__(self,reconstructor_meters,frame,first_observation_mm):
+    """TrackedObject handles all internal units in meters, but external interfaces are original units"""
+    def __init__(self,
+                 reconstructor_meters,
+                 frame,
+                 first_observation_orig_units,
+                 scale_factor=None):
         self.kill_me = False
         self.reconstructor_meters = reconstructor_meters
         self.current_frameno = frame
         self.n_sigma_accept = 3.0 # arbitrary
         self.max_variance_dist_meters = 0.010 # arbitrary, allow error to grow to 10 mm before dropping
-        first_observation_meters = first_observation_mm/1000.0
+        if scale_factor is None:
+            print 'WARNING: no scale_factor given in flydra_tracker, assuming 1e-3'
+            self.scale_factor = 1e-3
+        else:
+            self.scale_factor = scale_factor
+        first_observation_meters = first_observation_orig_units*self.scale_factor
         initial_x = numpy.hstack((first_observation_meters, # convert to mm from meters
                                   (0,0,0, 0,0,0))) # zero velocity and acceleration
         ss = params.A.shape[0]
@@ -138,11 +147,16 @@ class TrackedObject:
         return observation_meters
 
 class Tracker:
-    def __init__(self,reconstructor_meters):
+    def __init__(self,reconstructor_meters,scale_factor=None):
         self.reconstructor_meters=reconstructor_meters
         self.live_tracked_objects = []
         self.dead_tracked_objects = [] # save for getting data out
         self.kill_tracker_callbacks = []
+        if scale_factor is None:
+            print 'WARNING: scale_factor set to 1e-3',__file__
+            self.scale_factor = 1e-3
+        else:
+            self.scale_factor = scale_factor
     def gobble_2d_data_and_calculate_a_posteri_estimates(self,frame,data_dict):
         # Allow earlier tracked objects to be greedy and take all the
         # data they want.
@@ -160,8 +174,9 @@ class Tracker:
                 # require more than single observation to save
                 self.dead_tracked_objects.append( tro )
         self._flush_dead_queue()
-    def join_new_obj(self,frame,first_observation_mm):
-        tro = TrackedObject(self.reconstructor_meters,frame,first_observation_mm)
+    def join_new_obj(self,frame,first_observation_orig_units):
+        tro = TrackedObject(self.reconstructor_meters,frame,first_observation_orig_units,
+                            scale_factor=self.scale_factor)
         self.live_tracked_objects.append(tro)
     def kill_all_trackers(self):
         self.dead_tracked_objects.extend( self.live_tracked_objects )
