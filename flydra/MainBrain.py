@@ -18,10 +18,9 @@ import numarray.records
 pytables_filt = numpy.asarray
 import atexit
 
-import kalman.kalmanize
-import kalman.flydra_tracker
-import kalman.kalmanize
-import kalman.geom
+import flydra.kalman.flydra_kalman_utils
+import flydra.kalman.flydra_tracker
+import flydra.geom
 
 DO_KALMAN= False
 
@@ -282,12 +281,13 @@ class CoordReceiver(threading.Thread):
         # get version that operates in meters
         scale_factor = self.reconstructor.get_scale_factor()
         self.reconstructor_meters = self.reconstructor.get_scaled(scale_factor)
-        self.tracker = kalman.flydra_tracker.Tracker(self.reconstructor_meters,
+        self.tracker = flydra.kalman.flydra_tracker.Tracker(self.reconstructor_meters,
                                                      scale_factor=scale_factor)
         self.tracker.set_killed_tracker_callback( self.enqueue_finished_tracked_object )
 
     def enqueue_finished_tracked_object(self, tracked_object ):
         # XXX TODO DO_KALMAN stuff
+        print 'enqueue_finished_tracked_object() called'
         if self.main_brain.is_saving_data():
             self.main_brain.queue_data3d_kalman_estimates.put( 'x' )
         
@@ -584,7 +584,7 @@ class CoordReceiver(threading.Thread):
                                                 p1,p2,p3,p4, True)
                                 if ray_valid:
                                     points_in_pluecker_coords_meters.append( (pt_undistorted,
-                                                                              kalman.geom.line_from_HZline((ray0,ray1,
+                                                                              flydra.geom.line_from_HZline((ray0,ray1,
                                                                                                             ray2,ray3,
                                                                                                             ray4,ray5))
                                                                               ))
@@ -683,7 +683,7 @@ class CoordReceiver(threading.Thread):
                             # are new objects.
 
                             # Convert to format accepted by find_best_3d()
-                            found_data_dict = kalman.kalmanize.convert_format(pluecker_coords_by_cam_id)
+                            found_data_dict = flydra.kalman.flydra_kalman_utils.convert_format(pluecker_coords_by_cam_id)
                             if len(found_data_dict) < 2:
                                 # Can't do any 3D math without at least 2 cameras giving good
                                 # data.
@@ -729,7 +729,7 @@ class CoordReceiver(threading.Thread):
 
                                 # XXX need to compare format of
                                 # found_data_dict and format needed by
-                                # flydra.kalman.flydra_tracker.gobble...(data_dict).
+                                # flydra.flydra.kalman.flydra_tracker.gobble...(data_dict).
                             except:
                                 # this prevents us from bombing this thread...
                                 print 'WARNING:'
@@ -1627,7 +1627,7 @@ class MainBrain(object):
         if self.reconstructor is not None:
             self.reconstructor.save_to_h5file(self.h5file)
             if DO_KALMAN:
-                self.h5data3d_kalman = ct(root,'data3d_kalman', kalman.kalmanize.KalmanEstimates,
+                self.h5data3d_kalman = ct(root,'data3d_kalman', flydra.kalman.flydra_kalman_utils.KalmanEstimates,
                                           "3d data (from Kalman filter)",
                                           expectedrows=expected_rows)
             else:

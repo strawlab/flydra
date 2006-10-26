@@ -51,7 +51,7 @@ setup(name='flydra',
       author='Andrew Straw',
       author_email='strawman@astraw.com',
       description='multi-headed fly-tracking beast',
-      packages = ['flydra','kalman'],
+      packages = ['flydra','flydra.kalman'],
       ext_modules= ext_modules,
       entry_points = {
     'console_scripts': [

@@ -2,46 +2,19 @@ import numpy
 import params
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
-import geom
+import flydra.geom as geom
 import time
-from result_utils import get_results, get_f_xyz_L_err, get_caminfo_dicts
+from result_utils import get_results, get_caminfo_dicts
 import tables as PT
 import os, sys
 from flydra_tracker import Tracker
+import flydra_kalman_utils
 
 assert params.A_model_name == 'fixed_accel'
 
-class KalmanEstimates(PT.IsDescription):
-    obj_id     = PT.Int32Col(pos=0,indexed=True)
-    frame      = PT.Int32Col(pos=1)
-    x          = PT.Float32Col(pos=2)
-    y          = PT.Float32Col(pos=3)
-    z          = PT.Float32Col(pos=4)
-    xvel       = PT.Float32Col(pos=5)
-    yvel       = PT.Float32Col(pos=6)
-    zvel       = PT.Float32Col(pos=7)
-    xaccel     = PT.Float32Col(pos=8)
-    yaccel     = PT.Float32Col(pos=9)
-    zaccel     = PT.Float32Col(pos=10)
-
-class FilteredObservations(PT.IsDescription):
-    obj_id     = PT.Int32Col(pos=0,indexed=True)
-    frame      = PT.Int32Col(pos=1,indexed=True)
-    x          = PT.Float32Col(pos=2)
-    y          = PT.Float32Col(pos=3)
-    z          = PT.Float32Col(pos=4)
-    
-def convert_format(current_data):
-    found_data_dict = {}
-    for cam_id, stuff_list in current_data.iteritems():
-        if not len(stuff_list):
-            # no data for this camera, continue
-            continue
-        this_point,projected_line = stuff_list[0] # algorithm only accepts 1 point per camera
-        if this_point[9]: # only use if found_anything
-            found_data_dict[cam_id] = this_point[:9]
-    return found_data_dict
-
+KalmanEstimates = flydra_kalman_utils.KalmanEstimates
+FilteredObservations = flydra_kalman_utils.FilteredObservations
+convert_format = flydra_kalman_utils.convert_format
 
 def process_frame(reconstructor_mm,tracker,frame,frame_data):
     tracker.gobble_2d_data_and_calculate_a_posteri_estimates(frame,frame_data)

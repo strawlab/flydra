@@ -1,7 +1,7 @@
 import numpy
 import adskalman as kalman
 import params
-import geom
+import flydra.geom as geom
 import math
 
 __all__ = ['TrackedObject','Tracker']
