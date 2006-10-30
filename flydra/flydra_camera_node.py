@@ -10,6 +10,12 @@ import numpy as nx
 
 import FlyMovieFormat
 import cam_iface
+
+def DEBUG(*args):
+    if 0:
+        sys.stdout.write(' '.join(map(str,args))+'\n')
+        sys.stdout.flush()
+
 if not BENCHMARK:
     import Pyro.core, Pyro.errors
     Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here!
@@ -107,7 +113,7 @@ class GrabClass(object):
 
         self.new_roi = threading.Event()
         self.new_roi_data = None
-        max_num_points = 3
+        max_num_points = 2
         self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(self.cam.get_max_width(),
                                                                           self.cam.get_max_height(),
                                                                           max_num_points)
@@ -123,12 +129,6 @@ class GrabClass(object):
     def set_diff_threshold(self, value):
         self.realtime_analyzer.diff_threshold = value
     diff_threshold = property( get_diff_threshold, set_diff_threshold )
-
-    def get_pmat(self):
-        return self.realtime_analyzer.pmat
-    def set_pmat(self,value):
-        self.realtime_analyzer.pmat = value
-    pmat = property( get_pmat, set_pmat )
 
     def get_scale_factor(self):
         return self.realtime_analyzer.scale_factor
@@ -149,6 +149,11 @@ class GrabClass(object):
         self.new_roi.set()
     roi = property( get_roi, set_roi )
 
+    def get_pmat(self):
+        return self.realtime_analyzer.get_pmat()
+    def set_pmat(self,value):
+        self.realtime_analyzer.set_pmat(value)
+
     def make_reconstruct_helper(self, intlin, intnonlin):
         fc1 = intlin[0,0]
         fc2 = intlin[1,1]
@@ -159,7 +164,6 @@ class GrabClass(object):
         helper = reconstruct_utils.ReconstructHelper(
             fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
 
-        print 'received lens distortion information...'
         self.realtime_analyzer.set_reconstruct_helper( helper )
     
     def grab_func(self,globals):
@@ -291,6 +295,8 @@ class GrabClass(object):
                 timestamp=self.cam.get_last_timestamp()
                 framenumber=self.cam.get_last_framenumber()
 
+                DEBUG(' '*20,'captured frame')
+                
                 if BENCHMARK:
                     if (framenumber%100) == 0:
                         dur = received_time-benchmark_start_time
@@ -339,6 +345,7 @@ class GrabClass(object):
                          points,
                          self.realtime_analyzer.roi,
                          ) )
+                    #print ' '*20,'put frame'
 
                 tp2 = time.time()
                 if BENCHMARK:
@@ -546,6 +553,7 @@ class GrabClass(object):
                                         (main_brain_hostname,self.cam2mainbrain_port))
                 else:
                     coord_socket.send(data)
+                #print 'sent data...'
                     
                 if self.new_roi.isSet():
                     self.cam.stop_camera()  # stop camera
@@ -575,7 +583,7 @@ class GrabClass(object):
                 else:
                     mean_duration_no_bg = (1-alpha)*mean_duration_no_bg + alpha*bookkeeping_dur
 
-                if bookkeeping_dur > 0.050 and not BENCHMARK:
+                if False and bookkeeping_dur > 0.050 and not BENCHMARK:
                     print 'TIME BUDGET:'
                     print '   % 5.1f start of work'%((work_start_time-received_time)*1000.0,)
                     print '   % 5.1f done with work'%((work_done_time-received_time)*1000.0,)
@@ -717,7 +725,8 @@ class App:
         
         if not BENCHMARK:
             # run in single-thread for benchmark
-            timestamp_echo_thread=threading.Thread(target=TimestampEcho)
+            timestamp_echo_thread=threading.Thread(target=TimestampEcho,
+                                                   name='TimestampEcho')
             timestamp_echo_thread.setDaemon(True) # quit that thread if it's the only one left...
             timestamp_echo_thread.start()
         
@@ -819,6 +828,12 @@ class App:
             # ----------------------------------------------------------------
 
             self.log_message_queue = Queue.Queue()
+            driver_string = 'using cam_iface driver: %s (wrapper: %s)'%(
+                cam_iface.get_driver_name(),
+                cam_iface.get_wrapper_name())
+            print >> sys.stderr, driver_string
+            self.log_message_queue.put((cam_id,time.time(),driver_string))
+            
             grabber = GrabClass(cam,cam2mainbrain_port,cam_id,self.log_message_queue)
             self.all_grabbers.append( grabber )
             
@@ -830,7 +845,9 @@ class App:
 
             if not BENCHMARK:
                 grab_thread=threading.Thread(target=grabber.grab_func,
-                                             args=(globals,))
+                                             args=(globals,),
+                                             name='grab thread (%s)'%cam_id,
+                                             )
                 grab_thread.setDaemon(True) # quit that thread if it's the only one left...
                 grab_thread.start() # start grabbing frames from camera
             else:
@@ -841,9 +858,11 @@ class App:
         cam = self.all_cams[cam_no]
         grabber = self.all_grabbers[cam_no]
         cam_id = self.all_cam_ids[cam_no]
+        DEBUG('handle_commands:',cam_id)
         globals = self.globals[cam_no]
 
         for key in cmds.keys():
+            DEBUG('  handle_commands: key',key)
             if key == 'set':
                 for property_name,value in cmds['set'].iteritems():
                     if property_name in CAM_CONTROLS:
@@ -855,8 +874,8 @@ class App:
                             value = value[0]
                         cam.set_camera_property(enum,value,0,0)
                     elif property_name == 'roi':
-                        print 'flydra_camera_node.py: ignoring ROI command for now...'
-                        #grabber.roi = value 
+                        #print 'flydra_camera_node.py: ignoring ROI command for now...'
+                        grabber.roi = value 
                     elif property_name == 'diff_threshold':
                         print 'setting diff_threshold',value
                         grabber.diff_threshold = value
@@ -875,8 +894,8 @@ class App:
                         if value: globals['use_cmp'].set()
                         else: globals['use_cmp'].clear()
                     elif property_name == 'max_framerate':
-                        print 'flydra_camera_node.py: ignoring set_framerate() command for now...'
-                        #cam.set_framerate(value)
+                        #print 'flydra_camera_node.py: ignoring set_framerate() command for now...'
+                        cam.set_framerate(value)
                     elif property_name == 'collecting_background':
                         if value: globals['collecting_background'].set()
                         else: globals['collecting_background'].clear()
@@ -890,6 +909,7 @@ class App:
                     #nxim = nx.array(im) # copy to native nx form, not view of __array_struct__ form
                     nxim = nx.asarray(im) # view of __array_struct__ form
                     self.main_brain.set_image(cam_id, (lb, nxim))
+                    
             elif key == 'use_arena':
                 grabber.use_arena = cmds[key]
                 globals['use_arena'] = grabber.use_arena
@@ -968,7 +988,7 @@ class App:
 
                 # these three should always be done together in this order:
                 grabber.scale_factor = scale_factor
-                grabber.pmat = pmat
+                grabber.set_pmat( pmat )
                 grabber.make_reconstruct_helper(intlin, intnonlin) # let grab thread make one
 
                 ######
@@ -1017,7 +1037,7 @@ class App:
 
                         cam = self.all_cams[cam_no]
                         cam_id = self.all_cam_ids[cam_no]
-                        
+
                         now = time_func()
 
                         # calculate and send FPS every 5 sec
@@ -1048,12 +1068,16 @@ class App:
                             small_movie, small_datafile = small_fmf_and_small_datafile
                             
                         # Get new raw frames from grab thread.
-                        get_raw_frame_nowait = globals['incoming_raw_frames'].get_nowait
+                        get_raw_frame = globals['incoming_raw_frames'].get_nowait
                         try:
                             while 1:
-                                frame,timestamp,framenumber,points,lbrt = get_raw_frame_nowait() # this may raise Queue.Empty
+                                # what up to 50 msec for new frame
+                                DEBUG('waiting for new frame...')
+                                frame,timestamp,framenumber,points,lbrt = get_raw_frame() # this may raise Queue.Empty
+                                DEBUG('got new frame')
+
                                 # XXX could have option to skip frames if a newer frame is available
-                                last_frames.append( (frame,timestamp,framenumber,points) )
+                                last_frames.append( (frame,timestamp,framenumber,points) ) # save for post-triggering
                                 while len(last_frames)>1000:
                                     del last_frames[0]
                                 n_pts = len(points)
@@ -1106,10 +1130,14 @@ class App:
                                     small_datafile.write(
                                         struct.pack( small_datafile_fmt,
                                                      timestamp, save_l, save_b) )
+                                DEBUG('n_raw_frames[cam_no] += 1')
                                 n_raw_frames[cam_no] += 1
                         except Queue.Empty:
+                            DEBUG('empty queue - no frame')
                             pass
 
+                        DEBUG('ADS 0')
+                        
                         # Get new BG frames from grab thread.
                         get_bg_frame_nowait = globals['incoming_bg_frames'].get_nowait
                         try:
@@ -1122,6 +1150,7 @@ class App:
                         except Queue.Empty:
                             pass
 
+                        DEBUG('ADS 1')
                         try:
                             while 1:
                                 args = self.log_message_queue.get_nowait()
@@ -1129,21 +1158,27 @@ class App:
                         except Queue.Empty:
                             pass
 
+                        #print 'ADS 2'
                         # make sure a BG frame is saved at beginning of movie
                         if bg_movie is not None and not globals['saved_bg_frame']:
                             bg_frame,std_frame,timestamp = globals['current_bg_frame_and_timestamp']
                             bg_movie.add_frame(bg_frame,timestamp)
                             std_movie.add_frame(std_frame,timestamp)
                             globals['saved_bg_frame'] = True
-
-                        # process asynchronous commands
-                        self.main_brain_lock.acquire()
-                        cmds=self.main_brain.get_and_clear_commands(cam_id)
-                        self.main_brain_lock.release()
-                        self.handle_commands(cam_no,cmds)
                             
+                        # process asynchronous commands
+                        #print 'ADS 3'
+                        self.main_brain_lock.acquire()
+                        #print 'ADS 4'
+                        cmds=self.main_brain.get_and_clear_commands(cam_id)
+                        #print 'ADS 5'
+                        self.main_brain_lock.release()
+                        DEBUG('ADS 6')
+                        self.handle_commands(cam_no,cmds)
+                        DEBUG('ADS 7')
+                        
                     time.sleep(0.05)
-
+                            
             finally:
                 self.main_brain_lock.acquire()
                 for cam_id in self.all_cam_ids:
@@ -1159,7 +1194,6 @@ def main():
     if app.num_cams <= 0:
         return
     app.mainloop()
-    print
 
 if __name__=='__main__':
     if 0:

@@ -17,12 +17,13 @@ import tables as PT
 import numarray.records
 pytables_filt = numpy.asarray
 import atexit
+import pickle
 
 import flydra.kalman.flydra_kalman_utils
 import flydra.kalman.flydra_tracker
 import flydra.geom
 
-DO_KALMAN= False
+DO_KALMAN= True
 
 import flydra.common_variables
 REALTIME_UDP = flydra.common_variables.REALTIME_UDP
@@ -133,10 +134,16 @@ class TextLogDescription(PT.IsDescription):
     cam_id = PT.StringCol(255,pos=1)
     host_timestamp = PT.FloatCol(pos=2)
     message = PT.StringCol(255,pos=3)
+
+FilteredObservations = flydra.kalman.flydra_kalman_utils.FilteredObservations
+KalmanEstimates = flydra.kalman.flydra_kalman_utils.KalmanEstimates
+h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
+h5_xhat_names = PT.Description(KalmanEstimates().columns)._v_names
     
 # allow rapid building of numarray.records.RecArray:
 Info2DColNames = PT.Description(Info2D().columns)._v_names
 Info2DColFormats = PT.Description(Info2D().columns)._v_nestedFormats
+
 
 def encode_data_packet( corrected_framenumber,
                         line3d_valid,
@@ -239,7 +246,7 @@ class CoordReceiver(threading.Thread):
         self.timestamp_echo_gatherer.bind((hostname, port))
         self.timestamp_echo_gatherer.setblocking(0)
 
-        self.tracker_lock = threading.Lock()
+        self.tracker_lock = threading.Lock()#DebugLock('tracker_lock')
         self.all_data_lock = threading.Lock()
         #self.all_data_lock = DebugLock('all_data_lock',verbose=False)
         self.quit_event = threading.Event()
@@ -283,10 +290,14 @@ class CoordReceiver(threading.Thread):
         # get version that operates in meters
         scale_factor = self.reconstructor.get_scale_factor()
         self.reconstructor_meters = self.reconstructor.get_scaled(scale_factor)
+        evt = self.main_brain.accumulate_kalman_calibration_data
         tracker = flydra.kalman.flydra_tracker.Tracker(self.reconstructor_meters,
-                                                       scale_factor=scale_factor)
+                                                       scale_factor=scale_factor,
+                                                       save_calibration_data=evt)
         tracker.set_killed_tracker_callback( self.enqueue_finished_tracked_object )
         self.tracker_lock.acquire()
+        if self.tracker is not None:
+            self.tracker.kill_all_trackers() # save (if necessary) all old data
         self.tracker = tracker # bind to name, replacing old tracker
         self.tracker_lock.release()
 
@@ -302,10 +313,18 @@ class CoordReceiver(threading.Thread):
         print 'set tracker values',kw_dict
         
     def enqueue_finished_tracked_object(self, tracked_object ):
+        # this is from called within the realtime coords thread
+        
         # XXX TODO DO_KALMAN stuff
-        print 'enqueue_finished_tracked_object() called'
+        #print 'tracked object done with %d frames (including interpolation)'%(
+        #    len(tracked_object.xhats),)
         if self.main_brain.is_saving_data():
-            self.main_brain.queue_data3d_kalman_estimates.put( 'x' )
+            self.main_brain.queue_data3d_kalman_estimates.put(
+                (tracked_object.frames, tracked_object.xhats,
+                 tracked_object.observations_frames, tracked_object.observations_data) )
+            
+        if len(tracked_object.saved_calibration_data):
+            self.main_brain.queue_kalman_calibration_data.put( tracked_object.saved_calibration_data )
         
     def connect(self,cam_id):
         global hostname
@@ -572,7 +591,10 @@ class CoordReceiver(threading.Thread):
                             # incomplete point info
                             break
                         if framenumber-self.last_framenumbers_skip[cam_idx] > 1:
-                            print '  WARNING: frame data loss %s'%(cam_id,) # (or UDP out-of-order?)
+                            if REALTIME_UDP:
+                                print '  WARNING: frame data loss (probably from UDP collision) %s'%(cam_id,)
+                            else:
+                                print '  WARNING: frame data loss (unknown cause) %s'%(cam_id,)
                         self.last_framenumbers_skip[cam_idx]=framenumber
                         start=header_size
                         if n_pts:
@@ -679,6 +701,7 @@ class CoordReceiver(threading.Thread):
 
                         if self.reconstructor is None:
                             # can't do any 3D math without calibration information
+                            best_realtime_data = None
                             continue
 
                         if DO_KALMAN:
@@ -686,6 +709,7 @@ class CoordReceiver(threading.Thread):
                             if self.tracker is None:
                                 self.tracker_lock.release()
                                 # tracker isn't instantiated yet...
+                                best_realtime_data = None
                                 continue
                             
                             pluecker_coords_by_cam_id = realtime_kalman_coord_dict[corrected_framenumber]
@@ -701,34 +725,49 @@ class CoordReceiver(threading.Thread):
                             # removed from consideration), so we can use old flydra
                             # "hypothesis testing" algorithm on remaining data to see if there
                             # are new objects.
+                            
+                            if len(self.tracker.live_tracked_objects):
+                                #print '%d tracked objects:'%( len(self.tracker.live_tracked_objects), )
+                                #for obj0 in self.tracker.live_tracked_objects:
+                                #    print '%s: %d points so far'%(str(obj0),len(obj0.xhats))
+                                scale_factor = self.tracker.scale_factor
+                                Xs = []
+                                for obj in self.tracker.live_tracked_objects:
+                                    if len(obj.xhats)>10: # must track for a period of time before being displayed
+                                        last_xhat = obj.xhats[-1]
+                                        X = last_xhat[0]/scale_factor, last_xhat[1]/scale_factor, last_xhat[2]/scale_factor
+                                        Xs.append(X)
+##                                if len(Xs)>1:
+##                                    for X in Xs:
+##                                        print X
+##                                    print
+##                                    #print '%d objects simultaneously tracked!'%len(Xs)
+                                if len(Xs):
+                                    best_realtime_data = Xs, 0.0
+                                else:
+                                    best_realtime_data = None
+                            else:
+                                best_realtime_data = None
 
                             # Convert to format accepted by find_best_3d()
                             found_data_dict = convert_format(pluecker_coords_by_cam_id)
                             if len(found_data_dict) < 2:
                                 # Can't do any 3D math without at least 2 cameras giving good
                                 # data.
+                                self.tracker_lock.release()
                                 continue
                             (this_observation_orig_units, line3d, cam_ids_used,
                              min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
                                 self.reconstructor,
                                 found_data_dict)
-                            if min_mean_dist<flydra.common_variables.ACCEPTABLE_DISTANCE_PIXELS:
+                            #if min_mean_dist<flydra.common_variables.ACCEPTABLE_DISTANCE_PIXELS:
+                            if min_mean_dist<500.0: # unreasonably large error accepted
                                 ####################################
                                 #  Now join found point into Tracker
                                 self.tracker.join_new_obj( corrected_framenumber, this_observation_orig_units )
 
-                            if len(self.tracker.live_tracked_objects):
-                                print '%d tracked objects:'%( len(self.tracker.live_tracked_objects), )
-                                for obj0 in self.tracker.live_tracked_objects:
-                                    print '%s: %d points so far'%(str(obj0),len(obj0.xhats))
-                                obj0 = self.tracker.live_tracked_objects[0]
-                                scale_factor = self.tracker.scale_factor
-                                if len(obj0.xhats):
-                                    last_xhat = obj0.xhats[-1]
-                                    X = last_xhat[0]/scale_factor, last_xhat[1]/scale_factor, last_xhat[2]/scale_factor
-                                    best_realtime_data = X, 0.0
                             self.tracker_lock.release()
-                        else:
+                        else: # closes "if DO_KALMAN:"
                             
                             found_data_dict = {} # old "good" points will go in here
                             for cam_id, this_point in data_dict.iteritems():
@@ -777,7 +816,7 @@ class CoordReceiver(threading.Thread):
                                     )
 
                             # realtime 3d data
-                            best_realtime_data = X, min_mean_dist
+                            best_realtime_data = [X], min_mean_dist
                             try:
                                 for downstream_host in downstream_hosts:
                                     outgoing_UDP_socket.sendto(data_packet,downstream_host)
@@ -846,6 +885,13 @@ class CoordReceiver(threading.Thread):
 
             finally:
                 self.all_data_lock.release()
+
+        if DO_KALMAN:
+            self.tracker_lock.acquire()
+            if self.tracker is not None:
+                self.tracker.kill_all_trackers() # save (if necessary) all old data
+            self.tracker_lock.release()
+
     
 class MainBrain(object):
     """Handle all camera network stuff and interact with application"""
@@ -1336,7 +1382,7 @@ class MainBrain(object):
         self.h5movie_info = None
         self.h5textlog = None
         if DO_KALMAN:
-            self.h5data3d_kalman = None
+            self.h5data3d_kalman_estimates = None
         else:
             self.h5data3d_best = None
 
@@ -1344,16 +1390,26 @@ class MainBrain(object):
         self.queue_data2d          = Queue.Queue()
         self.queue_cam_info        = Queue.Queue()
         self.queue_host_clock_info = Queue.Queue()
+        self.queue_kalman_calibration_data = Queue.Queue()
         self.queue_data3d_best     = Queue.Queue()
         
         self.queue_data3d_kalman_estimates = Queue.Queue()
+        self.accumulate_kalman_calibration_data = threading.Event()
+        self.all_kalman_calibration_data = []
 
         self.coord_receiver = CoordReceiver(self)
         self.coord_receiver.setDaemon(True)
         self.coord_receiver.start()
 
+        self.current_kalman_obj_id = 0
         main_brain_keeper.register( self )
 
+    def set_accumulate_kalman_calibration_data(self, value):
+        if value:
+            self.accumulate_kalman_calibration_data.set()
+        else:
+            self.accumulate_kalman_calibration_data.clear()
+        
     def IncreaseCamCounter(self,cam_id,scalar_control_info,fqdn_and_port):
         self.num_cams += 1
         self.MainBrain_cam_ids_copy.append( cam_id )
@@ -1445,6 +1501,66 @@ class MainBrain(object):
             save_ascii_matrix(os.path.join(self.calib_dir,'Res.dat'),Res)
 
             fd = open(os.path.join(self.calib_dir,'camera_order.txt'),'w')
+            for cam_id in cam_ids:
+                fd.write('%s\n'%cam_id)
+            fd.close()
+        else:
+            raise RuntimeError('No points collected!')
+
+    def save_kalman_calibration_data(self,calib_dir):
+        def convert_to_multicamselfcal_format(cam_ids,data):
+            n_cams = len(cam_ids)
+            n_pts = len(data)
+
+            IdMat = numpy.zeros( (n_cams, n_pts), dtype=numpy.uint8 )
+            points = numpy.nan*numpy.ones( (n_cams*3, n_pts), dtype=numpy.float )
+
+            cam_id2idx = {}
+            for i,cam_id in enumerate(cam_ids):
+                cam_id2idx[cam_id]=i
+
+            # fill data
+            for col_num,row_data in enumerate(data):
+                for cam_id, point2d in row_data:
+                    row_num = cam_id2idx[cam_id]
+
+                    IdMat[row_num,col_num]=1
+                    points[row_num*3,  col_num]=point2d[0]
+                    points[row_num*3+1,col_num]=point2d[1]
+                    points[row_num*3+2,col_num]=1.0
+
+            return IdMat, points
+        
+        n_pts = len(self.all_kalman_calibration_data)
+
+        if n_pts>1:
+            print 'saving %s points from Kalman filtered data'%n_pts
+
+            data_to_save = self.all_kalman_calibration_data
+            self.all_kalman_calibration_data=[]
+            
+            # temporarily save all data as pickle
+            fd = open(os.path.join(calib_dir,'cal_data_temp_format.pkl'),mode='wb')
+            pickle.dump( data_to_save, fd )
+            fd.close()
+
+            cam_ids = self.remote_api.external_get_cam_ids()
+
+            IdMat,points = convert_to_multicamselfcal_format(cam_ids,data_to_save)
+            
+            save_ascii_matrix(os.path.join(calib_dir,'IdMat.dat'),IdMat)
+            save_ascii_matrix(os.path.join(calib_dir,'points.dat'),points)
+
+            # save extra data
+            Res = []
+            for cam_id in cam_ids:
+                sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+                width, height = self.get_widthheight(cam_id)
+                Res.append( [width,height] )
+            Res = nx.array( Res )
+            save_ascii_matrix(os.path.join(calib_dir,'Res.dat'),Res)
+
+            fd = open(os.path.join(calib_dir,'camera_order.txt'),'w')
             for cam_id in cam_ids:
                 fd.write('%s\n'%cam_id)
             fd.close()
@@ -1648,9 +1764,12 @@ class MainBrain(object):
         if self.reconstructor is not None:
             self.reconstructor.save_to_h5file(self.h5file)
             if DO_KALMAN:
-                self.h5data3d_kalman = ct(root,'data3d_kalman', flydra.kalman.flydra_kalman_utils.KalmanEstimates,
-                                          "3d data (from Kalman filter)",
-                                          expectedrows=expected_rows)
+                self.h5data3d_kalman_estimates = ct(root,'kalman_estimates', KalmanEstimates,
+                                                    "3d data (from Kalman filter)",
+                                                    expectedrows=expected_rows)
+                self.h5data3d_kalman_observations = ct(root,'kalman_observations', FilteredObservations,
+                                                       "3d data (input to Kalman filter)",
+                                                       expectedrows=expected_rows)
             else:
                 self.h5data3d_best = ct(root,'data3d_best', Info3D,
                                         "3d data (best)",
@@ -1677,11 +1796,21 @@ class MainBrain(object):
         self.h5movie_info = None
         self.h5textlog = None
         if DO_KALMAN:
-            self.h5data3d_kalman = None
+            self.h5data3d_kalman_estimates = None
+            self.h5data3d_kalman_observations = None
         else:
             self.h5data3d_best = None
 
     def _service_save_data(self):
+        list_of_kalman_calibration_data = []
+        try:
+            while True:
+                tmp = self.queue_kalman_calibration_data.get(0)
+                list_of_kalman_calibration_data.extend( tmp )
+        except Queue.Empty:
+            pass
+        self.all_kalman_calibration_data.extend( list_of_kalman_calibration_data )
+        
         changed = False
         
         # ** 2d data **
@@ -1755,7 +1884,6 @@ class MainBrain(object):
         if DO_KALMAN:
             # ** 3d data - kalman **
             q = self.queue_data3d_kalman_estimates
-            h5table = self.h5data3d_kalman
 
             #   clear queue
             list_of_3d_data = []
@@ -1764,10 +1892,40 @@ class MainBrain(object):
                     list_of_3d_data.append( q.get(0) )
             except Queue.Empty:
                 pass
-            if h5table is not None:
-                row = h5table.row
-                print 'not implemented - saving kalman data (%d rows ignored)'%(
-                    len(list_of_3d_data),)
+            if self.h5data3d_kalman_estimates is not None:
+##                print 'saving kalman data (%d objects)'%(
+##                    len(list_of_3d_data),)
+                for (tro_frames, tro_xhats, obs_frames, obs_data) in list_of_3d_data:
+
+                    if len(obs_frames)<10:
+                        # only save data with at least 10 observations
+                        continue
+
+                    # get object ID
+                    obj_id = self.current_kalman_obj_id
+                    self.current_kalman_obj_id += 1
+                    
+                    # save observations
+                    observations_frames = numpy.array(obs_frames, dtype=numpy.int32)
+                    observations_data = numpy.array(obs_data, dtype=numpy.float32)
+                    obj_id_array = obj_id * numpy.ones(observations_frames.shape, dtype=numpy.int32)
+                    list_of_obs = [observations_data[:,i] for i in range(observations_data.shape[1])]
+                    obs_recarray = numpy.rec.fromarrays([obj_id_array,observations_frames]+list_of_obs,
+                                                        names = h5_obs_names)
+                    
+                    self.h5data3d_kalman_observations.append(obs_recarray)
+                    self.h5data3d_kalman_observations.flush()
+
+                    # save xhat info (kalman estimates)
+                    frames = numpy.array(tro_frames, dtype=numpy.int32)
+                    xhat_data = numpy.array(tro_xhats, dtype=numpy.float32)
+                    obj_id_array = obj_id * numpy.ones(frames.shape, dtype=numpy.int32)
+                    list_of_xhats = [xhat_data[:,i] for i in range(xhat_data.shape[1])]
+                    xhats_recarray = numpy.rec.fromarrays([obj_id_array,frames]+list_of_xhats,
+                                                          names = h5_xhat_names)
+                    self.h5data3d_kalman_estimates.append( xhats_recarray )
+                    self.h5data3d_kalman_estimates.flush()
+                    changed = True
             
         else:
             # ** 3d data - hypthesis testing **
@@ -1843,7 +2001,7 @@ class MainBrain(object):
             
             filename = self.h5file.filename
             if DO_KALMAN:
-                had_h5data3d_kalman = self.h5data3d_kalman is not None
+                had_h5data3d_kalman_estimates = self.h5data3d_kalman_estimates is not None
             else:
                 had_h5data3d_best = self.h5data3d_best is not None
             self.h5file.close()
@@ -1855,8 +2013,8 @@ class MainBrain(object):
             self.h5movie_info = getattr(self.h5file.root,'movie_info')
             self.h5textlog = getattr(self.h5file.root,'textlog')
             if DO_KALMAN:
-                if had_h5data3d_kalman:
-                    self.h5data3d_kalman = getattr(self.h5file.root,'data3d_kalman')
+                if had_h5data3d_kalman_estimates:
+                    self.h5data3d_kalman_estimates = getattr(self.h5file.root,'kalman_estimates')
             else:
                 if had_h5data3d_best:
                     self.h5data3d_best = getattr(self.h5file.root,'data3d_best')

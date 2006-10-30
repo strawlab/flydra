@@ -46,7 +46,7 @@ class KalmanSaver:
         self.h5_xhat = self.h5file.createTable(self.h5file.root,'kalman_estimates', KalmanEstimates,
                                                "Kalman a posteri estimates of tracked object")
         self.h5_xhat_names = PT.Description(KalmanEstimates().columns)._v_names
-        self.h5_obs = self.h5file.createTable(self.h5file.root,'observations', FilteredObservations,
+        self.h5_obs = self.h5file.createTable(self.h5file.root,'kalman_observations', FilteredObservations,
                                               "observations of tracked object")
         self.h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
         self.obj_id = -1

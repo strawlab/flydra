@@ -6,6 +6,10 @@ import math
 
 __all__ = ['TrackedObject','Tracker']
 
+class FakeThreadingEvent:
+    def isSet(self):
+        return False
+
 class TrackedObject:
     """
     Track one object using a Kalman filter.
@@ -25,6 +29,8 @@ class TrackedObject:
                  initial_acceleration_covariance_estimate = 15, # default: arbitrary initial guess, rather large
                  Q = None,
                  R = None,
+                 save_calibration_data=None,
+                 max_frames_skipped=25,
                  ):
         """
 
@@ -77,6 +83,14 @@ class TrackedObject:
         
         self.observations_frames = [frame]
         self.observations_data = [first_observation_meters]
+
+        if save_calibration_data is None:
+            self.save_calibration_data = FakeThreadingEvent()
+        else:
+            self.save_calibration_data = save_calibration_data
+        self.saved_calibration_data = []
+        
+        self.max_frames_skipped=max_frames_skipped
         
         # Don't run kalman filter with initial data, as this would
         # cause error estimates to drop too low.
@@ -91,38 +105,50 @@ class TrackedObject:
             # Since we have no observation, the estimated error will
             # rise.
             frames_skipped = frame-self.current_frameno-1
-            for i in range(frames_skipped):
-                xhat, P = self.my_kalman.step()
-                ############ save outputs ###############
-                self.frames.append( self.current_frameno + i + 1 )
-                self.xhats.append( xhat )
-                self.Ps.append( P )
+            
+            if frames_skipped > self.max_frames_skipped:
+                self.kill_me = True # don't run Kalman filter, just quit
+            else:
+                for i in range(frames_skipped):
+                    xhat, P = self.my_kalman.step()
+                    ############ save outputs ###############
+                    self.frames.append( self.current_frameno + i + 1 )
+                    self.xhats.append( xhat )
+                    self.Ps.append( P )
 
-        self.current_frameno = frame
-        # Step 1.B. Update Kalman to provide a priori estimates for this frame
-        xhatminus, Pminus = self.my_kalman.step1__calculate_a_priori()
+        if not self.kill_me:
+            self.current_frameno = frame
+            # Step 1.B. Update Kalman to provide a priori estimates for this frame
+            xhatminus, Pminus = self.my_kalman.step1__calculate_a_priori()
 
-        # Step 2. Filter incoming 2D data to use informative points
-        observation_meters = self._filter_data(xhatminus, Pminus, data_dict)
-        
-        # Step 3. Incorporate observation to estimate a posteri
-        xhat, P = self.my_kalman.step2__calculate_a_posteri(xhatminus, Pminus,
-                                                            observation_meters)
-        Pmean = numpy.sqrt(numpy.sum([P[i,i] for i in range(3)]))
-        
-        # XXX Need to test if error for this object has grown beyond a
-        # threshold at which it should be terminated.
-        if Pmean > self.max_variance_dist_meters:
-            self.kill_me = True
+            # Step 2. Filter incoming 2D data to use informative points
+            observation_meters = self._filter_data(xhatminus, Pminus, data_dict)
 
-        ############ save outputs ###############
-        self.frames.append( frame )
-        self.xhats.append( xhat )
-        self.Ps.append( P )
+            # Step 3. Incorporate observation to estimate a posteri
+            try:
+                xhat, P = self.my_kalman.step2__calculate_a_posteri(xhatminus, Pminus,
+                                                                    observation_meters)
+            except OverflowError,err:
+                print 'OVERFLOW ERROR:'
+                print 'self.kill_me',self.kill_me
+                print 'frames_skipped',type(frames_skipped),frames_skipped
+                print 'self.my_kalman.n_skipped',type(self.my_kalman.n_skipped),self.my_kalman.n_skipped
+                raise err
+            Pmean = numpy.sqrt(numpy.sum([P[i,i] for i in range(3)]))
+
+            # XXX Need to test if error for this object has grown beyond a
+            # threshold at which it should be terminated.
+            if Pmean > self.max_variance_dist_meters:
+                self.kill_me = True
+
+            ############ save outputs ###############
+            self.frames.append( frame )
+            self.xhats.append( xhat )
+            self.Ps.append( P )
         
-        if observation_meters is not None:
-            self.observations_frames.append( frame )
-            self.observations_data.append( observation_meters )
+            if observation_meters is not None:
+                self.observations_frames.append( frame )
+                self.observations_data.append( observation_meters )
         
     def _filter_data(self,xhatminus, Pminus, data_dict):
         """given state estimate, select useful incoming data and make new observation"""
@@ -175,6 +201,9 @@ class TrackedObject:
         # Now new_data_dict has just the 2d points we'll use for this reconstruction
         if len(cam_ids_and_points2d)>=2:
             observation_meters = self.reconstructor_meters.find3d( cam_ids_and_points2d )
+            if len(cam_ids_and_points2d)>=3:
+                if self.save_calibration_data.isSet():
+                    self.saved_calibration_data.append( cam_ids_and_points2d )
         else:
             observation_meters = None
         return observation_meters
@@ -197,6 +226,7 @@ class Tracker:
                  initial_acceleration_covariance_estimate = 15, # default: arbitrary initial guess, rather large
                  Q = None,
                  R = None,
+                 save_calibration_data=None,
                  ):
         """
         
@@ -230,13 +260,19 @@ class Tracker:
         self.initial_acceleration_covariance_estimate = initial_acceleration_covariance_estimate
         self.Q = Q
         self.R = R
+        self.save_calibration_data=save_calibration_data
             
     def gobble_2d_data_and_calculate_a_posteri_estimates(self,frame,data_dict):
         # Allow earlier tracked objects to be greedy and take all the
         # data they want.
         kill_idxs = []
         for idx,tro in enumerate(self.live_tracked_objects):
-            tro.gobble_2d_data_and_calculate_a_posteri_estimate(frame,data_dict)
+            try:
+                tro.gobble_2d_data_and_calculate_a_posteri_estimate(frame,data_dict)
+            except OverflowError, err:
+                print 'WARNING: OverflowError in tro.gobble_2d_data_and_calculate_a_posteri_estimate'
+                print 'Killing tracked object and continuing...'
+                tro.kill_me = True
             if tro.kill_me:
                 kill_idxs.append( idx )
 
@@ -259,6 +295,7 @@ class Tracker:
                             initial_acceleration_covariance_estimate = self.initial_acceleration_covariance_estimate,
                             Q = self.Q,
                             R = self.R,
+                            save_calibration_data=self.save_calibration_data,
                             )
         self.live_tracked_objects.append(tro)
     def kill_all_trackers(self):

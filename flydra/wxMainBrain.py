@@ -879,6 +879,39 @@ class wxMainBrainApp(wxApp):
                        "kalman_parameters_choice")
         EVT_CHOICE(ctrl, ctrl.GetId(),
                    self.OnKalmanParametersChange)
+        
+        ctrl = XRCCTRL(self.status_panel,
+                       "ACCUMULATE_KALMAN_DATA_FOR_CALIBRATION")
+        EVT_CHECKBOX(ctrl, ctrl.GetId(),
+                     self.OnAccumulateKalmanCalibrationData)
+
+        ctrl = XRCCTRL(self.status_panel,
+                       "SAVE_KALMAN_CAL_DATA_TO_FILE")
+        EVT_BUTTON(ctrl, ctrl.GetId(),
+                   self.OnSaveKalmanCalibrationData)
+        
+    def OnSaveKalmanCalibrationData(self,event):
+        doit = False
+        dlg = wxDirDialog( self.frame, "Calibration save directory",
+                           style = wxDD_DEFAULT_STYLE | wxDD_NEW_DIR_BUTTON,
+                           defaultPath = os.environ.get('HOME',''),
+                           )
+        try:
+            self.pass_all_keystrokes = True
+            if dlg.ShowModal() == wxID_OK:
+                calib_dir = dlg.GetPath()
+                doit = True
+        finally:
+            dlg.Destroy()
+            self.pass_all_keystrokes = False            
+        if doit:
+            self.main_brain.save_kalman_calibration_data(calib_dir)
+            
+    def OnAccumulateKalmanCalibrationData(self,event):
+        ctrl = XRCCTRL(self.status_panel,
+                       "ACCUMULATE_KALMAN_DATA_FOR_CALIBRATION")
+        value = ctrl.GetValue()
+        self.main_brain.set_accumulate_kalman_calibration_data(value)
 
     def OnLoadCal(self,event):
         doit=False
@@ -1170,6 +1203,12 @@ class wxMainBrainApp(wxApp):
                     self.main_brain.request_image_async(cam_id)
                 except KeyError: # no big deal, camera probably just disconnected
                     pass
+                
+        # also update a couple other things...
+        
+        ctrl = XRCCTRL(self.status_panel,"KALMAN_CALIBRATION_N_POINTS")
+        n_pts = len(self.main_brain.all_kalman_calibration_data)
+        ctrl.SetValue(str(n_pts))
 
     def OnTimer(self, event):
         DEBUG('4')
@@ -1178,7 +1217,8 @@ class wxMainBrainApp(wxApp):
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc
         realtime_data=MainBrain.get_best_realtime_data() # gets global data
         if realtime_data is not None:
-            data3d,min_mean_dist=realtime_data
+            Xs,min_mean_dist=realtime_data
+            data3d = Xs[0]
             XRCCTRL(self.status_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
             XRCCTRL(self.status_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
             XRCCTRL(self.status_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
@@ -1192,12 +1232,19 @@ class wxMainBrainApp(wxApp):
                 if self.current_page == 'preview':
                     r=self.main_brain.reconstructor
                     for cam_id in self.cameras.keys():
-                        pt=r.find2d(cam_id,data3d,
-                                    distorted=True)
+                        pts = []
+                        for X in Xs:
+                            pt=r.find2d(cam_id,X,
+                                        distorted=True)
+                            pts.append( pt )
+                        #print cam_id, pts
                         #pt_undist,ln=r.find2d(cam_id,data3d,
                         #               Lcoords=line3d,distorted=False)
                         #self.cam_image_canvas.set_reconstructed_points(cam_id,([pt],[ln]))
-                        self.cam_image_canvas.set_reconstructed_points(cam_id,([pt],[]))
+                        self.cam_image_canvas.set_reconstructed_points(cam_id,(pts,[]))
+        else:
+            for cam_id in self.cameras.keys():
+                self.cam_image_canvas.set_reconstructed_points(cam_id,([],[]))
         if self.current_page == 'preview':
             for cam_id in self.cameras.keys():
                 cam = self.cameras[cam_id]
@@ -1215,6 +1262,10 @@ class wxMainBrainApp(wxApp):
                     if show_fps is not None:
                         show_fps_label = XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
                         show_fps_label.SetLabel('fps: %.1f'%show_fps)
+                    for i,pt in enumerate(points):
+                        pt = list(pt)
+                        pt[4] = 0 # set eccentricity to zero - don't draw line XXX HACK TODO FIXME
+                        points[i] = pt # reassign
                     self.cam_image_canvas.set_draw_points(cam_id,points)
                 except KeyError:
                     pass # may have lost camera since call to service_pending

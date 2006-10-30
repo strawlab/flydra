@@ -8,15 +8,11 @@ import datetime
 import vtk_results
 import vtk.util.colors as colors
 from vtkpython import vtk
+import sys
 
 plot_scale = 1000.0 # plot in mm
 
-def main(max_err=10.0):
-    if 1:
-        #filename = 'DATA20060914_181401.tracked_fixed_accel.h5'
-        filename = 'DATA20060915_173304.tracked_fixed_accel.h5'
-        fstart, fend = None, None
-            
+def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
     kresults = PT.openFile(filename,mode="r")
     
     renWin, renderers = vtk_results.init_vtk()#stereo=True)
@@ -41,8 +37,8 @@ def main(max_err=10.0):
 ##            continue
 ##        if not (850 <= obj_id < 1600):
 ##            continue
-        if not (1600 <= obj_id < 3200):
-            continue
+##        if not (1600 <= obj_id < 3200):
+##            continue
             
         row_idxs = numpy.nonzero( obj_ids == obj_id )[0]
         this_len = len(row_idxs)
@@ -92,4 +88,11 @@ def main(max_err=10.0):
     vtk_results.print_cam_props(camera)
     
 if __name__=='__main__':
-    main()
+    if 0:
+        #filename = 'DATA20060914_181401.tracked_fixed_accel.h5'
+        filename = 'DATA20060915_173304.tracked_fixed_accel.h5'
+        fstart, fend = None, None
+    elif 1:
+        fstart, fend = None, None
+        filename = sys.argv[1]
+    show_vtk(filename=filename,fstart=fstart,fend=fend)

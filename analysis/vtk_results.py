@@ -17,7 +17,7 @@ import flydra.reconstruct as reconstruct
 import numpy
 import numarray as nx
 import Numeric # vtkImageImportFromArray needs Numeric
-import RandomArray
+import RandomArray # part of Numeric (Debian package python-numeric-ext)
 
 import cgtypes # tested with 1.2
 array = nx.array

@@ -12,8 +12,10 @@
               
               
               
+              
               <label>x</label>
             </object>
+            
             
             
             
@@ -22,6 +24,7 @@
           </object>
           <object class="sizeritem">
             <object class="wxStaticText">
+              
               
               
               
@@ -32,10 +35,12 @@
             
             
             
+            
             <flag>wxALIGN_CENTRE</flag>
           </object>
           <object class="sizeritem">
             <object class="wxStaticText">
+              
               
               
               
@@ -46,6 +51,7 @@
             
             
             
+            
             <flag>wxALIGN_CENTRE</flag>
           </object>
           <object class="sizeritem">
@@ -54,8 +60,10 @@
               
               
               
+              
               <label>err</label>
             </object>
+            
             
             
             
@@ -68,7 +76,9 @@
               
               
               
+              
               <font>
+                
                 
                 
                 
@@ -78,7 +88,9 @@
                 
                 
                 
+                
                 <style>default</style>
+                
                 
                 
                 
@@ -88,7 +100,9 @@
                 
                 
                 
+                
                 <family>bold</family>
+                
                 
                 
                 
@@ -98,7 +112,9 @@
                 
                 
                 
+                
                 <face>helvetica</face>
+                
                 
                 
                 
@@ -106,6 +122,7 @@
                 <encoding>ISO-8859-1</encoding>
               </font>
             </object>
+            
             
             
             
@@ -118,7 +135,9 @@
               
               
               
+              
               <font>
+                
                 
                 
                 
@@ -128,7 +147,9 @@
                 
                 
                 
+                
                 <style>default</style>
+                
                 
                 
                 
@@ -138,7 +159,9 @@
                 
                 
                 
+                
                 <family>bold</family>
+                
                 
                 
                 
@@ -148,7 +171,9 @@
                 
                 
                 
+                
                 <face>helvetica</face>
+                
                 
                 
                 
@@ -156,6 +181,7 @@
                 <encoding>ISO-8859-1</encoding>
               </font>
             </object>
+            
             
             
             
@@ -168,7 +194,9 @@
               
               
               
+              
               <font>
+                
                 
                 
                 
@@ -178,7 +206,9 @@
                 
                 
                 
+                
                 <style>default</style>
+                
                 
                 
                 
@@ -188,7 +218,9 @@
                 
                 
                 
+                
                 <family>bold</family>
+                
                 
                 
                 
@@ -198,7 +230,9 @@
                 
                 
                 
+                
                 <face>helvetica</face>
+                
                 
                 
                 
@@ -206,6 +240,7 @@
                 <encoding>ISO-8859-1</encoding>
               </font>
             </object>
+            
             
             
             
@@ -218,7 +253,9 @@
               
               
               
+              
               <font>
+                
                 
                 
                 
@@ -228,7 +265,9 @@
                 
                 
                 
+                
                 <style>default</style>
+                
                 
                 
                 
@@ -238,7 +277,9 @@
                 
                 
                 
+                
                 <family>bold</family>
+                
                 
                 
                 
@@ -248,7 +289,9 @@
                 
                 
                 
+                
                 <face>helvetica</face>
+                
                 
                 
                 
@@ -260,19 +303,28 @@
             
             
             
+            
             <minsize>130,40</minsize>
           </object>
         </object>
+      
+        <flag>wxALL|wxALIGN_CENTRE_HORIZONTAL</flag>
+        <border>15</border>
       </object>
       <object class="sizeritem">
         <object class="wxCheckBox">
           
           
+          
           <label>grab thread has maximum priority (this checkbox not yet implemented)</label>
+          
           
           
           <enabled>0</enabled>
         </object>
+      
+        <flag>wxALL|wxALIGN_CENTRE_HORIZONTAL</flag>
+        <border>15</border>
       </object>
       <object class="sizeritem">
         <object class="wxBoxSizer">
@@ -280,25 +332,70 @@
           <object class="sizeritem">
             <object class="wxStaticText">
               
+              
               <label>Kalman filter parameters:</label>
             </object>
+            
             
             <flag>wxALIGN_CENTRE_VERTICAL</flag>
           </object>
           <object class="sizeritem">
             <object class="wxChoice" name="kalman_parameters_choice">
               
+              
               <content>
                 <item>fly dynamics, high precision calibration, units: mm</item>
                 <item>fly dynamics, low precision calibration, units: mm</item>
               </content>
+              
               
               <selection>0</selection>
             </object>
           </object>
         </object>
         
-        <flag>wxALIGN_CENTRE</flag>
+        
+        <flag>wxALL|wxALIGN_CENTRE</flag>
+      
+        <border>15</border>
+      </object>
+      <object class="sizeritem">
+        <object class="wxStaticBoxSizer">
+          <label>Calibration based on Kalman filter output</label>
+          <orient>wxVERTICAL</orient>
+          <object class="sizeritem">
+            <object class="wxCheckBox" name="ACCUMULATE_KALMAN_DATA_FOR_CALIBRATION">
+              <label>accumulate data</label>
+              <checked>0</checked>
+            </object>
+            <flag>wxALIGN_CENTRE_HORIZONTAL</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxBoxSizer">
+              <orient>wxHORIZONTAL</orient>
+              <object class="sizeritem">
+                <object class="wxStaticText">
+                  <label>Number of data samples acquired:</label>
+                </object>
+                <flag>wxALIGN_CENTRE_VERTICAL</flag>
+              </object>
+              <object class="sizeritem">
+                <object class="wxTextCtrl" name="KALMAN_CALIBRATION_N_POINTS">
+                  <enabled>0</enabled>
+                </object>
+                <flag>wxALIGN_CENTRE_VERTICAL</flag>
+              </object>
+              <object class="sizeritem">
+                <object class="wxButton" name="SAVE_KALMAN_CAL_DATA_TO_FILE">
+                  <label>Save to directory...</label>
+                </object>
+              </object>
+            </object>
+            <flag>wxALIGN_CENTRE_HORIZONTAL</flag>
+          </object>
+        </object>
+        <flag>wxALL|wxALIGN_CENTRE_HORIZONTAL</flag>
+        <border>15</border>
       </object>
     </object>
   </object>
@@ -319,7 +416,9 @@
                   
                   
                   
+                  
                   <label>Running avg</label>
+                  
                   
                   
                   
@@ -330,7 +429,9 @@
                 
                 
                 
+                
                 <flag>wxTOP</flag>
+                
                 
                 
                 
@@ -343,11 +444,13 @@
                   
                   
                   
+                  
                   <label>take</label>
                 </object>
               </object>
               <object class="sizeritem">
                 <object class="wxButton" name="clear_background">
+                  
                   
                   
                   
@@ -372,11 +475,13 @@
                       
                       
                       
+                      
                       <label>find Rcenter</label>
                     </object>
                   </object>
                   <object class="sizeritem">
                     <object class="wxButton" name="set_roi">
+                      
                       
                       
                       
@@ -390,7 +495,9 @@
                       
                       
                       
+                      
                       <label>quit camera</label>
+                      
                       
                       
                       
@@ -409,13 +516,16 @@
                       
                       
                       
+                      
                       <label>Max framerate:</label>
                     </object>
                     
                     
                     
                     
+                    
                     <flag>wxTOP|wxRIGHT</flag>
+                    
                     
                     
                     
@@ -428,7 +538,9 @@
                       
                       
                       
+                      
                       <value>?</value>
+                      
                       
                       
                       
@@ -442,6 +554,7 @@
                       
                       
                       
+                      
                       <content>
                         <item>raw</item>
                         <item>absdiff</item>
@@ -449,6 +562,7 @@
                         <item>cmp</item>
                         <item>cmpdiff</item>
                       </content>
+                      
                       
                       
                       
@@ -465,6 +579,7 @@
         
         
         
+        
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
@@ -473,6 +588,7 @@
           <rows>2</rows>
           <object class="sizeritem">
             <object class="wxStaticText" name="acquired_fps_label">
+              
               
               
               
@@ -489,13 +605,16 @@
                   
                   
                   
+                  
                   <label>Threshold for AbsDiff</label>
                 </object>
                 
                 
                 
                 
+                
                 <flag>wxTOP|wxRIGHT</flag>
+                
                 
                 
                 
@@ -508,7 +627,9 @@
                   
                   
                   
+                  
                   <value>?</value>
+                  
                   
                   
                   
@@ -527,13 +648,16 @@
                   
                   
                   
+                  
                   <label>Threshold for Clear</label>
                 </object>
                 
                 
                 
                 
+                
                 <flag>wxTOP|wxRIGHT</flag>
+                
                 
                 
                 
@@ -546,7 +670,9 @@
                   
                   
                   
+                  
                   <value>?</value>
+                  
                   
                   
                   
@@ -562,13 +688,16 @@
               
               
               
+              
               <label>Exposure (msec): --</label>
             </object>
             
             
             
             
+            
             <flag>wxRIGHT</flag>
+            
             
             
             
@@ -581,7 +710,9 @@
               
               
               
+              
               <label>send LED arena signals</label>
+              
               
               
               
@@ -599,11 +730,13 @@
                   
                   
                   
+                  
                   <label>external trigger</label>
                 </object>
               </object>
               <object class="sizeritem">
                 <object class="wxCheckBox" name="ROI2">
+                  
                   
                   
                   
@@ -618,6 +751,7 @@
         
         
         
+        
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
@@ -626,7 +760,9 @@
         
         
         
+        
         <option>1</option>
+        
         
         
         
@@ -644,7 +780,9 @@
         
         
         
+        
         <option>5</option>
+        
         
         
         
@@ -660,12 +798,15 @@
               
               
               
+              
               <label>Calibration loaded</label>
               
               
               
               
+              
               <checked>0</checked>
+              
               
               
               
@@ -678,7 +819,9 @@
         
         
         
+        
         <flag>wxTOP|wxEXPAND</flag>
+        
         
         
         
@@ -694,8 +837,10 @@
               
               
               
+              
               <label>Load calibration...</label>
             </object>
+            
             
             
             
@@ -707,12 +852,14 @@
         
         
         
+        
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="PreviewPerCamPanel">
           <size>10,200</size>
         </object>
+        
         
         
         
@@ -730,7 +877,9 @@
           
           
           
+          
           <bitmap>flydra_server_art.png</bitmap>
+          
           
           
           
@@ -741,7 +890,9 @@
         
         
         
+        
         <option>0</option>
+        
         
         
         
@@ -754,7 +905,9 @@
         
         
         
+        
         <option>1</option>
+        
         
         
         
@@ -772,7 +925,9 @@
           
           
           
+          
           <label>Under construction...</label>
+          
           
           
           
@@ -783,7 +938,9 @@
         
         
         
+        
         <option>1</option>
+        
         
         
         
@@ -804,6 +961,7 @@
               
               
               
+              
               <content>
                 <item/></content>
             </object>
@@ -811,7 +969,9 @@
             
             
             
+            
             <option>1</option>
+            
             
             
             
@@ -824,13 +984,16 @@
               
               
               
+              
               <label>refresh view</label>
             </object>
             
             
             
             
+            
             <option>0</option>
+            
             
             
             
@@ -846,12 +1009,14 @@
                   
                   
                   
+                  
                   <content>
                     <item>pink</item>
                     <item>jet</item>
                     <item>gray</item>
                     <item>bone</item>
                   </content>
+                  
                   
                   
                   
@@ -865,7 +1030,9 @@
                   
                   
                   
+                  
                   <label>fixed color range</label>
+                  
                   
                   
                   
@@ -880,12 +1047,15 @@
         
         
         
+        
         <option>0</option>
         
         
         
         
+        
         <flag>wxALL|wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
+        
         
         
         
@@ -898,7 +1068,9 @@
         
         
         
+        
         <option>1</option>
+        
         
         
         
@@ -916,7 +1088,9 @@
         
         
         
+        
         <option>1</option>
+        
         
         
         
@@ -929,7 +1103,9 @@
           
           
           
+          
           <label>Image display disabled for speed</label>
+          
           
           
           
@@ -940,7 +1116,9 @@
         
         
         
+        
         <option>1</option>
+        
         
         
         
@@ -966,13 +1144,16 @@
                           
                           
                           
+                          
                           <label>Record</label>
+                          
                           
                           
                           
                           
                           <checked>0</checked>
                         </object>
+                        
                         
                         
                         
@@ -984,7 +1165,9 @@
                     
                     
                     
+                    
                     <option>0</option>
+                    
                     
                     
                     
@@ -1000,7 +1183,9 @@
                           
                           
                           
+                          
                           <label>filename</label>
+                          
                           
                           
                           
@@ -1011,12 +1196,15 @@
                         
                         
                         
+                        
                         <option>0</option>
                         
                         
                         
                         
+                        
                         <flag>wxALL|wxEXPAND</flag>
+                        
                         
                         
                         
@@ -1029,8 +1217,10 @@
                           
                           
                           
+                          
                           <value>XXX CHANGE ME!</value>
                         
+                          
                           
                           
                           
@@ -1040,7 +1230,9 @@
                         
                         
                         
+                        
                         <option>1</option>
+                        
                         
                         
                         
@@ -1052,7 +1244,9 @@
                     
                     
                     
+                    
                     <option>0</option>
+                    
                     
                     
                     
@@ -1060,6 +1254,7 @@
                     <flag>wxEXPAND</flag>
                   </object>
                 </object>
+                
                 
                 
                 
@@ -1079,14 +1274,17 @@
                           
                           
                           
+                          
                           <label>Record</label>
                       
+                          
                           
                           
                           
                           <checked>0</checked>
                     </object>
                     
+                        
                         
                         
                         
@@ -1097,8 +1295,10 @@
                     
                     
                     
+                    
                     <option>0</option>
                 
+                    
                     
                     
                     
@@ -1113,7 +1313,9 @@
                           
                           
                           
+                          
                           <label>filename</label>
+                          
                           
                           
                           
@@ -1124,12 +1326,15 @@
                         
                         
                         
+                        
                         <option>0</option>
                         
                         
                         
                         
+                        
                         <flag>wxALL|wxEXPAND</flag>
+                        
                         
                         
                         
@@ -1142,8 +1347,10 @@
                           
                           
                           
+                          
                           <value>XXX CHANGE ME!</value>
                         
+                          
                           
                           
                           
@@ -1153,7 +1360,9 @@
                         
                         
                         
+                        
                         <option>1</option>
+                        
                         
                         
                         
@@ -1165,7 +1374,9 @@
                     
                     
                     
+                    
                     <option>0</option>
+                    
                     
                     
                     
@@ -1176,6 +1387,7 @@
                 
                 
                 
+                
                 <flag>wxEXPAND</flag>
               </object>
             </object>
@@ -1183,7 +1395,9 @@
             
             
             
+            
             <option>1</option>
+            
             
             
             
@@ -1199,13 +1413,16 @@
                   
                   
                   
+                  
                   <label>select cameras</label>
+                  
                   
                   
                   
                   
                   <style>wxALIGN_CENTRE</style>
                 </object>
+                
                 
                 
                 
@@ -1218,6 +1435,7 @@
                   
                   
                   
+                  
                   <content>
                     <item/></content>
                 </object>
@@ -1225,7 +1443,9 @@
                 
                 
                 
+                
                 <option>1</option>
+                
                 
                 
                 
@@ -1237,7 +1457,9 @@
             
             
             
+            
             <option>0</option>
+            
             
             
             
@@ -1249,7 +1471,9 @@
         
         
         
+        
         <option>0</option>
+        
         
         
         
@@ -1272,7 +1496,9 @@
               
               
               
+              
               <label>cam_id</label>
+              
               
               
               
@@ -1283,9 +1509,11 @@
             
             
             
+            
             <option>1</option>
           </object>
         </object>
+        
         
         
         
@@ -1302,6 +1530,7 @@
               
               
               
+              
               <label>left</label>
             </object>
           </object>
@@ -1311,11 +1540,13 @@
               
               
               
+              
               <value>0</value>
             </object>
           </object>
           <object class="sizeritem">
             <object class="wxStaticText">
+              
               
               
               
@@ -1329,11 +1560,13 @@
               
               
               
+              
               <value>655</value>
             </object>
           </object>
           <object class="sizeritem">
             <object class="wxStaticText">
+              
               
               
               
@@ -1347,6 +1580,7 @@
               
               
               
+              
               <value>0</value>
             </object>
           </object>
@@ -1356,11 +1590,13 @@
               
               
               
+              
               <label>bottom</label>
             </object>
           </object>
           <object class="sizeritem">
             <object class="wxTextCtrl" name="ROI_TOP">
+              
               
               
               
@@ -1379,8 +1615,10 @@
               
               
               
+              
               <label>OK</label>
             </object>
+            
             
             
             
@@ -1390,9 +1628,11 @@
             
             
             
+            
             <flag></flag>
           </object>
         </object>
+        
         
         
         
@@ -1414,11 +1654,13 @@
               
               
               
+              
               <label>&lt;&lt;</label>
             </object>
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="|&lt;">
+              
               
               
               
@@ -1432,11 +1674,13 @@
               
               
               
+              
               <label>&gt;|</label>
             </object>
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="&gt;&gt;">
+              
               
               
               
@@ -1450,13 +1694,16 @@
               
               
               
+              
               <label></label>
             </object>
             
             
             
             
+            
             <flag>wxLEFT|wxRIGHT</flag>
+            
             
             
             
@@ -1469,11 +1716,13 @@
               
               
               
+              
               <label>o</label>
             </object>
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="&gt;">
+              
               
               
               
