@@ -22,7 +22,7 @@ import RandomArray # part of Numeric (Debian package python-numeric-ext)
 import cgtypes # tested with 1.2
 array = nx.array
 
-def init_vtk(stereo=False):
+def init_vtk(n_viewports = 1, stereo=False):
 
     renWin = vtkRenderWindow()
     if stereo:
@@ -33,7 +33,8 @@ def init_vtk(stereo=False):
         renWin.SetStereoTypeToRedBlue()
         
     renderers = []
-    for side_view in [True]:
+    side_view = True
+    for viewport_no in range(n_viewports):
         camera = vtkCamera()
         camera.SetParallelProjection(1)
         if side_view:
@@ -77,10 +78,27 @@ def init_vtk(stereo=False):
 
         ren1 = vtkRenderer()
         lk = vtkLightKit()
-        if side_view:
+        if viewport_no==0 and n_viewports==1:
             ren1.SetViewport(0.0,0,1.0,1.0)
+        elif n_viewports==2:
+            if 1: # top and bottom
+                if viewport_no==0:
+                    ren1.SetViewport(0.0,0.5,1,1.0)
+                elif viewport_no==1:
+                    ren1.SetViewport(0.0,0.0,1.0,0.5)
+                else:
+                    raise ValueError('')
+            else:
+                # side by side
+                if viewport_no==0:
+                    ren1.SetViewport(0.0,0,0.5,1.0)
+                elif viewport_no==1:
+                    ren1.SetViewport(0.5,0,1.0,1.0)
+                else:
+                    raise ValueError('')
         else:
-            ren1.SetViewport(0.9,0.0,1.0,1)
+            raise ValueError('')
+            #ren1.SetViewport(0.9,0.0,1.0,1)
         ren1.SetBackground( 1,1,1)
         #ren1.SetBackground( .6,.6,.75)
         #ren1.SetBackground( 0, 0x33/255.0, 0x33/255.0)
