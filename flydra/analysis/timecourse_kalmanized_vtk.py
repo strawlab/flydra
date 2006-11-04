@@ -85,10 +85,9 @@ def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
     unique_frames = numpy.array( list(sets.Set(frames)) ) # find unique
     if 0:
         for frame in unique_frames:
-            if frame < 14700:
-                continue
+##            if not 14953<frame<16069:
+##                continue
             row_idxs = numpy.nonzero( frames == int(frame) )[0]
-            this_len = len(row_idxs)
 
             obj_ids = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='obj_id',flavor='numpy')
             xs = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='x',flavor='numpy')
@@ -101,7 +100,7 @@ def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
                 vtk_results.show_spheres(renderers,
                                          sphere_coords=[vert],
                                          sphere_radius=2.0,
-                                         sphere_color=obj_id2color[obj_id],
+                                         sphere_color=obj_id2color.get(obj_id,lime_green),
                                          theta_resolution=8,
                                          phi_resolution=8,
                                          )
@@ -127,45 +126,83 @@ def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
                 writer.SetFileName(fname)
                 writer.Write()
     else:
-        frames = kresults.root.kalman_estimates.read(field='frame',flavor='numpy')
         obj_ids = kresults.root.kalman_estimates.read(field='obj_id',flavor='numpy')
         for obj_id in range( obj_ids.max()+1 ):
-            row_idxs = numpy.nonzero( obj_ids == obj_id )[0]
-            this_len = len(row_idxs)
-##            if this_len < 10:
-##                print 'obj_id %d: %d frames, skipping'%(obj_id,this_len,)
+##            print 'obj_id',obj_id
+##            if obj_id != 141:
 ##                continue
+            
+            row_idxs = numpy.nonzero( obj_ids == obj_id )[0]
+            if len(row_idxs) < 10:
+                print 'skipping object because <3 data points'
+                continue
             frames = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='frame',flavor='numpy')
             xs = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='x',flavor='numpy')
             ys = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='y',flavor='numpy')
             zs = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='z',flavor='numpy')
 
+            if 0:
+                print 'limiting frames'
+                cond = (frames >= 14958) & (frames <= 16068)
+                frames = frames[cond]
+                xs = xs[cond]
+                ys = ys[cond]
+                zs = zs[cond]
+                
+            #print 'ke frames',frames
+
+            if 0:
+                cond = frames == 14953
+                if len(numpy.nonzero(cond)[0]):
+                    print frames[cond], xs[cond], ys[cond], zs[cond]
+            
             verts = numpy.vstack((xs,ys,zs)).T * plot_scale
-            for idx in range(len(frames)):
-                frame = frames[idx]
-                cond = frames==frame
-                condi = numpy.nonzero(cond)[0]
-                if len(condi)>1:
-                    #print 'hmm'
-                    #print frames[condi]
-                    vtk_results.show_spheres(renderers,
-                                             sphere_coords=verts[condi],
-                                             sphere_radius=12.0,
-                                             sphere_color=obj_id2color.get(obj_id,lime_green),
-                                             theta_resolution=8,
-                                             phi_resolution=8,
-                                             )
-##            vtk_results.show_longline(renderers,verts,
-##                                      radius=0.001*plot_scale,
-##                                      nsides=3,opacity=0.2,
-##                                      color=obj_id2color.get(obj_id,lime_green))
-            vtk_results.show_spheres(renderers,
-                                     sphere_coords=verts,
-                                     sphere_radius=2.0,
-                                     sphere_color=obj_id2color.get(obj_id,lime_green),
-                                     theta_resolution=8,
-                                     phi_resolution=8,
-                                     )
+            if 1:
+                # show doubled frames
+                for idx in range(len(frames)):
+                    frame = frames[idx]
+                    cond = frames==frame
+                    condi = numpy.nonzero(cond)[0]
+                    if len(condi)>1:
+                        #print 'hmm'
+                        #print frames[condi]
+                        vtk_results.show_spheres(renderers,
+                                                 sphere_coords=verts[condi],
+                                                 sphere_radius=2.0,
+                                                 sphere_color=obj_id2color.get(obj_id,lime_green),
+                                                 theta_resolution=8,
+                                                 phi_resolution=8,
+                                                 )
+            vtk_results.show_longline(renderers,verts,
+                                      radius=0.001*plot_scale,
+                                      nsides=3,opacity=0.2,
+                                      color=obj_id2color.get(obj_id,lime_green))
+##            vtk_results.show_spheres(renderers,
+##                                     sphere_coords=verts,
+##                                     sphere_radius=2.0,
+##                                     sphere_color=obj_id2color.get(obj_id,lime_green),
+##                                     theta_resolution=8,
+##                                     phi_resolution=8,
+##                                     )
+            if 1:
+                # show raw observations
+                row_idxs = kresults.root.kalman_observations.getWhereList(kresults.root.kalman_observations.cols.obj_id == obj_id,flavor='numpy')
+                frames = kresults.root.kalman_observations.readCoordinates(row_idxs,field='frame',flavor='numpy')
+                #print 'ko frames',frames
+                xs = kresults.root.kalman_observations.readCoordinates(row_idxs,field='x',flavor='numpy')
+                ys = kresults.root.kalman_observations.readCoordinates(row_idxs,field='y',flavor='numpy')
+                zs = kresults.root.kalman_observations.readCoordinates(row_idxs,field='z',flavor='numpy')
+                
+                verts = numpy.vstack((xs,ys,zs)).T * plot_scale
+
+                vtk_results.show_spheres(renderers,
+                                         sphere_coords=verts,
+                                         sphere_radius=.2,
+                                         sphere_color=obj_id2color.get(obj_id,lime_green),
+                                         theta_resolution=8,
+                                         phi_resolution=8,
+                                         )
+                
     kresults.close()
 
     vtk_results.interact_with_renWin(renWin)
