@@ -23,9 +23,10 @@ plot_scale = 1000.0 # plot in mm
 
 def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
     kresults = PT.openFile(filename,mode="r")
-    
-    renWin, renderers = vtk_results.init_vtk(n_viewports=2)#stereo=True)
-    save_to_file = True
+
+    n_viewports=1
+    renWin, renderers = vtk_results.init_vtk(n_viewports=n_viewports)#stereo=True)
+    save_to_file = False
     
     fname_base = 'frame%06d.png'
     #fname_base = 'frame%06d.jpg'
@@ -69,7 +70,7 @@ def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
             camera.SetViewUp (-0.0019776273589632333, 0.99866204591539953, -0.051674046078254918)
             camera.SetClippingRange (356.86986913737519, 1773.1639083658979)
             camera.SetParallelScale(319.400653668)
-        if 1:
+        if n_viewports>1:
             camera = renderers[1].GetActiveCamera()
 
             camera.SetParallelProjection(0)
@@ -82,7 +83,7 @@ def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
             
     frames = kresults.root.kalman_estimates.read(field='frame',flavor='numpy')
     unique_frames = numpy.array( list(sets.Set(frames)) ) # find unique
-    if 1:
+    if 0:
         for frame in unique_frames:
             if frame < 14700:
                 continue
@@ -131,26 +132,40 @@ def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
         for obj_id in range( obj_ids.max()+1 ):
             row_idxs = numpy.nonzero( obj_ids == obj_id )[0]
             this_len = len(row_idxs)
-            if this_len < 10:
-                print 'obj_id %d: %d frames, skipping'%(obj_id,this_len,)
-                continue
+##            if this_len < 10:
+##                print 'obj_id %d: %d frames, skipping'%(obj_id,this_len,)
+##                continue
+            frames = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='frame',flavor='numpy')
             xs = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='x',flavor='numpy')
             ys = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='y',flavor='numpy')
             zs = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='z',flavor='numpy')
 
             verts = numpy.vstack((xs,ys,zs)).T * plot_scale
-            
-            vtk_results.show_longline(renderers,verts,
-                                      radius=0.001*plot_scale,
-                                      nsides=3,opacity=0.2,
-                                      color=obj_id2color[obj_id])
-##            vtk_results.show_spheres(renderers,
-##                                     sphere_coords=verts,
-##                                     sphere_radius=2.0,
-##                                     sphere_color=obj_id2color[obj_id],
-##                                     theta_resolution=8,
-##                                     phi_resolution=8,
-##                                     )
+            for idx in range(len(frames)):
+                frame = frames[idx]
+                cond = frames==frame
+                condi = numpy.nonzero(cond)[0]
+                if len(condi)>1:
+                    #print 'hmm'
+                    #print frames[condi]
+                    vtk_results.show_spheres(renderers,
+                                             sphere_coords=verts[condi],
+                                             sphere_radius=12.0,
+                                             sphere_color=obj_id2color.get(obj_id,lime_green),
+                                             theta_resolution=8,
+                                             phi_resolution=8,
+                                             )
+##            vtk_results.show_longline(renderers,verts,
+##                                      radius=0.001*plot_scale,
+##                                      nsides=3,opacity=0.2,
+##                                      color=obj_id2color.get(obj_id,lime_green))
+            vtk_results.show_spheres(renderers,
+                                     sphere_coords=verts,
+                                     sphere_radius=2.0,
+                                     sphere_color=obj_id2color.get(obj_id,lime_green),
+                                     theta_resolution=8,
+                                     phi_resolution=8,
+                                     )
     kresults.close()
 
     vtk_results.interact_with_renWin(renWin)
@@ -158,9 +173,10 @@ def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
     print 'cam 0'
     camera = renderers[0].GetActiveCamera()
     vtk_results.print_cam_props(camera)
-    print 'cam 1'
-    camera = renderers[1].GetActiveCamera()
-    vtk_results.print_cam_props(camera)
+    if n_viewports>1:
+        print 'cam 1'
+        camera = renderers[1].GetActiveCamera()
+        vtk_results.print_cam_props(camera)
     
 if __name__=='__main__':
     if 1:

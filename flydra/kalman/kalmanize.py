@@ -16,7 +16,7 @@ KalmanEstimates = flydra_kalman_utils.KalmanEstimates
 FilteredObservations = flydra_kalman_utils.FilteredObservations
 convert_format = flydra_kalman_utils.convert_format
 
-def process_frame(reconstructor_mm,tracker,frame,frame_data):
+def process_frame(reconst_orig_units,tracker,frame,frame_data):
     tracker.gobble_2d_data_and_calculate_a_posteri_estimates(frame,frame_data)
 
     # Now, tracked objects have been updated (and their 2D data points
@@ -32,7 +32,7 @@ def process_frame(reconstructor_mm,tracker,frame,frame_data):
         return
     (this_observation_mm, line3d, cam_ids_used,
      min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
-        reconstructor_mm,
+        reconst_orig_units,
         found_data_dict)
     max_err=10.0 # mm
     if min_mean_dist<max_err:
@@ -89,12 +89,12 @@ def kalmanize(src_filename,dest_filename=None,reconstructor_filename=None):
     results = get_results(src_filename)
 
     if reconstructor_filename is None:
-        reconstructor_mm = flydra.reconstruct.Reconstructor(results)
+        reconst_orig_units = flydra.reconstruct.Reconstructor(results)
     else:
         reconstructor_file = PT.openFile(reconstructor_filename,mode='r')
-        reconstructor_mm = flydra.reconstruct.Reconstructor(reconstructor_file)
+        reconst_orig_units = flydra.reconstruct.Reconstructor(reconstructor_file)
         
-    reconstructor_meters = reconstructor_mm.get_scaled(1e-3)
+    reconstructor_meters = reconst_orig_units.get_scaled(reconst_orig_units.get_scale_factor())
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
     
     if dest_filename is None:
@@ -153,7 +153,7 @@ def kalmanize(src_filename,dest_filename=None,reconstructor_filename=None):
                     print frame_data
                     print
                 
-                process_frame(reconstructor_mm,tracker,last_frame,frame_data)
+                process_frame(reconst_orig_units,tracker,last_frame,frame_data)
                 frame_count += 1
                 if frame_count%1000==0:
                     time2 = time.time()
@@ -176,7 +176,7 @@ def kalmanize(src_filename,dest_filename=None,reconstructor_filename=None):
             continue
         y_distorted = row['y']
 
-        (x_undistorted,y_undistorted) = reconstructor_mm.undistort(
+        (x_undistorted,y_undistorted) = reconst_orig_units.undistort(
             cam_id,(x_distorted,y_distorted))
 
         area,slope,eccentricity,p1,p2,p3,p4 = (row['area'],

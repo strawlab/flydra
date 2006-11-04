@@ -18,12 +18,13 @@ setup(name='flydra',
       author='Andrew Straw',
       author_email='strawman@astraw.com',
       description='multi-headed fly-tracking beast',
-      packages = ['flydra','flydra.kalman'],
+      packages = ['flydra','flydra.kalman','flydra.analysis'],
       ext_modules= ext_modules,
       entry_points = {
     'console_scripts': [
     'flydra_camera_node = flydra.flydra_camera_node:main',
     'flydra_bench = flydra.flydra_bench:main',
+    'flydra_kalmanize = flydra.kalman.kalmanize:main',
     ],
     'gui_scripts': [
     'flydra_mainbrain = flydra.wxMainBrain:main',
