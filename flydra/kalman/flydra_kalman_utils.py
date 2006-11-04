@@ -1,4 +1,5 @@
 import tables as PT
+import numpy
 
 class KalmanEstimates(PT.IsDescription):
     obj_id     = PT.Int32Col(pos=0,indexed=True)
@@ -22,12 +23,13 @@ class FilteredObservations(PT.IsDescription):
     
 
 def convert_format(current_data):
+    """convert data from format used for Kalman tracker to hypothesis tester"""
     found_data_dict = {}
     for cam_id, stuff_list in current_data.iteritems():
         if not len(stuff_list):
             # no data for this camera, continue
             continue
         this_point,projected_line = stuff_list[0] # algorithm only accepts 1 point per camera
-        if this_point[9]: # only use if found_anything
+        if not numpy.isnan(this_point[0]): # only use if point was found
             found_data_dict[cam_id] = this_point[:9]
     return found_data_dict
