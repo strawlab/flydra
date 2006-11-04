@@ -786,8 +786,7 @@ class CoordReceiver(threading.Thread):
                             
                             found_data_dict = {} # old "good" points will go in here
                             for cam_id, this_point in data_dict.iteritems():
-                                if this_point[9]: # only use if found_anything
-                                    # don't include 'found_anything' variable
+                                if not numpy.isnan(this_point[0]): # only use if point was found
                                     found_data_dict[cam_id] = this_point[:9] 
 
                             if len(found_data_dict) < 2:
