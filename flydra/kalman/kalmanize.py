@@ -4,9 +4,9 @@ import flydra.reconstruct
 import flydra.reconstruct_utils as ru
 import flydra.geom as geom
 import time
-from result_utils import get_results, get_caminfo_dicts
+from flydra.analysis.result_utils import get_results, get_caminfo_dicts
 import tables as PT
-import os, sys
+import os, sys, pprint
 from flydra_tracker import Tracker
 import flydra_kalman_utils
 
@@ -16,7 +16,7 @@ KalmanEstimates = flydra_kalman_utils.KalmanEstimates
 FilteredObservations = flydra_kalman_utils.FilteredObservations
 convert_format = flydra_kalman_utils.convert_format
 
-def process_frame(reconst_orig_units,tracker,frame,frame_data):
+def process_frame(reconst_orig_units,tracker,frame,frame_data,max_err=500.0):
     tracker.gobble_2d_data_and_calculate_a_posteri_estimates(frame,frame_data)
 
     # Now, tracked objects have been updated (and their 2D data points
@@ -34,10 +34,10 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data):
      min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
         reconst_orig_units,
         found_data_dict)
-    max_err=10.0 # mm
     if min_mean_dist<max_err:
         ####################################
         #  Now join found point into Tracker
+        print 'new point, frame',frame
         tracker.join_new_obj( frame, this_observation_mm )
 
 class KalmanSaver:
@@ -91,8 +91,7 @@ def kalmanize(src_filename,dest_filename=None,reconstructor_filename=None):
     if reconstructor_filename is None:
         reconst_orig_units = flydra.reconstruct.Reconstructor(results)
     else:
-        reconstructor_file = PT.openFile(reconstructor_filename,mode='r')
-        reconst_orig_units = flydra.reconstruct.Reconstructor(reconstructor_file)
+        reconst_orig_units = flydra.reconstruct.Reconstructor(reconstructor_filename)
         
     reconstructor_meters = reconst_orig_units.get_scaled(reconst_orig_units.get_scale_factor())
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
@@ -104,7 +103,7 @@ def kalmanize(src_filename,dest_filename=None,reconstructor_filename=None):
         #os.unlink(dest_filename)
     h5saver = KalmanSaver(dest_filename)
 
-    tracker = Tracker(reconstructor_meters)
+    tracker = Tracker(reconstructor_meters,scale_factor=reconst_orig_units.get_scale_factor())
     tracker.set_killed_tracker_callback( h5saver.save_tro )
     
     data2d = results.root.data2d_distorted
@@ -118,7 +117,9 @@ def kalmanize(src_filename,dest_filename=None,reconstructor_filename=None):
     print 'done in %.1f sec'%(time2-time1)
     row_idxs = numpy.argsort(frames_array)
 
-    if 1:
+    print '2D data range: %d<frame<%d'%(frames_array[row_idxs[0]], frames_array[row_idxs[-1]])
+    
+    if 0:
         print '-='*40
         print '-='*40
         print 'using only first 2000 rows'
@@ -126,6 +127,8 @@ def kalmanize(src_filename,dest_filename=None,reconstructor_filename=None):
         print '-='*40
         print '-='*40
 
+    max_err = 500.0
+    print 'max error',max_err
     frame_count = 0
     accum_time = 0.0
     last_frame = None
@@ -147,13 +150,19 @@ def kalmanize(src_filename,dest_filename=None,reconstructor_filename=None):
             # Data for this frame is complete
             if last_frame is not None:
 
-                if 1:
+                if 0:
                     print
                     print 'frame_data'
-                    print frame_data
+                    pprint.pprint(frame_data)
                     print
-                
-                process_frame(reconst_orig_units,tracker,last_frame,frame_data)
+                if 0:
+                    for cam_id,data in frame_data.iteritems():
+                        if len(data)>1:
+                            print '>1'
+                            pprint.pprint(frame_data)
+                            print
+                print 'processing frame',last_frame
+                process_frame(reconst_orig_units,tracker,last_frame,frame_data,max_err=max_err)
                 frame_count += 1
                 if frame_count%1000==0:
                     time2 = time.time()
@@ -178,14 +187,24 @@ def kalmanize(src_filename,dest_filename=None,reconstructor_filename=None):
 
         (x_undistorted,y_undistorted) = reconst_orig_units.undistort(
             cam_id,(x_distorted,y_distorted))
-
+        if 1:
+            (x_undistorted_m,y_undistorted_m) = reconstructor_meters.undistort(
+                cam_id,(x_distorted,y_distorted))
+            if x_undistorted != x_undistorted_m:
+                raise ValueError('scaled reconstructors have different distortion!?')
+            if y_undistorted != y_undistorted_m:
+                raise ValueError('scaled reconstructors have different distortion!?')
+        
         area,slope,eccentricity,p1,p2,p3,p4 = (row['area'],
                                                row['slope'],row['eccentricity'],
                                                row['p1'],row['p2'],row['p3'],row['p4'])
+        if not numpy.isnan(p1):
+            line_found = True
+        else:
+            line_found = False
         pt_undistorted = (x_undistorted,y_undistorted,
                           area,slope,eccentricity,
-                          p1,p2,p3,p4, True)
-
+                          p1,p2,p3,p4, line_found)
 
         pluecker_hz_meters=reconstructor_meters.get_projected_line_from_2d(
             cam_id,(x_undistorted,y_undistorted))
