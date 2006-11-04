@@ -37,7 +37,7 @@ import wxglvideo
 from wxPython.wx import *
 from wxPython.lib.scrolledpanel import wxScrolledPanel
 from wxPython.xrc import *
-
+import wxvalidatedtext as wxvt
 import numpy
 
  # trigger extraction
@@ -58,6 +58,16 @@ def my_loadpanel(parent,panel_name):
         os.chdir(orig_dir)
     return result
 
+def validate_positive_float(val_str):
+    try:
+        val = float(val_str)
+    except ValueError,err:
+        return False
+    if val>0.0:
+        return True
+    else:
+        return False
+    
 class wxMainBrainApp(wxApp):
     def OnInit(self,*args,**kw):
         self.pass_all_keystrokes = False
@@ -890,6 +900,12 @@ class wxMainBrainApp(wxApp):
         EVT_BUTTON(ctrl, ctrl.GetId(),
                    self.OnSaveKalmanCalibrationData)
         
+    def OnHypothesisTestMaxError(self,event):
+        ctrl = XRCCTRL(self.status_panel,
+                       "HYPOTHESIS_TEST_MAX_ERR")
+        val = float(ctrl.GetValue())
+        self.main_brain.set_hypothesis_test_max_error(val)
+        
     def OnSaveKalmanCalibrationData(self,event):
         doit = False
         dlg = wxDirDialog( self.frame, "Calibration save directory",
@@ -1066,6 +1082,16 @@ class wxMainBrainApp(wxApp):
 
     def attach_and_start_main_brain(self,main_brain):
         self.main_brain = main_brain
+
+        if 1:
+            ctrl = XRCCTRL(self.status_panel,
+                           "HYPOTHESIS_TEST_MAX_ERR")
+            ctrl.SetValue(str(self.main_brain.get_hypothesis_test_max_error()))
+            wxvt.Validator(ctrl,
+                           ctrl.GetId(),
+                           self.OnHypothesisTestMaxError,
+                           validate_positive_float)
+            
         self.main_brain.set_new_camera_callback(self.OnNewCamera)
         self.main_brain.set_old_camera_callback(self.OnOldCamera)
         self.main_brain.start_listening()

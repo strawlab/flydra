@@ -59,6 +59,21 @@ class MainBrainKeeper:
 
 main_brain_keeper = MainBrainKeeper() # global to close MainBrain instances upon exit
 
+class LockedValue:
+    def __init__(self,initial_value=None):
+        self.lock = threading.Lock()
+        self._val = initial_value
+        self._q = Queue.Queue()
+    def set(self,value):
+        self._q.put( value )
+    def get(self):
+        try:
+            while 1:
+                self._val = self._q.get_nowait()
+        except Queue.Empty:
+            pass
+        return self._val
+
 best_realtime_data=None
 
 try:
@@ -760,8 +775,8 @@ class CoordReceiver(threading.Thread):
                              min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
                                 self.reconstructor,
                                 found_data_dict)
-                            #if min_mean_dist<flydra.common_variables.ACCEPTABLE_DISTANCE_PIXELS:
-                            if min_mean_dist<500.0: # unreasonably large error accepted
+                            max_error = self.main_brain.get_hypothesis_test_max_error()
+                            if min_mean_dist<max_error:
                                 ####################################
                                 #  Now join found point into Tracker
                                 self.tracker.join_new_obj( corrected_framenumber, this_observation_orig_units )
@@ -1397,12 +1412,20 @@ class MainBrain(object):
         self.accumulate_kalman_calibration_data = threading.Event()
         self.all_kalman_calibration_data = []
 
+        self.hypothesis_test_max_error = LockedValue(500.0)
+
         self.coord_receiver = CoordReceiver(self)
         self.coord_receiver.setDaemon(True)
         self.coord_receiver.start()
 
         self.current_kalman_obj_id = 0
         main_brain_keeper.register( self )
+
+    def get_hypothesis_test_max_error(self):
+        return self.hypothesis_test_max_error.get()
+
+    def set_hypothesis_test_max_error(self,val):
+        self.hypothesis_test_max_error.set(val)
 
     def set_accumulate_kalman_calibration_data(self, value):
         if value:
