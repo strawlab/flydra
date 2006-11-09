@@ -69,10 +69,6 @@ else:
 pt_fmt = '<dddddddddBBddBdddddd'
 small_datafile_fmt = '<dII'
     
-CAM_CONTROLS = {'shutter':cam_iface.SHUTTER,
-                'gain':cam_iface.GAIN,
-                'brightness':cam_iface.BRIGHTNESS}
-
 ALPHA = 1.0/50 # relative importance of each new frame
 BG_FRAME_INTERVAL = 50 # every N frames, add a new BG image to the accumulator
 
@@ -770,19 +766,35 @@ class App:
             globals['use_cmp'] = threading.Event()
             globals['use_cmp'].set()
             
-            # set defaults
-            cam.set_camera_property(cam_iface.SHUTTER,300,0,0)
-            cam.set_camera_property(cam_iface.GAIN,72,0,0)
-            cam.set_camera_property(cam_iface.BRIGHTNESS,783,0,0)
-
             # get settings
             scalar_control_info = {}
-            for name, enum_val in CAM_CONTROLS.items():
-                current_value = cam.get_camera_property(enum_val)[0]
-                tmp = cam.get_camera_property_range(enum_val)
-                min_value = tmp[1]
-                max_value = tmp[2]
-                scalar_control_info[name] = (current_value, min_value, max_value)
+            
+            globals['cam_controls'] = {}
+            CAM_CONTROLS = globals['cam_controls']
+            num_props = cam.get_num_camera_properties()
+            for prop_num in range(num_props):
+                props = cam.get_camera_property_info(prop_num)
+                current_value,auto = cam.get_camera_property( prop_num )
+                # set defaults
+                if props['name'] == 'shutter':
+                    new_value = 300
+                elif props['name'] == 'gain':
+                    new_value = 72
+                elif props['name'] == 'brightness':
+                    new_value = 783
+                else:
+                    print "WARNING: don't know default value for property %s, "\
+                          "leaving as default"%(props['name'],)
+                    new_value = current_value
+                if props['has_manual_mode']:
+                    cam.set_camera_property( prop_num, new_value, 0 )
+                    current_value = new_value
+                    CAM_CONTROLS[props['name']]=prop_num
+                min_value = props['min_value']
+                max_value = props['max_value']
+                scalar_control_info[props['name']] = (current_value,
+                                                      min_value, max_value)
+                    
             diff_threshold = 11
             scalar_control_info['diff_threshold'] = diff_threshold
             clear_threshold = 0.2
@@ -790,9 +802,9 @@ class App:
             scalar_control_info['visible_image_view'] = 'raw'
             
             try:
-                scalar_control_info['trigger_source'] = cam.get_trigger_source()
+                scalar_control_info['trigger_mode'] = cam.get_trigger_mode_number()
             except cam_iface.CamIFaceError:
-                scalar_control_info['trigger_source'] = 0
+                scalar_control_info['trigger_mode'] = 0
             scalar_control_info['roi2'] = globals['use_roi2'].isSet()
             scalar_control_info['cmp'] = globals['use_cmp'].isSet()
             
@@ -860,6 +872,7 @@ class App:
         cam_id = self.all_cam_ids[cam_no]
         DEBUG('handle_commands:',cam_id)
         globals = self.globals[cam_no]
+        CAM_CONTROLS = globals['cam_controls']
 
         for key in cmds.keys():
             DEBUG('  handle_commands: key',key)
@@ -868,11 +881,11 @@ class App:
                     if property_name in CAM_CONTROLS:
                         enum = CAM_CONTROLS[property_name]
                         if type(value) == tuple: # setting whole thing
-                            tmp = cam.get_camera_property_range(enum)
-                            assert value[1] == tmp[1]
-                            assert value[2] == tmp[2]
+                            props = cam.get_camera_property_info(enum)
+                            assert value[1] == props['min_value']
+                            assert value[2] == props['max_value']
                             value = value[0]
-                        cam.set_camera_property(enum,value,0,0)
+                        cam.set_camera_property(enum,value,0)
                     elif property_name == 'roi':
                         #print 'flydra_camera_node.py: ignoring ROI command for now...'
                         grabber.roi = value 
@@ -885,8 +898,8 @@ class App:
                         assert cam.get_max_width() == value
                     elif property_name == 'height':
                         assert cam.get_max_height() == value
-                    elif property_name == 'trigger_source':
-                        cam.set_trigger_source( value )
+                    elif property_name == 'trigger_mode':
+                        cam.set_trigger_mode_number( value )
                     elif property_name == 'roi2':
                         if value: globals['use_roi2'].set()
                         else: globals['use_roi2'].clear()

@@ -272,6 +272,7 @@ class Tracker:
             except OverflowError, err:
                 print 'WARNING: OverflowError in tro.gobble_2d_data_and_calculate_a_posteri_estimate'
                 print 'Killing tracked object and continuing...'
+                print 'XXX Note to Andrew: should really fix this within the Kalman object.'
                 tro.kill_me = True
             if tro.kill_me:
                 kill_idxs.append( idx )

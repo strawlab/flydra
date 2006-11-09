@@ -447,7 +447,7 @@ class wxMainBrainApp(wxApp):
         
         ext_trig = XRCCTRL(previewPerCamPanel,
                            "EXT_TRIG")
-        val = scalar_control_info['trigger_source']
+        val = scalar_control_info['trigger_mode']
         ext_trig.SetValue( val )
         EVT_CHECKBOX(ext_trig, ext_trig.GetId(), self.OnExtTrig)
         
@@ -547,7 +547,7 @@ class wxMainBrainApp(wxApp):
         elif param == 'diff_threshold':
             threshold_diff_value = XRCCTRL(previewPerCamPanel,"threshold_value")
             threshold_diff_value.SetValue( str( value ) )
-        elif param == 'trigger_source':
+        elif param == 'trigger_mode':
             ext_trig = XRCCTRL(previewPerCamPanel,
                                "EXT_TRIG")
             ext_trig.SetValue( value )
@@ -1379,7 +1379,7 @@ class wxMainBrainApp(wxApp):
     def OnExtTrig(self, event):
         widget = event.GetEventObject()
         cam_id = self._get_cam_id_for_button(widget)
-        self.main_brain.send_set_camera_property( cam_id, 'trigger_source', widget.IsChecked() )
+        self.main_brain.send_set_camera_property( cam_id, 'trigger_mode', widget.IsChecked() )
 
     def OnROI2(self, event):
         widget = event.GetEventObject()
