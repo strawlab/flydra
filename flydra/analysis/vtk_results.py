@@ -326,6 +326,15 @@ def show_longline(renderers,verts,
     if len(verts)<2:
         raise ValueError("line must have 2 or more vertices")
 
+    if 1:
+        vd = verts[1:]-verts[:-1]
+        vd = numpy.sum((vd**2),axis=1)
+        goodcond = (vd != 0.0)
+        vd_nonzero = numpy.nonzero(goodcond)[0]
+        if (len(vd_nonzero)+1) < len(verts):
+            print 'warning: dropped vertex because it was coincident with another in vtk_results.show_longline'
+            verts = verts[vd_nonzero]
+
     actors = []
     
     line_points = vtk.vtkPoints()
