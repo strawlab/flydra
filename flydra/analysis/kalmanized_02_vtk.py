@@ -15,7 +15,7 @@ plot_scale = 1000.0 # plot in mm
 def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
     kresults = PT.openFile(filename,mode="r")
     
-    renWin, renderers = vtk_results.init_vtk()#stereo=True)
+    renWin, renderers = vtk_results.init_vtk(stereo=True)
     if 1:
         camera = renderers[0].GetActiveCamera()
 
@@ -28,6 +28,10 @@ def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
             camera.SetClippingRange (2689.7556000877539, 5464.887997721311)
             camera.SetParallelScale(319.400653668)
 
+    DEBUG1=False
+    #DEBUG1=True
+    if DEBUG1:
+        neg_obj_ids = []
             
     obj_ids = kresults.root.kalman_estimates.read(field='obj_id',flavor='numpy')
     for obj_id in range( obj_ids.max()+1 ):
@@ -39,8 +43,14 @@ def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
 ##            continue
 ##        if not (1600 <= obj_id < 3200):
 ##            continue
+
+        observation_frames = kresults.root.kalman_observations.getWhereList(obj_id=obj_id,flavor='numpy')
+        max_observation_frame = observation_frames.max()
             
         row_idxs = numpy.nonzero( obj_ids == obj_id )[0]
+        estimate_frames = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='x',flavor='numpy')
+        valid_condition = estimate_frames <= max_observation_frame
+        row_idxs = row_idxs[valid_condition]
         this_len = len(row_idxs)
         if this_len < 10:
             print 'obj_id %d: %d frames, skipping'%(obj_id,this_len,)
@@ -49,15 +59,80 @@ def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
         xs = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='x',flavor='numpy')
         ys = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='y',flavor='numpy')
         zs = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='z',flavor='numpy')
-
+        
         verts = numpy.vstack((xs,ys,zs)).T * plot_scale
 
-        vtk_results.show_longline(renderers,verts,
-                                  radius=0.001*plot_scale,
-                                  nsides=3,opacity=0.2,
-                                  color=colors.blue)
+        
+
+        if DEBUG1:
+            if obj_id>320:
+                break
+            cond = ((xs < 0) & (zs < 0))
+            nz = numpy.nonzero(cond)[0]
+            if len(nz)>1:
+                frames = kresults.root.kalman_estimates.readCoordinates(row_idxs,
+                                                                        field='frame',
+                                                                        flavor='numpy')
+                neg_obj_ids.append(obj_id)
+                vd = verts[1:]-verts[:-1]
+                vd = numpy.sum((vd**2),axis=1)
+                min_vd_idx = numpy.argmin(vd)
+                if vd[min_vd_idx] == 0.0:
+                    
+                    print 'obj_id',obj_id
+                    for row in kresults.root.kalman_observations.where(
+                        kresults.root.kalman_observations.cols.obj_id==obj_id):
+                        print 'observations row:',row
+                    print
+                    for row in kresults.root.kalman_estimates.where(
+                        kresults.root.kalman_estimates.cols.obj_id==obj_id):
+                        print 'estimates row:',row['frame'],row['x'],row['y'],row['z']
+                        
+                    print 'frames',frames[0],frames[-1]
+                    frame0 = frames[min_vd_idx]
+                    frame1 = frames[min_vd_idx+1]
+                    print '  index',min_vd_idx
+                    print 'vert, frame0 (scaled)',verts[min_vd_idx], frame0
+                    print 'vert, frame1 (scaled)',verts[min_vd_idx+1], frame1
+                    
+                    for frame in [frame0,frame1]:
+                        frame = int(frame)
+                        for row in kresults.root.kalman_estimates.where(
+                            kresults.root.kalman_estimates.cols.frame==frame):
+                            if row['obj_id']==obj_id:
+                                print '  kalman_estimates row:',row
+                        for row in kresults.root.kalman_observations.where(
+                            kresults.root.kalman_observations.cols.frame==frame):
+                            if row['obj_id']==obj_id:
+                                print '  kalman_observations row:',row
+                        if 1:
+                            for row in kresults.root.data2d_distorted.where(
+                                kresults.root.data2d_distorted.cols.frame==frame):
+                                        print '  ',row['camn'],row['frame'],row['timestamp'],row['x'],row['y']
+                        print
+                    
+                    #print
+                #print verts
+                #print frames
+                print
+
+
+                vtk_results.show_longline(renderers,verts,
+                                          radius=0.001*plot_scale,
+                                          nsides=3,opacity=0.2,
+                                          color=colors.blue)
+
+        if not DEBUG1:
+            if len(verts):
+                vtk_results.show_longline(renderers,verts,
+                                          radius=0.001*plot_scale,
+                                          nsides=3,opacity=0.2,
+                                          color=colors.blue)
 
     kresults.close()
+    
+    if DEBUG1:
+        print 'neg_obj_ids = ',repr(neg_obj_ids)
 
     if 1:
         bbox_points = vtk.vtkPoints()
