@@ -335,7 +335,7 @@ class CoordReceiver(threading.Thread):
         #    len(tracked_object.xhats),)
         if self.main_brain.is_saving_data():
             self.main_brain.queue_data3d_kalman_estimates.put(
-                (tracked_object.frames, tracked_object.xhats,
+                (tracked_object.frames, tracked_object.xhats, tracked_object.Ps,
                  tracked_object.observations_frames, tracked_object.observations_data) )
             
         if len(tracked_object.saved_calibration_data):
@@ -1917,7 +1917,7 @@ class MainBrain(object):
             if self.h5data3d_kalman_estimates is not None:
 ##                print 'saving kalman data (%d objects)'%(
 ##                    len(list_of_3d_data),)
-                for (tro_frames, tro_xhats, obs_frames, obs_data) in list_of_3d_data:
+                for (tro_frames, tro_xhats, tro_Ps, obs_frames, obs_data) in list_of_3d_data:
 
                     if len(obs_frames)<10:
                         # only save data with at least 10 observations
@@ -1941,10 +1941,15 @@ class MainBrain(object):
                     # save xhat info (kalman estimates)
                     frames = numpy.array(tro_frames, dtype=numpy.int32)
                     xhat_data = numpy.array(tro_xhats, dtype=numpy.float32)
+                    P_data_full = numpy.array(tro_Ps, dtype=numpy.float32)
+                    P_data_save = P_data_full[:,numpy.arange(9),numpy.arange(9)] # get diagonal
+                    
                     obj_id_array = obj_id * numpy.ones(frames.shape, dtype=numpy.int32)
                     list_of_xhats = [xhat_data[:,i] for i in range(xhat_data.shape[1])]
-                    xhats_recarray = numpy.rec.fromarrays([obj_id_array,frames]+list_of_xhats,
-                                                          names = h5_xhat_names)
+                    list_of_Ps = [P_data_save[:,i] for i in range(P_data_save.shape[1])]
+                    xhats_recarray = numpy.rec.fromarrays(
+                        [obj_id_array,frames]+list_of_xhats+list_of_Ps,
+                        names = h5_xhat_names)
                     self.h5data3d_kalman_estimates.append( xhats_recarray )
                     self.h5data3d_kalman_estimates.flush()
                     changed = True

@@ -13,6 +13,16 @@ class KalmanEstimates(PT.IsDescription):
     xaccel     = PT.Float32Col(pos=8)
     yaccel     = PT.Float32Col(pos=9)
     zaccel     = PT.Float32Col(pos=10)
+    # save diagonal of P matrix
+    P00        = PT.Float32Col(pos=11)
+    P11        = PT.Float32Col(pos=11)
+    P22        = PT.Float32Col(pos=11)
+    P33        = PT.Float32Col(pos=11)
+    P44        = PT.Float32Col(pos=11)
+    P55        = PT.Float32Col(pos=11)
+    P66        = PT.Float32Col(pos=11)
+    P77        = PT.Float32Col(pos=11)
+    P88        = PT.Float32Col(pos=11)
 
 class FilteredObservations(PT.IsDescription):
     obj_id     = PT.Int32Col(pos=0,indexed=True)

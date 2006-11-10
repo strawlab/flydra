@@ -77,9 +77,9 @@ class TrackedObject:
                                              R,
                                              initial_x,
                                              P_k1)
-        self.frames = []
-        self.xhats = []
-        self.Ps = []
+        self.frames = [frame]
+        self.xhats = [initial_x]
+        self.Ps = [P_k1]
         
         self.observations_frames = [frame]
         self.observations_data = [first_observation_meters]
@@ -94,6 +94,20 @@ class TrackedObject:
         
         # Don't run kalman filter with initial data, as this would
         # cause error estimates to drop too low.
+    def kill(self):
+        # called when killed
+
+        # find last data
+        last_observation_frame = self.observations_frames[-1]
+
+        # eliminate estimates past last observation
+        while 1:
+            if self.frames[-1] > last_observation_frame:
+                self.frames.pop()
+                self.xhats.pop()
+                self.Ps.pop()
+            else:
+                break
         
     def gobble_2d_data_and_calculate_a_posteri_estimate(self,frame,data_dict):
         # Step 1. Update Kalman state to a priori estimates for this frame.
@@ -115,6 +129,8 @@ class TrackedObject:
                     self.frames.append( self.current_frameno + i + 1 )
                     self.xhats.append( xhat )
                     self.Ps.append( P )
+        else:
+            raise RuntimeError("why did we get here?")
 
         if not self.kill_me:
             self.current_frameno = frame
@@ -281,6 +297,7 @@ class Tracker:
         kill_idxs.reverse()
         for kill_idx in kill_idxs:
             tro = self.live_tracked_objects.pop( kill_idx )
+            tro.kill()
             if len(tro.observations_frames)>1:
                 # require more than single observation to save
                 self.dead_tracked_objects.append( tro )
@@ -300,8 +317,10 @@ class Tracker:
                             )
         self.live_tracked_objects.append(tro)
     def kill_all_trackers(self):
-        self.dead_tracked_objects.extend( self.live_tracked_objects )
-        self.live_tracked_objects = []
+        while len(self.live_tracked_objects):
+            tro = self.live_tracked_objects.pop()
+            tro.kill()
+            self.dead_tracked_objects.append( tro )
         self._flush_dead_queue()
     def set_killed_tracker_callback(self,callback):
         self.kill_tracker_callbacks.append( callback )

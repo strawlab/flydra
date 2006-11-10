@@ -76,22 +76,36 @@ class KalmanSaver:
         
         frames = numpy.array(tro.frames, dtype=numpy.int32)
         xhat_data = numpy.array(tro.xhats, dtype=numpy.float32)
+        
+        P_data_full = numpy.array(tro.Ps, dtype=numpy.float32)
+        P_data_save = P_data_full[:,numpy.arange(9),numpy.arange(9)] # get diagonal
+        
         obj_id_array = self.obj_id * numpy.ones(frames.shape, dtype=numpy.int32)
         #print 'xhat_data.shape',xhat_data.shape
         list_of_xhats = [xhat_data[:,i] for i in range(xhat_data.shape[1])]
-        xhats_recarray = numpy.rec.fromarrays([obj_id_array,frames]+list_of_xhats,
-                                            names = self.h5_xhat_names)
+        list_of_Ps = [P_data_save[:,i] for i in range(P_data_save.shape[1])]
+        xhats_recarray = numpy.rec.fromarrays([obj_id_array,frames]+list_of_xhats+list_of_Ps,
+                                              names = self.h5_xhat_names)
         
         self.h5_xhat.append(xhats_recarray)
         self.h5_xhat.flush()
 
-def kalmanize(src_filename,dest_filename=None,reconstructor_filename=None):
+def kalmanize(src_filename,
+              dest_filename=None,
+              reconstructor_filename=None,
+              start_frame=None,
+              stop_frame=None,
+              ):
     results = get_results(src_filename)
 
     if reconstructor_filename is None:
         reconst_orig_units = flydra.reconstruct.Reconstructor(results)
     else:
-        reconst_orig_units = flydra.reconstruct.Reconstructor(reconstructor_filename)
+        if reconstructor_filename.endswith('h5'):
+            fd = PT.openFile(reconstructor_filename,mode='r')
+            reconst_orig_units = flydra.reconstruct.Reconstructor(fd)
+        else:
+            reconst_orig_units = flydra.reconstruct.Reconstructor(reconstructor_filename)
         
     reconstructor_meters = reconst_orig_units.get_scaled(reconst_orig_units.get_scale_factor())
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
@@ -116,7 +130,7 @@ def kalmanize(src_filename,dest_filename=None,reconstructor_filename=None):
     time2 = time.time()
     print 'done in %.1f sec'%(time2-time1)
     row_idxs = numpy.argsort(frames_array)
-
+    
     print '2D data range: %d<frame<%d'%(frames_array[row_idxs[0]], frames_array[row_idxs[-1]])
     
     if 0:
@@ -135,11 +149,19 @@ def kalmanize(src_filename,dest_filename=None,reconstructor_filename=None):
     frame_data = {}
     time1 = time.time()
     for row_idx in row_idxs:
+        new_frame = frames_array[row_idx]
+        if start_frame is not None:
+            if new_frame < start_frame:
+                continue
+        if stop_frame is not None:
+            if new_frame > stop_frame:
+                continue
         time3 = time.time()
         row = data2d[row_idx]
         time4 = time.time()
         accum_time += (time4-time3)
-        new_frame = row['frame']
+        new_frame_test_cmp = row['frame']
+        assert new_frame_test_cmp==new_frame
         if last_frame != new_frame:
             if new_frame < last_frame:
                 print 'new_frame',new_frame
@@ -223,7 +245,20 @@ def main():
         reconstructor_filename = sys.argv[2]
     else:
         reconstructor_filename = None
-    kalmanize(src_filename,reconstructor_filename=reconstructor_filename)
+    if len(sys.argv)>3:
+        start_frame = int(sys.argv[3])
+    else:
+        start_frame = None
+        
+    if len(sys.argv)>4:
+        stop_frame = int(sys.argv[4])
+    else:
+        stop_frame = None
+                          
+    kalmanize(src_filename,
+              reconstructor_filename=reconstructor_filename,
+              start_frame=start_frame,
+              stop_frame=stop_frame)
 
 if __name__=='__main__':
     main()
