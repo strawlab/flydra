@@ -2981,7 +2981,7 @@ def print_clock_diffs(results):
         for row in table.where( table.cols.remote_hostname == hostname ):
             diff = row['stop_timestamp'] - row['remote_timestamp']
             dur = row['stop_timestamp'] - row['start_timestamp']
-            print '  %.1f msec (within %.1f msec)'%(diff*1e3,dur*1e3)
+            print '  %.1f msec (within %.2f msec)'%(diff*1e3,dur*1e3)
         print
 
 def add_backgrounds_to_results(results,cam_id,bg_fmf_filename,frame=-1):
