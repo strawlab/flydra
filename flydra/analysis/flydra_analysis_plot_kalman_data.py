@@ -10,6 +10,7 @@ import vtk_results
 import vtk.util.colors as colors
 from vtkpython import vtk
 import sys
+from optparse import OptionParser
 
 plot_scale = 1000.0 # plot in mm
 
@@ -174,13 +175,35 @@ def show_vtk(filename,max_err=10.0,obj_start=None,obj_end=None):
     vtk_results.print_cam_props(camera)
 
 def main():
-    obj_start, obj_end = None, None
-    filename = sys.argv[1]
-    if len(sys.argv)>2:
-        obj_start = int(sys.argv[2])
-        if len(sys.argv)>3:
-            obj_end = int(sys.argv[3])
-    show_vtk(filename=filename,obj_start=obj_start,obj_end=obj_end)
+    usage = '%prog FILE [options]'
+    
+    parser = OptionParser(usage)
+    
+    parser.add_option("-f", "--file", dest="filename", type='string',
+                      help="hdf5 file with data to display FILE",
+                      metavar="FILE")
+
+    parser.add_option("--start", type="int",
+                      help="first object ID to plot",
+                      metavar="START")
+        
+    parser.add_option("--stop", type="int",
+                      help="last object ID to plot",
+                      metavar="STOP")
+    
+    (options, args) = parser.parse_args()
+
+    if options.filename is not None:
+        args.append(options.filename)
+        
+    if len(args)>1:
+        print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
+        parser.print_help()
+        return
+    
+    h5_filename=args[0]
+
+    show_vtk(filename=h5_filename,obj_start=options.start,obj_end=options.stop)
     
 if __name__=='__main__':
     main()
