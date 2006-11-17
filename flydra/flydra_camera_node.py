@@ -366,7 +366,8 @@ class GrabClass(object):
                             # set to full ROI and take full image if necessary
                             raise NotImplementedError("background collection while using hardware ROI not implemented")
                         if 1:
-                            mybench = 1
+                            #mybench = BENCHMARK
+                            mybench = 0
                             res = realtime_image_analysis.do_bg_maint( running_mean_im,
                                                                        hw_roi_frame,
                                                                        max_frame_size,
