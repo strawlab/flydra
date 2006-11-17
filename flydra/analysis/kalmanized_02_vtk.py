@@ -4,6 +4,7 @@ from numpy import nan, pi
 import tables as PT
 import pytz # from http://pytz.sourceforge.net/
 import datetime
+import sets
 
 import vtk_results
 import vtk.util.colors as colors
@@ -12,10 +13,10 @@ import sys
 
 plot_scale = 1000.0 # plot in mm
 
-def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
+def show_vtk(filename,max_err=10.0,obj_start=None,obj_end=None):
     kresults = PT.openFile(filename,mode="r")
     
-    renWin, renderers = vtk_results.init_vtk(stereo=True)
+    renWin, renderers = vtk_results.init_vtk()#stereo=True)
     if 1:
         camera = renderers[0].GetActiveCamera()
 
@@ -34,19 +35,29 @@ def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
         neg_obj_ids = []
             
     obj_ids = kresults.root.kalman_estimates.read(field='obj_id',flavor='numpy')
-    for obj_id in range( obj_ids.max()+1 ):
-##        if not (0 <= obj_id < 400):
-##            continue
-##        if not (400 <= obj_id < 850):
-##            continue
-##        if not (850 <= obj_id < 1600):
-##            continue
-##        if not (1600 <= obj_id < 3200):
-##            continue
+    use_obj_ids = obj_ids
+    if obj_start is not None:
+        use_obj_ids = use_obj_ids[use_obj_ids >= obj_start]
+    if obj_end is not None:
+        use_obj_ids = use_obj_ids[use_obj_ids <= obj_end]
+    # find unique obj_ids:
+    use_obj_ids = numpy.array(list(sets.Set([int(obj_id) for obj_id in use_obj_ids])))
+    for obj_id in use_obj_ids:
+        
+        if PT.__version__ <= '1.3.3':
+            obj_id_find=int(obj_id)
+        else:
+            obj_id_find=obj_id
 
-        observation_frames = kresults.root.kalman_observations.getWhereList(obj_id=obj_id,flavor='numpy')
-        max_observation_frame = observation_frames.max()
-            
+        observation_frame_idxs = kresults.root.kalman_observations.getWhereList(
+            kresults.root.kalman_observations.cols.obj_id==obj_id_find,
+            flavor='numpy')
+        observation_frames = kresults.root.kalman_observations.readCoordinates(
+            observation_frame_idxs,
+            field='frame',
+            flavor='numpy')
+        max_observation_frame=observation_frames.max()
+
         row_idxs = numpy.nonzero( obj_ids == obj_id )[0]
         estimate_frames = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='x',flavor='numpy')
         valid_condition = estimate_frames <= max_observation_frame
@@ -161,13 +172,15 @@ def show_vtk(filename,max_err=10.0,fstart=None,fend=None):
     
     camera = renderers[0].GetActiveCamera()
     vtk_results.print_cam_props(camera)
+
+def main():
+    obj_start, obj_end = None, None
+    filename = sys.argv[1]
+    if len(sys.argv)>2:
+        obj_start = int(sys.argv[2])
+        if len(sys.argv)>3:
+            obj_end = int(sys.argv[3])
+    show_vtk(filename=filename,obj_start=obj_start,obj_end=obj_end)
     
 if __name__=='__main__':
-    if 0:
-        #filename = 'DATA20060914_181401.tracked_fixed_accel.h5'
-        filename = 'DATA20060915_173304.tracked_fixed_accel.h5'
-        fstart, fend = None, None
-    elif 1:
-        fstart, fend = None, None
-        filename = sys.argv[1]
-    show_vtk(filename=filename,fstart=fstart,fend=fend)
+    main()
