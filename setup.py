@@ -26,6 +26,7 @@ setup(name='flydra',
     'flydra_bench = flydra.flydra_bench:main',
     'flydra_kalmanize = flydra.kalman.kalmanize:main',
     'flydra_analysis_plot_clock_drift = flydra.analysis.flydra_analysis_plot_clock_drift:main',
+    'flydra_analysis_plot_kalman_data = flydra.analysis.flydra_analysis_plot_kalman_data:main',
     ],
     'gui_scripts': [
     'flydra_mainbrain = flydra.wxMainBrain:main',
