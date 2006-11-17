@@ -25,6 +25,7 @@ setup(name='flydra',
     'flydra_camera_node = flydra.flydra_camera_node:main',
     'flydra_bench = flydra.flydra_bench:main',
     'flydra_kalmanize = flydra.kalman.kalmanize:main',
+    'flydra_analysis_plot_clock_drift = flydra.analysis.flydra_analysis_plot_clock_drift:main',
     ],
     'gui_scripts': [
     'flydra_mainbrain = flydra.wxMainBrain:main',
