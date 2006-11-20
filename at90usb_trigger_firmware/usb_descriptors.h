@@ -40,7 +40,7 @@
 #define DEVICE_PROTOCOL       0      // each configuration has its own protocol
 #define EP_CONTROL_LENGTH     64
 #define VENDOR_ID             0x1781   // mecanique
-#define PRODUCT_ID            0x0BAE
+#define PRODUCT_ID            0x0BAF
 #define RELEASE_NUMBER        0x1000
 #define MAN_INDEX             0x01
 #define PROD_INDEX            0x02	
@@ -113,17 +113,22 @@
 , Usb_unicode('n') \
 }
 
-#define USB_PN_LENGTH         20
+#define USB_PN_LENGTH         22
 #define USB_PRODUCT_NAME \
-{ Usb_unicode('L') \
- ,Usb_unicode('a') \
- ,Usb_unicode('s') \
- ,Usb_unicode('e') \
+{ Usb_unicode('F') \
+ ,Usb_unicode('l') \
+ ,Usb_unicode('y') \
+ ,Usb_unicode('d') \
  ,Usb_unicode('r') \
+ ,Usb_unicode('a') \
+ ,Usb_unicode(' ') \
  ,Usb_unicode('T') \
  ,Usb_unicode('r') \
- ,Usb_unicode('a') \
- ,Usb_unicode('x') \
+ ,Usb_unicode('i') \
+ ,Usb_unicode('g') \
+ ,Usb_unicode('g') \
+ ,Usb_unicode('e') \
+ ,Usb_unicode('r') \
  ,Usb_unicode(' ') \
  ,Usb_unicode('C') \
  ,Usb_unicode('o') \
@@ -132,9 +137,6 @@
  ,Usb_unicode('r') \
  ,Usb_unicode('o') \
  ,Usb_unicode('l') \
- ,Usb_unicode('l') \
- ,Usb_unicode('e') \
- ,Usb_unicode('r') \
 }
 
 #define USB_SN_LENGTH         0x05
