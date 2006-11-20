@@ -71,7 +71,7 @@ FORMAT = ihex
 
 
 # Target file name (without extension).
-TARGET = servo-controller
+TARGET = trigger_control
 
 
 # Object files directory
@@ -79,7 +79,7 @@ OBJDIR = obj
 
 
 # List C source files here. (C dependencies are automatically generated.)
-SRC = servo-controller.c scheduler.c wdt_drv.c hid_task.c usb_descriptors.c usb_task.c usb_drv.c usb_standard_request.c usb_specific_request.c adc_drv.c power_drv.c stk_525.c
+SRC = trigger_control.c scheduler.c wdt_drv.c hid_task.c usb_descriptors.c usb_task.c usb_drv.c usb_standard_request.c usb_specific_request.c adc_drv.c power_drv.c stk_525.c
 
 
 # List C++ source files here. (C dependencies are automatically generated.)
