@@ -129,11 +129,11 @@ def get_results(filename,mode='r+'):
             frame_col.createIndex()
             print 'done'
 
-        timestamp_col = h5file.root.data2d.cols.timestamp
-        if timestamp_col.index is None:
-            print 'creating index on data2d.cols.timestamp ...'
-            timestamp_col.createIndex()
-            print 'done'
+##        timestamp_col = h5file.root.data2d.cols.timestamp
+##        if timestamp_col.index is None:
+##            print 'creating index on data2d.cols.timestamp ...'
+##            timestamp_col.createIndex()
+##            print 'done'
 
     if hasattr(h5file.root,'data2d_distorted'):
         frame_col = h5file.root.data2d_distorted.cols.frame
@@ -142,11 +142,11 @@ def get_results(filename,mode='r+'):
             frame_col.createIndex()
             print 'done'
 
-        timestamp_col = h5file.root.data2d_distorted.cols.timestamp
-        if timestamp_col.index is None:
-            print 'creating index on data2d_distorted.cols.timestamp ...'
-            timestamp_col.createIndex()
-            print 'done'
+##        timestamp_col = h5file.root.data2d_distorted.cols.timestamp
+##        if timestamp_col.index is None:
+##            print 'creating index on data2d_distorted.cols.timestamp ...'
+##            timestamp_col.createIndex()
+##            print 'done'
 
         if not hasattr(h5file.root,'data2d_camera_summary'):
             print 'creating data2d camera summary ...'

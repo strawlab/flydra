@@ -134,7 +134,7 @@ def my_subplot(n):
 def dougs_subplot(n,n_rows=2,n_cols=3):
     # 2 rows and n_cols
     
-    rrow = n / n_cols # reverse row
+    rrow = n // n_cols # reverse row
     row = n_rows-rrow-1 # row number
     col = n % n_cols
     

@@ -3,8 +3,15 @@ import adskalman as kalman
 import params
 import flydra.geom as geom
 import math
+import flydra.data_descriptions
 
 __all__ = ['TrackedObject','Tracker']
+
+PT_TUPLE_IDX_X = flydra.data_descriptions.PT_TUPLE_IDX_X
+PT_TUPLE_IDX_Y = flydra.data_descriptions.PT_TUPLE_IDX_Y
+PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
+
+xxxdebug = True
 
 class FakeThreadingEvent:
     def isSet(self):
@@ -19,9 +26,11 @@ class TrackedObject:
     """
     
     def __init__(self,
-                 reconstructor_meters,
-                 frame,
-                 first_observation_orig_units,
+                 reconstructor_meters, # the Reconstructor instance
+                 frame, # frame number of first data
+                 first_observation_orig_units, # first data
+                 first_observation_camns,
+                 first_observation_idxs,
                  scale_factor=None,
                  n_sigma_accept = 3.0, # default: arbitrarily set to 3
                  max_variance_dist_meters = 0.010, # default: allow error to grow to 10 mm before dropping
@@ -84,6 +93,14 @@ class TrackedObject:
         self.observations_frames = [frame]
         self.observations_data = [first_observation_meters]
 
+        first_observations_2d_pre = [[camn,idx] for camn,idx in zip(first_observation_camns,first_observation_idxs)]
+        first_observations_2d = []
+        for obs in first_observations_2d_pre:
+            first_observations_2d.extend( obs )
+        first_observations_2d = numpy.array(first_observations_2d,dtype=numpy.uint16) # if saved as VLArray, should match with atom type
+        
+        self.observations_2d = [first_observations_2d]
+
         if save_calibration_data is None:
             self.save_calibration_data = FakeThreadingEvent()
         else:
@@ -109,7 +126,7 @@ class TrackedObject:
             else:
                 break
         
-    def gobble_2d_data_and_calculate_a_posteri_estimate(self,frame,data_dict):
+    def gobble_2d_data_and_calculate_a_posteri_estimate(self,frame,data_dict,camn2cam_id):
         # Step 1. Update Kalman state to a priori estimates for this frame.
         # Step 1.A. Update Kalman state for each skipped frame.
         if self.current_frameno is not None:
@@ -132,14 +149,34 @@ class TrackedObject:
         else:
             raise RuntimeError("why did we get here?")
 
+        thisdebug = False
+        if xxxdebug:
+            if 13610 <= frame <= 13612:
+                thisdebug = True
+                
         if not self.kill_me:
             self.current_frameno = frame
             # Step 1.B. Update Kalman to provide a priori estimates for this frame
             xhatminus, Pminus = self.my_kalman.step1__calculate_a_priori()
 
             # Step 2. Filter incoming 2D data to use informative points
-            observation_meters = self._filter_data(xhatminus, Pminus, data_dict)
+            if xxxdebug:
+                if 13610 <= frame <= 13612:
+                    print 'frame',frame,'-='*20
+                    print '%d frames so far'%(len(self.observations_frames),)
+                    print self
+                    print 'frames_skipped',frame-self.current_frameno-1
+                    print
+            observation_meters, used_camns_and_idxs = self._filter_data(xhatminus, Pminus, data_dict, camn2cam_id,
+                                                                        debug=thisdebug)
 
+            if xxxdebug:
+                if 13610 <= frame <= 13612:
+                    print 'observation_meters',observation_meters
+                    print 'used_camns_and_idxs',used_camns_and_idxs
+                    print
+                    print '-='*20
+                    print
             # Step 3. Incorporate observation to estimate a posteri
             try:
                 xhat, P = self.my_kalman.step2__calculate_a_posteri(xhatminus, Pminus,
@@ -165,8 +202,9 @@ class TrackedObject:
             if observation_meters is not None:
                 self.observations_frames.append( frame )
                 self.observations_data.append( observation_meters )
+                self.observations_2d.append( used_camns_and_idxs )
         
-    def _filter_data(self,xhatminus, Pminus, data_dict):
+    def _filter_data(self, xhatminus, Pminus, data_dict, camn2cam_id, debug=False):
         """given state estimate, select useful incoming data and make new observation"""
         # 1. For each camera, predict 2D image location and error distance
         
@@ -176,19 +214,24 @@ class TrackedObject:
         variance_estimate_scalar = numpy.sqrt(numpy.sum(variance_estimate)) # put in distance units (meters)
         neg_predicted_3d = -geom.ThreeTuple( a_priori_observation_prediction )
         cam_ids_and_points2d = []
-        for cam_id in self.reconstructor_meters.cam_ids:
-            if cam_id not in data_dict:
-                # no data
-                continue
-            
-            predicted_2d = self.reconstructor_meters.find2d(cam_id,a_priori_observation_prediction)
 
+        used_camns_and_idxs = []
+        if debug:
+            print '_filter_data():'
+            print '  variance_estimate_scalar',variance_estimate_scalar
+        for camn in data_dict:
+            cam_id = camn2cam_id[camn]
+
+            predicted_2d = self.reconstructor_meters.find2d(cam_id,a_priori_observation_prediction)
+            if debug:
+                print 'camn',camn,'cam_id',cam_id
+                print 'predicted_2d',predicted_2d
             # For large numbers of 2d points in data_dict, probably
             # faster to compute 2d image of error ellipsoid and see if
             # data_dict points fall inside that. For now, however,
             # compute distance individually
 
-            candidate_point_list = data_dict[cam_id]
+            candidate_point_list = data_dict[camn]
             found_idxs = []
             
             # Use the first acceptable 2d point match as it's probably
@@ -201,16 +244,24 @@ class TrackedObject:
                 # find closest distance between projected_line and predicted position for each 2d point
                 dist2=projected_line_meters.translate(neg_predicted_3d).dist2()
                 dist = numpy.sqrt(dist2)
+                
+                if debug:
+                    print '->', dist, pt_undistorted[:2]
+                
                 if dist<(self.n_sigma_accept*variance_estimate_scalar):
                     # accept point
                     match_dist_and_idx.append( (dist,idx) )
                     found_idxs.append( idx )
             match_dist_and_idx.sort() # sort by distance
             if len(match_dist_and_idx):
-                closest_idx = match_dist_and_idx[0][1]
-                pt_undistorted = candidate_point_list[closest_idx][0]
-                cam_ids_and_points2d.append( (cam_id,(pt_undistorted[0],
-                                                      pt_undistorted[1])))
+                closest_idx = match_dist_and_idx[0][1] # take idx of closest point
+                pt_undistorted, projected_line_meters = candidate_point_list[closest_idx]
+                cam_ids_and_points2d.append( (cam_id,(pt_undistorted[PT_TUPLE_IDX_X],
+                                                      pt_undistorted[PT_TUPLE_IDX_Y])))
+                frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
+                used_camns_and_idxs.extend( [camn, frame_pt_idx] )
+                if debug:
+                    print 'best match idx %d (%s)'%(frame_pt_idx, str(pt_undistorted[:2]))
             found_idxs.reverse() # keep indexes OK as we delete them
             for idx in found_idxs:
                 del candidate_point_list[idx]
@@ -222,7 +273,8 @@ class TrackedObject:
                     self.saved_calibration_data.append( cam_ids_and_points2d )
         else:
             observation_meters = None
-        return observation_meters
+        used_camns_and_idxs = numpy.array( used_camns_and_idxs, dtype=numpy.uint8 ) # convert to numpy
+        return observation_meters, used_camns_and_idxs
 
 class Tracker:
     """
@@ -278,13 +330,13 @@ class Tracker:
         self.R = R
         self.save_calibration_data=save_calibration_data
             
-    def gobble_2d_data_and_calculate_a_posteri_estimates(self,frame,data_dict):
+    def gobble_2d_data_and_calculate_a_posteri_estimates(self,frame,data_dict,camn2cam_id):
         # Allow earlier tracked objects to be greedy and take all the
         # data they want.
         kill_idxs = []
         for idx,tro in enumerate(self.live_tracked_objects):
             try:
-                tro.gobble_2d_data_and_calculate_a_posteri_estimate(frame,data_dict)
+                tro.gobble_2d_data_and_calculate_a_posteri_estimate(frame,data_dict,camn2cam_id)
             except OverflowError, err:
                 print 'WARNING: OverflowError in tro.gobble_2d_data_and_calculate_a_posteri_estimate'
                 print 'Killing tracked object and continuing...'
@@ -302,10 +354,16 @@ class Tracker:
                 # require more than single observation to save
                 self.dead_tracked_objects.append( tro )
         self._flush_dead_queue()
-    def join_new_obj(self,frame,first_observation_orig_units):
+    def join_new_obj(self,
+                     frame,
+                     first_observation_orig_units,
+                     first_observation_camns,
+                     first_observation_idxs):
         tro = TrackedObject(self.reconstructor_meters,
                             frame,
                             first_observation_orig_units,
+                            first_observation_camns,
+                            first_observation_idxs,                            
                             scale_factor=self.scale_factor,
                             n_sigma_accept = self.n_sigma_accept,
                             max_variance_dist_meters = self.max_variance_dist_meters,

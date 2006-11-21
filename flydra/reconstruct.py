@@ -427,7 +427,8 @@ class Reconstructor:
                 K = nx.array(results.root.calibration.intrinsic_linear.__getattr__(cam_id))
                 nlparams = tuple(results.root.calibration.intrinsic_nonlinear.__getattr__(cam_id))
                 if hasattr(results.root.calibration,'scale_factor2meters'):
-                    scale_factors.append(results.root.calibration.scale_factor2meters.__getattr__(cam_id))
+                    sf_array = numpy.array(results.root.calibration.scale_factor2meters.__getattr__(cam_id))
+                    scale_factors.append(sf_array[0])
                 self.Pmat[cam_id] = pmat
                 self.Res[cam_id] = res
                 self._helper[cam_id] = reconstruct_utils.ReconstructHelper(
@@ -597,6 +598,11 @@ class Reconstructor:
             h5file.createArray(intnonlin_group, cam_id,
                                pytables_filt(self.get_intrinsic_nonlinear(cam_id)))
 
+        scale_group = h5file.createGroup(cal_group,'scale_factor2meters')
+        for cam_id in cam_ids:
+            h5file.createArray(scale_group, cam_id,
+                               pytables_filt([self.get_scale_factor()]))
+
         h5additional_info = ct(cal_group,'additional_info', AdditionalInfo,
                                '')
         row = h5additional_info.row
@@ -604,7 +610,10 @@ class Reconstructor:
         if isinstance(self.cal_source,list):
             row['cal_source'] = '(originally was list - not saved here)'
         else:
-            row['cal_source'] = self.cal_source
+            if not isinstance( self.cal_source,PT.File):
+                row['cal_source'] = self.cal_source
+            else:
+                row['cal_source'] = self.cal_source.filename
         row['minimum_eccentricity'] = MINIMUM_ECCENTRICITY
         row.append()
         h5additional_info.flush()

@@ -14,10 +14,21 @@ from optparse import OptionParser
 
 plot_scale = 1000.0 # plot in mm
 
-def show_vtk(filename,max_err=10.0,obj_start=None,obj_end=None):
+def show_vtk(filename,
+             show_obj_ids=False,
+             obj_start=None,
+             obj_end=None,
+             show_cameras=False,
+             show_observations=False,
+             min_length=None,
+             stereo=False):
     kresults = PT.openFile(filename,mode="r")
+
+    color_cycle = ['tomato', 'banana', 'azure', 'blue',
+                   'black', 'red', 'green', 'white', 'yellow', 'lime_green', 'cerulean',
+                   'light_grey', 'dark_orange', 'brown', 'light_beige']
     
-    renWin, renderers = vtk_results.init_vtk()#stereo=True)
+    renWin, renderers = vtk_results.init_vtk(stereo=stereo)
     if 1:
         camera = renderers[0].GetActiveCamera()
 
@@ -43,7 +54,7 @@ def show_vtk(filename,max_err=10.0,obj_start=None,obj_end=None):
         use_obj_ids = use_obj_ids[use_obj_ids <= obj_end]
     # find unique obj_ids:
     use_obj_ids = numpy.array(list(sets.Set([int(obj_id) for obj_id in use_obj_ids])))
-    for obj_id in use_obj_ids:
+    for obj_id_enum,obj_id in enumerate(use_obj_ids):
         
         if PT.__version__ <= '1.3.3':
             obj_id_find=int(obj_id)
@@ -63,10 +74,27 @@ def show_vtk(filename,max_err=10.0,obj_start=None,obj_end=None):
         estimate_frames = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='x',flavor='numpy')
         valid_condition = estimate_frames <= max_observation_frame
         row_idxs = row_idxs[valid_condition]
-        this_len = len(row_idxs)
-        if this_len < 10:
-            print 'obj_id %d: %d frames, skipping'%(obj_id,this_len,)
+        n_observations = len( observation_frames )
+#        this_len = len(row_idxs)
+#        if this_len < min_length:
+        if n_observations < min_length:
+#            print 'obj_id %d: %d frames, skipping'%(obj_id,this_len,)
+            print 'obj_id %d: %d observation frames, skipping'%(obj_id,n_observations,)
             continue
+
+        if show_observations:
+            obs_xs = kresults.root.kalman_observations.readCoordinates(
+                observation_frame_idxs,field='x',flavor='numpy')
+            obs_ys = kresults.root.kalman_observations.readCoordinates(
+                observation_frame_idxs,field='y',flavor='numpy')
+            obs_zs = kresults.root.kalman_observations.readCoordinates(
+                observation_frame_idxs,field='z',flavor='numpy')
+            obs_verts = numpy.vstack((obs_xs,obs_ys,obs_zs)).T * plot_scale
+            vtk_results.show_spheres(renderers,obs_verts,
+                                     #radius=0.001*plot_scale,
+                                     #opacity=0.2,
+                                     #color=colors.blue,
+                                     )
         
         xs = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='x',flavor='numpy')
         ys = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='y',flavor='numpy')
@@ -131,15 +159,30 @@ def show_vtk(filename,max_err=10.0,obj_start=None,obj_end=None):
 
                 vtk_results.show_longline(renderers,verts,
                                           radius=0.001*plot_scale,
-                                          nsides=3,opacity=0.2,
+                                          nsides=4,opacity=0.2,
                                           color=colors.blue)
 
         if not DEBUG1:
             if len(verts):
+                if show_obj_ids:
+                    start_label = '%d (%d-%d)'%(obj_id,
+                                                observation_frames[0],
+                                                observation_frames[-1],
+                                                )
+                else:
+                    start_label = None
+                    
+                color_idx = obj_id_enum%len(color_cycle)
+                color_name = color_cycle[color_idx]
+                color = getattr(colors,color_name)
                 vtk_results.show_longline(renderers,verts,
+                                          start_label=start_label,
                                           radius=0.001*plot_scale,
                                           nsides=3,opacity=0.2,
-                                          color=colors.blue)
+                                          color=color)#s.blue)
+
+    if show_cameras:
+        vtk_results.show_cameras(kresults,renderers)
 
     kresults.close()
     
@@ -168,7 +211,7 @@ def show_vtk(filename,max_err=10.0,obj_start=None,obj_end=None):
             axes2.SetProp(bbox)
             axes2.GetProperty().SetColor(0,0,0)
             renderer.AddActor(axes2)
-            
+
     vtk_results.interact_with_renWin(renWin)
     
     camera = renderers[0].GetActiveCamera()
@@ -191,6 +234,24 @@ def main():
                       help="last object ID to plot",
                       metavar="STOP")
     
+    parser.add_option("--min-length", type="int",
+                      help="minimum number of observations required to plot",
+                      dest="min_length",
+                      default=10,
+                      metavar="MIN_LENGTH")
+    
+    parser.add_option("--stereo", action='store_true',dest='stereo',
+                      help="display in anaglyphic stereo")
+
+    parser.add_option("--show-obj-ids", action='store_true',dest='show_obj_ids',
+                      help="show object ID numbers at start of trajectory")
+
+    parser.add_option("--show-observations", action='store_true',dest='show_observations',
+                      help="show observations as spheres")
+
+    parser.add_option("--show-cameras", action='store_true',dest='show_cameras',
+                      help="show cameras")
+
     (options, args) = parser.parse_args()
 
     if options.filename is not None:
@@ -201,9 +262,21 @@ def main():
         parser.print_help()
         return
     
+    if len(args)<1:
+        parser.print_help()
+        return
+        
     h5_filename=args[0]
 
-    show_vtk(filename=h5_filename,obj_start=options.start,obj_end=options.stop)
+    show_vtk(filename=h5_filename,
+             obj_start=options.start,
+             obj_end=options.stop,
+             stereo=options.stereo,
+             show_obj_ids = options.show_obj_ids,
+             show_observations = options.show_observations,
+             show_cameras = options.show_cameras,
+             min_length = options.min_length,
+             )
     
 if __name__=='__main__':
     main()

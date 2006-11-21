@@ -2,8 +2,8 @@ import tables as PT
 import numpy
 
 class KalmanEstimates(PT.IsDescription):
-    obj_id     = PT.Int32Col(pos=0,indexed=True)
-    frame      = PT.Int32Col(pos=1)
+    obj_id     = PT.UInt32Col(pos=0,indexed=True)
+    frame      = PT.UInt64Col(pos=1)
     x          = PT.Float32Col(pos=2)
     y          = PT.Float32Col(pos=3)
     z          = PT.Float32Col(pos=4)
@@ -25,21 +25,22 @@ class KalmanEstimates(PT.IsDescription):
     P88        = PT.Float32Col(pos=11)
 
 class FilteredObservations(PT.IsDescription):
-    obj_id     = PT.Int32Col(pos=0,indexed=True)
-    frame      = PT.Int32Col(pos=1,indexed=True)
+    obj_id     = PT.UInt32Col(pos=0,indexed=True)
+    frame      = PT.UInt64Col(pos=1,indexed=True)
     x          = PT.Float32Col(pos=2)
     y          = PT.Float32Col(pos=3)
     z          = PT.Float32Col(pos=4)
+    obs_2d_idx = PT.UInt64Col(pos=5) # index into VLArray 'kalman_observations_2d_idxs'
     
-
-def convert_format(current_data):
+def convert_format(current_data,camn2cam_id):
     """convert data from format used for Kalman tracker to hypothesis tester"""
     found_data_dict = {}
-    for cam_id, stuff_list in current_data.iteritems():
+    for camn, stuff_list in current_data.iteritems():
         if not len(stuff_list):
             # no data for this camera, continue
             continue
         this_point,projected_line = stuff_list[0] # algorithm only accepts 1 point per camera
         if not numpy.isnan(this_point[0]): # only use if point was found
+            cam_id = camn2cam_id[camn]
             found_data_dict[cam_id] = this_point[:9]
     return found_data_dict

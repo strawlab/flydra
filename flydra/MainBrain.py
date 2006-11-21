@@ -22,6 +22,7 @@ import pickle
 import flydra.kalman.flydra_kalman_utils
 import flydra.kalman.flydra_tracker
 import flydra.geom
+import flydra.data_descriptions
 
 DO_KALMAN= True
 
@@ -39,6 +40,10 @@ Pyro.config.PYRO_DETAILED_TRACEBACK = 1
 Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
 
 IMPOSSIBLE_TIMESTAMP = -10.0
+
+PT_TUPLE_IDX_X = flydra.data_descriptions.PT_TUPLE_IDX_X
+PT_TUPLE_IDX_Y = flydra.data_descriptions.PT_TUPLE_IDX_Y
+PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 
 # these calibration data are global, but that's a hack...
 calib_data_lock = threading.Lock()
@@ -94,23 +99,11 @@ if len(downstream_hosts):
     outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # 2D data format for PyTables:
-class Info2D(PT.IsDescription):
-    camn         = PT.Int32Col(pos=0)
-    frame        = PT.Int32Col(pos=1)
-    timestamp    = PT.FloatCol(pos=2)
-    x            = PT.Float32Col(pos=3)
-    y            = PT.Float32Col(pos=4)
-    area         = PT.Float32Col(pos=5)
-    slope        = PT.Float32Col(pos=6)
-    eccentricity = PT.Float32Col(pos=7)
-    p1           = PT.Float32Col(pos=8)
-    p2           = PT.Float32Col(pos=9)
-    p3           = PT.Float32Col(pos=10)
-    p4           = PT.Float32Col(pos=11)
+Info2D = flydra.data_descriptions.Info2D
 
 class CamSyncInfo(PT.IsDescription):
     cam_id = PT.StringCol(16,pos=0)
-    camn   = PT.Int32Col(pos=1)
+    camn   = PT.UInt16Col(pos=1)
     frame0 = PT.FloatCol(pos=2)
 
 class HostClockInfo(PT.IsDescription):
@@ -122,11 +115,11 @@ class HostClockInfo(PT.IsDescription):
 class MovieInfo(PT.IsDescription):
     cam_id             = PT.StringCol(16,pos=0)
     filename           = PT.StringCol(255,pos=1)
-    approx_start_frame = PT.Int32Col(pos=2)
-    approx_stop_frame  = PT.Int32Col(pos=3)
+    approx_start_frame = PT.Int64Col(pos=2)
+    approx_stop_frame  = PT.Int64Col(pos=3)
 
 class Info3D(PT.IsDescription):
-    frame      = PT.Int32Col(pos=0)
+    frame      = PT.Int64Col(pos=0)
     
     x          = PT.Float32Col(pos=1)
     y          = PT.Float32Col(pos=2)
@@ -329,14 +322,11 @@ class CoordReceiver(threading.Thread):
         
     def enqueue_finished_tracked_object(self, tracked_object ):
         # this is from called within the realtime coords thread
-        
-        # XXX TODO DO_KALMAN stuff
-        #print 'tracked object done with %d frames (including interpolation)'%(
-        #    len(tracked_object.xhats),)
         if self.main_brain.is_saving_data():
             self.main_brain.queue_data3d_kalman_estimates.put(
                 (tracked_object.frames, tracked_object.xhats, tracked_object.Ps,
-                 tracked_object.observations_frames, tracked_object.observations_data) )
+                 tracked_object.observations_frames, tracked_object.observations_data,
+                 tracked_object.observations_2d) )
             
         if len(tracked_object.saved_calibration_data):
             self.main_brain.queue_kalman_calibration_data.put( tracked_object.saved_calibration_data )
@@ -614,7 +604,7 @@ class CoordReceiver(threading.Thread):
                         start=header_size
                         if n_pts:
                             # valid points
-                            for i in range(n_pts):
+                            for frame_pt_idx in range(n_pts):
                                 end=start+pt_size
                                 (x_distorted,y_distorted,area,slope,eccentricity,
                                  p1,p2,p3,p4,line_found,slope_found,
@@ -631,12 +621,13 @@ class CoordReceiver(threading.Thread):
                                     eccentricity = inf
                                 if not slope_found:
                                     slope = nan
+                                unknown_val = True
                                 pt_undistorted = (x_undistorted,y_undistorted,
                                                   area,slope,eccentricity,
-                                                  p1,p2,p3,p4, True)
+                                                  p1,p2,p3,p4, unknown_val, frame_pt_idx)
                                 pt_distorted = (x_distorted,y_distorted,
                                                 area,slope,eccentricity,
-                                                p1,p2,p3,p4, True)
+                                                p1,p2,p3,p4, unknown_val, frame_pt_idx)
                                 if ray_valid:
                                     points_in_pluecker_coords_meters.append( (pt_undistorted,
                                                                               flydra.geom.line_from_HZline((ray0,ray1,
@@ -678,10 +669,12 @@ class CoordReceiver(threading.Thread):
                             for point_tuple in points_distorted:
                                 # Save 2D data (even when no point found) to allow
                                 # temporal correlation of movie frames to 2D data.
+                                frame_pt_idx = point_tuple[PT_TUPLE_IDX_FRAME_PT_IDX]
                                 deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                                          corrected_framenumber,
                                                          timestamp)
-                                                        +point_tuple[:9])
+                                                        +point_tuple[:9]
+                                                        +(frame_pt_idx,))
                         # save new frame data
                         # XXX for now, only attempt 3D reconstruction of 1st point from each 2D view
                         realtime_coord_dict.setdefault(corrected_framenumber,{})[cam_id]=points_undistorted[0]
@@ -1342,11 +1335,7 @@ class MainBrain(object):
     def __init__(self):
         global main_brain_keeper
 
-        if PT.__version__ >= '1.3.1':
-            # bug was fixed in pytables 1.3.1
-            self.close_and_reopen_HDF5_file = False
-        else:
-            self.close_and_reopen_HDF5_file = True
+        assert PT.__version__ >= '1.3.1': # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
         
         Pyro.core.initServer(banner=0)
 
@@ -1397,6 +1386,8 @@ class MainBrain(object):
         self.h5textlog = None
         if DO_KALMAN:
             self.h5data3d_kalman_estimates = None
+            self.h5data3d_kalman_observations = None
+            self.h5_2d_obs = None            
         else:
             self.h5data3d_best = None
 
@@ -1792,6 +1783,11 @@ class MainBrain(object):
                 self.h5data3d_kalman_observations = ct(root,'kalman_observations', FilteredObservations,
                                                        "3d data (input to Kalman filter)",
                                                        expectedrows=expected_rows)
+                self.h5_2d_obs = self.h5file.createVLArray(self.h5file.root,
+                                                           'kalman_observations_2d_idxs',
+                                                           PT.UInt16Atom(flavor='numpy'), # dtype should match with tro.observations_2d
+                                                           "camns and idxs")
+                self.h5_2d_obs_next_idx = 0
             else:
                 self.h5data3d_best = ct(root,'data3d_best', Info3D,
                                         "3d data (best)",
@@ -1820,6 +1816,7 @@ class MainBrain(object):
         if DO_KALMAN:
             self.h5data3d_kalman_estimates = None
             self.h5data3d_kalman_observations = None
+            self.h5_2d_obs = None            
         else:
             self.h5data3d_best = None
 
@@ -1832,8 +1829,6 @@ class MainBrain(object):
         except Queue.Empty:
             pass
         self.all_kalman_calibration_data.extend( list_of_kalman_calibration_data )
-        
-        changed = False
         
         # ** 2d data **
         #   clear queue
@@ -1853,7 +1848,6 @@ class MainBrain(object):
                 names=Info2DColNames)
             self.h5data2d.append( recarray )
             self.h5data2d.flush()
-            changed = True
 
         # ** textlog **
         # clear queue
@@ -1880,7 +1874,6 @@ class MainBrain(object):
                 textlog_row.append()
                 
             self.h5textlog.flush()
-            changed = True
         
         # ** camera info **
         #   clear queue
@@ -1901,7 +1894,6 @@ class MainBrain(object):
                 cam_info_row.append()
                 
             self.h5cam_info.flush()
-            changed = True
 
         if DO_KALMAN:
             # ** 3d data - kalman **
@@ -1917,34 +1909,46 @@ class MainBrain(object):
             if self.h5data3d_kalman_estimates is not None:
 ##                print 'saving kalman data (%d objects)'%(
 ##                    len(list_of_3d_data),)
-                for (tro_frames, tro_xhats, tro_Ps, obs_frames, obs_data) in list_of_3d_data:
+                for (tro_frames, tro_xhats, tro_Ps, obs_frames, obs_data,
+                     observations_2d) in list_of_3d_data:
 
-                    if len(obs_frames)<10:
+                    if len(obs_frames)<MIN_KALMAN_OBSERVATIONS_TO_SAVE:
                         # only save data with at least 10 observations
                         continue
 
                     # get object ID
                     obj_id = self.current_kalman_obj_id
                     self.current_kalman_obj_id += 1
+
+                    # save observation 2d data indexes
+                    this_idxs = []
+                    for camns_and_idxs in observations_2d:
+                        this_idxs.append( self.h5_2d_obs_next_idx )
+                        self.h5_2d_obs.append( camns_and_idxs )
+                        self.h5_2d_obs_next_idx += 1
+                    self.h5_2d_obs.flush()
+
+                    this_idxs = numpy.array( this_idxs, dtype=numpy.uint64 ) # becomes obs_2d_idx (index into 'kalman_observations_2d_idxs')
                     
                     # save observations
-                    observations_frames = numpy.array(obs_frames, dtype=numpy.int32)
+                    observations_frames = numpy.array(obs_frames, dtype=numpy.uint64)
+                    obj_id_array = numpy.empty(observations_frames.shape, dtype=numpy.uint32)
+                    obj_id_array.fill(self.obj_id)
                     observations_data = numpy.array(obs_data, dtype=numpy.float32)
-                    obj_id_array = obj_id * numpy.ones(observations_frames.shape, dtype=numpy.int32)
                     list_of_obs = [observations_data[:,i] for i in range(observations_data.shape[1])]
-                    obs_recarray = numpy.rec.fromarrays([obj_id_array,observations_frames]+list_of_obs,
-                                                        names = h5_obs_names)
+                    array_list = [obj_id_array,observations_frames]+list_of_obs+[this_idxs]
+                    obs_recarray = numpy.rec.fromarrays(array_list, names = h5_obs_names)
                     
                     self.h5data3d_kalman_observations.append(obs_recarray)
                     self.h5data3d_kalman_observations.flush()
 
                     # save xhat info (kalman estimates)
-                    frames = numpy.array(tro_frames, dtype=numpy.int32)
+                    frames = numpy.array(tro_frames, dtype=numpy.uint64)
                     xhat_data = numpy.array(tro_xhats, dtype=numpy.float32)
                     P_data_full = numpy.array(tro_Ps, dtype=numpy.float32)
                     P_data_save = P_data_full[:,numpy.arange(9),numpy.arange(9)] # get diagonal
-                    
-                    obj_id_array = obj_id * numpy.ones(frames.shape, dtype=numpy.int32)
+                    obj_id_array = numpy.empty(frames.shape, dtype=numpy.uint32)
+                    obj_id_array.fill(self.obj_id)
                     list_of_xhats = [xhat_data[:,i] for i in range(xhat_data.shape[1])]
                     list_of_Ps = [P_data_save[:,i] for i in range(P_data_save.shape[1])]
                     xhats_recarray = numpy.rec.fromarrays(
@@ -1952,7 +1956,6 @@ class MainBrain(object):
                         names = h5_xhat_names)
                     self.h5data3d_kalman_estimates.append( xhats_recarray )
                     self.h5data3d_kalman_estimates.flush()
-                    changed = True
             
         else:
             # ** 3d data - hypthesis testing **
@@ -1994,7 +1997,6 @@ class MainBrain(object):
                     row.append()
 
                 h5table.flush()
-                changed = True
 
         # ** camera info **
         #   clear queue
@@ -2016,32 +2018,3 @@ class MainBrain(object):
                 host_clock_info_row.append()
                 
             self.h5host_clock_info.flush()
-            changed = True
-            
-        if (self.close_and_reopen_HDF5_file and
-            self.h5file is not None and
-            changed):
-            
-            # Close and re-open file to keep its contents non-corrupt.
-            # (HDF5 don't buffer everything to a self-consistent disk
-            # state between calls.)
-            
-            filename = self.h5file.filename
-            if DO_KALMAN:
-                had_h5data3d_kalman_estimates = self.h5data3d_kalman_estimates is not None
-            else:
-                had_h5data3d_best = self.h5data3d_best is not None
-            self.h5file.close()
-            self.h5file = PT.openFile(filename, mode="r+")
-            
-            self.h5data2d = getattr(self.h5file.root,'data2d_distorted')
-            self.h5cam_info = getattr(self.h5file.root,'cam_info')
-            self.h5host_clock_info = getattr(self.h5file.root,'host_clock_info')
-            self.h5movie_info = getattr(self.h5file.root,'movie_info')
-            self.h5textlog = getattr(self.h5file.root,'textlog')
-            if DO_KALMAN:
-                if had_h5data3d_kalman_estimates:
-                    self.h5data3d_kalman_estimates = getattr(self.h5file.root,'kalman_estimates')
-            else:
-                if had_h5data3d_best:
-                    self.h5data3d_best = getattr(self.h5file.root,'data3d_best')

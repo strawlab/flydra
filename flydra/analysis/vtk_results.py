@@ -160,8 +160,8 @@ def show_cameras(results,renderers,frustums=True,labels=True,centers=True):
 
             # cam center
             C = reconstruct.pmat2cam_center(pmat) # X is column vector (matrix)
-            C = C.flat
-
+            C = tuple(C.flat)
+            
             z = 1
             first_vert = None
 
@@ -319,6 +319,7 @@ def show_line(renderers,v1,v2,color,radius,nsides=20,opacity=1.0):
     return actors
 
 def show_longline(renderers,verts,
+                  start_label=None,
                   color=black,
                   radius=0.005,
                   nsides=20,
@@ -336,6 +337,25 @@ def show_longline(renderers,verts,
             verts = verts[vd_nonzero]
 
     actors = []
+    
+    if start_label is not None:
+
+        X = verts[0]
+        tl = vtkTextActor()
+        tl.SetInput( start_label )
+        tl.GetPositionCoordinate().SetCoordinateSystemToWorld()
+        tl.GetPositionCoordinate().SetValue(*X)
+        tl.SetAlignmentPoint(0)
+        if 0:
+            tl.GetTextProperty().SetColor(0,0,0)
+        else:
+            tl.GetTextProperty().SetColor(white)
+            tl.GetTextProperty().SetShadow(True)
+        tl.GetTextProperty().SetJustificationToCentered() # does nothing?
+        for renderer in renderers:
+            renderer.AddActor( tl )
+        actors.append( tl )
+
     
     line_points = vtk.vtkPoints()
     lines = vtk.vtkCellArray()
