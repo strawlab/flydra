@@ -25,6 +25,7 @@ import flydra.geom
 import flydra.data_descriptions
 
 DO_KALMAN= True
+MIN_KALMAN_OBSERVATIONS_TO_SAVE = 10 # how many data points are required before saving trajectory?
 
 import flydra.common_variables
 REALTIME_UDP = flydra.common_variables.REALTIME_UDP
@@ -242,6 +243,7 @@ class CoordReceiver(threading.Thread):
         self.server_sockets = {}
         self.framenumber_offsets = []
         self.cam_id2cam_no = {}
+        self.camn2cam_id = {}
         self.reconstructor = None
         self.reconstructor_meters = None
         self.tracker = None
@@ -351,7 +353,8 @@ class CoordReceiver(threading.Thread):
             self.max_absolute_cam_nos += 1        
             absolute_cam_no = self.max_absolute_cam_nos
             self.absolute_cam_nos.append( absolute_cam_no )
-
+            
+            self.camn2cam_id[absolute_cam_no] = cam_id
             self.cam_id2cam_no[cam_id] = absolute_cam_no
 
             # create and bind socket to listen to
@@ -432,6 +435,7 @@ class CoordReceiver(threading.Thread):
         absolute_cam_no = self.max_absolute_cam_nos
         self.absolute_cam_nos[cam_idx] = absolute_cam_no
 
+        self.camn2cam_id[absolute_cam_no] = cam_id
         self.cam_id2cam_no[cam_id] = absolute_cam_no
 
         self.general_save_info[cam_id]['absolute_cam_no']=absolute_cam_no
@@ -464,7 +468,7 @@ class CoordReceiver(threading.Thread):
         realtime_kalman_coord_dict = {}        
         new_data_framenumbers = sets.Set()
 
-        no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False)
+        no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0)
         
         timestamp_echo_fmt2 = flydra.common_variables.timestamp_echo_fmt2
         
@@ -680,7 +684,7 @@ class CoordReceiver(threading.Thread):
                         realtime_coord_dict.setdefault(corrected_framenumber,{})[cam_id]=points_undistorted[0]
 
                         # save all 3D Pluecker coordinats for Kalman filtering
-                        realtime_kalman_coord_dict.setdefault(corrected_framenumber,{})[cam_id]=(
+                        realtime_kalman_coord_dict.setdefault(corrected_framenumber,{})[absolute_cam_no]=(
                             points_in_pluecker_coords_meters)
 
                         new_data_framenumbers.add( corrected_framenumber ) # insert into set
@@ -720,10 +724,11 @@ class CoordReceiver(threading.Thread):
                                 best_realtime_data = None
                                 continue
                             
-                            pluecker_coords_by_cam_id = realtime_kalman_coord_dict[corrected_framenumber]
+                            pluecker_coords_by_camn = realtime_kalman_coord_dict[corrected_framenumber]
                             self.tracker.gobble_2d_data_and_calculate_a_posteri_estimates(
                                 corrected_framenumber,
-                                pluecker_coords_by_cam_id)
+                                pluecker_coords_by_camn,
+                                self.camn2cam_id)
 
                             # the above calls
                             # self.enqueue_finished_tracked_object()
@@ -758,7 +763,8 @@ class CoordReceiver(threading.Thread):
                                 best_realtime_data = None
 
                             # Convert to format accepted by find_best_3d()
-                            found_data_dict = convert_format(pluecker_coords_by_cam_id)
+                            found_data_dict = convert_format(pluecker_coords_by_camn,
+                                                             self.camn2cam_id)
                             if len(found_data_dict) < 2:
                                 # Can't do any 3D math without at least 2 cameras giving good
                                 # data.
@@ -770,9 +776,15 @@ class CoordReceiver(threading.Thread):
                                 found_data_dict)
                             max_error = self.main_brain.get_hypothesis_test_max_error()
                             if min_mean_dist<max_error:
+                                this_observation_camns = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
+                                this_observation_idxs = [0 for camn in this_observation_camns] # zero idx
                                 ####################################
                                 #  Now join found point into Tracker
-                                self.tracker.join_new_obj( corrected_framenumber, this_observation_orig_units )
+                                self.tracker.join_new_obj( corrected_framenumber,
+                                                           this_observation_orig_units,
+                                                           this_observation_camns,
+                                                           this_observation_idxs
+                                                           )
 
                             self.tracker_lock.release()
                         else: # closes "if DO_KALMAN:"
@@ -1335,7 +1347,7 @@ class MainBrain(object):
     def __init__(self):
         global main_brain_keeper
 
-        assert PT.__version__ >= '1.3.1': # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
+        assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
         
         Pyro.core.initServer(banner=0)
 
@@ -1933,7 +1945,7 @@ class MainBrain(object):
                     # save observations
                     observations_frames = numpy.array(obs_frames, dtype=numpy.uint64)
                     obj_id_array = numpy.empty(observations_frames.shape, dtype=numpy.uint32)
-                    obj_id_array.fill(self.obj_id)
+                    obj_id_array.fill(obj_id)
                     observations_data = numpy.array(obs_data, dtype=numpy.float32)
                     list_of_obs = [observations_data[:,i] for i in range(observations_data.shape[1])]
                     array_list = [obj_id_array,observations_frames]+list_of_obs+[this_idxs]
@@ -1948,7 +1960,7 @@ class MainBrain(object):
                     P_data_full = numpy.array(tro_Ps, dtype=numpy.float32)
                     P_data_save = P_data_full[:,numpy.arange(9),numpy.arange(9)] # get diagonal
                     obj_id_array = numpy.empty(frames.shape, dtype=numpy.uint32)
-                    obj_id_array.fill(self.obj_id)
+                    obj_id_array.fill(obj_id)
                     list_of_xhats = [xhat_data[:,i] for i in range(xhat_data.shape[1])]
                     list_of_Ps = [P_data_save[:,i] for i in range(P_data_save.shape[1])]
                     xhats_recarray = numpy.rec.fromarrays(
