@@ -1,0 +1,19 @@
+= Subset of available features of chip =
+ADC:
+ * 8 analog inputs (port F)
+
+timer3 (timer3 used because all pins on one output port):
+ * 3 output compare units
+ * 1 input capture
+
+= Box features =
+
+11 BNC ports:
+ * 2 analog ins
+   - adc0 (port f 0) -- (board: J1 10)
+   - adc1 (port f 1) -- (board: J1 9)
+   - (board: J1 2 used as AGND)
+ * 1 input capture (port c 7) (board: J5 3)
+ * 6 output compare A (port c 6) (board: J5 4)
+ * 1 output compare B (port c 5) (board: J5 5)
+ * 1 output compare C (port c 4) (board: J5 6)
