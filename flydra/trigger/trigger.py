@@ -11,7 +11,8 @@ CS_dict = { 0:0, # off
             256:4,
             1024:5}
 
-FLAG_ENTER_DFU = 0x01
+TASK_FLAGS_ENTER_DFU = 0x01
+TASK_FLAGS_NEW_TIMER3_DATA = 0x02
 
 def debug(*args):
     if 1:
@@ -66,8 +67,89 @@ class Device:
         if 0:
             for i in range(len(self.OUTPUT_BUFFER)):
                 self.OUTPUT_BUFFER[i] = chr(0x88)
+
+        FOSC = 8000000 # 8 MHz
+        trigger_carrier_freq = 100.0 # 100 Hz
+
+        self._set_timer3_metadata(FOSC,trigger_carrier_freq)
+        
+    def _set_timer3_metadata(self, F_CPU, carrier_freq):
+        self.timer3_CS = 8
+        F_CLK = F_CPU/float(self.timer3_CS) # clock frequency, Hz
+
+        clock_tick_duration = 1.0/F_CLK
+        carrier_duration = 1.0/carrier_freq
+        n_ticks_for_carrier = int(round(carrier_duration/clock_tick_duration))
+        if n_ticks_for_carrier > 0xFFFF:
+            raise ValueError('n_ticks_for_carrier too large for 16 bit counter, try increasing self.timer3_CS')
+        
+        self.timer3_TOP = n_ticks_for_carrier
+        self.timer3_clock_tick_duration = clock_tick_duration
+        self.set_output_durations(A_sec=1e-5,
+                                  B_sec=0,
+                                  C_sec=0,
+                                  ) # output compare A duration 10 usec
+        
+    def set_output_durations(self, A_sec=None, B_sec=None, C_sec=None):
+        dur_A = A_sec
+        dur_B = B_sec
+        dur_C = C_sec
+        
+        ##########
+        
+        ticks_pwm_A = int(round(dur_A/self.timer3_clock_tick_duration))
+        if ticks_pwm_A > self.timer3_TOP:
+            raise ValueError('ticks_pwm_A larger than timer3_TOP')
+        ticks_pwm_B = int(round(dur_B/self.timer3_clock_tick_duration))
+        if ticks_pwm_B > self.timer3_TOP:
+            raise ValueError('ticks_pwm_B larger than timer3_TOP')
+        ticks_pwm_C = int(round(dur_C/self.timer3_clock_tick_duration))
+        if ticks_pwm_C > self.timer3_TOP:
+            raise ValueError('ticks_pwm_C larger than timer3_TOP')
+        ##########
+        
+        ocr3a = ticks_pwm_A
+        ocr3b = ticks_pwm_B
+        ocr3c = ticks_pwm_C
+        top = self.timer3_TOP
+        
+        buf = self.OUTPUT_BUFFER # shorthand
+        buf[0] = chr(ocr3a//0x100)
+        buf[1] = chr(ocr3a%0x100)
+        buf[2] = chr(ocr3b//0x100)
+        buf[3] = chr(ocr3b%0x100)
+        
+        buf[4] = chr(ocr3c//0x100)
+        buf[5] = chr(ocr3c%0x100)
+        buf[6] = chr(top//0x100)
+        buf[7] = chr(top%0x100)
+        
+        buf[8] = chr(TASK_FLAGS_NEW_TIMER3_DATA)
+        buf[9] = chr(CS_dict[self.timer3_CS])
+
+        val = usb.bulk_write(self.libusb_handle, 0x06, buf, 9999)
+        debug('set_output_durations result: %d'%(val,))
+
+        if 1:
+            INPUT_BUFFER = ctypes.create_string_buffer(16)
+            
+            try:
+                val = usb.bulk_read(self.libusb_handle, 0x82, INPUT_BUFFER, 1000)
+                if 0:
+                    print 'read',val
+            except usb.USBNoDataAvailableError:
+                if 0:
+                    sys.stdout.write('?')
+                    sys.stdout.flush()
+
+    def enter_dfu_mode(self):
+        buf = self.OUTPUT_BUFFER # shorthand
+        buf[8] = chr(TASK_FLAGS_ENTER_DFU)
+        val = usb.bulk_write(self.libusb_handle, 0x06, buf, 9999)
+        
         
 def enter_dfu_mode():
     print 'hi'
     dev = Device()
     print 'got device',dev
+    dev.enter_dfu_mode()
