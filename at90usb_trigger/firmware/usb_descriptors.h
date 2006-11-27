@@ -66,15 +66,26 @@
              // USB Endpoint 1 descriptor FS
 #define ENDPOINT_BULK_OUT   0x06 // endpoint address (number + OUT)
 #define EP_1_ATTRIBUTES     0x02          // BULK = 0x02, INTERUPT = 0x03, see also usb_specific_request.c
+#define LARGE_BUFFER
+#ifdef LARGE_BUFFER
 #define EP_1_MAX_LENGTH     16 // num bytes
 #define EP_1_MAX_LENGTH_CODE SIZE_16 // num bytes
+#else
+#define EP_1_MAX_LENGTH     8 // num bytes
+#define EP_1_MAX_LENGTH_CODE SIZE_8 // num bytes
+#endif
 #define EP_1_INTERVAL       0 // maximum NAKs per (micro)frame (Does this firmware send NAKs?)
 
              // USB Endpoint 2 descriptor FS
 #define ENDPOINT_BULK_IN    0x82 // endpoint address (number + IN)
 #define EP_2_ATTRIBUTES     0x02          // BULK = 0x02, INTERUPT = 0x03, see also usb_specific_request.c
+#ifdef LARGE_BUFFER
 #define EP_2_MAX_LENGTH     16 // num bytes
 #define EP_2_MAX_LENGTH_CODE SIZE_16 // num bytes
+#else
+#define EP_2_MAX_LENGTH     8 // num bytes
+#define EP_2_MAX_LENGTH_CODE SIZE_8 // num bytes
+#endif
 #define EP_2_INTERVAL       0 // maximum NAKs per (micro)frame (Does this firmware send NAKs?)
 
 /*

@@ -14,6 +14,8 @@ CS_dict = { 0:0, # off
 TASK_FLAGS_ENTER_DFU = 0x01
 TASK_FLAGS_NEW_TIMER3_DATA = 0x02
 
+LARGE_BUFFER = True
+
 def debug(*args):
     if 1:
         print >> sys.stderr, ' '.join([str(arg) for arg in args])
@@ -58,12 +60,23 @@ class Device:
 
         debug('setting configuration')
         debug('dev.config[0]',dev.config[0])
-        debug('dev.config[0].bConfigurationValue',dev.config[0].bConfigurationValue)
-        usb.set_configuration(self.libusb_handle, dev.config[0].bConfigurationValue)
+        config = dev.config[0]
+        debug('config.bConfigurationValue',config.bConfigurationValue)
+        usb.set_configuration(self.libusb_handle, config.bConfigurationValue)
         debug('claiming interface')
+        debug('config.bNumInterfaces',config.bNumInterfaces)
+        print 'config.interface',config.interface
+        for i in range(config.bNumInterfaces):
+            iface = config.interface[i]
+            print iface
+            print iface.altsetting
+            
         usb.claim_interface(self.libusb_handle, interface_nr)
 
-        self.OUTPUT_BUFFER = ctypes.create_string_buffer(16)
+        if LARGE_BUFFER:
+            self.OUTPUT_BUFFER = ctypes.create_string_buffer(16)
+        else:
+            self.OUTPUT_BUFFER = ctypes.create_string_buffer(8)
         if 0:
             for i in range(len(self.OUTPUT_BUFFER)):
                 self.OUTPUT_BUFFER[i] = chr(0x88)
@@ -118,20 +131,31 @@ class Device:
         buf[1] = chr(ocr3a%0x100)
         buf[2] = chr(ocr3b//0x100)
         buf[3] = chr(ocr3b%0x100)
-        
-        buf[4] = chr(ocr3c//0x100)
-        buf[5] = chr(ocr3c%0x100)
-        buf[6] = chr(top//0x100)
-        buf[7] = chr(top%0x100)
-        
-        buf[8] = chr(TASK_FLAGS_NEW_TIMER3_DATA)
-        buf[9] = chr(CS_dict[self.timer3_CS])
 
-        val = usb.bulk_write(self.libusb_handle, 0x06, buf, 9999)
-        debug('set_output_durations result: %d'%(val,))
+        if LARGE_BUFFER:
+            buf[4] = chr(ocr3c//0x100)
+            buf[5] = chr(ocr3c%0x100)
+            buf[6] = chr(top//0x100)
+            buf[7] = chr(top%0x100)
+        
+            buf[8] = chr(TASK_FLAGS_NEW_TIMER3_DATA)
+            buf[9] = chr(CS_dict[self.timer3_CS])
+        else:
+            buf[4] = chr(top//0x100)
+            buf[5] = chr(top%0x100)
+        
+            buf[6] = chr(TASK_FLAGS_NEW_TIMER3_DATA)
+            buf[7] = chr(CS_dict[self.timer3_CS])
 
-        if 1:
-            INPUT_BUFFER = ctypes.create_string_buffer(16)
+        if 0:
+            val = usb.bulk_write(self.libusb_handle, 0x06, buf, 9999)
+            debug('set_output_durations result: %d'%(val,))
+
+        if 0:
+            if LARGE_BUFFER:
+                INPUT_BUFFER = ctypes.create_string_buffer(16)
+            else:
+                INPUT_BUFFER = ctypes.create_string_buffer(8)
             
             try:
                 val = usb.bulk_read(self.libusb_handle, 0x82, INPUT_BUFFER, 1000)
@@ -144,9 +168,11 @@ class Device:
 
     def enter_dfu_mode(self):
         buf = self.OUTPUT_BUFFER # shorthand
-        buf[8] = chr(TASK_FLAGS_ENTER_DFU)
+        if LARGE_BUFFER:
+            buf[8] = chr(TASK_FLAGS_ENTER_DFU)
+        else:
+            buf[6] = chr(TASK_FLAGS_ENTER_DFU)
         val = usb.bulk_write(self.libusb_handle, 0x06, buf, 9999)
-        
         
 def enter_dfu_mode():
     print 'hi'
