@@ -21,7 +21,8 @@ def show_vtk(filename,
              show_cameras=False,
              show_observations=False,
              min_length=None,
-             stereo=False):
+             stereo=False,
+             debug=0):
     kresults = PT.openFile(filename,mode="r")
 
     color_cycle = ['tomato', 'banana', 'azure', 'blue',
@@ -54,6 +55,10 @@ def show_vtk(filename,
         use_obj_ids = use_obj_ids[use_obj_ids <= obj_end]
     # find unique obj_ids:
     use_obj_ids = numpy.array(list(sets.Set([int(obj_id) for obj_id in use_obj_ids])))
+
+    if debug >=5:
+        print 'DEBUG: obj_ids.min()',obj_ids.min()
+        print 'DEBUG: obj_ids.max()',obj_ids.max()
     for obj_id_enum,obj_id in enumerate(use_obj_ids):
         
         if PT.__version__ <= '1.3.3':
@@ -226,6 +231,10 @@ def main():
                       help="hdf5 file with data to display FILE",
                       metavar="FILE")
 
+    parser.add_option("--debug", type="int",
+                      help="debug level",
+                      metavar="DEBUG")
+        
     parser.add_option("--start", type="int",
                       help="first object ID to plot",
                       metavar="START")
@@ -276,6 +285,7 @@ def main():
              show_observations = options.show_observations,
              show_cameras = options.show_cameras,
              min_length = options.min_length,
+             debug = options.debug,
              )
     
 if __name__=='__main__':
