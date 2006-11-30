@@ -177,11 +177,15 @@ class wxMainBrainApp(wxApp):
         # finish menubar -----------------------------
         frame.SetMenuBar(menuBar)
 
-        try:
-            self.detect_sound = wxSound(os.path.join(RESDIR,'detect.wav'))
-            self.detect_sound.Play()
-        except NameError: #wxSound not in some versions of wx
+
+        if 1:
             self.detect_sound = None
+        else:
+            try:
+                self.detect_sound = wxSound(os.path.join(RESDIR,'detect.wav'))
+                self.detect_sound.Play()
+            except NameError: #wxSound not in some versions of wx
+                self.detect_sound = None
 
 
         # main panel ----------------------------------
