@@ -9,7 +9,9 @@ import Queue
 import numpy as nx
 
 import FlyMovieFormat
-import cam_iface
+cam_iface = None # global variable, value set in main()
+import cam_iface_choose
+from optparse import OptionParser
 
 def DEBUG(*args):
     if 0:
@@ -175,6 +177,10 @@ class GrabClass(object):
         collecting_background_isSet = globals['collecting_background'].isSet
         find_rotation_center_start_isSet = globals['find_rotation_center_start'].isSet
         find_rotation_center_start_clear = globals['find_rotation_center_start'].clear
+
+        if hasattr(self.cam,'set_thread_owner'):
+            self.cam.set_thread_owner()
+        
         max_frame_size = FastImage.Size(self.cam.get_max_width(), self.cam.get_max_height())
 
         hw_roi_w, hw_roi_h = self.cam.get_frame_size()
@@ -1204,6 +1210,42 @@ class App:
             print 'unexpected connection closure...'
 
 def main():
+    global cam_iface
+    
+    usage_lines = ['%prog FILE [options]',
+                   '',
+                   '  available wrappers and backends:']
+    
+    for wrapper,backends in cam_iface_choose.wrappers_and_backends.iteritems():
+        for backend in backends:
+            usage_lines.append('    --wrapper %s --backend %s'%(wrapper,backend))
+    del wrapper, backend # delete temporary variables
+    usage = '\n'.join(usage_lines)
+    
+    parser = OptionParser(usage)
+
+    parser.add_option("--wrapper", dest="wrapper", type='string',
+                      help="cam_iface WRAPPER to use",
+                      metavar="WRAPPER")
+    
+    parser.add_option("--backend", dest="backend", type='string',
+                      help="cam_iface BACKEND to use",
+                      metavar="BACKEND")
+
+    (options, args) = parser.parse_args()
+
+    if not options.wrapper:
+        print 'WRAPPER must be set'
+        parser.print_help()
+        return
+    
+    if not options.backend:
+        print 'BACKEND must be set'
+        parser.print_help()
+        return
+    
+    cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
+    
     app=App()
     if app.num_cams <= 0:
         return
