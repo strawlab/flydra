@@ -116,7 +116,10 @@ def init_vtk(n_viewports = 1, stereo=False):
 
 def show_cameras(results,renderers,frustums=True,labels=True,centers=True):
     import flydra.reconstruct
-    R = flydra.reconstruct.Reconstructor(results)
+    if isinstance(results,flydra.reconstruct.Reconstructor):
+        R = results
+    else:
+        R = flydra.reconstruct.Reconstructor(results)
     actors = []
     if centers:
         cam_centers = vtk.vtkPoints()
