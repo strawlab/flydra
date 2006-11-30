@@ -9,6 +9,7 @@ import tables as PT
 import os, sys, pprint
 from flydra_tracker import Tracker
 import flydra_kalman_utils
+from optparse import OptionParser
 
 assert params.A_model_name == 'fixed_accel'
 
@@ -126,7 +127,11 @@ def kalmanize(src_filename,
               reconstructor_filename=None,
               start_frame=None,
               stop_frame=None,
+              exclude_cam_ids=None,
               ):
+    if exclude_cam_ids is None:
+        exclude_cam_ids = []
+        
     results = get_results(src_filename)
 
     if reconstructor_filename is None:
@@ -231,6 +236,10 @@ def kalmanize(src_filename,
 
         camn = row['camn']
         cam_id = camn2cam_id[camn]
+        
+        if cam_id in exclude_cam_ids:
+            # exclude this camera
+            continue
 
         x_distorted = row['x']
         if numpy.isnan(x_distorted):
@@ -273,25 +282,54 @@ def kalmanize(src_filename,
     results.close()
 
 def main():
-    src_filename = sys.argv[1]
-    if len(sys.argv)>2:
-        reconstructor_filename = sys.argv[2]
-    else:
-        reconstructor_filename = None
-    if len(sys.argv)>3:
-        start_frame = int(sys.argv[3])
-    else:
-        start_frame = None
+    usage = '%prog FILE [options]'
+    
+    parser = OptionParser(usage)
+    
+    parser.add_option("-f", "--file", dest="filename", type='string',
+                      help="hdf5 file with data to display FILE",
+                      metavar="FILE")
+
+    parser.add_option("-r", "--reconstructor", dest="reconstructor_path", type='string',
+                      help="calibration/reconstructor path",
+                      metavar="RECONSTRUCTOR")
+
+    parser.add_option("--exclude-cams", dest="exclude_cams", type='string',
+                      help="camera ids to exclude from reconstruction (space separated)",
+                      metavar="EXCLUDE_CAMS")
+
+    parser.add_option("--start", type="int",
+                      help="first frame",
+                      metavar="START")
         
-    if len(sys.argv)>4:
-        stop_frame = int(sys.argv[4])
-    else:
-        stop_frame = None
+    parser.add_option("--stop", type="int",
+                      help="last frame",
+                      metavar="STOP")
+
+    (options, args) = parser.parse_args()
+    if options.exclude_cams is not None:
+        options.exclude_cams = options.exclude_cams.split()
+        
+    if options.filename is not None:
+        args.append(options.filename)
+        
+    if len(args)>1:
+        print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
+        parser.print_help()
+        return
+        
+    if len(args)<1:
+        parser.print_help()
+        return
+    
+    src_filename = args[0]
                           
     kalmanize(src_filename,
-              reconstructor_filename=reconstructor_filename,
-              start_frame=start_frame,
-              stop_frame=stop_frame)
+              reconstructor_filename=options.reconstructor_path,
+              start_frame=options.start,
+              stop_frame=options.stop,
+              exclude_cam_ids=options.exclude_cams,
+              )
 
 if __name__=='__main__':
     main()
