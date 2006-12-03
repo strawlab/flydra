@@ -734,7 +734,11 @@ class App:
             timestamp_echo_thread.start()
         
         for cam_no in range(self.num_cams):
-            num_buffers = 205
+            backend = cam_iface.get_driver_name()
+            if backend == 'prosilica_gige':
+                num_buffers = 50
+            else:
+                num_buffers = 205
             cam = cam_iface.Camera(cam_no,num_buffers,0) # get fastest mode, which should be 0
             print 'allocated %d buffers'%num_buffers
             self.all_cams.append( cam )
