@@ -580,7 +580,6 @@ class GrabClass(object):
                 #print 'sent data...'
                     
                 if self.new_roi.isSet():
-                    self.cam.stop_camera()  # stop camera
                     lbrt = self.new_roi_data
                     self.new_roi_data = None
                     l,b,r,t=lbrt
@@ -596,7 +595,6 @@ class GrabClass(object):
                     self.realtime_analyzer.roi = (l,b,r,t)
 
                     self.new_roi.clear()
-                    self.cam.start_camera()  # start camera
                     
                 bookkeeping_done_time = time.time()
                 bookkeeping_dur = bookkeeping_done_time-received_time
