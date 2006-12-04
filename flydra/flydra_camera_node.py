@@ -4,7 +4,6 @@
 import os
 BENCHMARK = int(os.environ.get('FLYDRA_BENCHMARK',0))
 FLYDRA_BT = int(os.environ.get('FLYDRA_BT',0)) # threaded benchmark
-print 'FLYDRA_BT',FLYDRA_BT
 
 import threading, time, socket, sys, struct, select, math
 import Queue
@@ -16,15 +15,15 @@ import cam_iface_choose
 from optparse import OptionParser
 
 def DEBUG(*args):
-    if 0:
+    if 1:
         sys.stdout.write(' '.join(map(str,args))+'\n')
         sys.stdout.flush()
 
 if not BENCHMARK:
     import Pyro.core, Pyro.errors
     Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here!
-    Pyro.config.PYRO_TRACELEVEL = 0
-    Pyro.config.PYRO_USER_TRACELEVEL = 0
+    Pyro.config.PYRO_TRACELEVEL = 3
+    Pyro.config.PYRO_USER_TRACELEVEL = 3
     Pyro.config.PYRO_DETAILED_TRACEBACK = 1
     Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
     ConnectionClosedError = Pyro.errors.ConnectionClosedError
@@ -98,7 +97,12 @@ def TimestampEcho():
     sendto_port = flydra.common_variables.timestamp_echo_gatherer_port
     fmt = flydra.common_variables.timestamp_echo_fmt_diff
     while 1:
-        in_ready, trash1, trash2 = select.select( [sockobj], [], [], 0.0 )
+        try:
+            in_ready, trash1, trash2 = select.select( [sockobj], [], [], 0.0 )
+        except Exception, err:
+            print 'TimestampEcho thread ignoring unknown error:',str(err)
+        except:
+            print 'TimestampEcho thread ignoring unknown error'
         if not len(in_ready):
             continue
         buf, (orig_host,orig_port) = sockobj.recvfrom(4096)
@@ -313,14 +317,15 @@ class GrabClass(object):
             numT = 0                    
         try:
             while not cam_quit_event_isSet():
+                time.sleep(0.004)
                 if BENCHMARK:
                     t1 = time.time()
                 try:
-##                    sys.stdout.write('<')
-##                    sys.stdout.flush()
+                    sys.stdout.write('<')
+                    sys.stdout.flush()
                     self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
-##                    sys.stdout.write('>')
-##                    sys.stdout.flush()
+                    sys.stdout.write('>')
+                    sys.stdout.flush()
                 except cam_iface.BuffersOverflowed:
                     now = time.time()
                     msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
@@ -330,7 +335,7 @@ class GrabClass(object):
                 except cam_iface.FrameDataMissing:
                     now = time.time()
                     msg = 'ERROR: frame data missing on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
-                    self.log_message_queue.put((self.cam_id,now,msg))
+                    #self.log_message_queue.put((self.cam_id,now,msg))
                     print >> sys.stderr, msg
                     continue
 
@@ -342,8 +347,6 @@ class GrabClass(object):
                 timestamp=self.cam.get_last_timestamp()
                 framenumber=self.cam.get_last_framenumber()
 
-                DEBUG(' '*20,'captured frame')
-                
                 if BENCHMARK:
                     if (framenumber%100) == 0:
                         dur = received_time-benchmark_start_time
@@ -386,8 +389,9 @@ class GrabClass(object):
                 if not BENCHMARK:
                     # allow other thread to see raw image always (for saving)
                     if incoming_raw_frames_queue.qsize() >1000:
+                        time.sleep(0.1)
                         # chop off some old frames to prevent memory explosion
-                        print 'ERROR: deleting old frames to make room for new ones!'
+                        print 'ERROR: deleting old frames to make room for new ones! (and sleeping)'
                         for i in range(100):
                             incoming_raw_frames_queue.get_nowait()
                     incoming_raw_frames_queue_put(
@@ -722,13 +726,13 @@ class App:
         self.all_grabbers = []
         self.reconstruct_helper = []        
         
-##        if not BENCHMARK or not FLYDRA_BT:
-##            print 'starting TimestampEcho thread'
-##            # run in single-thread for benchmark
-##            timestamp_echo_thread=threading.Thread(target=TimestampEcho,
-##                                                   name='TimestampEcho')
-##            timestamp_echo_thread.setDaemon(True) # quit that thread if it's the only one left...
-##            timestamp_echo_thread.start()
+        if not BENCHMARK or not FLYDRA_BT:
+            print 'starting TimestampEcho thread'
+            # run in single-thread for benchmark
+            timestamp_echo_thread=threading.Thread(target=TimestampEcho,
+                                                   name='TimestampEcho')
+            timestamp_echo_thread.setDaemon(True) # quit that thread if it's the only one left...
+            timestamp_echo_thread.start()
         
         for cam_no in range(self.num_cams):
             backend = cam_iface.get_driver_name()
@@ -878,7 +882,9 @@ class App:
                                              name='grab thread (%s)'%cam_id,
                                              )
                 grab_thread.setDaemon(True) # quit that thread if it's the only one left...
+                DEBUG('starting grab_thread()')
                 grab_thread.start() # start grabbing frames from camera
+                DEBUG('grab_thread() started')
             else:
                 # run in single-thread for benchmark
                 grabber.grab_func(globals)
@@ -1038,6 +1044,7 @@ class App:
                 raise ValueError("Unknown key '%s'"%key)
                 
     def mainloop(self):
+        DEBUG('entering mainloop')
         # per camera variables
         last_measurement_time = []
         last_return_info_check = []
@@ -1053,6 +1060,7 @@ class App:
             last_return_info_check.append( 0.0 ) # never
             n_raw_frames.append( 0 )
             
+        DEBUG('entering mainloop 2')
         try:
             try:
                 cams_in_operation = self.num_cams
@@ -1185,14 +1193,17 @@ class App:
                             pass
 
                         DEBUG('ADS 1')
-                        try:
-                            while 1:
-                                args = self.log_message_queue.get_nowait()
-                                self.main_brain.log_message(*args)
-                        except Queue.Empty:
-                            pass
+                        if 0:
+                            try:
+                                while 1:
+                                    DEBUG('ADS 1.4')
+                                    args = self.log_message_queue.get_nowait()
+                                    DEBUG('ADS 1.5')
+                                    self.main_brain.log_message(*args)
+                            except Queue.Empty:
+                                pass
 
-                        #print 'ADS 2'
+                        print 'ADS 2'
                         # make sure a BG frame is saved at beginning of movie
                         if bg_movie is not None and not globals['saved_bg_frame']:
                             bg_frame,std_frame,timestamp = globals['current_bg_frame_and_timestamp']
@@ -1201,11 +1212,11 @@ class App:
                             globals['saved_bg_frame'] = True
                             
                         # process asynchronous commands
-                        #print 'ADS 3'
+                        print 'ADS 3'
                         self.main_brain_lock.acquire()
-                        #print 'ADS 4'
+                        print 'ADS 4'
                         cmds=self.main_brain.get_and_clear_commands(cam_id)
-                        #print 'ADS 5'
+                        print 'ADS 5'
                         self.main_brain_lock.release()
                         DEBUG('ADS 6')
                         self.handle_commands(cam_no,cmds)
