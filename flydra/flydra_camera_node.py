@@ -3,6 +3,8 @@
 
 import os
 BENCHMARK = int(os.environ.get('FLYDRA_BENCHMARK',0))
+FLYDRA_BT = int(os.environ.get('FLYDRA_BT',0)) # threaded benchmark
+print 'FLYDRA_BT',FLYDRA_BT
 
 import threading, time, socket, sys, struct, select, math
 import Queue
@@ -285,7 +287,8 @@ class GrabClass(object):
 
         #################### done initializing images ############
         
-        incoming_raw_frames_queue_put = globals['incoming_raw_frames'].put
+        incoming_raw_frames_queue = globals['incoming_raw_frames']
+        incoming_raw_frames_queue_put = incoming_raw_frames_queue.put
         if BENCHMARK:
             benchmark_start_time = time.time()
             min_100_frame_time = 1e99
@@ -313,7 +316,11 @@ class GrabClass(object):
                 if BENCHMARK:
                     t1 = time.time()
                 try:
+##                    sys.stdout.write('<')
+##                    sys.stdout.flush()
                     self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
+##                    sys.stdout.write('>')
+##                    sys.stdout.flush()
                 except cam_iface.BuffersOverflowed:
                     now = time.time()
                     msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
@@ -378,6 +385,11 @@ class GrabClass(object):
                 tp1 = time.time()
                 if not BENCHMARK:
                     # allow other thread to see raw image always (for saving)
+                    if incoming_raw_frames_queue.qsize() >1000:
+                        # chop off some old frames to prevent memory explosion
+                        print 'ERROR: deleting old frames to make room for new ones!'
+                        for i in range(100):
+                            incoming_raw_frames_queue.get_nowait()
                     incoming_raw_frames_queue_put(
                         (hw_roi_frame.get_8u_copy(hw_roi_frame.size), # save a copy
                          timestamp,
@@ -710,12 +722,13 @@ class App:
         self.all_grabbers = []
         self.reconstruct_helper = []        
         
-        if not BENCHMARK:
-            # run in single-thread for benchmark
-            timestamp_echo_thread=threading.Thread(target=TimestampEcho,
-                                                   name='TimestampEcho')
-            timestamp_echo_thread.setDaemon(True) # quit that thread if it's the only one left...
-            timestamp_echo_thread.start()
+##        if not BENCHMARK or not FLYDRA_BT:
+##            print 'starting TimestampEcho thread'
+##            # run in single-thread for benchmark
+##            timestamp_echo_thread=threading.Thread(target=TimestampEcho,
+##                                                   name='TimestampEcho')
+##            timestamp_echo_thread.setDaemon(True) # quit that thread if it's the only one left...
+##            timestamp_echo_thread.start()
         
         for cam_no in range(self.num_cams):
             backend = cam_iface.get_driver_name()
@@ -857,7 +870,9 @@ class App:
             grabber.use_arena = False
             globals['use_arena'] = grabber.use_arena
 
-            if not BENCHMARK:
+            if not BENCHMARK or FLYDRA_BT:
+                print 'starting grab thread'
+
                 grab_thread=threading.Thread(target=grabber.grab_func,
                                              args=(globals,),
                                              name='grab thread (%s)'%cam_id,
