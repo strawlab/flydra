@@ -436,10 +436,13 @@ class wxMainBrainApp(wxApp):
                  self.OnSetCameraClearThreshold)
 
         max_framerate = XRCCTRL(previewPerCamPanel,"MAX_FRAMERATE")
-        val = scalar_control_info['max_framerate']
-        max_framerate.SetValue( str( val ) )
-        EVT_TEXT(max_framerate, max_framerate.GetId(),
-                 self.OnSetMaxFramerate)
+        if 'max_framerate' in scalar_control_info:
+            val = scalar_control_info['max_framerate']
+            max_framerate.SetValue( str( val ) )
+            EVT_TEXT(max_framerate, max_framerate.GetId(),
+                     self.OnSetMaxFramerate)
+        else:
+            max_framerate.Enable(False)
 
         view_image_choice = XRCCTRL(previewPerCamPanel,"view_image_display")
         EVT_CHOICE(view_image_choice, view_image_choice.GetId(),
