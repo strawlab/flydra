@@ -112,7 +112,13 @@ class GrabClass(object):
         self.new_roi = threading.Event()
         self.new_roi_data = None
         max_num_points = 2
-        self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(self.cam.get_max_width(),
+        l,b = self.cam.get_frame_offset()
+        w,h = self.cam.get_frame_size()
+        r = l+w-1
+        t = b+h-1
+        lbrt = l,b,r,t
+        self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(lbrt,
+                                                                          self.cam.get_max_width(),
                                                                           self.cam.get_max_height(),
                                                                           max_num_points)
 
@@ -184,6 +190,7 @@ class GrabClass(object):
         max_frame_size = FastImage.Size(self.cam.get_max_width(), self.cam.get_max_height())
 
         hw_roi_w, hw_roi_h = self.cam.get_frame_size()
+        cur_roi_l, cur_roi_b = self.cam.get_frame_offset()
         cur_fisize = FastImage.Size(hw_roi_w, hw_roi_h)
         
         bg_changed = True
@@ -225,10 +232,15 @@ class GrabClass(object):
         self.cam.start_camera()  # start camera
 
         # take first image to set background and so on
-        try:
-            self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
-        except cam_iface.BuffersOverflowed:
-            print >> sys.stderr , 'On start warning: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
+        first_image_ok = False
+        while not first_image_ok:
+            try:
+                self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
+                first_image_ok = True
+            except cam_iface.BuffersOverflowed:
+                print >> sys.stderr , 'On start warning: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
+            except cam_iface.FrameDataMissing:
+                print >> sys.stderr , 'On start warning: frame data missing on %s at %s'%(self.cam_id,time.asctime())
 
         running_mean8u_im = self.realtime_analyzer.get_image_view('mean') # this is a view we write into
 
@@ -237,7 +249,9 @@ class GrabClass(object):
         bg_image = FastImage.FastImage8u(max_frame_size)
         std_image = FastImage.FastImage8u(max_frame_size)
         
-        running_mean_im = hw_roi_frame.get_32f_copy(max_frame_size)
+        running_mean_im = FastImage.FastImage32f(max_frame_size)
+        running_mean_im_view = running_mean_im.roi(cur_roi_l, cur_roi_b, cur_fisize)
+        hw_roi_frame.get_32f_copy_put(running_mean_im_view,running_mean_im_view.size)
         running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
 
         fastframef32_tmp = FastImage.FastImage32f(max_frame_size)
@@ -288,6 +302,13 @@ class GrabClass(object):
                     msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
                     self.log_message_queue.put((self.cam_id,now,msg))
                     print >> sys.stderr, msg
+                    continue
+                except cam_iface.FrameDataMissing:
+                    now = time.time()
+                    msg = 'ERROR: frame data missing on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
+                    self.log_message_queue.put((self.cam_id,now,msg))
+                    print >> sys.stderr, msg
+                    continue
 
                 received_time = time.time()
                 if BENCHMARK:
@@ -797,12 +818,19 @@ class App:
                     print "WARNING: don't know default value for property %s, "\
                           "leaving as default"%(props['name'],)
                     new_value = current_value
-                if props['has_manual_mode']:
-                    cam.set_camera_property( prop_num, new_value, 0 )
-                    current_value = new_value
-                    CAM_CONTROLS[props['name']]=prop_num
                 min_value = props['min_value']
                 max_value = props['max_value']
+                if props['has_manual_mode']:
+                    if min_value <= new_value <= max_value:
+                        try:
+                            cam.set_camera_property( prop_num, new_value, 0 )
+                        except:
+                            print 'error while setting property %s to %d (from %d)'%(props['name'],new_value,current_value)
+                            raise
+                    else:
+                        print 'not setting property %s to %d (from %d) because out of range (%d<=value<=%d)'%(props['name'],new_value,current_value,min_value,max_value)
+                    current_value = new_value
+                    CAM_CONTROLS[props['name']]=prop_num
                 scalar_control_info[props['name']] = (current_value,
                                                       min_value, max_value)
                     
@@ -822,7 +850,7 @@ class App:
             scalar_control_info['width'] = width
             scalar_control_info['height'] = height
             scalar_control_info['roi'] = 0,0,width-1,height-1
-            scalar_control_info['max_framerate'] = cam.get_framerate()
+            #scalar_control_info['max_framerate'] = cam.get_framerate()
             scalar_control_info['collecting_background']=globals['collecting_background'].isSet()
             
             # register self with remote server
@@ -917,15 +945,17 @@ class App:
                     elif property_name == 'cmp':
                         if value: globals['use_cmp'].set()
                         else: globals['use_cmp'].clear()
-                    elif property_name == 'max_framerate':
-                        #print 'flydra_camera_node.py: ignoring set_framerate() command for now...'
-                        cam.set_framerate(value)
+##                    elif property_name == 'max_framerate':
+##                        #print 'flydra_camera_node.py: ignoring set_framerate() command for now...'
+##                        cam.set_framerate(value)
                     elif property_name == 'collecting_background':
                         if value: globals['collecting_background'].set()
                         else: globals['collecting_background'].clear()
                     elif property_name == 'visible_image_view':
                         globals['export_image_name'] = value
                         print 'displaying',value,'image'
+                    else:
+                        print 'IGNORING property',property_name
             elif key == 'get_im':
                 val = globals['most_recent_frame_potentially_corrupt']
                 if val is not None: # prevent race condition
