@@ -34,6 +34,7 @@ setup(name='flydra',
     'flydra_analysis_plot_kalman_data = flydra.analysis.flydra_analysis_plot_kalman_data:main',
     'flydra_analysis_plot_kalman_2d = flydra.analysis.flydra_analysis_plot_kalman_2d:main',
     'flydra_trigger_enter_dfu_mode = flydra.trigger:enter_dfu_mode',
+    'flydra_trigger_check_device = flydra.trigger:check_device',
     ],
     'gui_scripts': [
     'flydra_mainbrain = flydra.wxMainBrain:main',

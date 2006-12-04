@@ -2,7 +2,7 @@ import pylibusb as usb
 import ctypes
 import sys
 
-__all__ = ['Device','enter_dfu_mode']
+__all__ = ['Device','enter_dfu_mode','check_device']
 
 CS_dict = { 0:0, # off
             1:1,
@@ -82,7 +82,7 @@ class Device:
                 self.OUTPUT_BUFFER[i] = chr(0x88)
 
         FOSC = 8000000 # 8 MHz
-        trigger_carrier_freq = 100.0 # 100 Hz
+        trigger_carrier_freq = 200.0 # 200 Hz
 
         self._set_timer3_metadata(FOSC,trigger_carrier_freq)
         
@@ -95,10 +95,16 @@ class Device:
         n_ticks_for_carrier = int(round(carrier_duration/clock_tick_duration))
         if n_ticks_for_carrier > 0xFFFF:
             raise ValueError('n_ticks_for_carrier too large for 16 bit counter, try increasing self.timer3_CS')
+        print 'F_CPU',F_CPU
+        print 'F_CLK',F_CLK
+        print 'clock_tick_duration',clock_tick_duration
+        print 'carrier_freq',carrier_freq
+        print 'carrier_duration',carrier_duration
+        print 'n_ticks_for_carrier',n_ticks_for_carrier
         
         self.timer3_TOP = n_ticks_for_carrier
         self.timer3_clock_tick_duration = clock_tick_duration
-        self.set_output_durations(A_sec=1e-5,
+        self.set_output_durations(A_sec=1e-5, # 10 microseconds
                                   B_sec=0,
                                   C_sec=0,
                                   ) # output compare A duration 10 usec
@@ -147,7 +153,7 @@ class Device:
             buf[6] = chr(TASK_FLAGS_NEW_TIMER3_DATA)
             buf[7] = chr(CS_dict[self.timer3_CS])
 
-        if 0:
+        if 1:
             val = usb.bulk_write(self.libusb_handle, 0x06, buf, 9999)
             debug('set_output_durations result: %d'%(val,))
 
@@ -175,7 +181,8 @@ class Device:
         val = usb.bulk_write(self.libusb_handle, 0x06, buf, 9999)
         
 def enter_dfu_mode():
-    print 'hi'
     dev = Device()
-    print 'got device',dev
     dev.enter_dfu_mode()
+    
+def check_device():
+    dev = Device()
