@@ -1,5 +1,5 @@
 // leds 1 and 2
-#define DEBUG_PWM
+//#define DEBUG_PWM
 #define LARGE_BUFFER
 
 //_____  I N C L U D E S ___________________________________________________
@@ -188,13 +188,14 @@ void init_pwm_output(void) {
   DDRC |= 0x70; // enable output for Output compare and PWM A-C of Timer/Counter 3
 
   // Set output compare to mid-point
-  set_OCR3A( 0x7FFF );
+  set_OCR3A( 10 );
 
   set_OCR3B( 0x0 );
   set_OCR3C( 0x0 );
 
-  // Set TOP high
-  set_ICR3( 0xFFFF );
+  // Set TOP to 500 (if F_CLOCK = 1MHZ, this is 200 Hz)
+  //set_ICR3( 5000 );
+  set_ICR3( 77 );
 
   // ---- set TCCR1A ----------
   // set Compare Output Mode for Fast PWM
@@ -208,7 +209,8 @@ void init_pwm_output(void) {
   // high bits = 0,0,0
   //WGM33, WGM32 = 1,1
   // CS1 = 0,0,1 (starts timer1) (clock select)
-  TCCR3B = 0x19;
+  // CS1 = 0,1,1 (starts timer1 CS=8) (clock select)
+  TCCR3B = 0x1B;
 
 #ifdef DEBUG_PWM
   TIMSK3 = 0x07; //OCIE1A|TOIE1; // enable interrucpts
