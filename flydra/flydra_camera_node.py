@@ -15,7 +15,7 @@ import cam_iface_choose
 from optparse import OptionParser
 
 def DEBUG(*args):
-    if 1:
+    if 0:
         sys.stdout.write(' '.join(map(str,args))+'\n')
         sys.stdout.flush()
 
@@ -317,15 +317,14 @@ class GrabClass(object):
             numT = 0                    
         try:
             while not cam_quit_event_isSet():
-                time.sleep(0.004)
                 if BENCHMARK:
                     t1 = time.time()
                 try:
-                    sys.stdout.write('<')
-                    sys.stdout.flush()
+##                    sys.stdout.write('<')
+##                    sys.stdout.flush()
                     self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
-                    sys.stdout.write('>')
-                    sys.stdout.flush()
+##                    sys.stdout.write('>')
+##                    sys.stdout.flush()
                 except cam_iface.BuffersOverflowed:
                     now = time.time()
                     msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
@@ -389,7 +388,6 @@ class GrabClass(object):
                 if not BENCHMARK:
                     # allow other thread to see raw image always (for saving)
                     if incoming_raw_frames_queue.qsize() >1000:
-                        time.sleep(0.1)
                         # chop off some old frames to prevent memory explosion
                         print 'ERROR: deleting old frames to make room for new ones! (and sleeping)'
                         for i in range(100):
@@ -1120,7 +1118,6 @@ class App:
                                 # XXX could have option to skip frames if a newer frame is available
                                 last_frames.append( (frame,timestamp,framenumber,points) ) # save for post-triggering
                                 while len(last_frames)>1000:
-                                    print 'cannot process frames fast enough, deleting...'
                                     del last_frames[0]
                                 n_pts = len(points)
                                 if n_pts>0:
@@ -1203,7 +1200,7 @@ class App:
                             except Queue.Empty:
                                 pass
 
-                        print 'ADS 2'
+                        DEBUG('ADS 2')
                         # make sure a BG frame is saved at beginning of movie
                         if bg_movie is not None and not globals['saved_bg_frame']:
                             bg_frame,std_frame,timestamp = globals['current_bg_frame_and_timestamp']
@@ -1212,16 +1209,15 @@ class App:
                             globals['saved_bg_frame'] = True
                             
                         # process asynchronous commands
-                        print 'ADS 3'
+                        DEBUG( 'ADS 3')
                         self.main_brain_lock.acquire()
-                        print 'ADS 4'
+                        DEBUG( 'ADS 4')
                         cmds=self.main_brain.get_and_clear_commands(cam_id)
-                        print 'ADS 5'
+                        DEBUG( 'ADS 5')
                         self.main_brain_lock.release()
                         DEBUG('ADS 6')
                         self.handle_commands(cam_no,cmds)
                         DEBUG('ADS 7')
-                        
             finally:
                 self.main_brain_lock.acquire()
                 for cam_id in self.all_cam_ids:
