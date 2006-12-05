@@ -828,7 +828,7 @@ class App:
             scalar_control_info['width'] = width
             scalar_control_info['height'] = height
             scalar_control_info['roi'] = 0,0,width-1,height-1
-            #scalar_control_info['max_framerate'] = cam.get_framerate()
+            scalar_control_info['max_framerate'] = cam.get_framerate()
             scalar_control_info['collecting_background']=globals['collecting_background'].isSet()
             
             # register self with remote server
@@ -928,9 +928,8 @@ class App:
                     elif property_name == 'cmp':
                         if value: globals['use_cmp'].set()
                         else: globals['use_cmp'].clear()
-##                    elif property_name == 'max_framerate':
-##                        #print 'flydra_camera_node.py: ignoring set_framerate() command for now...'
-##                        cam.set_framerate(value)
+                    elif property_name == 'max_framerate':
+                        cam.set_framerate(value)
                     elif property_name == 'collecting_background':
                         if value: globals['collecting_background'].set()
                         else: globals['collecting_background'].clear()
