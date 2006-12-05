@@ -1217,6 +1217,7 @@ class App:
                         DEBUG('ADS 6')
                         self.handle_commands(cam_no,cmds)
                         DEBUG('ADS 7')
+                    time.sleep(0.05)
             finally:
                 self.main_brain_lock.acquire()
                 for cam_id in self.all_cam_ids:
