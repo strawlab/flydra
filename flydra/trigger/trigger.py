@@ -1,8 +1,14 @@
 import pylibusb as usb
 import ctypes
-import sys
+import sys, time
+from optparse import OptionParser
 
-__all__ = ['Device','enter_dfu_mode','check_device']
+__all__ = ['Device',
+           'enter_dfu_mode',
+           'check_device',
+           'set_frequency',
+           'trigger_once',
+           ]
 
 CS_dict = { 0:0, # off
             1:1,
@@ -13,8 +19,7 @@ CS_dict = { 0:0, # off
 
 TASK_FLAGS_ENTER_DFU = 0x01
 TASK_FLAGS_NEW_TIMER3_DATA = 0x02
-
-LARGE_BUFFER = True
+TASK_FLAGS_STOP_TIMER3_TRIG_NOW = 0x04
 
 def debug(*args):
     if 1:
@@ -73,29 +78,47 @@ class Device:
             
         usb.claim_interface(self.libusb_handle, interface_nr)
 
-        if LARGE_BUFFER:
-            self.OUTPUT_BUFFER = ctypes.create_string_buffer(16)
-        else:
-            self.OUTPUT_BUFFER = ctypes.create_string_buffer(8)
-        if 0:
-            for i in range(len(self.OUTPUT_BUFFER)):
-                self.OUTPUT_BUFFER[i] = chr(0x88)
+        self.OUTPUT_BUFFER = ctypes.create_string_buffer(16)
 
-        FOSC = 8000000 # 8 MHz
+        self.FOSC = 1000000 # 1 MHz # hey, i thought it was at 8 ?!?
         trigger_carrier_freq = 200.0 # 200 Hz
 
-        self._set_timer3_metadata(FOSC,trigger_carrier_freq)
+        self.timer3_CS = None
+        self._set_timer3_metadata(trigger_carrier_freq)
         
-    def _set_timer3_metadata(self, F_CPU, carrier_freq):
-        self.timer3_CS = 8
-        F_CLK = F_CPU/float(self.timer3_CS) # clock frequency, Hz
+    def set_carrier_frequency( self, freq=None ):
+        if freq is None:
+            print 'setting frequency to default (200 Hz)'
+            freq = 200.0
+        print 'setting freq to',freq
+        self._set_timer3_metadata(freq)
+        
+    def _set_timer3_metadata(self, carrier_freq, timer3_CS=None):
+        if timer3_CS is None:
+            if self.timer3_CS is None:
+                self.timer3_CS = 1
+        else:
+            self.timer3_CS = timer3_CS
+        del timer3_CS
+        
+        if carrier_freq == 0:
+            self.timer3_CS = 0
+            
+        if self.timer3_CS == 0:
+            buf = self.OUTPUT_BUFFER # shorthand
+            buf[8] = chr(TASK_FLAGS_NEW_TIMER3_DATA)
+            buf[9] = chr(CS_dict[self.timer3_CS])
+            self.send_buf()
+            return
+            
+        F_CLK = self.FOSC/float(self.timer3_CS) # clock frequency, Hz
 
         clock_tick_duration = 1.0/F_CLK
         carrier_duration = 1.0/carrier_freq
         n_ticks_for_carrier = int(round(carrier_duration/clock_tick_duration))
         if n_ticks_for_carrier > 0xFFFF:
             raise ValueError('n_ticks_for_carrier too large for 16 bit counter, try increasing self.timer3_CS')
-        print 'F_CPU',F_CPU
+        print 'F_CPU',self.FOSC
         print 'F_CLK',F_CLK
         print 'clock_tick_duration',clock_tick_duration
         print 'carrier_freq',carrier_freq
@@ -103,11 +126,17 @@ class Device:
         print 'n_ticks_for_carrier',n_ticks_for_carrier
         
         self.timer3_TOP = n_ticks_for_carrier
+        print 'self.timer3_TOP',self.timer3_TOP
         self.timer3_clock_tick_duration = clock_tick_duration
         self.set_output_durations(A_sec=1e-5, # 10 microseconds
                                   B_sec=0,
                                   C_sec=0,
                                   ) # output compare A duration 10 usec
+
+    def trigger_once(self):
+        buf = self.OUTPUT_BUFFER # shorthand
+        buf[8] = chr(TASK_FLAGS_STOP_TIMER3_TRIG_NOW)
+        self.send_buf()
         
     def set_output_durations(self, A_sec=None, B_sec=None, C_sec=None):
         dur_A = A_sec
@@ -138,34 +167,31 @@ class Device:
         buf[2] = chr(ocr3b//0x100)
         buf[3] = chr(ocr3b%0x100)
 
-        if LARGE_BUFFER:
-            buf[4] = chr(ocr3c//0x100)
-            buf[5] = chr(ocr3c%0x100)
-            buf[6] = chr(top//0x100)
-            buf[7] = chr(top%0x100)
+        buf[4] = chr(ocr3c//0x100)
+        buf[5] = chr(ocr3c%0x100)
+        buf[6] = chr(top//0x100)
+        buf[7] = chr(top%0x100)
         
-            buf[8] = chr(TASK_FLAGS_NEW_TIMER3_DATA)
-            buf[9] = chr(CS_dict[self.timer3_CS])
-        else:
-            buf[4] = chr(top//0x100)
-            buf[5] = chr(top%0x100)
-        
-            buf[6] = chr(TASK_FLAGS_NEW_TIMER3_DATA)
-            buf[7] = chr(CS_dict[self.timer3_CS])
+        buf[8] = chr(TASK_FLAGS_NEW_TIMER3_DATA)
+        buf[9] = chr(CS_dict[self.timer3_CS])
+
+        self.send_buf()
+
+    def send_buf(self):
+        buf = self.OUTPUT_BUFFER # shorthand
+        #buf[9] = chr(1)
+        #print 'ord(buf[9])',ord(buf[9])
 
         if 1:
             val = usb.bulk_write(self.libusb_handle, 0x06, buf, 9999)
             debug('set_output_durations result: %d'%(val,))
 
-        if 0:
-            if LARGE_BUFFER:
-                INPUT_BUFFER = ctypes.create_string_buffer(16)
-            else:
-                INPUT_BUFFER = ctypes.create_string_buffer(8)
+        if 1:
+            INPUT_BUFFER = ctypes.create_string_buffer(16)
             
             try:
                 val = usb.bulk_read(self.libusb_handle, 0x82, INPUT_BUFFER, 1000)
-                if 0:
+                if 1:
                     print 'read',val
             except usb.USBNoDataAvailableError:
                 if 0:
@@ -174,10 +200,7 @@ class Device:
 
     def enter_dfu_mode(self):
         buf = self.OUTPUT_BUFFER # shorthand
-        if LARGE_BUFFER:
-            buf[8] = chr(TASK_FLAGS_ENTER_DFU)
-        else:
-            buf[6] = chr(TASK_FLAGS_ENTER_DFU)
+        buf[8] = chr(TASK_FLAGS_ENTER_DFU)
         val = usb.bulk_write(self.libusb_handle, 0x06, buf, 9999)
         
 def enter_dfu_mode():
@@ -186,3 +209,29 @@ def enter_dfu_mode():
     
 def check_device():
     dev = Device()
+
+def set_frequency():
+    usage = '%prog FILE [options]'
+    parser = OptionParser(usage)
+    
+    parser.add_option("--freq", type="float",
+                      metavar="FREQ")
+    (options, args) = parser.parse_args()
+    dev = Device()
+    dev.set_carrier_frequency( options.freq )
+
+def get_time():
+    if sys.platform.startswith('win'):
+        return time.clock()
+    else:
+        return time.time()
+
+def trigger_once():
+    dev = Device()
+    dev.set_carrier_frequency( 0.0 )
+    time.sleep(0.5)
+    start = get_time()
+    dev.trigger_once()
+    stop = get_time()
+    dur = stop-start
+    print 'max trigger roundtrip latency %.2f ms'%(dur*1000.0,)

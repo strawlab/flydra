@@ -267,6 +267,7 @@ void hid_task(void)
    uint8_t flags=0;
 #define TASK_FLAGS_ENTER_DFU 0x01
 #define TASK_FLAGS_NEW_TIMER3_DATA 0x02
+#define TASK_FLAGS_STOP_TIMER3_TRIG_NOW 0x04
 
    uint8_t clock_select_timer3=0;
    uint32_t volatile tmp;
@@ -316,6 +317,13 @@ void hid_task(void)
 	  set_OCR3C(new_ocr3c);
 	  set_ICR3(new_icr3);  // icr3 is TOP for timer3
 	  TCCR3B = (TCCR3B & 0xF8) | (clock_select_timer3 & 0x07); // low 3 bits sets CS
+	  new_data = TRUE;
+	}
+
+	if (flags & TASK_FLAGS_STOP_TIMER3_TRIG_NOW) {
+	  // XXX this doesn't seem to work 100% of the time... - ADS
+	  PORTC |= 0x70; // pin C4-6 set high
+	  TCCR3B = (TCCR3B & 0xF8) | (0 & 0x07); // low 3 bits sets CS to 0 (stop)
 	  new_data = TRUE;
 	}
 
