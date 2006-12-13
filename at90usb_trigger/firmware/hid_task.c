@@ -1,5 +1,4 @@
 // leds 1 and 2
-//#define DEBUG_PWM
 #define LARGE_BUFFER
 
 //_____  I N C L U D E S ___________________________________________________
@@ -29,6 +28,8 @@ extern bit   usb_connected;
 bit   new_data=FALSE;
 extern  uint8_t   usb_configuration_nb;
 volatile uint8_t cpt_sof=0;
+
+volatile uint8_t trig_once_mode=0;
 
 //! Declare function pointer to USB bootloader entry point
 void (*start_bootloader) (void)=(void (*)(void))0xf000;
@@ -211,24 +212,28 @@ void init_pwm_output(void) {
   // CS1 = 0,0,1 (starts timer1) (clock select)
   // CS1 = 0,1,1 (starts timer1 CS=8) (clock select)
   TCCR3B = 0x1B;
+  Led2_on();
 
-#ifdef DEBUG_PWM
-  TIMSK3 = 0x07; //OCIE1A|TOIE1; // enable interrucpts
-#endif
+  // really only care about timer3_compa_vect
+  TIMSK3 = 0x07; //OCIE1A|OCIE1B|TOIE1; // XXX not sure about interrupt names // enable interrucpts
 }
 
-#ifdef DEBUG_PWM
 ISR(TIMER3_COMPA_vect) {
-  Led1_off();
+  if (trig_once_mode) {
+    Led3_on();
+
+    TCCR3B = (TCCR3B & 0xF8) | (0 & 0x07); // low 3 bits sets CS to 0 (stop)
+    Led2_off();
+
+    trig_once_mode=0;
+    Led0_off();
+  }
 }
 ISR(TIMER3_COMPB_vect) {
-  Led2_off();
 }
 ISR(TIMER3_OVF_vect) {
-  Led1_on();
-  Led2_on();
+  Led3_off();
 }
-#endif
 
 //!
 //! @brief This function initializes the target board ressources.
@@ -267,7 +272,7 @@ void hid_task(void)
    uint8_t flags=0;
 #define TASK_FLAGS_ENTER_DFU 0x01
 #define TASK_FLAGS_NEW_TIMER3_DATA 0x02
-#define TASK_FLAGS_STOP_TIMER3_TRIG_NOW 0x04
+#define TASK_FLAGS_DO_TRIG_ONCE 0x04
 
    uint8_t clock_select_timer3=0;
    uint32_t volatile tmp;
@@ -317,13 +322,40 @@ void hid_task(void)
 	  set_OCR3C(new_ocr3c);
 	  set_ICR3(new_icr3);  // icr3 is TOP for timer3
 	  TCCR3B = (TCCR3B & 0xF8) | (clock_select_timer3 & 0x07); // low 3 bits sets CS
+	  if (clock_select_timer3 & 0x07) {
+	    Led2_on();
+	  } else {
+	    Led2_off();
+	  }	    
 	  new_data = TRUE;
 	}
 
-	if (flags & TASK_FLAGS_STOP_TIMER3_TRIG_NOW) {
+	if (flags & TASK_FLAGS_DO_TRIG_ONCE) {
+	  Led0_on();
+
+	  //	  new_icr3 = get_ICR3();  // icr1 is TOP for timer1
+	  //new_icr3--;
+	  TCCR3B = (TCCR3B & 0xF8) | (0 & 0x07); // low 3 bits sets CS to 0 (stop)
+	  Led2_off();
+
+	  set_TCNT3(0xFF00); // trigger overflow soon
+	  //set_OCR3A(0xFE00);
+	  set_OCR3A(0x00FF);
+	  set_ICR3(0xFFFF);  // icr3 is TOP for timer3
+
+	  trig_once_mode=1;
+
+	  // start clock
+	  TCCR3B = (TCCR3B & 0xF8) | (1 & 0x07); // low 3 bits sets CS
+	  Led2_on();
+	  
+	  /*
 	  // XXX this doesn't seem to work 100% of the time... - ADS
 	  PORTC |= 0x70; // pin C4-6 set high
 	  TCCR3B = (TCCR3B & 0xF8) | (0 & 0x07); // low 3 bits sets CS to 0 (stop)
+	  Led2_off();
+
+	  */
 	  new_data = TRUE;
 	}
 
@@ -332,12 +364,15 @@ void hid_task(void)
 	{
 	  Usb_detach();                    // detach from USB...
 	  TCCR3B = 0x00; // disable trigger outputs and timer3
+	  Led2_off();
+
+	  Led0_off();
 	  Led1_off();
 	  Led2_off();
 	  Led3_off();
-	  Led0_on();
+	  //Led0_on();
 	  for(tmp=0;tmp<70000;tmp++);     // pause...
-	  Led3_on();
+	  //Led3_on();
 	  (*start_bootloader)();
 	}
 

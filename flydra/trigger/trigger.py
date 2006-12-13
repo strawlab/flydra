@@ -19,7 +19,7 @@ CS_dict = { 0:0, # off
 
 TASK_FLAGS_ENTER_DFU = 0x01
 TASK_FLAGS_NEW_TIMER3_DATA = 0x02
-TASK_FLAGS_STOP_TIMER3_TRIG_NOW = 0x04
+TASK_FLAGS_DO_TRIG_ONCE = 0x04
 
 def debug(*args):
     if 1:
@@ -81,9 +81,9 @@ class Device:
         self.OUTPUT_BUFFER = ctypes.create_string_buffer(16)
 
         self.FOSC = 1000000 # 1 MHz # hey, i thought it was at 8 ?!?
-        trigger_carrier_freq = 200.0 # 200 Hz
+        trigger_carrier_freq = 0.0 # stopped
 
-        self.timer3_CS = None
+        self.timer3_CS = 1
         self._set_timer3_metadata(trigger_carrier_freq)
         
     def set_carrier_frequency( self, freq=None ):
@@ -91,18 +91,17 @@ class Device:
             print 'setting frequency to default (200 Hz)'
             freq = 200.0
         print 'setting freq to',freq
+        if freq != 0:
+            if self.timer3_CS == 0:
+                self.timer3_CS = 1
         self._set_timer3_metadata(freq)
         
-    def _set_timer3_metadata(self, carrier_freq, timer3_CS=None):
-        if timer3_CS is None:
-            if self.timer3_CS is None:
-                self.timer3_CS = 1
-        else:
-            self.timer3_CS = timer3_CS
-        del timer3_CS
-        
+    def _set_timer3_metadata(self, carrier_freq):
         if carrier_freq == 0:
             self.timer3_CS = 0
+        else:
+            if self.timer3_CS == 0:
+                raise ValueError('cannot set non-zero freq because clock select is zero')
             
         if self.timer3_CS == 0:
             buf = self.OUTPUT_BUFFER # shorthand
@@ -135,7 +134,7 @@ class Device:
 
     def trigger_once(self):
         buf = self.OUTPUT_BUFFER # shorthand
-        buf[8] = chr(TASK_FLAGS_STOP_TIMER3_TRIG_NOW)
+        buf[8] = chr(TASK_FLAGS_DO_TRIG_ONCE)
         self.send_buf()
         
     def set_output_durations(self, A_sec=None, B_sec=None, C_sec=None):
@@ -180,7 +179,8 @@ class Device:
     def send_buf(self):
         buf = self.OUTPUT_BUFFER # shorthand
         #buf[9] = chr(1)
-        #print 'ord(buf[9])',ord(buf[9])
+        print 'ord(buf[8])',ord(buf[8])
+        print 'ord(buf[9])',ord(buf[9])
 
         if 1:
             val = usb.bulk_write(self.libusb_handle, 0x06, buf, 9999)
