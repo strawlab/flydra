@@ -110,7 +110,7 @@ def TimestampEcho():
         sender.sendto(newbuf,(orig_host,sendto_port))
 
 class GrabClass(object):
-    def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue):
+    def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue, max_num_points=2):
         self.cam = cam
         self.cam2mainbrain_port = cam2mainbrain_port
         self.cam_id = cam_id
@@ -118,7 +118,6 @@ class GrabClass(object):
 
         self.new_roi = threading.Event()
         self.new_roi_data = None
-        max_num_points = 2
         l,b = self.cam.get_frame_offset()
         w,h = self.cam.get_frame_size()
         r = l+w-1
@@ -679,7 +678,7 @@ class GrabClass(object):
 
 class App:
     
-    def __init__(self):
+    def __init__(self,max_num_points_per_camera=2):
 
         MAX_GRABBERS = 3
         # ----------------------------------------------------------------
@@ -862,8 +861,9 @@ class App:
                 cam_iface.get_wrapper_name())
             print >> sys.stderr, driver_string
             self.log_message_queue.put((cam_id,time.time(),driver_string))
-            
-            grabber = GrabClass(cam,cam2mainbrain_port,cam_id,self.log_message_queue)
+            print 'max_num_points_per_camera',max_num_points_per_camera
+            grabber = GrabClass(cam,cam2mainbrain_port,cam_id,self.log_message_queue,
+                                max_num_points_per_camera)
             self.all_grabbers.append( grabber )
             
             grabber.diff_threshold = diff_threshold
@@ -1250,7 +1250,10 @@ def main():
     parser.add_option("--backend", dest="backend", type='string',
                       help="cam_iface BACKEND to use",
                       metavar="BACKEND")
-
+    
+    parser.add_option("--numpts", type="int",
+                      help="number of points to track per camera")
+    
     (options, args) = parser.parse_args()
 
     if not options.wrapper:
@@ -1262,10 +1265,15 @@ def main():
         print 'BACKEND must be set'
         parser.print_help()
         return
+
+    if options.numpts is not None:
+        max_num_points_per_camera = options.numpts
+    else:
+        max_num_points_per_camera = 2
     
     cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
     
-    app=App()
+    app=App(max_num_points_per_camera)
     if app.num_cams <= 0:
         return
     app.mainloop()
