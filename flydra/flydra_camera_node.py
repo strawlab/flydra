@@ -110,7 +110,8 @@ def TimestampEcho():
         sender.sendto(newbuf,(orig_host,sendto_port))
 
 class GrabClass(object):
-    def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue, max_num_points=2):
+    def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue, max_num_points=2,
+                 roi2_radius=10):
         self.cam = cam
         self.cam2mainbrain_port = cam2mainbrain_port
         self.cam_id = cam_id
@@ -126,7 +127,9 @@ class GrabClass(object):
         self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(lbrt,
                                                                           self.cam.get_max_width(),
                                                                           self.cam.get_max_height(),
-                                                                          max_num_points)
+                                                                          max_num_points,
+                                                                          roi2_radius
+                                                                          )
 
     def get_clear_threshold(self):
         return self.realtime_analyzer.clear_threshold
@@ -678,7 +681,7 @@ class GrabClass(object):
 
 class App:
     
-    def __init__(self,max_num_points_per_camera=2):
+    def __init__(self,max_num_points_per_camera=2,roi2_radius=10):
 
         MAX_GRABBERS = 3
         # ----------------------------------------------------------------
@@ -863,7 +866,8 @@ class App:
             self.log_message_queue.put((cam_id,time.time(),driver_string))
             print 'max_num_points_per_camera',max_num_points_per_camera
             grabber = GrabClass(cam,cam2mainbrain_port,cam_id,self.log_message_queue,
-                                max_num_points_per_camera)
+                                max_num_points=max_num_points_per_camera,
+                                roi2_radius=roi2_radius)
             self.all_grabbers.append( grabber )
             
             grabber.diff_threshold = diff_threshold
@@ -1254,6 +1258,9 @@ def main():
     parser.add_option("--numpts", type="int",
                       help="number of points to track per camera")
     
+    parser.add_option("--swroiradius", type="int",
+                      help="radius of software region of interest")
+    
     (options, args) = parser.parse_args()
 
     if not options.wrapper:
@@ -1270,10 +1277,15 @@ def main():
         max_num_points_per_camera = options.numpts
     else:
         max_num_points_per_camera = 2
+
+    if options.swroiradius is not None:
+        roi2_radius = options.swroiradius
+    else:
+        roi2_radius = 10
     
     cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
     
-    app=App(max_num_points_per_camera)
+    app=App(max_num_points_per_camera,roi2_radius=roi2_radius)
     if app.num_cams <= 0:
         return
     app.mainloop()
