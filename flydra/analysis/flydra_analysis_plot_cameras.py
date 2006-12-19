@@ -10,7 +10,10 @@ import flydra.reconstruct
 
 import vtk_results
 import vtk.util.colors as colors
-from vtkpython import vtk
+try:
+    from vtkpython import vtk
+except:
+    import vtk
 import sys
 from optparse import OptionParser
 

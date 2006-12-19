@@ -4,7 +4,11 @@ import os
 os.environ['__GL_FSAA_MODE']='4' # 4x gaussian multisampling on geForce3 linux
 os.environ['__GL_DEFAULT_LOG_ANISO']='3'
 opj=os.path.join
-from vtkpython import *
+try:
+    from vtkpython import *
+except:
+    import vtk
+    from vtk import *
 from vtk.util.vtkImageImportFromArray import *
 from vtk.util.colors import tomato, banana, azure, blue, \
      black, red, green, white, yellow, lime_green, cerulean, \
