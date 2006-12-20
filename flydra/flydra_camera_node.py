@@ -583,7 +583,7 @@ class GrabClass(object):
 
                 alpha = 0.01
                 if did_expensive:
-                    mean_duration_bg = (1-alpha)*mean_duration_bg + alpha*bookkeeping_dur
+                    mean_duration_bg    = (1-alpha)*mean_duration_bg + alpha*bookkeeping_dur
                 else:
                     mean_duration_no_bg = (1-alpha)*mean_duration_no_bg + alpha*bookkeeping_dur
 
@@ -1279,12 +1279,12 @@ def main():
         return
 
     if options.num_points is not None:
-        max_num_points_per_camera = options.numpts
+        max_num_points_per_camera = options.num_points
     else:
         max_num_points_per_camera = 2
 
     if options.software_roi_radius is not None:
-        roi2_radius = options.swroiradius
+        roi2_radius = options.software_roi_radius
     else:
         roi2_radius = 10
 
