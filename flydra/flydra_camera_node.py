@@ -110,12 +110,13 @@ def TimestampEcho():
 
 class GrabClass(object):
     def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue, max_num_points=2,
-                 roi2_radius=10, bg_frame_interval=50):
+                 roi2_radius=10, bg_frame_interval=50, bg_frame_alpha=1.0/50.0):
         self.cam = cam
         self.cam2mainbrain_port = cam2mainbrain_port
         self.cam_id = cam_id
         self.log_message_queue = log_message_queue
 
+        self.bg_frame_alpha = bg_frame_alpha
         self.bg_frame_interval = bg_frame_interval
 
         self.new_roi = threading.Event()
@@ -432,7 +433,7 @@ class GrabClass(object):
                                                                    hw_roi_frame,
                                                                    cur_fisize,
 ##                                                                   max_frame_size,
-                                                                   ALPHA,
+                                                                   self.bg_frame_alpha,
                                                                    running_mean8u_im,
                                                                    fastframef32_tmp,
                                                                    running_sumsqf,
@@ -682,7 +683,9 @@ class GrabClass(object):
 
 class App:
     
-    def __init__(self,max_num_points_per_camera=2,roi2_radius=10,bg_frame_interval=50):
+    def __init__(self,max_num_points_per_camera=2,roi2_radius=10,
+                 bg_frame_interval=50,
+                 bg_frame_alpha=1.0/50.0):
 
         MAX_GRABBERS = 3
         # ----------------------------------------------------------------
@@ -869,7 +872,9 @@ class App:
             grabber = GrabClass(cam,cam2mainbrain_port,cam_id,self.log_message_queue,
                                 max_num_points=max_num_points_per_camera,
                                 roi2_radius=roi2_radius,
-                                bg_frame_interval=bg_frame_interval)
+                                bg_frame_interval=bg_frame_interval,
+                                bg_frame_alpha=bg_frame_alpha,
+                                )
             self.all_grabbers.append( grabber )
             
             grabber.diff_threshold = diff_threshold
@@ -1266,6 +1271,9 @@ def main():
     parser.add_option("--background-frame-interval", type="int",
                       help="every N frames, add a new BG image to the accumulator")
     
+    parser.add_option("--background-frame-alpha", type="float",
+                      help="weight for each BG frame added to accumulator")
+    
     (options, args) = parser.parse_args()
 
     if not options.wrapper:
@@ -1293,11 +1301,18 @@ def main():
     else:
         bg_frame_interval = 50
     
+    if options.background_frame_alpha is not None:
+        bg_frame_alpha = options.background_frame_alpha
+    else:
+        bg_frame_alpha = 50
+    
     cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
     
     app=App(max_num_points_per_camera,
             roi2_radius=roi2_radius,
-            bg_frame_interval=bg_frame_interval)
+            bg_frame_interval=bg_frame_interval,
+            bg_frame_alpha=bg_frame_alpha,
+            )
     if app.num_cams <= 0:
         return
     app.mainloop()
