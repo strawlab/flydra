@@ -74,7 +74,6 @@ pt_fmt = '<dddddddddBBddBdddddd'
 small_datafile_fmt = '<dII'
     
 ALPHA = 1.0/50 # relative importance of each new frame
-BG_FRAME_INTERVAL = 50 # every N frames, add a new BG image to the accumulator
 
 # where is the "main brain" server?
 try:
@@ -111,11 +110,13 @@ def TimestampEcho():
 
 class GrabClass(object):
     def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue, max_num_points=2,
-                 roi2_radius=10):
+                 roi2_radius=10, bg_frame_interval=50):
         self.cam = cam
         self.cam2mainbrain_port = cam2mainbrain_port
         self.cam_id = cam_id
         self.log_message_queue = log_message_queue
+
+        self.bg_frame_interval = bg_frame_interval
 
         self.new_roi = threading.Event()
         self.new_roi_data = None
@@ -421,7 +422,7 @@ class GrabClass(object):
                 
                 did_expensive = False
                 if collecting_background_isSet():
-                    if bg_frame_number % BG_FRAME_INTERVAL == 0:
+                    if bg_frame_number % self.bg_frame_interval == 0:
 ##                        if cur_fisize != max_frame_size:
 ##                            # set to full ROI and take full image if necessary
 ##                            raise NotImplementedError("background collection while using hardware ROI not implemented")
@@ -681,7 +682,7 @@ class GrabClass(object):
 
 class App:
     
-    def __init__(self,max_num_points_per_camera=2,roi2_radius=10):
+    def __init__(self,max_num_points_per_camera=2,roi2_radius=10,bg_frame_interval=50):
 
         MAX_GRABBERS = 3
         # ----------------------------------------------------------------
@@ -867,7 +868,8 @@ class App:
             print 'max_num_points_per_camera',max_num_points_per_camera
             grabber = GrabClass(cam,cam2mainbrain_port,cam_id,self.log_message_queue,
                                 max_num_points=max_num_points_per_camera,
-                                roi2_radius=roi2_radius)
+                                roi2_radius=roi2_radius,
+                                bg_frame_interval=bg_frame_interval)
             self.all_grabbers.append( grabber )
             
             grabber.diff_threshold = diff_threshold
@@ -1255,11 +1257,14 @@ def main():
                       help="cam_iface BACKEND to use",
                       metavar="BACKEND")
     
-    parser.add_option("--numpts", type="int",
+    parser.add_option("--num-points", type="int",
                       help="number of points to track per camera")
     
-    parser.add_option("--swroiradius", type="int",
+    parser.add_option("--software-roi-radius", type="int",
                       help="radius of software region of interest")
+    
+    parser.add_option("--background-frame-interval", type="int",
+                      help="every N frames, add a new BG image to the accumulator")
     
     (options, args) = parser.parse_args()
 
@@ -1273,19 +1278,26 @@ def main():
         parser.print_help()
         return
 
-    if options.numpts is not None:
+    if options.num_points is not None:
         max_num_points_per_camera = options.numpts
     else:
         max_num_points_per_camera = 2
 
-    if options.swroiradius is not None:
+    if options.software_roi_radius is not None:
         roi2_radius = options.swroiradius
     else:
         roi2_radius = 10
+
+    if options.background_frame_interval is not None:
+        bg_frame_interval = options.background_frame_interval
+    else:
+        bg_frame_interval = 50
     
     cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
     
-    app=App(max_num_points_per_camera,roi2_radius=roi2_radius)
+    app=App(max_num_points_per_camera,
+            roi2_radius=roi2_radius,
+            bg_frame_interval=bg_frame_interval)
     if app.num_cams <= 0:
         return
     app.mainloop()
