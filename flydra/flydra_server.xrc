@@ -399,6 +399,7 @@
               <content>
                 <item>fly dynamics, high precision calibration, units: mm</item>
                 <item>fly dynamics, low precision calibration, units: mm</item>
+                <item>hummingbird dynamics, units: mm</item>
               </content>
               
               

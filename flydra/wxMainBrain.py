@@ -606,6 +606,22 @@ class wxMainBrainApp(wxApp):
                        initial_acceleration_covariance_estimate=15,
                        Q=Q,
                        R=R)
+        elif kalman_param_string == u'hummingbird dynamics, units: mm':
+            # process covariance
+            Q = numpy.zeros((ss,ss))
+            for i in range(6,9):
+                Q[i,i] = 100.0 # acceleration noise (near (10*sec**-2)**2)
+
+            # measurement noise covariance matrix
+            R = 0.0025*numpy.eye(os) # (5cm)**2 = (0.05m)**2
+
+            kws = dict(scale_factor=1e-3, # units: mm
+                       n_sigma_accept=5.0, # XXX should reduce later?
+                       max_variance_dist_meters=0.050, # allow error to grow to 50 mm before dropping
+                       initial_position_covariance_estimate=0.0025, #50mm ( (5e-2)**2 meters)
+                       initial_acceleration_covariance_estimate=15,
+                       Q=Q,
+                       R=R)
         else:
             raise ValueError('did not understand kalman parameters %s'%repr(kalman_param_string))
         self.main_brain.set_new_tracker_defaults(kws)

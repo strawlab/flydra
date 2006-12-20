@@ -11,6 +11,9 @@ dt = 0.01 # sec
 half_dt2 = 0.5*dt**2
 ad = 0.1 # acceleration decay
 
+# state vector describes a particle in brownian motion
+# [ x y z xvel yvel zvel xaccel yaccel zaccel]
+
 # process update matrix (time evolution update matrix)
 A = numpy.array([[   1. ,    0. ,    0. ,   dt  ,    0. ,    0. , half_dt2 ,   0.     ,    0. ],
                  [   0. ,    1. ,    0. ,    0. ,   dt  ,    0. ,   0.     , half_dt2 ,    0. ],
