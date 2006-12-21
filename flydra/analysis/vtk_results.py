@@ -7,6 +7,7 @@ opj=os.path.join
 try:
     from vtkpython import *
 except:
+    print 'WARNING: hack to update vtk to version in Ubuntu Edgy'
     import vtk
     from vtk import *
 from vtk.util.vtkImageImportFromArray import *

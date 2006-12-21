@@ -8,7 +8,11 @@ import sets
 
 import vtk_results
 import vtk.util.colors as colors
-from vtkpython import vtk
+try:
+    from vtkpython import vtk
+except:
+    print 'WARNING: hack to update vtk to version in Ubuntu Edgy'
+    import vtk
 import sys
 from optparse import OptionParser
 
@@ -33,13 +37,23 @@ def show_vtk(filename,
     if 1:
         camera = renderers[0].GetActiveCamera()
 
-        if 1:
+        if 0:
             camera.SetParallelProjection(0)
             camera.SetFocalPoint (435.71871180094649, 122.4090122591231, -278.64208334323968)
             camera.SetPosition (562.75100798895119, 3693.498202839558, 1113.7885756800238)
             camera.SetViewAngle(15.0)
             camera.SetViewUp (0.062595103756296219, -0.36449830309814407, 0.92909786353446755)
             camera.SetClippingRange (2689.7556000877539, 5464.887997721311)
+            camera.SetParallelScale(319.400653668)
+
+        if 1:
+
+            camera.SetParallelProjection(0)
+            camera.SetFocalPoint (1711.1726091248922, 703.81692844931104, 1375.5848044671152)
+            camera.SetPosition (275.55235723413432, -4773.4823848768538, 2985.0885689508045)
+            camera.SetViewAngle(15.0)
+            camera.SetViewUp (0.10761558045997606, 0.25422425708086804, 0.96113938320825409)
+            camera.SetClippingRange (3271.2791970812791, 9713.790822523013)
             camera.SetParallelScale(319.400653668)
 
     DEBUG1=False
@@ -109,65 +123,66 @@ def show_vtk(filename,
 
         
 
-        if DEBUG1:
-            if obj_id>320:
-                break
-            cond = ((xs < 0) & (zs < 0))
-            nz = numpy.nonzero(cond)[0]
-            if len(nz)>1:
-                frames = kresults.root.kalman_estimates.readCoordinates(row_idxs,
-                                                                        field='frame',
-                                                                        flavor='numpy')
-                neg_obj_ids.append(obj_id)
-                vd = verts[1:]-verts[:-1]
-                vd = numpy.sum((vd**2),axis=1)
-                min_vd_idx = numpy.argmin(vd)
-                if vd[min_vd_idx] == 0.0:
+##        if DEBUG1:
+##            if obj_id>320:
+##                break
+##            cond = ((xs < 0) & (zs < 0))
+##            nz = numpy.nonzero(cond)[0]
+##            if len(nz)>1:
+##                frames = kresults.root.kalman_estimates.readCoordinates(row_idxs,
+##                                                                        field='frame',
+##                                                                        flavor='numpy')
+##                neg_obj_ids.append(obj_id)
+##                vd = verts[1:]-verts[:-1]
+##                vd = numpy.sum((vd**2),axis=1)
+##                min_vd_idx = numpy.argmin(vd)
+##                if vd[min_vd_idx] == 0.0:
                     
-                    print 'obj_id',obj_id
-                    for row in kresults.root.kalman_observations.where(
-                        kresults.root.kalman_observations.cols.obj_id==obj_id):
-                        print 'observations row:',row
-                    print
-                    for row in kresults.root.kalman_estimates.where(
-                        kresults.root.kalman_estimates.cols.obj_id==obj_id):
-                        print 'estimates row:',row['frame'],row['x'],row['y'],row['z']
+##                    print 'obj_id',obj_id
+##                    for row in kresults.root.kalman_observations.where(
+##                        kresults.root.kalman_observations.cols.obj_id==obj_id):
+##                        print 'observations row:',row
+##                    print
+##                    for row in kresults.root.kalman_estimates.where(
+##                        kresults.root.kalman_estimates.cols.obj_id==obj_id):
+##                        print 'estimates row:',row['frame'],row['x'],row['y'],row['z']
                         
-                    print 'frames',frames[0],frames[-1]
-                    frame0 = frames[min_vd_idx]
-                    frame1 = frames[min_vd_idx+1]
-                    print '  index',min_vd_idx
-                    print 'vert, frame0 (scaled)',verts[min_vd_idx], frame0
-                    print 'vert, frame1 (scaled)',verts[min_vd_idx+1], frame1
+##                    print 'frames',frames[0],frames[-1]
+##                    frame0 = frames[min_vd_idx]
+##                    frame1 = frames[min_vd_idx+1]
+##                    print '  index',min_vd_idx
+##                    print 'vert, frame0 (scaled)',verts[min_vd_idx], frame0
+##                    print 'vert, frame1 (scaled)',verts[min_vd_idx+1], frame1
                     
-                    for frame in [frame0,frame1]:
-                        frame = int(frame)
-                        for row in kresults.root.kalman_estimates.where(
-                            kresults.root.kalman_estimates.cols.frame==frame):
-                            if row['obj_id']==obj_id:
-                                print '  kalman_estimates row:',row
-                        for row in kresults.root.kalman_observations.where(
-                            kresults.root.kalman_observations.cols.frame==frame):
-                            if row['obj_id']==obj_id:
-                                print '  kalman_observations row:',row
-                        if 1:
-                            for row in kresults.root.data2d_distorted.where(
-                                kresults.root.data2d_distorted.cols.frame==frame):
-                                        print '  ',row['camn'],row['frame'],row['timestamp'],row['x'],row['y']
-                        print
+##                    for frame in [frame0,frame1]:
+##                        frame = int(frame)
+##                        for row in kresults.root.kalman_estimates.where(
+##                            kresults.root.kalman_estimates.cols.frame==frame):
+##                            if row['obj_id']==obj_id:
+##                                print '  kalman_estimates row:',row
+##                        for row in kresults.root.kalman_observations.where(
+##                            kresults.root.kalman_observations.cols.frame==frame):
+##                            if row['obj_id']==obj_id:
+##                                print '  kalman_observations row:',row
+##                        if 1:
+##                            for row in kresults.root.data2d_distorted.where(
+##                                kresults.root.data2d_distorted.cols.frame==frame):
+##                                        print '  ',row['camn'],row['frame'],row['timestamp'],row['x'],row['y']
+##                        print
                     
-                    #print
-                #print verts
-                #print frames
-                print
+##                    #print
+##                #print verts
+##                #print frames
+##                print
 
 
-                vtk_results.show_longline(renderers,verts,
-                                          radius=0.001*plot_scale,
-                                          nsides=4,opacity=0.2,
-                                          color=colors.blue)
+##                vtk_results.show_longline(renderers,verts,
+##                                          radius=0.001*plot_scale,
+##                                          nsides=4,opacity=0.2,
+##                                          color=colors.blue)
 
-        if not DEBUG1:
+##        if not DEBUG1:
+        if 1:
             if len(verts):
                 if show_obj_ids:
                     start_label = '%d (%d-%d)'%(obj_id,
@@ -182,8 +197,8 @@ def show_vtk(filename,
                 color = getattr(colors,color_name)
                 vtk_results.show_longline(renderers,verts,
                                           start_label=start_label,
-                                          radius=0.001*plot_scale,
-                                          nsides=3,opacity=0.2,
+                                          radius=0.003*plot_scale,
+                                          nsides=3,opacity=0.5,
                                           color=color)#s.blue)
 
     if show_cameras:
