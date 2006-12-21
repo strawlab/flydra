@@ -1,7 +1,5 @@
 import numpy
-# cam1
-
-
+import os
 
 # implementation of DLT method
 # http://www.miba.auc.dk/~lasse/publications/HTML/pilot/cam_cal/camcal.html
@@ -48,93 +46,115 @@ def center(P):
     return C_
 
 if 1:
-    z = 31
-
+    a = 0 # arbitrary number
+    b = a+1
+    c = a+2
+    wall = a+3 # wall
+    another_sample = a+4 # wall
+    times = {a:'163644',
+             b:'164010',
+             c:'164129',
+             another_sample:'122435',
+             }
+    datebytime = {times[a]:'20061218',
+                  times[b]:'20061218',
+                  times[c]:'20061218',
+                  times[another_sample]:'20061219',
+                  }
+                  
+    ft2inch = 12.0
+    inch2cm = 2.54
+    ft2cm = ft2inch*inch2cm
+    
     cam1 = [
-        [83,288,30,10,0],
-        [192,289,40,10,0],
-        [561, 293, 70, 10, 0],
-        [562, 162, 70, 20, 0],
-        [432,419,60,0,0],
-        [80,169,30,20,0],
-        [149,340,50,10,z],
-        [514,346,70,10,z],
-        [515,151,70,20,z],
-        [146,158,50,20,z],
+        # point A
+        [422, 488, 151, 76, 43, a, 1],
+        [ 323, 484, 177.5, 76, 43, a, 2],
+        [ 427, 342, 151, 76, 81, a, 5],
+        [435, 351, 151, 114, 81, a, 8],
+        #point B
+        [347, 397, 178, 95, 67, b, 1 ],
+        [257, 394, 204.5, 95, 67, b, 2],
+        [376, 284, 178, 133, 105, b, 8],
+        [304, 281, 204.5, 133, 105, b, 7],
+        #point C
+        [241, 388, 198, 64, 66, c, 2],
+        [264, 396, 198, 90.5, 66, c, 1],
+        [275, 264, 198, 90.5, 104, c, 5],
+        # back wall
+        [44.4, 163, 10*ft2cm, 5*ft2cm, 5*ft2cm, wall, 0],
         ]
+    cam1 = numpy.array(cam1, dtype=numpy.float)
 
     cam2 = [
-        [282,350,10,0,0],
-        [337,265,20,10,0],
-        [652,264,60,10,0],
-        [646,148,60,20,0],
-        [215,179,0,20,0],
-        [30,295,10,10,z],
-        [82,297,20,10,z],
-        [517,471,70,0,z],
-        [638,136,80,20,z],
-        [21,191,10,20,z],
+        # point A
+        [216,423,151, 114, 43,a,4],
+        [337,428,151,76,43,a,1],
+        [341,337, 151, 76, 81,a,5],
+        [343,282,177.5,76, 81,a,6],
+        # point B
+        [295,323,178, 95, 67, b,1],
+        [166,225, 178,133, 105, b,8],
+        [293,224, 178, 95, 105, b,5],
+        [294, 179, 204.5, 95, 105,b,6],
+        # point C
+        [303,283, 198, 90.5, 66,c,1],
+        [380,283, 198, 64, 66,c,2],
+        [296,182, 198, 90.5, 104,c,5],
+        [301,131, 236, 90.5, 104,c,8],
+        # wall
+        [498, 250, 10*ft2cm, 0, 0, wall, 0],
         ]
+    cam2 = numpy.array(cam2, dtype=numpy.float)
 
     cam3 = [
-        [92,296,20,10,0],
-        [190,396,30,0,0],
-        [494,392,60,0,0],
-        [593,288,70,10,0],
-        [594,188,70,20,0],
-        [93,195,20,20,0],
-        [76,318,30,10,z],
-        [607,485,60,0,z],
-        [609,130,60,20,z],
-        [252,316,40,10,z],
+        # point A
+        [304,387, 151, 76,43 ,a,1],
+        [226,389, 177.5, 76,43 ,a,2],
+        #[303,391, 151, 76, 81,a,5], # bad point
+        [221,293, 177.5, 76, 81,a,6],
+        [302,236, 151, 114, 81,a,8],
+        [226,237, 177.5, 114, 81,a,7],
+        # point B
+        [235, 308, 178,95 ,67 ,b,1],
+        [159, 305, 204.5, 95, 67,b,2],
+        [230, 207, 178,95 , 105,b,5],
+        [150, 206, 204.5, 95, 105,b, 6],
+        [179,252, 204.5, 133, 67,b,3],
+        # point C
+        [166,317, 198, 90.5, 66,c,1],
+        [155,356, 198, 64, 66,c,2],
+        [161,211, 198, 90.5, 104,c,5],
+        [44,207, 236, 90.5, 104 ,c,8],
+        # wall
+        [643,345, 0, 5*ft2cm, 0,wall,0],
         ]
+    cam3 = numpy.array(cam3, dtype=numpy.float)
 
     cam4 = [
-        [104,414,40,0,0],
-        [424,268,80,10,0],
-        [281,388,60,0,0],
-        [427,171,80,20,0],
-        [108,164,40,20,0],
-        [199,283,50,10,0],
-        [160,360,20,10,z],
-        [587,303,60,10,z],
-        [644,416,70,0,z],
-        [593,168,60,20,z],
-        [165,154,20,20,z],
+        # calibrated the next day
+        [120,475,10*ft2cm,0,0,another_sample,0],
+        [522,460,10*ft2cm,5*ft2cm,0,another_sample,0],
+        [497,69.6,10*ft2cm,5*ft2cm,5*ft2cm,another_sample,0],
+        [120,76.2,10*ft2cm,0,5*ft2cm,another_sample,0],
+        [344, 200, 178, 85, 86, another_sample,0], # feeder suspension
+        [349,298, 178, 85, 63, another_sample,0], # feeder bottom
         ]
-
-    cam5 = [
-        [141,378,20,10,z],
-        [501,364,40,10,z],
-        [509,183,40,20,z],
-        [145,177,20,20,z],
-        [83,321,20,10,0],
-        [559,312,60,10,0],
-        [563,196,60,20,0],
-        [447,435,50,0,0],
-        [87,188,20,20,0],
-        [212,319,30,10,0],
-        ]
+    cam4 = numpy.array(cam4, dtype=numpy.float)
 
     cams = [(cam1,'cam1_0'),
             (cam2,'cam2_0'),
             (cam3,'cam3_0'),
             (cam4,'cam4_0'),
-            (cam5,'cam5_0'),
             ]
 
     sccs = []
 
     for (cam,cam_id) in cams:
-        cam = numpy.array(cam, dtype=numpy.float)
-        if 1:
-            # on 20061121, the upper images were shifted by Y-2
-            print 'performing Y correction'
-            zcoord = cam[:,4]
-            cond = zcoord==z
-            cam[:,3] = cam[:,3]+2
+        # put in mm
+        cam[:,2:5] = cam[:,2:5]*10.0 
         
-        X3d = cam[:,2:5]*10.0 # put in mm
+        X3d = cam[:,2:5]
         x2d = cam[:,0:2]
         B,c = build_Bc(X3d,x2d)
         DLT_avec_results = numpy.linalg.lstsq(B,c)
@@ -145,29 +165,6 @@ if 1:
         fname = cam_id + 'DLT.txt'
         save_ascii_matrix(fname,Mhat)
 
-        if 0:
-            if cam_id == 'cam2_0':
-                all_rows = numpy.arange( cam.shape[0] )
-                all_X3d = cam[:,2:5]*10.0 # put in mm
-                all_x2d = cam[:,0:2]
-                
-                for test_bad_row in range(cam.shape[0]):
-                    test_good_rows = all_rows[ all_rows != test_bad_row ]
-
-                    
-                    X3d = all_X3d[test_good_rows]
-                    x2d = all_x2d[test_good_rows]
-                    B,c = build_Bc(X3d,x2d)
-                    DLT_avec_results = numpy.linalg.lstsq(B,c)
-                    a_vec,residuals = DLT_avec_results[:2]
-                    Mhat = numpy.array(list(a_vec)+[1])
-                    Mhat.shape=(3,4)
-
-                    print 'test_bad_row',test_bad_row
-                    print 'residuals',residuals
-                    print cam[test_bad_row,:]
-                    print
-                    
         if 1:
             import flydra.reconstruct
 
@@ -183,10 +180,61 @@ if 1:
                 res = res,
                 pp = pp,
                 helper = None, ## XXX should extract focal length?
-                scale_factor = 1e-3)
+                scale_factor = 1e-3, # convert these units to meters
+                )
             sccs.append(scc)
             
     if len(sccs):
         reconstructor = flydra.reconstruct.Reconstructor(sccs)
-        reconstructor.save_to_files_in_new_directory('cal_20061121_hand')
-                
+        reconstructor.save_to_files_in_new_directory('cal_hand')
+
+
+# replot
+if 1:
+    import FlyMovieFormat
+    import pylab
+    for scc in sccs:
+        for this_time in times:
+            time_str = times[this_time]
+            date = datebytime[time_str]
+            fname = 'full_%s_%s_%s.fmf'%(date,time_str,scc.cam_id)
+            #print fname
+
+            if not os.path.exists(fname):
+                print fname,'does not exist, skipping'
+                continue
+            fly_movie = FlyMovieFormat.FlyMovie(fname)
+            frame,timestamp = fly_movie.get_frame(0)
+
+            pylab.figure()
+            pylab.imshow(frame,interpolation='nearest',origin='lower')
+            xlim = pylab.gca().get_xlim()
+            pylab.gca().set_xlim(xlim[1],xlim[0])
+            pylab.title(fname)
+            
+            for (pts, cam_id) in cams:
+                if cam_id != scc.cam_id:
+                    continue
+                for pts_row in pts:
+                    if pts_row[5] != this_time:
+                        if pts_row[5] != wall:
+                            continue
+                    #print pts_row[:5]
+
+                    world_coord = pts_row[2:5]
+                    cam_coord = pts_row[:5]
+                    #print 'world_coord',world_coord
+                    recon_cam = reconstructor.find2d(scc.cam_id, world_coord)
+                    #print cam_coord[:2],'->',recon_cam
+                    pylab.plot( [ cam_coord[0], recon_cam[0] ],
+                                [ cam_coord[1], recon_cam[1] ],
+                                'w-' )
+                    pylab.plot( [ cam_coord[0] ],
+                                [ cam_coord[1]],
+                                'go' )
+                    pylab.plot( [ recon_cam[0] ],
+                                [ recon_cam[1] ],
+                                'ro' )
+                                  
+            #print
+    pylab.show()
