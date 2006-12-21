@@ -55,9 +55,15 @@ elif 0:
     cal_source = 'DATA20061205_193629.h5'
     reconstructor_source = tables.openFile(cal_source,mode='r')
 else:
-    files = os.listdir(os.curdir)
-    fmfs = [f for f in files if f.startswith('full') and f.endswith('bg.fmf')]
-    cals = [f for f in files if f.startswith('DATA') and f.endswith('.h5')]
+    if 0:
+        files = os.listdir(os.curdir)
+        fmfs = [f for f in files if f.startswith('full') and f.endswith('bg.fmf')]
+        cals = [f for f in files if f.startswith('DATA') and f.endswith('.h5')]
+    else:
+        files = os.listdir(os.curdir)
+        fmfs = [f for f in files if f.startswith('full') and f.endswith('bg.fmf')]
+        #fmfs = [f for f in files if f.startswith('full') and f.endswith('0.fmf')]
+        cals = [f for f in files if f.startswith('cal_')]
 
     use_fmf_names = []
     cam_ids = []
@@ -88,7 +94,10 @@ else:
     base_fname = use_fmf_names[0] +'_%s_bg.fmf'
     # hdf5 file containing calibration data
     cal_source = cals[0]
-    reconstructor_source = tables.openFile(cal_source,mode='r')
+    if cal_source.endswith('.h5'):
+        reconstructor_source = tables.openFile(cal_source,mode='r')
+    else:
+        reconstructor_source = cal_source
 
 recon = flydra.reconstruct.Reconstructor(reconstructor_source)
 
