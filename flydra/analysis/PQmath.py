@@ -1,7 +1,6 @@
 import math
 import cgtypes
 from numarray.ieeespecial import nan
-#import numarray as nx
 import numpy as nx
 import numpy
 import numarray
@@ -38,7 +37,7 @@ def norm_vec(V):
     else:
         assert Va.shape[1] == 3
         Vamags = nx.sqrt(Va[:,0]**2 + Va[:,1]**2 + Va[:,2]**2)
-        U = Va/Vamags[:,nx.NewAxis]
+        U = Va/Vamags[:,nx.newaxis]
     return U
 
 def rotate_velocity_by_orientation(vel,orient):
@@ -48,7 +47,7 @@ def rotate_velocity_by_orientation(vel,orient):
 def is_unit_vector(U):
     V = nx.asarray(U)
     if len(V.shape)==1:
-        V = V[nx.NewAxis,:]
+        V = V[nx.newaxis,:]
     V = V**2
     mag = nx.sqrt(nx.sum(V,axis=1))
 #    return nx.sum(nx.abs(mag-1.0)) < 1e-15
