@@ -1,5 +1,7 @@
 from flydra.trigger import Device
 
+# may need to do this: mount -t none /proc/bus/usb /dap386chrt/proc/bus/usb -o bind
+
 import cam_iface_choose
 global cam_iface
 cam_iface = None
@@ -178,7 +180,12 @@ def doit(device_num=0,mode_num=0,num_buffers=30):
         time.sleep(.3)
         fc2 = grabber.get_framecount()
 
-        assert fc == fc2
+        try:
+            assert fc == fc2
+        except:
+            print 'fc',fc
+            print 'fc2',fc2
+            raise
 
         # send single trigger pulse
         print 'sending single pulse'
