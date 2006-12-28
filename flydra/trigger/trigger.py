@@ -125,9 +125,8 @@ class Device:
         print 'n_ticks_for_carrier',n_ticks_for_carrier
         
         self.timer3_TOP = n_ticks_for_carrier
-        print 'self.timer3_TOP',self.timer3_TOP
         self.timer3_clock_tick_duration = clock_tick_duration
-        self.set_output_durations(A_sec=100e-6, # 100 usec
+        self.set_output_durations(A_sec=1e-3, # 1 msec
                                   B_sec=0,
                                   C_sec=0,
                                   ) # output compare A duration 10 usec
