@@ -328,6 +328,7 @@ def show_line(renderers,v1,v2,color,radius,nsides=20,opacity=1.0):
 
 def show_longline(renderers,verts,
                   start_label=None,
+                  end_label=None,
                   color=black,
                   radius=0.005,
                   nsides=20,
@@ -349,6 +350,25 @@ def show_longline(renderers,verts,
     if start_label is not None:
 
         X = verts[0]
+        tl = vtkTextActor()
+        tl.SetInput( start_label )
+        tl.GetPositionCoordinate().SetCoordinateSystemToWorld()
+        tl.GetPositionCoordinate().SetValue(*X)
+        tl.SetAlignmentPoint(0)
+        if 0:
+            tl.GetTextProperty().SetColor(0,0,0)
+        else:
+            tl.GetTextProperty().SetColor(white)
+            tl.GetTextProperty().SetShadow(True)
+        tl.GetTextProperty().SetJustificationToCentered() # does nothing?
+        for renderer in renderers:
+            renderer.AddActor( tl )
+        actors.append( tl )
+
+    
+    if end_label is not None:
+
+        X = verts[-1]
         tl = vtkTextActor()
         tl.SetInput( start_label )
         tl.GetPositionCoordinate().SetCoordinateSystemToWorld()
