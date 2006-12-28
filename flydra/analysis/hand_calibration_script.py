@@ -66,6 +66,8 @@ if 1:
     inch2cm = 2.54
     ft2cm = ft2inch*inch2cm
     
+    # cam_x cam_y world_x world_y world_z
+    
     cam1 = [
         # point A
         [422, 488, 151, 76, 43, a, 1],
