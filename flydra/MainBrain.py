@@ -417,6 +417,11 @@ class CoordReceiver(threading.Thread):
     def OnSynchronize(self, cam_idx, cam_id, framenumber, timestamp,
                       realtime_coord_dict, realtime_kalman_coord_dict,
                       new_data_framenumbers):
+        
+        if self.main_brain.is_saving_data():
+            print 'WARNING: will not re-synchronize while saving data!'
+            return
+        
         self.framenumber_offsets[cam_idx] = framenumber
         if self.last_timestamps[cam_idx] != IMPOSSIBLE_TIMESTAMP:
             print cam_id,'(re)synchronized'
