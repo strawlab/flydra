@@ -1022,10 +1022,13 @@ def show_frames_vtk(results,renderers,
 ##    return bbox
     return actors
     
-def interact_with_renWin(renWin):
+def interact_with_renWin(renWin, picker=None):
 
     iren = vtkRenderWindowInteractor()
     iren.SetRenderWindow( renWin )
+
+    if picker is not None:
+        iren.SetPicker(picker)
 
     iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
     iren.Initialize ()
