@@ -18,6 +18,25 @@ from optparse import OptionParser
 
 plot_scale = 1000.0 # plot in mm
 
+def get_top_sequences(objid_by_n_observations,n_top_traces = 20):
+    n_observations_list = objid_by_n_observations.keys()
+    n_observations_list.sort()
+    long_obs = []
+    long_obs_n = []
+    while len(long_obs) < n_top_traces:
+        if not len(n_observations_list):
+            break
+        n_observations = n_observations_list.pop()
+        long_obj_ids = objid_by_n_observations[n_observations]
+        
+        long_obs.extend( long_obj_ids )
+        long_obs_n.extend( [n_observations]*len(long_obj_ids) )
+    long_obs = long_obs[:n_top_traces]
+    long_obs_n = long_obs_n[:n_top_traces]
+    return long_obs, long_obs_n
+    print 'longest obj_ids:',long_obs
+    print 'longest obj_ids (number):',long_obs_n
+
 def show_vtk(filename,
              show_obj_ids=False,
              obj_start=None,
@@ -26,7 +45,11 @@ def show_vtk(filename,
              show_observations=False,
              min_length=None,
              stereo=False,
-             debug=0):
+             debug=0,
+             show_n_longest=None,
+             ):
+    actor2objid = {}
+
     kresults = PT.openFile(filename,mode="r")
 
     color_cycle = ['tomato', 'banana', 'azure', 'blue',
@@ -56,11 +79,6 @@ def show_vtk(filename,
             camera.SetClippingRange (3271.2791970812791, 9713.790822523013)
             camera.SetParallelScale(319.400653668)
 
-    DEBUG1=False
-    #DEBUG1=True
-    if DEBUG1:
-        neg_obj_ids = []
-            
     obj_ids = kresults.root.kalman_estimates.read(field='obj_id',flavor='numpy')
     use_obj_ids = obj_ids
     if obj_start is not None:
@@ -70,10 +88,47 @@ def show_vtk(filename,
     # find unique obj_ids:
     use_obj_ids = numpy.array(list(sets.Set([int(obj_id) for obj_id in use_obj_ids])))
 
-    if debug >=5:
+    if debug >=1:
         print 'DEBUG: obj_ids.min()',obj_ids.min()
         print 'DEBUG: obj_ids.max()',obj_ids.max()
+
+    ####### iterate once to find longest observations #########
+    if show_n_longest is not None:
+        objid_by_n_observations = {}
+        for obj_id_enum,obj_id in enumerate(use_obj_ids):
+            if obj_id_enum%100==0:
+                print 'reading %d of %d'%(obj_id_enum,len(use_obj_ids))
+            if PT.__version__ <= '1.3.3':
+                obj_id_find=int(obj_id)
+            else:
+                obj_id_find=obj_id
+
+            observation_frame_idxs = kresults.root.kalman_observations.getWhereList(
+                kresults.root.kalman_observations.cols.obj_id==obj_id_find,
+                flavor='numpy')
+            observation_frames = kresults.root.kalman_observations.readCoordinates(
+                observation_frame_idxs,
+                field='frame',
+                flavor='numpy')
+
+            n_observations = len( observation_frames )
+
+            if debug >=3:
+                print 'DEBUG: obj_id %d: %d/%d observations'%(obj_id, n_observations,len(estimate_frames))
+            objid_by_n_observations.setdefault(n_observations,[]).append(obj_id)
+        long_obs, long_obs_n = get_top_sequences(objid_by_n_observations,
+                                                 n_top_traces=show_n_longest)
+        for obj_id, n_observations in zip( long_obs, long_obs_n ):
+            print 'showing obj_id %d (%d observations)'%(obj_id, n_observations)
+        print 'longest obj_ids:',long_obs
+
+        use_obj_ids = long_obs
+        
+    ####### iterate again for plotting ########
+    objid_by_n_observations = {}
     for obj_id_enum,obj_id in enumerate(use_obj_ids):
+        if obj_id_enum%100==0:
+            print 'reading %d of %d'%(obj_id_enum,len(use_obj_ids))
         
         if PT.__version__ <= '1.3.3':
             obj_id_find=int(obj_id)
@@ -94,6 +149,12 @@ def show_vtk(filename,
         valid_condition = estimate_frames <= max_observation_frame
         row_idxs = row_idxs[valid_condition]
         n_observations = len( observation_frames )
+        
+        if debug >=3:
+            print 'DEBUG: obj_id %d: %d/%d observations'%(obj_id, n_observations,len(estimate_frames))
+        objid_by_n_observations.setdefault(n_observations,[]).append(obj_id)
+            
+        
 #        this_len = len(row_idxs)
 #        if this_len < min_length:
         if n_observations < min_length:
@@ -109,106 +170,50 @@ def show_vtk(filename,
             obs_zs = kresults.root.kalman_observations.readCoordinates(
                 observation_frame_idxs,field='z',flavor='numpy')
             obs_verts = numpy.vstack((obs_xs,obs_ys,obs_zs)).T * plot_scale
-            vtk_results.show_spheres(renderers,obs_verts,
-                                     #radius=0.001*plot_scale,
-                                     #opacity=0.2,
-                                     #color=colors.blue,
-                                     )
-        
+            actors = vtk_results.show_spheres(renderers,obs_verts,
+                                              #radius=0.001*plot_scale,
+                                              #opacity=0.2,
+                                              #color=colors.blue,
+                                              )
+            for actor in actors:
+                actor2objid[actor] = obj_id
+                    
         xs = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='x',flavor='numpy')
         ys = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='y',flavor='numpy')
         zs = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='z',flavor='numpy')
         
         verts = numpy.vstack((xs,ys,zs)).T * plot_scale
 
-        
+        if len(verts):
+            if show_obj_ids:
+                start_label = '%d (%d-%d)'%(obj_id,
+                                            observation_frames[0],
+                                            observation_frames[-1],
+                                            )
+            else:
+                start_label = None
 
-##        if DEBUG1:
-##            if obj_id>320:
-##                break
-##            cond = ((xs < 0) & (zs < 0))
-##            nz = numpy.nonzero(cond)[0]
-##            if len(nz)>1:
-##                frames = kresults.root.kalman_estimates.readCoordinates(row_idxs,
-##                                                                        field='frame',
-##                                                                        flavor='numpy')
-##                neg_obj_ids.append(obj_id)
-##                vd = verts[1:]-verts[:-1]
-##                vd = numpy.sum((vd**2),axis=1)
-##                min_vd_idx = numpy.argmin(vd)
-##                if vd[min_vd_idx] == 0.0:
-                    
-##                    print 'obj_id',obj_id
-##                    for row in kresults.root.kalman_observations.where(
-##                        kresults.root.kalman_observations.cols.obj_id==obj_id):
-##                        print 'observations row:',row
-##                    print
-##                    for row in kresults.root.kalman_estimates.where(
-##                        kresults.root.kalman_estimates.cols.obj_id==obj_id):
-##                        print 'estimates row:',row['frame'],row['x'],row['y'],row['z']
-                        
-##                    print 'frames',frames[0],frames[-1]
-##                    frame0 = frames[min_vd_idx]
-##                    frame1 = frames[min_vd_idx+1]
-##                    print '  index',min_vd_idx
-##                    print 'vert, frame0 (scaled)',verts[min_vd_idx], frame0
-##                    print 'vert, frame1 (scaled)',verts[min_vd_idx+1], frame1
-                    
-##                    for frame in [frame0,frame1]:
-##                        frame = int(frame)
-##                        for row in kresults.root.kalman_estimates.where(
-##                            kresults.root.kalman_estimates.cols.frame==frame):
-##                            if row['obj_id']==obj_id:
-##                                print '  kalman_estimates row:',row
-##                        for row in kresults.root.kalman_observations.where(
-##                            kresults.root.kalman_observations.cols.frame==frame):
-##                            if row['obj_id']==obj_id:
-##                                print '  kalman_observations row:',row
-##                        if 1:
-##                            for row in kresults.root.data2d_distorted.where(
-##                                kresults.root.data2d_distorted.cols.frame==frame):
-##                                        print '  ',row['camn'],row['frame'],row['timestamp'],row['x'],row['y']
-##                        print
-                    
-##                    #print
-##                #print verts
-##                #print frames
-##                print
-
-
-##                vtk_results.show_longline(renderers,verts,
-##                                          radius=0.001*plot_scale,
-##                                          nsides=4,opacity=0.2,
-##                                          color=colors.blue)
-
-##        if not DEBUG1:
-        if 1:
-            if len(verts):
-                if show_obj_ids:
-                    start_label = '%d (%d-%d)'%(obj_id,
-                                                observation_frames[0],
-                                                observation_frames[-1],
-                                                )
-                else:
-                    start_label = None
-                    
-                color_idx = obj_id_enum%len(color_cycle)
-                color_name = color_cycle[color_idx]
-                color = getattr(colors,color_name)
-                vtk_results.show_longline(renderers,verts,
-                                          start_label=start_label,
-                                          radius=0.003*plot_scale,
-                                          nsides=3,opacity=0.5,
-                                          color=color)#s.blue)
-
+            color_idx = obj_id_enum%len(color_cycle)
+            color_name = color_cycle[color_idx]
+            color = getattr(colors,color_name)
+            actors = vtk_results.show_longline(renderers,verts,
+                                               start_label=start_label,
+                                               radius=0.003*plot_scale,
+                                               nsides=3,opacity=0.5,
+                                               color=color)#s.blue)
+            for actor in actors:
+                actor2objid[actor] = obj_id
+                
+    if show_n_longest is None:
+        long_obs, long_obs_n = get_top_sequences(objid_by_n_observations)
+        print 'longest obj_ids:',long_obs
+        print 'longest obj_ids (number):',long_obs_n
+    
     if show_cameras:
         vtk_results.show_cameras(kresults,renderers)
 
     kresults.close()
     
-    if DEBUG1:
-        print 'neg_obj_ids = ',repr(neg_obj_ids)
-
     if 1:
         bbox_points = vtk.vtkPoints()
         X_zero_frame = None
@@ -232,7 +237,33 @@ def show_vtk(filename,
             axes2.GetProperty().SetColor(0,0,0)
             renderer.AddActor(axes2)
 
-    vtk_results.interact_with_renWin(renWin)
+    use_picker = True
+    if use_picker:
+        # inspired by Annotation/Python/annotatePick.py
+        picker = vtk.vtkCellPicker()
+        #print 'picker.GetTolerance()',picker.GetTolerance()
+        picker.SetTolerance(1e-9)
+        
+        def annotatePick(object, event):
+            if not picker.GetCellId() < 0:
+                found = sets.Set([])
+                actors = picker.GetActors()
+                actors.InitTraversal()
+                actor = actors.GetNextItem()
+                while actor:
+                    objid = actor2objid[actor]
+                    found.add(objid)
+                    actor = actors.GetNextItem()
+                found = list(found)
+                found.sort()
+                for f in found:
+                    print f
+                    
+        picker.AddObserver("EndPickEvent", annotatePick)
+    else:
+        picker=None
+
+    vtk_results.interact_with_renWin(renWin,picker=picker)
     
     camera = renderers[0].GetActiveCamera()
     vtk_results.print_cam_props(camera)
@@ -257,6 +288,9 @@ def main():
     parser.add_option("--stop", type="int",
                       help="last object ID to plot",
                       metavar="STOP")
+    
+    parser.add_option("--n-top-traces", type="int",
+                      help="show N longest traces")
     
     parser.add_option("--min-length", type="int",
                       help="minimum number of observations required to plot",
@@ -295,6 +329,7 @@ def main():
     show_vtk(filename=h5_filename,
              obj_start=options.start,
              obj_end=options.stop,
+             show_n_longest=options.n_top_traces,
              stereo=options.stereo,
              show_obj_ids = options.show_obj_ids,
              show_observations = options.show_observations,
