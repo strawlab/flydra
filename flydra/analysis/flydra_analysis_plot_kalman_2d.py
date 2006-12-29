@@ -136,8 +136,7 @@ def show_it(fig,
     elif k_before_stop is not None:
         k_use_idxs = k_before_stop
     else:
-        k_use_idxs = numpy.arange(data2d.nrows)
-
+        k_use_idxs = numpy.arange(kobs.nrows)
 
     obj_ids = kobs.readCoordinates( k_use_idxs,
                                     field='obj_id',
@@ -183,12 +182,6 @@ def show_it(fig,
             xys = xys_by_cam_id.setdefault( this_cam_id, ([],[]) )
             xys[0].append( this_row.x )
             xys[1].append( this_row.y )
-            if obj_id_save == 286:
-                print this_cam_id
-                print this_camn_idx
-                print this_camn_d2d
-                print this_row.x, this_row.y
-                print
             
     for obj_id in xys_by_obj_id:
         xys_by_cam_id = xys_by_obj_id[obj_id]
