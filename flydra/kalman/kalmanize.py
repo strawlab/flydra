@@ -40,8 +40,31 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
         # make mapping from cam_id to camn
         cam_id2camn = {}
         for camn in camn2cam_id:
+            if camn not in frame_data:
+                continue # this camn not used this frame, ignore
             cam_id = camn2cam_id[camn]
             if cam_id in cam_id2camn:
+                print '*'*80
+                print """
+                
+ERROR: It appears that you have >1 camn for a cam_id at a certain
+frame. This almost certainly means that you are using a data file
+recorded with an older version of flydra.MainBrain and that the
+cameras were re-synchronized during the saving of a data file. You
+will have to manually find out which camns to ignore (use
+flydra_analysis_print_camera_summary) and then use the --exclude-camns
+option to this program.
+
+"""
+                print '*'*80
+                print
+                print 'frame',frame
+                print 'camn',camn
+                print 'frame_data',frame_data
+                print
+                print 'cam_id2camn',cam_id2camn
+                print 'camn2cam_id',camn2cam_id
+                print
                 raise ValueError('cam_id already in dict')
             cam_id2camn[cam_id]=camn
 
@@ -128,9 +151,13 @@ def kalmanize(src_filename,
               start_frame=None,
               stop_frame=None,
               exclude_cam_ids=None,
+              exclude_camns=None,
               ):
     if exclude_cam_ids is None:
         exclude_cam_ids = []
+        
+    if exclude_camns is None:
+        exclude_camns = []
         
     results = get_results(src_filename)
 
@@ -198,6 +225,7 @@ def kalmanize(src_filename,
         accum_time += (time4-time3)
         new_frame_test_cmp = row['frame']
         assert new_frame_test_cmp==new_frame
+
         if last_frame != new_frame:
             if new_frame < last_frame:
                 print 'new_frame',new_frame
@@ -238,6 +266,10 @@ def kalmanize(src_filename,
         cam_id = camn2cam_id[camn]
         
         if cam_id in exclude_cam_ids:
+            # exclude this camera
+            continue
+
+        if camn in exclude_camns:
             # exclude this camera
             continue
 
@@ -294,9 +326,13 @@ def main():
                       help="calibration/reconstructor path",
                       metavar="RECONSTRUCTOR")
 
-    parser.add_option("--exclude-cams", dest="exclude_cams", type='string',
+    parser.add_option("--exclude-cam-ids", dest="exclude_cam_ids", type='string',
                       help="camera ids to exclude from reconstruction (space separated)",
-                      metavar="EXCLUDE_CAMS")
+                      metavar="EXCLUDE_CAM_IDS")
+
+    parser.add_option("--exclude-camns", dest="exclude_camns", type='string',
+                      help="camera numbers to exclude from reconstruction (space separated)",
+                      metavar="EXCLUDE_CAMNS")
 
     parser.add_option("--start", type="int",
                       help="first frame",
@@ -307,8 +343,11 @@ def main():
                       metavar="STOP")
 
     (options, args) = parser.parse_args()
-    if options.exclude_cams is not None:
-        options.exclude_cams = options.exclude_cams.split()
+    if options.exclude_cam_ids is not None:
+        options.exclude_cam_ids = options.exclude_cam_ids.split()
+        
+    if options.exclude_camns is not None:
+        options.exclude_camns = [int(camn) for camn in options.exclude_camns.split()]
         
     if options.filename is not None:
         args.append(options.filename)
@@ -328,7 +367,8 @@ def main():
               reconstructor_filename=options.reconstructor_path,
               start_frame=options.start,
               stop_frame=options.stop,
-              exclude_cam_ids=options.exclude_cams,
+              exclude_cam_ids=options.exclude_cam_ids,
+              exclude_camns=options.exclude_camns,
               )
 
 if __name__=='__main__':
