@@ -378,9 +378,13 @@ class Reconstructor:
         self._helper = {}
 
         # values for converting to meters
-        known_units2scale_factor = {
+        self._known_units2scale_factor = {
             'millimeters':1e-3,
             }
+
+        self._scale_factor2known_units = {}
+        for tmp_unit, tmp_scale_factor in self._known_units2scale_factor.iteritems():
+            self._scale_factor2known_units[tmp_scale_factor] = tmp_unit
         
         if self.cal_source_type == 'normal files':
             res_fd = open(os.path.join(self.cal_source,'Res.dat'),'r')
@@ -413,8 +417,8 @@ class Reconstructor:
                     __file__,filename)
                 value = 'millimeters'
                 
-            if value in known_units2scale_factor:
-                self.scale_factor = known_units2scale_factor[value]
+            if value in self._known_units2scale_factor:
+                self.scale_factor = self._known_units2scale_factor[value]
             else:
                 raise ValueError('Unknown unit "%s"'%value)
 
@@ -438,7 +442,7 @@ class Reconstructor:
             unique_scale_factors = list(sets.Set(scale_factors))
             if len(unique_scale_factors)==0:
                 print 'Assuming scale_factor units are millimeters in pytables',__file__
-                self.scale_factor = known_units2scale_factor['millimeters']
+                self.scale_factor = self._known_units2scale_factor['millimeters']
             elif len(unique_scale_factors)==1:
                 self.scale_factor = unique_scale_factors[0]
             else:
@@ -460,7 +464,7 @@ class Reconstructor:
             if len(unique_scale_factors)==0:
                 print 'Assuming scale_factor units are millimeters in SingleCameraCalibration instances (%s)'%(
                     __file__,)
-                self.scale_factor = known_units2scale_factor['millimeters']
+                self.scale_factor = self._known_units2scale_factor['millimeters']
             elif len(unique_scale_factors)==1:
                 self.scale_factor = unique_scale_factors[0]
             else:
@@ -548,12 +552,7 @@ class Reconstructor:
             rad_fd.close()
             
         fd = open(os.path.join(new_dirname,'calibration_units.txt'),mode='w')
-        if self.scale_factor == 1e-3:
-            fd.write('millimeters\n')
-        elif self.scale_factor == 1:
-            fd.write('meters\n')
-        else:
-            raise ValueError('unknown units for scale factor')
+        fd.write(self.get_calibration_unit()+'\n')
         fd.close()
         
     def save_to_h5file(self, h5file, OK_to_delete_old_calibration=False):
@@ -789,6 +788,9 @@ class Reconstructor:
     
     def get_scale_factor(self):
         return self.scale_factor
+
+    def get_calibration_unit(self):
+        return self._scale_factor2known_units[self.scale_factor]
     
     def get_SingleCameraCalibration(self,cam_id):
         return SingleCameraCalibration(cam_id=cam_id,
