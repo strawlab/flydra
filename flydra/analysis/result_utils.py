@@ -138,9 +138,12 @@ def get_results(filename,mode='r+'):
     if hasattr(h5file.root,'data2d_distorted'):
         frame_col = h5file.root.data2d_distorted.cols.frame
         if frame_col.index is None:
-            print 'creating index on data2d_distorted.cols.frame ...'
-            frame_col.createIndex()
-            print 'done'
+            if h5file._isWritable():
+                print 'creating index on data2d_distorted.cols.frame ...'
+                frame_col.createIndex()
+                print 'done'
+            else:
+                print 'WARNING: file is not writable and cannot create index - some operations may be very slow'
 
 ##        timestamp_col = h5file.root.data2d_distorted.cols.timestamp
 ##        if timestamp_col.index is None:
@@ -148,7 +151,7 @@ def get_results(filename,mode='r+'):
 ##            timestamp_col.createIndex()
 ##            print 'done'
 
-        if not hasattr(h5file.root,'data2d_camera_summary'):
+        if not hasattr(h5file.root,'data2d_camera_summary') and h5file._isWritable():
             print 'creating data2d camera summary ...'
             create_data2d_camera_summary(h5file)
             print 'done'
