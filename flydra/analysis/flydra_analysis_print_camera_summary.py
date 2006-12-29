@@ -35,6 +35,7 @@ def main():
     print results.root.data2d_camera_summary.colnames    
     for row in results.root.data2d_camera_summary:
         print row
+    results.close()
 
 if __name__=='__main__':
     main()
