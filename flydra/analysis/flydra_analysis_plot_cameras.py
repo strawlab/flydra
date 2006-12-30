@@ -22,6 +22,14 @@ plot_scale = 1000.0 # plot in mm
 def show_vtk(path,
              stereo=False):
     reconstructor = flydra.reconstruct.Reconstructor(path)
+
+    cam_ids = reconstructor.get_cam_ids()
+    cam_ids.sort()
+    cam_centers = numpy.asarray([reconstructor.get_camera_center(cam_id)[:,0]
+                                 for cam_id in cam_ids])
+    print 'cam_centers'
+    print cam_centers
+    
     renWin, renderers = vtk_results.init_vtk(stereo=stereo)
     
     if 1:
