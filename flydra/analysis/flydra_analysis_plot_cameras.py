@@ -36,12 +36,19 @@ def show_vtk(path,
         camera = renderers[0].GetActiveCamera()
 
         if 1:
+##            camera.SetParallelProjection(0)
+##            camera.SetFocalPoint (435.71871180094649, 122.4090122591231, -278.64208334323968)
+##            camera.SetPosition (562.75100798895119, 3693.498202839558, 1113.7885756800238)
+##            camera.SetViewAngle(15.0)
+##            camera.SetViewUp (0.062595103756296219, -0.36449830309814407, 0.92909786353446755)
+##            camera.SetClippingRange (2689.7556000877539, 5464.887997721311)
+##            camera.SetParallelScale(319.400653668)
             camera.SetParallelProjection(0)
-            camera.SetFocalPoint (435.71871180094649, 122.4090122591231, -278.64208334323968)
-            camera.SetPosition (562.75100798895119, 3693.498202839558, 1113.7885756800238)
+            camera.SetFocalPoint (443.85576323391666, -146.14541244359168, 409.36211176883899)
+            camera.SetPosition (607.89260636967447, 4465.2031576246363, 2207.4082500010913)
             camera.SetViewAngle(15.0)
             camera.SetViewUp (0.062595103756296219, -0.36449830309814407, 0.92909786353446755)
-            camera.SetClippingRange (2689.7556000877539, 5464.887997721311)
+            camera.SetClippingRange (3871.2571309945915, 5593.7028483989943)
             camera.SetParallelScale(319.400653668)
 
     reconstructor = flydra.reconstruct.Reconstructor(path)

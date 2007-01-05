@@ -80,10 +80,17 @@ def show_it(fig,
     print '%d cameras with data'%(len(unique_cam_ids),)
     if animate:
         raise NotImplementedError('xxx')
+    
+    if len(unique_cam_ids)==1:
+        n_rows=1
+        n_cols=1
+    else:
+        n_rows=2
+        n_cols=3
 
     subplot_by_cam_id = {}
     for i,cam_id in enumerate(unique_cam_ids):
-        ax = auto_subplot(fig,i)
+        ax = auto_subplot(fig,i,n_rows=n_rows,n_cols=n_cols)
         ax.text(0.5,0.95,cam_id,
                 horizontalalignment='center',
                 verticalalignment='top',
@@ -101,13 +108,19 @@ def show_it(fig,
         
         xs = data2d.readCoordinates( this_camn_idxs, field='x', flavor='numpy')
         ys = data2d.readCoordinates( this_camn_idxs, field='y', flavor='numpy')
+        frames = data2d.readCoordinates( this_camn_idxs, field='frame', flavor='numpy')
 
         ax.plot(xs,ys,'.')
+
+        if 0:
+            for x,y,frame in zip(xs[::5],ys[::5],frames[::5]):
+                ax.text(x,y,'%d'%(frame,))
         
         if reconstructor is not None:
             res = reconstructor.get_resolution(cam_id)
             ax.set_xlim([0,res[0]])
-            ax.set_ylim([0,res[1]])
+            #ax.set_ylim([0,res[1]])
+            ax.set_ylim([res[1],0])
 
     # Do same as above for Kalman-filtered data
 
@@ -200,7 +213,7 @@ def main():
                       help="hdf5 file with data to display FILE",
                       metavar="FILE")
 
-    parser.add_option("--kalman-file", dest="kalman_filename", type='string',
+    parser.add_option('-k', "--kalman-file", dest="kalman_filename", type='string',
                       help="hdf5 file with kalman data to display KALMANFILE",
                       metavar="KALMANFILE")
 
@@ -237,6 +250,7 @@ def main():
             kalman_filename = options.kalman_filename,
             frame_start = options.start,
             frame_stop = options.stop,
+            animate = options.animate,
             )
     pylab.show()
 

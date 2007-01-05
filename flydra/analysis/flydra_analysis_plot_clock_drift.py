@@ -35,8 +35,8 @@ def drift_estimates(results):
 def model_remote_to_local(remote_timestamps, local_timestamps):
     a1=remote_timestamps[:,numpy.newaxis]
     a2=numpy.ones( (len(remote_timestamps),1))
-    
-    A = numpy.hstack(( remote_timestamps[:,numpy.newaxis], numpy.ones( (len(remote_timestamps),1))))
+    A = numpy.hstack(( a1,a2))
+    #A = numpy.hstack(( remote_timestamps[:,numpy.newaxis], numpy.ones( (len(remote_timestamps),1))))
     b = local_timestamps[:,numpy.newaxis]
     x,resids,rank,s = numpy.linalg.lstsq(A,b)
     gain = x[0,0]

@@ -2,10 +2,16 @@ import tables as PT
 print 'using pytables',PT.__version__
 print '  from',PT.__file__
 import numpy as nx
+import sys, os
+import FlyMovieFormat
 
 # should avoid using any matplotlib here -- we want to keep this
 # module lean and mean
 
+def status(status_string):
+    print " status:",status_string
+    sys.stdout.flush()
+    
 def get_camn(results, cam, remote_timestamp=None, frame=None):
     """helper function to get camn given timestamp or frame number
 
@@ -297,3 +303,79 @@ def create_data2d_camera_summary(results):
         newrow['stop_timestamp']=stop_timestamp
         newrow.append()
     table.flush()
+
+def make_exact_movie_info2(results,movie_dir=None):
+    
+    class ExactMovieInfo(PT.IsDescription):
+        cam_id             = PT.StringCol(16,pos=0)
+        filename           = PT.StringCol(255,pos=1)
+        start_frame        = PT.Int32Col(pos=2)
+        stop_frame         = PT.Int32Col(pos=3)
+        start_timestamp    = PT.FloatCol(pos=4)
+        stop_timestamp     = PT.FloatCol(pos=5)
+    
+    status('making exact movie info')
+    
+    movie_info = results.root.movie_info
+    data2d = results.root.data2d_distorted
+    cam_info = results.root.cam_info
+
+    camn2cam_id = {}
+    for row in cam_info:
+        cam_id, camn = row['cam_id'], row['camn']
+        camn2cam_id[camn]=cam_id
+
+    exact_movie_info = results.createTable(results.root,'exact_movie_info',ExactMovieInfo,'')
+    
+    for row in movie_info:
+        cam_id = row['cam_id']
+        filename = row['filename']
+        print 'filename1:',filename
+        if movie_dir is None:
+            computer_name = cam_id.split(':')[0]
+            filename = filename.replace('local',computer_name)
+        else:
+            filename = os.path.join(movie_dir,os.path.split(filename)[-1])
+        print 'filename2:',filename
+        frame_server = FlyMovieFormat.FlyMovie(filename,check_integrity=True)
+        status(' for %s %s:'%(cam_id,filename))
+        tmp_frame, timestamp_movie_start = frame_server.get_frame( 0 )
+        tmp_frame, timestamp_movie_stop = frame_server.get_frame( -1 )
+        status('  %s %s'%(repr(timestamp_movie_start),repr(timestamp_movie_stop)))
+        camn_start_frame_list = [(x['camn'],x['frame']) for x in data2d
+                                 if x['timestamp'] == timestamp_movie_start ]
+##        camn_start_frame_list = [(x['camn'],x['frame']) for x in data2d.where(
+##            data2d.cols.timestamp == timestamp_movie_start )]
+        if len(camn_start_frame_list) == 0:
+            status('WARNING: movie for %s %s : start data not found'%(cam_id,filename))
+            #ts = nx.array(data2d.cols.timestamp)
+            #print 'min(ts),timestamp_movie_start,max(ts)',min(ts),timestamp_movie_start,max(ts)
+            continue
+        else:
+            if len(camn_start_frame_list) > 1:
+                for camn, start_frame in camn_start_frame_list:
+                    if camn2cam_id[camn] == cam_id:
+                        break
+            else:
+                camn, start_frame = camn_start_frame_list[0]
+            assert camn2cam_id[camn] == cam_id
+        camn_stop_frame_list = [x['frame'] for x in data2d
+                                if x['timestamp'] == timestamp_movie_stop ]
+##        camn_stop_frame_list = [x['frame'] for x in data2d.where(
+##            data2d.cols.timestamp == timestamp_movie_stop )]
+        if len(camn_stop_frame_list) == 0:
+            status('WARNING: movie for %s %s : stop data not found in data2d, using last data2d as stop point'%(cam_id,filename))
+            camn_frame_list = [x['frame'] for x in data2d
+                               if x['timestamp'] >= timestamp_movie_start ]
+            stop_frame = max(camn_frame_list)
+        else:
+            stop_frame = camn_stop_frame_list[0]
+            
+        exact_movie_info.row['cam_id']=cam_id
+        exact_movie_info.row['filename']=filename
+        exact_movie_info.row['start_frame']=start_frame
+        exact_movie_info.row['stop_frame']=stop_frame
+        exact_movie_info.row['start_timestamp']=timestamp_movie_start
+        exact_movie_info.row['stop_timestamp']=timestamp_movie_stop
+        exact_movie_info.row.append()
+        exact_movie_info.flush()

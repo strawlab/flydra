@@ -19,12 +19,16 @@ class CachingMovieOpener:
         self.smds_by_fmf_filename = {}
         self.bg_image_cache = {}
         self.undistorted_bg_image_cache = {}
+        self.movie_dir = None
+
+    def set_movie_dir(self,movie_dir):
+        self.movie_dir = movie_dir
         
     def _load_fmf_and_smd(self,indexes):
         results, camn, cam_id, frame_type, remote_timestamp = indexes
         if frame_type == 'full_frame_fmf':
             if not hasattr(results.root,'exact_movie_info'):
-                make_exact_movie_info2(results)
+                result_utils.make_exact_movie_info2(results,movie_dir=self.movie_dir)
             exact_movie_info = results.root.exact_movie_info
 
             # find normal (non background movie filename)
