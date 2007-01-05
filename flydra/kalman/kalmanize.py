@@ -10,6 +10,7 @@ import os, sys, pprint
 from flydra_tracker import Tracker
 import flydra_kalman_utils
 from optparse import OptionParser
+import dynamic_models
 
 assert params.A_model_name == 'fixed_accel'
 
@@ -102,9 +103,11 @@ class KalmanSaver:
         self.h5file.close()
         
     def save_tro(self,tro):
-        if not len(tro.xhats):
-            # don't save if tracker didn't succeed
+        MIN_KALMAN_OBSERVATIONS_TO_SAVE = 10
+        if len(tro.observations_frames) < MIN_KALMAN_OBSERVATIONS_TO_SAVE:
+            # only save data with at least 10 observations
             return
+        
         self.obj_id += 1
 
         # save observation 2d data indexes
@@ -152,13 +155,17 @@ def kalmanize(src_filename,
               stop_frame=None,
               exclude_cam_ids=None,
               exclude_camns=None,
+              dynamic_model=None,
               ):
     if exclude_cam_ids is None:
         exclude_cam_ids = []
         
     if exclude_camns is None:
         exclude_camns = []
-        
+
+    if dynamic_model is None:
+        dynamic_model = 'fly dynamics, high precision calibration, units: mm'
+    
     results = get_results(src_filename)
 
     if reconstructor_filename is None:
@@ -181,6 +188,14 @@ def kalmanize(src_filename,
     h5saver = KalmanSaver(dest_filename,reconst_orig_units)
 
     tracker = Tracker(reconstructor_meters,scale_factor=reconst_orig_units.get_scale_factor())
+    model_dict=dynamic_models.get_dynamic_model_dict()
+    try:
+        kw_dict = model_dict[dynamic_model]
+    except KeyError:
+        print 'valid model names:',model_dict.keys()
+        raise
+    for attr in kw_dict:
+        setattr(tracker,attr,kw_dict[attr])
     tracker.set_killed_tracker_callback( h5saver.save_tro )
     
     data2d = results.root.data2d_distorted
@@ -334,6 +349,8 @@ def main():
                       help="camera numbers to exclude from reconstruction (space separated)",
                       metavar="EXCLUDE_CAMNS")
 
+    parser.add_option("--dynamic-model", dest="dynamic_model", type='string')
+
     parser.add_option("--start", type="int",
                       help="first frame",
                       metavar="START")
@@ -369,6 +386,7 @@ def main():
               stop_frame=options.stop,
               exclude_cam_ids=options.exclude_cam_ids,
               exclude_camns=options.exclude_camns,
+              dynamic_model = options.dynamic_model,
               )
 
 if __name__=='__main__':

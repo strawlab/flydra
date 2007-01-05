@@ -570,6 +570,9 @@ class wxMainBrainApp(wxApp):
         ctrl = XRCCTRL(self.status_panel,
                        "kalman_parameters_choice")
         kalman_param_string = ctrl.GetStringSelection()
+
+        if 1:
+            raise NotImplementedError('get parameters from flydra.kalman.dynamic_models') # could currently delete this line and move on...
         
         ss = 9 # length of state vector (state size)
         os = 3 # length of observation vector (observation size)
