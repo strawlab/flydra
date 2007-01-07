@@ -33,7 +33,7 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
         print
         
     # Convert to format accepted by find_best_3d()
-    found_data_dict = convert_format(frame_data,camn2cam_id)
+    found_data_dict,first_idx_by_camn = convert_format(frame_data,camn2cam_id)
     if len(found_data_dict) < 2:
         # Can't do any 3D math without at least 2 cameras giving good
         # data.
@@ -85,24 +85,26 @@ option to this program.
 
         # find camns
         this_observation_camns = [cam_id2camn[cam_id] for cam_id in cam_ids_used]
-        this_observation_idxs = [0 for camn in this_observation_camns] # zero idx
+
+        this_observation_idxs = [first_idx_by_camn[camn] for camn in this_observation_camns] # zero idx
 
         if debug>5:
             print 'this_observation_camns',this_observation_camns
             print 'this_observation_idxs',this_observation_idxs
 
             print 'camn','raw 2d data','reprojected 3d->2d'
-            for camn,obs_idx in zip(this_observation_camns,this_observation_idxs):
+            for camn in this_observation_camns:
                 cam_id = camn2cam_id[camn]
                 repro=reconst_orig_units.find2d( cam_id, this_observation_mm )
-                print camn,frame_data[camn][obs_idx][0][:2],repro
+                print camn,frame_data[camn][0][0][:2],repro
         
         ####################################
         #  Now join found point into Tracker
         tracker.join_new_obj( frame,
                               this_observation_mm,
                               this_observation_camns,
-                              this_observation_idxs )
+                              this_observation_idxs,
+                              debug=debug )
     if debug > 5:
         print
 
@@ -137,12 +139,23 @@ class KalmanSaver:
         self.obj_id += 1
 
         # save observation 2d data indexes
+        debugADS=False
+        
+        if debugADS:
+            print '2D indices: ----------------'
+        
         this_idxs = []
         for camns_and_idxs in tro.observations_2d:
             this_idxs.append( self.h5_2d_obs_next_idx )
             self.h5_2d_obs.append( camns_and_idxs )
+
+            if debugADS:
+                print ' %d: %s'%(self.h5_2d_obs_next_idx,str(camns_and_idxs))
             self.h5_2d_obs_next_idx += 1
         self.h5_2d_obs.flush()
+        
+        if debugADS:
+            print
             
         this_idxs = numpy.array( this_idxs, dtype=numpy.uint64 ) # becomes obs_2d_idx (index into 'kalman_observations_2d_idxs')
         
@@ -154,6 +167,11 @@ class KalmanSaver:
         list_of_obs = [observations_data[:,i] for i in range(observations_data.shape[1])]
         array_list = [obj_id_array,observations_frames]+list_of_obs+[this_idxs]
         obs_recarray = numpy.rec.fromarrays( array_list, names = self.h5_obs_names)
+        
+        if debugADS:
+            print 'kalman observations: --------------'
+            for row in obs_recarray:
+                print row['frame'], row['obs_2d_idx']
         
         self.h5_obs.append(obs_recarray)
         self.h5_obs.flush()

@@ -1,5 +1,8 @@
 import tables as PT
 import numpy
+import flydra.data_descriptions
+
+PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 
 class KalmanEstimates(PT.IsDescription):
     obj_id     = PT.UInt32Col(pos=0,indexed=True)
@@ -35,6 +38,7 @@ class FilteredObservations(PT.IsDescription):
 def convert_format(current_data,camn2cam_id):
     """convert data from format used for Kalman tracker to hypothesis tester"""
     found_data_dict = {}
+    first_idx_by_camn = {}
     for camn, stuff_list in current_data.iteritems():
         if not len(stuff_list):
             # no data for this camera, continue
@@ -43,4 +47,5 @@ def convert_format(current_data,camn2cam_id):
         if not numpy.isnan(this_point[0]): # only use if point was found
             cam_id = camn2cam_id[camn]
             found_data_dict[cam_id] = this_point[:9]
-    return found_data_dict
+            first_idx_by_camn[camn] = this_point[PT_TUPLE_IDX_FRAME_PT_IDX]
+    return found_data_dict, first_idx_by_camn

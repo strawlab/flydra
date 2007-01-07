@@ -768,8 +768,8 @@ class CoordReceiver(threading.Thread):
                                 best_realtime_data = None
 
                             # Convert to format accepted by find_best_3d()
-                            found_data_dict = convert_format(pluecker_coords_by_camn,
-                                                             self.camn2cam_id)
+                            found_data_dict,first_idx_by_camn = convert_format(pluecker_coords_by_camn,
+                                                                               self.camn2cam_id)
                             if len(found_data_dict) < 2:
                                 # Can't do any 3D math without at least 2 cameras giving good
                                 # data.
@@ -782,7 +782,7 @@ class CoordReceiver(threading.Thread):
                             max_error = self.main_brain.get_hypothesis_test_max_error()
                             if min_mean_dist<max_error:
                                 this_observation_camns = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
-                                this_observation_idxs = [0 for camn in this_observation_camns] # zero idx
+                                this_observation_idxs = [first_idx_by_camn[camn] for camn in this_observation_camns] # zero idx
                                 ####################################
                                 #  Now join found point into Tracker
                                 self.tracker.join_new_obj( corrected_framenumber,

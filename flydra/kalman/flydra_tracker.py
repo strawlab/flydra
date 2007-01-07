@@ -372,7 +372,8 @@ class Tracker:
                      frame,
                      first_observation_orig_units,
                      first_observation_camns,
-                     first_observation_idxs):
+                     first_observation_idxs,
+                     debug=0):
         tro = TrackedObject(self.reconstructor_meters,
                             frame,
                             first_observation_orig_units,
@@ -388,6 +389,8 @@ class Tracker:
                             save_calibration_data=self.save_calibration_data,
                             )
         self.live_tracked_objects.append(tro)
+        if debug>0:
+            print 'new:',tro
     def kill_all_trackers(self):
         while len(self.live_tracked_objects):
             tro = self.live_tracked_objects.pop()
