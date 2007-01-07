@@ -11,8 +11,6 @@ PT_TUPLE_IDX_X = flydra.data_descriptions.PT_TUPLE_IDX_X
 PT_TUPLE_IDX_Y = flydra.data_descriptions.PT_TUPLE_IDX_Y
 PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 
-xxxdebug = True
-
 class FakeThreadingEvent:
     def isSet(self):
         return False
@@ -126,7 +124,7 @@ class TrackedObject:
             else:
                 break
         
-    def gobble_2d_data_and_calculate_a_posteri_estimate(self,frame,data_dict,camn2cam_id):
+    def gobble_2d_data_and_calculate_a_posteri_estimate(self,frame,data_dict,camn2cam_id,debug1=False):
         # Step 1. Update Kalman state to a priori estimates for this frame.
         # Step 1.A. Update Kalman state for each skipped frame.
         if self.current_frameno is not None:
@@ -137,9 +135,16 @@ class TrackedObject:
             # rise.
             frames_skipped = frame-self.current_frameno-1
             
+            if debug1:
+                print 'doing',self,'--------------'
+            
             if frames_skipped > self.max_frames_skipped:
                 self.kill_me = True # don't run Kalman filter, just quit
+                if debug1:
+                    print 'killed because too many frames skipped'
             else:
+                if debug1:
+                    print 'updating for %d frames skipped'%(frames_skipped,)
                 for i in range(frames_skipped):
                     xhat, P = self.my_kalman.step()
                     ############ save outputs ###############
@@ -149,34 +154,21 @@ class TrackedObject:
         else:
             raise RuntimeError("why did we get here?")
 
-        thisdebug = False
-        if xxxdebug:
-            if 13610 <= frame <= 13612:
-                thisdebug = True
-                
         if not self.kill_me:
             self.current_frameno = frame
             # Step 1.B. Update Kalman to provide a priori estimates for this frame
             xhatminus, Pminus = self.my_kalman.step1__calculate_a_priori()
+            if debug1:
+                print 'xhatminus, Pminus',xhatminus,Pminus
 
             # Step 2. Filter incoming 2D data to use informative points
-            if xxxdebug:
-                if 13610 <= frame <= 13612:
-                    print 'frame',frame,'-='*20
-                    print '%d frames so far'%(len(self.observations_frames),)
-                    print self
-                    print 'frames_skipped',frame-self.current_frameno-1
-                    print
-            observation_meters, used_camns_and_idxs = self._filter_data(xhatminus, Pminus, data_dict, camn2cam_id,
-                                                                        debug=thisdebug)
+            observation_meters, used_camns_and_idxs = self._filter_data(xhatminus, Pminus,
+                                                                        data_dict,
+                                                                        camn2cam_id,
+                                                                        debug=debug1)
+            if debug1:
+                print 'observation_meters, used_camns_and_idxs',observation_meters,used_camns_and_idxs
 
-            if xxxdebug:
-                if 13610 <= frame <= 13612:
-                    print 'observation_meters',observation_meters
-                    print 'used_camns_and_idxs',used_camns_and_idxs
-                    print
-                    print '-='*20
-                    print
             # Step 3. Incorporate observation to estimate a posteri
             try:
                 xhat, P = self.my_kalman.step2__calculate_a_posteri(xhatminus, Pminus,
@@ -187,12 +179,17 @@ class TrackedObject:
                 print 'frames_skipped',type(frames_skipped),frames_skipped
                 print 'self.my_kalman.n_skipped',type(self.my_kalman.n_skipped),self.my_kalman.n_skipped
                 raise err
+                
             Pmean = numpy.sqrt(numpy.sum([P[i,i] for i in range(3)]))
+            if debug1:
+                print 'xhat,P,Pmean',xhat,P,Pmean
 
             # XXX Need to test if error for this object has grown beyond a
             # threshold at which it should be terminated.
             if Pmean > self.max_variance_dist_meters:
                 self.kill_me = True
+                if debug1:
+                    print 'will kill next time because Pmean too large'
 
             ############ save outputs ###############
             self.frames.append( frame )
@@ -203,6 +200,8 @@ class TrackedObject:
                 self.observations_frames.append( frame )
                 self.observations_data.append( observation_meters )
                 self.observations_2d.append( used_camns_and_idxs )
+            if debug1:
+                print
         
     def _filter_data(self, xhatminus, Pminus, data_dict, camn2cam_id, debug=False):
         """given state estimate, select useful incoming data and make new observation"""
@@ -246,12 +245,20 @@ class TrackedObject:
                 dist = numpy.sqrt(dist2)
                 
                 if debug:
-                    print '->', dist, pt_undistorted[:2]
+                    frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
+                    print '->', dist, pt_undistorted[:2], '(idx %d)'%(frame_pt_idx,),
                 
                 if dist<(self.n_sigma_accept*variance_estimate_scalar):
                     # accept point
                     match_dist_and_idx.append( (dist,idx) )
                     found_idxs.append( idx )
+                    if debug:
+                        frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
+                        print '(accepted)'
+                else:
+                    if debug:
+                        print
+                    
             match_dist_and_idx.sort() # sort by distance
             if len(match_dist_and_idx):
                 closest_idx = match_dist_and_idx[0][1] # take idx of closest point
@@ -330,13 +337,20 @@ class Tracker:
         self.R = R
         self.save_calibration_data=save_calibration_data
             
-    def gobble_2d_data_and_calculate_a_posteri_estimates(self,frame,data_dict,camn2cam_id):
+    def gobble_2d_data_and_calculate_a_posteri_estimates(self,frame,data_dict,camn2cam_id,debug2=False):
         # Allow earlier tracked objects to be greedy and take all the
         # data they want.
         kill_idxs = []
+        
+        if debug2:
+            print self,'gobbling all data for frame %d'%(frame,)
+            
         for idx,tro in enumerate(self.live_tracked_objects):
             try:
-                tro.gobble_2d_data_and_calculate_a_posteri_estimate(frame,data_dict,camn2cam_id)
+                tro.gobble_2d_data_and_calculate_a_posteri_estimate(frame,
+                                                                    data_dict,
+                                                                    camn2cam_id,
+                                                                    debug1=debug2)
             except OverflowError, err:
                 print 'WARNING: OverflowError in tro.gobble_2d_data_and_calculate_a_posteri_estimate'
                 print 'Killing tracked object and continuing...'

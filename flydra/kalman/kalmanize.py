@@ -19,14 +19,19 @@ FilteredObservations = flydra_kalman_utils.FilteredObservations
 convert_format = flydra_kalman_utils.convert_format
 
 def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
-                  max_err=500.0):
-    tracker.gobble_2d_data_and_calculate_a_posteri_estimates(frame,frame_data,camn2cam_id)
+                  max_err=500.0, debug=False):
+    tracker.gobble_2d_data_and_calculate_a_posteri_estimates(frame,frame_data,camn2cam_id,debug2=debug)
 
     # Now, tracked objects have been updated (and their 2D data points
     # removed from consideration), so we can use old flydra
     # "hypothesis testing" algorithm on remaining data to see if there
     # are new objects.
 
+    if debug:
+        print 'for frame %d: data not gobbled:'%(frame,)
+        pprint.pprint(frame_data)
+        print
+        
     # Convert to format accepted by find_best_3d()
     found_data_dict = convert_format(frame_data,camn2cam_id)
     if len(found_data_dict) < 2:
@@ -37,7 +42,16 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
      min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
         reconst_orig_units,
         found_data_dict)
+    if debug > 5:
+        print 'found new point using hypothesis testing:'
+        print 'this_observation_mm',this_observation_mm
+        print 'cam_ids_used',cam_ids_used
+        print 'min_mean_dist',min_mean_dist
+    
     if min_mean_dist<max_err:
+        if debug > 5:
+            print 'accepting point'
+        
         # make mapping from cam_id to camn
         cam_id2camn = {}
         for camn in camn2cam_id:
@@ -72,6 +86,16 @@ option to this program.
         # find camns
         this_observation_camns = [cam_id2camn[cam_id] for cam_id in cam_ids_used]
         this_observation_idxs = [0 for camn in this_observation_camns] # zero idx
+
+        if debug>5:
+            print 'this_observation_camns',this_observation_camns
+            print 'this_observation_idxs',this_observation_idxs
+
+            print 'camn','raw 2d data','reprojected 3d->2d'
+            for camn,obs_idx in zip(this_observation_camns,this_observation_idxs):
+                cam_id = camn2cam_id[camn]
+                repro=reconst_orig_units.find2d( cam_id, this_observation_mm )
+                print camn,frame_data[camn][obs_idx][0][:2],repro
         
         ####################################
         #  Now join found point into Tracker
@@ -79,6 +103,8 @@ option to this program.
                               this_observation_mm,
                               this_observation_camns,
                               this_observation_idxs )
+    if debug > 5:
+        print
 
 class KalmanSaver:
     def __init__(self,dest_filename,reconst_orig_units):
@@ -156,6 +182,7 @@ def kalmanize(src_filename,
               exclude_cam_ids=None,
               exclude_camns=None,
               dynamic_model=None,
+              debug=False,
               ):
     if exclude_cam_ids is None:
         exclude_cam_ids = []
@@ -251,19 +278,19 @@ def kalmanize(src_filename,
             # Data for this frame is complete
             if last_frame is not None:
 
-                if 0:
+                if debug > 5:
                     print
-                    print 'frame_data'
+                    print 'frame_data for frame %d'%(last_frame,)
                     pprint.pprint(frame_data)
                     print
-                if 0:
-                    for camn,data in frame_data.iteritems():
-                        if len(data)>1:
-                            print '>1'
-                            pprint.pprint(frame_data)
-                            print
+#                if debug > 5:
+#                    for camn,data in frame_data.iteritems():
+#                        if len(data)>1:
+#                            print '>1'
+#                            pprint.pprint(frame_data)
+#                            print
                 process_frame(reconst_orig_units,tracker,last_frame,frame_data,camn2cam_id,
-                              max_err=max_err)
+                              max_err=max_err,debug=debug)
                 frame_count += 1
                 if frame_count%1000==0:
                     time2 = time.time()
@@ -359,6 +386,9 @@ def main():
                       help="last frame",
                       metavar="STOP")
 
+    parser.add_option("--debug", type="int",
+                      metavar="DEBUG")
+
     (options, args) = parser.parse_args()
     if options.exclude_cam_ids is not None:
         options.exclude_cam_ids = options.exclude_cam_ids.split()
@@ -387,6 +417,7 @@ def main():
               exclude_cam_ids=options.exclude_cam_ids,
               exclude_camns=options.exclude_camns,
               dynamic_model = options.dynamic_model,
+              debug = options.debug,
               )
 
 if __name__=='__main__':
