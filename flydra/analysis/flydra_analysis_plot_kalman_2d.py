@@ -35,7 +35,11 @@ def show_it(fig,
             frame_start = None,
             frame_stop = None,
             animate = False,
+            show_nth_frame = None,
             ):
+    
+    if show_nth_frame == 0:
+        show_nth_frame = None
 
     results = result_utils.get_results(filename,mode='r')
     reconstructor = flydra.reconstruct.Reconstructor(results)
@@ -43,6 +47,11 @@ def show_it(fig,
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(results)
     
     data2d = results.root.data2d_distorted # make sure we have 2d data table
+
+    debugADS = False
+    if debugADS:
+        for row in data2d.where(data2d.cols.frame==11900):
+            print '%d: %s'%(row.nrow,str(row))
     
     if frame_start is not None:
         print 'selecting frames after start'
@@ -91,7 +100,7 @@ def show_it(fig,
     subplot_by_cam_id = {}
     for i,cam_id in enumerate(unique_cam_ids):
         ax = auto_subplot(fig,i,n_rows=n_rows,n_cols=n_cols)
-        ax.text(0.5,0.95,cam_id,
+        ax.text(0.5,0.95,'%s: %s'%(cam_id,str(cam_id2camns[cam_id])),
                 horizontalalignment='center',
                 verticalalignment='top',
                 transform = ax.transAxes,
@@ -108,12 +117,16 @@ def show_it(fig,
         
         xs = data2d.readCoordinates( this_camn_idxs, field='x', flavor='numpy')
         ys = data2d.readCoordinates( this_camn_idxs, field='y', flavor='numpy')
-        frames = data2d.readCoordinates( this_camn_idxs, field='frame', flavor='numpy')
+        tmp_frames = data2d.readCoordinates( this_camn_idxs, field='frame', flavor='numpy')
 
         ax.plot(xs,ys,'.')
+        if show_nth_frame is not None:
+            for i,f in enumerate(tmp_frames):
+                if f%show_nth_frame==0:
+                    ax.text(xs[i],ys[i],'%d'%(f,))
 
         if 0:
-            for x,y,frame in zip(xs[::5],ys[::5],frames[::5]):
+            for x,y,frame in zip(xs[::5],ys[::5],tmp_frames[::5]):
                 ax.text(x,y,'%d'%(frame,))
         
         if reconstructor is not None:
@@ -179,8 +192,16 @@ def show_it(fig,
         this_camn_idxs = kobs_2d_data[1::2]
 
         this_use_idxs = use_idxs[frames==kframe]
+        if debugADS:
+            print
+            print kframe,'==============='
+            print 'this_use_idxs', this_use_idxs
 
         d2d = data2d.readCoordinates( this_use_idxs, flavor='numpy')
+        if debugADS:
+            print 'd2d ---------------'
+            for row in d2d:
+                print row
         for this_camn,this_camn_idx in zip(this_camns,this_camn_idxs):
             this_camn_d2d = d2d[d2d.camn == this_camn]
             found = False
@@ -189,7 +210,11 @@ def show_it(fig,
                     found = True
                     break
             if not found:
-                raise RuntimeError('point not found in data!?')
+                if 0:
+                    print 'WARNING:point not found in data!?'
+                    continue
+                else:
+                    raise RuntimeError('point not found in data!?')
             #this_row = this_camn_d2d[this_camn_idx]
             this_cam_id = camn2cam_id[this_camn]
             xys = xys_by_cam_id.setdefault( this_cam_id, ([],[]) )
@@ -199,10 +224,10 @@ def show_it(fig,
     for obj_id in xys_by_obj_id:
         xys_by_cam_id = xys_by_obj_id[obj_id]
         for cam_id, (xs,ys) in xys_by_cam_id.iteritems():
-            xs, ys = xys_by_cam_id[cam_id]
             ax = subplot_by_cam_id[cam_id]
-            ax.plot(xs,ys,'o-')
-            ax.text(xs[0],ys[0],'%d'%(obj_id,))
+            ax.plot(xs,ys)#,'o-')
+            ax.text(xs[0],ys[0],'%d:'%(obj_id,))
+            ax.text(xs[-1],ys[-1],':%d'%(obj_id,))
         
 def main():
     usage = '%prog FILE [options]'
@@ -228,6 +253,10 @@ def main():
     parser.add_option("--animate", action='store_true',dest='animate',
                       help="animate")
 
+    parser.add_option("--show-nth-frame", type="int",
+                      dest='show_nth_frame',
+                      help='show Nth frame number (0=none)')
+
     (options, args) = parser.parse_args()
     
     if options.filename is not None:
@@ -251,6 +280,7 @@ def main():
             frame_start = options.start,
             frame_stop = options.stop,
             animate = options.animate,
+            show_nth_frame = options.show_nth_frame,
             )
     pylab.show()
 
