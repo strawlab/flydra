@@ -114,7 +114,7 @@ def show_vtk(filename,
             n_observations = len( observation_frames )
 
             if debug >=3:
-                print 'DEBUG: obj_id %d: %d/%d observations'%(obj_id, n_observations,len(estimate_frames))
+                print 'DEBUG: obj_id %d: %d observations'%(obj_id, n_observations)
             objid_by_n_observations.setdefault(n_observations,[]).append(obj_id)
         long_obs, long_obs_n = get_top_sequences(objid_by_n_observations,
                                                  n_top_traces=show_n_longest)
