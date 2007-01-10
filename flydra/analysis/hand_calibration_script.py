@@ -1,7 +1,9 @@
 import numpy
 import os
 
-# implementation of DLT method
+# XXX Note that a no-skew constraint might be used: http://users.rsise.anu.edu.au/~hartley/Papers/algebraic/ICCV/final/algebraic.pdf Minimizing Algebraic Error in Geometric Estimation Problems by Hartley
+
+# Implementation of DLT method
 # http://www.miba.auc.dk/~lasse/publications/HTML/pilot/cam_cal/camcal.html
 # see also the pages at http://kwon3d.com/theory/calib.html
 # see also http://users.rsise.anu.edu.au/~hartley/Papers/algebraic/ICCV/final/algebraic.pdf
