@@ -20,6 +20,7 @@ CS_dict = { 0:0, # off
 TASK_FLAGS_ENTER_DFU = 0x01
 TASK_FLAGS_NEW_TIMER3_DATA = 0x02
 TASK_FLAGS_DO_TRIG_ONCE = 0x04
+TASK_FLAGS_DOUT_HIGH = 0x08
 
 def debug(*args):
     if 1:
@@ -97,7 +98,7 @@ class Device:
         self._set_timer3_metadata(freq)
         
     def _set_timer3_metadata(self, carrier_freq):
-        if carrier_freq == 0:
+        if carrier_freq <= 0:
             self.timer3_CS = 0
         else:
             if self.timer3_CS == 0:
@@ -105,8 +106,13 @@ class Device:
             
         if self.timer3_CS == 0:
             buf = self.OUTPUT_BUFFER # shorthand
-            buf[8] = chr(TASK_FLAGS_NEW_TIMER3_DATA)
             buf[9] = chr(CS_dict[self.timer3_CS])
+            if carrier_freq >= 0:
+                buf[8] = chr(TASK_FLAGS_NEW_TIMER3_DATA)
+            else:
+                # if negative, raise value high
+                buf[8] = chr(TASK_FLAGS_NEW_TIMER3_DATA|TASK_FLAGS_DOUT_HIGH)
+                
             self.send_buf()
             return
             
