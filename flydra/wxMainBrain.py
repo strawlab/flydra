@@ -29,7 +29,7 @@ PLOTPANEL = True
 if PLOTPANEL:
     from MatplotlibPanel import PlotPanel
 import common_variables
-
+import flydra.kalman.dynamic_models
 import pkg_resources
 pkg_resources.require('wxglvideo')
 
@@ -570,63 +570,8 @@ class wxMainBrainApp(wxApp):
         ctrl = XRCCTRL(self.status_panel,
                        "kalman_parameters_choice")
         kalman_param_string = ctrl.GetStringSelection()
-
-        if 1:
-            raise NotImplementedError('get parameters from flydra.kalman.dynamic_models') # could currently delete this line and move on...
-        
-        ss = 9 # length of state vector (state size)
-        os = 3 # length of observation vector (observation size)
-
-        if kalman_param_string == u'fly dynamics, high precision calibration, units: mm':
-            # process covariance
-            Q = numpy.zeros((ss,ss))
-            for i in range(6,9):
-                Q[i,i] = 10.0 # acceleration noise (near (3.16m*sec**-2)**2)
-
-            # measurement noise covariance matrix
-            R = 1e-6*numpy.eye(os) # (1mm)**2 = (0.001m)**2
-
-            kws = dict(scale_factor=1e-3,
-                       n_sigma_accept=3.0,
-                       max_variance_dist_meters=0.010, # allow error to grow to 10 mm before dropping
-                       initial_position_covariance_estimate=1e-6, #1mm ( (1e-3)**2 meters)
-                       initial_acceleration_covariance_estimate=15,
-                       Q=Q,
-                       R=R)
-        elif kalman_param_string == u'fly dynamics, low precision calibration, units: mm':
-            # process covariance
-            Q = numpy.zeros((ss,ss))
-            for i in range(6,9):
-                Q[i,i] = 10.0 # acceleration noise (near (3.16m*sec**-2)**2)
-
-            # measurement noise covariance matrix
-            R = 1e-4*numpy.eye(os) # (10mm)**2 = (0.01m)**2
-
-            kws = dict(scale_factor=1e-3,
-                       n_sigma_accept=3.0,
-                       max_variance_dist_meters=0.010, # allow error to grow to 10 mm before dropping
-                       initial_position_covariance_estimate=1e-4, #10mm ( (1e-2)**2 meters)
-                       initial_acceleration_covariance_estimate=15,
-                       Q=Q,
-                       R=R)
-        elif kalman_param_string == u'hummingbird dynamics, units: mm':
-            # process covariance
-            Q = numpy.zeros((ss,ss))
-            for i in range(6,9):
-                Q[i,i] = 100.0 # acceleration noise (near (10*sec**-2)**2)
-
-            # measurement noise covariance matrix
-            R = 0.0025*numpy.eye(os) # (5cm)**2 = (0.05m)**2
-
-            kws = dict(scale_factor=1e-3, # units: mm
-                       n_sigma_accept=5.0, # XXX should reduce later?
-                       max_variance_dist_meters=0.050, # allow error to grow to 50 mm before dropping
-                       initial_position_covariance_estimate=0.0025, #50mm ( (5e-2)**2 meters)
-                       initial_acceleration_covariance_estimate=15,
-                       Q=Q,
-                       R=R)
-        else:
-            raise ValueError('did not understand kalman parameters %s'%repr(kalman_param_string))
+        model_dicts = flydra.kalman.dynamic_models.get_dynamic_model_dict()
+        kws = model_dicts[str(kalman_param_string)]
         self.main_brain.set_new_tracker_defaults(kws)
         
     def PreviewPerCamClose(self,cam_id):
