@@ -1,5 +1,7 @@
 import glob, os, sys
 import FlyMovieFormat
+import matplotlib
+matplotlib.use('GTKAgg') # TkAgg doesn't work, at least without ioff(), which I haven't tried
 import pylab
 import tables
 import flydra.reconstruct
@@ -7,9 +9,12 @@ import numpy
 nan = numpy.nan
 
 # base file names
-base_fname = 'full_20060516_191746_%s_bg.fmf'
+
+    
+
+base_fname = '~/%(cam)s/FLYDRA_LARGE_MOVIES/full_20061219_184851_%(cam_id)s_bg.fmf'
 # hdf5 file containing calibration data
-cal_source = 'newDATA20060516_194920.h5'
+cal_source = 'DATA20061206_192530.kalmanized.h5'
 
 cams = ['cam%d'%i for i in range(1,6)]
 
@@ -39,7 +44,8 @@ for cam in cams:
             if cam_id is not None:
                 raise RuntimeError('>1 camera per host not yet supported')
             cam_id = c
-    fname = base_fname%cam_id
+            
+    fname = os.path.expanduser(base_fname%locals())
     print >> sys.stderr, cam_id,fname
     
     fmf = FlyMovieFormat.FlyMovie(fname)
