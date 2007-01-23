@@ -51,3 +51,5 @@ ln -s ~/kookaburra/flydra/flydra/analysis/plot_kalmanized.py
 ln -s ~/kookaburra/flydra/flydra/analysis/kalmanized_landing_01.py
 
 ln -s ~/kookaburra/flydra/flydra/analysis/timecourse_kalmanized_vtk.py
+
+ln -s ~/kookaburra/flydra/flydra/analysis/flydra_analysis_filter_kalman_data.py
