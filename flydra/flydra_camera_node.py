@@ -73,8 +73,6 @@ else:
 pt_fmt = '<dddddddddBBddBdddddd'
 small_datafile_fmt = '<dII'
     
-ALPHA = 1.0/50 # relative importance of each new frame
-
 # where is the "main brain" server?
 try:
     main_brain_hostname = socket.gethostbyname('brain1')
@@ -1304,7 +1302,7 @@ def main():
     if options.background_frame_alpha is not None:
         bg_frame_alpha = options.background_frame_alpha
     else:
-        bg_frame_alpha = 50
+        bg_frame_alpha = 1.0/50.0
     
     cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
     
