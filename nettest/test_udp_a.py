@@ -60,7 +60,9 @@ def server_func():
             #print sendtime, recvtime
             tdelta = (recvtime-sendtime)*1000.0
             rmt_tdelta = (timetime-rmttimetime)*1000.0
-            print '%d: %g msec (this-remote tdiff: %g msec)'%(i,tdelta,rmt_tdelta)
+            if tdelta < 0.5:
+            #if 1:
+                print '%d: %g msec (this-remote tdiff: %g msec)'%(i,tdelta,rmt_tdelta)
             #print addr,':',newdata
             if i-last_i != 1:
                 print '*******SKIP:',i
@@ -81,6 +83,6 @@ try:
         outstr = struct.pack('id',i,time_func())
         outgoing_UDP_socket.sendto(outstr, rmt_host )
         #print 'sent data to',rmt_host
-        time.sleep(0.1)
+        time.sleep(0.5)
 finally:
     outgoing_UDP_socket.close()
