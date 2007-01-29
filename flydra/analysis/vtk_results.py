@@ -326,6 +326,49 @@ def show_line(renderers,v1,v2,color,radius,nsides=20,opacity=1.0):
     actors.append( profile )
     return actors
 
+def show_tubes(renderers,pt1s,pt2s):
+    
+    body_line_points = vtk.vtkPoints()
+    body_lines = vtk.vtkCellArray()
+    body_point_num = 0
+    
+    for pt1,pt2 in zip(pt1s,pt2s):
+        body_line_points.InsertNextPoint(*pt1)
+        body_point_num += 1
+        body_line_points.InsertNextPoint(*pt2)
+        body_point_num += 1
+
+        body_lines.InsertNextCell(2)
+        body_lines.InsertCellPoint(body_point_num-2)
+        body_lines.InsertCellPoint(body_point_num-1)
+    profileData = vtk.vtkPolyData()
+    profileData.SetPoints(body_line_points)
+    profileData.SetLines(body_lines)
+    if 1:
+        if 1:
+            if 1:
+                # Add thickness to the resulting line.
+                profileTubes = vtk.vtkTubeFilter()
+                profileTubes.SetNumberOfSides(8)
+                profileTubes.SetInput(profileData)
+                profileTubes.SetRadius(.2)
+                #profileTubes.SetRadius(.8)
+
+                profileMapper = vtk.vtkPolyDataMapper()
+                profileMapper.SetInput(profileTubes.GetOutput())
+
+                profile = vtk.vtkActor()
+                profile.SetMapper(profileMapper)
+                profile.GetProperty().SetDiffuseColor( vtk.util.colors.black ) #0xd6/255.0, 0xec/255.0, 0x1c/255.0)
+                #profile.GetProperty().SetDiffuseColor(cerulean)
+                #profile.GetProperty().SetDiffuseColor(banana)
+                profile.GetProperty().SetSpecular(.3)
+                profile.GetProperty().SetSpecularPower(30)
+
+                for renderer in renderers:
+                    renderer.AddActor( profile )
+    return [profile]
+    
 def show_longline(renderers,verts,
                   start_label=None,
                   end_label=None,
@@ -337,6 +380,7 @@ def show_longline(renderers,verts,
         raise ValueError("line must have 2 or more vertices")
 
     if 1:
+        verts = numpy.asarray(verts)
         vd = verts[1:]-verts[:-1]
         vd = numpy.sum((vd**2),axis=1)
         goodcond = (vd != 0.0)

@@ -21,7 +21,35 @@ def do_it(filename=None):
     kresults.close()
     del kresults
 
-    newfilename = filename + '.mat'
+    if 1:
+        obj_ids = table1.field('obj_id').copy()
+        obj_ids = numpy.unique(obj_ids)
+
+        obs_cond = None
+        k_cond = None
+
+        for obj_id in obj_ids:
+            this_obs_cond = table2.field('obj_id') == obj_id
+            n_observations = numpy.sum(this_obs_cond)
+            if n_observations > 10:
+                if obs_cond is None:
+                    obs_cond = this_obs_cond
+                else:
+                    obs_cond = obs_cond | this_obs_cond
+
+                this_k_cond = table1.field('obj_id') == obj_id
+                if k_cond is None:
+                    k_cond = this_k_cond
+                else:
+                    k_cond = k_cond | this_k_cond
+                    
+        table1 = table1[k_cond]
+        table2 = table2[obs_cond]
+
+        newfilename = filename + '-short-only.mat'
+    else:
+        newfilename = filename + '.mat'
+    
     data = dict( kalman_obj_id = table1.field('obj_id'),
                  kalman_frame = table1.field('frame'),
                  kalman_x = table1.field('x'),

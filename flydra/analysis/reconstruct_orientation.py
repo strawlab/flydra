@@ -1,11 +1,12 @@
 from __future__ import division
 import tables as PT
 import numpy
+from numpy import nan
 import result_utils
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
 
-def reconstruct_line_3ds( kresults, recon2, use_obj_id):
+def reconstruct_line_3ds( kresults, recon2, use_obj_id, return_fXl=False ):
     
     data2d = kresults.root.data2d_distorted # make sure we have 2d data table
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(kresults)
@@ -45,10 +46,15 @@ def reconstruct_line_3ds( kresults, recon2, use_obj_id):
         flavor='numpy')
 
     line3d_by_frame = {}
+    if return_fXl:
+        X_by_frame = {}
 
     for frame_i,(kframe, obs_2d_idx) in enumerate(zip(observation_frames,obs_2d_idxs)):
-##        if frame_i >= 100:
+##        if frame_i >= 10:
 ##            break
+        if frame_i%100 == 0:
+            print 'frame %d of %d'%(frame_i, len(observation_frames))
+        
         if PT.__version__ <= '1.3.3':
             obs_2d_idx_find = int(obs_2d_idx)
             kframe_find = int(kframe)
@@ -131,10 +137,35 @@ def reconstruct_line_3ds( kresults, recon2, use_obj_id):
             X_orig = numpy.array(( observation_xs[frame_i], observation_ys[frame_i], observation_zs[frame_i] ))
             assert numpy.allclose(X,X_orig)
     
+        if return_fXl:
+            X_by_frame[int(kframe)] = X
         line3d_by_frame[int(kframe)] = line3d
-    return line3d_by_frame
+        
+    if return_fXl:
+        frames = X_by_frame.keys()
+        frames.sort()
+        fXl = []
+        for frame in frames:
+            
+            X_by_frame[frame]
+            
+            line3d_by_frame[frame]
+            
+            list(X_by_frame[frame])
+            
+            print 'line3d_by_frame[frame]',line3d_by_frame[frame]
 
-if 1:
+            L = line3d_by_frame[frame]
+            if L is None:
+                L = (nan, nan, nan, nan, nan, nan)
+            
+            fXl.append( [frame] + list(X_by_frame[frame]) + list(L) )
+        fXl = numpy.array(fXl,dtype=numpy.float)
+        return fXl
+    else:
+        return line3d_by_frame
+
+if __name__=='__main__':
     filename = 'DATA20070122_193851.h5'
     use_obj_id = 102
     
@@ -142,5 +173,10 @@ if 1:
     reconstructor = flydra.reconstruct.Reconstructor(kresults)
     recon2 = reconstructor.get_scaled( reconstructor.scale_factor )
     
-    reconstruct_line_3ds( kresults, recon2, use_obj_id)
+    fXl = reconstruct_line_3ds( kresults, recon2, use_obj_id, return_fXl=True)
+    import pickle
+    fd = open('fXl.pkl',mode='wb')
+    pickle.dump( fXl, fd )
+    fd.close()
+    
     

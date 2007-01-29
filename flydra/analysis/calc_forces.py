@@ -1,10 +1,18 @@
 from pylab import *
 from matplotlib.collections import LineCollection
 from matplotlib.patches import Rectangle
-from numarray.ieeespecial import nan, getnan
+
+#from numarray.ieeespecial import nan, getnan
+
+from numpy import nan
 import math, time
-import numarray as nx
-import numarray.mlab as mlab
+
+##import numarray as nx
+##import numarray.mlab as mlab
+
+import numpy as nx
+import numpy.numarray.mlab as mlab
+
 import flydra.reconstruct as reconstruct
 import cgtypes # tested with cgkit 1.2
 import tables # pytables
@@ -22,6 +30,9 @@ import sets
 ##sum = __builtins__.sum
 ##round = __builtins__.round
 ##abs = __builtins__.abs
+
+def getnan(x):
+    return numpy.nonzero( numpy.isnan(x) )
 
 def my_interp( A, B, frac ):
     return frac*(B-A)+A
@@ -41,7 +52,7 @@ def interpolate_P( results, start_frame, stop_frame, typ='best' ):
     assert (stop_frame - start_frame) > 1
 
     fXl = nx.array(fXl)
-    frame = fXl[:,0].astype(nx.Int32)
+    frame = fXl[:,0].astype(nx.int64)
     P = fXl[:,1:4]
 
     print '  ',start_frame, P[0,:]
@@ -138,6 +149,7 @@ def do_it(results,
           Psmooth=None,Qsmooth=None,
           
           alpha=0.2, beta=20.0, lambda1=2e-9, lambda2 = 1e-11,
+          gamma=0.0,
           percent_error_eps_quats = 9,
           
           interp_OK=False,
@@ -215,11 +227,29 @@ def do_it(results,
     else:
         print 'assuming results are numeric'
         fXl = results
-    fXl = nx.array(fXl)
-    frame = fXl[:,0].astype(nx.Int32)
+    fXl = nx.asarray(fXl)
+    frame = fXl[:,0].astype(nx.int64)
+    
+    if start_frame is None:
+        start_frame = frame.min()
+    else:
+        valid_cond = frame >= start_frame
+        fXl = fXl[valid_cond]
+        frame = fXl[:,0].astype(nx.int64)
+    if stop_frame is None:
+        stop_frame = frame.max()
+    else:
+        valid_cond = frame <= stop_frame
+        fXl = fXl[valid_cond]
+        frame = fXl[:,0].astype(nx.int64)
+
+    print 'frame[:5]',frame[:5]
 
     P = fXl[:,1:4]
     line3d = fXl[:,4:]
+    
+    print 'P[:5]',P[:5]
+    print 'line3d[:5]',line3d[:5]
 
     # reality check on data to ensure no big jumps -- drops frames
     framediff = frame[1:]-frame[:-1]
@@ -265,7 +295,7 @@ def do_it(results,
     P = nx.array( newP )
     line3d = nx.array( newline3d )
     
-    fXl = nx.concatenate( (frame[:,nx.NewAxis], P, line3d), axis=1 )
+    fXl = nx.concatenate( (frame[:,nx.newaxis], P, line3d), axis=1 )
 
     IFI = 1.0/fps
     t_P = (frame-frame[0])*IFI # put in seconds
@@ -299,7 +329,7 @@ def do_it(results,
                     new_y = my_interp( fXl[i][2], fXl[i+1][2], frac )
                     new_z = my_interp( fXl[i][3], fXl[i+1][3], frac )
                     new_row = nx.array( [fno, new_x, new_y, new_z, nan, nan, nan, nan, nan, nan],
-                                        fXl[0].typecode() )
+                                        dtype=fXl[0].dtype )
                     fXl.append( new_row )
                     print '  linear interpolation at time %0.2f (frame %d)'%((fno-start_frame)*0.01,fno,)
 
@@ -315,7 +345,7 @@ def do_it(results,
         fXl.sort( sort_on_col0 )
         
         fXl = nx.array(fXl)
-        frame = fXl[:,0].astype(nx.Int32)
+        frame = fXl[:,0]
         P = fXl[:,1:4]
         line3d = fXl[:,4:]
 
@@ -460,7 +490,8 @@ def do_it(results,
         d2Pdt2_smooth = (Psmooth[2:] - 2*Psmooth[1:-1] + Psmooth[:-2]) / (delta_t**2)
         
     if Qsmooth is None and do_smooth_quats:
-        gamma = 1000
+        print 'smoothing quats...'
+        #gamma = 1000
         #gamma = 0.0
         of = ObjectiveFunctionQuats(Q, delta_t, beta, gamma,
                                     no_distance_penalty_idxs=slerped_q_idxs)
@@ -491,7 +522,7 @@ def do_it(results,
                 pct_err = (last_err-err)/last_err*100.0
                 print 'Q elapsed: % 6.2f secs,'%(stop-start,),
                 print 'current gradient:',err,
-                print '   (%3.1f%%)'%(pct_err,)
+                print '   (%4.2f%%)'%(pct_err,)
                 
                 if err > last_err:
                     print 'ERROR: error is increasing, aborting'
@@ -555,7 +586,7 @@ def do_it(results,
         orient_parallel = quat_to_orient(Qsmooth)[1:-1]
 
         # vector for current velocity
-        Vair_orient = dPdt_air/nx.sqrt(nx.sum(dPdt_air**2,axis=1)[:,nx.NewAxis])
+        Vair_orient = dPdt_air/nx.sqrt(nx.sum(dPdt_air**2,axis=1)[:,nx.newaxis])
         # compute alpha == angle of attack
         aattack = nx.arccos( [nx.dot(v,p) for v,p in zip(Vair_orient,orient_parallel)])
         #print aattack*rad2deg
@@ -642,7 +673,7 @@ def do_it(results,
             drag_force = Cf_linear * Vmag_air * Vdir_air
         elif drag_model_for_roll == 'v^2':
             Cf_V2 = -0.000015
-            V2 = Vmag_air2[:,nx.NewAxis]
+            V2 = Vmag_air2[:,nx.newaxis]
             drag_force = Cf_V2 * V2 * Vdir_air
 
         if return_drag_force:
@@ -1854,7 +1885,7 @@ def do_it(results,
 
         ####################
 
-        if 1:
+        if 0:
             xlim = .09,.86
             ylim = -1115,2270
             print 'setting xlim to',xlim
@@ -1965,6 +1996,52 @@ def do_it(results,
     print 'returning...'
     return outputs
 
+def two_posts():
+    fd = open('fXl-fixed.pkl','rb')
+    fXl = pickle.load(fd)
+    fd.close()
+    results = fXl
+    if 1:
+        start = 59647
+        stop = start + 100*2
+        frames,psmooth,qsmooth=do_it(results,
+                                     
+                                     start_frame=start,
+                                     stop_frame=stop,
+                                     
+                                     interp_OK=True,
+                                     return_frame_numbers=True,
+
+                                     beta = 1e-3,
+                                     lambda2 = 1e-13,
+                                     #percent_error_eps_quats = 2.0,                                     
+                                     percent_error_eps_quats = 0.1,
+                                     
+                                     #do_smooth_position=False,
+                                     do_smooth_position=True,
+                                     do_smooth_quats=True,
+
+                                     
+##                                     plot_xy_Psmooth=True,
+##                                     plot_xy_Qsmooth=True,
+##                                     #plot_xy_Praw=False,
+##                                     plot_xy_Qraw=False,
+                                     plot_xy=False,
+                                     
+                                     plot_Q = True,
+                                     
+                                     plot_body_angular_vel2=True,
+                                     )
+        #result_browser.save_smooth_data(results,frames,psmooth,qsmooth)
+
+        qsmooth = qsmooth.to_numpy()
+        
+        results = {}
+        results['frames']=frames
+        results['psmooth']=psmooth
+        results['qsmooth']=qsmooth
+        scipy.io.savemat('smoothed',results)
+        show()
 
 def test_icb():
     import result_browser
@@ -1979,7 +2056,7 @@ def test_icb():
                                      interp_OK=True,
                                      return_frame_numbers=True,
 
-                                     beta = 1000.0,
+                                     beta = 1.0,
                                      lambda2 = 1e-13,
                                      percent_error_eps_quats = 2.0,                                     
                                      
@@ -2069,4 +2146,4 @@ def delete_calculated_roll(results):
     del results.root.resultants
     
 if __name__=='__main__':
-    test_icb()
+    two_posts()

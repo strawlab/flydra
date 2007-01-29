@@ -423,6 +423,8 @@ class QuatSeq(list):
     def get_z(self):
         return nx.array([ q.z for q in self])
     z = property(get_z)
+    def to_numpy(self):
+        return numpy.vstack( (self.w, self.x, self.y, self.z) )
 
 class ObjectiveFunctionQuats:
     """methods from Kim, Hsieh, Wang, Wang, Fang, Woo"""

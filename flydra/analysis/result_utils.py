@@ -5,6 +5,9 @@ import numpy as nx
 import sys, os
 import FlyMovieFormat
 
+import datetime
+import pytz # from http://pytz.sourceforge.net/
+
 # should avoid using any matplotlib here -- we want to keep this
 # module lean and mean
 
@@ -303,6 +306,12 @@ def create_data2d_camera_summary(results):
         newrow['stop_timestamp']=stop_timestamp
         newrow.append()
     table.flush()
+
+def timestamp2string(ts_float,timezone='US/Pacific'):
+    pacific = pytz.timezone(timezone)
+    dt_ts = datetime.datetime.fromtimestamp(ts_float,pacific)
+    # dt_ts.ctime()
+    return dt_ts.isoformat()
 
 def make_exact_movie_info2(results,movie_dir=None):
     

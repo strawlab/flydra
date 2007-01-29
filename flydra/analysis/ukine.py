@@ -54,44 +54,83 @@ elif 0:
     # hdf5 file containing calibration data
     cal_source = 'DATA20061205_193629.h5'
     reconstructor_source = tables.openFile(cal_source,mode='r')
-else:
+elif 1:
+    
     if 0:
+        # all files in current directory
         files = os.listdir(os.curdir)
         fmfs = [f for f in files if f.startswith('full') and f.endswith('bg.fmf')]
-        cals = [f for f in files if f.startswith('DATA') and f.endswith('.h5')]
-    else:
-        files = os.listdir(os.curdir)
-        fmfs = [f for f in files if f.startswith('full') and f.endswith('bg.fmf')]
-        #fmfs = [f for f in files if f.startswith('full') and f.endswith('0.fmf')]
-        cals = [f for f in files if f.startswith('cal_')]
-
-    use_fmf_names = []
-    cam_ids = []
-    for fmf in fmfs:
-        fmf = fmf.replace('_bg.fmf','')
-        spl = fmf.split('_')
-        start = '_'.join(spl[:3])
-        cam_id = '_'.join(spl[3:])
-        if start not in use_fmf_names:
-            use_fmf_names.append( start )
-        if cam_id not in cam_ids:
+        print 'fmfs',fmfs
+        if 0:
+            cals = [f for f in files if f.startswith('DATA') and f.endswith('.h5')]
+        elif 0:
+            cals = [f for f in files if f.startswith('cal_')]
+        elif 1:
+            cal_source = sys.argv[1]
+            cals = [os.path.expanduser(cal_source)]
+            
+        cam_ids = []
+        fname_by_cam_id = {}
+        for full_fmf in fmfs:
+            dirname,fmf = os.path.split(full_fmf)
+            print fmf
+            fmf = fmf.replace('_bg.fmf','')
+            spl = fmf.split('_')
+            start = '_'.join(spl[:3])
+            cam_id = '_'.join(spl[3:])
+            print 'fmf',fmf
+            print 'start',start
+            print
+            
+            fname_by_cam_id[cam_id] = full_fmf
             cam_ids.append( cam_id )
+            
+    elif 1:
+        # fmf files in ~/camN/FLYDRA_LARGE...
+        cal_source = sys.argv[1]
+        date_time = sys.argv[2]
+
+        cam_computers = ['cam1','cam2','cam3','cam4','cam5']
+
+        fname_by_cam_id = {}
+        for cam in cam_computers:
+            dirname = os.path.expanduser('~/%s/FLYDRA_LARGE_MOVIES/'%(cam,))
+            fnames = os.listdir( dirname )
+            this_fmfs = {}
+            cam_id = None
+            for fname in fnames:
+                if date_time in fname:
+                    if fname.endswith('_bg.fmf'):
+                        this_fmfs['bg'] = fname
+                    elif fname.endswith('_std.fmf'):
+                        this_fmfs['std'] = fname
+                    else:
+                        tmp_dirname, tmp_fname = os.path.split(fname)
+                        tmp_fname = os.path.splitext(tmp_fname)[0]
+                        cam_id = '_'.join(tmp_fname.split('_')[-2:])
+                        this_fmfs['single'] = fname
+            preferred_order = ['bg','single','std']
+            for name in preferred_order:
+                if name in this_fmfs:
+                    fname_by_cam_id[cam_id] = os.path.join(dirname,this_fmfs[name])
+                    break
+                
+        cals = [cal_source]
+
+        print cals
+        print fname_by_cam_id
         
-    print fmfs
+####################################        
+
+        
     print cals
-
-    print use_fmf_names
-    print 'cam_ids',cam_ids
-
-    if len(use_fmf_names)>1:
-        print use_fmf_names
-        raise ValueError('too many fmf names')
 
     if len(cals)>1:
         print cals
         raise ValueError('too many calibration files')
+    elif len(cals)==0:
+        raise ValueError('no calibration file')
     
-    base_fname = use_fmf_names[0] +'_%s_bg.fmf'
     # hdf5 file containing calibration data
     cal_source = cals[0]
     if cal_source.endswith('.h5'):
@@ -112,7 +151,7 @@ class ClickGetter:
 
 click_locations = []
 for cam_id in recon.cam_ids:
-    fname = base_fname%cam_id
+    fname = fname_by_cam_id[cam_id]
     print >> sys.stderr, cam_id,fname
     
     fmf = FlyMovieFormat.FlyMovie(fname)
