@@ -2,9 +2,9 @@ from __future__ import division
 import numpy
 from numpy import nan, pi
 import tables as PT
-import pytz # from http://pytz.sourceforge.net/
-import datetime
 import sets
+import flydra.reconstruct
+import reconstruct_orientation
 
 import vtk_results
 import vtk.util.colors as colors
@@ -41,17 +41,27 @@ def show_vtk(filename,
              show_obj_ids=False,
              obj_start=None,
              obj_end=None,
+             obj_only=None,
              show_cameras=False,
+             show_orientation=False,
              show_observations=False,
              min_length=None,
              stereo=False,
              debug=0,
              show_n_longest=None,
+             radius=0.001, # in meters
              ):
     actor2objid = {}
 
     kresults = PT.openFile(filename,mode="r")
-
+    if show_orientation:
+        reconstructor = flydra.reconstruct.Reconstructor(kresults)
+        recon2 = reconstructor.get_scaled( reconstructor.scale_factor)
+        
+        body_line_points = vtk.vtkPoints()
+        body_lines = vtk.vtkCellArray()
+        body_point_num = 0
+        
     color_cycle = ['tomato', 'banana', 'azure', 'blue',
                    'black', 'red', 'green', 'white', 'yellow', 'lime_green', 'cerulean',
                    'light_grey', 'dark_orange', 'brown', 'light_beige']
@@ -81,10 +91,15 @@ def show_vtk(filename,
 
     obj_ids = kresults.root.kalman_estimates.read(field='obj_id',flavor='numpy')
     use_obj_ids = obj_ids
+    
     if obj_start is not None:
         use_obj_ids = use_obj_ids[use_obj_ids >= obj_start]
     if obj_end is not None:
         use_obj_ids = use_obj_ids[use_obj_ids <= obj_end]
+
+    if obj_only is not None:
+        use_obj_ids = numpy.array(obj_only)
+        
     # find unique obj_ids:
     use_obj_ids = numpy.array(list(sets.Set([int(obj_id) for obj_id in use_obj_ids])))
 
@@ -127,6 +142,7 @@ def show_vtk(filename,
     ####### iterate again for plotting ########
     objid_by_n_observations = {}
     for obj_id_enum,obj_id in enumerate(use_obj_ids):
+        print obj_id_enum,'obj_id',obj_id
         if obj_id_enum%100==0:
             print 'reading %d of %d'%(obj_id_enum,len(use_obj_ids))
         
@@ -177,12 +193,13 @@ def show_vtk(filename,
                                               )
             for actor in actors:
                 actor2objid[actor] = obj_id
+                
                     
         xs = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='x',flavor='numpy')
         ys = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='y',flavor='numpy')
         zs = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='z',flavor='numpy')
         
-        verts = numpy.vstack((xs,ys,zs)).T * plot_scale
+        verts = numpy.vstack((xs,ys,zs)).T
 
         if len(verts):
             if show_obj_ids:
@@ -193,16 +210,114 @@ def show_vtk(filename,
             else:
                 start_label = None
 
+
             color_idx = obj_id_enum%len(color_cycle)
             color_name = color_cycle[color_idx]
             color = getattr(colors,color_name)
-            actors = vtk_results.show_longline(renderers,verts,
+            actors = vtk_results.show_longline(renderers,verts*plot_scale,
                                                start_label=start_label,
-                                               radius=0.003*plot_scale,
+                                               radius=radius*plot_scale,
                                                nsides=3,opacity=0.5,
                                                color=color)#s.blue)
             for actor in actors:
                 actor2objid[actor] = obj_id
+
+            if show_orientation:
+                frames = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='frame',flavor='numpy')
+                #print 'CALLING for ',obj_id_find
+                by_frame = reconstruct_orientation.reconstruct_line_3ds( kresults, recon2, obj_id_find)
+                for frame,X in zip(frames,verts):
+                    frame = int(frame)
+                    if frame not in by_frame:
+                        continue
+                    line3d = numpy.array( by_frame[frame], dtype=numpy.float)
+                    
+                    #print 'frame, X, line3d',frame, X, line3d
+                    if numpy.any(numpy.isnan(line3d)):
+                        #print 'nan -> skip'
+                        continue
+                    #print line3d.shape
+                    line3d.shape = (1,6)
+
+                    
+                    L = line3d
+                    #L = line3d[numpy.newaxis,:] # Plucker coordinates
+                    #print frame,'L',L
+                    U = flydra.reconstruct.line_direction(line3d)
+                    
+                    tube_length = 0.004 # meters ( 4 mm)
+                    #orientation_corrected = False
+                    orientation_corrected = True
+                    
+                    if orientation_corrected:
+                        pt1 = X-tube_length*U
+                        pt2 = X
+                    else:
+                        pt1 = X-tube_length*.5*U
+                        pt2 = X+tube_length*.5*U
+
+                    pt1 = pt1*plot_scale
+                    pt2 = pt2*plot_scale
+                    #print 'pt1 pt2',pt1, pt2
+
+                    body_line_points.InsertNextPoint(*pt1)
+                    body_point_num += 1
+                    body_line_points.InsertNextPoint(*pt2)
+                    body_point_num += 1
+
+                    body_lines.InsertNextCell(2)
+                    body_lines.InsertCellPoint(body_point_num-2)
+                    body_lines.InsertCellPoint(body_point_num-1)
+
+    if show_orientation:        
+        profileData = vtk.vtkPolyData()
+        profileData.SetPoints(body_line_points)
+        profileData.SetLines(body_lines)
+        
+        if 1:
+            if 1:
+                # Add thickness to the resulting line.
+                profileTubes = vtk.vtkTubeFilter()
+                profileTubes.SetNumberOfSides(8)
+                profileTubes.SetInput(profileData)
+                profileTubes.SetRadius(.2)
+                #profileTubes.SetRadius(.8)
+
+                profileMapper = vtk.vtkPolyDataMapper()
+                profileMapper.SetInput(profileTubes.GetOutput())
+
+                profile = vtk.vtkActor()
+                profile.SetMapper(profileMapper)
+                profile.GetProperty().SetDiffuseColor( colors.black ) #0xd6/255.0, 0xec/255.0, 0x1c/255.0)
+                #profile.GetProperty().SetDiffuseColor(cerulean)
+                #profile.GetProperty().SetDiffuseColor(banana)
+                profile.GetProperty().SetSpecular(.3)
+                profile.GetProperty().SetSpecularPower(30)
+
+                for renderer in renderers:
+                    renderer.AddActor( profile )
+
+    if 1:
+        if 0:
+            yplus = [( 458.4, 257.5, 203.8), # 3d location
+                     ( 461.2, 269.0,-28.3)]
+            yminus = [( 460.1, 154.9, 193.7),
+                      ( 461.4, 166.0,-35.8)]
+            all_verts = [yplus, yminus]
+        else:
+            post = [( 456.7, 202.9, 195.8),
+                    
+                    ( 458.1, 216.6,-32.9)]
+            all_verts = [post]
+        
+        for verts in all_verts:
+            verts = numpy.asarray(verts)
+            #verts = verts*plot_scale
+            actors = vtk_results.show_longline(renderers,verts,
+                                               #start_label=start_label,
+                                               radius=0.008*plot_scale,
+                                               nsides=8,
+                                               color=colors.black)
                 
     if show_n_longest is None:
         long_obs, long_obs_n = get_top_sequences(objid_by_n_observations)
@@ -211,6 +326,12 @@ def show_vtk(filename,
     
     if show_cameras:
         vtk_results.show_cameras(kresults,renderers)
+
+##    if show_orientation:
+##        reconstructor = flydra.reconstruct.Reconstructor(kresults)
+##        recon2 = reconstructor.get_scaled( reconstructor.scale_factor)
+        
+            
 
     kresults.close()
     
@@ -288,6 +409,9 @@ def main():
     parser.add_option("--stop", type="int",
                       help="last object ID to plot",
                       metavar="STOP")
+
+    parser.add_option("--obj-only", type="string",
+                      dest="obj_only")
     
     parser.add_option("--n-top-traces", type="int",
                       help="show N longest traces")
@@ -298,8 +422,16 @@ def main():
                       default=10,
                       metavar="MIN_LENGTH")
     
+    parser.add_option("--radius", type="float",
+                      help="radius of line (in meters)",
+                      default=0.001,
+                      metavar="RADIUS")
+    
     parser.add_option("--stereo", action='store_true',dest='stereo',
                       help="display in anaglyphic stereo")
+
+    parser.add_option("--show-orientation", action='store_true',dest='show_orientation',
+                      help="show orientation of points")
 
     parser.add_option("--show-obj-ids", action='store_true',dest='show_obj_ids',
                       help="show object ID numbers at start of trajectory")
@@ -326,16 +458,26 @@ def main():
         
     h5_filename=args[0]
 
+    if options.obj_only is not None:
+        seq = map(int,options.obj_only.split())
+        options.obj_only = seq
+
+        if options.start is not None or options.stop is not None:
+            raise ValueError("cannot specify start and stop with --obj-only option")
+
     show_vtk(filename=h5_filename,
              obj_start=options.start,
              obj_end=options.stop,
+             obj_only=options.obj_only,
              show_n_longest=options.n_top_traces,
+             show_orientation=options.show_orientation,
              stereo=options.stereo,
              show_obj_ids = options.show_obj_ids,
              show_observations = options.show_observations,
              show_cameras = options.show_cameras,
              min_length = options.min_length,
              debug = options.debug,
+             radius = options.radius,
              )
     
 if __name__=='__main__':
