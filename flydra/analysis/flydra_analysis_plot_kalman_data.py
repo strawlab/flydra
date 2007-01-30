@@ -384,6 +384,9 @@ def show_vtk(filename,
     else:
         picker=None
 
+    renWin.SetMultiSamples(32)
+    renWin.SetPolygonSmoothing(1)
+
     vtk_results.interact_with_renWin(renWin,picker=picker)
     
     camera = renderers[0].GetActiveCamera()
