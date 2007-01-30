@@ -132,10 +132,20 @@ def reconstruct_line_3ds( kresults, recon2, use_obj_id, return_fXl=False ):
          #mean_dist) = ru.find_best_3d(reconstructor,d2)
          mean_dist) = ru.find_best_3d(recon2,d2)
 
-        if 1:
+        try:
             # make sure reconstructed 3D point matches original
             X_orig = numpy.array(( observation_xs[frame_i], observation_ys[frame_i], observation_zs[frame_i] ))
             assert numpy.allclose(X,X_orig)
+        except AssertionError, err:
+            print '*'*80
+            print '*'*80
+            print
+            print 'WARNING: 3D positions and original 3D positions not the same!'
+            print 'X',X
+            print 'X_orig',X_orig
+            print
+            print '*'*80
+            print '*'*80
     
         if return_fXl:
             X_by_frame[int(kframe)] = X
@@ -153,7 +163,7 @@ def reconstruct_line_3ds( kresults, recon2, use_obj_id, return_fXl=False ):
             
             list(X_by_frame[frame])
             
-            print 'line3d_by_frame[frame]',line3d_by_frame[frame]
+            #print 'line3d_by_frame[frame]',line3d_by_frame[frame]
 
             L = line3d_by_frame[frame]
             if L is None:
@@ -166,10 +176,12 @@ def reconstruct_line_3ds( kresults, recon2, use_obj_id, return_fXl=False ):
         return line3d_by_frame
 
 if __name__=='__main__':
-    filename = 'DATA20070122_193851.h5'
-    use_obj_id = 102
+    import sys
+
+    filename = sys.argv[1]
+    use_obj_id = int(sys.argv[2])
     
-    kresults = result_utils.get_results(filename,mode="r")
+    kresults = result_utils.get_results(filename,mode="r+")
     reconstructor = flydra.reconstruct.Reconstructor(kresults)
     recon2 = reconstructor.get_scaled( reconstructor.scale_factor )
     

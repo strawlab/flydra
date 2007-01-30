@@ -4,7 +4,6 @@ import vtk_results
 import flydra.reconstruct
 import vtk.util.colors as colors
 import PQmath
-import scipy.io
 import cgtypes
 
 if 1:
@@ -49,7 +48,7 @@ if 1:
             fd.write( ' '.join( map(repr,xq) ) + '\n' )
         fd.close()
         
-        sys.exit()
+        #sys.exit()
             
         
         L = line3d
@@ -74,6 +73,7 @@ if 1:
         else:
             orientation_corrected = False
     else:
+        import scipy.io
         results = scipy.io.loadmat('smoothed')
         print results
         frame = results['frames']
