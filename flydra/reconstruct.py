@@ -644,8 +644,12 @@ class Reconstructor:
     def find3d(self, cam_ids_and_points2d, return_X_coords = True, return_line_coords = True ):
         """Find 3D coordinate using all data given
 
-        For a function which does hyptothesis testing to selectively
-        choose 2D to incorporate, see find_best_3d() in
+        Implements a linear triangulation method to find a 3D
+        point. For example, see Hartley & Zisserman section 12.2
+        (p.312).
+
+        Note: For a function which does hyptothesis testing to
+        selectively choose 2D to incorporate, see find_best_3d() in
         reconstruct_utils.
 
         """
@@ -667,9 +671,9 @@ class Reconstructor:
                 have_line_coords = True
             if return_X_coords:
                 Pmat = self.Pmat[cam_id] # Pmat is 3 rows x 4 columns
-                row3 = Pmat[2,:]
-                A.append( x*row3 - Pmat[0,:] )
-                A.append( y*row3 - Pmat[1,:] )
+                row2 = Pmat[2,:]
+                A.append( x*row2 - Pmat[0,:] )
+                A.append( y*row2 - Pmat[1,:] )
 
             if return_line_coords and have_line_coords = True:
                 if eccentricity > MINIMUM_ECCENTRICITY: # require a bit of elongation
