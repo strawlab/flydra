@@ -122,6 +122,7 @@ def norm_vec(V):
     return U
         
 def line_direction(Lcoords):
+    """convert from Pluecker coordinates to a direction"""
     L = nx.asarray(Lcoords)
     if len(L.shape)==1:
         # single line coord
