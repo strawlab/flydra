@@ -676,7 +676,7 @@ class Reconstructor:
                 A.append( x*row2 - Pmat[0,:] )
                 A.append( y*row2 - Pmat[1,:] )
 
-            if return_line_coords and have_line_coords = True:
+            if return_line_coords and have_line_coords:
                 if eccentricity > MINIMUM_ECCENTRICITY: # require a bit of elongation
                     P.append( (p1,p2,p3,p4) )
         
