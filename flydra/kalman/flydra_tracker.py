@@ -274,7 +274,7 @@ class TrackedObject:
                 del candidate_point_list[idx]
         # Now new_data_dict has just the 2d points we'll use for this reconstruction
         if len(cam_ids_and_points2d)>=2:
-            observation_meters = self.reconstructor_meters.find3d( cam_ids_and_points2d )
+            observation_meters = self.reconstructor_meters.find3d( cam_ids_and_points2d, return_line_coords = False)
             if len(cam_ids_and_points2d)>=3:
                 if self.save_calibration_data.isSet():
                     self.saved_calibration_data.append( cam_ids_and_points2d )
