@@ -52,6 +52,8 @@ class PlueckerLine:
             raise TypeError('v must be ThreeTuple')
         self.u = u
         self.v = v
+    def to_hz(self):
+        return (self.v[2], -self.v[1], self.u[0], self.v[0], -self.u[1], self.u[2])
     def __repr__(self):
         return 'PlueckerLine(%s,%s)'%(repr(self.u),repr(self.v))
     def dist2(self):
