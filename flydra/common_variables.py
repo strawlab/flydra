@@ -1,7 +1,7 @@
 MINIMUM_ECCENTRICITY = 1.4 # threshold to fit line
 ACCEPTABLE_DISTANCE_PIXELS = 10.0
-#REALTIME_UDP = False # use TCP to send realtime data
-REALTIME_UDP = True # use UDP to send realtime data
+
+NETWORK_PROTOCOL = 'udp'
 
 timestamp_echo_listener_port = 28992 # on cameras
 timestamp_echo_fmt1 = '<d'

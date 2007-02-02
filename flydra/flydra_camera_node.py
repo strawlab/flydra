@@ -61,7 +61,7 @@ class DummySocket:
         return
 
 import flydra.common_variables
-REALTIME_UDP = flydra.common_variables.REALTIME_UDP
+NETWORK_PROTOCOL = flydra.common_variables.NETWORK_PROTOCOL
 
 import flydra_ipp.realtime_image_analysis4 as realtime_image_analysis
 
@@ -212,11 +212,13 @@ class GrabClass(object):
         if BENCHMARK:
             coord_socket = DummySocket()
         else:
-            if REALTIME_UDP:
+            if NETWORK_PROTOCOL == 'udp':
                 coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            else:
+            elif NETWORK_PROTOCOL == 'tcp':
                 coord_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 coord_socket.connect((main_brain_hostname,self.cam2mainbrain_port))
+            else:
+                raise ValueError('unknown NETWORK_PROTOCOL')
 
         old_ts = time.time()
         old_fn = 0
@@ -540,11 +542,13 @@ class GrabClass(object):
                     except:
                         print 'error-causing data: ',point_tuple
                         raise
-                if REALTIME_UDP:
+                if NETWORK_PROTOCOL == 'udp':
                     coord_socket.sendto(data,
                                         (main_brain_hostname,self.cam2mainbrain_port))
-                else:
+                elif NETWORK_PROTOCOL == 'tcp':
                     coord_socket.send(data)
+                else:
+                    raise ValueError('unknown NETWORK_PROTOCOL')                    
                 #print 'sent data...'
                     
                 if self.new_roi.isSet():

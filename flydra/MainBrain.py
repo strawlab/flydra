@@ -28,7 +28,7 @@ DO_KALMAN= True
 MIN_KALMAN_OBSERVATIONS_TO_SAVE = 10 # how many data points are required before saving trajectory?
 
 import flydra.common_variables
-REALTIME_UDP = flydra.common_variables.REALTIME_UDP
+NETWORK_PROTOCOL = flydra.common_variables.NETWORK_PROTOCOL
 
 if os.name == 'posix':
     import posix_sched
@@ -358,17 +358,19 @@ class CoordReceiver(threading.Thread):
             self.cam_id2cam_no[cam_id] = absolute_cam_no
 
             # create and bind socket to listen to
-            if REALTIME_UDP:
+            if NETWORK_PROTOCOL == 'udp':
                 sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 sockobj.bind((hostname, cam2mainbrain_data_port))
                 sockobj.setblocking(0)
                 self.listen_sockets[ sockobj ] = cam_id
-            else:
+            elif NETWORK_PROTOCOL == 'tcp':
                 sockobj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sockobj.bind((hostname, cam2mainbrain_data_port))
                 sockobj.listen(1)
                 sockobj.setblocking(0)
                 self.server_sockets[ sockobj ] = cam_id
+            else:
+                raise ValueError('unknown NETWORK_PROTOCOL')
             self.last_timestamps.append(IMPOSSIBLE_TIMESTAMP) # arbitrary impossible number
             self.last_framenumbers_delay.append(-1) # arbitrary impossible number
             self.last_framenumbers_skip.append(-1) # arbitrary impossible number
@@ -489,7 +491,7 @@ class CoordReceiver(threading.Thread):
 
             #####################################################################
             
-            if not REALTIME_UDP:
+            if NETWORK_PROTOCOL == 'tcp':
                 try:
                     in_ready, out_ready, exc_ready = select_select( self.server_sockets.keys(),
                                                                     empty_list, empty_list, 0.0)
@@ -586,10 +588,13 @@ class CoordReceiver(threading.Thread):
                     cam_idx = self.cam_ids.index(cam_id)
                     absolute_cam_no = self.absolute_cam_nos[cam_idx]
 
-                    if REALTIME_UDP:
+                    
+                    if NETWORK_PROTOCOL == 'udp':
                         newdata, addr = sockobj.recvfrom(4096)
-                    else:
+                    elif NETWORK_PROTOCOL == 'tcp':
                         newdata = sockobj.recv(4096)
+                    else:
+                        raise ValueError('unknown NETWORK_PROTOCOL')
                     data = old_data.get( sockobj, '')
                     data = data + newdata
                     while len(data):
@@ -605,10 +610,12 @@ class CoordReceiver(threading.Thread):
                             # incomplete point info
                             break
                         if framenumber-self.last_framenumbers_skip[cam_idx] > 1:
-                            if REALTIME_UDP:
+                            if NETWORK_PROTOCOL == 'udp':
                                 print '  WARNING: frame data loss (probably from UDP collision) %s'%(cam_id,)
-                            else:
+                            elif NETWORK_PROTOCOL == 'tcp':
                                 print '  WARNING: frame data loss (unknown cause) %s'%(cam_id,)
+                            else:
+                                raise ValueError('unknown NETWORK_PROTOCOL')
                         self.last_framenumbers_skip[cam_idx]=framenumber
                         start=header_size
                         if n_pts:
