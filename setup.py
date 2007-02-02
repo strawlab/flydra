@@ -6,8 +6,6 @@ from kookutils import get_svnversion_persistent
 version_str = '0.2.dev%(svnversion)s'
 version = get_svnversion_persistent('flydra/version.py',version_str)
 
-import os, glob, time, sys, StringIO
-
 ext_modules = []
 
 ext_modules.append(Extension(name='flydra.reconstruct_utils',
