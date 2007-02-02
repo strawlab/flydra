@@ -962,6 +962,14 @@ class App:
             elif key == 'use_arena':
                 grabber.use_arena = cmds[key]
                 globals['use_arena'] = grabber.use_arena
+            elif key == 'request_missing':
+                camn_and_list = map(int,cmds[key].split())
+                camn = camn_and_list[0]
+                list_of_missing_framenumbers = camn_and_list[1:]
+                print 'I know main brain wants %d frames (camn %d): %s'%(
+                    len(list_of_missing_framenumbers),
+                    camn,
+                    str(list_of_missing_framenumbers))
             elif key == 'quit':
                 globals['cam_quit_event'].set()
             elif key == 'take_bg':
