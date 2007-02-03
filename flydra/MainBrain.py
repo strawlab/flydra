@@ -244,7 +244,7 @@ class CoordReceiver(threading.Thread):
         if ATTEMPT_DATA_RECOVERY:
             #self.request_data_lock = DebugLock('request_data_lock',True) # protect request_data
             self.request_data_lock = threading.Lock() # protect request_data
-            self.request_data = []
+            self.request_data = {}
         self.listen_sockets = {}
         self.server_sockets = {}
         self.framenumber_offsets = []
@@ -299,7 +299,7 @@ class CoordReceiver(threading.Thread):
         # called from main thread, must lock data in realtime coord thread
         result_by_camn = {}
         self.request_data_lock.acquire()
-        for absolute_cam_no,tmp_queue in enumerate(self.request_data):
+        for absolute_cam_no,tmp_queue in self.request_data.iteritems():
             list_of_missing_framenumbers = []
             cam_id = None
             try:
@@ -408,17 +408,17 @@ class CoordReceiver(threading.Thread):
             self.last_framenumbers_delay.append(-1) # arbitrary impossible number
             self.last_framenumbers_skip.append(-1) # arbitrary impossible number
 
-            if ATTEMPT_DATA_RECOVERY:
-                self.request_data_lock.acquire()
-                try:
-                    print 'absolute_cam_no',absolute_cam_no
-                    print 'len(self.request_data)',len(self.request_data)
-                    assert absolute_cam_no == len(self.request_data)
-                    # absolute_cam_no == "camn" in pytables Info2D
-                    self.request_data.append( Queue.Queue() ) # empty queue
-                    # now self.request_data[absolute_cam_no] == new, empty queue
-                finally:
-                    self.request_data_lock.release()
+##            if ATTEMPT_DATA_RECOVERY:
+##                self.request_data_lock.acquire()
+##                try:
+##                    print 'absolute_cam_no',absolute_cam_no
+##                    print 'len(self.request_data)',len(self.request_data)
+##                    assert absolute_cam_no == len(self.request_data)
+##                    # absolute_cam_no == "camn" in pytables Info2D
+##                    self.request_data.append( Queue.Queue() ) # empty queue
+##                    # now self.request_data[absolute_cam_no] == new, empty queue
+##                finally:
+##                    self.request_data_lock.release()
             
             self.framenumber_offsets.append(0)
             self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no,
@@ -669,7 +669,7 @@ class CoordReceiver(threading.Thread):
                                     framenumber)
                                 
                                 self.request_data_lock.acquire()
-                                tmp_queue = self.request_data[absolute_cam_no]
+                                tmp_queue = self.request_data.setdefault(absolute_cam_no,Queue.Queue())
                                 self.request_data_lock.release()
                                 
                                 print 'putting', (cam_id,  missing_frame_numbers)
@@ -1929,11 +1929,9 @@ class MainBrain(object):
         if ATTEMPT_DATA_RECOVERY:
             # request from camera computers any data that we're missing
             missing_data_dict = self.coord_receiver.get_missing_data_dict()
-            print 'requesting missing data:'
             for camn, (cam_id, list_of_missing_framenumbers) in missing_data_dict.iteritems():
-                print 'camn %d: %d frames %s'%(camn,len(list_of_missing_framenumbers), numpy.array(list_of_missing_framenumbers) )
+                print 'requesting from camn %d: %d frames %s'%(camn,len(list_of_missing_framenumbers), numpy.array(list_of_missing_framenumbers) )
                 self.remote_api.external_request_missing_data(cam_id,camn,list_of_missing_framenumbers)
-            print
 
     def _service_save_data(self):
         list_of_kalman_calibration_data = []

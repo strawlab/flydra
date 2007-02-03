@@ -7,6 +7,7 @@ FLYDRA_BT = int(os.environ.get('FLYDRA_BT',0)) # threaded benchmark
 
 import threading, time, socket, sys, struct, select, math
 import Queue
+import numpy
 import numpy as nx
 
 import FlyMovieFormat
@@ -965,11 +966,37 @@ class App:
             elif key == 'request_missing':
                 camn_and_list = map(int,cmds[key].split())
                 camn = camn_and_list[0]
-                list_of_missing_framenumbers = camn_and_list[1:]
+                missing_framenumbers = camn_and_list[1:]
                 print 'I know main brain wants %d frames (camn %d): %s'%(
-                    len(list_of_missing_framenumbers),
+                    len(missing_framenumbers),
                     camn,
-                    str(list_of_missing_framenumbers))
+                    str(missing_framenumbers))
+
+                last_points_framenumbers = self.last_points_framenumbers_by_cam[cam_no]
+                last_points = self.last_points_by_cam[cam_no]
+
+                # convert to numpy arrays for quick indexing
+                last_points_framenumbers = numpy.array( last_points_framenumbers, dtype=numpy.int64 )
+                missing_framenumbers = numpy.array( missing_framenumbers, dtype=numpy.int64 )
+
+                # now find missing_framenumbers in last_points_framenumbers
+                idxs = last_points_framenumbers.searchsorted( missing_framenumbers )
+
+                for ii,(idx,missing_framenumber) in enumerate(zip(idxs,missing_framenumbers)):
+                    if idx == 0:
+                        # search sorted will sometimes return 0 when value not in range
+                        found_framenumber = last_points_framenumbers[idx]
+                        if found_framenumber != missing_framenumber:
+                            print 'WARNING: could not find missing frame',missing_framenumber
+                            continue
+                    elif idx == len(last_points_framenumbers):
+                        print 'WARNING: could not find missing frame',missing_framenumber
+                        continue
+                    
+                    timestamp, points = last_points[idx]
+                    print 'found data for frame %d: (%f) %d points'%(missing_framenumber,
+                                                                     timestamp,len(points))
+                
             elif key == 'quit':
                 globals['cam_quit_event'].set()
             elif key == 'take_bg':
@@ -1068,7 +1095,11 @@ class App:
         last_return_info_check = []
         n_raw_frames = []
         last_found_timestamp = [0.0]*self.num_cams
+        # save all data for some time (for post-trigggering)
         last_frames_by_cam = [ [] for c in range(self.num_cams) ]
+        # save extracted data for some time (for data-recovery)
+        self.last_points_by_cam = [ [] for c in range(self.num_cams) ]
+        self.last_points_framenumbers_by_cam = [ [] for c in range(self.num_cams) ]
         
         if self.num_cams == 0:
             return
@@ -1087,6 +1118,8 @@ class App:
                     for cam_no in range(self.num_cams):
                         globals = self.globals[cam_no] # shorthand
                         last_frames = last_frames_by_cam[cam_no]
+                        last_points = self.last_points_by_cam[cam_no]
+                        last_points_framenumbers = self.last_points_framenumbers_by_cam[cam_no]
 
                         # check if camera running
                         if globals['cam_quit_event'].isSet():
@@ -1139,6 +1172,13 @@ class App:
                                 last_frames.append( (frame,timestamp,framenumber,points) ) # save for post-triggering
                                 while len(last_frames)>1000:
                                     del last_frames[0]
+
+                                last_points_framenumbers.append( framenumber ) # save for dropped packet recovery
+                                last_points.append( (timestamp,points) ) # save for dropped packet recovery
+                                while len(last_points)>10000:
+                                    del last_points[:100]
+                                    del last_points_framenumbers[:100]
+                                    
                                 n_pts = len(points)
                                 if n_pts>0:
                                     last_found_timestamp[cam_no] = timestamp
