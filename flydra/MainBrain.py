@@ -24,6 +24,9 @@ import flydra.kalman.flydra_tracker
 import flydra.geom
 import flydra.data_descriptions
 
+import flydra.debuglock
+#DebugLock = flydra.debuglock.DebugLock
+
 DO_KALMAN= True
 MIN_KALMAN_OBSERVATIONS_TO_SAVE = 10 # how many data points are required before saving trajectory?
 
@@ -199,37 +202,6 @@ def get_best_realtime_data():
 def DEBUG(msg=''):
     return
 
-class DebugLock:
-    def __init__(self,name,verbose=False):
-        self.name = name
-        self._lock = threading.Lock()
-        self.verbose = verbose
-
-    def acquire(self, latency_warn_msec = None):
-        if self.verbose:
-            print '-='*20
-        print '*****',self.name,'request acquire by',threading.currentThread()
-        if self.verbose:
-            frame = sys._getframe()
-            traceback.print_stack(frame)
-            print '-='*20
-        tstart = time.time()
-        self._lock.acquire()
-        tstop = time.time()
-        print '*****',self.name,'acquired by',threading.currentThread()
-        if latency_warn_msec is not None:
-            lat = (tstop-tstart)*1000.0
-            if lat > latency_warn_msec:
-                print '          **** WARNING acquisition time %.1f msec'%lat
-        
-        if self.verbose:
-            traceback.print_stack(frame)
-            print '-='*20
-
-    def release(self):
-        print '*****',self.name,'released by',threading.currentThread()
-        self._lock.release()
-
 class CoordReceiver(threading.Thread):
     def __init__(self,main_brain):
         global hostname
@@ -302,19 +274,25 @@ class CoordReceiver(threading.Thread):
         for absolute_cam_no,tmp_queue in self.request_data.iteritems():
             list_of_missing_framenumbers = []
             cam_id = None
+            framenumber_offset = None
             try:
                 while 1:
                     value = tmp_queue.get_nowait()
-                    print 'value',repr(value)
-                    this_cam_id, this_list = value
+                    #print 'value',repr(value)
+                    this_cam_id, this_framenumber_offset, this_list = value
                     if cam_id is None:
                         cam_id = this_cam_id
+                    if framenumber_offset is None:
+                        framenumber_offset = this_framenumber_offset
+                        
                     assert cam_id == this_cam_id # make sure given camn comes from single cam_id
+                    assert framenumber_offset == this_framenumber_offset
+                    
                     list_of_missing_framenumbers.extend( this_list )
             except Queue.Empty:
                 pass
             if len(list_of_missing_framenumbers):
-                result_by_camn[absolute_cam_no] = cam_id, list_of_missing_framenumbers
+                result_by_camn[absolute_cam_no] = cam_id, framenumber_offset, list_of_missing_framenumbers
         self.request_data_lock.release()
 
         return result_by_camn
@@ -407,19 +385,6 @@ class CoordReceiver(threading.Thread):
             self.last_timestamps.append(IMPOSSIBLE_TIMESTAMP) # arbitrary impossible number
             self.last_framenumbers_delay.append(-1) # arbitrary impossible number
             self.last_framenumbers_skip.append(-1) # arbitrary impossible number
-
-##            if ATTEMPT_DATA_RECOVERY:
-##                self.request_data_lock.acquire()
-##                try:
-##                    print 'absolute_cam_no',absolute_cam_no
-##                    print 'len(self.request_data)',len(self.request_data)
-##                    assert absolute_cam_no == len(self.request_data)
-##                    # absolute_cam_no == "camn" in pytables Info2D
-##                    self.request_data.append( Queue.Queue() ) # empty queue
-##                    # now self.request_data[absolute_cam_no] == new, empty queue
-##                finally:
-##                    self.request_data_lock.release()
-            
             self.framenumber_offsets.append(0)
             self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no,
                                               'frame0':IMPOSSIBLE_TIMESTAMP}
@@ -671,9 +636,11 @@ class CoordReceiver(threading.Thread):
                                 self.request_data_lock.acquire()
                                 tmp_queue = self.request_data.setdefault(absolute_cam_no,Queue.Queue())
                                 self.request_data_lock.release()
-                                
-                                print 'putting', (cam_id,  missing_frame_numbers)
-                                tmp_queue.put( (cam_id,  missing_frame_numbers) )
+
+                                tmp_framenumber_offset = self.framenumber_offsets[cam_idx]                                
+                                #print 'putting', (cam_id,  tmp_framenumber_offset, missing_frame_numbers)
+                                tmp_queue.put( (cam_id,  tmp_framenumber_offset, missing_frame_numbers) )
+                                del tmp_framenumber_offset
                                 del tmp_queue # drop reference to queue
                                 del missing_frame_numbers
                                 
@@ -1229,13 +1196,13 @@ class MainBrain(object):
             finally:
                 self.cam_info_lock.release()        
 
-        def external_request_missing_data(self, cam_id, camn, list_of_missing_framenumbers):
+        def external_request_missing_data(self, cam_id, camn, framenumber_offset, list_of_missing_framenumbers):
             self.cam_info_lock.acquire()
             try:
                 cam = self.cam_info[cam_id]
                 cam_lock = cam['lock']
                 
-                camn_and_list = [camn]
+                camn_and_list = [camn, framenumber_offset]
                 camn_and_list.extend( list_of_missing_framenumbers )
                 cmd_str = ' '.join(map(repr,camn_and_list))
                 cam_lock.acquire()
@@ -1373,6 +1340,31 @@ class MainBrain(object):
                     cam_lock.release()
             finally:
                 self.cam_info_lock.release()            
+
+        def receive_missing_data(self, cam_id, framenumber_offset, missing_data ):
+            #print 'received missing data from camera %s (offset %d):'%(cam_id, framenumber_offset)
+            if len(missing_data)==0:
+                # no missing data
+                return
+            
+            deferred_2d_data = []
+            for (absolute_cam_no, framenumber, remote_timestamp, points_distorted) in missing_data:
+                #print '  absolute_cam_no, framenumber, remote_timestamp, points_distorted', absolute_cam_no, framenumber, remote_timestamp, points_distorted
+
+                corrected_framenumber = framenumber-framenumber_offset
+                if len(points_distorted)==0:
+                    # no point was tracked that frame
+                    points_distorted = [(nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0)]
+                for point_tuple in points_distorted:
+                    # Save 2D data (even when no point found) to allow
+                    # temporal correlation of movie frames to 2D data.
+                    frame_pt_idx = point_tuple[PT_TUPLE_IDX_FRAME_PT_IDX]
+                    deferred_2d_data.append((absolute_cam_no, # defer saving to later
+                                             corrected_framenumber,
+                                             remote_timestamp)
+                                            +point_tuple[:9]
+                                            +(frame_pt_idx,))
+            self.main_brain.queue_data2d.put(deferred_2d_data)
 
         def set_fps(self,cam_id,fps):
             """set most recent fps (caller: remote camera)"""
@@ -1929,9 +1921,9 @@ class MainBrain(object):
         if ATTEMPT_DATA_RECOVERY:
             # request from camera computers any data that we're missing
             missing_data_dict = self.coord_receiver.get_missing_data_dict()
-            for camn, (cam_id, list_of_missing_framenumbers) in missing_data_dict.iteritems():
-                print 'requesting from camn %d: %d frames %s'%(camn,len(list_of_missing_framenumbers), numpy.array(list_of_missing_framenumbers) )
-                self.remote_api.external_request_missing_data(cam_id,camn,list_of_missing_framenumbers)
+            for camn, (cam_id, framenumber_offset, list_of_missing_framenumbers) in missing_data_dict.iteritems():
+                #print 'requesting from camn %d: %d frames %s'%(camn,len(list_of_missing_framenumbers), numpy.array(list_of_missing_framenumbers) )
+                self.remote_api.external_request_missing_data(cam_id,camn,framenumber_offset,list_of_missing_framenumbers)
 
     def _service_save_data(self):
         list_of_kalman_calibration_data = []

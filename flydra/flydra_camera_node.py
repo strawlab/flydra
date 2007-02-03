@@ -10,6 +10,9 @@ import Queue
 import numpy
 import numpy as nx
 
+#import flydra.debuglock
+#DebugLock = flydra.debuglock.DebugLock
+
 import FlyMovieFormat
 cam_iface = None # global variable, value set in main()
 import cam_iface_choose
@@ -717,8 +720,9 @@ class App:
             main_brain_URI = "PYROLOC://%s:%d/%s" % (main_brain_hostname,port,name)
             print 'connecting to',main_brain_URI
             self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
-            self.main_brain._setOneway(['set_image','set_fps','close','log_message'])
+            self.main_brain._setOneway(['set_image','set_fps','close','log_message','receive_missing_data'])
         self.main_brain_lock = threading.Lock()
+        #self.main_brain_lock = DebugLock('main_brain_lock',verbose=True)
 
         # ----------------------------------------------------------------
         #
@@ -965,8 +969,8 @@ class App:
                 globals['use_arena'] = grabber.use_arena
             elif key == 'request_missing':
                 camn_and_list = map(int,cmds[key].split())
-                camn = camn_and_list[0]
-                missing_framenumbers = camn_and_list[1:]
+                camn, framenumber_offset = camn_and_list[:2]
+                missing_framenumbers = camn_and_list[2:]
                 print 'I know main brain wants %d frames (camn %d): %s'%(
                     len(missing_framenumbers),
                     camn,
@@ -982,6 +986,8 @@ class App:
                 # now find missing_framenumbers in last_points_framenumbers
                 idxs = last_points_framenumbers.searchsorted( missing_framenumbers )
 
+                missing_data = []
+
                 for ii,(idx,missing_framenumber) in enumerate(zip(idxs,missing_framenumbers)):
                     if idx == 0:
                         # search sorted will sometimes return 0 when value not in range
@@ -994,8 +1000,15 @@ class App:
                         continue
                     
                     timestamp, points = last_points[idx]
-                    print 'found data for frame %d: (%f) %d points'%(missing_framenumber,
-                                                                     timestamp,len(points))
+                    # make sure data is pure python, (not numpy)
+                    missing_data.append( (int(camn), int(missing_framenumber), float(timestamp), points) ) 
+                    
+                if len(missing_data):
+                #if 1: # XXX deleteme
+                #if 0: # XXX deleteme
+                    self.main_brain_lock.acquire()
+                    self.main_brain.receive_missing_data(cam_id, framenumber_offset, missing_data)
+                    self.main_brain_lock.release()
                 
             elif key == 'quit':
                 globals['cam_quit_event'].set()
@@ -1271,10 +1284,12 @@ class App:
                         # process asynchronous commands
                         DEBUG( 'ADS 3')
                         self.main_brain_lock.acquire()
-                        DEBUG( 'ADS 4')
-                        cmds=self.main_brain.get_and_clear_commands(cam_id)
-                        DEBUG( 'ADS 5')
-                        self.main_brain_lock.release()
+                        try:
+                            DEBUG( 'ADS 4')
+                            cmds=self.main_brain.get_and_clear_commands(cam_id)
+                            DEBUG( 'ADS 5')
+                        finally:
+                            self.main_brain_lock.release()
                         DEBUG('ADS 6')
                         self.handle_commands(cam_no,cmds)
                         DEBUG('ADS 7')
