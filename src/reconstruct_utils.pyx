@@ -44,6 +44,17 @@ cdef class ReconstructHelper:
         self.p1 = p1
         self.p2 = p2
 
+    def __richcmp__(self,other,op):
+
+        if op == 2 or op == 3:
+            result = (numpy.allclose(self.get_K(),other.get_K()) and
+                      numpy.allclose(self.get_nlparams(),other.get_nlparams()) )
+            if op == 3:
+                result = not result
+        else:
+            result = False
+        return result
+
     def get_K(self):
         K = numpy.array((( self.fc1, 0, self.cc1),
                          ( 0, self.fc2, self.cc2),

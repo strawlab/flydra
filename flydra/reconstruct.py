@@ -222,6 +222,16 @@ class SingleCameraCalibration:
 
         self.pmat_inv = numpy.linalg.pinv(self.Pmat)
         self.scale_factor = scale_factor
+        
+    def __ne__(self,other):
+        return not (self==other)
+    
+    def __eq__(self,other):
+        return (numpy.allclose(self.pp,other.pp) and
+                (self.cam_id == other.cam_id) and
+                numpy.allclose(self.Pmat,other.Pmat) and
+                numpy.allclose(self.res,other.res) and
+                self.helper == other.helper)
 
     def get_scaled(self,scale_factor):
         """change units (e.g. from mm to meters)
@@ -344,7 +354,10 @@ class Reconstructor:
         self.cal_source = cal_source
 
         if type(self.cal_source) in [str,unicode]:
-            self.cal_source_type = 'normal files'
+            if not self.cal_source.endswith('h5'):
+                self.cal_source_type = 'normal files'
+            else:
+                self.cal_source_type = 'pytables filename'
         elif hasattr(self.cal_source,'__len__'): # is sequence
             for i in range(len(self.cal_source)):
                 if not isinstance(self.cal_source[i],SingleCameraCalibration):
@@ -356,21 +369,29 @@ class Reconstructor:
         else:
             self.cal_source_type = 'pytables'
 
+        if self.cal_source_type == 'pytables filename':
+            import tables as PT # PyTables
+            use_cal_source = PT.openFile(self.cal_source,mode='r')
+            self.cal_source_type = 'pytables'
+        else:
+            use_cal_source = self.cal_source
+
+
         if self.cal_source_type == 'normal files':
-            fd = open(os.path.join(self.cal_source,'camera_order.txt'),'r')
+            fd = open(os.path.join(use_cal_source,'camera_order.txt'),'r')
             cam_ids = fd.read().split('\n')
             fd.close()
             if cam_ids[-1] == '': del cam_ids[-1] # remove blank line
         elif self.cal_source_type == 'pytables':
             import tables as PT # PyTables
-            assert type(self.cal_source)==PT.File
-            results = self.cal_source
+            assert type(use_cal_source)==PT.File
+            results = use_cal_source
             nodes = results.root.calibration.pmat._f_listNodes()
             cam_ids = []
             for node in nodes:
                 cam_ids.append( node.name )
         elif self.cal_source_type=='SingleCameraCalibration instances':
-            cam_ids = [scci.cam_id for scci in self.cal_source]
+            cam_ids = [scci.cam_id for scci in use_cal_source]
             
         N = len(cam_ids)
         # load calibration matrices
@@ -388,16 +409,16 @@ class Reconstructor:
             self._scale_factor2known_units[tmp_scale_factor] = tmp_unit
         
         if self.cal_source_type == 'normal files':
-            res_fd = open(os.path.join(self.cal_source,'Res.dat'),'r')
+            res_fd = open(os.path.join(use_cal_source,'Res.dat'),'r')
             for i, cam_id in enumerate(cam_ids):
                 fname = 'camera%d.Pmat.cal'%(i+1)
-                pmat = load_ascii_matrix(opj(self.cal_source,fname)) # 3 rows x 4 columns
+                pmat = load_ascii_matrix(opj(use_cal_source,fname)) # 3 rows x 4 columns
                 self.Pmat[cam_id] = pmat
                 self.Res[cam_id] = map(int,res_fd.readline().split())
             res_fd.close()
 
             # load non linear parameters
-            rad_files = glob.glob(os.path.join(self.cal_source,'*.rad'))
+            rad_files = glob.glob(os.path.join(use_cal_source,'*.rad'))
             assert len(rad_files) < 10
             rad_files.sort() # cheap trick to associate camera number with file
             for cam_id, filename in zip( cam_ids, rad_files ):
@@ -407,7 +428,7 @@ class Reconstructor:
                     params['K11'], params['K22'], params['K13'], params['K23'],
                     params['kc1'], params['kc2'], params['kc3'], params['kc4'])
 
-            filename = os.path.join(self.cal_source,'calibration_units.txt')
+            filename = os.path.join(use_cal_source,'calibration_units.txt')
             if os.path.exists(filename):
                 fd = file(filename,'r')
                 value = fd.read()
@@ -453,7 +474,7 @@ class Reconstructor:
             # find instance
             scale_factors = []
             for cam_id in cam_ids:
-                for scci in self.cal_source:
+                for scci in use_cal_source:
                     if scci.cam_id==cam_id:
                         break
                 self.Pmat[cam_id] = scci.Pmat
@@ -494,6 +515,19 @@ class Reconstructor:
         self._cam_centers_cache = {}
         for cam_id in self.cam_ids:
             self._cam_centers_cache[cam_id] = self.get_camera_center(cam_id)[:,0] # make rank-1
+            
+    def __ne__(self,other):
+        return not (self==other)
+    
+    def __eq__(self,other):
+        orig_sccs = [self.get_SingleCameraCalibration(cam_id) for cam_id in self.cam_ids]
+        other_sccs = [other.get_SingleCameraCalibration(cam_id) for cam_id in other.cam_ids]
+        eq = True
+        for my_scc,other_scc in zip(orig_sccs,other_sccs):
+            if my_scc != other_scc:
+                eq = False
+                break
+        return eq
 
     def get_scaled(self,scale_factor):
         """change units (e.g. from mm to meters)
