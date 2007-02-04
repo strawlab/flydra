@@ -110,22 +110,34 @@ option to this program.
 
 class KalmanSaver:
     def __init__(self,dest_filename,reconst_orig_units):
-        self.h5file = PT.openFile(dest_filename, mode="w", title="tracked Flydra data file")
-        reconst_orig_units.save_to_h5file(self.h5file)
-        self.h5_xhat = self.h5file.createTable(self.h5file.root,'kalman_estimates', KalmanEstimates,
-                                               "Kalman a posteri estimates of tracked object")
-        self.h5_xhat_names = PT.Description(KalmanEstimates().columns)._v_names
-        self.h5_obs = self.h5file.createTable(self.h5file.root,'kalman_observations', FilteredObservations,
-                                              "observations of tracked object")
-        self.h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
+        if os.path.exists(dest_filename):
+            self.h5file = PT.openFile(dest_filename, mode="r+")
+            test_reconst = flydra.reconstruct.Reconstructor(self.h5file)
+            assert test_reconst == reconst_orig_units
 
-        self.h5_2d_obs_next_idx = 0
-        self.h5_2d_obs = self.h5file.createVLArray(self.h5file.root,
-                                                   'kalman_observations_2d_idxs',
-                                                   PT.UInt16Atom(flavor='numpy'), # dtype should match with tro.observations_2d
-                                                   "camns and idxs")
-        
-        self.obj_id = -1
+            self.h5_xhat = self.h5file.root.kalman_estimates
+            self.h5_obs = self.h5file.root.kalman_observations
+            
+            obj_ids = self.h5_xhat.read(field='obj_id',flavor='numpy')
+            self.obj_id = obj_ids.max()
+            del obj_ids
+        else:
+            self.h5file = PT.openFile(dest_filename, mode="w", title="tracked Flydra data file")
+            reconst_orig_units.save_to_h5file(self.h5file)
+            self.h5_xhat = self.h5file.createTable(self.h5file.root,'kalman_estimates', KalmanEstimates,
+                                                   "Kalman a posteri estimates of tracked object")
+            self.h5_obs = self.h5file.createTable(self.h5file.root,'kalman_observations', FilteredObservations,
+                                                  "observations of tracked object")
+
+            self.h5_2d_obs_next_idx = 0
+            self.h5_2d_obs = self.h5file.createVLArray(self.h5file.root,
+                                                       'kalman_observations_2d_idxs',
+                                                       PT.UInt16Atom(flavor='numpy'), # dtype should match with tro.observations_2d
+                                                       "camns and idxs")
+
+            self.obj_id = -1
+        self.h5_xhat_names = PT.Description(KalmanEstimates().columns)._v_names
+        self.h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
         
     def close(self):
         self.h5file.close()
@@ -227,9 +239,8 @@ def kalmanize(src_filename,
     
     if dest_filename is None:
         dest_filename = os.path.splitext(results.filename)[0]+'.kalmanized.h5'
-    if os.path.exists(dest_filename):
-        raise ValueError('%s already exists, quitting'%dest_filename)
-        #os.unlink(dest_filename)
+        if os.path.exists(dest_filename):
+            raise ValueError('%s already exists and not explicitly requesting append with "--dest-file" option, quitting'%dest_filename)
     h5saver = KalmanSaver(dest_filename,reconst_orig_units)
 
     tracker = Tracker(reconstructor_meters,scale_factor=reconst_orig_units.get_scale_factor())
@@ -382,6 +393,10 @@ def main():
                       help="hdf5 file with data to display FILE",
                       metavar="FILE")
 
+    parser.add_option("-d", "--dest-file", dest="dest_filename", type='string',
+                      help="save to hdf5 file (append if already present)",
+                      metavar="DESTFILE")
+
     parser.add_option("-r", "--reconstructor", dest="reconstructor_path", type='string',
                       help="calibration/reconstructor path",
                       metavar="RECONSTRUCTOR")
@@ -429,6 +444,7 @@ def main():
     src_filename = args[0]
                           
     kalmanize(src_filename,
+              dest_filename=options.dest_filename,
               reconstructor_filename=options.reconstructor_path,
               start_frame=options.start,
               stop_frame=options.stop,
