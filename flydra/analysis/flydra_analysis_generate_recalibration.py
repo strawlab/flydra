@@ -9,6 +9,24 @@ from optparse import OptionParser
 import flydra.reconstruct
 import flydra.analysis.result_utils as result_utils
 
+"""
+
+The basic idea is to watch some trajectories with::
+
+  flydra_analysis_plot_kalman_data <DATAfilename.h5> --n-top-traces=10
+
+Find the top traces, reject any bad ones, and put them in an "efile".
+
+The form of the efile is::
+  
+  long_ids = [1,2,3,4]
+
+Then run this program::
+
+  flydra_analysis_generate_recalibration <DATAfilename.h5> <efile>
+  
+"""
+
 def save_ascii_matrix(thefile,m):
     if hasattr(thefile,'write'):
         fd=thefile
