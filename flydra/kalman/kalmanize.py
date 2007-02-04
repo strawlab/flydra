@@ -121,6 +121,11 @@ class KalmanSaver:
             obj_ids = self.h5_xhat.read(field='obj_id',flavor='numpy')
             self.obj_id = obj_ids.max()
             del obj_ids
+
+
+            self.h5_2d_obs = self.h5file.root.kalman_observations_2d_idxs
+            self.h5_2d_obs_next_idx = len(self.h5_2d_obs)
+            
         else:
             self.h5file = PT.openFile(dest_filename, mode="w", title="tracked Flydra data file")
             reconst_orig_units.save_to_h5file(self.h5file)
