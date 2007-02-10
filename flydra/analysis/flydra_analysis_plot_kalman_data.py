@@ -161,7 +161,7 @@ def show_vtk(filename,
         max_observation_frame=observation_frames.max()
 
         row_idxs = numpy.nonzero( obj_ids == obj_id )[0]
-        estimate_frames = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='x',flavor='numpy')
+        estimate_frames = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='frame',flavor='numpy')
         valid_condition = estimate_frames <= max_observation_frame
         row_idxs = row_idxs[valid_condition]
         n_observations = len( observation_frames )
