@@ -684,7 +684,8 @@ class Reconstructor:
         (p.312).
 
         Note: For a function which does hyptothesis testing to
-        selectively choose 2D to incorporate, see find_best_3d() in
+        selectively choose 2D to incorporate, see
+        hypothesis_testing_algorithm__find_best_3d() in
         reconstruct_utils.
 
         """
