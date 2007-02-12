@@ -31,16 +31,19 @@ def doit(filename,
          radius=0.002, # in meters
          min_length=10,
          show_saccades = True,
+         show_observations = False,
          show_saccade_times = False,
          stim = None,
+         quick_kalman=False,
+         fps=100.0,
          ):
     
     if show_n_longest is not None:
         raise NotImplementedError('')
     
     kresults = PT.openFile(filename,mode="r")
-    obj_ids = kresults.root.kalman_estimates.read(field='obj_id',flavor='numpy')
-    use_obj_ids = numpy.unique(obj_ids)
+    obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id',flavor='numpy')
+    use_obj_ids = numpy.unique(obs_obj_ids)
 
     if obj_start is not None:
         use_obj_ids = use_obj_ids[use_obj_ids >= obj_start]
@@ -64,27 +67,54 @@ def doit(filename,
     
     ca = detect_saccades.CachingAnalyzer()
     for obj_id in use_obj_ids:
-        n_tracked = numpy.sum(obj_ids == obj_id)
-        if int(n_tracked) < int(min_length):
+        if show_observations:
+            obs_idx = numpy.nonzero(obs_obj_ids==obj_id)[0]
+            obs_rows = kresults.root.kalman_observations.readCoordinates(obs_idx,flavor='numpy')
+            obs_x = obs_rows.field('x')
+            obs_y = obs_rows.field('y')
+            obs_z = obs_rows.field('z')
+            obs_X = numpy.vstack((obs_x,obs_y,obs_z)).T
+
+            pd = tvtk.PolyData()
+            pd.points = obs_X
+
+            g = tvtk.Glyph3D(scale_mode='data_scaling_off',
+                             vector_mode = 'use_vector',
+                             input=pd)
+            ss = tvtk.SphereSource(radius = radius/3)
+            g.source = ss.output
+            vel_mapper = tvtk.PolyDataMapper(input=g.output)
+            a = tvtk.Actor(mapper=vel_mapper)
+            a.property.color = 1.0, 0.0, 0.0
+            actors.append(a)
+            actor2obj_id[a] = obj_id
+
+        
+        n_observations = numpy.sum(obs_obj_ids == obj_id)
+        if int(n_observations) < int(min_length):
             continue
         results = ca.calculate_trajectory_metrics(obj_id,
                                                   kresults,
-                                                  frames_per_second=100.0,
+                                                  quick_kalman=quick_kalman,
+                                                  frames_per_second=fps,
                                                   method='position based',
-                                                  method_params={'downsample':1})
+                                                  method_params={'downsample':1,
+                                                                 })
         verts = results['X_raw']
         speeds = results['speed_raw']
         
-        saccades = ca.detect_saccades(obj_id,
-                                      kresults,
-                                      frames_per_second=100.0,
-                                      method='position based',
-                                      method_params={'downsample':1,
-                                                     'horizontal only':False,
-                                                     #'horizontal only':True,
-                                                     })
-        saccade_verts = saccades['X']
-        saccade_times = saccades['times']
+        if show_saccades:
+            saccades = ca.detect_saccades(obj_id,
+                                          kresults,
+                                          quick_kalman=quick_kalman,
+                                          frames_per_second=fps,
+                                          method='position based',
+                                          method_params={'downsample':1,
+                                                         'horizontal only':False,
+                                                         #'horizontal only':True,
+                                                         })
+            saccade_verts = saccades['X']
+            saccade_times = saccades['times']
         
         #################
 
@@ -103,6 +133,8 @@ def doit(filename,
         vel_mapper.lookup_table = lut
         vel_mapper.scalar_range = 0.0, max_vel
         a = tvtk.Actor(mapper=vel_mapper)
+        if show_observations:
+            a.property.opacity = 0.3
         actors.append(a)
         actor2obj_id[a] = obj_id
 
@@ -147,7 +179,9 @@ def doit(filename,
                 ta.position_coordinate.value = tuple(X)
                 actors.append(ta)
                 actor2obj_id[a] = obj_id
-                
+
+    kresults.close()
+    
     ################################
       
     if stim is not None:
@@ -273,8 +307,14 @@ def main():
     parser.add_option("--show-saccades", action='store_true',dest='show_saccades',
                       help="show saccades")
 
+    parser.add_option("--show-observations", action='store_true',dest='show_observations',
+                      help="show observations")
+
     parser.add_option("--show-saccade-times", action='store_true',dest='show_saccade_times',
                       help="show saccade times")
+
+    parser.add_option("--quick-kalman", action='store_true',dest='quick_kalman',
+                      help="show original, causal Kalman filtered data (rather than Kalman smoothed observations)")
 
     (options, args) = parser.parse_args()
 
@@ -303,13 +343,16 @@ def main():
          obj_start=options.start,
          obj_end=options.stop,
          obj_only=options.obj_only,
+         quick_kalman=options.quick_kalman,
          show_n_longest=options.n_top_traces,
          show_obj_ids = options.show_obj_ids,
          radius = options.radius,
          min_length = options.min_length,
          show_saccades = options.show_saccades,
+         show_observations = options.show_observations,
          show_saccade_times = options.show_saccade_times,
          stim = options.stim,
+         fps = 100.0,
          )
     
 if __name__=='__main__':
