@@ -30,10 +30,10 @@ A_model_name = 'fixed_accel'
 C = numpy.zeros((os,ss))
 C[:os,:os] = numpy.eye(os) # directly measure x,y,z positions
 
-# process covariance
-Q = numpy.zeros((ss,ss))
-for i in range(6,9):
-    Q[i,i] = 10.0 # acceleration noise (near (3.16m*sec**-2)**2)
+### process covariance
+##Q = numpy.zeros((ss,ss))
+##for i in range(6,9):
+##    Q[i,i] = 10.0 # acceleration noise (near (3.16m*sec**-2)**2)
 
-# measurement noise covariance matrix
-R = 1e-6*numpy.eye(os) # (1mm)**2 = (0.001m)**2
+### measurement noise covariance matrix
+##R = 1e-6*numpy.eye(os) # (1mm)**2 = (0.001m)**2
