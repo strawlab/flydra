@@ -19,6 +19,7 @@ setup(name='flydra',
       packages = ['flydra',
                   'flydra.kalman',
                   'flydra.analysis',
+                  'flydra.a2', # new analysis
                   'flydra.trigger'],
       ext_modules= ext_modules,
       entry_points = {
