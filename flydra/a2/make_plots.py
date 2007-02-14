@@ -4,8 +4,11 @@ import numpy
 
 if 1:
     ca = detect_saccades.CachingAnalyzer()
-    obj_id = 1082
-    filename='DATA20061208_181556.kalmanized.h5'
+##    obj_id = 1082
+##    filename='DATA20061208_181556.kalmanized.h5'
+
+    obj_id = 158
+    filename='DATA20070126_184022.h5'
     
     RAD2DEG = 180.0/numpy.pi
     results = ca.calculate_trajectory_metrics(obj_id,
@@ -17,7 +20,8 @@ if 1:
                                         frames_per_second=100.0,
                                         method='position based',
                                         method_params={'downsample':1,
-                                                       'horizontal only':True})
+                                                       'horizontal only':False},
+                                        )
     
 ##    saccades = ca.detect_saccades(obj_id,filename,
 ##                                  frames_per_second=100.0,
@@ -29,12 +33,12 @@ if 1:
         # like tammero 2002 basic plot
         pylab.figure(figsize=(8,4))
         ax=pylab.subplot(4,1,1)
-        pylab.plot(results['time_t'],results['heading_t']*RAD2DEG,'.-')
+        pylab.plot(results['time_t'],results['corse_heading_t']*RAD2DEG,'.-')
         for t in horiz_saccades['times']:
             pylab.axvline(t,color='k')
             
         ax = pylab.subplot(4,1,2,sharex=ax)
-        pylab.plot(results['time_dt'],results['h_ang_vel_dt']*RAD2DEG,'k-',lw=2,label='heading')
+        pylab.plot(results['time_dt'],results['h_ang_vel_dt']*RAD2DEG,'k-',lw=2,label='course heading')
         pylab.plot(results['time_dt'],results['ang_vel_dt']*RAD2DEG,'b-',lw=2, label='overall')
         pylab.legend()
         pylab.ylabel('angular velocity\n(deg/s)')

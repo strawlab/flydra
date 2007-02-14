@@ -38,12 +38,37 @@ def doit(filename,
          fps=100.0,
          ):
     
-    if show_n_longest is not None:
-        raise NotImplementedError('')
-    
     kresults = PT.openFile(filename,mode="r")
     obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id',flavor='numpy')
     use_obj_ids = numpy.unique(obs_obj_ids)
+    
+    if show_n_longest is not None:
+        if ((obj_start is not None) or
+            (obj_end is not None) or
+            (obj_only is not None)):
+            raise ValueError("show_n_longest incompatible with other limiters")
+        frames = kresults.root.kalman_observations.read(field='frame',flavor='numpy')
+        obj_ids_by_n_frames = {}
+        for i,obj_id in enumerate(use_obj_ids):
+            if i%100==0:
+                print 'doing %d of %d'%(i,len(use_obj_ids))
+            obs_cond = obs_obj_ids==obj_id
+            obj_frames = frames[obs_cond]
+            n_frames = obj_frames[-1]-obj_frames[0]
+            obj_ids_by_n_frames.setdefault( n_frames, [] ).append( obj_id )
+        n_frames_list = obj_ids_by_n_frames.keys()
+        n_frames_list.sort()
+
+        obj_only = []
+        while len(n_frames_list):
+            n_frames = n_frames_list.pop()
+            obj_ids = obj_ids_by_n_frames[n_frames]
+            obj_only.extend( obj_ids)
+            if len(obj_only) > show_n_longest:
+                break
+
+        print 'longest traces = ',obj_only
+        use_obj_ids = numpy.array(obj_only)
 
     if obj_start is not None:
         use_obj_ids = use_obj_ids[use_obj_ids >= obj_start]
@@ -52,10 +77,26 @@ def doit(filename,
 
     if obj_only is not None:
         use_obj_ids = numpy.array(obj_only)
+##        obs_idx = []
+##        for obj_id in use_obj_ids:
+##            obs_idx.append( numpy.nonzero(obs_obj_ids==obj_id)[0] )
+##        obs_idx.append
+##        obs_rows = kresults.root.kalman_observations.readCoordinates(obs_idx,flavor='numpy')
 
     #################
     rw = tvtk.RenderWindow(size=(600, 600))
     ren = tvtk.Renderer(background=(1.0,1.0,1.0))
+
+    if 1:
+        camera = ren.active_camera
+        camera.parallel_projection =  0
+        camera.focal_point =  (0.52719625417063776, 0.15695605837665305, 0.10876143712478874)
+        camera.position =  (0.39743071773877131, -0.4114652255728779, 0.097431169175252269)
+        camera.view_angle =  30.0
+        camera.view_up =  (-0.072067516965519787, -0.0034285481144054573, 0.99739386305323308)
+        camera.clipping_range =  (0.25210456649736646, 1.0012868084455435)
+        camera.parallel_scale =  0.294595461395
+ 
     rw.add_renderer(ren)
     rwi = tvtk.RenderWindowInteractor(render_window=rw)
     

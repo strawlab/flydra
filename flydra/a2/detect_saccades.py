@@ -151,7 +151,7 @@ class CachingAnalyzer:
     def get_raw_positions(self,
                           obj_id,
                           result_h5_file,
-                          quick_kalman=True,
+                          quick_kalman=False,
                           ):
         preloaded_dict = self.loaded_cache.get(result_h5_file,None)
         if preloaded_dict is None:
@@ -179,7 +179,7 @@ class CachingAnalyzer:
     def calculate_trajectory_metrics(self,
                                      obj_id,
                                      result_h5_file,
-                                     quick_kalman=True,
+                                     quick_kalman=False,
                                      frames_per_second=100.0,
                                      method='position based',
                                      method_params=None,
@@ -207,153 +207,157 @@ class CachingAnalyzer:
         
         
         """
-        preloaded_dict = self.loaded_cache.get(result_h5_file,None)
-        if preloaded_dict is None:
-            preloaded_dict = self._load_dict(result_h5_file)
-            
-        kresults = preloaded_dict['kresults']
         
-        if quick_kalman:
-            obj_ids = preloaded_dict['obj_ids']
-            idxs = numpy.nonzero(obj_ids == obj_id)[0]
-            rows = kresults.root.kalman_estimates.readCoordinates(idxs,flavor='numpy')
-        else:
-            obs_obj_ids = preloaded_dict['obs_obj_ids']
-            obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
-            orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs,flavor='numpy')
-            rows = observations2smoothed(obj_id,orig_rows)
-            
-        if method_params is None:
-            method_params = {}
-            
-        RAD2DEG = 180/numpy.pi
-        DEG2RAD = 1.0/RAD2DEG
+        numpyerr = numpy.seterr(all='raise')
+        try:
+            preloaded_dict = self.loaded_cache.get(result_h5_file,None)
+            if preloaded_dict is None:
+                preloaded_dict = self._load_dict(result_h5_file)
 
-        results = {}
-        
-        if method == 'position based':
-            ##############
-            # load data                
-            framesA = rows.field('frame')
-            xsA = rows.field('x')
-            ysA = rows.field('y')
-            zsA = rows.field('z')
-            XA = numpy.vstack((xsA,ysA,zsA)).T
-            time_A = (framesA - framesA[0])/frames_per_second
+            kresults = preloaded_dict['kresults']
 
-            xvelsA = rows.field('xvel')
-            yvelsA = rows.field('yvel')
-            zvelsA = rows.field('zvel')
-            velA = numpy.vstack((xvelsA,yvelsA,zvelsA)).T
-            speedA = numpy.sqrt(numpy.sum(velA**2,axis=1))
-            
-            ##############
-            # downsample
-            skip = method_params.get('downsample',3)
-            
-            Aindex = numpy.arange(len(framesA))
-            AindexB = my_decimate( Aindex, skip )
-            AindexB = numpy.round(AindexB).astype(numpy.int)
-            
-            xsB = my_decimate(xsA,skip) # time index B - downsampled by 'skip' amount
-            ysB = my_decimate(ysA,skip)
-            zsB = my_decimate(zsA,skip)
-            time_B = my_decimate(time_A,skip)
-
-            XB = numpy.vstack((xsB,ysB,zsB)).T
-            
-            ###############################
-            # calculate horizontal velocity
-            
-            # central difference
-            xdiffsF = xsB[2:]-xsB[:-2] # time index F - points B, but inside one point each end
-            ydiffsF = ysB[2:]-ysB[:-2]
-            zdiffsF = zsB[2:]-zsB[:-2]
-            time_F = time_B[1:-1]
-            XF = XB[1:-1]
-            AindexF = AindexB[1:-1]
-            
-            delta_tBC = skip/frames_per_second # delta_t valid for B and C time indices
-            delta_tF = 2*delta_tBC # delta_t valid for F time indices
-
-            xvelsF = xdiffsF/delta_tF
-            yvelsF = ydiffsF/delta_tF
-            zvelsF = zdiffsF/delta_tF
-
-            velsF = numpy.vstack((xvelsF,yvelsF,zvelsF)).T
-            speedsF = numpy.sqrt(numpy.sum(velsF**2,axis=1))
-            
-            h_speedsF = numpy.sqrt(numpy.sum(velsF[:,:2]**2,axis=1))
-            v_speedsF = velsF[:,2]
-
-            headingsF = numpy.arctan2( ydiffsF, xdiffsF )
-            #headings2[0] = headings2[1] # first point is invalid
-            
-            headingsF_u = numpy.unwrap(headingsF)
-            
-            dheadingG_dt = (headingsF_u[2:]-headingsF_u[:-2])/(2*delta_tF) # central difference
-            time_G = time_F[1:-1]
-
-            norm_velsF = velsF / speedsF[:,numpy.newaxis] # make norm vectors ( mag(x)=1 )
-            if 0:
-                #forward diff
-                time_K = (timeF[1:]+timeF[:-1])/2 # same spacing as F, but in between
-                delta_tK = delta_tF
-                cos_angle_diffsK = [] # time base K - between F
-                for i in range(len(norm_velsF)-1):
-                    v1 = norm_velsF[i+1]
-                    v2 = norm_velsF[i]
-                    cos_angle_diff = numpy.dot(v1,v2) # dot product = mag(a) * mag(b) * cos(theta)
-                    cos_angle_diffsK.append( cos_angle_diff )
-                angle_diffK = numpy.arccos(cos_angle_diffsK)
-                angular_velK = angle_diffK/delta_tK
+            if quick_kalman:
+                obj_ids = preloaded_dict['obj_ids']
+                idxs = numpy.nonzero(obj_ids == obj_id)[0]
+                rows = kresults.root.kalman_estimates.readCoordinates(idxs,flavor='numpy')
             else:
-                #central diff
-                delta_tG = delta_tF
-                cos_angle_diffsG = [] # time base K - between F
-                for i in range(len(norm_velsF)-2):
-                    v1 = norm_velsF[i+2]
-                    v2 = norm_velsF[i]
-                    cos_angle_diff = numpy.dot(v1,v2) # dot product = mag(a) * mag(b) * cos(theta)
-                    cos_angle_diffsG.append( cos_angle_diff )
-                angle_diffG = numpy.arccos(cos_angle_diffsG)
-                angular_velG = angle_diffG/(2*delta_tG)
-            
-##            times = numpy.arange(0,len(xs))/frames_per_second
-##            times2 = times[::skip]
-##            dt_times2 = times2[1:-1]
-            
-            if hide_first_point:
-                slicer = slice(1,None,None)
-            else:
-                slicer = slice(0,None,None)
-            
+                obs_obj_ids = preloaded_dict['obs_obj_ids']
+                obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
+                orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs,flavor='numpy')
+                rows = observations2smoothed(obj_id,orig_rows)
+
+            if method_params is None:
+                method_params = {}
+
+            RAD2DEG = 180/numpy.pi
+            DEG2RAD = 1.0/RAD2DEG
+
             results = {}
-            results['time_raw'] = time_A[slicer]  # times for position data
-            results['X_raw'] = XA[slicer] # raw position data (not downsampled or smoothed)
-            results['vel_raw'] = velA[slicer] # raw velocity data (not downsampled or smoothed)
-            results['speed_raw'] = speedA[slicer] # raw speed data (not downsampled or smoothed)
-            
-            results['time_t'] = time_F[slicer] # times for most data
-            results['X_t'] = XF[slicer] # raw position data (not downsampled or smoothed)
-            results['vels_t'] = velsF[slicer] # 3D velocity
-            results['speed_t'] = speedsF[slicer]
-            results['h_speed_t'] = h_speedsF[slicer]
-            results['v_speed_t'] = v_speedsF[slicer]
-            results['heading_t'] = headingsF[slicer]
-            
-            results['time_dt'] = time_G # times for angular velocity data
-            results['h_ang_vel_dt'] = dheadingG_dt
-            results['ang_vel_dt'] = angular_velG
-        else:
-            raise ValueError('unknown saccade detection algorithm')
-        
+
+            if method == 'position based':
+                ##############
+                # load data                
+                framesA = rows.field('frame')
+                xsA = rows.field('x')
+                ysA = rows.field('y')
+                zsA = rows.field('z')
+                XA = numpy.vstack((xsA,ysA,zsA)).T
+                time_A = (framesA - framesA[0])/frames_per_second
+
+                xvelsA = rows.field('xvel')
+                yvelsA = rows.field('yvel')
+                zvelsA = rows.field('zvel')
+                velA = numpy.vstack((xvelsA,yvelsA,zvelsA)).T
+                speedA = numpy.sqrt(numpy.sum(velA**2,axis=1))
+
+                ##############
+                # downsample
+                skip = method_params.get('downsample',3)
+
+                Aindex = numpy.arange(len(framesA))
+                AindexB = my_decimate( Aindex, skip )
+                AindexB = numpy.round(AindexB).astype(numpy.int)
+
+                xsB = my_decimate(xsA,skip) # time index B - downsampled by 'skip' amount
+                ysB = my_decimate(ysA,skip)
+                zsB = my_decimate(zsA,skip)
+                time_B = my_decimate(time_A,skip)
+
+                XB = numpy.vstack((xsB,ysB,zsB)).T
+
+                ###############################
+                # calculate horizontal velocity
+
+                # central difference
+                xdiffsF = xsB[2:]-xsB[:-2] # time index F - points B, but inside one point each end
+                ydiffsF = ysB[2:]-ysB[:-2]
+                zdiffsF = zsB[2:]-zsB[:-2]
+                time_F = time_B[1:-1]
+                XF = XB[1:-1]
+                AindexF = AindexB[1:-1]
+
+                delta_tBC = skip/frames_per_second # delta_t valid for B and C time indices
+                delta_tF = 2*delta_tBC # delta_t valid for F time indices
+
+                xvelsF = xdiffsF/delta_tF
+                yvelsF = ydiffsF/delta_tF
+                zvelsF = zdiffsF/delta_tF
+
+                velsF = numpy.vstack((xvelsF,yvelsF,zvelsF)).T
+                speedsF = numpy.sqrt(numpy.sum(velsF**2,axis=1))
+
+                h_speedsF = numpy.sqrt(numpy.sum(velsF[:,:2]**2,axis=1))
+                v_speedsF = velsF[:,2]
+
+                headingsF = numpy.arctan2( ydiffsF, xdiffsF )
+                #headings2[0] = headings2[1] # first point is invalid
+
+                headingsF_u = numpy.unwrap(headingsF)
+
+                dheadingG_dt = (headingsF_u[2:]-headingsF_u[:-2])/(2*delta_tF) # central difference
+                time_G = time_F[1:-1]
+
+                norm_velsF = velsF / speedsF[:,numpy.newaxis] # make norm vectors ( mag(x)=1 )
+                if 0:
+                    #forward diff
+                    time_K = (timeF[1:]+timeF[:-1])/2 # same spacing as F, but in between
+                    delta_tK = delta_tF
+                    cos_angle_diffsK = [] # time base K - between F
+                    for i in range(len(norm_velsF)-1):
+                        v1 = norm_velsF[i+1]
+                        v2 = norm_velsF[i]
+                        cos_angle_diff = numpy.dot(v1,v2) # dot product = mag(a) * mag(b) * cos(theta)
+                        cos_angle_diffsK.append( cos_angle_diff )
+                    angle_diffK = numpy.arccos(cos_angle_diffsK)
+                    angular_velK = angle_diffK/delta_tK
+                else:
+                    #central diff
+                    delta_tG = delta_tF
+                    cos_angle_diffsG = [] # time base K - between F
+                    for i in range(len(norm_velsF)-2):
+                        v1 = norm_velsF[i+2]
+                        v2 = norm_velsF[i]
+                        cos_angle_diff = numpy.dot(v1,v2) # dot product = mag(a) * mag(b) * cos(theta)
+                        cos_angle_diffsG.append( cos_angle_diff )
+                    angle_diffG = numpy.arccos(cos_angle_diffsG)
+                    angular_velG = angle_diffG/(2*delta_tG)
+
+    ##            times = numpy.arange(0,len(xs))/frames_per_second
+    ##            times2 = times[::skip]
+    ##            dt_times2 = times2[1:-1]
+
+                if hide_first_point:
+                    slicer = slice(1,None,None)
+                else:
+                    slicer = slice(0,None,None)
+
+                results = {}
+                results['time_raw'] = time_A[slicer]  # times for position data
+                results['X_raw'] = XA[slicer] # raw position data from Kalman (not otherwise downsampled or smoothed)
+                results['vel_raw'] = velA[slicer] # raw velocity data from Kalman (not otherwise downsampled or smoothed)
+                results['speed_raw'] = speedA[slicer] # raw speed data from Kalman (not otherwise downsampled or smoothed)
+
+                results['time_t'] = time_F[slicer] # times for most data
+                results['X_t'] = XF[slicer]
+                results['vels_t'] = velsF[slicer] # 3D velocity
+                results['speed_t'] = speedsF[slicer]
+                results['h_speed_t'] = h_speedsF[slicer]
+                results['v_speed_t'] = v_speedsF[slicer]
+                results['coarse_heading_t'] = headingsF[slicer] # in 2D plane (note: not body heading)
+
+                results['time_dt'] = time_G # times for angular velocity data
+                results['h_ang_vel_dt'] = dheadingG_dt
+                results['ang_vel_dt'] = angular_velG
+            else:
+                raise ValueError('unknown saccade detection algorithm')
+        finally:
+            numpy.seterr(**numpyerr)
         return results
     
     def detect_saccades(self,
                         obj_id,
                         result_h5_file,
-                        quick_kalman=True,
+                        quick_kalman=False,
                         frames_per_second=100.0,
                         method='position based',
                         method_params=None,
