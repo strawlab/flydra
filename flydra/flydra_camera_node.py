@@ -38,7 +38,7 @@ else:
 import flydra.reconstruct_utils as reconstruct_utils
 import FastImage
 #FastImage.set_debug(3)
-if os.name == 'posix':
+if os.name == 'posix' and sys.platform != 'darwin':
     import posix_sched
 
 class DummyMainBrain:
