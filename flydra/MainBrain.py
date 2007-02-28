@@ -570,6 +570,11 @@ class CoordReceiver(threading.Thread):
                     rowidx = numpy.argmin(roundtrip_duration)
                     srs = tarray[rowidx,:]
                     start_timestamp, remote_timestamp, stop_timestamp = srs
+                    print '%s : clock diff: %.3f msec(measurement err: %.3f msec)'%(
+                        remote_hostname,
+                        (remote_timestamp-start_timestamp)*1e3,
+                        roundtrip_duration[rowidx]*1e3,
+                        )
 
                     self.main_brain.queue_host_clock_info.put(  (remote_hostname,
                                                                  start_timestamp,
