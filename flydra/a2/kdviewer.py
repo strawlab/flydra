@@ -36,6 +36,7 @@ def doit(filename,
          stim = None,
          quick_kalman=False,
          fps=100.0,
+         vertical_scale=False,
          ):
     
     kresults = PT.openFile(filename,mode="r")
@@ -86,9 +87,10 @@ def doit(filename,
     #################
     rw = tvtk.RenderWindow(size=(600, 600))
     ren = tvtk.Renderer(background=(1.0,1.0,1.0))
+    camera = ren.active_camera
+    max_vel = 0.316
 
-    if 1:
-        camera = ren.active_camera
+    if 0:
         camera.parallel_projection =  0
         camera.focal_point =  (0.52719625417063776, 0.15695605837665305, 0.10876143712478874)
         camera.position =  (0.39743071773877131, -0.4114652255728779, 0.097431169175252269)
@@ -96,12 +98,20 @@ def doit(filename,
         camera.view_up =  (-0.072067516965519787, -0.0034285481144054573, 0.99739386305323308)
         camera.clipping_range =  (0.25210456649736646, 1.0012868084455435)
         camera.parallel_scale =  0.294595461395
- 
+    if 1:
+        camera.parallel_projection =  0
+        camera.focal_point =  (0.49827304637942593, 0.20476671221773424, 0.090222461715116345)
+        camera.position =  (0.41982519417302594, -0.55501151899867784, 0.40089956585064912)
+        camera.view_angle =  30.0
+        camera.view_up =  (0.025460553314687551, 0.37610935779812088, 0.92622541057865326)
+        camera.clipping_range =  (0.38425211041324286, 1.3299558503823485)
+        camera.parallel_scale =  0.294595461395
+        max_vel = 0.25
+
     rw.add_renderer(ren)
     rwi = tvtk.RenderWindowInteractor(render_window=rw)
     
     lut = tvtk.LookupTable(hue_range = (0.667, 0.0))
-    max_vel = 0.4
     actors = []
     actor2obj_id = {}
     #################
@@ -143,6 +153,13 @@ def doit(filename,
                                                                  })
         verts = results['X_raw']
         speeds = results['speed_raw']
+
+        if 0:
+            print 'WARNING: limiting data'
+            slicer = slice(1350,1600)
+            verts = verts[slicer]
+            speeds = speeds[slicer]
+        
         
         if show_saccades:
             saccades = ca.detect_saccades(obj_id,
@@ -188,6 +205,16 @@ def doit(filename,
                 ta.position_coordinate.value = tuple(X)
                 actors.append(ta)
                 actor2obj_id[a] = obj_id
+
+        if show_obj_ids:
+            print 'showing ob_jd'
+            obj_id_ta = tvtk.TextActor(input=str( obj_id )+' start')
+            obj_id_ta.property.color = 0.0, 0.0, 0.0 # black
+            obj_id_ta.position_coordinate.coordinate_system = 'world'
+            obj_id_ta.position_coordinate.value = tuple(verts[0])
+            actors.append(obj_id_ta)
+            actor2obj_id[a] = obj_id
+            
 
         ##################
     
@@ -251,17 +278,25 @@ def doit(filename,
             a.property.color = 0,0,0
             a.property.specular = 0.3
             actors.append(a)
-            
+    if 0:
+        a=tvtk.AxesActor(normalized_tip_length=(0.4, 0.4, 0.4),
+                         normalized_shaft_length=(0.6, 0.6, 0.6),
+                         shaft_type='cylinder')
+        actors.append(a)
+
     for a in actors:
         ren.add_actor(a)
         
     if 1:
         # Create a scalar bar
- 	scalar_bar = tvtk.ScalarBarActor(title="Speed (m/s)",
- 	                                 orientation='horizontal',
-                                         width=0.4, height=0.08,
-#                                         width=0.8, height=0.17,
- 	                                 lookup_table = vel_mapper.lookup_table)
+        if vertical_scale:
+            scalar_bar = tvtk.ScalarBarActor(orientation='vertical',
+                                             width=0.08, height=0.4)
+        else: 
+            scalar_bar = tvtk.ScalarBarActor(orientation='horizontal',
+                                             width=0.4, height=0.08)
+        scalar_bar.title = "Speed (m/s)"
+        scalar_bar.lookup_table = vel_mapper.lookup_table
         
         scalar_bar.property.color = 0.0, 0.0, 0.0 # black
 
@@ -272,7 +307,10 @@ def doit(filename,
         scalar_bar.label_text_property.shadow = False
         
  	scalar_bar.position_coordinate.coordinate_system = 'normalized_viewport'
- 	scalar_bar.position_coordinate.value = 0.1, 0.01, 0.0
+        if vertical_scale:
+            scalar_bar.position_coordinate.value = 0.01, 0.01, 0.0
+        else:
+            scalar_bar.position_coordinate.value = 0.1, 0.01, 0.0
         
         if 1:
             # Use the ScalarBarWidget so we can drag the scalar bar around.
@@ -357,6 +395,9 @@ def main():
     parser.add_option("--quick-kalman", action='store_true',dest='quick_kalman',
                       help="show original, causal Kalman filtered data (rather than Kalman smoothed observations)")
 
+    parser.add_option("--vertical-scale", action='store_true',dest='vertical_scale',
+                      help="scale bar has vertical orientation")
+
     (options, args) = parser.parse_args()
 
     if options.filename is not None:
@@ -394,6 +435,7 @@ def main():
          show_saccade_times = options.show_saccade_times,
          stim = options.stim,
          fps = 100.0,
+         vertical_scale = options.vertical_scale,
          )
     
 if __name__=='__main__':
