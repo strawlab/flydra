@@ -169,7 +169,7 @@ for cam_id in recon.cam_ids:
         click_locations.append( (cam_id, recon.undistort(cam_id,cg.coords) ))
     print >> sys.stderr
 
-X = recon.find3d( click_locations )
+X = recon.find3d( click_locations, return_line_coords = False )
 
 l2norms = []
 for cam_id,orig_2d_undistorted in click_locations:
