@@ -199,7 +199,12 @@ def main():
     
     parser = OptionParser(usage)
     
+    parser.add_option('--use-nth-observation', type='int',
+                      dest='use_nth_observation', default=40)
+    
     (options, args) = parser.parse_args()
+    print options
+    print dir(options)
     
     if len(args)>2:
         print >> sys.stderr,  "arguments interpreted as FILE and EFILE supplied more than once"
@@ -209,11 +214,13 @@ def main():
     if len(args)<2:
         parser.print_help()
         return
-        
+    
+
     h5_filename=args[0]
     efilename = args[1]
 
-    do_it(h5_filename,efilename)
+    do_it(h5_filename,efilename,
+          use_nth_observation=options.use_nth_observation)
 
 if __name__=='__main__':
     main()
