@@ -34,9 +34,10 @@ def doit(filename,
          show_observations = False,
          show_saccade_times = False,
          stim = None,
-         quick_kalman=False,
+         use_kalman_smoothing=True,
          fps=100.0,
          vertical_scale=False,
+         max_vel=0.25,
          ):
     
     kresults = PT.openFile(filename,mode="r")
@@ -88,7 +89,6 @@ def doit(filename,
     rw = tvtk.RenderWindow(size=(600, 600))
     ren = tvtk.Renderer(background=(1.0,1.0,1.0))
     camera = ren.active_camera
-    max_vel = 0.316
 
     if 0:
         camera.parallel_projection =  0
@@ -106,7 +106,6 @@ def doit(filename,
         camera.view_up =  (0.025460553314687551, 0.37610935779812088, 0.92622541057865326)
         camera.clipping_range =  (0.38425211041324286, 1.3299558503823485)
         camera.parallel_scale =  0.294595461395
-        max_vel = 0.25
 
     rw.add_renderer(ren)
     rwi = tvtk.RenderWindowInteractor(render_window=rw)
@@ -146,13 +145,13 @@ def doit(filename,
             continue
         results = ca.calculate_trajectory_metrics(obj_id,
                                                   kresults,
-                                                  quick_kalman=quick_kalman,
+                                                  use_kalman_smoothing=use_kalman_smoothing,
                                                   frames_per_second=fps,
                                                   method='position based',
                                                   method_params={'downsample':1,
                                                                  })
-        verts = results['X_raw']
-        speeds = results['speed_raw']
+        verts = results['X_kalmanized']
+        speeds = results['speed_kalmanized']
 
         if 0:
             print 'WARNING: limiting data'
@@ -164,7 +163,7 @@ def doit(filename,
         if show_saccades:
             saccades = ca.detect_saccades(obj_id,
                                           kresults,
-                                          quick_kalman=quick_kalman,
+                                          use_kalman_smoothing=use_kalman_smoothing,
                                           frames_per_second=fps,
                                           method='position based',
                                           method_params={'downsample':1,
@@ -198,7 +197,7 @@ def doit(filename,
 
         if 0:
             # show time of each saccade
-            for X,showtime in zip(verts,results['time_raw']):
+            for X,showtime in zip(verts,results['time_kalmanized']):
                 ta = tvtk.TextActor(input=str( showtime ))
                 ta.property.color = 0.0, 0.0, 0.0 # black
                 ta.position_coordinate.coordinate_system = 'world'
@@ -380,6 +379,11 @@ def main():
                       default=0.002,
                       metavar="RADIUS")
     
+    parser.add_option("--max-vel", type="float",
+                      help="maximum velocity of colormap",
+                      dest='max_vel',
+                      default=0.25)
+    
     parser.add_option("--show-obj-ids", action='store_true',dest='show_obj_ids',
                       help="show object ID numbers at start of trajectory")
 
@@ -392,7 +396,8 @@ def main():
     parser.add_option("--show-saccade-times", action='store_true',dest='show_saccade_times',
                       help="show saccade times")
 
-    parser.add_option("--quick-kalman", action='store_true',dest='quick_kalman',
+    parser.add_option("--disable-kalman-smoothing", action='store_false',dest='use_kalman_smoothing',
+                      default=True,
                       help="show original, causal Kalman filtered data (rather than Kalman smoothed observations)")
 
     parser.add_option("--vertical-scale", action='store_true',dest='vertical_scale',
@@ -425,7 +430,7 @@ def main():
          obj_start=options.start,
          obj_end=options.stop,
          obj_only=options.obj_only,
-         quick_kalman=options.quick_kalman,
+         use_kalman_smoothing=options.use_kalman_smoothing,
          show_n_longest=options.n_top_traces,
          show_obj_ids = options.show_obj_ids,
          radius = options.radius,
@@ -436,6 +441,7 @@ def main():
          stim = options.stim,
          fps = 100.0,
          vertical_scale = options.vertical_scale,
+         max_vel = options.max_vel,
          )
     
 if __name__=='__main__':

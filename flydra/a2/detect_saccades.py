@@ -9,6 +9,9 @@ import flydra.kalman.dynamic_models
 import flydra.kalman.params
 import flydra.kalman.flydra_kalman_utils
 
+# global
+printed_dynamics_name = False
+
 def find_peaks(y,threshold,search_cond=None):
     """find local maxima above threshold in data y
 
@@ -85,6 +88,8 @@ def my_decimate(x,q):
         return result
 
 def kalman_smooth(orig_rows):
+    global printed_dynamics_name
+
     obs_frames = orig_rows.field('frame')
     fstart, fend = obs_frames[0], obs_frames[-1]
     frames = numpy.arange(fstart,fend+1)
@@ -112,9 +117,11 @@ def kalman_smooth(orig_rows):
         P_k1[i,i]=initial_position_covariance_estimate
     for i in range(6,9):
         P_k1[i,i]=initial_acceleration_covariance_estimate
-    
+
     dynamics_name = 'fly dynamics, high precision calibration, units: mm'
-    print 'using',dynamics_name
+    if not printed_dynamics_name:
+        print 'using "%s" for Kalman smoothing',dynamics_name
+        printed_dynamics_name = True
     model = flydra.kalman.dynamic_models.get_dynamic_model_dict()[dynamics_name]
     params = flydra.kalman.params    
     xsmooth, Psmooth = adskalman.kalman_smoother(obs,
@@ -151,7 +158,7 @@ class CachingAnalyzer:
     def get_raw_positions(self,
                           obj_id,
                           result_h5_file,
-                          quick_kalman=False,
+                          use_kalman_smoothing=True,
                           ):
         preloaded_dict = self.loaded_cache.get(result_h5_file,None)
         if preloaded_dict is None:
@@ -159,7 +166,7 @@ class CachingAnalyzer:
             
         kresults = preloaded_dict['kresults']
         
-        if quick_kalman:
+        if not use_kalman_smoothing:
             obj_ids = preloaded_dict['obj_ids']
             idxs = numpy.nonzero(obj_ids == obj_id)[0]
             rows = kresults.root.kalman_estimates.readCoordinates(idxs,flavor='numpy')
@@ -167,7 +174,7 @@ class CachingAnalyzer:
             obs_obj_ids = preloaded_dict['obs_obj_ids']
             obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
             orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs,flavor='numpy')
-            rows = observations2smoothed(obj_id,orig_rows)
+            rows = observations2smoothed(obj_id,orig_rows) # do Kalman smoothing
 
         xsA = rows.field('x')
         ysA = rows.field('y')
@@ -179,7 +186,7 @@ class CachingAnalyzer:
     def calculate_trajectory_metrics(self,
                                      obj_id,
                                      result_h5_file,
-                                     quick_kalman=False,
+                                     use_kalman_smoothing=True,
                                      frames_per_second=100.0,
                                      method='position based',
                                      method_params=None,
@@ -192,7 +199,7 @@ class CachingAnalyzer:
         obj_id - int, the object id
         result_h5_file - string of pytables file, the file with data
         frames_per_second - float, framerate of data
-        quick_kalman - boolean, use original, causal Kalman filtered data (rather than Kalman smoothed observations)
+        use_kalman_smoothing - boolean, if False, use original, causal Kalman filtered data (rather than Kalman smoothed observations)
         
         method_params for 'position based':
         -----------------------------------
@@ -216,15 +223,15 @@ class CachingAnalyzer:
 
             kresults = preloaded_dict['kresults']
 
-            if quick_kalman:
-                obj_ids = preloaded_dict['obj_ids']
-                idxs = numpy.nonzero(obj_ids == obj_id)[0]
-                rows = kresults.root.kalman_estimates.readCoordinates(idxs,flavor='numpy')
-            else:
+            if use_kalman_smoothing:
                 obs_obj_ids = preloaded_dict['obs_obj_ids']
                 obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
                 orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs,flavor='numpy')
-                rows = observations2smoothed(obj_id,orig_rows)
+                rows = observations2smoothed(obj_id,orig_rows) # do Kalman smoothing
+            else:
+                obj_ids = preloaded_dict['obj_ids']
+                idxs = numpy.nonzero(obj_ids == obj_id)[0]
+                rows = kresults.root.kalman_estimates.readCoordinates(idxs,flavor='numpy')
 
             if method_params is None:
                 method_params = {}
@@ -332,10 +339,10 @@ class CachingAnalyzer:
                     slicer = slice(0,None,None)
 
                 results = {}
-                results['time_raw'] = time_A[slicer]  # times for position data
-                results['X_raw'] = XA[slicer] # raw position data from Kalman (not otherwise downsampled or smoothed)
-                results['vel_raw'] = velA[slicer] # raw velocity data from Kalman (not otherwise downsampled or smoothed)
-                results['speed_raw'] = speedA[slicer] # raw speed data from Kalman (not otherwise downsampled or smoothed)
+                results['time_kalmanized'] = time_A[slicer]  # times for position data
+                results['X_kalmanized'] = XA[slicer] # raw position data from Kalman (not otherwise downsampled or smoothed)
+                results['vel_kalmanized'] = velA[slicer] # raw velocity data from Kalman (not otherwise downsampled or smoothed)
+                results['speed_kalmanized'] = speedA[slicer] # raw speed data from Kalman (not otherwise downsampled or smoothed)
 
                 results['time_t'] = time_F[slicer] # times for most data
                 results['X_t'] = XF[slicer]
@@ -357,7 +364,7 @@ class CachingAnalyzer:
     def detect_saccades(self,
                         obj_id,
                         result_h5_file,
-                        quick_kalman=False,
+                        use_kalman_smoothing=True,
                         frames_per_second=100.0,
                         method='position based',
                         method_params=None,
@@ -368,7 +375,7 @@ class CachingAnalyzer:
         ----------
         obj_id - int, the object id
         result_h5_file - string of pytables file, the file with data
-        quick_kalman - boolean, use original, causal Kalman filtered data (rather than Kalman smoothed observations)
+        use_kalman_smoothing - boolean, if False use original, causal Kalman filtered data (rather than Kalman smoothed observations)
 
         method_params for 'position based':
         -----------------------------------
@@ -395,7 +402,7 @@ class CachingAnalyzer:
             
         kresults = preloaded_dict['kresults']
         
-        if quick_kalman:
+        if not use_kalman_smoothing:
             obj_ids = preloaded_dict['obj_ids']
             idxs = numpy.nonzero(obj_ids == obj_id)[0]
             rows = kresults.root.kalman_estimates.readCoordinates(idxs,flavor='numpy')
@@ -403,7 +410,7 @@ class CachingAnalyzer:
             obs_obj_ids = preloaded_dict['obs_obj_ids']
             obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
             orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs,flavor='numpy')
-            rows = observations2smoothed(obj_id,orig_rows)
+            rows = observations2smoothed(obj_id,orig_rows)  # do Kalman smoothing
         
         if method_params is None:
             method_params = {}
