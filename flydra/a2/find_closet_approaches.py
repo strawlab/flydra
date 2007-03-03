@@ -7,10 +7,17 @@ import numpy
 import pickle
 
 if 1:
+    must_have_been_dist_away = 0.05 # 50 mm
+    print 'must_have_been_dist_away',must_have_been_dist_away
+    
+    #mode = 'all'
+    #mode = 'takeoff' # not really takeoff or landing, but distance of first and last tracked points, respectively
+    mode = 'landing'
+    
     by_filename = {}
     ca = detect_saccades.CachingAnalyzer()
     #for condition_name in condition_names:
-    for condition_name in ['double post']:
+    for condition_name in ['d2']:
         filenames = files[condition_name]
         stim = stim_names[condition_name]
         all_stim_verts = stimulus_positions.stim_positions[stim]
@@ -23,13 +30,14 @@ if 1:
 
             min_dist_by_obj_id = {}
             min_dists = []
+            use_idxs = []
             for obj_id_enum,obj_id in enumerate(use_obj_ids):
+##                if obj_id>1000:
+##                    break
+                
                 if obj_id_enum%100 == 0:
                     print 'object %d of %d'%(obj_id_enum,len(use_obj_ids))
                     
-##                if obj_id != 158:
-##                    continue
-                
                 verts = ca.get_raw_positions(obj_id,
                                              kresults)
                 if len(verts)<20:
@@ -43,37 +51,49 @@ if 1:
                     continue
                 
                 mindist = numpy.inf
+                maxdist = 0
                 for lineseg in all_stim_verts:
+                    
                     xavg = (lineseg[0][0] + lineseg[1][0])/2
                     yavg = (lineseg[0][1] + lineseg[1][1])/2
 
-##                    print 'xavg, yavg',xavg, yavg
-##                    print 'verts[:10]',verts[:10]
                     xdist = verts[:,0]-xavg
                     ydist = verts[:,1]-yavg
-##                    print 'xdist[:10]',xdist[:10]
-##                    print 'ydist[:10]',ydist[:10]
 
                     dist = numpy.sqrt(xdist**2+ydist**2)
-                    mindist = min(mindist,float(dist.min()))
-                    #print 'mindist',mindist
+                    if dist.max() < must_have_been_dist_away:
+                        continue
+
+                    if (dist[0] < must_have_been_dist_away):
+                        # probably takeoff
+                        if mode in ['all','takeoff']:
+                            mindist = min(mindist,float(dist.min()))
+                    elif (dist[-1] < must_have_been_dist_away):
+                        if mode in ['all','landing']:
+                            mindist = min(mindist,float(dist.min()))
+                    elif mode in ['all']:
+                        mindist = min(mindist,float(dist.min()))
+                    
                 if mindist<0.030 and len(verts) >1000:
                     print obj_id, len(verts), mindist
-                    
-                    # find 
                 min_dist_by_obj_id[obj_id] = mindist
                 min_dists.append(mindist)
-##                if obj_id_enum > 150:
-##                    break
+                use_idxs.append(obj_id_enum)
             min_dists = numpy.array(min_dists)
-            min_dists_order = numpy.argsort(min_dists)
-            min_dists_order = min_dists_order[:20]
+            use_idxs = numpy.array(use_idxs)
             use_obj_ids = numpy.array(use_obj_ids)
-            closest_flights_obj_ids = use_obj_ids[min_dists_order]
-            print closest_flights_obj_ids[:20]
+            
+            min_dists_order = numpy.argsort(min_dists)
+            min_dists_order = min_dists_order[:50]
+            closest_flights_idxs = use_idxs[min_dists_order]
+            closest_flights_obj_ids = use_obj_ids[closest_flights_idxs]
 
             by_filename[filename] = closest_flights_obj_ids
 
-            fd = open('closest.pkl',mode='wb')
-            pickle.dump(by_filename,fd)
-            fd.close()
+    ca.close()
+    kresults.close()
+    
+    fd = open('closest.pkl',mode='wb')
+    pickle.dump(by_filename,fd)
+    fd.close()
+            

@@ -7,9 +7,13 @@ stim_names = {'tall post':'tall',
               'spot':None,
               'necklace':'necklace',
               'half post':'half',
-              'double post':'double'}
+              'double post':'double',
+              'd2':'double_20070301',
+              }
 
-files = {'tall post':['DATA20061206_192530.kalmanized.h5',
+files = {
+    'd2':['DATA20070301_155517.h5'],
+    'tall post':['DATA20061206_192530.kalmanized.h5',
                       'DATA20061207_183409.kalmanized.h5',
                       'DATA20061208_181556.kalmanized.h5',
                       ],
