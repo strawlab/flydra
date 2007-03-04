@@ -120,7 +120,7 @@ def kalman_smooth(orig_rows):
 
     dynamics_name = 'fly dynamics, high precision calibration, units: mm'
     if not printed_dynamics_name:
-        print 'using "%s" for Kalman smoothing',dynamics_name
+        print 'using "%s" for Kalman smoothing'%(dynamics_name,)
         printed_dynamics_name = True
     model = flydra.kalman.dynamic_models.get_dynamic_model_dict()[dynamics_name]
     params = flydra.kalman.params    
@@ -139,7 +139,7 @@ def observations2smoothed(obj_id,orig_rows):
     #scale_factor = reconst_orig_units.get_scale_factor()
     #reconst_meters = reconst_orig_units.get_scaled(scale_factor)
     frames, xsmooth, Psmooth = kalman_smooth(orig_rows)#,reconst_meters)
-    obj_id_array = numpy.ones( frames.shape, dtype = numpy.uint32 )*obj_id
+    obj_id_array = numpy.ones( frames.shape, dtype = numpy.uint32 )*numpy.uint32(obj_id)
     KalmanEstimates = flydra.kalman.flydra_kalman_utils.KalmanEstimates
     field_names = tables.Description(KalmanEstimates().columns)._v_names
     list_of_xhats = [xsmooth[:,0],xsmooth[:,1],xsmooth[:,2],
@@ -182,10 +182,16 @@ class CachingAnalyzer:
         
         XA = numpy.vstack((xsA,ysA,zsA)).T
         return XA
-        
+
+    def get_obj_ids(self,result_h5_file):
+        preloaded_dict = self.loaded_cache.get(result_h5_file,None)
+        if preloaded_dict is None:
+            preloaded_dict = self._load_dict(result_h5_file)
+        return preloaded_dict['unique_obj_ids']
+    
     def calculate_trajectory_metrics(self,
                                      obj_id,
-                                     result_h5_file,
+                                     data_file,#result_h5_file,
                                      use_kalman_smoothing=True,
                                      frames_per_second=100.0,
                                      method='position based',
@@ -197,7 +203,7 @@ class CachingAnalyzer:
         arguments:
         ----------
         obj_id - int, the object id
-        result_h5_file - string of pytables file, the file with data
+        data_file - string of pytables filename, the pytables file object, or data dict from .mat file
         frames_per_second - float, framerate of data
         use_kalman_smoothing - boolean, if False, use original, causal Kalman filtered data (rather than Kalman smoothed observations)
         
@@ -217,21 +223,60 @@ class CachingAnalyzer:
         
         numpyerr = numpy.seterr(all='raise')
         try:
-            preloaded_dict = self.loaded_cache.get(result_h5_file,None)
-            if preloaded_dict is None:
-                preloaded_dict = self._load_dict(result_h5_file)
-
-            kresults = preloaded_dict['kresults']
-
-            if use_kalman_smoothing:
-                obs_obj_ids = preloaded_dict['obs_obj_ids']
-                obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
-                orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs,flavor='numpy')
-                rows = observations2smoothed(obj_id,orig_rows) # do Kalman smoothing
+            if isinstance(data_file,dict):
+                is_mat_file = True
             else:
-                obj_ids = preloaded_dict['obj_ids']
-                idxs = numpy.nonzero(obj_ids == obj_id)[0]
-                rows = kresults.root.kalman_estimates.readCoordinates(idxs,flavor='numpy')
+                is_mat_file = False
+                result_h5_file = data_file
+                preloaded_dict = self.loaded_cache.get(result_h5_file,None)
+                if preloaded_dict is None:
+                    preloaded_dict = self._load_dict(result_h5_file)
+                kresults = preloaded_dict['kresults']
+
+            if is_mat_file:
+                if use_kalman_smoothing is not True:
+                    raise ValueError('use of .mat file requires Kalman smoothing')
+
+                obj_ids = data_file['kalman_obj_id']
+                obj_idxs = numpy.nonzero(obj_ids == obj_id)[0]
+                if 1:
+                    id_frame = data_file['kalman_frame'][obj_idxs]
+                    id_x = data_file['kalman_x'][obj_idxs]
+                    id_y = data_file['kalman_y'][obj_idxs]
+                    id_z = data_file['kalman_z'][obj_idxs]
+                    id_xvel = data_file['kalman_xvel'][obj_idxs]
+                    id_yvel = data_file['kalman_yvel'][obj_idxs]
+                    id_zvel = data_file['kalman_zvel'][obj_idxs]
+                    id_xaccel = data_file['kalman_xaccel'][obj_idxs]
+                    id_yaccel = data_file['kalman_yaccel'][obj_idxs]
+                    id_zaccel = data_file['kalman_xaccel'][obj_idxs]
+
+                    KalmanEstimates = flydra.kalman.flydra_kalman_utils.KalmanEstimates
+                    field_names = tables.Description(KalmanEstimates().columns)._v_names
+                    list_of_xhats = [id_x,id_y,id_z,
+                                     id_xvel,id_yvel,id_zvel,
+                                     id_xaccel,id_yaccel,id_zaccel,
+                                     ]
+                    z = numpy.zeros(id_x.shape)
+                    list_of_Ps = [z,z,z,
+                                  z,z,z,
+                                  z,z,z,
+                                  ]
+                    obj_id_array = numpy.uint32(obj_id) * numpy.ones(id_x.shape, dtype=numpy.uint32)
+                    rows = numpy.rec.fromarrays([obj_id_array,id_frame]+list_of_xhats+list_of_Ps,
+                                                names = field_names)
+                kalman_smoothed_rows = rows # already Kalman smoothed
+            else:
+                if use_kalman_smoothing:
+                    obs_obj_ids = preloaded_dict['obs_obj_ids']
+                    obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
+                    orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs,flavor='numpy')
+                    rows = observations2smoothed(obj_id,orig_rows) # do Kalman smoothing
+                    kalman_smoothed_rows = observations2smoothed(obj_id,orig_rows) # do Kalman smoothing
+                else:
+                    obj_ids = preloaded_dict['obj_ids']
+                    idxs = numpy.nonzero(obj_ids == obj_id)[0]
+                    rows = kresults.root.kalman_estimates.readCoordinates(idxs,flavor='numpy')
 
             if method_params is None:
                 method_params = {}
@@ -339,6 +384,8 @@ class CachingAnalyzer:
                     slicer = slice(0,None,None)
 
                 results = {}
+                if use_kalman_smoothing:
+                    results['kalman_smoothed_rows'] = kalman_smoothed_rows
                 results['time_kalmanized'] = time_A[slicer]  # times for position data
                 results['X_kalmanized'] = XA[slicer] # raw position data from Kalman (not otherwise downsampled or smoothed)
                 results['vel_kalmanized'] = velA[slicer] # raw velocity data from Kalman (not otherwise downsampled or smoothed)
@@ -616,10 +663,12 @@ class CachingAnalyzer:
             self_should_close = False
         obj_ids = kresults.root.kalman_estimates.read(field='obj_id',flavor='numpy')
         obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id',flavor='numpy')
+        unique_obj_ids = numpy.unique(obs_obj_ids)
         preloaded_dict = {'kresults':kresults,
                           'self_should_close':self_should_close,
                           'obj_ids':obj_ids,
                           'obs_obj_ids':obs_obj_ids,
+                          'unique_obj_ids':unique_obj_ids,
                           }
         self.loaded_cache[result_h5_file] = preloaded_dict
         return preloaded_dict

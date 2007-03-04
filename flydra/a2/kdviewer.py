@@ -1,11 +1,11 @@
-import sets
+import sets, os, sys
 from enthought.tvtk.api import tvtk
 import numpy
 import tables as PT
-import sys
 from optparse import OptionParser
 import detect_saccades
 import stimulus_positions
+import scipy.io
 
 #IVTK= True
 IVTK= False
@@ -39,17 +39,30 @@ def doit(filename,
          vertical_scale=False,
          max_vel=0.25,
          ):
-    
-    kresults = PT.openFile(filename,mode="r")
-    obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id',flavor='numpy')
-    use_obj_ids = numpy.unique(obs_obj_ids)
+
+    if os.path.splitext(filename)[1] == '.mat':
+        mat_data = scipy.io.mio.loadmat(filename)
+        obj_ids = mat_data['kalman_obj_id']
+        obj_ids = obj_ids.astype( numpy.uint32 )
+        obs_obj_ids = obj_ids # use as observation length, even though these aren't observations
+        use_obj_ids = numpy.unique(obj_ids)
+        is_mat_file = True
+    else:
+        kresults = PT.openFile(filename,mode="r")
+        obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id',flavor='numpy')
+        use_obj_ids = numpy.unique(obs_obj_ids)
+        is_mat_file = False
     
     if show_n_longest is not None:
         if ((obj_start is not None) or
             (obj_end is not None) or
             (obj_only is not None)):
             raise ValueError("show_n_longest incompatible with other limiters")
-        frames = kresults.root.kalman_observations.read(field='frame',flavor='numpy')
+        
+        if is_mat_file:
+            frames = mat_data['kalman_frame']            
+        else:
+            frames = kresults.root.kalman_observations.read(field='frame',flavor='numpy')
         obj_ids_by_n_frames = {}
         for i,obj_id in enumerate(use_obj_ids):
             if i%100==0:
@@ -139,12 +152,15 @@ def doit(filename,
             actors.append(a)
             actor2obj_id[a] = obj_id
 
-        
-        n_observations = numpy.sum(obs_obj_ids == obj_id)
-        if int(n_observations) < int(min_length):
-            continue
+        if not is_mat_file:
+            n_observations = numpy.sum(obs_obj_ids == obj_id)
+            if int(n_observations) < int(min_length):
+                continue
+            data_file = kresults
+        else:
+            data_file = mat_data
         results = ca.calculate_trajectory_metrics(obj_id,
-                                                  kresults,
+                                                  data_file,
                                                   use_kalman_smoothing=use_kalman_smoothing,
                                                   frames_per_second=fps,
                                                   method='position based',
@@ -247,7 +263,8 @@ def doit(filename,
                 actors.append(ta)
                 actor2obj_id[a] = obj_id
 
-    kresults.close()
+    if not is_mat_file:
+        kresults.close()
     
     ################################
       
