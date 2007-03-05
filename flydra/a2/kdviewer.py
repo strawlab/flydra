@@ -178,7 +178,7 @@ def doit(filename,
         
         if show_saccades:
             saccades = ca.detect_saccades(obj_id,
-                                          kresults,
+                                          data_file,
                                           use_kalman_smoothing=use_kalman_smoothing,
                                           frames_per_second=fps,
                                           method='position based',

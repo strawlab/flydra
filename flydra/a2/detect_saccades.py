@@ -423,7 +423,7 @@ class CachingAnalyzer:
     
     def detect_saccades(self,
                         obj_id,
-                        result_h5_file,
+                        data_file,#result_h5_file or .mat dictionary
                         use_kalman_smoothing=True,
                         frames_per_second=100.0,
                         method='position based',
@@ -434,7 +434,7 @@ class CachingAnalyzer:
         arguments:
         ----------
         obj_id - int, the object id
-        result_h5_file - string of pytables file, the file with data
+        data_file - string of pytables filename, the pytables file object, or data dict from .mat file
         use_kalman_smoothing - boolean, if False use original, causal Kalman filtered data (rather than Kalman smoothed observations)
 
         method_params for 'position based':
@@ -456,21 +456,33 @@ class CachingAnalyzer:
         'X' - n by 3 array of floats, 3D position at each saccade
         
         """
-        preloaded_dict = self.loaded_cache.get(result_h5_file,None)
-        if preloaded_dict is None:
-            preloaded_dict = self._load_dict(result_h5_file)
-            
-        kresults = preloaded_dict['kresults']
-        
-        if not use_kalman_smoothing:
-            obj_ids = preloaded_dict['obj_ids']
-            idxs = numpy.nonzero(obj_ids == obj_id)[0]
-            rows = kresults.root.kalman_estimates.readCoordinates(idxs,flavor='numpy')
+        if isinstance(data_file,dict):
+            is_mat_file = True
         else:
-            obs_obj_ids = preloaded_dict['obs_obj_ids']
-            obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
-            orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs,flavor='numpy')
-            rows = observations2smoothed(obj_id,orig_rows)  # do Kalman smoothing
+            is_mat_file = False
+            result_h5_file = data_file
+            preloaded_dict = self.loaded_cache.get(result_h5_file,None)
+            if preloaded_dict is None:
+                preloaded_dict = self._load_dict(result_h5_file)
+            kresults = preloaded_dict['kresults']
+        
+        if is_mat_file:
+            if use_kalman_smoothing is not True:
+                raise ValueError('use of .mat file requires Kalman smoothing')
+
+            obj_ids = data_file['kalman_obj_id']
+            idxs = numpy.nonzero(obj_ids == obj_id)[0]
+            rows = matfile2rows(data_file,idxs)
+        else:
+            if not use_kalman_smoothing:
+                obj_ids = preloaded_dict['obj_ids']
+                idxs = numpy.nonzero(obj_ids == obj_id)[0]
+                rows = kresults.root.kalman_estimates.readCoordinates(idxs,flavor='numpy')
+            else:
+                obs_obj_ids = preloaded_dict['obs_obj_ids']
+                obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
+                orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs,flavor='numpy')
+                rows = observations2smoothed(obj_id,orig_rows)  # do Kalman smoothing
         
         if method_params is None:
             method_params = {}
