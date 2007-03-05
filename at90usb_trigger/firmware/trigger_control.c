@@ -10,13 +10,11 @@
 
 //_____ D E F I N I T I O N S ______________________________________________
 
-
-
 void main(void)
 {
-  //  CLKPR = 0x00; // Full crystal speed
-  Wdt_off();
-  scheduler();
+ // Set FOSC to 8 MHz
+ CLKPR = 0x80; // CLKPCE Clock Prescaler Change Enable set
+ CLKPR = 0x00; // Clock Prescaler Select Bits set
+ Wdt_off();
+ scheduler();
 }
-
-
