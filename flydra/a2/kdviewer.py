@@ -222,7 +222,7 @@ def doit(filename,
                 actor2obj_id[a] = obj_id
 
         if show_obj_ids:
-            print 'showing ob_jd'
+            print 'showing ob_jd %d at %s'%(obj_id,str(verts[0]))
             obj_id_ta = tvtk.TextActor(input=str( obj_id )+' start')
             obj_id_ta.property.color = 0.0, 0.0, 0.0 # black
             obj_id_ta.position_coordinate.coordinate_system = 'world'
@@ -241,8 +241,8 @@ def doit(filename,
                              vector_mode = 'use_vector',
                              input=pd)
             ss = tvtk.SphereSource(radius = 0.005,
-                                   theta_resolution=20,
-                                   phi_resolution=20,
+                                   theta_resolution=8,
+                                   phi_resolution=8,
                                    )
             g.source = ss.output
             mapper = tvtk.PolyDataMapper(input=g.output)
