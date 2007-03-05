@@ -9,10 +9,14 @@ stim_names = {'tall post':'tall',
               'half post':'half',
               'double post':'double',
               'd2':'double_20070301',
+              'half w/ odor':'half_20070303',
+              'half no odor, w/ wind':'half_20070303', # XXX need to double check using ukine
               }
 
 files = {
     'd2':['DATA20070301_155517.h5'],
+    'half no odor, w/ wind':['DATA20070304_185411_smoothed.mat'],
+    'half w/ odor':['DATA20070303_191938_smoothed.mat'],
     'tall post':['DATA20061206_192530.kalmanized.h5',
                       'DATA20061207_183409.kalmanized.h5',
                       'DATA20061208_181556.kalmanized.h5',
