@@ -153,20 +153,58 @@ def observations2smoothed(obj_id,orig_rows):
     rows = numpy.rec.fromarrays([obj_id_array,frames]+list_of_xhats+list_of_Ps,
                                 names = field_names)
     return rows
+
+def matfile2rows(data_file,obj_idxs):
+    obj_id_array = data_file['kalman_obj_id'][obj_idxs]
+    obj_id_array = obj_id_array.astype(numpy.uint32)
+    id_frame = data_file['kalman_frame'][obj_idxs]
+    id_x = data_file['kalman_x'][obj_idxs]
+    id_y = data_file['kalman_y'][obj_idxs]
+    id_z = data_file['kalman_z'][obj_idxs]
+    id_xvel = data_file['kalman_xvel'][obj_idxs]
+    id_yvel = data_file['kalman_yvel'][obj_idxs]
+    id_zvel = data_file['kalman_zvel'][obj_idxs]
+    id_xaccel = data_file['kalman_xaccel'][obj_idxs]
+    id_yaccel = data_file['kalman_yaccel'][obj_idxs]
+    id_zaccel = data_file['kalman_xaccel'][obj_idxs]
+
+    KalmanEstimates = flydra.kalman.flydra_kalman_utils.KalmanEstimates
+    field_names = tables.Description(KalmanEstimates().columns)._v_names
+    list_of_xhats = [id_x,id_y,id_z,
+                     id_xvel,id_yvel,id_zvel,
+                     id_xaccel,id_yaccel,id_zaccel,
+                     ]
+    z = numpy.nan*numpy.ones(id_x.shape)
+    list_of_Ps = [z,z,z,
+                  z,z,z,
+                  z,z,z,
+                  ]
+    rows = numpy.rec.fromarrays([obj_id_array,id_frame]+list_of_xhats+list_of_Ps,
+                                names = field_names)
+    return rows
     
 class CachingAnalyzer:
     def get_raw_positions(self,
                           obj_id,
-                          result_h5_file,
+                          data_file,
                           use_kalman_smoothing=True,
                           ):
-        preloaded_dict = self.loaded_cache.get(result_h5_file,None)
-        if preloaded_dict is None:
-            preloaded_dict = self._load_dict(result_h5_file)
-            
-        kresults = preloaded_dict['kresults']
-        
-        if not use_kalman_smoothing:
+
+        if isinstance(data_file,dict):
+            is_mat_file = True
+        else:
+            is_mat_file = False
+            result_h5_file = data_file
+            preloaded_dict = self.loaded_cache.get(result_h5_file,None)
+            if preloaded_dict is None:
+                preloaded_dict = self._load_dict(result_h5_file)
+            kresults = preloaded_dict['kresults']
+
+        if is_mat_file:
+            obj_ids = data_file['kalman_obj_id']
+            obj_idxs = numpy.nonzero(obj_ids == obj_id)[0]
+            rows = matfile2rows(data_file,obj_idxs)
+        elif not use_kalman_smoothing:
             obj_ids = preloaded_dict['obj_ids']
             idxs = numpy.nonzero(obj_ids == obj_id)[0]
             rows = kresults.root.kalman_estimates.readCoordinates(idxs,flavor='numpy')
@@ -191,7 +229,7 @@ class CachingAnalyzer:
     
     def calculate_trajectory_metrics(self,
                                      obj_id,
-                                     data_file,#result_h5_file,
+                                     data_file,#result_h5_file or .mat dictionary
                                      use_kalman_smoothing=True,
                                      frames_per_second=100.0,
                                      method='position based',
@@ -239,32 +277,7 @@ class CachingAnalyzer:
 
                 obj_ids = data_file['kalman_obj_id']
                 obj_idxs = numpy.nonzero(obj_ids == obj_id)[0]
-                if 1:
-                    id_frame = data_file['kalman_frame'][obj_idxs]
-                    id_x = data_file['kalman_x'][obj_idxs]
-                    id_y = data_file['kalman_y'][obj_idxs]
-                    id_z = data_file['kalman_z'][obj_idxs]
-                    id_xvel = data_file['kalman_xvel'][obj_idxs]
-                    id_yvel = data_file['kalman_yvel'][obj_idxs]
-                    id_zvel = data_file['kalman_zvel'][obj_idxs]
-                    id_xaccel = data_file['kalman_xaccel'][obj_idxs]
-                    id_yaccel = data_file['kalman_yaccel'][obj_idxs]
-                    id_zaccel = data_file['kalman_xaccel'][obj_idxs]
-
-                    KalmanEstimates = flydra.kalman.flydra_kalman_utils.KalmanEstimates
-                    field_names = tables.Description(KalmanEstimates().columns)._v_names
-                    list_of_xhats = [id_x,id_y,id_z,
-                                     id_xvel,id_yvel,id_zvel,
-                                     id_xaccel,id_yaccel,id_zaccel,
-                                     ]
-                    z = numpy.zeros(id_x.shape)
-                    list_of_Ps = [z,z,z,
-                                  z,z,z,
-                                  z,z,z,
-                                  ]
-                    obj_id_array = numpy.uint32(obj_id) * numpy.ones(id_x.shape, dtype=numpy.uint32)
-                    rows = numpy.rec.fromarrays([obj_id_array,id_frame]+list_of_xhats+list_of_Ps,
-                                                names = field_names)
+                rows = matfile2rows(data_file,obj_idxs)
                 kalman_smoothed_rows = rows # already Kalman smoothed
             else:
                 if use_kalman_smoothing:
