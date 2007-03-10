@@ -122,7 +122,7 @@ if 1:
     by_filename = {}
     ca = detect_saccades.CachingAnalyzer()
     #for condition_name in condition_names:
-    for condition_name in ['half no odor, w/ wind']:
+    for condition_name in ['half w/ odor, w/ wind']:
         filenames = files[condition_name]
         stim = stim_names[condition_name]
         all_stim_verts = stimulus_positions.stim_positions[stim]
