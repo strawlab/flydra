@@ -11,10 +11,9 @@ def convert(infilename,outfilename,frames_per_second=100.0):
     for i,obj_id in enumerate(obj_ids):
         if i%100 == 0:
             print '%d of %d'%(i,len(obj_ids))
-        results = ca.calculate_trajectory_metrics(obj_id,
-                                                  infilename,
-                                                  use_kalman_smoothing=True,
-                                                  frames_per_second=frames_per_second)
+        results = ca.get_smoothed(obj_id,
+                                  infilename,
+                                  frames_per_second=frames_per_second)
         rows = results['kalman_smoothed_rows']
         allrows.append(rows)
     allrows = numpy.concatenate( allrows )
