@@ -38,6 +38,7 @@ def doit(filename,
          fps=100.0,
          vertical_scale=False,
          max_vel=0.25,
+         show_only_track_ends = False,
          ):
 
     if os.path.splitext(filename)[1] == '.mat':
@@ -89,17 +90,13 @@ def doit(filename,
         use_obj_ids = use_obj_ids[use_obj_ids >= obj_start]
     if obj_end is not None:
         use_obj_ids = use_obj_ids[use_obj_ids <= obj_end]
-
     if obj_only is not None:
         use_obj_ids = numpy.array(obj_only)
-##        obs_idx = []
-##        for obj_id in use_obj_ids:
-##            obs_idx.append( numpy.nonzero(obs_obj_ids==obj_id)[0] )
-##        obs_idx.append
-##        obs_rows = kresults.root.kalman_observations.readCoordinates(obs_idx,flavor='numpy')
 
     #################
     rw = tvtk.RenderWindow(size=(600, 600))
+    #rw.full_screen = True
+    
     ren = tvtk.Renderer(background=(1.0,1.0,1.0))
     camera = ren.active_camera
 
@@ -128,8 +125,22 @@ def doit(filename,
     actor2obj_id = {}
     #################
     
+    if show_only_track_ends:
+        track_end_verts = []
+    
     ca = detect_saccades.CachingAnalyzer()
-    for obj_id in use_obj_ids:
+    #last_time = None
+    for obj_id_enum,obj_id in enumerate(use_obj_ids):
+        if (obj_id_enum%100)==0 and len(use_obj_ids) > 5:
+            print 'obj_id %d of %d'%(obj_id_enum,len(use_obj_ids))
+            if 0:
+                import time
+                now = time.time()
+                if last_time is not None:
+                    dur = now-last_time
+                    print dur,'seconds'
+                last_time = now
+               
         if show_observations:
             obs_idx = numpy.nonzero(obs_obj_ids==obj_id)[0]
             obs_rows = kresults.root.kalman_observations.readCoordinates(obs_idx,flavor='numpy')
@@ -159,15 +170,33 @@ def doit(filename,
             data_file = kresults
         else:
             data_file = mat_data
-        results = ca.calculate_trajectory_metrics(obj_id,
-                                                  data_file,
-                                                  use_kalman_smoothing=use_kalman_smoothing,
-                                                  frames_per_second=fps,
-                                                  method='position based',
-                                                  method_params={'downsample':1,
-                                                                 })
-        verts = results['X_kalmanized']
-        speeds = results['speed_kalmanized']
+
+        if not show_only_track_ends:
+            results = ca.calculate_trajectory_metrics(obj_id,
+                                                      data_file,
+                                                      use_kalman_smoothing=use_kalman_smoothing,
+                                                      frames_per_second=fps,
+                                                      method='position based',
+                                                      method_params={'downsample':1,
+                                                                     })
+            verts = results['X_kalmanized']
+            speeds = results['speed_kalmanized']
+
+        else:
+            rows=ca.load_data(obj_id,
+                              data_file)
+            
+            x0 = rows.field('x')[0]
+            x1 = rows.field('x')[-1]
+            
+            y0 = rows.field('y')[0]
+            y1 = rows.field('y')[-1]
+            
+            z0 = rows.field('z')[0]
+            z1 = rows.field('z')[-1]
+            
+            track_end_verts.append( (x0,y0,z0) )
+            track_end_verts.append( (x1,y1,z1) )
 
         if 0:
             print 'WARNING: limiting data'
@@ -188,28 +217,30 @@ def doit(filename,
                                                          })
             saccade_verts = saccades['X']
             saccade_times = saccades['times']
+
         
         #################
 
-        pd = tvtk.PolyData()
-        pd.points = verts
-        pd.point_data.scalars = speeds
-        if numpy.any(speeds>max_vel):
-            print 'WARNING: maximum speed (%.3f m/s) exceeds color map max'%(speeds.max(),)
+        if not show_only_track_ends:
+            pd = tvtk.PolyData()
+            pd.points = verts
+            pd.point_data.scalars = speeds
+            if numpy.any(speeds>max_vel):
+                print 'WARNING: maximum speed (%.3f m/s) exceeds color map max'%(speeds.max(),)
 
-        g = tvtk.Glyph3D(scale_mode='data_scaling_off',
-                         vector_mode = 'use_vector',
-                         input=pd)
-        ss = tvtk.SphereSource(radius = radius)
-        g.source = ss.output
-        vel_mapper = tvtk.PolyDataMapper(input=g.output)
-        vel_mapper.lookup_table = lut
-        vel_mapper.scalar_range = 0.0, max_vel
-        a = tvtk.Actor(mapper=vel_mapper)
-        if show_observations:
-            a.property.opacity = 0.3
-        actors.append(a)
-        actor2obj_id[a] = obj_id
+            g = tvtk.Glyph3D(scale_mode='data_scaling_off',
+                             vector_mode = 'use_vector',
+                             input=pd)
+            ss = tvtk.SphereSource(radius = radius)
+            g.source = ss.output
+            vel_mapper = tvtk.PolyDataMapper(input=g.output)
+            vel_mapper.lookup_table = lut
+            vel_mapper.scalar_range = 0.0, max_vel
+            a = tvtk.Actor(mapper=vel_mapper)
+            if show_observations:
+                a.property.opacity = 0.3
+            actors.append(a)
+            actor2obj_id[a] = obj_id
 
         if 0:
             # show time of each saccade
@@ -300,10 +331,40 @@ def doit(filename,
                          shaft_type='cylinder')
         actors.append(a)
 
+    if show_only_track_ends:
+        pd = tvtk.PolyData()
+
+        verts = numpy.array( track_end_verts )
+
+        if 1:
+            print 'limiting ends shown to approximate arena boundaries'
+            cond = (verts[:,2] < 0.25) & (verts[:,2] > -0.05)
+            #cond = cond & (verts[:,1] < 0.29) & (verts[:,1] > 0.0)
+            showverts = verts[cond]
+        else:
+            showverts = verts
+            
+        pd.points = showverts
+
+        g = tvtk.Glyph3D(scale_mode='data_scaling_off',
+                         vector_mode = 'use_vector',
+                         input=pd)
+        ss = tvtk.SphereSource(radius = 0.005,
+                               theta_resolution=8,
+                               phi_resolution=8,
+                               )
+        g.source = ss.output
+        mapper = tvtk.PolyDataMapper(input=g.output)
+        a = tvtk.Actor(mapper=mapper)
+        #a.property.color = (0,1,0) # green
+        a.property.color = (1,0,0) # red
+        a.property.opacity = 0.3
+        actors.append(a)
+            
     for a in actors:
         ren.add_actor(a)
         
-    if 1:
+    if not show_only_track_ends:
         # Create a scalar bar
         if vertical_scale:
             scalar_bar = tvtk.ScalarBarActor(orientation='vertical',
@@ -337,25 +398,25 @@ def doit(filename,
             rwi.initialize()
             sc_bar_widget.enabled = True
 
-            #rwi.interactor_style = tvtk.InteractorStyleSwitch() # doesn't work??
-            if 1:
-                picker = tvtk.CellPicker(tolerance=1e-9)
-                #print 'dir(picker)',dir(picker)
-                def annotatePick(object, event):
-                    if not picker.cell_id < 0:
-                        found = sets.Set([])
-                        for actor in picker.actors:
-                            objid = actor2obj_id[actor]
-                            found.add(objid)
-                        found = list(found)
-                        found.sort()
-                        print ' '.join(map(str,found))
-                
-                picker.add_observer('EndPickEvent', annotatePick)
-                rwi.picker = picker
+    #rwi.interactor_style = tvtk.InteractorStyleSwitch() # doesn't work??
+    if 1:
+        picker = tvtk.CellPicker(tolerance=1e-9)
+        #print 'dir(picker)',dir(picker)
+        def annotatePick(object, event):
+            if not picker.cell_id < 0:
+                found = sets.Set([])
+                for actor in picker.actors:
+                    objid = actor2obj_id[actor]
+                    found.add(objid)
+                found = list(found)
+                found.sort()
+                print ' '.join(map(str,found))
+
+        picker.add_observer('EndPickEvent', annotatePick)
+        rwi.picker = picker
             
-            rwi.start()
-            print_cam_props( ren.active_camera )
+    rwi.start()
+    print_cam_props( ren.active_camera )
             
 def main():
     usage = '%prog FILE [options]'
@@ -406,6 +467,8 @@ def main():
 
     parser.add_option("--show-saccades", action='store_true',dest='show_saccades',
                       help="show saccades")
+
+    parser.add_option("--show-only-track-ends", action='store_true',dest='show_only_track_ends')
 
     parser.add_option("--show-observations", action='store_true',dest='show_observations',
                       help="show observations")
@@ -459,6 +522,7 @@ def main():
          fps = 100.0,
          vertical_scale = options.vertical_scale,
          max_vel = options.max_vel,
+         show_only_track_ends = options.show_only_track_ends,
          )
     
 if __name__=='__main__':
