@@ -1306,7 +1306,21 @@ class App:
 
 def main():
     global cam_iface
-    
+
+    if BENCHMARK:
+        cam_iface = cam_iface_choose.import_backend('dummy','dummy')
+        max_num_points_per_camera=2
+        
+        app=App(max_num_points_per_camera,
+                roi2_radius=10,
+                bg_frame_interval=50,
+                bg_frame_alpha=1.0/50.0,
+                )
+        if app.num_cams <= 0:
+            return
+        app.mainloop()
+        return
+        
     usage_lines = ['%prog FILE [options]',
                    '',
                    '  available wrappers and backends:']
