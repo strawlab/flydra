@@ -1,3 +1,16 @@
+##2/3 height post experiments:
+
+##                             odor
+##                    yes                no
+
+##         yes     20070305           20070304  
+##                 20070306           20070308
+##wind       
+##         no      20070303           20070126
+##                 20070307           20070127
+##                                    20070128
+##                                    20070129
+
 # this is some kind of order
 condition_names = ['no post','tall post','spot',
                    'necklace','half post','double post']
