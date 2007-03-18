@@ -19,10 +19,12 @@ pytables_filt = numpy.asarray
 import atexit
 import pickle
 
+import motmot_utils.config
 import flydra.kalman.flydra_kalman_utils
 import flydra.kalman.flydra_tracker
 import flydra.geom
 import flydra.data_descriptions
+import flydra.trigger
 
 import flydra.debuglock
 #DebugLock = flydra.debuglock.DebugLock
@@ -55,6 +57,25 @@ PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 calib_data_lock = threading.Lock()
 calib_IdMat = []
 calib_points = []
+
+########
+# persistent configuration data ( implementation in motmot_utils.config )
+def get_rc_params():
+    defaultParams = {
+        'frames_per_second'  : 100.0,
+        }
+    fviewrc_fname = motmot_utils.config.rc_fname(filename='mainbrainrc',
+                                                 dirname='.flydra')
+    rc_params = motmot_utils.config.get_rc_params(fviewrc_fname,
+                                                  defaultParams)
+    return rc_params
+def save_rc_params():
+    save_fname = motmot_utils.config.rc_fname(must_already_exist=False,
+                                              filename='mainbrainrc',
+                                              dirname='.flydra')
+    motmot_utils.config.save_rc_params(save_fname,rc_params)
+rc_params = get_rc_params()
+########
 
 XXX_framenumber = 0
 
@@ -1435,6 +1456,10 @@ class MainBrain(object):
         global main_brain_keeper
 
         assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
+
+        self.fps = rc_params['frames_per_second']
+        self.trigger_device = flydra.trigger.Device()
+        self.trigger_device.set_carrier_frequency( self.fps )
         
         Pyro.core.initServer(banner=0)
 
@@ -1876,6 +1901,7 @@ class MainBrain(object):
                                expectedrows=500)
         self.h5textlog = ct(root,'textlog', TextLogDescription,
                             "text log")
+        self._startup_message()
         if self.reconstructor is not None:
             self.reconstructor.save_to_h5file(self.h5file)
             if DO_KALMAN:
@@ -1921,6 +1947,23 @@ class MainBrain(object):
             self.h5_2d_obs = None            
         else:
             self.h5data3d_best = None
+
+    def _startup_message(self):
+        textlog_row = self.h5textlog.row
+        cam_id = 'mainbrain'
+        timestamp = time.time()
+        list_of_textlog_data = [
+            (timestamp,cam_id,timestamp, 'MainBrain starting at %s fps'%(str(self.fps),))
+            ]
+        for textlog_data in list_of_textlog_data:
+            (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
+            textlog_row['mainbrain_timestamp'] = mainbrain_timestamp
+            textlog_row['cam_id'] = cam_id
+            textlog_row['host_timestamp'] = host_timestamp
+            textlog_row['message'] = message
+            textlog_row.append()
+
+        self.h5textlog.flush()
 
     def _request_missing_data(self):
         if ATTEMPT_DATA_RECOVERY:
