@@ -11,7 +11,7 @@
 #include "usb_standard_request.h"
 #include "usb_specific_request.h"
 #include "adc_drv.h"
-
+//#include "framecount_task.h"
 
 
 //_____ M A C R O S ________________________________________________________
@@ -223,10 +223,12 @@ ISR(TIMER3_COMPA_vect) {
 
     trig_once_mode=0;
   }
+  //  increment_framecount_A();
 }
 ISR(TIMER3_COMPB_vect) {
 }
 ISR(TIMER3_OVF_vect) {
+  // timer3 overflowed
 }
 
 //!
@@ -239,7 +241,7 @@ ISR(TIMER3_OVF_vect) {
 //! @return none
 //!
 //!/
-void hid_task_init(void)
+void trigger_task_init(void)
 {
    init_adc();
    Leds_init();
@@ -252,16 +254,7 @@ void hid_task_init(void)
 
 
 
-//! @brief Entry point of the HID generic communication task
-//!
-//! This function manages IN/OUT repport management.
-//!
-//! @warning Code:?? bytes (function code length)
-//!
-//! @param none
-//!
-//! @return none
-void hid_task(void)
+void trigger_task(void)
 {
    uint8_t flags=0;
 #define TASK_FLAGS_ENTER_DFU 0x01
@@ -277,7 +270,9 @@ void hid_task(void)
    uint16_t new_ocr3c;
    uint16_t new_icr3; // icr3 is TOP for timer3
 
-   if(usb_connected)                     //! Check USB HID is enumerated
+   int64_t * framecount_ptr;
+
+   if(usb_connected)                    
     {
       Usb_select_endpoint(ENDPOINT_BULK_OUT);    //! Get Data from Host
       if(Is_usb_receive_out()) {
@@ -368,16 +363,18 @@ void hid_task(void)
 	    new_ocr3b = get_OCR3B();
 	    new_ocr3c = get_OCR3C();
 	    new_icr3 = get_ICR3();  // icr1 is TOP for timer1
-	    
-	    Usb_write_byte((uint8_t)(new_ocr3a>>8));
-	    Usb_write_byte((uint8_t)(new_ocr3a));
-	    Usb_write_byte((uint8_t)(new_ocr3b>>8));
-	    Usb_write_byte((uint8_t)(new_ocr3b));
 
-	    Usb_write_byte((uint8_t)(new_ocr3c>>8));
-	    Usb_write_byte((uint8_t)(new_ocr3c));
-	    Usb_write_byte((uint8_t)(new_icr3>>8));
-	    Usb_write_byte((uint8_t)(new_icr3));
+	    //get_framecount_A(framecount_ptr);
+
+	    Usb_write_byte(((uint8_t*)framecount_ptr)[0]);
+	    Usb_write_byte(((uint8_t*)framecount_ptr)[1]);
+	    Usb_write_byte(((uint8_t*)framecount_ptr)[2]);
+	    Usb_write_byte(((uint8_t*)framecount_ptr)[3]);
+
+	    Usb_write_byte(((uint8_t*)framecount_ptr)[4]);
+	    Usb_write_byte(((uint8_t*)framecount_ptr)[5]);
+	    Usb_write_byte(((uint8_t*)framecount_ptr)[6]);
+	    Usb_write_byte(((uint8_t*)framecount_ptr)[7]);
 
 	    Usb_write_byte(PORTC);
 	    Usb_write_byte(TCCR3B);

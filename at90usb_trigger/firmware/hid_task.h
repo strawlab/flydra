@@ -13,8 +13,8 @@
  * @bug
  */
 
-#ifndef _HID_TASK_H_
-#define _HID_TASK_H_
+#ifndef _TRIGGER_TASK_H_
+#define _TRIGGER_TASK_H_
 
 //_____ I N C L U D E S ____________________________________________________
 
@@ -30,5 +30,5 @@
 
 
 
-#endif /* _HID_TASK_H_ */
+#endif /* _TRIGGER_TASK_H_ */
 

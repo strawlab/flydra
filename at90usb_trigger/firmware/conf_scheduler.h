@@ -20,12 +20,12 @@
 #define SCHEDULER_TYPE          SCHEDULER_FREE  // SCHEDULER_(TIMED|TASK|FREE|CUSTOM)
 #define Scheduler_task_1_init   usb_task_init
 #define Scheduler_task_1        usb_task
-#define Scheduler_task_2_init   hid_task_init
-#define Scheduler_task_2        hid_task
-
-
-
-
+#define Scheduler_task_2_init   trigger_task_init
+#define Scheduler_task_2        trigger_task
+/*
+#define Scheduler_task_3_init   framecount_task_init
+#define Scheduler_task_3        framecount_task
+*/
 
 #endif  //! _CONF_SCHEDULER_H_
 
