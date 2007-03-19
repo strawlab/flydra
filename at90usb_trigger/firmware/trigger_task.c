@@ -4,7 +4,7 @@
 
 #include "config.h"
 #include "conf_usb.h"
-#include "hid_task.h"
+#include "trigger_task.h"
 #include "stk_525.h"
 #include "usb_drv.h"
 #include "usb_descriptors.h"
