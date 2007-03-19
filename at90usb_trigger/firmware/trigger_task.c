@@ -11,7 +11,7 @@
 #include "usb_standard_request.h"
 #include "usb_specific_request.h"
 #include "adc_drv.h"
-//#include "framecount_task.h"
+#include "framecount_task.h"
 
 
 //_____ M A C R O S ________________________________________________________
@@ -223,7 +223,7 @@ ISR(TIMER3_COMPA_vect) {
 
     trig_once_mode=0;
   }
-  //  increment_framecount_A();
+  increment_framecount_A();
 }
 ISR(TIMER3_COMPB_vect) {
 }

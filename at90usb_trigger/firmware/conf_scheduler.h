@@ -22,10 +22,8 @@
 #define Scheduler_task_1        usb_task
 #define Scheduler_task_2_init   trigger_task_init
 #define Scheduler_task_2        trigger_task
-/*
 #define Scheduler_task_3_init   framecount_task_init
 #define Scheduler_task_3        framecount_task
-*/
 
 #endif  //! _CONF_SCHEDULER_H_
 
