@@ -3,7 +3,8 @@
 
 #include "config.h"
 
-extern void get_framecount_A(int64_t* result);
-extern void increment_framecount_A();
+extern int64_t get_framecount_A(void);
+extern void increment_framecount_A(void);
+extern void reset_framecount_A(void);
 
 #endif // _FRAMECOUNT_TASK_H_

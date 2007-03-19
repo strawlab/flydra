@@ -21,6 +21,8 @@ TASK_FLAGS_ENTER_DFU = 0x01
 TASK_FLAGS_NEW_TIMER3_DATA = 0x02
 TASK_FLAGS_DO_TRIG_ONCE = 0x04
 TASK_FLAGS_DOUT_HIGH = 0x08
+TASK_FLAGS_GET_DATA = 0x10
+TASK_FLAGS_RESET_FRAMECOUNT_A = 0x20
 
 def debug(*args):
     if 1:
@@ -81,10 +83,11 @@ class Device:
 
         self.OUTPUT_BUFFER = ctypes.create_string_buffer(16)
 
-        self.FOSC = 1000000 # 1 MHz # hey, i thought it was at 8 ?!?
+        self.FOSC = 8000000 # 8 MHz
         trigger_carrier_freq = 0.0 # stopped
 
-        self.timer3_CS = 1
+        self.timer3_CS = 8
+        print 'set A self.timer3_CS to',self.timer3_CS        
         self._set_timer3_metadata(trigger_carrier_freq)
         
     def set_carrier_frequency( self, freq=None ):
@@ -94,12 +97,34 @@ class Device:
         print 'setting freq to',freq
         if freq != 0:
             if self.timer3_CS == 0:
-                self.timer3_CS = 1
-        self._set_timer3_metadata(freq)
+                success = False
+                timer_vals = CS_dict.keys()
+                timer_vals.sort()
+                for timer3_CS in timer_vals:
+                    self.timer3_CS = timer3_CS
+                    print 'set B self.timer3_CS to',self.timer3_CS
+                    try:
+                        self._set_timer3_metadata(freq)
+                    except ValueError, err:
+                        continue # try again
+                    else:
+                        success = True
+                        break
+                if not success:
+                    raise RuntimeError('cound not set timer3 metadata')
+            else:
+                self._set_timer3_metadata(freq)
+        else:
+            self._set_timer3_metadata(freq)
+            
+    def get_carrier_frequency( self ):
+        IFI = self.timer3_TOP * self.timer3_clock_tick_duration
+        return 1.0/IFI
         
     def _set_timer3_metadata(self, carrier_freq):
         if carrier_freq <= 0:
             self.timer3_CS = 0
+            print 'set C self.timer3_CS to',self.timer3_CS            
         else:
             if self.timer3_CS == 0:
                 raise ValueError('cannot set non-zero freq because clock select is zero')
@@ -118,17 +143,23 @@ class Device:
             
         F_CLK = self.FOSC/float(self.timer3_CS) # clock frequency, Hz
 
+        print 'F_CPU',self.FOSC
+        print 'F_CLK',F_CLK
+
         clock_tick_duration = 1.0/F_CLK
         carrier_duration = 1.0/carrier_freq
         n_ticks_for_carrier = int(round(carrier_duration/clock_tick_duration))
         if n_ticks_for_carrier > 0xFFFF:
             raise ValueError('n_ticks_for_carrier too large for 16 bit counter, try increasing self.timer3_CS')
-        print 'F_CPU',self.FOSC
-        print 'F_CLK',F_CLK
+        
         print 'clock_tick_duration',clock_tick_duration
         print 'carrier_freq',carrier_freq
         print 'carrier_duration',carrier_duration
         print 'n_ticks_for_carrier',n_ticks_for_carrier
+
+        actual_freq = 1.0/(n_ticks_for_carrier*clock_tick_duration)
+        print 'actual_freq',actual_freq
+
         
         self.timer3_TOP = n_ticks_for_carrier
         self.timer3_clock_tick_duration = clock_tick_duration
@@ -181,7 +212,7 @@ class Device:
 
         self.send_buf()
 
-    def send_buf(self):
+    def send_buf(self,return_input=False):
         buf = self.OUTPUT_BUFFER # shorthand
         #buf[9] = chr(1)
         print 'ord(buf[8])',ord(buf[8])
@@ -202,12 +233,36 @@ class Device:
                 if 0:
                     sys.stdout.write('?')
                     sys.stdout.flush()
+                val = None
+            if return_input:
+                return INPUT_BUFFER
 
     def enter_dfu_mode(self):
         buf = self.OUTPUT_BUFFER # shorthand
         buf[8] = chr(TASK_FLAGS_ENTER_DFU)
         val = usb.bulk_write(self.libusb_handle, 0x06, buf, 9999)
-        
+
+    def _read_data_from_device(self):
+        buf = self.OUTPUT_BUFFER # shorthand
+        buf[8] = chr(TASK_FLAGS_GET_DATA)
+        returned_data = self.send_buf(return_input=True)
+        #for i in range(16):
+        #    print '%02d %d'%(i,ord(returned_data[i]))
+        return returned_data
+
+    def get_framecount_stamp(self):
+        data = self._read_data_from_device()
+        framecount = 0
+        for i in range(8):
+            framecount += ord(data[i]) << (i*8)
+        tcnt3 = ord(data[8]) + (ord(data[9]) << 8)
+        return framecount, tcnt3
+
+    def reset_framecount_A(self):
+        buf = self.OUTPUT_BUFFER # shorthand
+        buf[8] = chr(TASK_FLAGS_RESET_FRAMECOUNT_A)
+        self.send_buf()
+
 def enter_dfu_mode():
     dev = Device()
     dev.enter_dfu_mode()
@@ -223,7 +278,23 @@ def set_frequency():
                       metavar="FREQ")
     (options, args) = parser.parse_args()
     dev = Device()
+    
+    dev.set_carrier_frequency( 0.0 )
+    dev.reset_framecount_A()
     dev.set_carrier_frequency( options.freq )
+    t_start = time.time()
+    n_secs = 5.0
+    t_stop = t_start+n_secs
+    while time.time() < t_stop:
+        # busy wait for accurate timing
+        pass
+    framecount, tcnt3 = dev.get_framecount_stamp()
+    fps = framecount/n_secs
+    #print 'framecount, tct3,fps',framecount, tcnt3,fps
+    theory = dev.get_carrier_frequency()
+    measured = fps
+    print 'theoretical fps',theory
+    print 'measured fps',measured
 
 def get_time():
     if sys.platform.startswith('win'):

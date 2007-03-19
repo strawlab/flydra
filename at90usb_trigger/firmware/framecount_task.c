@@ -8,10 +8,21 @@ void increment_framecount_A() {
   do_increment_A_count++;
 }
 
-void get_framecount_A(int64_t* result) {
-  framecount_task(); // make sure no pending counts are around
-  *result = framecount_A;
+void reset_framecount_A() {
+  framecount_A=0;
 }
+
+int64_t get_framecount_A(void) {
+  framecount_task(); // make sure no pending counts are around
+  return framecount_A;
+}
+
+
+/* Forward declarations */
+
+void framecount_task_init(void);
+void framecount_task(void);
+
 
 void framecount_task_init(void) {
   do_increment_A_count=0;

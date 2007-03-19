@@ -24,7 +24,7 @@
 //_____ D E C L A R A T I O N S ____________________________________________
 
 extern bit   usb_connected;
-bit   new_data=FALSE;
+bit   send_data_back_to_host=FALSE;
 extern  uint8_t   usb_configuration_nb;
 volatile uint8_t cpt_sof=0;
 
@@ -261,6 +261,8 @@ void trigger_task(void)
 #define TASK_FLAGS_NEW_TIMER3_DATA 0x02
 #define TASK_FLAGS_DO_TRIG_ONCE 0x04
 #define TASK_FLAGS_DOUT_HIGH 0x08
+#define TASK_FLAGS_GET_DATA 0x10
+#define TASK_FLAGS_RESET_FRAMECOUNT_A 0x20
 
    uint8_t clock_select_timer3=0;
    uint32_t volatile tmp;
@@ -270,7 +272,7 @@ void trigger_task(void)
    uint16_t new_ocr3c;
    uint16_t new_icr3; // icr3 is TOP for timer3
 
-   int64_t * framecount_ptr;
+   int64_t framecount_A;
 
    if(usb_connected)                    
     {
@@ -304,43 +306,51 @@ void trigger_task(void)
 	Usb_read_byte();
 #endif
 	Usb_ack_receive_out();
-
-	if (flags & TASK_FLAGS_NEW_TIMER3_DATA) {
-	  // update timer3
-	  set_OCR3A(new_ocr3a);
-	  set_OCR3B(new_ocr3b);
-	  set_OCR3C(new_ocr3c);
-	  set_ICR3(new_icr3);  // icr3 is TOP for timer3
-
-	  TCCR3B = (TCCR3B & 0xF8) | (clock_select_timer3 & 0x07); // low 3 bits sets CS
-	  new_data = TRUE;
-	}
-
-	if (flags & TASK_FLAGS_DO_TRIG_ONCE) {
-	  //	  new_icr3 = get_ICR3();  // icr1 is TOP for timer1
-	  //new_icr3--;
-	  TCCR3B = (TCCR3B & 0xF8) | (0 & 0x07); // low 3 bits sets CS to 0 (stop)
-
-	  set_TCNT3(0xFF00); // trigger overflow soon
-	  //set_OCR3A(0xFE00);
-	  set_OCR3A(0x00FF);
-	  set_ICR3(0xFFFF);  // icr3 is TOP for timer3
-
-	  trig_once_mode=1;
-
-	  // start clock
-	  TCCR3B = (TCCR3B & 0xF8) | (1 & 0x07); // low 3 bits sets CS
-	  
-	  /*
-	  // XXX this doesn't seem to work 100% of the time... - ADS
-	  PORTC |= 0x70; // pin C4-6 set high
-	  TCCR3B = (TCCR3B & 0xF8) | (0 & 0x07); // low 3 bits sets CS to 0 (stop)
-
-	  */
-	  new_data = TRUE;
-	}
-
       }
+      if (flags & TASK_FLAGS_NEW_TIMER3_DATA) {
+	// update timer3
+	set_OCR3A(new_ocr3a);
+	set_OCR3B(new_ocr3b);
+	set_OCR3C(new_ocr3c);
+	set_ICR3(new_icr3);  // icr3 is TOP for timer3
+	
+	TCCR3B = (TCCR3B & 0xF8) | (clock_select_timer3 & 0x07); // low 3 bits sets CS
+	send_data_back_to_host = TRUE;
+      }
+
+      if (flags & TASK_FLAGS_DO_TRIG_ONCE) {
+	//	  new_icr3 = get_ICR3();  // icr1 is TOP for timer1
+	//new_icr3--;
+	TCCR3B = (TCCR3B & 0xF8) | (0 & 0x07); // low 3 bits sets CS to 0 (stop)
+	
+	set_TCNT3(0xFF00); // trigger overflow soon
+	//set_OCR3A(0xFE00);
+	set_OCR3A(0x00FF);
+	set_ICR3(0xFFFF);  // icr3 is TOP for timer3
+	
+	trig_once_mode=1;
+
+	// start clock
+	TCCR3B = (TCCR3B & 0xF8) | (1 & 0x07); // low 3 bits sets CS
+	  
+	/*
+	// XXX this doesn't seem to work 100% of the time... - ADS
+	PORTC |= 0x70; // pin C4-6 set high
+	TCCR3B = (TCCR3B & 0xF8) | (0 & 0x07); // low 3 bits sets CS to 0 (stop)
+	
+	*/
+	send_data_back_to_host = TRUE;
+      }
+
+      if (flags & TASK_FLAGS_GET_DATA) {
+	send_data_back_to_host = TRUE;
+      }
+
+      if (flags & TASK_FLAGS_RESET_FRAMECOUNT_A) {
+	reset_framecount_A();
+	send_data_back_to_host = TRUE;
+      }
+
       if (flags & TASK_FLAGS_ENTER_DFU) //! Check if we received DFU mode command from host
 	{
 	  Usb_detach();                    // detach from USB...
@@ -354,40 +364,43 @@ void trigger_task(void)
 	  (*start_bootloader)();
 	}
 
-      if (new_data == TRUE) {
+      if (send_data_back_to_host == TRUE) {
 
 	Usb_select_endpoint(ENDPOINT_BULK_IN);    //! Ready to send these information to the host application
 	if(Is_usb_in_ready())
 	  {
+	    /*
 	    new_ocr3a = get_OCR3A();
 	    new_ocr3b = get_OCR3B();
 	    new_ocr3c = get_OCR3C();
 	    new_icr3 = get_ICR3();  // icr1 is TOP for timer1
+	    */
 
-	    //get_framecount_A(framecount_ptr);
+	    framecount_A = get_framecount_A();
 
-	    Usb_write_byte(((uint8_t*)framecount_ptr)[0]);
-	    Usb_write_byte(((uint8_t*)framecount_ptr)[1]);
-	    Usb_write_byte(((uint8_t*)framecount_ptr)[2]);
-	    Usb_write_byte(((uint8_t*)framecount_ptr)[3]);
+	    Usb_write_byte((uint8_t)(framecount_A & 0xFF));
+	    Usb_write_byte((uint8_t)((framecount_A >> 8) & 0xFF));
+	    Usb_write_byte((uint8_t)((framecount_A >> 16) & 0xFF));
+	    Usb_write_byte((uint8_t)((framecount_A >> 24) & 0xFF));
 
-	    Usb_write_byte(((uint8_t*)framecount_ptr)[4]);
-	    Usb_write_byte(((uint8_t*)framecount_ptr)[5]);
-	    Usb_write_byte(((uint8_t*)framecount_ptr)[6]);
-	    Usb_write_byte(((uint8_t*)framecount_ptr)[7]);
+	    Usb_write_byte((uint8_t)((framecount_A >> 32) & 0xFF));
+	    Usb_write_byte((uint8_t)((framecount_A >> 40) & 0xFF));
+	    Usb_write_byte((uint8_t)((framecount_A >> 48) & 0xFF));
+	    Usb_write_byte((uint8_t)((framecount_A >> 56) & 0xFF));
 
+	    new_icr3 = get_TCNT3();
+	    Usb_write_byte((uint8_t)(new_icr3 & 0xFF));
+	    Usb_write_byte((uint8_t)((new_icr3 >> 8) & 0xFF));
+	    Usb_write_byte(0x00);
 	    Usb_write_byte(PORTC);
-	    Usb_write_byte(TCCR3B);
-	    Usb_write_byte(0x77);
-	    Usb_write_byte(0x77);
 
-	    Usb_write_byte(0x77);
-	    Usb_write_byte(0x77);
-	    Usb_write_byte(0x77);
-	    Usb_write_byte(0x77);
+	    Usb_write_byte(0x00);
+	    Usb_write_byte(0x00);
+	    Usb_write_byte(0x00);
+	    Usb_write_byte(0x00);
 	    
 	    Usb_ack_fifocon();               //! Send data over the USB
-	    new_data = FALSE;
+	    send_data_back_to_host = FALSE;
 	  }
       }
 
