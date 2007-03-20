@@ -32,6 +32,8 @@ import flydra.debuglock
 DO_KALMAN= True
 MIN_KALMAN_OBSERVATIONS_TO_SAVE = 10 # how many data points are required before saving trajectory?
 
+RESET_FRAMENUMBER_DURATION=2.0 # seconds
+
 import flydra.common_variables
 NETWORK_PROTOCOL = flydra.common_variables.NETWORK_PROTOCOL
 ATTEMPT_DATA_RECOVERY = True
@@ -137,6 +139,12 @@ class HostClockInfo(PT.IsDescription):
     remote_hostname  = PT.StringCol(255,pos=0)
     start_timestamp  = PT.FloatCol(pos=1)
     remote_timestamp = PT.FloatCol(pos=2)
+    stop_timestamp   = PT.FloatCol(pos=3)
+
+class TriggerClockInfo(PT.IsDescription):
+    start_timestamp  = PT.FloatCol(pos=0)
+    framecount       = PT.Int64Col(pos=1)
+    tcnt             = PT.UInt16Col(pos=2)
     stop_timestamp   = PT.FloatCol(pos=3)
 
 class MovieInfo(PT.IsDescription):
@@ -261,7 +269,6 @@ class CoordReceiver(threading.Thread):
         self.quit_event = threading.Event()
         
         self.max_absolute_cam_nos = -1
-        self.RESET_FRAMENUMBER_DURATION=2.0 # seconds
         
         self.general_save_info = {}
 
@@ -356,8 +363,9 @@ class CoordReceiver(threading.Thread):
         if self.main_brain.is_saving_data():
             self.main_brain.queue_data3d_kalman_estimates.put(
                 (tracked_object.frames, tracked_object.xhats, tracked_object.Ps,
+                 tracked_object.timestamps,
                  tracked_object.observations_frames, tracked_object.observations_data,
-                 tracked_object.observations_2d) )
+                 tracked_object.observations_2d ) )
             
         if len(tracked_object.saved_calibration_data):
             self.main_brain.queue_kalman_calibration_data.put( tracked_object.saved_calibration_data )
@@ -497,7 +505,7 @@ class CoordReceiver(threading.Thread):
             except Exception, x:
                 print 'WARNING: could not run in maximum priority mode (PID %d): %s'%(os.getpid(),str(x))
         
-        header_fmt = '<dli'
+        header_fmt = '<ddli'
         header_size = struct.calcsize(header_fmt)
         pt_fmt = '<dddddddddBBddBdddddd'
         pt_size = struct.calcsize(pt_fmt)
@@ -581,7 +589,9 @@ class CoordReceiver(threading.Thread):
                 tlist = self.last_clock_diff_measurements.setdefault(remote_ip,[])
                 tlist.append( (start_timestamp,remote_timestamp,stop_timestamp) )
                 if len(tlist)==100:
-                    remote_hostname = self.ip2hostname.setdefault(remote_ip, socket.getfqdn(remote_ip))
+                    if remote_ip not in self.ip2hostname:
+                        self.ip2hostname[remote_ip]=socket.getfqdn(remote_ip)
+                    remote_hostname = self.ip2hostname[remote_ip]
                     tarray = numpy.array(tlist)
                     del tlist[0:-1] # clear list
                     start_timestamps = tarray[:,0]
@@ -639,7 +649,8 @@ class CoordReceiver(threading.Thread):
                         if len(header) != header_size:
                             # incomplete header buffer
                             break
-                        timestamp, framenumber, n_pts = struct.unpack(header_fmt,header)
+                        (timestamp, camn_received_time, framenumber,
+                         n_pts) = struct.unpack(header_fmt,header)
                         points_in_pluecker_coords_meters = []
                         points_undistorted = []
                         points_distorted = []
@@ -724,7 +735,7 @@ class CoordReceiver(threading.Thread):
                         cam_dict['points_distorted']=points_distorted
                         cam_dict['lock'].release()
 
-                        if timestamp-self.last_timestamps[cam_idx] > self.RESET_FRAMENUMBER_DURATION:
+                        if timestamp-self.last_timestamps[cam_idx] > RESET_FRAMENUMBER_DURATION:
                             self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
                                                 realtime_coord_dict,
                                                 realtime_kalman_coord_dict,
@@ -742,7 +753,7 @@ class CoordReceiver(threading.Thread):
                                 frame_pt_idx = point_tuple[PT_TUPLE_IDX_FRAME_PT_IDX]
                                 deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                                          corrected_framenumber,
-                                                         timestamp)
+                                                         timestamp,camn_received_time)
                                                         +point_tuple[:9]
                                                         +(frame_pt_idx,))
                         # save new frame data
@@ -1374,8 +1385,8 @@ class MainBrain(object):
                 return
             
             deferred_2d_data = []
-            for (absolute_cam_no, framenumber, remote_timestamp, points_distorted) in missing_data:
-                #print '  absolute_cam_no, framenumber, remote_timestamp, points_distorted', absolute_cam_no, framenumber, remote_timestamp, points_distorted
+            for (absolute_cam_no, framenumber, remote_timestamp, camn_received_time,
+                 points_distorted) in missing_data:
 
                 corrected_framenumber = framenumber-framenumber_offset
                 if len(points_distorted)==0:
@@ -1387,7 +1398,7 @@ class MainBrain(object):
                     frame_pt_idx = point_tuple[PT_TUPLE_IDX_FRAME_PT_IDX]
                     deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                              corrected_framenumber,
-                                             remote_timestamp)
+                                             remote_timestamp, camn_received_time)
                                             +point_tuple[:9]
                                             +(frame_pt_idx,))
             self.main_brain.queue_data2d.put(deferred_2d_data)
@@ -1457,9 +1468,11 @@ class MainBrain(object):
 
         assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
 
-        self.fps = rc_params['frames_per_second']
         self.trigger_device = flydra.trigger.Device()
-        self.trigger_device.set_carrier_frequency( self.fps )
+        self.trigger_device.set_carrier_frequency( rc_params['frames_per_second'] )
+        self.fps = self.trigger_device.get_carrier_frequency()
+        self.trigger_timer_max = self.trigger_device.get_timer_max()
+        print self.trigger_timer_max
         
         Pyro.core.initServer(banner=0)
 
@@ -1496,6 +1509,7 @@ class MainBrain(object):
         self.currently_calibrating = threading.Event()
 
         self.last_saved_data_time = 0.0
+        self.last_trigger_framecount_check_time = 0.0
 
         self._currently_recording_movies = {}
         
@@ -1506,6 +1520,7 @@ class MainBrain(object):
         self.h5data2d = None
         self.h5cam_info = None
         self.h5host_clock_info = None
+        self.h5trigger_clock_info = None        
         self.h5movie_info = None
         self.h5textlog = None
         if DO_KALMAN:
@@ -1519,6 +1534,7 @@ class MainBrain(object):
         self.queue_data2d          = Queue.Queue()
         self.queue_cam_info        = Queue.Queue()
         self.queue_host_clock_info = Queue.Queue()
+        self.queue_trigger_clock_info = Queue.Queue()
         self.queue_kalman_calibration_data = Queue.Queue()
         self.queue_data3d_best     = Queue.Queue()
         
@@ -1534,7 +1550,25 @@ class MainBrain(object):
 
         self.current_kalman_obj_id = 0
         main_brain_keeper.register( self )
+        
+    def do_synchronization(self):
+        if self.is_saving_data():
+            raise RuntimeError('will not (re)synchronize while saving data')
+        
+        # called from wxPython event handler
+        self.trigger_device.set_carrier_frequency( 0.0 )
+        self.trigger_device.reset_framecount_A()
 
+        # clear queue of old trigger timestamp information...
+        try:
+            while True:
+                self.queue_trigger_clock_info.get(0)
+        except Queue.Empty:
+            pass
+        
+        time.sleep( RESET_FRAMENUMBER_DURATION+0.01 )
+        self.trigger_device.set_carrier_frequency( self.fps )
+        
     def get_hypothesis_test_max_error(self):
         return self.hypothesis_test_max_error.get()
 
@@ -1729,8 +1763,23 @@ class MainBrain(object):
             self._request_missing_data()
             self._service_save_data()
             self.last_saved_data_time = now
-        self._check_latencies()
+            
+        diff = now - self.last_trigger_framecount_check_time
+        if diff >= 5.0: # request missing data and save data every 5 seconds
+            self._trigger_framecount_check()
+            self.last_trigger_framecount_check_time = now
 
+        self._check_latencies()
+        
+    def _trigger_framecount_check(self):
+        while 1:
+            start_timestamp = time.time()
+            framecount, tcnt = self.trigger_device.get_framecount_stamp()
+            stop_timestamp = time.time()
+            if (stop_timestamp - start_timestamp) < 3e-3:
+                break # 3 msec or better - accept data, else query again
+        self.queue_trigger_clock_info.put((start_timestamp, framecount, tcnt, stop_timestamp))
+    
     def _check_latencies(self):
         for cam_id in self.MainBrain_cam_ids_copy:
             if cam_id not in self._fqdns_by_cam_id:
@@ -1896,7 +1945,9 @@ class MainBrain(object):
         self.h5cam_info = ct(root,'cam_info', CamSyncInfo, "Cam Sync Info",
                              expectedrows=500)
         self.h5host_clock_info = ct(root,'host_clock_info', HostClockInfo, "Host Clock Info",
-                                    expectedrows=6*60*24) # 24 hours
+                                    expectedrows=6*60*24) # 24 hours at 10 sec sample intervals
+        self.h5trigger_clock_info = ct(root,'trigger_clock_info', TriggerClockInfo, "Trigger Clock Info",
+                                       expectedrows=6*60*24) # 24 hours at 10 sec sample intervals
         self.h5movie_info = ct(root,'movie_info', MovieInfo, "Movie Info",
                                expectedrows=500)
         self.h5textlog = ct(root,'textlog', TextLogDescription,
@@ -1939,6 +1990,7 @@ class MainBrain(object):
         self.h5data2d = None
         self.h5cam_info = None
         self.h5host_clock_info = None
+        self.h5trigger_clock_info = None
         self.h5movie_info = None
         self.h5textlog = None
         if DO_KALMAN:
@@ -1953,7 +2005,8 @@ class MainBrain(object):
         cam_id = 'mainbrain'
         timestamp = time.time()
         list_of_textlog_data = [
-            (timestamp,cam_id,timestamp, 'MainBrain starting at %s fps'%(str(self.fps),))
+            (timestamp,cam_id,timestamp, 'MainBrain running at %s fps, (top %s)'%(
+            str(self.fps),str(self.trigger_timer_max)))
             ]
         for textlog_data in list_of_textlog_data:
             (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
@@ -2062,7 +2115,8 @@ class MainBrain(object):
             if self.h5data3d_kalman_estimates is not None:
 ##                print 'saving kalman data (%d objects)'%(
 ##                    len(list_of_3d_data),)
-                for (tro_frames, tro_xhats, tro_Ps, obs_frames, obs_data,
+                for (tro_frames, tro_xhats, tro_Ps, tro_timestamps,
+                     obs_frames, obs_data,
                      observations_2d) in list_of_3d_data:
 
                     if len(obs_frames)<MIN_KALMAN_OBSERVATIONS_TO_SAVE:
@@ -2097,6 +2151,7 @@ class MainBrain(object):
 
                     # save xhat info (kalman estimates)
                     frames = numpy.array(tro_frames, dtype=numpy.uint64)
+                    timestamps = numpy.array(tro_timestamps, dtype=numpy.float64)
                     xhat_data = numpy.array(tro_xhats, dtype=numpy.float32)
                     P_data_full = numpy.array(tro_Ps, dtype=numpy.float32)
                     P_data_save = P_data_full[:,numpy.arange(9),numpy.arange(9)] # get diagonal
@@ -2105,7 +2160,7 @@ class MainBrain(object):
                     list_of_xhats = [xhat_data[:,i] for i in range(xhat_data.shape[1])]
                     list_of_Ps = [P_data_save[:,i] for i in range(P_data_save.shape[1])]
                     xhats_recarray = numpy.rec.fromarrays(
-                        [obj_id_array,frames]+list_of_xhats+list_of_Ps,
+                        [obj_id_array,frames,timestamps]+list_of_xhats+list_of_Ps,
                         names = h5_xhat_names)
                     self.h5data3d_kalman_estimates.append( xhats_recarray )
                     self.h5data3d_kalman_estimates.flush()
@@ -2171,3 +2226,23 @@ class MainBrain(object):
                 host_clock_info_row.append()
                 
             self.h5host_clock_info.flush()
+            
+        #   clear queue
+        list_of_trigger_clock_info = []
+        try:
+            while True:
+                list_of_trigger_clock_info.append( self.queue_trigger_clock_info.get(0) )
+        except Queue.Empty:
+            pass
+        #   save
+        if self.h5trigger_clock_info is not None:
+            row = self.h5trigger_clock_info.row
+            for trigger_clock_info in list_of_trigger_clock_info:
+                start_timestamp, framecount, tcnt, stop_timestamp = trigger_clock_info
+                row['start_timestamp'] = start_timestamp
+                row['framecount'] = framecount
+                row['tcnt'] = tcnt
+                row['stop_timestamp'] = stop_timestamp
+                row.append()
+                
+            self.h5trigger_clock_info.flush()

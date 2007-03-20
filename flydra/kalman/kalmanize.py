@@ -197,13 +197,14 @@ class KalmanSaver:
         
         frames = numpy.array(tro.frames, dtype=numpy.uint64)
         xhat_data = numpy.array(tro.xhats, dtype=numpy.float32)
+        timestamps = numpy.array(tro.timestamps, dtype=numpy.float64)
         P_data_full = numpy.array(tro.Ps, dtype=numpy.float32)
         P_data_save = P_data_full[:,numpy.arange(9),numpy.arange(9)] # get diagonal
         obj_id_array = numpy.empty(frames.shape, dtype=numpy.uint32)
         obj_id_array.fill(self.obj_id)
         list_of_xhats = [xhat_data[:,i] for i in range(xhat_data.shape[1])]
         list_of_Ps = [P_data_save[:,i] for i in range(P_data_save.shape[1])]
-        xhats_recarray = numpy.rec.fromarrays([obj_id_array,frames]+list_of_xhats+list_of_Ps,
+        xhats_recarray = numpy.rec.fromarrays([obj_id_array,frames,timestamps]+list_of_xhats+list_of_Ps,
                                               names = self.h5_xhat_names)
         
         self.h5_xhat.append(xhats_recarray)

@@ -346,9 +346,9 @@ class GrabClass(object):
                     print >> sys.stderr, msg
                     continue
 
-                received_time = time.time()
+                cam_received_time = time.time()
                 if BENCHMARK:
-                    t2 = received_time
+                    t2 = cam_received_time
 
                 # get best guess as to when image was taken
                 timestamp=self.cam.get_last_timestamp()
@@ -356,11 +356,11 @@ class GrabClass(object):
 
                 if BENCHMARK:
                     if (framenumber%100) == 0:
-                        dur = received_time-benchmark_start_time
+                        dur = cam_received_time-benchmark_start_time
                         min_100_frame_time = min(min_100_frame_time,dur)
                         print '%.1f msec for 100 frames (min: %.1f)'%(dur*1000.0,min_100_frame_time*1000.0)
                         sys.stdout.flush()
-                        benchmark_start_time = received_time
+                        benchmark_start_time = cam_received_time
                 else:
                     diff = timestamp-old_ts
                     if diff > 0.02:
@@ -406,6 +406,7 @@ class GrabClass(object):
                          framenumber,
                          points,
                          self.realtime_analyzer.roi,
+                         cam_received_time,
                          ) )
                     #print ' '*20,'put frame'
 
@@ -539,7 +540,8 @@ class GrabClass(object):
                         rot_frame_number=-1 # stop averaging frames
               
                 # XXX could speed this with a join operation I think
-                data = struct.pack('<dli',timestamp,framenumber,len(points))
+                data = struct.pack('<ddli',timestamp,cam_received_time,
+                                   framenumber,len(points))
                 for point_tuple in points:
                     try:
                         data = data + struct.pack(pt_fmt,*point_tuple)
@@ -586,7 +588,7 @@ class GrabClass(object):
                     noisy_pixels_mask = noisy_pixels_mask_full.roi(l, b, cur_fisize)  # set ROI view
         
                 bookkeeping_done_time = time.time()
-                bookkeeping_dur = bookkeeping_done_time-received_time
+                bookkeeping_dur = bookkeeping_done_time-cam_received_time
 
                 alpha = 0.01
                 if did_expensive:
@@ -596,15 +598,15 @@ class GrabClass(object):
 
                 if False and bookkeeping_dur > 0.050 and not BENCHMARK:
                     print 'TIME BUDGET:'
-                    print '   % 5.1f start of work'%((work_start_time-received_time)*1000.0,)
-                    print '   % 5.1f done with work'%((work_done_time-received_time)*1000.0,)
+                    print '   % 5.1f start of work'%((work_start_time-cam_received_time)*1000.0,)
+                    print '   % 5.1f done with work'%((work_done_time-cam_received_time)*1000.0,)
                     
-                    print '   % 5.1f tp1'%((tp1-received_time)*1000.0,)
-                    print '   % 5.1f tp2'%((tp2-received_time)*1000.0,)
+                    print '   % 5.1f tp1'%((tp1-cam_received_time)*1000.0,)
+                    print '   % 5.1f tp2'%((tp2-cam_received_time)*1000.0,)
                     if did_expensive:
                         print '     (did background/variance estimate)'
-                    print '   % 5.1f tp3'%((tp3-received_time)*1000.0,)
-                    print '   % 5.1f tp4'%((tp4-received_time)*1000.0,)
+                    print '   % 5.1f tp3'%((tp3-cam_received_time)*1000.0,)
+                    print '   % 5.1f tp4'%((tp4-cam_received_time)*1000.0,)
                     
                     print '   % 5.1f end of all'%(bookkeeping_dur*1000.0,)
                     print
@@ -999,9 +1001,10 @@ class App:
                         print 'WARNING: could not find missing frame',missing_framenumber
                         continue
                     
-                    timestamp, points = last_points[idx]
+                    timestamp, points, camn_received_time = last_points[idx]
                     # make sure data is pure python, (not numpy)
-                    missing_data.append( (int(camn), int(missing_framenumber), float(timestamp), points) ) 
+                    missing_data.append( (int(camn), int(missing_framenumber), float(timestamp),
+                                          float(camn_received_time), points) ) 
                     
                 if len(missing_data):
                 #if 1: # XXX deleteme
@@ -1178,7 +1181,8 @@ class App:
                             while 1:
                                 # what up to 50 msec for new frame
                                 DEBUG('waiting for new frame...')
-                                frame,timestamp,framenumber,points,lbrt = get_raw_frame() # this may raise Queue.Empty
+                                (frame,timestamp,framenumber,points,lbrt,
+                                 cam_received_time) = get_raw_frame() # this may raise Queue.Empty
                                 DEBUG('got new frame')
 
                                 # XXX could have option to skip frames if a newer frame is available
@@ -1187,7 +1191,7 @@ class App:
                                     del last_frames[0]
 
                                 last_points_framenumbers.append( framenumber ) # save for dropped packet recovery
-                                last_points.append( (timestamp,points) ) # save for dropped packet recovery
+                                last_points.append( (timestamp,points,cam_received_time) ) # save for dropped packet recovery
                                 while len(last_points)>10000:
                                     del last_points[:100]
                                     del last_points_framenumbers[:100]

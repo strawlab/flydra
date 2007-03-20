@@ -350,6 +350,9 @@ class wxMainBrainApp(wxApp):
         load_cal = XRCCTRL(self.cam_preview_panel,
                            "LOAD_CAL")
         EVT_BUTTON(load_cal, load_cal.GetId(), self.OnLoadCal)
+
+        ctrl = XRCCTRL(self.cam_preview_panel,'SYNCHRONIZE_BUTTON')
+        EVT_BUTTON(ctrl, ctrl.GetId(), self.OnSynchronizeButton)
         
         # setup dynamic image (OpenGL) panel
         dynamic_image_panel = XRCCTRL(self.cam_preview_panel,"PreviewDynamicImagePanel") # get container
@@ -1192,6 +1195,9 @@ class wxMainBrainApp(wxApp):
         #traceback.print_stack(frame)
         sys.exit(0)
 
+    def OnSynchronizeButton(self,event):
+        self.main_brain.do_synchronization()
+    
     def OnUpdateRawImages(self, event):
         DEBUG('5')
         if self.current_page in ['preview','snapshot']:

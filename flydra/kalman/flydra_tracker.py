@@ -1,4 +1,5 @@
 import numpy
+import time
 import adskalman as kalman
 import params
 import flydra.geom as geom
@@ -86,6 +87,7 @@ class TrackedObject:
                                              P_k1)
         self.frames = [frame]
         self.xhats = [initial_x]
+        self.timestamps = [time.time()]
         self.Ps = [P_k1]
         
         self.observations_frames = [frame]
@@ -120,6 +122,7 @@ class TrackedObject:
             if self.frames[-1] > last_observation_frame:
                 self.frames.pop()
                 self.xhats.pop()
+                self.timestamps.pop()
                 self.Ps.pop()
             else:
                 break
@@ -150,6 +153,7 @@ class TrackedObject:
                     ############ save outputs ###############
                     self.frames.append( self.current_frameno + i + 1 )
                     self.xhats.append( xhat )
+                    self.timestamps.append( 0.0 )
                     self.Ps.append( P )
         else:
             raise RuntimeError("why did we get here?")
@@ -194,6 +198,7 @@ class TrackedObject:
             ############ save outputs ###############
             self.frames.append( frame )
             self.xhats.append( xhat )
+            self.timestamps.append(time.time())
             self.Ps.append( P )
         
             if observation_meters is not None:

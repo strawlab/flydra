@@ -25,7 +25,7 @@ TASK_FLAGS_GET_DATA = 0x10
 TASK_FLAGS_RESET_FRAMECOUNT_A = 0x20
 
 def debug(*args):
-    if 1:
+    if 0:
         print >> sys.stderr, ' '.join([str(arg) for arg in args])
 
 class Device:
@@ -73,11 +73,11 @@ class Device:
         usb.set_configuration(self.libusb_handle, config.bConfigurationValue)
         debug('claiming interface')
         debug('config.bNumInterfaces',config.bNumInterfaces)
-        print 'config.interface',config.interface
-        for i in range(config.bNumInterfaces):
-            iface = config.interface[i]
-            print iface
-            print iface.altsetting
+        #print 'config.interface',config.interface
+##        for i in range(config.bNumInterfaces):
+##            iface = config.interface[i]
+##            print iface
+##            print iface.altsetting
             
         usb.claim_interface(self.libusb_handle, interface_nr)
 
@@ -87,14 +87,14 @@ class Device:
         trigger_carrier_freq = 0.0 # stopped
 
         self.timer3_CS = 8
-        print 'set A self.timer3_CS to',self.timer3_CS        
+        #print 'set A self.timer3_CS to',self.timer3_CS        
         self._set_timer3_metadata(trigger_carrier_freq)
         
     def set_carrier_frequency( self, freq=None ):
         if freq is None:
-            print 'setting frequency to default (200 Hz)'
+            #print 'setting frequency to default (200 Hz)'
             freq = 200.0
-        print 'setting freq to',freq
+        #print 'setting freq to',freq
         if freq != 0:
             if self.timer3_CS == 0:
                 success = False
@@ -102,7 +102,6 @@ class Device:
                 timer_vals.sort()
                 for timer3_CS in timer_vals:
                     self.timer3_CS = timer3_CS
-                    print 'set B self.timer3_CS to',self.timer3_CS
                     try:
                         self._set_timer3_metadata(freq)
                     except ValueError, err:
@@ -121,10 +120,12 @@ class Device:
         IFI = self.timer3_TOP * self.timer3_clock_tick_duration
         return 1.0/IFI
         
+    def get_timer_max( self ):
+        return self.timer3_TOP
+        
     def _set_timer3_metadata(self, carrier_freq):
         if carrier_freq <= 0:
             self.timer3_CS = 0
-            print 'set C self.timer3_CS to',self.timer3_CS            
         else:
             if self.timer3_CS == 0:
                 raise ValueError('cannot set non-zero freq because clock select is zero')
@@ -143,8 +144,8 @@ class Device:
             
         F_CLK = self.FOSC/float(self.timer3_CS) # clock frequency, Hz
 
-        print 'F_CPU',self.FOSC
-        print 'F_CLK',F_CLK
+        #print 'F_CPU',self.FOSC
+        #print 'F_CLK',F_CLK
 
         clock_tick_duration = 1.0/F_CLK
         carrier_duration = 1.0/carrier_freq
@@ -152,13 +153,13 @@ class Device:
         if n_ticks_for_carrier > 0xFFFF:
             raise ValueError('n_ticks_for_carrier too large for 16 bit counter, try increasing self.timer3_CS')
         
-        print 'clock_tick_duration',clock_tick_duration
-        print 'carrier_freq',carrier_freq
-        print 'carrier_duration',carrier_duration
-        print 'n_ticks_for_carrier',n_ticks_for_carrier
+##        print 'clock_tick_duration',clock_tick_duration
+##        print 'carrier_freq',carrier_freq
+##        print 'carrier_duration',carrier_duration
+##        print 'n_ticks_for_carrier',n_ticks_for_carrier
 
-        actual_freq = 1.0/(n_ticks_for_carrier*clock_tick_duration)
-        print 'actual_freq',actual_freq
+        #actual_freq = 1.0/(n_ticks_for_carrier*clock_tick_duration)
+        #print 'actual_freq',actual_freq
 
         
         self.timer3_TOP = n_ticks_for_carrier
@@ -215,8 +216,8 @@ class Device:
     def send_buf(self,return_input=False):
         buf = self.OUTPUT_BUFFER # shorthand
         #buf[9] = chr(1)
-        print 'ord(buf[8])',ord(buf[8])
-        print 'ord(buf[9])',ord(buf[9])
+        #print 'ord(buf[8])',ord(buf[8])
+        #print 'ord(buf[9])',ord(buf[9])
 
         if 1:
             val = usb.bulk_write(self.libusb_handle, 0x06, buf, 9999)
@@ -227,7 +228,7 @@ class Device:
             
             try:
                 val = usb.bulk_read(self.libusb_handle, 0x82, INPUT_BUFFER, 1000)
-                if 1:
+                if 0:
                     print 'read',val
             except usb.USBNoDataAvailableError:
                 if 0:
