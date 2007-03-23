@@ -248,6 +248,7 @@ class CachingAnalyzer:
                           data_file,
                           use_kalman_smoothing=True,
                           ):
+        """get raw data (Kalman smoothed if data has been pre-smoothed)"""
         rows = self.load_data( obj_id,data_file,use_kalman_smoothing=use_kalman_smoothing)
         xsA = rows.field('x')
         ysA = rows.field('y')
@@ -256,11 +257,24 @@ class CachingAnalyzer:
         XA = numpy.vstack((xsA,ysA,zsA)).T
         return XA
 
-    def get_obj_ids(self,result_h5_file):
-        preloaded_dict = self.loaded_cache.get(result_h5_file,None)
-        if preloaded_dict is None:
-            preloaded_dict = self._load_dict(result_h5_file)
-        return preloaded_dict['unique_obj_ids']
+    def get_obj_ids(self,data_file):
+        if isinstance(data_file,dict):
+            is_mat_file = True
+        else:
+            is_mat_file = False
+            result_h5_file = data_file
+            preloaded_dict = self.loaded_cache.get(result_h5_file,None)
+            if preloaded_dict is None:
+                preloaded_dict = self._load_dict(result_h5_file)
+        if is_mat_file:
+            uoi = numpy.unique(data_file['kalman_obj_id'])
+            return uoi
+        else:
+            print dir(data_file)
+            preloaded_dict = self.loaded_cache.get(data_file,None)
+            if preloaded_dict is None:
+                preloaded_dict = self._load_dict(data_file)
+            return preloaded_dict['unique_obj_ids']
     
     def calculate_trajectory_metrics(self,
                                      obj_id,
@@ -700,9 +714,6 @@ class CachingAnalyzer:
     def __del__(self):
         self.close()
         
-def main():
-    pass
-
 if __name__=='__main__':
     ca = CachingAnalyzer()
     results = ca.detect_saccades(2396,'DATA20061208_181556.kalmanized.h5')
