@@ -66,8 +66,25 @@ if 1:
 
         latency = done_time-start_time
         latency_msec = latency*1e3
-        print latency_msec.mean()
 
+        lmsi = numpy.argsort(latency_msec)
+        N = len(lmsi)
+        num95 = int(N*0.95)
+        num90 = int(N*0.9)
+        latency95 = latency_msec[lmsi[num95]]
+
+        print 
+        print 'numpy.min(latency_msec),numpy.median(latency_msec)',numpy.min(latency_msec),numpy.median(latency_msec)
+        print
+        if 0:
+            median = numpy.median
+            print 'latency_msec[:num95].median()',median(latency_msec[lmsi[:num95]])
+            print 'latency_msec[:num90].median()',median(latency_msec[lmsi[:num90]])
+            print 'latency_msec[lmsi[int(N*0.95)]]',latency_msec[lmsi[int(N*0.95)]]
+            print 'latency_msec[lmsi[int(N*0.9)]]',latency_msec[lmsi[int(N*0.9)]]
+            print 'latency_msec[lmsi[int(N*0.85)]]',latency_msec[lmsi[int(N*0.85)]]
+            print 'latency_msec[lmsi[int(N*0.8)]]',latency_msec[lmsi[int(N*0.8)]]
+            
         if 1:
             #####################
             # 2D camera computer timestamps
@@ -87,12 +104,14 @@ if 1:
                 
                 camn_start_latencies_msec = (frame_2d_computer_start_timestamp - frame_trigger_timestamp)*1e3
                 camn_latencies_msec = (frame_2d_computer_timestamp - frame_trigger_timestamp)*1e3
-                
-                print 'camn,camn_start_latencies_msec.mean()',camn,camn_start_latencies_msec.mean()
-                print 'camn,camn_latencies_msec.mean()',camn,camn_latencies_msec.mean()
+
+                print camn
+                print ' numpy.median(camn_start_latencies_msec)',numpy.min(camn_start_latencies_msec),numpy.median(camn_start_latencies_msec)
+                print ' numpy.median(camn_latencies_msec.)', numpy.min(camn_latencies_msec),numpy.median(camn_latencies_msec)
 
                 acq_dur = (frame_2d_computer_timestamp-frame_2d_computer_start_timestamp)*1e3
-                print 'camn,acq_dur',camn,acq_dur.mean()
+                print 'acq_dur',numpy.min(acq_dur),numpy.median(acq_dur)
+                print
 
         kresults.close()
 
