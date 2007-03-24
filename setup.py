@@ -41,6 +41,8 @@ setup(name='flydra',
     'flydra_trigger_set_frequency = flydra.trigger:set_frequency',
     'flydra_trigger_trigger_once = flydra.trigger:trigger_once',
     'flydra_trigger_latency_test = flydra.trigger.latency_test:main',
+
+    'kdviewer = flydra.a2.kdviewer:main',
     ],
     'gui_scripts': [
     'flydra_mainbrain = flydra.wxMainBrain:main',

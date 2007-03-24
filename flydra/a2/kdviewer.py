@@ -41,8 +41,13 @@ def doit(filename,
          show_only_track_ends = False,
          ):
 
-    if os.path.splitext(filename)[1] == '.mat':
+    try:
+        sys.path.insert(0,os.curdir)
         mat_data = scipy.io.mio.loadmat(filename)
+    except IOError, err:
+        mat_data = None
+
+    if mat_data is not None:
         obj_ids = mat_data['kalman_obj_id']
         obj_ids = obj_ids.astype( numpy.uint32 )
         obs_obj_ids = obj_ids # use as observation length, even though these aren't observations
