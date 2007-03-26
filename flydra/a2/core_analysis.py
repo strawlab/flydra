@@ -2,6 +2,7 @@ from __future__ import division
 import tables
 import numpy
 import math
+import scipy.io
 DEBUG = False
 
 import adskalman
@@ -65,6 +66,9 @@ def find_peaks(y,threshold,search_cond=None):
     return all_peak_idxs
 
 def my_decimate(x,q):
+    if q==1:
+        return x
+    
     if 0:
         from scipy_utils import decimate as matlab_decimate # part of ads_utils, contains code translated from MATLAB
         return matlab_decimate(x,q)
@@ -212,6 +216,10 @@ class LazyRecArrayMimic:
 class CachingAnalyzer:
     def load_data(self,obj_id,data_file,use_kalman_smoothing=True,
                   frames_per_second=100.0):
+        if isinstance(data_file,str):
+            if data_file.endswith('_smoothed.mat'):
+                data_file = scipy.io.loadmat(data_file)
+        
         if isinstance(data_file,dict):
             is_mat_file = True
         else:
@@ -267,6 +275,7 @@ class CachingAnalyzer:
             if preloaded_dict is None:
                 preloaded_dict = self._load_dict(result_h5_file)
         if is_mat_file:
+
             uoi = numpy.unique(data_file['kalman_obj_id'])
             return uoi
         else:
