@@ -15,11 +15,18 @@
 ##condition_names = ['no post','tall post','spot',
 ##                   'necklace','half post','double post']
 
-condition_names = ['half post',
-                   'half no odor, w/ wind',
-                   'half w/ odor',
-                   'half w/ odor, w/ wind',
-                   ]
+##condition_names = ['half post',
+##                   'half no odor, w/ wind',
+##                   'half w/ odor',
+##                   'half w/ odor, w/ wind',
+##                   ]
+
+experiment_conditions = {'wind_X_odor':['half post',
+                                        'half no odor, w/ wind',
+                                        'half w/ odor',
+                                        'half w/ odor, w/ wind',
+                                        ],
+                         }
 
 stim_names = {'tall post':'tall',
               'no post':None,
