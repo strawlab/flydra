@@ -1,4 +1,5 @@
 import sets, os, sys
+sys.path.insert(0,os.curdir)
 from enthought.tvtk.api import tvtk
 import numpy
 import tables as PT
