@@ -26,6 +26,13 @@ experiment_conditions = {'wind_X_odor':['half post',
                                         'half w/ odor',
                                         'half w/ odor, w/ wind',
                                         ],
+                         'phantom_post':['phantom post'],
+                         'wind_X_odor_plus':['phantom post',
+                                             'half post',
+                                             'half no odor, w/ wind',
+                                             'half w/ odor',
+                                             'half w/ odor, w/ wind',
+                                             ],
                          }
 
 stim_names = {'tall post':'tall',
@@ -36,6 +43,7 @@ stim_names = {'tall post':'tall',
               'd2':'double_20070301',
               
               'half post':'half',
+              'phantom post':'half',
               'half w/ odor':'half_20070303',
               'half w/ odor, w/ wind':'half_20070303',
               'half no odor, w/ wind':'half_20070303', # XXX need to double check using ukine
@@ -80,6 +88,13 @@ files = {
                'DATA20061218_180311.kalmanized.h5',
                'DATA20061223_173845.kalmanized.h5',
                ],
+    'phantom post':[# same data as no post
+    'DATA20061209_180630.kalmanized_smoothed.mat',
+    'DATA20061215_174134.kalmanized_smoothed.mat',
+    'DATA20061218_180311.kalmanized_smoothed.mat',
+    'DATA20061223_173845.kalmanized_smoothed.mat',
+    ],
+                    
     'spot':['DATA20061211_183352.kalmanized.h5',
             'DATA20061212_184958.kalmanized.h5',
             'DATA20061213_181940.kalmanized.h5',
