@@ -43,6 +43,7 @@ setup(name='flydra',
     'flydra_trigger_latency_test = flydra.trigger.latency_test:main',
 
     'kdviewer = flydra.a2.kdviewer:main',
+    'data2smoothed = flydra.a2.data2smoothed:main',
     ],
     'gui_scripts': [
     'flydra_mainbrain = flydra.wxMainBrain:main',
