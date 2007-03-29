@@ -102,13 +102,15 @@ def kalman_smooth(orig_rows):
     x = numpy.empty( frames.shape, dtype=numpy.float )
     y = numpy.empty( frames.shape, dtype=numpy.float )
     z = numpy.empty( frames.shape, dtype=numpy.float )
-    
+
     x[idx] = orig_rows.field('x')
     y[idx] = orig_rows.field('y')
     z[idx] = orig_rows.field('z')
 
+    # assemble observations (in meters)
     obs = numpy.vstack(( x,y,z )).T
-    
+
+    # initial state guess: postion = observation, other parameters = 0
     ss = 9
     init_x = numpy.zeros( (ss,) )
     init_x[:3] = obs[0,:]
@@ -139,10 +141,7 @@ def kalman_smooth(orig_rows):
     return frames, xsmooth, Psmooth
 
 def observations2smoothed(obj_id,orig_rows):
-    #reconst_orig_units = flydra.reconstruct.Reconstructor(kresults)
-    #scale_factor = reconst_orig_units.get_scale_factor()
-    #reconst_meters = reconst_orig_units.get_scaled(scale_factor)
-    frames, xsmooth, Psmooth = kalman_smooth(orig_rows)#,reconst_meters)
+    frames, xsmooth, Psmooth = kalman_smooth(orig_rows)
     obj_id_array = numpy.ones( frames.shape, dtype = numpy.uint32 )*numpy.uint32(obj_id)
     KalmanEstimates = flydra.kalman.flydra_kalman_utils.KalmanEstimates
     field_names = tables.Description(KalmanEstimates().columns)._v_names
@@ -154,7 +153,10 @@ def observations2smoothed(obj_id,orig_rows):
                   Psmooth[:,3,3],Psmooth[:,4,4],Psmooth[:,5,5],
                   Psmooth[:,6,6],Psmooth[:,7,7],Psmooth[:,8,8],
                   ]
-    rows = numpy.rec.fromarrays([obj_id_array,frames]+list_of_xhats+list_of_Ps,
+    timestamps = numpy.zeros( (len(frames),))
+    list_of_cols = [obj_id_array,frames,timestamps]+list_of_xhats+list_of_Ps
+    assert len(list_of_cols)==len(field_names) # double check that definition didn't change on us
+    rows = numpy.rec.fromarrays(list_of_cols,
                                 names = field_names)
     return rows
 
@@ -192,9 +194,14 @@ def matfile2rows(data_file,obj_id):
     list_of_Ps = [z,z,z,
                   z,z,z,
                   z,z,z,
+
                   ]
-    rows = numpy.rec.fromarrays([obj_id_array,id_frame]+list_of_xhats+list_of_Ps,
+    timestamps = numpy.zeros( (len(frames),))    
+    list_of_cols = [obj_id_array,id_frame,timestamps]+list_of_xhats+list_of_Ps
+    assert len(list_of_cols)==len(field_names) # double check that definition didn't change on us
+    rows = numpy.rec.fromarrays(list_of_cols,
                                 names = field_names)
+    
     return rows
 
 class LazyRecArrayMimic:
@@ -246,6 +253,7 @@ class CachingAnalyzer:
             else:
                 obs_obj_ids = preloaded_dict['obs_obj_ids']
                 obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
+                # Kalman observations are already always in meters, no scale factor needed
                 orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs,flavor='numpy')
                 rows = observations2smoothed(obj_id,orig_rows)  # do Kalman smoothing
                 
@@ -275,11 +283,9 @@ class CachingAnalyzer:
             if preloaded_dict is None:
                 preloaded_dict = self._load_dict(result_h5_file)
         if is_mat_file:
-
             uoi = numpy.unique(data_file['kalman_obj_id'])
             return uoi
         else:
-            print dir(data_file)
             preloaded_dict = self.loaded_cache.get(data_file,None)
             if preloaded_dict is None:
                 preloaded_dict = self._load_dict(data_file)
@@ -333,6 +339,7 @@ class CachingAnalyzer:
                 # load data                
                 framesA = rows.field('frame')
                 xsA = rows.field('x')
+
                 ysA = rows.field('y')
                 zsA = rows.field('z')
                 XA = numpy.vstack((xsA,ysA,zsA)).T
