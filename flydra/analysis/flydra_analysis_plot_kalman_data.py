@@ -309,6 +309,7 @@ def show_vtk(filename,
                     
                     ( 458.1, 216.6,-32.9)]
             all_verts = [post]
+        print 'warning: post location hardcoded in file'
         
         for verts in all_verts:
             verts = numpy.asarray(verts)
