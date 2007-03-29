@@ -4,7 +4,7 @@ from enthought.tvtk.api import tvtk
 import numpy
 import tables as PT
 from optparse import OptionParser
-import detect_saccades
+import core_analysis
 import stimulus_positions
 import scipy.io
 
@@ -114,7 +114,7 @@ def doit(filename,
         camera.view_up =  (-0.072067516965519787, -0.0034285481144054573, 0.99739386305323308)
         camera.clipping_range =  (0.25210456649736646, 1.0012868084455435)
         camera.parallel_scale =  0.294595461395
-    if 1:
+    if 0:
         camera.parallel_projection =  0
         camera.focal_point =  (0.49827304637942593, 0.20476671221773424, 0.090222461715116345)
         camera.position =  (0.41982519417302594, -0.55501151899867784, 0.40089956585064912)
@@ -122,7 +122,7 @@ def doit(filename,
         camera.view_up =  (0.025460553314687551, 0.37610935779812088, 0.92622541057865326)
         camera.clipping_range =  (0.38425211041324286, 1.3299558503823485)
         camera.parallel_scale =  0.294595461395
-
+        
     rw.add_renderer(ren)
     rwi = tvtk.RenderWindowInteractor(render_window=rw)
     
@@ -134,7 +134,7 @@ def doit(filename,
     if show_only_track_ends:
         track_end_verts = []
     
-    ca = detect_saccades.CachingAnalyzer()
+    ca = core_analysis.CachingAnalyzer()
     #last_time = None
     for obj_id_enum,obj_id in enumerate(use_obj_ids):
         if (obj_id_enum%100)==0 and len(use_obj_ids) > 5:
@@ -369,6 +369,13 @@ def doit(filename,
             
     for a in actors:
         ren.add_actor(a)
+        
+    if 0:
+        # this isn't working yet
+        axes2 = tvtk.CubeAxesActor2D()
+        axes2.camera = ren.active_camera
+        #axes2.input = verts
+        ren.add_actor(axes2)
         
     if not show_only_track_ends:
         # Create a scalar bar
