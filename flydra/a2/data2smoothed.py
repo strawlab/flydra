@@ -1,11 +1,11 @@
 import numpy
 import sys, os
-import detect_saccades
+import core_analysis
 from optparse import OptionParser
 import flydra.analysis.flydra_analysis_convert_to_mat
 
 def convert(infilename,outfilename,frames_per_second=100.0):
-    ca = detect_saccades.CachingAnalyzer()
+    ca = core_analysis.CachingAnalyzer()
     obj_ids = ca.get_obj_ids(infilename)
     allrows = []
     for i,obj_id in enumerate(obj_ids):
