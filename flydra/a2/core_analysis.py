@@ -66,6 +66,8 @@ def find_peaks(y,threshold,search_cond=None):
     return all_peak_idxs
 
 def my_decimate(x,q):
+    assert isinstance(q,int)
+
     if q==1:
         return x
     
@@ -420,6 +422,11 @@ class CachingAnalyzer:
                         v2 = norm_velsF[i]
                         cos_angle_diff = numpy.dot(v1,v2) # dot product = mag(a) * mag(b) * cos(theta)
                         cos_angle_diffsG.append( cos_angle_diff )
+                    cos_angle_diffsG = numpy.asarray( cos_angle_diffsG )
+                    
+                    # eliminate fp rounding error:
+                    cos_angle_diffsG = numpy.clip( cos_angle_diffsG, -1.0, 1.0 )
+                    
                     angle_diffG = numpy.arccos(cos_angle_diffsG)
                     angular_velG = angle_diffG/(2*delta_tG)
 
