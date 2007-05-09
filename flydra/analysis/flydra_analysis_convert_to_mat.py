@@ -12,13 +12,17 @@ def do_it(filename=None,
           rows=None,
           ignore_observations=False,
           min_num_observations=10,
-          newfilename=None):
+          newfilename=None,
+          extra_vars=None):
 
     if filename is None and rows is None:
         raise ValueError("either filename or rows must be set")
     
     if filename is not None and rows is not None:
         raise ValueError("either filename or rows must be set, but not both")
+
+    if extra_vars is None:
+        extra_vars = {}
 
     if filename is not None:
         kresults = PT.openFile(filename,mode="r")
@@ -92,5 +96,11 @@ def do_it(filename=None,
             #print 'converting field',key, data[key].dtype, data[key].dtype.char
             if data[key].dtype.char == 'l':
                 data[key] = data[key].astype(numpy.float64)
+
+    for key,value in extra_vars.iteritems():
+        if key in data:
+            print 'WARNING: requested to save extra variable %s, but already in data, not overwriting'%key
+            continue
+        data[key] = value
 
     scipy.io.mio.savemat(newfilename,data)
