@@ -5,15 +5,31 @@ from optparse import OptionParser
 import flydra.analysis.flydra_analysis_convert_to_mat
 import tables
 
-def convert(infilename,outfilename,frames_per_second=100.0,save_timestamps=True):
+def convert(infilename,
+            outfilename,
+            frames_per_second=100.0,
+            save_timestamps=True,
+            file2d=None,
+            ):
 
     if save_timestamps:
         print 'STAGE 1: finding timestamps'
         print 'opening file %s...'%infilename
+        
         h5file_raw = tables.openFile(infilename,mode='r')
-        table_data2d = h5file_raw.root.data2d_distorted # table to get timestamps from
         table_kobs   = h5file_raw.root.kalman_observations # table to get framenumbers from
         kobs_2d = h5file_raw.root.kalman_observations_2d_idxs # VLArray linking two
+
+        if file2d is None:
+            h52d = h5file_raw
+        else:
+            h52d = tables.openFile(file2d,mode='r')
+
+        try:
+            table_data2d = h52d.root.data2d_distorted # table to get timestamps from
+        except:
+            print 'Error reading from file',h52d.filename
+            raise
         
         print 'caching Kalman obj_ids...'
         obs_obj_ids = table_kobs.read(field='obj_id',flavor='numpy')
@@ -80,8 +96,10 @@ def convert(infilename,outfilename,frames_per_second=100.0,save_timestamps=True)
 
 def main():
     usage = '%prog FILE [options]'
-    
     parser = OptionParser(usage)
+    parser.add_option("--2d", dest="file2d", type='string',
+                      help="hdf5 file with data 2d data FILE2D",
+                      metavar="FILE2D")
     (options, args) = parser.parse_args()
     
     if len(args)>1:
@@ -95,7 +113,7 @@ def main():
 
     infilename = args[0]
     outfilename = os.path.splitext(infilename)[0] + '_smoothed.mat'
-    convert(infilename,outfilename)
+    convert(infilename,outfilename,file2d=options.file2d)
     
 if __name__=='__main__':
     main()
