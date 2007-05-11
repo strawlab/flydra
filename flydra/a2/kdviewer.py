@@ -416,6 +416,12 @@ def doit(filename,
         picker = tvtk.CellPicker(tolerance=1e-9)
         #print 'dir(picker)',dir(picker)
         def annotatePick(object, event):
+            print 'camera.position = ',ren.active_camera.position
+##            attrs = dir(ren.active_camera)
+##            attrs.sort()
+##            for a in attrs:
+##                print a
+            print 'camera.orientation = ',ren.active_camera.orientation_wxyz
             if not picker.cell_id < 0:
                 found = sets.Set([])
                 for actor in picker.actors:
