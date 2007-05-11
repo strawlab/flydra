@@ -26,6 +26,7 @@ experiment_conditions = {'wind_X_odor':['half post',
                                         'half w/ odor',
                                         'half w/ odor, w/ wind',
                                         ],
+                         'odor_still':['half w/ odor',],
                          'phantom_post':['phantom post'],
                          'wind_X_odor_plus':['phantom post',
                                              'half post',
@@ -33,6 +34,11 @@ experiment_conditions = {'wind_X_odor':['half post',
                                              'half w/ odor',
                                              'half w/ odor, w/ wind',
                                              ],
+                         'gabys_paper':['no post (smoothed)',
+                                        'tall post (smoothed)',
+                                        'short post (smoothed)',
+                                        'necklace (smoothed)',
+                                        ]
                          }
 
 stim_names = {'tall post':'tall',
@@ -47,7 +53,11 @@ stim_names = {'tall post':'tall',
               'half w/ odor':'half_20070303',
               'half w/ odor, w/ wind':'half_20070303',
               'half no odor, w/ wind':'half_20070303', # XXX need to double check using ukine
-              
+
+##              'no post (smoothed)':None,
+##              'tall post (smoothed)',
+##              'short post (smoothed)',
+##              'necklace (smoothed)',
               }
 
 files = {
@@ -88,7 +98,33 @@ files = {
                'DATA20061218_180311.kalmanized.h5',
                'DATA20061223_173845.kalmanized.h5',
                ],
-    'phantom post':[# same data as no post
+    'no post (smoothed)':[# same data as 'no post', kalman smoothed
+    'DATA20061209_180630.kalmanized_smoothed.mat',
+    'DATA20061215_174134.kalmanized_smoothed.mat',
+    'DATA20061218_180311.kalmanized_smoothed.mat',
+    'DATA20061223_173845.kalmanized_smoothed.mat',
+    ],
+    
+    'tall post (smoothed)':[
+    'DATA20061206_192530.kalmanized_smoothed.mat',
+    'DATA20061207_183409.kalmanized_smoothed.mat',
+    'DATA20061208_181556.kalmanized_smoothed.mat'
+    ],
+    
+    'short post (smoothed)':[
+    'DATA20061211_183352.kalmanized_smoothed.mat',
+    'DATA20061212_184958.kalmanized_smoothed.mat',
+    'DATA20061213_181940.kalmanized_smoothed.mat',
+    ],
+    
+    'necklace (smoothed)':[
+    'DATA20061219_184831.kalmanized_smoothed.mat',
+    'DATA20061220_184522.kalmanized_smoothed.mat',
+    'DATA20061221_184519.kalmanized_smoothed.mat',
+    'DATA20061222_173500.kalmanized_smoothed.mat',
+    ],
+    
+    'phantom post':[# same data as 'no post', kalman smoothed
     'DATA20061209_180630.kalmanized_smoothed.mat',
     'DATA20061215_174134.kalmanized_smoothed.mat',
     'DATA20061218_180311.kalmanized_smoothed.mat',
