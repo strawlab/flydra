@@ -148,6 +148,10 @@ def pluecker_from_verts(A,B):
     return Lmatrix2Lcoords(L)
 
 def pmat2cam_center(P):
+    """
+
+    See Hartley & Zisserman (2003) p. 163
+    """
     assert P.shape == (3,4)
     determinant = numpy.linalg.det
     
