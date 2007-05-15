@@ -38,9 +38,13 @@ if 1:
     framestamp = framenumber + frac
     print 'framestamp[:5]',framestamp[:5]
     print 'framenumber.argmax()',framenumber.argmax()
-    #gain, offset0 = flydra.analysis.flydra_analysis_plot_clock_drift.model_remote_to_local( mb_timestamp- mb_timestamp[0], framestamp )
-    gain, offset0 = flydra.analysis.flydra_analysis_plot_clock_drift.model_remote_to_local( framestamp, mb_timestamp- mb_timestamp[0])
-    offset = offset0 + mb_timestamp[0]
+
+    if 0:
+        #gain, offset0 = flydra.analysis.flydra_analysis_plot_clock_drift.model_remote_to_local( mb_timestamp- mb_timestamp[0], framestamp )
+        gain, offset0 = flydra.analysis.flydra_analysis_plot_clock_drift.model_remote_to_local( framestamp, mb_timestamp- mb_timestamp[0])
+        offset = offset0 + mb_timestamp[0]
+    else:
+        gain, offset = flydra.analysis.flydra_analysis_plot_clock_drift.model_remote_to_local( framestamp, mb_timestamp )
 
     if 1:
 
