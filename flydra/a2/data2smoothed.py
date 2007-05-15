@@ -4,12 +4,19 @@ import core_analysis
 from optparse import OptionParser
 import flydra.analysis.flydra_analysis_convert_to_mat
 import tables
+import flydra.analysis.flydra_analysis_plot_clock_drift
+import flydra.analysis.result_utils as result_utils
+
+def cam_id2hostname(cam_id):
+    hostname = '_'.join(   cam_id.split('_')[:-1] )
+    return hostname
 
 def convert(infilename,
             outfilename,
             frames_per_second=100.0,
             save_timestamps=True,
-            file2d=None,
+            file_time_data=None,
+            do_nothing=False, # set to true to test for file existance
             ):
 
     if save_timestamps:
@@ -20,17 +27,37 @@ def convert(infilename,
         table_kobs   = h5file_raw.root.kalman_observations # table to get framenumbers from
         kobs_2d = h5file_raw.root.kalman_observations_2d_idxs # VLArray linking two
 
-        if file2d is None:
+        if file_time_data is None:
             h52d = h5file_raw
+            close_h52d = False
         else:
-            h52d = tables.openFile(file2d,mode='r')
+            h52d = tables.openFile(file_time_data,mode='r')
+            close_h52d = True
 
         try:
             table_data2d = h52d.root.data2d_distorted # table to get timestamps from
+            drift_estimates = flydra.analysis.flydra_analysis_plot_clock_drift.drift_estimates( h52d )
+            camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h52d)
         except:
             print 'Error reading from file',h52d.filename
             raise
         
+        hostnames = drift_estimates['hostnames']
+        gain = {}; offset = {};
+        for i,hostname in enumerate(hostnames):
+            tgain, toffset = flydra.analysis.flydra_analysis_plot_clock_drift.model_remote_to_local(
+                drift_estimates['remote_timestamp'][hostname][::10],
+                drift_estimates['local_timestamp'][hostname][::10])
+            gain[hostname]=tgain
+            offset[hostname]=toffset
+            print repr(hostname),tgain,toffset
+
+        if do_nothing:
+            h5file_raw.close()
+            if close_h52d:
+                h52d.close()
+            return
+            
         print 'caching Kalman obj_ids...'
         obs_obj_ids = table_kobs.read(field='obj_id',flavor='numpy')
         print 'finding unique obj_ids...'
@@ -47,20 +74,27 @@ def convert(infilename,
             framenumber = table_kobs[idx0]['frame']
             if tables.__version__ <= '1.3.3': # pytables numpy scalar workaround
                 framenumber = int(framenumber)
-            this_timestamp = numpy.nan
+            remote_timestamp = numpy.nan
             for row in table_data2d.where(table_data2d.cols.frame == framenumber):
-                this_timestamp = row['timestamp']
+                this_camn = row['camn']
+                remote_timestamp = row['timestamp']
                 break
 
-            timestamp_time[obj_id_enum] = this_timestamp
+            cam_id = camn2cam_id[this_camn]
+            remote_hostname = cam_id2hostname(cam_id)
+            mainbrain_timestamp = remote_timestamp*gain[remote_hostname] + offset[remote_hostname] # find mainbrain timestamp
+
+            timestamp_time[obj_id_enum] = mainbrain_timestamp
             if obj_id_enum%100==0:
                 try:
-                    print time.asctime(time.localtime(this_timestamp))
+                    print time.asctime(time.localtime(mainbrain_timestamp))
                 except:
                     print '** no timestamp **'
                 print
                     
         h5file_raw.close()
+        if close_h52d:
+            h52d.close()
             
         extra_vars = {'obj_ids':unique_obj_ids,
                       'timestamps':timestamp_time,
@@ -97,7 +131,7 @@ def convert(infilename,
 def main():
     usage = '%prog FILE [options]'
     parser = OptionParser(usage)
-    parser.add_option("--2d", dest="file2d", type='string',
+    parser.add_option("--time_data", dest="file2d", type='string',
                       help="hdf5 file with data 2d data FILE2D",
                       metavar="FILE2D")
     (options, args) = parser.parse_args()
@@ -113,7 +147,7 @@ def main():
 
     infilename = args[0]
     outfilename = os.path.splitext(infilename)[0] + '_smoothed.mat'
-    convert(infilename,outfilename,file2d=options.file2d)
+    convert(infilename,outfilename,file_time_data=options.file2d)
     
 if __name__=='__main__':
     main()
