@@ -1,17 +1,7 @@
 import tables
 import numpy
 import pylab
-
-def model_remote_to_local(remote_timestamps, local_timestamps):
-    a1=remote_timestamps[:,numpy.newaxis]
-    a2=numpy.ones( (len(remote_timestamps),1))
-    A = numpy.hstack(( a1,a2))
-    #A = numpy.hstack(( remote_timestamps[:,numpy.newaxis], numpy.ones( (len(remote_timestamps),1))))
-    b = local_timestamps[:,numpy.newaxis]
-    x,resids,rank,s = numpy.linalg.lstsq(A,b)
-    gain = x[0,0]
-    offset = x[1,0]
-    return gain,offset
+import flydra.analysis.flydra_analysis_plot_clock_drift
 
 if 1:
     #filename='DATA20070319_172634.h5'
@@ -48,8 +38,8 @@ if 1:
     framestamp = framenumber + frac
     print 'framestamp[:5]',framestamp[:5]
     print 'framenumber.argmax()',framenumber.argmax()
-    #gain, offset0 = model_remote_to_local( mb_timestamp- mb_timestamp[0], framestamp )
-    gain, offset0 = model_remote_to_local( framestamp, mb_timestamp- mb_timestamp[0])
+    #gain, offset0 = flydra.analysis.flydra_analysis_plot_clock_drift.model_remote_to_local( mb_timestamp- mb_timestamp[0], framestamp )
+    gain, offset0 = flydra.analysis.flydra_analysis_plot_clock_drift.model_remote_to_local( framestamp, mb_timestamp- mb_timestamp[0])
     offset = offset0 + mb_timestamp[0]
 
     if 1:
