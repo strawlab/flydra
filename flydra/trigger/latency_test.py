@@ -95,6 +95,7 @@ class Grabber:
 
         cam = cam_iface.Camera(device_num,num_buffers,mode_num)
         cam.set_trigger_mode_number(1)
+        print 'using ',cam.get_trigger_mode_string(cam.get_trigger_mode_number())
         cam.start_camera()
         n_frames = 0
         last_fps_print = time.time()
@@ -117,7 +118,9 @@ class Grabber:
             self.framecount_lock.release()
             
             self.last_pytimestamp_lock.acquire()
-            self.last_pytimestamp = now
+            # switch between "now" and "timestamp" to get time.time or
+            # backend's timestamp
+            self.last_pytimestamp = now 
             self.last_pytimestamp_lock.release()
 
             if last_fno is not None:
@@ -170,7 +173,7 @@ def doit(device_num=0,mode_num=0,num_buffers=30):
         # start camera, ensure we get some frames
         dev.set_carrier_frequency(start_fps) # hz
         print 'make sure you see %f fps'%start_fps
-        time.sleep(3)
+        time.sleep(6)
 
         # stop camera, wait until no more frames are coming
         print 'stopping camera'
@@ -194,9 +197,9 @@ def doit(device_num=0,mode_num=0,num_buffers=30):
         back_time = time.time()
         time.sleep(1)
 
-        fc3 = grabber.get_framecount()
+##        fc3 = grabber.get_framecount()
 
-        assert fc3 == fc + 1
+##        assert fc3 == fc + 1
 
         acquire_time = grabber.get_last_timestamp()
 
@@ -205,7 +208,7 @@ def doit(device_num=0,mode_num=0,num_buffers=30):
 
         print
         print
-        print 'min latency %.2f msec, max latency %.2f msec'%(min_latency*1e3, max_latency*1e3),'<','-'*20
+        print "using cam_iface's timestamp: min latency %.2f msec, max latency %.2f msec"%(min_latency*1e3, max_latency*1e3),'<','-'*20
         print
         print
 
