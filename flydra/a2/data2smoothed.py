@@ -4,7 +4,6 @@ import core_analysis
 from optparse import OptionParser
 import flydra.analysis.flydra_analysis_convert_to_mat
 import tables
-import flydra.analysis.flydra_analysis_plot_clock_drift
 import flydra.analysis.result_utils as result_utils
 
 def cam_id2hostname(cam_id):
@@ -36,7 +35,7 @@ def convert(infilename,
 
         try:
             table_data2d = h52d.root.data2d_distorted # table to get timestamps from
-            drift_estimates = flydra.analysis.flydra_analysis_plot_clock_drift.drift_estimates( h52d )
+            drift_estimates = result_utils.drift_estimates( h52d )
             camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h52d)
         except:
             print 'Error reading from file',h52d.filename
@@ -45,7 +44,7 @@ def convert(infilename,
         hostnames = drift_estimates['hostnames']
         gain = {}; offset = {};
         for i,hostname in enumerate(hostnames):
-            tgain, toffset = flydra.analysis.flydra_analysis_plot_clock_drift.model_remote_to_local(
+            tgain, toffset = result_utils.model_remote_to_local(
                 drift_estimates['remote_timestamp'][hostname][::10],
                 drift_estimates['local_timestamp'][hostname][::10])
             gain[hostname]=tgain
@@ -74,11 +73,17 @@ def convert(infilename,
             framenumber = table_kobs[idx0]['frame']
             if tables.__version__ <= '1.3.3': # pytables numpy scalar workaround
                 framenumber = int(framenumber)
+                
             remote_timestamp = numpy.nan
+            this_camn = None
             for row in table_data2d.where(table_data2d.cols.frame == framenumber):
                 this_camn = row['camn']
                 remote_timestamp = row['timestamp']
                 break
+            
+            if this_camn is None:
+                print 'skipping frame %d (obj %d): no data2d_distorted data'%(framenumber,obj_id)
+                continue
 
             cam_id = camn2cam_id[this_camn]
             remote_hostname = cam_id2hostname(cam_id)

@@ -2,7 +2,8 @@ import tables as PT
 print 'using pytables',PT.__version__
 print '  from',PT.__file__
 import numpy as nx
-import sys, os
+import numpy
+import sys, os, sets
 import FlyMovieFormat
 
 import datetime
@@ -313,6 +314,48 @@ def timestamp2string(ts_float,timezone='US/Pacific'):
     # dt_ts.ctime()
     return dt_ts.isoformat()
 
+def model_remote_to_local(remote_timestamps, local_timestamps):
+    """for timestamps"""
+    a1=remote_timestamps[:,numpy.newaxis]
+    a2=numpy.ones( (len(remote_timestamps),1))
+    A = numpy.hstack(( a1,a2))
+    #A = numpy.hstack(( remote_timestamps[:,numpy.newaxis], numpy.ones( (len(remote_timestamps),1))))
+    b = local_timestamps[:,numpy.newaxis]
+    x,resids,rank,s = numpy.linalg.lstsq(A,b)
+    gain = x[0,0]
+    offset = x[1,0]
+    return gain,offset
+
+def drift_estimates(results):
+    """calculate clock information"""
+    table = results.root.host_clock_info
+    remote_hostnames = table.read(field='remote_hostname',flavor='numpy')
+    hostnames = [str(x).strip() for x in list(sets.Set(remote_hostnames))]
+    hostnames.sort()
+    
+    del remote_hostnames
+
+    result = {}
+    
+    for hostname in hostnames:
+        row_idx = table.getWhereList(table.cols.remote_hostname == hostname,flavor='numpy')
+        start_timestamp = table.readCoordinates(row_idx,field='start_timestamp',flavor='numpy')
+        stop_timestamp = table.readCoordinates(row_idx,field='stop_timestamp',flavor='numpy')
+        remote_timestamp = table.readCoordinates(row_idx,field='remote_timestamp',flavor='numpy')
+
+        measurement_error = stop_timestamp-start_timestamp
+        clock_diff = stop_timestamp-remote_timestamp
+
+        # local time when we think remote timestamp was gathered, given symmetric transmission delays
+        local_timestamp = start_timestamp + measurement_error*0.5
+        
+        result.setdefault('hostnames',[]).append(hostname)
+        result.setdefault('local_timestamp',{})[hostname] = local_timestamp
+        result.setdefault('remote_timestamp',{})[hostname] = remote_timestamp
+        result.setdefault('measurement_error',{})[hostname] = measurement_error
+                          
+    return result
+        
 def make_exact_movie_info2(results,movie_dir=None):
     
     class ExactMovieInfo(PT.IsDescription):
