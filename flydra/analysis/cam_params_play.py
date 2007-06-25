@@ -1,38 +1,9 @@
 #!/usr/bin/env python
 import numpy
+import scipy.linalg
 import sys
 
 # Extract (linear) camera parameters.
-
-def cross(a,b):
-    cross = []
-    cross.append( a[1]*b[2]-a[2]*b[1] )
-    cross.append( a[2]*b[0]-a[0]*b[2] )
-    cross.append( a[0]*b[1]-a[1]*b[0] )
-    return numpy.asarray(cross)
-
-def norm(a):
-    return numpy.sqrt(numpy.sum(a**2))
-
-def rq(X):
-    Qt, Rt = numpy.linalg.qr(numpy.transpose(X))
-    Rt = numpy.transpose(Rt)
-    Qt = numpy.transpose(Qt)
-
-    Qu = []
-
-    Qu.append( cross(Rt[1,:], Rt[2,:] ) )
-    Qu[0] = Qu[0]/norm(Qu[0])
-
-    Qu.append( cross(Qu[0], Rt[2,:] ) )
-    Qu[1] = Qu[1]/norm(Qu[1])
-
-    Qu.append( cross(Qu[0], Qu[1] ) )
-
-    R = numpy.dot( Rt, numpy.transpose(Qu))
-    Q = numpy.dot( Qu, Qt )
-
-    return R, Q
 
 ####################################################################
 
@@ -66,8 +37,14 @@ C_ = numpy.transpose(numpy.array( [[ X/T, Y/T, Z/T ]] ))
 M = P[:,:3]
 
 # do the work:
-K,R = rq(M)
+# RQ decomposition: K is upper-triangular matrix and R is
+# orthogonal. Both are components of M such that KR=M
+print 'M',M
+K,R = scipy.linalg.rq(M) # added to scipy 0.5.3
 Knorm = K/K[2,2]
+
+# So now R is the rotation matrix (which is orthogonal) describing the
+# camera orientation. K is the intrinsic parameter matrix.
 
 t = numpy.dot( -R, C_ )
 
@@ -92,7 +69,7 @@ if show_results:
     print Knorm
     print
 
-    print 'R (orientation):'
+    print 'R (orientation):' # same as rotation matrix
     print R
     print
 

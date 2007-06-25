@@ -10,41 +10,10 @@ fast_svd = numpy.linalg.svd
 import flydra.reconstruct_utils as reconstruct_utils # in pyrex/C for speed
 import time
 from flydra.common_variables import MINIMUM_ECCENTRICITY
+import scipy.linalg
 
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
-
-def rq(X):
-    def cross(a,b):
-        return numpy.array( (( a[1]*b[2]-a[2]*b[1] ),
-                             ( a[2]*b[0]-a[0]*b[2] ),
-                             ( a[0]*b[1]-a[1]*b[0] )) )
-
-    def norm(a):
-        return numpy.sqrt(numpy.sum(a**2))
-
-    import scipy.linalg
-    
-    Qt, Rt = scipy.linalg.qr(X.transpose())
-    Rt = Rt.transpose()
-    Qt = Qt.transpose()
-
-    Qu = []
-
-    Qu.append( cross(Rt[1,:], Rt[2,:] ) )
-    Qu[0] = Qu[0]/norm(Qu[0])
-
-    Qu.append( cross(Qu[0], Rt[2,:] ) )
-    Qu[1] = Qu[1]/norm(Qu[1])
-
-    Qu.append( cross(Qu[0], Qu[1] ) )
-
-    Qu = numpy.asarray(Qu)
-
-    R = numpy.dot( Rt, Qu.transpose())
-    Q = numpy.dot( Qu, Qt )
-
-    return R, Q
 
 def load_ascii_matrix(filename):
     fd=open(filename,mode='rb')
@@ -215,6 +184,13 @@ class SingleCameraCalibration:
             raise ValueError('len(pp) must be 2')
         self.pp = pp
 
+        if 1:
+            center = self.get_image_center()
+            if ((pp[0]-center[0])**2 + (pp[1]-center[1])**2 ) > 5:
+                print 'WARNING: camera calibration contains different, supposedly redundant data'
+                print '  pp: %s, center: %s'%(str(pp),str(center))
+                #print 'WARNING: principal point and camera center seriously misaligned'
+
         if helper is None:
             helper = reconstruct_utils.ReconstructHelper(1,1, # focal length
                                                          0,0, # image center
@@ -236,6 +212,9 @@ class SingleCameraCalibration:
                 numpy.allclose(self.Pmat,other.Pmat) and
                 numpy.allclose(self.res,other.res) and
                 self.helper == other.helper)
+
+    def get_pmat(self):
+        return self.Pmat
 
     def get_scaled(self,scale_factor):
         """change units (e.g. from mm to meters)
@@ -267,11 +246,17 @@ class SingleCameraCalibration:
     def get_KR(self):
         """return intrinsic params (K) and extrinsic rotation/scale params (R)"""
         M = self.get_M()
-        K,R = rq(M)
+        K,R = scipy.linalg.rq(M)
         if K[2,2] != 0.0:
             # normalize K
             K = K/K[2,2]
         return K,R
+    def get_mean_focal_length(self):
+        K,R = self.get_KR()
+        return (K[0,0]+K[1,1])/2.0
+    def get_image_center(self):
+        K,R = self.get_KR()
+        return K[0,2], K[1,2]
     def get_extrinsic_parameter_matrix(self):
         """contains rotation and translation information"""
         C_ = self.get_cam_center()
@@ -279,6 +264,21 @@ class SingleCameraCalibration:
         t = numpy.dot( -R, C_ )
         ext = numpy.concatenate( (R, t), axis=1 )
         return ext
+    
+    def get_example_3d_point_creating_image_point(self,image_point,w_val=1.0):
+        # project back through principal point to get 3D line
+        import flydra.geom
+        c1 = self.get_cam_center()[:,0]
+        
+        x2d = (image_point[0],image_point[1],1.0)
+        c2 = numpy.dot(self.pmat_inv, as_column(x2d))[:,0]
+        c2 = c2[:3]/c2[3]
+
+        direction = c2-c1
+        direction = direction/numpy.sqrt(numpy.sum(direction**2))
+        c3 = c1+direction*w_val
+        return c3
+        
     def get_optical_axis(self):
         # project back through principal point to get 3D line
         import flydra.geom
@@ -328,7 +328,7 @@ class SingleCameraCalibration:
 def SingleCameraCalibration_fromfile(filename):
     params={}
     execfile(filename,params)
-    pmat = numpy.asarray(params['pmat'])
+    pmat = numpy.asarray(params['pmat']) # XXX redundant information in pmat and K
     K = numpy.asarray(params['K'])
     cam_id = params['cam_id']
     res = params['res']
@@ -349,6 +349,36 @@ def SingleCameraCalibration_fromfile(filename):
                                    Pmat=pmat,
                                    res=res,
                                    pp=pp,
+                                   helper=helper)
+    
+def SingleCameraCalibration_from_basic_pmat(pmat,cam_id=None,res=None):
+    M = numpy.asarray(pmat)
+    cam_center = pmat2cam_center(M)
+    
+    intrinsic_parameters, cam_rotation = scipy.linalg.rq(M[:,:3])
+    intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
+    # (K = intrinsic parameters)
+    
+    #cam_translation = numpy.dot( -cam_rotation, cam_center )
+    #extrinsic_parameters = numpy.concatenate( (cam_rotation, cam_translation), axis=1 )
+    
+    #mean_focal_length = (intrinsic_parameters[0,0]+intrinsic_parameters[1,1])/2.0
+    #center = intrinsic_parameters[0,2], intrinsic_parameters[1,2]
+    
+    #focalLength, center = compute_stuff_from_cal_matrix(cal)
+    
+    fc1 = intrinsic_parameters[0,0]
+    cc1 = intrinsic_parameters[0,2]
+    fc2 = intrinsic_parameters[1,1]
+    cc2 = intrinsic_parameters[1,2]
+
+    helper = reconstruct_utils.ReconstructHelper(fc1,fc2, # focal length
+                                                 cc1,cc2, # image center
+                                                 0,0, # radial distortion
+                                                 0,0) # tangential distortion
+    return SingleCameraCalibration(cam_id=cam_id,
+                                   Pmat=M,
+                                   res=res,
                                    helper=helper)
     
 class Reconstructor:

@@ -40,6 +40,8 @@ def build_Bc(X3d,x2d):
     return numpy.array(B), numpy.array(c)
 
 def center(P):
+    # there is also a copy of this in flydra.reconstruct, but included
+    # here so this file doesn't depend on that.
     orig_determinant = numpy.linalg.det
     def determinant( A ):
         return orig_determinant( numpy.asarray( A ) )
@@ -151,17 +153,34 @@ if 1:
         ]
     cam4 = numpy.array(cam4, dtype=numpy.float)
 
+    #### simple cal ###
+
+    pbox = [
+        [435,341,0,0,0],
+        [464,179,84,0,0],
+        [464,179,84,0,0],
+        [279,352,0,106,0],
+        [242,221,0,0,140],
+        [287,35,84,0,140],
+        [123, 82, 84, 106, 140],
+        [77,245,0,106,140],
+        ]
+    pbox = numpy.array(pbox, dtype=numpy.float)
+
     cams = [(cam1,'cam1_0'),
             (cam2,'cam2_0'),
             (cam3,'cam3_0'),
             (cam4,'cam4_0'),
             ]
+    cams = [(pbox,'pbox'),
+            ]
 
     sccs = []
 
     for (cam,cam_id) in cams:
-        # put in mm
-        cam[:,2:5] = cam[:,2:5]*10.0 
+        ## put in mm
+        #cam[:,2:5] = cam[:,2:5]*10.0
+        # print 'multiplied by 10 to put in mm'
         
         X3d = cam[:,2:5]
         x2d = cam[:,0:2]
@@ -170,6 +189,7 @@ if 1:
         a_vec,residuals = DLT_avec_results[:2]
         Mhat = numpy.array(list(a_vec)+[1])
         Mhat.shape=(3,4)
+
         print cam_id,center(Mhat).T,'residuals:',float(residuals)
         fname = cam_id + 'DLT.txt'
         save_ascii_matrix(fname,Mhat)
@@ -177,7 +197,7 @@ if 1:
         if 1:
             import flydra.reconstruct
 
-            res = 656,491
+            res = 640,480
             pp = res[0]/2., res[1]/2.
             print 'cam_id',cam_id
             print 'assuming res',res
@@ -199,7 +219,7 @@ if 1:
 
 
 # replot
-if 1:
+if 0:
     import FlyMovieFormat
     import pylab
     for scc in sccs:
