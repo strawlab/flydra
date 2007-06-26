@@ -79,13 +79,13 @@ small_datafile_fmt = '<dII'
     
 # where is the "main brain" server?
 try:
-    main_brain_hostname = socket.gethostbyname('brain1')
+    default_main_brain_hostname = socket.gethostbyname('brain1')
 except:
     # try localhost
     try:
-        main_brain_hostname = socket.gethostbyname(socket.gethostname())
+        default_main_brain_hostname = socket.gethostbyname(socket.gethostname())
     except: #socket.gaierror?
-        main_brain_hostname = ''
+        default_main_brain_hostname = ''
 
 def TimestampEcho():
     # create listening socket
@@ -112,7 +112,9 @@ def TimestampEcho():
 
 class GrabClass(object):
     def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue, max_num_points=2,
-                 roi2_radius=10, bg_frame_interval=50, bg_frame_alpha=1.0/50.0):
+                 roi2_radius=10, bg_frame_interval=50, bg_frame_alpha=1.0/50.0,
+                 main_brain_hostname=None):
+        self.main_brain_hostname = main_brain_hostname
         self.cam = cam
         self.cam2mainbrain_port = cam2mainbrain_port
         self.cam_id = cam_id
@@ -220,7 +222,7 @@ class GrabClass(object):
                 coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             elif NETWORK_PROTOCOL == 'tcp':
                 coord_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                coord_socket.connect((main_brain_hostname,self.cam2mainbrain_port))
+                coord_socket.connect((self.main_brain_hostname,self.cam2mainbrain_port))
             else:
                 raise ValueError('unknown NETWORK_PROTOCOL')
 
@@ -550,7 +552,7 @@ class GrabClass(object):
                         raise
                 if NETWORK_PROTOCOL == 'udp':
                     coord_socket.sendto(data,
-                                        (main_brain_hostname,self.cam2mainbrain_port))
+                                        (self.main_brain_hostname,self.cam2mainbrain_port))
                 elif NETWORK_PROTOCOL == 'tcp':
                     coord_socket.send(data)
                 else:
@@ -693,7 +695,13 @@ class App:
     
     def __init__(self,max_num_points_per_camera=2,roi2_radius=10,
                  bg_frame_interval=50,
-                 bg_frame_alpha=1.0/50.0):
+                 bg_frame_alpha=1.0/50.0,
+                 main_brain_hostname = None,
+                 ):
+        if main_brain_hostname is None:
+            self.main_brain_hostname = default_main_brain_hostname
+        else:
+            self.main_brain_hostname = main_brain_hostname
 
         MAX_GRABBERS = 3
         # ----------------------------------------------------------------
@@ -719,7 +727,7 @@ class App:
             Pyro.core.initClient(banner=0)
             port = 9833
             name = 'main_brain'
-            main_brain_URI = "PYROLOC://%s:%d/%s" % (main_brain_hostname,port,name)
+            main_brain_URI = "PYROLOC://%s:%d/%s" % (self.main_brain_hostname,port,name)
             print 'connecting to',main_brain_URI
             self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
             self.main_brain._setOneway(['set_image','set_fps','close','log_message','receive_missing_data'])
@@ -749,7 +757,7 @@ class App:
         
         for cam_no in range(self.num_cams):
             backend = cam_iface.get_driver_name()
-            if backend == 'prosilica_gige':
+            if backend.startswith('prosilica_gige'):
                 num_buffers = 50
             else:
                 num_buffers = 205
@@ -883,6 +891,7 @@ class App:
                                 roi2_radius=roi2_radius,
                                 bg_frame_interval=bg_frame_interval,
                                 bg_frame_alpha=bg_frame_alpha,
+                                main_brain_hostname=self.main_brain_hostname,
                                 )
             self.all_grabbers.append( grabber )
             
@@ -1325,7 +1334,7 @@ def main():
         app.mainloop()
         return
         
-    usage_lines = ['%prog FILE [options]',
+    usage_lines = ['%prog [options]',
                    '',
                    '  available wrappers and backends:']
     
@@ -1337,6 +1346,10 @@ def main():
     
     parser = OptionParser(usage)
 
+    parser.add_option("--server", dest="server", type='string',
+                      help="hostname of mainbrain SERVER",
+                      metavar="SERVER")
+                      
     parser.add_option("--wrapper", dest="wrapper", type='string',
                       help="cam_iface WRAPPER to use",
                       metavar="WRAPPER")
@@ -1395,6 +1408,7 @@ def main():
             roi2_radius=roi2_radius,
             bg_frame_interval=bg_frame_interval,
             bg_frame_alpha=bg_frame_alpha,
+            main_brain_hostname = options.server,
             )
     if app.num_cams <= 0:
         return
