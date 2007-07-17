@@ -5,7 +5,7 @@ import flydra.data_descriptions
 PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 
 class KalmanEstimates(PT.IsDescription):
-    obj_id     = PT.UInt32Col(pos=0,indexed=True)
+    obj_id     = PT.UInt32Col(pos=0)
     frame      = PT.UInt64Col(pos=1)
     timestamp  = PT.Float64Col(pos=2) # time of reconstruction
     x          = PT.Float32Col(pos=3)
@@ -29,8 +29,8 @@ class KalmanEstimates(PT.IsDescription):
     P88        = PT.Float32Col(pos=20)
 
 class FilteredObservations(PT.IsDescription):
-    obj_id     = PT.UInt32Col(pos=0,indexed=True)
-    frame      = PT.UInt64Col(pos=1,indexed=True)
+    obj_id     = PT.UInt32Col(pos=0)
+    frame      = PT.UInt64Col(pos=1)
     x          = PT.Float32Col(pos=2)
     y          = PT.Float32Col(pos=3)
     z          = PT.Float32Col(pos=4)
