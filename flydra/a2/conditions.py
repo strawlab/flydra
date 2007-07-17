@@ -42,6 +42,11 @@ experiment_conditions = {'wind_X_odor':['half post',
                          }
 
 stim_names = {'tall post':'tall',
+              'tall post (smoothed)':'tall',
+              'no post (smoothed)' : 'tall',
+              'short post (smoothed)': 'short',
+              'necklace (smoothed)':'necklace',
+              
               'no post':None,
               'spot':None,
               'necklace':'necklace',
