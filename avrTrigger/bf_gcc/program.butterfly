@@ -1,3 +1,0 @@
-#!/bin/bash
-#uisp -dprog=stk500 -dserial=/dev/ttyS0 -dpart=ATMEGA169 --erase --upload if=./AVR_butterfly_firmware
-uisp -dprog=stk500 -dserial=/dev/ttyUSB0 -dpart=ATMEGA169 --erase --upload if=./main.hex
