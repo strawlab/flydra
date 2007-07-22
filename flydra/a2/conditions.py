@@ -34,6 +34,10 @@ experiment_conditions = {'wind_X_odor':['half post',
                                              'half w/ odor',
                                              'half w/ odor, w/ wind',
                                              ],
+                         'odor_post':['phantom post',
+                                      'half post',
+                                      'half w/ odor',
+                                      ],
                          'gabys_paper':['no post (smoothed)',
                                         'tall post (smoothed)',
                                         'short post (smoothed)',
@@ -151,3 +155,31 @@ files = {
                    #'DATA20070202_190006.kalmanized.h5', # recovered 2D data used
                    ],
     }
+
+# access the results of these using get_stimname_from_filename() function
+_filename2stimname = {}
+_filename2conditions = {}
+for condition, filenames in files.iteritems():
+    stim_name = stim_names[condition]
+    for filename in filenames:
+        _filename2conditions.setdefault( filename, [] ).append(condition)
+    for filename in filenames:
+        _filename2stimname[filename] = stim_name
+
+def get_condition_stimname_from_filename(filename, no_post_stimname=None):
+    def is_no_post_condition(condition_name):
+        k=condition_name
+        return k.startswith('no post') or k.startswith('phantom post')
+        
+    # check one condition
+    conditions = _filename2conditions[filename]
+    if len(conditions)>1:
+        for k in contitions:
+            if not is_no_post_condition(k):
+                raise ValueError('file has >1 condition??')
+            
+    condition = conditions[0]
+    stimname = _filename2stimname[filename]
+    if is_no_post_condition(condition):
+        return no_post_stimname
+    return condition, stimname
