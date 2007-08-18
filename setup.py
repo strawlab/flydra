@@ -43,6 +43,7 @@ setup(name='flydra',
     'flydra_trigger_latency_test = flydra.trigger.latency_test:main',
 
     'kdviewer = flydra.a2.kdviewer:main',
+    'kdmovie_saver = flydra.a2.kdmovie_saver:main',
     'data2smoothed = flydra.a2.data2smoothed:main',
     ],
     'gui_scripts': [
@@ -53,6 +54,8 @@ setup(name='flydra',
       package_data={'flydra':['flydra_server.xrc',
                               'flydra_server_art.png',
                               'detect.wav',
+                              
                               ],
+                    'flydra.a2':['kdmovie_saver_default_path.kmp'],
                     },
       )

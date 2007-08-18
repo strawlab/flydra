@@ -1,3 +1,5 @@
+#
+
 import sets, os, sys, math
 sys.path.insert(0,os.curdir)
 from enthought.tvtk.api import tvtk
@@ -8,12 +10,8 @@ import core_analysis
 import stimulus_positions
 import scipy.io
 import conditions
-
-#IVTK= True
-IVTK= False
-RIBEXPORT=False
-if IVTK:
-    from enthought.tvtk.tools import ivtk
+import cgtypes
+import flydra.a2.pos_ori2fu
 
 def print_cam_props(camera):
     print 'camera.parallel_projection = ',camera.parallel_projection
@@ -42,6 +40,7 @@ def doit(filename,
          max_vel=0.25,
          show_only_track_ends = False,
          floor = True,
+         save_still = False,
          ):
 
     try:
@@ -102,8 +101,7 @@ def doit(filename,
         use_obj_ids = numpy.array(obj_only)
 
     #################
-    rw = tvtk.RenderWindow(size=(600, 600))
-    #rw.full_screen = True
+    rw = tvtk.RenderWindow(size=(1024, 768))
     
     ren = tvtk.Renderer(background=(1.0,1.0,1.0))
     camera = ren.active_camera
@@ -126,7 +124,8 @@ def doit(filename,
         camera.parallel_scale =  0.294595461395
         
     rw.add_renderer(ren)
-    rwi = tvtk.RenderWindowInteractor(render_window=rw)
+    rwi = tvtk.RenderWindowInteractor(render_window=rw,
+                                      interactor_style = tvtk.InteractorStyleTrackballCamera())
     
     lut = tvtk.LookupTable(hue_range = (0.667, 0.0))
     actors = []
@@ -188,9 +187,11 @@ def doit(filename,
                                                       method_params={'downsample':1,
                                                                      })
             verts = results['X_kalmanized']
+            floorz = verts[:,2].min()
             speeds = results['speed_kalmanized']
 
         else:
+            floorz = numpy.inf
             rows=ca.load_data(obj_id,
                               data_file)
             
@@ -313,7 +314,7 @@ def doit(filename,
         for verts in all_verts:
 
             verts = numpy.asarray(verts)
-
+            floorz = min(floorz, verts[:,2].min() )
             pd = tvtk.PolyData()
 
             np = len(verts) - 1
@@ -340,7 +341,7 @@ def doit(filename,
         y0 = .065
         y1 = .365
         #z0 = -.028
-        z0 = -.06
+        z0 = floorz#-.06
         
         inc = 0.05
         if 1:
@@ -466,17 +467,43 @@ def doit(filename,
             rwi.initialize()
             sc_bar_widget.enabled = True
 
-    #rwi.interactor_style = tvtk.InteractorStyleSwitch() # doesn't work??
     if 1:
         picker = tvtk.CellPicker(tolerance=1e-9)
         #print 'dir(picker)',dir(picker)
         def annotatePick(object, event):
+            # XXX keep all this math for reference with pos_ori2fu.py
+            vtm = numpy.array([ [ren.active_camera.view_transform_matrix.get_element(i,j) for j in range(4)] for i in range(4)])
+            print 'camera.view_transform_matrix = ',vtm
+            vtmcg = cgtypes.mat4(vtm.T)
+            print 'camera.view_transform_matrix = ',vtm
+            #print 'camera.view_transform_matrix = ',numpy.array(ren.active_camera.view_transform_matrix.elements)
+            view_translation,view_rotation_mat4,view_scaling = vtmcg.decompose()
+            q = aa=cgtypes.quat().fromMat(view_rotation_mat4)
+            print 'orientation quaternion',q
+            aa=q.toAngleAxis()
+            print
             print 'camera.position = ',ren.active_camera.position
-##            attrs = dir(ren.active_camera)
-##            attrs.sort()
-##            for a in attrs:
-##                print a
-            print 'camera.orientation = ',ren.active_camera.orientation_wxyz
+            cpos = view_rotation_mat4.inverse()*-view_translation # same as camera.position
+            print 'view_rotation_mat4.inverse()*-view_translation',cpos
+            print 'view_scaling',view_scaling
+
+            print 'camera.orientation_wxyz = ',ren.active_camera.orientation_wxyz
+            print 'aa',aa
+            print 'q',q
+            print 'camera.focal_point = ',ren.active_camera.focal_point
+            print 'camera.view_up = ',ren.active_camera.view_up
+
+            upq = view_rotation_mat4.inverse()*cgtypes.vec3(0,1,0) # get view up
+            vd = view_rotation_mat4.inverse()*cgtypes.vec3(0,0,-1) # get view forward
+            print 'upq',upq
+            print 'viewdir1',(vd).normalize()
+            print 'viewdir2',(cgtypes.vec3(ren.active_camera.focal_point)-cpos).normalize()
+            print
+            p = cgtypes.vec3(camera.position)
+            print 'animation path variable (t=time):'
+            print 't', p[0], p[1], p[2], q.w, q.x, q.y, q.z
+            print
+
             if not picker.cell_id < 0:
                 found = sets.Set([])
                 for actor in picker.actors:
@@ -488,10 +515,21 @@ def doit(filename,
 
         picker.add_observer('EndPickEvent', annotatePick)
         rwi.picker = picker
-            
-    rwi.start()
-    print_cam_props( ren.active_camera )
-            
+
+    if not save_still:
+        rwi.start()
+        print_cam_props( ren.active_camera )
+    else:
+        imf = tvtk.WindowToImageFilter(input=rw)
+        writer = tvtk.PNGWriter()
+
+        imf.update()
+        imf.modified()
+        writer.input = imf.output
+        fname = 'kdviewer_output.png'
+        writer.file_name = fname
+        writer.write()
+        
 def main():
     usage = '%prog FILE [options]'
     
@@ -557,6 +595,9 @@ def main():
     parser.add_option("--vertical-scale", action='store_true',dest='vertical_scale',
                       help="scale bar has vertical orientation")
 
+    parser.add_option("--save-still", action='store_true',dest='save_still',
+                      help="save still image as kdviewer_output.png")
+
     (options, args) = parser.parse_args()
 
     if options.filename is not None:
@@ -601,6 +642,7 @@ def main():
          max_vel = options.max_vel,
          show_only_track_ends = options.show_only_track_ends,
          floor=True,
+         save_still = options.save_still,
          )
     
 if __name__=='__main__':
