@@ -11,7 +11,10 @@ import conditions
 
 import pkg_resources
 from flydra.a2.pos_ori2fu import pos_ori2fu
-import cgtypes
+try:
+    import cgtypes # cgtypes 1.2.x
+except ImportError, err:
+    import cgkit.cgtypes as cgtypes # cgkit 2.0
 
 class AnimationPath(object):
     def __init__(self,fname):
@@ -57,21 +60,28 @@ def doit(filename,
          data_fps=100.0,
          save_fps = 25,
          vertical_scale=False,
-         max_vel=0.25,
+         max_vel='auto',
          floor = True,
          animation_path_fname = None,
+         output_dir='.',
          ):
     
     if animation_path_fname is None:
         animation_path_fname = pkg_resources.resource_filename(__name__,"kdmovie_saver_default_path.kmp")
     camera_animation_path = AnimationPath(animation_path_fname)
 
+    mat_data = None
     try:
-        sys.path.insert(0,os.curdir)
-        mat_data = scipy.io.mio.loadmat(filename)
+        try:
+            data_path, data_filename = os.path.split(filename)
+            data_path = os.path.expanduser(data_path)
+            sys.path.insert(0,data_path)
+            mat_data = scipy.io.mio.loadmat(data_filename)
+        finally:
+            del sys.path[0]
     except IOError, err:
-        mat_data = None
-
+        print 'not a .mat file at %s, treating as .hdf5 file'%(os.path.join(data_path, data_filename))
+    
     if mat_data is not None:
         obj_ids = mat_data['kalman_obj_id']
         obj_ids = obj_ids.astype( numpy.uint32 )
@@ -116,6 +126,10 @@ def doit(filename,
                                               method='position based',
                                               method_params={'downsample':1,
                                                              })
+    
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+
     obj_verts = results['X_kalmanized']
     floorz = obj_verts[:,2].min()
     speeds = results['speed_kalmanized']
@@ -149,6 +163,12 @@ def doit(filename,
             a.property.specular = 0.3
             ren.add_actor(a)
 
+
+    if max_vel == 'auto':
+        max_vel = speeds.max()
+    else:
+        max_vel == float(max_vel)
+        
     vel_mapper = tvtk.PolyDataMapper()
     vel_mapper.lookup_table = lut
     vel_mapper.scalar_range = 0.0, max_vel
@@ -256,6 +276,7 @@ def doit(filename,
 
         pos, ori = camera_animation_path.get_pos_ori(t_now)
         focal_point, view_up = pos_ori2fu(pos,ori)
+        #print 'focal_point, view_up',focal_point, view_up
 
         camera.position = tuple(pos)
         #camera.focal_point = (focal_point[0], focal_point[1], focal_point[2])
@@ -264,7 +285,7 @@ def doit(filename,
         camera.view_up = tuple(view_up)
 
         draw_n_frames = int(math.ceil(t_now / data_dt))
-        print 'frame_number, draw_n_frames', frame_number, draw_n_frames
+        #print 'frame_number, draw_n_frames', frame_number, draw_n_frames
 
         #################
 
@@ -291,7 +312,8 @@ def doit(filename,
             imf.modified()
             writer.input = imf.output
             fname = 'movie_%s_%03d_frame%05d.png'%(filename_trimmed,obj_id,frame_number)
-            writer.file_name = fname
+            full_fname = os.path.join(output_dir, fname)
+            writer.file_name = full_fname
             writer.write()
 
         ren.remove_actor(a)
@@ -323,6 +345,9 @@ def main():
     parser.add_option("--obj-only", type="string",
                       dest="obj_only")
 
+    parser.add_option("--output-dir", type="string",
+                      dest="output_dir")
+
     parser.add_option("--animation_path_fname",type="string",
                       dest="animation_path_fname")
 
@@ -338,10 +363,10 @@ def main():
                       default=0.002,
                       metavar="RADIUS")
     
-    parser.add_option("--max-vel", type="float",
+    parser.add_option("--max-vel", type="string",
                       help="maximum velocity of colormap",
                       dest='max_vel',
-                      default=0.25)
+                      default='auto')
     
     parser.add_option("--disable-kalman-smoothing", action='store_false',dest='use_kalman_smoothing',
                       default=True,
@@ -365,8 +390,9 @@ def main():
         return
         
     h5_filename=args[0]
-    
-    condition, stimname = conditions.get_condition_stimname_from_filename(h5_filename)
+
+    h5_filename_short = os.path.split(h5_filename)[-1]
+    condition, stimname = conditions.get_condition_stimname_from_filename(h5_filename_short)
     print 'Data from condition "%s",with stimulus'%(condition,),stimname
     
     if options.obj_only is not None:
@@ -375,6 +401,9 @@ def main():
 
         if options.start is not None or options.stop is not None:
             raise ValueError("cannot specify start and stop with --obj-only option")
+
+    if options.output_dir is None:
+        options.output_dir = os.curdir
 
     doit(filename=h5_filename,
          obj_only=options.obj_only,
@@ -386,6 +415,7 @@ def main():
          max_vel = options.max_vel,
          floor=True,
          animation_path_fname = options.animation_path_fname,
+         output_dir = options.output_dir,
          )
     
 if __name__=='__main__':

@@ -1,4 +1,8 @@
-import cgtypes
+try:
+    import cgtypes # cgtypes 1.2.x
+except ImportError, err:
+    import cgkit.cgtypes as cgtypes # cgkit 2.0
+    
 import numpy
 
 # See math in kdviewer.py (annotatePick function)
