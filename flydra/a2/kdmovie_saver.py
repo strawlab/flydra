@@ -64,6 +64,7 @@ def doit(filename,
          floor = True,
          animation_path_fname = None,
          output_dir='.',
+         done_hover_duration=5.0,
          ):
     
     if animation_path_fname is None:
@@ -317,6 +318,27 @@ def doit(filename,
             writer.write()
 
         ren.remove_actor(a)
+        
+    ren.add_actor(a) # restore actors removed
+    dur = dur+done_hover_duration
+
+    while t_now < dur:
+        frame_number += 1
+        t_now += save_dt
+
+        pos, ori = camera_animation_path.get_pos_ori(t_now)
+        focal_point, view_up = pos_ori2fu(pos,ori)
+        camera.position = tuple(pos)
+        camera.focal_point = tuple(focal_point)
+        camera.view_up = tuple(view_up)
+        if 1:
+            imf.update()
+            imf.modified()
+            writer.input = imf.output
+            fname = 'movie_%s_%03d_frame%05d.png'%(filename_trimmed,obj_id,frame_number)
+            full_fname = os.path.join(output_dir, fname)
+            writer.file_name = full_fname
+            writer.write()
 
     if not is_mat_file:
         kresults.close()
@@ -334,16 +356,12 @@ def main():
 ##                      help="debug level",
 ##                      metavar="DEBUG")
         
-    parser.add_option("--start", type="int",
-                      help="first object ID to plot",
-                      metavar="START")
-        
-    parser.add_option("--stop", type="int",
-                      help="last object ID to plot",
-                      metavar="STOP")
-
     parser.add_option("--obj-only", type="string",
                       dest="obj_only")
+
+    parser.add_option("--done-hover-duration", type="float",
+                      dest="done_hover_duration",
+                      default=5.0)
 
     parser.add_option("--output-dir", type="string",
                       dest="output_dir")
@@ -399,14 +417,12 @@ def main():
         seq = map(int,options.obj_only.split())
         options.obj_only = seq
 
-        if options.start is not None or options.stop is not None:
-            raise ValueError("cannot specify start and stop with --obj-only option")
-
     if options.output_dir is None:
         options.output_dir = os.curdir
 
     doit(filename=h5_filename,
          obj_only=options.obj_only,
+         done_hover_duration=options.done_hover_duration,
          use_kalman_smoothing=options.use_kalman_smoothing,
          radius = options.radius,
          min_length = options.min_length,
