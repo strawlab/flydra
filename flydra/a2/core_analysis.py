@@ -96,7 +96,7 @@ def my_decimate(x,q):
 def kalman_smooth(orig_rows):
     global printed_dynamics_name
 
-    obs_frames = orig_rows.field('frame')
+    obs_frames = orig_rows['frame']
     fstart, fend = obs_frames[0], obs_frames[-1]
     frames = numpy.arange(fstart,fend+1)
     idx = frames.searchsorted(obs_frames)
@@ -105,9 +105,9 @@ def kalman_smooth(orig_rows):
     y = numpy.empty( frames.shape, dtype=numpy.float )
     z = numpy.empty( frames.shape, dtype=numpy.float )
 
-    x[idx] = orig_rows.field('x')
-    y[idx] = orig_rows.field('y')
-    z[idx] = orig_rows.field('z')
+    x[idx] = orig_rows['x']
+    y[idx] = orig_rows['y']
+    z[idx] = orig_rows['z']
 
     # assemble observations (in meters)
     obs = numpy.vstack(( x,y,z )).T
@@ -251,12 +251,12 @@ class CachingAnalyzer:
             if not use_kalman_smoothing:
                 obj_ids = preloaded_dict['obj_ids']
                 idxs = numpy.nonzero(obj_ids == obj_id)[0]
-                rows = kresults.root.kalman_estimates.readCoordinates(idxs,flavor='numpy')
+                rows = kresults.root.kalman_estimates.readCoordinates(idxs)
             else:
                 obs_obj_ids = preloaded_dict['obs_obj_ids']
                 obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
                 # Kalman observations are already always in meters, no scale factor needed
-                orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs,flavor='numpy')
+                orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs)
                 rows = observations2smoothed(obj_id,orig_rows)  # do Kalman smoothing
                 
         return rows
@@ -268,9 +268,9 @@ class CachingAnalyzer:
                           ):
         """get raw data (Kalman smoothed if data has been pre-smoothed)"""
         rows = self.load_data( obj_id,data_file,use_kalman_smoothing=use_kalman_smoothing)
-        xsA = rows.field('x')
-        ysA = rows.field('y')
-        zsA = rows.field('z')
+        xsA = rows['x']
+        ysA = rows['y']
+        zsA = rows['z']
         
         XA = numpy.vstack((xsA,ysA,zsA)).T
         return XA
@@ -339,17 +339,17 @@ class CachingAnalyzer:
             if method == 'position based':
                 ##############
                 # load data                
-                framesA = rows.field('frame')
-                xsA = rows.field('x')
+                framesA = rows['frame']
+                xsA = rows['x']
 
-                ysA = rows.field('y')
-                zsA = rows.field('z')
+                ysA = rows['y']
+                zsA = rows['z']
                 XA = numpy.vstack((xsA,ysA,zsA)).T
                 time_A = (framesA - framesA[0])/frames_per_second
 
-                xvelsA = rows.field('xvel')
-                yvelsA = rows.field('yvel')
-                zvelsA = rows.field('zvel')
+                xvelsA = rows['xvel']
+                yvelsA = rows['yvel']
+                zvelsA = rows['zvel']
                 velA = numpy.vstack((xvelsA,yvelsA,zvelsA)).T
                 speedA = numpy.sqrt(numpy.sum(velA**2,axis=1))
 
@@ -525,10 +525,10 @@ class CachingAnalyzer:
         if method == 'position based':
             ##############
             # load data
-            framesA = rows.field('frame') # time index A - original time points
-            xsA = rows.field('x')
-            ysA = rows.field('y')
-            zsA = rows.field('z')
+            framesA = rows['frame'] # time index A - original time points
+            xsA = rows['x']
+            ysA = rows['y']
+            zsA = rows['z']
             XA = numpy.vstack((xsA,ysA,zsA)).T
 
             time_A = (framesA - framesA[0])/frames_per_second
@@ -716,8 +716,8 @@ class CachingAnalyzer:
         else:
             kresults = result_h5_file
             self_should_close = False
-        obj_ids = kresults.root.kalman_estimates.read(field='obj_id',flavor='numpy')
-        obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id',flavor='numpy')
+        obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
+        obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id')
         unique_obj_ids = numpy.unique(obs_obj_ids)
         preloaded_dict = {'kresults':kresults,
                           'self_should_close':self_should_close,
