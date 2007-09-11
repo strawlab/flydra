@@ -221,6 +221,8 @@ class LazyRecArrayMimic:
         self.cond = obj_ids == obj_id
     def field(self,name):
         return self.data_file[self.xtable[name]][self.cond]
+    def __getitem__(self,name):
+        return self.data_file[self.xtable[name]][self.cond]
     
 class CachingAnalyzer:
     def load_data(self,obj_id,data_file,use_kalman_smoothing=True,

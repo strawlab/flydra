@@ -1,4 +1,7 @@
-#
+if 1:
+    # deal with old files, forcing to numpy
+    import tables.flavor
+    tables.flavor.restrict_flavors(keep=['numpy'])
 
 import sets, os, sys, math
 sys.path.insert(0,os.curdir)
@@ -10,7 +13,10 @@ import core_analysis
 import stimulus_positions
 import scipy.io
 import conditions
-import cgtypes
+try:
+    import cgkit.cgtypes as cgtypes # cgkit 2
+except ImportError, err:
+    import cgtypes # cgkit 1
 import flydra.a2.pos_ori2fu
 
 def print_cam_props(camera):
@@ -613,9 +619,13 @@ def main():
         return
         
     h5_filename=args[0]
-    
-    condition, stimname = conditions.get_condition_stimname_from_filename(h5_filename)
-    print 'Data from condition "%s",with stimulus'%(condition,),stimname
+
+    stimname = None
+    try:
+        condition, stimname = conditions.get_condition_stimname_from_filename(h5_filename)
+        print 'Data from condition "%s",with stimulus'%(condition,),stimname
+    except KeyError, err:
+        print 'Unknown condition and stimname'
     
     if options.obj_only is not None:
         seq = map(int,options.obj_only.split())
