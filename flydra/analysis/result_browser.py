@@ -2455,7 +2455,7 @@ def get_frame_ts_and_realtime_analyzer_state( results,
     cam_info = results.root.cam_info      
     cam_id = [x['cam_id'] for x in cam_info if x['camn'] == camn ][0]
 
-    import flydra_ipp.realtime_image_analysis4 as realtime_image_analysis
+    import realtime_image_analysis
     import flydra.reconstruct
     import FastImage
     

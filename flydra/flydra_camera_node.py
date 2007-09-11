@@ -67,7 +67,7 @@ class DummySocket:
 import flydra.common_variables
 NETWORK_PROTOCOL = flydra.common_variables.NETWORK_PROTOCOL
 
-import flydra_ipp.realtime_image_analysis4 as realtime_image_analysis
+import realtime_image_analysis
 
 if sys.platform == 'win32':
     time_func = time.clock
