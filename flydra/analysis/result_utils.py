@@ -26,14 +26,14 @@ def get_camn(results, cam, remote_timestamp=None, frame=None):
         camn = cam
         return camn
 
-    cam_id = cam
+    this_cam_id = cam
     possible_camns = []
     for row in results.root.cam_info:
-        if row['cam_id'] == cam_id:
+        if row['cam_id'] == this_cam_id:
                 possible_camns.append( row['camn'] )
 
     table = results.root.data2d_camera_summary
-    for row in table.where(table.cols.cam_id==cam_id):
+    for row in table.where('cam_id==this_cam_id'):
         camn = None
         if row['camn'] in possible_camns:
             if remote_timestamp is not None:
@@ -119,6 +119,7 @@ def get_caminfo_dicts(results):
     
     for row in cam_info:
         cam_id, camn = row['cam_id'], row['camn']
+        cam_id = cam_id.strip() # workaround pytables 1.3 save bug
         cam_id2camns.setdefault(cam_id,[]).append(camn)
         camn2cam_id[camn]=cam_id
     return camn2cam_id, cam_id2camns
@@ -146,20 +147,26 @@ def get_results(filename,mode='r+'):
 ##            print 'done'
 
     if hasattr(h5file.root,'data2d_distorted'):
-        frame_col = h5file.root.data2d_distorted.cols.frame
-        if frame_col.index is None:
-            if h5file._isWritable():
-                print 'creating index on data2d_distorted.cols.frame ...'
-                frame_col.createIndex()
-                print 'done'
-            else:
-                print 'WARNING: file is not writable and cannot create index - some operations may be very slow'
+        if 1:
+            print 'WARNING: index creation disabled - some operations may be very slow'
+        else:
+            frame_col = h5file.root.data2d_distorted.cols.frame
+            if frame_col.index is None:
+                if h5file._isWritable():
+                    print 'creating index on data2d_distorted.cols.frame ...'
+                    try:
+                        frame_col.createIndex()
+                        print 'done'
+                    except PT.exceptions.NoIndexingError, err:
+                        print 'WARNING: indexing not supported in free version of PyTables 2.0 - some operations may be very slow'
+                else:
+                    print 'WARNING: file is not writable and cannot create index - some operations may be very slow'
 
-##        timestamp_col = h5file.root.data2d_distorted.cols.timestamp
-##        if timestamp_col.index is None:
-##            print 'creating index on data2d_distorted.cols.timestamp ...'
-##            timestamp_col.createIndex()
-##            print 'done'
+    ##        timestamp_col = h5file.root.data2d_distorted.cols.timestamp
+    ##        if timestamp_col.index is None:
+    ##            print 'creating index on data2d_distorted.cols.timestamp ...'
+    ##            timestamp_col.createIndex()
+    ##            print 'done'
 
         if not hasattr(h5file.root,'data2d_camera_summary') and h5file._isWritable():
             print 'creating data2d camera summary ...'
@@ -198,7 +205,7 @@ def get_f_xyz_L_err( results, max_err = 10, typ = 'best', include_timestamps=Fal
         L = []
         err = []
         timestamps = []
-        for row in data3d.where( data3d.cols.mean_dist <= max_err ):
+        for row in data3d.where( 'mean_dist <= max_err' ):
             f.append( row['frame'] )
             xyz.append( (row['x'],row['y'],row['z']) )
             L.append( (row['p0'],row['p1'],
@@ -287,7 +294,8 @@ def create_data2d_camera_summary(results):
         print 'creating 2d camera index for camn %d, cam_id %s'%(camn,cam_id)
 
         first_row = True
-        for row_data2d in data2d.where( data2d.cols.camn == camn ):
+        this_camn = camn
+        for row_data2d in data2d.where( 'camn == this_camn' ):
             ts = row_data2d['timestamp']
             f = row_data2d['frame']
             if first_row:
@@ -319,7 +327,6 @@ def model_remote_to_local(remote_timestamps, local_timestamps):
     a1=remote_timestamps[:,numpy.newaxis]
     a2=numpy.ones( (len(remote_timestamps),1))
     A = numpy.hstack(( a1,a2))
-    #A = numpy.hstack(( remote_timestamps[:,numpy.newaxis], numpy.ones( (len(remote_timestamps),1))))
     b = local_timestamps[:,numpy.newaxis]
     x,resids,rank,s = numpy.linalg.lstsq(A,b)
     gain = x[0,0]
@@ -329,31 +336,33 @@ def model_remote_to_local(remote_timestamps, local_timestamps):
 def drift_estimates(results):
     """calculate clock information"""
     table = results.root.host_clock_info
-    remote_hostnames = table.read(field='remote_hostname',flavor='numpy')
-    hostnames = [str(x).strip() for x in list(sets.Set(remote_hostnames))]
+    remote_hostnames = numpy.asarray(table.read(field='remote_hostname'))
+    hostnames = [str(x) for x in list(sets.Set(remote_hostnames))]
     hostnames.sort()
-    
+
     del remote_hostnames
 
     result = {}
     
     for hostname in hostnames:
-        row_idx = table.getWhereList(table.cols.remote_hostname == hostname,flavor='numpy')
-        start_timestamp = table.readCoordinates(row_idx,field='start_timestamp',flavor='numpy')
-        stop_timestamp = table.readCoordinates(row_idx,field='stop_timestamp',flavor='numpy')
-        remote_timestamp = table.readCoordinates(row_idx,field='remote_timestamp',flavor='numpy')
+        row_idx = table.getWhereList('remote_hostname == hostname')
+        assert len(row_idx)>0
+        start_timestamp = numpy.asarray(table.readCoordinates(row_idx,field='start_timestamp'))
+        stop_timestamp = numpy.asarray(table.readCoordinates(row_idx,field='stop_timestamp'))
+        remote_timestamp = numpy.asarray(table.readCoordinates(row_idx,field='remote_timestamp'))
 
         measurement_error = stop_timestamp-start_timestamp
         clock_diff = stop_timestamp-remote_timestamp
 
         # local time when we think remote timestamp was gathered, given symmetric transmission delays
         local_timestamp = start_timestamp + measurement_error*0.5
+
+        short_hostname = hostname.strip() # deal with old pytables bug resulting in corrupt files
         
-        result.setdefault('hostnames',[]).append(hostname)
-        result.setdefault('local_timestamp',{})[hostname] = local_timestamp
-        result.setdefault('remote_timestamp',{})[hostname] = remote_timestamp
-        result.setdefault('measurement_error',{})[hostname] = measurement_error
-                          
+        result.setdefault('hostnames',[]).append(short_hostname)
+        result.setdefault('local_timestamp',{})[short_hostname] = local_timestamp
+        result.setdefault('remote_timestamp',{})[short_hostname] = remote_timestamp
+        result.setdefault('measurement_error',{})[short_hostname] = measurement_error
     return result
         
 def make_exact_movie_info2(results,movie_dir=None):

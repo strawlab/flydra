@@ -1,3 +1,8 @@
+if 1:
+    # deal with old files, forcing to numpy
+    import tables.flavor
+    tables.flavor.restrict_flavors(keep=['numpy'])
+    
 import numpy
 import sys, os, time
 import core_analysis
@@ -58,7 +63,7 @@ def convert(infilename,
             return
             
         print 'caching Kalman obj_ids...'
-        obs_obj_ids = table_kobs.read(field='obj_id',flavor='numpy')
+        obs_obj_ids = table_kobs.read(field='obj_id')
         print 'finding unique obj_ids...'
         unique_obj_ids = numpy.unique(obs_obj_ids)
         
@@ -76,7 +81,7 @@ def convert(infilename,
                 
             remote_timestamp = numpy.nan
             this_camn = None
-            for row in table_data2d.where(table_data2d.cols.frame == framenumber):
+            for row in table_data2d.where('frame == framenumber'):
                 this_camn = row['camn']
                 remote_timestamp = row['timestamp']
                 break

@@ -118,7 +118,7 @@ class KalmanSaver:
             self.h5_xhat = self.h5file.root.kalman_estimates
             self.h5_obs = self.h5file.root.kalman_observations
             
-            obj_ids = self.h5_xhat.read(field='obj_id',flavor='numpy')
+            obj_ids = self.h5_xhat.read(field='obj_id')
             self.obj_id = obj_ids.max()
             del obj_ids
 
@@ -137,7 +137,7 @@ class KalmanSaver:
             self.h5_2d_obs_next_idx = 0
             self.h5_2d_obs = self.h5file.createVLArray(self.h5file.root,
                                                        'kalman_observations_2d_idxs',
-                                                       PT.UInt16Atom(flavor='numpy'), # dtype should match with tro.observations_2d
+                                                       PT.UInt16Atom(), # dtype should match with tro.observations_2d
                                                        "camns and idxs")
 
             self.obj_id = -1
@@ -239,10 +239,10 @@ def kalmanize(src_filename,
             reconst_orig_units = flydra.reconstruct.Reconstructor(fd)
         else:
             reconst_orig_units = flydra.reconstruct.Reconstructor(reconstructor_filename)
-        
+            
     reconstructor_meters = reconst_orig_units.get_scaled(reconst_orig_units.get_scale_factor())
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
-    
+
     if dest_filename is None:
         dest_filename = os.path.splitext(results.filename)[0]+'.kalmanized.h5'
         if os.path.exists(dest_filename):
@@ -266,9 +266,10 @@ def kalmanize(src_filename,
 
     time1 = time.time()
     print 'loading all frame numbers...'
-    frames_array = data2d.read(field='frame',flavor='numpy')
+    frames_array = numpy.asarray(data2d.read(field='frame'))
     time2 = time.time()
     print 'done in %.1f sec'%(time2-time1)
+
     row_idxs = numpy.argsort(frames_array)
     
     print '2D data range: %d<frame<%d'%(frames_array[row_idxs[0]], frames_array[row_idxs[-1]])
