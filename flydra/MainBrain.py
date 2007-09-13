@@ -27,6 +27,12 @@ import flydra.data_descriptions
 import flydra.trigger
 
 import flydra.debuglock
+
+# ensure that pytables uses numpy:
+import tables.flavor
+tables.flavor.restrict_flavors(keep=['numpy'])
+
+
 #DebugLock = flydra.debuglock.DebugLock
 
 DO_KALMAN= True
@@ -1964,7 +1970,7 @@ class MainBrain(object):
                                                        expectedrows=expected_rows)
                 self.h5_2d_obs = self.h5file.createVLArray(self.h5file.root,
                                                            'kalman_observations_2d_idxs',
-                                                           PT.UInt16Atom(flavor='numpy'), # dtype should match with tro.observations_2d
+                                                           PT.UInt16Atom(), # dtype should match with tro.observations_2d
                                                            "camns and idxs")
                 self.h5_2d_obs_next_idx = 0
             else:
