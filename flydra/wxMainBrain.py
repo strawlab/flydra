@@ -25,7 +25,7 @@ import sys, threading, time, os, copy
 import traceback
 import MainBrain
 from MainBrain import DEBUG
-PLOTPANEL = True
+PLOTPANEL = False
 if PLOTPANEL:
     from MatplotlibPanel import PlotPanel
 import common_variables
@@ -36,8 +36,17 @@ from wx import xrc
 
 import pkg_resources
 
-import wxglvideo
-from wxPython.lib.scrolledpanel import wxScrolledPanel
+if 0:
+    import OpenGL
+    if OpenGL.__version__.startswith('3'):
+        raise RuntimeError("wxMainBrain/wxglvideo is known to not work with PyOpenGL 3 (for now)")
+    import wxglvideo
+else:
+    import wxvideo as wxglvideo
+
+SCROLLED=False
+if SCROLLED:
+    from wxPython.lib.scrolledpanel import wxScrolledPanel
 
 import wxvalidatedtext as wxvt
 
@@ -206,9 +215,13 @@ class wxMainBrainApp(wx.App):
         self.cam_preview_panel.SetAutoLayout(True)
         nb.AddPage(self.cam_preview_panel,"Camera Preview/Settings")
         self.InitPreviewPanel()
-        
-        viewmenu.Check(ID_toggle_image_tinting,self.cam_image_canvas.get_clipping())
-        viewmenu.Check(ID_draw_points,self.cam_image_canvas.get_display_points())
+
+        if hasattr(self.cam_image_canvas,'get_clipping'):
+            viewmenu.Check(ID_toggle_image_tinting,self.cam_image_canvas.get_clipping())
+            viewmenu.Check(ID_draw_points,self.cam_image_canvas.get_display_points())
+        else:
+            viewmenu.Enable(ID_toggle_image_tinting,False)
+            viewmenu.Enable(ID_draw_points,False)
         
         self.snapshot_panel = my_loadpanel(nb,"SNAPSHOT_PANEL")
         nb.AddPage(self.snapshot_panel,"Snapshot")
@@ -371,7 +384,7 @@ class wxMainBrainApp(wx.App):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         container.SetSizer(sizer)
 
-        if 1:
+        if SCROLLED:
             scrolled_container = wxScrolledPanel(container,-1)
         else:
             scrolled_container = wx.Panel(container,-1)
@@ -380,7 +393,8 @@ class wxMainBrainApp(wx.App):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         scrolled_container.SetSizer(sizer)
         scrolled_container.SetAutoLayout(True)
-        if isinstance(scrolled_container,wxScrolledPanel):
+        
+        if SCROLLED:
             scrolled_container.SetupScrolling()
         self.preview_per_cam_scrolled_container = scrolled_container
 
@@ -1249,7 +1263,8 @@ class wxMainBrainApp(wx.App):
                         self.cam_image_canvas.set_reconstructed_points(cam_id,(pts,[]))
         else:
             for cam_id in self.cameras.keys():
-                self.cam_image_canvas.set_reconstructed_points(cam_id,([],[]))
+                if hasattr(self.cam_image_canvas,'set_reconstructed_points'):
+                    self.cam_image_canvas.set_reconstructed_points(cam_id,([],[]))
         if self.current_page == 'preview':
             for cam_id in self.cameras.keys():
                 cam = self.cameras[cam_id]
@@ -1261,9 +1276,10 @@ class wxMainBrainApp(wx.App):
                     # this may fail with a Key Error if unexpected disconnect:
                     image, show_fps, points, image_coords = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
                     if image is not None:
-                        self.cam_image_canvas.update_image(cam_id,image,
-                                                           xoffset=image_coords[0],
-                                                           yoffset=image_coords[1])
+                        if hasattr(self.cam_image_canvas,'update_image'):
+                            self.cam_image_canvas.update_image(cam_id,image,
+                                                               xoffset=image_coords[0],
+                                                               yoffset=image_coords[1])
                     if show_fps is not None:
                         show_fps_label = xrc.XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
                         show_fps_label.SetLabel('fps: %.1f'%show_fps)
@@ -1271,11 +1287,13 @@ class wxMainBrainApp(wx.App):
                         pt = list(pt)
                         pt[4] = 0 # set eccentricity to zero - don't draw line XXX HACK TODO FIXME
                         points[i] = pt # reassign
-                    self.cam_image_canvas.set_draw_points(cam_id,points)
+                    if hasattr(self.cam_image_canvas,'set_draw_points'):
+                        self.cam_image_canvas.set_draw_points(cam_id,points)
                 except KeyError:
                     pass # may have lost camera since call to service_pending
 
-            self.cam_image_canvas.OnDraw()
+            if hasattr(self.cam_image_canvas,'OnDraw'):
+                self.cam_image_canvas.OnDraw()
 
             if isinstance(event,wx.IdleEvent):
                 event.RequestMore()
@@ -1370,7 +1388,8 @@ class wxMainBrainApp(wx.App):
         self.OnRecordRawStop(warn=False)
         
         try:
-            self.cam_image_canvas.delete_image(cam_id)
+            if hasattr(self.cam_image_canvas,'delete_image'):
+                self.cam_image_canvas.delete_image(cam_id)
         
         except KeyError:
             # camera never sent frame??
