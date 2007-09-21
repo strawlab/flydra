@@ -13,15 +13,15 @@ if ENABLED:
     from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
     from matplotlib.mlab import meshgrid
     
-from wxPython.wx import *
+from wxwrap import wx
 
 #origin = 'lower' # will have to change extent?
 origin = 'upper'
 
-class PlotPanel(wxPanel):
+class PlotPanel(wx.Panel):
 
     def __init__(self, parent):
-        wxPanel.__init__(self, parent, -1)
+        wx.Panel.__init__(self, parent, -1)
         self.cmap_is_fixed = True
         if ENABLED:
             self.fig = matplotlib.figure.Figure(figsize=(5,4), dpi=75)
@@ -31,11 +31,11 @@ class PlotPanel(wxPanel):
             #self.toolbar.set_active([0,1])
 
             # Now put all into a sizer
-            sizer = wxBoxSizer(wxVERTICAL)
+            sizer = wx.BoxSizer(wx.VERTICAL)
             # This way of adding to sizer allows resizing
-            sizer.Add(self.canvas, 1, wxLEFT|wxTOP|wxGROW)
+            sizer.Add(self.canvas, 1, wx.LEFT|wx.TOP|wx.GROW)
             # Best to allow the toolbar to resize!
-            sizer.Add(self.toolbar, 0, wxGROW)
+            sizer.Add(self.toolbar, 0, wx.GROW)
             self.SetSizer(sizer)
             self.Fit()
 

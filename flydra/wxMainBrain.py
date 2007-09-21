@@ -30,15 +30,16 @@ if PLOTPANEL:
     from MatplotlibPanel import PlotPanel
 import common_variables
 import flydra.kalman.dynamic_models
+
+from wxwrap import wx
+from wx import xrc
+
 import pkg_resources
-pkg_resources.require('wxglvideo')
 
 import wxglvideo
-from wxPython.wx import *
 from wxPython.lib.scrolledpanel import wxScrolledPanel
-from wxPython.xrc import *
+
 import wxvalidatedtext as wxvt
-import numpy
 
  # trigger extraction
 RESFILE = pkg_resources.resource_filename(__name__,"flydra_server.xrc")
@@ -46,7 +47,7 @@ pkg_resources.resource_filename(__name__,"flydra_server_art.png")
 pkg_resources.resource_filename(__name__,"detect.wav")
 
 RESDIR = os.path.split(RESFILE)[0]
-RES = wxEmptyXmlResource()
+RES = xrc.EmptyXmlResource()
 RES.LoadFromString(open(RESFILE).read())
 
 def my_loadpanel(parent,panel_name):
@@ -68,109 +69,109 @@ def validate_positive_float(val_str):
     else:
         return False
     
-class wxMainBrainApp(wxApp):
+class wxMainBrainApp(wx.App):
     def OnInit(self,*args,**kw):
         self.pass_all_keystrokes = False
-        wxInitAllImageHandlers()
-        frame = wxFrame(None, -1, "Flydra Main Brain",size=(650,600))
+        wx.InitAllImageHandlers()
+        frame = wx.Frame(None, -1, "Flydra Main Brain",size=(650,600))
 
         # statusbar ----------------------------------
         self.statusbar = frame.CreateStatusBar()
         self.statusbar.SetFieldsCount(4)
         
         # menubar ------------------------------------
-        menuBar = wxMenuBar()
+        menuBar = wx.MenuBar()
         #   File
-        filemenu = wxMenu()
+        filemenu = wx.Menu()
         
-        ID_open_cam_config = wxNewId()
+        ID_open_cam_config = wx.NewId()
         filemenu.Append(ID_open_cam_config, "Open Camera Configuration...\tCtrl-O")
-        EVT_MENU(self, ID_open_cam_config, self.OnOpenCamConfig)
+        wx.EVT_MENU(self, ID_open_cam_config, self.OnOpenCamConfig)
         
-        ID_save_cam_config = wxNewId()
+        ID_save_cam_config = wx.NewId()
         filemenu.Append(ID_save_cam_config, "Save Camera Configuration...\tCtrl-S")
-        EVT_MENU(self, ID_save_cam_config, self.OnSaveCamConfig)
+        wx.EVT_MENU(self, ID_save_cam_config, self.OnSaveCamConfig)
 
-        filemenu.AppendItem(wxMenuItem(kind=wxITEM_SEPARATOR))
+        filemenu.AppendItem(wx.MenuItem(kind=wx.ITEM_SEPARATOR))
         
-        ID_start_calibration = wxNewId()
+        ID_start_calibration = wx.NewId()
         filemenu.Append(ID_start_calibration, "Start calibration...", "Start saving calibration points")
-        EVT_MENU(self, ID_start_calibration, self.OnStartCalibration)
+        wx.EVT_MENU(self, ID_start_calibration, self.OnStartCalibration)
         
-        filemenu.AppendItem(wxMenuItem(kind=wxITEM_SEPARATOR))
+        filemenu.AppendItem(wx.MenuItem(kind=wx.ITEM_SEPARATOR))
         
-        ID_about = wxNewId()
-        filemenu.Append(ID_about, "About", "About wxMainBrain")
-        EVT_MENU(self, ID_about, self.OnAboutMainBrain)
+        ID_about = wx.NewId()
+        filemenu.Append(ID_about, "About", "About wx.MainBrain")
+        wx.EVT_MENU(self, ID_about, self.OnAboutMainBrain)
 
-        filemenu.AppendItem(wxMenuItem(kind=wxITEM_SEPARATOR))
+        filemenu.AppendItem(wx.MenuItem(kind=wx.ITEM_SEPARATOR))
         
-        ID_quit = wxNewId()
+        ID_quit = wx.NewId()
         filemenu.Append(ID_quit, "Quit\tCtrl-Q", "Quit application")
-        EVT_MENU(self, ID_quit, self.OnQuit)
-        EVT_CLOSE(frame, self.OnWindowClose)
+        wx.EVT_MENU(self, ID_quit, self.OnQuit)
+        wx.EVT_CLOSE(frame, self.OnWindowClose)
         
         menuBar.Append(filemenu, "&File")
 
         #   Data logging
-        data_logging_menu = wxMenu()
+        data_logging_menu = wx.Menu()
 
-        ID_change_save_data_dir = wxNewId()
+        ID_change_save_data_dir = wx.NewId()
         data_logging_menu.Append(ID_change_save_data_dir, "Set save data dir...")
-        EVT_MENU(self, ID_change_save_data_dir, self.OnChangeSaveDataDir)
+        wx.EVT_MENU(self, ID_change_save_data_dir, self.OnChangeSaveDataDir)
 
-        ID_start_saving_data = wxNewId()
+        ID_start_saving_data = wx.NewId()
         data_logging_menu.Append(ID_start_saving_data, "Start saving data...",
                                  "Collect & save all 2D and 3D data")
-        EVT_MENU(self, ID_start_saving_data, self.OnStartSavingData)
+        wx.EVT_MENU(self, ID_start_saving_data, self.OnStartSavingData)
 
-        ID_stop_saving_data = wxNewId()
+        ID_stop_saving_data = wx.NewId()
         data_logging_menu.Append(ID_stop_saving_data, "Stop saving data",
                                  "Stop saving data")
-        EVT_MENU(self, ID_stop_saving_data, self.OnStopSavingData)
+        wx.EVT_MENU(self, ID_stop_saving_data, self.OnStopSavingData)
 
         menuBar.Append(data_logging_menu, "Data &Logging")
         
         #   Cameras
-        cammenu = wxMenu()
+        cammenu = wx.Menu()
         
-        ID_fake_sync = wxNewId()
+        ID_fake_sync = wx.NewId()
         cammenu.Append(ID_fake_sync, "Fake synchronization")
-        EVT_MENU(self, ID_fake_sync, self.OnFakeSync)
+        wx.EVT_MENU(self, ID_fake_sync, self.OnFakeSync)
 
         # XXX not finished
-        #ID_stop_all_collecting_bg = wxNewId()
+        #ID_stop_all_collecting_bg = wx.NewId()
         #cammenu.Append(ID_stop_all_collecting_bg, "Stop all running background collection")
-        #EVT_MENU(self, ID_stop_all_collecting_bg, self.OnStopAllCollectingBg)
+        #wx.EVT_MENU(self, ID_stop_all_collecting_bg, self.OnStopAllCollectingBg)
         
         menuBar.Append(cammenu, "&Cameras")
 
         #   View
-        viewmenu = wxMenu()
-        ID_debug_cameras = wxNewId()
+        viewmenu = wx.Menu()
+        ID_debug_cameras = wx.NewId()
         viewmenu.Append(ID_debug_cameras, "Camera debug mode",
-                        "Enter camera debug mode", wxITEM_CHECK)
-        EVT_MENU(self, ID_debug_cameras, self.OnToggleDebugCameras)
+                        "Enter camera debug mode", wx.ITEM_CHECK)
+        wx.EVT_MENU(self, ID_debug_cameras, self.OnToggleDebugCameras)
 
-        ID_toggle_image_tinting = wxNewId()
+        ID_toggle_image_tinting = wx.NewId()
         viewmenu.Append(ID_toggle_image_tinting, "Tint clipped data",
-                        "Tints clipped pixels green", wxITEM_CHECK)
-        EVT_MENU(self, ID_toggle_image_tinting, self.OnToggleTint)
+                        "Tints clipped pixels green", wx.ITEM_CHECK)
+        wx.EVT_MENU(self, ID_toggle_image_tinting, self.OnToggleTint)
 
-        ID_draw_points = wxNewId()
+        ID_draw_points = wx.NewId()
         viewmenu.Append(ID_draw_points, "Draw points",
-                        "Draw 2D points and orientation", wxITEM_CHECK)
-        EVT_MENU(self, ID_draw_points, self.OnToggleDrawPoints)
+                        "Draw 2D points and orientation", wx.ITEM_CHECK)
+        wx.EVT_MENU(self, ID_draw_points, self.OnToggleDrawPoints)
 
-        ID_set_timer = wxNewId()
+        ID_set_timer = wx.NewId()
         viewmenu.Append(ID_set_timer, "Set update timer...",
                         "Sets interval at which display is updated")
-        EVT_MENU(self, ID_set_timer, self.OnSetTimer)
+        wx.EVT_MENU(self, ID_set_timer, self.OnSetTimer)
 
-        ID_set_timer2 = wxNewId()
+        ID_set_timer2 = wx.NewId()
         viewmenu.Append(ID_set_timer2, "Set raw image update timer...",
                         "Sets interval at which images are updated")
-        EVT_MENU(self, ID_set_timer2, self.OnSetTimer2)
+        wx.EVT_MENU(self, ID_set_timer2, self.OnSetTimer2)
 
         menuBar.Append(viewmenu, "&View")
 
@@ -182,9 +183,9 @@ class wxMainBrainApp(wxApp):
             self.detect_sound = None
         else:
             try:
-                self.detect_sound = wxSound(os.path.join(RESDIR,'detect.wav'))
+                self.detect_sound = wx.Sound(os.path.join(RESDIR,'detect.wav'))
                 self.detect_sound.Play()
-            except NameError: #wxSound not in some versions of wx
+            except NameError: #wx.Sound not in some versions of wx
                 self.detect_sound = None
 
 
@@ -192,12 +193,12 @@ class wxMainBrainApp(wxApp):
         self.main_panel = my_loadpanel(frame,"APP_PANEL") # make frame main panel
         self.main_panel.SetFocus()
 
-        frame_box = wxBoxSizer(wxVERTICAL)
-        frame_box.Add(self.main_panel,1,wxEXPAND)
+        frame_box = wx.BoxSizer(wx.VERTICAL)
+        frame_box.Add(self.main_panel,1,wx.EXPAND)
         frame.SetSizer(frame_box)
         frame.Layout()
 
-        nb = XRCCTRL(self.main_panel,"MAIN_NOTEBOOK")
+        nb = xrc.XRCCTRL(self.main_panel,"MAIN_NOTEBOOK")
 
         # setup notebook pages
         
@@ -224,7 +225,7 @@ class wxMainBrainApp(wxApp):
         #temp_panel = my_loadpanel(nb,"UNDER_CONSTRUCTION_PANEL")
         #nb.AddPage(temp_panel,"Under construction")
         
-        EVT_NOTEBOOK_PAGE_CHANGED(nb,nb.GetId(),self.OnPageChanged)
+        wx.EVT_NOTEBOOK_PAGE_CHANGED(nb,nb.GetId(),self.OnPageChanged)
         self.main_notebook = nb
         self.current_page = 'preview'
 
@@ -236,25 +237,25 @@ class wxMainBrainApp(wxApp):
         self.SetTopWindow(frame)
         self.frame = frame
 
-        ID_Timer  = wxNewId() 	         
-        self.timer = wxTimer(self,      # object to send the event to 	 
+        ID_Timer  = wx.NewId() 	         
+        self.timer = wx.Timer(self,      # object to send the event to 	 
                              ID_Timer)  # event id to use 	 
-        EVT_TIMER(self,  ID_Timer, self.OnTimer)
+        wx.EVT_TIMER(self,  ID_Timer, self.OnTimer)
         self.update_interval=100
         self.timer.Start(self.update_interval) # call every n msec
-##        EVT_IDLE(self.frame, self.OnIdle)
+##        wx.EVT_IDLE(self.frame, self.OnIdle)
 
         # raw image update timer
-        ID_Timer2  = wxNewId() 	         
-        self.timer2 = wxTimer(self,      # object to send the event to 	 
+        ID_Timer2  = wx.NewId() 	         
+        self.timer2 = wx.Timer(self,      # object to send the event to 	 
                               ID_Timer2)  # event id to use 	 
-        EVT_TIMER(self,  ID_Timer2, self.OnUpdateRawImages)
+        wx.EVT_TIMER(self,  ID_Timer2, self.OnUpdateRawImages)
         self.update_interval2=2000
         self.timer2.Start(self.update_interval2) # call every n msec
 
         self.cameras = {} #OrderedDict()
 
-        EVT_KEY_DOWN(self, self.OnKeyDown)
+        wx.EVT_KEY_DOWN(self, self.OnKeyDown)
 
         self.update_wx()
 
@@ -275,9 +276,9 @@ class wxMainBrainApp(wxApp):
         disp += '----------------------\n'
         for d in pkg_resources.working_set:
             disp += str(d) + '\n'
-        dlg = wxMessageDialog(self.frame, disp,
+        dlg = wx.MessageDialog(self.frame, disp,
                                'About wxMainBrain',
-                               wxOK | wxICON_INFORMATION)
+                               wx.OK | wx.ICON_INFORMATION)
         dlg.ShowModal()
         dlg.Destroy()
 
@@ -299,7 +300,7 @@ class wxMainBrainApp(wxApp):
                 widget = self.collecting_background_buttons[cam_id]
                 widget.SetValue( not widget.GetValue() )
                 id = widget.GetId()
-                event = wxCommandEvent(wxEVT_COMMAND_CHECKBOX_CLICKED,id)
+                event = wx.CommandEvent(wx.EVT_COMMAND_CHECKBOX_CLICKED,id)
                 event.SetEventObject( widget )
                 widget.Command( event )
             self.statusbar.SetStatusText('running BG collection toggled',0)
@@ -312,7 +313,7 @@ class wxMainBrainApp(wxApp):
             for cam_id in self.cameras.keys():
                 widget = self.take_background_buttons[cam_id]
                 id = widget.GetId()
-                event = wxCommandEvent(wxEVT_COMMAND_BUTTON_CLICKED,id)
+                event = wx.CommandEvent(wx.EVT_COMMAND_BUTTON_CLICKED,id)
                 event.SetEventObject( widget )
                 widget.Command( event )
             self.statusbar.SetStatusText('took BG images',0)
@@ -320,7 +321,7 @@ class wxMainBrainApp(wxApp):
             for cam_id in self.cameras.keys():
                 widget = self.clear_background_buttons[cam_id]
                 id = widget.GetId()
-                event = wxCommandEvent(wxEVT_COMMAND_BUTTON_CLICKED,id)
+                event = wx.CommandEvent(wx.EVT_COMMAND_BUTTON_CLICKED,id)
                 event.SetEventObject( widget )
                 widget.Command( event )
             self.statusbar.SetStatusText('cleared BG images',0)
@@ -347,35 +348,36 @@ class wxMainBrainApp(wxApp):
 
     def InitPreviewPanel(self):
         # init "load calibration..." button
-        load_cal = XRCCTRL(self.cam_preview_panel,
+        load_cal = xrc.XRCCTRL(self.cam_preview_panel,
                            "LOAD_CAL")
-        EVT_BUTTON(load_cal, load_cal.GetId(), self.OnLoadCal)
+        wx.EVT_BUTTON(load_cal, load_cal.GetId(), self.OnLoadCal)
 
-        ctrl = XRCCTRL(self.cam_preview_panel,'SYNCHRONIZE_BUTTON')
-        EVT_BUTTON(ctrl, ctrl.GetId(), self.OnSynchronizeButton)
+        ctrl = xrc.XRCCTRL(self.cam_preview_panel,'SYNCHRONIZE_BUTTON')
+        wx.EVT_BUTTON(ctrl, ctrl.GetId(), self.OnSynchronizeButton)
         
         # setup dynamic image (OpenGL) panel
-        dynamic_image_panel = XRCCTRL(self.cam_preview_panel,"PreviewDynamicImagePanel") # get container
-        box = wxBoxSizer(wxVERTICAL)
+        dynamic_image_panel = xrc.XRCCTRL(self.cam_preview_panel,"PreviewDynamicImagePanel") # get container
+        box = wx.BoxSizer(wx.VERTICAL)
         dynamic_image_panel.SetSizer(box)
 
+        #self.cam_image_canvas = wxvideo.DynamicImageCanvas(dynamic_image_panel,-1)
         self.cam_image_canvas = wxglvideo.DynamicImageCanvas(dynamic_image_panel,-1)
         self.cam_image_canvas.minimum_eccentricity = common_variables.MINIMUM_ECCENTRICITY
-        box.Add(self.cam_image_canvas,1,wxEXPAND)
+        box.Add(self.cam_image_canvas,1,wx.EXPAND)
         dynamic_image_panel.Layout()
 
         # setup per-camera container panel
-        container = XRCCTRL(self.cam_preview_panel,"PreviewPerCamPanel")
-        sizer = wxBoxSizer(wxHORIZONTAL)
+        container = xrc.XRCCTRL(self.cam_preview_panel,"PreviewPerCamPanel")
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
         container.SetSizer(sizer)
 
         if 1:
             scrolled_container = wxScrolledPanel(container,-1)
         else:
-            scrolled_container = wxPanel(container,-1)
-        sizer.Add(scrolled_container,1,wxEXPAND)
+            scrolled_container = wx.Panel(container,-1)
+        sizer.Add(scrolled_container,1,wx.EXPAND)
         
-        sizer = wxBoxSizer(wxHORIZONTAL)
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
         scrolled_container.SetSizer(sizer)
         scrolled_container.SetAutoLayout(True)
         if isinstance(scrolled_container,wxScrolledPanel):
@@ -394,82 +396,82 @@ class wxMainBrainApp(wxApp):
         all_cams = self.cameras.keys()
         all_cams.sort()
         cam_number = all_cams.index(cam_id)
-        acp_box.Insert(cam_number,previewPerCamPanel,1,wxEXPAND | wxALL,border=3)
+        acp_box.Insert(cam_number,previewPerCamPanel,1,wx.EXPAND | wx.ALL,border=3)
 
         # set staticbox label
         box = previewPerCamPanel.GetSizer()
         static_box = box.GetStaticBox()
         static_box.SetLabel( cam_id )
 
-        collecting_background = XRCCTRL(previewPerCamPanel,"COLLECTING_BACKGROUND")
+        collecting_background = xrc.XRCCTRL(previewPerCamPanel,"COLLECTING_BACKGROUND")
         self.collecting_background_buttons[cam_id] = collecting_background
         collecting_background.SetValue(scalar_control_info['collecting_background'])
-        EVT_CHECKBOX(collecting_background, collecting_background.GetId(),
+        wx.EVT_CHECKBOX(collecting_background, collecting_background.GetId(),
                      self.OnCollectingBackground)
         
-        take_background = XRCCTRL(previewPerCamPanel,"take_background")
+        take_background = xrc.XRCCTRL(previewPerCamPanel,"take_background")
         self.take_background_buttons[cam_id] = take_background
-        EVT_BUTTON(take_background, take_background.GetId(),
+        wx.EVT_BUTTON(take_background, take_background.GetId(),
                    self.OnTakeBackground)
         
-        clear_background = XRCCTRL(previewPerCamPanel,"clear_background")
+        clear_background = xrc.XRCCTRL(previewPerCamPanel,"clear_background")
         self.clear_background_buttons[cam_id] = clear_background
-        EVT_BUTTON(clear_background, clear_background.GetId(),
+        wx.EVT_BUTTON(clear_background, clear_background.GetId(),
                    self.OnClearBackground)
         
-        find_Rcenter = XRCCTRL(previewPerCamPanel,"find_Rcenter")
-        EVT_BUTTON(find_Rcenter, find_Rcenter.GetId(),
+        find_Rcenter = xrc.XRCCTRL(previewPerCamPanel,"find_Rcenter")
+        wx.EVT_BUTTON(find_Rcenter, find_Rcenter.GetId(),
                    self.OnFindRCenter)
         
-        set_roi = XRCCTRL(previewPerCamPanel,"set_roi")
-        EVT_BUTTON(set_roi, set_roi.GetId(), self.OnSetROI)
+        set_roi = xrc.XRCCTRL(previewPerCamPanel,"set_roi")
+        wx.EVT_BUTTON(set_roi, set_roi.GetId(), self.OnSetROI)
 
-        quit_camera = XRCCTRL(previewPerCamPanel,"quit_camera")
-        EVT_BUTTON(quit_camera, quit_camera.GetId(), self.OnCloseCamera)
+        quit_camera = xrc.XRCCTRL(previewPerCamPanel,"quit_camera")
+        wx.EVT_BUTTON(quit_camera, quit_camera.GetId(), self.OnCloseCamera)
 
-        threshold_value = XRCCTRL(previewPerCamPanel,"threshold_value")
+        threshold_value = xrc.XRCCTRL(previewPerCamPanel,"threshold_value")
         val = scalar_control_info['diff_threshold']
         threshold_value.SetValue( str( val ) )
-        EVT_TEXT(threshold_value, threshold_value.GetId(), self.OnSetCameraThreshold)
+        wx.EVT_TEXT(threshold_value, threshold_value.GetId(), self.OnSetCameraThreshold)
 
-        threshold_clear_value = XRCCTRL(previewPerCamPanel,"threshold_clear_value")
+        threshold_clear_value = xrc.XRCCTRL(previewPerCamPanel,"threshold_clear_value")
         val = scalar_control_info['clear_threshold']
         threshold_clear_value.SetValue( str( val ) )
-        EVT_TEXT(threshold_clear_value, threshold_clear_value.GetId(),
+        wx.EVT_TEXT(threshold_clear_value, threshold_clear_value.GetId(),
                  self.OnSetCameraClearThreshold)
 
-        max_framerate = XRCCTRL(previewPerCamPanel,"MAX_FRAMERATE")
+        max_framerate = xrc.XRCCTRL(previewPerCamPanel,"MAX_FRAMERATE")
         if 'max_framerate' in scalar_control_info:
             val = scalar_control_info['max_framerate']
             max_framerate.SetValue( str( val ) )
-            EVT_TEXT(max_framerate, max_framerate.GetId(),
+            wx.EVT_TEXT(max_framerate, max_framerate.GetId(),
                      self.OnSetMaxFramerate)
         else:
             max_framerate.Enable(False)
 
-        view_image_choice = XRCCTRL(previewPerCamPanel,"view_image_display")
-        EVT_CHOICE(view_image_choice, view_image_choice.GetId(),
+        view_image_choice = xrc.XRCCTRL(previewPerCamPanel,"view_image_display")
+        wx.EVT_CHOICE(view_image_choice, view_image_choice.GetId(),
                    self.OnSetViewImageChoice)
 
-        arena_control = XRCCTRL(previewPerCamPanel,
+        arena_control = xrc.XRCCTRL(previewPerCamPanel,
                              "ARENA_CONTROL")
-        EVT_CHECKBOX(arena_control, arena_control.GetId(), self.OnArenaControl)
+        wx.EVT_CHECKBOX(arena_control, arena_control.GetId(), self.OnArenaControl)
         
-        ext_trig = XRCCTRL(previewPerCamPanel,
+        ext_trig = xrc.XRCCTRL(previewPerCamPanel,
                            "EXT_TRIG")
         val = scalar_control_info['trigger_mode']
         ext_trig.SetValue( val )
-        EVT_CHECKBOX(ext_trig, ext_trig.GetId(), self.OnExtTrig)
+        wx.EVT_CHECKBOX(ext_trig, ext_trig.GetId(), self.OnExtTrig)
         
-        roi2 = XRCCTRL(previewPerCamPanel,
+        roi2 = xrc.XRCCTRL(previewPerCamPanel,
                            "ROI2")
         val = scalar_control_info['roi2']
         roi2.SetValue( val )
-        EVT_CHECKBOX(roi2, roi2.GetId(), self.OnROI2)
+        wx.EVT_CHECKBOX(roi2, roi2.GetId(), self.OnROI2)
         
-        per_cam_controls_panel = XRCCTRL(previewPerCamPanel,
+        per_cam_controls_panel = xrc.XRCCTRL(previewPerCamPanel,
                                          "PerCameraControlsContainer")
-        grid = wxFlexGridSizer(0,3,0,0) # 3 columns
+        grid = wx.FlexGridSizer(0,3,0,0) # 3 columns
         grid.AddGrowableCol(2)
 
         params = scalar_control_info.keys()
@@ -479,18 +481,18 @@ class wxMainBrainApp(wxApp):
             if param not in ['shutter','gain','brightness']:
                 continue
             current_value, min_value, max_value = scalar_control_info[param]
-            grid.Add( wxStaticText(per_cam_controls_panel,wxNewId(),param),
-                     0,wxALIGN_RIGHT|wxALIGN_CENTER_VERTICAL )
+            grid.Add( wx.StaticText(per_cam_controls_panel,wx.NewId(),param),
+                     0,wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL )
             
-            txtctrl = wxTextCtrl( per_cam_controls_panel, wxNewId(),
+            txtctrl = wx.TextCtrl( per_cam_controls_panel, wx.NewId(),
                                   size=(40,20))
             txtctrl.SetValue(str(current_value))
-            grid.Add( txtctrl,0,wxALIGN_LEFT )
+            grid.Add( txtctrl,0,wx.ALIGN_LEFT )
             
-            slider = wxSlider( per_cam_controls_panel, wxNewId(),
+            slider = wx.Slider( per_cam_controls_panel, wx.NewId(),
                                current_value, min_value, max_value,
-                               style= wxSL_HORIZONTAL )
-            grid.Add( slider,1,wxEXPAND )
+                               style= wx.SL_HORIZONTAL )
+            grid.Add( slider,1,wx.EXPAND )
             
             class ParamSliderHelper:
                 def __init__(self, name, cam_id, txtctrl, slider,
@@ -527,7 +529,7 @@ class wxMainBrainApp(wxApp):
                     self.update(new_value)
 
             if param.lower() == 'shutter':
-                label_if_shutter = XRCCTRL(previewPerCamPanel,
+                label_if_shutter = xrc.XRCCTRL(previewPerCamPanel,
                                            'exposure_label') # get label
                 label_if_shutter.SetLabel(
                     'Exposure (msec): %.3f'%(current_value*0.02,))
@@ -535,8 +537,8 @@ class wxMainBrainApp(wxApp):
                 label_if_shutter = None
             psh = ParamSliderHelper(param,cam_id,txtctrl,slider,
                                     self.main_brain,label_if_shutter)
-            EVT_COMMAND_SCROLL(slider, slider.GetId(), psh.onScroll)
-            EVT_TEXT(txtctrl, txtctrl.GetId(), psh.onText)
+            wx.EVT_COMMAND_SCROLL(slider, slider.GetId(), psh.onScroll)
+            wx.EVT_TEXT(txtctrl, txtctrl.GetId(), psh.onText)
             self.cameras[cam_id]['sliderHelper_%s'%param]=psh
       
         per_cam_controls_panel.SetSizer(grid)
@@ -552,17 +554,17 @@ class wxMainBrainApp(wxApp):
             psh = self.cameras[cam_id]['sliderHelper_%s'%param]
             psh.external_set(current_value)
         elif param == 'clear_threshold':
-            threshold_clear_value = XRCCTRL(previewPerCamPanel,"threshold_clear_value")
+            threshold_clear_value = xrc.XRCCTRL(previewPerCamPanel,"threshold_clear_value")
             threshold_clear_value.SetValue( str( value ) )
         elif param == 'diff_threshold':
-            threshold_diff_value = XRCCTRL(previewPerCamPanel,"threshold_value")
+            threshold_diff_value = xrc.XRCCTRL(previewPerCamPanel,"threshold_value")
             threshold_diff_value.SetValue( str( value ) )
         elif param == 'trigger_mode':
-            ext_trig = XRCCTRL(previewPerCamPanel,
+            ext_trig = xrc.XRCCTRL(previewPerCamPanel,
                                "EXT_TRIG")
             ext_trig.SetValue( value )
         elif param == 'roi2':
-            roi2 = XRCCTRL(previewPerCamPanel,
+            roi2 = xrc.XRCCTRL(previewPerCamPanel,
                            "ROI2")
             roi2.SetValue( value )
         else:
@@ -570,7 +572,7 @@ class wxMainBrainApp(wxApp):
                 print 'WARNING: could not update panel display for',param
 
     def OnKalmanParametersChange(self,event=None):
-        ctrl = XRCCTRL(self.status_panel,
+        ctrl = xrc.XRCCTRL(self.status_panel,
                        "kalman_parameters_choice")
         kalman_param_string = ctrl.GetStringSelection()
         model_dicts = flydra.kalman.dynamic_models.get_dynamic_model_dict()
@@ -583,26 +585,26 @@ class wxMainBrainApp(wxApp):
         previewPerCamPanel.Destroy()
 
     def InitSnapshotPanel(self):
-        snapshot_cam_choice = XRCCTRL(self.snapshot_panel,
+        snapshot_cam_choice = xrc.XRCCTRL(self.snapshot_panel,
                                          "snapshot_cam_choice")
-        snapshot_button = XRCCTRL(self.snapshot_panel,
+        snapshot_button = xrc.XRCCTRL(self.snapshot_panel,
                                   "snapshot_button")
-        snapshot_colormap = XRCCTRL(self.snapshot_panel,
+        snapshot_colormap = xrc.XRCCTRL(self.snapshot_panel,
                                   "snapshot_colormap")
-        fixed_color_range = XRCCTRL(self.snapshot_panel,
+        fixed_color_range = xrc.XRCCTRL(self.snapshot_panel,
                                     "fixed_color_range")
-        EVT_CHECKBOX(fixed_color_range, fixed_color_range.GetId(),
+        wx.EVT_CHECKBOX(fixed_color_range, fixed_color_range.GetId(),
                      self.OnFixedColorRange)
-        EVT_BUTTON(snapshot_button, snapshot_button.GetId(),
+        wx.EVT_BUTTON(snapshot_button, snapshot_button.GetId(),
                    self.OnSnapshot)
-        EVT_CHOICE(snapshot_colormap, snapshot_colormap.GetId(),
+        wx.EVT_CHOICE(snapshot_colormap, snapshot_colormap.GetId(),
                    self.OnSnapshotColormap)
-        EVT_LISTBOX(snapshot_cam_choice, snapshot_cam_choice.GetId(),
+        wx.EVT_LISTBOX(snapshot_cam_choice, snapshot_cam_choice.GetId(),
                    self.OnSnapshot)
-        EVT_LISTBOX_DCLICK(snapshot_cam_choice, snapshot_cam_choice.GetId(),
+        wx.EVT_LISTBOX_DCLICK(snapshot_cam_choice, snapshot_cam_choice.GetId(),
                            self.OnSnapshot)
-        snapshot_plot = XRCCTRL(self.snapshot_panel,"snapshot_plot")
-        sizer = wxBoxSizer(wxVERTICAL)
+        snapshot_plot = xrc.XRCCTRL(self.snapshot_panel,"snapshot_plot")
+        sizer = wx.BoxSizer(wx.VERTICAL)
         
         # matplotlib panel itself
         if PLOTPANEL:
@@ -610,12 +612,12 @@ class wxMainBrainApp(wxApp):
             self.plotpanel.init_plot_data()
         
             # wx boilerplate
-            sizer.Add(self.plotpanel, 1, wxEXPAND)
+            sizer.Add(self.plotpanel, 1, wx.EXPAND)
         snapshot_plot.SetSizer(sizer)
 
     def SnapshotPerCamInit(self,cam_id):
         # Choice control
-        snapshot_cam_choice = XRCCTRL(self.snapshot_panel,
+        snapshot_cam_choice = xrc.XRCCTRL(self.snapshot_panel,
                                          "snapshot_cam_choice")
         orig_selection = snapshot_cam_choice.GetStringSelection()
         cam_list = [snapshot_cam_choice.GetString(i) for i in
@@ -637,38 +639,38 @@ class wxMainBrainApp(wxApp):
         snapshot_cam_choice.GetParent().GetSizer().Layout()
 
     def SnapshotPerCamClose(self,cam_id):
-        snapshot_cam_choice = XRCCTRL(self.snapshot_panel,
+        snapshot_cam_choice = xrc.XRCCTRL(self.snapshot_panel,
                                          "snapshot_cam_choice")
         i=snapshot_cam_choice.FindString(cam_id)
         snapshot_cam_choice.Delete(i)
 
     def InitRecordRawPanel(self):
-        self.record_raw = XRCCTRL(self.record_raw_panel,
+        self.record_raw = xrc.XRCCTRL(self.record_raw_panel,
                                   "record_raw")
-        EVT_CHECKBOX(self.record_raw, self.record_raw.GetId(),
+        wx.EVT_CHECKBOX(self.record_raw, self.record_raw.GetId(),
                      self.OnRecordRaw)
 
-##        filename_text_entry = XRCCTRL(self.record_raw_panel,
+##        filename_text_entry = xrc.XRCCTRL(self.record_raw_panel,
 ##                                      "record_raw_filename")
 
-        self.record_small = XRCCTRL(self.record_raw_panel,
+        self.record_small = xrc.XRCCTRL(self.record_raw_panel,
                                   "record_small")
-        EVT_CHECKBOX(self.record_small, self.record_small.GetId(),
+        wx.EVT_CHECKBOX(self.record_small, self.record_small.GetId(),
                      self.OnRecordSmall)
 
-##        small_filename_text_entry = XRCCTRL(self.record_raw_panel,
+##        small_filename_text_entry = xrc.XRCCTRL(self.record_raw_panel,
 ##                                            "record_small_filename")
 
-##        EVT_SET_FOCUS(filename_text_entry,
+##        wx.EVT_SET_FOCUS(filename_text_entry,
 ##                      self.OnFilenameSetFocus)
 
-##        EVT_KILL_FOCUS(filename_text_entry,
+##        wx.EVT_KILL_FOCUS(filename_text_entry,
 ##                      self.OnFilenameKillFocus)
         
-##        EVT_SET_FOCUS(small_filename_text_entry,
+##        wx.EVT_SET_FOCUS(small_filename_text_entry,
 ##                      self.OnFilenameSetFocus)
 
-##        EVT_KILL_FOCUS(small_filename_text_entry,
+##        wx.EVT_KILL_FOCUS(small_filename_text_entry,
 ##                      self.OnFilenameKillFocus)
         
         self._currently_recording_cams = []
@@ -700,9 +702,9 @@ class wxMainBrainApp(wxApp):
         if len(self._currently_recording_cams) != 0:
             raise RuntimeError("currently recording!")
         
-        cam_choice = XRCCTRL(self.record_raw_panel,
+        cam_choice = xrc.XRCCTRL(self.record_raw_panel,
                              "record_raw_cam_select_checklist")
-##        filename_text_entry = XRCCTRL(self.record_raw_panel,
+##        filename_text_entry = xrc.XRCCTRL(self.record_raw_panel,
 ##                                      "record_raw_filename")
 ##        raw_filename = filename_text_entry.GetValue()
 ##        if raw_filename.endswith('.fmf'):
@@ -742,9 +744,9 @@ class wxMainBrainApp(wxApp):
         if len(self._currently_recording_small_cams) != 0:
             raise RuntimeError("currently recording!")
         
-        cam_choice = XRCCTRL(self.record_raw_panel,
+        cam_choice = xrc.XRCCTRL(self.record_raw_panel,
                              "record_raw_cam_select_checklist")
-##        filename_text_entry = XRCCTRL(self.record_raw_panel,
+##        filename_text_entry = xrc.XRCCTRL(self.record_raw_panel,
 ##                                      "record_small_filename")
 ##        small_filename = filename_text_entry.GetValue()
 ##        if small_filename.endswith('.fmf'):
@@ -824,7 +826,7 @@ class wxMainBrainApp(wxApp):
 
     def RecordRawPerCamInit(self,cam_id):
         # Choice control
-        cam_choice = XRCCTRL(self.record_raw_panel,
+        cam_choice = xrc.XRCCTRL(self.record_raw_panel,
                              "record_raw_cam_select_checklist")
         cam_list = []
         for i in range(cam_choice.GetCount()):
@@ -853,42 +855,42 @@ class wxMainBrainApp(wxApp):
         cam_choice.GetParent().GetSizer().Layout()
 
     def RecordRawPerCamClose(self,cam_id):
-        cam_choice = XRCCTRL(self.record_raw_panel,
+        cam_choice = xrc.XRCCTRL(self.record_raw_panel,
                              "record_raw_cam_select_checklist")
         i=cam_choice.FindString(cam_id)
         cam_choice.Delete(i)
     
     def InitStatusPanel(self):
-        ctrl = XRCCTRL(self.status_panel,
+        ctrl = xrc.XRCCTRL(self.status_panel,
                        "kalman_parameters_choice")
-        EVT_CHOICE(ctrl, ctrl.GetId(),
+        wx.EVT_CHOICE(ctrl, ctrl.GetId(),
                    self.OnKalmanParametersChange)
         
-        ctrl = XRCCTRL(self.status_panel,
+        ctrl = xrc.XRCCTRL(self.status_panel,
                        "ACCUMULATE_KALMAN_DATA_FOR_CALIBRATION")
-        EVT_CHECKBOX(ctrl, ctrl.GetId(),
+        wx.EVT_CHECKBOX(ctrl, ctrl.GetId(),
                      self.OnAccumulateKalmanCalibrationData)
 
-        ctrl = XRCCTRL(self.status_panel,
+        ctrl = xrc.XRCCTRL(self.status_panel,
                        "SAVE_KALMAN_CAL_DATA_TO_FILE")
-        EVT_BUTTON(ctrl, ctrl.GetId(),
+        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
                    self.OnSaveKalmanCalibrationData)
         
     def OnHypothesisTestMaxError(self,event):
-        ctrl = XRCCTRL(self.status_panel,
+        ctrl = xrc.XRCCTRL(self.status_panel,
                        "HYPOTHESIS_TEST_MAX_ERR")
         val = float(ctrl.GetValue())
         self.main_brain.set_hypothesis_test_max_error(val)
         
     def OnSaveKalmanCalibrationData(self,event):
         doit = False
-        dlg = wxDirDialog( self.frame, "Calibration save directory",
-                           style = wxDD_DEFAULT_STYLE | wxDD_NEW_DIR_BUTTON,
+        dlg = wx.DirDialog( self.frame, "Calibration save directory",
+                           style = wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON,
                            defaultPath = os.environ.get('HOME',''),
                            )
         try:
             self.pass_all_keystrokes = True
-            if dlg.ShowModal() == wxID_OK:
+            if dlg.ShowModal() == wx.ID_OK:
                 calib_dir = dlg.GetPath()
                 doit = True
         finally:
@@ -898,20 +900,20 @@ class wxMainBrainApp(wxApp):
             self.main_brain.save_kalman_calibration_data(calib_dir)
             
     def OnAccumulateKalmanCalibrationData(self,event):
-        ctrl = XRCCTRL(self.status_panel,
+        ctrl = xrc.XRCCTRL(self.status_panel,
                        "ACCUMULATE_KALMAN_DATA_FOR_CALIBRATION")
         value = ctrl.GetValue()
         self.main_brain.set_accumulate_kalman_calibration_data(value)
 
     def OnLoadCal(self,event):
         doit=False
-        dlg = wxDirDialog( self.frame, "Select directory with calibration data",
-                           style = wxDD_DEFAULT_STYLE,
+        dlg = wx.DirDialog( self.frame, "Select directory with calibration data",
+                           style = wx.DD_DEFAULT_STYLE,
                            defaultPath = os.environ.get('HOME','')
                            )
         try:
             self.pass_all_keystrokes = True
-            if dlg.ShowModal() == wxID_OK:
+            if dlg.ShowModal() == wx.ID_OK:
                 calib_dir = dlg.GetPath()
                 doit = True
         finally:
@@ -919,7 +921,7 @@ class wxMainBrainApp(wxApp):
             self.pass_all_keystrokes = False
         if doit:
             self.main_brain.load_calibration(calib_dir)
-            cal_status_check = XRCCTRL(self.cam_preview_panel,
+            cal_status_check = xrc.XRCCTRL(self.cam_preview_panel,
                                        "CAL_STATUS_CHECK")
             cal_status_check.Enable(True)
             cal_status_check.SetValue(True)
@@ -935,7 +937,7 @@ class wxMainBrainApp(wxApp):
             self.plotpanel.set_colormap(event.GetEventObject().GetStringSelection())
 
     def OnSnapshot(self,event):
-        snapshot_cam_choice = XRCCTRL(self.snapshot_panel,
+        snapshot_cam_choice = xrc.XRCCTRL(self.snapshot_panel,
                                       "snapshot_cam_choice")
         cam_id = snapshot_cam_choice.GetStringSelection()
         if cam_id == '':
@@ -956,13 +958,13 @@ class wxMainBrainApp(wxApp):
         self.main_brain.set_all_cameras_debug_mode( event.IsChecked() )
 
     def OnChangeSaveDataDir(self, event):
-        dlg = wxDirDialog( self.frame, "Change save data directory",
-                           style = wxDD_DEFAULT_STYLE | wxDD_NEW_DIR_BUTTON,
+        dlg = wx.DirDialog( self.frame, "Change save data directory",
+                           style = wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON,
                            defaultPath = self.save_data_dir,
                            )
         try:
             self.pass_all_keystrokes = True
-            if dlg.ShowModal() == wxID_OK:
+            if dlg.ShowModal() == wx.ID_OK:
                 self.save_data_dir = dlg.GetPath()
         finally:
             dlg.Destroy()
@@ -993,11 +995,11 @@ class wxMainBrainApp(wxApp):
         self.cam_image_canvas.set_display_points( event.IsChecked() )
         
     def OnSetTimer(self, event):
-        dlg=wxTextEntryDialog(self.frame, 'What interval should the display be updated at (msec)?',
+        dlg=wx.TextEntryDialog(self.frame, 'What interval should the display be updated at (msec)?',
                               'Set display update interval',str(self.update_interval))
         try:
             self.pass_all_keystrokes = True            
-            if dlg.ShowModal() == wxID_OK:
+            if dlg.ShowModal() == wx.ID_OK:
                 self.update_interval = int(dlg.GetValue())
                 self.timer.Start(self.update_interval)
         finally:
@@ -1005,11 +1007,11 @@ class wxMainBrainApp(wxApp):
             self.pass_all_keystrokes = False
 
     def OnSetTimer2(self, event):
-        dlg=wxTextEntryDialog(self.frame, 'What interval should raw frames be grabbed (msec)?',
+        dlg=wx.TextEntryDialog(self.frame, 'What interval should raw frames be grabbed (msec)?',
                               'Set display update interval',str(self.update_interval2))
         try:
             self.pass_all_keystrokes = True            
-            if dlg.ShowModal() == wxID_OK:
+            if dlg.ShowModal() == wx.ID_OK:
                 self.update_interval2 = int(dlg.GetValue())
                 self.timer2.Start(self.update_interval2)
         finally:
@@ -1020,30 +1022,30 @@ class wxMainBrainApp(wxApp):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         dlg = RES.LoadDialog(self.frame,"ROI_DIALOG") # make frame main panel
         
-        dlg_ok = XRCCTRL(dlg,"ROI_OK")
-        dlg_cam_id = XRCCTRL(dlg,"ROI_cam_id")
+        dlg_ok = xrc.XRCCTRL(dlg,"ROI_OK")
+        dlg_cam_id = xrc.XRCCTRL(dlg,"ROI_cam_id")
         dlg_cam_id.SetLabel(cam_id)
 
         lbrt = self.main_brain.get_roi(cam_id)
         width, height = self.main_brain.get_widthheight(cam_id)
         
         l,b,r,t = lbrt
-        XRCCTRL(dlg,"ROI_LEFT").SetValue(str(l))
-        XRCCTRL(dlg,"ROI_BOTTOM").SetValue(str(b))
-        XRCCTRL(dlg,"ROI_RIGHT").SetValue(str(r))
-        XRCCTRL(dlg,"ROI_TOP").SetValue(str(t))
+        xrc.XRCCTRL(dlg,"ROI_LEFT").SetValue(str(l))
+        xrc.XRCCTRL(dlg,"ROI_BOTTOM").SetValue(str(b))
+        xrc.XRCCTRL(dlg,"ROI_RIGHT").SetValue(str(r))
+        xrc.XRCCTRL(dlg,"ROI_TOP").SetValue(str(t))
         
         def OnROIOK(event):
-            dlg.left = int(XRCCTRL(dlg,"ROI_LEFT").GetValue())
-            dlg.right = int(XRCCTRL(dlg,"ROI_RIGHT").GetValue())
-            dlg.bottom = int(XRCCTRL(dlg,"ROI_BOTTOM").GetValue())
-            dlg.top = int(XRCCTRL(dlg,"ROI_TOP").GetValue())
-            dlg.EndModal( wxID_OK )
-        EVT_BUTTON(dlg_ok, dlg_ok.GetId(),
+            dlg.left = int(xrc.XRCCTRL(dlg,"ROI_LEFT").GetValue())
+            dlg.right = int(xrc.XRCCTRL(dlg,"ROI_RIGHT").GetValue())
+            dlg.bottom = int(xrc.XRCCTRL(dlg,"ROI_BOTTOM").GetValue())
+            dlg.top = int(xrc.XRCCTRL(dlg,"ROI_TOP").GetValue())
+            dlg.EndModal( wx.ID_OK )
+        wx.EVT_BUTTON(dlg_ok, dlg_ok.GetId(),
                    OnROIOK)
         try:
             self.pass_all_keystrokes = True            
-            if dlg.ShowModal() == wxID_OK:
+            if dlg.ShowModal() == wx.ID_OK:
                 l,b,r,t = dlg.left,dlg.bottom,dlg.right,dlg.top
                 lbrt = l,b,r,t
                 if l >= r or b >= t or r >= width or t >= height:
@@ -1058,7 +1060,7 @@ class wxMainBrainApp(wxApp):
         self.main_brain = main_brain
 
         if 1:
-            ctrl = XRCCTRL(self.status_panel,
+            ctrl = xrc.XRCCTRL(self.status_panel,
                            "HYPOTHESIS_TEST_MAX_ERR")
             ctrl.SetValue(str(self.main_brain.get_hypothesis_test_max_error()))
             wxvt.Validator(ctrl,
@@ -1076,15 +1078,15 @@ class wxMainBrainApp(wxApp):
 
     def OnOpenCamConfig(self, event):
         doit=False
-        dlg = wxFileDialog( self.frame, "Select file from which to open camera config data",
-                            style = wxOPEN,
+        dlg = wx.FileDialog( self.frame, "Select file from which to open camera config data",
+                            style = wx.OPEN,
                             defaultDir = os.environ.get('HOME',''),
                             defaultFile = 'flydra_cameras.cfg',
                             wildcard = '*.cfg',
                             )
         try:
             self.pass_all_keystrokes = True            
-            if dlg.ShowModal() == wxID_OK:
+            if dlg.ShowModal() == wx.ID_OK:
                 open_filename = dlg.GetPath()
                 doit = True
         finally:
@@ -1103,9 +1105,9 @@ class wxMainBrainApp(wxApp):
                             lbrt = value
                             self.cam_image_canvas.set_lbrt(cam_id,lbrt)
             except KeyError,x:
-                dlg2 = wxMessageDialog( self.frame, 'Error opening configuration data:\n'\
+                dlg2 = wx.MessageDialog( self.frame, 'Error opening configuration data:\n'\
                                         '%s: %s'%(x.__class__,x),
-                                        'Error', wxOK | wxICON_ERROR )
+                                        'Error', wx.OK | wx.ICON_ERROR )
                 try:
                     self.pass_all_keystrokes = True
                     dlg2.ShowModal()
@@ -1116,16 +1118,16 @@ class wxMainBrainApp(wxApp):
     def OnSaveCamConfig(self, event):
         all_params = self.main_brain.get_all_params()
         doit=False
-        dlg = wxFileDialog( self.frame, "Select file to save camera config data",
-                            #style = wxSAVE | wxOVERWRITE_PROMPT,
-                            style = wxDD_DEFAULT_STYLE,
+        dlg = wx.FileDialog( self.frame, "Select file to save camera config data",
+                            #style = wx.SAVE | wx.OVERWRITE_PROMPT,
+                            style = wx.DD_DEFAULT_STYLE,
                             defaultDir = os.environ.get('HOME',''),
                             defaultFile = 'flydra_cameras.cfg',
                             wildcard = '*.cfg',
                             )
         try:
             self.pass_all_keystrokes = True            
-            if dlg.ShowModal() == wxID_OK:
+            if dlg.ShowModal() == wx.ID_OK:
                 save_filename = dlg.GetPath()
                 doit = True
         finally:
@@ -1138,13 +1140,13 @@ class wxMainBrainApp(wxApp):
         
     def OnStartCalibration(self, event):
         doit = False
-        dlg = wxDirDialog( self.frame, "Calibration save directory",
-                           style = wxDD_DEFAULT_STYLE | wxDD_NEW_DIR_BUTTON,
+        dlg = wx.DirDialog( self.frame, "Calibration save directory",
+                           style = wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON,
                            defaultPath = os.environ.get('HOME',''),
                            )
         try:
             self.pass_all_keystrokes = True
-            if dlg.ShowModal() == wxID_OK:
+            if dlg.ShowModal() == wx.ID_OK:
                 calib_dir = dlg.GetPath()
                 doit = True
         finally:
@@ -1152,8 +1154,8 @@ class wxMainBrainApp(wxApp):
             self.pass_all_keystrokes = False            
         if doit:
             self.main_brain.start_calibrating(calib_dir)
-            dlg = wxMessageDialog( self.frame, 'Acquiring calibration points',
-                                   'calibration', wxOK | wxICON_INFORMATION )
+            dlg = wx.MessageDialog( self.frame, 'Acquiring calibration points',
+                                   'calibration', wx.OK | wx.ICON_INFORMATION )
             try:
                 self.pass_all_keystrokes = True
                 dlg.ShowModal()
@@ -1209,7 +1211,7 @@ class wxMainBrainApp(wxApp):
                 
         # also update a couple other things...
         
-        ctrl = XRCCTRL(self.status_panel,"KALMAN_CALIBRATION_N_POINTS")
+        ctrl = xrc.XRCCTRL(self.status_panel,"KALMAN_CALIBRATION_N_POINTS")
         n_pts = len(self.main_brain.all_kalman_calibration_data)
         ctrl.SetValue(str(n_pts))
 
@@ -1222,10 +1224,10 @@ class wxMainBrainApp(wxApp):
         if realtime_data is not None:
             Xs,min_mean_dist=realtime_data
             data3d = Xs[0]
-            XRCCTRL(self.status_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
-            XRCCTRL(self.status_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
-            XRCCTRL(self.status_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
-            XRCCTRL(self.status_panel,'err').SetValue('% 8.1f'%min_mean_dist)
+            xrc.XRCCTRL(self.status_panel,'x_pos').SetValue('% 8.1f'%data3d[0])
+            xrc.XRCCTRL(self.status_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
+            xrc.XRCCTRL(self.status_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
+            xrc.XRCCTRL(self.status_panel,'err').SetValue('% 8.1f'%min_mean_dist)
             if min_mean_dist <= 10.0:
                 if self.detect_sound is not None:
                     now = time.time()
@@ -1263,7 +1265,7 @@ class wxMainBrainApp(wxApp):
                                                            xoffset=image_coords[0],
                                                            yoffset=image_coords[1])
                     if show_fps is not None:
-                        show_fps_label = XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
+                        show_fps_label = xrc.XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
                         show_fps_label.SetLabel('fps: %.1f'%show_fps)
                     for i,pt in enumerate(points):
                         pt = list(pt)
@@ -1275,7 +1277,7 @@ class wxMainBrainApp(wxApp):
 
             self.cam_image_canvas.OnDraw()
 
-            if isinstance(event,wxIdleEventPtr):
+            if isinstance(event,wx.IdleEvent):
                 event.RequestMore()
             
     def OnNewCamera(self, cam_id, scalar_control_info, fqdnport):
