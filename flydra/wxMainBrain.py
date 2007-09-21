@@ -37,14 +37,6 @@ from wx import xrc
 import pkg_resources
 from optparse import OptionParser
 
-if 0:
-    import OpenGL
-    if OpenGL.__version__.startswith('3'):
-        raise RuntimeError("wxMainBrain/wxglvideo is known to not work with PyOpenGL 3 (for now)")
-    import wxglvideo
-else:
-    import wxvideo as wxglvideo
-
 SCROLLED=False
 if SCROLLED:
     from wxPython.lib.scrolledpanel import wxScrolledPanel
@@ -81,6 +73,17 @@ def validate_positive_float(val_str):
     
 class wxMainBrainApp(wx.App):
     def OnInit(self,*args,**kw):
+        global use_opengl, wxglvideo
+
+        if use_opengl:
+            import OpenGL
+            if OpenGL.__version__.startswith('3'):
+                raise RuntimeError("wxMainBrain/wxglvideo is known to not work with PyOpenGL 3 (for now)")
+            import wxglvideo
+        else:
+            import wxvideo as wxglvideo
+
+        
         self.pass_all_keystrokes = False
         wx.InitAllImageHandlers()
         frame = wx.Frame(None, -1, "Flydra Main Brain",size=(650,600))
@@ -1416,8 +1419,12 @@ def main():
                       help="hostname of mainbrain SERVER",
                       default='',
                       metavar="SERVER")
+    parser.add_option("--disable-opengl", dest="use_opengl",
+                      default=True, action="store_false")
     (options, args) = parser.parse_args()
-    
+
+    global use_opengl
+    use_opengl = options.use_opengl
     # initialize GUI
     #app = App(redirect=1,filename='flydra_log.txt')
     app = wxMainBrainApp(0)
