@@ -120,6 +120,8 @@ try:
     hostname = socket.gethostbyname('mainbrain')
 except:
     hostname = socket.gethostbyname(socket.gethostname())
+    
+print 'running mainbrain at hostname %s'%hostname
 
 downstream_hosts = []
 
@@ -1592,8 +1594,12 @@ class MainBrain(object):
         self.MainBrain_cam_ids_copy.append( cam_id )
 
     def DecreaseCamCounter(self,cam_id):
+        try:
+            idx = self.MainBrain_cam_ids_copy.index( cam_id )
+        except ValueError, err:
+            print 'IGNORING ERROR: DecreaseCamCounter() called with non-existant cam_id'
+            return
         self.num_cams -= 1
-        idx = self.MainBrain_cam_ids_copy.index( cam_id )
         del self.MainBrain_cam_ids_copy[idx]
 
     def get_num_cams(self):
