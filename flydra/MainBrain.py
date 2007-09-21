@@ -14,7 +14,6 @@ from numpy import nan, inf
 near_inf = 9.999999e20
 import Queue
 import tables as PT
-import numarray.records
 pytables_filt = numpy.asarray
 import atexit
 import pickle
@@ -121,8 +120,6 @@ try:
 except:
     hostname = socket.gethostbyname(socket.gethostname())
     
-print 'running mainbrain at hostname %s'%hostname
-
 downstream_hosts = []
 
 if 1:
@@ -1471,8 +1468,12 @@ class MainBrain(object):
 
     # main MainBrain class
     
-    def __init__(self):
-        global main_brain_keeper
+    def __init__(self,server=None):
+        global main_brain_keeper, hostname
+
+        if server is not None:
+            hostname = server
+        print 'running mainbrain at hostname %s'%hostname
 
         assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
 
@@ -2060,7 +2061,8 @@ class MainBrain(object):
         #   save
         if self.h5data2d is not None and len(list_of_rows_of_data2d):
             # it's much faster to convert to numarray first:
-            recarray = numarray.records.array(
+            # XXX (converted to numpy without double checking - ADS 20070921)
+            recarray = numpy.recarray(
                 list_of_rows_of_data2d,
                 formats=Info2DColFormats,
                 names=Info2DColNames)

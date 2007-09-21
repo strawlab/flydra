@@ -35,6 +35,7 @@ from wxwrap import wx
 from wx import xrc
 
 import pkg_resources
+from optparse import OptionParser
 
 if 0:
     import OpenGL
@@ -1409,12 +1410,20 @@ class wxMainBrainApp(wx.App):
         self.update_wx()
     
 def main():
+    usage = '%prog [options]'
+    parser = OptionParser(usage)
+    parser.add_option("--server", dest="server", type='string',
+                      help="hostname of mainbrain SERVER",
+                      default='',
+                      metavar="SERVER")
+    (options, args) = parser.parse_args()
+    
     # initialize GUI
     #app = App(redirect=1,filename='flydra_log.txt')
     app = wxMainBrainApp(0)
     
     # create main_brain server (not started yet)
-    main_brain = MainBrain.MainBrain()
+    main_brain = MainBrain.MainBrain(server=options.server)
 
     try:
         # connect server to GUI
