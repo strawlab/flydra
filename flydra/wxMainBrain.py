@@ -37,7 +37,7 @@ from wx import xrc
 import pkg_resources
 from optparse import OptionParser
 
-SCROLLED=False
+SCROLLED=True
 if SCROLLED:
     from wxPython.lib.scrolledpanel import wxScrolledPanel
 
