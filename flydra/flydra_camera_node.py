@@ -244,7 +244,7 @@ class GrabClass(object):
 
         
         #FastImage.set_debug(3) # let us see any images malloced, should only happen on hardware ROI size change
-        
+
         self.cam.start_camera()  # start camera
 
         # take first image to set background and so on
@@ -684,12 +684,11 @@ class GrabClass(object):
                         t4J = 0.0
                         t4K = 0.0
                         t4L = 0.0
-                        numT = 0                    
+                        numT = 0
+        
         finally:
             self.realtime_analyzer.close()
             #FastImage.set_debug(0)
-            globals['cam_quit_event'].set()
-            globals['grab_thread_done'].set()
 
 class App:
     
@@ -788,7 +787,6 @@ class App:
             # control flow events for threading model
             globals['cam_quit_event'] = threading.Event()
             globals['listen_thread_done'] = threading.Event()
-            globals['grab_thread_done'] = threading.Event()
             globals['take_background'] = threading.Event()
             globals['clear_background'] = threading.Event()
             globals['collecting_background'] = threading.Event()
@@ -912,6 +910,7 @@ class App:
                 DEBUG('starting grab_thread()')
                 grab_thread.start() # start grabbing frames from camera
                 DEBUG('grab_thread() started')
+                globals['grab_thread'] = grab_thread
             else:
                 # run in single-thread for benchmark
                 grabber.grab_func(globals)
@@ -1137,21 +1136,17 @@ class App:
         DEBUG('entering mainloop 2')
         try:
             try:
-                cams_in_operation = self.num_cams
-                while cams_in_operation>0:
-                    cams_in_operation = 0
+                have_at_least_one_live_camera = True
+                while have_at_least_one_live_camera:
+                    have_at_least_one_live_camera = False # check each cycle
                     for cam_no in range(self.num_cams):
                         globals = self.globals[cam_no] # shorthand
+                        if not globals['grab_thread'].isAlive():
+                            continue
+                        have_at_least_one_live_camera = True
                         last_frames = last_frames_by_cam[cam_no]
                         last_points = self.last_points_by_cam[cam_no]
                         last_points_framenumbers = self.last_points_framenumbers_by_cam[cam_no]
-
-                        # check if camera running
-                        if globals['cam_quit_event'].isSet():
-                            continue
-
-                        cams_in_operation = cams_in_operation + 1
-
                         cam = self.all_cams[cam_no]
                         cam_id = self.all_cam_ids[cam_no]
 
@@ -1313,7 +1308,7 @@ class App:
                     self.main_brain.close(cam_id)
                 self.main_brain_lock.release()
                 for cam_no in range(self.num_cams):
-                    self.globals[cam_no]['cam_quit_event'].set()                    
+                    self.globals[cam_no]['cam_quit_event'].set()
         except ConnectionClosedError:
             print 'unexpected connection closure...'
 
