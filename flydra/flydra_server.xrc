@@ -218,11 +218,6 @@
                 <object class="wxBoxSizer">
                   <orient>wxHORIZONTAL</orient>
                   <object class="sizeritem">
-                    <object class="wxButton" name="find_Rcenter">
-                      <label>find Rcenter</label>
-                    </object>
-                  </object>
-                  <object class="sizeritem">
                     <object class="wxButton" name="set_roi">
                       <label>Set ROI...</label>
                     </object>
@@ -321,12 +316,6 @@
             </object>
             <flag>wxRIGHT</flag>
             <border>20</border>
-          </object>
-          <object class="sizeritem">
-            <object class="wxCheckBox" name="ARENA_CONTROL">
-              <label>send LED arena signals</label>
-              <checked>0</checked>
-            </object>
           </object>
           <hgap>10</hgap>
           <object class="sizeritem">
