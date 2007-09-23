@@ -317,7 +317,7 @@ class wxMainBrainApp(wx.App):
                 widget = self.collecting_background_buttons[cam_id]
                 widget.SetValue( not widget.GetValue() )
                 id = widget.GetId()
-                event = wx.CommandEvent(wx.EVT_COMMAND_CHECKBOX_CLICKED,id)
+                event = wx.CommandEvent(wx.wxEVT_COMMAND_CHECKBOX_CLICKED,id)
                 event.SetEventObject( widget )
                 widget.Command( event )
             self.statusbar.SetStatusText('running BG collection toggled',0)
@@ -330,7 +330,7 @@ class wxMainBrainApp(wx.App):
             for cam_id in self.cameras.keys():
                 widget = self.take_background_buttons[cam_id]
                 id = widget.GetId()
-                event = wx.CommandEvent(wx.EVT_COMMAND_BUTTON_CLICKED,id)
+                event = wx.CommandEvent(wx.wxEVT_COMMAND_BUTTON_CLICKED,id)
                 event.SetEventObject( widget )
                 widget.Command( event )
             self.statusbar.SetStatusText('took BG images',0)
@@ -338,7 +338,7 @@ class wxMainBrainApp(wx.App):
             for cam_id in self.cameras.keys():
                 widget = self.clear_background_buttons[cam_id]
                 id = widget.GetId()
-                event = wx.CommandEvent(wx.EVT_COMMAND_BUTTON_CLICKED,id)
+                event = wx.CommandEvent(wx.wxEVT_COMMAND_BUTTON_CLICKED,id)
                 event.SetEventObject( widget )
                 widget.Command( event )
             self.statusbar.SetStatusText('cleared BG images',0)
@@ -437,10 +437,6 @@ class wxMainBrainApp(wx.App):
         wx.EVT_BUTTON(clear_background, clear_background.GetId(),
                    self.OnClearBackground)
         
-        find_Rcenter = xrc.XRCCTRL(previewPerCamPanel,"find_Rcenter")
-        wx.EVT_BUTTON(find_Rcenter, find_Rcenter.GetId(),
-                   self.OnFindRCenter)
-        
         set_roi = xrc.XRCCTRL(previewPerCamPanel,"set_roi")
         wx.EVT_BUTTON(set_roi, set_roi.GetId(), self.OnSetROI)
 
@@ -471,10 +467,6 @@ class wxMainBrainApp(wx.App):
         wx.EVT_CHOICE(view_image_choice, view_image_choice.GetId(),
                    self.OnSetViewImageChoice)
 
-        arena_control = xrc.XRCCTRL(previewPerCamPanel,
-                             "ARENA_CONTROL")
-        wx.EVT_CHECKBOX(arena_control, arena_control.GetId(), self.OnArenaControl)
-        
         ext_trig = xrc.XRCCTRL(previewPerCamPanel,
                            "EXT_TRIG")
         val = scalar_control_info['trigger_mode']
@@ -1336,10 +1328,6 @@ class wxMainBrainApp(wx.App):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         self.main_brain.clear_background(cam_id)
 
-    def OnFindRCenter(self, event):
-        cam_id = self._get_cam_id_for_button(event.GetEventObject())
-        self.main_brain.find_r_center(cam_id)
-
     def OnCloseCamera(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         self.main_brain.close_camera(cam_id) # eventually calls OnOldCamera
@@ -1371,11 +1359,6 @@ class wxMainBrainApp(wx.App):
         widget = event.GetEventObject()
         value = widget.GetStringSelection()
         self.main_brain.send_set_camera_property(cam_id,'visible_image_view',value)
-
-    def OnArenaControl(self, event):
-        widget = event.GetEventObject()
-        cam_id = self._get_cam_id_for_button(widget)
-        self.main_brain.set_use_arena( cam_id, widget.IsChecked() )
 
     def OnExtTrig(self, event):
         widget = event.GetEventObject()

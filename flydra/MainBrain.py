@@ -584,8 +584,19 @@ class CoordReceiver(threading.Thread):
             if not len(in_ready):
                 continue
 
+            timestamp_echo_gatherer_ready = False
             if self.timestamp_echo_gatherer in in_ready:
-                buf, (remote_ip,cam_port) = self.timestamp_echo_gatherer.recvfrom(4096)
+                timestamp_echo_gatherer_ready = True
+                try:
+                    buf, (remote_ip,cam_port) = self.timestamp_echo_gatherer.recvfrom(4096)
+                except Exception, err:
+                    print 'WARNING: unknown Exception receiving timestamp echo data:',str(err)
+                    timestamp_echo_gatherer_ready = False
+                except:
+                    print 'WARNING: unknown error (non-Exception!) receiving timestamp echo data:'
+                    timestamp_echo_gatherer_ready = False
+                    
+            if timestamp_echo_gatherer_ready:
                 stop_timestamp = time_time()
                 start_timestamp,remote_timestamp = struct_unpack(timestamp_echo_fmt2,buf)
                 #measurement_duration = stop_timestamp-start_timestamp
@@ -606,11 +617,13 @@ class CoordReceiver(threading.Thread):
                     rowidx = numpy.argmin(roundtrip_duration)
                     srs = tarray[rowidx,:]
                     start_timestamp, remote_timestamp, stop_timestamp = srs
-                    print '%s : clock diff: %.3f msec(measurement err: %.3f msec)'%(
-                        remote_hostname,
-                        (remote_timestamp-start_timestamp)*1e3,
-                        roundtrip_duration[rowidx]*1e3,
-                        )
+                    clock_diff_msec = (remote_timestamp-start_timestamp)*1e3
+                    if clock_diff_msec > 1:
+                        print '%s : clock diff: %.3f msec(measurement err: %.3f msec)'%(
+                            remote_hostname,
+                            clock_diff_msec,
+                            roundtrip_duration[rowidx]*1e3,
+                            )
 
                     self.main_brain.queue_host_clock_info.put(  (remote_hostname,
                                                                  start_timestamp,
@@ -642,7 +655,14 @@ class CoordReceiver(threading.Thread):
 
                     
                     if NETWORK_PROTOCOL == 'udp':
-                        newdata, addr = sockobj.recvfrom(4096)
+                        try:
+                            newdata, addr = sockobj.recvfrom(4096)
+                        except Exception, err:
+                            print 'WARNING: unknown Exception receiving UDP data:',str(err)
+                            continue
+                        except:
+                            print 'WARNING: unknown error (non-Exception!) receiving UDP data:'
+                            continue
                     elif NETWORK_PROTOCOL == 'tcp':
                         newdata = sockobj.recv(4096)
                     else:
@@ -1181,32 +1201,6 @@ class MainBrain(object):
                 cam_lock.acquire()
                 try:
                     cam['commands']['quit']=True
-                finally:
-                    cam_lock.release()
-            finally:
-                self.cam_info_lock.release()
-
-        def external_set_use_arena( self, cam_id, value):
-            self.cam_info_lock.acquire()
-            try:
-                cam = self.cam_info[cam_id]
-                cam_lock = cam['lock']
-                cam_lock.acquire()
-                try:
-                    cam['commands']['use_arena']=value
-                finally:
-                    cam_lock.release()
-            finally:
-                self.cam_info_lock.release()
-
-        def external_find_r_center( self, cam_id):
-            self.cam_info_lock.acquire()
-            try:
-                cam = self.cam_info[cam_id]
-                cam_lock = cam['lock']
-                cam_lock.acquire()
-                try:
-                    cam['commands']['find_r_center']=None
                 finally:
                     cam_lock.release()
             finally:
@@ -1820,9 +1814,6 @@ class MainBrain(object):
         self.remote_api.external_quit( cam_id )
         sys.stdout.flush()
 
-    def set_use_arena(self, cam_id, value):
-        self.remote_api.external_set_use_arena( cam_id, value)
-
     def set_debug_mode(self, cam_id, value):
         self.remote_api.external_set_debug( cam_id, value)
 
@@ -1834,9 +1825,6 @@ class MainBrain(object):
 
     def clear_background(self,cam_id):
         self.remote_api.external_clear_background(cam_id)
-
-    def find_r_center(self,cam_id):
-        self.remote_api.external_find_r_center(cam_id)
 
     def send_set_camera_property(self, cam_id, property_name, value):
         self.remote_api.external_send_set_camera_property( cam_id, property_name, value)

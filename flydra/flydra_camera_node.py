@@ -155,12 +155,6 @@ class GrabClass(object):
         self.realtime_analyzer.scale_factor = value
     scale_factor = property( get_scale_factor, set_scale_factor )
 
-    def get_use_arena(self):
-        return self.realtime_analyzer.use_arena
-    def set_use_arena(self, value):
-        self.realtime_analyzer.use_arena = value
-    use_arena = property( get_use_arena, set_use_arena )
-
     def get_roi(self):
         return self.realtime_analyzer.roi
     def set_roi(self, lbrt):
@@ -189,14 +183,11 @@ class GrabClass(object):
         # questionable optimization: speed up by eliminating namespace lookups
         cam_quit_event_isSet = globals['cam_quit_event'].isSet
         bg_frame_number = 0
-        rot_frame_number = -1
         clear_background_isSet = globals['clear_background'].isSet
         clear_background_clear = globals['clear_background'].clear
         take_background_isSet = globals['take_background'].isSet
         take_background_clear = globals['take_background'].clear
         collecting_background_isSet = globals['collecting_background'].isSet
-        find_rotation_center_start_isSet = globals['find_rotation_center_start'].isSet
-        find_rotation_center_start_clear = globals['find_rotation_center_start'].clear
 
         if hasattr(self.cam,'set_thread_owner'):
             self.cam.set_thread_owner()
@@ -228,7 +219,6 @@ class GrabClass(object):
 
         old_ts = time.time()
         old_fn = 0
-        n_rot_samples = 560*60 # 1 minute -- WARNING: not valid for all framerates!
         points = []
 
         if os.name == 'posix' and not BENCHMARK:
@@ -516,31 +506,6 @@ class GrabClass(object):
                             (bg_image,std_image,timestamp,framenumber) ) # save it
                     bg_changed = False
                     
-                if find_rotation_center_start_isSet():
-                    find_rotation_center_start_clear()
-                    rot_frame_number=0
-                    self.realtime_analyzer.rotation_calculation_init( n_rot_samples )
-                    
-                if rot_frame_number>=0:
-                    find_rotation_center_start_clear()
-                    if len(points) > 0:
-                        pt = points[0]
-                        x0, y0, slope = pt[0],pt[1],pt[3]
-                    else:
-                        x0 = y0 = slope = 0.0
-                    if slope != 0.0:
-                        rise = 1.0
-                        run = rise/slope
-                        orientation = math.atan2(rise,run)
-                        orientation = orientation + math.pi/2.0
-                    else:
-                        orientation = math.pi/2.0
-                    self.realtime_analyzer.rotation_update(x0,y0,orientation,timestamp)
-                    rot_frame_number += 1
-                    if rot_frame_number>=n_rot_samples:
-                        self.realtime_analyzer.rotation_end()
-                        rot_frame_number=-1 # stop averaging frames
-              
                 # XXX could speed this with a join operation I think
                 data = struct.pack('<ddli',timestamp,cam_received_time,
                                    framenumber,len(points))
@@ -791,7 +756,6 @@ class App:
             globals['clear_background'] = threading.Event()
             globals['collecting_background'] = threading.Event()
             globals['collecting_background'].set()
-            globals['find_rotation_center_start'] = threading.Event()
             globals['export_image_name'] = 'raw'
             globals['use_roi2'] = threading.Event()
             globals['use_cmp'] = threading.Event()
@@ -896,9 +860,6 @@ class App:
             grabber.diff_threshold = diff_threshold
             grabber.clear_threshold = clear_threshold
             
-            grabber.use_arena = False
-            globals['use_arena'] = grabber.use_arena
-
             if not BENCHMARK or FLYDRA_BT:
                 print 'starting grab thread'
 
@@ -974,9 +935,6 @@ class App:
                     nxim = nx.asarray(im) # view of __array_struct__ form
                     self.main_brain.set_image(cam_id, (lb, nxim))
                     
-            elif key == 'use_arena':
-                grabber.use_arena = cmds[key]
-                globals['use_arena'] = grabber.use_arena
             elif key == 'request_missing':
                 camn_and_list = map(int,cmds[key].split())
                 camn, framenumber_offset = camn_and_list[:2]
@@ -1034,8 +992,6 @@ class App:
 ##                else:
 ##                    globals['collecting_background'].clear()
 ##                    print 'cleared collecting'
-            elif key == 'find_r_center':
-                globals['find_rotation_center_start'].set()
             elif key == 'stop_recording':
                 if globals['raw_fmf_and_bg_fmf'] is not None:
                     raw_movie, bg_movie, std_movie = globals['raw_fmf_and_bg_fmf']
