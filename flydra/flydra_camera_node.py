@@ -314,8 +314,8 @@ class GrabClass(object):
             t4J = 0.0
             t4K = 0.0
             t4L = 0.0
-            numT = 0                    
-        try:
+            numT = 0
+        if 1:
             while not cam_quit_event_isSet():
                 if BENCHMARK:
                     t1 = time.time()
@@ -650,10 +650,6 @@ class GrabClass(object):
                         t4K = 0.0
                         t4L = 0.0
                         numT = 0
-        
-        finally:
-            self.realtime_analyzer.close()
-            #FastImage.set_debug(0)
 
 class App:
     
