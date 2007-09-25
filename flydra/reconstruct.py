@@ -4,9 +4,6 @@ opj=os.path.join
 import numpy as nx
 import numpy
 import sets
-svd = numpy.linalg.svd
-import numpy as fast_nx
-fast_svd = numpy.linalg.svd
 import flydra.reconstruct_utils as reconstruct_utils # in pyrex/C for speed
 import time
 from flydra.common_variables import MINIMUM_ECCENTRICITY
@@ -387,7 +384,7 @@ class Reconstructor:
                  ):
         self.cal_source = cal_source
 
-        if type(self.cal_source) in [str,unicode]:
+        if isinstance(self.cal_source,str) or isinstance(self.cal_source,unicode):
             if not self.cal_source.endswith('h5'):
                 self.cal_source_type = 'normal files'
             else:
@@ -455,7 +452,15 @@ class Reconstructor:
             rad_files = glob.glob(os.path.join(use_cal_source,'*.rad'))
             assert len(rad_files) < 10
             rad_files.sort() # cheap trick to associate camera number with file
-            for cam_id, filename in zip( cam_ids, rad_files ):
+            for cam_id, filename in map( None, cam_ids, rad_files ):
+                if filename is None:
+                    print 'WARNING: no non-linear data (e.g. radial distortion) in calibration for %s'%cam_id
+                    self._helper[cam_id] = SingleCameraCalibration_from_basic_pmat(
+                        self.Pmat[cam_id],
+                        cam_id=cam_id,
+                        res=self.Res[cam_id]).helper
+                    continue
+                    
                 params = {}
                 execfile(filename,params)
                 self._helper[cam_id] = reconstruct_utils.ReconstructHelper(
@@ -723,7 +728,7 @@ class Reconstructor:
         reconstruct_utils.
 
         """
-        
+        svd = scipy.linalg.svd
         # for info on SVD, see Hartley & Zisserman (2003) p. 593 (see
         # also p. 587)
         
