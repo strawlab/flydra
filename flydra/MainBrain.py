@@ -188,10 +188,8 @@ KalmanEstimates = flydra.kalman.flydra_kalman_utils.KalmanEstimates
 h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
 h5_xhat_names = PT.Description(KalmanEstimates().columns)._v_names
     
-# allow rapid building of numarray.records.RecArray:
-Info2DColNames = PT.Description(Info2D().columns)._v_names
-Info2DColFormats = PT.Description(Info2D().columns)._v_nestedFormats
-
+# allow rapid building of numpy.rec.array:
+Info2DCol_description = PT.Description(Info2D().columns)._v_nestedDescr
 
 def encode_data_packet( corrected_framenumber,
                         line3d_valid,
@@ -2050,10 +2048,9 @@ class MainBrain(object):
         if self.h5data2d is not None and len(list_of_rows_of_data2d):
             # it's much faster to convert to numarray first:
             # XXX (converted to numpy without double checking - ADS 20070921)
-            recarray = numpy.recarray(
+            recarray = numpy.rec.array(
                 list_of_rows_of_data2d,
-                formats=Info2DColFormats,
-                names=Info2DColNames)
+                dtype=Info2DCol_description)
             self.h5data2d.append( recarray )
             self.h5data2d.flush()
 
