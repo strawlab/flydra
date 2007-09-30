@@ -63,7 +63,7 @@ def doit(filename,
         is_mat_file = True
     else:
         kresults = PT.openFile(filename,mode="r")
-        obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id',flavor='numpy')
+        obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id')
         use_obj_ids = numpy.unique(obs_obj_ids)
         is_mat_file = False
     
@@ -76,7 +76,7 @@ def doit(filename,
         if is_mat_file:
             frames = mat_data['kalman_frame']            
         else:
-            frames = kresults.root.kalman_observations.read(field='frame',flavor='numpy')
+            frames = kresults.root.kalman_observations.read(field='frame')
         obj_ids_by_n_frames = {}
         for i,obj_id in enumerate(use_obj_ids):
             if i%100==0:
@@ -143,6 +143,9 @@ def doit(filename,
     
     ca = core_analysis.CachingAnalyzer()
     #last_time = None
+    if not len(use_obj_ids):
+        raise ValueError('no trajectories to plot')
+        
     for obj_id_enum,obj_id in enumerate(use_obj_ids):
         if (obj_id_enum%100)==0 and len(use_obj_ids) > 5:
             print 'obj_id %d of %d'%(obj_id_enum,len(use_obj_ids))
@@ -156,10 +159,10 @@ def doit(filename,
                
         if show_observations:
             obs_idx = numpy.nonzero(obs_obj_ids==obj_id)[0]
-            obs_rows = kresults.root.kalman_observations.readCoordinates(obs_idx,flavor='numpy')
-            obs_x = obs_rows.field('x')
-            obs_y = obs_rows.field('y')
-            obs_z = obs_rows.field('z')
+            obs_rows = kresults.root.kalman_observations.readCoordinates(obs_idx)
+            obs_x = obs_rows['x']
+            obs_y = obs_rows['y']
+            obs_z = obs_rows['z']
             obs_X = numpy.vstack((obs_x,obs_y,obs_z)).T
 
             pd = tvtk.PolyData()
