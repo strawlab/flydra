@@ -8,9 +8,25 @@ import flydra.reconstruct_utils as reconstruct_utils # in pyrex/C for speed
 import time
 from flydra.common_variables import MINIMUM_ECCENTRICITY
 import scipy.linalg
+import traceback
 
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
+
+def my_rq(M):
+    """RQ decomposition, ensures diagonal of R is positive"""
+    R,K = scipy.linalg.rq(M)
+    n = R.shape[0]
+    for i in range(n):
+        if R[i,i]<0:
+            # I checked this with Mathematica. Works if R is upper-triangular.
+            R[:,i] = -R[:,i]
+            K[i,:] = -K[i,:]
+##    if R[0,0]<0:
+##        # I checked this with Mathematica. Works if R is upper-triangular.
+##        R[0,0] = -R[0,0]
+##        K[0,:] = -K[0,:]
+    return R,K
 
 def load_ascii_matrix(filename):
     fd=open(filename,mode='rb')
@@ -143,9 +159,9 @@ def setOfSubsets(L):
         
 class SingleCameraCalibration:
     def __init__(self,
-                 cam_id=None,
-                 Pmat=None,
-                 res=None,
+                 cam_id=None, # non-optional
+                 Pmat=None,   # non-optional
+                 res=None,    # non-optional
                  pp=None,
                  helper=None,
                  scale_factor=None # scale_factor is for conversion to meters (e.g. should be 1e-3 if your units are mm)
@@ -175,8 +191,10 @@ class SingleCameraCalibration:
         self.Pmat=Pmat
         self.res=res
 
+        pp_guess = False
         if pp is None:
             pp = self.res[0]/2.0,self.res[1]/2.0
+            pp_guess = True
         if len(pp) != 2:
             raise ValueError('len(pp) must be 2')
         self.pp = pp
@@ -184,13 +202,33 @@ class SingleCameraCalibration:
         if 1:
             center = self.get_image_center()
             if ((pp[0]-center[0])**2 + (pp[1]-center[1])**2 ) > 5:
-                print 'WARNING: camera calibration contains different, supposedly redundant data'
+                print 'WARNING: principal point and image center seriously misaligned'
                 print '  pp: %s, center: %s'%(str(pp),str(center))
-                #print 'WARNING: principal point and camera center seriously misaligned'
+                if pp_guess:
+                    
+                    print '  (note: one of these parameters was guessed ' \
+                          'as the midpoint of the specified image resolution, ' \
+                          'and could be wrong)'
 
         if helper is None:
-            helper = reconstruct_utils.ReconstructHelper(1,1, # focal length
-                                                         0,0, # image center
+            M = numpy.asarray(Pmat)
+            cam_center = pmat2cam_center(M)
+    
+            intrinsic_parameters, cam_rotation = my_rq(M[:,:3])
+            #intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
+            eps = 1e-6
+            if abs(intrinsic_parameters[2,2]-1.0)>eps:
+                print 'WARNING: expected last row/col of intrinsic parameter matrix to be unity'
+                print 'intrinsic_parameters[2,2]',intrinsic_parameters[2,2]
+                raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
+    
+            fc1 = intrinsic_parameters[0,0]
+            cc1 = intrinsic_parameters[0,2]
+            fc2 = intrinsic_parameters[1,1]
+            cc2 = intrinsic_parameters[1,2]
+            
+            helper = reconstruct_utils.ReconstructHelper(fc1,fc2, # focal length
+                                                         cc1,cc2, # image center
                                                          0,0, # radial distortion
                                                          0,0) # tangential distortion
         if not isinstance(helper,reconstruct_utils.ReconstructHelper):
@@ -236,17 +274,21 @@ class SingleCameraCalibration:
         return scaled
         
     def get_cam_center(self):
+        """get the 3D location of the camera center in world coordinates"""
         return pmat2cam_center(self.Pmat)
     def get_M(self):
         """return parameters except extrinsic translation params"""
         return self.Pmat[:,:3]
+    def get_t(self):
+        """return extrinsic translation parameters"""
+        return self.Pmat[:,3,numpy.newaxis]
     def get_KR(self):
         """return intrinsic params (K) and extrinsic rotation/scale params (R)"""
         M = self.get_M()
-        K,R = scipy.linalg.rq(M)
-        if K[2,2] != 0.0:
-            # normalize K
-            K = K/K[2,2]
+        K,R = my_rq(M)
+##        if K[2,2] != 0.0:
+##            # normalize K
+##            K = K/K[2,2]
         return K,R
     def get_mean_focal_length(self):
         K,R = self.get_KR()
@@ -348,12 +390,16 @@ def SingleCameraCalibration_fromfile(filename):
                                    pp=pp,
                                    helper=helper)
     
-def SingleCameraCalibration_from_basic_pmat(pmat,cam_id=None,res=None):
+def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
     M = numpy.asarray(pmat)
     cam_center = pmat2cam_center(M)
     
-    intrinsic_parameters, cam_rotation = scipy.linalg.rq(M[:,:3])
-    intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
+    intrinsic_parameters, cam_rotation = my_rq(M[:,:3])
+    #intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
+    if intrinsic_parameters[2,2]!=1.0:
+        print 'WARNING: expected last row/col of intrinsic parameter matrix to be unity'
+        raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
+    
     # (K = intrinsic parameters)
     
     #cam_translation = numpy.dot( -cam_rotation, cam_center )
@@ -373,14 +419,14 @@ def SingleCameraCalibration_from_basic_pmat(pmat,cam_id=None,res=None):
                                                  cc1,cc2, # image center
                                                  0,0, # radial distortion
                                                  0,0) # tangential distortion
-    return SingleCameraCalibration(cam_id=cam_id,
-                                   Pmat=M,
-                                   res=res,
-                                   helper=helper)
+    return SingleCameraCalibration(Pmat=M,
+                                   helper=helper,
+                                   **kw)
     
 class Reconstructor:
     def __init__(self,
                  cal_source = None,
+                 normalize_bad_calibration=False,
                  ):
         self.cal_source = cal_source
 
@@ -444,6 +490,20 @@ class Reconstructor:
             for i, cam_id in enumerate(cam_ids):
                 fname = 'camera%d.Pmat.cal'%(i+1)
                 pmat = load_ascii_matrix(opj(use_cal_source,fname)) # 3 rows x 4 columns
+                if 1:
+                    M = pmat[:,:3]
+                    t = pmat[:,3,numpy.newaxis]
+                    K,R = my_rq(M)
+                    eps = 1e-6
+                    if abs(K[2,2]-1.0)>eps:
+                        print 'WARNING: expected last row/col of intrinsic parameter matrix to be unity for %s'%cam_id
+                        print 'K[2,2]=',K[2,2]
+                    if normalize_bad_calibration:
+                        print 'normalizing intrinsic parameters'
+                        print 'original intrinsic parameter matrix:'
+                        print K
+                        K = K/K[2,2]
+                    pmat = numpy.dot( K, numpy.concatenate( (R,t), axis=1) )
                 self.Pmat[cam_id] = pmat
                 self.Res[cam_id] = map(int,res_fd.readline().split())
             res_fd.close()
@@ -467,6 +527,36 @@ class Reconstructor:
                     params['K11'], params['K22'], params['K13'], params['K23'],
                     params['kc1'], params['kc2'], params['kc3'], params['kc4'])
 
+                if 1:
+                    ## check consistency of .rad file with calibration matrix
+                    pmat = self.Pmat[cam_id]
+                    intrinsic_parameters, cam_rotation = my_rq(pmat[:,:3])
+                    eps = 1e-6
+                    if abs(intrinsic_parameters[2,2]-1.0)>eps:
+                        print 'WARNING: expected last row/col of intrinsic parameter matrix to be unity'
+                        print 'intrinsic_parameters[2,2]',intrinsic_parameters[2,2]
+                        if normalize_bad_calibration:
+                            print 'WARNING: normalizing the intrinsic parameters'
+                            intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
+                        else:
+                            raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
+                    
+                    fc1 = intrinsic_parameters[0,0]
+                    cc1 = intrinsic_parameters[0,2]
+                    fc2 = intrinsic_parameters[1,1]
+                    cc2 = intrinsic_parameters[1,2]
+                    if ((fc1 != params['K11']) or
+                        (fc2 != params['K22']) or
+                        (cc1 != params['K13']) or
+                        (cc2 != params['K23'])):
+                        print 'WARNING: *.rad file and *.Pmat.cal files differ for',cam_id
+                        print "                  .Pmat.cal    .rad"
+                        print "focal length X:",fc1,params['K11']
+                        print "focal length Y:",fc2,params['K22']
+                        print "principal point X:",cc1,params['K13']
+                        print "principal point Y:",cc2,params['K23']
+                        print
+                    
             filename = os.path.join(use_cal_source,'calibration_units.txt')
             if os.path.exists(filename):
                 fd = file(filename,'r')
@@ -567,6 +657,10 @@ class Reconstructor:
                 eq = False
                 break
         return eq
+    
+    def get_extrinsic_parameter_matrix(self,cam_id):
+        scc = self.get_SingleCameraCalibration(cam_id)
+        return scc.get_extrinsic_parameter_matrix()
 
     def get_scaled(self,scale_factor):
         """change units (e.g. from mm to meters)
@@ -856,9 +950,11 @@ class Reconstructor:
             return x
 
     def find3d_single_cam(self,cam_id,x):
+        "see also SingleCameraCalibration.get_example_3d_point_creating_image_point()"""
         return nx.dot(self.pmat_inv[cam_id], as_column(x))
 
     def get_projected_line_from_2d(self,cam_id,xy):
+        "see also SingleCameraCalibration.get_example_3d_point_creating_image_point()"""
         # XXX Could use nullspace method?
         # image of 2d point in 3d space (on optical ray)
         XY = self.find3d_single_cam(cam_id,(xy[0],xy[1],1.0))
@@ -879,3 +975,49 @@ class Reconstructor:
                                        helper=self._helper[cam_id],
                                        scale_factor=self.scale_factor,
                                        )
+
+def test():
+    import flydra.generate_fake_calibration as gfc
+    recon = gfc.generate_calibration()
+    Xs = [[0,0,0],
+         [1,2,3],
+         [0.5,-.2,.0004]]
+    for X in Xs:
+        print 'X',X
+        Xh = numpy.concatenate((X,[1]))
+        print 'Xh',Xh
+        for cam_id in recon.cam_ids:
+            pmat = recon.get_pmat(cam_id)
+            print 'numpy.dot(pmat,Xh)',numpy.dot(pmat,Xh)
+            x = recon.find2d(cam_id,X)
+            print cam_id,'pmat ========='
+            print pmat
+            Rt = recon.get_extrinsic_parameter_matrix(cam_id)
+            print 'Rt'
+            print Rt
+            print 'numpy.dot(Rt,Xh)'
+            print numpy.dot(Rt,Xh)
+            K,R = recon.get_SingleCameraCalibration(cam_id).get_KR()
+            print 'K'
+            print K
+            print 'numpy.dot(K,numpy.dot(Rt,Xh))'
+            print numpy.dot(K,numpy.dot(Rt,Xh))
+            print 'numpy.dot(pmat,Xh)'
+            print numpy.dot(pmat,Xh)
+            print 'x',x
+        print
+        break
+    print '-='*30
+    for cam_id in recon.cam_ids:
+        line = recon.get_projected_line_from_2d( cam_id, (800,600) )
+        print cam_id,'line',line
+        scc = recon.get_SingleCameraCalibration(cam_id)
+        print 'center',scc.get_cam_center()
+        oax = scc.get_optical_axis()
+        print 'oax',oax
+        print 'oax HZ',oax.to_hz()
+        print 'closest',oax.closest()
+        print
+        
+if __name__=='__main__':
+    test()

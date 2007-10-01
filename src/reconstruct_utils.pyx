@@ -24,8 +24,9 @@ cdef extern from "math.h":
 cdef class ReconstructHelper:
     cdef float fc1, fc2, cc1, cc2
     cdef float k1, k2, p1, p2
+    cdef float alpha_c
 
-    def __init__(self, fc1, fc2, cc1, cc2, k1, k2, p1, p2 ):
+    def __init__(self, fc1, fc2, cc1, cc2, k1, k2, p1, p2, alpha_c=0 ):
         """create instance of ReconstructHelper
 
         ReconstructHelper(fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
@@ -34,6 +35,7 @@ cdef class ReconstructHelper:
         cc - camera center
         k - radial distortion parameters (non-linear)
         p - tangential distortion parameters (non-linear)
+        alpha_c - skew between X and Y pixel axes
         """
         self.fc1 = fc1
         self.fc2 = fc2
@@ -43,6 +45,7 @@ cdef class ReconstructHelper:
         self.k2 = k2
         self.p1 = p1
         self.p2 = p2
+        self.alpha_c = alpha_c
 
     def __richcmp__(self,other,op):
 
@@ -56,9 +59,11 @@ cdef class ReconstructHelper:
         return result
 
     def get_K(self):
-        K = numpy.array((( self.fc1, 0, self.cc1),
-                         ( 0, self.fc2, self.cc2),
-                         ( 0, 0, 1)))
+        # See
+        # http://www.vision.caltech.edu/bouguetj/calib_doc/htmls/parameters.html
+        K = numpy.array((( self.fc1, self.alpha_c*self.fc1, self.cc1), 
+                         ( 0,        self.fc2,              self.cc2),
+                         ( 0,        0,                     1       )))
         return K
 
     def get_nlparams(self):
@@ -82,11 +87,13 @@ cdef class ReconstructHelper:
         cdef float r_2, k_radial, delta_x, delta_y
         cdef int i
 
-        # undoradial.m
+        # undoradial.m / CalTechCal/normalize.m
         
         xd = ( x_kk - self.cc1 ) / self.fc1
         yd = ( y_kk - self.cc2 ) / self.fc2
 
+        xd = xd - self.alpha_c * yd
+        
         # comp_distortion_oulu.m
         
         # initial guess
@@ -103,7 +110,7 @@ cdef class ReconstructHelper:
 
         # undoradial.m
         
-        xl = (self.fc1)*x + (self.cc1)
+        xl = (self.fc1)*x + (self.fc1*self.alpha_c)*y + (self.cc1)
         yl = (self.fc2)*y + (self.cc2)
         return (xl, yl)
 
