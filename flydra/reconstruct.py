@@ -156,6 +156,17 @@ def setOfSubsets(L):
     return [ [ L[i] for i in range(N)
                 if X & (1L<<i) ]
         for X in range(2**N) ]
+
+def normalize_pmat(pmat):
+    pmat_orig = pmat
+    M = pmat[:,:3]
+    t = pmat[:,3,numpy.newaxis]
+    K,R = my_rq(M)
+    eps = 1e-6
+    if abs(K[2,2]-1.0)>eps:
+        pmat = pmat/K[2,2]
+    assert numpy.allclose(pmat2cam_center(pmat_orig),pmat2cam_center(pmat))
+    return pmat
         
 class SingleCameraCalibration:
     def __init__(self,
@@ -275,6 +286,7 @@ class SingleCameraCalibration:
         
     def get_cam_center(self):
         """get the 3D location of the camera center in world coordinates"""
+        # should be called get_camera_center?
         return pmat2cam_center(self.Pmat)
     def get_M(self):
         """return parameters except extrinsic translation params"""
@@ -426,8 +438,15 @@ def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
 class Reconstructor:
     def __init__(self,
                  cal_source = None,
-                 normalize_bad_calibration=False,
+                 do_normalize_pmat=True,
                  ):
+        """
+        inputs
+        ======
+        cal_source - the source of the calibration. can be the output of MultiCamSelfCal, a pytables file, etc.
+        do_normalize_pmat - whether the pmat is normalized such that the intrinsic parameters are in the expected form
+        
+        """
         self.cal_source = cal_source
 
         if isinstance(self.cal_source,str) or isinstance(self.cal_source,unicode):
@@ -490,20 +509,12 @@ class Reconstructor:
             for i, cam_id in enumerate(cam_ids):
                 fname = 'camera%d.Pmat.cal'%(i+1)
                 pmat = load_ascii_matrix(opj(use_cal_source,fname)) # 3 rows x 4 columns
-                if 1:
-                    M = pmat[:,:3]
-                    t = pmat[:,3,numpy.newaxis]
-                    K,R = my_rq(M)
-                    eps = 1e-6
-                    if abs(K[2,2]-1.0)>eps:
-                        print 'WARNING: expected last row/col of intrinsic parameter matrix to be unity for %s'%cam_id
-                        print 'K[2,2]=',K[2,2]
-                    if normalize_bad_calibration:
-                        print 'normalizing intrinsic parameters'
-                        print 'original intrinsic parameter matrix:'
-                        print K
-                        K = K/K[2,2]
-                    pmat = numpy.dot( K, numpy.concatenate( (R,t), axis=1) )
+                if do_normalize_pmat:
+                    pmat_orig = pmat
+                    pmat = normalize_pmat(pmat)
+##                    if not numpy.allclose(pmat_orig,pmat):
+##                        assert numpy.allclose(pmat2cam_center(pmat_orig),pmat2cam_center(pmat))
+##                        #print 'normalized pmat, but camera center should  changed for %s'%cam_id
                 self.Pmat[cam_id] = pmat
                 self.Res[cam_id] = map(int,res_fd.readline().split())
             res_fd.close()
@@ -535,11 +546,11 @@ class Reconstructor:
                     if abs(intrinsic_parameters[2,2]-1.0)>eps:
                         print 'WARNING: expected last row/col of intrinsic parameter matrix to be unity'
                         print 'intrinsic_parameters[2,2]',intrinsic_parameters[2,2]
-                        if normalize_bad_calibration:
-                            print 'WARNING: normalizing the intrinsic parameters'
-                            intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
-                        else:
-                            raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
+##                        if do_normalize_pmat:
+##                            print 'WARNING: normalizing the intrinsic parameters'
+##                            intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
+##                        else:
+                        raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
                     
                     fc1 = intrinsic_parameters[0,0]
                     cc1 = intrinsic_parameters[0,2]
@@ -556,7 +567,7 @@ class Reconstructor:
                         print "principal point X:",cc1,params['K13']
                         print "principal point Y:",cc2,params['K23']
                         print
-                    
+
             filename = os.path.join(use_cal_source,'calibration_units.txt')
             if os.path.exists(filename):
                 fd = file(filename,'r')
@@ -644,7 +655,7 @@ class Reconstructor:
         self._cam_centers_cache = {}
         for cam_id in self.cam_ids:
             self._cam_centers_cache[cam_id] = self.get_camera_center(cam_id)[:,0] # make rank-1
-            
+
     def __ne__(self,other):
         return not (self==other)
     
@@ -792,6 +803,7 @@ class Reconstructor:
         return self.Pmat[cam_id]
     
     def get_camera_center(self, cam_id):
+        # should be called get_cam_center?
         return pmat2cam_center(self.Pmat[cam_id])
 
     def get_intrinsic_linear(self, cam_id):
