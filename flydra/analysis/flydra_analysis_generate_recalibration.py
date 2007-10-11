@@ -1,4 +1,9 @@
 from __future__ import division
+if 1:
+    # deal with old files, forcing to numpy
+    import tables.flavor
+    tables.flavor.restrict_flavors(keep=['numpy'])
+
 import numpy
 from numpy import nan, pi
 import tables as PT
@@ -75,15 +80,13 @@ def do_it(filename,
     points = []
     for obj_id in use_obj_ids:
         print 'obj_id',obj_id
+        this_obj_id = obj_id
         k_use_idxs = kobs.getWhereList(
-            kobs.cols.obj_id==obj_id,
-            flavor='numpy' )
+            'obj_id==this_obj_id')
         obs_2d_idxs = kobs.readCoordinates( k_use_idxs,
-                                            field='obs_2d_idx',
-                                            flavor='numpy')
+                                            field='obs_2d_idx')
         kframes = kobs.readCoordinates( k_use_idxs,
-                                        field='frame',
-                                        flavor='numpy')
+                                        field='frame')
         kframes_use = kframes[::use_nth_observation]
         obs_2d_idxs_use = obs_2d_idxs[::use_nth_observation]
         npoints_by_cam_id = {}
@@ -107,8 +110,9 @@ def do_it(filename,
 
             #sys.stdout.write('  reading frame data...')
             #sys.stdout.flush()
+            obs_2d_idx_find_next = obs_2d_idx_find+numpy.uint64(1)
             kobs_2d_data = kobs_2d.read( start=obs_2d_idx_find,
-                                         stop=obs_2d_idx_find+1 )
+                                         stop=obs_2d_idx_find_next )
             #sys.stdout.write('done\n')
             #sys.stdout.flush()
 
