@@ -351,6 +351,7 @@ def doit(filename,
         y1 = .365
         #z0 = -.028
         z0 = floorz#-.06
+        print 'z0',z0
         
         inc = 0.05
         if 1:
@@ -483,7 +484,7 @@ def doit(filename,
             # XXX keep all this math for reference with pos_ori2fu.py
             vtm = numpy.array([ [ren.active_camera.view_transform_matrix.get_element(i,j) for j in range(4)] for i in range(4)])
             print 'camera.view_transform_matrix = ',vtm
-            vtmcg = cgtypes.mat4(vtm.T)
+            vtmcg = cgtypes.mat4(list(vtm.T))
             print 'camera.view_transform_matrix = ',vtm
             #print 'camera.view_transform_matrix = ',numpy.array(ren.active_camera.view_transform_matrix.elements)
             view_translation,view_rotation_mat4,view_scaling = vtmcg.decompose()
