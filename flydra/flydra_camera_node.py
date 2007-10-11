@@ -36,6 +36,7 @@ else:
         pass
     ConnectionClosedError = NonExistantError
 import flydra.reconstruct_utils as reconstruct_utils
+import flydra.reconstruct
 import FastImage
 #FastImage.set_debug(3)
 if os.name == 'posix' and sys.platform != 'darwin':
@@ -125,6 +126,7 @@ class GrabClass(object):
 
         self.new_roi = threading.Event()
         self.new_roi_data = None
+        self.new_roi_data_lock = threading.Lock()
         l,b = self.cam.get_frame_offset()
         w,h = self.cam.get_frame_size()
         r = l+w-1
@@ -158,8 +160,12 @@ class GrabClass(object):
     def get_roi(self):
         return self.realtime_analyzer.roi
     def set_roi(self, lbrt):
-        self.new_roi_data = lbrt
-        self.new_roi.set()
+        self.new_roi_data_lock.acquire()
+        try:
+            self.new_roi_data = lbrt
+            self.new_roi.set()
+        finally:
+            self.new_roi_data_lock.release()
     roi = property( get_roi, set_roi )
 
     def get_pmat(self):
@@ -525,21 +531,29 @@ class GrabClass(object):
                 #print 'sent data...'
                     
                 if self.new_roi.isSet():
-                    lbrt = self.new_roi_data
-                    self.new_roi_data = None
+                    self.new_roi_data_lock.acquire()
+                    try:
+                        lbrt = self.new_roi_data
+                        self.new_roi_data = None
+                        self.new_roi.clear()
+                    finally:
+                        self.new_roi_data_lock.release()
                     l,b,r,t=lbrt
                     w = r-l+1
                     h = t-b+1
                     self.realtime_analyzer.roi = lbrt
+                    print 'desired l,b,w,h',l,b,w,h
                     self.cam.set_frame_size(w,h)
                     self.cam.set_frame_offset(l,b)
                     w,h = self.cam.get_frame_size()
                     l,b= self.cam.get_frame_offset()
+                    print 'actual l,b,w,h',l,b,w,h
+                    r = l+w-1
+                    t = b+h-1
                     cur_fisize = FastImage.Size(w, h)
                     hw_roi_frame = fi8ufactory( cur_fisize )
                     self.realtime_analyzer.roi = (l,b,r,t)
 
-                    self.new_roi.clear()
 
                     # set ROI views of full-frame images
                     bg_image = bg_image_full.roi(l, b, cur_fisize) # set ROI view
@@ -657,13 +671,13 @@ class App:
                  bg_frame_interval=50,
                  bg_frame_alpha=1.0/50.0,
                  main_brain_hostname = None,
+                 emulation_reconstructor = None,
                  ):
         if main_brain_hostname is None:
             self.main_brain_hostname = default_main_brain_hostname
         else:
             self.main_brain_hostname = main_brain_hostname
 
-        MAX_GRABBERS = 3
         # ----------------------------------------------------------------
         #
         # Setup cameras
@@ -672,7 +686,6 @@ class App:
 
         self.num_cams = cam_iface.get_num_cameras()
         print 'Number of cameras detected:', self.num_cams
-        assert self.num_cams <= MAX_GRABBERS
         if self.num_cams <= 0:
             return
 
@@ -1308,6 +1321,9 @@ def main():
     parser.add_option("--num-points", type="int",
                       help="number of points to track per camera")
     
+    parser.add_option("--emulation-cal", type="string",
+                      help="name of calibration (directory or .h5 file); Run in emulation mode.")
+    
     parser.add_option("--software-roi-radius", type="int",
                       help="radius of software region of interest")
     
@@ -1319,16 +1335,32 @@ def main():
     
     (options, args) = parser.parse_args()
 
-    if not options.wrapper:
-        print 'WRAPPER must be set'
-        parser.print_help()
-        return
-    
-    if not options.backend:
-        print 'BACKEND must be set'
-        parser.print_help()
-        return
+    emulation_cal=options.emulation_cal
+    print 'emulation_cal',repr(emulation_cal)
+    if emulation_cal is not None:
+        emulation_cal = os.path.expanduser(emulation_cal)
+        print 'emulation_cal',repr(emulation_cal)
+        emulation_reconstructor = flydra.reconstruct.Reconstructor(
+            emulation_cal)
+    else:
+        emulation_reconstructor = None
 
+    if not emulation_reconstructor:
+        if not options.wrapper:
+            print 'WRAPPER must be set (except in benchmark or emulation mode)'
+            parser.print_help()
+            return
+
+        if not options.backend:
+            print 'BACKEND must be set (except in benchmark or emulation mode)'
+            parser.print_help()
+            return
+        cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
+    else:
+        cam_iface = cam_iface_choose.import_backend('dummy','dummy')
+        #cam_iface = cam_iface_choose.import_backend('blank','ctypes')
+        cam_iface.set_num_cameras(len(emulation_reconstructor.get_cam_ids()))
+        
     if options.num_points is not None:
         max_num_points_per_camera = options.num_points
     else:
@@ -1348,14 +1380,13 @@ def main():
         bg_frame_alpha = options.background_frame_alpha
     else:
         bg_frame_alpha = 1.0/50.0
-    
-    cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
-    
+
     app=App(max_num_points_per_camera,
             roi2_radius=roi2_radius,
             bg_frame_interval=bg_frame_interval,
             bg_frame_alpha=bg_frame_alpha,
             main_brain_hostname = options.server,
+            emulation_reconstructor = emulation_reconstructor,
             )
     if app.num_cams <= 0:
         return
