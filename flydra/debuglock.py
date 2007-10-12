@@ -1,6 +1,7 @@
 import threading, sys, time, traceback
+from contextlib import contextmanager
 
-class DebugLock:
+class DebugLock(object):
     def __init__(self,name,verbose=False):
         self.name = name
         self._lock = threading.Lock()
@@ -24,9 +25,25 @@ class DebugLock:
                 print '          **** WARNING acquisition time %.1f msec'%lat
         
         if self.verbose:
+            frame = sys._getframe()
             traceback.print_stack(frame)
             print '-='*20
 
     def release(self):
         print '*****',self.name,'released by',threading.currentThread()
+        if self.verbose:
+            frame = sys._getframe()
+            traceback.print_stack(frame)
+            print '-='*20
         self._lock.release()
+
+    def __enter__(self):
+        print '__enter__',
+        self.acquire()
+
+    def __exit__(self,etype,eval,etb):
+        print '__exit__',
+        self.release()
+        if etype:
+            print '*****',self.name,'error on __exit__',threading.currentThread()
+            raise 
