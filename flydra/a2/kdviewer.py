@@ -13,6 +13,9 @@ import core_analysis
 import stimulus_positions
 import scipy.io
 import conditions
+import pytz, datetime
+pacific = pytz.timezone('US/Pacific')
+
 try:
     import cgkit.cgtypes as cgtypes # cgkit 2
 except ImportError, err:
@@ -54,17 +57,21 @@ def doit(filename,
         mat_data = scipy.io.mio.loadmat(filename)
     except IOError, err:
         mat_data = None
-
+        
     if mat_data is not None:
         obj_ids = mat_data['kalman_obj_id']
         obj_ids = obj_ids.astype( numpy.uint32 )
+        print 'max obj_id',numpy.amax(obj_ids)
+    
         obs_obj_ids = obj_ids # use as observation length, even though these aren't observations
         use_obj_ids = numpy.unique(obj_ids)
         is_mat_file = True
     else:
         kresults = PT.openFile(filename,mode="r")
         obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id')
+        my_obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
         use_obj_ids = numpy.unique(obs_obj_ids)
+        print 'max obj_id',numpy.amax(use_obj_ids)
         is_mat_file = False
     
     if show_n_longest is not None:
@@ -109,7 +116,8 @@ def doit(filename,
     #################
     rw = tvtk.RenderWindow(size=(1024, 768))
     
-    ren = tvtk.Renderer(background=(1.0,1.0,1.0))
+#    ren = tvtk.Renderer(background=(1.0,1.0,1.0)) # white
+    ren = tvtk.Renderer(background=(0.6,0.6,1.0)) # blue
     camera = ren.active_camera
 
     if 0:
@@ -156,7 +164,16 @@ def doit(filename,
                     dur = now-last_time
                     print dur,'seconds'
                 last_time = now
-               
+
+        if 1:
+            my_idx = numpy.nonzero(my_obj_ids==obj_id)[0]
+            #print 'my_idx',repr(my_idx),type(my_idx)
+            my_idx=my_idx[0]
+            my_rows = kresults.root.kalman_estimates.readCoordinates([int(my_idx)])
+            my_timestamp = my_rows['timestamp']
+            #print 'my_timestamp',my_timestamp
+            print obj_id,datetime.datetime.fromtimestamp(my_timestamp,pacific)
+            
         if show_observations:
             obs_idx = numpy.nonzero(obs_obj_ids==obj_id)[0]
             obs_rows = kresults.root.kalman_observations.readCoordinates(obs_idx)
@@ -243,8 +260,8 @@ def doit(filename,
             pd = tvtk.PolyData()
             pd.points = verts
             pd.point_data.scalars = speeds
-            if numpy.any(speeds>max_vel):
-                print 'WARNING: maximum speed (%.3f m/s) exceeds color map max'%(speeds.max(),)
+#            if numpy.any(speeds>max_vel):
+#                print 'WARNING: maximum speed (%.3f m/s) exceeds color map max'%(speeds.max(),)
 
             g = tvtk.Glyph3D(scale_mode='data_scaling_off',
                              vector_mode = 'use_vector',
@@ -273,7 +290,12 @@ def doit(filename,
         if show_obj_ids:
             print 'showing ob_jd %d at %s'%(obj_id,str(verts[0]))
             obj_id_ta = tvtk.TextActor(input=str( obj_id )+' start')
-            obj_id_ta.property.color = 0.0, 0.0, 0.0 # black
+            obj_id_ta.property = tvtk.Property2D(color = (0.0, 0.0, 0.0), # black
+                                                 )
+#            obj_id_ta.property = tvtk.TextProperty(color = (0.0, 0.0, 0.0), # black
+#                                                   )
+            #obj_id_ta.property.color = 0.0, 0.0, 0.0 # black
+            #obj_id_ta.set(color = (0.0, 0.0, 0.0)) # black
             obj_id_ta.position_coordinate.coordinate_system = 'world'
             obj_id_ta.position_coordinate.value = tuple(verts[0])
             actors.append(obj_id_ta)
