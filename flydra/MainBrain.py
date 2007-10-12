@@ -31,8 +31,8 @@ import flydra.debuglock
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy'])
 
-
-#DebugLock = flydra.debuglock.DebugLock
+import flydra.debuglock
+DebugLock = flydra.debuglock.DebugLock
 
 DO_KALMAN= True # Enables/disables Kalman filter based tracking
 MIN_KALMAN_OBSERVATIONS_TO_SAVE = 10 # how many data points are required before saving trajectory?
@@ -130,7 +130,7 @@ if 0:
     downstream_hosts.append( ('192.168.1.151',28931) ) # brain1
     
 downstream_kalman_hosts = []
-if 0:
+if 1:
     downstream_kalman_hosts.append( ('127.0.0.1',28931) ) # self
     
 if len(downstream_hosts) or len(downstream_kalman_hosts):
@@ -200,7 +200,7 @@ def encode_data_packet( corrected_framenumber,
                         outgoing_data,
                         min_mean_dist):
     
-    fmt = '<iBfffffffffdf'
+    fmt = '<iBfffffffffdf' # XXX I guess this no longer works -- what's the B for? 20071011
     packable_data = list(outgoing_data)
     if not line3d_valid:
         packable_data[3:9] = 0,0,0,0,0,0
@@ -217,28 +217,6 @@ def encode_data_packet( corrected_framenumber,
         print 'packable_data',packable_data
         raise
     return data_packet
-
-
-##def encode_kalman_data_packet( corrected_framenumber,
-##                               tracker):
-    
-##    fmt = '<iBfffffffffdf'
-##    packable_data = list(outgoing_data)
-##    if not line3d_valid:
-##        packable_data[3:9] = 0,0,0,0,0,0
-##    packable_data.append( min_mean_dist )
-##    try:
-##        data_packet = struct.pack(fmt,
-##                                  corrected_framenumber,
-##                                  line3d_valid,
-##                                  *packable_data)
-##    except SystemError, x:
-##        print 'fmt',fmt
-##        print 'corrected_framenumber',corrected_framenumber
-##        print 'line3d_valid',line3d_valid
-##        print 'packable_data',packable_data
-##        raise
-##    return data_packet
 
 def save_ascii_matrix(filename,m):
     fd=open(filename,mode='wb')
@@ -292,7 +270,9 @@ class CoordReceiver(threading.Thread):
         self.timestamp_echo_gatherer.bind((hostname, port))
         self.timestamp_echo_gatherer.setblocking(0)
 
-        self.tracker_lock = threading.Lock()#DebugLock('tracker_lock')
+        self.tracker_lock = threading.Lock()
+        #self.tracker_lock = DebugLock('tracker_lock',verbose=True)
+        
         self.all_data_lock = threading.Lock()
         #self.all_data_lock = DebugLock('all_data_lock',verbose=False)
         self.quit_event = threading.Event()
@@ -367,7 +347,6 @@ class CoordReceiver(threading.Thread):
         # called from main thread, must lock to send to realtime coord thread
         with self.tracker_lock:
             if self.tracker is None:
-                self.tracker_lock.release()
                 return
             for attr in kw_dict:
                 setattr(self.tracker,attr,kw_dict[attr])
@@ -822,18 +801,23 @@ class CoordReceiver(threading.Thread):
                                 if self.tracker is None: # tracker isn't instantiated yet...
                                     best_realtime_data = None
                                     continue
-
+                                
                                 pluecker_coords_by_camn = realtime_kalman_coord_dict[corrected_framenumber]
                                 self.tracker.gobble_2d_data_and_calculate_a_posteri_estimates(
                                     corrected_framenumber,
                                     pluecker_coords_by_camn,
                                     self.camn2cam_id)
                                 
-##                                if len(downstream_kalman_hosts):
-##                                    data_packet = encode_kalman_data_packet(
-##                                        corrected_framenumber,
-##                                        self.tracker)
-
+                                if len(downstream_kalman_hosts):
+                                    data_packet = self.tracker.encode_data_packet(
+                                        corrected_framenumber,timestamp)
+                                    try:
+                                        for downstream_host in downstream_kalman_hosts:
+                                            outgoing_UDP_socket.sendto(data_packet,downstream_host)
+                                    except:
+                                        print 'WARNING: could not send kalman data data over UDP'
+                                        print
+                                
                                 # The above calls
                                 # self.enqueue_finished_tracked_object()
                                 # when a tracked object is no longer
@@ -868,7 +852,6 @@ class CoordReceiver(threading.Thread):
                                 if len(found_data_dict) < 2:
                                     # Can't do any 3D math without at least 2 cameras giving good
                                     # data.
-                                    self.tracker_lock.release()
                                     continue
                                 (this_observation_orig_units, line3d, cam_ids_used,
                                  min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
