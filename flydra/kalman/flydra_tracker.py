@@ -3,7 +3,7 @@ import time
 import adskalman as kalman
 import params
 import flydra.geom as geom
-import math
+import math, struct
 import flydra.data_descriptions
 
 __all__ = ['TrackedObject','Tracker']
@@ -11,6 +11,9 @@ __all__ = ['TrackedObject','Tracker']
 PT_TUPLE_IDX_X = flydra.data_descriptions.PT_TUPLE_IDX_X
 PT_TUPLE_IDX_Y = flydra.data_descriptions.PT_TUPLE_IDX_Y
 PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
+
+state_size = params.A.shape[0]
+per_tracked_object_fmt = 'f'*state_size
 
 class FakeThreadingEvent:
     def isSet(self):
@@ -410,3 +413,19 @@ class Tracker:
             tro = self.dead_tracked_objects.pop(0)
             for callback in self.kill_tracker_callbacks:
                 callback(tro)
+
+    def encode_data_packet(self,corrected_framenumber,timestamp):
+        N = len(self.live_tracked_objects)
+        fmt = '<idB' # XXX check format
+        data_packet = struct.pack(fmt,
+                                  corrected_framenumber,
+                                  timestamp,
+                                  N)
+        for idx,tro in enumerate(self.live_tracked_objects):
+            if not len(tro.xhats):
+                continue
+            xhat = tro.xhats[-1]
+            data_packet += struct.pack(per_tracked_object_fmt,
+                                       *xhat)
+        return data_packet
+    
