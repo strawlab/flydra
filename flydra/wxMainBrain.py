@@ -25,7 +25,7 @@ import sys, threading, time, os, copy
 import traceback
 import MainBrain
 from MainBrain import DEBUG
-PLOTPANEL = False
+PLOTPANEL = True
 if PLOTPANEL:
     from MatplotlibPanel import PlotPanel
 import common_variables
@@ -77,8 +77,6 @@ class wxMainBrainApp(wx.App):
 
         if use_opengl:
             import OpenGL
-            if OpenGL.__version__.startswith('3'):
-                raise RuntimeError("wxMainBrain/wxglvideo is known to not work with PyOpenGL 3 (for now)")
             import wxglvideo
         else:
             import wxvideo as wxglvideo
