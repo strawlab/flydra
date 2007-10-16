@@ -6,14 +6,19 @@ import flydra.geom as geom
 import math, struct
 import flydra.data_descriptions
 
-__all__ = ['TrackedObject','Tracker']
+__all__ = ['TrackedObject','Tracker','decode_data_packet']
 
 PT_TUPLE_IDX_X = flydra.data_descriptions.PT_TUPLE_IDX_X
 PT_TUPLE_IDX_Y = flydra.data_descriptions.PT_TUPLE_IDX_Y
 PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 
+packet_header_fmt = '<idB' # XXX check format
+packet_header_fmtsize = struct.calcsize(packet_header_fmt)
+
 state_size = params.A.shape[0]
+#per_tracked_object_fmt = 'I' + 'f'*state_size # obj_id + state vector
 per_tracked_object_fmt = 'f'*state_size
+per_tracked_object_fmtsize = struct.calcsize(per_tracked_object_fmt)
 
 class FakeThreadingEvent:
     def isSet(self):
@@ -416,8 +421,7 @@ class Tracker:
 
     def encode_data_packet(self,corrected_framenumber,timestamp):
         N = len(self.live_tracked_objects)
-        fmt = '<idB' # XXX check format
-        data_packet = struct.pack(fmt,
+        data_packet = struct.pack(packet_header_fmt,
                                   corrected_framenumber,
                                   timestamp,
                                   N)
@@ -425,7 +429,23 @@ class Tracker:
             if not len(tro.xhats):
                 continue
             xhat = tro.xhats[-1]
-            data_packet += struct.pack(per_tracked_object_fmt,
-                                       *xhat)
+            data_packet += struct.pack(per_tracked_object_fmt,*xhat)
         return data_packet
     
+def decode_data_packet(buf):
+    header = buf[:packet_header_fmtsize]
+    rest = buf[packet_header_fmtsize:]
+    
+    (corrected_framenumber,timestamp,N) = struct.unpack(
+        packet_header_fmt,header)
+    state_vecs = []
+    for i in range(N):
+        this_tro = rest[:per_tracked_object_fmtsize]
+        rest = rest[per_tracked_object_fmtsize:]
+
+        state_vec = struct.unpack(per_tracked_object_fmt,this_tro)
+        state_vecs.append( state_vec )
+    return corrected_framenumber, timestamp, state_vecs
+        
+        
+        
