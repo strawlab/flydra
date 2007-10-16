@@ -25,21 +25,21 @@ import sys, threading, time, os, copy
 import traceback
 import MainBrain
 from MainBrain import DEBUG
+from wxwrap import wx
+from wx import xrc
+
 PLOTPANEL = True
 if PLOTPANEL:
     from MatplotlibPanel import PlotPanel
 import common_variables
 import flydra.kalman.dynamic_models
 
-from wxwrap import wx
-from wx import xrc
-
 import pkg_resources
 from optparse import OptionParser
 
 SCROLLED=True
 if SCROLLED:
-    from wxPython.lib.scrolledpanel import wxScrolledPanel
+    from wx.lib.scrolledpanel import ScrolledPanel
 
 import wxvalidatedtext as wxvt
 
@@ -387,7 +387,7 @@ class wxMainBrainApp(wx.App):
         container.SetSizer(sizer)
 
         if SCROLLED:
-            scrolled_container = wxScrolledPanel(container,-1)
+            scrolled_container = ScrolledPanel(container,-1)
         else:
             scrolled_container = wx.Panel(container,-1)
         sizer.Add(scrolled_container,1,wx.EXPAND)
