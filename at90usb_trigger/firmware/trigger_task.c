@@ -12,6 +12,7 @@
 #include "usb_specific_request.h"
 #include "adc_drv.h"
 #include "framecount_task.h"
+#include "adc_sampling.h"
 
 
 //_____ M A C R O S ________________________________________________________
@@ -224,6 +225,7 @@ ISR(TIMER3_COMPA_vect) {
     trig_once_mode=0;
   }
   increment_framecount_A();
+  start_ADC_sample();
 }
 ISR(TIMER3_COMPB_vect) {
 }
@@ -243,7 +245,8 @@ ISR(TIMER3_OVF_vect) {
 //!/
 void trigger_task_init(void)
 {
-   init_adc();
+   init_ADC_sampling();
+
    Leds_init();
    Joy_init();
    
