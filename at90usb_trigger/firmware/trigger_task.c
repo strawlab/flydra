@@ -1,5 +1,3 @@
-#define LARGE_BUFFER
-
 //_____  I N C L U D E S ___________________________________________________
 
 #include "config.h"
@@ -287,19 +285,14 @@ void trigger_task(void)
 	new_ocr3b =           Usb_read_byte()<<8; // high byte
 	new_ocr3b +=          Usb_read_byte();    // low byte
 
-#ifdef LARGE_BUFFER
 	new_ocr3c =           Usb_read_byte()<<8; // high byte
 	new_ocr3c +=          Usb_read_byte();    // low byte
-#else
-	new_ocr3c =           0;
-#endif
 	new_icr3  =           Usb_read_byte()<<8; // high byte  // icr3 is TOP for timer3
 	new_icr3 +=           Usb_read_byte();    // low byte
 
 	// next 8 bytes
 	flags     =           Usb_read_byte();
 	clock_select_timer3 = Usb_read_byte();
-#ifdef LARGE_BUFFER
 	Usb_read_byte();
 	Usb_read_byte();
 
@@ -307,7 +300,6 @@ void trigger_task(void)
 	Usb_read_byte();
 	Usb_read_byte();
 	Usb_read_byte();
-#endif
 	Usb_ack_receive_out();
       }
       if (flags & TASK_FLAGS_NEW_TIMER3_DATA) {
