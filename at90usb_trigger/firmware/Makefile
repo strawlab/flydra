@@ -79,7 +79,7 @@ OBJDIR = obj
 
 
 # List C source files here. (C dependencies are automatically generated.)
-SRC = trigger_control.c scheduler.c wdt_drv.c trigger_task.c adc_sampling.c usb_descriptors.c usb_task.c usb_drv.c usb_standard_request.c usb_specific_request.c adc_drv.c power_drv.c stk_525.c framecount_task.c
+SRC = trigger_control.c scheduler.c wdt_drv.c trigger_task.c usb_descriptors.c usb_task.c usb_drv.c usb_standard_request.c usb_specific_request.c adc_drv.c power_drv.c stk_525.c framecount_task.c
 
 
 # List C++ source files here. (C dependencies are automatically generated.)
