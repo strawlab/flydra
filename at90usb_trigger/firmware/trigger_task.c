@@ -184,7 +184,7 @@ void init_pwm_output(void) {
 
   // set output direction on pin
   PORTC &= 0x8F; // pin C4-6 set low to start
-  DDRC |= 0x70; // enable output for Output compare and PWM A-C of Timer/Counter 3
+  DDRC |= 0x70; // enable output for (Output Compare and PWM) A-C of Timer/Counter 3
 
   // Set output compare to mid-point
   set_OCR3A( 10 );
@@ -200,7 +200,7 @@ void init_pwm_output(void) {
   // set Compare Output Mode for Fast PWM
   // COM3A1:0 = 1,0 clear OC3A on compare match
   // COM3B1:0 = 1,0 clear OC3B on compare match
-  // COM3C1:0 = 1,0 clear OC3B on compare match
+  // COM3C1:0 = 1,0 clear OC3C on compare match
   // WGM31, WGM30 = 1,0
   TCCR3A = 0xAA;
 
