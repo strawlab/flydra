@@ -183,8 +183,10 @@ void init_pwm_output(void) {
   */
 
   // set output direction on pin
-  PORTC &= 0x8F; // pin C4-6 set low to start
-  DDRC |= 0x70; // enable output for (Output Compare and PWM) A-C of Timer/Counter 3
+  PORTC &= 0x87; // pin C3-6 set low to start
+  DDRC |= 0x7F; // enable output for:
+  // (Output Compare and PWM) A-C of Timer/Counter 3
+  // PORTC 3 (EXT_TRIG1)
 
   // Set output compare to mid-point
   set_OCR3A( 10 );
@@ -264,6 +266,7 @@ void trigger_task(void)
 #define TASK_FLAGS_DOUT_HIGH 0x08
 #define TASK_FLAGS_GET_DATA 0x10
 #define TASK_FLAGS_RESET_FRAMECOUNT_A 0x20
+#define TASK_FLAGS_SET_EXT_TRIG1 0x40
 
    uint8_t clock_select_timer3=0;
    uint32_t volatile tmp;
@@ -420,6 +423,9 @@ void trigger_task(void)
 	TCCR3B = (TCCR3B & 0xF8) | (0 & 0x07); // stop clock
       }
 
+      if (flags & TASK_FLAGS_SET_EXT_TRIG1) {
+	PORTC |= 0x08; // raise lowest bits (will start timer...)
+      }
 
     }
 }
