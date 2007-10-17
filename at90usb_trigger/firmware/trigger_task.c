@@ -29,6 +29,14 @@ volatile uint8_t cpt_sof=0;
 
 volatile uint8_t trig_once_mode=0;
 
+// static/global
+/*
+int64_t framecount_EXT_TRIG1;
+int16_t tcnt3_EXT_TRIG1;
+bit EXT_TRIG1_skip_error=FALSE;
+bit EXT_TRIG1_saved_timestamp_ready=FALSE;
+*/
+
 //! Declare function pointer to USB bootloader entry point
 void (*start_bootloader) (void)=(void (*)(void))0xf000;
 
@@ -198,7 +206,7 @@ void init_pwm_output(void) {
   //set_ICR3( 5000 );
   set_ICR3( 77 );
 
-  // ---- set TCCR1A ----------
+  // ---- set TCCR3A ----------
   // set Compare Output Mode for Fast PWM
   // COM3A1:0 = 1,0 clear OC3A on compare match
   // COM3B1:0 = 1,0 clear OC3B on compare match
@@ -206,7 +214,7 @@ void init_pwm_output(void) {
   // WGM31, WGM30 = 1,0
   TCCR3A = 0xAA;
 
-  // ---- set TCCR1B ----------
+  // ---- set TCCR3B ----------
   // high bits = 0,0,0
   //WGM33, WGM32 = 1,1
   // CS1 = 0,0,1 (starts timer1) (clock select)
@@ -267,6 +275,7 @@ void trigger_task(void)
 #define TASK_FLAGS_GET_DATA 0x10
 #define TASK_FLAGS_RESET_FRAMECOUNT_A 0x20
 #define TASK_FLAGS_SET_EXT_TRIG1 0x40
+   //#define TASK_FLAGS_GET_EXT_TRIG1_TIMESTAMP 0x80
 
    uint8_t clock_select_timer3=0;
    uint32_t volatile tmp;
@@ -277,6 +286,7 @@ void trigger_task(void)
    uint16_t new_icr3; // icr3 is TOP for timer3
 
    int64_t framecount_A;
+   uint8_t i;
 
    if(usb_connected)                    
     {
@@ -375,6 +385,7 @@ void trigger_task(void)
 	    */
 
 	    framecount_A = get_framecount_A();
+	    new_icr3 = get_TCNT3();
 
 	    Usb_write_byte((uint8_t)(framecount_A & 0xFF));
 	    Usb_write_byte((uint8_t)((framecount_A >> 8) & 0xFF));
@@ -386,7 +397,6 @@ void trigger_task(void)
 	    Usb_write_byte((uint8_t)((framecount_A >> 48) & 0xFF));
 	    Usb_write_byte((uint8_t)((framecount_A >> 56) & 0xFF));
 
-	    new_icr3 = get_TCNT3();
 	    Usb_write_byte((uint8_t)(new_icr3 & 0xFF));
 	    Usb_write_byte((uint8_t)((new_icr3 >> 8) & 0xFF));
 	    Usb_write_byte(0x00);
@@ -424,7 +434,21 @@ void trigger_task(void)
       }
 
       if (flags & TASK_FLAGS_SET_EXT_TRIG1) {
-	PORTC |= 0x08; // raise lowest bits (will start timer...)
+	PORTC |= 0x08; // raise bit
+	for (i=0;i<255;i++) {
+	  // do nothing
+	}
+	PORTC &= 0xF7; // clear bit
+
+	/*
+	framecount_EXT_TRIG1  = get_framecount_A();
+	tcnt3_EXT_TRIG1 = get_TCNT3();
+
+	if (EXT_TRIG1_saved_timestamp_ready) {
+	  EXT_TRIG1_skip_error=TRUE; // error, overwrote old values
+	}
+	EXT_TRIG1_saved_timestamp_ready = TRUE;
+	*/
       }
 
     }
