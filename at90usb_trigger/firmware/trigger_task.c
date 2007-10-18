@@ -191,7 +191,7 @@ void init_pwm_output(void) {
   */
 
   // set output direction on pin
-  PORTC &= 0x87; // pin C3-6 set low to start
+  PORTC &= 0x8F; // pin C4-6 set low to start
   DDRC |= 0x7F; // enable output for:
   // (Output Compare and PWM) A-C of Timer/Counter 3
   // PORTC 3 (EXT_TRIG1)
@@ -434,11 +434,11 @@ void trigger_task(void)
       }
 
       if (flags & TASK_FLAGS_SET_EXT_TRIG1) {
-	PORTC |= 0x08; // raise bit
+	PORTC &= 0xF7; // clear bit
 	for (i=0;i<255;i++) {
 	  // do nothing
 	}
-	PORTC &= 0xF7; // clear bit
+	PORTC |= 0x08; // raise bit
 
 	/*
 	framecount_EXT_TRIG1  = get_framecount_A();
