@@ -116,8 +116,13 @@ def doit(filename,
     #################
     rw = tvtk.RenderWindow(size=(1024, 768))
     
-#    ren = tvtk.Renderer(background=(1.0,1.0,1.0)) # white
-    ren = tvtk.Renderer(background=(0.6,0.6,1.0)) # blue
+    if show_obj_ids:
+        # Because I can't get black text right now (despite trying),
+        # make background blue to see white text. - ADS
+        ren = tvtk.Renderer(background=(0.6,0.6,1.0)) # blue
+    else:
+        ren = tvtk.Renderer(background=(1.0,1.0,1.0)) # white
+        
     camera = ren.active_camera
 
     if 0:
@@ -205,7 +210,7 @@ def doit(filename,
             data_file = mat_data
 
         if not show_only_track_ends:
-            results = ca.calculate_trajectory_metrics(obj_id,
+            results = ca.calculate_trajectory_metrics([576,577],
                                                       data_file,
                                                       use_kalman_smoothing=use_kalman_smoothing,
                                                       frames_per_second=fps,
@@ -372,7 +377,7 @@ def doit(filename,
         y0 = .065
         y1 = .365
         #z0 = -.028
-        z0 = floorz#-.06
+        z0 = floorz-.06
         print 'z0',z0
         
         inc = 0.05

@@ -97,6 +97,7 @@ def kalman_smooth(orig_rows):
     global printed_dynamics_name
 
     obs_frames = orig_rows['frame']
+    
     fstart, fend = obs_frames[0], obs_frames[-1]
     frames = numpy.arange(fstart,fend+1)
     idx = frames.searchsorted(obs_frames)
@@ -104,11 +105,14 @@ def kalman_smooth(orig_rows):
     x = numpy.empty( frames.shape, dtype=numpy.float )
     y = numpy.empty( frames.shape, dtype=numpy.float )
     z = numpy.empty( frames.shape, dtype=numpy.float )
-
+    obj_id_array =  numpy.ma.masked_array( numpy.empty( frames.shape, dtype=numpy.uint32 ),
+                                           mask=numpy.ones( frames.shape, dtype=numpy.bool_ ) )
+    
     x[idx] = orig_rows['x']
     y[idx] = orig_rows['y']
     z[idx] = orig_rows['z']
-
+    obj_id_array[idx] = orig_rows['obj_id']
+    
     # assemble observations (in meters)
     obs = numpy.vstack(( x,y,z )).T
 
@@ -140,11 +144,10 @@ def kalman_smooth(orig_rows):
                                                  init_x,
                                                  P_k1,
                                                  valid_data_idx=idx)
-    return frames, xsmooth, Psmooth
+    return frames, xsmooth, Psmooth, obj_id_array
 
 def observations2smoothed(obj_id,orig_rows):
-    frames, xsmooth, Psmooth = kalman_smooth(orig_rows)
-    obj_id_array = numpy.ones( frames.shape, dtype = numpy.uint32 )*numpy.uint32(obj_id)
+    frames, xsmooth, Psmooth, obj_id_array = kalman_smooth(orig_rows)
     KalmanEstimates = flydra.kalman.flydra_kalman_utils.KalmanEstimates
     field_names = tables.Description(KalmanEstimates().columns)._v_names
     list_of_xhats = [xsmooth[:,0],xsmooth[:,1],xsmooth[:,2],
@@ -252,11 +255,32 @@ class CachingAnalyzer:
         else:
             if not use_kalman_smoothing:
                 obj_ids = preloaded_dict['obj_ids']
-                idxs = numpy.nonzero(obj_ids == obj_id)[0]
+                if isinstance(obj_id,int):
+                    # obj_id is an integer, normal case
+                    idxs = numpy.nonzero(obj_ids == obj_id)[0]
+                else:
+                    # may specify sequence of obj_id -- concatenate data, treat as one object
+                    idxs = []
+                    for oi in obj_id:
+                        idxs.append( numpy.nonzero(obj_ids == oi)[0] )
+                    idxs = numpy.concatenate( idxs )
                 rows = kresults.root.kalman_estimates.readCoordinates(idxs)
             else:
                 obs_obj_ids = preloaded_dict['obs_obj_ids']
-                obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
+
+                if isinstance(obj_id,int):
+                    # obj_id is an integer, normal case
+                    obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
+                else:
+                    # may specify sequence of obj_id -- concatenate data, treat as one object
+                    obs_idxs = []
+                    for oi in obj_id:
+                        obs_idxs.append( numpy.nonzero(obs_obj_ids == oi)[0] )
+                        print 'oi',oi
+                        print 'len(obs_idxs[-1])',len(obs_idxs[-1])
+                        print
+                    obs_idxs = numpy.concatenate( obs_idxs )
+                
                 # Kalman observations are already always in meters, no scale factor needed
                 orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs)
                 rows = observations2smoothed(obj_id,orig_rows)  # do Kalman smoothing
