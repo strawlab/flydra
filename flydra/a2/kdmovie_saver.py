@@ -414,6 +414,7 @@ def main():
     print 'Data from condition "%s",with stimulus'%(condition,),stimname
     
     if options.obj_only is not None:
+        options.obj_only = options.obj_only.replace(',',' ')
         seq = map(int,options.obj_only.split())
         options.obj_only = seq
 

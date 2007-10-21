@@ -99,6 +99,7 @@ def kalman_smooth(orig_rows):
     obs_frames = orig_rows['frame']
     
     fstart, fend = obs_frames[0], obs_frames[-1]
+    assert fstart < fend
     frames = numpy.arange(fstart,fend+1)
     idx = frames.searchsorted(obs_frames)
     

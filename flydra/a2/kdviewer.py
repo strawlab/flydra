@@ -210,13 +210,18 @@ def doit(filename,
             data_file = mat_data
 
         if not show_only_track_ends:
-            results = ca.calculate_trajectory_metrics([576,577],
-                                                      data_file,
-                                                      use_kalman_smoothing=use_kalman_smoothing,
-                                                      frames_per_second=fps,
-                                                      method='position based',
-                                                      method_params={'downsample':1,
-                                                                     })
+            try:
+                results = ca.calculate_trajectory_metrics(obj_id,
+                                                          data_file,
+                                                          use_kalman_smoothing=use_kalman_smoothing,
+                                                          frames_per_second=fps,
+                                                          method='position based',
+                                                          method_params={'downsample':1,
+                                                                         })
+            except Exception, err:
+                print 'ERROR: while processing obj_id %d, skipping this obj_id'%obj_id
+                print err
+                continue
             verts = results['X_kalmanized']
             floorz = verts[:,2].min()
             speeds = results['speed_kalmanized']
@@ -659,6 +664,7 @@ def main():
         print 'Unknown condition and stimname'
     
     if options.obj_only is not None:
+        options.obj_only = options.obj_only.replace(',',' ')
         seq = map(int,options.obj_only.split())
         options.obj_only = seq
 
