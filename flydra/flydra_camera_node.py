@@ -734,7 +734,17 @@ class App:
                 num_buffers = 50
             else:
                 num_buffers = 205
-            cam = cam_iface.Camera(cam_no,num_buffers,0) # get fastest mode, which should be 0
+            N_modes = cam_iface.get_num_modes(cam_no)
+            use_mode = 0
+            for i in range(N_modes):
+                mode_string = cam_iface.get_mode_string(cam_no,i)
+                if 'format7_0' in mode_string.lower():
+                    # prefer format7_0
+                    use_mode = i
+                    break
+            print 'attempting to initialize camera with %d buffers, mode "%s"'%(
+                num_buffers,cam_iface.get_mode_string(cam_no,use_mode))
+            cam = cam_iface.Camera(cam_no,num_buffers,use_mode)
             print 'allocated %d buffers'%num_buffers
             self.all_cams.append( cam )
 
