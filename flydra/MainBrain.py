@@ -270,6 +270,11 @@ class CoordReceiver(threading.Thread):
         self.timestamp_echo_gatherer.bind((hostname, port))
         self.timestamp_echo_gatherer.setblocking(0)
 
+        self.trigger_network_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        port = flydra.common_variables.trigger_network_socket_port
+        self.trigger_network_socket.bind((hostname, port))
+        self.trigger_network_socket.setblocking(0)
+
         self.tracker_lock = threading.Lock()
         #self.tracker_lock = DebugLock('tracker_lock',verbose=True)
         
@@ -537,6 +542,7 @@ class CoordReceiver(threading.Thread):
             DEBUG('1')
             listen_sockets = self.listen_sockets.keys()
             listen_sockets.append(self.timestamp_echo_gatherer)
+            listen_sockets.append(self.trigger_network_socket)
             try:
                 in_ready, out_ready, exc_ready = select_select( listen_sockets,
                                                                 empty_list, empty_list, timeout )
@@ -566,17 +572,30 @@ class CoordReceiver(threading.Thread):
             if not len(in_ready):
                 continue
 
+            trigger_network_ready = False
+            if self.trigger_network_socket in in_ready:
+                try:
+                    trig_cmd, (remote_ip,cam_port) = self.trigger_network_socket.recvfrom(4096)
+                    trigger_network_ready = True
+                except Exception, err:
+                    print 'WARNING: unknown Exception receiving trigger data:',str(err)
+                except:
+                    print 'WARNING: unknown error (non-Exception!) receiving trigger data'
+                    
+            if trigger_network_ready:
+                with self.main_brain.trigger_device_lock:
+                    if trig_cmd=='x':
+                        self.main_brain.trigger_device.ext_trig1()
+                
             timestamp_echo_gatherer_ready = False
             if self.timestamp_echo_gatherer in in_ready:
-                timestamp_echo_gatherer_ready = True
                 try:
                     buf, (remote_ip,cam_port) = self.timestamp_echo_gatherer.recvfrom(4096)
+                    timestamp_echo_gatherer_ready = True
                 except Exception, err:
                     print 'WARNING: unknown Exception receiving timestamp echo data:',str(err)
-                    timestamp_echo_gatherer_ready = False
                 except:
-                    print 'WARNING: unknown error (non-Exception!) receiving timestamp echo data:'
-                    timestamp_echo_gatherer_ready = False
+                    print 'WARNING: unknown error (non-Exception!) receiving timestamp echo data'
                     
             if timestamp_echo_gatherer_ready:
                 stop_timestamp = time_time()
@@ -1299,11 +1318,12 @@ class MainBrain(object):
 
         assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
 
-        self.trigger_device = flydra.trigger.Device()
-        self.trigger_device.set_carrier_frequency( rc_params['frames_per_second'] )
-        self.fps = self.trigger_device.get_carrier_frequency()
-        self.trigger_timer_max = self.trigger_device.get_timer_max()
-        print self.trigger_timer_max
+        self.trigger_device_lock = threading.Lock()
+        with self.trigger_device_lock:
+            self.trigger_device = flydra.trigger.Device()
+            self.trigger_device.set_carrier_frequency( rc_params['frames_per_second'] )
+            self.fps = self.trigger_device.get_carrier_frequency()
+            self.trigger_timer_max = self.trigger_device.get_timer_max()
         
         Pyro.core.initServer(banner=0)
 
@@ -1387,8 +1407,9 @@ class MainBrain(object):
             raise RuntimeError('will not (re)synchronize while saving data')
         
         # called from wxPython event handler
-        self.trigger_device.set_carrier_frequency( 0.0 )
-        self.trigger_device.reset_framecount_A()
+        with self.trigger_device_lock:
+            self.trigger_device.set_carrier_frequency( 0.0 )
+            self.trigger_device.reset_framecount_A()
 
         # clear queue of old trigger timestamp information...
         try:
@@ -1398,7 +1419,8 @@ class MainBrain(object):
             pass
         
         time.sleep( RESET_FRAMENUMBER_DURATION+0.01 )
-        self.trigger_device.set_carrier_frequency( self.fps )
+        with self.trigger_device_lock:
+            self.trigger_device.set_carrier_frequency( self.fps )
         
     def get_hypothesis_test_max_error(self):
         return self.hypothesis_test_max_error.get()
@@ -1606,7 +1628,8 @@ class MainBrain(object):
     def _trigger_framecount_check(self):
         while 1:
             start_timestamp = time.time()
-            framecount, tcnt = self.trigger_device.get_framecount_stamp()
+            with self.trigger_device_lock:
+                framecount, tcnt = self.trigger_device.get_framecount_stamp()
             stop_timestamp = time.time()
             if (stop_timestamp - start_timestamp) < 3e-3:
                 break # 3 msec or better - accept data, else query again

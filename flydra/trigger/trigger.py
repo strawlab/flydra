@@ -17,12 +17,14 @@ CS_dict = { 0:0, # off
             256:4,
             1024:5}
 
+# keep in sync with defines in trigger_task.c
 TASK_FLAGS_ENTER_DFU = 0x01
 TASK_FLAGS_NEW_TIMER3_DATA = 0x02
 TASK_FLAGS_DO_TRIG_ONCE = 0x04
 TASK_FLAGS_DOUT_HIGH = 0x08
 TASK_FLAGS_GET_DATA = 0x10
 TASK_FLAGS_RESET_FRAMECOUNT_A = 0x20
+TASK_FLAGS_SET_EXT_TRIG1 = 0x40
 
 def debug(*args):
     if 0:
@@ -172,6 +174,13 @@ class Device:
     def trigger_once(self):
         buf = self.OUTPUT_BUFFER # shorthand
         buf[8] = chr(TASK_FLAGS_DO_TRIG_ONCE)
+        self.send_buf()
+
+    def ext_trig1(self):
+        print 'triggering!'
+        TASK_FLAGS_SET_EXT_TRIG1
+        buf = self.OUTPUT_BUFFER # shorthand
+        buf[8] = chr(TASK_FLAGS_SET_EXT_TRIG1)
         self.send_buf()
         
     def set_output_durations(self, A_sec=None, B_sec=None, C_sec=None):

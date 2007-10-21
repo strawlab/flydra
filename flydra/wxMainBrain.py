@@ -21,7 +21,7 @@
 #  use ROI surrounding maximum point (DONE)
 #  save clear_threshold and diff_threshold camera settings (really?)
 
-import sys, threading, time, os, copy
+import sys, threading, time, os, copy, socket
 import traceback
 import MainBrain
 from MainBrain import DEBUG
@@ -864,31 +864,40 @@ class wxMainBrainApp(wx.App):
 
     def RecordRawPerCamClose(self,cam_id):
         cam_choice = xrc.XRCCTRL(self.record_raw_panel,
-                             "record_raw_cam_select_checklist")
+                                 "record_raw_cam_select_checklist")
         i=cam_choice.FindString(cam_id)
         cam_choice.Delete(i)
     
     def InitStatusPanel(self):
         ctrl = xrc.XRCCTRL(self.status_panel,
-                       "kalman_parameters_choice")
+                           "kalman_parameters_choice")
         wx.EVT_CHOICE(ctrl, ctrl.GetId(),
-                   self.OnKalmanParametersChange)
+                      self.OnKalmanParametersChange)
         
         ctrl = xrc.XRCCTRL(self.status_panel,
-                       "ACCUMULATE_KALMAN_DATA_FOR_CALIBRATION")
+                           "ACCUMULATE_KALMAN_DATA_FOR_CALIBRATION")
         wx.EVT_CHECKBOX(ctrl, ctrl.GetId(),
-                     self.OnAccumulateKalmanCalibrationData)
+                        self.OnAccumulateKalmanCalibrationData)
 
         ctrl = xrc.XRCCTRL(self.status_panel,
-                       "SAVE_KALMAN_CAL_DATA_TO_FILE")
+                           "SAVE_KALMAN_CAL_DATA_TO_FILE")
         wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                   self.OnSaveKalmanCalibrationData)
+                      self.OnSaveKalmanCalibrationData)
+        
+        ctrl = xrc.XRCCTRL(self.status_panel,
+                           "MANUAL_TRIGGER_DEVICE")
+        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
+                      self.OnManualTriggerDevice)
         
     def OnHypothesisTestMaxError(self,event):
         ctrl = xrc.XRCCTRL(self.status_panel,
                        "HYPOTHESIS_TEST_MAX_ERR")
         val = float(ctrl.GetValue())
         self.main_brain.set_hypothesis_test_max_error(val)
+        
+    def OnManualTriggerDevice(self,event):
+        sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sender.sendto('x',(MainBrain.hostname,common_variables.trigger_network_socket_port))
         
     def OnSaveKalmanCalibrationData(self,event):
         doit = False

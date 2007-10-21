@@ -175,6 +175,18 @@
         <flag>wxALL|wxALIGN_CENTRE</flag>
         <border>15</border>
       </object>
+      <object class="sizeritem">
+        <object class="wxBoxSizer">
+          <orient>wxHORIZONTAL</orient>
+          <object class="sizeritem">
+            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE">
+              <label>Manually send EXT_TRIG1</label>
+            </object>
+          </object>
+        </object>
+        <flag>wxALL|wxALIGN_CENTRE</flag>
+        <border>10</border>
+      </object>
     </object>
   </object>
   <object class="wxPanel" name="preview_per_cam_panel">
@@ -561,13 +573,13 @@
                         <object class="wxCheckBox" name="record_raw">
                           <label>Record</label>
                           <checked>0</checked>
-                    </object>
+                        </object>
                         <option>1</option>
-                  </object>
+                      </object>
                     </object>
                     <option>0</option>
                     <flag>wxEXPAND</flag>
-              </object>
+                  </object>
                   <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <orient>wxHORIZONTAL</orient>

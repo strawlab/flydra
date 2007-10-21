@@ -9,5 +9,7 @@ timestamp_echo_fmt_diff = '<d'
 timestamp_echo_gatherer_port = 28993 # on MainBrain
 timestamp_echo_fmt2 = '<dd'
 
+trigger_network_socket_port = 28994 # on MainBrain
+
 # first of potentially many:
-min_cam2mainbrain_data_port = 34813 # totally arbitrary, get communicated
+min_cam2mainbrain_data_port = 34813 # totally arbitrary, gets communicated
