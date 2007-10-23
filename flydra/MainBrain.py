@@ -517,7 +517,8 @@ class CoordReceiver(threading.Thread):
         select_select = select.select
         time_time = time.time
         empty_list = []
-        old_data = {}
+        if NETWORK_PROTOCOL == 'tcp':
+            old_data = {}
         
         while not self.quit_event.isSet():
 
@@ -655,7 +656,7 @@ class CoordReceiver(threading.Thread):
                     
                     if NETWORK_PROTOCOL == 'udp':
                         try:
-                            newdata, addr = sockobj.recvfrom(4096)
+                            data, addr = sockobj.recvfrom(4096)
                         except Exception, err:
                             print 'WARNING: unknown Exception receiving UDP data:',str(err)
                             continue
@@ -664,10 +665,10 @@ class CoordReceiver(threading.Thread):
                             continue
                     elif NETWORK_PROTOCOL == 'tcp':
                         newdata = sockobj.recv(4096)
+                        data = old_data.get( sockobj, '')
+                        data += newdata
                     else:
                         raise ValueError('unknown NETWORK_PROTOCOL')
-                    data = old_data.get( sockobj, '')
-                    data = data + newdata
                     while len(data):
                         header = data[:header_size]
                         if len(header) != header_size:
@@ -789,7 +790,8 @@ class CoordReceiver(threading.Thread):
                         new_data_framenumbers.add( corrected_framenumber ) # insert into set
 
                     # preserve unprocessed data
-                    old_data[sockobj] = data
+                    if NETWORK_PROTOCOL == 'tcp':                    
+                        old_data[sockobj] = data
 
                 finished_corrected_framenumbers = [] # for quick deletion
 
@@ -1320,7 +1322,7 @@ class MainBrain(object):
 
         self.trigger_device_lock = threading.Lock()
         with self.trigger_device_lock:
-            self.trigger_device = flydra.trigger.Device()
+            self.trigger_device = flydra.trigger.get_trigger_device()
             self.trigger_device.set_carrier_frequency( rc_params['frames_per_second'] )
             self.fps = self.trigger_device.get_carrier_frequency()
             self.trigger_timer_max = self.trigger_device.get_timer_max()
