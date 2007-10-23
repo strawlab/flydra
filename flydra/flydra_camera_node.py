@@ -92,21 +92,12 @@ def TimestampEcho():
     # create listening socket
     sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sockobj.setblocking(0)
     hostname = ''
     port = flydra.common_variables.timestamp_echo_listener_port
     sockobj.bind(( hostname, port))
     sendto_port = flydra.common_variables.timestamp_echo_gatherer_port
     fmt = flydra.common_variables.timestamp_echo_fmt_diff
     while 1:
-        try:
-            in_ready, trash1, trash2 = select.select( [sockobj], [], [], 0.0 )
-        except Exception, err:
-            print 'TimestampEcho thread ignoring unknown error:',str(err)
-        except:
-            print 'TimestampEcho thread ignoring unknown error'
-        if not len(in_ready):
-            continue
         buf, (orig_host,orig_port) = sockobj.recvfrom(4096)
         newbuf = buf + struct.pack( fmt, time.time() )
         sender.sendto(newbuf,(orig_host,sendto_port))
