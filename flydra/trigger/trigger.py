@@ -1,13 +1,16 @@
 import pylibusb as usb
 import ctypes
-import sys, time
+import sys, time,os
 from optparse import OptionParser
+
+REQUIRE_FLYDRA_TRIGGER=int(os.environ.get('REQUIRE_FLYDRA_TRIGGER',1))
 
 __all__ = ['Device',
            'enter_dfu_mode',
            'check_device',
            'set_frequency',
            'trigger_once',
+           'get_trigger_device',
            ]
 
 CS_dict = { 0:0, # off
@@ -29,6 +32,26 @@ TASK_FLAGS_SET_EXT_TRIG1 = 0x40
 def debug(*args):
     if 0:
         print >> sys.stderr, ' '.join([str(arg) for arg in args])
+
+def get_trigger_device():
+    try:
+        device = Device()
+    except RuntimeError,err:
+        if REQUIRE_FLYDRA_TRIGGER:
+            raise
+        else:
+            device = FakeDevice()
+    return device
+
+class FakeDevice:
+    def set_carrier_frequency(self,*args,**kw):
+        return
+    def get_carrier_frequency(self,*args,**kw):
+        return 123.4
+    def get_timer_max(self,*args,**kw):
+        return 0xFFFF
+    def get_framecount_stamp(self,*args,**kw):
+        return 0, 0x0001
 
 class Device:
     def __init__(self):
@@ -52,7 +75,7 @@ class Device:
             if found:
                 break
         if not found:
-            raise RuntimeError("Cannot find device.")
+            raise RuntimeError("Cannot find device. (Perhaps run with environment variable REQUIRE_FLYDRA_TRIGGER=0.)")
 
         debug('found device',dev)
         self.libusb_handle = usb.open(dev)
