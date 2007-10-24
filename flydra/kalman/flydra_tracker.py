@@ -189,7 +189,6 @@ class TrackedObject:
                 print 'OVERFLOW ERROR:'
                 print 'self.kill_me',self.kill_me
                 print 'frames_skipped',type(frames_skipped),frames_skipped
-                print 'self.my_kalman.n_skipped',type(self.my_kalman.n_skipped),self.my_kalman.n_skipped
                 raise err
                 
             Pmean = numpy.sqrt(numpy.sum([P[i,i] for i in range(3)]))
