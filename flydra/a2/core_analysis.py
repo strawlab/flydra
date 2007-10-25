@@ -269,7 +269,7 @@ class CachingAnalyzer:
             else:
                 obs_obj_ids = preloaded_dict['obs_obj_ids']
 
-                if isinstance(obj_id,int):
+                if isinstance(obj_id,int) or isinstance(obj_id,numpy.integer):
                     # obj_id is an integer, normal case
                     obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
                 else:
