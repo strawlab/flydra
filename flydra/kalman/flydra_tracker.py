@@ -40,7 +40,7 @@ class TrackedObject:
                  first_observation_idxs,
                  scale_factor=None,
                  n_sigma_accept = 3.0, # default: arbitrarily set to 3
-                 max_variance_dist_meters = 0.010, # default: allow error to grow to 10 mm before dropping
+                 max_variance_dist_meters = 1e-4,
                  initial_position_covariance_estimate = 1e-6, # default: initial guess 1mm ( (1e-3)**2 meters)
                  initial_acceleration_covariance_estimate = 15, # default: arbitrary initial guess, rather large
                  Q = None,
@@ -171,7 +171,11 @@ class TrackedObject:
             # Step 1.B. Update Kalman to provide a priori estimates for this frame
             xhatminus, Pminus = self.my_kalman.step1__calculate_a_priori()
             if debug1:
-                print 'xhatminus, Pminus',xhatminus,Pminus
+                print 'xhatminus'
+                print xhatminus
+                print 'Pminus'
+                print Pminus
+                print
 
             # Step 2. Filter incoming 2D data to use informative points
             observation_meters, used_camns_and_idxs = self._filter_data(xhatminus, Pminus,
@@ -190,10 +194,15 @@ class TrackedObject:
                 print 'self.kill_me',self.kill_me
                 print 'frames_skipped',type(frames_skipped),frames_skipped
                 raise err
-                
-            Pmean = numpy.sqrt(numpy.sum([P[i,i] for i in range(3)]))
+
+            # calculate distance of variance of x y z position (assumes first three components of state vector are position)
+            Pmean = numpy.sqrt(numpy.sum([P[i,i]**2 for i in range(3)]))
             if debug1:
-                print 'xhat,P,Pmean',xhat,P,Pmean
+                print 'xhat'
+                print xhat
+                print 'P'
+                print P
+                print 'Pmean',Pmean
 
             # XXX Need to test if error for this object has grown beyond a
             # threshold at which it should be terminated.
@@ -308,12 +317,13 @@ class Tracker:
                  reconstructor_meters,
                  scale_factor=None,
                  n_sigma_accept = 3.0, # default: arbitrarily set to 3
-                 max_variance_dist_meters = 0.010, # default: allow error to grow to 10 mm before dropping
+                 max_variance_dist_meters = 1e-4,
                  initial_position_covariance_estimate = 1e-6, # default: initial guess 1mm ( (1e-3)**2 meters)
                  initial_acceleration_covariance_estimate = 15, # default: arbitrary initial guess, rather large
                  Q = None,
                  R = None,
                  save_calibration_data=None,
+                 max_frames_skipped=25,
                  ):
         """
         
@@ -337,12 +347,13 @@ class Tracker:
 
         # set values for passing to TrackedObject
         if scale_factor is None:
-            print 'WARNING: scale_factor set to 1e-3',__file__
+            print 'WARNING: scale_factor set to 1e-3 (because no value was specified)',__file__
             self.scale_factor = 1e-3
         else:
             self.scale_factor = scale_factor
         self.n_sigma_accept = n_sigma_accept
         self.max_variance_dist_meters = max_variance_dist_meters
+        self.max_frames_skipped = max_frames_skipped
         self.initial_position_covariance_estimate = initial_position_covariance_estimate
         self.initial_acceleration_covariance_estimate = initial_acceleration_covariance_estimate
         self.Q = Q
@@ -399,6 +410,7 @@ class Tracker:
                             Q = self.Q,
                             R = self.R,
                             save_calibration_data=self.save_calibration_data,
+                            max_frames_skipped=self.max_frames_skipped,
                             )
         self.live_tracked_objects.append(tro)
         if debug>0:

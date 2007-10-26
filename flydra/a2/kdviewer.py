@@ -172,12 +172,11 @@ def doit(filename,
 
         if 1:
             my_idx = numpy.nonzero(my_obj_ids==obj_id)[0]
-            #print 'my_idx',repr(my_idx),type(my_idx)
-            my_idx=my_idx[0]
-            my_rows = kresults.root.kalman_estimates.readCoordinates([int(my_idx)])
-            my_timestamp = my_rows['timestamp']
-            #print 'my_timestamp',my_timestamp
-            print obj_id,datetime.datetime.fromtimestamp(my_timestamp,pacific)
+            my_rows = kresults.root.kalman_estimates.readCoordinates(my_idx)
+            my_timestamp = my_rows['timestamp'][0]
+            dur = my_rows['timestamp'][-1] - my_timestamp
+            print obj_id,datetime.datetime.fromtimestamp(my_timestamp,pacific),'(for %.2f seconds)'%dur
+            print '  estimate frames: %d - %d'%(my_rows['frame'][0], my_rows['frame'][-1])
             
         if show_observations:
             obs_idx = numpy.nonzero(obs_obj_ids==obj_id)[0]
@@ -185,6 +184,8 @@ def doit(filename,
             obs_x = obs_rows['x']
             obs_y = obs_rows['y']
             obs_z = obs_rows['z']
+            obs_frames = obs_rows['frame']
+            print '  observation frames: %d - %d'%(obs_frames[0], obs_frames[-1])
             obs_X = numpy.vstack((obs_x,obs_y,obs_z)).T
 
             pd = tvtk.PolyData()
@@ -219,9 +220,12 @@ def doit(filename,
                                                           method_params={'downsample':1,
                                                                          })
             except Exception, err:
-                print 'ERROR: while processing obj_id %d, skipping this obj_id'%obj_id
-                print err
-                continue
+                if 1:
+                    raise
+                else:
+                    print 'ERROR: while processing obj_id %d, skipping this obj_id'%obj_id
+                    print err
+                    continue
             verts = results['X_kalmanized']
             floorz = verts[:,2].min()
             speeds = results['speed_kalmanized']

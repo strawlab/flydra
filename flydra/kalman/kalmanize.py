@@ -3,7 +3,7 @@ import params
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
 import flydra.geom as geom
-import time
+import time, math
 from flydra.analysis.result_utils import get_results, get_caminfo_dicts
 import tables as PT
 import os, sys, pprint
@@ -31,36 +31,38 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
         print 'for frame %d: data not gobbled:'%(frame,)
         pprint.pprint(frame_data)
         print
-        
+
     # Convert to format accepted by find_best_3d()
     found_data_dict,first_idx_by_camn = convert_format(frame_data,camn2cam_id)
-    if len(found_data_dict) < 2:
-        # Can't do any 3D math without at least 2 cameras giving good
-        # data.
-        return
-    (this_observation_mm, line3d, cam_ids_used,
-     min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
-        reconst_orig_units,
-        found_data_dict)
-    if debug > 5:
-        print 'found new point using hypothesis testing:'
-        print 'this_observation_mm',this_observation_mm
-        print 'cam_ids_used',cam_ids_used
-        print 'min_mean_dist',min_mean_dist
-    
-    if min_mean_dist<max_err:
-        if debug > 5:
-            print 'accepting point'
+    # test to short-circuit rest of function
+    if len(found_data_dict) >= 2:
         
-        # make mapping from cam_id to camn
-        cam_id2camn = {}
-        for camn in camn2cam_id:
-            if camn not in frame_data:
-                continue # this camn not used this frame, ignore
-            cam_id = camn2cam_id[camn]
-            if cam_id in cam_id2camn:
-                print '*'*80
-                print """
+        # Can only do 3D math with at least 2 cameras giving good
+        # data.
+        
+        (this_observation_mm, line3d, cam_ids_used,
+         min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
+            reconst_orig_units,
+            found_data_dict)
+        if debug > 5:
+            print 'found new point using hypothesis testing:'
+            print 'this_observation_mm',this_observation_mm
+            print 'cam_ids_used',cam_ids_used
+            print 'min_mean_dist',min_mean_dist
+
+        if min_mean_dist<max_err:
+            if debug > 5:
+                print 'accepting point'
+
+            # make mapping from cam_id to camn
+            cam_id2camn = {}
+            for camn in camn2cam_id:
+                if camn not in frame_data:
+                    continue # this camn not used this frame, ignore
+                cam_id = camn2cam_id[camn]
+                if cam_id in cam_id2camn:
+                    print '*'*80
+                    print """
                 
 ERROR: It appears that you have >1 camn for a cam_id at a certain
 frame. This almost certainly means that you are using a data file
@@ -71,42 +73,55 @@ flydra_analysis_print_camera_summary) and then use the --exclude-camns
 option to this program.
 
 """
-                print '*'*80
-                print
-                print 'frame',frame
-                print 'camn',camn
-                print 'frame_data',frame_data
-                print
-                print 'cam_id2camn',cam_id2camn
-                print 'camn2cam_id',camn2cam_id
-                print
-                raise ValueError('cam_id already in dict')
-            cam_id2camn[cam_id]=camn
+                    print '*'*80
+                    print
+                    print 'frame',frame
+                    print 'camn',camn
+                    print 'frame_data',frame_data
+                    print
+                    print 'cam_id2camn',cam_id2camn
+                    print 'camn2cam_id',camn2cam_id
+                    print
+                    raise ValueError('cam_id already in dict')
+                cam_id2camn[cam_id]=camn
 
-        # find camns
-        this_observation_camns = [cam_id2camn[cam_id] for cam_id in cam_ids_used]
+            # find camns
+            this_observation_camns = [cam_id2camn[cam_id] for cam_id in cam_ids_used]
 
-        this_observation_idxs = [first_idx_by_camn[camn] for camn in this_observation_camns] # zero idx
+            this_observation_idxs = [first_idx_by_camn[camn] for camn in this_observation_camns] # zero idx
 
-        if debug>5:
-            print 'this_observation_camns',this_observation_camns
-            print 'this_observation_idxs',this_observation_idxs
+            if debug>5:
+                print 'this_observation_camns',this_observation_camns
+                print 'this_observation_idxs',this_observation_idxs
 
-            print 'camn','raw 2d data','reprojected 3d->2d'
-            for camn in this_observation_camns:
-                cam_id = camn2cam_id[camn]
-                repro=reconst_orig_units.find2d( cam_id, this_observation_mm )
-                print camn,frame_data[camn][0][0][:2],repro
-        
-        ####################################
-        #  Now join found point into Tracker
-        tracker.join_new_obj( frame,
-                              this_observation_mm,
-                              this_observation_camns,
-                              this_observation_idxs,
-                              debug=debug )
+                print 'camn','raw 2d data','reprojected 3d->2d'
+                for camn in this_observation_camns:
+                    cam_id = camn2cam_id[camn]
+                    repro=reconst_orig_units.find2d( cam_id, this_observation_mm )
+                    print camn,frame_data[camn][0][0][:2],repro
+
+            ####################################
+            #  Now join found point into Tracker
+            tracker.join_new_obj( frame,
+                                  this_observation_mm,
+                                  this_observation_camns,
+                                  this_observation_idxs,
+                                  debug=debug )
     if debug > 5:
         print
+        print 'At end of frame %d, all live tracked objects:'%frame
+        for tro in tracker.live_tracked_objects:
+            print tro
+            for i in range(len(tro.xhats)):
+                print '  ',i,tro.frames[i],tro.xhats[i][:3],math.sqrt(tro.Ps[i][0,0]**2 + tro.Ps[i][1,1]**2 + tro.Ps[i][2,2]**2),
+                if tro.frames[i] in tro.observations_frames:
+                    j =  tro.observations_frames.index(  tro.frames[i] )
+                    print tro.observations_data[j]
+                else:
+                    print
+            print
+        print
+        print '-'*80
 
 class KalmanSaver:
     def __init__(self,dest_filename,reconst_orig_units):
@@ -220,6 +235,10 @@ def kalmanize(src_filename,
               dynamic_model=None,
               debug=False,
               ):
+
+    if debug:
+        numpy.set_printoptions(precision=3,linewidth=120,suppress=False)
+        
     if exclude_cam_ids is None:
         exclude_cam_ids = []
         
@@ -319,12 +338,6 @@ def kalmanize(src_filename,
                     print 'frame_data for frame %d'%(last_frame,)
                     pprint.pprint(frame_data)
                     print
-#                if debug > 5:
-#                    for camn,data in frame_data.iteritems():
-#                        if len(data)>1:
-#                            print '>1'
-#                            pprint.pprint(frame_data)
-#                            print
                 process_frame(reconst_orig_units,tracker,last_frame,frame_data,camn2cam_id,
                               max_err=max_err,debug=debug)
                 frame_count += 1
