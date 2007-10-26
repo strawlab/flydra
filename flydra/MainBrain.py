@@ -588,7 +588,8 @@ class CoordReceiver(threading.Thread):
                     if trig_cmd=='x':
                         pre_timestamp = time.time()
                         self.main_brain.trigger_device.ext_trig1()
-                        self.main_brain.log_message('<mainbrain>',pre_timestamp,'EXTTRIG1')
+                        # hmm, calling log_message is normally what the cameras do..
+                        self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG1')
                 
             timestamp_echo_gatherer_ready = False
             if self.timestamp_echo_gatherer in in_ready:
@@ -1298,7 +1299,7 @@ class MainBrain(object):
 
         def log_message(self,cam_id,host_timestamp,message):
             mainbrain_timestamp = time.time()
-            print 'received log message from %s: %s'%cam_id,message
+            print 'received log message from %s: %s'%(cam_id,message)
             self.message_queue.put( (mainbrain_timestamp,cam_id,host_timestamp,message) )
 
         def close(self,cam_id):
