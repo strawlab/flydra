@@ -885,7 +885,7 @@ class wxMainBrainApp(wx.App):
                       self.OnSaveKalmanCalibrationData)
         
         ctrl = xrc.XRCCTRL(self.status_panel,
-                           "MANUAL_TRIGGER_DEVICE")
+                           "MANUAL_TRIGGER_DEVICE") # EXT TRIG1
         wx.EVT_BUTTON(ctrl, ctrl.GetId(),
                       self.OnManualTriggerDevice)
         
@@ -1136,8 +1136,8 @@ class wxMainBrainApp(wx.App):
         all_params = self.main_brain.get_all_params()
         doit=False
         dlg = wx.FileDialog( self.frame, "Select file to save camera config data",
-                            #style = wx.SAVE | wx.OVERWRITE_PROMPT,
-                            style = wx.DD_DEFAULT_STYLE,
+                            style = wx.SAVE | wx.OVERWRITE_PROMPT,
+                            #style = wx.DD_DEFAULT_STYLE,
                             defaultDir = os.environ.get('HOME',''),
                             defaultFile = 'flydra_cameras.cfg',
                             wildcard = '*.cfg',
