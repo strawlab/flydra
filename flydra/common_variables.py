@@ -13,3 +13,4 @@ trigger_network_socket_port = 28994 # on MainBrain
 
 # first of potentially many:
 min_cam2mainbrain_data_port = 34813 # totally arbitrary, gets communicated
+realtime_kalman_port = 28931

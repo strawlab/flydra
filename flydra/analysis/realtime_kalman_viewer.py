@@ -10,12 +10,13 @@ from vtk.util.colors import tomato, banana, azure
 import time, sys, threading, socket, struct
 import flydra.reconstruct as reconstruct
 import flydra.kalman.flydra_tracker as flydra_tracker
+import common_variables
 
 #hostname = socket.gethostbyname('mainbrain')
 hostname = '127.0.0.1'
 sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-port = 28931
+port = common_variables.realtime_kalman_port
 
 sockobj.bind(( hostname, port))
 print 'listening on',hostname,port
