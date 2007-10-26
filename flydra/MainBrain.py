@@ -586,7 +586,9 @@ class CoordReceiver(threading.Thread):
             if trigger_network_ready:
                 with self.main_brain.trigger_device_lock:
                     if trig_cmd=='x':
+                        pre_timestamp = time.time()
                         self.main_brain.trigger_device.ext_trig1()
+                        self.main_brain.log_message('<mainbrain>',pre_timestamp,'EXTTRIG1')
                 
             timestamp_echo_gatherer_ready = False
             if self.timestamp_echo_gatherer in in_ready:
@@ -1145,6 +1147,9 @@ class MainBrain(object):
 
         def external_request_missing_data(self, cam_id, camn, framenumber_offset, list_of_missing_framenumbers):
             with self.cam_info_lock:
+                if cam_id not in self.cam_info:
+                    # the camera was dropped, ignore this request
+                    return
                 cam = self.cam_info[cam_id]
                 cam_lock = cam['lock']
                 
@@ -1293,6 +1298,7 @@ class MainBrain(object):
 
         def log_message(self,cam_id,host_timestamp,message):
             mainbrain_timestamp = time.time()
+            print 'received log message from %s: %s'%cam_id,message
             self.message_queue.put( (mainbrain_timestamp,cam_id,host_timestamp,message) )
 
         def close(self,cam_id):
