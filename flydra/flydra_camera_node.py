@@ -928,7 +928,10 @@ class App:
                         if value: globals['use_cmp'].set()
                         else: globals['use_cmp'].clear()
                     elif property_name == 'max_framerate':
-                        cam.set_framerate(value)
+                        try:
+                            cam.set_framerate(value)
+                        except Exception,err:
+                            print 'ERROR: failed setting framerate:',err
                     elif property_name == 'collecting_background':
                         if value: globals['collecting_background'].set()
                         else: globals['collecting_background'].clear()
