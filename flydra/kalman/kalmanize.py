@@ -409,10 +409,6 @@ def main():
     
     parser = OptionParser(usage)
     
-    parser.add_option("-f", "--file", dest="filename", type='string',
-                      help="hdf5 file with data to display FILE",
-                      metavar="FILE")
-
     parser.add_option("-d", "--dest-file", dest="dest_filename", type='string',
                       help="save to hdf5 file (append if already present)",
                       metavar="DESTFILE")
@@ -448,9 +444,6 @@ def main():
         
     if options.exclude_camns is not None:
         options.exclude_camns = [int(camn) for camn in options.exclude_camns.split()]
-        
-    if options.filename is not None:
-        args.append(options.filename)
         
     if len(args)>1:
         print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
