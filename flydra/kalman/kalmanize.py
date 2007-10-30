@@ -354,7 +354,16 @@ def kalmanize(src_filename,
             last_frame = new_frame
 
         camn = row['camn']
-        cam_id = camn2cam_id[camn]
+        try:
+            cam_id = camn2cam_id[camn]
+        except KeyError, err:
+            # This will happen if cameras were re-synchronized (and
+            # thus gain new cam_ids) immediately before saving was
+            # turned on in MainBrain. The reason is that the network
+            # buffers are still full of old data coming in from the
+            # cameras.
+            print 'WARNING: no cam_id for camn %d, skipping this row of data'%camn
+            continue
         
         if cam_id in exclude_cam_ids:
             # exclude this camera
