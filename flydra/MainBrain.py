@@ -677,6 +677,7 @@ class CoordReceiver(threading.Thread):
                         if len(header) != header_size:
                             # incomplete header buffer
                             break
+                        # this timestamp is the remote camera's timestamp
                         (timestamp, camn_received_time, framenumber,
                          n_pts) = struct.unpack(header_fmt,header)
                         points_in_pluecker_coords_meters = []
@@ -687,7 +688,8 @@ class CoordReceiver(threading.Thread):
                             break
                         if framenumber-self.last_framenumbers_skip[cam_idx] > 1:
                             if NETWORK_PROTOCOL == 'udp':
-                                print '  WARNING: frame data loss (probably from UDP collision) %s'%(cam_id,)
+                                sys.stderr.write('.')
+                                #print '  WARNING: frame data loss (probably from UDP collision) %s'%(cam_id,)
                             elif NETWORK_PROTOCOL == 'tcp':
                                 print '  WARNING: frame data loss (unknown cause) %s'%(cam_id,)
                             else:
@@ -832,9 +834,9 @@ class CoordReceiver(threading.Thread):
                                     pluecker_coords_by_camn,
                                     self.camn2cam_id)
                                 
-                                if len(downstream_kalman_hosts):
+                                if len(downstream_kalman_hosts) and len(self.tracker.live_tracked_objects):
                                     data_packet = self.tracker.encode_data_packet(
-                                        corrected_framenumber,timestamp)
+                                        corrected_framenumber,time.time())
                                     try:
                                         for downstream_host in downstream_kalman_hosts:
                                             outgoing_UDP_socket.sendto(data_packet,downstream_host)
