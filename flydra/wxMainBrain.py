@@ -70,7 +70,35 @@ def validate_positive_float(val_str):
         return True
     else:
         return False
-    
+
+def wrap_loud( wxparent, func ):
+    class LoudWrapper:
+        def __init__(self,wxparent,func):
+            self.func = func
+            self.wxparent = wxparent
+        def __call__(self,*args,**kw):
+            try:
+                return self.func(*args,**kw)
+            except Exception, err:
+                dlg2 = wx.MessageDialog( self.wxparent, 'Error: %s'%str(err),
+                                         'Unexpected error!',
+                                         wx.OK | wx.ICON_ERROR )
+                try:
+                    dlg2.ShowModal()
+                finally:
+                    dlg2.Destroy()
+                    raise
+            except:
+                dlg2 = wx.MessageDialog( self.wxparent, 'unknown error',
+                                         'Unexpected error!',
+                                         wx.OK | wx.ICON_ERROR )
+                try:
+                    dlg2.ShowModal()
+                finally:
+                    dlg2.Destroy()
+                    raise
+    return LoudWrapper( wxparent, func)
+
 class wxMainBrainApp(wx.App):
     def OnInit(self,*args,**kw):
         global use_opengl, wxglvideo
@@ -255,7 +283,7 @@ class wxMainBrainApp(wx.App):
         ID_Timer  = wx.NewId() 	         
         self.timer = wx.Timer(self,      # object to send the event to 	 
                              ID_Timer)  # event id to use 	 
-        wx.EVT_TIMER(self,  ID_Timer, self.OnTimer)
+        wx.EVT_TIMER(self,  ID_Timer, wrap_loud(self.frame,self.OnTimer))
         self.update_interval=100
         self.timer.Start(self.update_interval) # call every n msec
 ##        wx.EVT_IDLE(self.frame, self.OnIdle)
