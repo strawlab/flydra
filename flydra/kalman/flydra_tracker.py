@@ -16,8 +16,9 @@ packet_header_fmt = '<idB' # XXX check format
 packet_header_fmtsize = struct.calcsize(packet_header_fmt)
 
 state_size = params.A.shape[0]
-#per_tracked_object_fmt = 'I' + 'f'*state_size # obj_id + state vector
-per_tracked_object_fmt = 'f'*state_size
+err_size = 1
+#per_tracked_object_fmt = 'I' + 'f'*(state_size+err_size) # obj_id + state vector
+per_tracked_object_fmt = 'f'*(state_size+err_size)
 per_tracked_object_fmtsize = struct.calcsize(per_tracked_object_fmt)
 
 class FakeThreadingEvent:
@@ -440,7 +441,10 @@ class Tracker:
             if not len(tro.xhats):
                 continue
             xhat = tro.xhats[-1]
-            data_packet += struct.pack(per_tracked_object_fmt,*xhat)
+            P = tro.Ps[-1]
+            meanP = math.sqrt(numpy.sum(numpy.array([P[i,i]**2 for i in range(3)])))
+            data_values = [xhat[i] for i in range(state_size)]+[meanP]
+            data_packet += struct.pack(per_tracked_object_fmt,*data_values)
         return data_packet
     
 def decode_data_packet(buf):
@@ -454,9 +458,11 @@ def decode_data_packet(buf):
         this_tro = rest[:per_tracked_object_fmtsize]
         rest = rest[per_tracked_object_fmtsize:]
 
-        state_vec = struct.unpack(per_tracked_object_fmt,this_tro)
+        results = struct.unpack(per_tracked_object_fmt,this_tro)
+        state_vec = results[:state_size]
+        meanP = results[state_size]
         state_vecs.append( state_vec )
-    return corrected_framenumber, timestamp, state_vecs
+    return corrected_framenumber, timestamp, state_vecs, meanP
         
         
         
