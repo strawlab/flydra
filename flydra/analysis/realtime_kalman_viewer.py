@@ -10,7 +10,7 @@ from vtk.util.colors import tomato, banana, azure
 import time, sys, threading, socket, struct
 import flydra.reconstruct as reconstruct
 import flydra.kalman.flydra_tracker as flydra_tracker
-import common_variables
+import flydra.common_variables as common_variables
 
 #hostname = socket.gethostbyname('mainbrain')
 hostname = '127.0.0.1'
@@ -18,7 +18,14 @@ sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 port = common_variables.realtime_kalman_port
 
-sockobj.bind(( hostname, port))
+while 1:
+    try:
+        sockobj.bind(( hostname, port))
+    except socket.error, err:
+        if err.args[0]==98:
+            port += 1
+            continue
+    break
 print 'listening on',hostname,port
 
 EVT_TRIG_ID = wxNewId()
@@ -40,7 +47,7 @@ class Listener(threading.Thread):
         print 'listening...'
         while not self.quit_now.isSet():
             databuf, addr = sockobj.recvfrom(1024)
-            corrected_framenumber, timestamp, state_vecs=flydra_tracker.decode_data_packet(databuf)
+            corrected_framenumber, timestamp, state_vecs,meanP=flydra_tracker.decode_data_packet(databuf)
             #print corrected_framenumber, timestamp, state_vecs
             line3d=None
             if len(state_vecs):
