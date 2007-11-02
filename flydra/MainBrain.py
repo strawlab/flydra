@@ -497,7 +497,7 @@ class CoordReceiver(threading.Thread):
             except Exception, x:
                 print 'WARNING: could not run in maximum priority mode (PID %d): %s'%(os.getpid(),str(x))
         
-        header_fmt = '<ddli'
+        header_fmt = '<ddliH'
         header_size = struct.calcsize(header_fmt)
         pt_fmt = '<dddddddddBBddBdddddd'
         pt_size = struct.calcsize(pt_fmt)
@@ -519,6 +519,8 @@ class CoordReceiver(threading.Thread):
         empty_list = []
         if NETWORK_PROTOCOL == 'tcp':
             old_data = {}
+
+        debug_drop_fd = None
         
         while not self.quit_event.isSet():
 
@@ -679,17 +681,30 @@ class CoordReceiver(threading.Thread):
                             break
                         # this timestamp is the remote camera's timestamp
                         (timestamp, camn_received_time, framenumber,
-                         n_pts) = struct.unpack(header_fmt,header)
+                         n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
+                        
+                        DEBUG_DROP = self.main_brain.remote_api.cam_info[cam_id]['scalar_control_info']['debug_drop']
+                        if DEBUG_DROP:
+                            if debug_drop_fd is None:
+                                debug_drop_fd = open('debug_framedrop.txt',mode='w')
+                            debug_drop_fd.write('%d,%d\n'%(framenumber,n_pts))
                         points_in_pluecker_coords_meters = []
                         points_undistorted = []
                         points_distorted = []
                         if len(data) < header_size + n_pts*pt_size:
                             # incomplete point info
                             break
-                        if framenumber-self.last_framenumbers_skip[cam_idx] > 1:
+                        predicted_framenumber = n_frames_skipped + self.last_framenumbers_skip[cam_idx] + 1
+                        if framenumber<predicted_framenumber:
+                            print 'framenumber',framenumber
+                            print 'n_frames_skipped',n_frames_skipped
+                            print 'predicted_framenumber',predicted_framenumber
+                            print 'self.last_framenumbers_skip[cam_idx]',self.last_framenumbers_skip[cam_idx]
+                            raise RuntimeError('got framenumber already received or skipped!')
+                        elif framenumber>predicted_framenumber:
                             if NETWORK_PROTOCOL == 'udp':
-                                sys.stderr.write('.')
-                                #print '  WARNING: frame data loss (probably from UDP collision) %s'%(cam_id,)
+                                #sys.stderr.write('.')
+                                print '  WARNING: frame data loss (probably from UDP collision) %s'%(cam_id,)
                             elif NETWORK_PROTOCOL == 'tcp':
                                 print '  WARNING: frame data loss (unknown cause) %s'%(cam_id,)
                             else:
@@ -1608,7 +1623,6 @@ class MainBrain(object):
     def service_pending(self):
         """the MainBrain application calls this fairly frequently (e.g. every 100 msec)"""
         new_cam_ids, old_cam_ids = self.remote_api.external_get_and_clear_pending_cams()
-
         for cam_id in new_cam_ids:
             if cam_id in old_cam_ids:
                 continue # inserted and then removed

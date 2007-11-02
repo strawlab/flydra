@@ -177,6 +177,10 @@ class GrabClass(object):
         self.realtime_analyzer.set_reconstruct_helper( helper )
     
     def grab_func(self,globals):
+        DEBUG_DROP = globals['debug_drop']
+        if DEBUG_DROP:
+            debug_fd = open('debug_framedrop_cam.txt',mode='w')
+        
         # questionable optimization: speed up by eliminating namespace lookups
         cam_quit_event_isSet = globals['cam_quit_event'].isSet
         bg_frame_number = 0
@@ -357,9 +361,12 @@ class GrabClass(object):
                         self.log_message_queue.put((self.cam_id,time.time(),msg))
                         print >> sys.stderr, msg
                     if framenumber-old_fn > 1:
-                        msg = '  frames apparently skipped: %d'%(framenumber-old_fn,)
+                        n_frames_skipped = framenumber-old_fn-1
+                        msg = '  frames apparently skipped: %d'%(n_frames_skipped,)
                         self.log_message_queue.put((self.cam_id,time.time(),msg))
                         print >> sys.stderr, msg
+                    else:
+                        n_frames_skipped = 0
                 old_ts = timestamp
                 old_fn = framenumber
 
@@ -504,8 +511,8 @@ class GrabClass(object):
                     bg_changed = False
                     
                 # XXX could speed this with a join operation I think
-                data = struct.pack('<ddli',timestamp,cam_received_time,
-                                   framenumber,len(points))
+                data = struct.pack('<ddliH',timestamp,cam_received_time,
+                                   framenumber,len(points),n_frames_skipped)
                 for point_tuple in points:
                     try:
                         data = data + struct.pack(pt_fmt,*point_tuple)
@@ -518,7 +525,9 @@ class GrabClass(object):
                 elif NETWORK_PROTOCOL == 'tcp':
                     coord_socket.send(data)
                 else:
-                    raise ValueError('unknown NETWORK_PROTOCOL')                    
+                    raise ValueError('unknown NETWORK_PROTOCOL')
+                if DEBUG_DROP:
+                    debug_fd.write('%d,%d\n'%(framenumber,len(points)))
                 #print 'sent data...'
                     
                 if self.new_roi.isSet():
@@ -663,6 +672,7 @@ class App:
                  bg_frame_alpha=1.0/50.0,
                  main_brain_hostname = None,
                  emulation_reconstructor = None,
+                 debug_drop = False, # debug dropped network packets
                  ):
         if main_brain_hostname is None:
             self.main_brain_hostname = default_main_brain_hostname
@@ -751,6 +761,7 @@ class App:
             self.globals.append({})
             globals = self.globals[cam_no] # shorthand
 
+            globals['debug_drop']=debug_drop
             globals['incoming_raw_frames']=Queue.Queue()
             globals['incoming_bg_frames']=Queue.Queue()
             globals['raw_fmf_and_bg_fmf']=None
@@ -825,6 +836,7 @@ class App:
             scalar_control_info['roi'] = 0,0,width-1,height-1
             scalar_control_info['max_framerate'] = cam.get_framerate()
             scalar_control_info['collecting_background']=globals['collecting_background'].isSet()
+            scalar_control_info['debug_drop']=globals['debug_drop']
             
             # register self with remote server
             port = 9834 + cam_no # for local Pyro server
@@ -1321,6 +1333,10 @@ def main():
     parser.add_option("--backend", dest="backend", type='string',
                       help="cam_iface BACKEND to use",
                       metavar="BACKEND")
+        
+    parser.add_option("--debug-drop", action='store_true',dest='debug_drop',
+                      help="save debugging information regarding dropped network packets",
+                      default=False)
     
     parser.add_option("--num-points", type="int",
                       help="number of points to track per camera")
@@ -1391,6 +1407,7 @@ def main():
             bg_frame_alpha=bg_frame_alpha,
             main_brain_hostname = options.server,
             emulation_reconstructor = emulation_reconstructor,
+            debug_drop = options.debug_drop,
             )
     if app.num_cams <= 0:
         return
