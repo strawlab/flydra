@@ -497,7 +497,7 @@ class CoordReceiver(threading.Thread):
             except Exception, x:
                 print 'WARNING: could not run in maximum priority mode (PID %d): %s'%(os.getpid(),str(x))
         
-        header_fmt = '<ddliH'
+        header_fmt = '<ddliI'
         header_size = struct.calcsize(header_fmt)
         pt_fmt = '<dddddddddBBddBdddddd'
         pt_size = struct.calcsize(pt_fmt)
@@ -606,8 +606,6 @@ class CoordReceiver(threading.Thread):
             if timestamp_echo_gatherer_ready:
                 stop_timestamp = time_time()
                 start_timestamp,remote_timestamp = struct_unpack(timestamp_echo_fmt2,buf)
-                #measurement_duration = stop_timestamp-start_timestamp
-                #clock_diff = stop_timestamp-remote_timestamp
 
                 tlist = self.last_clock_diff_measurements.setdefault(remote_ip,[])
                 tlist.append( (start_timestamp,remote_timestamp,stop_timestamp) )
@@ -702,13 +700,15 @@ class CoordReceiver(threading.Thread):
                             print 'self.last_framenumbers_skip[cam_idx]',self.last_framenumbers_skip[cam_idx]
                             raise RuntimeError('got framenumber already received or skipped!')
                         elif framenumber>predicted_framenumber:
-                            if NETWORK_PROTOCOL == 'udp':
-                                #sys.stderr.write('.')
-                                print '  WARNING: frame data loss (probably from UDP collision) %s'%(cam_id,)
-                            elif NETWORK_PROTOCOL == 'tcp':
-                                print '  WARNING: frame data loss (unknown cause) %s'%(cam_id,)
-                            else:
-                                raise ValueError('unknown NETWORK_PROTOCOL')
+                            if not self.last_framenumbers_skip[cam_idx]==-1:
+                                # this is not the first frame
+                                if NETWORK_PROTOCOL == 'udp':
+                                    #sys.stderr.write('.')
+                                    print '  WARNING: frame data loss (probably from UDP collision) %s'%(cam_id,)
+                                elif NETWORK_PROTOCOL == 'tcp':
+                                    print '  WARNING: frame data loss (unknown cause) %s'%(cam_id,)
+                                else:
+                                    raise ValueError('unknown NETWORK_PROTOCOL')
                             
                             if ATTEMPT_DATA_RECOVERY:
                                 missing_frame_numbers = range(

@@ -1,5 +1,6 @@
 #emacs, this is -*-Python-*- mode
 # $Id: $
+from __future__ import division
 
 import os
 BENCHMARK = int(os.environ.get('FLYDRA_BENCHMARK',0))
@@ -219,7 +220,7 @@ class GrabClass(object):
                 raise ValueError('unknown NETWORK_PROTOCOL')
 
         old_ts = time.time()
-        old_fn = 0
+        old_fn = None
         points = []
 
         if os.name == 'posix' and not BENCHMARK:
@@ -334,7 +335,7 @@ class GrabClass(object):
                     continue
                 except cam_iface.FrameDataMissing:
                     now = time.time()
-                    msg = 'ERROR: frame data missing on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
+                    msg = 'Warning: frame data missing on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
                     #self.log_message_queue.put((self.cam_id,now,msg))
                     print >> sys.stderr, msg
                     continue
@@ -355,11 +356,9 @@ class GrabClass(object):
                         sys.stdout.flush()
                         benchmark_start_time = cam_received_time
                 else:
-                    diff = timestamp-old_ts
-                    if diff > 0.02:
-                        msg = 'Warning: IFI is %f on %s at %s'%(diff,self.cam_id,time.asctime())
-                        self.log_message_queue.put((self.cam_id,time.time(),msg))
-                        print >> sys.stderr, msg
+                    if old_fn is None:
+                        # no old frame
+                        old_fn = framenumber-1
                     if framenumber-old_fn > 1:
                         n_frames_skipped = framenumber-old_fn-1
                         msg = '  frames apparently skipped: %d'%(n_frames_skipped,)
@@ -367,6 +366,14 @@ class GrabClass(object):
                         print >> sys.stderr, msg
                     else:
                         n_frames_skipped = 0
+                        
+                    diff = timestamp-old_ts
+                    time_per_frame = diff/(n_frames_skipped+1)
+                    if time_per_frame > 0.02:
+                        msg = 'Warning: IFI is %f on %s at %s'%(time_per_frame,self.cam_id,time.asctime())
+                        self.log_message_queue.put((self.cam_id,time.time(),msg))
+                        print >> sys.stderr, msg
+                        
                 old_ts = timestamp
                 old_fn = framenumber
 
@@ -511,7 +518,7 @@ class GrabClass(object):
                     bg_changed = False
                     
                 # XXX could speed this with a join operation I think
-                data = struct.pack('<ddliH',timestamp,cam_received_time,
+                data = struct.pack('<ddliI',timestamp,cam_received_time,
                                    framenumber,len(points),n_frames_skipped)
                 for point_tuple in points:
                     try:
@@ -964,11 +971,14 @@ class App:
                 camn_and_list = map(int,cmds[key].split())
                 camn, framenumber_offset = camn_and_list[:2]
                 missing_framenumbers = camn_and_list[2:]
-                print 'I know main brain wants %d frames (camn %d): %s'%(
+                print 'I know main brain wants %d frames (camn %d):'%(
                     len(missing_framenumbers),
-                    camn,
-                    str(missing_framenumbers))
-
+                    camn),
+                if len(missing_framenumbers) > 200:
+                    print str(missing_framenumbers[:25]) + ' + ... + ' + str(missing_framenumbers[-25:])
+                else:
+                    print str(missing_framenumbers)
+                    
                 last_points_framenumbers = self.last_points_framenumbers_by_cam[cam_no]
                 last_points = self.last_points_by_cam[cam_no]
 
@@ -980,29 +990,36 @@ class App:
                 idxs = last_points_framenumbers.searchsorted( missing_framenumbers )
 
                 missing_data = []
-
+                still_missing = []
                 for ii,(idx,missing_framenumber) in enumerate(zip(idxs,missing_framenumbers)):
                     if idx == 0:
                         # search sorted will sometimes return 0 when value not in range
                         found_framenumber = last_points_framenumbers[idx]
                         if found_framenumber != missing_framenumber:
-                            print 'WARNING: could not find missing frame',missing_framenumber
+                            still_missing.append( missing_framenumber )
                             continue
                     elif idx == len(last_points_framenumbers):
-                        print 'WARNING: could not find missing frame',missing_framenumber
+                        still_missing.append( missing_framenumber )
                         continue
                     
                     timestamp, points, camn_received_time = last_points[idx]
                     # make sure data is pure python, (not numpy)
                     missing_data.append( (int(camn), int(missing_framenumber), float(timestamp),
                                           float(camn_received_time), points) ) 
-                    
                 if len(missing_data):
-                #if 1: # XXX deleteme
-                #if 0: # XXX deleteme
                     self.main_brain_lock.acquire()
                     self.main_brain.receive_missing_data(cam_id, framenumber_offset, missing_data)
                     self.main_brain_lock.release()
+                    
+                if len(still_missing):
+                    print '  Unable to find %d frames (camn %d):'%(
+                        len(still_missing),
+                        camn),
+                    if len(still_missing) > 200:
+                        print str(still_missing[:25]) + ' + ... + ' + str(still_missing[-25:])
+                    else:
+                        print str(still_missing)
+                    
                 
             elif key == 'quit':
                 globals['cam_quit_event'].set()
@@ -1292,6 +1309,7 @@ class App:
                     self.globals[cam_no]['cam_quit_event'].set()
         except ConnectionClosedError:
             print 'unexpected connection closure...'
+            raise
 
 def main():
     global cam_iface
