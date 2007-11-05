@@ -313,7 +313,6 @@ class CoordReceiver(threading.Thread):
                 try:
                     while 1:
                         value = tmp_queue.get_nowait()
-                        #print 'value',repr(value)
                         this_cam_id, this_framenumber_offset, this_list = value
                         if cam_id is None:
                             cam_id = this_cam_id
@@ -711,19 +710,21 @@ class CoordReceiver(threading.Thread):
                                     raise ValueError('unknown NETWORK_PROTOCOL')
                             
                             if ATTEMPT_DATA_RECOVERY:
-                                missing_frame_numbers = range(
-                                    self.last_framenumbers_skip[cam_idx]+1,
-                                    framenumber)
-                                
-                                with self.request_data_lock:
-                                    tmp_queue = self.request_data.setdefault(absolute_cam_no,Queue.Queue())
+                                if not self.last_framenumbers_skip[cam_idx]==-1:
+                                    # this is not the first frame
+                                    missing_frame_numbers = range(
+                                        self.last_framenumbers_skip[cam_idx]+1,
+                                        framenumber)
 
-                                tmp_framenumber_offset = self.framenumber_offsets[cam_idx]                                
-                                #print 'putting', (cam_id,  tmp_framenumber_offset, missing_frame_numbers)
-                                tmp_queue.put( (cam_id,  tmp_framenumber_offset, missing_frame_numbers) )
-                                del tmp_framenumber_offset
-                                del tmp_queue # drop reference to queue
-                                del missing_frame_numbers
+                                    with self.request_data_lock:
+                                        tmp_queue = self.request_data.setdefault(absolute_cam_no,Queue.Queue())
+
+                                    tmp_framenumber_offset = self.framenumber_offsets[cam_idx]                                
+                                    #print 'putting', (cam_id,  tmp_framenumber_offset, missing_frame_numbers)
+                                    tmp_queue.put( (cam_id,  tmp_framenumber_offset, missing_frame_numbers) )
+                                    del tmp_framenumber_offset
+                                    del tmp_queue # drop reference to queue
+                                    del missing_frame_numbers
                                 
                         self.last_framenumbers_skip[cam_idx]=framenumber
                         start=header_size
@@ -1644,7 +1645,7 @@ class MainBrain(object):
             self.last_saved_data_time = now
             
         diff = now - self.last_trigger_framecount_check_time
-        if diff >= 5.0: # request missing data and save data every 5 seconds
+        if diff >= 5.0:
             self._trigger_framecount_check()
             self.last_trigger_framecount_check_time = now
 
