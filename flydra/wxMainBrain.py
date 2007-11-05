@@ -25,7 +25,7 @@ import sys, threading, time, os, copy, socket
 import traceback
 import MainBrain
 from MainBrain import DEBUG
-from wxwrap import wx
+import wx
 from wx import xrc
 
 PLOTPANEL = True

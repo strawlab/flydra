@@ -13,7 +13,7 @@ if ENABLED:
     from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
     from matplotlib.mlab import meshgrid
     
-from wxwrap import wx
+import wx
 
 #origin = 'lower' # will have to change extent?
 origin = 'upper'
