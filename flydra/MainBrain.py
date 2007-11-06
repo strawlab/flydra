@@ -480,6 +480,100 @@ class CoordReceiver(threading.Thread):
         self.general_save_info[cam_id]['frame0']=timestamp
 
         self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, timestamp) )
+        
+    def _block_until_data_comes_then_get_all(self,timeout=0.1):
+        empty_list = []
+        incoming_2d_data = []
+        trig_buf = None
+        timestamp_echo_info = None
+        
+        #####################################################################
+
+        if NETWORK_PROTOCOL == 'tcp':
+            try:
+                in_ready, out_ready, exc_ready = select.select( self.server_sockets.keys(),
+                                                                empty_list, empty_list, 0.0)
+            except select.error, exc:
+                print 'select.error on server socket, ignoring...'
+                return trig_buf, timestamp_echo_info, incoming_2d_data
+            except socket.error, exc:
+                print 'socket.error on server socket, ignoring...'
+                return trig_buf, timestamp_echo_info, incoming_2d_data
+            for sockobj in in_ready:
+                cam_id = self.server_sockets[sockobj]
+                client_sockobj, addr = sockobj.accept()
+                client_sockobj.setblocking(0)
+                print cam_id, 'connected from',addr
+                self.listen_sockets[client_sockobj]=cam_id
+        DEBUG('1')
+        listen_sockets = self.listen_sockets.keys()
+        listen_sockets.append(self.timestamp_echo_gatherer)
+        listen_sockets.append(self.trigger_network_socket)
+        try:
+            in_ready, out_ready, exc_ready = select.select( listen_sockets,
+                                                            empty_list, empty_list, timeout )
+        except select.error, exc:
+            print 'select.error on listen socket, ignoring...'
+            return trig_buf, timestamp_echo_info, incoming_2d_data
+        except socket.error, exc:
+            print 'socket.error on listen socket, ignoring...'
+            return trig_buf, timestamp_echo_info, incoming_2d_data
+        except Exception, exc:
+            raise
+        except:
+            print 'ERROR: CoordReceiver received an exception not derived from Exception'
+            print '-='*10,'I should really quit now!','-='*10
+            return trig_buf, timestamp_echo_info, incoming_2d_data
+
+        if not len(in_ready):
+            return trig_buf, timestamp_echo_info, incoming_2d_data
+
+        if self.trigger_network_socket in in_ready:
+            try:
+                trig_buf, (remote_ip,cam_port) = self.trigger_network_socket.recvfrom(4096)
+            except Exception, err:
+                print 'WARNING: unknown Exception receiving trigger data:',str(err)
+            except:
+                print 'WARNING: unknown error (non-Exception!) receiving trigger data'
+            idx = in_ready.index(self.trigger_network_socket)
+            del in_ready[idx]
+
+        if self.timestamp_echo_gatherer in in_ready:
+            try:
+                timestamp_echo_buf, (timestamp_echo_remote_ip,cam_port) = self.timestamp_echo_gatherer.recvfrom(4096)
+            except Exception, err:
+                print 'WARNING: unknown Exception receiving timestamp echo data:',str(err)
+            except:
+                print 'WARNING: unknown error (non-Exception!) receiving timestamp echo data'
+            stop_timestamp = time.time()
+            idx = in_ready.index(self.timestamp_echo_gatherer)
+            del in_ready[idx]
+            timestamp_echo_info = timestamp_echo_buf, timestamp_echo_remote_ip, stop_timestamp
+        # now gather all data waiting on the sockets
+
+        for sockobj in in_ready:
+            try:
+                cam_id = self.listen_sockets[sockobj]
+            except KeyError,ValueError:
+                print 'strange - what is in my listen sockets list?',sockobj
+                # XXX camera was dropped?
+                continue
+
+            if NETWORK_PROTOCOL == 'udp':
+                try:
+                    data, addr = sockobj.recvfrom(4096)
+                except Exception, err:
+                    print 'WARNING: unknown Exception receiving UDP data:',str(err)
+                    continue
+                except:
+                    print 'WARNING: unknown error (non-Exception!) receiving UDP data:'
+                    continue
+            elif NETWORK_PROTOCOL == 'tcp':
+                data = sockobj.recv(4096)
+            else:
+                raise ValueError('unknown NETWORK_PROTOCOL')
+            incoming_2d_data.append( (cam_id, data ))
+        return trig_buf, timestamp_echo_info, incoming_2d_data
 
     def run(self):
         """main loop of CoordReceiver"""
@@ -500,7 +594,7 @@ class CoordReceiver(threading.Thread):
         header_size = struct.calcsize(header_fmt)
         pt_fmt = '<dddddddddBBddBdddddd'
         pt_size = struct.calcsize(pt_fmt)
-        timeout = 0.1
+        timestamp_echo_fmt2 = flydra.common_variables.timestamp_echo_fmt2
         
         realtime_coord_dict = {}        
         realtime_kalman_coord_dict = {}        
@@ -508,14 +602,8 @@ class CoordReceiver(threading.Thread):
 
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0)
         
-        timestamp_echo_fmt2 = flydra.common_variables.timestamp_echo_fmt2
-        
         convert_format = flydra.kalman.flydra_kalman_utils.convert_format # shorthand
 
-        struct_unpack = struct.unpack
-        select_select = select.select
-        time_time = time.time
-        empty_list = []
         if NETWORK_PROTOCOL == 'tcp':
             old_data = {}
 
@@ -523,43 +611,16 @@ class CoordReceiver(threading.Thread):
         
         while not self.quit_event.isSet():
 
-            #####################################################################
+            trig_buf, timestamp_echo_info, incoming_2d_data = self._block_until_data_comes_then_get_all()
             
-            if NETWORK_PROTOCOL == 'tcp':
-                try:
-                    in_ready, out_ready, exc_ready = select_select( self.server_sockets.keys(),
-                                                                    empty_list, empty_list, 0.0)
-                except select.error, exc:
-                    print 'select.error on server socket, ignoring...'
-                    continue
-                except socket.error, exc:
-                    print 'socket.error on server socket, ignoring...'
-                    continue
-                for sockobj in in_ready:
-                    cam_id = self.server_sockets[sockobj]
-                    client_sockobj, addr = sockobj.accept()
-                    client_sockobj.setblocking(0)
-                    print cam_id, 'connected from',addr
-                    self.listen_sockets[client_sockobj]=cam_id
-            DEBUG('1')
-            listen_sockets = self.listen_sockets.keys()
-            listen_sockets.append(self.timestamp_echo_gatherer)
-            listen_sockets.append(self.trigger_network_socket)
-            try:
-                in_ready, out_ready, exc_ready = select_select( listen_sockets,
-                                                                empty_list, empty_list, timeout )
-            except select.error, exc:
-                print 'select.error on listen socket, ignoring...'
-                continue
-            except socket.error, exc:
-                print 'socket.error on listen socket, ignoring...'
-                continue
-            except Exception, exc:
-                raise
-            except:
-                print 'ERROR: CoordReceiver received an exception not derived from Exception'
-                print '-='*10,'I should really quit now!','-='*10
-                continue
+            if trig_buf is not None:
+                with self.main_brain.trigger_device_lock:
+                    if trig_buf=='x':
+                        pre_timestamp = time.time()
+                        self.main_brain.trigger_device.ext_trig1()
+                        # hmm, calling log_message is normally what the cameras do..
+                        self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG1')
+
             new_data_framenumbers.clear()
             if self._fake_sync_event.isSet():
                 for cam_idx, cam_id in enumerate(self.cam_ids):
@@ -570,48 +631,17 @@ class CoordReceiver(threading.Thread):
                                         realtime_kalman_coord_dict,
                                         new_data_framenumbers )
                 self._fake_sync_event.clear()
-                
-            if not len(in_ready):
-                continue
 
-            trigger_network_ready = False
-            if self.trigger_network_socket in in_ready:
-                try:
-                    trig_cmd, (remote_ip,cam_port) = self.trigger_network_socket.recvfrom(4096)
-                    trigger_network_ready = True
-                except Exception, err:
-                    print 'WARNING: unknown Exception receiving trigger data:',str(err)
-                except:
-                    print 'WARNING: unknown error (non-Exception!) receiving trigger data'
-                    
-            if trigger_network_ready:
-                with self.main_brain.trigger_device_lock:
-                    if trig_cmd=='x':
-                        pre_timestamp = time.time()
-                        self.main_brain.trigger_device.ext_trig1()
-                        # hmm, calling log_message is normally what the cameras do..
-                        self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG1')
-                
-            timestamp_echo_gatherer_ready = False
-            if self.timestamp_echo_gatherer in in_ready:
-                try:
-                    buf, (remote_ip,cam_port) = self.timestamp_echo_gatherer.recvfrom(4096)
-                    timestamp_echo_gatherer_ready = True
-                except Exception, err:
-                    print 'WARNING: unknown Exception receiving timestamp echo data:',str(err)
-                except:
-                    print 'WARNING: unknown error (non-Exception!) receiving timestamp echo data'
-                    
-            if timestamp_echo_gatherer_ready:
-                stop_timestamp = time_time()
-                start_timestamp,remote_timestamp = struct_unpack(timestamp_echo_fmt2,buf)
+            if timestamp_echo_info is not None:
+                timestamp_echo_buf, timestamp_echo_remote_ip, stop_timestamp = timestamp_echo_info
+                start_timestamp,remote_timestamp = struct.unpack(timestamp_echo_fmt2,timestamp_echo_buf)
 
-                tlist = self.last_clock_diff_measurements.setdefault(remote_ip,[])
+                tlist = self.last_clock_diff_measurements.setdefault(timestamp_echo_remote_ip,[])
                 tlist.append( (start_timestamp,remote_timestamp,stop_timestamp) )
                 if len(tlist)==100:
-                    if remote_ip not in self.ip2hostname:
-                        self.ip2hostname[remote_ip]=socket.getfqdn(remote_ip)
-                    remote_hostname = self.ip2hostname[remote_ip]
+                    if timestamp_echo_remote_ip not in self.ip2hostname:
+                        self.ip2hostname[timestamp_echo_remote_ip]=socket.getfqdn(timestamp_echo_remote_ip)
+                    remote_hostname = self.ip2hostname[timestamp_echo_remote_ip]
                     tarray = numpy.array(tlist)
                     del tlist[0:-1] # clear list
                     start_timestamps = tarray[:,0]
@@ -636,41 +666,25 @@ class CoordReceiver(threading.Thread):
                     if 0:
                         measurement_duration = roundtrip_duration[rowidx]
                         clock_diff = stop_timestamp-remote_timestamp
-                    
+
                         print '%s: the remote diff is %.1f msec (within 0-%.1f msec accuracy)'%(
                             remote_hostname, clock_diff*1000, measurement_duration*1000)
 
-                idx = in_ready.index(self.timestamp_echo_gatherer)
-                del in_ready[idx]
-
             with self.all_data_lock:
             #self.all_data_lock.acquire(latency_warn_msec=1.0)
+
                 deferred_2d_data = []
-                for sockobj in in_ready:
-                    try:
-                        cam_id = self.listen_sockets[sockobj]
-                    except KeyError,ValueError:
-                        # camera was dropped?
-                        continue
+                for cam_id, newdata in incoming_2d_data:
+                    
                     cam_idx = self.cam_ids.index(cam_id)
                     absolute_cam_no = self.absolute_cam_nos[cam_idx]
-
                     
-                    if NETWORK_PROTOCOL == 'udp':
-                        try:
-                            data, addr = sockobj.recvfrom(4096)
-                        except Exception, err:
-                            print 'WARNING: unknown Exception receiving UDP data:',str(err)
-                            continue
-                        except:
-                            print 'WARNING: unknown error (non-Exception!) receiving UDP data:'
-                            continue
-                    elif NETWORK_PROTOCOL == 'tcp':
-                        newdata = sockobj.recv(4096)
+                    if NETWORK_PROTOCOL == 'tcp':
                         data = old_data.get( sockobj, '')
                         data += newdata
                     else:
-                        raise ValueError('unknown NETWORK_PROTOCOL')
+                        data = newdata
+                    
                     while len(data):
                         header = data[:header_size]
                         if len(header) != header_size:
@@ -942,7 +956,7 @@ class CoordReceiver(threading.Thread):
                             else:
                                 line3d_valid = True
 
-                            find3d_time = time_time()
+                            find3d_time = time.time()
 
                             x,y,z=X
                             outgoing_data = [x,y,z]
