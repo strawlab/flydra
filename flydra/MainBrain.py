@@ -27,6 +27,8 @@ import flydra.trigger
 
 import flydra.debuglock
 
+import errno
+
 # ensure that pytables uses numpy:
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy'])
@@ -132,8 +134,6 @@ if 0:
 downstream_kalman_hosts = []
 if 1:
     downstream_kalman_hosts.append( ('127.0.0.1',28931) ) # self
-if 1:
-    downstream_kalman_hosts.append( ('astraw-office.kicks-ass.net',28931) ) # self
     
 if len(downstream_hosts) or len(downstream_kalman_hosts):
     outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -240,9 +240,43 @@ def get_best_realtime_data():
 def DEBUG(msg=''):
     return
 
+class TrigReceiver(threading.Thread):
+    def __init__(self,main_brain):
+        self.main_brain = main_brain
+
+        name = 'TrigReceiver thread'
+        threading.Thread.__init__(self,name=name)
+        
+    def run(self):
+        global hostname
+        
+        trigger_network_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        port = flydra.common_variables.trigger_network_socket_port
+        trigger_network_socket.bind((hostname, port))
+
+        while 1: # XXX enable quit
+            try:
+                trig_buf, (remote_ip,cam_port) = trigger_network_socket.recvfrom(4096)
+            except Exception, err:
+                print 'WARNING: unknown Exception receiving trigger data:',str(err)
+                continue
+            except:
+                print 'WARNING: unknown error (non-Exception!) receiving trigger data'
+                continue
+            
+            if trig_buf=='x':
+                with self.main_brain.trigger_device_lock:
+                    pre_timestamp = time.time()
+                    self.main_brain.trigger_device.ext_trig1()
+                    # hmm, calling log_message is normally what the cameras do..
+                    self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG1')
+                        
 class CoordRealReceiver(threading.Thread):
     # called from CoordReceiver thread
-    def __init__(self):
+    def __init__(self,quit_event):
+        global hostname
+        
+        self.quit_event = quit_event
         self.socket_lock = threading.Lock()
         
         self.out_queue = Queue.Queue()
@@ -255,15 +289,12 @@ class CoordRealReceiver(threading.Thread):
         self.timestamp_echo_gatherer.bind((hostname, port))
         self.timestamp_echo_gatherer.setblocking(0)
 
-        self.trigger_network_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        port = flydra.common_variables.trigger_network_socket_port
-        self.trigger_network_socket.bind((hostname, port))
-        self.trigger_network_socket.setblocking(0)
-
         name = 'CoordRealReceiver thread'
         threading.Thread.__init__(self,name=name)
         
     def add_socket(self,cam2mainbrain_data_port,cam_id):
+        global hostname
+        
         if NETWORK_PROTOCOL == 'udp':
             sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sockobj.bind((hostname, cam2mainbrain_data_port))
@@ -307,25 +338,22 @@ class CoordRealReceiver(threading.Thread):
         out_list = _empty_into_list(self.out_queue)
 
         # separate data
-        trig_buf_list=[]
         timestamp_echo_info_list=[]
         incoming_2d_data=[]
         for key,value in out_list:
-            if key == 'trig':
-                trig_buf_list.append(value)
-            elif key == 'timestamp_echo':
+            if key == 'timestamp_echo':
                 timestamp_echo_info_list.append(value)
             elif key == '2d_data':
                 incoming_2d_data.append(value)
             else:
                 raise ValueError("unknown key %s"%key)
-        return trig_buf_list, timestamp_echo_info_list, incoming_2d_data
+        return timestamp_echo_info_list, incoming_2d_data
     
     # called from CoordRealReceiver thread
     def run(self):
         timeout=5.0
         empty_list = []
-        while 1:
+        while not self.quit_event.isSet():
             if NETWORK_PROTOCOL == 'tcp':
                 with self.socket_lock:
                     listen_sockets = self.server_sockets.keys()
@@ -349,7 +377,6 @@ class CoordRealReceiver(threading.Thread):
             with self.socket_lock:
                 listen_sockets = self.listen_sockets.keys()
             listen_sockets.append(self.timestamp_echo_gatherer)
-            listen_sockets.append(self.trigger_network_socket)
             try:
                 in_ready, out_ready, exc_ready = select.select( listen_sockets,
                                                                 empty_list, empty_list, timeout )
@@ -360,18 +387,6 @@ class CoordRealReceiver(threading.Thread):
             else:
                 if not len(in_ready):
                     continue
-
-                if self.trigger_network_socket in in_ready:
-                    try:
-                        trig_buf, (remote_ip,cam_port) = self.trigger_network_socket.recvfrom(4096)
-                    except Exception, err:
-                        print 'WARNING: unknown Exception receiving trigger data:',str(err)
-                    except:
-                        print 'WARNING: unknown error (non-Exception!) receiving trigger data'
-                    else:
-                        self.out_queue.put(('trig',trig_buf))
-                    idx = in_ready.index(self.trigger_network_socket)
-                    del in_ready[idx]
 
                 if self.timestamp_echo_gatherer in in_ready:
                     try:
@@ -449,7 +464,7 @@ class CoordReceiver(threading.Thread):
 
         self._fake_sync_event = threading.Event()
 
-        self.realreceiver = CoordRealReceiver()
+        self.realreceiver = CoordRealReceiver(self.quit_event)
         self.realreceiver.setDaemon(True)
         self.realreceiver.start()
 
@@ -661,15 +676,7 @@ class CoordReceiver(threading.Thread):
         
         while not self.quit_event.isSet():
 
-            trig_buf_list, timestamp_echo_info_list, incoming_2d_data = self.realreceiver.get_data()
-            
-            for trig_buf in trig_buf_list:
-                with self.main_brain.trigger_device_lock:
-                    if trig_buf=='x':
-                        pre_timestamp = time.time()
-                        self.main_brain.trigger_device.ext_trig1()
-                        # hmm, calling log_message is normally what the cameras do..
-                        self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG1')
+            timestamp_echo_info_list, incoming_2d_data = self.realreceiver.get_data()
 
             new_data_framenumbers.clear()
             if self._fake_sync_event.isSet():
@@ -1489,6 +1496,10 @@ class MainBrain(object):
         self.coord_receiver = CoordReceiver(self)
         self.coord_receiver.setDaemon(True)
         self.coord_receiver.start()
+
+        self.trig_receiver = TrigReceiver(self)
+        self.trig_receiver.setDaemon(True)
+        self.trig_receiver.start()
 
         self.current_kalman_obj_id = 0
         main_brain_keeper.register( self )
