@@ -240,6 +240,74 @@ def get_best_realtime_data():
 def DEBUG(msg=''):
     return
 
+
+
+class TimestampEchoReceiver(threading.Thread):
+    def __init__(self,main_brain):
+        self.main_brain = main_brain
+
+        name = 'TimestampEchoReceiver thread'
+        threading.Thread.__init__(self,name=name)
+        
+    def run(self):
+        ip2hostname = {}
+
+        timestamp_echo_fmt2 = flydra.common_variables.timestamp_echo_fmt2
+
+        timestamp_echo_gatherer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        port = flydra.common_variables.timestamp_echo_gatherer_port
+        timestamp_echo_gatherer.bind((hostname, port))
+
+        last_clock_diff_measurements = {}
+        
+        while 1:
+            try:
+                timestamp_echo_buf, (timestamp_echo_remote_ip,cam_port) = timestamp_echo_gatherer.recvfrom(4096)
+            except Exception, err:
+                print 'WARNING: unknown Exception receiving timestamp echo data:',str(err)
+                continue
+            except:
+                print 'WARNING: unknown error (non-Exception!) receiving timestamp echo data'
+                continue
+
+            stop_timestamp = time.time()
+
+            start_timestamp,remote_timestamp = struct.unpack(timestamp_echo_fmt2,timestamp_echo_buf)
+
+            tlist = last_clock_diff_measurements.setdefault(timestamp_echo_remote_ip,[])
+            tlist.append( (start_timestamp,remote_timestamp,stop_timestamp) )
+            if len(tlist)==100:
+                if timestamp_echo_remote_ip not in ip2hostname:
+                    ip2hostname[timestamp_echo_remote_ip]=socket.getfqdn(timestamp_echo_remote_ip)
+                remote_hostname = ip2hostname[timestamp_echo_remote_ip]
+                tarray = numpy.array(tlist)
+                del tlist[0:-1] # clear list
+                start_timestamps = tarray[:,0]
+                stop_timestamps = tarray[:,2]
+                roundtrip_duration = stop_timestamps-start_timestamps
+                # find best measurement (that with shortest roundtrip_duration)
+                rowidx = numpy.argmin(roundtrip_duration)
+                srs = tarray[rowidx,:]
+                start_timestamp, remote_timestamp, stop_timestamp = srs
+                clock_diff_msec = (remote_timestamp-start_timestamp)*1e3
+                if clock_diff_msec > 1:
+                    print '%s : clock diff: %.3f msec(measurement err: %.3f msec)'%(
+                        remote_hostname,
+                        clock_diff_msec,
+                        roundtrip_duration[rowidx]*1e3,
+                        )
+
+                self.main_brain.queue_host_clock_info.put(  (remote_hostname,
+                                                             start_timestamp,
+                                                             remote_timestamp,
+                                                             stop_timestamp) )
+                if 0:
+                    measurement_duration = roundtrip_duration[rowidx]
+                    clock_diff = stop_timestamp-remote_timestamp
+
+                    print '%s: the remote diff is %.1f msec (within 0-%.1f msec accuracy)'%(
+                        remote_hostname, clock_diff*1000, measurement_duration*1000)
+        
 class TrigReceiver(threading.Thread):
     def __init__(self,main_brain):
         self.main_brain = main_brain
@@ -284,11 +352,6 @@ class CoordRealReceiver(threading.Thread):
             self.listen_sockets = {}
             self.server_sockets = {}
 
-        self.timestamp_echo_gatherer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        port = flydra.common_variables.timestamp_echo_gatherer_port
-        self.timestamp_echo_gatherer.bind((hostname, port))
-        self.timestamp_echo_gatherer.setblocking(0)
-
         name = 'CoordRealReceiver thread'
         threading.Thread.__init__(self,name=name)
         
@@ -322,32 +385,19 @@ class CoordRealReceiver(threading.Thread):
                     sockobj.close()
                     del self.server_sockets[sockobj]
                     break # XXX naughty to delete item inside iteration
+                
     def get_data(self):
-        # XXX use select.select on a file descriptor to handle blocking?
-        def _empty_into_list(Q):
-            L = []
-            L.append( Q.get() ) # wait forever for the first item
+        Q = self.out_queue
+        L = []
+        L.append( Q.get() ) # wait forever for the first item
 
-            # don't wait for next items, but collect them if they're there
-            try:
-                while 1:
-                    L.append( Q.get_nowait() )
-            except Queue.Empty:
-                pass
-            return L
-        out_list = _empty_into_list(self.out_queue)
-
-        # separate data
-        timestamp_echo_info_list=[]
-        incoming_2d_data=[]
-        for key,value in out_list:
-            if key == 'timestamp_echo':
-                timestamp_echo_info_list.append(value)
-            elif key == '2d_data':
-                incoming_2d_data.append(value)
-            else:
-                raise ValueError("unknown key %s"%key)
-        return timestamp_echo_info_list, incoming_2d_data
+        # don't wait for next items, but collect them if they're there
+        try:
+            while 1:
+                L.append( Q.get_nowait() )
+        except Queue.Empty:
+            pass
+        return L
     
     # called from CoordRealReceiver thread
     def run(self):
@@ -376,7 +426,6 @@ class CoordRealReceiver(threading.Thread):
             DEBUG('1')
             with self.socket_lock:
                 listen_sockets = self.listen_sockets.keys()
-            listen_sockets.append(self.timestamp_echo_gatherer)
             try:
                 in_ready, out_ready, exc_ready = select.select( listen_sockets,
                                                                 empty_list, empty_list, timeout )
@@ -388,18 +437,6 @@ class CoordRealReceiver(threading.Thread):
                 if not len(in_ready):
                     continue
 
-                if self.timestamp_echo_gatherer in in_ready:
-                    try:
-                        timestamp_echo_buf, (timestamp_echo_remote_ip,cam_port) = self.timestamp_echo_gatherer.recvfrom(4096)
-                    except Exception, err:
-                        print 'WARNING: unknown Exception receiving timestamp echo data:',str(err)
-                    except:
-                        print 'WARNING: unknown error (non-Exception!) receiving timestamp echo data'
-                    else:
-                        stop_timestamp = time.time()
-                        self.out_queue.put(('timestamp_echo',(timestamp_echo_buf, timestamp_echo_remote_ip, stop_timestamp) ))
-                    idx = in_ready.index(self.timestamp_echo_gatherer)
-                    del in_ready[idx]
                 # now gather all data waiting on the sockets
 
                 for sockobj in in_ready:
@@ -424,7 +461,7 @@ class CoordRealReceiver(threading.Thread):
                         data = sockobj.recv(4096)
                     else:
                         raise ValueError('unknown NETWORK_PROTOCOL')
-                    self.out_queue.put(('2d_data',(cam_id, data )))
+                    self.out_queue.put((cam_id, data ))
         
 class CoordReceiver(threading.Thread):
     def __init__(self,main_brain):
@@ -448,7 +485,6 @@ class CoordReceiver(threading.Thread):
         self.reconstructor_meters = None
         self.tracker = None
         
-        self.last_clock_diff_measurements = {}
         self.ip2hostname = {}
         
         self.tracker_lock = threading.Lock()
@@ -659,7 +695,6 @@ class CoordReceiver(threading.Thread):
         header_size = struct.calcsize(header_fmt)
         pt_fmt = '<dddddddddBBddBdddddd'
         pt_size = struct.calcsize(pt_fmt)
-        timestamp_echo_fmt2 = flydra.common_variables.timestamp_echo_fmt2
         
         realtime_coord_dict = {}        
         realtime_kalman_coord_dict = {}        
@@ -676,7 +711,7 @@ class CoordReceiver(threading.Thread):
         
         while not self.quit_event.isSet():
 
-            timestamp_echo_info_list, incoming_2d_data = self.realreceiver.get_data()
+            incoming_2d_data = self.realreceiver.get_data()
 
             new_data_framenumbers.clear()
             if self._fake_sync_event.isSet():
@@ -688,44 +723,6 @@ class CoordReceiver(threading.Thread):
                                         realtime_kalman_coord_dict,
                                         new_data_framenumbers )
                 self._fake_sync_event.clear()
-
-            for timestamp_echo_info in timestamp_echo_info_list:
-                timestamp_echo_buf, timestamp_echo_remote_ip, stop_timestamp = timestamp_echo_info
-                start_timestamp,remote_timestamp = struct.unpack(timestamp_echo_fmt2,timestamp_echo_buf)
-
-                tlist = self.last_clock_diff_measurements.setdefault(timestamp_echo_remote_ip,[])
-                tlist.append( (start_timestamp,remote_timestamp,stop_timestamp) )
-                if len(tlist)==100:
-                    if timestamp_echo_remote_ip not in self.ip2hostname:
-                        self.ip2hostname[timestamp_echo_remote_ip]=socket.getfqdn(timestamp_echo_remote_ip)
-                    remote_hostname = self.ip2hostname[timestamp_echo_remote_ip]
-                    tarray = numpy.array(tlist)
-                    del tlist[0:-1] # clear list
-                    start_timestamps = tarray[:,0]
-                    stop_timestamps = tarray[:,2]
-                    roundtrip_duration = stop_timestamps-start_timestamps
-                    # find best measurement (that with shortest roundtrip_duration)
-                    rowidx = numpy.argmin(roundtrip_duration)
-                    srs = tarray[rowidx,:]
-                    start_timestamp, remote_timestamp, stop_timestamp = srs
-                    clock_diff_msec = (remote_timestamp-start_timestamp)*1e3
-                    if clock_diff_msec > 1:
-                        print '%s : clock diff: %.3f msec(measurement err: %.3f msec)'%(
-                            remote_hostname,
-                            clock_diff_msec,
-                            roundtrip_duration[rowidx]*1e3,
-                            )
-
-                    self.main_brain.queue_host_clock_info.put(  (remote_hostname,
-                                                                 start_timestamp,
-                                                                 remote_timestamp,
-                                                                 stop_timestamp) )
-                    if 0:
-                        measurement_duration = roundtrip_duration[rowidx]
-                        clock_diff = stop_timestamp-remote_timestamp
-
-                        print '%s: the remote diff is %.1f msec (within 0-%.1f msec accuracy)'%(
-                            remote_hostname, clock_diff*1000, measurement_duration*1000)
 
             with self.all_data_lock:
             #self.all_data_lock.acquire(latency_warn_msec=1.0)
@@ -1447,8 +1444,6 @@ class MainBrain(object):
         self.last_set_param_time = {}
 
         self.outgoing_latency_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.timestamp_echo_listener_port = flydra.common_variables.timestamp_echo_listener_port
-        self.timestamp_echo_fmt1 = flydra.common_variables.timestamp_echo_fmt1
         
         self.num_cams = 0
         self.MainBrain_cam_ids_copy = [] # keep a copy of all cam_ids connected
@@ -1500,6 +1495,10 @@ class MainBrain(object):
         self.trig_receiver = TrigReceiver(self)
         self.trig_receiver.setDaemon(True)
         self.trig_receiver.start()
+
+        self.timestamp_echo_receiver = TimestampEchoReceiver(self)
+        self.timestamp_echo_receiver.setDaemon(True)
+        self.timestamp_echo_receiver.start()
 
         self.current_kalman_obj_id = 0
         main_brain_keeper.register( self )
@@ -1737,14 +1736,17 @@ class MainBrain(object):
         self.queue_trigger_clock_info.put((start_timestamp, framecount, tcnt, stop_timestamp))
     
     def _check_latencies(self):
+        timestamp_echo_fmt1 = flydra.common_variables.timestamp_echo_fmt1
+        timestamp_echo_listener_port = flydra.common_variables.timestamp_echo_listener_port
+        
         for cam_id in self.MainBrain_cam_ids_copy:
             if cam_id not in self._fqdns_by_cam_id:
                 sci, fqdn, cam2mainbrain_port = self.remote_api.external_get_info(cam_id)
                 self._fqdns_by_cam_id[cam_id] = fqdn
             else:
                 fqdn = self._fqdns_by_cam_id[cam_id]
-            buf = struct.pack( self.timestamp_echo_fmt1, time.time() )
-            self.outgoing_latency_UDP_socket.sendto(buf,(fqdn,self.timestamp_echo_listener_port))
+            buf = struct.pack( timestamp_echo_fmt1, time.time() )
+            self.outgoing_latency_UDP_socket.sendto(buf,(fqdn,timestamp_echo_listener_port))
 
     def get_last_image_fps(self, cam_id):
         # XXX should extend to include lines
