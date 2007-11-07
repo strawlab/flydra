@@ -294,7 +294,7 @@ class TrackedObject:
             found_idxs.reverse() # keep indexes OK as we delete them
             for idx in found_idxs:
                 del candidate_point_list[idx]
-        # Now new_data_dict has just the 2d points we'll use for this reconstruction
+        # Now cam_ids_and_points2d has just the 2d points we'll use for this reconstruction
         if len(cam_ids_and_points2d)>=2:
             observation_meters = self.reconstructor_meters.find3d( cam_ids_and_points2d, return_line_coords = False)
             if len(cam_ids_and_points2d)>=3:
