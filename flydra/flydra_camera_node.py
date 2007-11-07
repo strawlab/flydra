@@ -526,6 +526,9 @@ class GrabClass(object):
                     except:
                         print 'error-causing data: ',point_tuple
                         raise
+                if 0:
+                    local_processing_time = (time.time()-cam_received_time)*1e3
+                    print 'local_processing_time % 3.1f'%local_processing_time
                 if NETWORK_PROTOCOL == 'udp':
                     coord_socket.sendto(data,
                                         (self.main_brain_hostname,self.cam2mainbrain_port))
