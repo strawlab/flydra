@@ -54,7 +54,7 @@ setup(name='flydra',
       package_data={'flydra':['flydra_server.xrc',
                               'flydra_server_art.png',
                               'detect.wav',
-                              
+                              'sample_calibration/*',
                               ],
                     'flydra.a2':['kdmovie_saver_default_path.kmp'],
                     },

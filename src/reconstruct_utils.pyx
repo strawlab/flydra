@@ -21,6 +21,9 @@ cdef extern from "math.h":
     int isnan(double x)
     int isinf(double x)
 
+def make_ReconstructHelper(*args,**kw):
+    return ReconstructHelper(*args,**kw)
+
 cdef class ReconstructHelper:
     cdef float fc1, fc2, cc1, cc2
     cdef float k1, k2, p1, p2
@@ -46,6 +49,12 @@ cdef class ReconstructHelper:
         self.p1 = p1
         self.p2 = p2
         self.alpha_c = alpha_c
+
+    def __reduce__(self):
+        """this allows ReconstructHelper to be pickled"""
+        args = (self.fc1, self.fc2, self.cc1, self.cc2,
+                self.k1, self.k2, self.p1, self.p2, self.alpha_c)
+        return (make_ReconstructHelper, args)
 
     def __richcmp__(self,other,op):
 

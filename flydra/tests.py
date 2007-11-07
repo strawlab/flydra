@@ -1,6 +1,7 @@
 import unittest
 import reconstruct
 import geom
+import pkg_resources
 
 try:
     import numpy.testing.parametric as parametric
@@ -46,7 +47,21 @@ class TestGeom(parametric.ParametricTestCase):
         line.closest()
         line.dist2()
 
+class TestReconstructor(unittest.TestCase):
+    def test_from_sample_directory(self):
+        caldir = pkg_resources.resource_filename(__name__,"sample_calibration")
+        reconstruct.Reconstructor(caldir)
+    def test_pickle(self):
+        caldir = pkg_resources.resource_filename(__name__,"sample_calibration")
+        x=reconstruct.Reconstructor(caldir)
+        import pickle
+        pickle.dumps(x)
+        
 def get_test_suite():
     ts=unittest.TestSuite([unittest.makeSuite(TestGeom),
+                           unittest.makeSuite(TestReconstructor),
                            ])
     return ts
+
+if __name__=='__main__':
+    unittest.main()
