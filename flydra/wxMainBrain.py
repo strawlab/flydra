@@ -1439,6 +1439,10 @@ def main():
                       metavar="SERVER")
     parser.add_option("--disable-opengl", dest="use_opengl",
                       default=True, action="store_false")
+    parser.add_option("--save_profiling_data", dest="save_profiling_data",
+                      default=False, action="store_true",
+                      help="save data to profile/debug the Kalman-filter based tracker (WARNING: SLOW)",
+                      )
     (options, args) = parser.parse_args()
 
     global use_opengl
@@ -1448,7 +1452,9 @@ def main():
     app = wxMainBrainApp(0)
     
     # create main_brain server (not started yet)
-    main_brain = MainBrain.MainBrain(server=options.server)
+    main_brain = MainBrain.MainBrain(server=options.server,
+                                     save_profiling_data=options.save_profiling_data,
+                                     )
 
     try:
         # connect server to GUI
