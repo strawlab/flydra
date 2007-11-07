@@ -16,7 +16,7 @@ import Queue
 import tables as PT
 pytables_filt = numpy.asarray
 import atexit
-import pickle
+import pickle, copy
 
 import motmot_utils.config
 import flydra.kalman.flydra_kalman_utils
@@ -40,6 +40,7 @@ DO_KALMAN= True # Enables/disables Kalman filter based tracking
 MIN_KALMAN_OBSERVATIONS_TO_SAVE = 10 # how many data points are required before saving trajectory?
 
 RESET_FRAMENUMBER_DURATION=2.0 # seconds
+SHOW_3D_PROCESSING_LATENCY = False
 
 import flydra.common_variables
 NETWORK_PROTOCOL = flydra.common_variables.NETWORK_PROTOCOL
@@ -340,7 +341,7 @@ class TrigReceiver(threading.Thread):
                     self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG1')
                         
 class CoordRealReceiver(threading.Thread):
-    # called from CoordReceiver thread
+    # called from CoordinateProcessor thread
     def __init__(self,quit_event):
         global hostname
         
@@ -403,6 +404,10 @@ class CoordRealReceiver(threading.Thread):
     def run(self):
         timeout=5.0
         empty_list = []
+        BENCHMARK_2D_GATHER = False
+        if BENCHMARK_2D_GATHER:
+            header_fmt = '<ddliI'
+            header_size = struct.calcsize(header_fmt)
         while not self.quit_event.isSet():
             if NETWORK_PROTOCOL == 'tcp':
                 with self.socket_lock:
@@ -461,12 +466,42 @@ class CoordRealReceiver(threading.Thread):
                         data = sockobj.recv(4096)
                     else:
                         raise ValueError('unknown NETWORK_PROTOCOL')
+
+                    if BENCHMARK_2D_GATHER:
+                        header = data[:header_size]
+                        if len(header) != header_size:
+                            # incomplete header buffer
+                            break
+                        # this timestamp is the remote camera's timestamp
+                        (timestamp, camn_received_time, framenumber,
+                         n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
+                        recv_latency_msec = (time.time()-camn_received_time)*1e3
+                        print 'recv_latency_msec % 3.1f'%recv_latency_msec
                     self.out_queue.put((cam_id, data ))
-        
-class CoordReceiver(threading.Thread):
-    def __init__(self,main_brain):
+
+class CoordinateSender(threading.Thread):
+      def __init__(self,my_queue):
+          self.my_queue = my_queue
+          name = 'CoordinateSender thread'
+          threading.Thread.__init__(self,name=name)
+      def run(self):
+          global downstream_kalman_hosts
+          out_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+          while 1:
+              data_packet = self.my_queue.get()
+              for downstream_host in downstream_kalman_hosts:
+                  outgoing_UDP_socket.sendto(data_packet,downstream_host)
+
+class CoordinateProcessor(threading.Thread):
+    def __init__(self,main_brain,save_profiling_data=False):
         global hostname
         self.main_brain = main_brain
+
+        self.save_profiling_data = save_profiling_data
+        if self.save_profiling_data:
+            self.data_dict_queue = []
+        
+        self.realtime_kalman_data_queue = Queue.Queue()
         
         self.cam_ids = []
         self.cam2mainbrain_data_ports = []
@@ -503,8 +538,12 @@ class CoordReceiver(threading.Thread):
         self.realreceiver = CoordRealReceiver(self.quit_event)
         self.realreceiver.setDaemon(True)
         self.realreceiver.start()
-
-        name = 'CoordReceiver thread'
+        
+        cs = CoordinateSender(self.realtime_kalman_data_queue)
+        cs.setDaemon(True)
+        cs.start()
+        
+        name = 'CoordinateProcessor thread'
         threading.Thread.__init__(self,name=name)
 
     def get_cam2mainbrain_data_port(self,cam_id):
@@ -570,6 +609,13 @@ class CoordReceiver(threading.Thread):
                 return
             for attr in kw_dict:
                 setattr(self.tracker,attr,kw_dict[attr])
+            if self.save_profiling_data:
+                tracker = copy.copy(self.tracker)
+                tracker.save_calibration_data = None
+                tracker.kill_tracker_callbacks = []
+                tracker.live_tracked_objects = []
+                tracker.dead_tracked_objects = []
+                self.data_dict_queue.append( ('tracker',tracker))
         print 'set tracker values',kw_dict
         
     def enqueue_finished_tracked_object(self, tracked_object ):
@@ -636,6 +682,15 @@ class CoordReceiver(threading.Thread):
     
     def quit(self):
         # called from outside of thread to quit the thread
+        if self.save_profiling_data:
+            fname = "data_for_kalman_profiling.pkl"
+            fullpath = os.path.abspath(fname)
+            print "saving data for profiling to %s"%fullpath
+            to_save = self.data_dict_queue
+            save_fd = open(fullpath,mode="wb")
+            pickle.dump( to_save, save_fd )
+            save_fd.close()
+            print "done saving"
         self.quit_event.set()
         self.join() # wait until CoordReveiver thread quits
 
@@ -677,7 +732,7 @@ class CoordReceiver(threading.Thread):
         self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, timestamp) )
         
     def run(self):
-        """main loop of CoordReceiver"""
+        """main loop of CoordinateProcessor"""
         global downstream_hosts, downstream_kalman_hosts, best_realtime_data
         global outgoing_UDP_socket, calib_data_lock, calib_IdMat, calib_points
         global calib_data_lock, XXX_framenumber
@@ -724,6 +779,10 @@ class CoordReceiver(threading.Thread):
                                         new_data_framenumbers )
                 self._fake_sync_event.clear()
 
+            BENCHMARK_GATHER=False
+            if BENCHMARK_GATHER:
+                incoming_remote_timestamps = []
+            
             with self.all_data_lock:
             #self.all_data_lock.acquire(latency_warn_msec=1.0)
 
@@ -747,6 +806,8 @@ class CoordReceiver(threading.Thread):
                         # this timestamp is the remote camera's timestamp
                         (timestamp, camn_received_time, framenumber,
                          n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
+                        if BENCHMARK_GATHER:
+                            incoming_remote_timestamps.append( camn_received_time )
                         
                         DEBUG_DROP = self.main_brain.remote_api.cam_info[cam_id]['scalar_control_info']['debug_drop']
                         if DEBUG_DROP:
@@ -769,14 +830,10 @@ class CoordReceiver(threading.Thread):
                         elif framenumber>predicted_framenumber:
                             if not self.last_framenumbers_skip[cam_idx]==-1:
                                 # this is not the first frame
-                                if NETWORK_PROTOCOL == 'udp':
-                                    #sys.stderr.write('.')
-                                    print '  WARNING: frame data loss (probably from UDP collision) %s'%(cam_id,)
-                                elif NETWORK_PROTOCOL == 'tcp':
-                                    print '  WARNING: frame data loss (unknown cause) %s'%(cam_id,)
-                                else:
-                                    raise ValueError('unknown NETWORK_PROTOCOL')
-                            
+
+                                # probably because network buffer filled up before we emptied it
+                                print '  WARNING: frame data loss %s'%(cam_id,)
+                                
                             if ATTEMPT_DATA_RECOVERY:
                                 if not self.last_framenumbers_skip[cam_idx]==-1:
                                     # this is not the first frame
@@ -870,17 +927,27 @@ class CoordReceiver(threading.Thread):
                                                         +(frame_pt_idx,))
                         # save new frame data
                         # XXX for now, only attempt 3D reconstruction of 1st point from each 2D view
-                        realtime_coord_dict.setdefault(corrected_framenumber,{})[cam_id]=points_undistorted[0]
+                        realtime_coord_dict.setdefault(corrected_framenumber,{})[cam_id]= points_undistorted[0]
 
                         # save all 3D Pluecker coordinats for Kalman filtering
                         realtime_kalman_coord_dict.setdefault(corrected_framenumber,{})[absolute_cam_no]=(
                             points_in_pluecker_coords_meters)
 
                         new_data_framenumbers.add( corrected_framenumber ) # insert into set
-
+                        
                     # preserve unprocessed data
                     if NETWORK_PROTOCOL == 'tcp':                    
                         old_data[sockobj] = data
+
+                if BENCHMARK_GATHER:
+                    incoming_remote_timestamps = numpy.array(incoming_remote_timestamps)
+                    min_incoming_remote_timestamp = incoming_remote_timestamps.min()
+                    max_incoming_remote_timestamp = incoming_remote_timestamps.max()
+                    finish_packet_sorting_time = time.time()
+                    min_packet_gather_dur = finish_packet_sorting_time-max_incoming_remote_timestamp
+                    max_packet_gather_dur = finish_packet_sorting_time-min_incoming_remote_timestamp
+                    print 'proc dur: % 3.1f % 3.1f'%(min_packet_gather_dur*1e3,
+                                                      max_packet_gather_dur*1e3)
 
                 finished_corrected_framenumbers = [] # for quick deletion
 
@@ -897,6 +964,8 @@ class CoordReceiver(threading.Thread):
                 for corrected_framenumber in new_data_framenumbers:
                     data_dict = realtime_coord_dict[corrected_framenumber]
                     if len(data_dict)==len(self.cam_ids): # all camera data arrived
+                        if SHOW_3D_PROCESSING_LATENCY:
+                            start_3d_proc = time.time()
                         
                         # mark for deletion out of data queue
                         finished_corrected_framenumbers.append( corrected_framenumber )
@@ -913,71 +982,104 @@ class CoordReceiver(threading.Thread):
                                     continue
                                 
                                 pluecker_coords_by_camn = realtime_kalman_coord_dict[corrected_framenumber]
+                                if self.save_profiling_data:
+                                    dumps = pickle.dumps(pluecker_coords_by_camn)
+                                    self.data_dict_queue.append(('gob',(corrected_framenumber,
+                                                                        dumps,
+                                                                        self.camn2cam_id)))
                                 self.tracker.gobble_2d_data_and_calculate_a_posteri_estimates(
                                     corrected_framenumber,
                                     pluecker_coords_by_camn,
                                     self.camn2cam_id)
-                                
-                                if len(downstream_kalman_hosts) and len(self.tracker.live_tracked_objects):
-                                    data_packet = self.tracker.encode_data_packet(
-                                        corrected_framenumber,time.time())
-                                    try:
-                                        for downstream_host in downstream_kalman_hosts:
-                                            outgoing_UDP_socket.sendto(data_packet,downstream_host)
-                                    except:
-                                        print 'WARNING: could not send kalman data data over UDP'
-                                        print
-                                
-                                # The above calls
-                                # self.enqueue_finished_tracked_object()
-                                # when a tracked object is no longer
-                                # tracked.
+                                if self.save_profiling_data:
+                                    self.data_dict_queue.append(('ntrack',len(self.tracker.live_tracked_objects)))
+                                    
+                                now = time.time()
+                                if SHOW_3D_PROCESSING_LATENCY:
+                                    start_3d_proc_a = now
 
-                                # Now, tracked objects have been updated (and their 2D data points
-                                # removed from consideration), so we can use old flydra
-                                # "hypothesis testing" algorithm on remaining data to see if there
-                                # are new objects.
+                                if 1:
+                                    if len(self.tracker.live_tracked_objects):
+                                        data_packet = self.tracker.encode_data_packet(
+                                            corrected_framenumber,now)
+                                        if 1:
+                                            self.realtime_kalman_data_queue.put(data_packet)
+                                            if 0:
+                                                for downstream_host in downstream_kalman_hosts:
+                                                    if 0:
+                                                        # XXX why does this take sooo long?
+                                                        outgoing_UDP_socket.sendto(data_packet,downstream_host)
+                                if 1:
+                                    # The above calls
+                                    # self.enqueue_finished_tracked_object()
+                                    # when a tracked object is no longer
+                                    # tracked.
 
-                                if len(self.tracker.live_tracked_objects):
-                                    #print '%d tracked objects:'%( len(self.tracker.live_tracked_objects), )
-                                    #for obj0 in self.tracker.live_tracked_objects:
-                                    #    print '%s: %d points so far'%(str(obj0),len(obj0.xhats))
-                                    scale_factor = self.tracker.scale_factor
-                                    Xs = []
-                                    for obj in self.tracker.live_tracked_objects:
-                                        if len(obj.xhats)>10: # must track for a period of time before being displayed
-                                            last_xhat = obj.xhats[-1]
-                                            X = last_xhat[0]/scale_factor, last_xhat[1]/scale_factor, last_xhat[2]/scale_factor
-                                            Xs.append(X)
-                                    if len(Xs):
-                                        best_realtime_data = Xs, 0.0
+                                    # Now, tracked objects have been updated (and their 2D data points
+                                    # removed from consideration), so we can use old flydra
+                                    # "hypothesis testing" algorithm on remaining data to see if there
+                                    # are new objects.
+
+                                    if len(self.tracker.live_tracked_objects):
+                                        #print '%d tracked objects:'%( len(self.tracker.live_tracked_objects), )
+                                        #for obj0 in self.tracker.live_tracked_objects:
+                                        #    print '%s: %d points so far'%(str(obj0),len(obj0.xhats))
+                                        scale_factor = self.tracker.scale_factor
+                                        Xs = []
+                                        for obj in self.tracker.live_tracked_objects:
+                                            if len(obj.xhats)>10: # must track for a period of time before being displayed
+                                                last_xhat = obj.xhats[-1]
+                                                X = last_xhat[0]/scale_factor, last_xhat[1]/scale_factor, last_xhat[2]/scale_factor
+                                                Xs.append(X)
+                                        if len(Xs):
+                                            best_realtime_data = Xs, 0.0
+                                        else:
+                                            best_realtime_data = None
                                     else:
                                         best_realtime_data = None
-                                else:
-                                    best_realtime_data = None
 
+                                if SHOW_3D_PROCESSING_LATENCY:
+                                    start_3d_proc_b = time.time()
+                                
                                 # Convert to format accepted by find_best_3d()
-                                found_data_dict,first_idx_by_camn = convert_format(pluecker_coords_by_camn,
-                                                                                   self.camn2cam_id)
-                                if len(found_data_dict) < 2:
+                                found_data_dict,first_idx_by_camn = convert_format(
+                                    pluecker_coords_by_camn,
+                                    self.camn2cam_id)
+                                
+                                if SHOW_3D_PROCESSING_LATENCY:
+                                    if len(found_data_dict) < 2:
+                                        print ' ',
+                                    else:
+                                        print '*',
+                                    
+                                if len(found_data_dict) >= 2:
                                     # Can't do any 3D math without at least 2 cameras giving good
                                     # data.
-                                    continue
-                                (this_observation_orig_units, line3d, cam_ids_used,
-                                 min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
-                                    self.reconstructor,
-                                    found_data_dict)
-                                max_error = self.main_brain.get_hypothesis_test_max_error()
-                                if min_mean_dist<max_error:
-                                    this_observation_camns = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
-                                    this_observation_idxs = [first_idx_by_camn[camn] for camn in this_observation_camns] # zero idx
-                                    ####################################
-                                    #  Now join found point into Tracker
-                                    self.tracker.join_new_obj( corrected_framenumber,
-                                                               this_observation_orig_units,
-                                                               this_observation_camns,
-                                                               this_observation_idxs
-                                                               )
+                                    (this_observation_orig_units, line3d, cam_ids_used,
+                                     min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
+                                        self.reconstructor,
+                                        found_data_dict)
+                                    max_error = self.main_brain.get_hypothesis_test_max_error()
+                                    if min_mean_dist<max_error:
+                                        this_observation_camns = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
+                                        this_observation_idxs = [first_idx_by_camn[camn] for camn in this_observation_camns] # zero idx
+                                        ####################################
+                                        #  Now join found point into Tracker
+                                        if self.save_profiling_data:
+                                            self.data_dict_queue.append(('join',(corrected_framenumber,
+                                                                                 this_observation_orig_units,
+                                                                                 this_observation_camns,
+                                                                                 this_observation_idxs
+                                                                                 )))
+                                        
+                                        self.tracker.join_new_obj( corrected_framenumber,
+                                                                   this_observation_orig_units,
+                                                                   this_observation_camns,
+                                                                   this_observation_idxs
+                                                                   )
+                                if SHOW_3D_PROCESSING_LATENCY:
+                                    start_3d_proc_c = time.time()
+                                        
                         else: # closes "if DO_KALMAN:"
                             
                             found_data_dict = {} # old "good" points will go in here
@@ -1038,6 +1140,18 @@ class CoordReceiver(threading.Thread):
                                                                         outgoing_data,
                                                                         cam_nos_used,
                                                                         min_mean_dist) )
+                        if SHOW_3D_PROCESSING_LATENCY:
+                            stop_3d_proc = time.time()
+                            dur_3d_proc_msec = (stop_3d_proc - start_3d_proc)*1e3
+                            dur_3d_proc_msec_a = (start_3d_proc_a - start_3d_proc)*1e3
+                            dur_3d_proc_msec_b = (start_3d_proc_b - start_3d_proc)*1e3
+                            dur_3d_proc_msec_c = (start_3d_proc_c - start_3d_proc)*1e3
+                            
+                            print 'dur_3d_proc_msec % 3.1f % 3.1f % 3.1f % 3.1f'%(
+                                dur_3d_proc_msec,
+                                dur_3d_proc_msec_a,
+                                dur_3d_proc_msec_b,
+                                dur_3d_proc_msec_c)
                 
                 # save calibration data -=-=-=-=-=-=-=-=
                 if self.main_brain.currently_calibrating.isSet():
@@ -1310,7 +1424,7 @@ class MainBrain(object):
             #cam_id = '%s:%d:%d'%(fqdn,cam_no,caller_port)
             cam_id = '%s_%d'%(fqdn,cam_no)
             
-            cam2mainbrain_data_port = self.main_brain.coord_receiver.connect(cam_id)
+            cam2mainbrain_data_port = self.main_brain.coord_processor.connect(cam_id)
             with self.cam_info_lock:
                 self.cam_info[cam_id] = {'commands':{}, # command queue for cam
                                          'lock':threading.Lock(), # prevent concurrent access
@@ -1380,7 +1494,7 @@ class MainBrain(object):
         
         def get_cam2mainbrain_port(self,cam_id):
             """Send port number to which camera should send realtime data"""
-            cam2mainbrain_data_port = self.main_brain.coord_receiver.get_cam2mainbrain_data_port(cam_id)
+            cam2mainbrain_data_port = self.main_brain.coord_processor.get_cam2mainbrain_data_port(cam_id)
             return cam2mainbrain_data_port
 
         def log_message(self,cam_id,host_timestamp,message):
@@ -1391,9 +1505,7 @@ class MainBrain(object):
         def close(self,cam_id):
             """gracefully say goodbye (caller: remote camera)"""
             with self.cam_info_lock:
-                self.main_brain.coord_receiver.disconnect(cam_id)
-                #self.cam_info[cam_id]['coord_receiver'].quit()
-                #del self.cam_info[cam_id]['coord_receiver']
+                self.main_brain.coord_processor.disconnect(cam_id)
                 del self.cam_info[cam_id]
                 if not len(self.cam_info):
                     self.no_cams_connected.set()
@@ -1404,7 +1516,7 @@ class MainBrain(object):
 
     # main MainBrain class
     
-    def __init__(self,server=None):
+    def __init__(self,server=None,save_profiling_data=False):
         global main_brain_keeper, hostname
 
         if server is not None:
@@ -1488,9 +1600,9 @@ class MainBrain(object):
 
         self.hypothesis_test_max_error = LockedValue(500.0)
 
-        self.coord_receiver = CoordReceiver(self)
-        self.coord_receiver.setDaemon(True)
-        self.coord_receiver.start()
+        self.coord_processor = CoordinateProcessor(self,save_profiling_data=save_profiling_data)
+        self.coord_processor.setDaemon(True)
+        self.coord_processor.start()
 
         self.trig_receiver = TrigReceiver(self)
         self.trig_receiver.setDaemon(True)
@@ -1758,7 +1870,7 @@ class MainBrain(object):
         return image, fps, points_distorted, image_coords
 
     def fake_synchronize(self):
-        self.coord_receiver.fake_synchronize()
+        self.coord_processor.fake_synchronize()
 
     def close_camera(self,cam_id):
         sys.stdout.flush()
@@ -1849,7 +1961,7 @@ class MainBrain(object):
             #raise RuntimeError('cameras failed to quit cleanly: %s'%str(cam_ids))
 
         self.stop_saving_data()
-        self.coord_receiver.quit()
+        self.coord_processor.quit()
 
     def load_calibration(self,dirname):
         if self.is_saving_data():
@@ -1857,7 +1969,7 @@ class MainBrain(object):
         cam_ids = self.remote_api.external_get_cam_ids()
         self.reconstructor = flydra.reconstruct.Reconstructor(dirname)
 
-        self.coord_receiver.set_reconstructor(self.reconstructor)
+        self.coord_processor.set_reconstructor(self.reconstructor)
         
         for cam_id in cam_ids:
             pmat = self.reconstructor.get_pmat(cam_id)
@@ -1868,7 +1980,7 @@ class MainBrain(object):
 
     def set_new_tracker_defaults(self,kw_dict):
         # send params over to realtime coords thread
-        self.coord_receiver.set_new_tracker_defaults(kw_dict)
+        self.coord_processor.set_new_tracker_defaults(kw_dict)
     
     def __del__(self):
         self.quit()
@@ -1921,7 +2033,7 @@ class MainBrain(object):
                                         "3d data (best)",
                                         expectedrows=expected_rows)
 
-        general_save_info=self.coord_receiver.get_general_cam_info()
+        general_save_info=self.coord_processor.get_general_cam_info()
         for cam_id,dd in general_save_info.iteritems():
             self.h5cam_info.row['cam_id'] = cam_id
             self.h5cam_info.row['camn']   = dd['absolute_cam_no']
@@ -1970,7 +2082,7 @@ class MainBrain(object):
     def _request_missing_data(self):
         if ATTEMPT_DATA_RECOVERY:
             # request from camera computers any data that we're missing
-            missing_data_dict = self.coord_receiver.get_missing_data_dict()
+            missing_data_dict = self.coord_processor.get_missing_data_dict()
             for camn, (cam_id, framenumber_offset, list_of_missing_framenumbers) in missing_data_dict.iteritems():
                 #print 'requesting from camn %d: %d frames %s'%(camn,len(list_of_missing_framenumbers), numpy.array(list_of_missing_framenumbers) )
                 self.remote_api.external_request_missing_data(cam_id,camn,framenumber_offset,list_of_missing_framenumbers)
