@@ -395,6 +395,11 @@ class wxMainBrainApp(wx.App):
                            "LOAD_CAL")
         wx.EVT_BUTTON(load_cal, load_cal.GetId(), self.OnLoadCal)
 
+        ctrl = xrc.XRCCTRL(self.cam_preview_panel,
+                           "MANUAL_TRIGGER_DEVICE2") # EXT TRIG1
+        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
+                      self.OnManualTriggerDevice)
+
         ctrl = xrc.XRCCTRL(self.cam_preview_panel,'SYNCHRONIZE_BUTTON')
         wx.EVT_BUTTON(ctrl, ctrl.GetId(), self.OnSynchronizeButton)
         
@@ -913,7 +918,7 @@ class wxMainBrainApp(wx.App):
                       self.OnSaveKalmanCalibrationData)
         
         ctrl = xrc.XRCCTRL(self.status_panel,
-                           "MANUAL_TRIGGER_DEVICE") # EXT TRIG1
+                           "MANUAL_TRIGGER_DEVICE1") # EXT TRIG1
         wx.EVT_BUTTON(ctrl, ctrl.GetId(),
                       self.OnManualTriggerDevice)
         

@@ -179,7 +179,7 @@
         <object class="wxBoxSizer">
           <orient>wxHORIZONTAL</orient>
           <object class="sizeritem">
-            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE">
+            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE1">
               <label>Manually send EXT_TRIG1</label>
             </object>
           </object>
@@ -383,6 +383,11 @@
               <label>Calibration loaded</label>
               <checked>0</checked>
               <enabled>0</enabled>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE2">
+              <label>Manually send EXT_TRIG1</label>
             </object>
           </object>
         </object>
