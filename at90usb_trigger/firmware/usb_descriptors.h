@@ -124,7 +124,7 @@
 , Usb_unicode('n') \
 }
 
-#define USB_PN_LENGTH         22
+#define USB_PN_LENGTH         26
 #define USB_PRODUCT_NAME \
 { Usb_unicode('F') \
  ,Usb_unicode('l') \
@@ -148,6 +148,10 @@
  ,Usb_unicode('r') \
  ,Usb_unicode('o') \
  ,Usb_unicode('l') \
+ ,Usb_unicode(' ') \
+ ,Usb_unicode('1') \
+ ,Usb_unicode('.') \
+ ,Usb_unicode('0') \
 }
 
 #define USB_SN_LENGTH         0x05
