@@ -265,9 +265,6 @@ class TrackedObject:
             match_dist_and_idx = []
             for idx,(pt_undistorted,projected_line_meters) in enumerate(candidate_point_list):
                 # find closest distance between projected_line and predicted position for each 2d point
-##                if not isinstance(projected_line_meters,geom.PlueckerLine):
-##                    projected_line_meters = geom.PlueckerLine(projected_line_meters.u,
-##                                                              projected_line_meters.v)
                 dist2=projected_line_meters.translate(neg_predicted_3d).dist2()
                 
                 if debug:
@@ -276,7 +273,7 @@ class TrackedObject:
                 
                 if dist2<dist2cmp:
                     # accept point
-                    match_dist_and_idx.append( (numpy.sqrt(dist2),idx) )
+                    match_dist2_and_idx.append( (dist2,idx) )
                     found_idxs.append( idx )
                     if debug:
                         frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
@@ -285,9 +282,9 @@ class TrackedObject:
                     if debug:
                         print
                     
-            match_dist_and_idx.sort() # sort by distance
-            if len(match_dist_and_idx):
-                closest_idx = match_dist_and_idx[0][1] # take idx of closest point
+            match_dist2_and_idx.sort() # sort by distance
+            if len(match_dist2_and_idx):
+                closest_idx = match_dist2_and_idx[0][1] # take idx of closest point
                 pt_undistorted, projected_line_meters = candidate_point_list[closest_idx]
                 cam_ids_and_points2d.append( (cam_id,(pt_undistorted[PT_TUPLE_IDX_X],
                                                       pt_undistorted[PT_TUPLE_IDX_Y])))
