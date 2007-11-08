@@ -318,7 +318,6 @@ class SingleCameraCalibration:
     
     def get_example_3d_point_creating_image_point(self,image_point,w_val=1.0):
         # project back through principal point to get 3D line
-        import flydra.geom
         c1 = self.get_cam_center()[:,0]
         
         x2d = (image_point[0],image_point[1],1.0)
@@ -332,15 +331,16 @@ class SingleCameraCalibration:
         
     def get_optical_axis(self):
         # project back through principal point to get 3D line
-        import flydra.geom
+        #import flydra.geom as geom
+        import flydra.fastgeom as geom
         c1 = self.get_cam_center()[:,0]
         
         x2d = (self.pp[0],self.pp[1],1.0)
         c2 = numpy.dot(self.pmat_inv, as_column(x2d))[:,0]
         c2 = c2[:3]/c2[3]
-        c1 = flydra.geom.ThreeTuple(c1)
-        c2 = flydra.geom.ThreeTuple(c2)
-        return flydra.geom.line_from_points( c1, c2 )
+        c1 = geom.ThreeTuple(c1)
+        c2 = geom.ThreeTuple(c2)
+        return geom.line_from_points( c1, c2 )
         
     def get_up_vector(self):
         # create up vector from image plane

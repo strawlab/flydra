@@ -262,7 +262,7 @@ class TrackedObject:
             # perspective, but remove from further consideration all
             # 2d points that meet consideration critereon.
 
-            match_dist_and_idx = []
+            match_dist2_and_idx = []
             for idx,(pt_undistorted,projected_line_meters) in enumerate(candidate_point_list):
                 # find closest distance between projected_line and predicted position for each 2d point
                 dist2=projected_line_meters.translate(neg_predicted_3d).dist2()

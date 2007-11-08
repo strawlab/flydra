@@ -21,7 +21,10 @@ import pickle, copy
 import motmot_utils.config
 import flydra.kalman.flydra_kalman_utils
 import flydra.kalman.flydra_tracker
-import flydra.geom
+
+import flydra.fastgeom as geom
+#import flydra.geom as geom
+
 import flydra.data_descriptions
 import flydra.trigger
 
@@ -135,6 +138,8 @@ if 0:
 downstream_kalman_hosts = []
 if 1:
     downstream_kalman_hosts.append( ('127.0.0.1',28931) ) # self
+if 1:
+    downstream_kalman_hosts.append( ('astraw-office.kicks-ass.net',28931) ) # self
     
 if len(downstream_hosts) or len(downstream_kalman_hosts):
     outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -881,7 +886,7 @@ class CoordinateProcessor(threading.Thread):
                                                 p1,p2,p3,p4, unknown_val, frame_pt_idx)
                                 if ray_valid:
                                     points_in_pluecker_coords_meters.append( (pt_undistorted,
-                                                                              flydra.geom.line_from_HZline((ray0,ray1,
+                                                                              geom.line_from_HZline((ray0,ray1,
                                                                                                             ray2,ray3,
                                                                                                             ray4,ray5))
                                                                               ))

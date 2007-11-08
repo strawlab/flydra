@@ -974,9 +974,9 @@ class App:
                 camn_and_list = map(int,cmds[key].split())
                 camn, framenumber_offset = camn_and_list[:2]
                 missing_framenumbers = camn_and_list[2:]
-                print 'I know main brain wants %d frames (camn %d):'%(
+                print 'I know main brain wants %d frames (camn %d) at %s:'%(
                     len(missing_framenumbers),
-                    camn),
+                    camn,time.asctime()),
                 if len(missing_framenumbers) > 200:
                     print str(missing_framenumbers[:25]) + ' + ... + ' + str(missing_framenumbers[-25:])
                 else:
