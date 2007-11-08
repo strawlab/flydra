@@ -11,6 +11,9 @@ ext_modules = []
 ext_modules.append(Extension(name='flydra.reconstruct_utils',
                              sources=['src/reconstruct_utils.pyx']))
 
+ext_modules.append(Extension(name='flydra.fastgeom',
+                             sources=['src/fastgeom.pyx']))
+
 setup(name='flydra',
       version=version,
       author='Andrew Straw',

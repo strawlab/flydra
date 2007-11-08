@@ -2,7 +2,8 @@ import numpy
 import time
 import adskalman as kalman
 import params
-import flydra.geom as geom
+#import flydra.geom as geom
+import flydra.fastgeom as geom
 import math, struct
 import flydra.data_descriptions
 
@@ -233,6 +234,7 @@ class TrackedObject:
         
         variance_estimate = [Pminus[i,i] for i in range(3)] # maybe equiv. to "dot(self.my_kalman.C,Pminus[i,i])"
         variance_estimate_scalar = numpy.sqrt(numpy.sum(variance_estimate)) # put in distance units (meters)
+        dist2cmp = (self.n_sigma_accept*variance_estimate_scalar)**2        
         neg_predicted_3d = -geom.ThreeTuple( a_priori_observation_prediction )
         cam_ids_and_points2d = []
 
@@ -243,8 +245,8 @@ class TrackedObject:
         for camn in data_dict:
             cam_id = camn2cam_id[camn]
 
-            predicted_2d = self.reconstructor_meters.find2d(cam_id,a_priori_observation_prediction)
             if debug:
+                predicted_2d = self.reconstructor_meters.find2d(cam_id,a_priori_observation_prediction)
                 print 'camn',camn,'cam_id',cam_id
                 print 'predicted_2d',predicted_2d
             # For large numbers of 2d points in data_dict, probably
@@ -263,16 +265,18 @@ class TrackedObject:
             match_dist_and_idx = []
             for idx,(pt_undistorted,projected_line_meters) in enumerate(candidate_point_list):
                 # find closest distance between projected_line and predicted position for each 2d point
+##                if not isinstance(projected_line_meters,geom.PlueckerLine):
+##                    projected_line_meters = geom.PlueckerLine(projected_line_meters.u,
+##                                                              projected_line_meters.v)
                 dist2=projected_line_meters.translate(neg_predicted_3d).dist2()
-                dist = numpy.sqrt(dist2)
                 
                 if debug:
                     frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                     print '->', dist, pt_undistorted[:2], '(idx %d)'%(frame_pt_idx,),
                 
-                if dist<(self.n_sigma_accept*variance_estimate_scalar):
+                if dist2<dist2cmp:
                     # accept point
-                    match_dist_and_idx.append( (dist,idx) )
+                    match_dist_and_idx.append( (numpy.sqrt(dist2),idx) )
                     found_idxs.append( idx )
                     if debug:
                         frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]

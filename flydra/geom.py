@@ -16,11 +16,18 @@ def cross(vec1,vec2):
 
 class ThreeTuple:
     def __init__(self,vals):
+        if isinstance(vals,ThreeTuple):
+            self.vals = numpy.array(vals.vals,copy=True)
+            return
         self.vals = numpy.asarray(vals)
         if self.vals.shape != (3,):
             raise ValueError('shape must be (3,)')
+    def __eq__(self,other):
+        return (self.vals[0]==other.vals[0] and
+                self.vals[1]==other.vals[1] and
+                self.vals[2]==other.vals[2])
     def __repr__(self):
-        return 'ThreeTuple(%s,%s,%s)'%tuple(map(repr,self.vals))
+        return 'ThreeTuple((%s,%s,%s))'%tuple(map(repr,self.vals))
     def __sub__(self,other):
         return ThreeTuple(self.vals-other.vals)
     def __add__(self,other):
@@ -52,6 +59,8 @@ class PlueckerLine:
             raise TypeError('v must be ThreeTuple')
         self.u = u
         self.v = v
+    def __eq__(self,other):
+        return ((self.u == other.u) and (self.v == other.v))
     def to_hz(self):
         return (self.v[2], -self.v[1], self.u[0], self.v[0], -self.u[1], self.u[2])
     def __repr__(self):
@@ -79,7 +88,7 @@ class PlueckerLine:
         return pt
     def translate(self,threetuple):
         if not isinstance(threetuple,ThreeTuple):
-            raise ValueError('expected ThreeTuple instance')
+            raise ValueError('expected ThreeTuple instance, got %s'%repr(threetuple))
         on_line = self.closest()
         on_new_line_a = on_line+threetuple
         on_new_line_b = on_new_line_a + self.u

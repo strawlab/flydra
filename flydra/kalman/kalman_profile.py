@@ -4,6 +4,13 @@ from flydra_tracker import Tracker
 import cProfile
 import lsprofcalltree
 
+if 1:
+    import flydra.fastgeom as geom
+else:
+    import flydra.geom as geom
+    
+import flydra.geom as slowgeom
+    
 def kalmanize(src_filename,
               max_iterations=None,
               ):
@@ -21,6 +28,18 @@ def kalmanize(src_filename,
             corrected_framenumber,s_pluecker_coords_by_camn,camn2cam_id = tup[1]
             frames.append( corrected_framenumber )
             pluecker_coords_by_camn = pickle.loads(s_pluecker_coords_by_camn)
+            if 1:
+                # convert to geom type
+                for camn in pluecker_coords_by_camn:
+                    candidate_point_list = pluecker_coords_by_camn[camn]
+                    newlist = []
+                    for idx,(pt_undistorted,projected_line_meters) in enumerate(candidate_point_list):
+                        #print 'projected_line_meters.u                        ',projected_line_meters.u                        
+                        projected_line_meters = geom.PlueckerLine(geom.ThreeTuple(projected_line_meters.u),
+                                                                  geom.ThreeTuple(projected_line_meters.v))
+                        newlist.append((pt_undistorted,projected_line_meters))
+                    pluecker_coords_by_camn[camn] = newlist
+
             tracker.gobble_2d_data_and_calculate_a_posteri_estimates(corrected_framenumber,pluecker_coords_by_camn,camn2cam_id)
         elif tup[0] == 'ntrack':
             assert len(tracker.live_tracked_objects)==tup[1]
