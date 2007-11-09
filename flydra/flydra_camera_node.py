@@ -1,5 +1,4 @@
 #emacs, this is -*-Python-*- mode
-# $Id: $
 from __future__ import division
 
 import os
