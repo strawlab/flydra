@@ -54,7 +54,7 @@ class FakeDevice:
         return 0, 0x0001
 
 class Device:
-    def __init__(self):
+    def __init__(self,ignore_version_mismatch=False):
         usb.init()
         
         if not usb.get_busses():
@@ -79,6 +79,20 @@ class Device:
 
         debug('found device',dev)
         self.libusb_handle = usb.open(dev)
+
+        manufacturer = usb.get_string_simple(self.libusb_handle,dev.descriptor.iManufacturer)
+        product = usb.get_string_simple(self.libusb_handle,dev.descriptor.iProduct)
+        serial = usb.get_string_simple(self.libusb_handle,dev.descriptor.iSerialNumber)
+
+        assert manufacturer == 'Strawman'
+        valid_product = 'Flydra Trigger Control 1.0'
+        if product != valid_product:
+            errmsg = 'Expected product "%s", but you have "%s"'%(
+                valid_product,product)
+            if ignore_version_mismatch:
+                print 'WARNING:',errmsg
+            else:
+                raise ValueError(errmsg)
 
         interface_nr = 0
         if hasattr(usb,'get_driver_np'):
@@ -297,7 +311,15 @@ class Device:
         self.send_buf()
 
 def enter_dfu_mode():
-    dev = Device()
+    import sys
+    from optparse import OptionParser
+    usage = '%prog [options]'
+    parser = OptionParser(usage)
+    parser.add_option("--ignore-version-mismatch", action='store_true',
+                      dest='ignore_version_mismatch',
+                      default=False)
+    (options, args) = parser.parse_args()
+    dev = Device(ignore_version_mismatch=options.ignore_version_mismatch)
     dev.enter_dfu_mode()
     
 def check_device():
@@ -344,3 +366,7 @@ def trigger_once():
     stop = get_time()
     dur = stop-start
     print 'max trigger roundtrip latency %.2f ms'%(dur*1000.0,)
+
+if __name__=='__main__':
+    device = Device()
+    
