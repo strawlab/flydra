@@ -50,6 +50,7 @@ def doit(filename,
          show_only_track_ends = False,
          floor = True,
          save_still = False,
+         exclude_vel_mps = None,
          ):
 
     try:
@@ -81,9 +82,17 @@ def doit(filename,
             raise ValueError("show_n_longest incompatible with other limiters")
         
         if is_mat_file:
-            frames = mat_data['kalman_frame']            
+            frames = mat_data['kalman_frame']
+            if exclude_vel_mps is not None:
+                x = mat_data['x']            
+                y = mat_data['y']            
+                z = mat_data['z']            
         else:
             frames = kresults.root.kalman_observations.read(field='frame')
+            if exclude_vel_mps is not None:
+                x = kresults.root.kalman_observations.read(field='x')
+                y = kresults.root.kalman_observations.read(field='y')
+                z = kresults.root.kalman_observations.read(field='z')
         obj_ids_by_n_frames = {}
         for i,obj_id in enumerate(use_obj_ids):
             if i%100==0:
@@ -91,6 +100,21 @@ def doit(filename,
             obs_cond = obs_obj_ids==obj_id
             obj_frames = frames[obs_cond]
             n_frames = obj_frames[-1]-obj_frames[0]
+            if exclude_vel_mps is not None:
+                x_frames = x[obs_cond]
+                y_frames = y[obs_cond]
+                z_frames = z[obs_cond]
+
+                dx = x_frames[1:]-x_frames[:-1]
+                dy = y_frames[1:]-y_frames[:-1]
+                dz = z_frames[1:]-z_frames[:-1]
+
+                dist = numpy.sqrt(dx**2 + dy**2 + dz**2)
+                total_dist = dist.sum()
+                total_time = n_frames/fps
+                mean_vel = total_dist / total_time
+                if mean_vel < exclude_vel_mps:
+                    continue
             obj_ids_by_n_frames.setdefault( n_frames, [] ).append( obj_id )
         n_frames_list = obj_ids_by_n_frames.keys()
         n_frames_list.sort()
@@ -620,6 +644,11 @@ def main():
                       dest='max_vel',
                       default=0.25)
     
+    parser.add_option("--exclude-vel", type="float",
+                      help="exclude traces with mean velocity less than this value",
+                      dest='exclude_vel_mps',
+                      default=None)
+    
     parser.add_option("--show-obj-ids", action='store_true',dest='show_obj_ids',
                       help="show object ID numbers at start of trajectory")
 
@@ -694,6 +723,7 @@ def main():
          show_only_track_ends = options.show_only_track_ends,
          floor=True,
          save_still = options.save_still,
+         exclude_vel_mps = options.exclude_vel_mps,
          )
     
 if __name__=='__main__':
