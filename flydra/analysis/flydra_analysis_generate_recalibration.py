@@ -18,7 +18,7 @@ import flydra.analysis.result_utils as result_utils
 
 The basic idea is to watch some trajectories with::
 
-  flydra_analysis_plot_kalman_data <DATAfilename.h5> --n-top-traces=10
+  kdviewer <DATAfilename.h5> --n-top-traces=10
 
 Find the top traces, reject any bad ones, and put them in an "efile".
 
@@ -72,7 +72,8 @@ def do_it(filename,
 
     data2d = results.root.data2d_distorted
     #use_idxs = numpy.arange(data2d.nrows)
-    #frames = data2d.cols.frame[:]
+    frames = data2d.cols.frame[:]
+    qfi = result_utils.QuickFrameIndexer(frames)
     
     kobs_2d = results.root.kalman_observations_2d_idxs
 
@@ -98,8 +99,7 @@ def do_it(filename,
             print 'kframe %d (%d of %d)'%(kframe,n_kframe,len(kframes_use))
             if 0:
                 k_use_idx = k_use_idxs[n_kframe*use_nth_observation]
-                print kobs.readCoordinates( numpy.array([k_use_idx]),
-                                            flavor='numpy' )
+                print kobs.readCoordinates( numpy.array([k_use_idx]))
             if PT.__version__ <= '1.3.3':
                 obs_2d_idx_find = int(obs_2d_idx)
                 kframe_find = int(kframe)
@@ -123,15 +123,19 @@ def do_it(filename,
 
             #sys.stdout.write('  doing frame selections...')
             #sys.stdout.flush()
-            this_use_idxs = data2d.getWhereList( data2d.cols.frame==kframe_find,
-                                                 flavor='numpy' )
+            if 1:
+                this_use_idxs=qfi.get_frame_idxs(kframe_find)
+            elif 0:
+                this_use_idxs=numpy.nonzero(frames==kframe_find)[0]
+            else:
+                this_use_idxs = data2d.getWhereList( 'frame==kframe_find')
             #sys.stdout.write('done\n')
             #sys.stdout.flush()
             
             if PT.__version__ <= '1.3.3':
                 this_use_idxs = [int(t) for t in this_use_idxs]
 
-            d2d = data2d.readCoordinates( this_use_idxs, flavor='numpy') # seems to require pytables >= 1.3.3
+            d2d = data2d.readCoordinates( this_use_idxs )
             #print 'd2d',d2d
             if len(this_camns) < 3:
                 # not enough points to contribute to calibration
@@ -149,10 +153,10 @@ def do_it(filename,
                         continue
                     npoints_by_cam_id[cam_id] = npoints_by_cam_id[cam_id] + 1
                     
-                    this_camn_d2d = d2d[d2d.camn == this_camn]
+                    this_camn_d2d = d2d[d2d['camn'] == this_camn]
                     #print '    this_camn_d2d',this_camn_d2d
                     for this_row in this_camn_d2d: # XXX could be sped up
-                        if this_row.frame_pt_idx == this_camn_idx:
+                        if this_row['frame_pt_idx'] == this_camn_idx:
                             found = True
                             break
                 if not found:
@@ -161,7 +165,7 @@ def do_it(filename,
                 else:
                     n_pts += 1
                     IdMat_row.append( 1 )
-                    points_row.extend( [this_row.x, this_row.y, 1.0] )
+                    points_row.extend( [this_row['x'], this_row['y'], 1.0] )
             #print 'IdMat_row',IdMat_row
             #print 'points_row',points_row
             IdMat.append( IdMat_row )
