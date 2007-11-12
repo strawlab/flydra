@@ -2,7 +2,8 @@ import numpy
 import params
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
-import flydra.geom as geom
+#import flydra.geom as geom
+import flydra.fastgeom as geom
 import time, math
 from flydra.analysis.result_utils import get_results, get_caminfo_dicts
 import tables as PT
