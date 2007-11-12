@@ -1,4 +1,7 @@
 from __future__ import division
+
+print 'WARNING: this script has been superseded by kdviewer'
+
 import numpy
 from numpy import nan, pi
 import tables as PT
