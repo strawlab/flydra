@@ -440,3 +440,14 @@ def make_exact_movie_info2(results,movie_dir=None):
         exact_movie_info.row['stop_timestamp']=timestamp_movie_stop
         exact_movie_info.row.append()
         exact_movie_info.flush()
+
+class QuickFrameIndexer:
+    """maintain a sorted cache of a particular 1D array to speed searches"""
+    def __init__(self,frames):
+        self.sorted_frame_idxs = numpy.argsort(frames)
+        self.sorted_frames = frames[self.sorted_frame_idxs]
+    def get_frame_idxs(self,frameno):
+        sorted_idx_low = self.sorted_frames.searchsorted(frameno)
+        sorted_idx_high = self.sorted_frames.searchsorted(frameno+1)
+        idx = self.sorted_frame_idxs[sorted_idx_low:sorted_idx_high]
+        return idx
