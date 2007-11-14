@@ -1,3 +1,4 @@
+from __future__ import division
 if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
@@ -199,8 +200,13 @@ def doit(filename,
             my_rows = kresults.root.kalman_estimates.readCoordinates(my_idx)
             my_timestamp = my_rows['timestamp'][0]
             dur = my_rows['timestamp'][-1] - my_timestamp
-            print obj_id,datetime.datetime.fromtimestamp(my_timestamp,pacific),'(for %.2f seconds)'%dur
-            print '  estimate frames: %d - %d'%(my_rows['frame'][0], my_rows['frame'][-1])
+            print '%d 3D triangulation started at %s (took %.2f seconds)'%(obj_id,datetime.datetime.fromtimestamp(my_timestamp,pacific),dur)
+            print '  estimate frames: %d - %d (%d frames, %.1f sec at %.1f fps)'%(
+                my_rows['frame'][0],
+                my_rows['frame'][-1],
+                my_rows['frame'][-1]-my_rows['frame'][0],
+                (my_rows['frame'][-1]-my_rows['frame'][0])/fps,
+                fps)
             
         if show_observations:
             obs_idx = numpy.nonzero(obs_obj_ids==obj_id)[0]
@@ -308,7 +314,7 @@ def doit(filename,
             g.source = ss.output
             vel_mapper = tvtk.PolyDataMapper(input=g.output)
             vel_mapper.lookup_table = lut
-            vel_mapper.scalar_range = 0.0, max_vel
+            vel_mapper.scalar_range = 0.0, float(max_vel)
             a = tvtk.Actor(mapper=vel_mapper)
             if show_observations:
                 a.property.opacity = 0.3
@@ -350,8 +356,8 @@ def doit(filename,
                              vector_mode = 'use_vector',
                              input=pd)
             ss = tvtk.SphereSource(radius = 0.005,
-                                   theta_resolution=8,
-                                   phi_resolution=8,
+                                   theta_resolution=3,
+                                   phi_resolution=3,
                                    )
             g.source = ss.output
             mapper = tvtk.PolyDataMapper(input=g.output)
@@ -482,8 +488,8 @@ def doit(filename,
                          vector_mode = 'use_vector',
                          input=pd)
         ss = tvtk.SphereSource(radius = 0.005,
-                               theta_resolution=8,
-                               phi_resolution=8,
+                               theta_resolution=3,
+                               phi_resolution=3,
                                )
         g.source = ss.output
         mapper = tvtk.PolyDataMapper(input=g.output)
@@ -543,34 +549,32 @@ def doit(filename,
         def annotatePick(object, event):
             # XXX keep all this math for reference with pos_ori2fu.py
             vtm = numpy.array([ [ren.active_camera.view_transform_matrix.get_element(i,j) for j in range(4)] for i in range(4)])
-            print 'camera.view_transform_matrix = ',vtm
+            #print 'camera.view_transform_matrix = ',vtm
             vtmcg = cgtypes.mat4(list(vtm.T))
-            print 'camera.view_transform_matrix = ',vtm
-            #print 'camera.view_transform_matrix = ',numpy.array(ren.active_camera.view_transform_matrix.elements)
             view_translation,view_rotation_mat4,view_scaling = vtmcg.decompose()
             q = aa=cgtypes.quat().fromMat(view_rotation_mat4)
-            print 'orientation quaternion',q
+            #print 'orientation quaternion',q
             aa=q.toAngleAxis()
-            print
-            print 'camera.position = ',ren.active_camera.position
+            #print
+            #print 'camera.position = ',ren.active_camera.position
             cpos = view_rotation_mat4.inverse()*-view_translation # same as camera.position
-            print 'view_rotation_mat4.inverse()*-view_translation',cpos
-            print 'view_scaling',view_scaling
+            #print 'view_rotation_mat4.inverse()*-view_translation',cpos
+            #print 'view_scaling',view_scaling
 
-            print 'camera.orientation_wxyz = ',ren.active_camera.orientation_wxyz
-            print 'aa',aa
-            print 'q',q
-            print 'camera.focal_point = ',ren.active_camera.focal_point
-            print 'camera.view_up = ',ren.active_camera.view_up
+            #print 'camera.orientation_wxyz = ',ren.active_camera.orientation_wxyz
+            #print 'aa',aa
+            #print 'q',q
+            #print 'camera.focal_point = ',ren.active_camera.focal_point
+            #print 'camera.view_up = ',ren.active_camera.view_up
 
             upq = view_rotation_mat4.inverse()*cgtypes.vec3(0,1,0) # get view up
             vd = view_rotation_mat4.inverse()*cgtypes.vec3(0,0,-1) # get view forward
-            print 'upq',upq
-            print 'viewdir1',(vd).normalize()
-            print 'viewdir2',(cgtypes.vec3(ren.active_camera.focal_point)-cpos).normalize()
-            print
+            #print 'upq',upq
+            #print 'viewdir1',(vd).normalize()
+            #print 'viewdir2',(cgtypes.vec3(ren.active_camera.focal_point)-cpos).normalize()
+            #print
             p = cgtypes.vec3(camera.position)
-            print 'animation path variable (t=time):'
+            print 'animation path variable (t=time) (t,x,y,z,qw,qx,qy,qz):'
             print 't', p[0], p[1], p[2], q.w, q.x, q.y, q.z
             print
 
