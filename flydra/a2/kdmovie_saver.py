@@ -1,3 +1,9 @@
+from __future__ import division
+if 1:
+    # deal with old files, forcing to numpy
+    import tables.flavor
+    tables.flavor.restrict_flavors(keep=['numpy'])
+
 import sets, os, sys, math
 sys.path.insert(0,os.curdir)
 from enthought.tvtk.api import tvtk
@@ -33,6 +39,9 @@ class AnimationPath(object):
         print 'self.data',self.data
     def get_pos_ori(self,t):
         file_ts = self.data[:,0]
+        tdiff = file_ts[1:]-file_ts[:-1]
+        if tdiff.min() < 0.0:
+            raise ValueError("animation path times go backwards!")
         t = t%file_ts[-1] # wrap around
         lower_idx = numpy.nonzero((file_ts <= t))[0][-1]
         upper_idx = lower_idx + 1
@@ -90,7 +99,7 @@ def doit(filename,
         is_mat_file = True
     else:
         kresults = PT.openFile(filename,mode="r")
-        obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id',flavor='numpy')
+        obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id')
         is_mat_file = False
 
     filename_trimmed = os.path.split(os.path.splitext(filename)[0])[-1]
@@ -168,8 +177,7 @@ def doit(filename,
     if max_vel == 'auto':
         max_vel = speeds.max()
     else:
-        max_vel == float(max_vel)
-        
+        max_vel = float(max_vel)
     vel_mapper = tvtk.PolyDataMapper()
     vel_mapper.lookup_table = lut
     vel_mapper.scalar_range = 0.0, max_vel
@@ -410,8 +418,12 @@ def main():
     h5_filename=args[0]
 
     h5_filename_short = os.path.split(h5_filename)[-1]
-    condition, stimname = conditions.get_condition_stimname_from_filename(h5_filename_short)
-    print 'Data from condition "%s",with stimulus'%(condition,),stimname
+    stimname = None
+    try:
+        condition, stimname = conditions.get_condition_stimname_from_filename(h5_filename_short)
+        print 'Data from condition "%s",with stimulus'%(condition,),stimname
+    except KeyError, err:
+        print 'Unknown condition and stimname'    
     
     if options.obj_only is not None:
         options.obj_only = options.obj_only.replace(',',' ')
