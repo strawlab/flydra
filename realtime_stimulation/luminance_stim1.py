@@ -95,69 +95,6 @@ print 'lums',lums
 tstart = time.time()
 last_lum = None
 
-import OpenGL.GL as gl # PyOpenGL
-import pygame
-from pygame.locals import *
-
-import numpy
-
-scale = 20 # magification of checkerboard (this many pixels per texture element)
-
-screen = get_default_screen()
-
-dynamic_checkerboard_size = (screen.size[0]//scale,screen.size[1]//scale) # width, height in texture elements
-
-# allocate temporary texture in grayscale mode for dynamic texture
-temp_grayscale_image = Image.new("L",dynamic_checkerboard_size,0)
-temp_texture = Texture(temp_grayscale_image)
-    
-# create TextureStimulus for dynamic stimulus
-scaled_dynamic_size = (scale*dynamic_checkerboard_size[0],scale*dynamic_checkerboard_size[1])
-
-# find center of screen
-x = screen.size[0]/2.0
-y = screen.size[1]/2.0
-dynamic_checkerboard = TextureStimulus(texture=temp_texture,
-                                       position=(x,y),
-                                       anchor="center",
-                                       mipmaps_enabled=0,
-                                       size=scaled_dynamic_size,
-                                       texture_min_filter=gl.GL_NEAREST,
-                                       texture_mag_filter=gl.GL_NEAREST,
-                                       )
-
-viewport = Viewport(screen=screen,
-                    stimuli=[
-                             dynamic_checkerboard]
-                    )
-
-dynamic_texture_object = dynamic_checkerboard.parameters.texture.get_texture_object()
-#width,height = dynamic_checkerboard_size
-
-quit_now = 0
-contrast = 1.0
-
-# zeros and ones
-#d = numpy.random.randint(0,2,size=(dynamic_checkerboard_size[1],dynamic_checkerboard_size[0]))
-checkerboard = numpy.zeros((dynamic_checkerboard_size[1],dynamic_checkerboard_size[0]))
-for row in range(dynamic_checkerboard_size[1]):
-    for col in range(dynamic_checkerboard_size[0]):
-        if row%2:
-            if col%2:
-                checkerboard[row,col] = 1
-        else:
-            if not col%2:
-                checkerboard[row,col] = 1
-
-lums = numpy.logspace(numpy.log10(0.05),numpy.log10(.5),6)
-lums = lums[::-1] # reverse
-#lum_dur = 5*60 # 5 minutes
-lum_dur = 1
-print 'lums',lums
-
-tstart = time.time()
-last_lum = None
-
 while not quit_now:
     for event in pygame.event.get():
         if event.type in (QUIT,KEYDOWN,MOUSEBUTTONDOWN):
