@@ -1,7 +1,9 @@
 from __future__ import division
 import tables
+import tables.flavor
+tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy
-import math
+import math, os
 import scipy.io
 DEBUG = False
 
@@ -93,6 +95,24 @@ def my_decimate(x,q):
         result[-1] = mysum[-1]/ (q-lendiff)
         return result
 
+def get_data(filename):
+    if os.path.splitext(filename)[1] == '.mat':
+        fullname = os.path.join(DATADIR,filename)
+        mat_data = scipy.io.mio.loadmat(fullname)
+        obj_ids = mat_data['kalman_obj_id']
+        obj_ids = obj_ids.astype( numpy.uint32 )
+        obs_obj_ids = obj_ids # use as observation length, even though these aren't observations
+        unique_obj_ids = numpy.unique(obj_ids)
+        is_mat_file = True
+        data_file = mat_data
+    else:
+        kresults = tables.openFile(filename,mode='r')
+        obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
+        unique_obj_ids = numpy.unique(obj_ids)
+        is_mat_file = False
+        data_file = kresults
+    return obj_ids, unique_obj_ids, is_mat_file, data_file
+                
 def kalman_smooth(orig_rows):
     global printed_dynamics_name
 
