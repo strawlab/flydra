@@ -1,4 +1,6 @@
 import tables
+import tables.flavor
+tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy
 import pylab
 import flydra.analysis.flydra_analysis_plot_clock_drift
@@ -11,28 +13,31 @@ if 1:
     filename = 'DATA20070319_201543.h5'
     filename = 'DATA20070319_204145.h5'
     filename = 'DATA20070319_204348.h5'
+    filename = 'DATA20071115_202838.h5'
     kresults = tables.openFile(filename,mode="r")
 
-    textlog = kresults.root.textlog.readCoordinates([0],flavor='numpy')
-    timer_max = int( textlog['message'].tostring().strip().split()[-1][:-1] )
+    textlog = kresults.root.textlog.readCoordinates([0])
+    infostr = textlog['message'].tostring().strip('\x00')
+    timer_max = int( textlog['message'].tostring().strip('\x00').split()[-1][:-1] )
+    print 'I found the timer maximum ("top") to be %d. I parsed this from "%s"'%(timer_max,infostr)
     
     tci = kresults.root.trigger_clock_info
-    tbl = tci.read(flavor='numpy')
+    tbl = tci.read()
 
-    kest = kresults.root.kalman_estimates.read(flavor='numpy')
+    kest = kresults.root.kalman_estimates.read()
 
-    meas_err = (-tbl.field('start_timestamp') + tbl.field('stop_timestamp'))
+    meas_err = (-tbl['start_timestamp'] + tbl['stop_timestamp'])
     print 'meas_err.max()',meas_err.max()*1e3
     print 'meas_err.min()',meas_err.min()*1e3
 
     #cond = meas_err < 3e-3
     cond = meas_err >-1e100
-    mb_timestamp = ((tbl.field('start_timestamp')[cond] + tbl.field('stop_timestamp')[cond])/2.0)
-    framenumber = tbl.field('framecount')[cond]
+    mb_timestamp = ((tbl['start_timestamp'][cond] + tbl['stop_timestamp'][cond])/2.0)
+    framenumber = tbl['framecount'][cond]
     
-    frac = tbl.field('tcnt')[cond]/float(timer_max)
+    frac = tbl['tcnt'][cond]/float(timer_max)
 
-    print "tbl.field('tcnt')[cond][-1]",tbl.field('tcnt')[cond][-1]
+    print "tbl['tcnt'][cond][-1]",tbl['tcnt'][cond][-1]
     print 'framenumber[:5]',framenumber[:5]
     print 'frac[:5]',frac[:5]
     framestamp = framenumber + frac
@@ -82,17 +87,17 @@ if 1:
         if 1:
             #####################
             # 2D camera computer timestamps
-            tbl = kresults.root.data2d_distorted.read(flavor='numpy')
+            tbl = kresults.root.data2d_distorted.read()
 
-            camns = tbl.field('camn')
+            camns = tbl['camn']
             ucamns = numpy.unique(camns)
             ucamns.sort()
             for camn in ucamns:
                 cond = camns == camn
-                frame = tbl.field('frame')[cond]
+                frame = tbl['frame'][cond]
                 
-                frame_2d_computer_start_timestamp = tbl.field('timestamp')[cond]
-                frame_2d_computer_timestamp = tbl.field('cam_received_timestamp')[cond]
+                frame_2d_computer_start_timestamp = tbl['timestamp'][cond]
+                frame_2d_computer_timestamp = tbl['cam_received_timestamp'][cond]
                 
                 frame_trigger_timestamp = frame*gain + offset
                 
