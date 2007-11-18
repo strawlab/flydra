@@ -6,6 +6,8 @@ import pylab
 import flydra.analysis.flydra_analysis_plot_clock_drift
 
 if 1:
+    # load the file
+    
     #filename='DATA20070319_172634.h5'
     #filename='DATA20070319_175152.h5'
     #filename = 'DATA20070319_191223.h5'
@@ -16,46 +18,48 @@ if 1:
     filename = 'DATA20071115_202838.h5'
     kresults = tables.openFile(filename,mode="r")
 
+    # get the timer top value
+    
     textlog = kresults.root.textlog.readCoordinates([0])
     infostr = textlog['message'].tostring().strip('\x00')
     timer_max = int( textlog['message'].tostring().strip('\x00').split()[-1][:-1] )
     print 'I found the timer maximum ("top") to be %d. I parsed this from "%s"'%(timer_max,infostr)
+
+    # open the log of at90usb clock info
     
     tci = kresults.root.trigger_clock_info
     tbl = tci.read()
 
-    kest = kresults.root.kalman_estimates.read()
+    # these are timestamps from the host's (main brain's) clock
 
     meas_err = (-tbl['start_timestamp'] + tbl['stop_timestamp'])
-    print 'meas_err.max()',meas_err.max()*1e3
-    print 'meas_err.min()',meas_err.min()*1e3
+    print 'meas_err.max() msec',meas_err.max()*1e3
+    print 'meas_err.min() msec',meas_err.min()*1e3
 
-    #cond = meas_err < 3e-3
-    cond = meas_err >-1e100
+    #cond = meas_err < 3e-3 # take data with only small measurement errors
+    cond = meas_err >-1e100 # take all data (expect measurement errors to be positive)
+
+    # approximate timestamp (assume symmetric delays) at which clock was sampled
     mb_timestamp = ((tbl['start_timestamp'][cond] + tbl['stop_timestamp'][cond])/2.0)
-    framenumber = tbl['framecount'][cond]
     
+    # get framenumber + fraction of next frame at which mb_timestamp estimated to happen
+    framenumber = tbl['framecount'][cond]
     frac = tbl['tcnt'][cond]/float(timer_max)
 
-    print "tbl['tcnt'][cond][-1]",tbl['tcnt'][cond][-1]
-    print 'framenumber[:5]',framenumber[:5]
-    print 'frac[:5]',frac[:5]
+    # create floating point number with this information
     framestamp = framenumber + frac
-    print 'framestamp[:5]',framestamp[:5]
-    print 'framenumber.argmax()',framenumber.argmax()
 
-    if 0:
-        #gain, offset0 = flydra.analysis.flydra_analysis_plot_clock_drift.model_remote_to_local( mb_timestamp- mb_timestamp[0], framestamp )
-        gain, offset0 = flydra.analysis.flydra_analysis_plot_clock_drift.model_remote_to_local( framestamp, mb_timestamp- mb_timestamp[0])
-        offset = offset0 + mb_timestamp[0]
-    else:
-        gain, offset = flydra.analysis.flydra_analysis_plot_clock_drift.model_remote_to_local( framestamp, mb_timestamp )
+    # fit linear model of relationship mainbrain timestamp and usb trigger_device framestamp
+    gain, offset = flydra.analysis.flydra_analysis_plot_clock_drift.model_remote_to_local( framestamp, mb_timestamp )
 
     if 1:
-
+        
+        # Calculate reconstruction latencies (this is only valid on original data).
+        
         if abs((framestamp[0]*gain + offset) - mb_timestamp[0]) > 1:
             raise RuntimeError('interpolated off by more than 1 second!')
 
+        kest = kresults.root.kalman_estimates.read()
         done_time = kest['timestamp']
         cond = done_time != 0.0
         done_time = done_time[cond]
@@ -95,38 +99,52 @@ if 1:
             for camn in ucamns:
                 cond = camns == camn
                 frame = tbl['frame'][cond]
-                
+
+                # timestamp of estimated frame time (assumes cam
+                # computer time near mainbrain time)
                 frame_2d_computer_start_timestamp = tbl['timestamp'][cond]
+                
+                # timestamp that the frame arrived in the camera
+                # computer (assumes cam computer time near mainbrain
+                # time)
                 frame_2d_computer_timestamp = tbl['cam_received_timestamp'][cond]
-                
+
+                # calculate time of trigger (mainbrain time, which is
+                # assumed near camera computer time)
                 frame_trigger_timestamp = frame*gain + offset
-                
+
+                # calculate latency to start taking image
                 camn_start_latencies_msec = (frame_2d_computer_start_timestamp - frame_trigger_timestamp)*1e3
+                # calculate latency to receiving image
                 camn_latencies_msec = (frame_2d_computer_timestamp - frame_trigger_timestamp)*1e3
 
-                print camn
-                print ' numpy.median(camn_start_latencies_msec)',numpy.min(camn_start_latencies_msec),numpy.median(camn_start_latencies_msec)
-                print ' numpy.median(camn_latencies_msec.)', numpy.min(camn_latencies_msec),numpy.median(camn_latencies_msec)
+                print 'camn',camn
+                #print ' numpy.median(camn_start_latencies_msec)',numpy.min(camn_start_latencies_msec),numpy.median(camn_start_latencies_msec)
+                print ' min and median of (camn_latencies_msec)', numpy.min(camn_latencies_msec),numpy.median(camn_latencies_msec)
 
-                acq_dur = (frame_2d_computer_timestamp-frame_2d_computer_start_timestamp)*1e3
-                print 'acq_dur',numpy.min(acq_dur),numpy.median(acq_dur)
+                #acq_dur = (frame_2d_computer_timestamp-frame_2d_computer_start_timestamp)*1e3
+                #print 'acq_dur',numpy.min(acq_dur),numpy.median(acq_dur)
                 print
 
         kresults.close()
 
         if 0:
+            pylab.figure()
             pylab.plot(    framenumber,'.')
-            pylab.show()
 
     if 1:
+        pylab.figure()
         pylab.hist( latency_msec, bins= 250)
+        pylab.title('total latency to 3D reconstruction')
+        pylab.ylabel('n occurances')
         pylab.xlabel('latency (msec)')
-        pylab.show()
 
-    if 0:
-    
-        pylab.plot( framestamp, mb_timestamp- mb_timestamp[0], 'r.' )
-        pylab.plot( framestamp, (framestamp*gain + offset) - mb_timestamp[0], 'b-' )
-        pylab.ylabel('time elapsed (sec)')
-        pylab.xlabel('frame')
-        pylab.show()
+    if 1:
+        pylab.figure()
+        pylab.plot( framestamp, mb_timestamp- mb_timestamp[0], 'r.', label='mainbrain clock' )
+        pylab.plot( framestamp, (framestamp*gain + offset) - mb_timestamp[0], 'b-', label='corrected USB device counter' )
+        pylab.legend()
+        pylab.ylabel('elapsed time (sec)')
+        pylab.xlabel('frame number')
+        pylab.title('clock/framecount comparison')
+    pylab.show()
