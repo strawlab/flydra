@@ -333,6 +333,56 @@ def model_remote_to_local(remote_timestamps, local_timestamps):
     offset = x[1,0]
     return gain,offset
 
+class TimeModel:
+    def __init__(self,gain,offset):
+        pass
+def get_time_model_from_data(results,debug=False,full_output=False):
+    # get the timer top value
+    
+    textlog = results.root.textlog.readCoordinates([0])
+    infostr = textlog['message'].tostring().strip('\x00')
+    timer_max = int( textlog['message'].tostring().strip('\x00').split()[-1][:-1] )
+    if debug:
+        print 'I found the timer maximum ("top") to be %d. I parsed this from "%s"'%(timer_max,infostr)
+
+    # open the log of at90usb clock info
+    
+    tci = results.root.trigger_clock_info
+    tbl = tci.read()
+
+    # these are timestamps from the host's (main brain's) clock
+
+    meas_err = (-tbl['start_timestamp'] + tbl['stop_timestamp'])
+    if debug:
+        print 'meas_err.max() msec',meas_err.max()*1e3
+        print 'meas_err.min() msec',meas_err.min()*1e3
+
+    #cond = meas_err < 3e-3 # take data with only small measurement errors
+    cond = meas_err >-1e100 # take all data (expect measurement errors to be positive)
+
+    # approximate timestamp (assume symmetric delays) at which clock was sampled
+    mb_timestamp = ((tbl['start_timestamp'][cond] + tbl['stop_timestamp'][cond])/2.0)
+    
+    # get framenumber + fraction of next frame at which mb_timestamp estimated to happen
+    framenumber = tbl['framecount'][cond]
+    frac = tbl['tcnt'][cond]/float(timer_max)
+
+    # create floating point number with this information
+    framestamp = framenumber + frac
+
+    # fit linear model of relationship mainbrain timestamp and usb trigger_device framestamp
+    gain, offset = model_remote_to_local( framestamp, mb_timestamp )
+    result = TimeModel(gain, offset)
+    if full_output:
+        full_results = {'framestamp':framestamp, # frame stamp on USB device
+                        'mb_timestamp':mb_timestamp, # timestamp on main brain
+                        'gain':gain,
+                        'offset':offset,
+                        }
+        return result, full_results
+    else:
+        return result
+
 def drift_estimates(results):
     """calculate clock information"""
     table = results.root.host_clock_info
