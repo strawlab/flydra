@@ -64,16 +64,16 @@ def doit(filename,
          obj_only=None,
          radius=0.002, # in meters
          min_length=10,
-         stim = None,
          use_kalman_smoothing=True,
          data_fps=100.0,
          save_fps = 25,
          vertical_scale=False,
          max_vel='auto',
+         draw_stim_func_str=None,
          floor = True,
          animation_path_fname = None,
          output_dir='.',
-         done_hover_duration=5.0,
+         cam_only_move_duration=5.0,
          ):
     
     if animation_path_fname is None:
@@ -105,8 +105,6 @@ def doit(filename,
     filename_trimmed = os.path.split(os.path.splitext(filename)[0])[-1]
     
     assert obj_only is not None
-    assert len(obj_only)==1
-    obj_id = obj_only[0]
 
     #################
     rw = tvtk.RenderWindow(size=(1024, 768))
@@ -118,61 +116,67 @@ def doit(filename,
     
     lut = tvtk.LookupTable(hue_range = (0.667, 0.0))
     #################
-    
-    ca = core_analysis.CachingAnalyzer()
-
-    if not is_mat_file:
-        n_observations = numpy.sum(obs_obj_ids == obj_id)
-        if int(n_observations) < int(min_length):
-            print 'WARNING: n_observerations < min_length'
-        data_file = kresults
-    else:
-        data_file = mat_data
-
-    results = ca.calculate_trajectory_metrics(obj_id,
-                                              data_file,
-                                              use_kalman_smoothing=use_kalman_smoothing,
-                                              frames_per_second=data_fps,
-                                              method='position based',
-                                              method_params={'downsample':1,
-                                                             })
-    
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
+        
+    ca = core_analysis.CachingAnalyzer()
+    
+    if len(obj_only)==1:
+        animate_path = True
+        # allow path to grow during trajectory
+    else:
+        animate_path = False
+        obj_verts = []
+        speeds = []
+ 
+    for obj_id in obj_only:
 
-    obj_verts = results['X_kalmanized']
-    floorz = obj_verts[:,2].min()
-    speeds = results['speed_kalmanized']
+        if not is_mat_file:
+            n_observations = numpy.sum(obs_obj_ids == obj_id)
+            if int(n_observations) < int(min_length):
+                print 'WARNING: n_observerations < min_length'
+            data_file = kresults
+        else:
+            data_file = mat_data
 
+        print 'loading %d'%obj_id
+        results = ca.calculate_trajectory_metrics(obj_id,
+                                                  data_file,
+                                                  use_kalman_smoothing=use_kalman_smoothing,
+                                                  frames_per_second=data_fps,
+                                                  method='position based',
+                                                  method_params={'downsample':1,
+                                                                 })
+    
+        if len(obj_only)==1:
+            obj_verts = results['X_kalmanized']
+            speeds = results['speed_kalmanized']
+        else:
+            obj_verts.append( results['X_kalmanized'] )
+            speeds.append( results['speed_kalmanized'] )
+            
+    if not len(obj_only)==1:
+        obj_verts = numpy.concatenate(obj_verts,axis=0)
+        speeds = numpy.concatenate(speeds,axis=0)
+        
     ####################### start draw permanently on stuff ############################
-      
-    if stim is not None:
-        all_verts = stimulus_positions.stim_positions[stim]
-
-        for verts in all_verts:
-
-            verts = numpy.asarray(verts)
-            floorz = min(floorz, verts[:,2].min() )
-            pd = tvtk.PolyData()
-
-            np = len(verts) - 1
-            lines = numpy.zeros((np, 2), numpy.int64)
-            lines[:,0] = numpy.arange(0, np-0.5, 1, numpy.int64)
-            lines[:,1] = numpy.arange(1, np+0.5, 1, numpy.int64)
-
-            pd.points = verts
-            pd.lines = lines
-
-            pt = tvtk.TubeFilter(radius=0.006,input=pd,
-                                 number_of_sides=20,
-                                 vary_radius='vary_radius_off',
-                                 )
-            m = tvtk.PolyDataMapper(input=pt.output)
-            a = tvtk.Actor(mapper=m)
-            a.property.color = 0,0,0
-            a.property.specular = 0.3
-            ren.add_actor(a)
-
+    
+    if draw_stim_func_str:
+        def my_import(name):
+            mod = __import__(name)
+            components = name.split('.')
+            for comp in components[1:]:
+                mod = getattr(mod, comp)
+            return mod
+        draw_stim_module_name, draw_stim_func_name = draw_stim_func_str.strip().split(':')
+        draw_stim_module = my_import(draw_stim_module_name)
+        draw_stim_func = getattr(draw_stim_module, draw_stim_func_name)
+        stim_actors = draw_stim_func(filename=filename)
+        print '*'*80,'drew with custom code'
+        for stim_actor in stim_actors:
+            ren.add_actor( stim_actor )
+            
+    ####################### 
 
     if max_vel == 'auto':
         max_vel = speeds.max()
@@ -209,79 +213,27 @@ def doit(filename,
         
         ren.add_actor( scalar_bar )
 
-    if floor:
-        x0 = 0.007
-        x1 = 1.007
-        y0 = .065
-        y1 = .365
-        #z0 = -.028
-        z0 = floorz#-.06
-        
-        inc = 0.05
-        if 1:
-            nx = int(math.ceil((x1-x0)/inc))
-            ny = int(math.ceil((y1-y0)/inc))
-            eps = 1e-10
-            x1 = x0+nx*inc+eps
-            y1 = y0+ny*inc+eps
-        
-        segs = []
-        for x in numpy.r_[x0:x1:inc]:
-            seg =[(x,y0,z0),
-                  (x,y1,z0)]
-            segs.append(seg)
-        for y in numpy.r_[y0:y1:inc]:
-            seg =[(x0,y,z0),
-                  (x1,y,z0)]
-            segs.append(seg)
-            
-        if 1:
-            verts = []
-            for seg in segs:
-                verts.extend(seg)
-            verts = numpy.asarray(verts)
-
-            pd = tvtk.PolyData()
-
-            np = len(verts)/2
-            lines = numpy.zeros((np, 2), numpy.int64)
-            lines[:,0] = 2*numpy.arange(np,dtype=numpy.int64)
-            lines[:,1] = lines[:,0]+1
-
-            pd.points = verts
-            pd.lines = lines
-
-            pt = tvtk.TubeFilter(radius=0.001,input=pd,
-                                 number_of_sides=4,
-                                 vary_radius='vary_radius_off',
-                                 )
-            m = tvtk.PolyDataMapper(input=pt.output)
-            a = tvtk.Actor(mapper=m)
-            a.property.color = .9, .9, .9
-            a.property.specular = 0.3
-            ren.add_actor(a)
-            
-    if 0:
-        a=tvtk.AxesActor(normalized_tip_length=(0.4, 0.4, 0.4),
-                         normalized_shaft_length=(0.6, 0.6, 0.6),
-                         shaft_type='cylinder')
-        ren.add_actor(a)
-
     imf = tvtk.WindowToImageFilter(input=rw)
     writer = tvtk.PNGWriter()
 
     ####################### end draw permanently on stuff ############################
 
     save_dt = 1.0/save_fps
-    data_dt = 1.0/data_fps
-    
-    n_frames = len(obj_verts)
+
+    if animate_path:
+        data_dt = 1.0/data_fps
+        n_frames = len(obj_verts)
+        dur = n_frames*data_dt
+    else:
+        data_dt = 0.0
+        dur = 0.0
+        
     t_now = 0.0
-    dur = n_frames*data_dt
     frame_number = 0
-    while t_now < dur:
+    while t_now <= dur:
         frame_number += 1
         t_now += save_dt
+        print 't_now',t_now
 
         pos, ori = camera_animation_path.get_pos_ori(t_now)
         focal_point, view_up = pos_ori2fu(pos,ori)
@@ -293,8 +245,11 @@ def doit(filename,
         camera.focal_point = tuple(focal_point)
         camera.view_up = tuple(view_up)
 
-        draw_n_frames = int(math.ceil(t_now / data_dt))
-        #print 'frame_number, draw_n_frames', frame_number, draw_n_frames
+        if data_dt != 0.0:
+            draw_n_frames = int(math.ceil(t_now / data_dt))
+        else:
+            draw_n_frames = len(obj_verts)
+        print 'frame_number, draw_n_frames', frame_number, draw_n_frames
 
         #################
 
@@ -328,11 +283,12 @@ def doit(filename,
         ren.remove_actor(a)
         
     ren.add_actor(a) # restore actors removed
-    dur = dur+done_hover_duration
+    dur = dur+cam_only_move_duration
 
     while t_now < dur:
         frame_number += 1
         t_now += save_dt
+        print 't_now',t_now
 
         pos, ori = camera_animation_path.get_pos_ori(t_now)
         focal_point, view_up = pos_ori2fu(pos,ori)
@@ -343,7 +299,10 @@ def doit(filename,
             imf.update()
             imf.modified()
             writer.input = imf.output
-            fname = 'movie_%s_%03d_frame%05d.png'%(filename_trimmed,obj_id,frame_number)
+            if len(obj_only)==1:
+                fname = 'movie_%s_%03d_frame%05d.png'%(filename_trimmed,obj_id,frame_number)
+            else:
+                fname = 'movie_%s_many_frame%05d.png'%(filename_trimmed,frame_number)
             full_fname = os.path.join(output_dir, fname)
             writer.file_name = full_fname
             writer.write()
@@ -360,15 +319,17 @@ def main():
                       help="hdf5 file with data to display FILE",
                       metavar="FILE")
 
-##    parser.add_option("--debug", type="int",
-##                      help="debug level",
-##                      metavar="DEBUG")
-        
     parser.add_option("--obj-only", type="string",
                       dest="obj_only")
-
-    parser.add_option("--done-hover-duration", type="float",
-                      dest="done_hover_duration",
+    
+    parser.add_option("--draw-stim",
+                      type="string",
+                      dest="draw_stim_func_str",
+                      default="flydra.a2.conditions_draw:draw_default_stim",
+                      )
+    
+    parser.add_option("--cam-only-move-duration", type="float", # formerly called hover
+                      dest="cam_only_move_duration",
                       default=5.0)
 
     parser.add_option("--output-dir", type="string",
@@ -376,9 +337,6 @@ def main():
 
     parser.add_option("--animation_path_fname",type="string",
                       dest="animation_path_fname")
-
-##    parser.add_option("--stim", type="string",
-##                      dest="stim")
     
     parser.add_option("--min-length", dest="min_length", type="int",
                       help="minimum number of tracked points (not observations!) required to plot",
@@ -417,14 +375,6 @@ def main():
         
     h5_filename=args[0]
 
-    h5_filename_short = os.path.split(h5_filename)[-1]
-    stimname = None
-    try:
-        condition, stimname = conditions.get_condition_stimname_from_filename(h5_filename_short)
-        print 'Data from condition "%s",with stimulus'%(condition,),stimname
-    except KeyError, err:
-        print 'Unknown condition and stimname'    
-    
     if options.obj_only is not None:
         options.obj_only = options.obj_only.replace(',',' ')
         seq = map(int,options.obj_only.split())
@@ -435,12 +385,12 @@ def main():
 
     doit(filename=h5_filename,
          obj_only=options.obj_only,
-         done_hover_duration=options.done_hover_duration,
+         cam_only_move_duration=options.cam_only_move_duration,
          use_kalman_smoothing=options.use_kalman_smoothing,
          radius = options.radius,
          min_length = options.min_length,
-         stim = stimname,
          vertical_scale = options.vertical_scale,
+         draw_stim_func_str = options.draw_stim_func_str,
          max_vel = options.max_vel,
          floor=True,
          animation_path_fname = options.animation_path_fname,

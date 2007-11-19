@@ -11,9 +11,7 @@ import numpy
 import tables as PT
 from optparse import OptionParser
 import core_analysis
-import stimulus_positions
 import scipy.io
-import conditions
 import pytz, datetime
 pacific = pytz.timezone('US/Pacific')
 
@@ -31,7 +29,7 @@ def print_cam_props(camera):
     print 'camera.view_up = ',camera.view_up
     print 'camera.clipping_range = ',camera.clipping_range
     print 'camera.parallel_scale = ',camera.parallel_scale
-
+    
 def doit(filename,
          show_obj_ids=False,
          obj_start=None,
@@ -43,13 +41,12 @@ def doit(filename,
          show_saccades = True,
          show_observations = False,
          show_saccade_times = False,
-         stim = None,
+         draw_stim_func_str = None,
          use_kalman_smoothing=True,
          fps=100.0,
          vertical_scale=False,
          max_vel=0.25,
          show_only_track_ends = False,
-         floor = True,
          save_still = False,
          exclude_vel_mps = None,
          ):
@@ -257,11 +254,9 @@ def doit(filename,
                     print err
                     continue
             verts = results['X_kalmanized']
-            floorz = verts[:,2].min()
             speeds = results['speed_kalmanized']
 
         else:
-            floorz = numpy.inf
             rows=ca.load_data(obj_id,
                               data_file)
             
@@ -382,87 +377,23 @@ def doit(filename,
         kresults.close()
     
     ################################
-      
-    if stim is not None:
-        all_verts = stimulus_positions.stim_positions[stim]
 
-        for verts in all_verts:
-
-            verts = numpy.asarray(verts)
-            floorz = min(floorz, verts[:,2].min() )
-            pd = tvtk.PolyData()
-
-            np = len(verts) - 1
-            lines = numpy.zeros((np, 2), numpy.int64)
-            lines[:,0] = numpy.arange(0, np-0.5, 1, numpy.int64)
-            lines[:,1] = numpy.arange(1, np+0.5, 1, numpy.int64)
-
-            pd.points = verts
-            pd.lines = lines
-
-            pt = tvtk.TubeFilter(radius=0.006,input=pd,
-                                 number_of_sides=20,
-                                 vary_radius='vary_radius_off',
-                                 )
-            m = tvtk.PolyDataMapper(input=pt.output)
-            a = tvtk.Actor(mapper=m)
-            a.property.color = 0,0,0
-            a.property.specular = 0.3
-            actors.append(a)
-
-    if 1 and floor:
-        x0 = 0.007
-        x1 = 1.007
-        y0 = .065
-        y1 = .365
-        #z0 = -.028
-        z0 = floorz-.06
-        print 'z0',z0
-        
-        inc = 0.05
-        if 1:
-            nx = int(math.ceil((x1-x0)/inc))
-            ny = int(math.ceil((y1-y0)/inc))
-            eps = 1e-10
-            x1 = x0+nx*inc+eps
-            y1 = y0+ny*inc+eps
-        
-        segs = []
-        for x in numpy.r_[x0:x1:inc]:
-            seg =[(x,y0,z0),
-                  (x,y1,z0)]
-            segs.append(seg)
-        for y in numpy.r_[y0:y1:inc]:
-            seg =[(x0,y,z0),
-                  (x1,y,z0)]
-            segs.append(seg)
-            
-        if 1:
-            verts = []
-            for seg in segs:
-                verts.extend(seg)
-            verts = numpy.asarray(verts)
-
-            pd = tvtk.PolyData()
-
-            np = len(verts)/2
-            lines = numpy.zeros((np, 2), numpy.int64)
-            lines[:,0] = 2*numpy.arange(np,dtype=numpy.int64)
-            lines[:,1] = lines[:,0]+1
-
-            pd.points = verts
-            pd.lines = lines
-
-            pt = tvtk.TubeFilter(radius=0.001,input=pd,
-                                 number_of_sides=4,
-                                 vary_radius='vary_radius_off',
-                                 )
-            m = tvtk.PolyDataMapper(input=pt.output)
-            a = tvtk.Actor(mapper=m)
-            a.property.color = .9, .9, .9
-            a.property.specular = 0.3
-            actors.append(a)
-            
+    if draw_stim_func_str:
+        def my_import(name):
+            mod = __import__(name)
+            components = name.split('.')
+            for comp in components[1:]:
+                mod = getattr(mod, comp)
+            return mod
+        draw_stim_module_name, draw_stim_func_name = draw_stim_func_str.strip().split(':')
+        draw_stim_module = my_import(draw_stim_module_name)
+        draw_stim_func = getattr(draw_stim_module, draw_stim_func_name)
+        stim_actors = draw_stim_func(filename=filename)
+        actors.extend( stim_actors )
+        print '*'*80,'drew with custom code'
+    
+    ################################
+    
     if 0:
         a=tvtk.AxesActor(normalized_tip_length=(0.4, 0.4, 0.4),
                          normalized_shaft_length=(0.6, 0.6, 0.6),
@@ -628,8 +559,11 @@ def main():
     parser.add_option("--obj-only", type="string",
                       dest="obj_only")
     
-##    parser.add_option("--stim", type="string",
-##                      dest="stim")
+    parser.add_option("--draw-stim",
+                      type="string",
+                      dest="draw_stim_func_str",
+                      default="flydra.a2.conditions_draw:draw_default_stim",
+                      )
     
     parser.add_option("--n-top-traces", type="int",
                       help="show N longest traces")
@@ -692,13 +626,6 @@ def main():
         return
         
     h5_filename=args[0]
-
-    stimname = None
-    try:
-        condition, stimname = conditions.get_condition_stimname_from_filename(h5_filename)
-        print 'Data from condition "%s",with stimulus'%(condition,),stimname
-    except KeyError, err:
-        print 'Unknown condition and stimname'
     
     if options.obj_only is not None:
         options.obj_only = options.obj_only.replace(',',' ')
@@ -720,12 +647,11 @@ def main():
          show_saccades = options.show_saccades,
          show_observations = options.show_observations,
          show_saccade_times = options.show_saccade_times,
-         stim = stimname,
+         draw_stim_func_str = options.draw_stim_func_str,
          fps = 100.0,
          vertical_scale = options.vertical_scale,
          max_vel = options.max_vel,
          show_only_track_ends = options.show_only_track_ends,
-         floor=True,
          save_still = options.save_still,
          exclude_vel_mps = options.exclude_vel_mps,
          )
