@@ -88,8 +88,8 @@ for row in range(dynamic_checkerboard_size[1]):
 
 lums = numpy.logspace(numpy.log10(0.05),numpy.log10(.5),6)
 lums = lums[::-1] # reverse
-#lum_dur = 5*60 # 5 minutes
-lum_dur = 1
+lum_dur = 5*60 # 5 minutes
+#lum_dur = 1
 print 'lums',lums
 
 tstart = time.time()
