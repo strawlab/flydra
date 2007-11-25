@@ -335,7 +335,13 @@ def model_remote_to_local(remote_timestamps, local_timestamps):
 
 class TimeModel:
     def __init__(self,gain,offset):
-        pass
+        self.gain = gain
+        self.offset = offset
+    def timestamp2framestamp(self, mainbain_timestamp ):
+        return (mainbain_timestamp-self.offset)/self.gain
+    def framestamp2timestamp(self, framestamp ):
+        return framestamp*self.gain + self.offset
+    
 def get_time_model_from_data(results,debug=False,full_output=False):
     # get the timer top value
     

@@ -11,6 +11,7 @@ import adskalman
 import flydra.kalman.dynamic_models
 import flydra.kalman.params
 import flydra.kalman.flydra_kalman_utils
+import flydra.analysis.result_utils
 
 # global
 printed_dynamics_name = False
@@ -96,6 +97,7 @@ def my_decimate(x,q):
         return result
 
 def get_data(filename):
+    extra = {}
     if os.path.splitext(filename)[1] == '.mat':
         fullname = os.path.join(DATADIR,filename)
         mat_data = scipy.io.mio.loadmat(fullname)
@@ -105,13 +107,17 @@ def get_data(filename):
         unique_obj_ids = numpy.unique(obj_ids)
         is_mat_file = True
         data_file = mat_data
+        # XXX probably need to add time_model computation here
     else:
         kresults = tables.openFile(filename,mode='r')
         obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
         unique_obj_ids = numpy.unique(obj_ids)
         is_mat_file = False
         data_file = kresults
-    return obj_ids, unique_obj_ids, is_mat_file, data_file
+        extra['kresults'] = kresults
+        time_model = flydra.analysis.result_utils.get_time_model_from_data(kresults)
+    extra['time_model'] = time_model
+    return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
                 
 def kalman_smooth(orig_rows):
     global printed_dynamics_name
