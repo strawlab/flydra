@@ -2070,6 +2070,10 @@ class MainBrain(object):
         textlog_row = self.h5textlog.row
         cam_id = 'mainbrain'
         timestamp = time.time()
+        
+        # This line is important (including the formatting). It is
+        # read by flydra.a2.check_atmel_clock.
+        
         list_of_textlog_data = [
             (timestamp,cam_id,timestamp, 'MainBrain running at %s fps, (top %s)'%(
             str(self.fps),str(self.trigger_timer_max)))
