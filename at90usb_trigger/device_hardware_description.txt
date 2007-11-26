@@ -1,23 +1,40 @@
-= Subset of available features of chip =
-ADC:
- * 8 analog inputs (port F)
+= Overview of the Flydra Trigger Device =
 
-timer3 (timer3 used because all pins on one output port):
- * 3 output compare units
- * 1 input capture
+The Flydra Trigger Device serves to provide a synchronized trigger
+signal to all cameras providing input to the Main Brain. By use of a
+custom trigger device, precise timing of frame-by-frame inputs can be
+verified. (See the [source:trunk/flydra/flydra/a2/check_atmel_clock.py
+check_atmel_clock.py] script for an example.) Furthermore, additional
+experimental components can be triggered by the device by use of the
+External Device Trigger.
 
-= Box features =
+This device is an
+[http://www.atmel.com/dyn/products/tools_card.asp?tool_id=3879
+AT90USBKEY] placed in a custom enclosure with some minimal additional
+circuitry and custom firmware.
 
-11 BNC ports:
- * 2 analog ins
-   - adc0 (port f 0) -- (board: J1 10)
-   - adc1 (port f 1) -- (board: J1 9)
-   - (board: J1 2 used as AGND)
- * 2 LEDs
-   - VCC from J1 ?
-   - current limiting resistors
-   - pins from port f
- * 1            timer3 input capture (port c 7) (board: J5 3)
- * 6 TRIG OUT - timer3 output compare A (port c 6) (board: J5 4)
- * 1            timer3 output compare B (port c 5) (board: J5 5)
- * 1            timer3 output compare C (port c 4) (board: J5 6)
+The primary connections are A) the USB interface, which connects to
+the Main Brain computer, and B) the Camera Sync Triggers, which
+connects to the flydra cameras.
+
+In addition the External Device Trigger, can be used to trigger
+experimental devices via a software command from the Main Brain
+computer over the USB interface.
+
+= Internal connection details =
+
+The Camera Sync Triggers are the bottom row of BNCs on the
+device. Internally, they all share the same input. This is a direct
+connection from the AT90USBKEY J5 pin 7 (and thus Port C6, OCR3A, of
+the AT90USB1287). Optionally, an op-amp to provide a 5V trigger signal
+may be added (see below).
+
+The External Device Trigger is the top left BNC on the
+device. Internally, this is a direct connection from the AT90USBKEY J5
+pin 4 (and thus Port C3 of the AT90USB1287). Optionally, an op-amp to
+provide a 5V trigger signal may be added (see below).
+
+= Optional 5V outputs =
+
+An optional Op-Amp may be used to boost the output signal voltage from
+3.3V to 5.0V.
