@@ -37,3 +37,12 @@ provide a 5V trigger signal may be added (see below).
 
 An optional Op-Amp may be used to boost the output signal voltage from
 3.3V to 5.0V.
+
+[[Image(source:/trunk/flydra/at90usb_trigger/flydra_trigger_opamp_circuit.png)]]
+
+In the drawing above, V_{CST} are the Camera Sync Triggers, V_{ETD} is
+the External Device Trigger. J5 refers to the jumper on the AT90USBKEY
+device. R1-4 should be chosen to give the appropriate gain. Values of
+100 ohms for R1 and R3 and 200 ohms for R2 and R4 should work. The +5
+V power should be taken from an external power supply, which can be
+connected into the trigger box via the provided plug.
