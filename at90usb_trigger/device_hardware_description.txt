@@ -3,15 +3,14 @@
 The Flydra Trigger Device serves to provide a synchronized trigger
 signal to all cameras providing input to the Main Brain. By use of a
 custom trigger device, precise timing of frame-by-frame inputs can be
-verified. (See the [source:trunk/flydra/flydra/a2/check_atmel_clock.py
-check_atmel_clock.py] script for an example.) Furthermore, additional
-experimental components can be triggered by the device by use of the
-External Device Trigger.
+verified. (See source:trunk/flydra/flydra/a2/check_atmel_clock.py
+script for an example.) Furthermore, additional experimental
+components can be triggered by the device by use of the External
+Device Trigger.
 
-This device is an
-[http://www.atmel.com/dyn/products/tools_card.asp?tool_id=3879
-AT90USBKEY] placed in a custom enclosure with some minimal additional
-circuitry and custom firmware.
+This device is an AT90USBKEY ( http://www.atmel.com/dyn/products/tools_card.asp?tool_id=3879 ) placed
+in a custom enclosure with some minimal additional circuitry and
+custom firmware.
 
 The primary connections are A) the USB interface, which connects to
 the Main Brain computer, and B) the Camera Sync Triggers, which
