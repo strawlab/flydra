@@ -30,13 +30,13 @@ def find_peaks(y,threshold,search_cond=None):
         return []
     peak_idx_search = numpy.argmax(ysearch)
     peak_idx = nz[peak_idx_search]
-    
+
     # descend y in positive x direction
     new_idx = peak_idx
     curval = y[new_idx]
     if curval < threshold:
         return []
-    
+
     while 1:
         new_idx += 1
         if new_idx>=len(y):
@@ -73,7 +73,7 @@ def my_decimate(x,q):
 
     if q==1:
         return x
-    
+
     if 0:
         from scipy_utils import decimate as matlab_decimate # part of ads_utils, contains code translated from MATLAB
         return matlab_decimate(x,q)
@@ -86,7 +86,7 @@ def my_decimate(x,q):
         lendiff = xtrimlen-len(x)
         xtrim = numpy.zeros( (xtrimlen,), dtype=numpy.float)
         xtrim[:len(x)] = x
-        
+
         all = []
         for i in range(q):
             all.append( xtrim[i::q] )
@@ -118,28 +118,28 @@ def get_data(filename):
         time_model = flydra.analysis.result_utils.get_time_model_from_data(kresults)
     extra['time_model'] = time_model
     return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
-                
+
 def kalman_smooth(orig_rows):
     global printed_dynamics_name
 
     obs_frames = orig_rows['frame']
-    
+
     fstart, fend = obs_frames[0], obs_frames[-1]
     assert fstart < fend
     frames = numpy.arange(fstart,fend+1)
     idx = frames.searchsorted(obs_frames)
-    
+
     x = numpy.empty( frames.shape, dtype=numpy.float )
     y = numpy.empty( frames.shape, dtype=numpy.float )
     z = numpy.empty( frames.shape, dtype=numpy.float )
     obj_id_array =  numpy.ma.masked_array( numpy.empty( frames.shape, dtype=numpy.uint32 ),
                                            mask=numpy.ones( frames.shape, dtype=numpy.bool_ ) )
-    
+
     x[idx] = orig_rows['x']
     y[idx] = orig_rows['y']
     z[idx] = orig_rows['z']
     obj_id_array[idx] = orig_rows['obj_id']
-    
+
     # assemble observations (in meters)
     obs = numpy.vstack(( x,y,z )).T
 
@@ -162,7 +162,7 @@ def kalman_smooth(orig_rows):
         print 'using "%s" for Kalman smoothing'%(dynamics_name,)
         printed_dynamics_name = True
     model = flydra.kalman.dynamic_models.get_dynamic_model_dict()[dynamics_name]
-    params = flydra.kalman.params    
+    params = flydra.kalman.params
     xsmooth, Psmooth = adskalman.kalman_smoother(obs,
                                                  params.A,
                                                  params.C,
@@ -193,7 +193,7 @@ def observations2smoothed(obj_id,orig_rows):
     return rows
 
 def matfile2rows(data_file,obj_id):
-    
+
     obj_ids = data_file['kalman_obj_id']
     cond = obj_ids == obj_id
     if 0:
@@ -202,7 +202,7 @@ def matfile2rows(data_file,obj_id):
     else:
         # benchmarking showed this is 20% faster
         indexer = cond
-    
+
     obj_id_array = data_file['kalman_obj_id'][cond]
     obj_id_array = obj_id_array.astype(numpy.uint32)
     id_frame = data_file['kalman_frame'][cond]
@@ -228,12 +228,12 @@ def matfile2rows(data_file,obj_id):
                   z,z,z,
 
                   ]
-    timestamps = numpy.zeros( (len(frames),))    
+    timestamps = numpy.zeros( (len(frames),))
     list_of_cols = [obj_id_array,id_frame,timestamps]+list_of_xhats+list_of_Ps
     assert len(list_of_cols)==len(field_names) # double check that definition didn't change on us
     rows = numpy.rec.fromarrays(list_of_cols,
                                 names = field_names)
-    
+
     return rows
 
 class LazyRecArrayMimic:
@@ -253,14 +253,14 @@ class LazyRecArrayMimic:
         return self.data_file[self.xtable[name]][self.cond]
     def __getitem__(self,name):
         return self.data_file[self.xtable[name]][self.cond]
-    
+
 class CachingAnalyzer:
     def load_data(self,obj_id,data_file,use_kalman_smoothing=True,
                   frames_per_second=100.0):
         if isinstance(data_file,str):
             if data_file.endswith('_smoothed.mat'):
                 data_file = scipy.io.loadmat(data_file)
-        
+
         if isinstance(data_file,dict):
             is_mat_file = True
         else:
@@ -270,7 +270,7 @@ class CachingAnalyzer:
             if preloaded_dict is None:
                 preloaded_dict = self._load_dict(result_h5_file)
             kresults = preloaded_dict['kresults']
-        
+
         if is_mat_file:
             if use_kalman_smoothing is not True:
                 raise ValueError('use of .mat file requires Kalman smoothing')
@@ -282,7 +282,7 @@ class CachingAnalyzer:
         else:
             if not use_kalman_smoothing:
                 obj_ids = preloaded_dict['obj_ids']
-                if isinstance(obj_id,int):
+                if isinstance(obj_id,int) or isinstance(obj_id,numpy.integer):
                     # obj_id is an integer, normal case
                     idxs = numpy.nonzero(obj_ids == obj_id)[0]
                 else:
@@ -307,11 +307,11 @@ class CachingAnalyzer:
                         print 'len(obs_idxs[-1])',len(obs_idxs[-1])
                         print
                     obs_idxs = numpy.concatenate( obs_idxs )
-                
+
                 # Kalman observations are already always in meters, no scale factor needed
                 orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs)
                 rows = observations2smoothed(obj_id,orig_rows)  # do Kalman smoothing
-                
+
         return rows
 
     def get_raw_positions(self,
@@ -324,7 +324,7 @@ class CachingAnalyzer:
         xsA = rows['x']
         ysA = rows['y']
         zsA = rows['z']
-        
+
         XA = numpy.vstack((xsA,ysA,zsA)).T
         return XA
 
@@ -345,7 +345,7 @@ class CachingAnalyzer:
             if preloaded_dict is None:
                 preloaded_dict = self._load_dict(data_file)
             return preloaded_dict['unique_obj_ids']
-    
+
     def calculate_trajectory_metrics(self,
                                      obj_id,
                                      data_file,#result_h5_file or .mat dictionary
@@ -363,21 +363,21 @@ class CachingAnalyzer:
         data_file - string of pytables filename, the pytables file object, or data dict from .mat file
         frames_per_second - float, framerate of data
         use_kalman_smoothing - boolean, if False, use original, causal Kalman filtered data (rather than Kalman smoothed observations)
-        
+
         method_params for 'position based':
         -----------------------------------
         'downsample' - decimation factor
-        
+
         returns:
         --------
         results - dictionary
 
         results dictionary always contains:
         -----------------------------------
-        
-        
+
+
         """
-        
+
         rows = self.load_data( obj_id, data_file,use_kalman_smoothing=use_kalman_smoothing)
         numpyerr = numpy.seterr(all='raise')
         try:
@@ -391,7 +391,7 @@ class CachingAnalyzer:
 
             if method == 'position based':
                 ##############
-                # load data                
+                # load data
                 framesA = rows['frame']
                 xsA = rows['x']
 
@@ -453,7 +453,10 @@ class CachingAnalyzer:
                 dheadingG_dt = (headingsF_u[2:]-headingsF_u[:-2])/(2*delta_tF) # central difference
                 time_G = time_F[1:-1]
 
-                norm_velsF = velsF / speedsF[:,numpy.newaxis] # make norm vectors ( mag(x)=1 )
+                norm_velsF = velsF
+                nonzero_speeds = speedsF[:,numpy.newaxis]
+                nonzero_speeds[ nonzero_speeds==0 ] = 1
+                norm_velsF = velsF / nonzero_speeds # make norm vectors ( mag(x)=1 )
                 if 0:
                     #forward diff
                     time_K = (timeF[1:]+timeF[:-1])/2 # same spacing as F, but in between
@@ -476,10 +479,10 @@ class CachingAnalyzer:
                         cos_angle_diff = numpy.dot(v1,v2) # dot product = mag(a) * mag(b) * cos(theta)
                         cos_angle_diffsG.append( cos_angle_diff )
                     cos_angle_diffsG = numpy.asarray( cos_angle_diffsG )
-                    
+
                     # eliminate fp rounding error:
                     cos_angle_diffsG = numpy.clip( cos_angle_diffsG, -1.0, 1.0 )
-                    
+
                     angle_diffG = numpy.arccos(cos_angle_diffsG)
                     angular_velG = angle_diffG/(2*delta_tG)
 
@@ -516,7 +519,7 @@ class CachingAnalyzer:
         finally:
             numpy.seterr(**numpyerr)
         return results
-    
+
     def get_smoothed(self,
                      obj_id,
                      data_file,#result_h5_file or .mat dictionary
@@ -529,7 +532,7 @@ class CachingAnalyzer:
         results = {}
         results['kalman_smoothed_rows'] = rows
         return results
-                        
+
     def detect_saccades(self,
                         obj_id,
                         data_file,#result_h5_file or .mat dictionary
@@ -563,18 +566,18 @@ class CachingAnalyzer:
         'frames' - array of ints, frame numbers of moment of saccade
         'times' - array of floats, seconds since beginning of trace at moment of saccade
         'X' - n by 3 array of floats, 3D position at each saccade
-        
+
         """
         rows = self.load_data( obj_id, data_file,use_kalman_smoothing=use_kalman_smoothing)
-        
+
         if method_params is None:
             method_params = {}
-            
+
         RAD2DEG = 180/numpy.pi
         DEG2RAD = 1.0/RAD2DEG
 
         results = {}
-        
+
         if method == 'position based':
             ##############
             # load data
@@ -585,7 +588,7 @@ class CachingAnalyzer:
             XA = numpy.vstack((xsA,ysA,zsA)).T
 
             time_A = (framesA - framesA[0])/frames_per_second
-            
+
             ##############
             # downsample
             skip = method_params.get('downsample',3)
@@ -593,7 +596,7 @@ class CachingAnalyzer:
             Aindex = numpy.arange(len(framesA))
             AindexB = my_decimate( Aindex, skip )
             AindexB = numpy.round(AindexB).astype(numpy.int)
-            
+
             xsB = my_decimate(xsA,skip) # time index B - downsampled by 'skip' amount
             ysB = my_decimate(ysA,skip)
             zsB = my_decimate(zsA,skip)
@@ -621,11 +624,11 @@ class CachingAnalyzer:
 ##            ydiffsC = ysB[1:]-ysB[:-1]
 ##            zdiffsC = zsB[1:]-zsB[:-1]
 ##            time_C = (time_B[1:] + time_B[:-1])*0.5
-            
+
 ##            xvelsC = xdiffsC/delta_tBC
 ##            yvelsC = ydiffsC/delta_tBC
 ##            zvelsC = zdiffsC/delta_tBC
-            
+
             horizontal_only = method_params.get('horizontal only',True)
 
             if horizontal_only:
@@ -641,7 +644,7 @@ class CachingAnalyzer:
 ##                # central difference of forward difference
 ##                dheadingD_dt = (headingsC_u[2:]-headingsC_u[:-2])/(2*delta_tBC) # index now the same as C, but starts one later
 ##                time_D = time_C[1:-1]
-                
+
 ##                # forward difference of forward difference
 ##                dheadingE_dt = (headingsC_u[1:]-headingsC_u[:-1])/(delta_tBC) # index now the same as B, but starts one later
 ##                time_E = (time_C[1:]+time_C[:-1])*0.5
@@ -649,7 +652,7 @@ class CachingAnalyzer:
                 # central difference of central difference
                 dheadingG_dt = (headingsF_u[2:]-headingsF_u[:-2])/(2*delta_tF) # index now the same as F, but starts one later
                 time_G = time_F[1:-1]
-                
+
 ##                # forward difference of central difference
 ##                dheadingH_dt = (headingsF_u[1:]-headingsF_u[:-1])/(delta_tF) # index now the same as B?, but starts one later
 ##                time_H = (time_F[1:]+time_F[:-1])*0.5
@@ -664,9 +667,9 @@ class CachingAnalyzer:
                     pylab.legend()
                     pylab.xlabel('s')
                     pylab.ylabel('deg/s')
-                
+
             else: # not horizontal only
-                
+
                 #central diff
                 velsF = numpy.vstack((xvelsF,yvelsF,zvelsF)).T
                 speedsF = numpy.sqrt(numpy.sum(velsF**2,axis=1))
@@ -680,7 +683,7 @@ class CachingAnalyzer:
                     cos_angle_diffsG.append( cos_angle_diff )
                 angle_diffG = numpy.arccos(cos_angle_diffsG)
                 angular_velG = angle_diffG/(2*delta_tG)
-                
+
 ##                vels2 = numpy.vstack((xvels2,yvels2,zvels2)).T
 ##                speeds2 = numpy.sqrt(numpy.sum(vels2**2,axis=1))
 ##                norm_vels2 = vels2 / speeds2[:,numpy.newaxis] # make norm vectors ( mag(x)=1 )
@@ -695,32 +698,32 @@ class CachingAnalyzer:
 
             ###################
             # peak detection
-            
+
             thresh_rad2 = method_params.get('threshold angular velocity (rad/s)',300*DEG2RAD)
-            
+
             if horizontal_only:
                 pos_peak_idxsG = find_peaks(dheadingG_dt,thresh_rad2)
                 neg_peak_idxsG = find_peaks(-dheadingG_dt,thresh_rad2)
-            
+
                 peak_idxsG = pos_peak_idxsG + neg_peak_idxsG
 
                 if DEBUG:
                     import pylab
                     pylab.figure()
                     pylab.plot( dheadingG_dt*RAD2DEG  )
-                    pylab.ylabel('heading angular vel (deg/s)')                    
+                    pylab.ylabel('heading angular vel (deg/s)')
                     for i in peak_idxsG:
                         pylab.axvline( i )
                     pylab.plot( peak_idxsG, dheadingG_dt[peak_idxsG]*RAD2DEG ,'k.')
             else:
                 peak_idxsG = find_peaks(angular_velG,thresh_rad2)
-                
+
             orig_idxsG = numpy.array(peak_idxsG,dtype=numpy.int)
-            
+
             ####################
             # make sure peak is at time when velocity exceed minimum threshold
             min_vel = method_params.get('minimum speed',0.04)
-            
+
             orig_idxsF = orig_idxsG+1 # convert G timebase to F
             if horizontal_only:
                 h_speedsF = numpy.sqrt(numpy.sum((numpy.vstack((xvelsF,yvelsF)).T)**2,axis=1))
@@ -728,16 +731,16 @@ class CachingAnalyzer:
             else:
                 valid_condF = speedsF[orig_idxsF] > min_vel
             valid_idxsF = orig_idxsF[valid_condF]
-            
+
             ####################
             # output parameters
-            
+
             valid_idxsA = AindexF[valid_idxsF]
             #results['indices'] = take_idxs2[valid_idxs] # this seems silly -- how could it be done?
             results['frames'] = framesA[valid_idxsA]
             results['times'] = time_F[valid_idxsF]
             results['X'] = XA[valid_idxsA]
-            
+
             if DEBUG and horizontal_only:
                 pylab.figure()
                 ax=pylab.subplot(2,1,1)
@@ -745,23 +748,23 @@ class CachingAnalyzer:
                 pylab.ylabel('heading angular vel (deg/s)')
                 for t in results['times']:
                     pylab.axvline(t)
-                    
+
                 pylab.plot(time_G[peak_idxsG],dheadingG_dt[peak_idxsG]*RAD2DEG,'ko')
-                
+
                 ax=pylab.subplot(2,1,2,sharex=ax)
                 pylab.plot( time_F, h_speedsF)
         else:
             raise ValueError('unknown saccade detection algorithm')
-        
+
         return results
 
     ###################################
     # Implementatation details below
     ###################################
-    
+
     def __init__(self):
         self.loaded_cache = {}
-        
+
     def _load_dict(self,result_h5_file):
         if isinstance(result_h5_file,str) or isinstance(result_h5_file,unicode):
             kresults = tables.openFile(result_h5_file,mode='r')
@@ -780,16 +783,16 @@ class CachingAnalyzer:
                           }
         self.loaded_cache[result_h5_file] = preloaded_dict
         return preloaded_dict
-    
+
     def close(self):
         for key,preloaded_dict in self.loaded_cache.iteritems():
             if preloaded_dict['self_should_close']:
                 preloaded_dict['kresults'].close()
                 preloaded_dict['self_should_close'] = False
-                
+
     def __del__(self):
         self.close()
-        
+
 if __name__=='__main__':
     ca = CachingAnalyzer()
     results = ca.detect_saccades(2396,'DATA20061208_181556.kalmanized.h5')
@@ -797,4 +800,4 @@ if __name__=='__main__':
     print results['times']
     print results['frames']
     print results['X']
-    
+
