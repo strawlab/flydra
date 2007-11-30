@@ -681,6 +681,7 @@ class App:
                  bg_frame_alpha=1.0/50.0,
                  main_brain_hostname = None,
                  emulation_reconstructor = None,
+                 use_mode=None,
                  debug_drop = False, # debug dropped network packets
                  ):
         if main_brain_hostname is None:
@@ -745,13 +746,15 @@ class App:
             else:
                 num_buffers = 205
             N_modes = cam_iface.get_num_modes(cam_no)
-            use_mode = 0
             for i in range(N_modes):
                 mode_string = cam_iface.get_mode_string(cam_no,i)
+                print '  mode %d: %s'%(i,mode_string)
                 if 'format7_0' in mode_string.lower():
                     # prefer format7_0
-                    use_mode = i
-                    break
+                    if use_mode is None:
+                        use_mode = i
+            if use_mode is None:
+                use_mode = 0
             print 'attempting to initialize camera with %d buffers, mode "%s"'%(
                 num_buffers,cam_iface.get_mode_string(cam_no,use_mode))
             cam = cam_iface.Camera(cam_no,num_buffers,use_mode)
@@ -1372,7 +1375,8 @@ def main():
     
     parser.add_option("--background-frame-alpha", type="float",
                       help="weight for each BG frame added to accumulator")
-    
+    parser.add_option("--mode-num", type="int", default=None,
+                      help="force a camera mode")
     (options, args) = parser.parse_args()
 
     emulation_cal=options.emulation_cal
@@ -1428,6 +1432,7 @@ def main():
             main_brain_hostname = options.server,
             emulation_reconstructor = emulation_reconstructor,
             debug_drop = options.debug_drop,
+            use_mode = options.mode_num,
             )
     if app.num_cams <= 0:
         return
