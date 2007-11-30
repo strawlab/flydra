@@ -395,11 +395,11 @@ class CoordRealReceiver(threading.Thread):
     def get_data(self):
         Q = self.out_queue
         L = []
-        L.append( Q.get() ) # wait forever for the first item
 
-        # don't wait for next items, but collect them if they're there
         try:
+            L.append( Q.get(1,.1) ) # block for 0.1 second timeout for the first item
             while 1:
+                # don't wait for next items, but collect them if they're there
                 L.append( Q.get_nowait() )
         except Queue.Empty:
             pass
@@ -407,7 +407,7 @@ class CoordRealReceiver(threading.Thread):
     
     # called from CoordRealReceiver thread
     def run(self):
-        timeout=5.0
+        timeout=.1
         empty_list = []
         BENCHMARK_2D_GATHER = False
         if BENCHMARK_2D_GATHER:
@@ -485,15 +485,19 @@ class CoordRealReceiver(threading.Thread):
                     self.out_queue.put((cam_id, data ))
 
 class CoordinateSender(threading.Thread):
-      def __init__(self,my_queue):
+      def __init__(self,my_queue,quit_event):
           self.my_queue = my_queue
+          self.quit_event = quit_event
           name = 'CoordinateSender thread'
           threading.Thread.__init__(self,name=name)
       def run(self):
           global downstream_kalman_hosts
           out_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-          while 1:
-              data_packet = self.my_queue.get()
+          while not self.quit_event.isSet():
+              try:
+                  data_packet = self.my_queue.get(1,.1)
+              except Queue.Empty:
+                  continue
               for downstream_host in downstream_kalman_hosts:
                   outgoing_UDP_socket.sendto(data_packet,downstream_host)
 
@@ -541,11 +545,11 @@ class CoordinateProcessor(threading.Thread):
         self._fake_sync_event = threading.Event()
 
         self.realreceiver = CoordRealReceiver(self.quit_event)
-        self.realreceiver.setDaemon(True)
+        #self.realreceiver.setDaemon(True)
         self.realreceiver.start()
         
-        cs = CoordinateSender(self.realtime_kalman_data_queue)
-        cs.setDaemon(True)
+        cs = CoordinateSender(self.realtime_kalman_data_queue,self.quit_event)
+        #cs.setDaemon(True)
         cs.start()
         
         name = 'CoordinateProcessor thread'
@@ -770,8 +774,9 @@ class CoordinateProcessor(threading.Thread):
         debug_drop_fd = None
         
         while not self.quit_event.isSet():
-
-            incoming_2d_data = self.realreceiver.get_data()
+            incoming_2d_data = self.realreceiver.get_data() # blocks
+            if not len(incoming_2d_data):
+                continue
 
             new_data_framenumbers.clear()
             if self._fake_sync_event.isSet():
@@ -1550,7 +1555,7 @@ class MainBrain(object):
         self.listen_thread=threading.Thread(target=remote_api.listen,
                                             name='RemoteAPI-Thread',
                                             args=(daemon,))
-        self.listen_thread.setDaemon(True) # don't let this thread keep app alive
+        #self.listen_thread.setDaemon(True) # don't let this thread keep app alive
         self.remote_api = remote_api
 
         self._new_camera_functions = []
@@ -1606,15 +1611,15 @@ class MainBrain(object):
         self.hypothesis_test_max_error = LockedValue(500.0)
 
         self.coord_processor = CoordinateProcessor(self,save_profiling_data=save_profiling_data)
-        self.coord_processor.setDaemon(True)
+        #self.coord_processor.setDaemon(True)
         self.coord_processor.start()
 
         self.trig_receiver = TrigReceiver(self)
-        self.trig_receiver.setDaemon(True)
+        #self.trig_receiver.setDaemon(True)
         self.trig_receiver.start()
 
         self.timestamp_echo_receiver = TimestampEchoReceiver(self)
-        self.timestamp_echo_receiver.setDaemon(True)
+        #self.timestamp_echo_receiver.setDaemon(True)
         self.timestamp_echo_receiver.start()
 
         self.current_kalman_obj_id = 0
