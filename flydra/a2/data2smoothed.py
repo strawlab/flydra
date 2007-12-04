@@ -2,10 +2,10 @@ if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
     tables.flavor.restrict_flavors(keep=['numpy'])
-    
+
 import numpy
 import sys, os, time
-import core_analysis
+import flydra.a2.core_analysis as core_analysis
 from optparse import OptionParser
 import flydra.analysis.flydra_analysis_convert_to_mat
 import tables
@@ -26,7 +26,7 @@ def convert(infilename,
     if save_timestamps:
         print 'STAGE 1: finding timestamps'
         print 'opening file %s...'%infilename
-        
+
         h5file_raw = tables.openFile(infilename,mode='r')
         table_kobs   = h5file_raw.root.kalman_observations # table to get framenumbers from
         kobs_2d = h5file_raw.root.kalman_observations_2d_idxs # VLArray linking two
@@ -39,13 +39,13 @@ def convert(infilename,
             close_h52d = True
 
         try:
-            table_data2d = h52d.root.data2d_distorted # table to get timestamps from
+            table_data2d = h52d.root.data2d_distorted # Table to get timestamps from. (If you don't have timestamps, use the '--no-timestamps' option.)
             drift_estimates = result_utils.drift_estimates( h52d )
             camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h52d)
         except:
             print 'Error reading from file',h52d.filename
             raise
-        
+
         hostnames = drift_estimates['hostnames']
         gain = {}; offset = {};
         for i,hostname in enumerate(hostnames):
@@ -61,12 +61,12 @@ def convert(infilename,
             if close_h52d:
                 h52d.close()
             return
-            
+
         print 'caching Kalman obj_ids...'
         obs_obj_ids = table_kobs.read(field='obj_id')
         print 'finding unique obj_ids...'
         unique_obj_ids = numpy.unique(obs_obj_ids)
-        
+
         print 'finding 2d data for each obj_id...'
         timestamp_time = numpy.zeros( unique_obj_ids.shape, dtype=numpy.float64)
         for obj_id_enum,obj_id in enumerate(unique_obj_ids):
@@ -78,14 +78,14 @@ def convert(infilename,
             framenumber = table_kobs[idx0]['frame']
             if tables.__version__ <= '1.3.3': # pytables numpy scalar workaround
                 framenumber = int(framenumber)
-                
+
             remote_timestamp = numpy.nan
             this_camn = None
             for row in table_data2d.where('frame == framenumber'):
                 this_camn = row['camn']
                 remote_timestamp = row['timestamp']
                 break
-            
+
             if this_camn is None:
                 print 'skipping frame %d (obj %d): no data2d_distorted data'%(framenumber,obj_id)
                 continue
@@ -101,11 +101,11 @@ def convert(infilename,
                 except:
                     print '** no timestamp **'
                 print
-                    
+
         h5file_raw.close()
         if close_h52d:
             h52d.close()
-            
+
         extra_vars = {'obj_ids':unique_obj_ids,
                       'timestamps':timestamp_time,
                       }
@@ -126,38 +126,41 @@ def convert(infilename,
         allrows.append(rows)
 
         #
-        
+
     allrows = numpy.concatenate( allrows )
     recarray = numpy.rec.array(allrows)
-    
+
     flydra.analysis.flydra_analysis_convert_to_mat.do_it(
         rows=recarray,
         ignore_observations=True,
         newfilename=outfilename,
         extra_vars=extra_vars,
         )
-        
+
 
 def main():
     usage = '%prog FILE [options]'
     parser = OptionParser(usage)
-    parser.add_option("--time_data", dest="file2d", type='string',
-                      help="hdf5 file with data 2d data FILE2D",
+    parser.add_option("--time-data", dest="file2d", type='string',
+                      help="hdf5 file with 2d data FILE2D used to calculate timestamp information",
                       metavar="FILE2D")
+    parser.add_option("--no-timestamps",action='store_true',dest='no_timestamps',default=False)
     (options, args) = parser.parse_args()
-    
+
     if len(args)>1:
         print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
         parser.print_help()
         return
-    
+
     if len(args)<1:
         parser.print_help()
         return
 
     infilename = args[0]
     outfilename = os.path.splitext(infilename)[0] + '_smoothed.mat'
-    convert(infilename,outfilename,file_time_data=options.file2d)
-    
+    convert(infilename,outfilename,file_time_data=options.file2d,
+            save_timestamps = not options.no_timestamps,
+            )
+
 if __name__=='__main__':
     main()
