@@ -28,10 +28,20 @@ connection from the AT90USBKEY J5 pin 7 (and thus Port C6, OCR3A, of
 the AT90USB1287). Optionally, an op-amp to provide a 5V trigger signal
 may be added (see below).
 
-The External Device Trigger is the top left BNC on the
+External Device Trigger 1 is the top left BNC on the
 device. Internally, this is a direct connection from the AT90USBKEY J5
-pin 4 (and thus Port C3 of the AT90USB1287). Optionally, an op-amp to
+pin 9 (and thus Port C1 of the AT90USB1287). Optionally, an op-amp to
 provide a 5V trigger signal may be added (see below).
+
+External Device Trigger 2: Internally, this is a direct connection
+from the AT90USBKEY J5 pin 8 (and thus Port C2 of the
+AT90USB1287). Optionally, an op-amp to provide a 5V trigger signal may
+be added (see below).
+
+External Device Trigger 3: Internally, this is a direct connection
+from the AT90USBKEY J5 pin 7 (and thus Port C3 of the
+AT90USB1287). Optionally, an op-amp to provide a 5V trigger signal may
+be added (see below).
 
 = Optional 5V outputs =
 
