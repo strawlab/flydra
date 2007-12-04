@@ -14,24 +14,6 @@ from optparse import OptionParser
 import flydra.reconstruct
 import flydra.analysis.result_utils as result_utils
 
-"""
-
-The basic idea is to watch some trajectories with::
-
-  kdviewer <DATAfilename.h5> --n-top-traces=10
-
-Find the top traces, reject any bad ones, and put them in an "efile".
-
-The form of the efile is::
-  
-  long_ids = [1,2,3,4]
-
-Then run this program::
-
-  flydra_analysis_generate_recalibration <DATAfilename.h5> <efile>
-  
-"""
-
 def save_ascii_matrix(thefile,m):
     if hasattr(thefile,'write'):
         fd=thefile
@@ -53,7 +35,7 @@ def do_it(filename,
     mylocals = {}
     myglobals = {}
     execfile(efilename,myglobals,mylocals)
-    
+
     use_obj_ids = mylocals['long_ids']
     if 'bad' in mylocals:
         use_obj_ids = sets.Set(use_obj_ids)
@@ -62,19 +44,19 @@ def do_it(filename,
 
     results = result_utils.get_results(filename,mode='r+')
     reconstructor = flydra.reconstruct.Reconstructor(results)
-    
+
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(results)
-    
+
     cam_ids = cam_id2camns.keys()
     cam_ids.sort()
-    
+
     kobs = results.root.kalman_observations
 
     data2d = results.root.data2d_distorted
     #use_idxs = numpy.arange(data2d.nrows)
     frames = data2d.cols.frame[:]
     qfi = result_utils.QuickFrameIndexer(frames)
-    
+
     kobs_2d = results.root.kalman_observations_2d_idxs
 
     IdMat = []
@@ -93,7 +75,7 @@ def do_it(filename,
         npoints_by_cam_id = {}
         for cam_id in cam_ids:
             npoints_by_cam_id[cam_id] = 0
-        
+
         for n_kframe, (kframe, obs_2d_idx) in enumerate(zip(kframes_use,obs_2d_idxs_use)):
             #print
             print 'kframe %d (%d of %d)'%(kframe,n_kframe,len(kframes_use))
@@ -131,7 +113,7 @@ def do_it(filename,
                 this_use_idxs = data2d.getWhereList( 'frame==kframe_find')
             #sys.stdout.write('done\n')
             #sys.stdout.flush()
-            
+
             if PT.__version__ <= '1.3.3':
                 this_use_idxs = [int(t) for t in this_use_idxs]
 
@@ -152,7 +134,7 @@ def do_it(filename,
                     if camn2cam_id[this_camn] != cam_id:
                         continue
                     npoints_by_cam_id[cam_id] = npoints_by_cam_id[cam_id] + 1
-                    
+
                     this_camn_d2d = d2d[d2d['camn'] == this_camn]
                     #print '    this_camn_d2d',this_camn_d2d
                     for this_row in this_camn_d2d: # XXX could be sped up
@@ -181,48 +163,67 @@ def do_it(filename,
 
     cam_centers = numpy.asarray([reconstructor.get_camera_center(cam_id)[:,0]
                                  for cam_id in cam_ids])
-    
+
     fd = open(os.path.join(calib_dir,'calibration_units.txt'),mode='w')
     fd.write(reconstructor.get_calibration_unit()+'\n')
     fd.close()
-    
+
     results.close()
 
     save_ascii_matrix(os.path.join(calib_dir,'original_cam_centers.dat'),cam_centers)
     save_ascii_matrix(os.path.join(calib_dir,'IdMat.dat'),IdMat)
     save_ascii_matrix(os.path.join(calib_dir,'points.dat'),points)
     save_ascii_matrix(os.path.join(calib_dir,'Res.dat'),Res)
-    
+
     fd = open(os.path.join(calib_dir,'camera_order.txt'),'w')
     for cam_id in cam_ids:
         fd.write('%s\n'%cam_id)
     fd.close()
-    
-    
+
+
     for cam_id in cam_ids:
         print 'cam_id %s: %d points'%(cam_id,npoints_by_cam_id[cam_id])
-    
+
 def main():
     usage = '%prog FILE EFILE [options]'
-    
+
+    usage +="""
+
+The basic idea is to watch some trajectories with::
+
+  kdviewer <DATAfilename.h5> --n-top-traces=10
+
+Find the top traces, reject any bad ones, and put them in an "efile".
+
+The form of the efile is::
+
+  long_ids = [1,2,3,4]
+
+Then run this program::
+
+  flydra_analysis_generate_recalibration <DATAfilename.h5> <efile> [options]
+
+"""
+
+
     parser = OptionParser(usage)
-    
+
     parser.add_option('--use-nth-observation', type='int',
                       dest='use_nth_observation', default=40)
-    
+
     (options, args) = parser.parse_args()
     print options
     print dir(options)
-    
+
     if len(args)>2:
         print >> sys.stderr,  "arguments interpreted as FILE and EFILE supplied more than once"
         parser.print_help()
         return
-    
+
     if len(args)<2:
         parser.print_help()
         return
-    
+
 
     h5_filename=args[0]
     efilename = args[1]
