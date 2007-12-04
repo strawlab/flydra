@@ -3,6 +3,8 @@ import numpy
 import tables as PT
 import scipy.io
 import sys
+import tables.flavor
+tables.flavor.restrict_flavors(keep=['numpy'])
 
 def main():
     filename = sys.argv[1]
@@ -17,7 +19,7 @@ def do_it(filename=None,
 
     if filename is None and rows is None:
         raise ValueError("either filename or rows must be set")
-    
+
     if filename is not None and rows is not None:
         raise ValueError("either filename or rows must be set, but not both")
 
@@ -27,9 +29,9 @@ def do_it(filename=None,
     if filename is not None:
         kresults = PT.openFile(filename,mode="r")
         print 'reading files...'
-        table1 = kresults.root.kalman_estimates.read(flavor='numpy')
+        table1 = kresults.root.kalman_estimates.read()
         if not ignore_observations:
-            table2 = kresults.root.kalman_observations.read(flavor='numpy')
+            table2 = kresults.root.kalman_observations.read()
         print 'done.'
         kresults.close()
         del kresults
@@ -40,14 +42,14 @@ def do_it(filename=None,
             raise ValueError("no observations can be saved in rows mode")
 
     if not ignore_observations:
-        obj_ids = table1.field('obj_id')
+        obj_ids = table1['obj_id']
         obj_ids = numpy.unique(obj_ids)
 
         obs_cond = None
         k_cond = None
 
         for obj_id in obj_ids:
-            this_obs_cond = table2.field('obj_id') == obj_id
+            this_obs_cond = table2['obj_id'] == obj_id
             n_observations = numpy.sum(this_obs_cond)
             if n_observations > min_num_observations:
                 if obs_cond is None:
@@ -55,12 +57,12 @@ def do_it(filename=None,
                 else:
                     obs_cond = obs_cond | this_obs_cond
 
-                this_k_cond = table1.field('obj_id') == obj_id
+                this_k_cond = table1['obj_id'] == obj_id
                 if k_cond is None:
                     k_cond = this_k_cond
                 else:
                     k_cond = k_cond | this_k_cond
-                    
+
         table1 = table1[k_cond]
         table2 = table2[obs_cond]
 
@@ -69,25 +71,25 @@ def do_it(filename=None,
     else:
         if newfilename is None:
             newfilename = filename + '.mat'
-    
-    data = dict( kalman_obj_id = table1.field('obj_id'),
-                 kalman_frame = table1.field('frame'),
-                 kalman_x = table1.field('x'),
-                 kalman_y = table1.field('y'),
-                 kalman_z = table1.field('z'),
-                 kalman_xvel = table1.field('xvel'),
-                 kalman_yvel = table1.field('yvel'),
-                 kalman_zvel = table1.field('zvel'),
-                 kalman_xaccel = table1.field('xaccel'),
-                 kalman_yaccel = table1.field('yaccel'),
-                 kalman_zaccel = table1.field('zaccel'))
+
+    data = dict( kalman_obj_id = table1['obj_id'],
+                 kalman_frame = table1['frame'],
+                 kalman_x = table1['x'],
+                 kalman_y = table1['y'],
+                 kalman_z = table1['z'],
+                 kalman_xvel = table1['xvel'],
+                 kalman_yvel = table1['yvel'],
+                 kalman_zvel = table1['zvel'],
+                 kalman_xaccel = table1['xaccel'],
+                 kalman_yaccel = table1['yaccel'],
+                 kalman_zaccel = table1['zaccel'])
     if not ignore_observations:
         extra = dict(
-            observation_obj_id = table2.field('obj_id'),
-            observation_frame = table2.field('frame'),
-            observation_x = table2.field('x'),
-            observation_y = table2.field('y'),
-            observation_z = table2.field('z') )
+            observation_obj_id = table2['obj_id'],
+            observation_frame = table2['frame'],
+            observation_x = table2['x'],
+            observation_y = table2['y'],
+            observation_z = table2['z'] )
         data.update(extra)
 
     if 0:
@@ -104,3 +106,7 @@ def do_it(filename=None,
         data[key] = value
 
     scipy.io.mio.savemat(newfilename,data)
+
+if __name__=='__main__':
+    print "WARNING: are you sure you want to run this program and not 'data2smoothed'?"
+    main()
