@@ -1,6 +1,6 @@
 import tables as PT
-print 'using pytables',PT.__version__
-print '  from',PT.__file__
+import tables.flavor
+tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy as nx
 import numpy
 import sys, os, sets
@@ -15,12 +15,12 @@ import pytz # from http://pytz.sourceforge.net/
 def status(status_string):
     print " status:",status_string
     sys.stdout.flush()
-    
+
 def get_camn(results, cam, remote_timestamp=None, frame=None):
     """helper function to get camn given timestamp or frame number
 
     last used 2006-05-17
-    
+
     """
     if not isinstance(cam,str):
         camn = cam
@@ -78,7 +78,7 @@ def get_camn_and_frame(results, cam, remote_timestamp):
     last used 2006-06-06
     """
     camn = get_camn(results, cam, remote_timestamp=remote_timestamp)
-    frame = get_frame_from_camn_and_timestamp(results, camn, remote_timestamp)        
+    frame = get_frame_from_camn_and_timestamp(results, camn, remote_timestamp)
     return camn, frame
 
 def get_camn_and_remote_timestamp(results, cam, frame):
@@ -116,7 +116,7 @@ def get_caminfo_dicts(results):
     cam_info = results.root.cam_info
     cam_id2camns = {}
     camn2cam_id = {}
-    
+
     for row in cam_info:
         cam_id, camn = row['cam_id'], row['camn']
         cam_id = cam_id.strip() # workaround pytables 1.3 save bug
@@ -132,7 +132,7 @@ def get_results(filename,mode='r+'):
             print 'creating index on data3d_best.cols.frame ...'
             frame_col.createIndex()
             print 'done'
-        
+
     if False and hasattr(h5file.root,'data2d'):
         frame_col = h5file.root.data2d.cols.frame
         if frame_col.index is None:
@@ -181,7 +181,7 @@ def get_f_xyz_L_err( results, max_err = 10, typ = 'best', include_timestamps=Fal
     (f,X,L,err)
     if include_timestamps is True:
     (f,X,L,err,timestamps)
-    
+
     where:
     f is frame numbers
     X is 3D position coordinates
@@ -256,7 +256,7 @@ def get_f_xyz_L_err( results, max_err = 10, typ = 'best', include_timestamps=Fal
         good_idx.sort()
     else:
         good_idx = nx.argsort(f)
-        
+
     f = nx.take(f,good_idx,axis=0)
     xyz = nx.take(xyz,good_idx,axis=0)
     L = nx.take(L,good_idx,axis=0)
@@ -284,7 +284,7 @@ def create_data2d_camera_summary(results):
         stop_frame         = PT.Int32Col(pos=3)
         start_timestamp    = PT.FloatCol(pos=4)
         stop_timestamp     = PT.FloatCol(pos=5)
-    
+
     data2d = results.root.data2d_distorted # make sure we have 2d data table
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
     table = results.createTable( results.root, 'data2d_camera_summary',
@@ -341,10 +341,10 @@ class TimeModel:
         return (mainbain_timestamp-self.offset)/self.gain
     def framestamp2timestamp(self, framestamp ):
         return framestamp*self.gain + self.offset
-    
+
 def get_time_model_from_data(results,debug=False,full_output=False):
     # get the timer top value
-    
+
     textlog = results.root.textlog.readCoordinates([0])
     infostr = textlog['message'].tostring().strip('\x00')
     timer_max = int( textlog['message'].tostring().strip('\x00').split()[-1][:-1] )
@@ -352,7 +352,7 @@ def get_time_model_from_data(results,debug=False,full_output=False):
         print 'I found the timer maximum ("top") to be %d. I parsed this from "%s"'%(timer_max,infostr)
 
     # open the log of at90usb clock info
-    
+
     tci = results.root.trigger_clock_info
     tbl = tci.read()
 
@@ -368,7 +368,7 @@ def get_time_model_from_data(results,debug=False,full_output=False):
 
     # approximate timestamp (assume symmetric delays) at which clock was sampled
     mb_timestamp = ((tbl['start_timestamp'][cond] + tbl['stop_timestamp'][cond])/2.0)
-    
+
     # get framenumber + fraction of next frame at which mb_timestamp estimated to happen
     framenumber = tbl['framecount'][cond]
     frac = tbl['tcnt'][cond]/float(timer_max)
@@ -399,7 +399,7 @@ def drift_estimates(results):
     del remote_hostnames
 
     result = {}
-    
+
     for hostname in hostnames:
         row_idx = table.getWhereList('remote_hostname == hostname')
         assert len(row_idx)>0
@@ -414,15 +414,15 @@ def drift_estimates(results):
         local_timestamp = start_timestamp + measurement_error*0.5
 
         short_hostname = hostname.strip() # deal with old pytables bug resulting in corrupt files
-        
+
         result.setdefault('hostnames',[]).append(short_hostname)
         result.setdefault('local_timestamp',{})[short_hostname] = local_timestamp
         result.setdefault('remote_timestamp',{})[short_hostname] = remote_timestamp
         result.setdefault('measurement_error',{})[short_hostname] = measurement_error
     return result
-        
+
 def make_exact_movie_info2(results,movie_dir=None):
-    
+
     class ExactMovieInfo(PT.IsDescription):
         cam_id             = PT.StringCol(16,pos=0)
         filename           = PT.StringCol(255,pos=1)
@@ -430,9 +430,9 @@ def make_exact_movie_info2(results,movie_dir=None):
         stop_frame         = PT.Int32Col(pos=3)
         start_timestamp    = PT.FloatCol(pos=4)
         stop_timestamp     = PT.FloatCol(pos=5)
-    
+
     status('making exact movie info')
-    
+
     movie_info = results.root.movie_info
     data2d = results.root.data2d_distorted
     cam_info = results.root.cam_info
@@ -443,7 +443,7 @@ def make_exact_movie_info2(results,movie_dir=None):
         camn2cam_id[camn]=cam_id
 
     exact_movie_info = results.createTable(results.root,'exact_movie_info',ExactMovieInfo,'')
-    
+
     for row in movie_info:
         cam_id = row['cam_id']
         filename = row['filename']
@@ -487,7 +487,7 @@ def make_exact_movie_info2(results,movie_dir=None):
             stop_frame = max(camn_frame_list)
         else:
             stop_frame = camn_stop_frame_list[0]
-            
+
         exact_movie_info.row['cam_id']=cam_id
         exact_movie_info.row['filename']=filename
         exact_movie_info.row['start_frame']=start_frame
