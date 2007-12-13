@@ -64,10 +64,14 @@ def do_it(filename,
 
     kobs_2d = results.root.kalman_observations_2d_idxs
 
+    npoints_by_cam_id = {}
+    for cam_id in cam_ids:
+        npoints_by_cam_id[cam_id] = 0
+
     IdMat = []
     points = []
-    for obj_id in use_obj_ids:
-        print 'obj_id',obj_id
+    for obj_id_enum, obj_id in enumerate(use_obj_ids):
+        print 'obj_id %d (%d of %d)'%(obj_id, obj_id_enum+1, len(use_obj_ids))
         this_obj_id = obj_id
         k_use_idxs = kobs.getWhereList(
             'obj_id==this_obj_id')
@@ -77,13 +81,10 @@ def do_it(filename,
                                         field='frame')
         kframes_use = kframes[::use_nth_observation]
         obs_2d_idxs_use = obs_2d_idxs[::use_nth_observation]
-        npoints_by_cam_id = {}
-        for cam_id in cam_ids:
-            npoints_by_cam_id[cam_id] = 0
 
         for n_kframe, (kframe, obs_2d_idx) in enumerate(zip(kframes_use,obs_2d_idxs_use)):
             #print
-            print 'kframe %d (%d of %d)'%(kframe,n_kframe,len(kframes_use))
+            print 'kframe %d (%d of %d)'%(kframe,n_kframe+1,len(kframes_use))
             if 0:
                 k_use_idx = k_use_idxs[n_kframe*use_nth_observation]
                 print kobs.readCoordinates( numpy.array([k_use_idx]))
@@ -157,6 +158,11 @@ def do_it(filename,
             #print 'points_row',points_row
             IdMat.append( IdMat_row )
             points.append( points_row )
+        print 'running total of points','-'*20
+        for cam_id in cam_ids:
+            print 'cam_id %s: %d points'%(cam_id,npoints_by_cam_id[cam_id])
+        print
+
     IdMat = numpy.array(IdMat,dtype=numpy.uint8).T
     points = numpy.array(points,dtype=numpy.float32).T
 
@@ -185,10 +191,6 @@ def do_it(filename,
     for cam_id in cam_ids:
         fd.write('%s\n'%cam_id)
     fd.close()
-
-
-    for cam_id in cam_ids:
-        print 'cam_id %s: %d points'%(cam_id,npoints_by_cam_id[cam_id])
 
 def main():
     usage = '%prog FILE EFILE [options]'
