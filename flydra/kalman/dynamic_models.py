@@ -6,7 +6,7 @@ def get_dynamic_model_dict():
     os = 3 # length of observation vector (observation size)
 
     dynamic_models = {}
-    
+
     # 'hbird2, units: mm':
     # process covariance
     Q = numpy.zeros((ss,ss))
@@ -55,7 +55,7 @@ def get_dynamic_model_dict():
         Q=Q,
         R=R)
     ######################################
-    
+
     # 'fly dynamics, high precision calibration, units: mm':
     # process covariance
     Q = numpy.zeros((ss,ss))
@@ -73,7 +73,7 @@ def get_dynamic_model_dict():
         initial_acceleration_covariance_estimate=15,
         Q=Q,
         R=R)
-    
+
     # 'fly dynamics, low precision calibration, units: mm':
     # process covariance
     Q = numpy.zeros((ss,ss))
@@ -86,12 +86,12 @@ def get_dynamic_model_dict():
     dynamic_models['fly dynamics, low precision calibration, units: mm'] = dict(
         scale_factor=1e-3,
         n_sigma_accept=3.0,
-        max_variance_dist_meters=1e-4, # allow error to grow to 10 mm before dropping
+        max_variance_dist_meters=1e-3,
         initial_position_covariance_estimate=1e-4, #10mm ( (1e-2)**2 meters)
         initial_acceleration_covariance_estimate=15,
         Q=Q,
         R=R)
-            
+
     # 'hummingbird dynamics, units: mm'
 
     # process covariance
