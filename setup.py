@@ -30,15 +30,16 @@ setup(name='flydra',
     'flydra_camera_node = flydra.flydra_camera_node:main',
     'flydra_bench = flydra.flydra_bench:main',
     'flydra_kalmanize = flydra.kalman.kalmanize:main',
-    
+
     'flydra_analysis_convert_to_mat = flydra.analysis.flydra_analysis_convert_to_mat:main',
+    'flydra_analysis_filter_kalman_data = flydra.analysis.flydra_analysis_filter_kalman_data:main',
     'flydra_analysis_generate_recalibration = flydra.analysis.flydra_analysis_generate_recalibration:main',
     'flydra_analysis_plot_clock_drift = flydra.analysis.flydra_analysis_plot_clock_drift:main',
     'flydra_analysis_plot_cameras = flydra.analysis.flydra_analysis_plot_cameras:main',
     'flydra_analysis_plot_kalman_data = flydra.analysis.flydra_analysis_plot_kalman_data:main',
     'flydra_analysis_plot_kalman_2d = flydra.analysis.flydra_analysis_plot_kalman_2d:main',
     'flydra_analysis_print_camera_summary = flydra.analysis.flydra_analysis_print_camera_summary:main',
-    
+
     'flydra_trigger_enter_dfu_mode = flydra.trigger:enter_dfu_mode',
     'flydra_trigger_check_device = flydra.trigger:check_device',
     'flydra_trigger_set_frequency = flydra.trigger:set_frequency',
@@ -59,6 +60,8 @@ setup(name='flydra',
                               'detect.wav',
                               'sample_calibration/*',
                               ],
-                    'flydra.a2':['kdmovie_saver_default_path.kmp'],
+                    'flydra.a2':['kdmovie_saver_default_path.kmp',
+                                 'sample_kalman_trajectories.h5',
+                                 ],
                     },
       )

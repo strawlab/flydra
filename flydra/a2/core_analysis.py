@@ -16,6 +16,9 @@ import flydra.analysis.result_utils
 # global
 printed_dynamics_name = False
 
+class NoObjectIDError(Exception):
+    pass
+
 def find_peaks(y,threshold,search_cond=None):
     """find local maxima above threshold in data y
 
@@ -124,7 +127,8 @@ def kalman_smooth(orig_rows):
 
     obs_frames = orig_rows['frame']
 
-    fstart, fend = obs_frames[0], obs_frames[-1]
+    fstart = obs_frames.min()
+    fend = obs_frames.max()
     assert fstart < fend
     frames = numpy.arange(fstart,fend+1)
     idx = frames.searchsorted(obs_frames)
@@ -186,7 +190,8 @@ def observations2smoothed(obj_id,orig_rows):
                   Psmooth[:,6,6],Psmooth[:,7,7],Psmooth[:,8,8],
                   ]
     timestamps = numpy.zeros( (len(frames),))
-    list_of_cols = [obj_id_array,frames,timestamps]+list_of_xhats+list_of_Ps
+    obj_id_array2 = obj_id_array.filled( numpy.iinfo(obj_id_array.dtype).max ) # set unknown obj_id to maximum value (=mask value)
+    list_of_cols = [obj_id_array2,frames,timestamps]+list_of_xhats+list_of_Ps
     assert len(list_of_cols)==len(field_names) # double check that definition didn't change on us
     rows = numpy.rec.fromarrays(list_of_cols,
                                 names = field_names)
@@ -257,6 +262,15 @@ class LazyRecArrayMimic:
 class CachingAnalyzer:
     def load_data(self,obj_id,data_file,use_kalman_smoothing=True,
                   frames_per_second=100.0):
+        """
+
+        If use_kalman_smoothing is True, the data are passed through a
+        Kalman smoother. If not, the data are directly loaded from the
+        file. Typically, this means that the forward-filtered data
+        saved in realtime are returned. However, if the data file has
+        already been smoothed, this will also result in smoothing.
+
+        """
         if isinstance(data_file,str):
             if data_file.endswith('_smoothed.mat'):
                 data_file = scipy.io.loadmat(data_file)
@@ -312,6 +326,8 @@ class CachingAnalyzer:
                 orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs)
                 rows = observations2smoothed(obj_id,orig_rows)  # do Kalman smoothing
 
+        if not len(rows):
+            raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
         return rows
 
     def get_raw_positions(self,
