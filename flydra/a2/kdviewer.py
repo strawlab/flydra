@@ -29,7 +29,7 @@ def print_cam_props(camera):
     print 'camera.view_up = ',camera.view_up
     print 'camera.clipping_range = ',camera.clipping_range
     print 'camera.parallel_scale = ',camera.parallel_scale
-    
+
 def doit(filename,
          show_obj_ids=False,
          obj_start=None,
@@ -56,12 +56,12 @@ def doit(filename,
         mat_data = scipy.io.mio.loadmat(filename)
     except IOError, err:
         mat_data = None
-        
+
     if mat_data is not None:
         obj_ids = mat_data['kalman_obj_id']
         obj_ids = obj_ids.astype( numpy.uint32 )
         print 'max obj_id',numpy.amax(obj_ids)
-    
+
         obs_obj_ids = obj_ids # use as observation length, even though these aren't observations
         use_obj_ids = numpy.unique(obj_ids)
         is_mat_file = True
@@ -70,21 +70,23 @@ def doit(filename,
         obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id')
         my_obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
         use_obj_ids = numpy.unique(obs_obj_ids)
+        if not len(use_obj_ids):
+            raise ValueError('no trajectories in file!')
         print 'max obj_id',numpy.amax(use_obj_ids)
         is_mat_file = False
-    
+
     if show_n_longest is not None:
         if ((obj_start is not None) or
             (obj_end is not None) or
             (obj_only is not None)):
             raise ValueError("show_n_longest incompatible with other limiters")
-        
+
         if is_mat_file:
             frames = mat_data['kalman_frame']
             if exclude_vel_mps is not None:
-                x = mat_data['x']            
-                y = mat_data['y']            
-                z = mat_data['z']            
+                x = mat_data['x']
+                y = mat_data['y']
+                z = mat_data['z']
         else:
             frames = kresults.root.kalman_observations.read(field='frame')
             if exclude_vel_mps is not None:
@@ -137,14 +139,14 @@ def doit(filename,
 
     #################
     rw = tvtk.RenderWindow(size=(1024, 768))
-    
+
     if show_obj_ids:
         # Because I can't get black text right now (despite trying),
         # make background blue to see white text. - ADS
         ren = tvtk.Renderer(background=(0.6,0.6,1.0)) # blue
     else:
         ren = tvtk.Renderer(background=(1.0,1.0,1.0)) # white
-        
+
     camera = ren.active_camera
 
     if 0:
@@ -163,24 +165,24 @@ def doit(filename,
         camera.view_up =  (0.025460553314687551, 0.37610935779812088, 0.92622541057865326)
         camera.clipping_range =  (0.38425211041324286, 1.3299558503823485)
         camera.parallel_scale =  0.294595461395
-        
+
     rw.add_renderer(ren)
     rwi = tvtk.RenderWindowInteractor(render_window=rw,
                                       interactor_style = tvtk.InteractorStyleTrackballCamera())
-    
+
     lut = tvtk.LookupTable(hue_range = (0.667, 0.0))
     actors = []
     actor2obj_id = {}
     #################
-    
+
     if show_only_track_ends:
         track_end_verts = []
-    
+
     ca = core_analysis.CachingAnalyzer()
     #last_time = None
     if not len(use_obj_ids):
         raise ValueError('no trajectories to plot')
-        
+
     for obj_id_enum,obj_id in enumerate(use_obj_ids):
         if (obj_id_enum%100)==0 and len(use_obj_ids) > 5:
             print 'obj_id %d of %d'%(obj_id_enum,len(use_obj_ids))
@@ -204,7 +206,7 @@ def doit(filename,
                 my_rows['frame'][-1]-my_rows['frame'][0],
                 (my_rows['frame'][-1]-my_rows['frame'][0])/fps,
                 fps)
-            
+
         if show_observations:
             obs_idx = numpy.nonzero(obs_obj_ids==obj_id)[0]
             obs_rows = kresults.root.kalman_observations.readCoordinates(obs_idx)
@@ -259,16 +261,16 @@ def doit(filename,
         else:
             rows=ca.load_data(obj_id,
                               data_file)
-            
+
             x0 = rows.field('x')[0]
             x1 = rows.field('x')[-1]
-            
+
             y0 = rows.field('y')[0]
             y1 = rows.field('y')[-1]
-            
+
             z0 = rows.field('z')[0]
             z1 = rows.field('z')[-1]
-            
+
             track_end_verts.append( (x0,y0,z0) )
             track_end_verts.append( (x1,y1,z1) )
 
@@ -277,8 +279,8 @@ def doit(filename,
             slicer = slice(1350,1600)
             verts = verts[slicer]
             speeds = speeds[slicer]
-        
-        
+
+
         if show_saccades:
             saccades = ca.detect_saccades(obj_id,
                                           data_file,
@@ -292,7 +294,7 @@ def doit(filename,
             saccade_verts = saccades['X']
             saccade_times = saccades['times']
 
-        
+
         #################
 
         if not show_only_track_ends:
@@ -339,10 +341,10 @@ def doit(filename,
             obj_id_ta.position_coordinate.value = tuple(verts[0])
             actors.append(obj_id_ta)
             actor2obj_id[a] = obj_id
-            
+
 
         ##################
-    
+
         if show_saccades:
             pd = tvtk.PolyData()
             pd.points = saccade_verts
@@ -375,7 +377,7 @@ def doit(filename,
 
     if not is_mat_file:
         kresults.close()
-    
+
     ################################
 
     if draw_stim_func_str:
@@ -391,9 +393,9 @@ def doit(filename,
         stim_actors = draw_stim_func(filename=filename)
         actors.extend( stim_actors )
         print '*'*80,'drew with custom code'
-    
+
     ################################
-    
+
     if 0:
         a=tvtk.AxesActor(normalized_tip_length=(0.4, 0.4, 0.4),
                          normalized_shaft_length=(0.6, 0.6, 0.6),
@@ -412,7 +414,7 @@ def doit(filename,
             showverts = verts[cond]
         else:
             showverts = verts
-            
+
         pd.points = showverts
 
         g = tvtk.Glyph3D(scale_mode='data_scaling_off',
@@ -429,42 +431,42 @@ def doit(filename,
         a.property.color = (1,0,0) # red
         a.property.opacity = 0.3
         actors.append(a)
-            
+
     for a in actors:
         ren.add_actor(a)
-        
+
     if 0:
         # this isn't working yet
         axes2 = tvtk.CubeAxesActor2D()
         axes2.camera = ren.active_camera
         #axes2.input = verts
         ren.add_actor(axes2)
-        
+
     if not show_only_track_ends:
         # Create a scalar bar
         if vertical_scale:
             scalar_bar = tvtk.ScalarBarActor(orientation='vertical',
                                              width=0.08, height=0.4)
-        else: 
+        else:
             scalar_bar = tvtk.ScalarBarActor(orientation='horizontal',
                                              width=0.4, height=0.08)
         scalar_bar.title = "Speed (m/s)"
         scalar_bar.lookup_table = vel_mapper.lookup_table
-        
+
         scalar_bar.property.color = 0.0, 0.0, 0.0 # black
 
         scalar_bar.title_text_property.color = 0.0, 0.0, 0.0
         scalar_bar.title_text_property.shadow = False
-        
+
         scalar_bar.label_text_property.color = 0.0, 0.0, 0.0
         scalar_bar.label_text_property.shadow = False
-        
+
  	scalar_bar.position_coordinate.coordinate_system = 'normalized_viewport'
         if vertical_scale:
             scalar_bar.position_coordinate.value = 0.01, 0.01, 0.0
         else:
             scalar_bar.position_coordinate.value = 0.1, 0.01, 0.0
-        
+
         if 1:
             # Use the ScalarBarWidget so we can drag the scalar bar around.
             sc_bar_widget = tvtk.ScalarBarWidget(interactor=rwi,
@@ -534,12 +536,12 @@ def doit(filename,
         fname = 'kdviewer_output.png'
         writer.file_name = fname
         writer.write()
-        
+
 def main():
     usage = '%prog FILE [options]'
-    
+
     parser = OptionParser(usage)
-    
+
     parser.add_option("-f", "--file", dest="filename", type='string',
                       help="hdf5 file with data to display FILE",
                       metavar="FILE")
@@ -547,46 +549,46 @@ def main():
 ##    parser.add_option("--debug", type="int",
 ##                      help="debug level",
 ##                      metavar="DEBUG")
-        
+
     parser.add_option("--start", type="int",
                       help="first object ID to plot",
                       metavar="START")
-        
+
     parser.add_option("--stop", type="int",
                       help="last object ID to plot",
                       metavar="STOP")
 
     parser.add_option("--obj-only", type="string",
                       dest="obj_only")
-    
+
     parser.add_option("--draw-stim",
                       type="string",
                       dest="draw_stim_func_str",
                       default="flydra.a2.conditions_draw:draw_default_stim",
                       )
-    
+
     parser.add_option("--n-top-traces", type="int",
                       help="show N longest traces")
-    
+
     parser.add_option("--min-length", dest="min_length", type="int",
                       help="minimum number of tracked points (not observations!) required to plot",
                       default=10,)
-    
+
     parser.add_option("--radius", type="float",
                       help="radius of line (in meters)",
                       default=0.002,
                       metavar="RADIUS")
-    
+
     parser.add_option("--max-vel", type="float",
                       help="maximum velocity of colormap",
                       dest='max_vel',
                       default=0.25)
-    
+
     parser.add_option("--exclude-vel", type="float",
                       help="exclude traces with mean velocity less than this value",
                       dest='exclude_vel_mps',
                       default=None)
-    
+
     parser.add_option("--show-obj-ids", action='store_true',dest='show_obj_ids',
                       help="show object ID numbers at start of trajectory")
 
@@ -615,18 +617,18 @@ def main():
 
     if options.filename is not None:
         args.append(options.filename)
-        
+
     if len(args)>1:
         print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
         parser.print_help()
         return
-    
+
     if len(args)<1:
         parser.print_help()
         return
-        
+
     h5_filename=args[0]
-    
+
     if options.obj_only is not None:
         options.obj_only = options.obj_only.replace(',',' ')
         seq = map(int,options.obj_only.split())
@@ -655,7 +657,7 @@ def main():
          save_still = options.save_still,
          exclude_vel_mps = options.exclude_vel_mps,
          )
-    
+
 if __name__=='__main__':
     main()
 
