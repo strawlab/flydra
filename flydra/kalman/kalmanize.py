@@ -5,13 +5,15 @@ import flydra.reconstruct_utils as ru
 #import flydra.geom as geom
 import flydra.fastgeom as geom
 import time, math
-from flydra.analysis.result_utils import get_results, get_caminfo_dicts
+from flydra.analysis.result_utils import get_results, get_caminfo_dicts, \
+     get_resolution
 import tables as PT
 import os, sys, pprint
 from flydra_tracker import Tracker
 import flydra_kalman_utils
 from optparse import OptionParser
 import dynamic_models
+import flydra.save_calibration_data as save_calibration_data
 
 assert params.A_model_name == 'fixed_accel'
 
@@ -19,8 +21,18 @@ KalmanEstimates = flydra_kalman_utils.KalmanEstimates
 FilteredObservations = flydra_kalman_utils.FilteredObservations
 convert_format = flydra_kalman_utils.convert_format
 
+class FakeThreadingEvent:
+    def __init__(self):
+        self._set = False
+    def set(self):
+        self._set = True
+    def isSet(self):
+        return self._set
+    def clear(self):
+        self._set = False
+
 def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
-                  max_err=500.0, debug=False):
+                  max_err=500.0, debug=0):
     tracker.gobble_2d_data_and_calculate_a_posteri_estimates(frame,frame_data,camn2cam_id,debug2=debug)
 
     # Now, tracked objects have been updated (and their 2D data points
@@ -28,7 +40,7 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
     # "hypothesis testing" algorithm on remaining data to see if there
     # are new objects.
 
-    if debug:
+    if debug>1:
         print 'for frame %d: data not gobbled:'%(frame,)
         pprint.pprint(frame_data)
         print
@@ -37,10 +49,10 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
     found_data_dict,first_idx_by_camn = convert_format(frame_data,camn2cam_id)
     # test to short-circuit rest of function
     if len(found_data_dict) >= 2:
-        
+
         # Can only do 3D math with at least 2 cameras giving good
         # data.
-        
+
         (this_observation_mm, line3d, cam_ids_used,
          min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
             reconst_orig_units,
@@ -64,7 +76,7 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
                 if cam_id in cam_id2camn:
                     print '*'*80
                     print """
-                
+
 ERROR: It appears that you have >1 camn for a cam_id at a certain
 frame. This almost certainly means that you are using a data file
 recorded with an older version of flydra.MainBrain and that the
@@ -125,7 +137,17 @@ option to this program.
         print '-'*80
 
 class KalmanSaver:
-    def __init__(self,dest_filename,reconst_orig_units):
+    def __init__(self,dest_filename,reconst_orig_units,save_cal_dir=None,cam_id2camns=None):
+
+        self.cam_id2camns = cam_id2camns
+
+        if save_cal_dir is not None:
+            assert cam_id2camns is not None
+            if os.path.exists(save_cal_dir):
+                raise RuntimeError('save_cal_dir exists')
+            os.mkdir(save_cal_dir)
+        self.save_cal_dir = save_cal_dir
+
         if os.path.exists(dest_filename):
             self.h5file = PT.openFile(dest_filename, mode="r+")
             test_reconst = flydra.reconstruct.Reconstructor(self.h5file)
@@ -133,7 +155,7 @@ class KalmanSaver:
 
             self.h5_xhat = self.h5file.root.kalman_estimates
             self.h5_obs = self.h5file.root.kalman_observations
-            
+
             obj_ids = self.h5_xhat.read(field='obj_id')
             self.obj_id = obj_ids.max()
             del obj_ids
@@ -141,7 +163,7 @@ class KalmanSaver:
 
             self.h5_2d_obs = self.h5file.root.kalman_observations_2d_idxs
             self.h5_2d_obs_next_idx = len(self.h5_2d_obs)
-            
+
         else:
             self.h5file = PT.openFile(dest_filename, mode="w", title="tracked Flydra data file")
             reconst_orig_units.save_to_h5file(self.h5file)
@@ -159,24 +181,27 @@ class KalmanSaver:
             self.obj_id = -1
         self.h5_xhat_names = PT.Description(KalmanEstimates().columns)._v_names
         self.h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
-        
+        self.all_kalman_calibration_data = []
+
     def close(self):
+        if self.save_cal_dir is not None:
+            self._save_kalman_calibration_data()
         self.h5file.close()
-        
+
     def save_tro(self,tro):
         MIN_KALMAN_OBSERVATIONS_TO_SAVE = 10
         if len(tro.observations_frames) < MIN_KALMAN_OBSERVATIONS_TO_SAVE:
             # only save data with at least 10 observations
             return
-        
+
         self.obj_id += 1
 
         # save observation 2d data indexes
         debugADS=False
-        
+
         if debugADS:
             print '2D indices: ----------------'
-        
+
         this_idxs = []
         for camns_and_idxs in tro.observations_2d:
             this_idxs.append( self.h5_2d_obs_next_idx )
@@ -186,12 +211,12 @@ class KalmanSaver:
                 print ' %d: %s'%(self.h5_2d_obs_next_idx,str(camns_and_idxs))
             self.h5_2d_obs_next_idx += 1
         self.h5_2d_obs.flush()
-        
+
         if debugADS:
             print
-            
+
         this_idxs = numpy.array( this_idxs, dtype=numpy.uint64 ) # becomes obs_2d_idx (index into 'kalman_observations_2d_idxs')
-        
+
         # save observations
         observations_frames = numpy.array(tro.observations_frames, dtype=numpy.uint64)
         obj_id_array = numpy.empty(observations_frames.shape, dtype=numpy.uint32)
@@ -200,17 +225,17 @@ class KalmanSaver:
         list_of_obs = [observations_data[:,i] for i in range(observations_data.shape[1])]
         array_list = [obj_id_array,observations_frames]+list_of_obs+[this_idxs]
         obs_recarray = numpy.rec.fromarrays( array_list, names = self.h5_obs_names)
-        
+
         if debugADS:
             print 'kalman observations: --------------'
             for row in obs_recarray:
                 print row['frame'], row['obs_2d_idx']
-        
+
         self.h5_obs.append(obs_recarray)
         self.h5_obs.flush()
 
         # save xhat info (kalman estimates)
-        
+
         frames = numpy.array(tro.frames, dtype=numpy.uint64)
         xhat_data = numpy.array(tro.xhats, dtype=numpy.float32)
         timestamps = numpy.array(tro.timestamps, dtype=numpy.float64)
@@ -222,9 +247,28 @@ class KalmanSaver:
         list_of_Ps = [P_data_save[:,i] for i in range(P_data_save.shape[1])]
         xhats_recarray = numpy.rec.fromarrays([obj_id_array,frames,timestamps]+list_of_xhats+list_of_Ps,
                                               names = self.h5_xhat_names)
-        
+
         self.h5_xhat.append(xhats_recarray)
         self.h5_xhat.flush()
+
+        # calibration data
+        self.all_kalman_calibration_data.extend( tro.saved_calibration_data )
+        if 1:
+            # re-save calibration data after every increment...
+            self._save_kalman_calibration_data()
+
+    def _save_kalman_calibration_data(self):
+        calib_dir = self.save_cal_dir
+        data_to_save = self.all_kalman_calibration_data
+        cam_ids = self.cam_id2camns.keys()
+        cam_ids.sort()
+
+        Res = []
+        for cam_id in cam_ids:
+            width,height = get_resolution(self.h5file, cam_id)
+            Res.append( [width,height] )
+        save_calibration_data.do_save_calibration_data(
+            calib_dir, cam_ids, data_to_save, Res)
 
 def kalmanize(src_filename,
               dest_filename=None,
@@ -234,21 +278,22 @@ def kalmanize(src_filename,
               exclude_cam_ids=None,
               exclude_camns=None,
               dynamic_model=None,
+              save_cal_dir=None,
               debug=False,
               ):
 
     if debug:
         numpy.set_printoptions(precision=3,linewidth=120,suppress=False)
-        
+
     if exclude_cam_ids is None:
         exclude_cam_ids = []
-        
+
     if exclude_camns is None:
         exclude_camns = []
 
     if dynamic_model is None:
         dynamic_model = 'fly dynamics, high precision calibration, units: mm'
-    
+
     results = get_results(src_filename)
 
     if reconstructor_filename is None:
@@ -259,7 +304,7 @@ def kalmanize(src_filename,
             reconst_orig_units = flydra.reconstruct.Reconstructor(fd)
         else:
             reconst_orig_units = flydra.reconstruct.Reconstructor(reconstructor_filename)
-            
+
     reconstructor_meters = reconst_orig_units.get_scaled(reconst_orig_units.get_scale_factor())
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
 
@@ -267,9 +312,15 @@ def kalmanize(src_filename,
         dest_filename = os.path.splitext(results.filename)[0]+'.kalmanized.h5'
         if os.path.exists(dest_filename):
             raise ValueError('%s already exists and not explicitly requesting append with "--dest-file" option, quitting'%dest_filename)
-    h5saver = KalmanSaver(dest_filename,reconst_orig_units)
+    h5saver = KalmanSaver(dest_filename,reconst_orig_units,save_cal_dir=save_cal_dir,cam_id2camns=cam_id2camns)
 
-    tracker = Tracker(reconstructor_meters,scale_factor=reconst_orig_units.get_scale_factor())
+    save_calibration_data = FakeThreadingEvent()
+    save_calibration_data.set()
+
+    tracker = Tracker(reconstructor_meters,
+                      scale_factor=reconst_orig_units.get_scale_factor(),
+                      save_calibration_data=save_calibration_data,
+                      )
     model_dict=dynamic_models.get_dynamic_model_dict()
     try:
         kw_dict = model_dict[dynamic_model]
@@ -279,7 +330,7 @@ def kalmanize(src_filename,
     for attr in kw_dict:
         setattr(tracker,attr,kw_dict[attr])
     tracker.set_killed_tracker_callback( h5saver.save_tro )
-    
+
     data2d = results.root.data2d_distorted
 
     done_frames = []
@@ -291,9 +342,9 @@ def kalmanize(src_filename,
     print 'done in %.1f sec'%(time2-time1)
 
     row_idxs = numpy.argsort(frames_array)
-    
+
     print '2D data range: %d<frame<%d'%(frames_array[row_idxs[0]], frames_array[row_idxs[-1]])
-    
+
     if 0:
         print '-='*40
         print '-='*40
@@ -365,7 +416,7 @@ def kalmanize(src_filename,
             # cameras.
             print 'WARNING: no cam_id for camn %d, skipping this row of data'%camn
             continue
-        
+
         if cam_id in exclude_cam_ids:
             # exclude this camera
             continue
@@ -389,7 +440,7 @@ def kalmanize(src_filename,
                 raise ValueError('scaled reconstructors have different distortion!?')
             if y_undistorted != y_undistorted_m:
                 raise ValueError('scaled reconstructors have different distortion!?')
-        
+
         (area,slope,eccentricity,p1,p2,p3,p4,frame_pt_idx) = (row['area'],
                                                               row['slope'],row['eccentricity'],
                                                               row['p1'],row['p2'],
@@ -411,14 +462,15 @@ def kalmanize(src_filename,
         frame_data.setdefault(camn,[]).append((pt_undistorted,projected_line_meters))
 
     tracker.kill_all_trackers() # done tracking
+
     h5saver.close()
     results.close()
 
 def main():
     usage = '%prog FILE [options]'
-    
+
     parser = OptionParser(usage)
-    
+
     parser.add_option("-d", "--dest-file", dest="dest_filename", type='string',
                       help="save to hdf5 file (append if already present)",
                       metavar="DESTFILE")
@@ -426,6 +478,11 @@ def main():
     parser.add_option("-r", "--reconstructor", dest="reconstructor_path", type='string',
                       help="calibration/reconstructor path",
                       metavar="RECONSTRUCTOR")
+
+    parser.add_option("--save-cal-dir", dest="save_cal_dir", type='string',
+                      help="directory name in which to save new calibration data",
+                      default=None,
+                      )
 
     parser.add_option("--exclude-cam-ids", dest="exclude_cam_ids", type='string',
                       help="camera ids to exclude from reconstruction (space separated)",
@@ -440,7 +497,7 @@ def main():
     parser.add_option("--start", type="int",
                       help="first frame",
                       metavar="START")
-        
+
     parser.add_option("--stop", type="int",
                       help="last frame",
                       metavar="STOP")
@@ -451,21 +508,21 @@ def main():
     (options, args) = parser.parse_args()
     if options.exclude_cam_ids is not None:
         options.exclude_cam_ids = options.exclude_cam_ids.split()
-        
+
     if options.exclude_camns is not None:
         options.exclude_camns = [int(camn) for camn in options.exclude_camns.split()]
-        
+
     if len(args)>1:
         print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
         parser.print_help()
         return
-        
+
     if len(args)<1:
         parser.print_help()
         return
-    
+
     src_filename = args[0]
-                          
+
     kalmanize(src_filename,
               dest_filename=options.dest_filename,
               reconstructor_filename=options.reconstructor_path,
@@ -474,6 +531,7 @@ def main():
               exclude_cam_ids=options.exclude_cam_ids,
               exclude_camns=options.exclude_camns,
               dynamic_model = options.dynamic_model,
+              save_cal_dir = options.save_cal_dir,
               debug = options.debug,
               )
 
