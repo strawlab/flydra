@@ -26,7 +26,11 @@ def save_ascii_matrix(thefile,m):
 def do_it(filename,
           efilename,
           use_nth_observation=40,
+          h5_2d_data_filename=None,
           ):
+
+    if h5_2d_data_filename is None:
+        h5_2d_data_filename = filename
 
     calib_dir = filename+'.recal'
     if not os.path.exists(calib_dir):
@@ -43,16 +47,17 @@ def do_it(filename,
         use_obj_ids = list(use_obj_ids.difference(bad))
 
     results = result_utils.get_results(filename,mode='r+')
+    h5_2d_data = result_utils.get_results(h5_2d_data_filename,mode='r+')
     reconstructor = flydra.reconstruct.Reconstructor(results)
 
-    camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(results)
+    camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5_2d_data)
 
     cam_ids = cam_id2camns.keys()
     cam_ids.sort()
 
     kobs = results.root.kalman_observations
 
-    data2d = results.root.data2d_distorted
+    data2d = h5_2d_data.root.data2d_distorted
     #use_idxs = numpy.arange(data2d.nrows)
     frames = data2d.cols.frame[:]
     qfi = result_utils.QuickFrameIndexer(frames)
@@ -169,6 +174,7 @@ def do_it(filename,
     fd.close()
 
     results.close()
+    h5_2d_data.close()
 
     save_ascii_matrix(os.path.join(calib_dir,'original_cam_centers.dat'),cam_centers)
     save_ascii_matrix(os.path.join(calib_dir,'IdMat.dat'),IdMat)
@@ -197,7 +203,10 @@ Find the top traces, reject any bad ones, and put them in an "efile".
 
 The form of the efile is::
 
+  # Lots of traces
   long_ids = [1,2,3,4]
+  # Exclude from above
+  bad = [3]
 
 Then run this program::
 
@@ -210,6 +219,9 @@ Then run this program::
 
     parser.add_option('--use-nth-observation', type='int',
                       dest='use_nth_observation', default=40)
+
+    parser.add_option('--2d-data', type='string',
+                      dest='h5_2d_data_filename', default=None)
 
     (options, args) = parser.parse_args()
     print options
@@ -229,7 +241,9 @@ Then run this program::
     efilename = args[1]
 
     do_it(h5_filename,efilename,
-          use_nth_observation=options.use_nth_observation)
+          use_nth_observation=options.use_nth_observation,
+          h5_2d_data_filename=options.h5_2d_data_filename,
+          )
 
 if __name__=='__main__':
     main()
