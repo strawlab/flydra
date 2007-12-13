@@ -33,7 +33,7 @@ class TrackedObject:
     TrackedObject handles all internal units in meters, but external interfaces are original units
 
     """
-    
+
     def __init__(self,
                  reconstructor_meters, # the Reconstructor instance
                  frame, # frame number of first data
@@ -99,7 +99,7 @@ class TrackedObject:
         self.xhats = [initial_x]
         self.timestamps = [time.time()]
         self.Ps = [P_k1]
-        
+
         self.observations_frames = [frame]
         self.observations_data = [first_observation_meters]
 
@@ -108,7 +108,7 @@ class TrackedObject:
         for obs in first_observations_2d_pre:
             first_observations_2d.extend( obs )
         first_observations_2d = numpy.array(first_observations_2d,dtype=numpy.uint16) # if saved as VLArray, should match with atom type
-        
+
         self.observations_2d = [first_observations_2d]
 
         if save_calibration_data is None:
@@ -116,9 +116,9 @@ class TrackedObject:
         else:
             self.save_calibration_data = save_calibration_data
         self.saved_calibration_data = []
-        
+
         self.max_frames_skipped=max_frames_skipped
-        
+
         # Don't run kalman filter with initial data, as this would
         # cause error estimates to drop too low.
     def kill(self):
@@ -136,8 +136,8 @@ class TrackedObject:
                 self.Ps.pop()
             else:
                 break
-        
-    def gobble_2d_data_and_calculate_a_posteri_estimate(self,frame,data_dict,camn2cam_id,debug1=False):
+
+    def gobble_2d_data_and_calculate_a_posteri_estimate(self,frame,data_dict,camn2cam_id,debug1=0):
         # Step 1. Update Kalman state to a priori estimates for this frame.
         # Step 1.A. Update Kalman state for each skipped frame.
         if self.current_frameno is not None:
@@ -147,16 +147,16 @@ class TrackedObject:
             # Since we have no observation, the estimated error will
             # rise.
             frames_skipped = frame-self.current_frameno-1
-            
-            if debug1:
+
+            if debug1>2:
                 print 'doing',self,'--------------'
-            
+
             if frames_skipped > self.max_frames_skipped:
                 self.kill_me = True # don't run Kalman filter, just quit
-                if debug1:
+                if debug1>2:
                     print 'killed because too many frames skipped'
             else:
-                if debug1:
+                if debug1>2:
                     print 'updating for %d frames skipped'%(frames_skipped,)
                 for i in range(frames_skipped):
                     xhat, P = self.my_kalman.step()
@@ -172,7 +172,7 @@ class TrackedObject:
             self.current_frameno = frame
             # Step 1.B. Update Kalman to provide a priori estimates for this frame
             xhatminus, Pminus = self.my_kalman.step1__calculate_a_priori()
-            if debug1:
+            if debug1>2:
                 print 'xhatminus'
                 print xhatminus
                 print 'Pminus'
@@ -184,7 +184,7 @@ class TrackedObject:
                                                                         data_dict,
                                                                         camn2cam_id,
                                                                         debug=debug1)
-            if debug1:
+            if debug1>2:
                 print 'observation_meters, used_camns_and_idxs',observation_meters,used_camns_and_idxs
 
             # Step 3. Incorporate observation to estimate a posteri
@@ -199,7 +199,7 @@ class TrackedObject:
 
             # calculate distance of variance of x y z position (assumes first three components of state vector are position)
             Pmean = numpy.sqrt(numpy.sum([P[i,i]**2 for i in range(3)]))
-            if debug1:
+            if debug1>2:
                 print 'xhat'
                 print xhat
                 print 'P'
@@ -210,7 +210,7 @@ class TrackedObject:
             # threshold at which it should be terminated.
             if Pmean > self.max_variance_dist_meters:
                 self.kill_me = True
-                if debug1:
+                if debug1>2:
                     print 'will kill next time because Pmean too large'
 
             ############ save outputs ###############
@@ -218,34 +218,34 @@ class TrackedObject:
             self.xhats.append( xhat )
             self.timestamps.append(time.time())
             self.Ps.append( P )
-        
+
             if observation_meters is not None:
                 self.observations_frames.append( frame )
                 self.observations_data.append( observation_meters )
                 self.observations_2d.append( used_camns_and_idxs )
-            if debug1:
+            if debug1>2:
                 print
-        
-    def _filter_data(self, xhatminus, Pminus, data_dict, camn2cam_id, debug=False):
+
+    def _filter_data(self, xhatminus, Pminus, data_dict, camn2cam_id, debug=0):
         """given state estimate, select useful incoming data and make new observation"""
         # 1. For each camera, predict 2D image location and error distance
-        
+
         a_priori_observation_prediction = xhatminus[:3] # equiv. to "dot(self.my_kalman.C,xhatminus)"
-        
+
         variance_estimate = [Pminus[i,i] for i in range(3)] # maybe equiv. to "dot(self.my_kalman.C,Pminus[i,i])"
         variance_estimate_scalar = numpy.sqrt(numpy.sum(variance_estimate)) # put in distance units (meters)
-        dist2cmp = (self.n_sigma_accept*variance_estimate_scalar)**2        
+        dist2cmp = (self.n_sigma_accept*variance_estimate_scalar)**2
         neg_predicted_3d = -geom.ThreeTuple( a_priori_observation_prediction )
         cam_ids_and_points2d = []
 
         used_camns_and_idxs = []
-        if debug:
+        if debug>2:
             print '_filter_data():'
             print '  variance_estimate_scalar',variance_estimate_scalar
         for camn in data_dict:
             cam_id = camn2cam_id[camn]
 
-            if debug:
+            if debug>2:
                 predicted_2d = self.reconstructor_meters.find2d(cam_id,a_priori_observation_prediction)
                 print 'camn',camn,'cam_id',cam_id
                 print 'predicted_2d',predicted_2d
@@ -256,7 +256,7 @@ class TrackedObject:
 
             candidate_point_list = data_dict[camn]
             found_idxs = []
-            
+
             # Use the first acceptable 2d point match as it's probably
             # best from distance-from-mean-image-backgroudn
             # perspective, but remove from further consideration all
@@ -266,22 +266,22 @@ class TrackedObject:
             for idx,(pt_undistorted,projected_line_meters) in enumerate(candidate_point_list):
                 # find closest distance between projected_line and predicted position for each 2d point
                 dist2=projected_line_meters.translate(neg_predicted_3d).dist2()
-                
-                if debug:
+
+                if debug>2:
                     frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                     print '->', dist, pt_undistorted[:2], '(idx %d)'%(frame_pt_idx,),
-                
+
                 if dist2<dist2cmp:
                     # accept point
                     match_dist2_and_idx.append( (dist2,idx) )
                     found_idxs.append( idx )
-                    if debug:
+                    if debug>2:
                         frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                         print '(accepted)'
                 else:
-                    if debug:
+                    if debug>2:
                         print
-                    
+
             match_dist2_and_idx.sort() # sort by distance
             if len(match_dist2_and_idx):
                 closest_idx = match_dist2_and_idx[0][1] # take idx of closest point
@@ -290,13 +290,15 @@ class TrackedObject:
                                                       pt_undistorted[PT_TUPLE_IDX_Y])))
                 frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                 used_camns_and_idxs.extend( [camn, frame_pt_idx] )
-                if debug:
+                if debug>2:
                     print 'best match idx %d (%s)'%(frame_pt_idx, str(pt_undistorted[:2]))
             found_idxs.reverse() # keep indexes OK as we delete them
             for idx in found_idxs:
                 del candidate_point_list[idx]
         # Now cam_ids_and_points2d has just the 2d points we'll use for this reconstruction
         if len(cam_ids_and_points2d)>=2:
+            if debug>=1:
+                print len(cam_ids_and_points2d) # XXX ADS
             observation_meters = self.reconstructor_meters.find3d( cam_ids_and_points2d, return_line_coords = False)
             if len(cam_ids_and_points2d)>=3:
                 if self.save_calibration_data.isSet():
@@ -313,7 +315,7 @@ class Tracker:
     This class keeps a list of objects currently being tracked. It
     also keeps a couple other lists for dealing with cases when the
     tracked objects are no longer 'live'.
-    
+
     """
     def __init__(self,
                  reconstructor_meters,
@@ -328,7 +330,7 @@ class Tracker:
                  max_frames_skipped=25,
                  ):
         """
-        
+
         arguments
         ---------
         reconstructor_meters - reconstructor instance with internal units of meters
@@ -339,9 +341,9 @@ class Tracker:
         initial_acceleration_covariance_estimate -
         Q - process covariance matrix
         R - measurement noise covariance matrix
-        
+
         """
-        
+
         self.reconstructor_meters=reconstructor_meters
         self.live_tracked_objects = []
         self.dead_tracked_objects = [] # save for getting data out
@@ -361,15 +363,15 @@ class Tracker:
         self.Q = Q
         self.R = R
         self.save_calibration_data=save_calibration_data
-            
-    def gobble_2d_data_and_calculate_a_posteri_estimates(self,frame,data_dict,camn2cam_id,debug2=False):
+
+    def gobble_2d_data_and_calculate_a_posteri_estimates(self,frame,data_dict,camn2cam_id,debug2=0):
         # Allow earlier tracked objects to be greedy and take all the
         # data they want.
         kill_idxs = []
-        
-        if debug2:
+
+        if debug2>1:
             print self,'gobbling all data for frame %d'%(frame,)
-            
+
         for idx,tro in enumerate(self.live_tracked_objects):
             try:
                 tro.gobble_2d_data_and_calculate_a_posteri_estimate(frame,
@@ -403,7 +405,7 @@ class Tracker:
                             frame,
                             first_observation_orig_units,
                             first_observation_camns,
-                            first_observation_idxs,                            
+                            first_observation_idxs,
                             scale_factor=self.scale_factor,
                             n_sigma_accept = self.n_sigma_accept,
                             max_variance_dist_meters = self.max_variance_dist_meters,
@@ -415,8 +417,6 @@ class Tracker:
                             max_frames_skipped=self.max_frames_skipped,
                             )
         self.live_tracked_objects.append(tro)
-        if debug>0:
-            print 'new:',tro
     def kill_all_trackers(self):
         while len(self.live_tracked_objects):
             tro = self.live_tracked_objects.pop()
@@ -425,7 +425,7 @@ class Tracker:
         self._flush_dead_queue()
     def set_killed_tracker_callback(self,callback):
         self.kill_tracker_callbacks.append( callback )
-        
+
     def _flush_dead_queue(self):
         while len(self.dead_tracked_objects):
             tro = self.dead_tracked_objects.pop(0)
@@ -447,11 +447,11 @@ class Tracker:
             data_values = [xhat[i] for i in range(state_size)]+[meanP]
             data_packet += struct.pack(per_tracked_object_fmt,*data_values)
         return data_packet
-    
+
 def decode_data_packet(buf):
     header = buf[:packet_header_fmtsize]
     rest = buf[packet_header_fmtsize:]
-    
+
     (corrected_framenumber,timestamp,N) = struct.unpack(
         packet_header_fmt,header)
     state_vecs = []
@@ -464,6 +464,6 @@ def decode_data_packet(buf):
         meanP = results[state_size]
         state_vecs.append( state_vec )
     return corrected_framenumber, timestamp, state_vecs, meanP
-        
-        
-        
+
+
+
