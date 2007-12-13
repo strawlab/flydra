@@ -142,6 +142,8 @@ class KalmanSaver:
         self.cam_id2camns = cam_id2camns
 
         if save_cal_dir is not None:
+            if 1:
+                raise NotImplementedError("this code path is not known to work!")
             assert cam_id2camns is not None
             if os.path.exists(save_cal_dir):
                 raise RuntimeError('save_cal_dir exists')
