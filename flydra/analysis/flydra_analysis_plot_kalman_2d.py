@@ -126,7 +126,7 @@ def show_it(fig,
         ys = data2d.readCoordinates( this_camn_idxs, field='y')
         tmp_frames = data2d.readCoordinates( this_camn_idxs, field='frame')
 
-        ax.plot(xs,ys,'.')
+        ax.plot(xs,ys,'.',label='all points')
         if show_nth_frame is not None:
             for i,f in enumerate(tmp_frames):
                 if f%show_nth_frame==0:
@@ -231,9 +231,17 @@ def show_it(fig,
         xys_by_cam_id = xys_by_obj_id[obj_id]
         for cam_id, (xs,ys) in xys_by_cam_id.iteritems():
             ax = subplot_by_cam_id[cam_id]
-            ax.plot(xs,ys)#,'o-')
+            if 0:
+                ax.plot(xs,ys,label='obs: %d'%obj_id)
+            else:
+                ax.plot(xs,ys,'x-',label='obs: %d'%obj_id)
             ax.text(xs[0],ys[0],'%d:'%(obj_id,))
             ax.text(xs[-1],ys[-1],':%d'%(obj_id,))
+
+    for cam_id in subplot_by_cam_id.keys():
+        ax = subplot_by_cam_id[cam_id]
+        ax.legend()
+    print 'note: could/should also plot re-projection of Kalman filtered/smoothed data'
 
 def main():
     usage = '%prog FILE [options]'
