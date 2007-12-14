@@ -258,7 +258,7 @@ class TrackedObject:
             found_idxs = []
 
             # Use the first acceptable 2d point match as it's probably
-            # best from distance-from-mean-image-backgroudn
+            # best from distance-from-mean-image-background
             # perspective, but remove from further consideration all
             # 2d points that meet consideration critereon.
 
@@ -269,7 +269,7 @@ class TrackedObject:
 
                 if debug>2:
                     frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
-                    print '->', dist, pt_undistorted[:2], '(idx %d)'%(frame_pt_idx,),
+                    print '->', dist2, pt_undistorted[:2], '(idx %d)'%(frame_pt_idx,),
 
                 if dist2<dist2cmp:
                     # accept point
