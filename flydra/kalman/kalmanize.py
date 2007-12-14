@@ -260,7 +260,8 @@ class KalmanSaver:
             self._save_kalman_calibration_data()
 
     def _save_kalman_calibration_data(self):
-        calib_dir = self.save_cal_dir
+        if self.save_cal_dir is None:
+            return
         data_to_save = self.all_kalman_calibration_data
         cam_ids = self.cam_id2camns.keys()
         cam_ids.sort()
@@ -270,7 +271,7 @@ class KalmanSaver:
             width,height = get_resolution(self.h5file, cam_id)
             Res.append( [width,height] )
         save_calibration_data.do_save_calibration_data(
-            calib_dir, cam_ids, data_to_save, Res)
+            self.save_cal_dir, cam_ids, data_to_save, Res)
 
 def kalmanize(src_filename,
               dest_filename=None,
