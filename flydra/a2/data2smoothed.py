@@ -21,6 +21,7 @@ def convert(infilename,
             save_timestamps=True,
             file_time_data=None,
             do_nothing=False, # set to true to test for file existance
+            stop_obj_id=None,
             ):
 
     if save_timestamps:
@@ -48,13 +49,16 @@ def convert(infilename,
 
         hostnames = drift_estimates['hostnames']
         gain = {}; offset = {};
+        print 'hostname time_gain time_offset'
+        print '-------- --------- -----------'
         for i,hostname in enumerate(hostnames):
             tgain, toffset = result_utils.model_remote_to_local(
                 drift_estimates['remote_timestamp'][hostname][::10],
                 drift_estimates['local_timestamp'][hostname][::10])
             gain[hostname]=tgain
             offset[hostname]=toffset
-            print repr(hostname),tgain,toffset
+            print '  ',repr(hostname),tgain,toffset
+        print
 
         if do_nothing:
             h5file_raw.close()
@@ -70,6 +74,8 @@ def convert(infilename,
         print 'finding 2d data for each obj_id...'
         timestamp_time = numpy.zeros( unique_obj_ids.shape, dtype=numpy.float64)
         for obj_id_enum,obj_id in enumerate(unique_obj_ids):
+            if obj_id > stop_obj_id:
+                break
             if obj_id_enum%100==0:
                 print '%d of %d'%(obj_id_enum,len(unique_obj_ids))
             valid_cond = obs_obj_ids == obj_id
@@ -117,6 +123,8 @@ def convert(infilename,
     obj_ids = ca.get_obj_ids(infilename)
     allrows = []
     for i,obj_id in enumerate(obj_ids):
+        if obj_id > stop_obj_id:
+            break
         if i%100 == 0:
             print '%d of %d'%(i,len(obj_ids))
         results = ca.get_smoothed(obj_id,
@@ -145,6 +153,8 @@ def main():
                       help="hdf5 file with 2d data FILE2D used to calculate timestamp information",
                       metavar="FILE2D")
     parser.add_option("--no-timestamps",action='store_true',dest='no_timestamps',default=False)
+    parser.add_option("--stop",dest='stop_obj_id',default=None,type='int')
+    parser.add_option("--profile",action='store_true',dest='profile',default=False)
     (options, args) = parser.parse_args()
 
     if len(args)>1:
@@ -158,9 +168,20 @@ def main():
 
     infilename = args[0]
     outfilename = os.path.splitext(infilename)[0] + '_smoothed.mat'
-    convert(infilename,outfilename,file_time_data=options.file2d,
-            save_timestamps = not options.no_timestamps,
-            )
+    cmd_str = 'convert(infilename,outfilename,file_time_data=options.file2d,save_timestamps = not options.no_timestamps,stop_obj_id=options.stop_obj_id)'
+    if options.profile:
+        import cProfile
+        import lsprofcalltree
+        p = cProfile.Profile()
+
+        print 'PROFILING'
+        p.runctx(cmd_str,globals(),locals())
+        k = lsprofcalltree.KCacheGrind(p)
+        data = open('data2smoothed.prof',mode='wb')
+        k.output(data)
+        data.close()
+    else:
+        exec(cmd_str)
 
 if __name__=='__main__':
     main()
