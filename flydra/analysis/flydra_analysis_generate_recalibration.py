@@ -226,8 +226,6 @@ Then run this program::
                       dest='h5_2d_data_filename', default=None)
 
     (options, args) = parser.parse_args()
-    print options
-    print dir(options)
 
     if len(args)>2:
         print >> sys.stderr,  "arguments interpreted as FILE and EFILE supplied more than once"
@@ -237,7 +235,6 @@ Then run this program::
     if len(args)<2:
         parser.print_help()
         return
-
 
     h5_filename=args[0]
     efilename = args[1]
