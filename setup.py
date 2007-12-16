@@ -49,6 +49,7 @@ setup(name='flydra',
     'kdviewer = flydra.a2.kdviewer:main',
     'kdmovie_saver = flydra.a2.kdmovie_saver:main',
     'data2smoothed = flydra.a2.data2smoothed:main',
+    'flydra_textlog2csv = flydra.a2.flydra_textlog2csv:main',
     ],
     'gui_scripts': [
     'flydra_mainbrain = flydra.wxMainBrain:main',
