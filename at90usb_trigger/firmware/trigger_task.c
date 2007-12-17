@@ -48,7 +48,7 @@ void set_OCR3A(uint16_t val) {
   sreg = SREG; // save arithmetic state
   cli(); // disable interrupts
   OCR3A = val;
-  SREG = sreg; // restore arithmetic state 
+  SREG = sreg; // restore arithmetic state
 
   // presumably interrupts are enabled upon function return
 }
@@ -61,7 +61,7 @@ void set_OCR3B(uint16_t val) {
   sreg = SREG; // save arithmetic state
   cli(); // disable interrupts
   OCR3B = val;
-  SREG = sreg; // restore arithmetic state 
+  SREG = sreg; // restore arithmetic state
 
   // presumably interrupts are enabled upon function return
 }
@@ -74,7 +74,7 @@ void set_OCR3C(uint16_t val) {
   sreg = SREG; // save arithmetic state
   cli(); // disable interrupts
   OCR3C = val;
-  SREG = sreg; // restore arithmetic state 
+  SREG = sreg; // restore arithmetic state
 
   // presumably interrupts are enabled upon function return
 }
@@ -88,7 +88,7 @@ void set_ICR3(uint16_t val) {
   sreg = SREG; // save arithmetic state
   cli(); // disable interrupts
   ICR3 = val;
-  SREG = sreg; // restore arithmetic state 
+  SREG = sreg; // restore arithmetic state
 
   // presumably interrupts are enabled upon function return
 }
@@ -100,7 +100,7 @@ void set_TCNT3(uint16_t val) {
   sreg = SREG; // save arithmetic state
   cli(); // disable interrupts
   TCNT3 = val;
-  SREG = sreg; // restore arithmetic state 
+  SREG = sreg; // restore arithmetic state
 
   // presumably interrupts are enabled upon function return
 }
@@ -110,11 +110,11 @@ uint16_t get_TCNT3(void) {
 
   uint16_t val;
   uint8_t sreg;
-  
+
   sreg = SREG; // save arithmetic state
   cli(); // disable interrupts
   val = TCNT3;
-  SREG = sreg; // restore arithmetic state 
+  SREG = sreg; // restore arithmetic state
 
   return val;
 }
@@ -125,11 +125,11 @@ uint16_t get_ICR3(void) {
 
   uint16_t val;
   uint8_t sreg;
-  
+
   sreg = SREG; // save arithmetic state
   cli(); // disable interrupts
   val = ICR3;
-  SREG = sreg; // restore arithmetic state 
+  SREG = sreg; // restore arithmetic state
 
   return val;
 }
@@ -139,11 +139,11 @@ uint16_t get_OCR3A(void) {
 
   uint16_t val;
   uint8_t sreg;
-  
+
   sreg = SREG; // save arithmetic state
   cli(); // disable interrupts
   val = OCR3A;
-  SREG = sreg; // restore arithmetic state 
+  SREG = sreg; // restore arithmetic state
 
   return val;
 }
@@ -153,11 +153,11 @@ uint16_t get_OCR3B(void) {
 
   uint16_t val;
   uint8_t sreg;
-  
+
   sreg = SREG; // save arithmetic state
   cli(); // disable interrupts
   val = OCR3B;
-  SREG = sreg; // restore arithmetic state 
+  SREG = sreg; // restore arithmetic state
 
   return val;
 }
@@ -167,27 +167,27 @@ uint16_t get_OCR3C(void) {
 
   uint16_t val;
   uint8_t sreg;
-  
+
   sreg = SREG; // save arithmetic state
   cli(); // disable interrupts
   val = OCR3C;
-  SREG = sreg; // restore arithmetic state 
+  SREG = sreg; // restore arithmetic state
 
   return val;
 }
 
 void init_pwm_output(void) {
   /*
-    
+
   n = 3 (timer3)
 
   Set frequency of PWM using ICRn to set TOP. (Not double-buffered,
-  also, clear TCNT before setting.)  
-  
+  also, clear TCNT before setting.)
+
   Set compare value using OCRnA.
-  
+
   WGMn3:0 = 14
-  
+
   */
 
   // set output direction on pin
@@ -257,7 +257,7 @@ void trigger_task_init(void)
 
    Leds_init();
    Joy_init();
-   
+
    init_pwm_output(); // trigger output
 }
 
@@ -280,15 +280,15 @@ void trigger_task(void)
    uint8_t clock_select_timer3=0;
    uint32_t volatile tmp;
 
-   uint16_t new_ocr3a;
-   uint16_t new_ocr3b;
-   uint16_t new_ocr3c;
-   uint16_t new_icr3; // icr3 is TOP for timer3
+   uint16_t new_ocr3a=0;
+   uint16_t new_ocr3b=0;
+   uint16_t new_ocr3c=0;
+   uint16_t new_icr3=0; // icr3 is TOP for timer3
 
    int64_t framecount_A;
-   uint8_t i;
+   uint8_t i,j;
 
-   if(usb_connected)                    
+   if(usb_connected)
     {
       Usb_select_endpoint(ENDPOINT_BULK_OUT);    //! Get Data from Host
       if(Is_usb_receive_out()) {
@@ -321,7 +321,7 @@ void trigger_task(void)
 	set_OCR3B(new_ocr3b);
 	set_OCR3C(new_ocr3c);
 	set_ICR3(new_icr3);  // icr3 is TOP for timer3
-	
+
 	TCCR3B = (TCCR3B & 0xF8) | (clock_select_timer3 & 0x07); // low 3 bits sets CS
 	send_data_back_to_host = TRUE;
       }
@@ -330,22 +330,22 @@ void trigger_task(void)
 	//	  new_icr3 = get_ICR3();  // icr1 is TOP for timer1
 	//new_icr3--;
 	TCCR3B = (TCCR3B & 0xF8) | (0 & 0x07); // low 3 bits sets CS to 0 (stop)
-	
+
 	set_TCNT3(0xFF00); // trigger overflow soon
 	//set_OCR3A(0xFE00);
 	set_OCR3A(0x00FF);
 	set_ICR3(0xFFFF);  // icr3 is TOP for timer3
-	
+
 	trig_once_mode=1;
 
 	// start clock
 	TCCR3B = (TCCR3B & 0xF8) | (1 & 0x07); // low 3 bits sets CS
-	  
+
 	/*
 	// XXX this doesn't seem to work 100% of the time... - ADS
 	PORTC |= 0x70; // pin C4-6 set high
 	TCCR3B = (TCCR3B & 0xF8) | (0 & 0x07); // low 3 bits sets CS to 0 (stop)
-	
+
 	*/
 	send_data_back_to_host = TRUE;
       }
@@ -406,7 +406,7 @@ void trigger_task(void)
 	    Usb_write_byte(0x00);
 	    Usb_write_byte(0x00);
 	    Usb_write_byte(0x00);
-	    
+
 	    Usb_ack_fifocon();               //! Send data over the USB
 	    send_data_back_to_host = FALSE;
 	  }
@@ -434,10 +434,14 @@ void trigger_task(void)
       }
 
       if (flags & TASK_FLAGS_SET_EXT_TRIG1) {
+	/* HACK - busy loop to hold pin high */
+
 	PORTC |= 0x08; // raise bit
-	for (i=0;i<10;i++) {
-	  tmp++;
-	  // do nothing
+	for (j=0;j<10;j++) {
+	  for (i=0;i<255;i++) {
+	    tmp++;
+	    // do nothing
+	  }
 	}
 	PORTC &= 0xF7; // clear bit
 
