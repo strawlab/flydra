@@ -438,7 +438,7 @@ void trigger_task(void)
 
 	PORTC |= 0x08; // raise bit
 	for (j=0;j<10;j++) {
-	  for (i=0;i<64;i++) {
+	  for (i=0;i<128;i++) {
 	    tmp++;
 	    // do nothing
 	  }
