@@ -4,7 +4,7 @@ tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy as nx
 import numpy
 import sys, os, sets
-import FlyMovieFormat
+import flydra.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 
 import datetime
 import pytz # from http://pytz.sourceforge.net/

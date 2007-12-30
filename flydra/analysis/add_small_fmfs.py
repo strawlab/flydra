@@ -1,7 +1,7 @@
 import result_browser
 import glob
 import sets
-import FlyMovieFormat
+import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 import tables as PT
 
 def main():
@@ -26,7 +26,7 @@ def main():
             print fname, basename
             print
             print '-='*20
-            
+
             results = result_browser.get_results(fname,mode='r+')
             try:
                 for cam_id in ['cam1_0',
@@ -45,7 +45,7 @@ def main():
                         pass
             finally:
                 results.close()
-        
+
 if 0:
     import hotshot
     prof = hotshot.Profile("profile.hotshot")

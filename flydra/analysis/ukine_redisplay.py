@@ -1,5 +1,5 @@
 import glob, os, sys
-import FlyMovieFormat
+import flydra.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 import pylab
 import tables
 import flydra.reconstruct
@@ -52,5 +52,5 @@ if 1:
             x = [ verts2d[i][0] for i in lineseg ]
             y = [ verts2d[i][1] for i in lineseg ]
             pylab.plot( x, y, 'w-' )
-        
+
 pylab.show()

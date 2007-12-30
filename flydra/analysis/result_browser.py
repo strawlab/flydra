@@ -16,13 +16,13 @@ import cgtypes
 import threading
 
 import flydra.undistort as undistort
-import FlyMovieFormat
+import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 
 from numpy import nan,inf
 import numarray # needed for pytables
 
 # flydra analysis tools:
-import caching_movie_opener 
+import caching_movie_opener
 from result_utils import get_camn, get_camn_and_frame, \
      get_camn_and_remote_timestamp, get_cam_ids, \
      get_caminfo_dicts, get_results, get_f_xyz_L_err, \
@@ -51,7 +51,7 @@ class SmallFMFSummary(PT.IsDescription):
     cam_id             = PT.StringCol(16,pos=0)
     camn               = PT.Int32Col(pos=1,indexed=True)
     start_timestamp    = PT.FloatCol(pos=2)
-    stop_timestamp     = PT.FloatCol(pos=3)  
+    stop_timestamp     = PT.FloatCol(pos=3)
     basename           = PT.StringCol(255,pos=4)
 
 class IgnoreFrames(PT.IsDescription):
@@ -84,16 +84,16 @@ class LinearInterpolator:
         a2 = numpy.ones( (len(x),1))
         A = numpy.hstack((a1, a2))
         b = numpy.asarray(y)[:,numpy.newaxis]
-        
+
         solution,resids,rank,s = numpy.linalg.lstsq(A,b)
         self.gain = solution[0,0]
         self.offset = solution[1,0]
-        
+
     def __call__(self,newx):
         if numpy.any(newx > self.maxx) or numpy.any(newx < self.minx):
             raise ValueError('will not extrapolate data ~(min(x) <= newx <= max(x))')
         return (newx-self.meanx)*self.gain + self.offset
-        
+
 def make_new_fmt(results):
     """convert all 2D data into camera-by-camera tables"""
     Info2D = results.root.data2d.description # 2D data format for PyTables
@@ -103,7 +103,7 @@ def make_new_fmt(results):
     # or results.removeNode( results.root.cam_by_cam_2d, recursive=True)
     status("making new cam_by_cam_2d tables...")
     cam_by_cam_2d = results.createGroup( results.root, 'cam_by_cam_2d' )
-    
+
     tables_by_camn = {}
     for oldrow in results.root.data2d:
         camn = oldrow['camn']
@@ -116,7 +116,7 @@ def make_new_fmt(results):
         for attr in Info2D._v_names:
             newrow[attr] = oldrow[attr] #copy all attributes
         newrow.append()
-        
+
     for camn,table in tables_by_camn.iteritems():
         table.flush()
     status("done")
@@ -133,7 +133,7 @@ def save_ascii_matrix(thefile,m):
 def my_subplot(n):
     x_space = 0.05
     y_space = 0.15
-    
+
     left = n*0.2 + x_space
     bottom = 0 + + y_space
     w = 0.2 - (x_space*1.5)
@@ -142,17 +142,17 @@ def my_subplot(n):
 
 def dougs_subplot(n,n_rows=2,n_cols=3):
     # 2 rows and n_cols
-    
+
     rrow = n // n_cols # reverse row
     row = n_rows-rrow-1 # row number
     col = n % n_cols
-    
+
     x_space = (0.02/n_cols)
     #y_space = 0.0125
     y_space = 0.07
 
     y_size = 0.42
-    
+
     left = col*(1.0/n_cols) + x_space
     bottom = row*y_size + y_space
     w = (1.0/n_cols) - x_space
@@ -189,9 +189,9 @@ def dougs_subplot(n,n_rows=2,n_cols=3):
 
 ##    frame_server = Pyro.core.getProxyForURI(URI)
 ##    frame_server.noop()
-        
-##    return frame_server    
-        
+
+##    return frame_server
+
 def flip_line_direction(results,frame,typ='best'):
     if typ=='best':
         data3d = results.root.data3d_best
@@ -224,7 +224,7 @@ def sort_on_col0( a, b ):
     else: return 0
 
 def auto_flip_line_direction(results,start_frame,stop_frame,typ='best',
-                             skip_allowance = 5,                             
+                             skip_allowance = 5,
                              ):
     if typ=='best':
         data3d = results.root.data3d_best
@@ -232,20 +232,20 @@ def auto_flip_line_direction(results,start_frame,stop_frame,typ='best',
         data3d = results.root.data3d_fastest
 
     assert stop_frame-start_frame > 1
-    
+
     frame_and_dir_list = [ (row['frame'], -row['p2'],row['p4'],-row['p5']) for row in data3d.where( start_frame <= data3d.cols.frame <= stop_frame ) ]
     frame_and_dir_list.sort(sort_on_col0)
     frame_and_dir_list = nx.array( frame_and_dir_list )
     bad_idx=list(getnan(frame_and_dir_list[:,1])[0])
     good_idx = [i for i in range(len(frame_and_dir_list[:,1])) if i not in bad_idx]
     frame_and_dir_list = [ frame_and_dir_list[i] for i in good_idx]
-    
+
     prev_frame = frame_and_dir_list[0][0]
     prev_dir = my_normalize(frame_and_dir_list[0][1:4])
-    
+
     cos_90 = math.cos(math.pi/4)
     frames_flipped = []
-    
+
     for frame_and_dir in frame_and_dir_list[1:]:
         this_frame = frame_and_dir[0]
         this_dir = my_normalize(frame_and_dir[1:4])
@@ -259,19 +259,19 @@ def auto_flip_line_direction(results,start_frame,stop_frame,typ='best',
             print 'hmm'
             raise
         theta_deg = math.acos(cos_theta)/math.pi*180
-        
+
         if this_frame in [188305, 188306, 188307]:
             print '*'*10,theta_deg
-        
+
 #        print this_frame, this_dir, cos_theta, math.acos(cos_theta)/math.pi*180
 #        print
-        
+
         dt_frames = this_frame - prev_frame
-        
+
         prev_frame = this_frame
         prev_dir = this_dir
 
-        
+
         if dt_frames > skip_allowance:
             print 'frame %d skipped because previous %d frames not found'%(this_frame,skip_allowance)
             continue
@@ -289,16 +289,16 @@ def auto_flip_line_direction_hang(results,start_frame,stop_frame,typ='best',
         data3d = results.root.data3d_fastest
 
     assert stop_frame-start_frame > 1
-    
+
     frame_and_dir_list = [ (row['frame'], -row['p2'],row['p4'],-row['p5']) for row in data3d.where( start_frame <= data3d.cols.frame <= stop_frame ) ]
     frame_and_dir_list.sort(sort_on_col0)
     frame_and_dir_list = nx.array( frame_and_dir_list )
     bad_idx=list(getnan(frame_and_dir_list[:,1])[0])
     good_idx = [i for i in range(len(frame_and_dir_list[:,1])) if i not in bad_idx]
     frame_and_dir_list = [ frame_and_dir_list[i] for i in good_idx]
-    
+
     frames_flipped = []
-    
+
     for frame_and_dir in frame_and_dir_list:
         this_frame = int(frame_and_dir[0])
         this_dir = my_normalize(frame_and_dir[1:4])
@@ -328,7 +328,7 @@ def from_table_by_frame(table,frame,colnames=None):
 
     def values_for_keys(dikt,keys):
         return [dikt[key] for key in keys]
-    
+
     rows = [values_for_keys(x,colnames) for x in table if x['frame']==frame]
     #rows = [values_for_keys(x,colnames) for x in table.where( table.cols.frame==frame)]
     return rows
@@ -356,13 +356,13 @@ def redo_3d_calc(results,frame,reconstructor=None,verify=True,overwrite=False):
     There's a new function, find_best_3d. This one doesn't use it.
 
     """
-    
+
     import flydra.reconstruct
-    
+
     data3d = results.root.data3d_best
     data2d = results.root.data2d
     cam_info = results.root.cam_info
-    
+
     Xorig, camns_used, nrow = [ ((x['x'],x['y'],x['z']),x['camns_used'],x.nrow())
 ##                                for x in data3d.where( data3d.cols.frame==frame )][0]
                                 for x in data3d if x['frame']==frame ][0]
@@ -394,7 +394,7 @@ def redo_3d_calc(results,frame,reconstructor=None,verify=True,overwrite=False):
 ##                       for row in data2d if row['frame']==frame and row['camn']==camn][0]
         x,y,area,slope,eccentricity,p1,p2,p3,p4 = value_tuple
         cam_ids_and_points2d.append( (cam_id, value_tuple) )
-        
+
     Xnew, Lcoords = reconstructor.find3d(cam_ids_and_points2d)
     if verify:
         assert nx.allclose(Xnew,Xorig)
@@ -419,7 +419,7 @@ def summarize(results):
 ##    cam_info = results.root.cam_info
 ##    cam_id2camns = {}
 ##    camn2cam_id = {}
-    
+
 ##    for row in cam_info:
 ##        cam_id, camn = row['cam_id'], row['camn']
 ##        cam_id2camns.setdefault(cam_id,[]).append(camn)
@@ -445,7 +445,7 @@ def summarize(results):
     frames = list(data3d.cols.frame)
     frames.sort()
     print >> res, '  (start: %d, stop: %d)'%(frames[0],frames[-1])
-    
+
 
     frame2camns_used = {}
     for row in data3d:
@@ -455,7 +455,7 @@ def summarize(results):
         else:
             orient_info = True
         frame2camns_used[row['frame']]=camns_used, orient_info
-    
+
     nframes_by_n_camns_used = {}
     nframes2_by_n_camns_used = {} # with orient_info
     for f, (camns_used, orient_info) in frame2camns_used.iteritems():
@@ -464,12 +464,12 @@ def summarize(results):
             nframes2_by_n_camns_used[len(camns_used)]=nframes2_by_n_camns_used.get(len(camns_used),0) + 1
         else:
             nframes2_by_n_camns_used.setdefault(len(camns_used),0)
-        
+
         #orig_value = nframes_by_n_camns_used.setdefault( len(camns_used), 0).add(1)
-        
+
     for n_camns_used,n_frames in nframes_by_n_camns_used.iteritems():
         print >> res, ' with %d camns: %d frames (%d with orientation)'%(n_camns_used, n_frames, nframes2_by_n_camns_used[n_camns_used] )
-    
+
     res.seek(0)
     return res.read()
 
@@ -493,9 +493,9 @@ def plot_movie_2d(results,
     try:
         import flydra.reconstruct
         reconstructor = flydra.reconstruct.Reconstructor(results)
-        
+
         data3d = results.root.data3d_best
-        
+
         # get 3D data
         f,X,L,err = get_f_xyz_L_err(results,max_err=max_err,typ=typ)
         if fstart is not None:
@@ -571,7 +571,7 @@ def plot_movie_2d(results,
                         if str(camn) in row3d['camns_used']:
                             cu = 1
                     camn_used.append( cu )
-                    
+
             f2 = nx.array(f2)
             x2 = nx.array(x2)
             y2 = nx.array(y2)
@@ -638,7 +638,7 @@ def plot_whole_movie_3d(results, typ='best', show_err=False, max_err=10,
                         fstart=None, fstop=None):
     import flydra.reconstruct
     ioff()
-    
+
     if typ == 'fast':
         data3d = results.root.data3d_fast
     elif typ == 'best':
@@ -670,7 +670,7 @@ def plot_whole_movie_3d(results, typ='best', show_err=False, max_err=10,
     ax_z = pylab.axes([0.1,  0.25,  0.8, yinc],sharex=ax_x)
     ax_xlen = pylab.axes([0.1, 0.15,  0.8, 0.1],sharex=ax_x)
     ax_err = pylab.axes([0.1, 0.05,  0.8, 0.1],sharex=ax_x)
-    
+
     # plot it!
     xl=ax_x.plot(f,x,'r.')
     ax_x.axhline(y=730)
@@ -690,7 +690,7 @@ def plot_whole_movie_3d(results, typ='best', show_err=False, max_err=10,
     ax_xlen.plot( f, nx.arctan2(U[:,1],U[:,0]), 'r.')
     ax_xlen.set_ylabel('angle')
     ax_xlen.set_ylim([-4,4])
-        
+
     ax_err.plot(f,err,'k.')
     ax_err.set_xlabel('frame no.')
     ax_err.xaxis.set_major_formatter(matplotlib.ticker.OldScalarFormatter())
@@ -747,7 +747,7 @@ def plot_whole_range(results, start_frame, stop_frame, typ='best', show_err=Fals
     z = nx.array(z)
     if show_err:
         err = nx.array(data3d.cols.mean_dist)
-    
+
     # plot it!
     ax = pylab.axes()
     ax.plot(f,x,'r.')
@@ -765,8 +765,8 @@ def save_smooth_data(results,frames,Psmooth,Qsmooth,table_name='smooth_data'):
         smooth_data = results.createTable(results.root,table_name,SmoothData,'')
     else:
         smooth_data = results.root.smooth_data
-        
-    for i in range(len(frames)):        
+
+    for i in range(len(frames)):
         frame = frames[i]
         P = Psmooth[i]
         Q = Qsmooth[i]
@@ -778,7 +778,7 @@ def save_smooth_data(results,frames,Psmooth,Qsmooth,table_name='smooth_data'):
                 raise RuntimeError('more than row with frame number %d in smooth_data'%frame)
             old_nrow = row.nrow
             old_nrow = int(old_nrow) # XXX pytables bug ?
-        
+
         new_row = []
         new_row_dict = {}
         for colname in smooth_data.colnames:
@@ -813,8 +813,8 @@ def save_timed_forces(table_name,results,frames,resultant):
         resultant_forces = results.createTable(results.root,table_name,TimedVectors,'')
     else:
         resultant_forces = results.root.resultant_forces
-        
-    for i in range(len(frames)):        
+
+    for i in range(len(frames)):
         frame = frames[i]
         fxyz = resultant[i]
 
@@ -825,7 +825,7 @@ def save_timed_forces(table_name,results,frames,resultant):
             if old_nrow is not None:
                 raise RuntimeError('more than row with frame number %d in smooth_data'%frame)
             old_nrow = row.nrow()
-        
+
         new_row = []
         new_row_dict = {}
         for colname in resultant_forces.colnames:
@@ -859,11 +859,11 @@ def update_exact_roi_movie_info(results,cam_id,roi_movie_basename):
 
     WARNING: This is pretty heavy-handed for giant files. On these it
     would be better to use update_small_fmf_summary().
-    
+
     last used extensively 2006-05-16
     """
     status('making exact ROI movie info for %s'%cam_id)
-    
+
     data2d = results.root.data2d
 
     if hasattr(results.root,'exact_roi_movie_info'):
@@ -966,7 +966,7 @@ def update_exact_roi_movie_info(results,cam_id,roi_movie_basename):
     finally:
         exact_roi_movie_info.flush()
     print 'done'
-    
+
 _caching_movie_opener = caching_movie_opener.CachingMovieOpener()
 get_movie_frame2 = _caching_movie_opener.get_movie_frame
 get_background_image = _caching_movie_opener.get_background_image
@@ -976,13 +976,13 @@ def get_movie_frame2_orig(results, cam_timestamp_or_frame, cam, suffix=None):
     # OLD, delete me
     if suffix is None:
         suffix = ''
-        
+
     if isinstance(cam_timestamp_or_frame,float):
         cam_timestamp = cam_timestamp_or_frame
     else:
         frame = cam_timestamp_or_frame
         camn, cam_timestamp = get_camn_and_remote_timestamp(results,cam,frame)
-    
+
     cam_info = results.root.cam_info
     movie_info = results.root.movie_info
     data2d = results.root.data2d
@@ -994,7 +994,7 @@ def get_movie_frame2_orig(results, cam_timestamp_or_frame, cam, suffix=None):
         cam_id = [x['cam_id'] for x in cam_info if x['camn'] == camn ][0]
     elif isinstance(cam,str): # cam_id
         cam_id = cam
-        
+
     if not hasattr(results.root,'exact_movie_info'):
         make_exact_movie_info2(results)
     exact_movie_info = results.root.exact_movie_info
@@ -1025,13 +1025,13 @@ def recompute_3d_from_2d(results,
     recompute 3D from 2D over many frames
 
     See also redo_3d_calc() for single frames.
-    
+
     Last used 2006-07-23.
     """
     import flydra.reconstruct
     import flydra.reconstruct_utils as ru
     import flydra.MainBrain as mb
-    
+
     # allow rapid building of numarray.records.RecArray:
     Info3DColNames = PT.Description(mb.Info3D().columns)._v_names
     Info3DColFormats = PT.Description(mb.Info3D().columns)._v_nestedFormats
@@ -1044,9 +1044,9 @@ def recompute_3d_from_2d(results,
     for row in cam_info:
         cam_id, camn = row['cam_id'], row['camn']
         camn2cam_id[camn]=cam_id
-        
+
     max_n_cameras = len(reconstructor.cam_combinations[0])
-    
+
     if not hypothesis_test:
         if typ == 'fast':
             data3d = results.root.data3d_fast
@@ -1134,7 +1134,7 @@ def recompute_3d_from_2d(results,
                         list_of_row_tup3d,
                         absolutely_save=False
                         ):
-            n_saved = 0            
+            n_saved = 0
             if 0:
                 print 'computing 3d for frame %d'%do_frame_no
                 print 'do_idxs_in_comp',do_idxs_in_comp
@@ -1161,7 +1161,7 @@ def recompute_3d_from_2d(results,
                              line3d[3],line3d[4],line3d[5],
                              time.time(),
                              camns_used_str, mean_dist)
-                    
+
                 list_of_row_tup3d.append( row_tup3d )
                 # save to disk every 100 rows
                 if ((absolutely_save and len(list_of_row_tup3d)) or
@@ -1177,7 +1177,7 @@ def recompute_3d_from_2d(results,
             return n_saved
         ############################################
 
-            
+
         # create new data3d
         data3d = results.createTable(results.root,
                                      'data3d_best', mb.Info3D,
@@ -1197,7 +1197,7 @@ def recompute_3d_from_2d(results,
             if chunk_start>=n_2d_rows:
                 break
             #        chunk_stop is index x[y] (not slice x[:y])
-            chunk_stop = chunk_start+approx_chunksize 
+            chunk_stop = chunk_start+approx_chunksize
             chunk_stop = min(chunk_stop,n_2d_rows-1) # make sure we're not off end
             next_chunk_stop = chunk_stop+1
             chunk_stop_idx = stably_sorted_idxs[chunk_stop]
@@ -1206,7 +1206,7 @@ def recompute_3d_from_2d(results,
             while 1:
                 if next_chunk_stop>=n_2d_rows:
                     break # at end of list
-                
+
                 # make sure to get all rows with same frame number
                 next_chunk_stop_idx = stably_sorted_idxs[next_chunk_stop]
                 test_stop_frame = all_frames[next_chunk_stop_idx]
@@ -1234,7 +1234,7 @@ def recompute_3d_from_2d(results,
                     chunk_start, chunk_stop,n_2d_rows,stop_frame)
 
             chunk_idxs=stably_sorted_idxs[chunk_start:chunk_stop+1]
-            
+
             # get contiguous block of 2D table
             first_chunk_idx = chunk_idxs.min()
             last_chunk_idx  = chunk_idxs.max()
@@ -1256,7 +1256,7 @@ def recompute_3d_from_2d(results,
 
             for idx in chunk_relative_idxs:
                 row = chunk[idx]
-                
+
                 frame_no = row['frame']
                 if 0:
                     print
@@ -1267,13 +1267,13 @@ def recompute_3d_from_2d(results,
                 if frame_no != last_frame_no:
                     # previous frame data collection over -- compute 3D
                     # clear data collection apparatus
-                    
+
                     #print 'frame_no',frame_no,'(% 5d of %d)'%(count,n_rows)
                     do_d2 = d2 # save for 3D calc
                     do_frame_no = last_frame_no
                     do_idxs_in_comp = idxs_in_comp
                     do_cam_id2camn = cam_id2camn
-                    
+
                     last_frame_no = frame_no
                     d2 = {}
                     cam_id2camn = {} # must be recomputed each frame
@@ -1286,11 +1286,11 @@ def recompute_3d_from_2d(results,
                                                      do_idxs_in_comp,
                                                      do_cam_id2camn,
                                                      list_of_row_tup3d)
-                    
+
                 # collect all data from data2d row for this frame
                 # load all 2D data
                 idxs_in_comp.append(int(idx))
-                
+
                 camn = row['camn']
                 if camn in did_camns:
                     # only take 1st found point... XXX should fix (with Kalman?)
@@ -1308,7 +1308,7 @@ def recompute_3d_from_2d(results,
                                   row['eccentricity'],
                                   row['p1'], row['p2'],
                                   row['p3'], row['p4'])
-                    
+
             # repeat 3d calcs on last idx in chunk:
             #print 'frame_no',frame_no,'(% 5d of %d)'%(count,n_rows)
             do_d2 = d2 # save for 3D calc
@@ -1323,7 +1323,7 @@ def recompute_3d_from_2d(results,
                                          absolutely_save=True)
             print 'running total: %d 3d frames found'%(total_n_saved,)
         print     '        total: %d 3d frames found'%(total_n_saved,)
-      
+
 def switch_data2d_to_data2d_distorted(results):
     """
 
@@ -1331,20 +1331,20 @@ def switch_data2d_to_data2d_distorted(results):
     undistortion parameters. (In other words, this only produces valid
     data if the calibration data in the results file is that which was
     used to construct data2d.)
-    
+
     """
     import flydra.MainBrain as MainBrain
-    
+
     reconstructor = get_reconstructor(results)
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
 
     data2d = results.root.data2d
-    
+
     # remove any old data2d_distorted structures
     if hasattr(results.root,'data2d_distorted'):
         print 'deleting old data2d_distorted'
         results.removeNode( results.root.data2d_distorted )
-        
+
     # create new data3d
     data2d_distorted = results.createTable(
         results.root,
@@ -1374,7 +1374,7 @@ def switch_data2d_to_data2d_distorted(results):
             chunk_y[i] = y_distorted
         data2d_distorted.append(chunk)
         data2d_distorted.flush()
-        
+
     print 'should now delete results.root.data2d'
 
 def plot_all_images(results,
@@ -1423,13 +1423,13 @@ def plot_all_images(results,
     #if origin == 'upper' and zoomed==True: raise NotImplementedError('')
     if plot_true_3d_line and plot_3d_unit_vector:
         raise ValueError('options plot_true_3d_line and plot_3d_unit_vector are mutually exclusive')
-    
+
     if fixed_im_centers is None:
         fixed_im_centers = {}
     if fixed_im_lims is None:
         fixed_im_lims = {}
     ioff()
-    
+
     import flydra.reconstruct
 
     if 'reconstructor' not in plt_all_images_locals_cache:
@@ -1437,7 +1437,7 @@ def plot_all_images(results,
             flydra.reconstruct.Reconstructor(results))
     reconstructor = plt_all_images_locals_cache['reconstructor']
     assert reconstructor.cal_source == results # make sure cache is valid
-    
+
     if typ == 'fast':
         data3d = results.root.data3d_fast
     elif typ == 'best':
@@ -1459,7 +1459,7 @@ def plot_all_images(results,
     for row in cam_info:
         cam_id, camn = row['cam_id'], row['camn']
         camn2cam_id[camn]=cam_id
-    
+
     # find total number of cameras plugged in:
     cam_ids=list(sets.Set(cam_info.cols.cam_id))
     cam_ids.sort()
@@ -1479,9 +1479,9 @@ def plot_all_images(results,
             if err > max_err:
                 X, line3d = None, None
                 camns_used = ()
-                
+
     undistorted_bgs = {}
-        
+
     clf()
     figtext( 0.5, 0.99, '% 5.2f sec'%( (frame_no-start_frame_offset)/100.0,),
              horizontalalignment='center',
@@ -1489,7 +1489,7 @@ def plot_all_images(results,
              )
     for subplot_number,cam_id in enumerate(cam_ids):
         width, height = reconstructor.get_resolution(cam_id)
-        
+
         i = cam_ids.index(cam_id)
         ax=dougs_subplot(subplot_number)
         setp(ax,'frame_on',display_labels)
@@ -1499,7 +1499,7 @@ def plot_all_images(results,
         slopes=[]
         eccentricities=[]
         remote_timestamps=[]
-        
+
         for row in data2d.where(data2d.cols.frame==frame_no):
             test_camn = row['camn']
             if camn2cam_id[test_camn] == cam_id:
@@ -1514,13 +1514,13 @@ def plot_all_images(results,
                 slopes.append(row['slope'])
                 eccentricities.append(row['eccentricity'])
                 remote_timestamps.append(row['timestamp'])
-                    
+
         # check to make sure they're from the same time
         if len(sets.Set(remote_timestamps))>1:
             raise RuntimeError("somehow more than one timestamp from same frame!?")
         if len(remote_timestamps):
             remote_timestamp = remote_timestamps[0]
-            
+
         have_2d_data = bool(len(xs))
         if no_2d_data_mode=='blank' and not have_2d_data:
             setp(ax,'frame_on',False)
@@ -1529,7 +1529,7 @@ def plot_all_images(results,
             continue
 
         title_str = cam_id
-        
+
         im, movie_timestamp = None, None # make sure these aren't falsely set
         del im, movie_timestamp          # make sure these aren't falsely set
         undistorted_im = None
@@ -1610,7 +1610,7 @@ def plot_all_images(results,
                         im = undistort.rect(im, f=f, c=c, k=k)
 
                 code_path_0 = False
-                
+
                 if have_2d_data and zoomed:
                     code_path_0 = True
                     xcenter, ycenter = xs[0],ys[0]
@@ -1624,10 +1624,10 @@ def plot_all_images(results,
                         if 0<=reproj_y<=height:
                             xcenter,ycenter = reproj_x,reproj_y
                             code_path_0 = True
-                    
+
                 if code_path_0:
                     #print 'XXX code path 0',cam_id
-                
+
                     w = 13
                     h = 20
                     xcenter, ycenter = fixed_im_centers.get(
@@ -1640,7 +1640,7 @@ def plot_all_images(results,
                     # workaround ipython -pylab mode:
                     max = sys.modules['__builtin__'].max
                     min = sys.modules['__builtin__'].min
-                    
+
                     xmin = max(0,xmin)
                     xmax = min(xmax,width-1)
                     ymin = max(0,ymin)
@@ -1648,7 +1648,7 @@ def plot_all_images(results,
 
                     (xmin, xmax), (ymin, ymax) = fixed_im_lims.get(
                         cam_id, ((xmin,xmax),(ymin,ymax)) )
-                    
+
                     if xmax>xmin and ymax>ymin: # distortion can cause this not to be true
 
                         if origin == 'upper':
@@ -1666,7 +1666,7 @@ def plot_all_images(results,
                             extent = (xmin,xmax,ymin,ymax)
                         im = im.copy() # make contiguous
                         im_small = im[ymin:ymax,xmin:xmax]
-                        
+
                         if origin == 'upper':
                             im_small = im_small[::-1] # flip-upside down
                         im_small = im_small.copy()
@@ -1677,7 +1677,7 @@ def plot_all_images(results,
                                   extent = extent,
                                   vmin=0,vmax=255,
                                   )
-                    
+
                 else:
                     if no_2d_data_mode=='plot_reproj_with_bg' and zoomed:
                         # plot nothing and continue...
@@ -1685,7 +1685,7 @@ def plot_all_images(results,
                         setp(ax,'xticks',[])
                         setp(ax,'yticks',[])
                         continue
-                    
+
                     #print 'XXX code path 1',cam_id
                     xmin=0
                     xmax=width-1
@@ -1694,10 +1694,10 @@ def plot_all_images(results,
 
 ##                    (xmin, xmax), (ymin, ymax) = fixed_im_lims.get(
 ##                        cam_id, ((xmin,xmax),(ymin,ymax)) )
-                    
+
                     show_ymin = ymin
                     show_ymax = ymax
-                    
+
                     if origin == 'upper':
                         extent = (xmin,xmax,height-ymax,height-ymin)
                     else:
@@ -1713,15 +1713,15 @@ def plot_all_images(results,
 
             else:
                 #print 'XXX code path 2',cam_id
-                    
+
                 xmin=0
                 xmax=width-1
                 ymin=0
                 ymax=height-1
-                
+
                 (xmin, xmax), (ymin, ymax) = fixed_im_lims.get(
                     cam_id, ((xmin,xmax),(ymin,ymax)) )
-                
+
                 show_ymin = ymin
                 show_ymax = ymax
 
@@ -1731,7 +1731,7 @@ def plot_all_images(results,
 
                 if not do_undistort:
                     x,y = reconstructor.distort(cam_id,(x,y))
-                
+
                 # raw 2D
                 if PLOT_GREEN:
                     if origin == 'upper':
@@ -1788,7 +1788,7 @@ def plot_all_images(results,
                         x2 = -(c+b*y2)/a
                     elif y2 > ymax:
                         y2 = ymax
-                        x2 = -(c+b*y2)/a                
+                        x2 = -(c+b*y2)/a
 
                     if plot_orientation:
                         if origin == 'upper':
@@ -1804,7 +1804,7 @@ def plot_all_images(results,
                             #setp(lines,'color',green)
                             #setp(lines[0],'linewidth',0.8)
             del x,y,eccentricity,slope # remove loop variables
-                            
+
         if X is not None:
 ##            if line3d is None:
 ##                reproj_x,reproj_y=reconstructor.find2d(cam_id,X)
@@ -1831,7 +1831,7 @@ def plot_all_images(results,
                 setp(lines,'markerfacecolor',(1,0,0))
                 setp(lines,'markeredgewidth',0.0)
                 setp(lines,'markersize',4.0)
-                
+
             if PLOT_RED and line3d is not None:
                 if plot_orientation:
                     if plot_3d_unit_vector:
@@ -1905,7 +1905,7 @@ def plot_all_images(results,
                     lines=ax.plot([x,unit_x],[height-y,height-unit_y],'b-',linewidth=1.5)
                 else:
                     lines=ax.plot([x,unit_x],[y,unit_y],'b-',linewidth=1.5)
-                
+
         if display_titles:
             title(title_str)
         if have_limit_data:
@@ -1947,15 +1947,15 @@ def update_small_fmf_summary(results,cam_id,roi_movie_basename):
     last used extensively 2006-05-17
     """
     status('making summary ROI movie info for %s'%cam_id)
-    
+
     cam_summary = results.root.data2d_camera_summary
-    
+
     if hasattr(results.root,'small_fmf_summary'):
         small_fmf_summary = results.root.small_fmf_summary
     else:
         small_fmf_summary = results.createTable(results.root,'small_fmf_summary',SmallFMFSummary,'')
     table = small_fmf_summary
-    
+
     fmf_filename = roi_movie_basename + '.fmf'
     #smd_filename = roi_movie_basename + '.smd'
 
@@ -1969,11 +1969,11 @@ def update_small_fmf_summary(results,cam_id,roi_movie_basename):
     else:
         fmf.seek(0)
         fmf_start_timestamp = fmf.get_next_timestamp()
-        
+
         fmf.seek(-1)
         fmf_stop_timestamp = fmf.get_next_timestamp()
     fmf.close()
-    
+
     for row in cam_summary.where( cam_summary.cols.cam_id == cam_id ):
         start_timestamp = max(fmf_start_timestamp,row['start_timestamp'])
         stop_timestamp = min(fmf_stop_timestamp,row['stop_timestamp'])
@@ -1982,7 +1982,7 @@ def update_small_fmf_summary(results,cam_id,roi_movie_basename):
             continue
         if stop_timestamp < row['start_timestamp']:
             continue
-        
+
         # keep in loop because cam_id can have multiple camns
         newrow = table.row
         newrow['cam_id'] = cam_id
@@ -1992,7 +1992,7 @@ def update_small_fmf_summary(results,cam_id,roi_movie_basename):
         newrow['basename'] = roi_movie_basename
         newrow.append()
     table.flush()
-        
+
 def plot_simple_phase_plots(results,form='xy',max_err=10,typ='best',ori_180_ambig=True):
     from matplotlib.collections import LineCollection
     f,xyz,L,err = get_f_xyz_L_err(results,max_err=max_err,typ=typ)
@@ -2075,7 +2075,7 @@ def emit_recalibration_data(results, calib_dir,
         print 'OLD camera centers (may be useful for recalibration):'
         save_ascii_matrix(sys.stdout,cam_centers)
         print
-    
+
     data3d = results.root.data3d_best
     coords = data3d.getWhereList(data3d.cols.mean_dist <= max_err)
     coords_frames = nx.asarray(data3d.readCoordinates( coords, 'frame' ))
@@ -2165,7 +2165,7 @@ def emit_recalibration_data(results, calib_dir,
                         print '  saving %d cameras:'%len(cam_ids),' '.join(cam_ids)
                         print
                 to_output.append(row_dict)
-                
+
     all_cam_ids = cam_id2camns.keys()
     all_cam_ids.sort()
     print '%d calibration points found'%len(to_output)
@@ -2178,7 +2178,7 @@ def emit_recalibration_data(results, calib_dir,
     count_by_cam_id = {}
     for cam_id in all_cam_ids:
         count_by_cam_id[cam_id]=0
-        
+
     for row_dict in to_output:
         ids = []
         save_points = []
@@ -2219,16 +2219,16 @@ def emit_recalibration_data(results, calib_dir,
     Res = nx.array( Res )
 
     # save the data
-    
+
     save_ascii_matrix(os.path.join(calib_dir,'IdMat.dat'),IdMat)
     save_ascii_matrix(os.path.join(calib_dir,'points.dat'),points)
     save_ascii_matrix(os.path.join(calib_dir,'Res.dat'),Res)
-    
+
     fd = open(os.path.join(calib_dir,'camera_order.txt'),'w')
     for cam_id in all_cam_ids:
         fd.write('%s\n'%cam_id)
     fd.close()
-            
+
 def save_movie(results):
     """convenience function for calling plot_all_images
 
@@ -2265,8 +2265,8 @@ def save_movie(results):
     elif 1: #jerky
         start_frame = 1021340
         stop_frame =  1021350
-        
-    
+
+
     plt_all_images_locals_cache = {}
     for frame in range(start_frame, stop_frame, 1):
         clf()
@@ -2282,19 +2282,19 @@ def save_movie(results):
                             #colormap='grayscale',
                             colormap='jet',
                             #zoomed=True,
-                            
+
                             #frame_type='small_frame_only',
                             frame_type='small_frame_and_bg',
 
                             #do_undistort=False, # leave images untouched, but drawn lines are undistorted, while everything else is distorted
                             do_undistort=True, # for alignment with points
-                            
+
                             plot_true_3d_line=False,
                             plot_3d_unit_vector=False,
-                            
+
                             #plot_orientation=True,
                             plot_orientation=False,
-                            
+
                             origin='lower',
                             display_labels=False,
                             display_titles=False,
@@ -2309,7 +2309,7 @@ def save_movie(results):
                             no_2d_data_mode='blank',
                             plt_all_images_locals_cache=plt_all_images_locals_cache,
                             )
-            
+
             print ' saving...',
             sys.stdout.flush()
             savefig(fname)
@@ -2323,7 +2323,7 @@ def plot_camera_view(results,camn):
     try:
         start_frame = 68942+330
         stop_frame = 68942+360
-        
+
         f1 = start_frame
         f2 = stop_frame
 
@@ -2354,11 +2354,11 @@ def plot_camera_view(results,camn):
     finally:
         ion()
     return f, cam_timestamps
-    
+
 def get_data_array(results):
 ##    import flydra.reconstruct
 ##    save_ascii_matrix
-    
+
     data3d = results.root.data3d_best
 
     M = []
@@ -2369,7 +2369,7 @@ def get_data_array(results):
 
 def get_start_stop_times( results ):
     data3d = results.root.data3d_best
-    
+
     # XXX Assume all rows in table are in chronological
     # order. (Messing with tables during analysis could have screwed
     # this up.)
@@ -2378,14 +2378,14 @@ def get_start_stop_times( results ):
         results = data3d.cols.timestamp[0], data3d.cols.timestamp[-1]
     except IndexError:
         results = None
-        
+
     return results
 
 ##    all_times = data3d.cols.timestamp
 ##    timin = nx.argmin(all_times)
 ##    timax = nx.argmax(all_times)
 ##    return all_times[timin], all_times[timax]
-    
+
 def get_timestamp( results, frame, cam):
     camn2cam_id = {}
     for row in results.root.cam_info:
@@ -2434,7 +2434,7 @@ class RT_Analyzer_State:
         bg_frame_server = get_server(cam_id,port=9899) # port 9889 for bg images
         self.frame_server_dict_fg = { cam_id:fg_frame_server }
         self.frame_server_dict_bg = { cam_id:bg_frame_server }
-        
+
 
 def get_frame_ts_and_realtime_analyzer_state( results,
                                               frame = 6804,
@@ -2451,37 +2451,37 @@ def get_frame_ts_and_realtime_analyzer_state( results,
     if timestamp is None:
         return None,None,None
     print 'timestamp',timestamp
-            
-    cam_info = results.root.cam_info      
+
+    cam_info = results.root.cam_info
     cam_id = [x['cam_id'] for x in cam_info if x['camn'] == camn ][0]
 
-    import realtime_image_analysis
+    import motmot.realtime_image_analysis.realtime_image_analysis as realtime_image_analysis
     import flydra.reconstruct
-    import FastImage
-    
+    import motmot.FastImage.FastImage as FastImage
+
     frame,timestamp2=get_movie_frame2(results, timestamp, camn, suffix='')
     assert timestamp2-timestamp < 1e-15
     bg_frame,bg_timestamp=get_movie_frame2(results, timestamp, camn, suffix='_bg')
     bg_frame_fi = FastImage.asfastimage(bg_frame)
     std_frame,std_timestamp=get_movie_frame2(results, timestamp, camn, suffix='_std')
     std_frame_fi = FastImage.asfastimage(std_frame)
-    
+
     if 0:
         diff = frame.astype(numarray.Int32) - bg_frame.astype(numarray.Int32)
         imshow(diff)
         colorbar()
-    
+
     reconstructor = flydra.reconstruct.Reconstructor(results)
-    
+
     ALPHA = 0.1
     rt = realtime_image_analysis.RealtimeAnalyzer(frame.shape[1],frame.shape[0])
-    
+
     mean_im = rt.get_image_view('mean')
     bg_frame_fi.get_8u_copy_put(mean_im,bg_frame_fi.size)
 
     cmp_im = rt.get_image_view('cmp')
     std_frame_fi.get_8u_copy_put(cmp_im,std_frame_fi.size)
-    
+
     rt.set_reconstruct_helper( reconstructor.get_recontruct_helper_dict()[cam_id] )
     rt.pmat = reconstructor.get_pmat(cam_id)
     if clear_threshold is None:
@@ -2501,7 +2501,7 @@ def show_working_image(results,cam,fno,
         camn = cam
     else:
         orig_cam_id = cam
-        
+
         cam_id2camns = {}
         for row in results.root.cam_info:
             add_cam_id, add_camn = row['cam_id'], row['camn']
@@ -2517,7 +2517,7 @@ def show_working_image(results,cam,fno,
 
         if not found:
             raise ValueError("could not find data for cam")
-                    
+
     use_roi2 = True
     frame, ts, rt = get_frame_ts_and_realtime_analyzer_state( results,
                                                               fno, camn,
@@ -2545,13 +2545,13 @@ def recompute_2d_data(results,
     """
     import flydra_ipp.realtime_image_analysis4 as realtime_image_analysis
     import flydra.reconstruct
-    import FastImage
+    import motmot.FastImage.FastImage as FastImage
     import Image
-    
+
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
-    
+
     data2d = results.root.data2d_distorted
-    
+
     # step 0: find all camns
     camns = data2d.read(field='camn',flavor='numpy')
     camns = numpy.unique(camns)
@@ -2571,7 +2571,7 @@ def recompute_2d_data(results,
         this_camn_frames = data2d.readCoordinates( this_camn_idxs,
                                                    field='frame', flavor='numpy')
         timestamp2frame[camn] = LinearInterpolator( this_camn_timestamps, this_camn_frames )
-        
+
         # check interpolation
         frame_guesses = timestamp2frame[camn](this_camn_timestamps)
         if numpy.any( abs(frame_guesses-this_camn_frames) > 0.5 ):
@@ -2593,15 +2593,15 @@ def recompute_2d_data(results,
     for camn in camns:
         # loop over every camera
         cam_id = camn2cam_id[camn]
-        
+
         for row in results.root.movie_info.where(results.root.movie_info.cols.cam_id==cam_id):
             # loop over every .fmf file
-            
+
             filename = row['filename']
-            
+
             if movie_dir is not None:
                 filename = os.path.join(movie_dir,os.path.split(filename)[-1])
-            
+
             bg_filename = os.path.splitext(filename)[0]+'_bg.fmf'
             std_filename = os.path.splitext(filename)[0]+'_std.fmf'
 
@@ -2614,7 +2614,7 @@ def recompute_2d_data(results,
             w = fmf.get_width()
             h = fmf.get_height()
             lbrt = (0,0,w-1,h-1)
-            
+
             rt = realtime_image_analysis.RealtimeAnalyzer(lbrt,w,h,
                                                           max_num_points,roi2_radius)
 
@@ -2626,7 +2626,7 @@ def recompute_2d_data(results,
             rt.set_pmat( reconstructor.get_pmat(cam_id) )
             rt.clear_threshold = clear_threshold
             rt.diff_threshold = diff_threshold
-            
+
             mean_im = rt.get_image_view('mean')
             cmp_im = rt.get_image_view('cmp')
             next_bg_frame, next_bg_timestamp = fmf_bg.get_next_frame()
@@ -2646,7 +2646,7 @@ def recompute_2d_data(results,
 
                 if count%100==0:
                     print '%d frames analyzed'%(count,)
-                    
+
                 if current_timestamp >= next_bg_timestamp:
                     current_bg_frame = next_bg_frame
                     current_bg_timestamp = next_bg_timestamp
@@ -2658,7 +2658,7 @@ def recompute_2d_data(results,
                     except FlyMovieFormat.NoMoreFramesException:
                         print 'bg fmf ended (count %d)'%(count,)
                         next_bg_frame, next_bg_timestamp = None, numpy.inf
-                    
+
                 if current_timestamp >= next_std_timestamp:
                     current_std_frame = next_std_frame
                     current_std_timestamp = next_std_timestamp
@@ -2670,7 +2670,7 @@ def recompute_2d_data(results,
                     except FlyMovieFormat.NoMoreFramesException:
                         print 'std fmf ended (count %d)'%(count,)
                         next_std_frame, next_std_timestamp = None, numpy.inf
-                        
+
                 current_framenumber = int(round(timestamp2frame[camn](current_timestamp) ))
                 if 0:
                     if current_framenumber < 11820:
@@ -2683,15 +2683,15 @@ def recompute_2d_data(results,
                     print '%d timestamp: %s'%(count,repr(current_timestamp))
                     im=Image.fromstring('L',(w,h),current_frame.tostring())
                     im.save('frame%d.bmp'%count)
-                    
+
                     im=Image.fromstring('L',(w,h),current_bg_frame.tostring())
                     im.save('frame_bg_%d.bmp'%count)
                     print 'current_bg_timestamp',current_bg_timestamp
-                    
+
                     im=Image.fromstring('L',(w,h),current_std_frame.tostring())
                     im.save('frame_std_%d.bmp'%count)
                     print 'current_std_timestamp',current_std_timestamp
-                
+
                 points = rt.do_work(hw_roi_frame, current_timestamp, current_framenumber,
                                     use_roi2, use_cmp, return_first_xy, max_time_sec)
 
@@ -2725,24 +2725,24 @@ def recompute_2d_data(results,
     data2d.flush()
 
 def cam_usage(results,typ='best'):
-    
+
     start_frame = 68942+330
     stop_frame = 68942+360
-    
+
     if typ=='best':
         data3d = results.root.data3d_best
     elif typ=='fastest':
         data3d = results.root.data3d_fastest
-        
+
     data2d = results.root.data2d
     cam_info = results.root.cam_info
-    
+
     camn2cam_id = {}
-    
+
     for row in cam_info:
         cam_id, camn = row['cam_id'], row['camn']
         camn2cam_id[camn]=cam_id
-        
+
     for frame in range(start_frame, stop_frame+1):
         tmp_res = [ (row['camns_used'],row['mean_dist']) for row in data3d.where(data3d.cols.frame == frame) ]
         if len(tmp_res) == 0:
@@ -2750,7 +2750,7 @@ def cam_usage(results,typ='best'):
         assert len(tmp_res) == 1
         camns_used = map(int,tmp_res[0][0].split(' '))
         err = tmp_res[0][1]
-        
+
 #        print 'camns_used',camns_used
         used = [int(camn2cam_id[camn][3]) for camn in camns_used]
 #        print 'used',used
@@ -2762,7 +2762,7 @@ def cam_usage(results,typ='best'):
                 camns_found.append( row['camn'] )
                 cam_id = camn2cam_id[camn]
                 num = int(cam_id[3])
-                
+
         found_but_not_used = []
         for camn in camns_found:
             if camn not in camns_used:
@@ -2773,7 +2773,7 @@ def cam_usage(results,typ='best'):
         if 1:
         #if len(found_but_not_used):
             print 'frame %d:'%(frame,),
-            
+
             found_but_not_used.sort()
             for i in range( 6 ):
                 if i in found_but_not_used:
@@ -2819,7 +2819,7 @@ def cam_usage(results,typ='best'):
 ##    if X is not None:
 ##        import flydra.reconstruct
 ##        reconstructor = flydra.reconstruct.Reconstructor(results)
-        
+
 ##    by_cam_id = {}
 ##    for row in results.root.exact_movie_info:
 ##        print row
@@ -2868,7 +2868,7 @@ def cam_usage(results,typ='best'):
 
 ##        picker = MyPickClass(by_cam_id,cam_id)
 ##        mpl_id = pylab.connect('key_press_event',picker.pick)
-                         
+
 ##        try:
 ##            print 'connected MPL event',mpl_id
 ##            pylab.show()
@@ -2883,11 +2883,11 @@ def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
     f,xyz,L,err = get_f_xyz_L_err(results,max_err=max_err,typ=typ)
     del xyz
     del L
-    
+
     sort_order = nx.argsort( f )
     f = f[sort_order]
     err = err[sort_order]
-    
+
     good_frames = nx.take(f,nx.where( err < 10.0 ),axis=0)
     good_frames = good_frames[0] # make 1D array
 
@@ -2900,7 +2900,7 @@ def get_usable_startstop(results,min_len=100,max_break=5,max_err=10,typ='best'):
     results = []
     for break_idx in break_idxs:
         stop_frame = good_frames[break_idx]
-        
+
         if (stop_frame - start_frame + 1) >= min_len:
             results.append( (start_frame, stop_frame) )
 
@@ -2923,12 +2923,12 @@ def add_backgrounds_to_results(results,cam_id,bg_fmf_filename,frame=-1):
     fmf = FlyMovieFormat.FlyMovie(bg_fmf_filename,check_integrity=True)
     fmf.seek(frame)
     frame,timestamp = fmf.get_next_frame()
-    
+
     if not hasattr(results.root,'backgrounds'):
         backgrounds_group = results.createGroup(results.root,'backgrounds')
     else:
         backgrounds_group = results.root.backgrounds
-        
+
     pytables_filt = numpy.asarray
     results.createArray(backgrounds_group, cam_id,
                         pytables_filt(frame))
@@ -2965,7 +2965,7 @@ def simple_add_backgrounds(results):
                         break
         if found_file:
             add_backgrounds_to_results(results,cam_id,worked_filename)
-                    
+
 if __name__=='__main__':
     # for running in ipython:
     try:
@@ -2975,7 +2975,7 @@ if __name__=='__main__':
     else:
         results.close()
         del results
-        
+
     results = get_results('DATA20061219_190812.h5',mode='r+')
     #results = get_results('DATA20060315_170142.h5',mode='r+')
 
@@ -2983,7 +2983,7 @@ if __name__=='__main__':
     #results.close()
     #make_exact_movie_info2(results)
     if 0:
-        import FastImage
+        import motmot.FastImage.FastImage as FastImage
         for camn in [14]:
             for framenumber in range(1231000,1231800):
                 print
@@ -3019,7 +3019,7 @@ if __name__=='__main__':
                 for r in data2d.where( data2d.cols.camn == camn ):
                     if r['frame']==framenumber:
                         print 'orig: x,y,p1,eccentricity',r['x'],r['y'],r['p1'],r['eccentricity']
-                
+
 ##    if 1:
 ##        del results.root.exact_movie_info
 ##        results.close()

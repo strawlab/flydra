@@ -1,6 +1,6 @@
 import result_utils
 import smdfile
-import FlyMovieFormat
+import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 import numpy as nx
 
 class NoFrameRecordedHere(Exception):
@@ -12,7 +12,7 @@ class CachingMovieOpener:
     last used 2006-05-17
 
     """
-    
+
     def __init__(self):
         self.cache = {}
         self.fmfs_by_filename = {}
@@ -23,7 +23,7 @@ class CachingMovieOpener:
 
     def set_movie_dir(self,movie_dir):
         self.movie_dir = movie_dir
-        
+
     def _load_fmf_and_smd(self,indexes):
         results, camn, cam_id, frame_type, remote_timestamp = indexes
         if frame_type == 'full_frame_fmf':
@@ -52,7 +52,7 @@ class CachingMovieOpener:
                         basename = row['basename']
                         filename = basename+'.fmf'
                         break
-                    
+
             elif hasattr(results.root,'exact_roi_movie_info'):
                 found = False
                 exact_roi_movie_info = results.root.exact_roi_movie_info
@@ -63,7 +63,7 @@ class CachingMovieOpener:
                     break
             else:
                 raise RuntimeError('need "small_fmf_summary" or "exact_roi_movie_info" table')
-            
+
             if not found:
                 raise NoFrameRecordedHere("frame not found for %s, %s"%(cam_id,repr(remote_timestamp)))
 
@@ -74,7 +74,7 @@ class CachingMovieOpener:
         fmf = self.fmfs_by_filename[filename]
         smd = self.smds_by_fmf_filename[filename]
         return (fmf, smd)
-    
+
     def get_movie_frame(self,
                         results,
                         remote_timestamp_or_frame,
@@ -87,7 +87,7 @@ class CachingMovieOpener:
                         ):
         if frame_type is None:
             frame_type = 'full_frame_fmf'
-            
+
         if frame_type not in ['small_frame_and_bg',
                               'small_frame_only',
                               'full_frame_fmf']:
@@ -96,7 +96,7 @@ class CachingMovieOpener:
         print 'XY0'
         if frame_type != 'full_frame_fmf' and suffix is not None:
             raise ValueError("suffix has no meaning unless frame_type is full_frame_fmf")
-        
+
         if suffix is None:
             suffix = ''
 
@@ -190,7 +190,7 @@ class CachingMovieOpener:
                 # no frame found
                 frame = bg_frame
         return frame, movie_timestamp
-    
+
     def get_background_image(self,results, cam_id):
         idx = (results,cam_id)
         if idx not in self.bg_image_cache:
@@ -207,12 +207,12 @@ class CachingMovieOpener:
         c = intrin[0,2], intrin[1,2] # camera center
         undist_im = undistort.rect(im, f=f, c=c, k=k)
         return undist_im
-        
+
     def get_undistorted_background_image(self,results,reconstructor,cam_id):
         im = self.get_background_image(results, cam_id)
         idx = (results,reconstructor,cam_id)
         if idx not in self.undistorted_bg_image_cache:
             self.undistorted_bg_image_cache[idx] = (
-                self._undist(idx,im))                
+                self._undist(idx,im))
         undist = self.undistorted_bg_image_cache[idx]
         return undist

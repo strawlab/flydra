@@ -18,7 +18,7 @@ pytables_filt = numpy.asarray
 import atexit
 import pickle, copy
 
-import motmot_utils.config
+import motmot.utils.config
 import flydra.kalman.flydra_kalman_utils
 import flydra.kalman.flydra_tracker
 import flydra.save_calibration_data as save_calibration_data
@@ -72,21 +72,21 @@ calib_IdMat = []
 calib_points = []
 
 ########
-# persistent configuration data ( implementation in motmot_utils.config )
+# persistent configuration data ( implementation in motmot.utils.config )
 def get_rc_params():
     defaultParams = {
         'frames_per_second'  : 100.0,
         }
-    fviewrc_fname = motmot_utils.config.rc_fname(filename='mainbrainrc',
+    fviewrc_fname = motmot.utils.config.rc_fname(filename='mainbrainrc',
                                                  dirname='.flydra')
-    rc_params = motmot_utils.config.get_rc_params(fviewrc_fname,
+    rc_params = motmot.utils.config.get_rc_params(fviewrc_fname,
                                                   defaultParams)
     return rc_params
 def save_rc_params():
-    save_fname = motmot_utils.config.rc_fname(must_already_exist=False,
+    save_fname = motmot.utils.config.rc_fname(must_already_exist=False,
                                               filename='mainbrainrc',
                                               dirname='.flydra')
-    motmot_utils.config.save_rc_params(save_fname,rc_params)
+    motmot.utils.config.save_rc_params(save_fname,rc_params)
 rc_params = get_rc_params()
 ########
 

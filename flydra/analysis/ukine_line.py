@@ -1,5 +1,5 @@
 import glob, os, sys
-import FlyMovieFormat
+import flydra.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 import matplotlib
 matplotlib.use('GTKAgg') # TkAgg doesn't work, at least without ioff(), which I haven't tried
 import pylab
@@ -10,7 +10,7 @@ nan = numpy.nan
 
 # base file names
 
-    
+
 
 base_fname = '~/%(cam)s/FLYDRA_LARGE_MOVIES/full_20061219_184851_%(cam_id)s_bg.fmf'
 # hdf5 file containing calibration data
@@ -44,14 +44,14 @@ for cam in cams:
             if cam_id is not None:
                 raise RuntimeError('>1 camera per host not yet supported')
             cam_id = c
-            
+
     fname = os.path.expanduser(base_fname%locals())
     print >> sys.stderr, cam_id,fname
-    
+
     fmf = FlyMovieFormat.FlyMovie(fname)
     frame,timestamp = fmf.get_frame(0)
     fmf.close()
-    
+
     pylab.imshow(frame,origin='lower')
 
     cg = ClickGetter()
@@ -87,7 +87,7 @@ for cam in cams:
         eccentricity = 1e10
         value_tuple = x,y,area,slope,eccentricity, p1,p2,p3,p4
         click_locations.append( (cam_id,value_tuple) )
-        
+
     print >> sys.stderr
 
 line3d = recon.find3d( click_locations,

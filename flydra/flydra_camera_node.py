@@ -13,7 +13,7 @@ import numpy as nx
 #import flydra.debuglock
 #DebugLock = flydra.debuglock.DebugLock
 
-import FlyMovieFormat
+import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 cam_iface = None # global variable, value set in main()
 import cam_iface_choose
 from optparse import OptionParser
@@ -37,7 +37,7 @@ else:
     ConnectionClosedError = NonExistantError
 import flydra.reconstruct_utils as reconstruct_utils
 import flydra.reconstruct
-import FastImage
+import flydra.FastImage.FastImage as FastImage
 #FastImage.set_debug(3)
 if os.name == 'posix' and sys.platform != 'darwin':
     import posix_sched
@@ -56,7 +56,7 @@ class DummyMainBrain:
         return 'camdummy_0'
     def get_and_clear_commands(self,*args,**kw):
         return {}
-    
+
 class DummySocket:
     def __init__(self,*args,**kw):
         self.connect = self.noop
@@ -68,7 +68,7 @@ class DummySocket:
 import flydra.common_variables
 NETWORK_PROTOCOL = flydra.common_variables.NETWORK_PROTOCOL
 
-import realtime_image_analysis
+import motmot.realtime_image_analysis.realtime_image_analysis as realtime_image_analysis
 
 if sys.platform == 'win32':
     time_func = time.clock
@@ -77,7 +77,7 @@ else:
 
 pt_fmt = '<dddddddddBBddBdddddd'
 small_datafile_fmt = '<dII'
-    
+
 # where is the "main brain" server?
 try:
     default_main_brain_hostname = socket.gethostbyname('brain1')
@@ -135,7 +135,7 @@ class GrabClass(object):
     def set_clear_threshold(self, value):
         self.realtime_analyzer.clear_threshold = value
     clear_threshold = property( get_clear_threshold, set_clear_threshold )
-    
+
     def get_diff_threshold(self):
         return self.realtime_analyzer.diff_threshold
     def set_diff_threshold(self, value):
@@ -170,17 +170,17 @@ class GrabClass(object):
         cc1 = intlin[0,2]
         cc2 = intlin[1,2]
         k1, k2, p1, p2 = intnonlin
-        
+
         helper = reconstruct_utils.ReconstructHelper(
             fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
 
         self.realtime_analyzer.set_reconstruct_helper( helper )
-    
+
     def grab_func(self,globals):
         DEBUG_DROP = globals['debug_drop']
         if DEBUG_DROP:
             debug_fd = open('debug_framedrop_cam.txt',mode='w')
-        
+
         # questionable optimization: speed up by eliminating namespace lookups
         cam_quit_event_isSet = globals['cam_quit_event'].isSet
         bg_frame_number = 0
@@ -192,19 +192,19 @@ class GrabClass(object):
 
         if hasattr(self.cam,'set_thread_owner'):
             self.cam.set_thread_owner()
-        
+
         max_frame_size = FastImage.Size(self.cam.get_max_width(), self.cam.get_max_height())
 
         hw_roi_w, hw_roi_h = self.cam.get_frame_size()
         cur_roi_l, cur_roi_b = self.cam.get_frame_offset()
         cur_fisize = FastImage.Size(hw_roi_w, hw_roi_h)
-        
+
         bg_changed = True
         use_roi2_isSet = globals['use_roi2'].isSet
         fi8ufactory = FastImage.FastImage8u
         use_cmp_isSet = globals['use_cmp'].isSet
         return_first_xy = 0
-        
+
         hw_roi_frame = fi8ufactory( cur_fisize )
 
         if BENCHMARK:
@@ -233,7 +233,7 @@ class GrabClass(object):
             self.log_message_queue.put((self.cam_id,time.time(),msg))
             print msg
 
-        
+
         #FastImage.set_debug(3) # let us see any images malloced, should only happen on hardware ROI size change
 
         self.cam.start_camera()  # start camera
@@ -257,19 +257,19 @@ class GrabClass(object):
 
         bg_image_full = FastImage.FastImage8u(max_frame_size)
         std_image_full = FastImage.FastImage8u(max_frame_size)
-        
+
         running_mean_im_full = FastImage.FastImage32f(max_frame_size)
 
         fastframef32_tmp_full = FastImage.FastImage32f(max_frame_size)
-        
+
         mean2_full = FastImage.FastImage32f(max_frame_size)
         running_stdframe_full = FastImage.FastImage32f(max_frame_size)
         compareframe_full = FastImage.FastImage32f(max_frame_size)
         compareframe8u_full = self.realtime_analyzer.get_image_view('cmp') # this is a view we write into
-        
+
         running_sumsqf_full = FastImage.FastImage32f(max_frame_size)
         running_sumsqf_full.set_val(0,max_frame_size)
-        
+
         noisy_pixels_mask_full = FastImage.FastImage8u(max_frame_size)
         mean_duration_no_bg = 0.0053 # starting value
         mean_duration_bg = 0.020 # starting value
@@ -286,12 +286,12 @@ class GrabClass(object):
         compareframe8u = compareframe8u_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
         running_sumsqf = running_sumsqf_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
         noisy_pixels_mask = noisy_pixels_mask_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
-        
+
         hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
         running_mean_im.get_8u_copy_put( running_mean8u_im, cur_fisize )
 
         #################### done initializing images ############
-        
+
         incoming_raw_frames_queue = globals['incoming_raw_frames']
         incoming_raw_frames_queue_put = incoming_raw_frames_queue.put
         if BENCHMARK:
@@ -365,14 +365,14 @@ class GrabClass(object):
                         print >> sys.stderr, msg
                     else:
                         n_frames_skipped = 0
-                        
+
                     diff = timestamp-old_ts
                     time_per_frame = diff/(n_frames_skipped+1)
                     if time_per_frame > 0.02:
                         msg = 'Warning: IFI is %f on %s at %s'%(time_per_frame,self.cam_id,time.asctime())
                         self.log_message_queue.put((self.cam_id,time.time(),msg))
                         print >> sys.stderr, msg
-                        
+
                 old_ts = timestamp
                 old_fn = framenumber
 
@@ -385,7 +385,7 @@ class GrabClass(object):
                 work_done_time = time.time()
                 if BENCHMARK:
                     t3 = work_done_time
-                
+
                 # allow other thread to see images
                 imname = globals['export_image_name'] # figure out what is wanted # XXX theoretically could have threading issue
                 if imname == 'raw':
@@ -427,7 +427,7 @@ class GrabClass(object):
                     t49=t4
                     t491=t4
                     t492=t4
-                
+
                 did_expensive = False
                 if collecting_background_isSet():
                     if bg_frame_number % self.bg_frame_interval == 0:
@@ -458,12 +458,12 @@ class GrabClass(object):
                         bg_changed = True
                         bg_frame_number = 0
                     bg_frame_number += 1
-                
+
                 tp3 = time.time()
                 if BENCHMARK:
                     t5 = tp3
                     #FastImage.set_debug(0) # let us see any images malloced, should only happen on hardware ROI size change
-                    
+
                 if take_background_isSet():
                     # reset background image with current frame as mean and 0 STD
                     hw_roi_frame.get_32f_copy_put( running_mean_im, max_frame_size )
@@ -476,19 +476,19 @@ class GrabClass(object):
                         # XXX TODO: cleanup
                         hw_roi_frame.get_32f_copy_put(running_sumsqf,max_frame_size)
                         running_sumsqf.toself_square(max_frame_size)
-                        
+
                         running_mean_im.get_square_put(mean2,max_frame_size)
                         running_sumsqf.get_subtracted_put(mean2,running_stdframe,max_frame_size)
-                        
+
                         compareframe8u.set_val(0, max_frame_size )
-                    
+
                     bg_changed = True
                     take_background_clear()
-                    
+
                 tp4 = time.time()
                 if BENCHMARK:
                     t6 = tp4
-                
+
                 if clear_background_isSet():
                     # reset background image with 0 mean and 0 STD
                     running_mean_im.set_val( 0, max_frame_size )
@@ -515,7 +515,7 @@ class GrabClass(object):
                         globals['incoming_bg_frames'].put(
                             (bg_image,std_image,timestamp,framenumber) ) # save it
                     bg_changed = False
-                    
+
                 # XXX could speed this with a join operation I think
                 data = struct.pack('<ddliI',timestamp,cam_received_time,
                                    framenumber,len(points),n_frames_skipped)
@@ -538,7 +538,7 @@ class GrabClass(object):
                 if DEBUG_DROP:
                     debug_fd.write('%d,%d\n'%(framenumber,len(points)))
                 #print 'sent data...'
-                    
+
                 if self.new_roi.isSet():
                     self.new_roi_data_lock.acquire()
                     try:
@@ -576,7 +576,7 @@ class GrabClass(object):
                     compareframe8u = compareframe8u_full.roi(l, b, cur_fisize)  # set ROI view
                     running_sumsqf = running_sumsqf_full.roi(l, b, cur_fisize)  # set ROI view
                     noisy_pixels_mask = noisy_pixels_mask_full.roi(l, b, cur_fisize)  # set ROI view
-        
+
                 bookkeeping_done_time = time.time()
                 bookkeeping_dur = bookkeeping_done_time-cam_received_time
 
@@ -590,14 +590,14 @@ class GrabClass(object):
                     print 'TIME BUDGET:'
                     print '   % 5.1f start of work'%((work_start_time-cam_received_time)*1000.0,)
                     print '   % 5.1f done with work'%((work_done_time-cam_received_time)*1000.0,)
-                    
+
                     print '   % 5.1f tp1'%((tp1-cam_received_time)*1000.0,)
                     print '   % 5.1f tp2'%((tp2-cam_received_time)*1000.0,)
                     if did_expensive:
                         print '     (did background/variance estimate)'
                     print '   % 5.1f tp3'%((tp3-cam_received_time)*1000.0,)
                     print '   % 5.1f tp4'%((tp4-cam_received_time)*1000.0,)
-                    
+
                     print '   % 5.1f end of all'%(bookkeeping_dur*1000.0,)
                     print
                     print 'mean_duration_bg',mean_duration_bg*1000
@@ -625,7 +625,7 @@ class GrabClass(object):
                     t4J += t491-t49
                     t4K += t492-t491
                     t4L += t5-t492
-                    
+
                     if numT == 1000:
                         tA *= 1000.0
                         tB *= 1000.0
@@ -675,7 +675,7 @@ class GrabClass(object):
                         numT = 0
 
 class App:
-    
+
     def __init__(self,max_num_points_per_camera=2,roi2_radius=10,
                  bg_frame_interval=50,
                  bg_frame_alpha=1.0/50.0,
@@ -729,8 +729,8 @@ class App:
 
         self.all_cams = []
         self.all_grabbers = []
-        self.reconstruct_helper = []        
-        
+        self.reconstruct_helper = []
+
         if not BENCHMARK or not FLYDRA_BT:
             print 'starting TimestampEcho thread'
             # run in single-thread for benchmark
@@ -738,7 +738,7 @@ class App:
                                                    name='TimestampEcho')
             timestamp_echo_thread.setDaemon(True) # quit that thread if it's the only one left...
             timestamp_echo_thread.start()
-        
+
         for cam_no in range(self.num_cams):
             backend = cam_iface.get_driver_name()
             if backend.startswith('prosilica_gige'):
@@ -793,10 +793,10 @@ class App:
             globals['use_roi2'] = threading.Event()
             globals['use_cmp'] = threading.Event()
             globals['use_cmp'].set()
-            
+
             # get settings
             scalar_control_info = {}
-            
+
             globals['cam_controls'] = {}
             CAM_CONTROLS = globals['cam_controls']
             num_props = cam.get_num_camera_properties()
@@ -829,27 +829,27 @@ class App:
                     CAM_CONTROLS[props['name']]=prop_num
                 scalar_control_info[props['name']] = (current_value,
                                                       min_value, max_value)
-                    
+
             diff_threshold = 11
             scalar_control_info['diff_threshold'] = diff_threshold
             clear_threshold = 0.2
             scalar_control_info['clear_threshold'] = clear_threshold
             scalar_control_info['visible_image_view'] = 'raw'
-            
+
             try:
                 scalar_control_info['trigger_mode'] = cam.get_trigger_mode_number()
             except cam_iface.CamIFaceError:
                 scalar_control_info['trigger_mode'] = 0
             scalar_control_info['roi2'] = globals['use_roi2'].isSet()
             scalar_control_info['cmp'] = globals['use_cmp'].isSet()
-            
+
             scalar_control_info['width'] = width
             scalar_control_info['height'] = height
             scalar_control_info['roi'] = 0,0,width-1,height-1
             scalar_control_info['max_framerate'] = cam.get_framerate()
             scalar_control_info['collecting_background']=globals['collecting_background'].isSet()
             scalar_control_info['debug_drop']=globals['debug_drop']
-            
+
             # register self with remote server
             port = 9834 + cam_no # for local Pyro server
             self.main_brain_lock.acquire()
@@ -866,9 +866,9 @@ class App:
             # Misc
             #
             # ----------------------------------------------------------------
-            
+
             self.reconstruct_helper.append( None )
-            
+
             # ----------------------------------------------------------------
             #
             # start camera thread
@@ -890,10 +890,10 @@ class App:
                                 main_brain_hostname=self.main_brain_hostname,
                                 )
             self.all_grabbers.append( grabber )
-            
+
             grabber.diff_threshold = diff_threshold
             grabber.clear_threshold = clear_threshold
-            
+
             if not BENCHMARK or FLYDRA_BT:
                 print 'starting grab thread'
 
@@ -909,7 +909,7 @@ class App:
             else:
                 # run in single-thread for benchmark
                 grabber.grab_func(globals)
-                
+
     def handle_commands(self, cam_no, cmds):
         cam = self.all_cams[cam_no]
         grabber = self.all_grabbers[cam_no]
@@ -932,7 +932,7 @@ class App:
                         cam.set_camera_property(enum,value,0)
                     elif property_name == 'roi':
                         #print 'flydra_camera_node.py: ignoring ROI command for now...'
-                        grabber.roi = value 
+                        grabber.roi = value
                     elif property_name == 'diff_threshold':
                         print 'setting diff_threshold',value
                         grabber.diff_threshold = value
@@ -971,7 +971,7 @@ class App:
                     #nxim = nx.array(im) # copy to native nx form, not view of __array_struct__ form
                     nxim = nx.asarray(im) # view of __array_struct__ form
                     self.main_brain.set_image(cam_id, (lb, nxim))
-                    
+
             elif key == 'request_missing':
                 camn_and_list = map(int,cmds[key].split())
                 camn, framenumber_offset = camn_and_list[:2]
@@ -983,7 +983,7 @@ class App:
                     print str(missing_framenumbers[:25]) + ' + ... + ' + str(missing_framenumbers[-25:])
                 else:
                     print str(missing_framenumbers)
-                    
+
                 last_points_framenumbers = self.last_points_framenumbers_by_cam[cam_no]
                 last_points = self.last_points_by_cam[cam_no]
 
@@ -1006,16 +1006,16 @@ class App:
                     elif idx == len(last_points_framenumbers):
                         still_missing.append( missing_framenumber )
                         continue
-                    
+
                     timestamp, points, camn_received_time = last_points[idx]
                     # make sure data is pure python, (not numpy)
                     missing_data.append( (int(camn), int(missing_framenumber), float(timestamp),
-                                          float(camn_received_time), points) ) 
+                                          float(camn_received_time), points) )
                 if len(missing_data):
                     self.main_brain_lock.acquire()
                     self.main_brain.receive_missing_data(cam_id, framenumber_offset, missing_data)
                     self.main_brain_lock.release()
-                    
+
                 if len(still_missing):
                     print '  Unable to find %d frames (camn %d):'%(
                         len(still_missing),
@@ -1024,8 +1024,8 @@ class App:
                         print str(still_missing[:25]) + ' + ... + ' + str(still_missing[-25:])
                     else:
                         print str(still_missing)
-                    
-                
+
+
             elif key == 'quit':
                 globals['cam_quit_event'].set()
             elif key == 'take_bg':
@@ -1057,14 +1057,14 @@ class App:
                     globals['small_fmf'] = None
             elif key == 'start_recording':
                 raw_filename, bg_filename = cmds[key]
-                
+
                 raw_filename = os.path.expanduser(raw_filename)
                 bg_filename = os.path.expanduser(bg_filename)
-                
+
                 save_dir = os.path.split(raw_filename)[0]
                 if not os.path.exists(save_dir):
                     os.makedirs(save_dir)
-                    
+
                 std_filename = bg_filename.replace('_bg','_std')
                 msg = 'WARNING: fly movie filenames will conflict if > 1 camera per computer'
                 print msg
@@ -1079,14 +1079,14 @@ class App:
                 print msg
             elif key == 'start_small_recording':
                 small_movie_filename, small_datafile_filename = cmds[key]
-                
+
                 small_movie_filename = os.path.expanduser(small_movie_filename)
                 small_datafile_filename = os.path.expanduser(small_datafile_filename)
-                
+
                 save_dir = os.path.split(small_movie_filename)[0]
                 if not os.path.exists(save_dir):
                     os.makedirs(save_dir)
-                    
+
                 small_movie = FlyMovieFormat.FlyMovieSaver(small_movie_filename,version=1)
                 small_datafile = file( small_datafile_filename, mode='wb' )
                 globals['small_fmf'] = small_movie, small_datafile
@@ -1111,10 +1111,10 @@ class App:
 
                 # we make one, too
                 self.reconstruct_helper[cam_no] = reconstruct_utils.ReconstructHelper(
-                    fc1, fc2, cc1, cc2, k1, k2, p1, p2 )                
+                    fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
             else:
                 raise ValueError("Unknown key '%s'"%key)
-                
+
     def mainloop(self):
         DEBUG('entering mainloop')
         # per camera variables
@@ -1127,7 +1127,7 @@ class App:
         # save extracted data for some time (for data-recovery)
         self.last_points_by_cam = [ [] for c in range(self.num_cams) ]
         self.last_points_framenumbers_by_cam = [ [] for c in range(self.num_cams) ]
-        
+
         if self.num_cams == 0:
             return
 
@@ -1135,7 +1135,7 @@ class App:
             last_measurement_time.append( time_func() )
             last_return_info_check.append( 0.0 ) # never
             n_raw_frames.append( 0 )
-            
+
         DEBUG('entering mainloop 2')
         try:
             try:
@@ -1173,7 +1173,7 @@ class App:
                             std_movie = None
                         else:
                             raw_movie, bg_movie, std_movie = raw_fmf_and_bg_fmf
-                            
+
                         # Are we saving small movies?
                         small_fmf_and_small_datafile = globals['small_fmf']
                         if small_fmf_and_small_datafile is None:
@@ -1181,7 +1181,7 @@ class App:
                             small_datafile = None
                         else:
                             small_movie, small_datafile = small_fmf_and_small_datafile
-                            
+
                         # Get new raw frames from grab thread.
                         get_raw_frame = globals['incoming_raw_frames'].get_nowait
                         try:
@@ -1202,7 +1202,7 @@ class App:
                                 while len(last_points)>10000:
                                     del last_points[:100]
                                     del last_points_framenumbers[:100]
-                                    
+
                                 n_pts = len(points)
                                 if n_pts>0:
                                     last_found_timestamp[cam_no] = timestamp
@@ -1212,7 +1212,7 @@ class App:
                                     raw_movie.add_frame(frame,timestamp)
                                 if small_movie is not None and n_pts>0:
                                     pt = points[0] # save only first found point currently
-                                    
+
                                     x0, y0 = pt[0],pt[1] # absolute values, distorted
                                     l,b,r,t = lbrt # absolute values
                                     hw_roi_w = r-l
@@ -1224,7 +1224,7 @@ class App:
                                     if ((small_width > hw_roi_w) or
                                         (small_height > hw_roi_h)):
                                         raise RuntimeError('FMF frame size (for small movie) is bigger than hardware ROI')
-                                    
+
                                     save_l = int(round(x0 - small_width2))
                                     if save_l < l:
                                         save_l = l
@@ -1248,7 +1248,7 @@ class App:
                                         warnings.warn('memory leak!')
                                         nxframe = nx.asarray(frame)
                                         small_frame = nxframe[save_b:save_t,save_l:save_r]
-                                        
+
                                     small_movie.add_frame(small_frame,timestamp)
                                     small_datafile.write(
                                         struct.pack( small_datafile_fmt,
@@ -1260,7 +1260,7 @@ class App:
                             pass
 
                         DEBUG('ADS 0')
-                        
+
                         # Get new BG frames from grab thread.
                         get_bg_frame_nowait = globals['incoming_bg_frames'].get_nowait
                         try:
@@ -1291,7 +1291,7 @@ class App:
                             bg_movie.add_frame(bg_frame,timestamp)
                             std_movie.add_frame(std_frame,timestamp)
                             globals['saved_bg_frame'] = True
-                            
+
                         # process asynchronous commands
                         DEBUG( 'ADS 3')
                         self.main_brain_lock.acquire()
@@ -1322,7 +1322,7 @@ def main():
     if BENCHMARK:
         cam_iface = cam_iface_choose.import_backend('dummy','dummy')
         max_num_points_per_camera=2
-        
+
         app=App(max_num_points_per_camera,
                 roi2_radius=10,
                 bg_frame_interval=50,
@@ -1332,47 +1332,47 @@ def main():
             return
         app.mainloop()
         return
-        
+
     usage_lines = ['%prog [options]',
                    '',
                    '  available wrappers and backends:']
-    
+
     for wrapper,backends in cam_iface_choose.wrappers_and_backends.iteritems():
         for backend in backends:
             usage_lines.append('    --wrapper %s --backend %s'%(wrapper,backend))
     del wrapper, backend # delete temporary variables
     usage = '\n'.join(usage_lines)
-    
+
     parser = OptionParser(usage)
 
     parser.add_option("--server", dest="server", type='string',
                       help="hostname of mainbrain SERVER",
                       metavar="SERVER")
-                      
+
     parser.add_option("--wrapper", dest="wrapper", type='string',
                       help="cam_iface WRAPPER to use",
                       metavar="WRAPPER")
-    
+
     parser.add_option("--backend", dest="backend", type='string',
                       help="cam_iface BACKEND to use",
                       metavar="BACKEND")
-        
+
     parser.add_option("--debug-drop", action='store_true',dest='debug_drop',
                       help="save debugging information regarding dropped network packets",
                       default=False)
-    
+
     parser.add_option("--num-points", type="int",
                       help="number of points to track per camera")
-    
+
     parser.add_option("--emulation-cal", type="string",
                       help="name of calibration (directory or .h5 file); Run in emulation mode.")
-    
+
     parser.add_option("--software-roi-radius", type="int",
                       help="radius of software region of interest")
-    
+
     parser.add_option("--background-frame-interval", type="int",
                       help="every N frames, add a new BG image to the accumulator")
-    
+
     parser.add_option("--background-frame-alpha", type="float",
                       help="weight for each BG frame added to accumulator")
     parser.add_option("--mode-num", type="int", default=None,
@@ -1404,7 +1404,7 @@ def main():
         cam_iface = cam_iface_choose.import_backend('dummy','dummy')
         #cam_iface = cam_iface_choose.import_backend('blank','ctypes')
         cam_iface.set_num_cameras(len(emulation_reconstructor.get_cam_ids()))
-        
+
     if options.num_points is not None:
         max_num_points_per_camera = options.num_points
     else:
@@ -1419,7 +1419,7 @@ def main():
         bg_frame_interval = options.background_frame_interval
     else:
         bg_frame_interval = 50
-    
+
     if options.background_frame_alpha is not None:
         bg_frame_alpha = options.background_frame_alpha
     else:
@@ -1450,4 +1450,4 @@ if __name__=='__main__':
     else:
         # don't profile
         main()
-        
+

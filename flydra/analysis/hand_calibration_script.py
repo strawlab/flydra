@@ -17,7 +17,7 @@ def save_ascii_matrix(filename,m):
     for row in m:
         fd.write( ' '.join(map(str,row)) )
         fd.write( '\n' )
-        
+
 def build_Bc(X3d,x2d):
     B = []
     c = []
@@ -50,7 +50,7 @@ def center(P):
     Y = -determinant( [ P[:,0], P[:,2], P[:,3] ] )
     Z = determinant( [ P[:,0], P[:,1], P[:,3] ] )
     T = -determinant( [ P[:,0], P[:,1], P[:,2] ] )
-    
+
     C_ = numpy.array( [[ X/T, Y/T, Z/T ]] ).T
     return C_
 
@@ -70,13 +70,13 @@ if 1:
                   times[c]:'20061218',
                   times[another_sample]:'20061219',
                   }
-                  
+
     ft2inch = 12.0
     inch2cm = 2.54
     ft2cm = ft2inch*inch2cm
-    
+
     # cam_x cam_y world_x world_y world_z
-    
+
     cam1 = [
         # point A
         [422, 488, 151, 76, 43, a, 1],
@@ -181,7 +181,7 @@ if 1:
         ## put in mm
         #cam[:,2:5] = cam[:,2:5]*10.0
         # print 'multiplied by 10 to put in mm'
-        
+
         X3d = cam[:,2:5]
         x2d = cam[:,0:2]
         B,c = build_Bc(X3d,x2d)
@@ -212,7 +212,7 @@ if 1:
                 scale_factor = 1e-3, # convert these units to meters
                 )
             sccs.append(scc)
-            
+
     if len(sccs):
         reconstructor = flydra.reconstruct.Reconstructor(sccs)
         reconstructor.save_to_files_in_new_directory('cal_hand')
@@ -220,7 +220,7 @@ if 1:
 
 # replot
 if 0:
-    import FlyMovieFormat
+    import flydra.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
     import pylab
     for scc in sccs:
         for this_time in times:
@@ -240,7 +240,7 @@ if 0:
             xlim = pylab.gca().get_xlim()
             pylab.gca().set_xlim(xlim[1],xlim[0])
             pylab.title(fname)
-            
+
             for (pts, cam_id) in cams:
                 if cam_id != scc.cam_id:
                     continue
@@ -264,6 +264,6 @@ if 0:
                     pylab.plot( [ recon_cam[0] ],
                                 [ recon_cam[1] ],
                                 'ro' )
-                                  
+
             #print
     pylab.show()

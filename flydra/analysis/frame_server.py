@@ -1,7 +1,7 @@
 #!/usr/bin/python
 import Pyro.core
 import os
-import FlyMovieFormat
+import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 import socket
 
 Pyro.config.PYRO_MULTITHREADED = 0 # No multithreading!
@@ -22,7 +22,7 @@ class FrameServer(Pyro.core.ObjBase):
 
     def get_timestamp2frame(self):
         return self._ts_dict.copy()
-        
+
     # not overriding Pyro's __init__ funciton...
     def load(self, movie_filename='/tmp/raw_video.fmf'):
         if self._filename == movie_filename:
@@ -59,7 +59,7 @@ class FrameServer(Pyro.core.ObjBase):
                 if abs(key-timestamp) < 0.02:
                     print >> sys.stderr, repr(key)
             raise
-        
+
     def get_frame_prior_to_timestamp(self, target_timestamp):
         timestamps = self._ts_dict.keys()
         timestamps.sort()
@@ -72,7 +72,7 @@ class FrameServer(Pyro.core.ObjBase):
             for ts in timestamps:
                 print >> sys.stderr, ' ts',type(ts),ts
         return self.fly_movie.get_frame(self._ts_dict[real_timestamp])
-        
+
     def get_frame(self, frame_number):
         return self.fly_movie.get_frame(frame_number)
 
@@ -89,9 +89,9 @@ if __name__ == '__main__':
         port = int(sys.argv[1])
     else:
         port = 9888
-        
+
     Pyro.core.initServer(banner=0,storageCheck=0)
-    
+
     # start Pyro server
     hostname = socket.gethostbyname(socket.gethostname())
 

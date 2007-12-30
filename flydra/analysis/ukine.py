@@ -1,5 +1,5 @@
 import glob, os, sys
-import FlyMovieFormat
+import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 import matplotlib
 matplotlib.use('GTKAgg') # TkAgg doesn't work, at least without ioff(), which I haven't tried
 import pylab
@@ -28,7 +28,7 @@ elif 0:
     cal_source = 'DATA20060717_185535.h5'
     reconstructor_source = tables.openFile(cal_source,mode='r')
 
-    
+
 elif 0:
     base_fname = 'full_20060830_184358_%s_bg.fmf'
     # hdf5 file containing calibration data
@@ -55,7 +55,7 @@ elif 0:
     cal_source = 'DATA20061205_193629.h5'
     reconstructor_source = tables.openFile(cal_source,mode='r')
 elif 1:
-    
+
     if 0:
         # all files in current directory
         files = os.listdir(os.curdir)
@@ -68,7 +68,7 @@ elif 1:
         elif 1:
             cal_source = sys.argv[1]
             cals = [os.path.expanduser(cal_source)]
-            
+
         cam_ids = []
         fname_by_cam_id = {}
         for full_fmf in fmfs:
@@ -81,10 +81,10 @@ elif 1:
             print 'fmf',fmf
             print 'start',start
             print
-            
+
             fname_by_cam_id[cam_id] = full_fmf
             cam_ids.append( cam_id )
-            
+
     elif 1:
         # fmf files in ~/camN/FLYDRA_LARGE...
         cal_source = sys.argv[1]
@@ -114,15 +114,15 @@ elif 1:
                 if name in this_fmfs:
                     fname_by_cam_id[cam_id] = os.path.join(dirname,this_fmfs[name])
                     break
-                
+
         cals = [cal_source]
 
         print cals
         print fname_by_cam_id
-        
-####################################        
 
-        
+####################################
+
+
     print cals
 
     if len(cals)>1:
@@ -130,7 +130,7 @@ elif 1:
         raise ValueError('too many calibration files')
     elif len(cals)==0:
         raise ValueError('no calibration file')
-    
+
     # hdf5 file containing calibration data
     cal_source = cals[0]
     if cal_source.endswith('.h5'):
@@ -153,11 +153,11 @@ click_locations = []
 for cam_id in recon.cam_ids:
     fname = fname_by_cam_id[cam_id]
     print >> sys.stderr, cam_id,fname
-    
+
     fmf = FlyMovieFormat.FlyMovie(fname)
     frame,timestamp = fmf.get_frame(0)
     fmf.close()
-    
+
     pylab.imshow(frame,origin='lower')
 
     cg = ClickGetter()
