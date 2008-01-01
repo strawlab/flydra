@@ -99,7 +99,7 @@ def my_decimate(x,q):
         result[-1] = mysum[-1]/ (q-lendiff)
         return result
 
-def get_data(filename):
+def get_data(filename,DATADIR=''):
     extra = {}
     if os.path.splitext(filename)[1] == '.mat':
         fullname = os.path.join(DATADIR,filename)
@@ -119,7 +119,7 @@ def get_data(filename):
         data_file = kresults
         extra['kresults'] = kresults
         time_model = flydra.analysis.result_utils.get_time_model_from_data(kresults)
-    extra['time_model'] = time_model
+        extra['time_model'] = time_model
     return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
 
 def kalman_smooth(orig_rows):
@@ -258,6 +258,35 @@ class LazyRecArrayMimic:
         return self.data_file[self.xtable[name]][self.cond]
     def __getitem__(self,name):
         return self.data_file[self.xtable[name]][self.cond]
+    def __len__(self):
+        return numpy.sum(self.cond)
+
+class LazyRecArrayMimic2:
+    xtable = {'x':'kalman_x',
+              'y':'kalman_y',
+              'z':'kalman_z',
+              'frame':'kalman_frame',
+              'xvel':'kalman_xvel',
+              'yvel':'kalman_yvel',
+              'zvel':'kalman_zvel',
+              }
+    def __init__(self,data_file,obj_id):
+        self.data_file = data_file
+        obj_ids = self.data_file['kalman_obj_id']
+        self.cond = obj_ids == obj_id
+        self.view = {}
+        for name in ['x']:
+            xname = self.xtable[name]
+            self.view[xname] = self.data_file[xname][self.cond]
+    def field(self,name):
+        xname = self.xtable[name]
+        if xname not in self.view:
+            self.view[xname] = self.data_file[xname][self.cond]
+        return self.view[xname]
+    def __getitem__(self,name):
+        return self.field(name)
+    def __len__(self):
+        return len(self.view['kalman_x'])
 
 class CachingAnalyzer:
     def load_data(self,obj_id,data_file,use_kalman_smoothing=True,
@@ -291,8 +320,10 @@ class CachingAnalyzer:
 
             if 0:
                 rows = matfile2rows(data_file,obj_id)
-            else:
+            elif 0:
                 rows = LazyRecArrayMimic(data_file,obj_id)
+            else:
+                rows = LazyRecArrayMimic2(data_file,obj_id)
         else:
             if not use_kalman_smoothing:
                 obj_ids = preloaded_dict['obj_ids']
