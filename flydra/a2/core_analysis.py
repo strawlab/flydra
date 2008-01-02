@@ -13,6 +13,8 @@ import flydra.kalman.params
 import flydra.kalman.flydra_kalman_utils
 import flydra.analysis.result_utils
 
+import weakref
+
 # global
 printed_dynamics_name = False
 
@@ -99,11 +101,23 @@ def my_decimate(x,q):
         result[-1] = mysum[-1]/ (q-lendiff)
         return result
 
-def get_data(filename,DATADIR=''):
+class WeakRefAbleDict(object):
+    def __init__(self,val):
+        self.val = val
+    def __getitem__(self,key):
+        return self.val[key]
+
+def check_is_mat_file(data_file):
+    if isinstance(data_file,WeakRefAbleDict):
+        return True
+    else:
+        return False
+
+def get_data(filename):
     extra = {}
     if os.path.splitext(filename)[1] == '.mat':
-        fullname = os.path.join(DATADIR,filename)
-        mat_data = scipy.io.mio.loadmat(fullname)
+        mat_data = scipy.io.mio.loadmat(filename)
+        mat_data = WeakRefAbleDict(mat_data)
         obj_ids = mat_data['kalman_obj_id']
         obj_ids = obj_ids.astype( numpy.uint32 )
         obs_obj_ids = obj_ids # use as observation length, even though these aren't observations
@@ -249,6 +263,7 @@ class LazyRecArrayMimic:
               'xvel':'kalman_xvel',
               'yvel':'kalman_yvel',
               'zvel':'kalman_zvel',
+              'obj_id':'kalman_obj_id',
               }
     def __init__(self,data_file,obj_id):
         self.data_file = data_file
@@ -301,15 +316,14 @@ class CachingAnalyzer:
 
         """
         if isinstance(data_file,str):
-            if data_file.endswith('_smoothed.mat'):
+            if data_file.endswith('.mat'):
                 data_file = scipy.io.loadmat(data_file)
 
-        if isinstance(data_file,dict):
-            is_mat_file = True
-        else:
-            is_mat_file = False
+        is_mat_file = check_is_mat_file(data_file)
+
+        if not is_mat_file:
             result_h5_file = data_file
-            preloaded_dict = self.loaded_cache.get(result_h5_file,None)
+            preloaded_dict = self.loaded_h5_cache.get(result_h5_file,None)
             if preloaded_dict is None:
                 preloaded_dict = self._load_dict(result_h5_file)
             kresults = preloaded_dict['kresults']
@@ -322,8 +336,11 @@ class CachingAnalyzer:
                 rows = matfile2rows(data_file,obj_id)
             elif 0:
                 rows = LazyRecArrayMimic(data_file,obj_id)
-            else:
+            elif 1:
                 rows = LazyRecArrayMimic2(data_file,obj_id)
+            else:
+                rows = self.get_recarray(data_file,obj_id)
+
         else:
             if not use_kalman_smoothing:
                 obj_ids = preloaded_dict['obj_ids']
@@ -376,21 +393,18 @@ class CachingAnalyzer:
         return XA
 
     def get_obj_ids(self,data_file):
-        if isinstance(data_file,dict):
-            is_mat_file = True
-        else:
-            is_mat_file = False
+        is_mat_file = check_is_mat_file(data_file)
+        if not is_mat_file:
             result_h5_file = data_file
-            preloaded_dict = self.loaded_cache.get(result_h5_file,None)
+            preloaded_dict = self.loaded_h5_cache.get(result_h5_file,None)
             if preloaded_dict is None:
                 preloaded_dict = self._load_dict(result_h5_file)
+
         if is_mat_file:
             uoi = numpy.unique(data_file['kalman_obj_id'])
             return uoi
         else:
-            preloaded_dict = self.loaded_cache.get(data_file,None)
-            if preloaded_dict is None:
-                preloaded_dict = self._load_dict(data_file)
+            preloaded_dict = self.loaded_h5_cache.get(data_file,None)
             return preloaded_dict['unique_obj_ids']
 
     def calculate_trajectory_metrics(self,
@@ -810,7 +824,29 @@ class CachingAnalyzer:
     ###################################
 
     def __init__(self):
-        self.loaded_cache = {}
+        self.loaded_h5_cache = {}
+
+        self.loaded_matfile_cache = weakref.WeakKeyDictionary()
+        self.loaded_cond_cache = weakref.WeakKeyDictionary()
+
+    def get_recarray(self,data_file,obj_id):
+        """currently assumes data_file is a matfile"""
+
+        if data_file not in self.loaded_matfile_cache:
+            names = LazyRecArrayMimic.xtable.keys()
+            xnames = [ LazyRecArrayMimic.xtable[name] for name in names ]
+            arrays = [ data_file[xname] for xname in xnames ]
+            ra = numpy.rec.fromarrays( arrays, names=names )
+            obj_id2idx = {}
+            self.loaded_matfile_cache[data_file] = ra, obj_id2idx
+        full, obj_id2idx = self.loaded_matfile_cache[data_file]
+        if obj_id not in obj_id2idx:
+            # perform search for matching obj_id numbers
+            obj_id2idx[obj_id] = numpy.nonzero(full['obj_id']==obj_id)[0]
+        idx = obj_id2idx[obj_id]
+        rows = full[idx]
+
+        return rows
 
     def _load_dict(self,result_h5_file):
         if isinstance(result_h5_file,str) or isinstance(result_h5_file,unicode):
@@ -819,6 +855,7 @@ class CachingAnalyzer:
         else:
             kresults = result_h5_file
             self_should_close = False
+            # XXX I should make my reference a weakref
         obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
         obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id')
         unique_obj_ids = numpy.unique(obs_obj_ids)
@@ -828,11 +865,11 @@ class CachingAnalyzer:
                           'obs_obj_ids':obs_obj_ids,
                           'unique_obj_ids':unique_obj_ids,
                           }
-        self.loaded_cache[result_h5_file] = preloaded_dict
+        self.loaded_h5_cache[result_h5_file] = preloaded_dict
         return preloaded_dict
 
     def close(self):
-        for key,preloaded_dict in self.loaded_cache.iteritems():
+        for key,preloaded_dict in self.loaded_h5_cache.iteritems():
             if preloaded_dict['self_should_close']:
                 preloaded_dict['kresults'].close()
                 preloaded_dict['self_should_close'] = False
