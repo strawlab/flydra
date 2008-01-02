@@ -8,14 +8,13 @@
 */
 
 /*
-Description: This file contains the interrupt handler for the system.  
-The registered interrupts are called according to their time interval.  
+Description: This file contains the interrupt handler for the system.
+The registered interrupts are called according to their time interval.
 The units of time are the overflow of the 8 bit counter.
 */
 
 #include "handler.h"
 
-#include <avr/signal.h>
 #include <avr/interrupt.h>
 
 
@@ -36,15 +35,14 @@ Return Values: none
 void Handler_Init(void)
 {
     unsigned char lcv;
-    
+
     for(lcv=0;lcv<HANDLER_MAX;lcv++)    /* Initialize masks to FALSE */
     {
         mask[lcv] = FALSE;
     }
-    
-    TCCR0 = TCCR0;                      /* write timer prescaler */
-    TIMSK |= TOIE0;                     /* enable timer ovf irq */
-    sei();                              /* enable interrupts */
+
+    TCCR0B = 0x02;                      /* write timer prescaler */
+    TIMSK0 |= TOIE0;                    /* enable timer ovf irq */
 }
 
 /*
@@ -53,11 +51,11 @@ Description: The interrupt handler function of the timer0 interrupt.
 Arguments: none
 Return Values: none
 */
-SIGNAL(SIG_OVERFLOW0)
+ISR(TIMER0_OVF_vect)
 {
     unsigned char lcv;
 
-    TIMSK &= ~TOIE0;                              /* disable timer ovf irq */
+    TIMSK0 &= ~TOIE0;                             /* disable timer ovf irq */
 
     for(lcv=0;lcv<HANDLER_MAX;lcv++)              /* check and act on all vectors */
     {
@@ -72,13 +70,13 @@ SIGNAL(SIG_OVERFLOW0)
         }
     }
 
-    TIMSK |= TOIE0;                               /* enable timer ovf irq */
+    TIMSK0 |= TOIE0;                              /* enable timer ovf irq */
 }
 
 /*
 Function Name: Reg_Handler
 Description: Registers a timed interrupt request with the interrupt handler.
-Arguments: 
+Arguments:
             void* fptr = function pointer to the handler function
             long s_cnt = start count of the timer
             unsigned char priority = priority of the interrupt request
@@ -86,7 +84,7 @@ Arguments:
 Return Values: none
 */
 void Reg_Handler(void* fptr,unsigned long s_cnt,unsigned char priority,unsigned char msk)
-{	
+{
     mask[priority]=FALSE;               /* disable while modifying vector */
     p_handler_func[priority]=fptr;      /* set function pointer */
     start_count[priority]=s_cnt;        /* set start count */

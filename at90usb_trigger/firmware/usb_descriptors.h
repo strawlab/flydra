@@ -43,7 +43,7 @@
 #define PRODUCT_ID            0x0BAF
 #define RELEASE_NUMBER        0x1000
 #define MAN_INDEX             0x01
-#define PROD_INDEX            0x02	
+#define PROD_INDEX            0x02
 #define SN_INDEX              0x03
 #define NB_CONFIGURATION      1
 
@@ -124,7 +124,7 @@
 , Usb_unicode('n') \
 }
 
-#define USB_PN_LENGTH         26
+#define USB_PN_LENGTH         28
 #define USB_PRODUCT_NAME \
 { Usb_unicode('F') \
  ,Usb_unicode('l') \
@@ -151,7 +151,9 @@
  ,Usb_unicode(' ') \
  ,Usb_unicode('1') \
  ,Usb_unicode('.') \
- ,Usb_unicode('0') \
+ ,Usb_unicode('1') \
+ ,Usb_unicode('a') \
+ ,Usb_unicode('1') \
 }
 
 #define USB_SN_LENGTH         0x05

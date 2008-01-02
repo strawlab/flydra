@@ -10,11 +10,12 @@
 #include "usb_specific_request.h"
 #include "adc_drv.h"
 #include "framecount_task.h"
+#include "handler.h"
 //#include "adc_sampling.h"
-
 
 //_____ M A C R O S ________________________________________________________
 
+#define NULL ((void*)0)
 
 //_____ D E F I N I T I O N S ______________________________________________
 
@@ -30,12 +31,6 @@ volatile uint8_t cpt_sof=0;
 volatile uint8_t trig_once_mode=0;
 
 // static/global
-/*
-int64_t framecount_EXT_TRIG1;
-int16_t tcnt3_EXT_TRIG1;
-bit EXT_TRIG1_skip_error=FALSE;
-bit EXT_TRIG1_saved_timestamp_ready=FALSE;
-*/
 
 //! Declare function pointer to USB bootloader entry point
 void (*start_bootloader) (void)=(void (*)(void))0xf000;
@@ -194,7 +189,6 @@ void init_pwm_output(void) {
   PORTC &= 0x87; // pin C3-6 set low to start
   DDRC |= 0x7F; // enable output for:
   // (Output Compare and PWM) A-C of Timer/Counter 3
-  // PORTC 3 (EXT_TRIG1)
 
   // Set output compare to mid-point
   set_OCR3A( 10 );
@@ -259,11 +253,36 @@ void trigger_task_init(void)
    Joy_init();
 
    init_pwm_output(); // trigger output
+   Handler_Init();
 }
 
+static uint8_t switchoff_trig1_count=0;
+static uint8_t switchoff_trig2_count=0;
+static uint8_t switchoff_trig3_count=0;
 
+void switchoff_trig1(void) {
+  switchoff_trig1_count--;
+  if (switchoff_trig1_count==0) {
+    Reg_Handler( NULL, 0, 1, FALSE);
+    PORTC &= 0xFE; // clear bit
+  }
+}
 
+void switchoff_trig2(void) {
+  switchoff_trig2_count--;
+  if (switchoff_trig2_count==0) {
+    Reg_Handler( NULL, 0, 2, FALSE);
+    PORTC &= 0xFB; // clear bit
+  }
+}
 
+void switchoff_trig3(void) {
+  switchoff_trig3_count--;
+  if (switchoff_trig3_count==0) {
+    Reg_Handler( NULL, 0, 3, FALSE);
+    PORTC &= 0xF7; // clear bit
+  }
+}
 
 void trigger_task(void)
 {
@@ -274,8 +293,12 @@ void trigger_task(void)
 #define TASK_FLAGS_DOUT_HIGH 0x08
 #define TASK_FLAGS_GET_DATA 0x10
 #define TASK_FLAGS_RESET_FRAMECOUNT_A 0x20
-#define TASK_FLAGS_SET_EXT_TRIG1 0x40
-   //#define TASK_FLAGS_GET_EXT_TRIG1_TIMESTAMP 0x80
+#define TASK_FLAGS_SET_EXT_TRIG 0x40
+
+   uint8_t ext_trig_flags=0;
+#define EXT_TRIG1 0x01
+#define EXT_TRIG2 0x02
+#define EXT_TRIG3 0x04
 
    uint8_t clock_select_timer3=0;
    uint32_t volatile tmp;
@@ -286,7 +309,6 @@ void trigger_task(void)
    uint16_t new_icr3=0; // icr3 is TOP for timer3
 
    int64_t framecount_A;
-   uint8_t i,j;
 
    if(usb_connected)
     {
@@ -306,7 +328,7 @@ void trigger_task(void)
 	// next 8 bytes
 	flags     =           Usb_read_byte();
 	clock_select_timer3 = Usb_read_byte();
-	Usb_read_byte();
+	ext_trig_flags =      Usb_read_byte();
 	Usb_read_byte();
 
 	Usb_read_byte();
@@ -433,27 +455,27 @@ void trigger_task(void)
 	TCCR3B = (TCCR3B & 0xF8) | (0 & 0x07); // stop clock
       }
 
-      if (flags & TASK_FLAGS_SET_EXT_TRIG1) {
-	/* HACK - busy loop to hold pin high */
+      if (flags & TASK_FLAGS_SET_EXT_TRIG) {
 
-	PORTC |= 0x08; // raise bit
-	for (j=0;j<10;j++) {
-	  for (i=0;i<128;i++) {
-	    tmp++;
-	    // do nothing
-	  }
+	if (ext_trig_flags & EXT_TRIG1) {
+	  PORTC |= 0x02; // raise bit
+	  switchoff_trig1_count++;
+	  Reg_Handler( switchoff_trig1, 0x7FFF, 1, TRUE);
 	}
-	PORTC &= 0xF7; // clear bit
 
-	/*
-	framecount_EXT_TRIG1  = get_framecount_A();
-	tcnt3_EXT_TRIG1 = get_TCNT3();
-
-	if (EXT_TRIG1_saved_timestamp_ready) {
-	  EXT_TRIG1_skip_error=TRUE; // error, overwrote old values
+	if (ext_trig_flags & EXT_TRIG2) {
+	  PORTC |= 0x04; // raise bit
+	  switchoff_trig2_count++;
+	  Reg_Handler( switchoff_trig2, 0x7FFF, 2, TRUE);
 	}
-	EXT_TRIG1_saved_timestamp_ready = TRUE;
-	*/
+
+	if (ext_trig_flags & EXT_TRIG3) {
+	  PORTC |= 0x08; // raise bit
+	  switchoff_trig3_count++;
+	  Reg_Handler( switchoff_trig3, 0x7FFF, 3, TRUE);
+	}
+
+
       }
 
     }
