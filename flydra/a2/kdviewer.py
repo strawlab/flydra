@@ -50,7 +50,10 @@ def doit(filename,
          show_only_track_ends = False,
          save_still = False,
          exclude_vel_mps = None,
+         exclude_vel_data = 'kalman_smooth',
          ):
+
+    assert exclude_vel_data in ['kalman_smooth','observations']
 
     try:
         sys.path.insert(0,os.curdir)
@@ -85,12 +88,17 @@ def doit(filename,
         if is_mat_file:
             frames = mat_data['kalman_frame']
             if exclude_vel_mps is not None:
-                x = mat_data['x']
-                y = mat_data['y']
-                z = mat_data['z']
+                if exclude_vel_data != 'kalman_smooth':
+                    raise ValueError("with .mat file, only kalman_smooth can be used to exclude data")
+                x = mat_data['kalman_x']
+                y = mat_data['kalman_y']
+                z = mat_data['kalman_z']
         else:
             frames = kresults.root.kalman_observations.read(field='frame')
             if exclude_vel_mps is not None:
+                if exclude_vel_data != 'observations':
+                    raise NotImplementedError("with .h5 file, only observations currently implemented to exclude data")
+
                 x = kresults.root.kalman_observations.read(field='x')
                 y = kresults.root.kalman_observations.read(field='y')
                 z = kresults.root.kalman_observations.read(field='z')
@@ -195,7 +203,7 @@ def doit(filename,
                     print dur,'seconds'
                 last_time = now
 
-        if 1:
+        if not is_mat_file:
             my_idx = numpy.nonzero(my_obj_ids==obj_id)[0]
             my_rows = kresults.root.kalman_estimates.readCoordinates(my_idx)
             my_timestamp = my_rows['timestamp'][0]

@@ -110,6 +110,8 @@ class WeakRefAbleDict(object):
 def check_is_mat_file(data_file):
     if isinstance(data_file,WeakRefAbleDict):
         return True
+    elif isinstance(data_file,dict):
+        return True
     else:
         return False
 
