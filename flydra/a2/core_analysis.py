@@ -3,7 +3,7 @@ import tables
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy
-import math, os
+import math, os, sys
 import scipy.io
 DEBUG = False
 
@@ -20,6 +20,11 @@ printed_dynamics_name = False
 
 class NoObjectIDError(Exception):
     pass
+
+def fast_startstopidx_on_sorted_array( sorted_array, value ):
+    idx_left = sorted_array.searchsorted( value, side='left' )
+    idx_right = sorted_array.searchsorted( value, side='right' )
+    return idx_left, idx_right
 
 def find_peaks(y,threshold,search_cond=None):
     """find local maxima above threshold in data y
@@ -102,8 +107,14 @@ def my_decimate(x,q):
         return result
 
 class WeakRefAbleDict(object):
-    def __init__(self,val):
+    def __init__(self,val,debug=False):
         self.val = val
+        self.debug = debug
+        if self.debug:
+            print 'creating WeakRefAbleDict',self
+    def __del__(self):
+        if self.debug:
+            print 'deleting WeakRefAbleDict',self
     def __getitem__(self,key):
         return self.val[key]
 
@@ -116,9 +127,15 @@ def check_is_mat_file(data_file):
         return False
 
 def get_data(filename):
+    import warnings
+    warnings.warn('use CachingAnalyzer.initial_file_load(filename)')
+    return _initial_file_load(filename)
+
+def _initial_file_load(filename):
     extra = {}
     if os.path.splitext(filename)[1] == '.mat':
         mat_data = scipy.io.mio.loadmat(filename)
+        #mat_data = WeakRefAbleDict(mat_data)
         mat_data = WeakRefAbleDict(mat_data)
         obj_ids = mat_data['kalman_obj_id']
         obj_ids = obj_ids.astype( numpy.uint32 )
@@ -134,14 +151,17 @@ def get_data(filename):
         is_mat_file = False
         data_file = kresults
         extra['kresults'] = kresults
-        time_model = flydra.analysis.result_utils.get_time_model_from_data(kresults)
-        extra['time_model'] = time_model
+        if hasattr(kresults.root,'textlog'):
+            time_model = flydra.analysis.result_utils.get_time_model_from_data(kresults)
+            extra['time_model'] = time_model
     return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
 
 def kalman_smooth(orig_rows):
     global printed_dynamics_name
 
     obs_frames = orig_rows['frame']
+    if len(obs_frames)<2:
+        raise ValueError('orig_rows must have 2 or more rows of data')
 
     fstart = obs_frames.min()
     fend = obs_frames.max()
@@ -193,10 +213,18 @@ def kalman_smooth(orig_rows):
                                                  valid_data_idx=idx)
     return frames, xsmooth, Psmooth, obj_id_array
 
-def observations2smoothed(obj_id,orig_rows):
-    frames, xsmooth, Psmooth, obj_id_array = kalman_smooth(orig_rows)
+def observations2smoothed(obj_id,orig_rows,fill_value='orig'):
     KalmanEstimates = flydra.kalman.flydra_kalman_utils.KalmanEstimates
     field_names = tables.Description(KalmanEstimates().columns)._v_names
+
+    if not len(orig_rows):
+        # if no input data, return empty output data
+        list_of_cols = [[]]*len(field_names)
+        rows = numpy.rec.fromarrays(list_of_cols,
+                                    names = field_names)
+        return rows
+
+    frames, xsmooth, Psmooth, obj_id_array = kalman_smooth(orig_rows)
     list_of_xhats = [xsmooth[:,0],xsmooth[:,1],xsmooth[:,2],
                      xsmooth[:,3],xsmooth[:,4],xsmooth[:,5],
                      xsmooth[:,6],xsmooth[:,7],xsmooth[:,8],
@@ -206,7 +234,13 @@ def observations2smoothed(obj_id,orig_rows):
                   Psmooth[:,6,6],Psmooth[:,7,7],Psmooth[:,8,8],
                   ]
     timestamps = numpy.zeros( (len(frames),))
-    obj_id_array2 = obj_id_array.filled( numpy.iinfo(obj_id_array.dtype).max ) # set unknown obj_id to maximum value (=mask value)
+
+    if fill_value == 'orig':
+        obj_id_array2 = obj_id_array.filled( obj_id )
+    elif fill_value == 'maxint':
+        obj_id_array2 = obj_id_array.filled( numpy.iinfo(obj_id_array.dtype).max ) # set unknown obj_id to maximum value (=mask value)
+    else:
+        raise ValueError("unknown value for fill_value")
     list_of_cols = [obj_id_array2,frames,timestamps]+list_of_xhats+list_of_Ps
     assert len(list_of_cols)==len(field_names) # double check that definition didn't change on us
     rows = numpy.rec.fromarrays(list_of_cols,
@@ -214,6 +248,8 @@ def observations2smoothed(obj_id,orig_rows):
     return rows
 
 def matfile2rows(data_file,obj_id):
+    import warnings
+    warnings.warn('using the slow matfile2rows -- use the faster CachingAnalyzer.load_data()')
 
     obj_ids = data_file['kalman_obj_id']
     cond = obj_ids == obj_id
@@ -257,46 +293,39 @@ def matfile2rows(data_file,obj_id):
 
     return rows
 
+xtable = {'x':'kalman_x',
+          'y':'kalman_y',
+          'z':'kalman_z',
+          'frame':'kalman_frame',
+          'xvel':'kalman_xvel',
+          'yvel':'kalman_yvel',
+          'zvel':'kalman_zvel',
+          'obj_id':'kalman_obj_id',
+          }
+
 class LazyRecArrayMimic:
-    xtable = {'x':'kalman_x',
-              'y':'kalman_y',
-              'z':'kalman_z',
-              'frame':'kalman_frame',
-              'xvel':'kalman_xvel',
-              'yvel':'kalman_yvel',
-              'zvel':'kalman_zvel',
-              'obj_id':'kalman_obj_id',
-              }
     def __init__(self,data_file,obj_id):
         self.data_file = data_file
         obj_ids = self.data_file['kalman_obj_id']
         self.cond = obj_ids == obj_id
     def field(self,name):
-        return self.data_file[self.xtable[name]][self.cond]
+        return self.data_file[xtable[name]][self.cond]
     def __getitem__(self,name):
-        return self.data_file[self.xtable[name]][self.cond]
+        return self.data_file[xtable[name]][self.cond]
     def __len__(self):
         return numpy.sum(self.cond)
 
 class LazyRecArrayMimic2:
-    xtable = {'x':'kalman_x',
-              'y':'kalman_y',
-              'z':'kalman_z',
-              'frame':'kalman_frame',
-              'xvel':'kalman_xvel',
-              'yvel':'kalman_yvel',
-              'zvel':'kalman_zvel',
-              }
     def __init__(self,data_file,obj_id):
         self.data_file = data_file
         obj_ids = self.data_file['kalman_obj_id']
         self.cond = obj_ids == obj_id
         self.view = {}
         for name in ['x']:
-            xname = self.xtable[name]
+            xname = xtable[name]
             self.view[xname] = self.data_file[xname][self.cond]
     def field(self,name):
-        xname = self.xtable[name]
+        xname = xtable[name]
         if xname not in self.view:
             self.view[xname] = self.data_file[xname][self.cond]
         return self.view[xname]
@@ -306,44 +335,80 @@ class LazyRecArrayMimic2:
         return len(self.view['kalman_x'])
 
 class CachingAnalyzer:
+
+    """
+    usage:
+
+     1. Load a file with CachingAnalyzer.initial_file_load(). (Doing this from
+     user code is optional for backwards compatibility. However, if a
+     CachingAnalyzer instance does it, that instance will maintain a
+     strong reference to the data file, perhaps resulting in large
+     memeory consumption.)
+
+     2. get traces with CachingAnalyzer.load_data() (for kalman data)
+     or CachingAnalyzer.load_observations() (for observations)
+
+    """
+
+    def initial_file_load(self,filename):
+        if filename not in self.loaded_filename_cache:
+            obj_ids, use_obj_ids, is_mat_file, data_file, extra = _initial_file_load(filename)
+
+            diff = numpy.int64(obj_ids[1:])-numpy.int64(obj_ids[:-1])
+            assert numpy.all(diff >= 0) # make sure obj_ids in ascending order for fast search
+
+            self.loaded_filename_cache[filename] = (obj_ids, use_obj_ids, is_mat_file, data_file, extra)
+        (obj_ids, use_obj_ids, is_mat_file, data_file, extra) = self.loaded_filename_cache[filename]
+        self.loaded_datafile_cache[data_file] = True
+        return obj_ids, use_obj_ids, is_mat_file, data_file, extra
+
+    def has_obj_id(self, obj_id, data_file):
+        import warnings
+        warnings.warn('slow implementation of .has_obj_id()')
+        try:
+            self.load_data(obj_id,data_file,use_kalman_smoothing=False)
+        except NoObjectIDError, err:
+            return False
+        else:
+            return True
+
     def load_data(self,obj_id,data_file,use_kalman_smoothing=True,
                   frames_per_second=100.0):
-        """
+        """Load Kalman state estimates from data_file.
 
         If use_kalman_smoothing is True, the data are passed through a
         Kalman smoother. If not, the data are directly loaded from the
-        file. Typically, this means that the forward-filtered data
-        saved in realtime are returned. However, if the data file has
-        already been smoothed, this will also result in smoothing.
+        Kalman estimates in the file. Typically, this means that the
+        forward-filtered data saved in realtime are returned. However,
+        if the data file has already been smoothed, this will also
+        result in smoothing.
 
         """
+        # for backwards compatibility, allow user to pass in string identifying filename
         if isinstance(data_file,str):
-            if data_file.endswith('.mat'):
-                data_file = scipy.io.loadmat(data_file)
+            filename = data_file
+            obj_ids, use_obj_ids, is_mat_file, data_file, extra = self.initial_file_load(filename)
+            self.keep_references.append( data_file ) # prevent from garbage collection with weakref
 
         is_mat_file = check_is_mat_file(data_file)
 
-        if not is_mat_file:
+        if is_mat_file:
+            # We ignore use_kalman_smoothing -- always smoothed
+            if 0:
+                rows = matfile2rows(data_file,obj_id)
+            elif 0:
+                rows = LazyRecArrayMimic(data_file,obj_id)
+            elif 0:
+                rows = LazyRecArrayMimic2(data_file,obj_id)
+            elif 1:
+                rows = self._get_recarray(data_file,obj_id)
+        else:
             result_h5_file = data_file
             preloaded_dict = self.loaded_h5_cache.get(result_h5_file,None)
             if preloaded_dict is None:
                 preloaded_dict = self._load_dict(result_h5_file)
             kresults = preloaded_dict['kresults']
 
-        if is_mat_file:
-            if use_kalman_smoothing is not True:
-                raise ValueError('use of .mat file requires Kalman smoothing')
-
-            if 0:
-                rows = matfile2rows(data_file,obj_id)
-            elif 0:
-                rows = LazyRecArrayMimic(data_file,obj_id)
-            elif 1:
-                rows = LazyRecArrayMimic2(data_file,obj_id)
-            else:
-                rows = self.get_recarray(data_file,obj_id)
-
-        else:
             if not use_kalman_smoothing:
                 obj_ids = preloaded_dict['obj_ids']
                 if isinstance(obj_id,int) or isinstance(obj_id,numpy.integer):
@@ -826,29 +891,62 @@ class CachingAnalyzer:
     ###################################
 
     def __init__(self):
+        self.keep_references = [] # a list of strong references
+
         self.loaded_h5_cache = {}
 
-        self.loaded_matfile_cache = weakref.WeakKeyDictionary()
+        self.loaded_filename_cache = {}
+        self.loaded_datafile_cache = weakref.WeakKeyDictionary()
+
+        self.loaded_matfile_recarrays = weakref.WeakKeyDictionary()
         self.loaded_cond_cache = weakref.WeakKeyDictionary()
 
-    def get_recarray(self,data_file,obj_id):
-        """currently assumes data_file is a matfile"""
+    def _get_recarray(self,data_file,obj_id,which_data='kalman'):
+        """returns a recarray of the data
+        """
+        full, obj_id2idx = self._load_full_recarray(data_file,which_data=which_data)
+        try:
+            start,stop = obj_id2idx[obj_id]
+        except KeyError,err:
+            raise NoObjectIDError('obj_id not found')
+        rows = full[start:stop]
+        return rows
 
-        if data_file not in self.loaded_matfile_cache:
-            names = LazyRecArrayMimic.xtable.keys()
-            xnames = [ LazyRecArrayMimic.xtable[name] for name in names ]
+    def _load_full_recarray( self, data_file, which_data='kalman'):
+        assert which_data in ['kalman','observations']
+
+        if which_data != 'kalman':
+            raise NotImplementedError('')
+
+        if data_file not in self.loaded_datafile_cache:
+            # loading with initial_file_load() ensures that obj_ids are ascending
+            raise RuntimeError('you must load data_file using CachingAnalyzer.initial_file_load() (and keep a reference to it, and keep the same CachingAnalyzer instance)')
+
+        if not check_is_mat_file(data_file):
+            raise NotImplementedError('loading recarray not implemented yet for h5 files')
+
+        if data_file not in self.loaded_matfile_recarrays:
+            # create recarray
+            names = xtable.keys()
+            xnames = [ xtable[name] for name in names ]
             arrays = [ data_file[xname] for xname in xnames ]
             ra = numpy.rec.fromarrays( arrays, names=names )
-            obj_id2idx = {}
-            self.loaded_matfile_cache[data_file] = ra, obj_id2idx
-        full, obj_id2idx = self.loaded_matfile_cache[data_file]
-        if obj_id not in obj_id2idx:
-            # perform search for matching obj_id numbers
-            obj_id2idx[obj_id] = numpy.nonzero(full['obj_id']==obj_id)[0]
-        idx = obj_id2idx[obj_id]
-        rows = full[idx]
 
-        return rows
+            # create obj_id-based indexer
+            obj_ids = ra['obj_id']
+
+            uniq = numpy.unique(obj_ids)
+            start_idx, stop_idx = fast_startstopidx_on_sorted_array( obj_ids, uniq )
+            obj_id2idx = {}
+            for i,obj_id in enumerate(uniq):
+                obj_id2idx[obj_id] = start_idx[i], stop_idx[i]
+            self.loaded_matfile_recarrays[data_file] = ra, obj_id2idx, which_data
+        full, obj_id2idx, which_data_test = self.loaded_matfile_recarrays[data_file]
+
+        if which_data != which_data_test:
+            raise ValueError('which_data switched between original load and now')
+
+        return full, obj_id2idx
 
     def _load_dict(self,result_h5_file):
         if isinstance(result_h5_file,str) or isinstance(result_h5_file,unicode):

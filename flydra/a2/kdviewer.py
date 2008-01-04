@@ -50,34 +50,16 @@ def doit(filename,
          show_only_track_ends = False,
          save_still = False,
          exclude_vel_mps = None,
-         exclude_vel_data = 'kalman_smooth',
+         exclude_vel_data = 'kalman',
          ):
 
-    assert exclude_vel_data in ['kalman_smooth','observations']
+    assert exclude_vel_data in ['kalman','observations'] # kalman means smoothed or filtered, depending on use_kalman_smoothing
 
-    try:
-        sys.path.insert(0,os.curdir)
-        mat_data = scipy.io.mio.loadmat(filename)
-    except IOError, err:
+    ca = core_analysis.CachingAnalyzer()
+    obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(filename)
+
+    if not is_mat_file:
         mat_data = None
-
-    if mat_data is not None:
-        obj_ids = mat_data['kalman_obj_id']
-        obj_ids = obj_ids.astype( numpy.uint32 )
-        print 'max obj_id',numpy.amax(obj_ids)
-
-        obs_obj_ids = obj_ids # use as observation length, even though these aren't observations
-        use_obj_ids = numpy.unique(obj_ids)
-        is_mat_file = True
-    else:
-        kresults = PT.openFile(filename,mode="r")
-        obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id')
-        my_obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
-        use_obj_ids = numpy.unique(obs_obj_ids)
-        if not len(use_obj_ids):
-            raise ValueError('no trajectories in file!')
-        print 'max obj_id',numpy.amax(use_obj_ids)
-        is_mat_file = False
 
     if show_n_longest is not None:
         if ((obj_start is not None) or
@@ -85,46 +67,35 @@ def doit(filename,
             (obj_only is not None)):
             raise ValueError("show_n_longest incompatible with other limiters")
 
-        if is_mat_file:
-            frames = mat_data['kalman_frame']
-            if exclude_vel_mps is not None:
-                if exclude_vel_data != 'kalman_smooth':
-                    raise ValueError("with .mat file, only kalman_smooth can be used to exclude data")
-                x = mat_data['kalman_x']
-                y = mat_data['kalman_y']
-                z = mat_data['kalman_z']
-        else:
-            frames = kresults.root.kalman_observations.read(field='frame')
-            if exclude_vel_mps is not None:
-                if exclude_vel_data != 'observations':
-                    raise NotImplementedError("with .h5 file, only observations currently implemented to exclude data")
-
-                x = kresults.root.kalman_observations.read(field='x')
-                y = kresults.root.kalman_observations.read(field='y')
-                z = kresults.root.kalman_observations.read(field='z')
         obj_ids_by_n_frames = {}
         for i,obj_id in enumerate(use_obj_ids):
             if i%100==0:
                 print 'doing %d of %d'%(i,len(use_obj_ids))
-            obs_cond = obs_obj_ids==obj_id
-            obj_frames = frames[obs_cond]
-            n_frames = obj_frames[-1]-obj_frames[0]
-            if exclude_vel_mps is not None:
-                x_frames = x[obs_cond]
-                y_frames = y[obs_cond]
-                z_frames = z[obs_cond]
 
-                dx = x_frames[1:]-x_frames[:-1]
-                dy = y_frames[1:]-y_frames[:-1]
-                dz = z_frames[1:]-z_frames[:-1]
+            if not ca.has_obj_id(obj_id, data_file):
+                continue
+            rows = ca.load_data(obj_id, data_file)
 
-                dist = numpy.sqrt(dx**2 + dy**2 + dz**2)
-                total_dist = dist.sum()
-                total_time = n_frames/fps
-                mean_vel = total_dist / total_time
+            frames = rows['frame']
+            n_frames = rows['frame'][-1]-rows['frame'][0]+1
+
+            if obj_id==1606:
+                print obj_id,n_frames
+                ## print rows['x']
+                ## print rows['y']
+                ## print rows['z']
+
+            if exclude_vel_mps and exclude_vel_data != 'kalman':
+                raise NotImplementedError('')
+
+            if exclude_vel_mps and exclude_vel_data == 'kalman':
+                vel = numpy.sqrt(rows['xvel']**2 + rows['yvel']**2 + rows['zvel']**2)
+                mean_vel = numpy.mean(vel)
                 if mean_vel < exclude_vel_mps:
                     continue
+
             obj_ids_by_n_frames.setdefault( n_frames, [] ).append( obj_id )
+
         n_frames_list = obj_ids_by_n_frames.keys()
         n_frames_list.sort()
 
@@ -187,8 +158,6 @@ def doit(filename,
     if show_only_track_ends:
         track_end_verts = []
 
-    ca = core_analysis.CachingAnalyzer()
-    #last_time = None
     if not len(use_obj_ids):
         raise ValueError('no trajectories to plot')
 
@@ -204,8 +173,10 @@ def doit(filename,
                 last_time = now
 
         if not is_mat_file:
-            my_idx = numpy.nonzero(my_obj_ids==obj_id)[0]
-            my_rows = kresults.root.kalman_estimates.readCoordinates(my_idx)
+            # h5 file has timestamps for each frame
+            #my_rows = ca.get_recarray(data_file,obj_id,which_data='kalman')
+            my_rows = ca.load_data( obj_id, data_file)
+
             my_timestamp = my_rows['timestamp'][0]
             dur = my_rows['timestamp'][-1] - my_timestamp
             print '%d 3D triangulation started at %s (took %.2f seconds)'%(obj_id,datetime.datetime.fromtimestamp(my_timestamp,pacific),dur)
@@ -217,8 +188,8 @@ def doit(filename,
                 fps)
 
         if show_observations:
-            obs_idx = numpy.nonzero(obs_obj_ids==obj_id)[0]
-            obs_rows = kresults.root.kalman_observations.readCoordinates(obs_idx)
+            obs_rows = ca.load_observations( obj_id, data_file)
+
             obs_x = obs_rows['x']
             obs_y = obs_rows['y']
             obs_z = obs_rows['z']
@@ -240,13 +211,17 @@ def doit(filename,
             actors.append(a)
             actor2obj_id[a] = obj_id
 
-        if not is_mat_file:
-            n_observations = numpy.sum(obs_obj_ids == obj_id)
-            if int(n_observations) < int(min_length):
-                continue
-            data_file = kresults
+        rows = ca.load_data( obj_id, data_file, use_kalman_smoothing=use_kalman_smoothing,
+                             frames_per_second=fps)
+
+        if len(rows):
+            frames = rows['frame']
+            n_frames = rows['frame'][-1]-rows['frame'][0]+1
         else:
-            data_file = mat_data
+            n_frames = 0
+
+        if n_frames < int(min_length):
+            continue
 
         if not show_only_track_ends:
             try:
@@ -266,11 +241,11 @@ def doit(filename,
                     continue
             verts = results['X_kalmanized']
             speeds = results['speed_kalmanized']
+            if obj_id==1606:
+                print 'verts',obj_id,n_frames
+##                print verts
 
         else:
-            rows=ca.load_data(obj_id,
-                              data_file)
-
             x0 = rows.field('x')[0]
             x1 = rows.field('x')[-1]
 
@@ -282,12 +257,6 @@ def doit(filename,
 
             track_end_verts.append( (x0,y0,z0) )
             track_end_verts.append( (x1,y1,z1) )
-
-        if 0:
-            print 'WARNING: limiting data'
-            slicer = slice(1350,1600)
-            verts = verts[slicer]
-            speeds = speeds[slicer]
 
 
         if show_saccades:
@@ -327,16 +296,6 @@ def doit(filename,
             actors.append(a)
             actor2obj_id[a] = obj_id
 
-        if 0:
-            # show time of each saccade
-            for X,showtime in zip(verts,results['time_kalmanized']):
-                ta = tvtk.TextActor(input=str( showtime ))
-                ta.property.color = 0.0, 0.0, 0.0 # black
-                ta.position_coordinate.coordinate_system = 'world'
-                ta.position_coordinate.value = tuple(X)
-                actors.append(ta)
-                actor2obj_id[a] = obj_id
-
         if show_obj_ids:
             print 'showing ob_jd %d at %s'%(obj_id,str(verts[0]))
             obj_id_ta = tvtk.TextActor(input=str( obj_id )+' start')
@@ -350,7 +309,6 @@ def doit(filename,
             obj_id_ta.position_coordinate.value = tuple(verts[0])
             actors.append(obj_id_ta)
             actor2obj_id[a] = obj_id
-
 
         ##################
 
