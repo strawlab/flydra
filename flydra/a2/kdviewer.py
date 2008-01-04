@@ -79,12 +79,6 @@ def doit(filename,
             frames = rows['frame']
             n_frames = rows['frame'][-1]-rows['frame'][0]+1
 
-            if obj_id==1606:
-                print obj_id,n_frames
-                ## print rows['x']
-                ## print rows['y']
-                ## print rows['z']
-
             if exclude_vel_mps and exclude_vel_data != 'kalman':
                 raise NotImplementedError('')
 
@@ -241,9 +235,6 @@ def doit(filename,
                     continue
             verts = results['X_kalmanized']
             speeds = results['speed_kalmanized']
-            if obj_id==1606:
-                print 'verts',obj_id,n_frames
-##                print verts
 
         else:
             x0 = rows.field('x')[0]
