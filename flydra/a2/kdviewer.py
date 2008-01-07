@@ -334,7 +334,7 @@ def doit(filename,
                 actor2obj_id[a] = obj_id
 
     if not is_mat_file:
-        kresults.close()
+        extra['kresults'].close()
 
     ################################
 

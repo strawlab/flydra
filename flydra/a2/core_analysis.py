@@ -135,7 +135,6 @@ def _initial_file_load(filename):
     extra = {}
     if os.path.splitext(filename)[1] == '.mat':
         mat_data = scipy.io.mio.loadmat(filename)
-        #mat_data = WeakRefAbleDict(mat_data)
         mat_data = WeakRefAbleDict(mat_data)
         obj_ids = mat_data['kalman_obj_id']
         obj_ids = obj_ids.astype( numpy.uint32 )
@@ -357,8 +356,12 @@ class CachingAnalyzer:
             diff = numpy.int64(obj_ids[1:])-numpy.int64(obj_ids[:-1])
             assert numpy.all(diff >= 0) # make sure obj_ids in ascending order for fast search
 
-            self.loaded_filename_cache[filename] = (obj_ids, use_obj_ids, is_mat_file, data_file, extra)
-        (obj_ids, use_obj_ids, is_mat_file, data_file, extra) = self.loaded_filename_cache[filename]
+            self.loaded_filename_cache[filename] = (obj_ids, use_obj_ids, is_mat_file, extra)
+            self.loaded_filename_cache2[filename] = data_file # maintain only a weak ref to data file
+
+        (obj_ids, use_obj_ids, is_mat_file, extra) = self.loaded_filename_cache[filename]
+        data_file                                  = self.loaded_filename_cache2[filename]
+
         self.loaded_datafile_cache[data_file] = True
         return obj_ids, use_obj_ids, is_mat_file, data_file, extra
 
@@ -371,6 +374,37 @@ class CachingAnalyzer:
             return False
         else:
             return True
+
+    def load_observations(self,obj_id,data_file):
+        """Load observations used for Kalman state estimates from data_file.
+        """
+        is_mat_file = check_is_mat_file(data_file)
+
+        if is_mat_file:
+            raise ValueError("observations are not saved in .mat files")
+
+        result_h5_file = data_file
+        preloaded_dict = self.loaded_h5_cache.get(result_h5_file,None)
+        if preloaded_dict is None:
+            preloaded_dict = self._load_dict(result_h5_file)
+        kresults = preloaded_dict['kresults']
+        # XXX this is slow! Should precompute indexes on file load.
+        obs_obj_ids = preloaded_dict['obs_obj_ids']
+
+        if isinstance(obj_id,int) or isinstance(obj_id,numpy.integer):
+            # obj_id is an integer, normal case
+            idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
+        else:
+            # may specify sequence of obj_id -- concatenate data, treat as one object
+            idxs = []
+            for oi in obj_id:
+                idxs.append( numpy.nonzero(obs_obj_ids == oi)[0] )
+            idxs = numpy.concatenate( idxs )
+
+        rows = kresults.root.kalman_observations.readCoordinates(idxs)
+        if not len(rows):
+            raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
+        return rows
 
     def load_data(self,obj_id,data_file,use_kalman_smoothing=True,
                   frames_per_second=100.0):
@@ -410,6 +444,7 @@ class CachingAnalyzer:
             kresults = preloaded_dict['kresults']
 
             if not use_kalman_smoothing:
+                # XXX this is slow! Should precompute indexes on file load.
                 obj_ids = preloaded_dict['obj_ids']
                 if isinstance(obj_id,int) or isinstance(obj_id,numpy.integer):
                     # obj_id is an integer, normal case
@@ -896,6 +931,8 @@ class CachingAnalyzer:
         self.loaded_h5_cache = {}
 
         self.loaded_filename_cache = {}
+        self.loaded_filename_cache2 = weakref.WeakValueDictionary()
+
         self.loaded_datafile_cache = weakref.WeakKeyDictionary()
 
         self.loaded_matfile_recarrays = weakref.WeakKeyDictionary()
