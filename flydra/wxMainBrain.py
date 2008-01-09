@@ -105,7 +105,7 @@ class wxMainBrainApp(wx.App):
 
         if use_opengl:
             import OpenGL
-            import motmot.wxglvideo.wxglvideo as wxglvideo
+            import motmot.fview.fview_video as wxglvideo
         else:
             import motmot.wxvideo.wxvideo as wxglvideo
 
@@ -1313,9 +1313,9 @@ class wxMainBrainApp(wx.App):
                     image, show_fps, points, image_coords = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
                     if image is not None:
                         if hasattr(self.cam_image_canvas,'update_image'):
-                            self.cam_image_canvas.update_image(cam_id,image,
-                                                               xoffset=image_coords[0],
-                                                               yoffset=image_coords[1])
+                            self.cam_image_canvas.update_image(cam_id,image),
+#                                                               xoffset=image_coords[0],
+#                                                               yoffset=image_coords[1])
                     if show_fps is not None:
                         show_fps_label = xrc.XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
                         show_fps_label.SetLabel('fps: %.1f'%show_fps)
