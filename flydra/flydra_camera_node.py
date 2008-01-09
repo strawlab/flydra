@@ -15,7 +15,7 @@ import numpy as nx
 
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 cam_iface = None # global variable, value set in main()
-import cam_iface_choose
+import motmot.cam_iface.choose as cam_iface_choose
 from optparse import OptionParser
 
 def DEBUG(*args):
