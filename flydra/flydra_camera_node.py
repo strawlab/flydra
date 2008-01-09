@@ -37,7 +37,7 @@ else:
     ConnectionClosedError = NonExistantError
 import flydra.reconstruct_utils as reconstruct_utils
 import flydra.reconstruct
-import flydra.FastImage.FastImage as FastImage
+import motmot.FastImage.FastImage as FastImage
 #FastImage.set_debug(3)
 if os.name == 'posix' and sys.platform != 'darwin':
     import posix_sched
