@@ -1,5 +1,6 @@
 """
-Check a flydra-saved .h5 file for telltale indicators of some flydra problem.
+Check the sanity of a saved .h5 file (checks for previously-seen, and potentially unresolved, bugs)
+
 """
 
 from __future__ import division
