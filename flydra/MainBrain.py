@@ -933,7 +933,7 @@ class CoordinateProcessor(threading.Thread):
                                 deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                                          corrected_framenumber,
                                                          timestamp,camn_received_time)
-                                                        +point_tuple[:9]
+                                                        +point_tuple[:5]
                                                         +(frame_pt_idx,))
                         # save new frame data
                         # XXX for now, only attempt 3D reconstruction of 1st point from each 2D view
