@@ -8,7 +8,7 @@ inf = numpy.inf
 cdef double cinf
 cinf = inf
 
-import flydra.common_variables 
+import flydra.common_variables
 
 cdef float MINIMUM_ECCENTRICITY
 MINIMUM_ECCENTRICITY = flydra.common_variables.MINIMUM_ECCENTRICITY
@@ -70,7 +70,7 @@ cdef class ReconstructHelper:
     def get_K(self):
         # See
         # http://www.vision.caltech.edu/bouguetj/calib_doc/htmls/parameters.html
-        K = numpy.array((( self.fc1, self.alpha_c*self.fc1, self.cc1), 
+        K = numpy.array((( self.fc1, self.alpha_c*self.fc1, self.cc1),
                          ( 0,        self.fc2,              self.cc2),
                          ( 0,        0,                     1       )))
         return K
@@ -89,7 +89,7 @@ cdef class ReconstructHelper:
         See also the OpenCV reference manual, which has the equation
         used.
         """
-        
+
         cdef float xl, yl
 
         cdef float xd, yd, x, y
@@ -97,16 +97,16 @@ cdef class ReconstructHelper:
         cdef int i
 
         # undoradial.m / CalTechCal/normalize.m
-        
+
         xd = ( x_kk - self.cc1 ) / self.fc1
         yd = ( y_kk - self.cc2 ) / self.fc2
 
         xd = xd - self.alpha_c * yd
-        
+
         # comp_distortion_oulu.m
-        
+
         # initial guess
-        x = xd 
+        x = xd
         y = yd
 
         for i from 0<=i<20:
@@ -118,19 +118,19 @@ cdef class ReconstructHelper:
             y = (yd-delta_y)/k_radial
 
         # undoradial.m
-        
+
         xl = (self.fc1)*x + (self.fc1*self.alpha_c)*y + (self.cc1)
         yl = (self.fc2)*y + (self.cc2)
         return (xl, yl)
 
     def distort(self, float xl, float yl):
         """distort 2D coordinate pair"""
-        
+
         cdef float x, y, r_2, term1, xd, yd
-        
+
         x = ( xl - self.cc1 ) / self.fc1
         y = ( yl - self.cc2 ) / self.fc2
-        
+
         r_2 = x*x + y*y
         term1 = self.k1*r_2 + self.k2*r_2**2
         xd = x + x*term1 + (2*self.p1*x*y + self.p2*(r_2+2*x**2))
@@ -141,12 +141,12 @@ cdef class ReconstructHelper:
 
         xd = (self.fc1)*xd + (self.cc1)
         yd = (self.fc2)*yd + (self.cc2)
-        
+
         return (xd, yd)
-    
+
 def hypothesis_testing_algorithm__find_best_3d( object recon, object d2):
     """Use hypothesis testing algorithm to find best 3D point
-    
+
     Finds combination of cameras which uses the most number of cameras
     while minimizing mean reprojection error. Algorithm used accepts
     any camera combination with reprojection error less than the
@@ -159,15 +159,15 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2):
     cdef double alpha
     cdef double x, y, orig_x, orig_y, new_x, new_y
     cdef double dist, mean_dist, least_err
-    
+
     cdef int MAX_CAMERAS
     # 10 = MAX_CAMERAS
     cdef double least_err_by_n_cameras[10] # fake dict (index = key)
-    
+
     MAX_CAMERAS = 10 # should be a compile-time define
-    
+
     svd = numpy.dual.svd # eliminate global name lookup
-    
+
     cam_ids = recon.cam_ids # shorthand
     max_n_cams = len(cam_ids)
     if max_n_cams > MAX_CAMERAS:
@@ -177,7 +177,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2):
     # values at 0th and 1st index will always remain infinity.
     for i from 0 <= i <= max_n_cams:
         least_err_by_n_cameras[i] = cinf
-    
+
     allA = numpy.zeros( (2*max_n_cams,4), dtype=numpy.float64)
     bad_cam_ids = []
     cam_id2idx = {}
@@ -211,23 +211,23 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2):
     cam_ids_for_least_err = {}
     X_for_least_err = {}
     for n_cams from 2<=n_cams<=max_n_cams:
-        
+
         # Calculate in least reprojection error starting with all
         # possible combinations of 2 cameras, then start increasing
         # the number of cameras used.  For each number of cameras,
         # determine if there exists a combination with an acceptable
         # reprojection error.
-        
+
         alpha = 1.0/n_cams
 
         # Can we short-circuit the rest of these computations?
-        
+
         if not isinf(least_err_by_n_cameras[n_cams-2]):
             # If we've calculated error for 2 less than n_cams
             if least_err_by_n_cameras[n_cams-1] > ACCEPTABLE_DISTANCE_PIXELS:
                 # and if the error for 1 less is too large, don't bother with more.
                 break
-            
+
         for cam_ids_used in recon.cam_combinations_by_size[n_cams]:
             missing_cam_data = 0 #False
             good_A_idx = []
@@ -280,7 +280,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2):
     P = []
     for cam_id in cam_ids_used:
         x,y,area,slope,eccentricity, p1,p2,p3,p4 = d2[cam_id]
-        if eccentricity > MINIMUM_ECCENTRICITY:
+        if eccentricity > MINIMUM_ECCENTRICITY and not numpy.isnan(p1):
             P.append( (p1,p2,p3,p4) )
     if len(P) < 2:
         Lcoords = None
@@ -291,6 +291,10 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2):
         except numpy.linalg.LinAlgError, err:
             print 'SVD error, P=',repr(P)
             Lcoords = None
+        except:
+            print 'Error on P'
+            print P
+            raise
         else:
             P = vt[0,:] # P,Q are planes (take row because this is transpose(V))
             Q = vt[1,:]
