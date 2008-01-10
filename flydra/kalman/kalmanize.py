@@ -436,7 +436,7 @@ def kalmanize(src_filename,
 
         (x_undistorted,y_undistorted) = reconst_orig_units.undistort(
             cam_id,(x_distorted,y_distorted))
-        if 1:
+        if 0:
             (x_undistorted_m,y_undistorted_m) = reconstructor_meters.undistort(
                 cam_id,(x_distorted,y_distorted))
             if x_undistorted != x_undistorted_m:
@@ -444,15 +444,17 @@ def kalmanize(src_filename,
             if y_undistorted != y_undistorted_m:
                 raise ValueError('scaled reconstructors have different distortion!?')
 
-        (area,slope,eccentricity,p1,p2,p3,p4,frame_pt_idx) = (row['area'],
-                                                              row['slope'],row['eccentricity'],
-                                                              row['p1'],row['p2'],
-                                                              row['p3'],row['p4'],
-                                                              row['frame_pt_idx'])
-        if not numpy.isnan(p1):
-            line_found = True
-        else:
-            line_found = False
+        (area,slope,eccentricity,frame_pt_idx) = (row['area'],
+                                                  row['slope'],row['eccentricity'],
+                                                  row['frame_pt_idx'])
+
+        # XXX for now, do not calculate 3D plane for each point. This
+        # is because we are punting on calculating p1,p2,p3,p4 from
+        # the point, slope, and reconstructor.
+
+        line_found = False
+        p1, p2, p3, p4 = numpy.nan, numpy.nan, numpy.nan, numpy.nan
+
         pt_undistorted = (x_undistorted,y_undistorted,
                           area,slope,eccentricity,
                           p1,p2,p3,p4, line_found, frame_pt_idx)
