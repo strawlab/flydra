@@ -30,10 +30,14 @@ import flydra.analysis.result_utils as result_utils
 import progressbar
 import core_analysis
 
+import pytz, datetime
+pacific = pytz.timezone('US/Pacific')
+
 def doit(fmf_filename=None,
          h5_filename=None,
          kalman_filename=None,
          start=None,
+         stop=None,
          ):
     fmf = FMF.FlyMovie(fmf_filename)
     h5 = PT.openFile( h5_filename, mode='r' )
@@ -49,8 +53,8 @@ def doit(fmf_filename=None,
         R = reconstruct.Reconstructor(data_file)
         R = R.get_scaled( R.get_scale_factor() )
 
-        print 'loading frame numbers for kalman objects'
-        all_rows = []
+        print 'loading frame numbers for kalman objects (estimates)'
+        kalman_rows = []
         for obj_id in use_obj_ids:
             my_rows = ca.load_data( obj_id, data_file,
                                     use_kalman_smoothing=False,
@@ -58,9 +62,18 @@ def doit(fmf_filename=None,
                                     #kalman_dynamic_model = dynamic_model,
                                     #frames_per_second=fps,
                                     )
-            all_rows.append(my_rows)
-        all_rows = numpy.concatenate( all_rows )
-        data_3d_frame = all_rows['frame']
+            kalman_rows.append(my_rows)
+        kalman_rows = numpy.concatenate( kalman_rows )
+        kalman_3d_frame = kalman_rows['frame']
+
+        print 'loading frame numbers for kalman objects (observations)'
+        kobs_rows = []
+        for obj_id in use_obj_ids:
+            my_rows = ca.load_observations( obj_id, data_file,
+                                            )
+            kobs_rows.append(my_rows)
+        kobs_rows = numpy.concatenate( kobs_rows )
+        kobs_3d_frame = kobs_rows['frame']
 
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
 
@@ -108,6 +121,9 @@ def doit(fmf_filename=None,
         pen3d = aggdraw.Pen('Red', width=2 )
         font3d = aggdraw.Font('Red','/usr/share/fonts/truetype/freefont/FreeMono.ttf')
 
+        pen_obs = aggdraw.Pen('Blue', width=2 )
+        font_obs = aggdraw.Font('Blue','/usr/share/fonts/truetype/freefont/FreeMono.ttf')
+
     # step through .fmf file
     for fmf_fno, timestamp in enumerate( fmf_timestamps ):
         pbar.update(fmf_fno)
@@ -124,9 +140,10 @@ def doit(fmf_filename=None,
             im = None
 
         rows = None
+        mainbrain_timestamp = numpy.nan
         if len(idxs):
             rows = h5.root.data2d_distorted.readCoordinates( idxs )
-
+            mainbrain_timestamp = rows['cam_received_timestamp'][0]
             if not numpy.all( h5_frame==rows['frame'] ):
                 real_h5_frame = rows['frame'][0]
                 try:
@@ -148,21 +165,44 @@ def doit(fmf_filename=None,
             if h5_frame < start:
                 continue
 
+        if stop is not None:
+            if h5_frame > stop:
+                continue
+
         if 1:
             # get frame
             fmf.seek(fmf_fno)
             frame, timestamp2 = fmf.get_next_frame()
             assert timestamp==timestamp2
 
-            # get 3D data
-            vert_images = []
+            # get 3D estimates data
+            kalman_vert_images = []
             if kalman_filename is not None:
-                data_3d_idxs = numpy.nonzero(h5_frame == data_3d_frame)[0]
-                these_3d_rows = all_rows[data_3d_idxs]
+                data_3d_idxs = numpy.nonzero(h5_frame == kalman_3d_frame)[0]
+                these_3d_rows = kalman_rows[data_3d_idxs]
                 for this_3d_row in these_3d_rows:
                     vert = numpy.array([this_3d_row['x'],this_3d_row['y'],this_3d_row['z']])
                     vert_image = R.find2d(cam_id,vert,distorted=True)
-                    vert_images.append( (vert_image, this_3d_row['obj_id']) )
+                    kalman_vert_images.append( (vert_image, vert, this_3d_row['obj_id']) )
+
+            # get 3D observation data
+            kobs_vert_images = []
+            if kalman_filename is not None:
+                data_3d_idxs = numpy.nonzero(h5_frame == kobs_3d_frame)[0]
+                these_3d_rows = kobs_rows[data_3d_idxs]
+                for this_3d_row in these_3d_rows:
+                    vert = numpy.array([this_3d_row['x'],this_3d_row['y'],this_3d_row['z']])
+                    vert_image = R.find2d(cam_id,vert,distorted=True)
+                    obs_2d_idx = this_3d_row['obs_2d_idx']
+                    kobs_2d_data = data_file.root.kalman_observations_2d_idxs[int(obs_2d_idx)]
+
+                    # parse VLArray
+                    this_camns = kobs_2d_data[0::2]
+                    this_camn_idxs = kobs_2d_data[1::2]
+                    this_cam_ids = [camn2cam_id[this_camn] for this_camn in this_camns]
+                    obs_info = (this_cam_ids, this_camn_idxs)
+
+                    kobs_vert_images.append( (vert_image, vert, this_3d_row['obj_id'], obs_info) )
 
             if PLOT=='mpl':
                 pylab.imshow( frame,
@@ -178,7 +218,7 @@ def doit(fmf_filename=None,
                     y = rows['y']
                     if not numpy.isnan(x[0]):
                         pylab.plot(x,y,'.')
-                if len(vert_images):
+                if len(kalman_vert_images):
                     raise NotImplementedError('')
 
             elif PLOT=='image':
@@ -189,20 +229,37 @@ def doit(fmf_filename=None,
                 im = im.convert('RGB')
                 draw = aggdraw.Draw(im)
 
-                draw.text( (0,0), 'frame %d, timestamp %s, cam %s'%(
-                    h5_frame, repr(timestamp), cam_id), font )
+                strtime = datetime.datetime.fromtimestamp(mainbrain_timestamp,pacific)
+                draw.text( (0,0), 'frame %d, %s (%d) timestamp %s - %s'%(
+                    h5_frame, cam_id, camn, repr(timestamp), strtime), font )
 
                 if len(idxs):
                     radius=3
-                    for x,y in zip(rows['x'],rows['y']):
+                    for pt_no,(x,y) in enumerate(zip(rows['x'],rows['y'])):
                         draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
                                       pen )
-                for (xy,obj_id) in vert_images:
+                        draw.text( (x,y), 'pt %d'%(pt_no,), font )
+
+                for (xy,XYZ,obj_id) in kalman_vert_images:
                     radius=3
                     x,y= xy
+                    X,Y,Z=XYZ
                     draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
                                   pen3d )
-                    draw.text( (x,y), 'obj %d'%obj_id, font3d )
+                    draw.text( (x,y), 'obj %d (%.3f, %.3f, %.3f)'%(obj_id,X,Y,Z), font3d )
+
+                for (xy,XYZ,obj_id,obs_info) in kobs_vert_images:
+                    radius=3
+                    x,y= xy
+                    X,Y,Z=XYZ
+                    draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
+                                  pen_obs )
+                    draw.text( (x,y), 'obj %d (%.3f, %.3f, %.3f)'%(obj_id,X,Y,Z), font_obs )
+                    (this_cam_ids, this_camn_idxs) = obs_info
+                    for i,(obs_cam_id,pt_no) in enumerate( zip(*obs_info) ):
+                        draw.text( (x+10,y+(i+1)*10),
+                                   '%s pt %d'%(obs_cam_id,pt_no), font_obs )
+
 
                 draw.flush()
 
@@ -238,6 +295,9 @@ def main():
     parser.add_option("--start", dest="start", type='int',
                       help="start frame (.h5 frame number reference)")
 
+    parser.add_option("--stop", dest="stop", type='int',
+                      help="stop frame (.h5 frame number reference)")
+
     (options, args) = parser.parse_args()
 
     if len(args):
@@ -248,6 +308,7 @@ def main():
          h5_filename=options.h5_filename,
          kalman_filename=options.kalman_filename,
          start=options.start,
+         stop=options.stop,
          )
 
 if __name__=='__main__':
