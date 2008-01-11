@@ -54,6 +54,10 @@ setup(name='flydra',
     'gui_scripts': [
     'flydra_mainbrain = flydra.wxMainBrain:main',
     ],
+    'flydra.kdviewer.plugins':['default = flydra.a2.conditions_draw:default',
+                               'mama07 = flydra.a2.conditions_draw:mama07',
+                               'hum07 = flydra.a2.conditions_draw:hum07',
+                               ],
     },
       zip_safe = False, # must be false for flydra_bench
       package_data={'flydra':['flydra_server.xrc',

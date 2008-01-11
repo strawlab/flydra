@@ -14,6 +14,9 @@ from optparse import OptionParser
 import core_analysis
 import scipy.io
 import pytz, datetime
+import pkg_resources
+import flydra.reconstruct as reconstruct
+
 pacific = pytz.timezone('US/Pacific')
 
 try:
@@ -30,6 +33,112 @@ def print_cam_props(camera):
     print 'camera.view_up = ',camera.view_up
     print 'camera.clipping_range = ',camera.clipping_range
     print 'camera.parallel_scale = ',camera.parallel_scale
+
+def do_show_cameras(results, renderers, frustums=True, labels=True, centers=True):
+    if isinstance(results,reconstruct.Reconstructor):
+        R = results
+    else:
+        R = reconstruct.Reconstructor(results)
+
+    R = R.get_scaled( R.get_scale_factor() )
+
+    actors = []
+    if centers:
+        cam_centers = tvtk.Points()
+
+        for cam_id, pmat in R.Pmat.iteritems():
+            X = reconstruct.pmat2cam_center(pmat) # X is column vector (matrix)
+            X = numpy.array(X.flat)
+            cam_centers.insert_next_point(*X)
+
+        points_poly_data = tvtk.PolyData( points=cam_centers )
+        ball = tvtk.SphereSource(radius=0.020,
+                                 theta_resolution=25,
+                                 phi_resolution=25)
+        balls = tvtk.Glyph3D(scale_mode='data_scaling_off',
+                             vector_mode = 'use_vector',
+                             input=points_poly_data,
+                             source = ball.output)
+        mapBalls = tvtk.PolyDataMapper(input=balls.output)
+        ballActor = tvtk.Actor(mapper=mapBalls)
+        ballActor.property.diffuse_color = (1,0,0)
+        ballActor.property.specular = .3
+        ballActor.property.specular_power = 30
+        for ren in renderers:
+            ren.add_actor(ballActor)
+
+    if frustums:
+        line_points = tvtk.Points()
+        polys = tvtk.CellArray()
+        point_num = 0
+
+        for cam_id in R.Pmat.keys():
+            pmat = R.get_pmat( cam_id )
+            width,height = R.get_resolution( cam_id )
+
+            # cam center
+            C = reconstruct.pmat2cam_center(pmat) # X is column vector (matrix)
+            C = numpy.array(C.flat)
+
+            z = 1
+            first_vert = None
+
+            for x,y in ((0,0),(0,height-1),(width-1,height-1),(width-1,0)):
+                    x2d = x,y,z
+                    X = R.find3d_single_cam(cam_id,x2d) # returns column matrix
+                    X = X.flat
+                    X = X[:3]/X[3]
+
+                    line_points.insert_next_point(*C)
+                    point_num += 1
+
+                    U = X-C # direction
+                    # rescale to unit length
+                    U=U/math.sqrt(U[0]**2 + U[1]**2 + U[2]**2)
+                    X = C+500.0*U
+
+                    line_points.insert_next_point(*X)
+                    point_num += 1
+
+                    if first_vert is None:
+                        first_vert = point_num-2
+                    else:
+                        polys.insert_next_cell(4)
+                        polys.insert_cell_point(point_num-4)
+                        polys.insert_cell_point(point_num-3)
+                        polys.insert_cell_point(point_num-1)
+                        polys.insert_cell_point(point_num-2)
+
+            polys.insert_next_cell(4)
+            polys.insert_cell_point(point_num-2)
+            polys.insert_cell_point(point_num-1)
+            polys.insert_cell_point(first_vert+1)
+            polys.insert_cell_point(first_vert)
+
+        profileData = tvtk.PolyData(points=line_points, polys=polys)
+        profileMapper = tvtk.PolyDataMapper(input=profileData)
+        profile = tvtk.Actor(mapper=profileMapper)
+        p = profile.property
+        p.opacity = 0.1
+        p.diffuse_color = 1,0,0
+        p.specular = .3
+        p.specular_power = 30
+        for ren in renderers:
+            ren.add_actor(profile)
+
+    if labels:
+        for cam_id, pmat in R.Pmat.iteritems():
+            X = reconstruct.pmat2cam_center(pmat) # X is column vector (matrix)
+            X = numpy.array(X.flat)
+
+            ta = tvtk.TextActor(input=cam_id)
+            #ta.set(scaled_text=True, height=0.05)
+            pc = ta.position_coordinate
+            pc.coordinate_system = 'world'
+            pc.value = X
+
+            for ren in renderers:
+                ren.add_actor(ta)
 
 def doit(filename,
          show_obj_ids=False,
@@ -53,6 +162,7 @@ def doit(filename,
          exclude_vel_data = 'kalman',
          stereo = False,
          dynamic_model = None,
+         show_cameras=False,
          ):
 
     assert exclude_vel_data in ['kalman','observations'] # kalman means smoothed or filtered, depending on use_kalman_smoothing
@@ -134,6 +244,11 @@ def doit(filename,
         ren = tvtk.Renderer(background=(1.0,1.0,1.0)) # white
 
     camera = ren.active_camera
+
+    if show_cameras:
+        if is_mat_file:
+            raise RuntimeError('.mat file does not contain camera information')
+        do_show_cameras(extra['kresults'], [ren])
 
     if 0:
         camera.parallel_projection =  0
@@ -359,16 +474,28 @@ def doit(filename,
     ################################
 
     if draw_stim_func_str:
-        def my_import(name):
-            mod = __import__(name)
-            components = name.split('.')
-            for comp in components[1:]:
-                mod = getattr(mod, comp)
-            return mod
-        draw_stim_module_name, draw_stim_func_name = draw_stim_func_str.strip().split(':')
-        draw_stim_module = my_import(draw_stim_module_name)
-        draw_stim_func = getattr(draw_stim_module, draw_stim_func_name)
-        stim_actors = draw_stim_func(filename=filename)
+        all_names = []
+        found=False
+        pkg_env = pkg_resources.Environment()
+        EP = 'flydra.kdviewer.plugins'
+        for name in pkg_env:
+            egg = pkg_env[name][0]
+
+            for name in egg.get_entry_map(EP):
+                egg.activate()
+                print 'name',name
+                all_names.append(name)
+                if name != draw_stim_func_str:
+                    continue
+                found=True
+                entry_point = egg.get_entry_info(EP, name)
+                PluginFunc = entry_point.load()
+                print 'PluginFunc',PluginFunc
+                break
+        if not found:
+            raise ValueError('Could not find stimulus drawing plugin. Available: %s'%( str(all_names), ))
+
+        stim_actors = PluginFunc(filename=filename)
         actors.extend( stim_actors )
         print '*'*80,'drew with custom code'
 
@@ -419,6 +546,27 @@ def doit(filename,
         axes2.camera = ren.active_camera
         #axes2.input = verts
         ren.add_actor(axes2)
+
+    if 1:
+        # Inspired by pyface.tvtk.decorated_scene
+        marker = tvtk.OrientationMarkerWidget()
+
+        axes = tvtk.AxesActor()
+        axes.set(
+            normalized_tip_length=(0.4, 0.4, 0.4),
+            normalized_shaft_length=(0.6, 0.6, 0.6),
+            shaft_type='cylinder'
+            )
+
+        p = axes.x_axis_caption_actor2d.caption_text_property
+        axes.y_axis_caption_actor2d.caption_text_property = p
+        axes.z_axis_caption_actor2d.caption_text_property = p
+
+        p.color = 0.0, 0.0, 0.0 # black
+
+        marker.orientation_marker = axes
+        marker.interactor = rwi
+        marker.enabled = True
 
     if not show_only_track_ends:
         # Create a scalar bar
@@ -542,7 +690,7 @@ def main():
     parser.add_option("--draw-stim",
                       type="string",
                       dest="draw_stim_func_str",
-                      default="flydra.a2.conditions_draw:draw_default_stim",
+                      default="default",
                       )
 
     parser.add_option("--dynamic-model",
@@ -586,6 +734,10 @@ def main():
 
     parser.add_option("--stereo", action='store_true',dest='stereo',
                       help="display in stereo (red-blue analglyphic)",
+                      default=False)
+
+    parser.add_option("--show-cameras", action='store_true',dest='show_cameras',
+                      help="show camera locations/frustums",
                       default=False)
 
     parser.add_option("--fps", dest='fps', type='float',
@@ -650,6 +802,7 @@ def main():
          exclude_vel_mps = options.exclude_vel_mps,
          stereo = options.stereo,
          dynamic_model = options.dynamic_model,
+         show_cameras = options.show_cameras,
          )
 
 if __name__=='__main__':
