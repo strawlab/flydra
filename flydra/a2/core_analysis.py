@@ -197,8 +197,6 @@ def kalman_smooth(orig_rows,
         import warnings
         warnings.warn('using "%s" for Kalman smoothing'%(kalman_dynamic_model,))
 
-    if frames_per_second!=200.0:
-        1/0
     model_dict = flydra.kalman.dynamic_models.create_dynamic_model_dict(dt=(1.0/frames_per_second))
     if kalman_dynamic_model not in model_dict:
         raise ValueError("'%s' not in list of known dynamic models. Known models: %s"%(
@@ -232,9 +230,6 @@ def observations2smoothed(obj_id,
         rows = numpy.rec.fromarrays(list_of_cols,
                                     names = field_names)
         return rows
-
-    if frames_per_second!=200.0:
-        1/0
 
     frames, xsmooth, Psmooth, obj_id_array = kalman_smooth(orig_rows,
                                                            frames_per_second=frames_per_second,
