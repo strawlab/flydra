@@ -98,7 +98,7 @@ def mama07(filename=None):
         actors.append(a)
     return actors
 
-def draw_default_stim(filename=None):
+def default(filename=None):
     ### draw floor
     actors = []
     if 1:
