@@ -112,6 +112,9 @@ def get_cam_ids(results):
     return cam_ids
 
 def get_caminfo_dicts(results):
+    """
+    camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
+    """
     # camera info
     cam_info = results.root.cam_info
     cam_id2camns = {}
