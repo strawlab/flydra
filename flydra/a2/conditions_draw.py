@@ -49,7 +49,7 @@ def hum07(filename=None):
     cm2m = .01
     ft2m = ft2inch*inch2cm*cm2m
     origin = numpy.array([0,0,0])
-    size = numpy.array([10*ft2m,5*ft2m,5*ft2m])
+    size = numpy.array([5*ft2m,10*ft2m,5*ft2m])
     actors.extend(draw_cubic_solid(origin,size))
     #actors.extend(draw_cubic_solid(origin,0.1*size))
 
