@@ -29,7 +29,7 @@ class FakeThreadingEvent:
         self._set = False
 
 def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
-                  max_err=500.0, debug=0, kalman_model=None):
+                  max_err=None, debug=0, kalman_model=None):
     tracker.gobble_2d_data_and_calculate_a_posteri_estimates(frame,frame_data,camn2cam_id,debug2=debug)
 
     # Now, tracked objects have been updated (and their 2D data points
@@ -59,6 +59,9 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
             print 'this_observation_mm',this_observation_mm
             print 'cam_ids_used',cam_ids_used
             print 'min_mean_dist',min_mean_dist
+
+        if (debug > 5) and not (min_mean_dist<max_err):
+                print 'NOT accepting point - reprojection error too large'
 
         if min_mean_dist<max_err:
             if debug > 5:
@@ -357,8 +360,8 @@ def kalmanize(src_filename,
         print '-='*40
         print '-='*40
 
-    max_err = 500.0
-    print 'max error',max_err
+    max_err = 50.0
+    print 'max reprojection error to accept new 3D point with hypothesis testing: %.1f (pixels)'%(max_err,)
     frame_count = 0
     accum_time = 0.0
     last_frame = None

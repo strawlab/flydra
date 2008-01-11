@@ -1608,7 +1608,7 @@ class MainBrain(object):
         self.accumulate_kalman_calibration_data = threading.Event()
         self.all_kalman_calibration_data = []
 
-        self.hypothesis_test_max_error = LockedValue(500.0)
+        self.hypothesis_test_max_error = LockedValue(50.0) # maximum reprojection error # XXX should save to file
 
         self.coord_processor = CoordinateProcessor(self,save_profiling_data=save_profiling_data)
         #self.coord_processor.setDaemon(True)
