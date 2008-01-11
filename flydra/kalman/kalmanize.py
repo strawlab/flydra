@@ -1,5 +1,4 @@
 import numpy
-import params
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
 #import flydra.geom as geom
@@ -14,8 +13,6 @@ import flydra_kalman_utils
 from optparse import OptionParser
 import dynamic_models
 import flydra.save_calibration_data as save_calibration_data
-
-assert params.A_model_name == 'fixed_accel'
 
 KalmanEstimates = flydra_kalman_utils.KalmanEstimates
 FilteredObservations = flydra_kalman_utils.FilteredObservations
@@ -32,7 +29,7 @@ class FakeThreadingEvent:
         self._set = False
 
 def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
-                  max_err=500.0, debug=0):
+                  max_err=500.0, debug=0, kalman_model=None):
     tracker.gobble_2d_data_and_calculate_a_posteri_estimates(frame,frame_data,camn2cam_id,debug2=debug)
 
     # Now, tracked objects have been updated (and their 2D data points
@@ -119,7 +116,8 @@ option to this program.
                                   this_observation_mm,
                                   this_observation_camns,
                                   this_observation_idxs,
-                                  debug=debug )
+                                  debug=debug,
+                                  )
     if debug > 5:
         print
         print 'At end of frame %d, all live tracked objects:'%frame
@@ -283,6 +281,7 @@ def kalmanize(src_filename,
               dynamic_model=None,
               save_cal_dir=None,
               debug=False,
+              frames_per_second=None,
               ):
 
     if debug:
@@ -320,18 +319,20 @@ def kalmanize(src_filename,
     save_calibration_data = FakeThreadingEvent()
     save_calibration_data.set()
 
-    tracker = Tracker(reconstructor_meters,
-                      scale_factor=reconst_orig_units.get_scale_factor(),
-                      save_calibration_data=save_calibration_data,
-                      )
-    model_dict=dynamic_models.get_dynamic_model_dict()
+    dt = 1.0/frames_per_second
+    model_dict=dynamic_models.create_dynamic_model_dict(dt=dt)
     try:
-        kw_dict = model_dict[dynamic_model]
+        kalman_model = model_dict[dynamic_model]
     except KeyError:
         print 'valid model names:',model_dict.keys()
         raise
-    for attr in kw_dict:
-        setattr(tracker,attr,kw_dict[attr])
+
+    tracker = Tracker(reconstructor_meters,
+                      scale_factor=reconst_orig_units.get_scale_factor(),
+                      save_calibration_data=save_calibration_data,
+                      kalman_model=kalman_model,
+                      )
+
     tracker.set_killed_tracker_callback( h5saver.save_tro )
 
     data2d = results.root.data2d_distorted
@@ -394,7 +395,7 @@ def kalmanize(src_filename,
                     pprint.pprint(frame_data)
                     print
                 process_frame(reconst_orig_units,tracker,last_frame,frame_data,camn2cam_id,
-                              max_err=max_err,debug=debug)
+                              max_err=max_err,debug=debug, kalman_model=kalman_model)
                 frame_count += 1
                 if frame_count%1000==0:
                     time2 = time.time()
@@ -489,6 +490,10 @@ def main():
                       default=None,
                       )
 
+    parser.add_option("--fps", dest='fps', type='float',
+                      default=100.0,
+                      help="frames per second (used for Kalman filtering/smoothing)")
+
     parser.add_option("--exclude-cam-ids", dest="exclude_cam_ids", type='string',
                       help="camera ids to exclude from reconstruction (space separated)",
                       metavar="EXCLUDE_CAM_IDS")
@@ -538,6 +543,7 @@ def main():
               dynamic_model = options.dynamic_model,
               save_cal_dir = options.save_cal_dir,
               debug = options.debug,
+              frames_per_second = options.fps,
               )
 
 if __name__=='__main__':

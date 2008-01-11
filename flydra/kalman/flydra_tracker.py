@@ -1,7 +1,6 @@
 import numpy
 import time
 import adskalman as kalman
-import params
 #import flydra.geom as geom
 import flydra.fastgeom as geom
 import math, struct
@@ -16,7 +15,7 @@ PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 packet_header_fmt = '<idB' # XXX check format
 packet_header_fmtsize = struct.calcsize(packet_header_fmt)
 
-state_size = params.A.shape[0]
+state_size = 9
 err_size = 1
 #per_tracked_object_fmt = 'I' + 'f'*(state_size+err_size) # obj_id + state vector
 per_tracked_object_fmt = 'f'*(state_size+err_size)
@@ -41,35 +40,23 @@ class TrackedObject:
                  first_observation_camns,
                  first_observation_idxs,
                  scale_factor=None,
-                 n_sigma_accept = 3.0, # default: arbitrarily set to 3
-                 max_variance_dist_meters = 1e-4,
-                 initial_position_covariance_estimate = 1e-6, # default: initial guess 1mm ( (1e-3)**2 meters)
-                 initial_acceleration_covariance_estimate = 15, # default: arbitrary initial guess, rather large
-                 Q = None,
-                 R = None,
+                 kalman_model=None,
                  save_calibration_data=None,
                  max_frames_skipped=25,
                  ):
         """
 
         arguments
-        ---------
+        =========
         reconstructor_meters - reconstructor instance with internal units of meters
         frame - frame number of first observation data
         first_observation_orig_units - first observation (in arbitrary units)
         scale_factor - how to convert from arbitrary units (of observations) into meters (e.g. 1e-3 for mm)
-        n_sigma_accept - gobble 2D data points that are within this distance from predicted 2D location
-        max_variance_dist_meters - estimated error (in meters) to allow growth to before killing tracked object
-        initial_position_covariance_estimate -
-        initial_acceleration_covariance_estimate -
-        Q - process covariance matrix
-        R - measurement noise covariance matrix
+        kalman_model - Kalman parameters
         """
         self.kill_me = False
         self.reconstructor_meters = reconstructor_meters
         self.current_frameno = frame
-        self.n_sigma_accept = n_sigma_accept # arbitrary
-        self.max_variance_dist_meters = max_variance_dist_meters
         if scale_factor is None:
             print 'WARNING: no scale_factor given in flydra_tracker, assuming 1e-3'
             self.scale_factor = 1e-3
@@ -78,21 +65,20 @@ class TrackedObject:
         first_observation_meters = first_observation_orig_units*self.scale_factor
         initial_x = numpy.hstack((first_observation_meters, # convert to mm from meters
                                   (0,0,0, 0,0,0))) # zero velocity and acceleration
-        ss = params.A.shape[0]
+        ss = kalman_model['ss']
         P_k1=numpy.eye(ss) # initial state error covariance guess
         for i in range(0,3):
-            P_k1[i,i]=initial_position_covariance_estimate
+            P_k1[i,i]=kalman_model['initial_position_covariance_estimate']
         for i in range(6,9):
-            P_k1[i,i]=initial_acceleration_covariance_estimate
+            P_k1[i,i]=kalman_model['initial_acceleration_covariance_estimate']
 
-        if Q is None:
-            Q = params.Q
-        if R is None:
-            R = params.R
-        self.my_kalman = kalman.KalmanFilter(params.A,
-                                             params.C,
-                                             Q,
-                                             R,
+        self.n_sigma_accept = kalman_model['n_sigma_accept']
+        self.max_variance_dist_meters = kalman_model['max_variance_dist_meters']
+
+        self.my_kalman = kalman.KalmanFilter(kalman_model['A'],
+                                             kalman_model['C'],
+                                             kalman_model['Q'],
+                                             kalman_model['R'],
                                              initial_x,
                                              P_k1)
         self.frames = [frame]
@@ -149,7 +135,7 @@ class TrackedObject:
             frames_skipped = frame-self.current_frameno-1
 
             if debug1>2:
-                print 'doing',self,'--------------'
+                print 'doing',self,'============--'
 
             if frames_skipped > self.max_frames_skipped:
                 self.kill_me = True # don't run Kalman filter, just quit
@@ -320,27 +306,17 @@ class Tracker:
     def __init__(self,
                  reconstructor_meters,
                  scale_factor=None,
-                 n_sigma_accept = 3.0, # default: arbitrarily set to 3
-                 max_variance_dist_meters = 1e-4,
-                 initial_position_covariance_estimate = 1e-6, # default: initial guess 1mm ( (1e-3)**2 meters)
-                 initial_acceleration_covariance_estimate = 15, # default: arbitrary initial guess, rather large
-                 Q = None,
-                 R = None,
+                 kalman_model=None,
                  save_calibration_data=None,
                  max_frames_skipped=25,
                  ):
         """
 
         arguments
-        ---------
+        =========
         reconstructor_meters - reconstructor instance with internal units of meters
         scale_factor - how to convert from arbitrary units (of observations) into meters (e.g. 1e-3 for mm)
-        n_sigma_accept - gobble 2D data points that are within this distance from predicted 2D location
-        max_variance_dist_meters - estimated error (in meters) to allow growth to before killing tracked object
-        initial_position_covariance_estimate -
-        initial_acceleration_covariance_estimate -
-        Q - process covariance matrix
-        R - measurement noise covariance matrix
+        kalman_model - dictionary of Kalman filter parameters
 
         """
 
@@ -355,13 +331,11 @@ class Tracker:
             self.scale_factor = 1e-3
         else:
             self.scale_factor = scale_factor
-        self.n_sigma_accept = n_sigma_accept
-        self.max_variance_dist_meters = max_variance_dist_meters
         self.max_frames_skipped = max_frames_skipped
-        self.initial_position_covariance_estimate = initial_position_covariance_estimate
-        self.initial_acceleration_covariance_estimate = initial_acceleration_covariance_estimate
-        self.Q = Q
-        self.R = R
+
+        if kalman_model is None:
+            raise ValueError('must specify kalman_model')
+        self.kalman_model = kalman_model
         self.save_calibration_data=save_calibration_data
 
     def gobble_2d_data_and_calculate_a_posteri_estimates(self,frame,data_dict,camn2cam_id,debug2=0):
@@ -407,12 +381,7 @@ class Tracker:
                             first_observation_camns,
                             first_observation_idxs,
                             scale_factor=self.scale_factor,
-                            n_sigma_accept = self.n_sigma_accept,
-                            max_variance_dist_meters = self.max_variance_dist_meters,
-                            initial_position_covariance_estimate = self.initial_position_covariance_estimate,
-                            initial_acceleration_covariance_estimate = self.initial_acceleration_covariance_estimate,
-                            Q = self.Q,
-                            R = self.R,
+                            kalman_model=self.kalman_model,
                             save_calibration_data=self.save_calibration_data,
                             max_frames_skipped=self.max_frames_skipped,
                             )
