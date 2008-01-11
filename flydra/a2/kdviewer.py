@@ -51,6 +51,8 @@ def doit(filename,
          save_still = False,
          exclude_vel_mps = None,
          exclude_vel_data = 'kalman',
+         stereo = False,
+         dynamic_model = None,
          ):
 
     assert exclude_vel_data in ['kalman','observations'] # kalman means smoothed or filtered, depending on use_kalman_smoothing
@@ -74,7 +76,10 @@ def doit(filename,
 
             if not ca.has_obj_id(obj_id, data_file):
                 continue
-            rows = ca.load_data(obj_id, data_file)
+            rows = ca.load_data( obj_id, data_file,
+                                 use_kalman_smoothing=use_kalman_smoothing,
+                                 kalman_dynamic_model = dynamic_model,
+                                 frames_per_second=fps)
 
             frames = rows['frame']
             n_frames = rows['frame'][-1]-rows['frame'][0]+1
@@ -112,7 +117,14 @@ def doit(filename,
         use_obj_ids = numpy.array(obj_only)
 
     #################
-    rw = tvtk.RenderWindow(size=(1024, 768))
+    rw = tvtk.RenderWindow(size=(1024, 768),
+                           stereo_capable_window=stereo,
+                           )
+    if stereo:
+    ##     rw.stereo_render_on()
+    ##     rw.set_stereo_type_to_red_blue()
+        rw.set(stereo_type='red_blue',
+               stereo_render=stereo)
 
     if show_obj_ids:
         # Because I can't get black text right now (despite trying),
@@ -142,7 +154,9 @@ def doit(filename,
 
     rw.add_renderer(ren)
     rwi = tvtk.RenderWindowInteractor(render_window=rw,
-                                      interactor_style = tvtk.InteractorStyleTrackballCamera())
+                                      interactor_style = tvtk.InteractorStyleTrackballCamera(),
+                                      #stereo = stereo,
+                                      )
 
     lut = tvtk.LookupTable(hue_range = (0.667, 0.0))
     actors = []
@@ -169,7 +183,10 @@ def doit(filename,
         if not is_mat_file:
             # h5 file has timestamps for each frame
             #my_rows = ca.get_recarray(data_file,obj_id,which_data='kalman')
-            my_rows = ca.load_data( obj_id, data_file)
+            my_rows = ca.load_data( obj_id, data_file,
+                                    use_kalman_smoothing=use_kalman_smoothing,
+                                    kalman_dynamic_model = dynamic_model,
+                                    frames_per_second=fps)
 
             my_timestamp = my_rows['timestamp'][0]
             dur = my_rows['timestamp'][-1] - my_timestamp
@@ -205,7 +222,9 @@ def doit(filename,
             actors.append(a)
             actor2obj_id[a] = obj_id
 
-        rows = ca.load_data( obj_id, data_file, use_kalman_smoothing=use_kalman_smoothing,
+        rows = ca.load_data( obj_id, data_file,
+                             use_kalman_smoothing=use_kalman_smoothing,
+                             kalman_dynamic_model = dynamic_model,
                              frames_per_second=fps)
 
         if len(rows):
@@ -223,6 +242,7 @@ def doit(filename,
                                                           data_file,
                                                           use_kalman_smoothing=use_kalman_smoothing,
                                                           frames_per_second=fps,
+                                                          kalman_dynamic_model = dynamic_model,
                                                           method='position based',
                                                           method_params={'downsample':1,
                                                                          })
@@ -283,7 +303,7 @@ def doit(filename,
             vel_mapper.scalar_range = 0.0, float(max_vel)
             a = tvtk.Actor(mapper=vel_mapper)
             if show_observations:
-                a.property.opacity = 0.3
+                a.property.opacity = 0.3 # sets transparency/alpha
             actors.append(a)
             actor2obj_id[a] = obj_id
 
@@ -525,6 +545,12 @@ def main():
                       default="flydra.a2.conditions_draw:draw_default_stim",
                       )
 
+    parser.add_option("--dynamic-model",
+                      type="string",
+                      dest="dynamic_model",
+                      default=None,
+                      )
+
     parser.add_option("--n-top-traces", type="int",
                       help="show N longest traces")
 
@@ -557,6 +583,14 @@ def main():
 
     parser.add_option("--show-observations", action='store_true',dest='show_observations',
                       help="show observations")
+
+    parser.add_option("--stereo", action='store_true',dest='stereo',
+                      help="display in stereo (red-blue analglyphic)",
+                      default=False)
+
+    parser.add_option("--fps", dest='fps', type='float',
+                      default=100.0,
+                      help="frames per second (used for Kalman filtering/smoothing)")
 
     parser.add_option("--show-saccade-times", action='store_true',dest='show_saccade_times',
                       help="show saccade times")
@@ -608,12 +642,14 @@ def main():
          show_observations = options.show_observations,
          show_saccade_times = options.show_saccade_times,
          draw_stim_func_str = options.draw_stim_func_str,
-         fps = 100.0,
+         fps = options.fps,
          vertical_scale = options.vertical_scale,
          max_vel = options.max_vel,
          show_only_track_ends = options.show_only_track_ends,
          save_still = options.save_still,
          exclude_vel_mps = options.exclude_vel_mps,
+         stereo = options.stereo,
+         dynamic_model = options.dynamic_model,
          )
 
 if __name__=='__main__':
