@@ -10,7 +10,6 @@ import pkg_resources
 import numpy
 import tables as PT
 from optparse import OptionParser
-import flydra.analysis.result_utils
 import flydra.reconstruct as reconstruct
 
 #PLOT='mpl'
@@ -74,6 +73,7 @@ def doit(fmf_filename=None,
             kobs_rows.append(my_rows)
         kobs_rows = numpy.concatenate( kobs_rows )
         kobs_3d_frame = kobs_rows['frame']
+        print 'loaded'
 
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
 
@@ -98,6 +98,7 @@ def doit(fmf_filename=None,
 
     fmf_timestamps = fmf.get_all_timestamps()
     # find frame correspondence
+    frame_match_h5 = None
     for fmf_fno, timestamp in enumerate( fmf_timestamps ):
         timestamp_idx = numpy.nonzero(timestamp == timestamps)[0]
         #print repr(timestamp), repr(timestamp_idx)
@@ -107,6 +108,10 @@ def doit(fmf_filename=None,
             frame_match_h5 = rows['frame'][0]
             break
     #print
+    if frame_match_h5 is None:
+        print >> sys.stderr, "ERROR: no timestamp corresponding to .fmf '%s' for %s in '%s'"%(
+            fmf_filename, cam_id, h5_filename)
+        sys.exit(1)
 
     fmf_frame2h5_frame = frame_match_h5 - fmf_fno
 
