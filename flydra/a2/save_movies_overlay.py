@@ -110,7 +110,7 @@ def doit(fmf_filename=None,
 
     fmf_frame2h5_frame = frame_match_h5 - fmf_fno
 
-    widgets=["calculating", " ", progressbar.Percentage(), ' ',
+    widgets=[cam_id, " ", progressbar.Percentage(), ' ',
              progressbar.Bar(), ' ', progressbar.ETA()]
     pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(fmf_timestamps)).start()
 
@@ -183,7 +183,9 @@ def doit(fmf_filename=None,
                 for this_3d_row in these_3d_rows:
                     vert = numpy.array([this_3d_row['x'],this_3d_row['y'],this_3d_row['z']])
                     vert_image = R.find2d(cam_id,vert,distorted=True)
-                    kalman_vert_images.append( (vert_image, vert, this_3d_row['obj_id']) )
+                    P = numpy.array([this_3d_row['P00'],this_3d_row['P11'],this_3d_row['P22']])
+                    Pmean = numpy.sqrt(numpy.sum(P**2))
+                    kalman_vert_images.append( (vert_image, vert, this_3d_row['obj_id'], Pmean) )
 
             # get 3D observation data
             kobs_vert_images = []
@@ -240,13 +242,13 @@ def doit(fmf_filename=None,
                                       pen )
                         draw.text( (x,y), 'pt %d'%(pt_no,), font )
 
-                for (xy,XYZ,obj_id) in kalman_vert_images:
+                for (xy,XYZ,obj_id,Pmean) in kalman_vert_images:
                     radius=3
                     x,y= xy
                     X,Y,Z=XYZ
                     draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
                                   pen3d )
-                    draw.text( (x,y), 'obj %d (%.3f, %.3f, %.3f)'%(obj_id,X,Y,Z), font3d )
+                    draw.text( (x,y), 'obj %d (%.3f, %.3f, %.3f +- ~%f)'%(obj_id,X,Y,Z,Pmean), font3d )
 
                 for (xy,XYZ,obj_id,obs_info) in kobs_vert_images:
                     radius=3
