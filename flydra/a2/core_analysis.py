@@ -231,6 +231,10 @@ def observations2smoothed(obj_id,
                                     names = field_names)
         return rows
 
+    if len(orig_rows)==1:
+        # if one row, we can't really smooth it...
+        return orig_rows
+
     frames, xsmooth, Psmooth, obj_id_array = kalman_smooth(orig_rows,
                                                            frames_per_second=frames_per_second,
                                                            kalman_dynamic_model=kalman_dynamic_model)
