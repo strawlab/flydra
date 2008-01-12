@@ -222,9 +222,6 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
         alpha = 1.0/n_cams
 
         # Can we short-circuit the rest of these computations?
-        print 'HYPOTHESIS TEST - performing test to shortcircuit for n_cams %d (prev=%f, ACCEPTABLE_DISTANCE_PIXELS=%f)'%(
-            n_cams,least_err_by_n_cameras[n_cams-1],ACCEPTABLE_DISTANCE_PIXELS)
-
         if not isinf(least_err_by_n_cameras[n_cams-1]): # if it's infinity, it must be n_cams 0 or 1.
             # If we've calculated error for 2 less than n_cams
             if least_err_by_n_cameras[n_cams-1] > ACCEPTABLE_DISTANCE_PIXELS:
