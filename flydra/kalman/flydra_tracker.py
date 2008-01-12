@@ -43,6 +43,7 @@ class TrackedObject:
                  kalman_model=None,
                  save_calibration_data=None,
                  max_frames_skipped=25,
+                 save_all_data=False,
                  ):
         """
 
@@ -54,6 +55,7 @@ class TrackedObject:
         scale_factor - how to convert from arbitrary units (of observations) into meters (e.g. 1e-3 for mm)
         kalman_model - Kalman parameters
         """
+        self.save_all_data = save_all_data
         self.kill_me = False
         self.reconstructor_meters = reconstructor_meters
         self.current_frameno = frame
@@ -73,7 +75,7 @@ class TrackedObject:
             P_k1[i,i]=kalman_model['initial_acceleration_covariance_estimate']
 
         self.n_sigma_accept = kalman_model['n_sigma_accept']
-        self.max_variance_dist_meters = kalman_model['max_variance_dist_meters']
+        self.max_variance = kalman_model['max_variance_dist_meters']**2 # square so that it is in variance units
 
         self.my_kalman = kalman.KalmanFilter(kalman_model['A'],
                                              kalman_model['C'],
@@ -109,6 +111,8 @@ class TrackedObject:
         # cause error estimates to drop too low.
     def kill(self):
         # called when killed
+        if self.save_all_data:
+            return
 
         # find last data
         last_observation_frame = self.observations_frames[-1]
@@ -183,7 +187,7 @@ class TrackedObject:
                 print 'frames_skipped',type(frames_skipped),frames_skipped
                 raise err
 
-            # calculate distance of variance of x y z position (assumes first three components of state vector are position)
+            # calculate mean variance of x y z position (assumes first three components of state vector are position)
             Pmean = numpy.sqrt(numpy.sum([P[i,i]**2 for i in range(3)]))
             if debug1>2:
                 print 'xhat'
@@ -194,7 +198,7 @@ class TrackedObject:
 
             # XXX Need to test if error for this object has grown beyond a
             # threshold at which it should be terminated.
-            if Pmean > self.max_variance_dist_meters:
+            if Pmean > self.max_variance:
                 self.kill_me = True
                 if debug1>2:
                     print 'will kill next time because Pmean too large'
@@ -218,16 +222,16 @@ class TrackedObject:
 
         a_priori_observation_prediction = xhatminus[:3] # equiv. to "dot(self.my_kalman.C,xhatminus)"
 
-        variance_estimate = [Pminus[i,i] for i in range(3)] # maybe equiv. to "dot(self.my_kalman.C,Pminus[i,i])"
-        variance_estimate_scalar = numpy.sqrt(numpy.sum(variance_estimate)) # put in distance units (meters)
-        dist2cmp = (self.n_sigma_accept*variance_estimate_scalar)**2
+        variance_estimate = numpy.array([Pminus[i,i] for i in range(3)]) # maybe equiv. to "dot(self.my_kalman.C,Pminus[i,i])"
+        mean_variance_estimate = numpy.sqrt(numpy.sum(variance_estimate**2)) # put in variance units (meters^2)
+        dist2cmp = self.n_sigma_accept*mean_variance_estimate
         neg_predicted_3d = -geom.ThreeTuple( a_priori_observation_prediction )
         cam_ids_and_points2d = []
 
         used_camns_and_idxs = []
         if debug>2:
             print '_filter_data():'
-            print '  variance_estimate_scalar',variance_estimate_scalar
+            print '  dist2cmp %f = self.n_sigma_accept * %f'%(dist2cmp,mean_variance_estimate)
         for camn in data_dict:
             cam_id = camn2cam_id[camn]
 
@@ -235,6 +239,7 @@ class TrackedObject:
                 predicted_2d = self.reconstructor_meters.find2d(cam_id,a_priori_observation_prediction)
                 print 'camn',camn,'cam_id',cam_id
                 print 'predicted_2d',predicted_2d
+
             # For large numbers of 2d points in data_dict, probably
             # faster to compute 2d image of error ellipsoid and see if
             # data_dict points fall inside that. For now, however,
@@ -309,6 +314,7 @@ class Tracker:
                  kalman_model=None,
                  save_calibration_data=None,
                  max_frames_skipped=25,
+                 save_all_data=False,
                  ):
         """
 
@@ -319,7 +325,7 @@ class Tracker:
         kalman_model - dictionary of Kalman filter parameters
 
         """
-
+        self.save_all_data = save_all_data
         self.reconstructor_meters=reconstructor_meters
         self.live_tracked_objects = []
         self.dead_tracked_objects = [] # save for getting data out
@@ -365,7 +371,7 @@ class Tracker:
         for kill_idx in kill_idxs:
             tro = self.live_tracked_objects.pop( kill_idx )
             tro.kill()
-            if len(tro.observations_frames)>1:
+            if self.save_all_data or len(tro.observations_frames)>1:
                 # require more than single observation to save
                 self.dead_tracked_objects.append( tro )
         self._flush_dead_queue()
@@ -384,6 +390,7 @@ class Tracker:
                             kalman_model=self.kalman_model,
                             save_calibration_data=self.save_calibration_data,
                             max_frames_skipped=self.max_frames_skipped,
+                            save_all_data=self.save_all_data,
                             )
         self.live_tracked_objects.append(tro)
     def kill_all_trackers(self):
