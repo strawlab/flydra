@@ -1,3 +1,4 @@
+# see a2/save_movies_overlay.py
 from __future__ import division
 import numpy
 from numpy import nan, pi
