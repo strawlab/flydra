@@ -71,6 +71,8 @@ class TrackedObject:
         P_k1=numpy.eye(ss) # initial state error covariance guess
         for i in range(0,3):
             P_k1[i,i]=kalman_model['initial_position_covariance_estimate']
+        for i in range(3,6):
+            P_k1[i,i]=kalman_model.get('initial_velocity_covariance_estimate',0)
         for i in range(6,9):
             P_k1[i,i]=kalman_model['initial_acceleration_covariance_estimate']
 
