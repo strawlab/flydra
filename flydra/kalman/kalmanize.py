@@ -30,6 +30,8 @@ class FakeThreadingEvent:
 
 def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
                   max_err=None, debug=0, kalman_model=None):
+    if debug is None:
+        debug=0
     tracker.gobble_2d_data_and_calculate_a_posteri_estimates(frame,frame_data,camn2cam_id,debug2=debug)
 
     # Now, tracked objects have been updated (and their 2D data points
