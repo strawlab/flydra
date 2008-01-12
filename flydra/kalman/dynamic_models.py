@@ -1,4 +1,5 @@
 import numpy
+import math
 
 def _get_A_C_arrays(dt=None):
     """get linear dynamical system matrices A and C
@@ -95,6 +96,9 @@ def create_dynamic_model_dict(dt=None):
     # 'hbird3, units: mm':
     # process covariance
     Q = numpy.zeros((ss,ss))
+    for i in range(0,3):
+        Q[i,i] = (0.050)**2 # position noise (10mm)^2
+
     for i in range(6,9):
         #Q[i,i] = 10.0 # acceleration noise (near (3.16m*sec**-2)**2)
         Q[i,i] = 50.0
@@ -108,8 +112,8 @@ def create_dynamic_model_dict(dt=None):
     newdict = dict(
         n_sigma_accept=2.8,
         #n_sigma_accept=2.4,
-        max_variance_dist_meters=0.038,
-        initial_position_covariance_estimate=2e-4,
+        max_variance_dist_meters=math.sqrt(0.01),
+        initial_position_covariance_estimate=(0.030)**2, # 30mm2
         #initial_acceleration_covariance_estimate=15,
         initial_acceleration_covariance_estimate=10,
         Q=Q,
