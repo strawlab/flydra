@@ -153,7 +153,7 @@ def doit(filename,
          show_saccade_times = False,
          draw_stim_func_str = None,
          use_kalman_smoothing=True,
-         fps=100.0,
+         fps=None,
          vertical_scale=False,
          max_vel=0.25,
          show_only_track_ends = False,
@@ -166,6 +166,11 @@ def doit(filename,
          ):
 
     assert exclude_vel_data in ['kalman','observations'] # kalman means smoothed or filtered, depending on use_kalman_smoothing
+
+    if not use_kalman_smoothing:
+        if (fps is not None) or (dynamic_model is not None):
+            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting fps and dynamic model options (--fps and --dynamic-model)'
+            sys.exit(1)
 
     ca = core_analysis.CachingAnalyzer()
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(filename)
@@ -229,6 +234,7 @@ def doit(filename,
     #################
     rw = tvtk.RenderWindow(size=(1024, 768),
                            stereo_capable_window=stereo,
+                           alpha_bit_planes=True,
                            )
     if stereo:
     ##     rw.stereo_render_on()
@@ -306,12 +312,19 @@ def doit(filename,
             my_timestamp = my_rows['timestamp'][0]
             dur = my_rows['timestamp'][-1] - my_timestamp
             print '%d 3D triangulation started at %s (took %.2f seconds)'%(obj_id,datetime.datetime.fromtimestamp(my_timestamp,pacific),dur)
-            print '  estimate frames: %d - %d (%d frames, %.1f sec at %.1f fps)'%(
+            print '  estimate frames: %d - %d (%d frames)'%(
                 my_rows['frame'][0],
                 my_rows['frame'][-1],
-                my_rows['frame'][-1]-my_rows['frame'][0],
-                (my_rows['frame'][-1]-my_rows['frame'][0])/fps,
-                fps)
+                my_rows['frame'][-1]-my_rows['frame'][0]),
+            if fps is None:
+                fpses = [60.0, 100.0, 200.0]
+            else:
+                fpses = [fps]
+            for my_fps in fpses:
+                    print '(%.1f sec at %.1f fps)'%(
+                        (my_rows['frame'][-1]-my_rows['frame'][0])/my_fps,
+                        my_fps),
+            print
 
         if show_observations:
             obs_rows = ca.load_observations( obj_id, data_file)
@@ -353,14 +366,11 @@ def doit(filename,
 
         if not show_only_track_ends:
             try:
-                results = ca.calculate_trajectory_metrics(obj_id,
-                                                          data_file,
-                                                          use_kalman_smoothing=use_kalman_smoothing,
-                                                          frames_per_second=fps,
-                                                          kalman_dynamic_model = dynamic_model,
-                                                          method='position based',
-                                                          method_params={'downsample':1,
-                                                                         })
+                rows = ca.load_data(obj_id,
+                                    data_file,
+                                    use_kalman_smoothing=use_kalman_smoothing,
+                                    frames_per_second=fps,
+                                    kalman_dynamic_model = dynamic_model)
             except Exception, err:
                 if 1:
                     raise
@@ -368,9 +378,9 @@ def doit(filename,
                     print 'ERROR: while processing obj_id %d, skipping this obj_id'%obj_id
                     print err
                     continue
-            verts = results['X_kalmanized']
-            speeds = results['speed_kalmanized']
-
+            verts = numpy.array( [rows['x'], rows['y'], rows['z']] ).T
+            vels = numpy.array( [rows['xvel'], rows['yvel'], rows['zvel']] ). T
+            speeds = numpy.sqrt(numpy.sum(vels**2,axis=0))
         else:
             x0 = rows.field('x')[0]
             x1 = rows.field('x')[-1]
@@ -653,7 +663,7 @@ def doit(filename,
         rwi.start()
         print_cam_props( ren.active_camera )
     else:
-        imf = tvtk.WindowToImageFilter(input=rw)
+        imf = tvtk.WindowToImageFilter(input=rw, input_buffer_type='rgba' )
         writer = tvtk.PNGWriter()
 
         imf.update()
@@ -741,7 +751,6 @@ def main():
                       default=False)
 
     parser.add_option("--fps", dest='fps', type='float',
-                      default=100.0,
                       help="frames per second (used for Kalman filtering/smoothing)")
 
     parser.add_option("--show-saccade-times", action='store_true',dest='show_saccade_times',
