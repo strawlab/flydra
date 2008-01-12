@@ -21,34 +21,46 @@ import pytz, datetime
 pacific = pytz.timezone('US/Pacific')
 
 def doit(
-         h5_filename=None,
+         filenames=None,
          start=None,
          stop=None,
          ):
-    h5 = PT.openFile( h5_filename, mode='r' )
-    camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
-    cam_ids = cam_id2camns.keys()
-    cam_ids.sort()
+    for filename in filenames:
 
-    all_data = h5.root.data2d_distorted[:]
-    #all_camns = h5.root.data2d_distorted.read(field='camn')
-    #all_frames = h5.root.data2d_distorted.read(field='frame')
-    for cam_id_enum, cam_id in enumerate( cam_ids ):
-        pylab.subplot( len(cam_ids), 1, cam_id_enum+1)
-        camns = cam_id2camns[cam_id]
-        for camn in camns:
-            #this_idx = numpy.nonzero( all_camns==camn )[0]
-            this_idx = numpy.nonzero( all_data['camn']==camn )[0]
+        fig = pylab.figure()
+        pylab.figtext(0,0,filename)
 
-    h5.close()
+        h5 = PT.openFile( filename, mode='r' )
+        camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
+        cam_ids = cam_id2camns.keys()
+        if 0:
+            print 'removing cam3'
+            cam_ids = [cam_id for cam_id in cam_ids if 'cam3' not in cam_id]
+        cam_ids.sort()
+
+        all_data = h5.root.data2d_distorted[:]
+        ax = None
+        for cam_id_enum, cam_id in enumerate( cam_ids ):
+            ax = pylab.subplot( len(cam_ids), 1, cam_id_enum+1, sharex=ax)
+            camns = cam_id2camns[cam_id]
+            for camn in camns:
+                this_idx = numpy.nonzero( all_data['camn']==camn )[0]
+                data = all_data[this_idx]
+                ax.plot( data['frame'], data['x'], 'r.' )
+                ax.plot( data['frame'], data['y'], 'g.' )
+            pylab.title(cam_id)
+
+        h5.close()
+
+    if len(filenames):
+        pylab.show()
+    else:
+        print 'nothing to do!'
 
 def main():
-    usage = '%prog [options]'
+    usage = '%prog [options] FILE1 [FILE2] ...'
 
     parser = OptionParser(usage)
-
-    parser.add_option("--h5", dest="h5_filename", type='string',
-                      help=".h5 file with data2d_distorted (REQUIRED)")
 
     parser.add_option("--start", dest="start", type='int',
                       help="start frame (.h5 frame number reference)")
@@ -58,15 +70,11 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    if len(args):
-        parser.print_help()
-        return
-
     doit(
-         h5_filename=options.h5_filename,
-         start=options.start,
-         stop=options.stop,
-         )
+        filenames=args,
+        start=options.start,
+        stop=options.stop,
+        )
 
 if __name__=='__main__':
     main()
