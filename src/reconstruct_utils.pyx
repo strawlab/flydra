@@ -13,8 +13,8 @@ import flydra.common_variables
 cdef float MINIMUM_ECCENTRICITY
 MINIMUM_ECCENTRICITY = flydra.common_variables.MINIMUM_ECCENTRICITY
 
-cdef float ACCEPTABLE_DISTANCE_PIXELS
-ACCEPTABLE_DISTANCE_PIXELS = flydra.common_variables.ACCEPTABLE_DISTANCE_PIXELS
+class NoAcceptablePointFound(Exception):
+    pass
 
 cdef extern from "math.h":
     double sqrt(double)
@@ -144,13 +144,15 @@ cdef class ReconstructHelper:
 
         return (xd, yd)
 
-def hypothesis_testing_algorithm__find_best_3d( object recon, object d2):
+def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
+                                                float ACCEPTABLE_DISTANCE_PIXELS,
+                                                int debug=0):
     """Use hypothesis testing algorithm to find best 3D point
 
     Finds combination of cameras which uses the most number of cameras
     while minimizing mean reprojection error. Algorithm used accepts
     any camera combination with reprojection error less than the
-    global variable ACCEPTABLE_DISTANCE_PIXELS.
+    variable ACCEPTABLE_DISTANCE_PIXELS.
 
     """
     cdef int max_n_cams, n_cams, best_n_cams
@@ -163,7 +165,6 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2):
     cdef int MAX_CAMERAS
     # 10 = MAX_CAMERAS
     cdef double least_err_by_n_cameras[10] # fake dict (index = key)
-
     MAX_CAMERAS = 10 # should be a compile-time define
 
     svd = numpy.dual.svd # eliminate global name lookup
@@ -221,16 +222,23 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2):
         alpha = 1.0/n_cams
 
         # Can we short-circuit the rest of these computations?
+        print 'HYPOTHESIS TEST - performing test to shortcircuit for n_cams %d (prev=%f, ACCEPTABLE_DISTANCE_PIXELS=%f)'%(
+            n_cams,least_err_by_n_cameras[n_cams-1],ACCEPTABLE_DISTANCE_PIXELS)
 
-        if not isinf(least_err_by_n_cameras[n_cams-2]):
+        if not isinf(least_err_by_n_cameras[n_cams-1]): # if it's infinity, it must be n_cams 0 or 1.
             # If we've calculated error for 2 less than n_cams
             if least_err_by_n_cameras[n_cams-1] > ACCEPTABLE_DISTANCE_PIXELS:
+                if debug>5:
+                    print 'HYPOTHESIS TEST -    shorting for n_cams %d (this=%f, ACCEPTABLE_DISTANCE_PIXELS=%f)'%(
+                        n_cams,least_err_by_n_cameras[n_cams-1],ACCEPTABLE_DISTANCE_PIXELS)
                 # and if the error for 1 less is too large, don't bother with more.
                 break
 
         for cam_ids_used in recon.cam_combinations_by_size[n_cams]:
             missing_cam_data = 0 #False
             good_A_idx = []
+            if debug>5:
+                assert len(cam_ids_used)==n_cams
             for cam_id in cam_ids_used:
                 if cam_id in bad_cam_ids:
                     missing_cam_data = 1 #True
@@ -240,10 +248,13 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2):
                     good_A_idx.extend( (i*2, i*2+1) )
             if missing_cam_data == 1:
                 continue
+
+            # find 3D point
             A = allA[good_A_idx,:]
             u,d,vt=svd(A)
             X = vt[-1,:]/vt[-1,3] # normalize
 
+            # calculate reprojection error
             mean_dist = 0.0
             for cam_id in cam_ids_used:
                 orig_x,orig_y = all2d[cam_id]
@@ -253,6 +264,8 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2):
 
                 dist = sqrt((orig_x-new_x)**2 + (orig_y-new_y)**2)
                 mean_dist = mean_dist + dist*alpha
+            if debug>5:
+                print 'HYPOTHESIS TEST - mean_dist = %f for cam_ids_used = %s (always pt 0)'%(mean_dist,str(cam_ids_used))
 
             least_err = least_err_by_n_cameras[n_cams]
             if mean_dist < least_err:
@@ -264,8 +277,13 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2):
     best_n_cams = 2
     least_err = least_err_by_n_cameras[2]
     mean_dist = least_err
+    if not (least_err < ACCEPTABLE_DISTANCE_PIXELS):
+        raise NoAcceptablePointFound('least error was %f'%least_err)
+
     for n_cams from 3 <= n_cams <= max_n_cams:
         least_err = least_err_by_n_cameras[n_cams]
+        if debug>5:
+            print 'HYPOTHESIS TEST - n_cams %d: %f'%(n_cams,least_err)
         if isinf(least_err):
             break # if we don't have e.g. 4 cameras, we won't have 5
         if least_err < ACCEPTABLE_DISTANCE_PIXELS:
@@ -281,7 +299,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2):
     for cam_id in cam_ids_used:
         x,y,area,slope,eccentricity, p1,p2,p3,p4 = d2[cam_id]
         if eccentricity > MINIMUM_ECCENTRICITY and not numpy.isnan(p1):
-            P.append( (p1,p2,p3,p4) )
+                P.append( (p1,p2,p3,p4) )
     if len(P) < 2:
         Lcoords = None
     else:

@@ -44,16 +44,27 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
 
     # Convert to format accepted by find_best_3d()
     found_data_dict,first_idx_by_camn = convert_format(frame_data,camn2cam_id)
+
+    hypothesis_test_found_point = False
     # test to short-circuit rest of function
     if len(found_data_dict) >= 2:
 
         # Can only do 3D math with at least 2 cameras giving good
         # data.
+        try:
+            (this_observation_mm, line3d, cam_ids_used,
+             min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
+                reconst_orig_units,
+                found_data_dict,
+                max_err,
+                debug=debug)
+        except ru.NoAcceptablePointFound, err:
+            pass
+        else:
+            hypothesis_test_found_point = True
 
-        (this_observation_mm, line3d, cam_ids_used,
-         min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
-            reconst_orig_units,
-            found_data_dict)
+    if hypothesis_test_found_point:
+
         if debug > 5:
             print 'found new point using hypothesis testing:'
             print 'this_observation_mm',this_observation_mm
@@ -63,7 +74,7 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
         if (debug > 5) and not (min_mean_dist<max_err):
                 print 'NOT accepting point - reprojection error too large'
 
-        if min_mean_dist<max_err:
+        if min_mean_dist<max_err: # this should always be true
             if debug > 5:
                 print 'accepting point'
 
@@ -127,7 +138,8 @@ option to this program.
         for tro in tracker.live_tracked_objects:
             print tro
             for i in range(len(tro.xhats)):
-                print '  ',i,tro.frames[i],tro.xhats[i][:3],math.sqrt(tro.Ps[i][0,0]**2 + tro.Ps[i][1,1]**2 + tro.Ps[i][2,2]**2),
+                this_Pmean = math.sqrt(tro.Ps[i][0,0]**2 + tro.Ps[i][1,1]**2 + tro.Ps[i][2,2]**2)
+                print '  ',i,tro.frames[i],tro.xhats[i][:3],this_Pmean,
                 if tro.frames[i] in tro.observations_frames:
                     j =  tro.observations_frames.index(  tro.frames[i] )
                     print tro.observations_data[j]
@@ -192,10 +204,10 @@ class KalmanSaver:
         self.h5file.close()
 
     def save_tro(self,tro):
-        MIN_KALMAN_OBSERVATIONS_TO_SAVE = 10
-        if len(tro.observations_frames) < MIN_KALMAN_OBSERVATIONS_TO_SAVE:
-            # only save data with at least 10 observations
-            return
+        ## MIN_KALMAN_OBSERVATIONS_TO_SAVE = 10
+        ## if len(tro.observations_frames) < MIN_KALMAN_OBSERVATIONS_TO_SAVE:
+        ##     # only save data with at least 10 observations
+        ##     return
 
         self.obj_id += 1
 
@@ -285,6 +297,7 @@ def kalmanize(src_filename,
               save_cal_dir=None,
               debug=False,
               frames_per_second=None,
+              max_err=None,
               ):
 
     if debug:
@@ -334,6 +347,7 @@ def kalmanize(src_filename,
                       scale_factor=reconst_orig_units.get_scale_factor(),
                       save_calibration_data=save_calibration_data,
                       kalman_model=kalman_model,
+                      save_all_data=True,
                       )
 
     tracker.set_killed_tracker_callback( h5saver.save_tro )
@@ -360,7 +374,6 @@ def kalmanize(src_filename,
         print '-='*40
         print '-='*40
 
-    max_err = 50.0
     print 'max reprojection error to accept new 3D point with hypothesis testing: %.1f (pixels)'%(max_err,)
     frame_count = 0
     accum_time = 0.0
@@ -497,6 +510,10 @@ def main():
                       default=100.0,
                       help="frames per second (used for Kalman filtering/smoothing)")
 
+    parser.add_option("--max-err", dest='max_err', type='float',
+                      default=50.0,
+                      help="frames per second (used for Kalman filtering/smoothing)")
+
     parser.add_option("--exclude-cam-ids", dest="exclude_cam_ids", type='string',
                       help="camera ids to exclude from reconstruction (space separated)",
                       metavar="EXCLUDE_CAM_IDS")
@@ -547,6 +564,7 @@ def main():
               save_cal_dir = options.save_cal_dir,
               debug = options.debug,
               frames_per_second = options.fps,
+              max_err = options.max_err,
               )
 
 if __name__=='__main__':
