@@ -14,7 +14,13 @@ import flydra.analysis.result_utils
 
 import weakref
 
-class NoObjectIDError(Exception):
+class ObjectIDDataError(Exception):
+    pass
+
+class NoObjectIDError(ObjectIDDataError):
+    pass
+
+class NotEnoughDataToSmoothError(ObjectIDDataError):
     pass
 
 def fast_startstopidx_on_sorted_array( sorted_array, value ):
@@ -230,10 +236,6 @@ def observations2smoothed(obj_id,
         rows = numpy.rec.fromarrays(list_of_cols,
                                     names = field_names)
         return rows
-
-    if len(orig_rows)==1:
-        # if one row, we can't really smooth it...
-        return orig_rows
 
     frames, xsmooth, Psmooth, obj_id_array = kalman_smooth(orig_rows,
                                                            frames_per_second=frames_per_second,
@@ -489,6 +491,9 @@ class CachingAnalyzer:
 
                 # Kalman observations are already always in meters, no scale factor needed
                 orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs)
+
+                if len(orig_rows)==1:
+                    raise NotEnoughDataToSmoothError('not enough data from obj_id %d was found'%obj_id)
 
                 # do Kalman smoothing
                 rows = observations2smoothed(obj_id,orig_rows,
