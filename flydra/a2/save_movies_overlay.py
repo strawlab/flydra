@@ -18,7 +18,6 @@ import flydra.reconstruct as reconstruct
 
 #PLOT='mpl'
 PLOT='image'
-SKIP_NODATA = True
 
 if PLOT=='mpl':
     import matplotlib
@@ -111,7 +110,7 @@ def doit(fmf_filename=None,
 
     if PLOT=='mpl':
         fig = pylab.figure()
-    timestamps = h5.root.data2d_distorted.read(field='timestamp')
+    remote_timestamps = h5.root.data2d_distorted.read(field='timestamp')
     camns = h5.root.data2d_distorted.read(field='camn')
     camn_idx = numpy.nonzero(camn==camns)[0]
 
@@ -119,13 +118,19 @@ def doit(fmf_filename=None,
     # find frame correspondence
     frame_match_h5 = None
     for fmf_fno, timestamp in enumerate( fmf_timestamps ):
-        timestamp_idx = numpy.nonzero(timestamp == timestamps)[0]
+        timestamp_idx = numpy.nonzero(timestamp == remote_timestamps)[0]
         #print repr(timestamp), repr(timestamp_idx)
         idxs = numpy.intersect1d( camn_idx, timestamp_idx )
         if len(idxs):
             rows = h5.root.data2d_distorted.readCoordinates( idxs )
             frame_match_h5 = rows['frame'][0]
-            break
+            if start is None:
+                start = frame_match_h5
+            if stop is not None:
+                break
+    if stop is None:
+        stop = frame_match_h5
+
     #print
     if frame_match_h5 is None:
         print >> sys.stderr, "ERROR: no timestamp corresponding to .fmf '%s' for %s in '%s'"%(
@@ -133,10 +138,6 @@ def doit(fmf_filename=None,
         sys.exit(1)
 
     fmf_frame2h5_frame = frame_match_h5 - fmf_fno
-
-    widgets=[cam_id, " ", progressbar.Percentage(), ' ',
-             progressbar.Bar(), ' ', progressbar.ETA()]
-    pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(fmf_timestamps)).start()
 
     if PLOT=='image':
         # colors from: http://jfly.iam.u-tokyo.ac.jp/color/index.html#pallet
@@ -154,57 +155,79 @@ def doit(fmf_filename=None,
         pen_obs = aggdraw.Pen(cb_vermillion, width=2 )
         font_obs = aggdraw.Font(cb_vermillion,'/usr/share/fonts/truetype/freefont/FreeMono.ttf')
 
-    # step through .fmf file
-    for fmf_fno, timestamp in enumerate( fmf_timestamps ):
+    print 'loading frame information...'
+    # step through .fmf file to get map of h5frame <-> fmfframe
+    mymap = {}
+    all_frame = h5.root.data2d_distorted.read(field='frame')
+
+    widgets=['stage 1 of 2: ',cam_id, ' ', progressbar.Percentage(), ' ',
+             progressbar.Bar(), ' ', progressbar.ETA()]
+
+    pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(fmf_timestamps)).start()
+    for fmf_fno, fmf_timestamp in enumerate( fmf_timestamps ):
         pbar.update(fmf_fno)
         h5_frame = fmf_fno + fmf_frame2h5_frame
-        timestamp_idx = numpy.nonzero(timestamp == timestamps)[0]
+        timestamp_idx = numpy.nonzero(fmf_timestamp == remote_timestamps)[0]
         #print 'ts', fmf_fno,len(timestamp_idx)
-        if SKIP_NODATA and not len(timestamp_idx):
-            continue # no point in plotting images without data in .h5 file
+
         idxs = numpy.intersect1d( camn_idx, timestamp_idx )
 
-        #print fmf_fno,len(idxs)
-
-        if PLOT=='image':
-            im = None
-
-        rows = None
-        mainbrain_timestamp = numpy.nan
         if len(idxs):
-            rows = h5.root.data2d_distorted.readCoordinates( idxs )
-            mainbrain_timestamp = rows['cam_received_timestamp'][0]
-            if not numpy.all( h5_frame==rows['frame'] ):
-                real_h5_frame = rows['frame'][0]
+
+            this_frame = all_frame[idxs]
+            #rows = h5.root.data2d_distorted.readCoordinates( idxs )
+            if not numpy.all( h5_frame==this_frame ):
+                real_h5_frame = this_frame[0]
                 try:
                     # We may have skipped a frame saving movie, so
                     # h5_frame can be less than actual.
-                    assert numpy.all( h5_frame<= rows['frame'] )
+                    assert numpy.all( h5_frame<= this_frame )
 
-                    assert numpy.all( real_h5_frame== rows['frame'] )
+                    assert numpy.all( real_h5_frame== this_frame )
                 except:
                     print "h5_frame",h5_frame
-                    print "rows['frame']",rows['frame']
+                    print "this_frame",this_frame
                     raise
                 n_skip = real_h5_frame-h5_frame
                 h5_frame = real_h5_frame
                 fmf_frame2h5_frame += n_skip
                 #print 'skipped %d frame(s) in .fmf'%(n_skip,)
+        mymap[h5_frame]= fmf_fno
+    pbar.finish()
+    print 'done loading frame information.'
 
-        if start is not None:
-            if h5_frame < start:
-                continue
+    widgets[0]='stage 2 of 2: '
+    pbar=progressbar.ProgressBar(widgets=widgets,maxval=(stop-start+1)).start()
+    for h5_frame in range(start,stop+1):
+        pbar.update(h5_frame-start)
+        mainbrain_timestamp = numpy.nan
+        idxs = []
+        try:
+            fmf_fno = mymap[h5_frame]
+            fmf_timestamp = fmf_timestamps[fmf_fno]
 
-        if stop is not None:
-            if h5_frame > stop:
-                continue
-
-        if 1:
             # get frame
             fmf.seek(fmf_fno)
-            frame, timestamp2 = fmf.get_next_frame()
-            assert timestamp==timestamp2
+            frame, fmf_timestamp2 = fmf.get_next_frame()
+            assert fmf_timestamp==fmf_timestamp2
 
+            timestamp_idx = numpy.nonzero(fmf_timestamp == remote_timestamps)[0]
+            idxs = numpy.intersect1d( camn_idx, timestamp_idx )
+            rows = None
+            if len(idxs):
+                rows = h5.root.data2d_distorted.readCoordinates( idxs )
+                mainbrain_timestamp = rows['cam_received_timestamp'][0]
+
+            del fmf_fno
+            del fmf_timestamp
+            del fmf_timestamp2
+        except KeyError,err:
+            frame = blank_image
+
+        if PLOT=='image':
+            im = None
+
+        if 1:
             # get 3D estimates data
             kalman_vert_images = []
             if kalman_filename is not None:
@@ -265,7 +288,7 @@ def doit(fmf_filename=None,
                 if style=='debug':
                     strtime = datetime.datetime.fromtimestamp(mainbrain_timestamp,pacific)
                     draw.text( (0,0), 'frame %d, %s (%d) timestamp %s - %s'%(
-                        h5_frame, cam_id, camn, repr(timestamp), strtime), font )
+                        h5_frame, cam_id, camn, repr(fmf_timestamp), strtime), font )
 
                 if len(idxs):
                     for pt_no,(x,y,area,slope,eccentricity) in enumerate(zip(rows['x'],

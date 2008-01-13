@@ -116,7 +116,8 @@ def doit(
         accelmag = numpy.sqrt(numpy.sum(accel**2,axis=0))
 
         subplot['vel'].plot(frame, velmag, label='obj %d'%obj_id, **props )
-        subplot['vel'].plot(frames2, vel2mag, mfc=(.5,.5,.5), mec=(.5,.5,.5), color=(.5, .5, .5) )
+        c = line.get_color()
+        subplot['vel'].plot(frames2, vel2mag, mfc=c, mec=c, color=c, alpha=0.5 )
 
         subplot['vel'].text( frame[0], velmag[0], '%d'%obj_id )
 

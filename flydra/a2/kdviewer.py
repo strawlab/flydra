@@ -142,6 +142,8 @@ def do_show_cameras(results, renderers, frustums=True, labels=True, centers=True
 
 def doit(filename,
          show_obj_ids=False,
+         start=None,
+         stop=None,
          obj_start=None,
          obj_end=None,
          obj_only=None,
@@ -304,10 +306,13 @@ def doit(filename,
         if not is_mat_file:
             # h5 file has timestamps for each frame
             #my_rows = ca.get_recarray(data_file,obj_id,which_data='kalman')
-            my_rows = ca.load_data( obj_id, data_file,
-                                    use_kalman_smoothing=use_kalman_smoothing,
-                                    kalman_dynamic_model = dynamic_model,
-                                    frames_per_second=fps)
+            try:
+                my_rows = ca.load_data( obj_id, data_file,
+                                        use_kalman_smoothing=use_kalman_smoothing,
+                                        kalman_dynamic_model = dynamic_model,
+                                        frames_per_second=fps)
+            except core_analysis.ObjectIDDataError, err:
+                continue
 
             my_timestamp = my_rows['timestamp'][0]
             dur = my_rows['timestamp'][-1] - my_timestamp
@@ -378,6 +383,14 @@ def doit(filename,
                     print 'ERROR: while processing obj_id %d, skipping this obj_id'%obj_id
                     print err
                     continue
+
+            if start is not None or stop is not None:
+                frames = rows['frame']
+                ok1 = frames >= start
+                ok2 = frames <= stop
+                ok = ok1 & ok2
+                rows = rows[ok]
+
             verts = numpy.array( [rows['x'], rows['y'], rows['z']] ).T
             vels = numpy.array( [rows['xvel'], rows['yvel'], rows['zvel']] ). T
             speeds = numpy.sqrt(numpy.sum(vels**2,axis=0))
@@ -686,13 +699,25 @@ def main():
 ##                      help="debug level",
 ##                      metavar="DEBUG")
 
-    parser.add_option("--start", type="int",
-                      help="first object ID to plot",
+    parser.add_option("--start", dest='start',
+                      type="int",
+                      help="first frame to plot",
                       metavar="START")
 
-    parser.add_option("--stop", type="int",
-                      help="last object ID to plot",
+    parser.add_option("--stop", dest='stop',
+                      type="int",
+                      help="last frame to plot",
                       metavar="STOP")
+
+    parser.add_option("--obj-start", dest='obj_start',
+                      type="int",
+                      help="first object ID to plot",
+                      metavar="OBJSTART")
+
+    parser.add_option("--obj-stop", dest='obj_stop',
+                      type="int",
+                      help="last object ID to plot",
+                      metavar="OBJSTOP")
 
     parser.add_option("--obj-only", type="string",
                       dest="obj_only")
@@ -787,12 +812,14 @@ def main():
         seq = map(int,options.obj_only.split())
         options.obj_only = seq
 
-        if options.start is not None or options.stop is not None:
+        if options.obj_start is not None or options.obj_stop is not None:
             raise ValueError("cannot specify start and stop with --obj-only option")
 
     doit(filename=h5_filename,
-         obj_start=options.start,
-         obj_end=options.stop,
+         start=options.start,
+         stop=options.stop,
+         obj_start=options.obj_start,
+         obj_end=options.obj_stop,
          obj_only=options.obj_only,
          use_kalman_smoothing=options.use_kalman_smoothing,
          show_n_longest=options.n_top_traces,
