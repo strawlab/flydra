@@ -97,21 +97,22 @@ def create_dynamic_model_dict(dt=None):
     # process covariance
     Q = numpy.zeros((ss,ss))
     for i in range(0,3):
-        Q[i,i] = (0.005)**2 # position noise (10mm)^2
+        #Q[i,i] = (0.005)**2
+        Q[i,i] = (0.010)**2
 
     for i in range(3,6):
-        Q[i,i] = (5)**2 # velocity noise
+        Q[i,i] = (.5)**2 # velocity noise
 
     for i in range(6,9):
-        #Q[i,i] = 10.0 # acceleration noise (near (3.16m*sec**-2)**2)
-        Q[i,i] = 50.0
+        Q[i,i] = 10.0 # acceleration noise (near (3.16m*sec**-2)**2)
+        #Q[i,i] = 50.0
 
     # measurement noise covariance matrix
     #R = 1e-6*numpy.eye(os) # (1mm)**2 = (0.001m)**2
     #R = 1e-4*numpy.eye(os) # (10mm)**2 = (0.01m)**2
     #R = 2e-4*numpy.eye(os)
-    #R = 2.5e-3*numpy.eye(os) # (50mm)**2 = (0.05m)**2
-    R = 2.5e-2*numpy.eye(os)
+    R = 2.5e-3*numpy.eye(os) # (50mm)**2 = (0.05m)**2
+    #R = 2.5e-2*numpy.eye(os)
 
     newdict = dict(
         n_sigma_accept=2.8,
