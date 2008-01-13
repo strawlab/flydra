@@ -39,12 +39,28 @@ pacific = pytz.timezone('US/Pacific')
 def doit(fmf_filename=None,
          h5_filename=None,
          kalman_filename=None,
+         fps=None,
+         use_kalman_smoothing=True,
+         dynamic_model = None,
          start=None,
          stop=None,
+         style='debug',
+         blank=None,
          ):
+
+    if not use_kalman_smoothing:
+        if (fps is not None) or (dynamic_model is not None):
+            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting fps and dynamic model options (--fps and --dynamic-model)'
+            sys.exit(1)
+
     fmf = FMF.FlyMovie(fmf_filename)
     h5 = PT.openFile( h5_filename, mode='r' )
     ca = core_analysis.CachingAnalyzer()
+
+    if blank is not None:
+        fmf.seek(blank)
+        blank_image, blank_timestamp = fmf.get_next_frame()
+        fmf.seek(0)
 
     if kalman_filename is not None:
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
@@ -60,10 +76,9 @@ def doit(fmf_filename=None,
         kalman_rows = []
         for obj_id in use_obj_ids:
             my_rows = ca.load_data( obj_id, data_file,
-                                    use_kalman_smoothing=False,
-                                    #use_kalman_smoothing=use_kalman_smoothing,
-                                    #kalman_dynamic_model = dynamic_model,
-                                    #frames_per_second=fps,
+                                    use_kalman_smoothing=use_kalman_smoothing,
+                                    kalman_dynamic_model = dynamic_model,
+                                    frames_per_second=fps,
                                     )
             kalman_rows.append(my_rows)
         kalman_rows = numpy.concatenate( kalman_rows )
@@ -124,14 +139,20 @@ def doit(fmf_filename=None,
     pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(fmf_timestamps)).start()
 
     if PLOT=='image':
-        font = aggdraw.Font('Lime','/usr/share/fonts/truetype/freefont/FreeMono.ttf')
-        pen = aggdraw.Pen('Lime', width=2 )
+        # colors from: http://jfly.iam.u-tokyo.ac.jp/color/index.html#pallet
 
-        pen3d = aggdraw.Pen('Red', width=2 )
-        font3d = aggdraw.Font('Red','/usr/share/fonts/truetype/freefont/FreeMono.ttf')
+        cb_orange = (230, 159, 0)
+        cb_blue = (0, 114, 178)
+        cb_vermillion = (213, 94, 0)
 
-        pen_obs = aggdraw.Pen('Blue', width=2 )
-        font_obs = aggdraw.Font('Blue','/usr/share/fonts/truetype/freefont/FreeMono.ttf')
+        font = aggdraw.Font(cb_blue,'/usr/share/fonts/truetype/freefont/FreeMono.ttf')
+        pen = aggdraw.Pen(cb_blue, width=2 )
+
+        pen3d = aggdraw.Pen(cb_orange, width=2 )
+        font3d = aggdraw.Font(cb_orange,'/usr/share/fonts/truetype/freefont/FreeMono.ttf')
+
+        pen_obs = aggdraw.Pen(cb_vermillion, width=2 )
+        font_obs = aggdraw.Font(cb_vermillion,'/usr/share/fonts/truetype/freefont/FreeMono.ttf')
 
     # step through .fmf file
     for fmf_fno, timestamp in enumerate( fmf_timestamps ):
@@ -241,48 +262,56 @@ def doit(fmf_filename=None,
                 im = im.convert('RGB')
                 draw = aggdraw.Draw(im)
 
-                strtime = datetime.datetime.fromtimestamp(mainbrain_timestamp,pacific)
-                draw.text( (0,0), 'frame %d, %s (%d) timestamp %s - %s'%(
-                    h5_frame, cam_id, camn, repr(timestamp), strtime), font )
+                if style=='debug':
+                    strtime = datetime.datetime.fromtimestamp(mainbrain_timestamp,pacific)
+                    draw.text( (0,0), 'frame %d, %s (%d) timestamp %s - %s'%(
+                        h5_frame, cam_id, camn, repr(timestamp), strtime), font )
 
                 if len(idxs):
                     for pt_no,(x,y,area,slope,eccentricity) in enumerate(zip(rows['x'],
                                                                              rows['y'],
                                                                              rows['area'],rows['slope'],
                                                                              rows['eccentricity'])):
-                        radius = numpy.sqrt(area/(2*numpy.pi))
+                        if style=='debug':
+                            radius = numpy.sqrt(area/(2*numpy.pi))
+                            draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
+                                          pen )
 
-                        pos = numpy.array( [x,y] )
-                        direction = numpy.array( [slope,1] )
-                        direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
-                        vec = direction*eccentricity
-                        p1 = pos+vec
-                        p2 = pos-vec
-                        draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
-                                      pen )
-                        draw.line(    [p1[0],p1[1], p2[0],p2[1]],
-                                      pen )
-                        draw.text( (x,y), 'pt %d (area %f)'%(pt_no,area), font )
+                            pos = numpy.array( [x,y] )
+                            direction = numpy.array( [slope,1] )
+                            direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
+                            vec = direction*eccentricity
+                            p1 = pos+vec
+                            p2 = pos-vec
+                            draw.line(    [p1[0],p1[1], p2[0],p2[1]],
+                                          pen )
+                            draw.text( (x,y), 'pt %d (area %f)'%(pt_no,area), font )
+                        elif style=='pretty':
+                            radius = 30
+                            draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
+                                          pen )
 
                 for (xy,XYZ,obj_id,Pmean_meters) in kalman_vert_images:
-                    radius=3
+                    radius=10
                     x,y= xy
                     X,Y,Z=XYZ
                     draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
                                   pen3d )
-                    draw.text( (x,y), 'obj %d (%.3f, %.3f, %.3f +- ~%f)'%(obj_id,X,Y,Z,Pmean_meters), font3d )
+                    if style=='debug':
+                        draw.text( (x,y), 'obj %d (%.3f, %.3f, %.3f +- ~%f)'%(obj_id,X,Y,Z,Pmean_meters), font3d )
 
-                for (xy,XYZ,obj_id,obs_info) in kobs_vert_images:
-                    radius=3
-                    x,y= xy
-                    X,Y,Z=XYZ
-                    draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
-                                  pen_obs )
-                    draw.text( (x,y), 'obj %d (%.3f, %.3f, %.3f)'%(obj_id,X,Y,Z), font_obs )
-                    (this_cam_ids, this_camn_idxs) = obs_info
-                    for i,(obs_cam_id,pt_no) in enumerate( zip(*obs_info) ):
-                        draw.text( (x+10,y+(i+1)*10),
-                                   '%s pt %d'%(obs_cam_id,pt_no), font_obs )
+                if style=='debug':
+                    for (xy,XYZ,obj_id,obs_info) in kobs_vert_images:
+                        radius=3
+                        x,y= xy
+                        X,Y,Z=XYZ
+                        draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
+                                      pen_obs )
+                        draw.text( (x,y), 'obj %d (%.3f, %.3f, %.3f)'%(obj_id,X,Y,Z), font_obs )
+                        (this_cam_ids, this_camn_idxs) = obs_info
+                        for i,(obs_cam_id,pt_no) in enumerate( zip(*obs_info) ):
+                            draw.text( (x+10,y+(i+1)*10),
+                                       '%s pt %d'%(obs_cam_id,pt_no), font_obs )
 
 
                 draw.flush()
@@ -322,6 +351,25 @@ def main():
     parser.add_option("--stop", dest="stop", type='int',
                       help="stop frame (.h5 frame number reference)")
 
+    parser.add_option("--blank", dest="blank", type='int',
+                      help="frame number of FMF file (fmf-reference) of blank image to use when no image")
+
+    parser.add_option("--disable-kalman-smoothing", action='store_false',dest='use_kalman_smoothing',
+                      default=True,
+                      help="show original, causal Kalman filtered data (rather than Kalman smoothed observations)")
+
+    parser.add_option("--fps", dest='fps', type='float',
+                      help="frames per second (used for Kalman filtering/smoothing)")
+
+    parser.add_option("--dynamic-model",
+                      type="string",
+                      dest="dynamic_model",
+                      default=None,
+                      )
+
+    parser.add_option("--style", dest="style", type='string',
+                      default='debug',)
+
     (options, args) = parser.parse_args()
 
     if len(args):
@@ -331,8 +379,13 @@ def main():
     doit(fmf_filename=options.fmf_filename,
          h5_filename=options.h5_filename,
          kalman_filename=options.kalman_filename,
+         fps = options.fps,
+         dynamic_model = options.dynamic_model,
+         use_kalman_smoothing=options.use_kalman_smoothing,
          start=options.start,
          stop=options.stop,
+         style=options.style,
+         blank=options.blank,
          )
 
 if __name__=='__main__':
