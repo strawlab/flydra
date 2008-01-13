@@ -245,11 +245,23 @@ def doit(fmf_filename=None,
                     h5_frame, cam_id, camn, repr(timestamp), strtime), font )
 
                 if len(idxs):
-                    radius=3
-                    for pt_no,(x,y) in enumerate(zip(rows['x'],rows['y'])):
+                    for pt_no,(x,y,area,slope,eccentricity) in enumerate(zip(rows['x'],
+                                                                             rows['y'],
+                                                                             rows['area'],rows['slope'],
+                                                                             rows['eccentricity'])):
+                        radius = numpy.sqrt(area/(2*numpy.pi))
+
+                        pos = numpy.array( [x,y] )
+                        direction = numpy.array( [slope,1] )
+                        direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
+                        vec = direction*eccentricity
+                        p1 = pos+vec
+                        p2 = pos-vec
                         draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
                                       pen )
-                        draw.text( (x,y), 'pt %d'%(pt_no,), font )
+                        draw.line(    [p1[0],p1[1], p2[0],p2[1]],
+                                      pen )
+                        draw.text( (x,y), 'pt %d (area %f)'%(pt_no,area), font )
 
                 for (xy,XYZ,obj_id,Pmean) in kalman_vert_images:
                     radius=3
