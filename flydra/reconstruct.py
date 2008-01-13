@@ -46,7 +46,7 @@ def save_ascii_matrix(M,fd):
     if type(fd) == str:
         fd = open(fd,mode='wb')
         close_file = True
-        
+
     for i in range(A.shape[0]):
         buf = ' '.join( map( fmt, A[i,:] ) )
         fd.write( buf )
@@ -102,7 +102,7 @@ def norm_vec(V):
         Vamags = nx.sqrt(Va[:,0]**2 + Va[:,1]**2 + Va[:,2]**2)
         U = Va/Vamags[:,nx.newaxis]
     return U
-        
+
 def line_direction(Lcoords):
     """convert from Pluecker coordinates to a direction"""
     L = nx.asarray(Lcoords)
@@ -112,7 +112,7 @@ def line_direction(Lcoords):
     else:
         assert L.shape[1] == 6
         # XXX could speed up with concatenate:
-        U = nx.transpose(nx.array((-L[:,2], L[:,4], -L[:,5]))) 
+        U = nx.transpose(nx.array((-L[:,2], L[:,4], -L[:,5])))
     return norm_vec(U)
 
 def pluecker_from_verts(A,B):
@@ -136,7 +136,7 @@ def pmat2cam_center(P):
     """
     assert P.shape == (3,4)
     determinant = numpy.linalg.det
-    
+
     # camera center
     X = determinant( [ P[:,1], P[:,2], P[:,3] ] )
     Y = -determinant( [ P[:,0], P[:,2], P[:,3] ] )
@@ -167,7 +167,7 @@ def normalize_pmat(pmat):
         pmat = pmat/K[2,2]
     assert numpy.allclose(pmat2cam_center(pmat_orig),pmat2cam_center(pmat))
     return pmat
-        
+
 class SingleCameraCalibration:
     def __init__(self,
                  cam_id=None, # non-optional
@@ -197,7 +197,7 @@ class SingleCameraCalibration:
             raise ValueError('Pmat must have shape (3,4)')
         if len(res) != 2:
             raise ValueError('len(res) must be 2')
-        
+
         self.cam_id=cam_id
         self.Pmat=Pmat
         self.res=res
@@ -216,7 +216,7 @@ class SingleCameraCalibration:
                 print 'WARNING: principal point and image center seriously misaligned'
                 print '  pp: %s, center: %s'%(str(pp),str(center))
                 if pp_guess:
-                    
+
                     print '  (note: one of these parameters was guessed ' \
                           'as the midpoint of the specified image resolution, ' \
                           'and could be wrong)'
@@ -224,7 +224,7 @@ class SingleCameraCalibration:
         if helper is None:
             M = numpy.asarray(Pmat)
             cam_center = pmat2cam_center(M)
-    
+
             intrinsic_parameters, cam_rotation = my_rq(M[:,:3])
             #intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
             eps = 1e-6
@@ -232,12 +232,12 @@ class SingleCameraCalibration:
                 print 'WARNING: expected last row/col of intrinsic parameter matrix to be unity'
                 print 'intrinsic_parameters[2,2]',intrinsic_parameters[2,2]
                 raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
-    
+
             fc1 = intrinsic_parameters[0,0]
             cc1 = intrinsic_parameters[0,2]
             fc2 = intrinsic_parameters[1,1]
             cc2 = intrinsic_parameters[1,2]
-            
+
             helper = reconstruct_utils.ReconstructHelper(fc1,fc2, # focal length
                                                          cc1,cc2, # image center
                                                          0,0, # radial distortion
@@ -248,10 +248,10 @@ class SingleCameraCalibration:
 
         self.pmat_inv = numpy.linalg.pinv(self.Pmat)
         self.scale_factor = scale_factor
-        
+
     def __ne__(self,other):
         return not (self==other)
-    
+
     def __eq__(self,other):
         return (numpy.allclose(self.pp,other.pp) and
                 (self.cam_id == other.cam_id) and
@@ -264,7 +264,7 @@ class SingleCameraCalibration:
 
     def get_scaled(self,scale_factor):
         """change units (e.g. from mm to meters)
-        
+
         Note: some of the data structures are shared with the unscaled original
         """
         scale_array = numpy.ones((3,4))
@@ -275,7 +275,7 @@ class SingleCameraCalibration:
             new_scale_factor = self.scale_factor/scale_factor
         else:
             new_scale_factor = None
-        
+
         scaled = SingleCameraCalibration(self.cam_id,
                                          scaled_Pmat,
                                          self.res,
@@ -283,7 +283,7 @@ class SingleCameraCalibration:
                                          self.helper,
                                          scale_factor=new_scale_factor)
         return scaled
-        
+
     def get_cam_center(self):
         """get the 3D location of the camera center in world coordinates"""
         # should be called get_camera_center?
@@ -315,11 +315,11 @@ class SingleCameraCalibration:
         t = numpy.dot( -R, C_ )
         ext = numpy.concatenate( (R, t), axis=1 )
         return ext
-    
+
     def get_example_3d_point_creating_image_point(self,image_point,w_val=1.0):
         # project back through principal point to get 3D line
         c1 = self.get_cam_center()[:,0]
-        
+
         x2d = (image_point[0],image_point[1],1.0)
         c2 = numpy.dot(self.pmat_inv, as_column(x2d))[:,0]
         c2 = c2[:3]/c2[3]
@@ -328,26 +328,26 @@ class SingleCameraCalibration:
         direction = direction/numpy.sqrt(numpy.sum(direction**2))
         c3 = c1+direction*w_val
         return c3
-        
+
     def get_optical_axis(self):
         # project back through principal point to get 3D line
         #import flydra.geom as geom
         import flydra.fastgeom as geom
         c1 = self.get_cam_center()[:,0]
-        
+
         x2d = (self.pp[0],self.pp[1],1.0)
         c2 = numpy.dot(self.pmat_inv, as_column(x2d))[:,0]
         c2 = c2[:3]/c2[3]
         c1 = geom.ThreeTuple(c1)
         c2 = geom.ThreeTuple(c2)
         return geom.line_from_points( c1, c2 )
-        
+
     def get_up_vector(self):
         # create up vector from image plane
         x2d_a = (self.pp[0],self.pp[1],1.0)
         c2_a = numpy.dot(self.pmat_inv, as_column(x2d_a))[:,0]
         c2_a = c2_a[:3]/c2_a[3]
-        
+
         x2d_b = (self.pp[0],self.pp[1]+1,1.0)
         c2_b = numpy.dot(self.pmat_inv, as_column(x2d_b))[:,0]
         c2_b = c2_b[:3]/c2_b[3]
@@ -358,15 +358,15 @@ class SingleCameraCalibration:
     def to_file(self,filename):
         fd = open(filename,'wb')
         fd.write(    'cam_id = "%s"\n'%self.cam_id)
-        
+
         fd.write(    'pmat = [\n')
         for row in self.Pmat:
             fd.write('        [%s, %s, %s, %s],\n'%tuple([repr(x) for x in row]))
         fd.write(    '       ]\n')
-        
+
         fd.write(    'res = (%d,%d)\n'%(self.res[0],self.res[1]))
         fd.write(    'pp = (%s,%s)\n'%(repr(self.pp[0]),repr(self.pp[1])))
-                     
+
         fd.write(    'K = [\n')
         for row in self.helper.get_K():
             fd.write('     [%s, %s, %s],\n'%tuple([repr(x) for x in row]))
@@ -375,7 +375,7 @@ class SingleCameraCalibration:
         k1,k2,p1,p2 = self.helper.get_nlparams()
         fd.write(    'radial_params = %s, %s\n'%(repr(k1),repr(k2)))
         fd.write(    'tangential_params = %s, %s\n'%(repr(p1),repr(p2)))
-        
+
 def SingleCameraCalibration_fromfile(filename):
     params={}
     execfile(filename,params)
@@ -386,7 +386,7 @@ def SingleCameraCalibration_fromfile(filename):
     pp = params['pp']
     k1,k2 = params['radial_params']
     p1,p2 = params['tangential_params']
-    
+
     fc1 = K[0,0]
     cc1 = K[0,2]
     fc2 = K[1,1]
@@ -401,27 +401,27 @@ def SingleCameraCalibration_fromfile(filename):
                                    res=res,
                                    pp=pp,
                                    helper=helper)
-    
+
 def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
     M = numpy.asarray(pmat)
     cam_center = pmat2cam_center(M)
-    
+
     intrinsic_parameters, cam_rotation = my_rq(M[:,:3])
     #intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
     if intrinsic_parameters[2,2]!=1.0:
         print 'WARNING: expected last row/col of intrinsic parameter matrix to be unity'
         raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
-    
+
     # (K = intrinsic parameters)
-    
+
     #cam_translation = numpy.dot( -cam_rotation, cam_center )
     #extrinsic_parameters = numpy.concatenate( (cam_rotation, cam_translation), axis=1 )
-    
+
     #mean_focal_length = (intrinsic_parameters[0,0]+intrinsic_parameters[1,1])/2.0
     #center = intrinsic_parameters[0,2], intrinsic_parameters[1,2]
-    
+
     #focalLength, center = compute_stuff_from_cal_matrix(cal)
-    
+
     fc1 = intrinsic_parameters[0,0]
     cc1 = intrinsic_parameters[0,2]
     fc2 = intrinsic_parameters[1,1]
@@ -434,7 +434,7 @@ def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
     return SingleCameraCalibration(Pmat=M,
                                    helper=helper,
                                    **kw)
-    
+
 class Reconstructor:
     def __init__(self,
                  cal_source = None,
@@ -445,7 +445,7 @@ class Reconstructor:
         ======
         cal_source - the source of the calibration. can be the output of MultiCamSelfCal, a pytables file, etc.
         do_normalize_pmat - whether the pmat is normalized such that the intrinsic parameters are in the expected form
-        
+
         """
         self.cal_source = cal_source
 
@@ -488,7 +488,7 @@ class Reconstructor:
                 cam_ids.append( node.name )
         elif self.cal_source_type=='SingleCameraCalibration instances':
             cam_ids = [scci.cam_id for scci in use_cal_source]
-            
+
         N = len(cam_ids)
         # load calibration matrices
         self.Pmat = {}
@@ -503,7 +503,7 @@ class Reconstructor:
         self._scale_factor2known_units = {}
         for tmp_unit, tmp_scale_factor in self._known_units2scale_factor.iteritems():
             self._scale_factor2known_units[tmp_scale_factor] = tmp_unit
-        
+
         if self.cal_source_type == 'normal files':
             res_fd = open(os.path.join(use_cal_source,'Res.dat'),'r')
             for i, cam_id in enumerate(cam_ids):
@@ -531,7 +531,7 @@ class Reconstructor:
                         cam_id=cam_id,
                         res=self.Res[cam_id]).helper
                     continue
-                    
+
                 params = {}
                 execfile(filename,params)
                 self._helper[cam_id] = reconstruct_utils.ReconstructHelper(
@@ -551,7 +551,7 @@ class Reconstructor:
 ##                            intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
 ##                        else:
                         raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
-                    
+
                     fc1 = intrinsic_parameters[0,0]
                     cc1 = intrinsic_parameters[0,2]
                     fc2 = intrinsic_parameters[1,1]
@@ -578,13 +578,13 @@ class Reconstructor:
                 print 'Assuming scale_factor units are millimeters in %s: file %s does not exist'%(
                     __file__,filename)
                 value = 'millimeters'
-                
+
             if value in self._known_units2scale_factor:
                 self.scale_factor = self._known_units2scale_factor[value]
             else:
                 raise ValueError('Unknown unit "%s"'%value)
 
-                
+
         elif self.cal_source_type == 'pytables':
             scale_factors = []
             for cam_id in cam_ids:
@@ -609,7 +609,7 @@ class Reconstructor:
                 self.scale_factor = unique_scale_factors[0]
             else:
                 raise NotImplementedError('cannot handle case where each camera has a different scale factor')
-            
+
         elif self.cal_source_type=='SingleCameraCalibration instances':
             # find instance
             scale_factors = []
@@ -636,7 +636,7 @@ class Reconstructor:
         for cam_id in cam_ids:
             # For speed reasons, make sure self.Pmat has only numpy arrays.
             self.Pmat[cam_id] = numpy.array(self.Pmat[cam_id])
-            
+
             self.pmat_inv[cam_id] = numpy.linalg.pinv(self.Pmat[cam_id])
 
         self.cam_combinations = [s for s in setOfSubsets(cam_ids) if len(s) >=2]
@@ -658,7 +658,7 @@ class Reconstructor:
 
     def __ne__(self,other):
         return not (self==other)
-    
+
     def __eq__(self,other):
         orig_sccs = [self.get_SingleCameraCalibration(cam_id) for cam_id in self.cam_ids]
         other_sccs = [other.get_SingleCameraCalibration(cam_id) for cam_id in other.cam_ids]
@@ -668,7 +668,7 @@ class Reconstructor:
                 eq = False
                 break
         return eq
-    
+
     def get_extrinsic_parameter_matrix(self,cam_id):
         scc = self.get_SingleCameraCalibration(cam_id)
         return scc.get_extrinsic_parameter_matrix()
@@ -729,11 +729,11 @@ class Reconstructor:
             rad_fd.write('kc3 = %s\n'%repr(p1))
             rad_fd.write('kc4 = %s\n'%repr(p2))
             rad_fd.close()
-            
+
         fd = open(os.path.join(new_dirname,'calibration_units.txt'),mode='w')
         fd.write(self.get_calibration_unit()+'\n')
         fd.close()
-        
+
     def save_to_h5file(self, h5file, OK_to_delete_old_calibration=False):
         """create groups with calibration information"""
 
@@ -745,7 +745,7 @@ class Reconstructor:
         pytables_filt = numpy.asarray
         ct = h5file.createTable # shorthand
         root = h5file.root # shorthand
-        
+
         cam_ids = self.Pmat.keys()
         cam_ids.sort()
 
@@ -754,9 +754,9 @@ class Reconstructor:
                 h5file.removeNode( root.calibration, recursive=True )
             else:
                 raise RuntimeError('not deleting old calibration.')
-            
+
         cal_group = h5file.createGroup(root,'calibration')
-            
+
         pmat_group = h5file.createGroup(cal_group,'pmat')
         for cam_id in cam_ids:
             h5file.createArray(pmat_group, cam_id,
@@ -795,20 +795,20 @@ class Reconstructor:
         row['minimum_eccentricity'] = MINIMUM_ECCENTRICITY
         row.append()
         h5additional_info.flush()
-                
+
     def get_resolution(self, cam_id):
         return self.Res[cam_id]
 
     def get_pmat(self, cam_id):
         return self.Pmat[cam_id]
-    
+
     def get_camera_center(self, cam_id):
         # should be called get_cam_center?
         return pmat2cam_center(self.Pmat[cam_id])
 
     def get_intrinsic_linear(self, cam_id):
         return self._helper[cam_id].get_K()
-        
+
     def get_intrinsic_nonlinear(self, cam_id):
         return self._helper[cam_id].get_nlparams()
 
@@ -837,7 +837,7 @@ class Reconstructor:
         svd = scipy.linalg.svd
         # for info on SVD, see Hartley & Zisserman (2003) p. 593 (see
         # also p. 587)
-        
+
         # Construct matrices
         A=[]
         P=[]
@@ -859,7 +859,7 @@ class Reconstructor:
             if return_line_coords and have_line_coords:
                 if eccentricity > MINIMUM_ECCENTRICITY: # require a bit of elongation
                     P.append( (p1,p2,p3,p4) )
-        
+
         # Calculate best point
         if return_X_coords:
             A=nx.array(A)
@@ -919,9 +919,9 @@ class Reconstructor:
             X = nx.transpose(X) # 4 rows, N columns
         Pmat = self.Pmat[cam_id]
         x=nx.dot(Pmat,X)
-        
+
         x = x[0:2,:]/x[2,:] # normalize
-        
+
         if distorted:
             if rank1:
                 xd, yd = self.distort(cam_id, x)
@@ -937,18 +937,18 @@ class Reconstructor:
 
         # XXX The rest of this function hasn't been (recently) checked
         # for >1 points. (i.e. not rank1)
-        
+
         if Lcoords is not None:
             if distorted:
-                
+
                 # Impossible to distort Lcoords. The image of the line
                 # could be distorted downstream.
-                
+
                 raise RuntimeError('cannot (easily) distort line')
-            
+
             if not rank1:
                 raise NotImplementedError('Line reconstruction not yet implemented for rank-2 data')
-                
+
             # see Hartley & Zisserman (2003) p. 198, eqn 8.2
             L = Lcoords2Lmatrix(Lcoords)
             # XXX could be made faster by pre-computing line projection matrix
@@ -973,13 +973,13 @@ class Reconstructor:
         XY = XY[:3,0]/XY[3] # convert to rank1
         C = self._cam_centers_cache[cam_id]
         return pluecker_from_verts(XY,C)
-    
+
     def get_scale_factor(self):
         return self.scale_factor
 
     def get_calibration_unit(self):
         return self._scale_factor2known_units[self.scale_factor]
-    
+
     def get_SingleCameraCalibration(self,cam_id):
         return SingleCameraCalibration(cam_id=cam_id,
                                        Pmat=self.Pmat[cam_id],
@@ -1030,6 +1030,6 @@ def test():
         print 'oax HZ',oax.to_hz()
         print 'closest',oax.closest()
         print
-        
+
 if __name__=='__main__':
     test()
