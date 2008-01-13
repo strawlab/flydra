@@ -150,7 +150,10 @@ def setOfSubsets(L):
     """find all subsets of L
 
     from Alex Martelli:
-    http://mail.python.org/pipermail/python-list/2001-January/027238.html
+    http://mail.python.org/pipermail/python-list/2001-January/067815.html
+
+    This is also called the power set:
+    http://en.wikipedia.org/wiki/Power_set
     """
     N = len(L)
     return [ [ L[i] for i in range(N)
