@@ -1,7 +1,10 @@
 import tables as PT
 
+# This describes indexes in the "pt_undistorted" tuple.
+# These are created in MainBrain.py and kalmanize.py
 PT_TUPLE_IDX_X = 0
 PT_TUPLE_IDX_Y = 1
+PT_TUPLE_IDX_AREA = 2
 PT_TUPLE_IDX_FRAME_PT_IDX = 10
 
 # 2D data format for PyTables:

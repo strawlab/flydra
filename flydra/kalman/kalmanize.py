@@ -13,6 +13,7 @@ import flydra_kalman_utils
 from optparse import OptionParser
 import dynamic_models
 import flydra.save_calibration_data as save_calibration_data
+import collections
 
 KalmanEstimates = flydra_kalman_utils.KalmanEstimates
 FilteredObservations = flydra_kalman_utils.FilteredObservations
@@ -424,7 +425,7 @@ def kalmanize(src_filename,
                     print 'frame % 10d, mean speed so far: %.1f fps (%.1f fps without pytables)'%(last_frame,fps,fps2)
 
             ########################################
-            frame_data = {}
+            frame_data = collections.defaultdict(list)
             last_frame = new_frame
 
         camn = row['camn']
@@ -474,6 +475,7 @@ def kalmanize(src_filename,
         line_found = False
         p1, p2, p3, p4 = numpy.nan, numpy.nan, numpy.nan, numpy.nan
 
+        # Keep in sync with kalmanize.py and data_descriptions.py
         pt_undistorted = (x_undistorted,y_undistorted,
                           area,slope,eccentricity,
                           p1,p2,p3,p4, line_found, frame_pt_idx)
@@ -483,7 +485,7 @@ def kalmanize(src_filename,
 
         projected_line_meters=geom.line_from_HZline(pluecker_hz_meters)
 
-        frame_data.setdefault(camn,[]).append((pt_undistorted,projected_line_meters))
+        frame_data[camn].append((pt_undistorted,projected_line_meters))
 
     tracker.kill_all_trackers() # done tracking
 

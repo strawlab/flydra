@@ -882,13 +882,14 @@ class CoordinateProcessor(threading.Thread):
                                     eccentricity = inf
                                 if not slope_found:
                                     slope = nan
-                                unknown_val = True
+
+                                # Keep in sync with kalmanize.py and data_descriptions.py
                                 pt_undistorted = (x_undistorted,y_undistorted,
                                                   area,slope,eccentricity,
-                                                  p1,p2,p3,p4, unknown_val, frame_pt_idx)
+                                                  p1,p2,p3,p4, line_found, frame_pt_idx)
                                 pt_distorted = (x_distorted,y_distorted,
                                                 area,slope,eccentricity,
-                                                p1,p2,p3,p4, unknown_val, frame_pt_idx)
+                                                p1,p2,p3,p4, line_found, frame_pt_idx)
                                 if ray_valid:
                                     points_in_pluecker_coords_meters.append( (pt_undistorted,
                                                                               geom.line_from_HZline((ray0,ray1,
