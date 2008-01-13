@@ -194,7 +194,8 @@ def doit(fmf_filename=None,
                     vert_image = R.find2d(cam_id,vert,distorted=True)
                     P = numpy.array([this_3d_row['P00'],this_3d_row['P11'],this_3d_row['P22']])
                     Pmean = numpy.sqrt(numpy.sum(P**2))
-                    kalman_vert_images.append( (vert_image, vert, this_3d_row['obj_id'], Pmean) )
+                    Pmean_meters = numpy.sqrt(Pmean)
+                    kalman_vert_images.append( (vert_image, vert, this_3d_row['obj_id'], Pmean_meters) )
 
             # get 3D observation data
             kobs_vert_images = []
@@ -263,13 +264,13 @@ def doit(fmf_filename=None,
                                       pen )
                         draw.text( (x,y), 'pt %d (area %f)'%(pt_no,area), font )
 
-                for (xy,XYZ,obj_id,Pmean) in kalman_vert_images:
+                for (xy,XYZ,obj_id,Pmean_meters) in kalman_vert_images:
                     radius=3
                     x,y= xy
                     X,Y,Z=XYZ
                     draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
                                   pen3d )
-                    draw.text( (x,y), 'obj %d (%.3f, %.3f, %.3f +- ~%f)'%(obj_id,X,Y,Z,Pmean), font3d )
+                    draw.text( (x,y), 'obj %d (%.3f, %.3f, %.3f +- ~%f)'%(obj_id,X,Y,Z,Pmean_meters), font3d )
 
                 for (xy,XYZ,obj_id,obs_info) in kobs_vert_images:
                     radius=3

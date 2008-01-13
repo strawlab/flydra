@@ -49,7 +49,7 @@ def doit(
     if kalman_filename is not None:
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
 
-    fig = pylab.figure()
+    fig = pylab.figure(figsize=(18,12))
 
     ax = None
     subplot ={}
@@ -131,7 +131,7 @@ def doit(
     subplot['z'].set_ylim([0,2])
     subplot['z'].set_ylabel('z (m)')
 
-    subplot['vel'].set_ylim([0,40])
+    subplot['vel'].set_ylim([0,10])
     subplot['vel'].set_ylabel('|vel| (m/s)')
 
     subplot['accel'].set_ylabel('|accel| (m/s/s)')
