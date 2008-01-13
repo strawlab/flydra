@@ -5,11 +5,13 @@ import adskalman as kalman
 import flydra.fastgeom as geom
 import math, struct
 import flydra.data_descriptions
+import collections
 
 __all__ = ['TrackedObject','Tracker','decode_data_packet']
 
 PT_TUPLE_IDX_X = flydra.data_descriptions.PT_TUPLE_IDX_X
 PT_TUPLE_IDX_Y = flydra.data_descriptions.PT_TUPLE_IDX_Y
+PT_TUPLE_IDX_AREA = flydra.data_descriptions.PT_TUPLE_IDX_AREA
 PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 
 packet_header_fmt = '<idB' # XXX check format
@@ -44,6 +46,7 @@ class TrackedObject:
                  save_calibration_data=None,
                  max_frames_skipped=25,
                  save_all_data=False,
+                 area_threshold=0,
                  ):
         """
 
@@ -54,7 +57,10 @@ class TrackedObject:
         first_observation_orig_units - first observation (in arbitrary units)
         scale_factor - how to convert from arbitrary units (of observations) into meters (e.g. 1e-3 for mm)
         kalman_model - Kalman parameters
+        area_threshold - minimum area to consider for tracking use
         """
+        self.area_threshold = area_threshold
+        if self.area_threshold<1: 1/0
         self.save_all_data = save_all_data
         self.kill_me = False
         self.reconstructor_meters = reconstructor_meters
@@ -111,6 +117,18 @@ class TrackedObject:
 
         # Don't run kalman filter with initial data, as this would
         # cause error estimates to drop too low.
+
+    def distance_in_sigma( self, testx ):
+        xhat = self.xhats[-1][:3]
+
+        dist2 = numpy.sum((testx-xhat)**2) # distance squared
+        dist = numpy.sqrt(dist2)
+
+        P = self.Ps[-1]
+        Pmean = numpy.sqrt(numpy.sum([P[i,i]**2 for i in range(3)])) # sigma squared
+        sigma = numpy.sqrt(Pmean)
+        return dist/sigma
+
     def kill(self):
         # called when killed
         if self.save_all_data:
@@ -129,7 +147,10 @@ class TrackedObject:
             else:
                 break
 
-    def gobble_2d_data_and_calculate_a_posteri_estimate(self,frame,data_dict,camn2cam_id,debug1=0):
+    def calculate_a_posteri_estimate(self,frame,
+                                     data_dict,
+                                     camn2cam_id,
+                                     debug1=0):
         # Step 1. Update Kalman state to a priori estimates for this frame.
         # Step 1.A. Update Kalman state for each skipped frame.
         if self.current_frameno is not None:
@@ -214,11 +235,17 @@ class TrackedObject:
             if observation_meters is not None:
                 self.observations_frames.append( frame )
                 self.observations_data.append( observation_meters )
-                self.observations_2d.append( used_camns_and_idxs )
+                tmp = []
+                for (camn, frame_pt_idx, dd_idx) in used_camns_and_idxs:
+                    tmp.extend( [camn,frame_pt_idx] )
+                tmp = numpy.array( tmp, dtype=numpy.uint8 ) # convert to numpy
+                self.observations_2d.append( tmp )
             if debug1>2:
                 print
+        return used_camns_and_idxs, self.kill_me
 
-    def _filter_data(self, xhatminus, Pminus, data_dict, camn2cam_id, debug=0):
+    def _filter_data(self, xhatminus, Pminus, data_dict, camn2cam_id,
+                     debug=0):
         """given state estimate, select useful incoming data and make new observation"""
         # 1. For each camera, predict 2D image location and error distance
 
@@ -234,7 +261,7 @@ class TrackedObject:
         if debug>2:
             print '_filter_data():'
             print '  dist2cmp %f = self.n_sigma_accept * %f'%(dist2cmp,mean_variance_estimate)
-        for camn in data_dict:
+        for camn,candidate_point_list in data_dict.iteritems():
             cam_id = camn2cam_id[camn]
 
             if debug>2:
@@ -247,47 +274,40 @@ class TrackedObject:
             # data_dict points fall inside that. For now, however,
             # compute distance individually
 
-            candidate_point_list = data_dict[camn]
-            found_idxs = []
-
             # Use the first acceptable 2d point match as it's probably
             # best from distance-from-mean-image-background
             # perspective, but remove from further consideration all
             # 2d points that meet consideration critereon.
 
-            match_dist2_and_idx = []
+            closest_dist2 = numpy.inf
+            closest_idx = None
             for idx,(pt_undistorted,projected_line_meters) in enumerate(candidate_point_list):
                 # find closest distance between projected_line and predicted position for each 2d point
                 dist2=projected_line_meters.translate(neg_predicted_3d).dist2()
+                pt_area = pt_undistorted[PT_TUPLE_IDX_AREA]
 
                 if debug>2:
                     frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
-                    print '->', dist2, pt_undistorted[:2], '(idx %d)'%(frame_pt_idx,),
+                    print '->', dist2, pt_undistorted[:2], '(idx %d, area %f)'%(frame_pt_idx,pt_area)
 
-                if dist2<dist2cmp:
-                    # accept point
-                    match_dist2_and_idx.append( (dist2,idx) )
-                    found_idxs.append( idx )
+                if dist2<dist2cmp and pt_area > self.area_threshold:
                     if debug>2:
-                        frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
-                        print '(accepted)'
-                else:
-                    if debug>2:
-                        print
+                        print '       (acceptable)'
+                    if dist2<closest_dist2:
+                        if debug>2:
+                            print '       (so far the best -- taking)'
+                        closest_dist2 = dist2
+                        closest_idx = idx
 
-            match_dist2_and_idx.sort() # sort by distance
-            if len(match_dist2_and_idx):
-                closest_idx = match_dist2_and_idx[0][1] # take idx of closest point
+            if closest_idx is not None:
                 pt_undistorted, projected_line_meters = candidate_point_list[closest_idx]
                 cam_ids_and_points2d.append( (cam_id,(pt_undistorted[PT_TUPLE_IDX_X],
                                                       pt_undistorted[PT_TUPLE_IDX_Y])))
                 frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
-                used_camns_and_idxs.extend( [camn, frame_pt_idx] )
+                used_camns_and_idxs.append( (camn, frame_pt_idx, closest_idx) )
+
                 if debug>2:
-                    print 'best match idx %d (%s)'%(frame_pt_idx, str(pt_undistorted[:2]))
-            found_idxs.reverse() # keep indexes OK as we delete them
-            for idx in found_idxs:
-                del candidate_point_list[idx]
+                    print 'best match idx %d (%s)'%(closest_idx, str(pt_undistorted[:2]))
         # Now cam_ids_and_points2d has just the 2d points we'll use for this reconstruction
         if len(cam_ids_and_points2d)>=2:
             if debug>=1:
@@ -298,7 +318,6 @@ class TrackedObject:
                     self.saved_calibration_data.append( cam_ids_and_points2d )
         else:
             observation_meters = None
-        used_camns_and_idxs = numpy.array( used_camns_and_idxs, dtype=numpy.uint8 ) # convert to numpy
         return observation_meters, used_camns_and_idxs
 
 class Tracker:
@@ -317,6 +336,7 @@ class Tracker:
                  save_calibration_data=None,
                  max_frames_skipped=25,
                  save_all_data=False,
+                 area_threshold=0,
                  ):
         """
 
@@ -325,8 +345,10 @@ class Tracker:
         reconstructor_meters - reconstructor instance with internal units of meters
         scale_factor - how to convert from arbitrary units (of observations) into meters (e.g. 1e-3 for mm)
         kalman_model - dictionary of Kalman filter parameters
+        area_threshold - minimum area to consider for tracking use
 
         """
+        self.area_threshold = area_threshold
         self.save_all_data = save_all_data
         self.reconstructor_meters=reconstructor_meters
         self.live_tracked_objects = []
@@ -346,7 +368,24 @@ class Tracker:
         self.kalman_model = kalman_model
         self.save_calibration_data=save_calibration_data
 
-    def gobble_2d_data_and_calculate_a_posteri_estimates(self,frame,data_dict,camn2cam_id,debug2=0):
+    def is_believably_new( self, Xmm, n_sigma = 2.0, debug=0 ):
+
+        """Sometimes the Kalman tracker will not gobble all the points
+        it should. This still prevents spawning a new Kalman
+        tracker."""
+
+        believably_new = True
+        X = Xmm*self.scale_factor
+        for idx,tro in enumerate(self.live_tracked_objects):
+            if debug>5:
+                nsigma = tro.distance_in_sigma( X )
+                print 'distance in sigma:',nsigma, tro
+            if tro.distance_in_sigma( X ) < n_sigma:
+                believably_new = False
+                break
+        return believably_new
+
+    def calculate_a_posteri_estimates(self,frame,data_dict,camn2cam_id,debug2=0):
         # Allow earlier tracked objects to be greedy and take all the
         # data they want.
         kill_idxs = []
@@ -354,19 +393,44 @@ class Tracker:
         if debug2>1:
             print self,'gobbling all data for frame %d'%(frame,)
 
+        all_to_gobble= []
+        # I could easily parallelize this========================================
         for idx,tro in enumerate(self.live_tracked_objects):
             try:
-                tro.gobble_2d_data_and_calculate_a_posteri_estimate(frame,
-                                                                    data_dict,
-                                                                    camn2cam_id,
-                                                                    debug1=debug2)
+                this_to_gobble, kill_me = tro.calculate_a_posteri_estimate(frame,
+                                                                           data_dict,
+                                                                           camn2cam_id,
+                                                                           debug1=debug2,
+                                                                           )
             except OverflowError, err:
                 print 'WARNING: OverflowError in tro.gobble_2d_data_and_calculate_a_posteri_estimate'
                 print 'Killing tracked object and continuing...'
                 print 'XXX Note to Andrew: should really fix this within the Kalman object.'
                 tro.kill_me = True
-            if tro.kill_me:
                 kill_idxs.append( idx )
+            else:
+                for item in this_to_gobble:
+                    all_to_gobble.append( item )
+                if kill_me:
+                    kill_idxs.append( idx )
+        # End  ================================================================
+
+        if 1:
+
+            # We deferred gobbling until now - fuse all points to be
+            # gobbled and remove them from further consideration.
+
+            # fuse dictionaries
+            fused_to_gobble = collections.defaultdict(set)
+            for (camn, frame_pt_idx, dd_idx) in all_to_gobble:
+                fused_to_gobble[camn].add(dd_idx)
+
+            for camn, dd_idx_set in fused_to_gobble.iteritems():
+                dd_idx = list(dd_idx_set)
+                dd_idx.sort()
+                dd_idx.reverse()
+                for idx in dd_idx:
+                    del data_dict[camn][idx]
 
         # remove tracked objects from live list (when their error grows too large)
         kill_idxs.reverse()
@@ -377,6 +441,8 @@ class Tracker:
                 # require more than single observation to save
                 self.dead_tracked_objects.append( tro )
         self._flush_dead_queue()
+        return data_dict
+
     def join_new_obj(self,
                      frame,
                      first_observation_orig_units,
@@ -393,6 +459,7 @@ class Tracker:
                             save_calibration_data=self.save_calibration_data,
                             max_frames_skipped=self.max_frames_skipped,
                             save_all_data=self.save_all_data,
+                            area_threshold=self.area_threshold,
                             )
         self.live_tracked_objects.append(tro)
     def kill_all_trackers(self):

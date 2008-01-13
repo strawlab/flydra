@@ -30,10 +30,10 @@ class FakeThreadingEvent:
         self._set = False
 
 def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
-                  max_err=None, debug=0, kalman_model=None):
+                  max_err=None, debug=0, kalman_model=None, area_threshold=0):
     if debug is None:
         debug=0
-    tracker.gobble_2d_data_and_calculate_a_posteri_estimates(frame,frame_data,camn2cam_id,debug2=debug)
+    frame_data = tracker.calculate_a_posteri_estimates(frame,frame_data,camn2cam_id,debug2=debug)
 
     # Now, tracked objects have been updated (and their 2D data points
     # removed from consideration), so we can use old flydra
@@ -42,11 +42,13 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
 
     if debug>1:
         print 'for frame %d: data not gobbled:'%(frame,)
-        pprint.pprint(frame_data)
+        pprint.pprint(dict(frame_data))
         print
 
     # Convert to format accepted by find_best_3d()
-    found_data_dict,first_idx_by_camn = convert_format(frame_data,camn2cam_id)
+    found_data_dict,first_idx_by_camn = convert_format(frame_data,
+                                                       camn2cam_id,
+                                                       area_threshold=area_threshold)
 
     hypothesis_test_found_point = False
     # test to short-circuit rest of function
@@ -77,7 +79,12 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
         if (debug > 5) and not (min_mean_dist<max_err):
                 print 'NOT accepting point - reprojection error too large'
 
-        if min_mean_dist<max_err: # this should always be true
+        believably_new = tracker.is_believably_new( this_observation_mm, debug=debug )
+        if (debug > 5):
+                print 'believably_new',believably_new
+
+        if believably_new:
+            assert min_mean_dist<max_err
             if debug > 5:
                 print 'accepting point'
 
@@ -301,6 +308,7 @@ def kalmanize(src_filename,
               debug=False,
               frames_per_second=None,
               max_err=None,
+              area_threshold=0,
               ):
 
     if debug:
@@ -351,6 +359,7 @@ def kalmanize(src_filename,
                       save_calibration_data=save_calibration_data,
                       kalman_model=kalman_model,
                       save_all_data=True,
+                      area_threshold=area_threshold,
                       )
 
     tracker.set_killed_tracker_callback( h5saver.save_tro )
@@ -411,10 +420,10 @@ def kalmanize(src_filename,
                 if debug > 5:
                     print
                     print 'frame_data for frame %d'%(last_frame,)
-                    pprint.pprint(frame_data)
+                    pprint.pprint(dict(frame_data))
                     print
                 process_frame(reconst_orig_units,tracker,last_frame,frame_data,camn2cam_id,
-                              max_err=max_err,debug=debug, kalman_model=kalman_model)
+                              max_err=max_err,debug=debug, kalman_model=kalman_model, area_threshold=area_threshold)
                 frame_count += 1
                 if frame_count%1000==0:
                     time2 = time.time()
@@ -539,6 +548,10 @@ def main():
     parser.add_option("--debug", type="int",
                       metavar="DEBUG")
 
+    parser.add_option("--area-threshold", dest='area_threshold', type='float',
+                      default=0.0,
+                      help="area threshold (used to filter incoming 2d points)")
+
     (options, args) = parser.parse_args()
     if options.exclude_cam_ids is not None:
         options.exclude_cam_ids = options.exclude_cam_ids.split()
@@ -569,6 +582,7 @@ def main():
               debug = options.debug,
               frames_per_second = options.fps,
               max_err = options.max_err,
+              area_threshold=options.area_threshold,
               )
 
 if __name__=='__main__':
