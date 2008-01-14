@@ -23,6 +23,11 @@ class NoObjectIDError(ObjectIDDataError):
 class NotEnoughDataToSmoothError(ObjectIDDataError):
     pass
 
+def parse_seq( input ):
+    input = input.replace(',',' ')
+    seq = map(int,input.split())
+    return seq
+
 def fast_startstopidx_on_sorted_array( sorted_array, value ):
     idx_left = sorted_array.searchsorted( value, side='left' )
     idx_right = sorted_array.searchsorted( value, side='right' )
