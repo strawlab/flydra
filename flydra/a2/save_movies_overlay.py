@@ -45,7 +45,11 @@ def doit(fmf_filename=None,
          stop=None,
          style='debug',
          blank=None,
+         prefix=None,
          ):
+    styles = ['debug','pretty','blank']
+    if style not in styles:
+        raise ValueError('style ("%s") is not one of %s'%(style,str(styles)))
 
     if not use_kalman_smoothing:
         if (fps is not None) or (dynamic_model is not None):
@@ -315,11 +319,12 @@ def doit(fmf_filename=None,
                                           pen )
 
                 for (xy,XYZ,obj_id,Pmean_meters) in kalman_vert_images:
-                    radius=10
-                    x,y= xy
-                    X,Y,Z=XYZ
-                    draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
-                                  pen3d )
+                    if style in ['debug','pretty']:
+                        radius=10
+                        x,y= xy
+                        X,Y,Z=XYZ
+                        draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
+                                      pen3d )
                     if style=='debug':
                         draw.text( (x,y), 'obj %d (%.3f, %.3f, %.3f +- ~%f)'%(obj_id,X,Y,Z,Pmean_meters), font3d )
 
@@ -341,12 +346,14 @@ def doit(fmf_filename=None,
 
         if 1:
             fname = 'smo_%s_%07d.png'%(cam_id,h5_frame)
+            if prefix is not None:
+                fname = prefix + '_' + fname
             #print 'saving',fname
             if PLOT=='mpl':
                 fig.savefig( fname )
             elif PLOT=='image':
                 if im is not None:
-                    im.save( 'PIL_'+fname )
+                    im.save( fname )
 
         if PLOT=='mpl':
             fig.clear()
@@ -367,6 +374,9 @@ def main():
 
     parser.add_option("--kalman", dest="kalman_filename", type='string',
                       help=".h5 file with kalman data and 3D reconstructor")
+
+    parser.add_option("--prefix", dest="prefix", type='string',
+                      help="prefix for output image filenames")
 
     parser.add_option("--start", dest="start", type='int',
                       help="start frame (.h5 frame number reference)")
@@ -409,6 +419,7 @@ def main():
          stop=options.stop,
          style=options.style,
          blank=options.blank,
+         prefix=options.prefix,
          )
 
 if __name__=='__main__':
