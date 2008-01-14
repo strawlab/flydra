@@ -17,6 +17,9 @@ from optparse import OptionParser
 import flydra.reconstruct as reconstruct
 
 import matplotlib
+rcParams = matplotlib.rcParams
+rcParams['xtick.major.pad'] = 10
+rcParams['ytick.major.pad'] = 10
 import pylab
 
 import flydra.analysis.result_utils as result_utils
@@ -59,13 +62,15 @@ def doit(
     if kalman_filename is not None:
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
 
-    fig = pylab.figure(figsize=(18,12))
+    fig = pylab.figure(figsize=(6,4))
 
     ax = None
     subplot ={}
     subplots = ['x','y','z','vel','accel']
+    #subplots = ['x','y','z','vel','accel']
     for i, name in enumerate(subplots):
         ax = fig.add_subplot(len(subplots),1,i+1,sharex=ax)
+        ax.grid(True)
         subplot[name] = ax
 
     dt = 1.0/fps
@@ -73,6 +78,8 @@ def doit(
     if obj_only is not None:
         use_obj_ids = [i for i in use_obj_ids if i in obj_only]
 
+    allX = {}
+    frame0 = None
     for obj_id in use_obj_ids:
         try:
             kalman_rows =  ca.load_data( obj_id, data_file,
@@ -105,25 +112,28 @@ def doit(
         Xy = kalman_rows['y']
         Xz = kalman_rows['z']
 
-        frame0 = frame[0]
+        if frame0 is None:
+            frame0 = frame[0]
         f2t = Frames2Time(frame0,fps)
 
         kws = {}
-        if obj_id == 158:
-            kws['color'] = .9, .8, 0
-        elif obj_id == 160:
-            kws['color'] = 0, .45, .70
+        if 0:
+            if obj_id == 158:
+                kws['color'] = .9, .8, 0
+            elif obj_id == 160:
+                kws['color'] = 0, .45, .70
 
         line,=subplot['x'].plot( f2t(frame), Xx, label='obj %d'%obj_id, linewidth=2, **kws )
         props = dict(color = line.get_color(),
                      linewidth = line.get_linewidth() )
 
-        #plot_err( subplot['x'], frame, Xx, kalman_rows['P00'], color=line.get_color() )
-
         subplot['y'].plot( f2t(frame), Xy, label='obj %d'%obj_id, **props )
         subplot['z'].plot( f2t(frame), Xz, label='obj %d'%obj_id, **props )
 
         X = numpy.array([Xx,Xy,Xz])
+        if 0:
+            allX[obj_id] = X
+
         vel = numpy.array([kalman_rows['xvel'], kalman_rows['xvel'], kalman_rows['xvel']])
         accel = numpy.array([kalman_rows['xaccel'], kalman_rows['xaccel'], kalman_rows['xaccel']])
 
@@ -141,31 +151,36 @@ def doit(
         frames4 = frames2[1:-1]
 
         c = line.get_color()
-        #subplot['vel'].plot(frame, velmag, mfc=c, mec=c, color=c, alpha=0.5 )
         subplot['vel'].plot(f2t(frames2), vel2mag, label='obj %d'%obj_id, **props )
-
-        #subplot['vel'].text( frame[0], velmag[0], '%d'%obj_id )
-
-        #subplot['accel'].plot( frame, accelmag, label='obj %d'%obj_id, **props )
         subplot['accel'].plot( f2t(frames4), accel4mag, label='obj %d'%obj_id, **props )
 
     subplot['x'].set_ylim([0,2])
+    subplot['x'].set_yticks([0,1,2])
     subplot['x'].set_ylabel(r'x ($m$)')
 
     subplot['y'].set_ylim([0,3])
+    subplot['y'].set_yticks([0,1.5,3])
     subplot['y'].set_ylabel(r'y ($m$)')
 
     subplot['z'].set_ylim([0,2])
+    subplot['z'].set_yticks([0,1,2])
     subplot['z'].set_ylabel(r'z ($m$)')
 
     subplot['vel'].set_ylim([0,10])
+    subplot['vel'].set_yticks([0,5,10])
     subplot['vel'].set_ylabel(r'vel ($m/s$)')
 
     subplot['accel'].set_ylabel(r'acceleration ($m/s^{2}$)')
+    subplot['accel'].set_yticks([-100,0,100])
     subplot['accel'].set_xlabel(r'time ($s$)')
 
-    #subplot['x'].set_xlim([24500,27000])
-    #subplot['x'].set_xlim([25700,26000])
+    if 0:
+        X1 = allX[158]
+        X2 = allX[160]
+        dist = numpy.sqrt(numpy.sum((X1-X2)**2,axis=0))
+        subplot['dist'].plot( f2t(frame), dist, label='obj %d'%obj_id, **props )
+
+        subplot['dist'].set_ylabel(r'distance ($m$)')
 
     pylab.show()
 
