@@ -30,6 +30,15 @@ def plot_err( ax, x, mean, err, color=None ):
     ax.plot( x, mean+err, color=color)
     ax.plot( x, mean-err, color=color)
 
+class Frames2Time:
+    def __init__(self,frame0,fps):
+        self.f0 = frame0
+        self.fps = fps
+    def __call__(self,farr):
+        f = farr-self.f0
+        f2  = f/self.fps
+        return f2
+
 def doit(
          kalman_filename=None,
          fps=None,
@@ -37,6 +46,7 @@ def doit(
          dynamic_model = None,
          start = None,
          stop = None,
+         obj_only = None,
          ):
 
     if not use_kalman_smoothing:
@@ -59,6 +69,9 @@ def doit(
         subplot[name] = ax
 
     dt = 1.0/fps
+
+    if obj_only is not None:
+        use_obj_ids = [i for i in use_obj_ids if i in obj_only]
 
     for obj_id in use_obj_ids:
         try:
@@ -92,14 +105,23 @@ def doit(
         Xy = kalman_rows['y']
         Xz = kalman_rows['z']
 
-        line,=subplot['x'].plot( frame, Xx, label='obj %d'%obj_id, linewidth=2 )
+        frame0 = frame[0]
+        f2t = Frames2Time(frame0,fps)
+
+        kws = {}
+        if obj_id == 158:
+            kws['color'] = .9, .8, 0
+        elif obj_id == 160:
+            kws['color'] = 0, .45, .70
+
+        line,=subplot['x'].plot( f2t(frame), Xx, label='obj %d'%obj_id, linewidth=2, **kws )
         props = dict(color = line.get_color(),
                      linewidth = line.get_linewidth() )
 
         #plot_err( subplot['x'], frame, Xx, kalman_rows['P00'], color=line.get_color() )
 
-        subplot['y'].plot( frame, Xy, label='obj %d'%obj_id, **props )
-        subplot['z'].plot( frame, Xz, label='obj %d'%obj_id, **props )
+        subplot['y'].plot( f2t(frame), Xy, label='obj %d'%obj_id, **props )
+        subplot['z'].plot( f2t(frame), Xz, label='obj %d'%obj_id, **props )
 
         X = numpy.array([Xx,Xy,Xz])
         vel = numpy.array([kalman_rows['xvel'], kalman_rows['xvel'], kalman_rows['xvel']])
@@ -115,27 +137,32 @@ def doit(
         velmag = numpy.sqrt(numpy.sum(vel**2,axis=0))
         accelmag = numpy.sqrt(numpy.sum(accel**2,axis=0))
 
-        subplot['vel'].plot(frame, velmag, label='obj %d'%obj_id, **props )
+        accel4mag = (vel2mag[2:]-vel2mag[:-2])/(2*dt)
+        frames4 = frames2[1:-1]
+
         c = line.get_color()
-        subplot['vel'].plot(frames2, vel2mag, mfc=c, mec=c, color=c, alpha=0.5 )
+        #subplot['vel'].plot(frame, velmag, mfc=c, mec=c, color=c, alpha=0.5 )
+        subplot['vel'].plot(f2t(frames2), vel2mag, label='obj %d'%obj_id, **props )
 
-        subplot['vel'].text( frame[0], velmag[0], '%d'%obj_id )
+        #subplot['vel'].text( frame[0], velmag[0], '%d'%obj_id )
 
-        subplot['accel'].plot( frame, accelmag, label='obj %d'%obj_id, **props )
+        #subplot['accel'].plot( frame, accelmag, label='obj %d'%obj_id, **props )
+        subplot['accel'].plot( f2t(frames4), accel4mag, label='obj %d'%obj_id, **props )
 
     subplot['x'].set_ylim([0,2])
-    subplot['x'].set_ylabel('x (m)')
+    subplot['x'].set_ylabel(r'x ($m$)')
 
     subplot['y'].set_ylim([0,3])
-    subplot['y'].set_ylabel('y (m)')
+    subplot['y'].set_ylabel(r'y ($m$)')
 
     subplot['z'].set_ylim([0,2])
-    subplot['z'].set_ylabel('z (m)')
+    subplot['z'].set_ylabel(r'z ($m$)')
 
     subplot['vel'].set_ylim([0,10])
-    subplot['vel'].set_ylabel('|vel| (m/s)')
+    subplot['vel'].set_ylabel(r'vel ($m/s$)')
 
-    subplot['accel'].set_ylabel('|accel| (m/s/s)')
+    subplot['accel'].set_ylabel(r'acceleration ($m/s^{2}$)')
+    subplot['accel'].set_xlabel(r'time ($s$)')
 
     #subplot['x'].set_xlim([24500,27000])
     #subplot['x'].set_xlim([25700,26000])
@@ -171,11 +198,17 @@ def main():
                       help="last frame to plot",
                       metavar="STOP")
 
+    parser.add_option("--obj-only", type="string",
+                      dest="obj_only")
+
     (options, args) = parser.parse_args()
 
     if len(args):
         parser.print_help()
         return
+
+    if options.obj_only is not None:
+        options.obj_only = core_analysis.parse_seq(options.obj_only)
 
     doit(
          kalman_filename=options.kalman_filename,
@@ -184,6 +217,7 @@ def main():
          use_kalman_smoothing=options.use_kalman_smoothing,
          start=options.start,
          stop=options.stop,
+         obj_only=options.obj_only,
          )
 
 if __name__=='__main__':
