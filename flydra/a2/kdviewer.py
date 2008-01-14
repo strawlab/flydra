@@ -165,6 +165,7 @@ def doit(filename,
          stereo = False,
          dynamic_model = None,
          show_cameras=False,
+         obj_color=False,
          ):
 
     assert exclude_vel_data in ['kalman','observations'] # kalman means smoothed or filtered, depending on use_kalman_smoothing
@@ -392,8 +393,9 @@ def doit(filename,
                 rows = rows[ok]
 
             verts = numpy.array( [rows['x'], rows['y'], rows['z']] ).T
-            vels = numpy.array( [rows['xvel'], rows['yvel'], rows['zvel']] ). T
-            speeds = numpy.sqrt(numpy.sum(vels**2,axis=0))
+            if not obj_color:
+                vels = numpy.array( [rows['xvel'], rows['yvel'], rows['zvel']] )#. T
+                speeds = numpy.sqrt(numpy.sum(vels**2,axis=0))
         else:
             x0 = rows.field('x')[0]
             x1 = rows.field('x')[-1]
@@ -427,7 +429,8 @@ def doit(filename,
         if not show_only_track_ends:
             pd = tvtk.PolyData()
             pd.points = verts
-            pd.point_data.scalars = speeds
+            if not obj_color:
+                pd.point_data.scalars = speeds
 #            if numpy.any(speeds>max_vel):
 #                print 'WARNING: maximum speed (%.3f m/s) exceeds color map max'%(speeds.max(),)
 
@@ -437,11 +440,19 @@ def doit(filename,
             ss = tvtk.SphereSource(radius = radius)
             g.source = ss.output
             vel_mapper = tvtk.PolyDataMapper(input=g.output)
-            vel_mapper.lookup_table = lut
-            vel_mapper.scalar_range = 0.0, float(max_vel)
+            if not obj_color:
+                vel_mapper.lookup_table = lut
+                vel_mapper.scalar_range = 0.0, float(max_vel)
             a = tvtk.Actor(mapper=vel_mapper)
             if show_observations:
                 a.property.opacity = 0.3 # sets transparency/alpha
+            if obj_color:
+                if obj_id == 158:
+                    a.property.color = .9, .8, 0
+                elif obj_id == 160:
+                    a.property.color = 0, .45, .70
+                else:
+                    a.property.color = .9, .9, .9
             actors.append(a)
             actor2obj_id[a] = obj_id
 
@@ -591,7 +602,7 @@ def doit(filename,
         marker.interactor = rwi
         marker.enabled = True
 
-    if not show_only_track_ends:
+    if not show_only_track_ends and not obj_color:
         # Create a scalar bar
         if vertical_scale:
             scalar_bar = tvtk.ScalarBarActor(orientation='vertical',
@@ -668,6 +679,17 @@ def doit(filename,
                 found = list(found)
                 found.sort()
                 print ' '.join(map(str,found))
+
+            if 1:
+                imf = tvtk.WindowToImageFilter(input=rw, input_buffer_type='rgba' )
+                writer = tvtk.PNGWriter()
+
+                imf.update()
+                imf.modified()
+                writer.input = imf.output
+                fname = 'kdviewer_output.png'
+                writer.file_name = fname
+                writer.write()
 
         picker.add_observer('EndPickEvent', annotatePick)
         rwi.picker = picker
@@ -791,6 +813,8 @@ def main():
     parser.add_option("--save-still", action='store_true',dest='save_still',
                       help="save still image as kdviewer_output.png")
 
+    parser.add_option("--obj-color", action='store_true',default=False,dest='obj_color')
+
     (options, args) = parser.parse_args()
 
     if options.filename is not None:
@@ -808,9 +832,10 @@ def main():
     h5_filename=args[0]
 
     if options.obj_only is not None:
-        options.obj_only = options.obj_only.replace(',',' ')
-        seq = map(int,options.obj_only.split())
-        options.obj_only = seq
+        options.obj_only = core_analysis.parse_seq(options.obj_only)
+        ## options.obj_only = options.obj_only.replace(',',' ')
+        ## seq = map(int,options.obj_only.split())
+        ## options.obj_only = seq
 
         if options.obj_start is not None or options.obj_stop is not None:
             raise ValueError("cannot specify start and stop with --obj-only option")
@@ -839,6 +864,7 @@ def main():
          stereo = options.stereo,
          dynamic_model = options.dynamic_model,
          show_cameras = options.show_cameras,
+         obj_color = options.obj_color,
          )
 
 if __name__=='__main__':
