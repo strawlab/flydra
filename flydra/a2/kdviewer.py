@@ -166,9 +166,13 @@ def doit(filename,
          dynamic_model = None,
          show_cameras=False,
          obj_color=False,
+         link_all_simultaneous_objs=True,
          ):
 
     assert exclude_vel_data in ['kalman','observations'] # kalman means smoothed or filtered, depending on use_kalman_smoothing
+
+    if link_all_simultaneous_objs:
+        allsave = []
 
     if not use_kalman_smoothing:
         if (fps is not None) or (dynamic_model is not None):
@@ -335,6 +339,13 @@ def doit(filename,
         if show_observations:
             obs_rows = ca.load_observations( obj_id, data_file)
 
+            if start is not None or stop is not None:
+                obs_frames = obs_rows['frame']
+                ok1 = obs_frames >= start
+                ok2 = obs_frames <= stop
+                ok = ok1 & ok2
+                obs_rows = obs_rows[ok]
+
             obs_x = obs_rows['x']
             obs_y = obs_rows['y']
             obs_z = obs_rows['z']
@@ -393,6 +404,8 @@ def doit(filename,
                 rows = rows[ok]
 
             verts = numpy.array( [rows['x'], rows['y'], rows['z']] ).T
+            if link_all_simultaneous_objs:
+                allsave.append( rows )
             if not obj_color:
                 vels = numpy.array( [rows['xvel'], rows['yvel'], rows['zvel']] )#. T
                 speeds = numpy.sqrt(numpy.sum(vels**2,axis=0))
@@ -408,6 +421,33 @@ def doit(filename,
 
             track_end_verts.append( (x0,y0,z0) )
             track_end_verts.append( (x1,y1,z1) )
+
+        if show_observations:
+            if 1:
+                # draw lines connecting observation with Kalman point
+
+                line_verts = numpy.concatenate([verts, obs_X])
+
+                line_edges = []
+                for i, obs_frame in enumerate(obs_frames):
+                    kidx = numpy.nonzero( rows['frame']==obs_frame )[0]
+                    assert len(kidx)==1
+                    kidx = kidx[0]
+                    line_edges.append( [kidx, i+len(verts)] )
+
+                pd = tvtk.PolyData()
+                pd.points = line_verts
+                pd.lines = line_edges
+
+                pt = tvtk.TubeFilter(radius=0.001,input=pd,
+                                     number_of_sides=4,
+                                     vary_radius='vary_radius_off',
+                                     )
+                m = tvtk.PolyDataMapper(input=pt.output)
+                a = tvtk.Actor(mapper=m)
+                a.property.color = (1,0,0) # red
+                a.property.specular = 0.3
+                actors.append(a)
 
 
         if show_saccades:
@@ -501,6 +541,40 @@ def doit(filename,
                 ta.position_coordinate.value = tuple(X)
                 actors.append(ta)
                 actor2obj_id[a] = obj_id
+
+    if link_all_simultaneous_objs:
+        allsave = numpy.concatenate(allsave)
+        allframes = allsave['frame']
+        allframes_unique = numpy.unique(allframes)
+        link_verts = []
+        link_edges = []
+        vert_count = 0
+        for frameno in allframes_unique:
+            this_frame_data = allsave[ allframes == frameno ]
+            print frameno, this_frame_data
+            if len(this_frame_data)<2:
+                continue
+
+            start_vert = vert_count
+            for this_row in this_frame_data:
+                link_verts.append( [this_row['x'], this_row['y'], this_row['z']] )
+                vert_count += 1
+            end_vert = vert_count
+            link_edges.append( list(range(start_vert,end_vert)) )
+
+        pd = tvtk.PolyData()
+        pd.points = link_verts
+        pd.lines = link_edges
+
+        pt = tvtk.TubeFilter(radius=0.001,input=pd,
+                             number_of_sides=4,
+                             vary_radius='vary_radius_off',
+                             )
+        m = tvtk.PolyDataMapper(input=pt.output)
+        a = tvtk.Actor(mapper=m)
+        a.property.color = (1,1,1)
+        a.property.specular = 0.3
+        actors.append(a)
 
     if not is_mat_file:
         extra['kresults'].close()
