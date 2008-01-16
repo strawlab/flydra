@@ -1295,12 +1295,12 @@ class wxMainBrainApp(wx.App):
                         #print cam_id, pts
                         #pt_undist,ln=r.find2d(cam_id,data3d,
                         #               Lcoords=line3d,distorted=False)
-                        #self.cam_image_canvas.set_reconstructed_points(cam_id,([pt],[ln]))
-                        self.cam_image_canvas.set_reconstructed_points(cam_id,(pts,[]))
+                        #self.cam_image_canvas.set_red_points(cam_id,([pt],[ln]))
+                        self.cam_image_canvas.set_red_points(cam_id,pts)
         else:
             for cam_id in self.cameras.keys():
-                if hasattr(self.cam_image_canvas,'set_reconstructed_points'):
-                    self.cam_image_canvas.set_reconstructed_points(cam_id,([],[]))
+                if hasattr(self.cam_image_canvas,'set_red_points'):
+                    self.cam_image_canvas.set_red_points(cam_id,None)
         if self.current_page == 'preview':
             for cam_id in self.cameras.keys():
                 cam = self.cameras[cam_id]
@@ -1312,19 +1312,14 @@ class wxMainBrainApp(wx.App):
                     # this may fail with a Key Error if unexpected disconnect:
                     image, show_fps, points, image_coords = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
                     if image is not None:
-                        if hasattr(self.cam_image_canvas,'update_image'):
-                            self.cam_image_canvas.update_image(cam_id,image),
+                        if hasattr(self.cam_image_canvas,'update_image_and_drawings'):
+                            self.cam_image_canvas.update_image_and_drawings(cam_id,image,
+                                                                            points=points)
 #                                                               xoffset=image_coords[0],
 #                                                               yoffset=image_coords[1])
                     if show_fps is not None:
                         show_fps_label = xrc.XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
                         show_fps_label.SetLabel('fps: %.1f'%show_fps)
-                    for i,pt in enumerate(points):
-                        pt = list(pt)
-                        pt[4] = 0 # set eccentricity to zero - don't draw line XXX HACK TODO FIXME
-                        points[i] = pt # reassign
-                    if hasattr(self.cam_image_canvas,'set_draw_points'):
-                        self.cam_image_canvas.set_draw_points(cam_id,points)
                 except KeyError:
                     pass # may have lost camera since call to service_pending
 
