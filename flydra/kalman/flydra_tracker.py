@@ -60,7 +60,6 @@ class TrackedObject:
         area_threshold - minimum area to consider for tracking use
         """
         self.area_threshold = area_threshold
-        if self.area_threshold<1: 1/0
         self.save_all_data = save_all_data
         self.kill_me = False
         self.reconstructor_meters = reconstructor_meters

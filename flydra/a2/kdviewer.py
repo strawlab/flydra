@@ -201,6 +201,11 @@ def doit(filename,
         if (fps is not None) or (dynamic_model is not None):
             print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting fps and dynamic model options (--fps and --dynamic-model)'
             sys.exit(1)
+    else:
+        if fps is None:
+            fps = 100.0
+            import warnings
+            warnings.warn('Setting fps to default value of %f'%fps)
 
     ca = core_analysis.CachingAnalyzer()
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(filename)
@@ -221,10 +226,13 @@ def doit(filename,
 
             if not ca.has_obj_id(obj_id, data_file):
                 continue
-            rows = ca.load_data( obj_id, data_file,
-                                 use_kalman_smoothing=use_kalman_smoothing,
-                                 kalman_dynamic_model = dynamic_model,
-                                 frames_per_second=fps)
+            try:
+                rows = ca.load_data( obj_id, data_file,
+                                     use_kalman_smoothing=use_kalman_smoothing,
+                                     kalman_dynamic_model = dynamic_model,
+                                     frames_per_second=fps)
+            except core_analysis.ObjectIDDataError,err:
+                continue
 
             frames = rows['frame']
             n_frames = rows['frame'][-1]-rows['frame'][0]+1
@@ -320,6 +328,7 @@ def doit(filename,
     if not len(use_obj_ids):
         raise ValueError('no trajectories to plot')
 
+    had_any_obj_id_data = False
     for obj_id_enum,obj_id in enumerate(use_obj_ids):
         if (obj_id_enum%100)==0 and len(use_obj_ids) > 5:
             print 'obj_id %d of %d'%(obj_id_enum,len(use_obj_ids))
@@ -403,6 +412,7 @@ def doit(filename,
 
         if n_frames < int(min_length):
             continue
+        had_any_obj_id_data = True
 
         if not show_only_track_ends:
             try:
@@ -677,7 +687,8 @@ def doit(filename,
         marker.interactor = rwi
         marker.enabled = True
 
-    if not show_only_track_ends and not obj_color:
+    if not show_only_track_ends and not obj_color and had_any_obj_id_data:
+
         # Create a scalar bar
         if vertical_scale:
             scalar_bar = tvtk.ScalarBarActor(orientation='vertical',
@@ -874,6 +885,7 @@ def main():
                       default=False)
 
     parser.add_option("--fps", dest='fps', type='float',
+                      default = None,
                       help="frames per second (used for Kalman filtering/smoothing)")
 
     parser.add_option("--show-saccade-times", action='store_true',dest='show_saccade_times',

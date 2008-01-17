@@ -322,6 +322,8 @@ def kalmanize(src_filename,
 
     if dynamic_model is None:
         dynamic_model = 'fly dynamics, high precision calibration, units: mm'
+        import warnings
+        warnings.warn('dynamic model not specified. using "%s"'%dynamic_model)
 
     results = get_results(src_filename)
 
@@ -345,6 +347,11 @@ def kalmanize(src_filename,
 
     save_calibration_data = FakeThreadingEvent()
     save_calibration_data.set()
+
+    if frames_per_second is None:
+        frames_per_second = 100.0
+        import warnings
+        warnings.warn('setting fps to default value of %f'%frames_per_second)
 
     dt = 1.0/frames_per_second
     model_dict=dynamic_models.create_dynamic_model_dict(dt=dt)
@@ -520,7 +527,6 @@ def main():
                       )
 
     parser.add_option("--fps", dest='fps', type='float',
-                      default=100.0,
                       help="frames per second (used for Kalman filtering/smoothing)")
 
     parser.add_option("--max-err", dest='max_err', type='float',
