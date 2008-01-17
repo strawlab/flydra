@@ -140,6 +140,29 @@ def do_show_cameras(results, renderers, frustums=True, labels=True, centers=True
             for ren in renderers:
                 ren.add_actor(ta)
 
+class PluginLoader:
+    def __init__(self):
+        self.all_names = []
+        pkg_env = pkg_resources.Environment()
+        self.EP = 'flydra.kdviewer.plugins'
+        for name in pkg_env:
+            egg = pkg_env[name][0]
+            for name in egg.get_entry_map(self.EP):
+                egg.activate()
+                self.all_names.append(name)
+    def __call__(self,draw_stim_func_str):
+        pkg_env = pkg_resources.Environment()
+        for name in pkg_env:
+            egg = pkg_env[name][0]
+            for name in egg.get_entry_map(self.EP):
+                if name != draw_stim_func_str:
+                    continue
+                entry_point = egg.get_entry_info(self.EP,draw_stim_func_str)
+                PluginFunc = entry_point.load()
+                return PluginFunc
+        raise ValueError('Could not find stimulus drawing plugin. Available: %s'%( str(self.all_names), ))
+plugin_loader = PluginLoader()
+
 def doit(filename,
          show_obj_ids=False,
          start=None,
@@ -551,7 +574,6 @@ def doit(filename,
         vert_count = 0
         for frameno in allframes_unique:
             this_frame_data = allsave[ allframes == frameno ]
-            print frameno, this_frame_data
             if len(this_frame_data)<2:
                 continue
 
@@ -582,30 +604,9 @@ def doit(filename,
     ################################
 
     if draw_stim_func_str:
-        all_names = []
-        found=False
-        pkg_env = pkg_resources.Environment()
-        EP = 'flydra.kdviewer.plugins'
-        for name in pkg_env:
-            egg = pkg_env[name][0]
-
-            for name in egg.get_entry_map(EP):
-                egg.activate()
-                print 'name',name
-                all_names.append(name)
-                if name != draw_stim_func_str:
-                    continue
-                found=True
-                entry_point = egg.get_entry_info(EP, name)
-                PluginFunc = entry_point.load()
-                print 'PluginFunc',PluginFunc
-                break
-        if not found:
-            raise ValueError('Could not find stimulus drawing plugin. Available: %s'%( str(all_names), ))
-
+        PluginFunc = plugin_loader(draw_stim_func_str)
         stim_actors = PluginFunc(filename=filename)
         actors.extend( stim_actors )
-        print '*'*80,'drew with custom code'
 
     ################################
 
@@ -822,6 +823,7 @@ def main():
                       type="string",
                       dest="draw_stim_func_str",
                       default="default",
+                      help="possible values: %s"%str(plugin_loader.all_names),
                       )
 
     parser.add_option("--dynamic-model",
@@ -889,6 +891,9 @@ def main():
 
     parser.add_option("--obj-color", action='store_true',default=False,dest='obj_color')
 
+    parser.add_option("--link-all-simultaneous-objs", action='store_true', default=False,
+                      dest='link_all_simultaneous_objs')
+
     (options, args) = parser.parse_args()
 
     if options.filename is not None:
@@ -939,6 +944,7 @@ def main():
          dynamic_model = options.dynamic_model,
          show_cameras = options.show_cameras,
          obj_color = options.obj_color,
+         link_all_simultaneous_objs=options.link_all_simultaneous_objs,
          )
 
 if __name__=='__main__':
