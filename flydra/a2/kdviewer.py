@@ -34,7 +34,7 @@ def print_cam_props(camera):
     print 'camera.clipping_range = ',camera.clipping_range
     print 'camera.parallel_scale = ',camera.parallel_scale
 
-def do_show_cameras(results, renderers, frustums=True, labels=True, centers=True):
+def do_show_cameras(results, renderers, frustums=True, labels=True, centers=True, length=2.0):
     if isinstance(results,reconstruct.Reconstructor):
         R = results
     else:
@@ -95,7 +95,7 @@ def do_show_cameras(results, renderers, frustums=True, labels=True, centers=True
                     U = X-C # direction
                     # rescale to unit length
                     U=U/math.sqrt(U[0]**2 + U[1]**2 + U[2]**2)
-                    X = C+500.0*U
+                    X = C+length*U
 
                     line_points.insert_next_point(*X)
                     point_num += 1
