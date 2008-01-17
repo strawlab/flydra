@@ -48,7 +48,13 @@ def doit(
                 data = all_data[this_idx]
                 ax.plot( data['frame'], data['x'], 'r.' )
                 ax.plot( data['frame'], data['y'], 'g.' )
-            pylab.title(cam_id)
+            ax.text(0.1,0,cam_id,
+                    horizontalalignment='left',
+                    verticalalignment='bottom',
+                    transform = ax.transAxes,
+                    )
+            ax.set_xlabel('pixel')
+        ax.set_xlabel('frame')
 
         h5.close()
 
