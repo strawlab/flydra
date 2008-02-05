@@ -24,6 +24,7 @@ try:
 except ImportError, err:
     import cgtypes # cgkit 1
 import flydra.a2.pos_ori2fu
+import flydra.version
 
 def print_cam_props(camera):
     print 'camera.parallel_projection = ',camera.parallel_projection
@@ -797,7 +798,14 @@ def doit(filename,
 def main():
     usage = '%prog FILE [options]'
 
+    # A man page can be generated with:
+    # 'help2man -N -n kdviewer kdviewer > kdviewer.1'
+
     parser = OptionParser(usage)
+
+    parser.add_option("--version", action='store_true',dest='version',
+                      help="print version and quit",
+                      default=False)
 
     parser.add_option("-f", "--file", dest="filename", type='string',
                       help="hdf5 file with data to display FILE",
@@ -924,12 +932,12 @@ def main():
 
     if options.obj_only is not None:
         options.obj_only = core_analysis.parse_seq(options.obj_only)
-        ## options.obj_only = options.obj_only.replace(',',' ')
-        ## seq = map(int,options.obj_only.split())
-        ## options.obj_only = seq
 
         if options.obj_start is not None or options.obj_stop is not None:
             raise ValueError("cannot specify start and stop with --obj-only option")
+
+    if options.version:
+        print 'kdviewer %s'%(flydra.version.__version__,)
 
     doit(filename=h5_filename,
          start=options.start,
