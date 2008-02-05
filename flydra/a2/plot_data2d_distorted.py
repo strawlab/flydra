@@ -39,6 +39,18 @@ def doit(
         cam_ids.sort()
 
         all_data = h5.root.data2d_distorted[:]
+        if start is not None or stop is not None:
+            frames = all_data['frame']
+            valid_cond = numpy.ones( frames.shape, dtype=numpy.bool)
+            if start is not None:
+                valid_cond = valid_cond & (frames >= start)
+            if stop is not None:
+                valid_cond = valid_cond & (frames <= stop)
+            all_data = all_data[valid_cond]
+            del valid_cond
+            del frames
+            del start, stop
+
         ax = None
         for cam_id_enum, cam_id in enumerate( cam_ids ):
             ax = pylab.subplot( len(cam_ids), 1, cam_id_enum+1, sharex=ax)
@@ -61,7 +73,7 @@ def doit(
     if len(filenames):
         pylab.show()
     else:
-        print 'nothing to do!'
+        print 'No filename(s) given -- nothing to do!'
 
 def main():
     usage = '%prog [options] FILE1 [FILE2] ...'
