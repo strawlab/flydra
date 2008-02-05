@@ -1,6 +1,6 @@
 # I think this script is similar to
 # flydra/analysis/flydra_analysis_plot_kalman_2d.py but better. I
-# wrote that one a long time ago. - ADS 20070112
+# wrote that one a long time ago. - ADS 20080112
 
 from __future__ import division
 if 1:
