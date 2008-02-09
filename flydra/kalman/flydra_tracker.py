@@ -27,6 +27,23 @@ class FakeThreadingEvent:
     def isSet(self):
         return False
 
+def obs2d_hashable( arr ):
+    assert arr.dtype == numpy.uint8
+    assert len(arr.shape)==1
+
+    # sort array based on camn
+    camns = arr[0::2]
+    pt_idx = arr[1::2]
+    camn_order = numpy.argsort(camns)
+
+    # fill new array with sorted values
+    newarr = numpy.zeros( (len(arr),), dtype = numpy.uint8 )
+    newarr[ camn_order*2 ] = camns
+    newarr[ camn_order*2+1 ] = pt_idx
+
+    val = newarr.tostring()
+    return val
+
 class TrackedObject:
     """
     Track one object using a Kalman filter.
@@ -152,34 +169,33 @@ class TrackedObject:
                                      debug1=0):
         # Step 1. Update Kalman state to a priori estimates for this frame.
         # Step 1.A. Update Kalman state for each skipped frame.
-        if self.current_frameno is not None:
-            # Make sure we have xhat_k1 (previous frames' a posteri)
 
-            # For each frame that was skipped, step the Kalman filter.
-            # Since we have no observation, the estimated error will
-            # rise.
-            frames_skipped = frame-self.current_frameno-1
+        # Make sure we have xhat_k1 (previous frames' a posteri)
 
+        # For each frame that was skipped, step the Kalman filter.
+        # Since we have no observation, the estimated error will
+        # rise.
+        frames_skipped = frame-self.current_frameno-1
+
+        if debug1>2:
+            print 'doing',self,'============--'
+
+        if frames_skipped > self.max_frames_skipped:
+            self.kill_me = True # don't run Kalman filter, just quit
             if debug1>2:
-                print 'doing',self,'============--'
-
-            if frames_skipped > self.max_frames_skipped:
-                self.kill_me = True # don't run Kalman filter, just quit
-                if debug1>2:
-                    print 'killed because too many frames skipped'
-            else:
-                if debug1>2:
-                    print 'updating for %d frames skipped'%(frames_skipped,)
-                for i in range(frames_skipped):
-                    xhat, P = self.my_kalman.step()
-                    ############ save outputs ###############
-                    self.frames.append( self.current_frameno + i + 1 )
-                    self.xhats.append( xhat )
-                    self.timestamps.append( 0.0 )
-                    self.Ps.append( P )
+                print 'killed because too many frames skipped'
         else:
-            raise RuntimeError("why did we get here?")
+            if debug1>2:
+                print 'updating for %d frames skipped'%(frames_skipped,)
+            for i in range(frames_skipped):
+                xhat, P = self.my_kalman.step()
+                ############ save outputs ###############
+                self.frames.append( self.current_frameno + i + 1 )
+                self.xhats.append( xhat )
+                self.timestamps.append( 0.0 )
+                self.Ps.append( P )
 
+        this_observations_2d_hash = None
         if not self.kill_me:
             self.current_frameno = frame
             # Step 1.B. Update Kalman to provide a priori estimates for this frame
@@ -223,7 +239,7 @@ class TrackedObject:
             if Pmean > self.max_variance:
                 self.kill_me = True
                 if debug1>2:
-                    print 'will kill next time because Pmean too large'
+                    print 'will kill next time because Pmean too large (%f > %f)'%(Pmean,self.max_variance)
 
             ############ save outputs ###############
             self.frames.append( frame )
@@ -234,14 +250,41 @@ class TrackedObject:
             if observation_meters is not None:
                 self.observations_frames.append( frame )
                 self.observations_data.append( observation_meters )
-                tmp = []
+                this_observations_2d = []
                 for (camn, frame_pt_idx, dd_idx) in used_camns_and_idxs:
-                    tmp.extend( [camn,frame_pt_idx] )
-                tmp = numpy.array( tmp, dtype=numpy.uint8 ) # convert to numpy
-                self.observations_2d.append( tmp )
+                    this_observations_2d.extend( [camn,frame_pt_idx] )
+                this_observations_2d = numpy.array( this_observations_2d, dtype=numpy.uint8 ) # convert to numpy
+                self.observations_2d.append( this_observations_2d )
+                this_observations_2d_hash = obs2d_hashable( this_observations_2d )
             if debug1>2:
                 print
-        return used_camns_and_idxs, self.kill_me
+        return used_camns_and_idxs, self.kill_me, this_observations_2d_hash, Pmean
+
+    def remove_previous_observation(self, debug1=0):
+
+
+        # This will remove the just-done observation from my
+        # state. Thus, this instance will act as it it skipped data on
+        # one observation.
+
+        self.current_frameno -= 1
+
+        # Remove most recent information
+        frame = self.frames.pop()
+        if debug1>2:
+            print self,'removing previous observation (from frame %d)'%(frame,)
+
+        self.xhats.pop()
+        self.timestamps.pop()
+        self.Ps.pop()
+        if self.observations_frames[-1] == frame:
+            self.observations_frames.pop()
+            self.observations_data.pop()
+            self.observations_2d.pop()
+
+        # reset self.my_kalman
+        self.my_kalman.xhat_k1 = self.xhats[-1]
+        self.my_kalman.P_k1 = self.Ps[-1]
 
     def _filter_data(self, xhatminus, Pminus, data_dict, camn2cam_id,
                      debug=0):
@@ -297,6 +340,8 @@ class TrackedObject:
                             print '       (so far the best -- taking)'
                         closest_dist2 = dist2
                         closest_idx = idx
+                elif debug>2:
+                    print '       (not acceptable)'
 
             if closest_idx is not None:
                 pt_undistorted, projected_line_meters = candidate_point_list[closest_idx]
@@ -387,34 +432,40 @@ class Tracker:
     def calculate_a_posteri_estimates(self,frame,data_dict,camn2cam_id,debug2=0):
         # Allow earlier tracked objects to be greedy and take all the
         # data they want.
-        kill_idxs = []
 
         if debug2>1:
             print self,'gobbling all data for frame %d'%(frame,)
 
+        kill_idxs = []
         all_to_gobble= []
+        best_by_hash = {}
+        to_rewind = []
         # I could easily parallelize this========================================
         for idx,tro in enumerate(self.live_tracked_objects):
-            try:
-                this_to_gobble, kill_me = tro.calculate_a_posteri_estimate(frame,
-                                                                           data_dict,
-                                                                           camn2cam_id,
-                                                                           debug1=debug2,
-                                                                           )
-            except OverflowError, err:
-                print 'WARNING: OverflowError in tro.gobble_2d_data_and_calculate_a_posteri_estimate'
-                print 'Killing tracked object and continuing...'
-                print 'XXX Note to Andrew: should really fix this within the Kalman object.'
-                tro.kill_me = True
+            used_camns_and_idxs, kill_me, obs2d_hash, Pmean = tro.calculate_a_posteri_estimate(frame,
+                                                                                               data_dict,
+                                                                                               camn2cam_id,
+                                                                                               debug1=debug2,
+                                                                                               )
+            all_to_gobble.extend( used_camns_and_idxs )
+            if kill_me:
                 kill_idxs.append( idx )
-            else:
-                for item in this_to_gobble:
-                    all_to_gobble.append( item )
-                if kill_me:
-                    kill_idxs.append( idx )
+            if obs2d_hash is not None:
+                if obs2d_hash in best_by_hash:
+                    (best_idx, best_Pmean) = best_by_hash[ obs2d_hash ]
+                    if Pmean < best_Pmean:
+                        # new value is better than previous best
+                        best_by_hash[ obs2d_hash ] = ( idx, Pmean )
+                        to_rewind.append( best_idx )
+                    else:
+                        # old value is still best
+                        to_rewind.append( idx )
+                else:
+                    best_by_hash[obs2d_hash] = ( idx, Pmean )
+
         # End  ================================================================
 
-        if 1:
+        if len(all_to_gobble):
 
             # We deferred gobbling until now - fuse all points to be
             # gobbled and remove them from further consideration.
@@ -424,12 +475,20 @@ class Tracker:
             for (camn, frame_pt_idx, dd_idx) in all_to_gobble:
                 fused_to_gobble[camn].add(dd_idx)
 
+            # remove data to gobble
             for camn, dd_idx_set in fused_to_gobble.iteritems():
-                dd_idx = list(dd_idx_set)
-                dd_idx.sort()
-                dd_idx.reverse()
-                for idx in dd_idx:
-                    del data_dict[camn][idx]
+                old_list = data_dict[camn]
+                data_dict[camn] = [ item for (idx,item) in enumerate(old_list) if idx not in dd_idx_set ]
+
+        if len(to_rewind):
+
+            # Take-back previous observations - starve this Kalman
+            # object (which has higher error) so that 2 Kalman objects
+            # don't start sharing all observations.
+
+            for rewind_idx in to_rewind:
+                tro = self.live_tracked_objects[rewind_idx]
+                tro.remove_previous_observation(debug1=debug2)
 
         # remove tracked objects from live list (when their error grows too large)
         kill_idxs.reverse()
