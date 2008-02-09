@@ -10,6 +10,8 @@ from flydra.common_variables import MINIMUM_ECCENTRICITY
 import scipy.linalg
 import traceback
 
+WARN_CALIB_DIFF = False
+
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
 
@@ -216,13 +218,14 @@ class SingleCameraCalibration:
         if 1:
             center = self.get_image_center()
             if ((pp[0]-center[0])**2 + (pp[1]-center[1])**2 ) > 5:
-                print 'WARNING: principal point and image center seriously misaligned'
-                print '  pp: %s, center: %s'%(str(pp),str(center))
-                if pp_guess:
+                if WARN_CALIB_DIFF:
+                    print 'WARNING: principal point and image center seriously misaligned'
+                    print '  pp: %s, center: %s'%(str(pp),str(center))
+                    if pp_guess:
 
-                    print '  (note: one of these parameters was guessed ' \
-                          'as the midpoint of the specified image resolution, ' \
-                          'and could be wrong)'
+                        print '  (note: one of these parameters was guessed ' \
+                              'as the midpoint of the specified image resolution, ' \
+                              'and could be wrong)'
 
         if helper is None:
             M = numpy.asarray(Pmat)
@@ -559,17 +562,18 @@ class Reconstructor:
                     cc1 = intrinsic_parameters[0,2]
                     fc2 = intrinsic_parameters[1,1]
                     cc2 = intrinsic_parameters[1,2]
-                    if ((fc1 != params['K11']) or
-                        (fc2 != params['K22']) or
-                        (cc1 != params['K13']) or
-                        (cc2 != params['K23'])):
-                        print 'WARNING: *.rad file and *.Pmat.cal files differ for',cam_id
-                        print "                  .Pmat.cal    .rad"
-                        print "focal length X:",fc1,params['K11']
-                        print "focal length Y:",fc2,params['K22']
-                        print "principal point X:",cc1,params['K13']
-                        print "principal point Y:",cc2,params['K23']
-                        print
+                    if WARN_CALIB_DIFF:
+                        if ((fc1 != params['K11']) or
+                            (fc2 != params['K22']) or
+                            (cc1 != params['K13']) or
+                            (cc2 != params['K23'])):
+                            print 'WARNING: *.rad file and *.Pmat.cal files differ for',cam_id
+                            print "                  .Pmat.cal    .rad"
+                            print "focal length X:",fc1,params['K11']
+                            print "focal length Y:",fc2,params['K22']
+                            print "principal point X:",cc1,params['K13']
+                            print "principal point Y:",cc2,params['K23']
+                            print
 
             filename = os.path.join(use_cal_source,'calibration_units.txt')
             if os.path.exists(filename):
