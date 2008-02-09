@@ -191,6 +191,7 @@ def doit(filename,
          show_cameras=False,
          obj_color=False,
          link_all_simultaneous_objs=True,
+         show_kalman_P=False,
          ):
 
     assert exclude_vel_data in ['kalman','observations'] # kalman means smoothed or filtered, depending on use_kalman_smoothing
@@ -438,6 +439,9 @@ def doit(filename,
                 rows = rows[ok]
 
             verts = numpy.array( [rows['x'], rows['y'], rows['z']] ).T
+            if show_kalman_P:
+                Ps_position = numpy.array( [rows['P00'], rows['P11'], rows['P22']] ).T
+                Ps_position = numpy.sqrt( Ps_position) # put in distance units, not variance units
             if link_all_simultaneous_objs:
                 allsave.append( rows )
             if not obj_color:
@@ -508,10 +512,19 @@ def doit(filename,
 #            if numpy.any(speeds>max_vel):
 #                print 'WARNING: maximum speed (%.3f m/s) exceeds color map max'%(speeds.max(),)
 
-            g = tvtk.Glyph3D(scale_mode='data_scaling_off',
+            if show_kalman_P:
+                scale_mode = 'scale_by_vector_components'
+                pd.point_data.vectors = Ps_position
+                #sphere_radius = radius*1e3
+                sphere_kw = {}
+            else:
+                scale_mode = 'data_scaling_off'
+                sphere_kw = dict(radius=radius)
+
+            g = tvtk.Glyph3D(scale_mode=scale_mode,
                              vector_mode = 'use_vector',
                              input=pd)
-            ss = tvtk.SphereSource(radius = radius)
+            ss = tvtk.SphereSource(**sphere_kw)
             g.source = ss.output
             vel_mapper = tvtk.PolyDataMapper(input=g.output)
             if not obj_color:
@@ -903,6 +916,10 @@ def main():
                       default=True,
                       help="show original, causal Kalman filtered data (rather than Kalman smoothed observations)")
 
+    parser.add_option("--show-kalman-P", action='store_true',dest='show_kalman_P',
+                      default=False,
+                      help="show Kalman P"),
+
     parser.add_option("--vertical-scale", action='store_true',dest='vertical_scale',
                       help="scale bar has vertical orientation")
 
@@ -965,6 +982,7 @@ def main():
          show_cameras = options.show_cameras,
          obj_color = options.obj_color,
          link_all_simultaneous_objs=options.link_all_simultaneous_objs,
+         show_kalman_P=options.show_kalman_P,
          )
 
 if __name__=='__main__':
