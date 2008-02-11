@@ -132,12 +132,6 @@ def create_dynamic_model_dict(dt=None):
     # 'fly dynamics, high precision calibration, units: mm':
     # process covariance
     Q = numpy.zeros((ss,ss))
-    for i in range(0,3):
-        Q[i,i] = (0.001)**2
-
-    for i in range(3,6):
-        Q[i,i] = (0.2)**2
-
     for i in range(6,9):
         Q[i,i] = 10.0 # acceleration noise (near (3.16m*sec**-2)**2)
 
@@ -145,10 +139,10 @@ def create_dynamic_model_dict(dt=None):
     R = 1e-6*numpy.eye(os)
 
     newdict = dict(
-        n_sigma_accept=3.0,
-        max_variance_dist_meters=1e-2, # 10mm
-        initial_position_covariance_estimate=1e-4,
-        initial_acceleration_covariance_estimate=20,
+        n_sigma_accept=9.0,
+        max_variance_dist_meters=0.01,
+        initial_position_covariance_estimate=1e-6,
+        initial_acceleration_covariance_estimate=15,
         Q=Q,
         R=R)
     newdict.update(base_model_dict)
