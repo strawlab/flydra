@@ -294,7 +294,7 @@ class TrackedObject:
         a_priori_observation_prediction = xhatminus[:3] # equiv. to "dot(self.my_kalman.C,xhatminus)"
 
         variance_estimate = numpy.array([Pminus[i,i] for i in range(3)]) # maybe equiv. to "dot(self.my_kalman.C,Pminus[i,i])"
-        mean_variance_estimate = numpy.sqrt(numpy.sum(variance_estimate**2)) # put in variance units (meters^2)
+        mean_variance_estimate = numpy.sum(abs(variance_estimate)) # Will calls this "Manhattan distance".
         dist2cmp = self.n_sigma_accept*mean_variance_estimate
         neg_predicted_3d = -geom.ThreeTuple( a_priori_observation_prediction )
         cam_ids_and_points2d = []
