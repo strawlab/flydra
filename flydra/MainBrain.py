@@ -601,23 +601,19 @@ class CoordinateProcessor(threading.Thread):
         # get version that operates in meters
         scale_factor = self.reconstructor.get_scale_factor()
         self.reconstructor_meters = self.reconstructor.get_scaled(scale_factor)
+
+    def set_new_tracker(self,kalman_model=None):
         evt = self.main_brain.accumulate_kalman_calibration_data
         tracker = flydra.kalman.flydra_tracker.Tracker(self.reconstructor_meters,
-                                                       scale_factor=scale_factor,
+                                                       scale_factor=1.0, # we're in meters.
+                                                       kalman_model=kalman_model,
                                                        save_calibration_data=evt)
         tracker.set_killed_tracker_callback( self.enqueue_finished_tracked_object )
         with self.tracker_lock:
             if self.tracker is not None:
                 self.tracker.kill_all_trackers() # save (if necessary) all old data
+                raise NotImplementedError('Cannot switch dynamic models right now - get highest ObjId from old model and set as new ObjId for new model')
             self.tracker = tracker # bind to name, replacing old tracker
-
-    def set_new_tracker_defaults(self,kw_dict):
-        # called from main thread, must lock to send to realtime coord thread
-        with self.tracker_lock:
-            if self.tracker is None:
-                return
-            for attr in kw_dict:
-                setattr(self.tracker,attr,kw_dict[attr])
             if self.save_profiling_data:
                 tracker = copy.copy(self.tracker)
                 tracker.save_calibration_data = None
@@ -625,8 +621,7 @@ class CoordinateProcessor(threading.Thread):
                 tracker.live_tracked_objects = []
                 tracker.dead_tracked_objects = []
                 self.data_dict_queue.append( ('tracker',tracker))
-        print 'set tracker values',kw_dict
-
+        
     def enqueue_finished_tracked_object(self, tracked_object ):
         # this is from called within the realtime coords thread
         if self.main_brain.is_saving_data():
@@ -998,7 +993,7 @@ class CoordinateProcessor(threading.Thread):
                                     self.data_dict_queue.append(('gob',(corrected_framenumber,
                                                                         dumps,
                                                                         self.camn2cam_id)))
-                                self.tracker.gobble_2d_data_and_calculate_a_posteri_estimates(
+                                self.tracker.calculate_a_posteri_estimates(
                                     corrected_framenumber,
                                     pluecker_coords_by_camn,
                                     self.camn2cam_id)
@@ -1066,12 +1061,16 @@ class CoordinateProcessor(threading.Thread):
                                 if len(found_data_dict) >= 2:
                                     # Can't do any 3D math without at least 2 cameras giving good
                                     # data.
-                                    (this_observation_orig_units, line3d, cam_ids_used,
-                                     min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
-                                        self.reconstructor,
-                                        found_data_dict)
                                     max_error = self.main_brain.get_hypothesis_test_max_error()
-                                    if min_mean_dist<max_error:
+                                    try:
+                                        (this_observation_orig_units, line3d, cam_ids_used,
+                                         min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
+                                            self.reconstructor,
+                                            found_data_dict,
+                                            max_error)
+                                    except ru.NoAcceptablePointFound, err:
+                                        pass
+                                    else:
                                         this_observation_camns = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
                                         this_observation_idxs = [first_idx_by_camn[camn] for camn in this_observation_camns] # zero idx
                                         ####################################
@@ -1626,6 +1625,9 @@ class MainBrain(object):
         self.current_kalman_obj_id = 0
         main_brain_keeper.register( self )
 
+    def get_fps(self):
+        return self.fps
+
     def do_synchronization(self):
         if self.is_saving_data():
             raise RuntimeError('will not (re)synchronize while saving data')
@@ -1943,9 +1945,9 @@ class MainBrain(object):
             scale_factor = self.reconstructor.get_scale_factor()
             self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin, scale_factor )
 
-    def set_new_tracker_defaults(self,kw_dict):
+    def set_new_tracker(self,*args,**kws):
         # send params over to realtime coords thread
-        self.coord_processor.set_new_tracker_defaults(kw_dict)
+        self.coord_processor.set_new_tracker(*args,**kws)
 
     def __del__(self):
         self.quit()

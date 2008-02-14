@@ -616,9 +616,11 @@ class wxMainBrainApp(wx.App):
         ctrl = xrc.XRCCTRL(self.status_panel,
                        "kalman_parameters_choice")
         kalman_param_string = ctrl.GetStringSelection()
-        model_dicts = flydra.kalman.dynamic_models.get_dynamic_model_dict()
-        kws = model_dicts[str(kalman_param_string)]
-        self.main_brain.set_new_tracker_defaults(kws)
+        fps = self.main_brain.get_fps()
+        dt = 1.0/fps
+        model_dicts = flydra.kalman.dynamic_models.create_dynamic_model_dict(dt = dt)
+        kalman_model = model_dicts[str(kalman_param_string)]
+        self.main_brain.set_new_tracker(kalman_model=kalman_model)
 
     def PreviewPerCamClose(self,cam_id):
         previewPerCamPanel=self.cameras[cam_id]['previewPerCamPanel']
