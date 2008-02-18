@@ -44,19 +44,15 @@ class PlotPanel(wx.Panel):
             a = self.fig.add_axes([0.075,0.1,0.75,0.85])
 
             start_size=656,491
-            x = nx.arange(start_size[0])
-            y = nx.arange(start_size[1])
             pylab.setp(a,'xlim',[0,start_size[0]])
             pylab.setp(a,'xticks',range(0,start_size[0],100))
             pylab.setp(a,'ylim',[0,start_size[1]])
             pylab.setp(a,'yticks',range(0,start_size[1],100))
-            x, y = meshgrid(x, y)
-            z = nx.zeros(x.shape)
+            z = nx.zeros((start_size[1],start_size[0]))
             frame = z
             extent = 0, frame.shape[1]-1, frame.shape[0]-1, 0
             self.im = a.imshow( z,
                                 cmap=matplotlib.cm.pink,
-                                #cmap=matplotlib.cm.hsv,
                                 origin=origin,
                                 interpolation='nearest',
                                 extent=extent,
@@ -67,11 +63,9 @@ class PlotPanel(wx.Panel):
             self.fig.colorbar( self.im, cax=self.cax, orientation='vertical')
             
             self.lines = a.plot([0],[0],'o') 	 
-            pylab.setp(self.lines[0],'markerfacecolor',None) 	 
+            pylab.setp(self.lines[0],'markerfacecolor','None')
             white = (1.0,1.0,1.0) 	 
             blue = (0.0,0.0,1.0)
-            #pylab.setp(self.lines[0],'color',white) 	 
-            #pylab.setp(self.lines[0],'linewidth',2.0) 	 
             pylab.setp(self.lines[0],'markeredgecolor',blue) 	 
             pylab.setp(self.lines[0],'markeredgewidth',2)
             a.grid('on')
