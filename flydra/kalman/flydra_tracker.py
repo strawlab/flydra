@@ -196,7 +196,7 @@ class TrackedObject:
                 self.Ps.append( P )
 
         this_observations_2d_hash = None
-        used_camns_and_idxs = None
+        used_camns_and_idxs = []
         Pmean = None
         if not self.kill_me:
             self.current_frameno = frame
