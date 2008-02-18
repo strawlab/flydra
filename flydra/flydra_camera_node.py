@@ -9,6 +9,7 @@ import threading, time, socket, sys, struct, select, math
 import Queue
 import numpy
 import numpy as nx
+import errno
 
 #import flydra.debuglock
 #DebugLock = flydra.debuglock.DebugLock
@@ -98,7 +99,12 @@ def TimestampEcho():
     sendto_port = flydra.common_variables.timestamp_echo_gatherer_port
     fmt = flydra.common_variables.timestamp_echo_fmt_diff
     while 1:
-        buf, (orig_host,orig_port) = sockobj.recvfrom(4096)
+        try:
+            buf, (orig_host,orig_port) = sockobj.recvfrom(4096)
+        except socket.error, err:
+            if sys.platform.startswith('linux') and err.args[0] == errno.EINTR: # interrupted system call
+                continue
+            raise
         newbuf = buf + struct.pack( fmt, time.time() )
         sender.sendto(newbuf,(orig_host,sendto_port))
 
@@ -321,11 +327,7 @@ class GrabClass(object):
                 if BENCHMARK:
                     t1 = time.time()
                 try:
-##                    sys.stdout.write('<')
-##                    sys.stdout.flush()
                     self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
-##                    sys.stdout.write('>')
-##                    sys.stdout.flush()
                 except cam_iface.BuffersOverflowed:
                     now = time.time()
                     msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
@@ -337,6 +339,8 @@ class GrabClass(object):
                     msg = 'Warning: frame data missing on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
                     #self.log_message_queue.put((self.cam_id,now,msg))
                     print >> sys.stderr, msg
+                    continue
+                except cam_iface.FrameSystemCallInterruption:
                     continue
 
                 cam_received_time = time.time()
@@ -683,6 +687,7 @@ class App:
                  emulation_reconstructor = None,
                  use_mode=None,
                  debug_drop = False, # debug dropped network packets
+                 num_buffers = None,
                  ):
         if main_brain_hostname is None:
             self.main_brain_hostname = default_main_brain_hostname
@@ -741,10 +746,11 @@ class App:
 
         for cam_no in range(self.num_cams):
             backend = cam_iface.get_driver_name()
-            if backend.startswith('prosilica_gige'):
-                num_buffers = 50
-            else:
-                num_buffers = 205
+            if num_buffers is None:
+                if backend.startswith('prosilica_gige'):
+                    num_buffers = 50
+                else:
+                    num_buffers = 205
             N_modes = cam_iface.get_num_modes(cam_no)
             for i in range(N_modes):
                 mode_string = cam_iface.get_mode_string(cam_no,i)
@@ -1136,12 +1142,25 @@ class App:
             last_return_info_check.append( 0.0 ) # never
             n_raw_frames.append( 0 )
 
+        all_cameras_started_OK = False
+
         DEBUG('entering mainloop 2')
         try:
             try:
                 have_at_least_one_live_camera = True
                 while have_at_least_one_live_camera:
                     have_at_least_one_live_camera = False # check each cycle
+                    if not all_cameras_started_OK:
+                        time.sleep(3) # XXX give 3 seconds for all cameras to start
+                        n_OK = 0
+                        for cam_no in range(self.num_cams):
+                            globals = self.globals[cam_no] # shorthand
+                            if globals['grab_thread'].isAlive():
+                                n_OK += 1
+                        if n_OK != self.num_cams:
+                            raise RuntimeError('not all cameras started OK')
+                        all_cameras_started_OK = True
+
                     for cam_no in range(self.num_cams):
                         globals = self.globals[cam_no] # shorthand
                         if not globals['grab_thread'].isAlive():
@@ -1377,6 +1396,8 @@ def main():
                       help="weight for each BG frame added to accumulator")
     parser.add_option("--mode-num", type="int", default=None,
                       help="force a camera mode")
+    parser.add_option("--num-buffers", type="int", default=None,
+                      help="force number of buffers")
     (options, args) = parser.parse_args()
 
     emulation_cal=options.emulation_cal
@@ -1433,6 +1454,7 @@ def main():
             emulation_reconstructor = emulation_reconstructor,
             debug_drop = options.debug_drop,
             use_mode = options.mode_num,
+            num_buffers = options.num_buffers,
             )
     if app.num_cams <= 0:
         return
