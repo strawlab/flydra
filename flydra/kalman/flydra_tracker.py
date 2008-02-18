@@ -196,6 +196,8 @@ class TrackedObject:
                 self.Ps.append( P )
 
         this_observations_2d_hash = None
+        used_camns_and_idxs = None
+        Pmean = None
         if not self.kill_me:
             self.current_frameno = frame
             # Step 1.B. Update Kalman to provide a priori estimates for this frame
