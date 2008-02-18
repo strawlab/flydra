@@ -1325,8 +1325,6 @@ class wxMainBrainApp(wx.App):
                 except KeyError:
                     pass # may have lost camera since call to service_pending
 
-            if hasattr(self.cam_image_canvas,'OnDraw'):
-                self.cam_image_canvas.OnDraw()
 
             if isinstance(event,wx.IdleEvent):
                 event.RequestMore()
@@ -1412,11 +1410,9 @@ class wxMainBrainApp(wx.App):
         self.OnRecordRawStop(warn=False)
 
         try:
-            if hasattr(self.cam_image_canvas,'delete_image'):
-                self.cam_image_canvas.delete_image(cam_id)
-
+            self.cam_image_canvas.delete_image(cam_id)
         except KeyError:
-            # camera never sent frame??
+            # camera never sent frame
             pass
 
         del self.collecting_background_buttons[cam_id]
