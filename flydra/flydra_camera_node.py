@@ -1,11 +1,12 @@
 #emacs, this is -*-Python-*- mode
 from __future__ import division
+from __future__ import with_statement
 
 import os
 BENCHMARK = int(os.environ.get('FLYDRA_BENCHMARK',0))
 FLYDRA_BT = int(os.environ.get('FLYDRA_BT',0)) # threaded benchmark
 
-import threading, time, socket, sys, struct, select, math
+import threading, time, socket, sys, struct, select, math, warnings
 import Queue
 import numpy
 import numpy as nx
@@ -108,12 +109,67 @@ def TimestampEcho():
         newbuf = buf + struct.pack( fmt, time.time() )
         sender.sendto(newbuf,(orig_host,sendto_port))
 
+class CamProxy:
+    """This class is a quick hack to make calls to cam_iface single-threaded."""
+    def __init__(self,cam,cil):
+        self.cam = cam
+        self.cil = cil
+    def get_framerate(self):
+        with self.cil:
+            return self.cam.get_framerate()
+    def get_frame_offset(self):
+        with self.cil:
+            return self.cam.get_frame_offset()
+    def get_frame_size(self):
+        with self.cil:
+            return self.cam.get_frame_size()
+    def set_frame_offset(self,*args,**kw):
+        with self.cil:
+            return self.cam.set_frame_offset(*args,**kw)
+    def set_frame_size(self,*args,**kw):
+        with self.cil:
+            return self.cam.set_frame_size(*args,**kw)
+    def get_max_width(self):
+        with self.cil:
+            return  self.cam.get_max_width()
+    def get_max_height(self):
+        with self.cil:
+            return  self.cam.get_max_height()
+    def grab_next_frame_into_buf_blocking(self,*args,**kw):
+        with self.cil:
+            return self.cam.grab_next_frame_into_buf_blocking(*args,**kw)
+    def get_last_timestamp(self):
+        with self.cil:
+            return self.cam.get_last_timestamp()
+    def get_last_framenumber(self):
+        with self.cil:
+            return self.cam.get_last_framenumber()
+    def start_camera(self):
+        with self.cil:
+            return self.cam.start_camera()
+
+class CamThreadProxyMaker:
+    def __init__(self):
+        self.cil = threading.Lock()
+        self.n_cameras = 0
+    def __call__(self,cam):
+        self.n_cameras += 1
+        if self.n_cameras > 1:
+
+            warnings.warn('Non-optimized multi-camera implementation in use. Latency may be ' 
+                          'higher than necessary and different framerates on same computer '
+                          'not possible.')
+
+        return CamProxy(cam,self.cil)
+
+cam_thread_proxy_maker = CamThreadProxyMaker()
+
 class GrabClass(object):
     def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue, max_num_points=2,
                  roi2_radius=10, bg_frame_interval=50, bg_frame_alpha=1.0/50.0,
                  main_brain_hostname=None):
         self.main_brain_hostname = main_brain_hostname
-        self.cam = cam
+        self.cam = cam_thread_proxy_maker(cam)
         self.cam2mainbrain_port = cam2mainbrain_port
         self.cam_id = cam_id
         self.log_message_queue = log_message_queue
@@ -210,6 +266,8 @@ class GrabClass(object):
         fi8ufactory = FastImage.FastImage8u
         use_cmp_isSet = globals['use_cmp'].isSet
         return_first_xy = 0
+
+        shortest_IFI = 1.0/self.cam.get_framerate()
 
         hw_roi_frame = fi8ufactory( cur_fisize )
 
@@ -372,8 +430,8 @@ class GrabClass(object):
 
                     diff = timestamp-old_ts
                     time_per_frame = diff/(n_frames_skipped+1)
-                    if time_per_frame > 0.02:
-                        msg = 'Warning: IFI is %f on %s at %s'%(time_per_frame,self.cam_id,time.asctime())
+                    if time_per_frame > 2*shortest_IFI:
+                        msg = 'Warning: IFI is %f on %s at %s (frame skipped?)'%(time_per_frame,self.cam_id,time.asctime())
                         self.log_message_queue.put((self.cam_id,time.time(),msg))
                         print >> sys.stderr, msg
 
