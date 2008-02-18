@@ -147,6 +147,27 @@ class CamProxy:
     def start_camera(self):
         with self.cil:
             return self.cam.start_camera()
+    def get_num_camera_properties(self):
+        with self.cil:
+            return self.cam.get_num_camera_properties()
+    def get_camera_property_info(self,*args,**kw):
+        with self.cil:
+            return self.cam.get_camera_property_info(*args,**kw)
+    def get_camera_property(self,*args,**kw):
+        with self.cil:
+            return self.cam.get_camera_property(*args,**kw)
+    def set_camera_property(self,*args,**kw):
+        with self.cil:
+            return self.cam.set_camera_property(*args,**kw)
+    def get_trigger_mode_number(self,*args,**kw):
+        with self.cil:
+            return self.cam.get_trigger_mode_number(*args,**kw)
+    def set_trigger_mode_number(self,*args,**kw):
+        with self.cil:
+            return self.cam.set_trigger_mode_number(*args,**kw)
+    def set_framerate(self,*args,**kw):
+        with self.cil:
+            return self.cam.set_framerate(*args,**kw)
 
 class CamThreadProxyMaker:
     def __init__(self):
@@ -156,7 +177,7 @@ class CamThreadProxyMaker:
         self.n_cameras += 1
         if self.n_cameras > 1:
 
-            warnings.warn('Non-optimized multi-camera implementation in use. Latency may be ' 
+            warnings.warn('Non-optimized multi-camera implementation in use. Latency may be '
                           'higher than necessary and different framerates on same computer '
                           'not possible.')
 
@@ -169,7 +190,7 @@ class GrabClass(object):
                  roi2_radius=10, bg_frame_interval=50, bg_frame_alpha=1.0/50.0,
                  main_brain_hostname=None):
         self.main_brain_hostname = main_brain_hostname
-        self.cam = cam_thread_proxy_maker(cam)
+        self.cam = cam
         self.cam2mainbrain_port = cam2mainbrain_port
         self.cam_id = cam_id
         self.log_message_queue = log_message_queue
@@ -822,6 +843,7 @@ class App:
             print 'attempting to initialize camera with %d buffers, mode "%s"'%(
                 num_buffers,cam_iface.get_mode_string(cam_no,use_mode))
             cam = cam_iface.Camera(cam_no,num_buffers,use_mode)
+            cam = cam_thread_proxy_maker(cam)
             print 'allocated %d buffers'%num_buffers
             self.all_cams.append( cam )
 
