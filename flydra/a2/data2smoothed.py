@@ -23,6 +23,8 @@ def convert(infilename,
             do_nothing=False, # set to true to test for file existance
             stop_obj_id=None,
             ):
+    if stop_obj_id is None:
+        stop_obj_id=numpy.inf
 
     if save_timestamps:
         print 'STAGE 1: finding timestamps'
@@ -70,7 +72,7 @@ def convert(infilename,
         obs_obj_ids = table_kobs.read(field='obj_id')
         print 'finding unique obj_ids...'
         unique_obj_ids = numpy.unique(obs_obj_ids)
-
+        print '(found %d)'%(len(unique_obj_ids),)
         print 'finding 2d data for each obj_id...'
         timestamp_time = numpy.zeros( unique_obj_ids.shape, dtype=numpy.float64)
         for obj_id_enum,obj_id in enumerate(unique_obj_ids):
