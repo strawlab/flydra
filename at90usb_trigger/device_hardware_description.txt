@@ -24,7 +24,7 @@ computer over the USB interface.
 
 The Camera Sync Triggers are the bottom row of BNCs on the
 device. Internally, they all share the same input. This is a direct
-connection from the AT90USBKEY J5 pin 7 (and thus Port C6, OCR3A, of
+connection from the AT90USBKEY J5 pin 4 (and thus Port C6, OCR3A, of
 the AT90USB1287). Optionally, an op-amp to provide a 5V trigger signal
 may be added (see below).
 
