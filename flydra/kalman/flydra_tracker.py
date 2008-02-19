@@ -417,7 +417,7 @@ class Tracker:
         self.kalman_model = kalman_model
         self.save_calibration_data=save_calibration_data
 
-    def is_believably_new( self, Xmm, n_sigma = 2.0, debug=0 ):
+    def is_believably_new( self, Xmm, n_sigma = 9.0, debug=0 ):
 
         """Sometimes the Kalman tracker will not gobble all the points
         it should. This still prevents spawning a new Kalman
