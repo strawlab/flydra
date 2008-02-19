@@ -187,8 +187,7 @@ void init_pwm_output(void) {
 
   // set output direction on pin
   PORTC &= 0x87; // pin C3-6 set low to start
-  DDRC |= 0x7F; // enable output for:
-  // (Output Compare and PWM) A-C of Timer/Counter 3
+  DDRC |= 0xFF; // enable output for all PORTC
 
   // Set output compare to mid-point
   set_OCR3A( 10 );
@@ -216,7 +215,7 @@ void init_pwm_output(void) {
   TCCR3B = 0x1B;
 
   // really only care about timer3_compa_vect
-  TIMSK3 = 0x07; //OCIE1A|OCIE1B|TOIE1; // XXX not sure about interrupt names // enable interrucpts
+  TIMSK3 = 0x07; // XXX not sure about interrupt names // enable interrucpts
 }
 
 ISR(TIMER3_COMPA_vect) {
@@ -231,9 +230,12 @@ ISR(TIMER3_COMPA_vect) {
 }
 ISR(TIMER3_COMPB_vect) {
 }
+
+/*
 ISR(TIMER3_OVF_vect) {
   // timer3 overflowed
 }
+*/
 
 //!
 //! @brief This function initializes the target board ressources.
@@ -256,32 +258,28 @@ void trigger_task_init(void)
    Handler_Init();
 }
 
-static uint8_t switchoff_trig1_count=0;
-static uint8_t switchoff_trig2_count=0;
-static uint8_t switchoff_trig3_count=0;
+#define trig1_on()  (PORTC |=  0x02)
+#define trig1_off() (PORTC &= ~0x02)
+
+#define trig2_on()  (PORTC |=  0x04)
+#define trig2_off() (PORTC &= ~0x04)
+
+#define trig3_on()  (PORTC |=  0x08)
+#define trig3_off() (PORTC &= ~0x08)
 
 void switchoff_trig1(void) {
-  switchoff_trig1_count--;
-  if (switchoff_trig1_count==0) {
-    Reg_Handler( NULL, 0, 1, FALSE);
-    PORTC &= 0xFE; // clear bit
-  }
+  Reg_Handler( switchoff_trig1, 2, 0, FALSE);
+  trig1_off();
 }
 
 void switchoff_trig2(void) {
-  switchoff_trig2_count--;
-  if (switchoff_trig2_count==0) {
-    Reg_Handler( NULL, 0, 2, FALSE);
-    PORTC &= 0xFB; // clear bit
-  }
+  Reg_Handler( switchoff_trig2, 2, 1, FALSE);
+  trig2_off();
 }
 
 void switchoff_trig3(void) {
-  switchoff_trig3_count--;
-  if (switchoff_trig3_count==0) {
-    Reg_Handler( NULL, 0, 3, FALSE);
-    PORTC &= 0xF7; // clear bit
-  }
+  Reg_Handler( switchoff_trig3, 2, 2, FALSE);
+  trig3_off();
 }
 
 void trigger_task(void)
@@ -442,7 +440,7 @@ void trigger_task(void)
 	//set_OCR3C(new_ocr3c);
 	set_ICR3(0xFEFFU);
 	set_TCNT3(0xFFFFU);
-	Led0_on();
+	//Led0_on();
 	TCCR3B = (TCCR3B & 0xF8) | (1 & 0x07); // start clock
 	while (1) {
 	  // wait for timer to roll over and thus trigger output compare
@@ -451,28 +449,25 @@ void trigger_task(void)
 	    break;
 	  }
 	}
-	Led3_on();
+	//Led3_on();
 	TCCR3B = (TCCR3B & 0xF8) | (0 & 0x07); // stop clock
       }
 
       if (flags & TASK_FLAGS_SET_EXT_TRIG) {
 
 	if (ext_trig_flags & EXT_TRIG1) {
-	  PORTC |= 0x02; // raise bit
-	  switchoff_trig1_count++;
-	  Reg_Handler( switchoff_trig1, 0x7FFF, 1, TRUE);
+	  trig1_on();
+	  Reg_Handler( switchoff_trig1, 2, 0, TRUE);
 	}
 
 	if (ext_trig_flags & EXT_TRIG2) {
-	  PORTC |= 0x04; // raise bit
-	  switchoff_trig2_count++;
-	  Reg_Handler( switchoff_trig2, 0x7FFF, 2, TRUE);
+	  trig2_on();
+	  Reg_Handler( switchoff_trig2, 2, 1, TRUE);
 	}
 
 	if (ext_trig_flags & EXT_TRIG3) {
-	  PORTC |= 0x08; // raise bit
-	  switchoff_trig3_count++;
-	  Reg_Handler( switchoff_trig3, 0x7FFF, 3, TRUE);
+	  trig3_on();
+	  Reg_Handler( switchoff_trig3, 2, 2, TRUE);
 	}
 
 

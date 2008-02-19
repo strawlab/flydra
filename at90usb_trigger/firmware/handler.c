@@ -1,22 +1,19 @@
 /*
     Interrupt Handler Routines
-    By Robert Bailey
+    Originally By Robert Bailey
 
-    Revision History:
-    11.15.02   RB   Created
-    06.26.03   RB   Cleaned up
 */
 
 /*
 Description: This file contains the interrupt handler for the system.
 The registered interrupts are called according to their time interval.
-The units of time are the overflow of the 8 bit counter.
+The units of time are the overflow of a counter.
 */
 
 #include "handler.h"
 
 #include <avr/interrupt.h>
-
+#include "stk_525.h"
 
 /* Handler Routine Variables */
 volatile unsigned long count[HANDLER_MAX];   /* functions counts */
@@ -40,22 +37,16 @@ void Handler_Init(void)
     {
         mask[lcv] = FALSE;
     }
-
-    TCCR0B = 0x02;                      /* write timer prescaler */
-    TIMSK0 |= TOIE0;                    /* enable timer ovf irq */
 }
 
 /*
-Function Name: SIG_OVERFLOW0
-Description: The interrupt handler function of the timer0 interrupt.
+Description: The interrupt handler function of the timer3 interrupt.
 Arguments: none
 Return Values: none
 */
-ISR(TIMER0_OVF_vect)
+ISR(TIMER3_OVF_vect)
 {
     unsigned char lcv;
-
-    TIMSK0 &= ~TOIE0;                             /* disable timer ovf irq */
 
     for(lcv=0;lcv<HANDLER_MAX;lcv++)              /* check and act on all vectors */
     {
@@ -70,7 +61,6 @@ ISR(TIMER0_OVF_vect)
         }
     }
 
-    TIMSK0 |= TOIE0;                              /* enable timer ovf irq */
 }
 
 /*
