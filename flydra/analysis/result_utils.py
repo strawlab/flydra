@@ -345,19 +345,29 @@ class TimeModel:
     def framestamp2timestamp(self, framestamp ):
         return framestamp*self.gain + self.offset
 
-def get_time_model_from_data(results,debug=False,full_output=False):
-    # get the timer top value
-
+def read_textlog_header(results):
     textlog = results.root.textlog.readCoordinates([0])
     infostr = textlog['message'].tostring().strip('\x00')
+    assert infostr.startswith('MainBrain running at')
+    fps_str = infostr.split()[3]
+    parsed = {}
+    parsed['fps'] = fps_str
     re_paren = re.compile(r'.*\((.*)\)')
     paren_contents = re_paren.search( infostr )
     paren_contents = paren_contents.groups()[0]
     paren_contents = paren_contents.split(',')
-    parsed = {}
     for pc in paren_contents:
         name, strvalue = pc.strip().split()
         parsed[name]=strvalue
+    return parsed
+
+def get_fps(results):
+    parsed = read_textlog_header(results)
+    return float(parsed['fps'])
+
+def get_time_model_from_data(results,debug=False,full_output=False):
+    # get the timer top value
+    parsed = read_textlog_header(results)
 
     timer_max = int( parsed['top'] )
     if debug:
