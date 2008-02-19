@@ -21,6 +21,19 @@ import core_analysis
 import pytz, datetime
 pacific = pytz.timezone('US/Pacific')
 
+all_kalman_lines = {}
+
+def onpick_callback(event):
+    # see matplotlib/examples/pick_event_demo.py
+    thisline = event.artist
+    obj_id = all_kalman_lines[thisline]
+    print 'obj_id',obj_id
+    if 0:
+        xdata = thisline.get_xdata()
+        ydata = thisline.get_ydata()
+        ind = event.ind
+        print 'picked line:', zip(numpy.take(xdata, ind), numpy.take(ydata, ind))
+
 def doit(
          filenames=None,
          start=None,
@@ -143,8 +156,10 @@ def doit(
                 x2d = R.find2d(cam_id,X,distorted=True)
                 print '%d %d %s (%f,%f)'%(obj_id,frame[0],cam_id,x2d[0,0],x2d[1,0])
                 ax.text( frame[0], x2d[0,0], '%d'%obj_id )
-                ax.plot( frame, x2d[0,:], 'b-')
-                ax.plot( frame, x2d[1,:], 'y-')
+                thisline,=ax.plot( frame, x2d[0,:], 'b-', picker=5) # 5 points tolerance
+                all_kalman_lines[thisline] = obj_id
+                thisline,=ax.plot( frame, x2d[1,:], 'y-', picker=5) # 5 points tolerance
+                all_kalman_lines[thisline] = obj_id
                 ax.set_ylim([-100,800])
 
         if 0:
@@ -185,6 +200,7 @@ def doit(
 
 
     if len(filenames):
+        fig.canvas.mpl_connect('pick_event', onpick_callback)
         pylab.show()
     else:
         print 'No filename(s) given -- nothing to do!'
