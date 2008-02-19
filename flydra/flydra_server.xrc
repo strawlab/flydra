@@ -179,8 +179,18 @@
         <object class="wxBoxSizer">
           <orient>wxHORIZONTAL</orient>
           <object class="sizeritem">
-            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE1">
+            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE_STATUS1">
               <label>Manually send EXT_TRIG1</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE_STATUS2">
+              <label>Manually send EXT_TRIG2</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE_STATUS3">
+              <label>Manually send EXT_TRIG3</label>
             </object>
           </object>
         </object>
@@ -386,8 +396,18 @@
             </object>
           </object>
           <object class="sizeritem">
-            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE2">
+            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE_PREVIEW1">
               <label>Manually send EXT_TRIG1</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE_PREVIEW2">
+              <label>Manually send EXT_TRIG2</label>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE_PREVIEW3">
+              <label>Manually send EXT_TRIG3</label>
             </object>
           </object>
         </object>
