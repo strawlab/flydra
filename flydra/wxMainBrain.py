@@ -396,9 +396,19 @@ class wxMainBrainApp(wx.App):
         wx.EVT_BUTTON(load_cal, load_cal.GetId(), self.OnLoadCal)
 
         ctrl = xrc.XRCCTRL(self.cam_preview_panel,
-                           "MANUAL_TRIGGER_DEVICE2") # EXT TRIG1
+                           "MANUAL_TRIGGER_DEVICE_PREVIEW1") # EXT TRIG1
         wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnManualTriggerDevice)
+                      self.OnManualTriggerDevice1)
+
+        ctrl = xrc.XRCCTRL(self.cam_preview_panel,
+                           "MANUAL_TRIGGER_DEVICE_PREVIEW2") # EXT TRIG2
+        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
+                      self.OnManualTriggerDevice2)
+
+        ctrl = xrc.XRCCTRL(self.cam_preview_panel,
+                           "MANUAL_TRIGGER_DEVICE_PREVIEW3") # EXT TRIG3
+        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
+                      self.OnManualTriggerDevice3)
 
         ctrl = xrc.XRCCTRL(self.cam_preview_panel,'SYNCHRONIZE_BUTTON')
         wx.EVT_BUTTON(ctrl, ctrl.GetId(), self.OnSynchronizeButton)
@@ -920,9 +930,19 @@ class wxMainBrainApp(wx.App):
                       self.OnSaveKalmanCalibrationData)
 
         ctrl = xrc.XRCCTRL(self.status_panel,
-                           "MANUAL_TRIGGER_DEVICE1") # EXT TRIG1
+                           "MANUAL_TRIGGER_DEVICE_STATUS1") # EXT TRIG1
         wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnManualTriggerDevice)
+                      self.OnManualTriggerDevice1)
+
+        ctrl = xrc.XRCCTRL(self.status_panel,
+                           "MANUAL_TRIGGER_DEVICE_STATUS2") # EXT TRIG2
+        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
+                      self.OnManualTriggerDevice2)
+
+        ctrl = xrc.XRCCTRL(self.status_panel,
+                           "MANUAL_TRIGGER_DEVICE_STATUS3") # EXT TRIG3
+        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
+                      self.OnManualTriggerDevice3)
 
     def OnHypothesisTestMaxError(self,event):
         ctrl = xrc.XRCCTRL(self.status_panel,
@@ -930,9 +950,17 @@ class wxMainBrainApp(wx.App):
         val = float(ctrl.GetValue())
         self.main_brain.set_hypothesis_test_max_error(val)
 
-    def OnManualTriggerDevice(self,event):
+    def OnManualTriggerDevice1(self,event):
         sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sender.sendto('x',(MainBrain.hostname,common_variables.trigger_network_socket_port))
+        sender.sendto('1',(MainBrain.hostname,common_variables.trigger_network_socket_port))
+
+    def OnManualTriggerDevice2(self,event):
+        sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sender.sendto('2',(MainBrain.hostname,common_variables.trigger_network_socket_port))
+
+    def OnManualTriggerDevice3(self,event):
+        sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sender.sendto('3',(MainBrain.hostname,common_variables.trigger_network_socket_port))
 
     def OnSaveKalmanCalibrationData(self,event):
         doit = False

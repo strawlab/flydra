@@ -338,12 +338,26 @@ class TrigReceiver(threading.Thread):
                 print 'WARNING: unknown error (non-Exception!) receiving trigger data'
                 continue
 
-            if trig_buf=='x':
+            if trig_buf=='1':
                 with self.main_brain.trigger_device_lock:
                     pre_timestamp = time.time()
                     self.main_brain.trigger_device.ext_trig1()
                     # hmm, calling log_message is normally what the cameras do..
                     self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG1')
+
+            elif trig_buf=='2':
+                with self.main_brain.trigger_device_lock:
+                    pre_timestamp = time.time()
+                    self.main_brain.trigger_device.ext_trig2()
+                    # hmm, calling log_message is normally what the cameras do..
+                    self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG2')
+
+            elif trig_buf=='3':
+                with self.main_brain.trigger_device_lock:
+                    pre_timestamp = time.time()
+                    self.main_brain.trigger_device.ext_trig3()
+                    # hmm, calling log_message is normally what the cameras do..
+                    self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG3')
 
 class CoordRealReceiver(threading.Thread):
     # called from CoordinateProcessor thread
@@ -621,7 +635,7 @@ class CoordinateProcessor(threading.Thread):
                 tracker.live_tracked_objects = []
                 tracker.dead_tracked_objects = []
                 self.data_dict_queue.append( ('tracker',tracker))
-        
+
     def enqueue_finished_tracked_object(self, tracked_object ):
         # this is from called within the realtime coords thread
         if self.main_brain.is_saving_data():
