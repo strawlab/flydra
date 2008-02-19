@@ -777,6 +777,8 @@ class CoordinateProcessor(threading.Thread):
 
         convert_format = flydra.kalman.flydra_kalman_utils.convert_format # shorthand
 
+        max_error = self.main_brain.get_hypothesis_test_max_error()
+
         if NETWORK_PROTOCOL == 'tcp':
             old_data = {}
 
@@ -1007,7 +1009,7 @@ class CoordinateProcessor(threading.Thread):
                                     self.data_dict_queue.append(('gob',(corrected_framenumber,
                                                                         dumps,
                                                                         self.camn2cam_id)))
-                                self.tracker.calculate_a_posteri_estimates(
+                                pluecker_coords_by_camn = self.tracker.calculate_a_posteri_estimates(
                                     corrected_framenumber,
                                     pluecker_coords_by_camn,
                                     self.camn2cam_id)
@@ -1064,7 +1066,8 @@ class CoordinateProcessor(threading.Thread):
                                 # Convert to format accepted by find_best_3d()
                                 found_data_dict,first_idx_by_camn = convert_format(
                                     pluecker_coords_by_camn,
-                                    self.camn2cam_id)
+                                    self.camn2cam_id,
+                                    area_threshold=0.0)
 
                                 if SHOW_3D_PROCESSING_LATENCY:
                                     if len(found_data_dict) < 2:
@@ -1075,7 +1078,6 @@ class CoordinateProcessor(threading.Thread):
                                 if len(found_data_dict) >= 2:
                                     # Can't do any 3D math without at least 2 cameras giving good
                                     # data.
-                                    max_error = self.main_brain.get_hypothesis_test_max_error()
                                     try:
                                         (this_observation_orig_units, line3d, cam_ids_used,
                                          min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
@@ -1095,12 +1097,13 @@ class CoordinateProcessor(threading.Thread):
                                                                                  this_observation_camns,
                                                                                  this_observation_idxs
                                                                                  )))
-
-                                        self.tracker.join_new_obj( corrected_framenumber,
-                                                                   this_observation_orig_units,
-                                                                   this_observation_camns,
-                                                                   this_observation_idxs
-                                                                   )
+                                        believably_new = self.tracker.is_believably_new( this_observation_orig_units, n_sigma = 9.0 )
+                                        if believably_new:
+                                            self.tracker.join_new_obj( corrected_framenumber,
+                                                                       this_observation_orig_units,
+                                                                       this_observation_camns,
+                                                                       this_observation_idxs
+                                                                       )
                                 if SHOW_3D_PROCESSING_LATENCY:
                                     start_3d_proc_c = time.time()
 
@@ -2228,7 +2231,7 @@ class MainBrain(object):
                     self.h5data3d_kalman_estimates.flush()
 
         else:
-            # ** 3d data - hypthesis testing **
+            # ** 3d data - hypothesis testing **
             q = self.queue_data3d_best
             h5table = self.h5data3d_best
 
