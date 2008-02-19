@@ -27,7 +27,11 @@ TASK_FLAGS_DO_TRIG_ONCE = 0x04
 TASK_FLAGS_DOUT_HIGH = 0x08
 TASK_FLAGS_GET_DATA = 0x10
 TASK_FLAGS_RESET_FRAMECOUNT_A = 0x20
-TASK_FLAGS_SET_EXT_TRIG1 = 0x40
+TASK_FLAGS_SET_EXT_TRIG = 0x40
+
+EXT_TRIG1 = 0x01
+EXT_TRIG2 = 0x02
+EXT_TRIG3 = 0x04
 
 def debug(*args):
     if 0:
@@ -56,7 +60,7 @@ class FakeDevice:
 class Device:
     def __init__(self,ignore_version_mismatch=False):
         usb.init()
-        
+
         if not usb.get_busses():
             usb.find_busses()
             usb.find_devices()
@@ -85,7 +89,7 @@ class Device:
         serial = usb.get_string_simple(self.libusb_handle,dev.descriptor.iSerialNumber)
 
         assert manufacturer == 'Strawman'
-        valid_product = 'Flydra Trigger Control 1.0'
+        valid_product = 'Flydra Trigger Control 1.1a1'
         if product != valid_product:
             errmsg = 'Expected product "%s", but you have "%s"'%(
                 valid_product,product)
@@ -117,7 +121,7 @@ class Device:
 ##            iface = config.interface[i]
 ##            print iface
 ##            print iface.altsetting
-            
+
         usb.claim_interface(self.libusb_handle, interface_nr)
 
         self.OUTPUT_BUFFER = ctypes.create_string_buffer(16)
@@ -126,9 +130,9 @@ class Device:
         trigger_carrier_freq = 0.0 # stopped
 
         self.timer3_CS = 8
-        #print 'set A self.timer3_CS to',self.timer3_CS        
+        #print 'set A self.timer3_CS to',self.timer3_CS
         self._set_timer3_metadata(trigger_carrier_freq)
-        
+
     def set_carrier_frequency( self, freq=None ):
         if freq is None:
             #print 'setting frequency to default (200 Hz)'
@@ -154,21 +158,21 @@ class Device:
                 self._set_timer3_metadata(freq)
         else:
             self._set_timer3_metadata(freq)
-            
+
     def get_carrier_frequency( self ):
         IFI = self.timer3_TOP * self.timer3_clock_tick_duration
         return 1.0/IFI
-        
+
     def get_timer_max( self ):
         return self.timer3_TOP
-        
+
     def _set_timer3_metadata(self, carrier_freq):
         if carrier_freq <= 0:
             self.timer3_CS = 0
         else:
             if self.timer3_CS == 0:
                 raise ValueError('cannot set non-zero freq because clock select is zero')
-            
+
         if self.timer3_CS == 0:
             buf = self.OUTPUT_BUFFER # shorthand
             buf[9] = chr(CS_dict[self.timer3_CS])
@@ -177,10 +181,10 @@ class Device:
             else:
                 # if negative, raise value high
                 buf[8] = chr(TASK_FLAGS_NEW_TIMER3_DATA|TASK_FLAGS_DOUT_HIGH)
-                
+
             self.send_buf()
             return
-            
+
         F_CLK = self.FOSC/float(self.timer3_CS) # clock frequency, Hz
 
         #print 'F_CPU',self.FOSC
@@ -191,7 +195,7 @@ class Device:
         n_ticks_for_carrier = int(round(carrier_duration/clock_tick_duration))
         if n_ticks_for_carrier > 0xFFFF:
             raise ValueError('n_ticks_for_carrier too large for 16 bit counter, try increasing self.timer3_CS')
-        
+
 ##        print 'clock_tick_duration',clock_tick_duration
 ##        print 'carrier_freq',carrier_freq
 ##        print 'carrier_duration',carrier_duration
@@ -200,7 +204,7 @@ class Device:
         #actual_freq = 1.0/(n_ticks_for_carrier*clock_tick_duration)
         #print 'actual_freq',actual_freq
 
-        
+
         self.timer3_TOP = n_ticks_for_carrier
         self.timer3_clock_tick_duration = clock_tick_duration
         self.set_output_durations(A_sec=1e-3, # 1 msec
@@ -214,19 +218,33 @@ class Device:
         self.send_buf()
 
     def ext_trig1(self):
-        print 'triggering!'
-        TASK_FLAGS_SET_EXT_TRIG1
+        print 'triggering 1!'
         buf = self.OUTPUT_BUFFER # shorthand
-        buf[8] = chr(TASK_FLAGS_SET_EXT_TRIG1)
+        buf[8] = chr(TASK_FLAGS_SET_EXT_TRIG)
+        buf[10] = chr(EXT_TRIG1)
         self.send_buf()
-        
+
+    def ext_trig2(self):
+        print 'triggering 2!'
+        buf = self.OUTPUT_BUFFER # shorthand
+        buf[8] = chr(TASK_FLAGS_SET_EXT_TRIG)
+        buf[10] = chr(EXT_TRIG2)
+        self.send_buf()
+
+    def ext_trig3(self):
+        print 'triggering 3!'
+        buf = self.OUTPUT_BUFFER # shorthand
+        buf[8] = chr(TASK_FLAGS_SET_EXT_TRIG)
+        buf[10] = chr(EXT_TRIG3)
+        self.send_buf()
+
     def set_output_durations(self, A_sec=None, B_sec=None, C_sec=None):
         dur_A = A_sec
         dur_B = B_sec
         dur_C = C_sec
-        
+
         ##########
-        
+
         ticks_pwm_A = int(round(dur_A/self.timer3_clock_tick_duration))
         if ticks_pwm_A > self.timer3_TOP:
             raise ValueError('ticks_pwm_A larger than timer3_TOP')
@@ -237,12 +255,12 @@ class Device:
         if ticks_pwm_C > self.timer3_TOP:
             raise ValueError('ticks_pwm_C larger than timer3_TOP')
         ##########
-        
+
         ocr3a = ticks_pwm_A
         ocr3b = ticks_pwm_B
         ocr3c = ticks_pwm_C
         top = self.timer3_TOP
-        
+
         buf = self.OUTPUT_BUFFER # shorthand
         buf[0] = chr(ocr3a//0x100)
         buf[1] = chr(ocr3a%0x100)
@@ -253,7 +271,7 @@ class Device:
         buf[5] = chr(ocr3c%0x100)
         buf[6] = chr(top//0x100)
         buf[7] = chr(top%0x100)
-        
+
         buf[8] = chr(TASK_FLAGS_NEW_TIMER3_DATA)
         buf[9] = chr(CS_dict[self.timer3_CS])
 
@@ -271,7 +289,7 @@ class Device:
 
         if 1:
             INPUT_BUFFER = ctypes.create_string_buffer(16)
-            
+
             try:
                 val = usb.bulk_read(self.libusb_handle, 0x82, INPUT_BUFFER, 1000)
                 if 0:
@@ -321,19 +339,19 @@ def enter_dfu_mode():
     (options, args) = parser.parse_args()
     dev = Device(ignore_version_mismatch=options.ignore_version_mismatch)
     dev.enter_dfu_mode()
-    
+
 def check_device():
     dev = Device()
 
 def set_frequency():
     usage = '%prog FILE [options]'
     parser = OptionParser(usage)
-    
+
     parser.add_option("--freq", type="float",
                       metavar="FREQ")
     (options, args) = parser.parse_args()
     dev = Device()
-    
+
     dev.set_carrier_frequency( 0.0 )
     dev.reset_framecount_A()
     dev.set_carrier_frequency( options.freq )
@@ -369,4 +387,4 @@ def trigger_once():
 
 if __name__=='__main__':
     device = Device()
-    
+
