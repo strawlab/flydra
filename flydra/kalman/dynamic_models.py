@@ -119,7 +119,7 @@ def create_dynamic_model_dict(dt=None):
 
     newdict = dict(
         n_sigma_accept=9.0,
-        max_variance_dist_meters=0.01,
+        max_variance_dist_meters=0.02,
         initial_position_covariance_estimate=1e-6,
         initial_acceleration_covariance_estimate=15,
         Q=Q,
