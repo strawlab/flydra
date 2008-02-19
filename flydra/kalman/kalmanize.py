@@ -160,9 +160,15 @@ option to this program.
         print '-'*80
 
 class KalmanSaver:
-    def __init__(self,dest_filename,reconst_orig_units,save_cal_dir=None,cam_id2camns=None):
+    def __init__(self,
+                 dest_filename,
+                 reconst_orig_units,
+                 save_cal_dir=None,
+                 cam_id2camns=None,
+                 min_observations_to_save=0):
 
         self.cam_id2camns = cam_id2camns
+        self.min_observations_to_save = min_observations_to_save
 
         if save_cal_dir is not None:
             if 1:
@@ -214,10 +220,9 @@ class KalmanSaver:
         self.h5file.close()
 
     def save_tro(self,tro):
-        ## MIN_KALMAN_OBSERVATIONS_TO_SAVE = 10
-        ## if len(tro.observations_frames) < MIN_KALMAN_OBSERVATIONS_TO_SAVE:
-        ##     # only save data with at least 10 observations
-        ##     return
+        if len(tro.observations_frames) < self.min_observations_to_save:
+            # not enough data to bother saving
+            return
 
         self.obj_id += 1
 
@@ -309,6 +314,7 @@ def kalmanize(src_filename,
               frames_per_second=None,
               max_err=None,
               area_threshold=0,
+              min_observations_to_save=0,
               ):
 
     if debug:
@@ -343,7 +349,8 @@ def kalmanize(src_filename,
         dest_filename = os.path.splitext(results.filename)[0]+'.kalmanized.h5'
         if os.path.exists(dest_filename):
             raise ValueError('%s already exists and not explicitly requesting append with "--dest-file" option, quitting'%dest_filename)
-    h5saver = KalmanSaver(dest_filename,reconst_orig_units,save_cal_dir=save_cal_dir,cam_id2camns=cam_id2camns)
+    h5saver = KalmanSaver(dest_filename,reconst_orig_units,save_cal_dir=save_cal_dir,cam_id2camns=cam_id2camns,
+                          min_observations_to_save=min_observations_to_save)
 
     save_calibration_data = FakeThreadingEvent()
     save_calibration_data.set()
@@ -518,10 +525,10 @@ def main():
                       metavar="DESTFILE")
 
     parser.add_option("-r", "--reconstructor", dest="reconstructor_path", type='string',
-                      help="calibration/reconstructor path",
+                      help="calibration/reconstructor path (if not specified, defaults to FILE)",
                       metavar="RECONSTRUCTOR")
 
-    parser.add_option("--save-cal-dir", dest="save_cal_dir", type='string',
+    parser.add_option("--save-cal-dir", type='string',
                       help="directory name in which to save new calibration data",
                       default=None,
                       )
@@ -529,15 +536,15 @@ def main():
     parser.add_option("--fps", dest='fps', type='float',
                       help="frames per second (used for Kalman filtering/smoothing)")
 
-    parser.add_option("--max-err", dest='max_err', type='float',
+    parser.add_option("--max-err", type='float',
                       default=50.0,
-                      help="frames per second (used for Kalman filtering/smoothing)")
+                      help="maximum mean reprojection error for hypothesis testing algorithm")
 
-    parser.add_option("--exclude-cam-ids", dest="exclude_cam_ids", type='string',
+    parser.add_option("--exclude-cam-ids", type='string',
                       help="camera ids to exclude from reconstruction (space separated)",
                       metavar="EXCLUDE_CAM_IDS")
 
-    parser.add_option("--exclude-camns", dest="exclude_camns", type='string',
+    parser.add_option("--exclude-camns", type='string',
                       help="camera numbers to exclude from reconstruction (space separated)",
                       metavar="EXCLUDE_CAMNS")
 
@@ -554,9 +561,12 @@ def main():
     parser.add_option("--debug", type="int",
                       metavar="DEBUG")
 
-    parser.add_option("--area-threshold", dest='area_threshold', type='float',
+    parser.add_option("--area-threshold", type='float',
                       default=0.0,
                       help="area threshold (used to filter incoming 2d points)")
+
+    parser.add_option("--min-observations-to-save", type='int', default=0,
+                      help='minimum number of observations required for a kalman object to be saved')
 
     (options, args) = parser.parse_args()
     if options.exclude_cam_ids is not None:
@@ -589,6 +599,7 @@ def main():
               frames_per_second = options.fps,
               max_err = options.max_err,
               area_threshold=options.area_threshold,
+              min_observations_to_save=options.min_observations_to_save,
               )
 
 if __name__=='__main__':
