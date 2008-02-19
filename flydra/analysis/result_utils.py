@@ -3,7 +3,7 @@ import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy as nx
 import numpy
-import sys, os, sets
+import sys, os, sets, re
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 
 import datetime
@@ -350,7 +350,16 @@ def get_time_model_from_data(results,debug=False,full_output=False):
 
     textlog = results.root.textlog.readCoordinates([0])
     infostr = textlog['message'].tostring().strip('\x00')
-    timer_max = int( textlog['message'].tostring().strip('\x00').split()[-1][:-1] )
+    re_paren = re.compile(r'.*\((.*)\)')
+    paren_contents = re_paren.search( infostr )
+    paren_contents = paren_contents.groups()[0]
+    paren_contents = paren_contents.split(',')
+    parsed = {}
+    for pc in paren_contents:
+        name, strvalue = pc.strip().split()
+        parsed[name]=strvalue
+
+    timer_max = int( parsed['top'] )
     if debug:
         print 'I found the timer maximum ("top") to be %d. I parsed this from "%s"'%(timer_max,infostr)
 
