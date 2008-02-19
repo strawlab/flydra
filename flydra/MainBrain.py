@@ -1591,6 +1591,7 @@ class MainBrain(object):
         self.last_saved_data_time = 0.0
         self.last_trigger_framecount_check_time = 0.0
 
+        self.last_images = {}
         self._currently_recording_movies = {}
 
         self.reconstructor = None
@@ -1848,6 +1849,11 @@ class MainBrain(object):
         # image).
         (image, fps, points_distorted,
          image_coords) = self.remote_api.external_get_image_fps_points(cam_id)
+
+        if image is not None:
+            self.last_images[cam_id] = image
+        else:
+            image = self.last_images.get(cam_id,None)
         return image, fps, points_distorted, image_coords
 
     def fake_synchronize(self):
@@ -2022,6 +2028,15 @@ class MainBrain(object):
             self.h5cam_info.row.append()
         self.h5cam_info.flush()
 
+        # save raw image from each camera
+        img = self.h5file.createGroup(root,'images','sample images')
+        cam_ids = self.remote_api.external_get_cam_ids()
+        for cam_id in cam_ids:
+            image, fps, points_distorted, image_coords = self.get_last_image_fps(cam_id)
+            if image is None:
+                raise ValueError('image cannot be None')
+            self.h5file.createArray( img, cam_id, image, 'sample image from %s'%cam_id )
+
     def stop_saving_data(self):
         self._service_save_data()
         if self.is_saving_data():
@@ -2051,8 +2066,9 @@ class MainBrain(object):
         # read by flydra.a2.check_atmel_clock.
 
         list_of_textlog_data = [
-            (timestamp,cam_id,timestamp, 'MainBrain running at %s fps, (top %s)'%(
-            str(self.fps),str(self.trigger_timer_max)))
+            (timestamp,cam_id,timestamp, 'MainBrain running at %s fps, (top %s, hypothesis_test_max_error %s)'%(
+            str(self.fps),str(self.trigger_timer_max),str(self.get_hypothesis_test_max_error())
+            ))
             ]
         for textlog_data in list_of_textlog_data:
             (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
