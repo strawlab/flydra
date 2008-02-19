@@ -5,7 +5,7 @@ import flydra.reconstruct_utils as ru
 import flydra.fastgeom as geom
 import time, math
 from flydra.analysis.result_utils import get_results, get_caminfo_dicts, \
-     get_resolution
+     get_resolution, get_fps
 import tables as PT
 import os, sys, pprint
 from flydra_tracker import Tracker
@@ -165,10 +165,12 @@ class KalmanSaver:
                  reconst_orig_units,
                  save_cal_dir=None,
                  cam_id2camns=None,
-                 min_observations_to_save=0):
+                 min_observations_to_save=0,
+                 debug=0):
 
         self.cam_id2camns = cam_id2camns
         self.min_observations_to_save = min_observations_to_save
+        self.debug = 0
 
         if save_cal_dir is not None:
             if 1:
@@ -225,6 +227,9 @@ class KalmanSaver:
             return
 
         self.obj_id += 1
+
+        if self.debug:
+            print 'saving %s as obj_id %d'%(repr(self), obj_id)
 
         # save observation 2d data indexes
         debugADS=False
@@ -350,15 +355,15 @@ def kalmanize(src_filename,
         if os.path.exists(dest_filename):
             raise ValueError('%s already exists and not explicitly requesting append with "--dest-file" option, quitting'%dest_filename)
     h5saver = KalmanSaver(dest_filename,reconst_orig_units,save_cal_dir=save_cal_dir,cam_id2camns=cam_id2camns,
-                          min_observations_to_save=min_observations_to_save)
+                          min_observations_to_save=min_observations_to_save,
+                          debug=debug)
 
     save_calibration_data = FakeThreadingEvent()
     save_calibration_data.set()
 
     if frames_per_second is None:
-        frames_per_second = 100.0
-        import warnings
-        warnings.warn('setting fps to default value of %f'%frames_per_second)
+        frames_per_second = get_fps(results)
+        print 'read frames_per_second from file', frames_per_second
 
     dt = 1.0/frames_per_second
     model_dict=dynamic_models.create_dynamic_model_dict(dt=dt)
