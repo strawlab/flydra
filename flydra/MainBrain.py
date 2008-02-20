@@ -642,6 +642,8 @@ class CoordinateProcessor(threading.Thread):
     def enqueue_finished_tracked_object(self, tracked_object ):
         # this is from called within the realtime coords thread
         if self.main_brain.is_saving_data():
+            if self.debug_level.isSet():
+                print 'saving finished kalman object with %d frames'%(len(tracked_object.frames),)
             self.main_brain.queue_data3d_kalman_estimates.put(
                 (tracked_object.frames, tracked_object.xhats, tracked_object.Ps,
                  tracked_object.timestamps,
@@ -2213,11 +2215,16 @@ class MainBrain(object):
 
                     if len(obs_frames)<MIN_KALMAN_OBSERVATIONS_TO_SAVE:
                         # only save data with at least 10 observations
+                        if self.debug_level.isSet():
+                            print 'not saving kalman object -- too few observations to save'
                         continue
 
                     # get object ID
                     obj_id = self.current_kalman_obj_id
                     self.current_kalman_obj_id += 1
+
+                    if self.debug_level.isSet():
+                        print 'saving kalman object %d'%(obj_id,)
 
                     # save observation 2d data indexes
                     this_idxs = []
