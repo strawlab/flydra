@@ -207,6 +207,7 @@ def encode_data_packet( corrected_framenumber,
                         line3d_valid,
                         outgoing_data,
                         min_mean_dist):
+    # This is for the non-Kalman data. See tracker.encode_data_packet() for Kalman version.
 
     fmt = '<iBfffffffffdf' # XXX I guess this no longer works -- what's the B for? 20071011
     packable_data = list(outgoing_data)
@@ -516,9 +517,10 @@ class CoordinateSender(threading.Thread):
                   outgoing_UDP_socket.sendto(data_packet,downstream_host)
 
 class CoordinateProcessor(threading.Thread):
-    def __init__(self,main_brain,save_profiling_data=False):
+    def __init__(self,main_brain,save_profiling_data=False,debug_level=None):
         global hostname
         self.main_brain = main_brain
+        self.debug_level = debug_level
 
         self.save_profiling_data = save_profiling_data
         if self.save_profiling_data:
@@ -618,8 +620,9 @@ class CoordinateProcessor(threading.Thread):
 
     def set_new_tracker(self,kalman_model=None):
         evt = self.main_brain.accumulate_kalman_calibration_data
+        scale_factor = self.reconstructor.get_scale_factor()
         tracker = flydra.kalman.flydra_tracker.Tracker(self.reconstructor_meters,
-                                                       scale_factor=1.0, # we're in meters.
+                                                       scale_factor=scale_factor,
                                                        kalman_model=kalman_model,
                                                        save_calibration_data=evt)
         tracker.set_killed_tracker_callback( self.enqueue_finished_tracked_object )
@@ -986,6 +989,10 @@ class CoordinateProcessor(threading.Thread):
                 for corrected_framenumber in new_data_framenumbers:
                     data_dict = realtime_coord_dict[corrected_framenumber]
                     if len(data_dict)==len(self.cam_ids): # all camera data arrived
+
+                        if self.debug_level.isSet():
+                            print 'frame %d'%(corrected_framenumber,)
+
                         if SHOW_3D_PROCESSING_LATENCY:
                             start_3d_proc = time.time()
 
@@ -1013,6 +1020,13 @@ class CoordinateProcessor(threading.Thread):
                                     corrected_framenumber,
                                     pluecker_coords_by_camn,
                                     self.camn2cam_id)
+
+                                if self.debug_level.isSet():
+                                    print '%d live objects:'%(len(self.tracker.live_tracked_objects),),
+                                    for tro in self.tracker.live_tracked_objects:
+                                        print tro.xhats[-1][:3],
+                                    print
+
                                 if self.save_profiling_data:
                                     self.data_dict_queue.append(('ntrack',len(self.tracker.live_tracked_objects)))
 
@@ -1552,6 +1566,8 @@ class MainBrain(object):
 
         assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
 
+        self.debug_level = threading.Event()
+
         self.trigger_device_lock = threading.Lock()
         with self.trigger_device_lock:
             self.trigger_device = flydra.trigger.get_trigger_device()
@@ -1628,7 +1644,9 @@ class MainBrain(object):
 
         self.hypothesis_test_max_error = LockedValue(50.0) # maximum reprojection error # XXX should save to file
 
-        self.coord_processor = CoordinateProcessor(self,save_profiling_data=save_profiling_data)
+        self.coord_processor = CoordinateProcessor(self,
+                                                   save_profiling_data=save_profiling_data,
+                                                   debug_level=self.debug_level)
         #self.coord_processor.setDaemon(True)
         self.coord_processor.start()
 
@@ -1884,6 +1902,15 @@ class MainBrain(object):
 
     def request_image_async(self, cam_id):
         self.remote_api.external_request_image_async(cam_id)
+
+    def get_debug_level(self):
+        return self.debug_level.isSet()
+
+    def set_debug_level(self,value):
+        if value:
+            self.debug_level.set()
+        else:
+            self.debug_level.clear()
 
     def start_recording(self, cam_id, raw_filename, bg_filename):
         global XXX_framenumber
