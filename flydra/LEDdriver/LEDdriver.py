@@ -73,7 +73,7 @@ class Device:
                 debug('idVendor: 0x%04x idProduct: 0x%04x'%(dev.descriptor.idVendor,
                                                             dev.descriptor.idProduct))
                 if (dev.descriptor.idVendor == 0x1781 and
-                    dev.descriptor.idProduct == 0x0BAF):
+                    dev.descriptor.idProduct == 0x0BB1):
                     found = True
                     break
             if found:
@@ -89,7 +89,7 @@ class Device:
         serial = usb.get_string_simple(self.libusb_handle,dev.descriptor.iSerialNumber)
 
         assert manufacturer == 'Strawman'
-        valid_product = 'Flydra Trigger Control 1.1a1'
+        valid_product = 'Flydra LED latency tester 1'
         if product != valid_product:
             errmsg = 'Expected product "%s", but you have "%s"'%(
                 valid_product,product)

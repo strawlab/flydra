@@ -40,6 +40,8 @@ setup(name='flydra',
     'flydra_analysis_plot_kalman_2d = flydra.analysis.flydra_analysis_plot_kalman_2d:main',
     'flydra_analysis_print_camera_summary = flydra.analysis.flydra_analysis_print_camera_summary:main',
 
+    'flydra_LED_driver_enter_dfu_mode = flydra.LEDdriver.LEDdriver:enter_dfu_mode',
+
     'flydra_trigger_enter_dfu_mode = flydra.trigger:enter_dfu_mode',
     'flydra_trigger_check_device = flydra.trigger:check_device',
     'flydra_trigger_set_frequency = flydra.trigger:set_frequency',
