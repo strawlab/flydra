@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# $Id: realtime_viewer.py 557 2005-06-29 17:36:04Z astraw $
 import Numeric as nx
 import math
 from wxPython.wx import *
@@ -53,10 +52,10 @@ class Listener(threading.Thread):
             if len(state_vecs):
                 x,y,z=state_vecs[0][:3]
                 self.wxapp.AddPendingEvent(TrigEvent((corrected_framenumber, (x,y,z), line3d, timestamp )))
-            
+
     def quit(self):
         self.quit_now.set()
-            
+
 class App(wxApp):
     def OnInit(self,*args,**kw):
         wxInitAllImageHandlers()
@@ -98,14 +97,14 @@ class App(wxApp):
         camera.SetViewUp(0,1,0)
         #camera.SetClippingRange( 115,2314 )
         camera.SetParallelScale(.209)
-        
+
         self.cam2 = camera
         ren2.SetActiveCamera( camera )
         ren2.SetBackground( .7,.7,.8 )
         #ren2.SetBackground( 1,1,1)
 
         # point rendering #######################
-    
+
         points_poly_data = vtkPolyData()
 #        points_poly_data.SetPoints(self.cog_points)
 
@@ -123,11 +122,11 @@ class App(wxApp):
 
         ren.AddActor( ballActor )
         ren2.AddActor( ballActor )
- 
+
         # point rendering #######################
 
         profileData = vtk.vtkPolyData()
-    
+
 #        profileData.SetPoints(self.line_points)
 #        profileData.SetLines(self.lines)
 
@@ -183,24 +182,24 @@ class App(wxApp):
         self.current_data = []
         #########################################
 
-        ID_Timer  = wxNewId() 	         
-        self.timer = wxTimer(self,      # object to send the event to 	 
-                             ID_Timer)  # event id to use 	 
+        ID_Timer  = wxNewId()
+        self.timer = wxTimer(self,      # object to send the event to
+                             ID_Timer)  # event id to use
         EVT_TIMER(self,  ID_Timer, self.OnTimer)
         self.update_interval=200
         self.timer.Start(self.update_interval) # call every n msec
         #EVT_IDLE(self.frame, self.OnIdle)
 
-        ID_Timer2  = wxNewId() 	         
-        self.timer2 = wxTimer(self,      # object to send the event to 	 
-                              ID_Timer2)  # event id to use 	 
+        ID_Timer2  = wxNewId()
+        self.timer2 = wxTimer(self,      # object to send the event to
+                              ID_Timer2)  # event id to use
         EVT_TIMER(self,  ID_Timer2, self.OnDraw)
         self.timer2.Start(200) # call every n msec
-        
+
         #########################################
-        
+
         EVT_TRIG(self, self.OnTrig)
-        
+
         self.frame.Show()
         self.SetTopWindow(self.frame)
 
@@ -209,7 +208,7 @@ class App(wxApp):
     def OnTrig(self,event):
 ##        sys.stdout.write('r')
 ##        sys.stdout.flush()
-        
+
         self.current_data.append( event.data )
         #print 'appending',event.data
         #print 'len(self.current_data)',len(self.current_data)
@@ -232,7 +231,7 @@ class App(wxApp):
                 # recent enough means the rest will be too.
                 break
 ##        print 'len(self.current_data)',len(self.current_data)
-        
+
     def OnDraw(self,event=None):
 ##        sys.stdout.write('d')
 ##        sys.stdout.flush()
@@ -257,7 +256,7 @@ class App(wxApp):
             #cog_points.InsertNextPoint( x,y,z )
             if 0:
                 U = reconstruct.line_direction(line3d)
-                
+
                 # line
                 line_points.InsertNextPoint(*(X+20*U))
                 current_line_point += 1
@@ -267,7 +266,7 @@ class App(wxApp):
                 lines.InsertNextCell(2)
                 lines.InsertCellPoint(current_line_point-2)
                 lines.InsertCellPoint(current_line_point-1)
-        
+
         if 1:
             points_poly_data = vtkPolyData()
             points_poly_data.SetPoints(cog_points)
@@ -278,29 +277,29 @@ class App(wxApp):
                 profileData.SetPoints(line_points)
                 profileData.SetLines(lines)
                 self.profileTubes.SetInput(profileData)
-                
+
             self.vtk_render_window.Render()
 
 def print_cam_props(camera):
     print 'camera.SetParallelProjection',camera.GetParallelProjection()
     print 'camera.SetFocalPoint',camera.GetFocalPoint()
-    print 'camera.SetPosition',camera.GetPosition()        
+    print 'camera.SetPosition',camera.GetPosition()
     print 'camera.SetViewAngle',camera.GetViewAngle()
     print 'camera.SetViewUp',camera.GetViewUp()
     print 'camera.SetClippingRange',camera.GetClippingRange()
     print 'camera.SetParallelScale',camera.GetParallelScale()
     print
-    
+
 def main():
     # initialize GUI
     #app = App(redirect=1,filename='viewer_log.txt')
     app = App(redirect=0)
-    #app = App() 
+    #app = App()
 
     listener = Listener(app)
     listener.setDaemon(True) # don't let this thread keep app alive
     listener.start()
-    
+
     app.MainLoop()
 
     print_cam_props(app.cam1)
