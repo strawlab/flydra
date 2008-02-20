@@ -1448,12 +1448,14 @@ def main():
                       help="hostname of mainbrain SERVER",
                       metavar="SERVER")
 
-    parser.add_option("--wrapper", dest="wrapper", type='string',
+    parser.add_option("--wrapper", type='string',
                       help="cam_iface WRAPPER to use",
+                      default='ctypes',
                       metavar="WRAPPER")
 
-    parser.add_option("--backend", dest="backend", type='string',
+    parser.add_option("--backend", type='string',
                       help="cam_iface BACKEND to use",
+                      default='unity',
                       metavar="BACKEND")
 
     parser.add_option("--debug-drop", action='store_true',dest='debug_drop',
