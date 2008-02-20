@@ -258,31 +258,19 @@ void trigger_task_init(void)
    Handler_Init();
 }
 
-// LED1
-#define trig1_on()  (PORTD |= 0x20)
-#define trig1_off() (PORTD &= 0xDF)
-
-// LED2
-#define trig2_on()  (PORTD |= 0x40)
-#define trig2_off() (PORTD &= 0xBF)
-
-// LED3
-#define trig3_on()  (PORTD |= 0x80)
-#define trig3_off() (PORTD &= 0x7F)
-
 void switchoff_trig1(void) {
-  Reg_Handler( switchoff_trig1, 2, 0, FALSE);
-  trig1_off();
+  Reg_Handler( switchoff_trig1, 20, 0, FALSE);
+  Led1_off();
 }
 
 void switchoff_trig2(void) {
-  Reg_Handler( switchoff_trig2, 2, 1, FALSE);
-  trig2_off();
+  Reg_Handler( switchoff_trig2, 20, 1, FALSE);
+  Led2_off();
 }
 
 void switchoff_trig3(void) {
-  Reg_Handler( switchoff_trig3, 2, 2, FALSE);
-  trig3_off();
+  Reg_Handler( switchoff_trig3, 20, 2, FALSE);
+  Led3_off();
 }
 
 void trigger_task(void)
@@ -459,18 +447,18 @@ void trigger_task(void)
       if (flags & TASK_FLAGS_SET_EXT_TRIG) {
 
 	if (ext_trig_flags & EXT_TRIG1) {
-	  trig1_on();
-	  Reg_Handler( switchoff_trig1, 5, 0, TRUE);
+	  Led1_on();
+	  Reg_Handler( switchoff_trig1, 2, 0, TRUE);
 	}
 
 	if (ext_trig_flags & EXT_TRIG2) {
-	  trig2_on();
-	  Reg_Handler( switchoff_trig2, 5, 1, TRUE);
+	  Led2_on();
+	  Reg_Handler( switchoff_trig2, 2, 1, TRUE);
 	}
 
 	if (ext_trig_flags & EXT_TRIG3) {
-	  trig3_on();
-	  Reg_Handler( switchoff_trig3, 5, 2, TRUE);
+	  Led3_on();
+	  Reg_Handler( switchoff_trig3, 2, 2, TRUE);
 	}
 
 
