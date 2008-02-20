@@ -220,21 +220,21 @@ class Device:
     def ext_trig1(self):
         print 'triggering 1!'
         buf = self.OUTPUT_BUFFER # shorthand
-        buf[8] = chr(TASK_FLAGS_SET_EXT_TRIG)
+        buf[8] = chr(TASK_FLAGS_SET_EXT_TRIG | TASK_FLAGS_GET_DATA ) # get data reduces return latency
         buf[10] = chr(EXT_TRIG1)
         self.send_buf()
 
     def ext_trig2(self):
         print 'triggering 2!'
         buf = self.OUTPUT_BUFFER # shorthand
-        buf[8] = chr(TASK_FLAGS_SET_EXT_TRIG)
+        buf[8] = chr(TASK_FLAGS_SET_EXT_TRIG | TASK_FLAGS_GET_DATA ) # get data reduces return latency
         buf[10] = chr(EXT_TRIG2)
         self.send_buf()
 
     def ext_trig3(self):
         print 'triggering 3!'
         buf = self.OUTPUT_BUFFER # shorthand
-        buf[8] = chr(TASK_FLAGS_SET_EXT_TRIG)
+        buf[8] = chr(TASK_FLAGS_SET_EXT_TRIG | TASK_FLAGS_GET_DATA ) # get data reduces return latency
         buf[10] = chr(EXT_TRIG3)
         self.send_buf()
 
