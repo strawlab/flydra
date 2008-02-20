@@ -169,6 +169,11 @@ class wxMainBrainApp(wx.App):
                                  "Stop saving data")
         wx.EVT_MENU(self, ID_stop_saving_data, self.OnStopSavingData)
 
+        ID_toggle_debugging_text = wx.NewId()
+        data_logging_menu.Append(ID_toggle_debugging_text, "Toggle emitting debug data to console",
+                                 "Stop saving data")
+        wx.EVT_MENU(self, ID_toggle_debugging_text, self.OnToggleDebuggingText)
+
         menuBar.Append(data_logging_menu, "Data &Logging")
 
         #   Cameras
@@ -1067,6 +1072,11 @@ class wxMainBrainApp(wx.App):
         self.main_brain.stop_saving_data()
         self.statusbar.SetStatusText("Saving stopped")
         self.statusbar.SetStatusText("",2)
+
+    def OnToggleDebuggingText(self, event=None):
+        level = self.main_brain.get_debug_level()
+        level = not level
+        self.main_brain.set_debug_level(level)
 
     def OnToggleTint(self, event):
         self.cam_image_canvas.set_clipping( event.IsChecked() )
