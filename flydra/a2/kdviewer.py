@@ -627,6 +627,9 @@ def doit(filename,
 
     ################################
 
+    if draw_stim_func_str is None:
+        draw_stim_func_str = 'default'
+
     if draw_stim_func_str:
         PluginFunc = plugin_loader(draw_stim_func_str)
         stim_actors = PluginFunc(filename=filename)
@@ -854,7 +857,7 @@ def main():
     parser.add_option("--draw-stim",
                       type="string",
                       dest="draw_stim_func_str",
-                      default="default",
+                      default=None,
                       help="possible values: %s"%str(plugin_loader.all_names),
                       )
 
