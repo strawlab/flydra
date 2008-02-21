@@ -1,11 +1,12 @@
+import os
 ##2/3 height post experiments:
 
 ##                             odor
 ##                    yes                no
 
-##         yes     20070305           20070304  
+##         yes     20070305           20070304
 ##                 20070306           20070308
-##wind       
+##wind
 ##         no      20070303           20070126
 ##                 20070307           20070127
 ##                                    20070128
@@ -50,13 +51,13 @@ stim_names = {'tall post':'tall',
               'no post (smoothed)' : 'tall',
               'short post (smoothed)': 'short',
               'necklace (smoothed)':'necklace',
-              
+
               'no post':None,
               'spot':None,
               'necklace':'necklace',
               'double post':'double',
               'd2':'double_20070301',
-              
+
               'half post':'half',
               'phantom post':'half',
               'half w/ odor':'half_20070303',
@@ -80,24 +81,24 @@ files = {
                  'DATA20070128_171253_smoothed.mat',
                  'DATA20070129_184131_smoothed.mat',
                  ],
-    
+
     'half no odor, w/ wind':['DATA20070304_185411_smoothed.mat',
                              'DATA20070308_185556_smoothed.mat',
                              ],
-    
+
     'half w/ odor':['DATA20070303_191938_smoothed.mat',
                     'DATA20070307_190812_smoothed.mat',
                     ],
-    
+
     'half w/ odor, w/ wind':['DATA20070305_181659_smoothed.mat',
                              'DATA20070306_190445_smoothed.mat',
                              ],
-    
+
     #######################################################
-    
+
     'd2':['DATA20070301_155517.h5'],
-    
-    
+
+
     'tall post':['DATA20061206_192530.kalmanized.h5',
                  'DATA20061207_183409.kalmanized.h5',
                  'DATA20061208_181556.kalmanized.h5',
@@ -113,33 +114,33 @@ files = {
     'DATA20061218_180311.kalmanized_smoothed.mat',
     'DATA20061223_173845.kalmanized_smoothed.mat',
     ],
-    
+
     'tall post (smoothed)':[
     'DATA20061206_192530.kalmanized_smoothed.mat',
     'DATA20061207_183409.kalmanized_smoothed.mat',
     'DATA20061208_181556.kalmanized_smoothed.mat'
     ],
-    
+
     'short post (smoothed)':[
     'DATA20061211_183352.kalmanized_smoothed.mat',
     'DATA20061212_184958.kalmanized_smoothed.mat',
     'DATA20061213_181940.kalmanized_smoothed.mat',
     ],
-    
+
     'necklace (smoothed)':[
     'DATA20061219_184831.kalmanized_smoothed.mat',
     'DATA20061220_184522.kalmanized_smoothed.mat',
     'DATA20061221_184519.kalmanized_smoothed.mat',
     'DATA20061222_173500.kalmanized_smoothed.mat',
     ],
-    
+
     'phantom post':[# same data as 'no post', kalman smoothed
     'DATA20061209_180630.kalmanized_smoothed.mat',
     'DATA20061215_174134.kalmanized_smoothed.mat',
     'DATA20061218_180311.kalmanized_smoothed.mat',
     'DATA20061223_173845.kalmanized_smoothed.mat',
     ],
-                    
+
     'spot':['DATA20061211_183352.kalmanized.h5',
             'DATA20061212_184958.kalmanized.h5',
             'DATA20061213_181940.kalmanized.h5',
@@ -170,16 +171,16 @@ def get_condition_stimname_from_filename(filename, no_post_stimname=None):
     def is_no_post_condition(condition_name):
         k=condition_name
         return k.startswith('no post') or k.startswith('phantom post')
-        
+
     # check one condition
-    conditions = _filename2conditions[filename]
+    filename_short = os.path.split(filename)[-1]
+    conditions = _filename2conditions[filename_short]
     if len(conditions)>1:
         for k in contitions:
             if not is_no_post_condition(k):
                 raise ValueError('file has >1 condition??')
-            
     condition = conditions[0]
-    stimname = _filename2stimname[filename]
+    stimname = _filename2stimname[filename_short]
     if is_no_post_condition(condition):
         return no_post_stimname
     return condition, stimname
