@@ -159,7 +159,7 @@ def default(filename=None):
     stim = None
     try:
         condition, stim = conditions.get_condition_stimname_from_filename(filename)
-        print 'Data from condition "%s",with stimulus'%(condition,),stimname
+        print 'Data from condition "%s",with stimulus'%(condition,),stim
     except KeyError, err:
         print 'Unknown condition and stimname'
 
