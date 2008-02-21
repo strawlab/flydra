@@ -517,10 +517,13 @@ class CoordinateSender(threading.Thread):
                   outgoing_UDP_socket.sendto(data_packet,downstream_host)
 
 class CoordinateProcessor(threading.Thread):
-    def __init__(self,main_brain,save_profiling_data=False,debug_level=None):
+    def __init__(self,main_brain,save_profiling_data=False,
+                 debug_level=None,
+                 show_overall_latency=None):
         global hostname
         self.main_brain = main_brain
         self.debug_level = debug_level
+        self.show_overall_latency = show_overall_latency
 
         self.save_profiling_data = save_profiling_data
         if self.save_profiling_data:
@@ -722,6 +725,7 @@ class CoordinateProcessor(threading.Thread):
 
     def OnSynchronize(self, cam_idx, cam_id, framenumber, timestamp,
                       realtime_coord_dict, realtime_kalman_coord_dict,
+                      oldest_timestamp_by_corrected_framenumber,
                       new_data_framenumbers):
 
         if self.main_brain.is_saving_data():
@@ -736,6 +740,8 @@ class CoordinateProcessor(threading.Thread):
                 del realtime_coord_dict[k]
             for k in realtime_kalman_coord_dict.keys():
                 del realtime_kalman_coord_dict[k]
+            for k in oldest_timestamp_by_corrected_framenumber.keys():
+                del oldest_timestamp_by_corrected_framenumber[k]
             new_data_framenumbers.clear()
 
         #else:
@@ -776,6 +782,8 @@ class CoordinateProcessor(threading.Thread):
 
         realtime_coord_dict = {}
         realtime_kalman_coord_dict = {}
+        oldest_timestamp_by_corrected_framenumber = {}
+
         new_data_framenumbers = sets.Set()
 
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0)
@@ -802,12 +810,13 @@ class CoordinateProcessor(threading.Thread):
                     self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
                                         realtime_coord_dict,
                                         realtime_kalman_coord_dict,
+                                        oldest_timestamp_by_corrected_framenumber,
                                         new_data_framenumbers )
                 self._fake_sync_event.clear()
 
             BENCHMARK_GATHER=False
             if BENCHMARK_GATHER:
-                incoming_remote_timestamps = []
+                incoming_remote_received_timestamps = []
 
             with self.all_data_lock:
             #self.all_data_lock.acquire(latency_warn_msec=1.0)
@@ -833,7 +842,7 @@ class CoordinateProcessor(threading.Thread):
                         (timestamp, camn_received_time, framenumber,
                          n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
                         if BENCHMARK_GATHER:
-                            incoming_remote_timestamps.append( camn_received_time )
+                            incoming_remote_received_timestamps.append( camn_received_time )
 
                         DEBUG_DROP = self.main_brain.remote_api.cam_info[cam_id]['scalar_control_info']['debug_drop']
                         if DEBUG_DROP:
@@ -935,6 +944,7 @@ class CoordinateProcessor(threading.Thread):
                             self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
                                                 realtime_coord_dict,
                                                 realtime_kalman_coord_dict,
+                                                oldest_timestamp_by_corrected_framenumber,
                                                 new_data_framenumbers )
 
                         self.last_timestamps[cam_idx]=timestamp
@@ -953,12 +963,34 @@ class CoordinateProcessor(threading.Thread):
                                                         +point_tuple[:5]
                                                         +(frame_pt_idx,))
                         # save new frame data
-                        # XXX for now, only attempt 3D reconstruction of 1st point from each 2D view
-                        realtime_coord_dict.setdefault(corrected_framenumber,{})[cam_id]= points_undistorted[0]
 
-                        # save all 3D Pluecker coordinats for Kalman filtering
-                        realtime_kalman_coord_dict.setdefault(corrected_framenumber,{})[absolute_cam_no]=(
+                        if corrected_framenumber not in realtime_coord_dict:
+                            realtime_coord_dict[corrected_framenumber] = {}
+
+                        # For hypothesis testing: attempt 3D reconstruction of 1st point from each 2D view
+                        realtime_coord_dict[corrected_framenumber][cam_id]= points_undistorted[0]
+
+                        if corrected_framenumber not in realtime_kalman_coord_dict:
+                            realtime_kalman_coord_dict[corrected_framenumber] = {}
+
+                        # save all 3D Pluecker coordinates for Kalman filtering
+                        realtime_kalman_coord_dict[corrected_framenumber][absolute_cam_no]=(
                             points_in_pluecker_coords_meters)
+
+                        if self.show_overall_latency.isSet():
+                            if n_pts:
+                                inc_val = 1
+                            else:
+                                inc_val = 0
+                            if corrected_framenumber in oldest_timestamp_by_corrected_framenumber:
+                                orig_timestamp,n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
+                                if timestamp < orig_timestamp:
+                                    oldest = timestamp
+                                else:
+                                    oldest = orig_timestamp
+                                oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ] = (oldest,n+inc_val)
+                            else:
+                                oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ] = timestamp, inc_val
 
                         new_data_framenumbers.add( corrected_framenumber ) # insert into set
 
@@ -967,14 +999,14 @@ class CoordinateProcessor(threading.Thread):
                         old_data[sockobj] = data
 
                 if BENCHMARK_GATHER:
-                    incoming_remote_timestamps = numpy.array(incoming_remote_timestamps)
-                    min_incoming_remote_timestamp = incoming_remote_timestamps.min()
-                    max_incoming_remote_timestamp = incoming_remote_timestamps.max()
+                    incoming_remote_received_timestamps = numpy.array(incoming_remote_received_timestamps)
+                    min_incoming_remote_timestamp = incoming_remote_received_timestamps.min()
+                    max_incoming_remote_timestamp = incoming_remote_received_timestamps.max()
                     finish_packet_sorting_time = time.time()
                     min_packet_gather_dur = finish_packet_sorting_time-max_incoming_remote_timestamp
                     max_packet_gather_dur = finish_packet_sorting_time-min_incoming_remote_timestamp
                     print 'proc dur: % 3.1f % 3.1f'%(min_packet_gather_dur*1e3,
-                                                      max_packet_gather_dur*1e3)
+                                                     max_packet_gather_dur*1e3)
 
                 finished_corrected_framenumbers = [] # for quick deletion
 
@@ -1035,18 +1067,23 @@ class CoordinateProcessor(threading.Thread):
                                 now = time.time()
                                 if SHOW_3D_PROCESSING_LATENCY:
                                     start_3d_proc_a = now
+                                if self.show_overall_latency.isSet():
+                                    oldest_camera_timestamp, n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
+                                    if n>0:
+                                        if 0:
+                                            print 'overall latency %d: %.1f msec (oldest: %s now: %s)'%(
+                                                n,
+                                                (now-oldest_camera_timestamp)*1e3,
+                                                repr(oldest_camera_timestamp),
+                                                repr(now),
+                                                )
+                                        else:
 
-                                if 1:
-                                    if len(self.tracker.live_tracked_objects):
-                                        data_packet = self.tracker.encode_data_packet(
-                                            corrected_framenumber,now)
-                                        if 1:
-                                            self.realtime_kalman_data_queue.put(data_packet)
-                                            if 0:
-                                                for downstream_host in downstream_kalman_hosts:
-                                                    if 0:
-                                                        # XXX why does this take sooo long?
-                                                        outgoing_UDP_socket.sendto(data_packet,downstream_host)
+                                            print 'overall latency (%d camera detected 2d points): %.1f msec (note: may exclude camera->camera computer latency)'%(
+                                                n,
+                                                (now-oldest_camera_timestamp)*1e3,
+                                                )
+
                                 if 1:
                                     # The above calls
                                     # self.enqueue_finished_tracked_object()
@@ -1120,6 +1157,18 @@ class CoordinateProcessor(threading.Thread):
                                                                        this_observation_camns,
                                                                        this_observation_idxs
                                                                        )
+                                if 1:
+                                    if len(self.tracker.live_tracked_objects):
+                                        data_packet = self.tracker.encode_data_packet(
+                                            corrected_framenumber,now)
+                                        if 1:
+                                            self.realtime_kalman_data_queue.put(data_packet)
+                                            if 0:
+                                                for downstream_host in downstream_kalman_hosts:
+                                                    if 0:
+                                                        # XXX why does this take sooo long?
+                                                        outgoing_UDP_socket.sendto(data_packet,downstream_host)
+
                                 if SHOW_3D_PROCESSING_LATENCY:
                                     start_3d_proc_c = time.time()
 
@@ -1163,6 +1212,9 @@ class CoordinateProcessor(threading.Thread):
                             outgoing_data.append( find3d_time )
 
                             if len(downstream_hosts):
+                                # This is for the non-Kalman data. See
+                                # tracker.encode_data_packet() for
+                                # Kalman version.
                                 data_packet = encode_data_packet(
                                     corrected_framenumber,
                                     line3d_valid,
@@ -1244,6 +1296,12 @@ class CoordinateProcessor(threading.Thread):
                     k.sort()
                     for ki in k[:-50]:
                         del realtime_kalman_coord_dict[ki]
+
+                if len(oldest_timestamp_by_corrected_framenumber)>100:
+                    k=oldest_timestamp_by_corrected_framenumber.keys()
+                    k.sort()
+                    for ki in k[:-50]:
+                        del oldest_timestamp_by_corrected_framenumber[ki]
 
                 if len(deferred_2d_data):
                     self.main_brain.queue_data2d.put( deferred_2d_data )
@@ -1569,6 +1627,7 @@ class MainBrain(object):
         assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
 
         self.debug_level = threading.Event()
+        self.show_overall_latency = threading.Event()
 
         self.trigger_device_lock = threading.Lock()
         with self.trigger_device_lock:
@@ -1648,7 +1707,9 @@ class MainBrain(object):
 
         self.coord_processor = CoordinateProcessor(self,
                                                    save_profiling_data=save_profiling_data,
-                                                   debug_level=self.debug_level)
+                                                   debug_level=self.debug_level,
+                                                   show_overall_latency=self.show_overall_latency,
+                                                   )
         #self.coord_processor.setDaemon(True)
         self.coord_processor.start()
 
@@ -1913,6 +1974,15 @@ class MainBrain(object):
             self.debug_level.set()
         else:
             self.debug_level.clear()
+
+    def get_show_overall_latency(self):
+        return self.show_overall_latency.isSet()
+
+    def set_show_overall_latency(self,value):
+        if value:
+            self.show_overall_latency.set()
+        else:
+            self.show_overall_latency.clear()
 
     def start_recording(self, cam_id, raw_filename, bg_filename):
         global XXX_framenumber
