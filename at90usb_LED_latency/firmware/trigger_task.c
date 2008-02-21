@@ -448,17 +448,17 @@ void trigger_task(void)
 
 	if (ext_trig_flags & EXT_TRIG1) {
 	  Led1_on();
-	  Reg_Handler( switchoff_trig1, 2, 0, TRUE);
+	  Reg_Handler( switchoff_trig1, 20, 0, TRUE);
 	}
 
 	if (ext_trig_flags & EXT_TRIG2) {
 	  Led2_on();
-	  Reg_Handler( switchoff_trig2, 2, 1, TRUE);
+	  Reg_Handler( switchoff_trig2, 20, 1, TRUE);
 	}
 
 	if (ext_trig_flags & EXT_TRIG3) {
 	  Led3_on();
-	  Reg_Handler( switchoff_trig3, 2, 2, TRUE);
+	  Reg_Handler( switchoff_trig3, 20, 2, TRUE);
 	}
 
 
