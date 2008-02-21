@@ -371,7 +371,7 @@ def get_time_model_from_data(results,debug=False,full_output=False):
 
     timer_max = int( parsed['top'] )
     if debug:
-        print 'I found the timer maximum ("top") to be %d. I parsed this from "%s"'%(timer_max,infostr)
+        print 'I found the timer maximum ("top") to be %d.)'%(timer_max,)
 
     # open the log of at90usb clock info
 
