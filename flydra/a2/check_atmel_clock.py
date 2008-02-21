@@ -7,15 +7,16 @@ import flydra.analysis.result_utils
 
 if 1:
     # load the file
-    
+
     #filename='DATA20070319_172634.h5'
     #filename='DATA20070319_175152.h5'
     #filename = 'DATA20070319_191223.h5'
     #filename = 'DATA20070319_195045.h5'
-    filename = 'DATA20070319_201543.h5'
-    filename = 'DATA20070319_204145.h5'
-    filename = 'DATA20070319_204348.h5'
-    filename = 'DATA20071115_202838.h5'
+##     filename = 'DATA20070319_201543.h5'
+##     filename = 'DATA20070319_204145.h5'
+##     filename = 'DATA20070319_204348.h5'
+##     filename = 'DATA20071115_202838.h5'
+    filename = 'DATA20080220_182114.h5'
     kresults = tables.openFile(filename,mode="r")
     time_model, full_output = flydra.analysis.result_utils.get_time_model_from_data(kresults,
                                                                                     debug=True,
@@ -24,11 +25,11 @@ if 1:
     mb_timestamp = full_output['mb_timestamp']
     gain = full_output['gain']
     offset = full_output['offset']
-  
+
     if 1:
-        
+
         # Calculate reconstruction latencies (this is only valid on original data).
-        
+
         if abs((framestamp[0]*gain + offset) - mb_timestamp[0]) > 1:
             raise RuntimeError('interpolated off by more than 1 second!')
 
@@ -49,7 +50,7 @@ if 1:
         num90 = int(N*0.9)
         latency95 = latency_msec[lmsi[num95]]
 
-        print 
+        print
         print 'numpy.min(latency_msec),numpy.median(latency_msec)',numpy.min(latency_msec),numpy.median(latency_msec)
         print
         if 0:
@@ -60,7 +61,7 @@ if 1:
             print 'latency_msec[lmsi[int(N*0.9)]]',latency_msec[lmsi[int(N*0.9)]]
             print 'latency_msec[lmsi[int(N*0.85)]]',latency_msec[lmsi[int(N*0.85)]]
             print 'latency_msec[lmsi[int(N*0.8)]]',latency_msec[lmsi[int(N*0.8)]]
-            
+
         if 1:
             #####################
             # 2D camera computer timestamps
@@ -76,7 +77,7 @@ if 1:
                 # timestamp of estimated frame time (assumes cam
                 # computer time near mainbrain time)
                 frame_2d_computer_start_timestamp = tbl['timestamp'][cond]
-                
+
                 # timestamp that the frame arrived in the camera
                 # computer (assumes cam computer time near mainbrain
                 # time)
