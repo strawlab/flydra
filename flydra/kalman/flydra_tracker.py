@@ -17,6 +17,10 @@ PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 packet_header_fmt = '<idB' # XXX check format
 packet_header_fmtsize = struct.calcsize(packet_header_fmt)
 
+super_packet_header_fmt = '<H'
+super_packet_header_fmtsize = struct.calcsize(super_packet_header_fmt)
+super_packet_subheader = 'H'
+
 state_size = 9
 err_size = 1
 #per_tracked_object_fmt = 'I' + 'f'*(state_size+err_size) # obj_id + state vector
@@ -573,5 +577,47 @@ def decode_data_packet(buf):
         state_vecs.append( state_vec )
     return corrected_framenumber, timestamp, state_vecs, meanP
 
+def encode_super_packet( data_packets ):
+    n = len(data_packets)
+    sizes = [ len(p) for p in data_packets ]
+    fmt = super_packet_header_fmt + (super_packet_subheader)*n
+    super_packet_header = struct.pack( fmt, n, *sizes )
+    final_packet = super_packet_header + ''.join(data_packets)
+    return final_packet
 
+def decode_super_packet( super_packet ):
+    header = super_packet[:super_packet_header_fmtsize]
+    rest = super_packet[super_packet_header_fmtsize:]
+
+    (n,) = struct.unpack(super_packet_header_fmt,header)
+    fmt2 = (super_packet_subheader)*n
+    fmt2size = struct.calcsize(fmt2)
+
+    subheader = rest[:fmt2size]
+    data_packets_joined = rest[fmt2size:]
+    sizes = struct.unpack( fmt2, subheader )
+
+    data_packets = []
+    next_packets = data_packets_joined
+
+    for sz in sizes:
+        this_packet = next_packets[:sz]
+        next_packets = next_packets[sz:]
+
+        data_packets.append( this_packet )
+    return data_packets
+
+
+def test():
+    packetA = 'hello'
+    packetB = 'world!'
+    packetC = '(and sawyer, too)'
+    super_packet = encode_super_packet( [packetA, packetB, packetC] )
+    packets = decode_super_packet( super_packet )
+    assert packets[0] == packetA
+    assert packets[1] == packetB
+    assert packets[2] == packetC
+
+if __name__=='__main__':
+    test()
 

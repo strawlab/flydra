@@ -137,9 +137,10 @@ if 0:
 
 downstream_kalman_hosts = []
 if 1:
-    downstream_kalman_hosts.append( ('127.0.0.1',28931) ) # self
-if 1:
-    downstream_kalman_hosts.append( ('astraw-office.kicks-ass.net',28931) ) # self
+    downstream_kalman_hosts.append( ('127.0.0.1',28931) ) # localhost
+#    downstream_kalman_hosts.append( ('255.255.255.255',28931) ) # broadcast to every device on subnet
+if 0:
+    downstream_kalman_hosts.append( ('astraw-office.kicks-ass.net',28931) ) # send off subnet
 
 if len(downstream_hosts) or len(downstream_kalman_hosts):
     outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -508,13 +509,21 @@ class CoordinateSender(threading.Thread):
       def run(self):
           global downstream_kalman_hosts
           out_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+          block = 1
+          timeout = .1
+          encode_super_packet = flydra.kalman.flydra_tracker.encode_super_packet
           while not self.quit_event.isSet():
-              try:
-                  data_packet = self.my_queue.get(1,.1)
-              except Queue.Empty:
-                  continue
+              packets = []
+              packets.append( self.my_queue.get() )
+              while 1:
+                  try:
+                      packets.append( self.my_queue.get_nowait() )
+                  except Queue.Empty:
+                      break
+              # now packets is a list of all recent data
+              super_packet = encode_super_packet( packets )
               for downstream_host in downstream_kalman_hosts:
-                  outgoing_UDP_socket.sendto(data_packet,downstream_host)
+                  outgoing_UDP_socket.sendto(super_packet,downstream_host)
 
 class CoordinateProcessor(threading.Thread):
     def __init__(self,main_brain,save_profiling_data=False,

@@ -3,42 +3,30 @@ import time, socket, threading, Queue
 import flydra.common_variables as common_variables
 import flydra.kalman.flydra_tracker as flydra_tracker
 import numpy
-
-#hostname = socket.gethostbyname('mainbrain')
-hostname = '127.0.0.1'
-sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-port = common_variables.realtime_kalman_port
-
-while 1:
-    try:
-        sockobj.bind(( hostname, port))
-    except socket.error, err:
-        if err.args[0]==98:
-            port += 1
-            continue
-    break
-print 'listening on',hostname,port
+from optparse import OptionParser
 
 class Listener(threading.Thread):
-    def __init__(self):
+    def __init__(self,sockobj):
         threading.Thread.__init__(self)
+        self.sockobj=sockobj
         self.quit_now = threading.Event()
         self.q = Queue.Queue()
     def run(self):
         tick = 0
         print 'listening...'
         while not self.quit_now.isSet():
-            databuf, addr = sockobj.recvfrom(1024)
-            corrected_framenumber, timestamp, state_vecs,meanP=flydra_tracker.decode_data_packet(databuf)
-            recv_ts = time.time()
-            self.q.put( (timestamp, state_vecs, recv_ts) )
-            if 0:
-                #print corrected_framenumber, timestamp, state_vecs
-                line3d=None
-                if len(state_vecs):
-                    x,y,z=state_vecs[0][:3]
-                    print x,y,z
+            buf, addr = self.sockobj.recvfrom(1024)
+            data_packets = flydra_tracker.decode_super_packet( buf )
+            for data_packet in data_packets:
+                corrected_framenumber, timestamp, state_vecs,meanP=flydra_tracker.decode_data_packet(data_packet)
+                recv_ts = time.time()
+                self.q.put( (timestamp, state_vecs, recv_ts) )
+                if 0:
+                    #print corrected_framenumber, timestamp, state_vecs
+                    line3d=None
+                    if len(state_vecs):
+                        x,y,z=state_vecs[0][:3]
+                        print x,y,z
 
     def quit(self):
         self.quit_now.set()
@@ -52,19 +40,39 @@ class Listener(threading.Thread):
                 break
         return result
 
-def main():
+def doit(no_listen=False,interval=None):
     dev = LEDdriver.Device()
+    if interval is None:
+        interval = 3.0
+    print 'interval',interval
 
-    listener = Listener()
-    listener.setDaemon(True) # don't let this thread keep app alive
-    listener.start()
+    if not no_listen:
+
+        #hostname = socket.gethostbyname('mainbrain')
+        hostname = '127.0.0.1'
+        sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        port = common_variables.realtime_kalman_port
+
+        while 1:
+            try:
+                sockobj.bind(( hostname, port))
+            except socket.error, err:
+                if err.args[0]==98:
+                    port += 1
+                    continue
+            break
+        print 'listening on',hostname,port
+
+
+        listener = Listener(sockobj)
+        listener.setDaemon(True) # don't let this thread keep app alive
+        listener.start()
 
     # some bug in my firmware seems to require this...
     dev.set_carrier_frequency( 100.0 )
     fps = dev.get_carrier_frequency()
     trigger_timer_max = dev.get_timer_max()
-
-    interval = 3.0
 
     while 1:
         pre = time.time()
@@ -75,7 +83,10 @@ def main():
         print 'approximate time of start: %s, error estimate: max %.1f msec'%( repr(av), dur*1e3,)
 
         time.sleep(interval)
-        data =listener.get_listened()
+        if not no_listen:
+            data =listener.get_listened()
+        else:
+            data = []
         IFIs = []
         IFIrs = []
         i=0
@@ -109,6 +120,24 @@ def main():
 ##             print '%.1f +/- %.1f STD msec (min %.1f, max %.1f, n=%d)'%(
 ##                 IFIs.mean(), IFIs.std(), IFIs.min(), IFIs.max(), i )
         print
+
+def main():
+    usage = '%prog [options]'
+
+    parser = OptionParser(usage)
+
+    parser.add_option("--no-listen", action='store_true',
+                      help="do not listen on the UDP port",
+                      default=False)
+
+    parser.add_option("--interval", type='float',
+                      help='blinking interval',
+                      default=None)
+
+    (options, args) = parser.parse_args()
+    doit(no_listen=options.no_listen,
+         interval=options.interval,
+         )
 
 if __name__=='__main__':
     main()
