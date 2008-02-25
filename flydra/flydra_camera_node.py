@@ -185,9 +185,13 @@ class CamThreadProxyMaker:
 
 cam_thread_proxy_maker = CamThreadProxyMaker()
 
+def stdout_write(x):
+    sys.stdout.write(x)
+    sys.stdout.flush()
+
 class GrabClass(object):
     def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue, max_num_points=2,
-                 roi2_radius=10, bg_frame_interval=50, bg_frame_alpha=1.0/50.0,
+                 roi2_radius=10, bg_frame_interval=50, bg_frame_alpha=1.0/50.0, cam_no=-1,
                  main_brain_hostname=None,
                  mask_image=None):
         self.mask_image = mask_image
@@ -214,6 +218,7 @@ class GrabClass(object):
                                                                           max_num_points,
                                                                           roi2_radius
                                                                           )
+        self.cam_no_str = str(cam_no)
 
     def get_clear_threshold(self):
         return self.realtime_analyzer.clear_threshold
@@ -262,6 +267,7 @@ class GrabClass(object):
         self.realtime_analyzer.set_reconstruct_helper( helper )
 
     def grab_func(self,globals):
+        DEBUG_ACQUIRE = globals['debug_acquire']
         DEBUG_DROP = globals['debug_drop']
         if DEBUG_DROP:
             debug_fd = open('debug_framedrop_cam.txt',mode='w')
@@ -332,9 +338,17 @@ class GrabClass(object):
                 self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
                 first_image_ok = True
             except cam_iface.BuffersOverflowed:
+                if DEBUG_ACQUIRE:
+                    stdout_write('(O%s)'%self.cam_no_str)
                 print >> sys.stderr , 'On start warning: buffers overflowed on %s at %s'%(self.cam_id,time.asctime())
             except cam_iface.FrameDataMissing:
+                if DEBUG_ACQUIRE:
+                    stdout_write('(M%s)'%self.cam_no_str)
                 print >> sys.stderr , 'On start warning: frame data missing on %s at %s'%(self.cam_id,time.asctime())
+            else:
+                if DEBUG_ACQUIRE:
+                    stdout_write(self.cam_no_str)
+
 
         #################### initialize images ############
 
@@ -414,19 +428,28 @@ class GrabClass(object):
                 try:
                     self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
                 except cam_iface.BuffersOverflowed:
+                    if DEBUG_ACQUIRE:
+                        stdout_write('(O%s)'%self.cam_no_str)
                     now = time.time()
                     msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
                     self.log_message_queue.put((self.cam_id,now,msg))
                     print >> sys.stderr, msg
                     continue
                 except cam_iface.FrameDataMissing:
+                    if DEBUG_ACQUIRE:
+                        stdout_write('(M%s)'%self.cam_no_str)
                     now = time.time()
                     msg = 'Warning: frame data missing on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
                     #self.log_message_queue.put((self.cam_id,now,msg))
                     print >> sys.stderr, msg
                     continue
                 except cam_iface.FrameSystemCallInterruption:
+                    if DEBUG_ACQUIRE:
+                        stdout_write('(S%s)'%self.cam_no_str)
                     continue
+
+                if DEBUG_ACQUIRE:
+                    stdout_write(self.cam_no_str)
 
                 cam_received_time = time.time()
                 if BENCHMARK:
@@ -772,6 +795,7 @@ class App:
                  emulation_reconstructor = None,
                  use_mode=None,
                  debug_drop = False, # debug dropped network packets
+                 debug_acquire = False,
                  num_buffers = None,
                  mask_images = None,
                  ):
@@ -889,6 +913,7 @@ class App:
             globals = self.globals[cam_no] # shorthand
 
             globals['debug_drop']=debug_drop
+            globals['debug_acquire']=debug_acquire
             globals['incoming_raw_frames']=Queue.Queue()
             globals['incoming_bg_frames']=Queue.Queue()
             globals['raw_fmf_and_bg_fmf']=None
@@ -1004,6 +1029,7 @@ class App:
                                 bg_frame_alpha=bg_frame_alpha,
                                 main_brain_hostname=self.main_brain_hostname,
                                 mask_image = mask,
+                                cam_no=cam_no,
                                 )
             self.all_grabbers.append( grabber )
 
@@ -1488,8 +1514,12 @@ def main():
                       default='unity',
                       metavar="BACKEND")
 
-    parser.add_option("--debug-drop", action='store_true',dest='debug_drop',
+    parser.add_option("--debug-drop", action='store_true',
                       help="save debugging information regarding dropped network packets",
+                      default=False)
+
+    parser.add_option("--debug-acquire", action='store_true',
+                      help="print to the console information on each frame",
                       default=False)
 
     parser.add_option("--num-points", type="int",
@@ -1569,9 +1599,11 @@ def main():
             main_brain_hostname = options.server,
             emulation_reconstructor = emulation_reconstructor,
             debug_drop = options.debug_drop,
+            debug_acquire = options.debug_acquire,
             use_mode = options.mode_num,
             num_buffers = options.num_buffers,
             mask_images = options.mask_images,
+
             )
     if app.num_cams <= 0:
         return
