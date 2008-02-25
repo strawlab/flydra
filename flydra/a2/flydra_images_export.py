@@ -12,7 +12,11 @@ def doit(filename=None):
 
         arr = getattr(img,cam_id)
         image = arr.read()
-        print cam_id, image.shape
+        mean_luminance = numpy.mean(image.flat)
+        print '%s: %dx%d, mean luminance %.1f'%(cam_id,
+                                                image.shape[1],
+                                                image.shape[0],
+                                                mean_luminance)
         scipy.misc.pilutil.imsave( '%s.bmp'%(cam_id,), image )
     results.close()
 
