@@ -11,7 +11,7 @@ import Queue
 import numpy
 import numpy as nx
 import errno
-
+import scipy.misc.pilutil
 #import flydra.debuglock
 #DebugLock = flydra.debuglock.DebugLock
 
@@ -188,7 +188,9 @@ cam_thread_proxy_maker = CamThreadProxyMaker()
 class GrabClass(object):
     def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue, max_num_points=2,
                  roi2_radius=10, bg_frame_interval=50, bg_frame_alpha=1.0/50.0,
-                 main_brain_hostname=None):
+                 main_brain_hostname=None,
+                 mask_image=None):
+        self.mask_image = mask_image
         self.main_brain_hostname = main_brain_hostname
         self.cam = cam
         self.cam2mainbrain_port = cam2mainbrain_port
@@ -337,6 +339,12 @@ class GrabClass(object):
         #################### initialize images ############
 
         running_mean8u_im_full = self.realtime_analyzer.get_image_view('mean') # this is a view we write into
+
+        mask_im = self.realtime_analyzer.get_image_view('mask') # this is a view we write into
+        print 'numpy.max(self.mask_image), numpy.min(self.mask_image)',numpy.max(self.mask_image), numpy.min(self.mask_image)
+        newmask_fi = FastImage.asfastimage( self.mask_image )
+        newmask_fi.get_8u_copy_put(mask_im, max_frame_size)
+        print 'copied mask image'
 
         # allocate images and initialize if necessary
 
@@ -767,6 +775,7 @@ class App:
                  use_mode=None,
                  debug_drop = False, # debug dropped network packets
                  num_buffers = None,
+                 mask_images = None,
                  ):
         if main_brain_hostname is None:
             self.main_brain_hostname = default_main_brain_hostname
@@ -823,7 +832,11 @@ class App:
             timestamp_echo_thread.setDaemon(True) # quit that thread if it's the only one left...
             timestamp_echo_thread.start()
 
+        if mask_images is not None:
+            mask_images = mask_images.split( os.pathsep )
+
         for cam_no in range(self.num_cams):
+
             backend = cam_iface.get_driver_name()
             if num_buffers is None:
                 if backend.startswith('prosilica_gige'):
@@ -849,6 +862,28 @@ class App:
 
             height = cam.get_max_height()
             width = cam.get_max_width()
+
+            if mask_images is not None:
+                mask_image_fname = mask_images[cam_no]
+                im = scipy.misc.pilutil.imread( mask_image_fname )
+                if len(im.shape) != 3:
+                    raise ValueError('mask image must have color channels')
+                if im.shape[2] != 4:
+                    raise ValueError('mask image must have an alpha (4th) channel')
+                alpha = im[:,:,3]
+                if numpy.any((alpha > 0) & (alpha < 255)):
+                    print ('WARNING: some alpha values between 0 and '
+                           '255 detected. Only zero and non-zero values are '
+                           'considered.')
+                mask = alpha.astype(numpy.bool)
+            else:
+                mask = numpy.zeros( (height,width), dtype=numpy.bool )
+
+            # mask is currently an array of bool
+            print 'numpy.max(mask), numpy.min(mask)',numpy.max(mask), numpy.min(mask)
+
+            mask = mask.astype(numpy.uint8)*255
+            print 'numpy.max(mask), numpy.min(mask)',numpy.max(mask), numpy.min(mask)
 
             # ----------------------------------------------------------------
             #
@@ -974,6 +1009,7 @@ class App:
                                 bg_frame_interval=bg_frame_interval,
                                 bg_frame_alpha=bg_frame_alpha,
                                 main_brain_hostname=self.main_brain_hostname,
+                                mask_image = mask,
                                 )
             self.all_grabbers.append( grabber )
 
@@ -1480,6 +1516,10 @@ def main():
                       help="force a camera mode")
     parser.add_option("--num-buffers", type="int", default=None,
                       help="force number of buffers")
+
+    parser.add_option("--mask-images", type="string",
+                      help="list of masks for each camera (uses OS-specific path separator, ':' for POSIX, ';' for Windows)")
+
     (options, args) = parser.parse_args()
 
     emulation_cal=options.emulation_cal
@@ -1537,6 +1577,7 @@ def main():
             debug_drop = options.debug_drop,
             use_mode = options.mode_num,
             num_buffers = options.num_buffers,
+            mask_images = options.mask_images,
             )
     if app.num_cams <= 0:
         return
