@@ -48,6 +48,8 @@ setup(name='flydra',
     'flydra_trigger_trigger_once = flydra.trigger:trigger_once',
     'flydra_trigger_latency_test = flydra.trigger.latency_test:main',
 
+    'flydra_images_export = flydra.a2.flydra_images_export:main',
+
     'kdviewer = flydra.a2.kdviewer:main',
     'kdmovie_saver = flydra.a2.kdmovie_saver:main',
     'data2smoothed = flydra.a2.data2smoothed:main',
