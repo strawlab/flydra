@@ -341,10 +341,8 @@ class GrabClass(object):
         running_mean8u_im_full = self.realtime_analyzer.get_image_view('mean') # this is a view we write into
 
         mask_im = self.realtime_analyzer.get_image_view('mask') # this is a view we write into
-        print 'numpy.max(self.mask_image), numpy.min(self.mask_image)',numpy.max(self.mask_image), numpy.min(self.mask_image)
         newmask_fi = FastImage.asfastimage( self.mask_image )
         newmask_fi.get_8u_copy_put(mask_im, max_frame_size)
-        print 'copied mask image'
 
         # allocate images and initialize if necessary
 
@@ -878,12 +876,8 @@ class App:
                 mask = alpha.astype(numpy.bool)
             else:
                 mask = numpy.zeros( (height,width), dtype=numpy.bool )
-
             # mask is currently an array of bool
-            print 'numpy.max(mask), numpy.min(mask)',numpy.max(mask), numpy.min(mask)
-
             mask = mask.astype(numpy.uint8)*255
-            print 'numpy.max(mask), numpy.min(mask)',numpy.max(mask), numpy.min(mask)
 
             # ----------------------------------------------------------------
             #
