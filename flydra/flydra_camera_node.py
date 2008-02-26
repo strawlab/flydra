@@ -337,6 +337,8 @@ class GrabClass(object):
             try:
                 self.cam.grab_next_frame_into_buf_blocking(hw_roi_frame)
                 first_image_ok = True
+                if DEBUG_ACQUIRE:
+                    stdout_write(self.cam_no_str)
             except cam_iface.BuffersOverflowed:
                 if DEBUG_ACQUIRE:
                     stdout_write('(O%s)'%self.cam_no_str)
@@ -345,10 +347,10 @@ class GrabClass(object):
                 if DEBUG_ACQUIRE:
                     stdout_write('(M%s)'%self.cam_no_str)
                 print >> sys.stderr , 'On start warning: frame data missing on %s at %s'%(self.cam_id,time.asctime())
-            else:
+            except cam_iface.FrameSystemCallInterruption:
                 if DEBUG_ACQUIRE:
-                    stdout_write(self.cam_no_str)
-
+                    stdout_write('(S%s)'%self.cam_no_str)
+                print >> sys.stderr , 'On start warning: frame data interrupted during system call on %s at %s'%(self.cam_id,time.asctime())
 
         #################### initialize images ############
 
