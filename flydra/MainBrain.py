@@ -1845,11 +1845,12 @@ class MainBrain(object):
         IdMat = nx.transpose(nx.array(IdMat))
         points = nx.transpose(nx.array(points))
 
-        num_found_points = numpy.sum(IdMat, axis=1)
-        valid_idx = num_found_points >= 3
+        if 0:
+            num_found_points = numpy.sum(IdMat, axis=1)
+            valid_idx = num_found_points >= 3
 
-        IdMat = IdMat[:,valid_idx]
-        points = points[:,valid_idx]
+            IdMat = IdMat[:,valid_idx]
+            points = points[:,valid_idx]
 
         if len(points.shape)>1:
             print 'saving %d points to %s'%(points.shape[1],self.calib_dir)
