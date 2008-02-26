@@ -1268,7 +1268,7 @@ class CoordinateProcessor(threading.Thread):
                             save_points = []
                             for cam_id in k:
                                 pt = data_dict[cam_id]
-                                if not pt[9]: # found_anything
+                                if numpy.isnan(pt[0]): # found_anything
                                     save_pt = nan, nan, nan
                                     id = 0
                                 else:
@@ -1280,7 +1280,7 @@ class CoordinateProcessor(threading.Thread):
                             with calib_data_lock:
                                 calib_IdMat.append( ids )
                                 calib_points.append( save_points )
-                                #print 'saving points for calibration:',save_points
+                                #print 'saving points for calibration:',ids,save_points
 
                 for finished in finished_corrected_framenumbers:
                     del realtime_coord_dict[finished]
@@ -1844,6 +1844,13 @@ class MainBrain(object):
 
         IdMat = nx.transpose(nx.array(IdMat))
         points = nx.transpose(nx.array(points))
+
+        num_found_points = numpy.sum(IdMat, axis=1)
+        valid_idx = num_found_points >= 3
+
+        IdMat = IdMat[:,valid_idx]
+        points = points[:,valid_idx]
+
         if len(points.shape)>1:
             print 'saving %d points to %s'%(points.shape[1],self.calib_dir)
             save_ascii_matrix(os.path.join(self.calib_dir,'IdMat.dat'),IdMat)
