@@ -934,7 +934,9 @@ class App:
             globals['export_image_name'] = 'raw'
             globals['use_roi2'] = threading.Event()
             globals['use_cmp'] = threading.Event()
-            globals['use_cmp'].set()
+            globals['use_cmp'].clear()
+            print 'not using ongoing variance estimate'
+            #globals['use_cmp'].set()
 
             # get settings
             scalar_control_info = {}
