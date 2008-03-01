@@ -111,15 +111,21 @@ def doit(fmf_filename=None,
         print >> sys.stderr, 'Could not automatically determine cam_id from fmf_filename. Exiting'
         sys.exit(1)
     cam_id = found_cam_id
-    camns = cam_id2camns[cam_id]
-    assert len(camns)==1
-    camn = camns[0]
+    my_camns = cam_id2camns[cam_id]
 
     if PLOT=='mpl':
         fig = pylab.figure()
     remote_timestamps = h5.root.data2d_distorted.read(field='timestamp')
     camns = h5.root.data2d_distorted.read(field='camn')
-    camn_idx = numpy.nonzero(camn==camns)[0]
+    # find rows for all camns for this cam_id
+    all_camn_cond = None
+    for camn in my_camns:
+        cond = camn==camns
+        if all_camn_cond is None:
+            all_camn_cond = cond
+        else:
+            all_camn_cond = all_camn_cond | cond
+    camn_idx = numpy.nonzero( all_camn_cond )[0]
 
     fmf_timestamps = fmf.get_all_timestamps()
     # find frame correspondence
@@ -153,8 +159,8 @@ def doit(fmf_filename=None,
         cb_blue = (0, 114, 178)
         cb_vermillion = (213, 94, 0)
 
-        font = aggdraw.Font(cb_blue,'/usr/share/fonts/truetype/freefont/FreeMono.ttf')
-        pen = aggdraw.Pen(cb_blue, width=2 )
+        font2d = aggdraw.Font(cb_blue,'/usr/share/fonts/truetype/freefont/FreeMono.ttf')
+        pen2d = aggdraw.Pen(cb_blue, width=2 )
 
         pen3d = aggdraw.Pen(cb_orange, width=2 )
         font3d = aggdraw.Font(cb_orange,'/usr/share/fonts/truetype/freefont/FreeMono.ttf')
@@ -293,8 +299,8 @@ def doit(fmf_filename=None,
 
                 if style=='debug':
                     strtime = datetime.datetime.fromtimestamp(mainbrain_timestamp,pacific)
-                    draw.text( (0,0), 'frame %d, %s (%d) timestamp %s - %s'%(
-                        h5_frame, cam_id, camn, repr(fmf_timestamp), strtime), font )
+                    draw.text( (0,0), 'frame %d, %s timestamp %s - %s'%(
+                        h5_frame, cam_id, repr(fmf_timestamp), strtime), font2d )
 
                 if len(idxs):
                     for pt_no,(x,y,area,slope,eccentricity) in enumerate(zip(rows['x'],
@@ -304,21 +310,24 @@ def doit(fmf_filename=None,
                         if style=='debug':
                             radius = numpy.sqrt(area/(2*numpy.pi))
                             draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
-                                          pen )
+                                          pen2d )
 
                             pos = numpy.array( [x,y] )
-                            direction = numpy.array( [slope,1] )
-                            direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
-                            vec = direction*eccentricity
-                            p1 = pos+vec
-                            p2 = pos-vec
-                            draw.line(    [p1[0],p1[1], p2[0],p2[1]],
-                                          pen )
-                            draw.text( (x,y), 'pt %d (area %f)'%(pt_no,area), font )
+                            if 0:
+                                direction = numpy.array( [slope,1] )
+                                direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
+                                vec = direction*eccentricity
+                                p1 = pos+vec
+                                p2 = pos-vec
+                                draw.line(    [p1[0],p1[1], p2[0],p2[1]],
+                                              pen2d )
+                            tmp_str = 'pt %d (area %f)'%(pt_no,area)
+                            tmpw,tmph = draw.textsize(tmp_str, font2d )
+                            draw.text( (x,y-tmph-1), tmp_str, font2d )
                         elif style=='pretty':
                             radius = 30
                             draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
-                                          pen )
+                                          pen2d )
 
                 for (xy,XYZ,obj_id,Pmean_meters) in kalman_vert_images:
                     if style in ['debug','pretty']:
