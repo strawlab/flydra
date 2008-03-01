@@ -1159,6 +1159,7 @@ class CoordinateProcessor(threading.Thread):
                                                                                  this_observation_camns,
                                                                                  this_observation_idxs
                                                                                  )))
+                                        # test for novelty
                                         believably_new = self.tracker.is_believably_new( this_observation_orig_units, n_sigma = 9.0 )
                                         if believably_new:
                                             self.tracker.join_new_obj( corrected_framenumber,
@@ -2032,7 +2033,11 @@ class MainBrain(object):
             if nrow is not None:
                 nrowi = int(nrow) # pytables bug workaround...
                 assert nrowi == nrow # pytables bug workaround...
-                self.h5movie_info.cols.approx_stop_frame[nrowi] = approx_stop_frame
+                approx_stop_framei = int(approx_stop_frame)
+                assert approx_stop_framei == approx_stop_frame
+
+                new_columns = numpy.rec.fromarrays([[approx_stop_framei]], formats='i8')
+                self.h5movie_info.modifyColumns(start=nrowi, columns=new_columns, names=['approx_stop_frame'])
             else:
                 raise RuntimeError("could not find row to save movie stop frame.")
 
