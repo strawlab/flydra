@@ -461,7 +461,7 @@ def doit(filename,
             track_end_verts.append( (x1,y1,z1) )
 
         if show_observations:
-            if 1:
+            if 0:
                 # draw lines connecting observation with Kalman point
 
                 line_verts = numpy.concatenate([verts, obs_X])
@@ -469,7 +469,8 @@ def doit(filename,
                 line_edges = []
                 for i, obs_frame in enumerate(obs_frames):
                     kidx = numpy.nonzero( rows['frame']==obs_frame )[0]
-                    assert len(kidx)==1
+                    if not len(kidx)==1:
+                        raise ValueError('length of kidx is not 1, it is %d'%(len(kidx),))
                     kidx = kidx[0]
                     line_edges.append( [kidx, i+len(verts)] )
 
@@ -915,7 +916,8 @@ def main():
     parser.add_option("--show-saccade-times", action='store_true',dest='show_saccade_times',
                       help="show saccade times")
 
-    parser.add_option("--disable-kalman-smoothing", action='store_false',dest='use_kalman_smoothing',
+    parser.add_option("--disable-kalman-smoothing", action='store_false',
+                      dest='use_kalman_smoothing',
                       default=True,
                       help="show original, causal Kalman filtered data (rather than Kalman smoothed observations)")
 
