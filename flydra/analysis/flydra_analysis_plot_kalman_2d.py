@@ -37,7 +37,6 @@ def show_it(fig,
             kalman_filename = None,
             frame_start = None,
             frame_stop = None,
-            animate = False,
             show_nth_frame = None,
             ):
 
@@ -95,8 +94,6 @@ def show_it(fig,
     unique_cam_ids = list(sets.Set([camn2cam_id[camn] for camn in unique_camns]))
     unique_cam_ids.sort()
     print '%d cameras with data'%(len(unique_cam_ids),)
-    if animate:
-        raise NotImplementedError('xxx')
 
     if len(unique_cam_ids)==1:
         n_rows=1
@@ -265,9 +262,6 @@ def main():
                       help="last frame to plot",
                       metavar="STOP")
 
-    parser.add_option("--animate", action='store_true',dest='animate',
-                      help="animate")
-
     parser.add_option("--show-nth-frame", type="int",
                       dest='show_nth_frame',
                       help='show Nth frame number (0=none)')
@@ -294,7 +288,6 @@ def main():
             kalman_filename = options.kalman_filename,
             frame_start = options.start,
             frame_stop = options.stop,
-            animate = options.animate,
             show_nth_frame = options.show_nth_frame,
             )
     pylab.show()
