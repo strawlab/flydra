@@ -55,6 +55,9 @@ def doit(fmf_filename=None,
         if (fps is not None) or (dynamic_model is not None):
             print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting fps and dynamic model options (--fps and --dynamic-model)'
             sys.exit(1)
+    else:
+        if fps is None:
+            raise NotImplementedError('TODO: find fps from .h5 file')
 
     fmf = FMF.FlyMovie(fmf_filename)
     h5 = PT.openFile( h5_filename, mode='r' )
@@ -223,7 +226,6 @@ def doit(fmf_filename=None,
                 mainbrain_timestamp = rows['cam_received_timestamp'][0]
 
             del fmf_fno
-            del fmf_timestamp
             del fmf_timestamp2
         except KeyError,err:
             frame = blank_image
