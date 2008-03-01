@@ -59,7 +59,9 @@ def doit(fmf_filename=None,
         if fps is None:
             raise NotImplementedError('TODO: find fps from .h5 file')
 
+    bg_fmf_filename = os.path.splitext(fmf_filename)[0] + '_bg.fmf'
     fmf = FMF.FlyMovie(fmf_filename)
+    bg_fmf = FMF.FlyMovie(bg_fmf_filename)
     h5 = PT.openFile( h5_filename, mode='r' )
     ca = core_analysis.CachingAnalyzer()
 
@@ -128,6 +130,11 @@ def doit(fmf_filename=None,
     camn_idx = numpy.nonzero( all_camn_cond )[0]
 
     fmf_timestamps = fmf.get_all_timestamps()
+    bg_fmf_timestamps = bg_fmf.get_all_timestamps()
+    assert numpy.all((bg_fmf_timestamps[1:] - bg_fmf_timestamps[:-1])>0) # ascending
+    fmf2bg = bg_fmf_timestamps.searchsorted( fmf_timestamps, side='right')-1
+    cur_bg_idx = None
+
     # find frame correspondence
     frame_match_h5 = None
     for fmf_fno, timestamp in enumerate( fmf_timestamps ):
@@ -179,33 +186,14 @@ def doit(fmf_filename=None,
     pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(fmf_timestamps)).start()
     for fmf_fno, fmf_timestamp in enumerate( fmf_timestamps ):
         pbar.update(fmf_fno)
-        h5_frame = fmf_fno + fmf_frame2h5_frame
         timestamp_idx = numpy.nonzero(fmf_timestamp == remote_timestamps)[0]
-        #print 'ts', fmf_fno,len(timestamp_idx)
-
         idxs = numpy.intersect1d( camn_idx, timestamp_idx )
-
         if len(idxs):
-
             this_frame = all_frame[idxs]
-            #rows = h5.root.data2d_distorted.readCoordinates( idxs )
-            if not numpy.all( h5_frame==this_frame ):
-                real_h5_frame = this_frame[0]
-                try:
-                    # We may have skipped a frame saving movie, so
-                    # h5_frame can be less than actual.
-                    assert numpy.all( h5_frame<= this_frame )
-
-                    assert numpy.all( real_h5_frame== this_frame )
-                except:
-                    print "h5_frame",h5_frame
-                    print "this_frame",this_frame
-                    raise
-                n_skip = real_h5_frame-h5_frame
-                h5_frame = real_h5_frame
-                fmf_frame2h5_frame += n_skip
-                #print 'skipped %d frame(s) in .fmf'%(n_skip,)
-        mymap[h5_frame]= fmf_fno
+            real_h5_frame = int(this_frame[0])
+            # we only should have one frame here
+            assert numpy.all( real_h5_frame== this_frame )
+            mymap[real_h5_frame]= fmf_fno
     pbar.finish()
     print 'done loading frame information.'
 
@@ -223,6 +211,12 @@ def doit(fmf_filename=None,
             fmf.seek(fmf_fno)
             frame, fmf_timestamp2 = fmf.get_next_frame()
             assert fmf_timestamp==fmf_timestamp2
+
+            # get bg frame
+            bg_idx = fmf2bg[fmf_fno]
+            if cur_bg_idx != bg_idx:
+                bg_frame, bg_timestamp = bg_fmf.get_frame(bg_idx)
+                cur_bg_idx = bg_idx
 
             timestamp_idx = numpy.nonzero(fmf_timestamp == remote_timestamps)[0]
             idxs = numpy.intersect1d( camn_idx, timestamp_idx )
@@ -271,6 +265,63 @@ def doit(fmf_filename=None,
                     obs_info = (this_cam_ids, this_camn_idxs)
 
                     kobs_vert_images.append( (vert_image, vert, this_3d_row['obj_id'], obs_info) )
+
+            if 1:
+                # Zoomed difference image for this frame
+                bg = bg_frame.astype(numpy.float32)
+                fg = frame.astype(numpy.float32)
+                diff_im = fg-bg
+                zoom_objs = []
+                obj_ids = []
+                this2ds = []
+                radius=10
+                h,w = fg.shape
+                for (xy,XYZ,obj_id,Pmean_meters) in kalman_vert_images:
+                    x,y= xy
+                    this2d = []
+                    if ((0 <= x <= w) and
+                        (0 <= y <= h)):
+                        minx = max(0,x-radius)
+                        maxx = min(w,minx+(2*radius))
+                        miny = max(0,y-radius)
+                        maxy = min(h,miny+(2*radius))
+
+                        zoom_diff = diff_im[miny:maxy, minx:maxx]
+                        zoom_objs.append( zoom_diff )
+                        obj_ids.append( obj_id )
+
+                        for pt_no, (x2d,y2d) in enumerate(zip(rows['x'],rows['y'])):
+                            print pt_no, (x2d,y2d), (minx,maxx), (miny, maxy),
+                            if ((minx <= x2d <= maxx) and
+                                (miny <= y2d <= maxy)):
+                                this2d.append( (x2d-minx,y2d-miny,pt_no) )
+                                print 'X'
+                            else:
+                                print
+                    this2ds.append( this2d )
+
+                if len(zoom_objs):
+                    newframe = numpy.hstack( zoom_objs )
+                    im = (newframe*7 + 127).astype( numpy.uint8 ) # scale and offset
+                    im=Image.fromstring('L',
+                                        (im.shape[1],im.shape[0]),
+                                        im.tostring())
+                    w,h = im.size
+                    rescale_factor = 3
+                    im = im.resize( (rescale_factor*w, rescale_factor*h) )
+                    im = im.convert('RGB')
+                    draw = aggdraw.Draw(im)
+                    for i, obj_id in enumerate( obj_ids ):
+                        draw.text( (i*2*radius,0), '%d'%(obj_id,), font2d)
+                    radius_pt = 3
+                    for this2d in this2ds:
+                        for (x2d, y2d, pt_no) in this2d:
+                            draw.ellipse( [rescale_factor*x2d-radius_pt,rescale_factor*y2d-radius_pt,
+                                           rescale_factor*x2d+radius_pt,rescale_factor*y2d+radius_pt],
+                                          pen2d )
+                    draw.flush()
+                    fname = 'zoom_diff_%s_%07d.png'%(cam_id,h5_frame)
+                    im.save( fname )
 
             if PLOT=='mpl':
                 pylab.imshow( frame,
@@ -323,7 +374,7 @@ def doit(fmf_filename=None,
                                               pen2d )
                             tmp_str = 'pt %d (area %f)'%(pt_no,area)
                             tmpw,tmph = draw.textsize(tmp_str, font2d )
-                            draw.text( (x,y-tmph-1), tmp_str, font2d )
+                            draw.text( (x+5,y-tmph-1), tmp_str, font2d )
                         elif style=='pretty':
                             radius = 30
                             draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
@@ -337,7 +388,7 @@ def doit(fmf_filename=None,
                         draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
                                       pen3d )
                     if style=='debug':
-                        draw.text( (x,y), 'obj %d (%.3f, %.3f, %.3f +- ~%f)'%(obj_id,X,Y,Z,Pmean_meters), font3d )
+                        draw.text( (x+5,y), 'obj %d (%.3f, %.3f, %.3f +- ~%f)'%(obj_id,X,Y,Z,Pmean_meters), font3d )
 
                 if style=='debug':
                     for (xy,XYZ,obj_id,obs_info) in kobs_vert_images:
@@ -346,10 +397,10 @@ def doit(fmf_filename=None,
                         X,Y,Z=XYZ
                         draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
                                       pen_obs )
-                        draw.text( (x,y), 'obj %d (%.3f, %.3f, %.3f)'%(obj_id,X,Y,Z), font_obs )
+                        draw.text( (x+5,y), 'obj %d (%.3f, %.3f, %.3f)'%(obj_id,X,Y,Z), font_obs )
                         (this_cam_ids, this_camn_idxs) = obs_info
                         for i,(obs_cam_id,pt_no) in enumerate( zip(*obs_info) ):
-                            draw.text( (x+10,y+(i+1)*10),
+                            draw.text( (x+15,y+(i+1)*10),
                                        '%s pt %d'%(obs_cam_id,pt_no), font_obs )
 
 
