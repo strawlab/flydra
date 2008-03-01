@@ -106,7 +106,7 @@ def show_it(fig,
              'blue':((0,0,0),
                      (1,1,1)),
              }
-    black2magenta = matplotlib.colors.LinearSegmentedColormap('black2magenta',cdict,256)
+#    black2magenta = matplotlib.colors.LinearSegmentedColormap('black2magenta',cdict,256)
 
 
     for camn in unique_camns:
@@ -126,7 +126,7 @@ def show_it(fig,
         im = getattr(results.root.images,cam_id)
 
         ax.imshow(im, origin='lower', extent=[0,w-1,0,h-1], cmap=pylab.cm.gray)
-        pcolor_im = ax.pcolor( xbins, ybins, hist.T, alpha=0.5, cmap = black2magenta )
+        pcolor_im = ax.pcolor( xbins, ybins, hist.T, alpha=0.5,)# cmap = black2magenta )
         #fig.colorbar( pcolor_im, cax )
 
         res = reconstructor.get_resolution(cam_id)
