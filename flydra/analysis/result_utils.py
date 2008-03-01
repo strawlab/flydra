@@ -471,11 +471,14 @@ def make_exact_movie_info2(results,movie_dir=None):
         filename = row['filename']
         print 'filename1:',filename
         if movie_dir is None:
-            computer_name = cam_id.split(':')[0]
-            filename = filename.replace('local',computer_name)
+            computer_name = cam_id.split('_')[0]
+            filename = filename.replace('~/','~/%s/'%computer_name)
         else:
             filename = os.path.join(movie_dir,os.path.split(filename)[-1])
+
         print 'filename2:',filename
+        filename = os.path.expanduser(filename)
+        print 'filename3:',filename
         frame_server = FlyMovieFormat.FlyMovie(filename,check_integrity=True)
         status(' for %s %s:'%(cam_id,filename))
         tmp_frame, timestamp_movie_start = frame_server.get_frame( 0 )
