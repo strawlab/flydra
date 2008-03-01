@@ -291,13 +291,9 @@ def doit(fmf_filename=None,
                         obj_ids.append( obj_id )
 
                         for pt_no, (x2d,y2d) in enumerate(zip(rows['x'],rows['y'])):
-                            print pt_no, (x2d,y2d), (minx,maxx), (miny, maxy),
                             if ((minx <= x2d <= maxx) and
                                 (miny <= y2d <= maxy)):
                                 this2d.append( (x2d-minx,y2d-miny,pt_no) )
-                                print 'X'
-                            else:
-                                print
                     this2ds.append( this2d )
 
                 if len(zoom_objs):
