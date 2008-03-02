@@ -69,6 +69,8 @@ def doit(fmf_filename=None,
         fmf.seek(blank)
         blank_image, blank_timestamp = fmf.get_next_frame()
         fmf.seek(0)
+    else:
+        blank_image = 255*numpy.ones( (fmf.get_height(), fmf.get_width()), dtype=numpy.uint8)
 
     if kalman_filename is not None:
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
@@ -166,14 +168,14 @@ def doit(fmf_filename=None,
         cb_blue = (0, 114, 178)
         cb_vermillion = (213, 94, 0)
 
-        font2d = aggdraw.Font(cb_blue,'/usr/share/fonts/truetype/freefont/FreeMono.ttf')
+        font2d = aggdraw.Font(cb_blue,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf',size=20)
         pen2d = aggdraw.Pen(cb_blue, width=2 )
 
         pen3d = aggdraw.Pen(cb_orange, width=2 )
-        font3d = aggdraw.Font(cb_orange,'/usr/share/fonts/truetype/freefont/FreeMono.ttf')
+        font3d = aggdraw.Font(cb_orange,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf')
 
         pen_obs = aggdraw.Pen(cb_vermillion, width=2 )
-        font_obs = aggdraw.Font(cb_vermillion,'/usr/share/fonts/truetype/freefont/FreeMono.ttf')
+        font_obs = aggdraw.Font(cb_vermillion,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf')
 
     print 'loading frame information...'
     # step through .fmf file to get map of h5frame <-> fmfframe
@@ -274,6 +276,7 @@ def doit(fmf_filename=None,
                 zoom_objs = []
                 obj_ids = []
                 this2ds = []
+                maxabsdiff = []
                 radius=10
                 h,w = fg.shape
                 for (xy,XYZ,obj_id,Pmean_meters) in kalman_vert_images:
@@ -289,7 +292,7 @@ def doit(fmf_filename=None,
                         zoom_diff = diff_im[miny:maxy, minx:maxx]
                         zoom_objs.append( zoom_diff )
                         obj_ids.append( obj_id )
-
+                        maxabsdiff.append( abs(zoom_diff ).max() )
                         for pt_no, (x2d,y2d) in enumerate(zip(rows['x'],rows['y'])):
                             if ((minx <= x2d <= maxx) and
                                 (miny <= y2d <= maxy)):
@@ -303,12 +306,12 @@ def doit(fmf_filename=None,
                                         (im.shape[1],im.shape[0]),
                                         im.tostring())
                     w,h = im.size
-                    rescale_factor = 3
+                    rescale_factor = 5
                     im = im.resize( (rescale_factor*w, rescale_factor*h) )
                     im = im.convert('RGB')
                     draw = aggdraw.Draw(im)
-                    for i, obj_id in enumerate( obj_ids ):
-                        draw.text( (i*2*radius,0), '%d'%(obj_id,), font2d)
+                    for i, (this_maxabsdiff, obj_id) in enumerate( zip(maxabsdiff, obj_ids) ):
+                        draw.text( (i*2*radius,0), '%.0f (%d)'%(this_maxabsdiff,obj_id), font2d)
                     radius_pt = 3
                     for this2d in this2ds:
                         for (x2d, y2d, pt_no) in this2d:
@@ -345,7 +348,10 @@ def doit(fmf_filename=None,
                 draw = aggdraw.Draw(im)
 
                 if style=='debug':
-                    strtime = datetime.datetime.fromtimestamp(mainbrain_timestamp,pacific)
+                    try:
+                        strtime = datetime.datetime.fromtimestamp(mainbrain_timestamp,pacific)
+                    except:
+                        strtime = '<no 2d data timestamp>'
                     draw.text( (0,0), 'frame %d, %s timestamp %s - %s'%(
                         h5_frame, cam_id, repr(fmf_timestamp), strtime), font2d )
 
