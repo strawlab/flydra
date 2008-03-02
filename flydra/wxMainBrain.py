@@ -1363,9 +1363,8 @@ class wxMainBrainApp(wx.App):
                     if image is not None:
                         if hasattr(self.cam_image_canvas,'update_image_and_drawings'):
                             self.cam_image_canvas.update_image_and_drawings(cam_id,image,
-                                                                            points=points)
-#                                                               xoffset=image_coords[0],
-#                                                               yoffset=image_coords[1])
+                                                                            points=points,
+                                                                            sort_add=True)
                     if show_fps is not None:
                         show_fps_label = xrc.XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
                         show_fps_label.SetLabel('fps: %.1f'%show_fps)
