@@ -332,15 +332,19 @@ class GrabClass(object):
                 run = numpy.nan
                 line_found = False
             else:
-                run = 1
                 line_found = True
+                if numpy.isinf(slope):
+                    run = 0
+                    rise = 1
+                else:
+                    run = 1
+                    #slope = rise/run
+                    rise = slope
 
             ray_valid = False
             if self._hlper is not None:
                 x0u, y0u = self._hlper.undistort( x0_abs, y0_abs )
                 if line_found:
-                    #slope = rise/run
-                    rise = slope*run
 
                     # (If we have self._hlper _pmat_inv, we can assume we have
                     # self._pmat_inv and sef._pmat_meters.)
@@ -407,6 +411,7 @@ class GrabClass(object):
             try:
                 u,d,vt=svd(A,full_matrices=True)
             except:
+                print 'rise,run',rise,run
                 print 'pmat_inv',pmat_inv
                 print 'X0, X1, camera_center',X0, X1, camera_center
                 raise
