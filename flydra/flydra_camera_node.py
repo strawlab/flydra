@@ -2,9 +2,11 @@
 from __future__ import division
 from __future__ import with_statement
 
+import pkg_resources
 import os
 BENCHMARK = int(os.environ.get('FLYDRA_BENCHMARK',0))
 FLYDRA_BT = int(os.environ.get('FLYDRA_BT',0)) # threaded benchmark
+near_inf = 9.999999e20
 
 import threading, time, socket, sys, struct, select, math, warnings
 import Queue
@@ -12,6 +14,8 @@ import numpy
 import numpy as nx
 import errno
 import scipy.misc.pilutil
+import numpy.dual
+
 #import flydra.debuglock
 #DebugLock = flydra.debuglock.DebugLock
 
@@ -189,6 +193,55 @@ def stdout_write(x):
     sys.stdout.write(x)
     sys.stdout.flush()
 
+def do_3d_operations_on_2d_point(undistort,
+                                 pmat_inv, pmat_meters_inv,
+                                 camera_center, camera_center_meters,
+                                 x0_abs, y0_abs,
+                                 rise, run):
+        #cdef double x0u, y0u, x1u, y1u
+
+        matrixmultiply = numpy.dot
+        svd = numpy.dual.svd # use fastest ATLAS/fortran libraries
+
+        # calculate plane containing camera origin and found line
+        # in 3D world coords
+
+        # Step 1) Find world coordinates points defining plane:
+        #    A) found point
+        x0u, y0u = undistort( x0_abs, y0_abs )
+        found_point_image_plane = [x0u,y0u,1.0]
+        X0=matrixmultiply(pmat_inv,found_point_image_plane)
+
+        #    B) another point on found line
+        x1u, y1u = undistort(x0_abs+run,y0_abs+rise)
+        X1=matrixmultiply(pmat_inv,[x1u,y1u,1.0])
+
+        #    C) world coordinates of camera center already known
+
+        # Step 2) Find world coordinates of plane
+        A = nx.array( [ X0, X1, camera_center] ) # 3 points define plane
+        u,d,vt=svd(A,full_matrices=True)
+        Pt = vt[3,:] # plane parameters
+
+        p1,p2,p3,p4 = Pt[0:4]
+        line_found = True
+        if c_lib.isnan(p1):
+            print 'ERROR: SVD returned nan'
+
+        # calculate pluecker coords of 3D ray from camera center to point
+        # calculate 3D coords of point on image plane
+        X0meters = numpy.dot(pmat_meters_inv, found_point_image_plane )
+        X0meters = X0meters[:3]/X0meters[3] # convert to shape = (3,)
+        # project line
+        pluecker_meters = pluecker_from_verts(X0meters,camera_center_meters)
+        ray_valid = 1
+        (ray0, ray1, ray2, ray3, ray4, ray5) = pluecker_meters # unpack
+
+        return (x0u, y0u,
+                p1, p2, p3, p4,
+                line_found, ray_valid,
+                ray0, ray1, ray2, ray3, ray4, ray5)
+
 class GrabClass(object):
     def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue, max_num_points=2,
                  roi2_radius=10, bg_frame_interval=50, bg_frame_alpha=1.0/50.0, cam_no=-1,
@@ -218,6 +271,9 @@ class GrabClass(object):
                                                                           max_num_points,
                                                                           roi2_radius
                                                                           )
+        self._hlper = None
+        self._pmat = None
+        self._scale_factor = None
         self.cam_no_str = str(cam_no)
 
     def get_clear_threshold(self):
@@ -233,10 +289,9 @@ class GrabClass(object):
     diff_threshold = property( get_diff_threshold, set_diff_threshold )
 
     def get_scale_factor(self):
-        return self.realtime_analyzer.scale_factor
+        return self._scale_factor
     def set_scale_factor(self,value):
-        self.realtime_analyzer.scale_factor = value
-    scale_factor = property( get_scale_factor, set_scale_factor )
+        self._scale_factor = value
 
     def get_roi(self):
         return self.realtime_analyzer.roi
@@ -250,9 +305,42 @@ class GrabClass(object):
     roi = property( get_roi, set_roi )
 
     def get_pmat(self):
-        return self.realtime_analyzer.get_pmat()
+        return self._pmat
     def set_pmat(self,value):
-        self.realtime_analyzer.set_pmat(value)
+        self._pmat = numpy.asarray(value)
+
+        P = self._pmat
+        determinant = numpy.dual.det
+        r_ = numpy.r_
+
+        # find camera center in 3D world coordinates
+        col0_asrow = P[nx.newaxis,:,0]
+        col1_asrow = P[nx.newaxis,:,1]
+        col2_asrow = P[nx.newaxis,:,2]
+        col3_asrow = P[nx.newaxis,:,3]
+        X = determinant(  r_[ col1_asrow, col2_asrow, col3_asrow ] )
+        Y = -determinant( r_[ col0_asrow, col2_asrow, col3_asrow ] )
+        Z = determinant(  r_[ col0_asrow, col1_asrow, col3_asrow ] )
+        T = -determinant( r_[ col0_asrow, col1_asrow, col2_asrow ] )
+
+        self._camera_center = nx.array( [ X/T, Y/T, Z/T, 1.0 ] )
+        self._pmat_inv = numpy.dual.pinv(self._pmat)
+
+        scale_array = numpy.ones((3,4))
+        scale_array[:,3] = self._scale_factor # mulitply last column by scale_factor
+        self._pmat_meters = scale_array*self._pmat # element-wise multiplication
+        self._pmat_meters_inv = numpy.dual.pinv(self._pmat_meters)
+        P = self._pmat_meters
+        # find camera center in 3D world coordinates
+        col0_asrow = P[nx.newaxis,:,0]
+        col1_asrow = P[nx.newaxis,:,1]
+        col2_asrow = P[nx.newaxis,:,2]
+        col3_asrow = P[nx.newaxis,:,3]
+        X = determinant(  r_[ col1_asrow, col2_asrow, col3_asrow ] )
+        Y = -determinant( r_[ col0_asrow, col2_asrow, col3_asrow ] )
+        Z = determinant(  r_[ col0_asrow, col1_asrow, col3_asrow ] )
+        T = -determinant( r_[ col0_asrow, col1_asrow, col2_asrow ] )
+        self._camera_center_meters = nx.array( [ X/T, Y/T, Z/T, 1.0 ] )
 
     def make_reconstruct_helper(self, intlin, intnonlin):
         fc1 = intlin[0,0]
@@ -261,10 +349,59 @@ class GrabClass(object):
         cc2 = intlin[1,2]
         k1, k2, p1, p2 = intnonlin
 
-        helper = reconstruct_utils.ReconstructHelper(
+        self._hlper = reconstruct_utils.ReconstructHelper(
             fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
 
-        self.realtime_analyzer.set_reconstruct_helper( helper )
+    def _convert_to_old_format(self, xpoints ):
+        points = []
+        for xpt in xpoints:
+            (x0_abs, y0_abs, area, slope, eccentricity) = xpt
+
+            if self._hlper is not None:
+                #slope = rise/run
+                rise = slope
+                run = 1.0
+                if numpy.isnan(slope):
+                    run = numpy.nan
+
+                # (If we have self._hlper _pmat_inv, we can assume we have
+                # self._pmat_inv and sef._pmat_meters.)
+                (x0u, y0u,
+                 p1, p2, p3, p4,
+                 line_found, ray_valid,
+                 ray0, ray1, ray2, ray3, ray4, ray5) = do_3d_operations_on_2d_point(self._hlper.undistort,
+                                                                                    self._pmat_inv, self._pmat_meters_inv,
+                                                                                    self._camera_center, self._camera_center_meters,
+                                                                                    x0_abs, y0_abs,
+                                                                                    rise, run)
+            else:
+                x0u = x0_abs # fake undistorted data
+                y0u = y0_abs
+
+                p1,p2,p3,p4 = -1, -1, -1, -1 # sentinel value (will be converted to nan)
+                line_found = False
+                ray_valid = 0
+                (ray0, ray1, ray2, ray3, ray4, ray5) = (0,0,0, 0,0,0)
+
+            slope_found = True
+            if numpy.isnan(slope):
+                # prevent nan going across network
+                slope_found = False
+                slope = 0.0
+
+            if numpy.isinf(eccentricity):
+                eccentricity = near_inf
+
+            if numpy.isinf(slope):
+                slope = near_inf
+
+            pt = (x0_abs, y0_abs, area, slope, eccentricity,
+                  p1, p2, p3, p4, line_found, slope_found,
+                  x0u, y0u,
+                  ray_valid,
+                  ray0, ray1, ray2, ray3, ray4, ray5)
+            points.append( pt )
+        return points
 
     def grab_func(self,globals):
         DEBUG_ACQUIRE = globals['debug_acquire']
@@ -294,7 +431,6 @@ class GrabClass(object):
         use_roi2_isSet = globals['use_roi2'].isSet
         fi8ufactory = FastImage.FastImage8u
         use_cmp_isSet = globals['use_cmp'].isSet
-        return_first_xy = 0
 
         shortest_IFI = 1.0/self.cam.get_framerate()
 
@@ -468,6 +604,7 @@ class GrabClass(object):
                         print '%.1f msec for 100 frames (min: %.1f)'%(dur*1000.0,min_100_frame_time*1000.0)
                         sys.stdout.flush()
                         benchmark_start_time = cam_received_time
+                    n_frames_skipped = 0
                 else:
                     if old_fn is None:
                         # no old frame
@@ -491,11 +628,13 @@ class GrabClass(object):
                 old_fn = framenumber
 
                 work_start_time = time.time()
-                points = self.realtime_analyzer.do_work(hw_roi_frame,
-                                                        timestamp, framenumber, use_roi2_isSet(),
-                                                        use_cmp_isSet(), return_first_xy,
-                                                        0.010, # maximum 10 msec in here
-                                                        )
+                xpoints = self.realtime_analyzer.do_work(hw_roi_frame,
+                                                         timestamp, framenumber, use_roi2_isSet(),
+                                                         use_cmp_isSet(),
+                                                         0.010, # maximum 10 msec in here
+                                                         )
+                points = self._convert_to_old_format( xpoints )
+
                 work_done_time = time.time()
                 if BENCHMARK:
                     t3 = work_done_time
@@ -1244,7 +1383,7 @@ class App:
                 pmat, intlin, intnonlin, scale_factor = cmds[key]
 
                 # these three should always be done together in this order:
-                grabber.scale_factor = scale_factor
+                grabber.set_scale_factor( scale_factor )
                 grabber.set_pmat( pmat )
                 grabber.make_reconstruct_helper(intlin, intnonlin) # let grab thread make one
 
@@ -1480,6 +1619,8 @@ def main():
 
     if BENCHMARK:
         cam_iface = cam_iface_choose.import_backend('dummy','dummy')
+        print 'benchmark imported backend',cam_iface
+        print '(from file %s)'%cam_iface.__file__
         max_num_points_per_camera=2
 
         app=App(max_num_points_per_camera,
