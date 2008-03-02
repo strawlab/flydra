@@ -193,54 +193,24 @@ def stdout_write(x):
     sys.stdout.write(x)
     sys.stdout.flush()
 
-def do_3d_operations_on_2d_point(undistort,
-                                 pmat_inv, pmat_meters_inv,
-                                 camera_center, camera_center_meters,
-                                 x0_abs, y0_abs,
-                                 rise, run):
-        #cdef double x0u, y0u, x1u, y1u
+L_i = nx.array([0,0,0,1,3,2])
+L_j = nx.array([1,2,3,2,1,3])
 
-        matrixmultiply = numpy.dot
-        svd = numpy.dual.svd # use fastest ATLAS/fortran libraries
+def Lmatrix2Lcoords(Lmatrix):
+    return Lmatrix[L_i,L_j]
 
-        # calculate plane containing camera origin and found line
-        # in 3D world coords
-
-        # Step 1) Find world coordinates points defining plane:
-        #    A) found point
-        x0u, y0u = undistort( x0_abs, y0_abs )
-        found_point_image_plane = [x0u,y0u,1.0]
-        X0=matrixmultiply(pmat_inv,found_point_image_plane)
-
-        #    B) another point on found line
-        x1u, y1u = undistort(x0_abs+run,y0_abs+rise)
-        X1=matrixmultiply(pmat_inv,[x1u,y1u,1.0])
-
-        #    C) world coordinates of camera center already known
-
-        # Step 2) Find world coordinates of plane
-        A = nx.array( [ X0, X1, camera_center] ) # 3 points define plane
-        u,d,vt=svd(A,full_matrices=True)
-        Pt = vt[3,:] # plane parameters
-
-        p1,p2,p3,p4 = Pt[0:4]
-        line_found = True
-        if c_lib.isnan(p1):
-            print 'ERROR: SVD returned nan'
-
-        # calculate pluecker coords of 3D ray from camera center to point
-        # calculate 3D coords of point on image plane
-        X0meters = numpy.dot(pmat_meters_inv, found_point_image_plane )
-        X0meters = X0meters[:3]/X0meters[3] # convert to shape = (3,)
-        # project line
-        pluecker_meters = pluecker_from_verts(X0meters,camera_center_meters)
-        ray_valid = 1
-        (ray0, ray1, ray2, ray3, ray4, ray5) = pluecker_meters # unpack
-
-        return (x0u, y0u,
-                p1, p2, p3, p4,
-                line_found, ray_valid,
-                ray0, ray1, ray2, ray3, ray4, ray5)
+def pluecker_from_verts(A,B):
+    """
+    See Hartley & Zisserman (2003) p. 70
+    """
+    if len(A)==3:
+        A = A[0], A[1], A[2], 1.0
+    if len(B)==3:
+        B = B[0], B[1], B[2], 1.0
+    A=nx.reshape(A,(4,1))
+    B=nx.reshape(B,(4,1))
+    L = nx.dot(A,nx.transpose(B)) - nx.dot(B,nx.transpose(A))
+    return Lmatrix2Lcoords(L)
 
 class GrabClass(object):
     def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue, max_num_points=2,
@@ -357,30 +327,36 @@ class GrabClass(object):
         for xpt in xpoints:
             (x0_abs, y0_abs, area, slope, eccentricity) = xpt
 
-            if self._hlper is not None:
-                #slope = rise/run
-                rise = slope
-                run = 1.0
-                if numpy.isnan(slope):
-                    run = numpy.nan
 
-                # (If we have self._hlper _pmat_inv, we can assume we have
-                # self._pmat_inv and sef._pmat_meters.)
-                (x0u, y0u,
-                 p1, p2, p3, p4,
-                 line_found, ray_valid,
-                 ray0, ray1, ray2, ray3, ray4, ray5) = do_3d_operations_on_2d_point(self._hlper.undistort,
-                                                                                    self._pmat_inv, self._pmat_meters_inv,
-                                                                                    self._camera_center, self._camera_center_meters,
-                                                                                    x0_abs, y0_abs,
-                                                                                    rise, run)
+            if numpy.isnan(slope):
+                run = numpy.nan
+                line_found = False
+            else:
+                run = 1
+                line_found = True
+
+            ray_valid = False
+            if self._hlper is not None:
+                x0u, y0u = self._hlper.undistort( x0_abs, y0_abs )
+                if line_found:
+                    #slope = rise/run
+                    rise = slope*run
+
+                    # (If we have self._hlper _pmat_inv, we can assume we have
+                    # self._pmat_inv and sef._pmat_meters.)
+                    (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4,
+                     ray5) = self.do_3d_operations_on_2d_point(x0u,y0u,#self._hlper.undistort,
+                                                               self._pmat_inv, self._pmat_meters_inv,
+                                                               self._camera_center, self._camera_center_meters,
+                                                               x0_abs, y0_abs,
+                                                               rise, run)
+                    ray_valid = True
             else:
                 x0u = x0_abs # fake undistorted data
                 y0u = y0_abs
 
+            if not ray_valid:
                 p1,p2,p3,p4 = -1, -1, -1, -1 # sentinel value (will be converted to nan)
-                line_found = False
-                ray_valid = 0
                 (ray0, ray1, ray2, ray3, ray4, ray5) = (0,0,0, 0,0,0)
 
             slope_found = True
@@ -402,6 +378,55 @@ class GrabClass(object):
                   ray0, ray1, ray2, ray3, ray4, ray5)
             points.append( pt )
         return points
+
+    def do_3d_operations_on_2d_point(self, x0u, y0u,
+                                     pmat_inv, pmat_meters_inv,
+                                     camera_center, camera_center_meters,
+                                     x0_abs, y0_abs,
+                                     rise, run):
+
+            matrixmultiply = numpy.dot
+            svd = numpy.dual.svd # use fastest ATLAS/fortran libraries
+
+            # calculate plane containing camera origin and found line
+            # in 3D world coords
+
+            # Step 1) Find world coordinates points defining plane:
+            #    A) found point
+            found_point_image_plane = [x0u,y0u,1.0]
+            X0=matrixmultiply(pmat_inv,found_point_image_plane)
+
+            #    B) another point on found line
+            x1u, y1u = self._hlper.undistort(x0_abs+run,y0_abs+rise)
+            X1=matrixmultiply(pmat_inv,[x1u,y1u,1.0])
+
+            #    C) world coordinates of camera center already known
+
+            # Step 2) Find world coordinates of plane
+            A = nx.array( [ X0, X1, camera_center] ) # 3 points define plane
+            try:
+                u,d,vt=svd(A,full_matrices=True)
+            except:
+                print 'pmat_inv',pmat_inv
+                print 'X0, X1, camera_center',X0, X1, camera_center
+                raise
+            Pt = vt[3,:] # plane parameters
+
+            p1,p2,p3,p4 = Pt[0:4]
+            if numpy.isnan(p1):
+                print 'ERROR: SVD returned nan'
+
+            # calculate pluecker coords of 3D ray from camera center to point
+            # calculate 3D coords of point on image plane
+            X0meters = numpy.dot(pmat_meters_inv, found_point_image_plane )
+            X0meters = X0meters[:3]/X0meters[3] # convert to shape = (3,)
+            # project line
+            pluecker_meters = pluecker_from_verts(X0meters,camera_center_meters)
+            (ray0, ray1, ray2, ray3, ray4, ray5) = pluecker_meters # unpack
+
+            return (p1, p2, p3, p4,
+                    ray0, ray1, ray2, ray3, ray4, ray5)
+
 
     def grab_func(self,globals):
         DEBUG_ACQUIRE = globals['debug_acquire']
@@ -631,7 +656,7 @@ class GrabClass(object):
                 xpoints = self.realtime_analyzer.do_work(hw_roi_frame,
                                                          timestamp, framenumber, use_roi2_isSet(),
                                                          use_cmp_isSet(),
-                                                         0.010, # maximum 10 msec in here
+                                                         max_duration_sec=0.010, # maximum 10 msec in here
                                                          )
                 points = self._convert_to_old_format( xpoints )
 
@@ -1234,7 +1259,7 @@ class App:
                         if value: globals['use_roi2'].set()
                         else: globals['use_roi2'].clear()
                     elif property_name == 'cmp':
-                        if value: globals['use_cmp'].set()
+                        if value: print 'ignoring request to use_cmp' #globals['use_cmp'].set()
                         else: globals['use_cmp'].clear()
                     elif property_name == 'max_framerate':
                         try:
