@@ -140,7 +140,8 @@ class GrabClass(object):
     def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue, max_num_points=2,
                  roi2_radius=10, bg_frame_interval=50, bg_frame_alpha=1.0/50.0, cam_no=-1,
                  main_brain_hostname=None,
-                 mask_image=None):
+                 mask_image=None,
+                 n_sigma=6.0):
         self.mask_image = mask_image
         self.main_brain_hostname = main_brain_hostname
         self.cam = cam
@@ -150,6 +151,7 @@ class GrabClass(object):
 
         self.bg_frame_alpha = bg_frame_alpha
         self.bg_frame_interval = bg_frame_interval
+        self.n_sigma = n_sigma
 
         self.new_roi = threading.Event()
         self.new_roi_data = None
@@ -211,7 +213,9 @@ class GrabClass(object):
                         if value: globals['use_roi2'].set()
                         else: globals['use_roi2'].clear()
                     elif property_name == 'cmp':
-                        if value: print 'ignoring request to use_cmp' #globals['use_cmp'].set()
+                        if value:
+                            # print 'ignoring request to use_cmp'
+                            globals['use_cmp'].set()
                         else: globals['use_cmp'].clear()
                     elif property_name == 'max_framerate':
                         if 1:
@@ -719,11 +723,12 @@ class GrabClass(object):
                                                                    running_sumsqf,
                                                                    mean2,
                                                                    running_stdframe,
-                                                                   6.0,
+                                                                   self.n_sigma,
                                                                    compareframe8u,
                                                                    200,
                                                                    noisy_pixels_mask,
-                                                                   25, bench=mybench )
+                                                                   25,
+                                                                   bench=mybench )
                         if mybench:
                             t41, t42, t43, t44, t45, t46, t47, t48, t49, t491, t492 = res
                         del res
@@ -961,6 +966,7 @@ class App:
                  debug_acquire = False,
                  num_buffers = None,
                  mask_images = None,
+                 n_sigma = 6.0,
                  ):
         if main_brain_hostname is None:
             self.main_brain_hostname = default_main_brain_hostname
@@ -1094,9 +1100,9 @@ class App:
             globals['export_image_name'] = 'raw'
             globals['use_roi2'] = threading.Event()
             globals['use_cmp'] = threading.Event()
-            globals['use_cmp'].clear()
-            print 'not using ongoing variance estimate'
-            #globals['use_cmp'].set()
+            #globals['use_cmp'].clear()
+            #print 'not using ongoing variance estimate'
+            globals['use_cmp'].set()
 
             # get settings
             scalar_control_info = {}
@@ -1194,6 +1200,7 @@ class App:
                                 main_brain_hostname=self.main_brain_hostname,
                                 mask_image = mask,
                                 cam_no=cam_no,
+                                n_sigma=n_sigma,
                                 )
             self.all_grabbers.append( grabber )
 
@@ -1636,6 +1643,9 @@ def main():
                       help="cam_iface BACKEND to use",
                       default='unity',
                       metavar="BACKEND")
+
+    parser.add_option("--n-sigma", type='float',
+                      default=6.0)
 
     parser.add_option("--debug-drop", action='store_true',
                       help="save debugging information regarding dropped network packets",
