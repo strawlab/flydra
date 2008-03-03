@@ -113,82 +113,6 @@ def TimestampEcho():
         newbuf = buf + struct.pack( fmt, time.time() )
         sender.sendto(newbuf,(orig_host,sendto_port))
 
-class CamProxy:
-    """This class is a quick hack to make calls to cam_iface single-threaded."""
-    def __init__(self,cam,cil):
-        self.cam = cam
-        self.cil = cil
-    def get_framerate(self):
-        with self.cil:
-            return self.cam.get_framerate()
-    def get_frame_offset(self):
-        with self.cil:
-            return self.cam.get_frame_offset()
-    def get_frame_size(self):
-        with self.cil:
-            return self.cam.get_frame_size()
-    def set_frame_offset(self,*args,**kw):
-        with self.cil:
-            return self.cam.set_frame_offset(*args,**kw)
-    def set_frame_size(self,*args,**kw):
-        with self.cil:
-            return self.cam.set_frame_size(*args,**kw)
-    def get_max_width(self):
-        with self.cil:
-            return  self.cam.get_max_width()
-    def get_max_height(self):
-        with self.cil:
-            return  self.cam.get_max_height()
-    def grab_next_frame_into_buf_blocking(self,*args,**kw):
-        with self.cil:
-            return self.cam.grab_next_frame_into_buf_blocking(*args,**kw)
-    def get_last_timestamp(self):
-        with self.cil:
-            return self.cam.get_last_timestamp()
-    def get_last_framenumber(self):
-        with self.cil:
-            return self.cam.get_last_framenumber()
-    def start_camera(self):
-        with self.cil:
-            return self.cam.start_camera()
-    def get_num_camera_properties(self):
-        with self.cil:
-            return self.cam.get_num_camera_properties()
-    def get_camera_property_info(self,*args,**kw):
-        with self.cil:
-            return self.cam.get_camera_property_info(*args,**kw)
-    def get_camera_property(self,*args,**kw):
-        with self.cil:
-            return self.cam.get_camera_property(*args,**kw)
-    def set_camera_property(self,*args,**kw):
-        with self.cil:
-            return self.cam.set_camera_property(*args,**kw)
-    def get_trigger_mode_number(self,*args,**kw):
-        with self.cil:
-            return self.cam.get_trigger_mode_number(*args,**kw)
-    def set_trigger_mode_number(self,*args,**kw):
-        with self.cil:
-            return self.cam.set_trigger_mode_number(*args,**kw)
-    def set_framerate(self,*args,**kw):
-        with self.cil:
-            return self.cam.set_framerate(*args,**kw)
-
-class CamThreadProxyMaker:
-    def __init__(self):
-        self.cil = threading.Lock()
-        self.n_cameras = 0
-    def __call__(self,cam):
-        self.n_cameras += 1
-        if self.n_cameras > 1:
-
-            warnings.warn('Non-optimized multi-camera implementation in use. Latency may be '
-                          'higher than necessary and different framerates on same computer '
-                          'not possible.')
-
-        return CamProxy(cam,self.cil)
-
-cam_thread_proxy_maker = CamThreadProxyMaker()
-
 def stdout_write(x):
     sys.stdout.write(x)
     sys.stdout.flush()
@@ -245,6 +169,70 @@ class GrabClass(object):
         self._pmat = None
         self._scale_factor = None
         self.cam_no_str = str(cam_no)
+        self._prop_queue = Queue.Queue()
+
+    def _handle_prop_queue(self):
+        # called from grab thread mainloop
+        globals = self._globals
+        cam = self.cam
+        CAM_CONTROLS = globals['cam_controls']
+        grabber = self
+
+        while 1:
+            if self._prop_queue.empty():
+                break
+            property_name, value = self._prop_queue.get_nowait()
+            if 1:
+                if 1:
+                    if property_name in CAM_CONTROLS:
+                        enum = CAM_CONTROLS[property_name]
+                        if type(value) == tuple: # setting whole thing
+                            props = cam.get_camera_property_info(enum)
+                            assert value[1] == props['min_value']
+                            assert value[2] == props['max_value']
+                            value = value[0]
+                        cam.set_camera_property(enum,value,0)
+                    elif property_name == 'roi':
+                        #print 'flydra_camera_node.py: ignoring ROI command for now...'
+                        grabber.roi = value
+                    elif property_name == 'diff_threshold':
+                        print 'setting diff_threshold',value
+                        grabber.diff_threshold = value
+                    elif property_name == 'clear_threshold':
+                        grabber.clear_threshold = value
+                    elif property_name == 'width':
+                        assert cam.get_max_width() == value
+                    elif property_name == 'height':
+                        assert cam.get_max_height() == value
+                    elif property_name == 'trigger_mode':
+                        print 'cam.set_trigger_mode_number( value )',value
+                        cam.set_trigger_mode_number( value )
+                    elif property_name == 'roi2':
+                        if value: globals['use_roi2'].set()
+                        else: globals['use_roi2'].clear()
+                    elif property_name == 'cmp':
+                        if value: print 'ignoring request to use_cmp' #globals['use_cmp'].set()
+                        else: globals['use_cmp'].clear()
+                    elif property_name == 'max_framerate':
+                        if 1:
+                            print 'ignoring request to set max_framerate'
+                        else:
+                            try:
+                                cam.set_framerate(value)
+                            except Exception,err:
+                                print 'ERROR: failed setting framerate:',err
+                    elif property_name == 'collecting_background':
+                        if value: globals['collecting_background'].set()
+                        else: globals['collecting_background'].clear()
+                    elif property_name == 'visible_image_view':
+                        globals['export_image_name'] = value
+                        print 'displaying',value,'image'
+                    else:
+                        print 'IGNORING property',property_name
+
+    def set_property(self, property_name, value ):
+        # called from any thread, passes values to grab thread
+        self._prop_queue.put( (property_name, value) )
 
     def get_clear_threshold(self):
         return self.realtime_analyzer.clear_threshold
@@ -434,6 +422,7 @@ class GrabClass(object):
 
 
     def grab_func(self,globals):
+        self._globals = globals
         DEBUG_ACQUIRE = globals['debug_acquire']
         DEBUG_DROP = globals['debug_drop']
         if DEBUG_DROP:
@@ -591,6 +580,7 @@ class GrabClass(object):
             numT = 0
         if 1:
             while not cam_quit_event_isSet():
+                self._handle_prop_queue()
                 if BENCHMARK:
                     t1 = time.time()
                 try:
@@ -956,6 +946,8 @@ class GrabClass(object):
                         t4K = 0.0
                         t4L = 0.0
                         numT = 0
+            print 'Will now close the camera nicely.'
+            self.cam.close()
 
 class App:
 
@@ -1049,7 +1041,6 @@ class App:
             print 'attempting to initialize camera with %d buffers, mode "%s"'%(
                 num_buffers,cam_iface.get_mode_string(cam_no,use_mode))
             cam = cam_iface.Camera(cam_no,num_buffers,use_mode)
-            cam = cam_thread_proxy_maker(cam)
             print 'allocated %d buffers'%num_buffers
             self.all_cams.append( cam )
 
@@ -1216,7 +1207,6 @@ class App:
                                              args=(globals,),
                                              name='grab thread (%s)'%cam_id,
                                              )
-                grab_thread.setDaemon(True) # quit that thread if it's the only one left...
                 DEBUG('starting grab_thread()')
                 grab_thread.start() # start grabbing frames from camera
                 DEBUG('grab_thread() started')
@@ -1231,54 +1221,12 @@ class App:
         cam_id = self.all_cam_ids[cam_no]
         DEBUG('handle_commands:',cam_id)
         globals = self.globals[cam_no]
-        CAM_CONTROLS = globals['cam_controls']
 
         for key in cmds.keys():
             DEBUG('  handle_commands: key',key)
             if key == 'set':
                 for property_name,value in cmds['set'].iteritems():
-                    if property_name in CAM_CONTROLS:
-                        enum = CAM_CONTROLS[property_name]
-                        if type(value) == tuple: # setting whole thing
-                            props = cam.get_camera_property_info(enum)
-                            assert value[1] == props['min_value']
-                            assert value[2] == props['max_value']
-                            value = value[0]
-                        cam.set_camera_property(enum,value,0)
-                    elif property_name == 'roi':
-                        #print 'flydra_camera_node.py: ignoring ROI command for now...'
-                        grabber.roi = value
-                    elif property_name == 'diff_threshold':
-                        print 'setting diff_threshold',value
-                        grabber.diff_threshold = value
-                    elif property_name == 'clear_threshold':
-                        grabber.clear_threshold = value
-                    elif property_name == 'width':
-                        assert cam.get_max_width() == value
-                    elif property_name == 'height':
-                        assert cam.get_max_height() == value
-                    elif property_name == 'trigger_mode':
-                        print 'cam.set_trigger_mode_number( value )',value
-                        cam.set_trigger_mode_number( value )
-                    elif property_name == 'roi2':
-                        if value: globals['use_roi2'].set()
-                        else: globals['use_roi2'].clear()
-                    elif property_name == 'cmp':
-                        if value: print 'ignoring request to use_cmp' #globals['use_cmp'].set()
-                        else: globals['use_cmp'].clear()
-                    elif property_name == 'max_framerate':
-                        try:
-                            cam.set_framerate(value)
-                        except Exception,err:
-                            print 'ERROR: failed setting framerate:',err
-                    elif property_name == 'collecting_background':
-                        if value: globals['collecting_background'].set()
-                        else: globals['collecting_background'].clear()
-                    elif property_name == 'visible_image_view':
-                        globals['export_image_name'] = value
-                        print 'displaying',value,'image'
-                    else:
-                        print 'IGNORING property',property_name
+                    grabber.set_property(property_name,value)
             elif key == 'get_im':
                 val = globals['most_recent_frame_potentially_corrupt']
                 if val is not None: # prevent race condition
