@@ -8,6 +8,9 @@ BENCHMARK = int(os.environ.get('FLYDRA_BENCHMARK',0))
 FLYDRA_BT = int(os.environ.get('FLYDRA_BT',0)) # threaded benchmark
 near_inf = 9.999999e20
 
+bright_non_gaussian_cutoff = 255
+bright_non_gaussian_replacement = 25
+
 import threading, time, socket, sys, struct, select, math, warnings
 import Queue
 import numpy
@@ -107,7 +110,7 @@ def TimestampEcho():
         try:
             buf, (orig_host,orig_port) = sockobj.recvfrom(4096)
         except socket.error, err:
-            if sys.platform.startswith('linux') and err.args[0] == errno.EINTR: # interrupted system call
+            if err.args[0] == errno.EINTR: # interrupted system call
                 continue
             raise
         newbuf = buf + struct.pack( fmt, time.time() )
@@ -142,7 +145,6 @@ class GrabClass(object):
                  main_brain_hostname=None,
                  mask_image=None,
                  n_sigma=6.0):
-        self.mask_image = mask_image
         self.main_brain_hostname = main_brain_hostname
         self.cam = cam
         self.cam2mainbrain_port = cam2mainbrain_port
@@ -161,6 +163,13 @@ class GrabClass(object):
         r = l+w-1
         t = b+h-1
         lbrt = l,b,r,t
+        if mask_image is None:
+            mask_image = numpy.zeros( (self.cam.get_max_height(),
+                                       self.cam.get_max_width()),
+                                      dtype=numpy.bool )
+            # mask is currently an array of bool
+            mask_image = mask_image.astype(numpy.uint8)*255
+        self.mask_image = mask_image
         self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(lbrt,
                                                                           self.cam.get_max_width(),
                                                                           self.cam.get_max_height(),
@@ -426,6 +435,8 @@ class GrabClass(object):
 
 
     def grab_func(self,globals):
+        last_take_bg_timestamp = -numpy.inf
+
         self._globals = globals
         DEBUG_ACQUIRE = globals['debug_acquire']
         DEBUG_DROP = globals['debug_drop']
@@ -458,6 +469,7 @@ class GrabClass(object):
         shortest_IFI = 1.0/self.cam.get_framerate()
 
         hw_roi_frame = fi8ufactory( cur_fisize )
+        self._hw_roi_frame = hw_roi_frame # make accessible to other code
 
         if BENCHMARK:
             coord_socket = DummySocket()
@@ -488,6 +500,62 @@ class GrabClass(object):
 
         #FastImage.set_debug(3) # let us see any images malloced, should only happen on hardware ROI size change
 
+
+        #################### initialize images ############
+
+        running_mean8u_im_full = self.realtime_analyzer.get_image_view('mean') # this is a view we write into
+
+        mask_im = self.realtime_analyzer.get_image_view('mask') # this is a view we write into
+        newmask_fi = FastImage.asfastimage( self.mask_image )
+        newmask_fi.get_8u_copy_put(mask_im, max_frame_size)
+
+        # allocate images and initialize if necessary
+
+        bg_image_full = FastImage.FastImage8u(max_frame_size)
+        std_image_full = FastImage.FastImage8u(max_frame_size)
+
+        running_mean_im_full = FastImage.FastImage32f(max_frame_size)
+        self._running_mean_im_full = running_mean_im_full # make accessible to other code
+
+        fastframef32_tmp_full = FastImage.FastImage32f(max_frame_size)
+
+        mean2_full = FastImage.FastImage32f(max_frame_size)
+        self._mean2_full = mean2_full # make accessible to other code
+        std2_full = FastImage.FastImage32f(max_frame_size)
+        self._std2_full = std2_full # make accessible to other code
+        running_stdframe_full = FastImage.FastImage32f(max_frame_size)
+        self._running_stdframe_full = running_stdframe_full # make accessible to other code
+        compareframe_full = FastImage.FastImage32f(max_frame_size)
+        compareframe8u_full = self.realtime_analyzer.get_image_view('cmp') # this is a view we write into
+        self._compareframe8u_full = compareframe8u_full
+
+        running_sumsqf_full = FastImage.FastImage32f(max_frame_size)
+        running_sumsqf_full.set_val(0,max_frame_size)
+        self._running_sumsqf_full = running_sumsqf_full # make accessible to other code
+
+        noisy_pixels_mask_full = FastImage.FastImage8u(max_frame_size)
+        mean_duration_no_bg = 0.0053 # starting value
+        mean_duration_bg = 0.020 # starting value
+
+        # set ROI views of full-frame images
+        bg_image = bg_image_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
+        std_image = std_image_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
+        running_mean8u_im = running_mean8u_im_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
+        running_mean_im = running_mean_im_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        fastframef32_tmp = fastframef32_tmp_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        mean2 = mean2_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        std2 = std2_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        running_stdframe = running_stdframe_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        compareframe = compareframe_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        compareframe8u = compareframe8u_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        running_sumsqf = running_sumsqf_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        noisy_pixels_mask = noisy_pixels_mask_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+
+        hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
+        running_mean_im.get_8u_copy_put( running_mean8u_im, cur_fisize )
+
+        #################### done initializing images ############
+
         self.cam.start_camera()  # start camera
 
         # take first image to set background and so on
@@ -511,52 +579,6 @@ class GrabClass(object):
                     stdout_write('(S%s)'%self.cam_no_str)
                 print >> sys.stderr , 'On start warning: frame data interrupted during system call on %s at %s'%(self.cam_id,time.asctime())
 
-        #################### initialize images ############
-
-        running_mean8u_im_full = self.realtime_analyzer.get_image_view('mean') # this is a view we write into
-
-        mask_im = self.realtime_analyzer.get_image_view('mask') # this is a view we write into
-        newmask_fi = FastImage.asfastimage( self.mask_image )
-        newmask_fi.get_8u_copy_put(mask_im, max_frame_size)
-
-        # allocate images and initialize if necessary
-
-        bg_image_full = FastImage.FastImage8u(max_frame_size)
-        std_image_full = FastImage.FastImage8u(max_frame_size)
-
-        running_mean_im_full = FastImage.FastImage32f(max_frame_size)
-
-        fastframef32_tmp_full = FastImage.FastImage32f(max_frame_size)
-
-        mean2_full = FastImage.FastImage32f(max_frame_size)
-        running_stdframe_full = FastImage.FastImage32f(max_frame_size)
-        compareframe_full = FastImage.FastImage32f(max_frame_size)
-        compareframe8u_full = self.realtime_analyzer.get_image_view('cmp') # this is a view we write into
-
-        running_sumsqf_full = FastImage.FastImage32f(max_frame_size)
-        running_sumsqf_full.set_val(0,max_frame_size)
-
-        noisy_pixels_mask_full = FastImage.FastImage8u(max_frame_size)
-        mean_duration_no_bg = 0.0053 # starting value
-        mean_duration_bg = 0.020 # starting value
-
-        # set ROI views of full-frame images
-        bg_image = bg_image_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
-        std_image = std_image_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
-        running_mean8u_im = running_mean8u_im_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
-        running_mean_im = running_mean_im_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
-        fastframef32_tmp = fastframef32_tmp_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
-        mean2 = mean2_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
-        running_stdframe = running_stdframe_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
-        compareframe = compareframe_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
-        compareframe8u = compareframe8u_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
-        running_sumsqf = running_sumsqf_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
-        noisy_pixels_mask = noisy_pixels_mask_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
-
-        hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
-        running_mean_im.get_8u_copy_put( running_mean8u_im, cur_fisize )
-
-        #################### done initializing images ############
 
         incoming_raw_frames_queue = globals['incoming_raw_frames']
         incoming_raw_frames_queue_put = incoming_raw_frames_queue.put
@@ -707,7 +729,8 @@ class GrabClass(object):
 
                 did_expensive = False
                 if collecting_background_isSet():
-                    if bg_frame_number % self.bg_frame_interval == 0:
+                    if ((bg_frame_number % self.bg_frame_interval == 0) or
+                        (timestamp-last_take_bg_timestamp < 1.0)): # estimate STD quickly
 ##                        if cur_fisize != max_frame_size:
 ##                            # set to full ROI and take full image if necessary
 ##                            raise NotImplementedError("background collection while using hardware ROI not implemented")
@@ -716,18 +739,18 @@ class GrabClass(object):
                         res = realtime_image_analysis.do_bg_maint( running_mean_im,
                                                                    hw_roi_frame,
                                                                    cur_fisize,
-##                                                                   max_frame_size,
                                                                    self.bg_frame_alpha,
                                                                    running_mean8u_im,
                                                                    fastframef32_tmp,
                                                                    running_sumsqf,
                                                                    mean2,
+                                                                   std2,
                                                                    running_stdframe,
                                                                    self.n_sigma,
                                                                    compareframe8u,
-                                                                   200,
+                                                                   bright_non_gaussian_cutoff,
                                                                    noisy_pixels_mask,
-                                                                   25,
+                                                                   bright_non_gaussian_replacement,
                                                                    bench=mybench )
                         if mybench:
                             t41, t42, t43, t44, t45, t46, t47, t48, t49, t491, t492 = res
@@ -747,20 +770,36 @@ class GrabClass(object):
                     hw_roi_frame.get_32f_copy_put( running_mean_im, max_frame_size )
                     running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
 
-                    if 1:
-                        running_sumsqf.set_val( 0, max_frame_size )
-                        compareframe8u.set_val(0, max_frame_size )
+                    if cur_fisize != max_frame_size:
+                        print cur_fisize
+                        print max_frame_size
+                        print 'ERROR: can only take background image if not using ROI'
                     else:
-                        # XXX TODO: cleanup
                         hw_roi_frame.get_32f_copy_put(running_sumsqf,max_frame_size)
                         running_sumsqf.toself_square(max_frame_size)
 
-                        running_mean_im.get_square_put(mean2,max_frame_size)
-                        running_sumsqf.get_subtracted_put(mean2,running_stdframe,max_frame_size)
+                        hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
+                        print 'taking new bg'
+                        realtime_image_analysis.do_bg_maint(
+                            running_mean_im,#in
+                            hw_roi_frame,#in
+                            cur_fisize,#in
+                            self.bg_frame_alpha, #in
+                            running_mean8u_im,
+                            fastframef32_tmp,
+                            running_sumsqf, #in
+                            mean2,
+                            std2,
+                            running_stdframe,
+                            self.n_sigma,#in
+                            compareframe8u,
+                            bright_non_gaussian_cutoff,#in
+                            noisy_pixels_mask,#in
+                            bright_non_gaussian_replacement,#in
+                            bench=0 )
 
-                        compareframe8u.set_val(0, max_frame_size )
-
-                    bg_changed = True
+                        bg_changed = True
+                        last_take_bg_timestamp = timestamp
                     take_background_clear()
 
                 tp4 = time.time()
@@ -849,6 +888,7 @@ class GrabClass(object):
                     running_mean_im = running_mean_im_full.roi(l, b, cur_fisize)  # set ROI view
                     fastframef32_tmp = fastframef32_tmp_full.roi(l, b, cur_fisize)  # set ROI view
                     mean2 = mean2_full.roi(l, b, cur_fisize)  # set ROI view
+                    std2 = std2_full.roi(l, b, cur_fisize)  # set ROI view
                     running_stdframe = running_stdframe_full.roi(l, b, cur_fisize)  # set ROI view
                     compareframe = compareframe_full.roi(l, b, cur_fisize)  # set ROI view
                     compareframe8u = compareframe8u_full.roi(l, b, cur_fisize)  # set ROI view
@@ -1391,7 +1431,7 @@ class App:
         last_measurement_time = []
         last_return_info_check = []
         n_raw_frames = []
-        last_found_timestamp = [0.0]*self.num_cams
+        #last_found_timestamp = [0.0]*self.num_cams
         # save all data for some time (for post-trigggering)
         last_frames_by_cam = [ [] for c in range(self.num_cams) ]
         # save extracted data for some time (for data-recovery)
@@ -1487,11 +1527,12 @@ class App:
                                     del last_points_framenumbers[:100]
 
                                 n_pts = len(points)
-                                if n_pts>0:
-                                    last_found_timestamp[cam_no] = timestamp
+                                #if n_pts>0:
+                                #    last_found_timestamp[cam_no] = timestamp
                                 # save movie for 1 second after I found anything
-                                if ((raw_movie is not None) and
-                                    (timestamp - last_found_timestamp[cam_no]) < 1.0):
+                                if raw_movie is not None:
+                                #if ((raw_movie is not None) and
+                                #    (timestamp - last_found_timestamp[cam_no]) < 1.0):
                                     raw_movie.add_frame(frame,timestamp)
                                 if small_movie is not None and n_pts>0:
                                     pt = points[0] # save only first found point currently
