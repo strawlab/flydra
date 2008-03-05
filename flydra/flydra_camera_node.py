@@ -153,10 +153,10 @@ def pluecker_from_verts(A,B):
 
 class GrabClass(object):
     def __init__(self, cam, cam2mainbrain_port, cam_id, log_message_queue, max_num_points=2,
-                 roi2_radius=10, bg_frame_interval=50, bg_frame_alpha=1.0/50.0, cam_no=-1,
+                 roi2_radius=10, bg_frame_interval=50, bg_frame_alpha=0.001, cam_no=-1,
                  main_brain_hostname=None,
                  mask_image=None,
-                 n_sigma=6.0):
+                 n_sigma=1.0):
         self.main_brain_hostname = main_brain_hostname
         self.cam = cam
         self.cam2mainbrain_port = cam2mainbrain_port
@@ -742,7 +742,7 @@ class GrabClass(object):
                 did_expensive = False
                 if collecting_background_isSet():
                     if ((bg_frame_number % self.bg_frame_interval == 0) or
-                        (timestamp-last_take_bg_timestamp < 1.0)): # estimate STD quickly
+                        (timestamp-last_take_bg_timestamp < 2.0)): # estimate STD quickly
 ##                        if cur_fisize != max_frame_size:
 ##                            # set to full ROI and take full image if necessary
 ##                            raise NotImplementedError("background collection while using hardware ROI not implemented")
@@ -1010,7 +1010,7 @@ class App:
 
     def __init__(self,max_num_points_per_camera=2,roi2_radius=10,
                  bg_frame_interval=50,
-                 bg_frame_alpha=1.0/50.0,
+                 bg_frame_alpha=0.001,
                  main_brain_hostname = None,
                  emulation_reconstructor = None,
                  use_mode=None,
@@ -1018,7 +1018,7 @@ class App:
                  debug_acquire = False,
                  num_buffers = None,
                  mask_images = None,
-                 n_sigma = 6.0,
+                 n_sigma = 1.0,
                  ):
         if main_brain_hostname is None:
             self.main_brain_hostname = default_main_brain_hostname
@@ -1664,7 +1664,7 @@ def main():
         app=App(max_num_points_per_camera,
                 roi2_radius=10,
                 bg_frame_interval=50,
-                bg_frame_alpha=1.0/50.0,
+                bg_frame_alpha=0.001,
                 )
         if app.num_cams <= 0:
             return
@@ -1698,7 +1698,7 @@ def main():
                       metavar="BACKEND")
 
     parser.add_option("--n-sigma", type='float',
-                      default=6.0)
+                      default=1.0)
 
     parser.add_option("--debug-drop", action='store_true',
                       help="save debugging information regarding dropped network packets",
@@ -1776,7 +1776,7 @@ def main():
     if options.background_frame_alpha is not None:
         bg_frame_alpha = options.background_frame_alpha
     else:
-        bg_frame_alpha = 1.0/50.0
+        bg_frame_alpha = 0.001
 
     app=App(max_num_points_per_camera,
             roi2_radius=roi2_radius,
