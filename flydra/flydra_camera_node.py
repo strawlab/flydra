@@ -910,13 +910,13 @@ class GrabClass(object):
                 bookkeeping_done_time = time.time()
                 bookkeeping_dur = bookkeeping_done_time-cam_received_time
 
-                alpha = 0.01
-                if did_expensive:
-                    mean_duration_bg    = (1-alpha)*mean_duration_bg + alpha*bookkeeping_dur
-                else:
-                    mean_duration_no_bg = (1-alpha)*mean_duration_no_bg + alpha*bookkeeping_dur
-
                 if False and bookkeeping_dur > 0.050 and not BENCHMARK:
+                    alpha = 0.01
+                    if did_expensive:
+                        mean_duration_bg    = (1-alpha)*mean_duration_bg + alpha*bookkeeping_dur
+                    else:
+                        mean_duration_no_bg = (1-alpha)*mean_duration_no_bg + alpha*bookkeeping_dur
+
                     print 'TIME BUDGET:'
                     print '   % 5.1f start of work'%((work_start_time-cam_received_time)*1000.0,)
                     print '   % 5.1f done with work'%((work_done_time-cam_received_time)*1000.0,)
