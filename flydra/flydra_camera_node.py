@@ -214,6 +214,7 @@ class GrabClass(object):
                             assert value[1] == props['min_value']
                             assert value[2] == props['max_value']
                             value = value[0]
+                        print 'setting camera property', property_name, value
                         cam.set_camera_property(enum,value,0)
                     elif property_name == 'roi':
                         #print 'flydra_camera_node.py: ignoring ROI command for now...'
@@ -881,17 +882,22 @@ class GrabClass(object):
                     h = t-b+1
                     self.realtime_analyzer.roi = lbrt
                     print 'desired l,b,w,h',l,b,w,h
-                    self.cam.set_frame_size(w,h)
-                    self.cam.set_frame_offset(l,b)
-                    w,h = self.cam.get_frame_size()
-                    l,b= self.cam.get_frame_offset()
-                    print 'actual l,b,w,h',l,b,w,h
+
+                    w2,h2 = self.cam.get_frame_size()
+                    l2,b2= self.cam.get_frame_offset()
+                    if ((l==l2) and (b==b2) and (w==w2) and (h==h2)):
+                        print 'current ROI matches desired ROI - not changing'
+                    else:
+                        self.cam.set_frame_size(w,h)
+                        self.cam.set_frame_offset(l,b)
+                        w,h = self.cam.get_frame_size()
+                        l,b= self.cam.get_frame_offset()
+                        print 'actual l,b,w,h',l,b,w,h
                     r = l+w-1
                     t = b+h-1
                     cur_fisize = FastImage.Size(w, h)
                     hw_roi_frame = fi8ufactory( cur_fisize )
                     self.realtime_analyzer.roi = (l,b,r,t)
-
 
                     # set ROI views of full-frame images
                     bg_image = bg_image_full.roi(l, b, cur_fisize) # set ROI view
@@ -1181,6 +1187,7 @@ class App:
                 if props['has_manual_mode']:
                     if min_value <= new_value <= max_value:
                         try:
+                            print 'setting camera property', props['name'], new_value
                             cam.set_camera_property( prop_num, new_value, 0 )
                         except:
                             print 'error while setting property %s to %d (from %d)'%(props['name'],new_value,current_value)
