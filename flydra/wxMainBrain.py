@@ -192,6 +192,13 @@ class wxMainBrainApp(wx.App):
         #cammenu.Append(ID_stop_all_collecting_bg, "Stop all running background collection")
         #wx.EVT_MENU(self, ID_stop_all_collecting_bg, self.OnStopAllCollectingBg)
 
+
+
+        ID_set_fps = wx.NewId()
+        cammenu.Append(ID_set_fps, "Set framerate...")
+        wx.EVT_MENU(self, ID_set_fps, self.OnSetFps)
+
+
         menuBar.Append(cammenu, "&Cameras")
 
         #   View
@@ -1038,6 +1045,18 @@ class wxMainBrainApp(wx.App):
             self.plotpanel.set_image(image, image_coords)
             self.plotpanel.set_points(points)
             self.plotpanel.draw()
+
+    def OnSetFps(self,event):
+        dlg=wx.TextEntryDialog(self.frame, 'What should the framerate of the cameras be (Hz)?',
+                               'Set fps',str(self.main_brain.get_fps()))
+        try:
+            self.pass_all_keystrokes = True
+            if dlg.ShowModal() == wx.ID_OK:
+                fps = float(dlg.GetValue())
+                self.main_brain.set_fps(fps)
+        finally:
+            dlg.Destroy()
+            self.pass_all_keystrokes = False
 
     def OnFakeSync(self, event):
         print 'sending fake sync command...'

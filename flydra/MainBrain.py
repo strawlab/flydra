@@ -1736,6 +1736,14 @@ class MainBrain(object):
     def get_fps(self):
         return self.fps
 
+    def set_fps(self,fps):
+        with self.trigger_device_lock:
+            self.trigger_device.set_carrier_frequency( fps )
+        self.fps = fps
+        self.remote_api.log_message('<mainbrain>',time.time(),'set fps to %f'%(self.fps,))
+        print 'set fps to', fps
+        print 'WARNING: .flydrarc fps not yet set...'
+
     def do_synchronization(self):
         if self.is_saving_data():
             raise RuntimeError('will not (re)synchronize while saving data')
