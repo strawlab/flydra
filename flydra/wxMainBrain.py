@@ -428,7 +428,7 @@ class wxMainBrainApp(wx.App):
 
         ctrl = xrc.XRCCTRL(self.cam_preview_panel,
                            "MANUAL_RECORD_RAW_TOGGLE")
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(),self.OnRecordRaw)
+        wx.EVT_BUTTON(ctrl, ctrl.GetId(),self.OnRecordRawButton)
 
         ctrl = xrc.XRCCTRL(self.cam_preview_panel,'SYNCHRONIZE_BUTTON')
         wx.EVT_BUTTON(ctrl, ctrl.GetId(), self.OnSynchronizeButton)
@@ -758,6 +758,14 @@ class wxMainBrainApp(wx.App):
         #print 'OnFilenameKillFocus'
         self.pass_all_keystrokes = False
         event.Skip()
+
+    def OnRecordRawButton(self,event):
+        if self.record_raw.IsChecked():
+            #toggle value
+            self.record_raw.SetValue(False)
+        else:
+            self.record_raw.SetValue(True)
+        self.OnRecordRaw(None)
 
     def OnRecordRaw(self,event):
         if self.record_raw.IsChecked():
