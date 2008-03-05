@@ -641,7 +641,6 @@ class CoordinateProcessor(threading.Thread):
         with self.tracker_lock:
             if self.tracker is not None:
                 self.tracker.kill_all_trackers() # save (if necessary) all old data
-                raise NotImplementedError('Cannot switch dynamic models right now - get highest ObjId from old model and set as new ObjId for new model')
             self.tracker = tracker # bind to name, replacing old tracker
             if self.save_profiling_data:
                 tracker = copy.copy(self.tracker)
