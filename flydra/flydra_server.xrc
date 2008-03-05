@@ -422,6 +422,16 @@
               <label>Synchronize cameras</label>
             </object>
             <option>1</option>
+            <flag>wxLEFT|wxRIGHT</flag>
+            <border>5</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="MANUAL_RECORD_RAW_TOGGLE">
+              <label>Toggle recording large .fmfs</label>
+            </object>
+            <option>1</option>
+            <flag>wxLEFT|wxRIGHT</flag>
+            <border>5</border>
           </object>
         </object>
         <flag>wxEXPAND</flag>

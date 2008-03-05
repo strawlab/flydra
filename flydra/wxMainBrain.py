@@ -426,6 +426,10 @@ class wxMainBrainApp(wx.App):
         wx.EVT_BUTTON(ctrl, ctrl.GetId(),
                       self.OnManualTriggerDevice3)
 
+        ctrl = xrc.XRCCTRL(self.cam_preview_panel,
+                           "MANUAL_RECORD_RAW_TOGGLE")
+        wx.EVT_BUTTON(ctrl, ctrl.GetId(),self.OnRecordRaw)
+
         ctrl = xrc.XRCCTRL(self.cam_preview_panel,'SYNCHRONIZE_BUTTON')
         wx.EVT_BUTTON(ctrl, ctrl.GetId(), self.OnSynchronizeButton)
 
