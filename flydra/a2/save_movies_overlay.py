@@ -91,18 +91,23 @@ def doit(fmf_filename=None,
                                     frames_per_second=fps,
                                     )
             kalman_rows.append(my_rows)
-        kalman_rows = numpy.concatenate( kalman_rows )
-        kalman_3d_frame = kalman_rows['frame']
 
-        print 'loading frame numbers for kalman objects (observations)'
-        kobs_rows = []
-        for obj_id in use_obj_ids:
-            my_rows = ca.load_observations( obj_id, data_file,
-                                            )
-            kobs_rows.append(my_rows)
-        kobs_rows = numpy.concatenate( kobs_rows )
-        kobs_3d_frame = kobs_rows['frame']
-        print 'loaded'
+        if len(kalman_rows):
+            kalman_rows = numpy.concatenate( kalman_rows )
+            kalman_3d_frame = kalman_rows['frame']
+
+            print 'loading frame numbers for kalman objects (observations)'
+            kobs_rows = []
+            for obj_id in use_obj_ids:
+                my_rows = ca.load_observations( obj_id, data_file,
+                                                )
+                kobs_rows.append(my_rows)
+            kobs_rows = numpy.concatenate( kobs_rows )
+            kobs_3d_frame = kobs_rows['frame']
+            print 'loaded'
+        else:
+            print 'WARNING: kalman filename specified, but objects found'
+            kalman_filename = None
 
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
 
