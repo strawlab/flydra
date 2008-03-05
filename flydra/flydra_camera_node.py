@@ -117,8 +117,20 @@ def TimestampEcho():
         sender.sendto(newbuf,(orig_host,sendto_port))
 
 def stdout_write(x):
-    sys.stdout.write(x)
-    sys.stdout.flush()
+    while 1:
+        try:
+            sys.stdout.write(x)
+            break
+        except IOError, err:
+            if err.args[0] == errno.EINTR: # interrupted system call
+                continue
+    while 1:
+        try:
+            sys.stdout.flush()
+            break
+        except IOError, err:
+            if err.args[0] == errno.EINTR: # interrupted system call
+                continue
 
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
