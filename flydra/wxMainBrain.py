@@ -1483,6 +1483,7 @@ class wxMainBrainApp(wx.App):
         self.main_brain.send_set_camera_property( cam_id, 'roi2', widget.IsChecked() )
 
     def OnOldCamera(self, cam_id):
+        print 'camera detached: '+cam_id
         sys.stdout.flush()
         self.OnRecordRawStop(warn=False)
 
