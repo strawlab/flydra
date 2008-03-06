@@ -156,9 +156,10 @@ class GrabClass(object):
                  roi2_radius=10, bg_frame_interval=50, bg_frame_alpha=0.001, cam_no=-1,
                  main_brain_hostname=None,
                  mask_image=None,
-                 n_sigma=1.0):
+                 n_sigma=None):
         self.main_brain_hostname = main_brain_hostname
         self.cam = cam
+        self.shortest_IFI = 1.0/self.cam.get_framerate()
         self.cam2mainbrain_port = cam2mainbrain_port
         self.cam_id = cam_id
         self.log_message_queue = log_message_queue
@@ -207,6 +208,8 @@ class GrabClass(object):
             property_name, value = self._prop_queue.get_nowait()
             if 1:
                 if 1:
+                    print 'setting camera property', property_name, value,'...',
+                    sys.stdout.flush()
                     if property_name in CAM_CONTROLS:
                         enum = CAM_CONTROLS[property_name]
                         if type(value) == tuple: # setting whole thing
@@ -214,13 +217,12 @@ class GrabClass(object):
                             assert value[1] == props['min_value']
                             assert value[2] == props['max_value']
                             value = value[0]
-                        print 'setting camera property', property_name, value
                         cam.set_camera_property(enum,value,0)
                     elif property_name == 'roi':
                         #print 'flydra_camera_node.py: ignoring ROI command for now...'
                         grabber.roi = value
                     elif property_name == 'diff_threshold':
-                        print 'setting diff_threshold',value
+                        #print 'setting diff_threshold',value
                         grabber.diff_threshold = value
                     elif property_name == 'clear_threshold':
                         grabber.clear_threshold = value
@@ -229,7 +231,7 @@ class GrabClass(object):
                     elif property_name == 'height':
                         assert cam.get_max_height() == value
                     elif property_name == 'trigger_mode':
-                        print 'cam.set_trigger_mode_number( value )',value
+                        #print 'cam.set_trigger_mode_number( value )',value
                         cam.set_trigger_mode_number( value )
                     elif property_name == 'roi2':
                         if value: globals['use_roi2'].set()
@@ -239,9 +241,13 @@ class GrabClass(object):
                             # print 'ignoring request to use_cmp'
                             globals['use_cmp'].set()
                         else: globals['use_cmp'].clear()
+                    elif property_name == 'expected_trigger_framerate':
+                        #print 'expecting trigger fps',value
+                        self.shortest_IFI = 1.0/value
                     elif property_name == 'max_framerate':
                         if 1:
-                            print 'ignoring request to set max_framerate'
+                            #print 'ignoring request to set max_framerate'
+                            pass
                         else:
                             try:
                                 cam.set_framerate(value)
@@ -252,9 +258,11 @@ class GrabClass(object):
                         else: globals['collecting_background'].clear()
                     elif property_name == 'visible_image_view':
                         globals['export_image_name'] = value
-                        print 'displaying',value,'image'
+                        #print 'displaying',value,'image'
                     else:
                         print 'IGNORING property',property_name
+
+                    print 'OK'
 
     def set_property(self, property_name, value ):
         # called from any thread, passes values to grab thread
@@ -479,8 +487,6 @@ class GrabClass(object):
         fi8ufactory = FastImage.FastImage8u
         use_cmp_isSet = globals['use_cmp'].isSet
 
-        shortest_IFI = 1.0/self.cam.get_framerate()
-
         hw_roi_frame = fi8ufactory( cur_fisize )
         self._hw_roi_frame = hw_roi_frame # make accessible to other code
 
@@ -678,7 +684,7 @@ class GrabClass(object):
 
                     diff = timestamp-old_ts
                     time_per_frame = diff/(n_frames_skipped+1)
-                    if time_per_frame > 2*shortest_IFI:
+                    if time_per_frame > 2*self.shortest_IFI:
                         msg = 'Warning: IFI is %f on %s at %s (frame skipped?)'%(time_per_frame,self.cam_id,time.asctime())
                         self.log_message_queue.put((self.cam_id,time.time(),msg))
                         print >> sys.stderr, msg
@@ -1024,7 +1030,7 @@ class App:
                  debug_acquire = False,
                  num_buffers = None,
                  mask_images = None,
-                 n_sigma = 1.0,
+                 n_sigma = None,
                  ):
         if main_brain_hostname is None:
             self.main_brain_hostname = default_main_brain_hostname
@@ -1218,6 +1224,7 @@ class App:
             scalar_control_info['max_framerate'] = cam.get_framerate()
             scalar_control_info['collecting_background']=globals['collecting_background'].isSet()
             scalar_control_info['debug_drop']=globals['debug_drop']
+            scalar_control_info['expected_trigger_framerate'] = 0.0
 
             # register self with remote server
             port = 9834 + cam_no # for local Pyro server
@@ -1282,7 +1289,6 @@ class App:
                 grabber.grab_func(globals)
 
     def handle_commands(self, cam_no, cmds):
-        cam = self.all_cams[cam_no]
         grabber = self.all_grabbers[cam_no]
         cam_id = self.all_cam_ids[cam_no]
         DEBUG('handle_commands:',cam_id)
@@ -1424,6 +1430,7 @@ class App:
 ##                if cmds[key]: globals['export_image_name'] = 'absdiff'
 ##                else: globals['export_image_name'] = 'raw'
             elif key == 'cal':
+                print 'setting calibration'
                 pmat, intlin, intnonlin, scale_factor = cmds[key]
 
                 # these three should always be done together in this order:
@@ -1492,7 +1499,6 @@ class App:
                         last_frames = last_frames_by_cam[cam_no]
                         last_points = self.last_points_by_cam[cam_no]
                         last_points_framenumbers = self.last_points_framenumbers_by_cam[cam_no]
-                        cam = self.all_cams[cam_no]
                         cam_id = self.all_cam_ids[cam_no]
 
                         now = time_func()
@@ -1705,7 +1711,7 @@ def main():
                       metavar="BACKEND")
 
     parser.add_option("--n-sigma", type='float',
-                      default=1.0)
+                      default=2.0)
 
     parser.add_option("--debug-drop", action='store_true',
                       help="save debugging information regarding dropped network packets",
@@ -1796,7 +1802,7 @@ def main():
             use_mode = options.mode_num,
             num_buffers = options.num_buffers,
             mask_images = options.mask_images,
-
+            n_sigma = options.n_sigma,
             )
     if app.num_cams <= 0:
         return
