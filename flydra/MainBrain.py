@@ -4,6 +4,7 @@
 # 1. make variable eccentricity threshold dependent on area (bigger area = lower threshold)
 from __future__ import with_statement, division
 import threading, time, socket, select, sys, os, copy, struct, math
+import collections
 import sets, traceback
 import Pyro.core
 import flydra.reconstruct
@@ -789,7 +790,7 @@ class CoordinateProcessor(threading.Thread):
         pt_size = struct.calcsize(pt_fmt)
 
         realtime_coord_dict = {}
-        realtime_kalman_coord_dict = {}
+        realtime_kalman_coord_dict = collections.defaultdict(dict)
         oldest_timestamp_by_corrected_framenumber = {}
 
         new_data_framenumbers = sets.Set()
@@ -978,12 +979,10 @@ class CoordinateProcessor(threading.Thread):
                         # For hypothesis testing: attempt 3D reconstruction of 1st point from each 2D view
                         realtime_coord_dict[corrected_framenumber][cam_id]= points_undistorted[0]
 
-                        if corrected_framenumber not in realtime_kalman_coord_dict:
-                            realtime_kalman_coord_dict[corrected_framenumber] = {}
-
-                        # save all 3D Pluecker coordinates for Kalman filtering
-                        realtime_kalman_coord_dict[corrected_framenumber][absolute_cam_no]=(
-                            points_in_pluecker_coords_meters)
+                        if len( points_in_pluecker_coords_meters):
+                            # save all 3D Pluecker coordinates for Kalman filtering
+                            realtime_kalman_coord_dict[corrected_framenumber][absolute_cam_no]=(
+                                points_in_pluecker_coords_meters)
 
                         if self.show_overall_latency.isSet():
                             if n_pts:
@@ -1053,6 +1052,7 @@ class CoordinateProcessor(threading.Thread):
                                     continue
 
                                 pluecker_coords_by_camn = realtime_kalman_coord_dict[corrected_framenumber]
+
                                 if self.save_profiling_data:
                                     dumps = pickle.dumps(pluecker_coords_by_camn)
                                     self.data_dict_queue.append(('gob',(corrected_framenumber,
@@ -1284,6 +1284,10 @@ class CoordinateProcessor(threading.Thread):
 
                 for finished in finished_corrected_framenumbers:
                     del realtime_coord_dict[finished]
+                    try:
+                        del realtime_kalman_coord_dict[finished]
+                    except KeyError:
+                        pass
 
                 # Clean up old frame records to save RAM.
 
@@ -1295,12 +1299,14 @@ class CoordinateProcessor(threading.Thread):
                 # re-sync, but who cares?
 
                 if len(realtime_coord_dict)>100:
+                    print 'Cameras not synchronized or network dropping packets -- unmatched 2D data accumulating'
                     k=realtime_coord_dict.keys()
                     k.sort()
                     for ki in k[:-50]:
                         del realtime_coord_dict[ki]
 
                 if len(realtime_kalman_coord_dict)>100:
+                    print 'deleting unused 3D data (this should be a rare occurrance)'
                     k=realtime_kalman_coord_dict.keys()
                     k.sort()
                     for ki in k[:-50]:
@@ -1490,6 +1496,7 @@ class MainBrain(object):
                 cam_lock = cam['lock']
                 with cam_lock:
                     cam['commands']['cal']= pmat, intlin, intnonlin, scale_factor
+                    cam['is_calibrated'] = True
         # --- thread boundary -----------------------------------------
 
         def listen(self,daemon):
@@ -1546,6 +1553,7 @@ class MainBrain(object):
                                          'fqdn':fqdn,
                                          'port':port,
                                          'cam2mainbrain_data_port':cam2mainbrain_data_port,
+                                         'is_calibrated':False, # has 3D calibration been sent yet?
                                          }
             self.no_cams_connected.clear()
             with self.changed_cam_lock:
@@ -1674,6 +1682,7 @@ class MainBrain(object):
         self.MainBrain_cam_ids_copy = [] # keep a copy of all cam_ids connected
         self._fqdns_by_cam_id = {}
         self.set_new_camera_callback(self.IncreaseCamCounter)
+        self.set_new_camera_callback(self.SendExpectedFPS)
         self.set_old_camera_callback(self.DecreaseCamCounter)
         self.currently_calibrating = threading.Event()
 
@@ -1742,7 +1751,14 @@ class MainBrain(object):
         self.fps = fps
         self.remote_api.log_message('<mainbrain>',time.time(),'set fps to %f'%(self.fps,))
         print 'set fps to', fps
-        print 'WARNING: .flydrarc fps not yet set...'
+        cam_ids = self.remote_api.external_get_cam_ids()
+        for cam_id in cam_ids:
+            try:
+                self.send_set_camera_property( cam_id, 'expected_trigger_framerate', fps )
+            except Exception,err:
+                print 'ERROR:',err
+        rc_params['frames_per_second'] = fps
+        save_rc_params()
 
     def do_synchronization(self):
         if self.is_saving_data():
@@ -1779,6 +1795,9 @@ class MainBrain(object):
     def IncreaseCamCounter(self,cam_id,scalar_control_info,fqdn_and_port):
         self.num_cams += 1
         self.MainBrain_cam_ids_copy.append( cam_id )
+
+    def SendExpectedFPS(self,cam_id,scalar_control_info,fqdn_and_port):
+        self.send_set_camera_property( cam_id, 'expected_trigger_framerate', self.fps )
 
     def DecreaseCamCounter(self,cam_id):
         try:
