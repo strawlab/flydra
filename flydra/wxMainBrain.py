@@ -104,7 +104,6 @@ class wxMainBrainApp(wx.App):
         global use_opengl, wxglvideo
 
         if use_opengl:
-            import OpenGL
             import motmot.wxglvideo.simple_overlay as wxglvideo
         else:
             import motmot.wxvideo.wxvideo as wxglvideo
