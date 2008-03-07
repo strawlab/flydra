@@ -13,6 +13,7 @@ from optparse import OptionParser
 import pylab
 import flydra.reconstruct
 import flydra.analysis.result_utils as result_utils
+import matplotlib.cm as cm
 
 def auto_subplot(fig,n,n_rows=2,n_cols=3):
     # 2 rows and n_cols
@@ -44,7 +45,14 @@ def show_it(fig,
         show_nth_frame = None
 
     results = result_utils.get_results(filename,mode='r')
-    reconstructor = flydra.reconstruct.Reconstructor(results)
+    if hasattr(results.root,'images'):
+        img_table = results.root.images
+    else:
+        img_table = None
+    if hasattr(results.root,'calibration'):
+        reconstructor = flydra.reconstruct.Reconstructor(results)
+    else:
+        reconstructor = None
 
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(results)
 
@@ -87,6 +95,7 @@ def show_it(fig,
 
     print 'reading cameras'
     frames = frames[use_idxs]#data2d.readCoordinates( use_idxs, field='frame')
+    print 'frame range: %d - %d'%( frames[0], frames[-1] )
     camns = data2d.read(field='camn')
     camns = camns[use_idxs]
     #camns = data2d.readCoordinates( use_idxs, field='camn')
@@ -122,9 +131,25 @@ def show_it(fig,
 
         xs = data2d.readCoordinates( this_camn_idxs, field='x')
         ys = data2d.readCoordinates( this_camn_idxs, field='y')
+
+        valid_idx = numpy.nonzero( ~numpy.isnan(xs) )[0]
+        idx_first_valid = valid_idx[0]
+        idx_last_valid = valid_idx[-1]
         tmp_frames = data2d.readCoordinates( this_camn_idxs, field='frame')
 
-        ax.plot(xs,ys,'.',label='all points')
+        if img_table is not None:
+            bg_arr_h5 = getattr(img_table,cam_id)
+            bg_arr = bg_arr_h5.read()
+            ax.imshow( bg_arr, origin='lower',cmap=cm.pink )
+
+        ax.plot([xs[idx_first_valid]],[ys[idx_first_valid]],
+                'ro',label='first point')
+
+        ax.plot(xs,ys,'g.',label='all points')
+
+        ax.plot([xs[idx_last_valid]],[ys[idx_last_valid]],
+                'bo',label='first point')
+
         if show_nth_frame is not None:
             for i,f in enumerate(tmp_frames):
                 if f%show_nth_frame==0:
@@ -139,6 +164,10 @@ def show_it(fig,
             ax.set_xlim([0,res[0]])
             #ax.set_ylim([0,res[1]])
             ax.set_ylim([res[1],0])
+        elif bg_arr is not None:
+            ax.set_xlim([0,bg_arr.shape[1]])
+            #ax.set_ylim([0,res[1]])
+            ax.set_ylim([bg_arr.shape[0],0])
 
     # Do same as above for Kalman-filtered data
 
