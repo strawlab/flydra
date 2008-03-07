@@ -833,7 +833,11 @@ class CoordinateProcessor(threading.Thread):
                 deferred_2d_data = []
                 for cam_id, newdata in incoming_2d_data:
 
-                    cam_idx = self.cam_ids.index(cam_id)
+                    try:
+                        cam_idx = self.cam_ids.index(cam_id)
+                    except ValueError, err:
+                        print 'ERROR: ignoring lost cam_id %s'%(cam_id,)
+                        continue
                     absolute_cam_no = self.absolute_cam_nos[cam_idx]
 
                     if NETWORK_PROTOCOL == 'tcp':
