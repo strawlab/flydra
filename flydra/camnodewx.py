@@ -61,6 +61,17 @@ class WxApp(wx.App):
         if self.call_often is not None:
             self.call_often()
 
+    def quit_now(self, exit_value):
+        # called from callback thread
+        if exit_value != 0:
+            # don't know how to make wx exit with exit value otherwise
+            sys.exit(exit_value)
+        else:
+            # send event to app
+            event = wx.CloseEvent()
+            event.SetEventObject(self)
+            wx.PostEvent(self, event)
+
 class DisplayCamData(object):
     def __init__(self):
         self._chain = camnode_utils.ChainLink()
