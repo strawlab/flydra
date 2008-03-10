@@ -3,8 +3,13 @@ from __future__ import division
 from __future__ import with_statement
 
 import wx
+import wx.lib.newevent
 import camnode
 import camnode_utils
+import numpy
+import motmot.wxglvideo.simple_overlay as wxglvideo
+
+DisplayImageEvent, EVT_DISPLAYIMAGE = wx.lib.newevent.NewEvent()
 
 class WxApp(wx.App):
     def OnInit(self):
@@ -30,6 +35,10 @@ class WxApp(wx.App):
         self.frame.SetMenuBar(menuBar)
 
         frame_box = wx.BoxSizer(wx.VERTICAL)
+
+        self.cam_image_canvas = wxglvideo.DynamicImageCanvas(self.frame,-1)
+        frame_box.Add(self.cam_image_canvas,1,wx.EXPAND)
+
         self.frame.SetSizer(frame_box)
         self.frame.Layout()
 
@@ -46,6 +55,8 @@ class WxApp(wx.App):
         wx.EVT_TIMER(self, ID_Timer2, self.OnTimer2)
         self.update_interval2=50
         self.timer2.Start(self.update_interval2)
+
+        EVT_DISPLAYIMAGE(self, self.OnDisplayImageEvent )
 
         return True
     def post_init(self, call_often = None):
@@ -72,13 +83,26 @@ class WxApp(wx.App):
             event.SetEventObject(self)
             wx.PostEvent(self, event)
 
+    def OnDisplayImageEvent(self, event):
+        #print 'got display image for %s in wx mainloop'%event.cam_id
+        self.cam_image_canvas.update_image_and_drawings(event.cam_id,
+                                                        event.buf,
+                                                        points=event.pts,
+                                                        sort_add=True)
 class DisplayCamData(object):
-    def __init__(self):
+    def __init__(self, wxapp, cam_id=None):
         self._chain = camnode_utils.ChainLink()
+        self._wxapp = wxapp
+        self._cam_id = cam_id
     def get_chain(self):
         return self._chain
     def mainloop(self):
         while 1:
             with camnode_utils.use_buffer_from_chain(self._chain) as buf:
-                camnode.stdout_write('D')
-
+                # post images and processed points to wx
+                if hasattr(buf,'processed_points'):
+                    pts = buf.processed_points
+                else:
+                    pts = None
+                buf_copy = numpy.array( buf.get_buf(), copy=True )
+            wx.PostEvent(self._wxapp, DisplayImageEvent(buf=buf_copy, pts=pts, cam_id=self._cam_id))
