@@ -6,6 +6,10 @@ import pkg_resources
 import os
 BENCHMARK = int(os.environ.get('FLYDRA_BENCHMARK',0))
 FLYDRA_BT = int(os.environ.get('FLYDRA_BT',0)) # threaded benchmark
+
+#DISABLE_ALL_PROCESSING = True
+DISABLE_ALL_PROCESSING = False
+
 near_inf = 9.999999e20
 
 bright_non_gaussian_cutoff = 255
@@ -19,6 +23,7 @@ import errno
 import scipy.misc.pilutil
 import numpy.dual
 
+import contextlib
 #import flydra.debuglock
 #DebugLock = flydra.debuglock.DebugLock
 
@@ -198,25 +203,40 @@ class PreallocatedBufferPool(object):
             if buffer.get_size() == self._size:
                 self._allocated_pool.append( buffer )
 
+@contextlib.contextmanager
+def get_free_buffer_from_pool(pool):
+    """manage access to buffers from the pool"""
+    buf = pool.get_free_buffer()
+    buf._i_promise_to_return_buffer_to_the_pool = False
+    try:
+        yield buf
+    finally:
+        if not buf._i_promise_to_return_buffer_to_the_pool:
+            pool.return_buffer(buf)
+
 class ProcessCamData(object):
-    def __init__(self):
+    def __init__(self,cam_id=None):
         self._chain = camnode_utils.ChainLink()
+        self._cam_id = cam_id
     def get_chain(self):
         return self._chain
     def mainloop(self):
         while 1:
             with camnode_utils.use_buffer_from_chain(self._chain) as buf:
-                stdout_write('P')
+                #stdout_write('P')
+                buf.processed_points = [ (10,20) ]
 
 class SaveCamData(object):
-    def __init__(self):
+    def __init__(self,cam_id=None):
         self._chain = camnode_utils.ChainLink()
+        self._cam_id = cam_id
     def get_chain(self):
         return self._chain
     def mainloop(self):
         while 1:
             with camnode_utils.use_buffer_from_chain(self._chain) as buf:
-                stdout_write('S')
+                #stdout_write('S')
+                1
 
 class IsoThread(threading.Thread):
     """One instance of this class for each camera. Do nothing but get
@@ -245,39 +265,51 @@ class IsoThread(threading.Thread):
         cam = self.cam
         DEBUG_ACQUIRE = self.debug_acquire
         while not cam_quit_event_isSet():
-            buf = buffer_pool.get_free_buffer()
-            _bufim = buf.get_buf()
-            try:
-                cam.grab_next_frame_into_buf_blocking(_bufim)
-            except cam_iface.BuffersOverflowed:
-                if DEBUG_ACQUIRE:
-                    stdout_write('(O%s)'%self.cam_no_str)
-                now = time.time()
-                msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
-                self.log_message_queue.put((self.cam_id,now,msg))
-                print >> sys.stderr, msg
-                continue
-            except cam_iface.FrameDataMissing:
-                if DEBUG_ACQUIRE:
-                    stdout_write('(M%s)'%self.cam_no_str)
-                now = time.time()
-                msg = 'Warning: frame data missing on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
-                #self.log_message_queue.put((self.cam_id,now,msg))
-                print >> sys.stderr, msg
-                continue
-            except cam_iface.FrameSystemCallInterruption:
-                if DEBUG_ACQUIRE:
-                    stdout_write('(S%s)'%self.cam_no_str)
-                continue
+            with get_free_buffer_from_pool( buffer_pool ) as buf:
+                _bufim = buf.get_buf()
 
-            if DEBUG_ACQUIRE:
-                stdout_write(self.cam_no_str)
+                try:
+                    cam.grab_next_frame_into_buf_blocking(_bufim)
+                except cam_iface.BuffersOverflowed:
+                    if DEBUG_ACQUIRE:
+                        stdout_write('(O%s)'%self.cam_no_str)
+                    now = time.time()
+                    msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
+                    self.log_message_queue.put((self.cam_id,now,msg))
+                    print >> sys.stderr, msg
+                    continue
+                except cam_iface.FrameDataMissing:
+                    if DEBUG_ACQUIRE:
+                        stdout_write('(M%s)'%self.cam_no_str)
+                    now = time.time()
+                    msg = 'Warning: frame data missing on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
+                    #self.log_message_queue.put((self.cam_id,now,msg))
+                    print >> sys.stderr, msg
+                    continue
+                except cam_iface.FrameSystemCallInterruption:
+                    if DEBUG_ACQUIRE:
+                        stdout_write('(S%s)'%self.cam_no_str)
+                    continue
 
-            # Now we get rid of the frame from this thread by passing
-            # it to processing threads. The last one of these will
-            # return the buffer to buffer_pool when done.
+                if DEBUG_ACQUIRE:
+                    stdout_write(self.cam_no_str)
 
-            chain.fire( buf )
+                cam_received_time = time.time()
+
+                # get best guess as to when image was taken
+                timestamp=self.cam.get_last_timestamp()
+                framenumber=self.cam.get_last_framenumber()
+
+                buf.cam_received_time = cam_received_time
+                buf.timestamp = timestamp
+                buf.framenumber = framenumber
+
+                # Now we get rid of the frame from this thread by passing
+                # it to processing threads. The last one of these will
+                # return the buffer to buffer_pool when done.
+                if chain is not None:
+                    buf._i_promise_to_return_buffer_to_the_pool = True
+                    chain.fire( buf ) # the end of the chain will call return_buffer()
         print 'exiting camera IsoThread for camera',self.cam_no_str
 
 class ConsoleApp(object):
@@ -329,7 +361,7 @@ class AppState(object):
 
         num_cams = cam_iface.get_num_cameras()
         if num_cams == 0:
-            return
+            raise RuntimeError('No cameras detected')
 
         self.all_cams = []
         self.cam_status = []
@@ -403,20 +435,25 @@ class AppState(object):
             self.cam_status.append( 'started' )
 
             # setup chain for this camera:
-            process_cam = ProcessCamData()
-            self.all_grabbers.append( process_cam )
+            if not DISABLE_ALL_PROCESSING:
+                process_cam = ProcessCamData()
+                self.all_grabbers.append( process_cam )
 
-            process_cam_chain = process_cam.get_chain()
-            self.all_cam_chains.append(process_cam_chain)
-            thread = threading.Thread( target = process_cam.mainloop )
-            thread.setDaemon(True)
-            thread.start()
+                process_cam_chain = process_cam.get_chain()
+                self.all_cam_chains.append(process_cam_chain)
+                thread = threading.Thread( target = process_cam.mainloop )
+                thread.setDaemon(True)
+                thread.start()
 
-            save_cam = SaveCamData()
-            process_cam_chain.append_link( save_cam.get_chain() )
-            thread = threading.Thread( target = save_cam.mainloop )
-            thread.setDaemon(True)
-            thread.start()
+                save_cam = SaveCamData()
+                process_cam_chain.append_link( save_cam.get_chain() )
+                thread = threading.Thread( target = save_cam.mainloop )
+                thread.setDaemon(True)
+                thread.start()
+            else:
+                process_cam_chain = None
+                self.all_grabbers.append( None )
+                self.all_cam_chains.append( None )
 
             buffer_pool = PreallocatedBufferPool(FastImage.Size(*cam.get_frame_size()))
             iso_thread = IsoThread(chain = process_cam_chain,
@@ -579,15 +616,20 @@ class AppState(object):
             print >> sys.stderr, driver_string
             self.log_message_queue.put((cam_id,time.time(),driver_string))
             print 'max_num_points_per_camera',max_num_points_per_camera
+        print 'AppState init OK'
 
     def set_quit_function(self, quit_function=None):
         self.quit_function = quit_function
 
-    def append_chain(self, klass=None):
-        for first_chain in self.all_cam_chains:
-            thread_instance = klass()
+    def append_chain(self, klass=None, args=None):
+        for cam_no, (cam_id, chain) in enumerate(zip(self.all_cam_ids,
+                                                     self.all_cam_chains)):
+            if args is None:
+                thread_instance = klass(cam_id=cam_id)
+            else:
+                thread_instance = klass(*args,**dict(cam_id=cam_id))
             print 'thread_instance',thread_instance
-            first_chain.append_link( thread_instance.get_chain() )
+            chain.append_link( thread_instance.get_chain() )
             thread = threading.Thread( target = thread_instance.mainloop )
             thread.setDaemon(True)
             thread.start()
@@ -701,12 +743,17 @@ class AppState(object):
                 globals['cam_quit_event'].set()
                 print "globals['cam_quit_event'].isSet()",globals['cam_quit_event'].isSet()
                 self.iso_threads[cam_no].join()
+                # XXX TODO: quit and join chain threads
                 print 'done with IsoThread %d - joined'%cam_no
                 cam.close()
                 print 'camera %d closed'%cam_no
                 self.cam_status[cam_no] = 'destroyed'
                 with self.main_brain_lock:
                     cmds=self.main_brain.close(cam_id)
+            elif key == 'take_bg':
+                globals['take_background'].set()
+            elif key == 'clear_bg':
+                globals['clear_background'].set()
             else:
                 raise NotImplementedError('no support yet for key "%s"'%key)
 
@@ -854,12 +901,14 @@ def main():
     if options.wx:
         import camnodewx
         app=camnodewx.WxApp()
-        app_state.append_chain( klass = camnodewx.DisplayCamData )
+        if not DISABLE_ALL_PROCESSING:
+            app_state.append_chain( klass = camnodewx.DisplayCamData, args=(app,) )
         app.post_init(call_often = app_state.update)
         app_state.set_quit_function( app.OnQuit )
     else:
         app=ConsoleApp(call_often = app_state.update)
         app_state.set_quit_function( app.OnQuit )
+    print 'starting mainloop'
     app.MainLoop()
 
 if __name__=='__main__':
