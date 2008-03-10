@@ -203,6 +203,9 @@ class PreallocatedBufferPool(object):
             if buffer.get_size() == self._size:
                 self._allocated_pool.append( buffer )
 
+    def get_num_outstanding_buffers(self):
+        return self._buffers_handed_out
+
 @contextlib.contextmanager
 def get_free_buffer_from_pool(pool):
     """manage access to buffers from the pool"""
@@ -213,6 +216,773 @@ def get_free_buffer_from_pool(pool):
     finally:
         if not buf._i_promise_to_return_buffer_to_the_pool:
             pool.return_buffer(buf)
+
+class GrabClass(object):
+    def __init__(self,
+                 cam2mainbrain_port=None,
+                 cam_id=None,
+                 log_message_queue=None,
+                 max_num_points=2,
+                 roi2_radius=None,
+                 bg_frame_interval=50,
+                 bg_frame_alpha=0.001,
+                 cam_no=-1,
+                 main_brain_hostname=None,
+                 mask_image=None,
+                 n_sigma=None,
+                 framerate = None,
+                 lbrt=None,
+                 max_height=None,
+                 max_width=None,
+                 globals = None,
+                 ):
+        self.globals = globals
+        self.main_brain_hostname = main_brain_hostname
+        if framerate is not None:
+            self.shortest_IFI = 1.0/framerate
+        else:
+            self.shortest_IFI = numpy.inf
+        self.cam2mainbrain_port = cam2mainbrain_port
+        self.cam_id = cam_id
+        self.log_message_queue = log_message_queue
+
+        self.bg_frame_alpha = bg_frame_alpha
+        self.bg_frame_interval = bg_frame_interval
+        self.n_sigma = n_sigma
+
+        self.new_roi = threading.Event()
+        self.new_roi_data = None
+        self.new_roi_data_lock = threading.Lock()
+
+        self.max_height = max_height
+        self.max_width = max_width
+
+        if mask_image is None:
+            mask_image = numpy.zeros( (self.max_height,
+                                       self.max_width),
+                                      dtype=numpy.bool )
+            # mask is currently an array of bool
+            mask_image = mask_image.astype(numpy.uint8)*255
+        self.mask_image = mask_image
+        self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(lbrt,
+                                                                          self.max_width,
+                                                                          self.max_height,
+                                                                          max_num_points,
+                                                                          roi2_radius,
+                                                                          )
+        self._hlper = None
+        self._pmat = None
+        self._scale_factor = None
+        self.cam_no_str = str(cam_no)
+
+        self._chain = camnode_utils.ChainLink()
+
+    def get_chain(self):
+        return self._chain
+
+    def get_clear_threshold(self):
+        return self.realtime_analyzer.clear_threshold
+    def set_clear_threshold(self, value):
+        self.realtime_analyzer.clear_threshold = value
+    clear_threshold = property( get_clear_threshold, set_clear_threshold )
+
+    def get_diff_threshold(self):
+        return self.realtime_analyzer.diff_threshold
+    def set_diff_threshold(self, value):
+        self.realtime_analyzer.diff_threshold = value
+    diff_threshold = property( get_diff_threshold, set_diff_threshold )
+
+    def get_scale_factor(self):
+        return self._scale_factor
+    def set_scale_factor(self,value):
+        self._scale_factor = value
+
+    def get_roi(self):
+        return self.realtime_analyzer.roi
+    def set_roi(self, lbrt):
+        with self.new_roi_data_lock:
+            self.new_roi_data = lbrt
+            self.new_roi.set()
+    roi = property( get_roi, set_roi )
+
+    def get_pmat(self):
+        return self._pmat
+    def set_pmat(self,value):
+        self._pmat = numpy.asarray(value)
+
+        P = self._pmat
+        determinant = numpy.dual.det
+        r_ = numpy.r_
+
+        # find camera center in 3D world coordinates
+        col0_asrow = P[nx.newaxis,:,0]
+        col1_asrow = P[nx.newaxis,:,1]
+        col2_asrow = P[nx.newaxis,:,2]
+        col3_asrow = P[nx.newaxis,:,3]
+        X = determinant(  r_[ col1_asrow, col2_asrow, col3_asrow ] )
+        Y = -determinant( r_[ col0_asrow, col2_asrow, col3_asrow ] )
+        Z = determinant(  r_[ col0_asrow, col1_asrow, col3_asrow ] )
+        T = -determinant( r_[ col0_asrow, col1_asrow, col2_asrow ] )
+
+        self._camera_center = nx.array( [ X/T, Y/T, Z/T, 1.0 ] )
+        self._pmat_inv = numpy.dual.pinv(self._pmat)
+
+        scale_array = numpy.ones((3,4))
+        scale_array[:,3] = self._scale_factor # mulitply last column by scale_factor
+        self._pmat_meters = scale_array*self._pmat # element-wise multiplication
+        self._pmat_meters_inv = numpy.dual.pinv(self._pmat_meters)
+        P = self._pmat_meters
+        # find camera center in 3D world coordinates
+        col0_asrow = P[nx.newaxis,:,0]
+        col1_asrow = P[nx.newaxis,:,1]
+        col2_asrow = P[nx.newaxis,:,2]
+        col3_asrow = P[nx.newaxis,:,3]
+        X = determinant(  r_[ col1_asrow, col2_asrow, col3_asrow ] )
+        Y = -determinant( r_[ col0_asrow, col2_asrow, col3_asrow ] )
+        Z = determinant(  r_[ col0_asrow, col1_asrow, col3_asrow ] )
+        T = -determinant( r_[ col0_asrow, col1_asrow, col2_asrow ] )
+        self._camera_center_meters = nx.array( [ X/T, Y/T, Z/T, 1.0 ] )
+
+    def make_reconstruct_helper(self, intlin, intnonlin):
+        fc1 = intlin[0,0]
+        fc2 = intlin[1,1]
+        cc1 = intlin[0,2]
+        cc2 = intlin[1,2]
+        k1, k2, p1, p2 = intnonlin
+
+        self._hlper = reconstruct_utils.ReconstructHelper(
+            fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
+
+    def _convert_to_old_format(self, xpoints ):
+        points = []
+        for xpt in xpoints:
+            (x0_abs, y0_abs, area, slope, eccentricity) = xpt
+
+
+            if numpy.isnan(slope):
+                run = numpy.nan
+                line_found = False
+            else:
+                line_found = True
+                if numpy.isinf(slope):
+                    run = 0
+                    rise = 1
+                else:
+                    run = 1
+                    #slope = rise/run
+                    rise = slope
+
+            ray_valid = False
+            if self._hlper is not None:
+                x0u, y0u = self._hlper.undistort( x0_abs, y0_abs )
+                if line_found:
+
+                    # (If we have self._hlper _pmat_inv, we can assume we have
+                    # self._pmat_inv and sef._pmat_meters.)
+                    (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4,
+                     ray5) = self.do_3d_operations_on_2d_point(x0u,y0u,#self._hlper.undistort,
+                                                               self._pmat_inv, self._pmat_meters_inv,
+                                                               self._camera_center, self._camera_center_meters,
+                                                               x0_abs, y0_abs,
+                                                               rise, run)
+                    ray_valid = True
+            else:
+                x0u = x0_abs # fake undistorted data
+                y0u = y0_abs
+
+            if not ray_valid:
+                p1,p2,p3,p4 = -1, -1, -1, -1 # sentinel value (will be converted to nan)
+                (ray0, ray1, ray2, ray3, ray4, ray5) = (0,0,0, 0,0,0)
+
+            slope_found = True
+            if numpy.isnan(slope):
+                # prevent nan going across network
+                slope_found = False
+                slope = 0.0
+
+            if numpy.isinf(eccentricity):
+                eccentricity = near_inf
+
+            if numpy.isinf(slope):
+                slope = near_inf
+
+            pt = (x0_abs, y0_abs, area, slope, eccentricity,
+                  p1, p2, p3, p4, line_found, slope_found,
+                  x0u, y0u,
+                  ray_valid,
+                  ray0, ray1, ray2, ray3, ray4, ray5)
+            points.append( pt )
+        return points
+
+    def do_3d_operations_on_2d_point(self, x0u, y0u,
+                                     pmat_inv, pmat_meters_inv,
+                                     camera_center, camera_center_meters,
+                                     x0_abs, y0_abs,
+                                     rise, run):
+
+            matrixmultiply = numpy.dot
+            svd = numpy.dual.svd # use fastest ATLAS/fortran libraries
+
+            # calculate plane containing camera origin and found line
+            # in 3D world coords
+
+            # Step 1) Find world coordinates points defining plane:
+            #    A) found point
+            found_point_image_plane = [x0u,y0u,1.0]
+            X0=matrixmultiply(pmat_inv,found_point_image_plane)
+
+            #    B) another point on found line
+            x1u, y1u = self._hlper.undistort(x0_abs+run,y0_abs+rise)
+            X1=matrixmultiply(pmat_inv,[x1u,y1u,1.0])
+
+            #    C) world coordinates of camera center already known
+
+            # Step 2) Find world coordinates of plane
+            A = nx.array( [ X0, X1, camera_center] ) # 3 points define plane
+            try:
+                u,d,vt=svd(A,full_matrices=True)
+            except:
+                print 'rise,run',rise,run
+                print 'pmat_inv',pmat_inv
+                print 'X0, X1, camera_center',X0, X1, camera_center
+                raise
+            Pt = vt[3,:] # plane parameters
+
+            p1,p2,p3,p4 = Pt[0:4]
+            if numpy.isnan(p1):
+                print 'ERROR: SVD returned nan'
+
+            # calculate pluecker coords of 3D ray from camera center to point
+            # calculate 3D coords of point on image plane
+            X0meters = numpy.dot(pmat_meters_inv, found_point_image_plane )
+            X0meters = X0meters[:3]/X0meters[3] # convert to shape = (3,)
+            # project line
+            pluecker_meters = pluecker_from_verts(X0meters,camera_center_meters)
+            (ray0, ray1, ray2, ray3, ray4, ray5) = pluecker_meters # unpack
+
+            return (p1, p2, p3, p4,
+                    ray0, ray1, ray2, ray3, ray4, ray5)
+
+
+    def mainloop(self):
+        globals = self.globals
+        last_take_bg_timestamp = -numpy.inf
+
+        self._globals = globals
+        DEBUG_ACQUIRE = globals['debug_acquire']
+        DEBUG_DROP = globals['debug_drop']
+        if DEBUG_DROP:
+            debug_fd = open('debug_framedrop_cam.txt',mode='w')
+
+        # questionable optimization: speed up by eliminating namespace lookups
+        cam_quit_event_isSet = globals['cam_quit_event'].isSet
+        bg_frame_number = 0
+        clear_background_isSet = globals['clear_background'].isSet
+        clear_background_clear = globals['clear_background'].clear
+        take_background_isSet = globals['take_background'].isSet
+        take_background_clear = globals['take_background'].clear
+        collecting_background_isSet = globals['collecting_background'].isSet
+
+        max_frame_size = FastImage.Size(self.max_width, self.max_height)
+
+        lbrt = self.realtime_analyzer.roi
+        l,b,r,t=lbrt
+        hw_roi_w = r-l+1
+        hw_roi_h = t-b+1
+        cur_roi_l = l
+        cur_roi_b = b
+        #hw_roi_w, hw_roi_h = self.cam.get_frame_size()
+        #cur_roi_l, cur_roi_b = self.cam.get_frame_offset()
+        cur_fisize = FastImage.Size(hw_roi_w, hw_roi_h)
+
+        bg_changed = True
+        use_roi2_isSet = globals['use_roi2'].isSet
+        fi8ufactory = FastImage.FastImage8u
+        use_cmp_isSet = globals['use_cmp'].isSet
+
+        hw_roi_frame = fi8ufactory( cur_fisize )
+        self._hw_roi_frame = hw_roi_frame # make accessible to other code
+
+        if BENCHMARK:
+            coord_socket = DummySocket()
+        else:
+            if NETWORK_PROTOCOL == 'udp':
+                coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            elif NETWORK_PROTOCOL == 'tcp':
+                coord_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                coord_socket.connect((self.main_brain_hostname,self.cam2mainbrain_port))
+            else:
+                raise ValueError('unknown NETWORK_PROTOCOL')
+
+        old_ts = time.time()
+        old_fn = None
+        points = []
+
+        if os.name == 'posix' and not BENCHMARK:
+            try:
+                max_priority = posix_sched.get_priority_max( posix_sched.FIFO )
+                sched_params = posix_sched.SchedParam(max_priority)
+                posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
+                msg = 'excellent, grab thread running in maximum prioity mode'
+            except Exception, x:
+                msg = 'WARNING: could not run in maximum priority mode:', str(x)
+            self.log_message_queue.put((self.cam_id,time.time(),msg))
+            print msg
+
+
+        #FastImage.set_debug(3) # let us see any images malloced, should only happen on hardware ROI size change
+
+
+        #################### initialize images ############
+
+        running_mean8u_im_full = self.realtime_analyzer.get_image_view('mean') # this is a view we write into
+
+        mask_im = self.realtime_analyzer.get_image_view('mask') # this is a view we write into
+        newmask_fi = FastImage.asfastimage( self.mask_image )
+        newmask_fi.get_8u_copy_put(mask_im, max_frame_size)
+
+        # allocate images and initialize if necessary
+
+        bg_image_full = FastImage.FastImage8u(max_frame_size)
+        std_image_full = FastImage.FastImage8u(max_frame_size)
+
+        running_mean_im_full = FastImage.FastImage32f(max_frame_size)
+        self._running_mean_im_full = running_mean_im_full # make accessible to other code
+
+        fastframef32_tmp_full = FastImage.FastImage32f(max_frame_size)
+
+        mean2_full = FastImage.FastImage32f(max_frame_size)
+        self._mean2_full = mean2_full # make accessible to other code
+        std2_full = FastImage.FastImage32f(max_frame_size)
+        self._std2_full = std2_full # make accessible to other code
+        running_stdframe_full = FastImage.FastImage32f(max_frame_size)
+        self._running_stdframe_full = running_stdframe_full # make accessible to other code
+        compareframe_full = FastImage.FastImage32f(max_frame_size)
+        compareframe8u_full = self.realtime_analyzer.get_image_view('cmp') # this is a view we write into
+        self._compareframe8u_full = compareframe8u_full
+
+        running_sumsqf_full = FastImage.FastImage32f(max_frame_size)
+        running_sumsqf_full.set_val(0,max_frame_size)
+        self._running_sumsqf_full = running_sumsqf_full # make accessible to other code
+
+        noisy_pixels_mask_full = FastImage.FastImage8u(max_frame_size)
+        mean_duration_no_bg = 0.0053 # starting value
+        mean_duration_bg = 0.020 # starting value
+
+        # set ROI views of full-frame images
+        bg_image = bg_image_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
+        std_image = std_image_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
+        running_mean8u_im = running_mean8u_im_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
+        running_mean_im = running_mean_im_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        fastframef32_tmp = fastframef32_tmp_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        mean2 = mean2_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        std2 = std2_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        running_stdframe = running_stdframe_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        compareframe = compareframe_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        compareframe8u = compareframe8u_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        running_sumsqf = running_sumsqf_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+        noisy_pixels_mask = noisy_pixels_mask_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
+
+        hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
+        running_mean_im.get_8u_copy_put( running_mean8u_im, cur_fisize )
+
+        #################### done initializing images ############
+
+        # take first image to set background and so on
+
+        with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
+            hw_roi_frame = chainbuf.get_buf()
+
+        incoming_raw_frames_queue = globals['incoming_raw_frames']
+        incoming_raw_frames_queue_put = incoming_raw_frames_queue.put
+
+        if BENCHMARK:
+            benchmark_start_time = time.time()
+            min_100_frame_time = 1e99
+            tA = 0.0
+            tB = 0.0
+            tC = 0.0
+            tD = 0.0
+            tE = 0.0
+            tF = 0.0
+            t4A = 0.0
+            t4B = 0.0
+            t4C = 0.0
+            t4D = 0.0
+            t4E = 0.0
+            t4F = 0.0
+            t4G = 0.0
+            t4H = 0.0
+            t4I = 0.0
+            t4J = 0.0
+            t4K = 0.0
+            t4L = 0.0
+            numT = 0
+
+        while not cam_quit_event_isSet():
+            if BENCHMARK:
+                t1 = time.time()
+            with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
+                hw_roi_frame = chainbuf.get_buf()
+                cam_received_time = chainbuf.cam_received_time
+                if BENCHMARK:
+                    t2 = cam_received_time
+
+                # get best guess as to when image was taken
+                timestamp=chainbuf.timestamp
+                framenumber=chainbuf.framenumber
+
+                if BENCHMARK:
+                    if (framenumber%100) == 0:
+                        dur = cam_received_time-benchmark_start_time
+                        min_100_frame_time = min(min_100_frame_time,dur)
+                        print '%.1f msec for 100 frames (min: %.1f)'%(dur*1000.0,min_100_frame_time*1000.0)
+                        sys.stdout.flush()
+                        benchmark_start_time = cam_received_time
+                    n_frames_skipped = 0
+                else:
+                    if old_fn is None:
+                        # no old frame
+                        old_fn = framenumber-1
+                    if framenumber-old_fn > 1:
+                        n_frames_skipped = framenumber-old_fn-1
+                        msg = '  frames apparently skipped: %d'%(n_frames_skipped,)
+                        self.log_message_queue.put((self.cam_id,time.time(),msg))
+                        print >> sys.stderr, msg
+                    else:
+                        n_frames_skipped = 0
+
+                    diff = timestamp-old_ts
+                    time_per_frame = diff/(n_frames_skipped+1)
+                    if time_per_frame > 2*self.shortest_IFI:
+                        msg = 'Warning: IFI is %f on %s at %s (frame skipped?)'%(time_per_frame,self.cam_id,time.asctime())
+                        self.log_message_queue.put((self.cam_id,time.time(),msg))
+                        print >> sys.stderr, msg
+
+                old_ts = timestamp
+                old_fn = framenumber
+
+                work_start_time = time.time()
+                xpoints = self.realtime_analyzer.do_work(hw_roi_frame,
+                                                         timestamp, framenumber, use_roi2_isSet(),
+                                                         use_cmp_isSet(),
+                                                         max_duration_sec=0.010, # maximum 10 msec in here
+                                                         )
+                chainbuf.processed_points = xpoints
+                points = self._convert_to_old_format( xpoints )
+
+                work_done_time = time.time()
+                if BENCHMARK:
+                    t3 = work_done_time
+
+                # allow other thread to see images
+                imname = globals['export_image_name'] # figure out what is wanted # XXX theoretically could have threading issue
+                if imname == 'raw':
+                    export_image = hw_roi_frame
+                else:
+                    export_image = self.realtime_analyzer.get_image_view(imname) # get image
+                globals['most_recent_frame_potentially_corrupt'] = (0,0), export_image # give view of image, receiver must be careful
+
+                tp1 = time.time()
+                if not BENCHMARK:
+                    # allow other thread to see raw image always (for saving)
+                    if incoming_raw_frames_queue.qsize() >1000:
+                        # chop off some old frames to prevent memory explosion
+                        print 'ERROR: deleting old frames to make room for new ones! (and sleeping)'
+                        for i in range(100):
+                            incoming_raw_frames_queue.get_nowait()
+                    incoming_raw_frames_queue_put(
+                        (hw_roi_frame.get_8u_copy(hw_roi_frame.size), # save a copy
+                         timestamp,
+                         framenumber,
+                         points,
+                         self.realtime_analyzer.roi,
+                         cam_received_time,
+                         ) )
+                    #print ' '*20,'put frame'
+
+                tp2 = time.time()
+                if BENCHMARK:
+                    t4 = tp2
+                    #FastImage.set_debug(3) # let us see any images malloced, should only happen on hardware ROI size change
+                    t41=t4
+                    t42=t4
+                    t43=t4
+                    t44=t4
+                    t45=t4
+                    t46=t4
+                    t47=t4
+                    t48=t4
+                    t49=t4
+                    t491=t4
+                    t492=t4
+
+                did_expensive = False
+                if collecting_background_isSet():
+                    if ((bg_frame_number % self.bg_frame_interval == 0) or
+                        (timestamp-last_take_bg_timestamp < 2.0)): # estimate STD quickly
+##                        if cur_fisize != max_frame_size:
+##                            # set to full ROI and take full image if necessary
+##                            raise NotImplementedError("background collection while using hardware ROI not implemented")
+                        #mybench = BENCHMARK
+                        mybench = 0
+                        res = realtime_image_analysis.do_bg_maint( running_mean_im,
+                                                                   hw_roi_frame,
+                                                                   cur_fisize,
+                                                                   self.bg_frame_alpha,
+                                                                   running_mean8u_im,
+                                                                   fastframef32_tmp,
+                                                                   running_sumsqf,
+                                                                   mean2,
+                                                                   std2,
+                                                                   running_stdframe,
+                                                                   self.n_sigma,
+                                                                   compareframe8u,
+                                                                   bright_non_gaussian_cutoff,
+                                                                   noisy_pixels_mask,
+                                                                   bright_non_gaussian_replacement,
+                                                                   bench=mybench )
+                        if mybench:
+                            t41, t42, t43, t44, t45, t46, t47, t48, t49, t491, t492 = res
+                        del res
+                        did_expensive = True
+                        bg_changed = True
+                        bg_frame_number = 0
+                    bg_frame_number += 1
+
+                tp3 = time.time()
+                if BENCHMARK:
+                    t5 = tp3
+                    #FastImage.set_debug(0) # let us see any images malloced, should only happen on hardware ROI size change
+
+                if take_background_isSet():
+                    # reset background image with current frame as mean and 0 STD
+                    hw_roi_frame.get_32f_copy_put( running_mean_im, max_frame_size )
+                    running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
+
+                    if cur_fisize != max_frame_size:
+                        print cur_fisize
+                        print max_frame_size
+                        print 'ERROR: can only take background image if not using ROI'
+                    else:
+                        hw_roi_frame.get_32f_copy_put(running_sumsqf,max_frame_size)
+                        running_sumsqf.toself_square(max_frame_size)
+
+                        hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
+                        print 'taking new bg'
+                        realtime_image_analysis.do_bg_maint(
+                            running_mean_im,#in
+                            hw_roi_frame,#in
+                            cur_fisize,#in
+                            self.bg_frame_alpha, #in
+                            running_mean8u_im,
+                            fastframef32_tmp,
+                            running_sumsqf, #in
+                            mean2,
+                            std2,
+                            running_stdframe,
+                            self.n_sigma,#in
+                            compareframe8u,
+                            bright_non_gaussian_cutoff,#in
+                            noisy_pixels_mask,#in
+                            bright_non_gaussian_replacement,#in
+                            bench=0 )
+
+                        bg_changed = True
+                        last_take_bg_timestamp = timestamp
+                    take_background_clear()
+
+                tp4 = time.time()
+                if BENCHMARK:
+                    t6 = tp4
+
+                if clear_background_isSet():
+                    # reset background image with 0 mean and 0 STD
+                    running_mean_im.set_val( 0, max_frame_size )
+                    running_mean8u_im.set_val(0, max_frame_size )
+                    running_sumsqf.set_val( 0, max_frame_size )
+                    compareframe8u.set_val(0, max_frame_size )
+                    bg_changed = True
+                    clear_background_clear()
+
+                if bg_changed:
+                    if 1:
+##                        bg_image = running_mean8u_im.get_8u_copy(running_mean8u_im.size)
+##                        std_image = compareframe8u.get_8u_copy(compareframe8u.size)
+                        running_mean8u_im.get_8u_copy_put(bg_image, running_mean8u_im.size)
+                        compareframe8u.get_8u_copy_put(std_image, compareframe8u.size)
+                    elif 0:
+                        bg_image = nx.array(running_mean8u_im) # make copy (we don't want to send live versions of image
+                        std_image = nx.array(compareframe8u) # make copy (we don't want to send live versions of image
+                    else:
+                        bg_image = running_mean8u_im
+                        std_image = compareframe8u
+                    globals['current_bg_frame_and_timestamp']=bg_image,std_image,timestamp # only used when starting to save
+##                     if not BENCHMARK:
+##                         globals['incoming_bg_frames'].put(
+##                             (bg_image,std_image,timestamp,framenumber) ) # save it
+                    bg_changed = False
+
+                # XXX could speed this with a join operation I think
+                data = struct.pack('<ddliI',timestamp,cam_received_time,
+                                   framenumber,len(points),n_frames_skipped)
+                for point_tuple in points:
+                    try:
+                        data = data + struct.pack(pt_fmt,*point_tuple)
+                    except:
+                        print 'error-causing data: ',point_tuple
+                        raise
+                if 0:
+                    local_processing_time = (time.time()-cam_received_time)*1e3
+                    print 'local_processing_time % 3.1f'%local_processing_time
+                if NETWORK_PROTOCOL == 'udp':
+                    coord_socket.sendto(data,
+                                        (self.main_brain_hostname,self.cam2mainbrain_port))
+                elif NETWORK_PROTOCOL == 'tcp':
+                    coord_socket.send(data)
+                else:
+                    raise ValueError('unknown NETWORK_PROTOCOL')
+                if DEBUG_DROP:
+                    debug_fd.write('%d,%d\n'%(framenumber,len(points)))
+                #print 'sent data...'
+
+                if self.new_roi.isSet():
+                    with self.new_roi_data_lock:
+                        lbrt = self.new_roi_data
+                        self.new_roi_data = None
+                        self.new_roi.clear()
+                    l,b,r,t=lbrt
+                    w = r-l+1
+                    h = t-b+1
+                    self.realtime_analyzer.roi = lbrt
+                    print 'desired l,b,w,h',l,b,w,h
+
+                    w2,h2 = self.cam.get_frame_size()
+                    l2,b2= self.cam.get_frame_offset()
+                    if ((l==l2) and (b==b2) and (w==w2) and (h==h2)):
+                        print 'current ROI matches desired ROI - not changing'
+                    else:
+                        self.cam.set_frame_size(w,h)
+                        self.cam.set_frame_offset(l,b)
+                        w,h = self.cam.get_frame_size()
+                        l,b= self.cam.get_frame_offset()
+                        print 'actual l,b,w,h',l,b,w,h
+                    r = l+w-1
+                    t = b+h-1
+                    cur_fisize = FastImage.Size(w, h)
+                    hw_roi_frame = fi8ufactory( cur_fisize )
+                    self.realtime_analyzer.roi = (l,b,r,t)
+
+                    # set ROI views of full-frame images
+                    bg_image = bg_image_full.roi(l, b, cur_fisize) # set ROI view
+                    std_image = std_image_full.roi(l, b, cur_fisize) # set ROI view
+                    running_mean8u_im = running_mean8u_im_full.roi(l, b, cur_fisize) # set ROI view
+                    running_mean_im = running_mean_im_full.roi(l, b, cur_fisize)  # set ROI view
+                    fastframef32_tmp = fastframef32_tmp_full.roi(l, b, cur_fisize)  # set ROI view
+                    mean2 = mean2_full.roi(l, b, cur_fisize)  # set ROI view
+                    std2 = std2_full.roi(l, b, cur_fisize)  # set ROI view
+                    running_stdframe = running_stdframe_full.roi(l, b, cur_fisize)  # set ROI view
+                    compareframe = compareframe_full.roi(l, b, cur_fisize)  # set ROI view
+                    compareframe8u = compareframe8u_full.roi(l, b, cur_fisize)  # set ROI view
+                    running_sumsqf = running_sumsqf_full.roi(l, b, cur_fisize)  # set ROI view
+                    noisy_pixels_mask = noisy_pixels_mask_full.roi(l, b, cur_fisize)  # set ROI view
+
+                bookkeeping_done_time = time.time()
+                bookkeeping_dur = bookkeeping_done_time-cam_received_time
+
+                if False and bookkeeping_dur > 0.050 and not BENCHMARK:
+                    alpha = 0.01
+                    if did_expensive:
+                        mean_duration_bg    = (1-alpha)*mean_duration_bg + alpha*bookkeeping_dur
+                    else:
+                        mean_duration_no_bg = (1-alpha)*mean_duration_no_bg + alpha*bookkeeping_dur
+
+                    print 'TIME BUDGET:'
+                    print '   % 5.1f start of work'%((work_start_time-cam_received_time)*1000.0,)
+                    print '   % 5.1f done with work'%((work_done_time-cam_received_time)*1000.0,)
+
+                    print '   % 5.1f tp1'%((tp1-cam_received_time)*1000.0,)
+                    print '   % 5.1f tp2'%((tp2-cam_received_time)*1000.0,)
+                    if did_expensive:
+                        print '     (did background/variance estimate)'
+                    print '   % 5.1f tp3'%((tp3-cam_received_time)*1000.0,)
+                    print '   % 5.1f tp4'%((tp4-cam_received_time)*1000.0,)
+
+                    print '   % 5.1f end of all'%(bookkeeping_dur*1000.0,)
+                    print
+                    print 'mean_duration_bg',mean_duration_bg*1000
+                    print 'mean_duration_no_bg',mean_duration_no_bg*1000
+                    print
+                if BENCHMARK:
+                    t7 = time.time()
+                    tA += t2-t1
+                    tB += t3-t2
+                    tC += t4-t3
+                    tD += t5-t4
+                    tE += t6-t5
+                    tF += t7-t6
+                    numT += 1
+
+                    t4A += t41-t4
+                    t4B += t42-t41
+                    t4C += t43-t42
+                    t4D += t44-t43
+                    t4E += t45-t44
+                    t4F += t46-t45
+                    t4G += t47-t46
+                    t4H += t48-t47
+                    t4I += t49-t48
+                    t4J += t491-t49
+                    t4K += t492-t491
+                    t4L += t5-t492
+
+                    if numT == 1000:
+                        tA *= 1000.0
+                        tB *= 1000.0
+                        tC *= 1000.0
+                        tD *= 1000.0
+                        tE *= 1000.0
+                        tF *= 1000.0
+                        print ' '.join(["% 6.1f"]*6)%(tA,tB,tC,
+                                                      tD,tE,tF)
+
+                        t4A *= 1000.0
+                        t4B *= 1000.0
+                        t4C *= 1000.0
+                        t4D *= 1000.0
+                        t4E *= 1000.0
+                        t4F *= 1000.0
+                        t4G *= 1000.0
+                        t4H *= 1000.0
+                        t4I *= 1000.0
+                        t4J *= 1000.0
+                        t4K *= 1000.0
+                        t4L *= 1000.0
+                        print ' '.join(["% 6.1f"]*12)%(t4A,t4B,t4C,
+                                                       t4D,t4E,t4F,
+                                                       t4G,t4H,t4I,
+                                                       t4J,t4K,t4L,
+                                                       )
+                        sys.stdout.flush()
+                        tA = 0.0
+                        tB = 0.0
+                        tC = 0.0
+                        tD = 0.0
+                        tE = 0.0
+                        tF = 0.0
+                        t4A = 0.0
+                        t4B = 0.0
+                        t4C = 0.0
+                        t4D = 0.0
+                        t4E = 0.0
+                        t4F = 0.0
+                        t4G = 0.0
+                        t4H = 0.0
+                        t4I = 0.0
+                        t4J = 0.0
+                        t4K = 0.0
+                        t4L = 0.0
+                        numT = 0
 
 class ProcessCamData(object):
     def __init__(self,cam_id=None):
@@ -232,11 +1002,18 @@ class SaveCamData(object):
         self._cam_id = cam_id
     def get_chain(self):
         return self._chain
+    def start_recording(self,*args,**kw):
+        """threadsafe"""
+        raise NotImplementedError('')
+    def stop_recording(self,*args,**kw):
+        """threadsafe"""
+        raise NotImplementedError('')
     def mainloop(self):
+        # Note: need to accummulate frames into queue and add with .add_frames() for speed
+        # Also: old version uses fmf version 1. Not sure why.
         while 1:
             with camnode_utils.use_buffer_from_chain(self._chain) as buf:
-                #stdout_write('S')
-                1
+                pass
 
 class IsoThread(threading.Thread):
     """One instance of this class for each camera. Do nothing but get
@@ -251,20 +1028,25 @@ class IsoThread(threading.Thread):
                  ):
 
         threading.Thread.__init__(self)
-        self.chain = chain
+        self._chain = chain
         self.cam = cam
         self.buffer_pool = buffer_pool
         self.debug_acquire = debug_acquire
         self.cam_no_str = str(cam_no)
         self.quit_event = quit_event
-
+    def set_chain(self,new_chain):
+        # XXX TODO FIXME: put self._chain behind lock
+        if self._chain is not None:
+            raise NotImplementedError('replacing a processing chain not implemented')
+        self._chain = new_chain
     def run(self):
         buffer_pool = self.buffer_pool
-        chain = self.chain
         cam_quit_event_isSet = self.quit_event.isSet
         cam = self.cam
         DEBUG_ACQUIRE = self.debug_acquire
         while not cam_quit_event_isSet():
+            if buffer_pool.get_num_outstanding_buffers() > 100:
+                raise RuntimeError('We seem to be leaking buffers - will not acquire more images!')
             with get_free_buffer_from_pool( buffer_pool ) as buf:
                 _bufim = buf.get_buf()
 
@@ -307,6 +1089,7 @@ class IsoThread(threading.Thread):
                 # Now we get rid of the frame from this thread by passing
                 # it to processing threads. The last one of these will
                 # return the buffer to buffer_pool when done.
+                chain = self._chain
                 if chain is not None:
                     buf._i_promise_to_return_buffer_to_the_pool = True
                     chain.fire( buf ) # the end of the chain will call return_buffer()
@@ -331,7 +1114,7 @@ class AppState(object):
     """This class handles all camera states, properties, etc."""
     def __init__(self,
                  max_num_points_per_camera=2,
-                 roi2_radius=10,
+                 roi2_radius=None,
                  bg_frame_interval=50,
                  bg_frame_alpha=0.001,
                  main_brain_hostname = None,
@@ -350,7 +1133,9 @@ class AppState(object):
             self.main_brain_hostname = default_main_brain_hostname
         else:
             self.main_brain_hostname = main_brain_hostname
+        del main_brain_hostname
 
+        self.log_message_queue = Queue.Queue()
 
         # ----------------------------------------------------------------
         #
@@ -367,6 +1152,7 @@ class AppState(object):
         self.cam_status = []
         self.all_cam_chains = []
         self.all_grabbers = []
+        self.all_savers = []
         self.globals = []
         self.all_cam_ids = []
 
@@ -387,7 +1173,7 @@ class AppState(object):
             globals['debug_drop']=debug_drop
             globals['debug_acquire']=debug_acquire
             globals['incoming_raw_frames']=Queue.Queue()
-            globals['incoming_bg_frames']=Queue.Queue()
+#            globals['incoming_bg_frames']=Queue.Queue()
             globals['raw_fmf_and_bg_fmf']=None
             globals['small_fmf']=None
             globals['most_recent_frame_potentially_corrupt']=None
@@ -434,29 +1220,8 @@ class AppState(object):
             cam.start_camera()  # start camera
             self.cam_status.append( 'started' )
 
-            # setup chain for this camera:
-            if not DISABLE_ALL_PROCESSING:
-                process_cam = ProcessCamData()
-                self.all_grabbers.append( process_cam )
-
-                process_cam_chain = process_cam.get_chain()
-                self.all_cam_chains.append(process_cam_chain)
-                thread = threading.Thread( target = process_cam.mainloop )
-                thread.setDaemon(True)
-                thread.start()
-
-                save_cam = SaveCamData()
-                process_cam_chain.append_link( save_cam.get_chain() )
-                thread = threading.Thread( target = save_cam.mainloop )
-                thread.setDaemon(True)
-                thread.start()
-            else:
-                process_cam_chain = None
-                self.all_grabbers.append( None )
-                self.all_cam_chains.append( None )
-
             buffer_pool = PreallocatedBufferPool(FastImage.Size(*cam.get_frame_size()))
-            iso_thread = IsoThread(chain = process_cam_chain,
+            iso_thread = IsoThread(chain = None,
                                    cam = cam,
                                    buffer_pool = buffer_pool,
                                    debug_acquire = debug_acquire,
@@ -482,8 +1247,6 @@ class AppState(object):
             print 'connecting to',main_brain_URI
             self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
             self.main_brain._setOneway(['set_image','set_fps','close','log_message','receive_missing_data'])
-        self.main_brain_lock = threading.Lock()
-        #self.main_brain_lock = DebugLock('main_brain_lock',verbose=True)
 
         # ----------------------------------------------------------------
         #
@@ -587,13 +1350,69 @@ class AppState(object):
 
             # register self with remote server
             port = 9834 + cam_no # for local Pyro server
-            with self.main_brain_lock:
-                cam_id = self.main_brain.register_new_camera(cam_no,
-                                                             scalar_control_info,
-                                                             port)
+            cam_id = self.main_brain.register_new_camera(cam_no,
+                                                         scalar_control_info,
+                                                         port)
 
             self.all_cam_ids.append(cam_id)
             cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(self.all_cam_ids[cam_no])
+
+            # ----------------------------------------------------------------
+            #
+            # Processing chains
+            #
+            # ----------------------------------------------------------------
+
+            # setup chain for this camera:
+            if not DISABLE_ALL_PROCESSING:
+                if 0:
+                    process_cam = ProcessCamData()
+                else:
+                    cam.get_max_height()
+                    l,b = cam.get_frame_offset()
+                    w,h = cam.get_frame_size()
+                    r = l+w-1
+                    t = b+h-1
+                    lbrt = l,b,r,t
+                    process_cam = GrabClass(
+                        cam2mainbrain_port=cam2mainbrain_port,
+                        cam_id=cam_id,
+                        log_message_queue=self.log_message_queue,
+                        max_num_points=max_num_points_per_camera,
+                        roi2_radius=roi2_radius,
+                        bg_frame_interval=bg_frame_interval,
+                        bg_frame_alpha=bg_frame_alpha,
+                        cam_no=cam_no,
+                        main_brain_hostname=self.main_brain_hostname,
+                        mask_image=mask,
+                        n_sigma=n_sigma,
+                        framerate=None,
+                        lbrt=lbrt,
+                        max_height=cam.get_max_height(),
+                        max_width=cam.get_max_width(),
+                        globals=globals,
+                        )
+                self.all_grabbers.append( process_cam )
+
+                process_cam_chain = process_cam.get_chain()
+                self.all_cam_chains.append(process_cam_chain)
+                thread = threading.Thread( target = process_cam.mainloop )
+                thread.setDaemon(True)
+                thread.start()
+
+                save_cam = SaveCamData()
+                self.all_savers.append( save_cam )
+                process_cam_chain.append_link( save_cam.get_chain() )
+                thread = threading.Thread( target = save_cam.mainloop )
+                thread.setDaemon(True)
+                thread.start()
+            else:
+                process_cam_chain = None
+                self.all_grabbers.append( None )
+                self.all_savers.append( None )
+                self.all_cam_chains.append( None )
+
+            self.iso_threads[cam_no].set_chain( process_cam_chain )
 
             # ----------------------------------------------------------------
             #
@@ -603,19 +1422,24 @@ class AppState(object):
 
             self.reconstruct_helper.append( None )
 
-            # ----------------------------------------------------------------
-            #
-            # start camera thread
-            #
-            # ----------------------------------------------------------------
-
-            self.log_message_queue = Queue.Queue()
             driver_string = 'using cam_iface driver: %s (wrapper: %s)'%(
                 cam_iface.get_driver_name(),
                 cam_iface.get_wrapper_name())
             print >> sys.stderr, driver_string
             self.log_message_queue.put((cam_id,time.time(),driver_string))
             print 'max_num_points_per_camera',max_num_points_per_camera
+
+        self.last_frames_by_cam = [ [] for c in range(num_cams) ]
+        self.last_points_by_cam = [ [] for c in range(num_cams) ]
+        self.last_points_framenumbers_by_cam = [ [] for c in range(num_cams) ]
+        self.n_raw_frames = []
+        self.last_measurement_time = []
+        self.last_return_info_check = []
+        for cam_no in range(num_cams):
+            self.last_measurement_time.append( time_func() )
+            self.last_return_info_check.append( 0.0 ) # never
+            self.n_raw_frames.append( 0 )
+
         print 'AppState init OK'
 
     def set_quit_function(self, quit_function=None):
@@ -634,15 +1458,20 @@ class AppState(object):
             thread.setDaemon(True)
             thread.start()
 
-    def update(self):
+    def main_thread_task(self):
+        """gets called often in mainloop of app"""
         try:
+            # handle pyro function calls
             for cam_no, cam_id in enumerate(self.all_cam_ids):
                 if self.cam_status[cam_no] == 'destroyed':
                     # ignore commands for closed cameras
                     continue
-                with self.main_brain_lock:
+                try:
                     cmds=self.main_brain.get_and_clear_commands(cam_id)
-                self.handle_commands(cam_no,cmds)
+                except KeyError:
+                    print 'main brain appears to have lost cam_id',cam_id
+                else:
+                    self.handle_commands(cam_no,cmds)
 
             # test if all closed
             all_closed = True
@@ -650,10 +1479,50 @@ class AppState(object):
                 if self.cam_status[cam_no] != 'destroyed':
                     all_closed = False
                     break
+
+            # quit if no more cameras
             if all_closed:
                 if self.quit_function is None:
                     raise RuntimeError('all cameras closed, but no quit_function set')
                 self.quit_function(0)
+
+            if not DISABLE_ALL_PROCESSING:
+                for cam_no, cam_id in enumerate(self.all_cam_ids):
+                    globals = self.globals[cam_no] # shorthand
+                    last_frames = self.last_frames_by_cam[cam_no]
+                    last_points = self.last_points_by_cam[cam_no]
+                    last_points_framenumbers = self.last_points_framenumbers_by_cam[cam_no]
+
+                    now = time_func() # roughly flydra_camera_node.py line 1504
+
+                    # calculate and send FPS every 5 sec
+                    elapsed = now-self.last_measurement_time[cam_no]
+                    if elapsed > 5.0:
+                        fps = self.n_raw_frames[cam_no]/elapsed
+                        self.main_brain.set_fps(cam_id,fps)
+                        self.last_measurement_time[cam_no] = now
+                        self.n_raw_frames[cam_no] = 0
+
+                    # Get new raw frames from grab thread.
+                    get_raw_frame = globals['incoming_raw_frames'].get_nowait
+                    try:
+                        while 1:
+                            (frame,timestamp,framenumber,points,lbrt,
+                                     cam_received_time) = get_raw_frame() # this may raise Queue.Empty
+                            last_frames.append( (frame,timestamp,framenumber,points) ) # save for post-triggering
+                            while len(last_frames)>200:
+                                del last_frames[0]
+
+                            last_points_framenumbers.append( framenumber ) # save for dropped packet recovery
+                            last_points.append( (timestamp,points,cam_received_time) ) # save for dropped packet recovery
+                            while len(last_points)>10000:
+                                del last_points[:100]
+                                del last_points_framenumbers[:100]
+
+                            self.n_raw_frames[cam_no] += 1 # fcn 1606
+                    except Queue.Empty:
+                        pass
+
         except:
             import traceback
             traceback.print_exc()
@@ -662,6 +1531,7 @@ class AppState(object):
     def handle_commands(self, cam_no, cmds):
         if cmds:
             grabber = self.all_grabbers[cam_no]
+            saver = self.all_savers[cam_no]
             cam_id = self.all_cam_ids[cam_no]
             cam = self.all_cams[cam_no]
             #print 'handle_commands:',cam_id, cmds
@@ -685,12 +1555,12 @@ class AppState(object):
                         cam.set_camera_property(enum,value,0)
                     elif property_name == 'roi':
                         #print 'flydra_camera_node.py: ignoring ROI command for now...'
-                        grabber.roi = value
+                        grabber.roi = value # XXX TODO: FIXME: thread crossing bug
                     elif property_name == 'diff_threshold':
                         #print 'setting diff_threshold',value
-                        grabber.diff_threshold = value
+                        grabber.diff_threshold = value # XXX TODO: FIXME: thread crossing bug
                     elif property_name == 'clear_threshold':
-                        grabber.clear_threshold = value
+                        grabber.clear_threshold = value # XXX TODO: FIXME: thread crossing bug
                     elif property_name == 'width':
                         assert cam.get_max_width() == value
                     elif property_name == 'height':
@@ -708,7 +1578,7 @@ class AppState(object):
                         else: globals['use_cmp'].clear()
                     elif property_name == 'expected_trigger_framerate':
                         #print 'expecting trigger fps',value
-                        self.shortest_IFI = 1.0/value
+                        grabber.shortest_IFI = 1.0/value # XXX TODO: FIXME: thread crossing bug
                     elif property_name == 'max_framerate':
                         if 1:
                             #print 'ignoring request to set max_framerate'
@@ -738,6 +1608,58 @@ class AppState(object):
                     nxim = nx.asarray(im) # view of __array_struct__ form
                     self.main_brain.set_image(cam_id, (lb, nxim))
 
+
+            elif key == 'request_missing':
+                camn_and_list = map(int,cmds[key].split())
+                camn, framenumber_offset = camn_and_list[:2]
+                missing_framenumbers = camn_and_list[2:]
+                print 'I know main brain wants %d frames (camn %d) at %s:'%(
+                    len(missing_framenumbers),
+                    camn,time.asctime()),
+                if len(missing_framenumbers) > 200:
+                    print str(missing_framenumbers[:25]) + ' + ... + ' + str(missing_framenumbers[-25:])
+                else:
+                    print str(missing_framenumbers)
+
+                last_points_framenumbers = self.last_points_framenumbers_by_cam[cam_no]
+                last_points = self.last_points_by_cam[cam_no]
+
+                # convert to numpy arrays for quick indexing
+                last_points_framenumbers = numpy.array( last_points_framenumbers, dtype=numpy.int64 )
+                missing_framenumbers = numpy.array( missing_framenumbers, dtype=numpy.int64 )
+
+                # now find missing_framenumbers in last_points_framenumbers
+                idxs = last_points_framenumbers.searchsorted( missing_framenumbers )
+
+                missing_data = []
+                still_missing = []
+                for ii,(idx,missing_framenumber) in enumerate(zip(idxs,missing_framenumbers)):
+                    if idx == 0:
+                        # search sorted will sometimes return 0 when value not in range
+                        found_framenumber = last_points_framenumbers[idx]
+                        if found_framenumber != missing_framenumber:
+                            still_missing.append( missing_framenumber )
+                            continue
+                    elif idx == len(last_points_framenumbers):
+                        still_missing.append( missing_framenumber )
+                        continue
+
+                    timestamp, points, camn_received_time = last_points[idx]
+                    # make sure data is pure python, (not numpy)
+                    missing_data.append( (int(camn), int(missing_framenumber), float(timestamp),
+                                          float(camn_received_time), points) )
+                if len(missing_data):
+                    self.main_brain.receive_missing_data(cam_id, framenumber_offset, missing_data)
+
+                if len(still_missing):
+                    print '  Unable to find %d frames (camn %d):'%(
+                        len(still_missing),
+                        camn),
+                    if len(still_missing) > 200:
+                        print str(still_missing[:25]) + ' + ... + ' + str(still_missing[-25:])
+                    else:
+                        print str(still_missing)
+
             elif key == 'quit':
                 print 'quitting cam',cam_no
                 globals['cam_quit_event'].set()
@@ -748,31 +1670,64 @@ class AppState(object):
                 cam.close()
                 print 'camera %d closed'%cam_no
                 self.cam_status[cam_no] = 'destroyed'
-                with self.main_brain_lock:
-                    cmds=self.main_brain.close(cam_id)
+                cmds=self.main_brain.close(cam_id)
             elif key == 'take_bg':
                 globals['take_background'].set()
             elif key == 'clear_bg':
                 globals['clear_background'].set()
+
+            elif key == 'start_recording':
+                raw_filename, bg_filename = cmds[key]
+
+                raw_filename = os.path.expanduser(raw_filename)
+                bg_filename = os.path.expanduser(bg_filename)
+
+                save_dir = os.path.split(raw_filename)[0]
+                if not os.path.exists(save_dir):
+                    os.makedirs(save_dir)
+
+                std_filename = bg_filename.replace('_bg','_std')
+                msg = 'WARNING: fly movie filenames will conflict if > 1 camera per computer'
+                print msg
+
+                saver.start_recording(
+                    full_raw = raw_filename,
+                    full_bg = bg_filename,
+                    full_std = std_filename,
+                    )
+
+            elif key == 'stop_recording':
+                saver.stop_recording()
+
+            elif key == 'start_small_recording':
+                raise NotImplementedError('')
+            elif key == 'stop_small_recording':
+                raise NotImplementedError('')
+            elif key == 'cal':
+                print 'setting calibration'
+                pmat, intlin, intnonlin, scale_factor = cmds[key]
+
+                # XXX TODO: FIXME: thread crossing bug
+                # these three should always be done together in this order:
+                grabber.set_scale_factor( scale_factor )
+                grabber.set_pmat( pmat )
+                grabber.make_reconstruct_helper(intlin, intnonlin) # let grab thread make one
+
+                ######
+                fc1 = intlin[0,0]
+                fc2 = intlin[1,1]
+                cc1 = intlin[0,2]
+                cc2 = intlin[1,2]
+                k1, k2, p1, p2 = intnonlin
+
+                # we make one, too
+                self.reconstruct_helper[cam_no] = reconstruct_utils.ReconstructHelper(
+                    fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
             else:
-                raise NotImplementedError('no support yet for key "%s"'%key)
+                raise ValueError('unknown key "%s"'%key)
 
 def main():
     global cam_iface
-
-    if BENCHMARK:
-        cam_iface = cam_iface_choose.import_backend('dummy','dummy')
-        print 'benchmark imported backend',cam_iface
-        print '(from file %s)'%cam_iface.__file__
-        max_num_points_per_camera=2
-
-        app=App(max_num_points_per_camera,
-                roi2_radius=10,
-                bg_frame_interval=50,
-                bg_frame_alpha=0.001,
-                )
-        app.mainloop()
-        return
 
     usage_lines = ['%prog [options]',
                    '',
@@ -820,7 +1775,7 @@ def main():
     parser.add_option("--emulation-cal", type="string",
                       help="name of calibration (directory or .h5 file); Run in emulation mode.")
 
-    parser.add_option("--software-roi-radius", type="int",
+    parser.add_option("--software-roi-radius", type="int", default=10,
                       help="radius of software region of interest")
 
     parser.add_option("--background-frame-interval", type="int",
@@ -869,11 +1824,6 @@ def main():
     else:
         max_num_points_per_camera = 2
 
-    if options.software_roi_radius is not None:
-        roi2_radius = options.software_roi_radius
-    else:
-        roi2_radius = 10
-
     if options.background_frame_interval is not None:
         bg_frame_interval = options.background_frame_interval
     else:
@@ -885,7 +1835,7 @@ def main():
         bg_frame_alpha = 0.001
 
     app_state=AppState(max_num_points_per_camera=max_num_points_per_camera,
-                       roi2_radius=roi2_radius,
+                       roi2_radius=options.software_roi_radius,
                        bg_frame_interval=bg_frame_interval,
                        bg_frame_alpha=bg_frame_alpha,
                        main_brain_hostname = options.server,
@@ -903,10 +1853,10 @@ def main():
         app=camnodewx.WxApp()
         if not DISABLE_ALL_PROCESSING:
             app_state.append_chain( klass = camnodewx.DisplayCamData, args=(app,) )
-        app.post_init(call_often = app_state.update)
+        app.post_init(call_often = app_state.main_thread_task)
         app_state.set_quit_function( app.OnQuit )
     else:
-        app=ConsoleApp(call_often = app_state.update)
+        app=ConsoleApp(call_often = app_state.main_thread_task)
         app_state.set_quit_function( app.OnQuit )
     print 'starting mainloop'
     app.MainLoop()
