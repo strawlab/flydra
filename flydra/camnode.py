@@ -205,10 +205,8 @@ class ProcessCamData(object):
         return self._chain
     def mainloop(self):
         while 1:
-            buf= self._chain.get_buf()
-            stdout_write('P')
-            buf.processed_points = [ (10,20) ]
-            self._chain.end_buf(buf)
+            with camnode_utils.use_buffer_from_chain(self._chain) as buf:
+                stdout_write('P')
 
 class SaveCamData(object):
     def __init__(self):
@@ -217,9 +215,8 @@ class SaveCamData(object):
         return self._chain
     def mainloop(self):
         while 1:
-            buf= self._chain.get_buf()
-            stdout_write('S')
-            self._chain.end_buf(buf)
+            with camnode_utils.use_buffer_from_chain(self._chain) as buf:
+                stdout_write('S')
 
 class IsoThread(threading.Thread):
     """One instance of this class for each camera. Do nothing but get

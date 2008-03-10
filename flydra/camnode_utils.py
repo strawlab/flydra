@@ -2,6 +2,8 @@
 from __future__ import division
 from __future__ import with_statement
 
+import contextlib
+
 import threading, Queue
 
 class ChainLink(object):
@@ -45,3 +47,12 @@ class ChainLink(object):
         else:
             pool = buf.get_pool()
             pool.return_buffer( buf )
+
+@contextlib.contextmanager
+def use_buffer_from_chain(link):
+    """manage access to the buffer"""
+    buf = link.get_buf()
+    try:
+        yield buf
+    finally:
+        link.end_buf(buf)

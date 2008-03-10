@@ -79,7 +79,6 @@ class DisplayCamData(object):
         return self._chain
     def mainloop(self):
         while 1:
-            buf= self._chain.get_buf()
-            camnode.stdout_write('D')
-            self._chain.end_buf(buf)
+            with camnode_utils.use_buffer_from_chain(self._chain) as buf:
+                camnode.stdout_write('D')
 
