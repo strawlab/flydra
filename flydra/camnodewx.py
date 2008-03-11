@@ -7,7 +7,6 @@ import wx.lib.newevent
 import camnode
 import camnode_utils
 import numpy
-import motmot.wxglvideo.wxglvideo as wxglvideo
 from motmot.wxglvideo.simple_overlay import PointDisplayCanvas
 from pygarrayimage.arrayimage import ArrayInterfaceImage
 
@@ -99,6 +98,7 @@ class WxApp(wx.App):
             im_box = wx.BoxSizer(wx.VERTICAL)
 
             raw_canvas = PointDisplayCanvas(parent,-1)
+            raw_canvas.set_fullcanvas(True)
             pygim = ArrayInterfaceImage(event.buf,allow_copy=False)
             raw_canvas.new_image(pygim)
 
