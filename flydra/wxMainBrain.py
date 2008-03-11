@@ -1349,6 +1349,15 @@ class wxMainBrainApp(wx.App):
         if not hasattr(self,'main_brain'):
             return # quitting
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc
+        if not self.main_brain.coord_processor.isAlive():
+            dlg = wx.MessageDialog( self.frame, 'Error: the coordinate processor '
+                                    'thread dieed expectedly. You should re-start '
+                                    'this program.', 'Unexpected error!',
+                                     wx.OK | wx.ICON_ERROR )
+            try:
+                dlg.ShowModal()
+            finally:
+                dlg.Destroy()
         realtime_data=MainBrain.get_best_realtime_data() # gets global data
         if realtime_data is not None:
             Xs,min_mean_dist=realtime_data
