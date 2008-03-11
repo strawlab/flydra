@@ -27,7 +27,7 @@ setup(name='flydra',
       ext_modules= ext_modules,
       entry_points = {
     'console_scripts': [
-    'flydra_camera_node = flydra.flydra_camera_node:main',
+    'flydra_camera_node = flydra.camnode:main',
     'flydra_bench = flydra.flydra_bench:main',
     'flydra_kalmanize = flydra.kalman.kalmanize:main',
 
