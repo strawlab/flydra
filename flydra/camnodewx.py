@@ -99,6 +99,7 @@ class WxApp(wx.App):
 
             raw_canvas = PointDisplayCanvas(parent,-1)
             raw_canvas.set_fullcanvas(True)
+
             pygim = ArrayInterfaceImage(event.buf,allow_copy=False)
             raw_canvas.new_image(pygim)
 
@@ -115,6 +116,7 @@ class WxApp(wx.App):
             im_box = wx.BoxSizer(wx.VERTICAL)
 
             absdiff_canvas = PointDisplayCanvas(parent,-1)
+            absdiff_canvas.set_fullcanvas(True)
 
             # event.absdiff_buf is (naughtily) not locked or copied between threads
             pygim = ArrayInterfaceImage(event.absdiff_buf,allow_copy=False)
@@ -132,6 +134,7 @@ class WxApp(wx.App):
             im_box = wx.BoxSizer(wx.VERTICAL)
 
             mean_canvas = PointDisplayCanvas(parent,-1)
+            mean_canvas.set_fullcanvas(True)
 
             # event.mean_buf is (naughtily) not locked or copied between threads
             pygim = ArrayInterfaceImage(event.mean_buf,allow_copy=False)
@@ -151,6 +154,7 @@ class WxApp(wx.App):
             im_box = wx.BoxSizer(wx.VERTICAL)
 
             cmp_canvas = PointDisplayCanvas(parent,-1)
+            cmp_canvas.set_fullcanvas(True)
 
             # event.cmp_buf is (naughtily) not locked or copied between threads
             pygim = ArrayInterfaceImage(event.cmp_buf,allow_copy=False)
