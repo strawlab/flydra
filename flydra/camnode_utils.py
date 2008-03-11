@@ -33,9 +33,12 @@ class ChainLink(object):
                 next = self._next
         next.append_link( chain )
 
-    def get_buf(self):
+    def get_buf(self,blocking=True):
         """called from client thread to get a buffer"""
-        return self._queue.get()
+        if blocking:
+            return self._queue.get()
+        else:
+            return self._queue.get_nowait()
 
     def end_buf(self,buf):
         """called from client thread to release a buffer"""
@@ -49,9 +52,9 @@ class ChainLink(object):
             pool.return_buffer( buf )
 
 @contextlib.contextmanager
-def use_buffer_from_chain(link):
+def use_buffer_from_chain(link,blocking=True):
     """manage access to the buffer"""
-    buf = link.get_buf()
+    buf = link.get_buf(blocking=blocking)
     try:
         yield buf
     finally:
