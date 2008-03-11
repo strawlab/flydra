@@ -587,15 +587,9 @@ class GrabClass(object):
         running_sumsqf = running_sumsqf_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
         noisy_pixels_mask = noisy_pixels_mask_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
 
-        #hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
         running_mean_im.get_8u_copy_put( running_mean8u_im, cur_fisize )
 
         #################### done initializing images ############
-
-        # take first image to set background and so on
-        with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
-            hw_roi_frame = chainbuf.get_buf()
-            hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
 
         incoming_raw_frames_queue = globals['incoming_raw_frames']
         incoming_raw_frames_queue_put = incoming_raw_frames_queue.put
@@ -627,6 +621,9 @@ class GrabClass(object):
             if BENCHMARK:
                 t1 = time.time()
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
+                chainbuf.updated_bg_image = None
+                chainbuf.updated_cmp_image = None
+
                 hw_roi_frame = chainbuf.get_buf()
                 cam_received_time = chainbuf.cam_received_time
                 if BENCHMARK:
@@ -828,7 +825,10 @@ class GrabClass(object):
                     else:
                         bg_image = running_mean8u_im
                         std_image = compareframe8u
-                    globals['current_bg_frame_and_timestamp']=bg_image,std_image,timestamp # only used when starting to save
+                    chainbuf.updated_bg_image = numpy.array( bg_image, copy=True )
+                    chainbuf.updated_cmp_image = numpy.array( std_image, copy=True )
+
+#                    globals['current_bg_frame_and_timestamp']=bg_image,std_image,timestamp # only used when starting to save
 ##                     if not BENCHMARK:
 ##                         globals['incoming_bg_frames'].put(
 ##                             (bg_image,std_image,timestamp,framenumber) ) # save it
@@ -1011,20 +1011,76 @@ class SaveCamData(object):
     def __init__(self,cam_id=None):
         self._chain = camnode_utils.ChainLink()
         self._cam_id = cam_id
+        self.cmd = Queue.Queue()
     def get_chain(self):
         return self._chain
-    def start_recording(self,*args,**kw):
+    def start_recording(self,
+                        full_raw = None,
+                        full_bg = None,
+                        full_std = None):
         """threadsafe"""
-        raise NotImplementedError('')
+        self.cmd.put( ('save',full_raw,full_bg,full_std) )
+
     def stop_recording(self,*args,**kw):
         """threadsafe"""
-        raise NotImplementedError('')
+        self.cmd.put( ('stop',) )
+
     def mainloop(self):
         # Note: need to accummulate frames into queue and add with .add_frames() for speed
         # Also: old version uses fmf version 1. Not sure why.
+
+        raw = []
+        meancmp = []
+
+        state = 'pass'
+
         while 1:
-            with camnode_utils.use_buffer_from_chain(self._chain) as buf:
+
+            while 1:
+                if self.cmd.empty():
+                    break
+                cmd = self.cmd.get()
+                if cmd[0] == 'save':
+                    full_raw,full_bg,full_std = cmd[1:]
+                    raw_movie = FlyMovieFormat.FlyMovieSaver(full_raw,version=1)
+                    bg_movie = FlyMovieFormat.FlyMovieSaver(full_bg,version=1)
+                    std_movie = FlyMovieFormat.FlyMovieSaver(full_std,version=1)
+                    state = 'saving'
+                elif cmd[0] == 'stop':
+                    raw_movie.close()
+                    bg_movie.close()
+                    std_movie.close()
+                    state = 'pass'
+
+            # first, block for images
+            with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
+                raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
+                             chainbuf.timestamp) )
+                if chainbuf.updated_bg_image is not None:
+                    meancmp.append( (chainbuf.updated_bg_image,
+                                     chainbuf.updated_cmp_image,
+                                     chainbuf.timestamp)) # these were copied in process thread
+
+            # second, grab any more that are here
+            try:
+                with camnode_utils.use_buffer_from_chain(self._chain,blocking=False) as chainbuf:
+                    raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
+                                 chainbuf.timestamp) )
+                    if chainbuf.updated_bg_image is not None:
+                        meancmp.append( (chainbuf.updated_bg_image,
+                                         chainbuf.updated_cmp_image,
+                                         chainbuf.timestamp)) # these were copied in process thread
+            except Queue.Empty:
                 pass
+
+            if state == 'saving':
+                for frame,timestamp in raw:
+                    raw_movie.add_frame(frame,timestamp)
+                for bg,cmp,timestamp in meancmp:
+                    bg_movie.add_frame(bg,timestamp)
+                    std_movie.add_frame(cmp,timestamp)
+            del raw[:]
+            del meancmp[:]
 
 class IsoThread(threading.Thread):
     """One instance of this class for each camera. Do nothing but get
@@ -1189,7 +1245,7 @@ class AppState(object):
             globals['small_fmf']=None
             globals['most_recent_frame_potentially_corrupt']=None
             globals['saved_bg_frame']=False
-            globals['current_bg_frame_and_timestamp']=None
+#            globals['current_bg_frame_and_timestamp']=None
 
             # control flow events for threading model
             globals['cam_quit_event'] = threading.Event()
