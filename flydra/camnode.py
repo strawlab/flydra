@@ -1310,16 +1310,19 @@ class AppState(object):
             for prop_num in range(num_props):
                 props = cam.get_camera_property_info(prop_num)
                 current_value,auto = cam.get_camera_property( prop_num )
-                # set defaults
-                if props['name'] == 'shutter':
-                    new_value = 300
-                elif props['name'] == 'gain':
-                    new_value = 72
-                elif props['name'] == 'brightness':
-                    new_value = 783
+                if 0:
+                    # set defaults
+                    if props['name'] == 'shutter':
+                        new_value = 300
+                    elif props['name'] == 'gain':
+                        new_value = 72
+                    elif props['name'] == 'brightness':
+                        new_value = 783
+                    else:
+                        print "WARNING: don't know default value for property %s, "\
+                              "leaving as default"%(props['name'],)
+                        new_value = current_value
                 else:
-                    print "WARNING: don't know default value for property %s, "\
-                          "leaving as default"%(props['name'],)
                     new_value = current_value
                 min_value = props['min_value']
                 max_value = props['max_value']
@@ -1333,8 +1336,10 @@ class AppState(object):
                             raise
                     else:
                         print 'not setting property %s to %d (from %d) because out of range (%d<=value<=%d)'%(props['name'],new_value,current_value,min_value,max_value)
-                    current_value = new_value
+
                     CAM_CONTROLS[props['name']]=prop_num
+                current_value,auto = cam.get_camera_property( prop_num )
+                current_value = new_value
                 scalar_control_info[props['name']] = (current_value,
                                                       min_value, max_value)
 
