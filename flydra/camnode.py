@@ -500,8 +500,8 @@ class GrabClass(object):
         fi8ufactory = FastImage.FastImage8u
         use_cmp_isSet = globals['use_cmp'].isSet
 
-        hw_roi_frame = fi8ufactory( cur_fisize )
-        self._hw_roi_frame = hw_roi_frame # make accessible to other code
+#        hw_roi_frame = fi8ufactory( cur_fisize )
+#        self._hw_roi_frame = hw_roi_frame # make accessible to other code
 
         if BENCHMARK:
             coord_socket = DummySocket()
@@ -583,15 +583,15 @@ class GrabClass(object):
         running_sumsqf = running_sumsqf_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
         noisy_pixels_mask = noisy_pixels_mask_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
 
-        hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
+        #hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
         running_mean_im.get_8u_copy_put( running_mean8u_im, cur_fisize )
 
         #################### done initializing images ############
 
         # take first image to set background and so on
-
         with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
             hw_roi_frame = chainbuf.get_buf()
+            hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
 
         incoming_raw_frames_queue = globals['incoming_raw_frames']
         incoming_raw_frames_queue_put = incoming_raw_frames_queue.put
@@ -787,7 +787,6 @@ class GrabClass(object):
                             noisy_pixels_mask,#in
                             bright_non_gaussian_replacement,#in
                             bench=0 )
-
                         bg_changed = True
                         last_take_bg_timestamp = timestamp
                     take_background_clear()
@@ -846,7 +845,7 @@ class GrabClass(object):
                     debug_fd.write('%d,%d\n'%(framenumber,len(points)))
                 #print 'sent data...'
 
-                if self.new_roi.isSet():
+                if 0 and self.new_roi.isSet():
                     with self.new_roi_data_lock:
                         lbrt = self.new_roi_data
                         self.new_roi_data = None
@@ -1045,7 +1044,7 @@ class IsoThread(threading.Thread):
         cam = self.cam
         DEBUG_ACQUIRE = self.debug_acquire
         while not cam_quit_event_isSet():
-            if buffer_pool.get_num_outstanding_buffers() > 100:
+            if buffer_pool.get_num_outstanding_buffers() > 300:
                 raise RuntimeError('We seem to be leaking buffers - will not acquire more images!')
             with get_free_buffer_from_pool( buffer_pool ) as buf:
                 _bufim = buf.get_buf()
@@ -1267,6 +1266,7 @@ class AppState(object):
 
         for cam_no in range(num_cams):
             cam = self.all_cams[cam_no]
+            width,height = cam.get_frame_size()
             globals = self.globals[cam_no] # shorthand
 
             if mask_images is not None:
@@ -1283,7 +1283,6 @@ class AppState(object):
                            'considered.')
                 mask = alpha.astype(numpy.bool)
             else:
-                width,height = cam.get_frame_size()
                 mask = numpy.zeros( (height,width), dtype=numpy.bool )
             # mask is currently an array of bool
             mask = mask.astype(numpy.uint8)*255
@@ -1554,8 +1553,8 @@ class AppState(object):
                             value = value[0]
                         cam.set_camera_property(enum,value,0)
                     elif property_name == 'roi':
-                        #print 'flydra_camera_node.py: ignoring ROI command for now...'
-                        grabber.roi = value # XXX TODO: FIXME: thread crossing bug
+                        print 'flydra_camera_node.py: ignoring ROI command for now...'
+                        #grabber.roi = value
                     elif property_name == 'diff_threshold':
                         #print 'setting diff_threshold',value
                         grabber.diff_threshold = value # XXX TODO: FIXME: thread crossing bug
