@@ -48,10 +48,12 @@ def get_trigger_device():
     return device
 
 class FakeDevice:
-    def set_carrier_frequency(self,*args,**kw):
-        return
+    def __init__(self,*args,**kw):
+        self._freq = 123.4
+    def set_carrier_frequency(self, freq=None ):
+        self._freq = freq
     def get_carrier_frequency(self,*args,**kw):
-        return 123.4
+        return self._freq
     def get_timer_max(self,*args,**kw):
         return 0xFFFF
     def get_framecount_stamp(self,*args,**kw):
