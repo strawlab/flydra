@@ -7,6 +7,9 @@ import os
 BENCHMARK = int(os.environ.get('FLYDRA_BENCHMARK',0))
 FLYDRA_BT = int(os.environ.get('FLYDRA_BT',0)) # threaded benchmark
 
+#NAUGHTY_BUT_FAST = False
+NAUGHTY_BUT_FAST = True
+
 #DISABLE_ALL_PROCESSING = True
 DISABLE_ALL_PROCESSING = False
 
@@ -536,6 +539,7 @@ class GrabClass(object):
         #################### initialize images ############
 
         running_mean8u_im_full = self.realtime_analyzer.get_image_view('mean') # this is a view we write into
+        absdiff8u_im_full = self.realtime_analyzer.get_image_view('absdiff') # this is a view we write into
 
         mask_im = self.realtime_analyzer.get_image_view('mask') # this is a view we write into
         newmask_fi = FastImage.asfastimage( self.mask_image )
@@ -669,6 +673,14 @@ class GrabClass(object):
                                                          max_duration_sec=0.010, # maximum 10 msec in here
                                                          )
                 chainbuf.processed_points = xpoints
+                if NAUGHTY_BUT_FAST:
+                    chainbuf.absdiff8u_im_full = absdiff8u_im_full
+                    chainbuf.mean8u_im_full = running_mean8u_im_full
+                    chainbuf.compareframe8u_full = compareframe8u_full
+                else:
+                    chainbuf.absdiff8u_im_full = numpy.array(absdiff8u_im_full,copy=True)
+                    chainbuf.mean8u_im_full = numpy.array(running_mean8u_im_full,copy=True)
+                    chainbuf.compareframe8u_full = numpy.array(compareframe8u_full,copy=True)
                 points = self._convert_to_old_format( xpoints )
 
                 work_done_time = time.time()

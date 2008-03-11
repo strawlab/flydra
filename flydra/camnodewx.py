@@ -7,7 +7,9 @@ import wx.lib.newevent
 import camnode
 import camnode_utils
 import numpy
-import motmot.wxglvideo.simple_overlay as wxglvideo
+import motmot.wxglvideo.wxglvideo as wxglvideo
+from motmot.wxglvideo.simple_overlay import PointDisplayCanvas
+from pygarrayimage.arrayimage import ArrayInterfaceImage
 
 DisplayImageEvent, EVT_DISPLAYIMAGE = wx.lib.newevent.NewEvent()
 
@@ -34,12 +36,14 @@ class WxApp(wx.App):
         # finish menubar -----------------------------
         self.frame.SetMenuBar(menuBar)
 
-        frame_box = wx.BoxSizer(wx.VERTICAL)
+        self.frame_box = wx.BoxSizer(wx.HORIZONTAL)
+        self.cic_box = wx.BoxSizer(wx.VERTICAL)
 
-        self.cam_image_canvas = wxglvideo.DynamicImageCanvas(self.frame,-1)
-        frame_box.Add(self.cam_image_canvas,1,wx.EXPAND)
+        self.cam_image_canvases = {}
 
-        self.frame.SetSizer(frame_box)
+        self.frame_box.Add(self.cic_box,1,wx.EXPAND)
+
+        self.frame.SetSizer(self.frame_box)
         self.frame.Layout()
 
         self.frame.SetAutoLayout(True)
@@ -85,10 +89,98 @@ class WxApp(wx.App):
 
     def OnDisplayImageEvent(self, event):
         #print 'got display image for %s in wx mainloop'%event.cam_id
-        self.cam_image_canvas.update_image_and_drawings(event.cam_id,
-                                                        event.buf,
-                                                        points=event.pts,
-                                                        sort_add=True)
+
+        if event.cam_id not in self.cam_image_canvases:
+            parent = self.frame
+
+            cam_row_box = wx.StaticBoxSizer(wx.StaticBox(parent,-1,event.cam_id),wx.HORIZONTAL)
+
+            # realtime image
+            im_box = wx.BoxSizer(wx.VERTICAL)
+
+            raw_canvas = PointDisplayCanvas(parent,-1)
+            pygim = ArrayInterfaceImage(event.buf,allow_copy=False)
+            raw_canvas.new_image(pygim)
+
+            im_box.Add(raw_canvas,proportion=1,
+                       flag=wx.EXPAND|wx.ALL,border=2)
+            im_box.Add(wx.StaticText(parent,-1,"raw image"),
+                       proportion=0,flag=wx.ALIGN_CENTRE|wx.ALL,
+                       border=2)
+
+            cam_row_box.Add(im_box,proportion=1,
+                            flag=wx.EXPAND|wx.ALL,border=2)
+
+            # absdiff image
+            im_box = wx.BoxSizer(wx.VERTICAL)
+
+            absdiff_canvas = PointDisplayCanvas(parent,-1)
+
+            # event.absdiff_buf is (naughtily) not locked or copied between threads
+            pygim = ArrayInterfaceImage(event.absdiff_buf,allow_copy=False)
+            absdiff_canvas.new_image(pygim)
+
+            im_box.Add(absdiff_canvas,proportion=1,
+                       flag=wx.EXPAND|wx.ALL,border=2)
+            im_box.Add(wx.StaticText(parent,-1,"modified absdiff image"),
+                       proportion=0,flag=wx.ALIGN_CENTRE|wx.ALL,
+                       border=2)
+            cam_row_box.Add(im_box,proportion=1,
+                            flag=wx.EXPAND|wx.ALL,border=2)
+
+            # mean image
+            im_box = wx.BoxSizer(wx.VERTICAL)
+
+            mean_canvas = PointDisplayCanvas(parent,-1)
+
+            # event.mean_buf is (naughtily) not locked or copied between threads
+            pygim = ArrayInterfaceImage(event.mean_buf,allow_copy=False)
+            mean_canvas.new_image(pygim)
+
+            im_box.Add(mean_canvas,proportion=1,
+                       flag=wx.EXPAND|wx.ALL,border=2)
+            im_box.Add(wx.StaticText(parent,-1,"mean image"),
+                       proportion=0,flag=wx.ALIGN_CENTRE|wx.ALL,
+                       border=2)
+
+            cam_row_box.Add(im_box,proportion=1,
+                            flag=wx.EXPAND|wx.ALL,border=2)
+
+
+            # cmp image
+            im_box = wx.BoxSizer(wx.VERTICAL)
+
+            cmp_canvas = PointDisplayCanvas(parent,-1)
+
+            # event.cmp_buf is (naughtily) not locked or copied between threads
+            pygim = ArrayInterfaceImage(event.cmp_buf,allow_copy=False)
+            cmp_canvas.new_image(pygim)
+
+            im_box.Add(cmp_canvas,proportion=1,
+                       flag=wx.EXPAND|wx.ALL,border=2)
+            im_box.Add(wx.StaticText(parent,-1,"cmp image"),
+                       proportion=0,flag=wx.ALIGN_CENTRE|wx.ALL,
+                       border=2)
+
+            cam_row_box.Add(im_box,proportion=1,
+                            flag=wx.EXPAND|wx.ALL,border=2)
+
+
+            self.cic_box.Add(cam_row_box,proportion=1,flag=wx.EXPAND)
+
+            parent.Layout()
+            self.cam_image_canvases[event.cam_id] = (raw_canvas, absdiff_canvas, mean_canvas, cmp_canvas)
+        else:
+            (raw_canvas, absdiff_canvas, mean_canvas, cmp_canvas) = self.cam_image_canvases[event.cam_id]
+            points = event.pts
+            point_colors, linesegs,lineseg_colors = None,None,None
+            raw_canvas.extra_points_linesegs = (
+                points,point_colors, linesegs,lineseg_colors)
+            raw_canvas.update_image( event.buf )
+            absdiff_canvas.update_image( event.absdiff_buf )
+            mean_canvas.update_image( event.mean_buf )
+            cmp_canvas.update_image( event.cmp_buf )
+
 class DisplayCamData(object):
     def __init__(self, wxapp, cam_id=None):
         self._chain = camnode_utils.ChainLink()
@@ -97,6 +189,7 @@ class DisplayCamData(object):
     def get_chain(self):
         return self._chain
     def mainloop(self):
+        NAUGHTY_BUT_FAST = True
         while 1:
             with camnode_utils.use_buffer_from_chain(self._chain) as buf:
                 # post images and processed points to wx
@@ -104,5 +197,21 @@ class DisplayCamData(object):
                     pts = buf.processed_points
                 else:
                     pts = None
-                buf_copy = numpy.array( buf.get_buf(), copy=True )
-            wx.PostEvent(self._wxapp, DisplayImageEvent(buf=buf_copy, pts=pts, cam_id=self._cam_id))
+                if NAUGHTY_BUT_FAST:
+                    buf_copy = buf.get_buf() # not a copy at all!
+                    absdiff = buf.absdiff8u_im_full
+                    mean = buf.mean8u_im_full
+                    cmp = buf.compareframe8u_full
+                else:
+                    buf_copy = numpy.array( buf.get_buf(), copy=True )
+                    absdiff = numpy.array( buf.absdiff8u_im_full, copy=True )
+                    mean = numpy.array( buf.mean8u_im_full, copy=True )
+                    cmp = numpy.array( buf.compareframe8u_full, copy=True )
+
+            wx.PostEvent(self._wxapp, DisplayImageEvent(buf=buf_copy,
+                                                        pts=pts,
+                                                        cam_id=self._cam_id,
+                                                        absdiff_buf=absdiff,
+                                                        mean_buf=mean,
+                                                        cmp_buf=cmp,
+                                                        ))
