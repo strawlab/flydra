@@ -227,7 +227,7 @@ class GrabClass(object):
                  log_message_queue=None,
                  max_num_points=2,
                  roi2_radius=None,
-                 bg_frame_interval=50,
+                 bg_frame_interval=None,
                  bg_frame_alpha=None,
                  cam_no=-1,
                  main_brain_hostname=None,
@@ -675,9 +675,6 @@ class GrabClass(object):
 
                 if take_background_isSet():
                     # reset background image with current frame as mean and 0 STD
-                    hw_roi_frame.get_32f_copy_put( running_mean_im, max_frame_size )
-                    running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
-
                     if cur_fisize != max_frame_size:
                         print cur_fisize
                         print max_frame_size
@@ -687,6 +684,7 @@ class GrabClass(object):
                         running_sumsqf.toself_square(max_frame_size)
 
                         hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
+                        running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
                         print 'taking new bg'
                         do_bg_maint = True
                     take_background_clear()
@@ -998,7 +996,7 @@ class AppState(object):
     def __init__(self,
                  max_num_points_per_camera=2,
                  roi2_radius=None,
-                 bg_frame_interval=50,
+                 bg_frame_interval=None,
                  bg_frame_alpha=None,
                  main_brain_hostname = None,
                  emulation_reconstructor = None,
