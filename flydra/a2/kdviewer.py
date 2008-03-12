@@ -545,18 +545,21 @@ def doit(filename,
             actor2obj_id[a] = obj_id
 
         if show_obj_ids:
-            print 'showing ob_jd %d at %s'%(obj_id,str(verts[0]))
-            obj_id_ta = tvtk.TextActor(input=str( obj_id )+' start')
-            obj_id_ta.property = tvtk.Property2D(color = (0.0, 0.0, 0.0), # black
-                                                 )
-#            obj_id_ta.property = tvtk.TextProperty(color = (0.0, 0.0, 0.0), # black
-#                                                   )
-            #obj_id_ta.property.color = 0.0, 0.0, 0.0 # black
-            #obj_id_ta.set(color = (0.0, 0.0, 0.0)) # black
-            obj_id_ta.position_coordinate.coordinate_system = 'world'
-            obj_id_ta.position_coordinate.value = tuple(verts[0])
-            actors.append(obj_id_ta)
-            actor2obj_id[a] = obj_id
+            if len(verts):
+                print 'showing obj_id %d at %s'%(obj_id,str(verts[0]))
+                obj_id_ta = tvtk.TextActor(input=str( obj_id )+' start')
+                obj_id_ta.property = tvtk.Property2D(color = (0.0, 0.0, 0.0), # black
+                                                     )
+    #            obj_id_ta.property = tvtk.TextProperty(color = (0.0, 0.0, 0.0), # black
+    #                                                   )
+                #obj_id_ta.property.color = 0.0, 0.0, 0.0 # black
+                #obj_id_ta.set(color = (0.0, 0.0, 0.0)) # black
+                obj_id_ta.position_coordinate.coordinate_system = 'world'
+                obj_id_ta.position_coordinate.value = tuple(verts[0])
+                actors.append(obj_id_ta)
+                actor2obj_id[a] = obj_id
+            else:
+                print 'no data for obj_id %d'%obj_id
 
         ##################
 
