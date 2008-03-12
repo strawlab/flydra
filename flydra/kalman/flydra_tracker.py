@@ -138,7 +138,7 @@ class TrackedObject:
         # Don't run kalman filter with initial data, as this would
         # cause error estimates to drop too low.
 
-    def distance_in_sigma( self, testx ):
+    def distance_in_meters_and_nsigma( self, testx ):
         xhat = self.xhats[-1][:3]
 
         dist2 = numpy.sum((testx-xhat)**2) # distance squared
@@ -147,7 +147,7 @@ class TrackedObject:
         P = self.Ps[-1]
         Pmean = numpy.sqrt(numpy.sum([P[i,i]**2 for i in range(3)])) # sigma squared
         sigma = numpy.sqrt(Pmean)
-        return dist/sigma
+        return dist, (dist/sigma)
 
     def kill(self):
         # called when killed
@@ -421,7 +421,7 @@ class Tracker:
         self.kalman_model = kalman_model
         self.save_calibration_data=save_calibration_data
 
-    def is_believably_new( self, Xmm, n_sigma = 9.0, debug=0 ):
+    def is_believably_new( self, Xmm, debug=0 ):
 
         """Sometimes the Kalman tracker will not gobble all the points
         it should. This still prevents spawning a new Kalman
@@ -429,11 +429,14 @@ class Tracker:
 
         believably_new = True
         X = Xmm*self.scale_factor
+        min_dist_to_believe_new_meters = self.kalman_model['min_dist_to_believe_new_meters']
+        min_dist_to_believe_new_nsigma = self.kalman_model['min_dist_to_believe_new_sigma']
         for idx,tro in enumerate(self.live_tracked_objects):
+            dist_meters, dist_nsigma = tro.distance_in_meters_and_nsigma( X )
             if debug>5:
-                nsigma = tro.distance_in_sigma( X )
-                print 'distance in sigma:',nsigma, tro
-            if tro.distance_in_sigma( X ) < n_sigma:
+                print 'distance in meters, nsigma:',dist_meters, dist_nsigma, tro
+            if ((dist_nsigma < min_dist_to_believe_new_nsigma) or
+                (dist_meters < min_dist_to_believe_new_meters)):
                 believably_new = False
                 break
         return believably_new

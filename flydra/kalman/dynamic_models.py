@@ -91,6 +91,10 @@ def create_dynamic_model_dict(dt=None):
     #R = 2.5e-2*numpy.eye(os)
 
     newdict = dict(
+        # these 2 values are old and could probably be improved:
+        min_dist_to_believe_new_meters=0.0,
+        min_dist_to_believe_new_sigma=9.0,
+
         n_sigma_accept=2.8,
         #n_sigma_accept=2.4,
         max_variance_dist_meters=math.sqrt(0.06),
@@ -118,6 +122,8 @@ def create_dynamic_model_dict(dt=None):
     R = 1e-6*numpy.eye(os)
 
     newdict = dict(
+        min_dist_to_believe_new_meters=0.01, # 1 cm
+        min_dist_to_believe_new_sigma=3.0,
         n_sigma_accept=9.0,
         max_variance_dist_meters=0.02,
         initial_position_covariance_estimate=1e-6,

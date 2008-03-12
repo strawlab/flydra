@@ -77,6 +77,7 @@ calib_points = []
 def get_rc_params():
     defaultParams = {
         'frames_per_second'  : 100.0,
+        'hypothesis_test_max_acceptable_error' : 50.0,
         }
     fviewrc_fname = motmot.utils.config.rc_fname(filename='mainbrainrc',
                                                  dirname='.flydra')
@@ -1163,7 +1164,7 @@ class CoordinateProcessor(threading.Thread):
                                                                                  this_observation_idxs
                                                                                  )))
                                         # test for novelty
-                                        believably_new = self.tracker.is_believably_new( this_observation_orig_units, n_sigma = 9.0 )
+                                        believably_new = self.tracker.is_believably_new( this_observation_orig_units)
                                         if believably_new:
                                             self.tracker.join_new_obj( corrected_framenumber,
                                                                        this_observation_orig_units,
@@ -1725,7 +1726,8 @@ class MainBrain(object):
         self.accumulate_kalman_calibration_data = threading.Event()
         self.all_kalman_calibration_data = []
 
-        self.hypothesis_test_max_error = LockedValue(50.0) # maximum reprojection error # XXX should save to file
+        self.hypothesis_test_max_error = LockedValue(
+            rc_params['hypothesis_test_max_acceptable_error']) # maximum reprojection error
 
         self.coord_processor = CoordinateProcessor(self,
                                                    save_profiling_data=save_profiling_data,
@@ -1789,6 +1791,8 @@ class MainBrain(object):
 
     def set_hypothesis_test_max_error(self,val):
         self.hypothesis_test_max_error.set(val)
+        rc_params['hypothesis_test_max_acceptable_error'] = val
+        save_rc_params()
 
     def set_accumulate_kalman_calibration_data(self, value):
         if value:

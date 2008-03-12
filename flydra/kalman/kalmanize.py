@@ -76,7 +76,7 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
             print 'cam_ids_used',cam_ids_used
             print 'min_mean_dist',min_mean_dist
 
-        believably_new = tracker.is_believably_new( this_observation_mm, debug=debug, n_sigma = 9.0 )
+        believably_new = tracker.is_believably_new( this_observation_mm, debug=debug)
         if (debug > 5):
                 print 'believably_new',believably_new
 
