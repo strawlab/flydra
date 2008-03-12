@@ -469,7 +469,6 @@ class GrabClass(object):
 
     def mainloop(self):
         globals = self.globals
-        last_take_bg_timestamp = -numpy.inf
 
         self._globals = globals
         DEBUG_ACQUIRE = globals['debug_acquire']
@@ -715,8 +714,6 @@ class GrabClass(object):
                         noisy_pixels_mask,#in
                         bright_non_gaussian_replacement,#in
                         bench=0 )
-                    bg_changed = True
-                    last_take_bg_timestamp = timestamp
                     bg_changed = True
                     bg_frame_number = 0
 
