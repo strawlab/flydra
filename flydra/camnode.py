@@ -479,7 +479,7 @@ class GrabClass(object):
 
         # questionable optimization: speed up by eliminating namespace lookups
         cam_quit_event_isSet = globals['cam_quit_event'].isSet
-        bg_frame_number = 0
+        bg_frame_number = -1
         clear_background_isSet = globals['clear_background'].isSet
         clear_background_clear = globals['clear_background'].clear
         take_background_isSet = globals['take_background'].isSet
@@ -594,54 +594,19 @@ class GrabClass(object):
         incoming_raw_frames_queue = globals['incoming_raw_frames']
         incoming_raw_frames_queue_put = incoming_raw_frames_queue.put
 
-        if BENCHMARK:
-            benchmark_start_time = time.time()
-            min_100_frame_time = 1e99
-            tA = 0.0
-            tB = 0.0
-            tC = 0.0
-            tD = 0.0
-            tE = 0.0
-            tF = 0.0
-            t4A = 0.0
-            t4B = 0.0
-            t4C = 0.0
-            t4D = 0.0
-            t4E = 0.0
-            t4F = 0.0
-            t4G = 0.0
-            t4H = 0.0
-            t4I = 0.0
-            t4J = 0.0
-            t4K = 0.0
-            t4L = 0.0
-            numT = 0
-
         while not cam_quit_event_isSet():
-            if BENCHMARK:
-                t1 = time.time()
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
                 chainbuf.updated_bg_image = None
                 chainbuf.updated_cmp_image = None
 
                 hw_roi_frame = chainbuf.get_buf()
                 cam_received_time = chainbuf.cam_received_time
-                if BENCHMARK:
-                    t2 = cam_received_time
 
                 # get best guess as to when image was taken
                 timestamp=chainbuf.timestamp
                 framenumber=chainbuf.framenumber
 
-                if BENCHMARK:
-                    if (framenumber%100) == 0:
-                        dur = cam_received_time-benchmark_start_time
-                        min_100_frame_time = min(min_100_frame_time,dur)
-                        print '%.1f msec for 100 frames (min: %.1f)'%(dur*1000.0,min_100_frame_time*1000.0)
-                        sys.stdout.flush()
-                        benchmark_start_time = cam_received_time
-                    n_frames_skipped = 0
-                else:
+                if 1:
                     if old_fn is None:
                         # no old frame
                         old_fn = framenumber-1
@@ -681,8 +646,6 @@ class GrabClass(object):
                 points = self._convert_to_old_format( xpoints )
 
                 work_done_time = time.time()
-                if BENCHMARK:
-                    t3 = work_done_time
 
                 # allow other thread to see images
                 imname = globals['export_image_name'] # figure out what is wanted # XXX theoretically could have threading issue
@@ -692,8 +655,7 @@ class GrabClass(object):
                     export_image = self.realtime_analyzer.get_image_view(imname) # get image
                 globals['most_recent_frame_potentially_corrupt'] = (0,0), export_image # give view of image, receiver must be careful
 
-                tp1 = time.time()
-                if not BENCHMARK:
+                if 1:
                     # allow other thread to see raw image always (for saving)
                     if incoming_raw_frames_queue.qsize() >1000:
                         # chop off some old frames to prevent memory explosion
@@ -710,58 +672,7 @@ class GrabClass(object):
                          ) )
                     #print ' '*20,'put frame'
 
-                tp2 = time.time()
-                if BENCHMARK:
-                    t4 = tp2
-                    #FastImage.set_debug(3) # let us see any images malloced, should only happen on hardware ROI size change
-                    t41=t4
-                    t42=t4
-                    t43=t4
-                    t44=t4
-                    t45=t4
-                    t46=t4
-                    t47=t4
-                    t48=t4
-                    t49=t4
-                    t491=t4
-                    t492=t4
-
-                did_expensive = False
-                if collecting_background_isSet():
-                    if (bg_frame_number % self.bg_frame_interval == 0):
-##                        if cur_fisize != max_frame_size:
-##                            # set to full ROI and take full image if necessary
-##                            raise NotImplementedError("background collection while using hardware ROI not implemented")
-                        #mybench = BENCHMARK
-                        mybench = 0
-                        res = realtime_image_analysis.do_bg_maint( running_mean_im,
-                                                                   hw_roi_frame,
-                                                                   cur_fisize,
-                                                                   self.bg_frame_alpha,
-                                                                   running_mean8u_im,
-                                                                   fastframef32_tmp,
-                                                                   running_sumsqf,
-                                                                   mean2,
-                                                                   std2,
-                                                                   running_stdframe,
-                                                                   self.n_sigma,
-                                                                   compareframe8u,
-                                                                   bright_non_gaussian_cutoff,
-                                                                   noisy_pixels_mask,
-                                                                   bright_non_gaussian_replacement,
-                                                                   bench=mybench )
-                        if mybench:
-                            t41, t42, t43, t44, t45, t46, t47, t48, t49, t491, t492 = res
-                        del res
-                        did_expensive = True
-                        bg_changed = True
-                        bg_frame_number = 0
-                    bg_frame_number += 1
-
-                tp3 = time.time()
-                if BENCHMARK:
-                    t5 = tp3
-                    #FastImage.set_debug(0) # let us see any images malloced, should only happen on hardware ROI size change
+                do_bg_maint = False
 
                 if take_background_isSet():
                     # reset background image with current frame as mean and 0 STD
@@ -778,30 +689,36 @@ class GrabClass(object):
 
                         hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
                         print 'taking new bg'
-                        realtime_image_analysis.do_bg_maint(
-                            running_mean_im,#in
-                            hw_roi_frame,#in
-                            cur_fisize,#in
-                            self.bg_frame_alpha, #in
-                            running_mean8u_im,
-                            fastframef32_tmp,
-                            running_sumsqf, #in
-                            mean2,
-                            std2,
-                            running_stdframe,
-                            self.n_sigma,#in
-                            compareframe8u,
-                            bright_non_gaussian_cutoff,#in
-                            noisy_pixels_mask,#in
-                            bright_non_gaussian_replacement,#in
-                            bench=0 )
-                        bg_changed = True
-                        last_take_bg_timestamp = timestamp
+                        do_bg_maint = True
                     take_background_clear()
 
-                tp4 = time.time()
-                if BENCHMARK:
-                    t6 = tp4
+                if collecting_background_isSet():
+                    bg_frame_number += 1
+                    if (bg_frame_number % self.bg_frame_interval == 0):
+                        do_bg_maint = True
+
+                if do_bg_maint:
+                    realtime_image_analysis.do_bg_maint(
+                        running_mean_im,#in
+                        hw_roi_frame,#in
+                        cur_fisize,#in
+                        self.bg_frame_alpha, #in
+                        running_mean8u_im,
+                        fastframef32_tmp,
+                        running_sumsqf, #in
+                        mean2,
+                        std2,
+                        running_stdframe,
+                        self.n_sigma,#in
+                        compareframe8u,
+                        bright_non_gaussian_cutoff,#in
+                        noisy_pixels_mask,#in
+                        bright_non_gaussian_replacement,#in
+                        bench=0 )
+                    bg_changed = True
+                    last_take_bg_timestamp = timestamp
+                    bg_changed = True
+                    bg_frame_number = 0
 
                 if clear_background_isSet():
                     # reset background image with 0 mean and 0 STD
@@ -896,103 +813,6 @@ class GrabClass(object):
                     compareframe8u = compareframe8u_full.roi(l, b, cur_fisize)  # set ROI view
                     running_sumsqf = running_sumsqf_full.roi(l, b, cur_fisize)  # set ROI view
                     noisy_pixels_mask = noisy_pixels_mask_full.roi(l, b, cur_fisize)  # set ROI view
-
-                bookkeeping_done_time = time.time()
-                bookkeeping_dur = bookkeeping_done_time-cam_received_time
-
-                if False and bookkeeping_dur > 0.050 and not BENCHMARK:
-                    alpha = 0.01
-                    if did_expensive:
-                        mean_duration_bg    = (1-alpha)*mean_duration_bg + alpha*bookkeeping_dur
-                    else:
-                        mean_duration_no_bg = (1-alpha)*mean_duration_no_bg + alpha*bookkeeping_dur
-
-                    print 'TIME BUDGET:'
-                    print '   % 5.1f start of work'%((work_start_time-cam_received_time)*1000.0,)
-                    print '   % 5.1f done with work'%((work_done_time-cam_received_time)*1000.0,)
-
-                    print '   % 5.1f tp1'%((tp1-cam_received_time)*1000.0,)
-                    print '   % 5.1f tp2'%((tp2-cam_received_time)*1000.0,)
-                    if did_expensive:
-                        print '     (did background/variance estimate)'
-                    print '   % 5.1f tp3'%((tp3-cam_received_time)*1000.0,)
-                    print '   % 5.1f tp4'%((tp4-cam_received_time)*1000.0,)
-
-                    print '   % 5.1f end of all'%(bookkeeping_dur*1000.0,)
-                    print
-                    print 'mean_duration_bg',mean_duration_bg*1000
-                    print 'mean_duration_no_bg',mean_duration_no_bg*1000
-                    print
-                if BENCHMARK:
-                    t7 = time.time()
-                    tA += t2-t1
-                    tB += t3-t2
-                    tC += t4-t3
-                    tD += t5-t4
-                    tE += t6-t5
-                    tF += t7-t6
-                    numT += 1
-
-                    t4A += t41-t4
-                    t4B += t42-t41
-                    t4C += t43-t42
-                    t4D += t44-t43
-                    t4E += t45-t44
-                    t4F += t46-t45
-                    t4G += t47-t46
-                    t4H += t48-t47
-                    t4I += t49-t48
-                    t4J += t491-t49
-                    t4K += t492-t491
-                    t4L += t5-t492
-
-                    if numT == 1000:
-                        tA *= 1000.0
-                        tB *= 1000.0
-                        tC *= 1000.0
-                        tD *= 1000.0
-                        tE *= 1000.0
-                        tF *= 1000.0
-                        print ' '.join(["% 6.1f"]*6)%(tA,tB,tC,
-                                                      tD,tE,tF)
-
-                        t4A *= 1000.0
-                        t4B *= 1000.0
-                        t4C *= 1000.0
-                        t4D *= 1000.0
-                        t4E *= 1000.0
-                        t4F *= 1000.0
-                        t4G *= 1000.0
-                        t4H *= 1000.0
-                        t4I *= 1000.0
-                        t4J *= 1000.0
-                        t4K *= 1000.0
-                        t4L *= 1000.0
-                        print ' '.join(["% 6.1f"]*12)%(t4A,t4B,t4C,
-                                                       t4D,t4E,t4F,
-                                                       t4G,t4H,t4I,
-                                                       t4J,t4K,t4L,
-                                                       )
-                        sys.stdout.flush()
-                        tA = 0.0
-                        tB = 0.0
-                        tC = 0.0
-                        tD = 0.0
-                        tE = 0.0
-                        tF = 0.0
-                        t4A = 0.0
-                        t4B = 0.0
-                        t4C = 0.0
-                        t4D = 0.0
-                        t4E = 0.0
-                        t4F = 0.0
-                        t4G = 0.0
-                        t4H = 0.0
-                        t4I = 0.0
-                        t4J = 0.0
-                        t4K = 0.0
-                        t4L = 0.0
-                        numT = 0
 
 class ProcessCamData(object):
     def __init__(self,cam_id=None):
@@ -1748,6 +1568,9 @@ class AppState(object):
                 globals['clear_background'].set()
 
             elif key == 'start_recording':
+                if 1:
+                    print 'taking background prior to recording'
+                    globals['take_background'].set()
                 raw_filename, bg_filename = cmds[key]
 
                 raw_filename = os.path.expanduser(raw_filename)
