@@ -16,7 +16,7 @@ DISABLE_ALL_PROCESSING = False
 near_inf = 9.999999e20
 
 bright_non_gaussian_cutoff = 255
-bright_non_gaussian_replacement = 25
+bright_non_gaussian_replacement = 5
 
 import threading, time, socket, sys, struct, select, math, warnings
 import Queue
@@ -228,7 +228,7 @@ class GrabClass(object):
                  max_num_points=2,
                  roi2_radius=None,
                  bg_frame_interval=50,
-                 bg_frame_alpha=0.001,
+                 bg_frame_alpha=None,
                  cam_no=-1,
                  main_brain_hostname=None,
                  mask_image=None,
@@ -728,8 +728,7 @@ class GrabClass(object):
 
                 did_expensive = False
                 if collecting_background_isSet():
-                    if ((bg_frame_number % self.bg_frame_interval == 0) or
-                        (timestamp-last_take_bg_timestamp < 2.0)): # estimate STD quickly
+                    if (bg_frame_number % self.bg_frame_interval == 0):
 ##                        if cur_fisize != max_frame_size:
 ##                            # set to full ROI and take full image if necessary
 ##                            raise NotImplementedError("background collection while using hardware ROI not implemented")
@@ -1183,7 +1182,7 @@ class AppState(object):
                  max_num_points_per_camera=2,
                  roi2_radius=None,
                  bg_frame_interval=50,
-                 bg_frame_alpha=0.001,
+                 bg_frame_alpha=None,
                  main_brain_hostname = None,
                  emulation_reconstructor = None,
                  use_mode=None,
@@ -1904,7 +1903,7 @@ def main():
     if options.background_frame_alpha is not None:
         bg_frame_alpha = options.background_frame_alpha
     else:
-        bg_frame_alpha = 0.001
+        bg_frame_alpha = 1.0/50.0
 
     app_state=AppState(max_num_points_per_camera=max_num_points_per_camera,
                        roi2_radius=options.software_roi_radius,
