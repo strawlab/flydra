@@ -567,7 +567,7 @@ def main():
                       default=0.0,
                       help="area threshold (used to filter incoming 2d points)")
 
-    parser.add_option("--min-observations-to-save", type='int', default=0,
+    parser.add_option("--min-observations-to-save", type='int', default=2,
                       help='minimum number of observations required for a kalman object to be saved')
 
     (options, args) = parser.parse_args()
