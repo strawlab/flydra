@@ -15,6 +15,7 @@ import numpy
 import tables as PT
 from optparse import OptionParser
 import flydra.reconstruct as reconstruct
+import sets
 
 #PLOT='mpl'
 PLOT='image'
@@ -305,6 +306,8 @@ def doit(fmf_filename=None,
                 obj_ids = []
                 this2ds = []
                 maxabsdiff = []
+                maxcmp = []
+                plotted_pt_nos = sets.Set()
                 radius=10
                 h,w = fg.shape
                 for (xy,XYZ,obj_id,Pmean_meters) in kalman_vert_images:
@@ -335,11 +338,58 @@ def doit(fmf_filename=None,
 
                         obj_ids.append( obj_id )
                         maxabsdiff.append( abs(zoom_diff ).max() )
+                        maxcmp.append( zoom_cmp.max() )
+
                         this2d = []
                         for pt_no, (x2d,y2d) in enumerate(zip(rows['x'],rows['y'])):
                             if ((minx <= x2d <= maxx) and
                                 (miny <= y2d <= maxy)):
                                 this2d.append( (x2d-minx,y2d-miny,pt_no) )
+                                plotted_pt_nos.add( int(pt_no) )
+                        this2ds.append( this2d )
+                del xy,XYZ,obj_id,Pmean_meters
+                all_pt_nos = sets.Set(range( len( rows) ))
+                missing_pt_nos = list(all_pt_nos-plotted_pt_nos)
+                for pt_no in missing_pt_nos:
+                    this_row = rows[pt_no]
+                    (x2d,y2d) = this_row['x'], this_row['y']
+                    x=x2d
+                    y=y2d
+
+                    if ((0 <= x <= w) and
+                        (0 <= y <= h)):
+                        minx = max(0,x-radius)
+                        maxx = min(w,minx+(2*radius))
+                        miny = max(0,y-radius)
+                        maxy = min(h,miny+(2*radius))
+
+                        zoom_diff = diff_im[miny:maxy, minx:maxx]
+                        zoom_diff = ensure_minsize_image( zoom_diff, (2*radius, 2*radius ))
+                        zoom_diffs.append( zoom_diff )
+                        zoom_absdiffs.append( abs(zoom_diff) )
+
+                        zoom_fg = fg[miny:maxy, minx:maxx]
+                        zoom_fg =  ensure_minsize_image( zoom_fg,  (2*radius, 2*radius ))
+                        zoom_fgs.append( zoom_fg )
+
+                        zoom_bg = bg[miny:maxy, minx:maxx]
+                        zoom_bg =  ensure_minsize_image( zoom_bg,  (2*radius, 2*radius ))
+                        zoom_bgs.append( zoom_bg )
+
+                        zoom_cmp = cmp[miny:maxy, minx:maxx]
+                        zoom_cmp =  ensure_minsize_image( zoom_cmp,  (2*radius, 2*radius ))
+                        zoom_cmps.append( zoom_cmp )
+
+                        obj_ids.append( None )
+                        maxabsdiff.append( abs(zoom_diff ).max() )
+                        maxcmp.append( zoom_cmp.max() )
+
+                        this2d = []
+                        if 1:
+                            if ((minx <= x2d <= maxx) and
+                                (miny <= y2d <= maxy)):
+                                this2d.append( (x2d-minx,y2d-miny,pt_no) )
+                                plotted_pt_nos.add( int(pt_no) )
                         this2ds.append( this2d )
 
                 if len(zoom_diffs):
@@ -392,6 +442,7 @@ def doit(fmf_filename=None,
 
                     cumy = 0
                     absdiffy = None
+                    cmpy = None
                     for j in range(len(labels)):
                         label = labels[j]
                         row_im = row_ims[j]
@@ -399,15 +450,24 @@ def doit(fmf_filename=None,
                                    label, font_zoomed)
                         if label == 'absdiff (s.)':
                             absdiffy = cumy
+                        if label == 'cmp (s.)':
+                            cmpy = cumy
                         cumy += row_im.shape[0]
 
-                    for i, (this_maxabsdiff, obj_id) in enumerate( zip(maxabsdiff, obj_ids) ):
-                        draw.text( (rescale_factor*(i*2*radius+left_offset),0),
-                                   'obj %d'%(obj_id,), font_zoomed)
+                    for i, (this_maxabsdiff, this_maxcmp, obj_id) in enumerate(
+                        zip(maxabsdiff, maxcmp, obj_ids) ):
+
+                        if obj_id is not None:
+                            draw.text( (rescale_factor*(i*2*radius+left_offset),0),
+                                       'obj %d'%(obj_id,), font_zoomed)
 
                         draw.text( (rescale_factor*(i*2*radius+left_offset)+3,
                                     rescale_factor*(absdiffy)),
                                    'max %.0f'%(this_maxabsdiff,), font_zoomed)
+
+                        draw.text( (rescale_factor*(i*2*radius+left_offset)+3,
+                                    rescale_factor*(cmpy)),
+                                   'max %.0f'%(this_maxcmp,), font_zoomed)
 
                     radius_pt = 3
                     for i,this2d in enumerate(this2ds):
