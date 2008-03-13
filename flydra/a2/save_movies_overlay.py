@@ -35,6 +35,13 @@ import core_analysis
 import pytz, datetime
 pacific = pytz.timezone('US/Pacific')
 
+def ensure_minsize_image( arr, (h,w)):
+    if ((arr.shape[0] < h) or (arr.shape[1] < w)):
+        arr_new = numpy.zeros( (h,w), dtype=arr.dtype )
+        arr_new[:arr.shape[0],:arr.shape[1]] = arr
+        arr=arr_new
+    return arr
+
 def doit(fmf_filename=None,
          h5_filename=None,
          kalman_filename=None,
@@ -61,8 +68,10 @@ def doit(fmf_filename=None,
             raise NotImplementedError('TODO: find fps from .h5 file')
 
     bg_fmf_filename = os.path.splitext(fmf_filename)[0] + '_bg.fmf'
+    cmp_fmf_filename = os.path.splitext(fmf_filename)[0] + '_std.fmf'
     fmf = FMF.FlyMovie(fmf_filename)
     bg_fmf = FMF.FlyMovie(bg_fmf_filename)
+    cmp_fmf = FMF.FlyMovie(cmp_fmf_filename)
     h5 = PT.openFile( h5_filename, mode='r' )
     ca = core_analysis.CachingAnalyzer()
 
@@ -139,7 +148,9 @@ def doit(fmf_filename=None,
 
     fmf_timestamps = fmf.get_all_timestamps()
     bg_fmf_timestamps = bg_fmf.get_all_timestamps()
+    cmp_fmf_timestamps = cmp_fmf.get_all_timestamps()
     assert numpy.all((bg_fmf_timestamps[1:] - bg_fmf_timestamps[:-1])>0) # ascending
+    assert numpy.all((bg_fmf_timestamps == cmp_fmf_timestamps))
     fmf2bg = bg_fmf_timestamps.searchsorted( fmf_timestamps, side='right')-1
     cur_bg_idx = None
 
@@ -180,6 +191,9 @@ def doit(fmf_filename=None,
         pen3d = aggdraw.Pen(cb_orange, width=2 )
         font3d = aggdraw.Font(cb_orange,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf')
 
+        pen_zoomed = pen3d
+        font_zoomed = aggdraw.Font(cb_orange,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf', size=20)
+
         pen_obs = aggdraw.Pen(cb_vermillion, width=2 )
         font_obs = aggdraw.Font(cb_vermillion,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf')
 
@@ -211,7 +225,6 @@ def doit(fmf_filename=None,
         pbar.update(h5_frame-start)
         mainbrain_timestamp = numpy.nan
         idxs = []
-        bg_frame, bg_timestamp = None,None
         try:
             fmf_fno = mymap[h5_frame]
             fmf_timestamp = fmf_timestamps[fmf_fno]
@@ -225,6 +238,7 @@ def doit(fmf_filename=None,
             bg_idx = fmf2bg[fmf_fno]
             if cur_bg_idx != bg_idx:
                 bg_frame, bg_timestamp = bg_fmf.get_frame(bg_idx)
+                cmp_frame, trash = cmp_fmf.get_frame(bg_idx)
                 cur_bg_idx = bg_idx
 
             timestamp_idx = numpy.nonzero(fmf_timestamp == remote_timestamps)[0]
@@ -278,9 +292,16 @@ def doit(fmf_filename=None,
             if do_zoom_diff:
                 # Zoomed difference image for this frame
                 bg = bg_frame.astype(numpy.float32)
+                cmp = cmp_frame.astype(numpy.float32)
                 fg = frame.astype(numpy.float32)
                 diff_im = fg-bg
-                zoom_objs = []
+
+                zoom_diffs = []
+                zoom_absdiffs = []
+                zoom_fgs = []
+                zoom_bgs = []
+                zoom_cmps = []
+
                 obj_ids = []
                 this2ds = []
                 maxabsdiff = []
@@ -288,7 +309,6 @@ def doit(fmf_filename=None,
                 h,w = fg.shape
                 for (xy,XYZ,obj_id,Pmean_meters) in kalman_vert_images:
                     x,y= xy
-                    this2d = []
                     if ((0 <= x <= w) and
                         (0 <= y <= h)):
                         minx = max(0,x-radius)
@@ -297,18 +317,70 @@ def doit(fmf_filename=None,
                         maxy = min(h,miny+(2*radius))
 
                         zoom_diff = diff_im[miny:maxy, minx:maxx]
-                        zoom_objs.append( zoom_diff )
+                        zoom_diff = ensure_minsize_image( zoom_diff, (2*radius, 2*radius ))
+                        zoom_diffs.append( zoom_diff )
+                        zoom_absdiffs.append( abs(zoom_diff) )
+
+                        zoom_fg = fg[miny:maxy, minx:maxx]
+                        zoom_fg =  ensure_minsize_image( zoom_fg,  (2*radius, 2*radius ))
+                        zoom_fgs.append( zoom_fg )
+
+                        zoom_bg = bg[miny:maxy, minx:maxx]
+                        zoom_bg =  ensure_minsize_image( zoom_bg,  (2*radius, 2*radius ))
+                        zoom_bgs.append( zoom_bg )
+
+                        zoom_cmp = cmp[miny:maxy, minx:maxx]
+                        zoom_cmp =  ensure_minsize_image( zoom_cmp,  (2*radius, 2*radius ))
+                        zoom_cmps.append( zoom_cmp )
+
                         obj_ids.append( obj_id )
                         maxabsdiff.append( abs(zoom_diff ).max() )
+                        this2d = []
                         for pt_no, (x2d,y2d) in enumerate(zip(rows['x'],rows['y'])):
                             if ((minx <= x2d <= maxx) and
                                 (miny <= y2d <= maxy)):
                                 this2d.append( (x2d-minx,y2d-miny,pt_no) )
-                    this2ds.append( this2d )
+                        this2ds.append( this2d )
 
-                if len(zoom_objs):
-                    newframe = numpy.hstack( zoom_objs )
-                    im = (newframe*7 + 127).astype( numpy.uint8 ) # scale and offset
+                if len(zoom_diffs):
+                    scale = 7.0
+                    offset = 127
+
+                    top_offset = 5
+                    left_offset = 30
+
+                    diffrow = numpy.hstack( zoom_diffs ) * scale + offset
+                    cmprow = numpy.hstack( zoom_cmps ) * scale + offset
+                    blackrow = numpy.zeros( (top_offset, diffrow.shape[1]) )
+
+                    fgrow = numpy.hstack( zoom_fgs )
+                    bgrow = numpy.hstack( zoom_bgs )
+                    absdiffrow = numpy.hstack( zoom_absdiffs ) * scale+offset
+
+                    row_ims=[blackrow,
+                             diffrow,
+                             cmprow,
+                             absdiffrow,
+                             blackrow,
+                             fgrow,
+                             bgrow,
+                             ]
+
+                    labels = [None,
+                              'diff (s.)',
+                              'cmp (s.)',
+                              'absdiff (s.)',
+                              None,
+                              'raw',
+                              'bg',
+                              ]
+
+                    rightpart = numpy.vstack(row_ims)
+                    leftpart = numpy.zeros( (rightpart.shape[0], left_offset) )
+                    newframe = numpy.hstack( [leftpart, rightpart] )
+
+                    newframe = numpy.clip( newframe, 0, 255)
+                    im = newframe.astype( numpy.uint8 ) # scale and offset
                     im=Image.fromstring('L',
                                         (im.shape[1],im.shape[0]),
                                         im.tostring())
@@ -317,16 +389,37 @@ def doit(fmf_filename=None,
                     im = im.resize( (rescale_factor*w, rescale_factor*h) )
                     im = im.convert('RGB')
                     draw = aggdraw.Draw(im)
+
+                    cumy = 0
+                    absdiffy = None
+                    for j in range(len(labels)):
+                        label = labels[j]
+                        row_im = row_ims[j]
+                        draw.text( (rescale_factor*(0),rescale_factor*cumy),
+                                   label, font_zoomed)
+                        if label == 'absdiff (s.)':
+                            absdiffy = cumy
+                        cumy += row_im.shape[0]
+
                     for i, (this_maxabsdiff, obj_id) in enumerate( zip(maxabsdiff, obj_ids) ):
-                        draw.text( (i*2*radius,0), '%.0f (%d)'%(this_maxabsdiff,obj_id), font2d)
+                        draw.text( (rescale_factor*(i*2*radius+left_offset),0),
+                                   'obj %d'%(obj_id,), font_zoomed)
+
+                        draw.text( (rescale_factor*(i*2*radius+left_offset),
+                                    rescale_factor*(absdiffy)),
+                                   'max %.0f'%(this_maxabsdiff,), font_zoomed)
+
                     radius_pt = 3
-                    for this2d in this2ds:
+                    for i,this2d in enumerate(this2ds):
                         for (x2d, y2d, pt_no) in this2d:
-                            draw.ellipse( [rescale_factor*x2d-radius_pt,rescale_factor*y2d-radius_pt,
-                                           rescale_factor*x2d+radius_pt,rescale_factor*y2d+radius_pt],
-                                          pen2d )
+                            xloc = rescale_factor*( x2d + i*2*radius + left_offset )
+                            xloc1 = xloc - radius_pt
+                            xloc2 = xloc + radius_pt
+                            draw.ellipse( [xloc1,rescale_factor*(absdiffy+y2d)-radius_pt,
+                                           xloc2,rescale_factor*(absdiffy+y2d)+radius_pt],
+                                          pen_zoomed )
                     draw.flush()
-                    fname = 'zoom_diff_%s_%07d.png'%(cam_id,h5_frame)
+                    fname = 'zoomed/zoom_diff_%s_%07d.png'%(cam_id,h5_frame)
                     im.save( fname )
 
             if PLOT=='mpl':
