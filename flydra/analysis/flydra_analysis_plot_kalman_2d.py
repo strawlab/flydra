@@ -107,9 +107,15 @@ def show_it(fig,
     if len(unique_cam_ids)==1:
         n_rows=1
         n_cols=1
-    else:
+    elif len(unique_cam_ids)<=6:
         n_rows=2
         n_cols=3
+    elif len(unique_cam_ids)<=12:
+        n_rows=3
+        n_cols=4
+    else:
+        n_rows=4
+        n_cols=int( math.ceil(len(unique_cam_ids)/n_rows))
 
     subplot_by_cam_id = {}
     for i,cam_id in enumerate(unique_cam_ids):
