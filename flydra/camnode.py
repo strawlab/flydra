@@ -60,6 +60,27 @@ import motmot.FastImage.FastImage as FastImage
 if os.name == 'posix' and sys.platform != 'darwin':
     import posix_sched
 
+class SharedValue:
+    def __init__(self):
+        self.evt = threading.Event()
+        self._val = None
+    def set(self,value):
+        # called from producer thread
+        self._val = value
+        self.evt.set()
+    def is_new_value_waiting(self):
+        return self.evt.isSet()
+    def get(self,*args,**kwargs):
+        # called from consumer thread
+        self.evt.wait(*args,**kwargs)
+        val = self._val
+        self.evt.clear()
+        return val
+    def get_nowait(self):
+        val = self._val
+        self.evt.clear()
+        return val
+
 class DummyMainBrain:
     def __init__(self,*args,**kw):
         self.set_image = self.noop
@@ -232,7 +253,7 @@ class GrabClass(object):
                  cam_no=-1,
                  main_brain_hostname=None,
                  mask_image=None,
-                 n_sigma=None,
+                 n_sigma_shared=None,
                  framerate = None,
                  lbrt=None,
                  max_height=None,
@@ -251,7 +272,7 @@ class GrabClass(object):
 
         self.bg_frame_alpha = bg_frame_alpha
         self.bg_frame_interval = bg_frame_interval
-        self.n_sigma = n_sigma
+        self.n_sigma_shared = n_sigma_shared
 
         self.new_roi = threading.Event()
         self.new_roi_data = None
@@ -498,7 +519,7 @@ class GrabClass(object):
         cur_fisize = FastImage.Size(hw_roi_w, hw_roi_h)
 
         bg_changed = True
-        use_roi2_isSet = globals['use_roi2'].isSet
+        use_roi2 = True
         fi8ufactory = FastImage.FastImage8u
         use_cmp_isSet = globals['use_cmp'].isSet
 
@@ -629,7 +650,7 @@ class GrabClass(object):
 
                 work_start_time = time.time()
                 xpoints = self.realtime_analyzer.do_work(hw_roi_frame,
-                                                         timestamp, framenumber, use_roi2_isSet(),
+                                                         timestamp, framenumber, use_roi2,
                                                          use_cmp_isSet(),
                                                          max_duration_sec=0.010, # maximum 10 msec in here
                                                          )
@@ -706,7 +727,7 @@ class GrabClass(object):
                         mean2,
                         std2,
                         running_stdframe,
-                        self.n_sigma,#in
+                        self.n_sigma_shared.get_nowait(),#in
                         compareframe8u,
                         bright_non_gaussian_cutoff,#in
                         noisy_pixels_mask,#in
@@ -1069,7 +1090,6 @@ class AppState(object):
             globals['collecting_background'] = threading.Event()
             globals['collecting_background'].set()
             globals['export_image_name'] = 'raw'
-            globals['use_roi2'] = threading.Event()
             globals['use_cmp'] = threading.Event()
             #globals['use_cmp'].clear()
             #print 'not using ongoing variance estimate'
@@ -1223,8 +1243,11 @@ class AppState(object):
                 scalar_control_info['trigger_mode'] = cam.get_trigger_mode_number()
             except cam_iface.CamIFaceError:
                 scalar_control_info['trigger_mode'] = 0
-            scalar_control_info['roi2'] = globals['use_roi2'].isSet()
             scalar_control_info['cmp'] = globals['use_cmp'].isSet()
+
+            n_sigma_shared = SharedValue()
+            n_sigma_shared.set(n_sigma)
+            scalar_control_info['n_sigma'] = n_sigma_shared.get_nowait()
 
             scalar_control_info['width'] = width
             scalar_control_info['height'] = height
@@ -1271,7 +1294,7 @@ class AppState(object):
                         cam_no=cam_no,
                         main_brain_hostname=self.main_brain_hostname,
                         mask_image=mask,
-                        n_sigma=n_sigma,
+                        n_sigma_shared=n_sigma_shared,
                         framerate=None,
                         lbrt=lbrt,
                         max_height=cam.get_max_height(),
@@ -1442,6 +1465,9 @@ class AppState(object):
                     elif property_name == 'roi':
                         print 'flydra_camera_node.py: ignoring ROI command for now...'
                         #grabber.roi = value
+                    elif property_name == 'n_sigma':
+                        print 'setting n_sigma',value
+                        grabber.n_sigma_shared.set(value)
                     elif property_name == 'diff_threshold':
                         #print 'setting diff_threshold',value
                         grabber.diff_threshold = value # XXX TODO: FIXME: thread crossing bug
@@ -1454,9 +1480,6 @@ class AppState(object):
                     elif property_name == 'trigger_mode':
                         #print 'cam.set_trigger_mode_number( value )',value
                         cam.set_trigger_mode_number( value )
-                    elif property_name == 'roi2':
-                        if value: globals['use_roi2'].set()
-                        else: globals['use_roi2'].clear()
                     elif property_name == 'cmp':
                         if value:
                             # print 'ignoring request to use_cmp'

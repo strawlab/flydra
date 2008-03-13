@@ -503,6 +503,11 @@ class wxMainBrainApp(wx.App):
         quit_camera = xrc.XRCCTRL(previewPerCamPanel,"quit_camera")
         wx.EVT_BUTTON(quit_camera, quit_camera.GetId(), self.OnCloseCamera)
 
+        ctrl = xrc.XRCCTRL(previewPerCamPanel,"n_sigma")
+        val = scalar_control_info['n_sigma']
+        ctrl.SetValue( str( val ) )
+        wx.EVT_TEXT(ctrl, ctrl.GetId(), self.OnSetCameraNSigma)
+
         threshold_value = xrc.XRCCTRL(previewPerCamPanel,"threshold_value")
         val = scalar_control_info['diff_threshold']
         threshold_value.SetValue( str( val ) )
@@ -532,12 +537,6 @@ class wxMainBrainApp(wx.App):
         val = scalar_control_info['trigger_mode']
         ext_trig.SetValue( val )
         wx.EVT_CHECKBOX(ext_trig, ext_trig.GetId(), self.OnExtTrig)
-
-        roi2 = xrc.XRCCTRL(previewPerCamPanel,
-                           "ROI2")
-        val = scalar_control_info['roi2']
-        roi2.SetValue( val )
-        wx.EVT_CHECKBOX(roi2, roi2.GetId(), self.OnROI2)
 
         per_cam_controls_panel = xrc.XRCCTRL(previewPerCamPanel,
                                          "PerCameraControlsContainer")
@@ -629,14 +628,13 @@ class wxMainBrainApp(wx.App):
         elif param == 'diff_threshold':
             threshold_diff_value = xrc.XRCCTRL(previewPerCamPanel,"threshold_value")
             threshold_diff_value.SetValue( str( value ) )
+        elif param == 'n_sigma':
+            value = xrc.XRCCTRL(previewPerCamPanel,"n_sigma")
+            value.SetValue( str( value ) )
         elif param == 'trigger_mode':
             ext_trig = xrc.XRCCTRL(previewPerCamPanel,
                                "EXT_TRIG")
             ext_trig.SetValue( value )
-        elif param == 'roi2':
-            roi2 = xrc.XRCCTRL(previewPerCamPanel,
-                           "ROI2")
-            roi2.SetValue( value )
         else:
             if param not in ('roi','width','height'):
                 print 'WARNING: could not update panel display for',param
@@ -1452,6 +1450,13 @@ class wxMainBrainApp(wx.App):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         self.main_brain.close_camera(cam_id) # eventually calls OnOldCamera
 
+    def OnSetCameraNSigma(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        value = event.GetString()
+        if value:
+            value = float(value)
+            self.main_brain.send_set_camera_property(cam_id,'n_sigma',value)
+
     def OnSetCameraThreshold(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         value = event.GetString()
@@ -1484,11 +1489,6 @@ class wxMainBrainApp(wx.App):
         widget = event.GetEventObject()
         cam_id = self._get_cam_id_for_button(widget)
         self.main_brain.send_set_camera_property( cam_id, 'trigger_mode', widget.IsChecked() )
-
-    def OnROI2(self, event):
-        widget = event.GetEventObject()
-        cam_id = self._get_cam_id_for_button(widget)
-        self.main_brain.send_set_camera_property( cam_id, 'roi2', widget.IsChecked() )
 
     def OnOldCamera(self, cam_id):
         print 'camera detached: '+cam_id

@@ -348,9 +348,22 @@
                   <label>external trigger</label>
                 </object>
               </object>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxBoxSizer">
+              <orient>wxHORIZONTAL</orient>
               <object class="sizeritem">
-                <object class="wxCheckBox" name="ROI2">
-                  <label>use roi2</label>
+                <object class="wxStaticText">
+                  <label>N sigma</label>
+                </object>
+                <flag>wxTOP|wxRIGHT</flag>
+                <border>3</border>
+              </object>
+              <object class="sizeritem">
+                <object class="wxTextCtrl" name="n_sigma">
+                  <value>?</value>
+                  <size>40,20</size>
                 </object>
               </object>
             </object>
