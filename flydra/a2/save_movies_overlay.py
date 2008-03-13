@@ -36,9 +36,9 @@ import core_analysis
 import pytz, datetime
 pacific = pytz.timezone('US/Pacific')
 
-def ensure_minsize_image( arr, (h,w)):
+def ensure_minsize_image( arr, (h,w), fill=0):
     if ((arr.shape[0] < h) or (arr.shape[1] < w)):
-        arr_new = numpy.zeros( (h,w), dtype=arr.dtype )
+        arr_new = numpy.ones( (h,w), dtype=arr.dtype )*fill
         arr_new[:arr.shape[0],:arr.shape[1]] = arr
         arr=arr_new
     return arr
@@ -291,6 +291,10 @@ def doit(fmf_filename=None,
                     kobs_vert_images.append( (vert_image, vert, this_3d_row['obj_id'], obs_info) )
 
             if do_zoom_diff:
+                zoom_luminance_scale = 7.0
+                zoom_luminance_offset = 127
+                zoom_scaled_black = -zoom_luminance_offset/zoom_luminance_scale
+
                 # Zoomed difference image for this frame
                 bg = bg_frame.astype(numpy.float32)
                 cmp = cmp_frame.astype(numpy.float32)
@@ -320,20 +324,20 @@ def doit(fmf_filename=None,
                         maxy = min(h,miny+(2*radius))
 
                         zoom_diff = diff_im[miny:maxy, minx:maxx]
-                        zoom_diff = ensure_minsize_image( zoom_diff, (2*radius, 2*radius ))
+                        zoom_diff = ensure_minsize_image( zoom_diff, (2*radius, 2*radius ),fill=zoom_scaled_black)
                         zoom_diffs.append( zoom_diff )
                         zoom_absdiffs.append( abs(zoom_diff) )
 
                         zoom_fg = fg[miny:maxy, minx:maxx]
-                        zoom_fg =  ensure_minsize_image( zoom_fg,  (2*radius, 2*radius ))
+                        zoom_fg =  ensure_minsize_image( zoom_fg,  (2*radius, 2*radius ),fill=zoom_scaled_black)
                         zoom_fgs.append( zoom_fg )
 
                         zoom_bg = bg[miny:maxy, minx:maxx]
-                        zoom_bg =  ensure_minsize_image( zoom_bg,  (2*radius, 2*radius ))
+                        zoom_bg =  ensure_minsize_image( zoom_bg,  (2*radius, 2*radius ),fill=zoom_scaled_black)
                         zoom_bgs.append( zoom_bg )
 
                         zoom_cmp = cmp[miny:maxy, minx:maxx]
-                        zoom_cmp =  ensure_minsize_image( zoom_cmp,  (2*radius, 2*radius ))
+                        zoom_cmp =  ensure_minsize_image( zoom_cmp,  (2*radius, 2*radius ),fill=zoom_scaled_black)
                         zoom_cmps.append( zoom_cmp )
 
                         obj_ids.append( obj_id )
@@ -347,9 +351,9 @@ def doit(fmf_filename=None,
                                 this2d.append( (x2d-minx,y2d-miny,pt_no) )
                                 plotted_pt_nos.add( int(pt_no) )
                         this2ds.append( this2d )
-                del xy,XYZ,obj_id,Pmean_meters
                 all_pt_nos = sets.Set(range( len( rows) ))
                 missing_pt_nos = list(all_pt_nos-plotted_pt_nos)
+
                 for pt_no in missing_pt_nos:
                     this_row = rows[pt_no]
                     (x2d,y2d) = this_row['x'], this_row['y']
@@ -364,20 +368,20 @@ def doit(fmf_filename=None,
                         maxy = min(h,miny+(2*radius))
 
                         zoom_diff = diff_im[miny:maxy, minx:maxx]
-                        zoom_diff = ensure_minsize_image( zoom_diff, (2*radius, 2*radius ))
+                        zoom_diff = ensure_minsize_image( zoom_diff, (2*radius, 2*radius ),fill=zoom_scaled_black)
                         zoom_diffs.append( zoom_diff )
                         zoom_absdiffs.append( abs(zoom_diff) )
 
                         zoom_fg = fg[miny:maxy, minx:maxx]
-                        zoom_fg =  ensure_minsize_image( zoom_fg,  (2*radius, 2*radius ))
+                        zoom_fg =  ensure_minsize_image( zoom_fg,  (2*radius, 2*radius ),fill=zoom_scaled_black)
                         zoom_fgs.append( zoom_fg )
 
                         zoom_bg = bg[miny:maxy, minx:maxx]
-                        zoom_bg =  ensure_minsize_image( zoom_bg,  (2*radius, 2*radius ))
+                        zoom_bg =  ensure_minsize_image( zoom_bg,  (2*radius, 2*radius ),fill=zoom_scaled_black)
                         zoom_bgs.append( zoom_bg )
 
                         zoom_cmp = cmp[miny:maxy, minx:maxx]
-                        zoom_cmp =  ensure_minsize_image( zoom_cmp,  (2*radius, 2*radius ))
+                        zoom_cmp =  ensure_minsize_image( zoom_cmp,  (2*radius, 2*radius ),fill=zoom_scaled_black)
                         zoom_cmps.append( zoom_cmp )
 
                         obj_ids.append( None )
@@ -393,8 +397,8 @@ def doit(fmf_filename=None,
                         this2ds.append( this2d )
 
                 if len(zoom_diffs):
-                    scale = 7.0
-                    offset = 127
+                    scale = zoom_luminance_scale
+                    offset = zoom_luminance_offset
 
                     top_offset = 5
                     left_offset = 30
