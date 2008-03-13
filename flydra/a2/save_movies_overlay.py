@@ -46,6 +46,7 @@ def doit(fmf_filename=None,
          style='debug',
          blank=None,
          prefix=None,
+         do_zoom_diff=False,
          ):
     styles = ['debug','pretty','blank']
     if style not in styles:
@@ -210,6 +211,7 @@ def doit(fmf_filename=None,
         pbar.update(h5_frame-start)
         mainbrain_timestamp = numpy.nan
         idxs = []
+        bg_frame, bg_timestamp = None,None
         try:
             fmf_fno = mymap[h5_frame]
             fmf_timestamp = fmf_timestamps[fmf_fno]
@@ -273,7 +275,7 @@ def doit(fmf_filename=None,
 
                     kobs_vert_images.append( (vert_image, vert, this_3d_row['obj_id'], obs_info) )
 
-            if 1:
+            if do_zoom_diff:
                 # Zoomed difference image for this frame
                 bg = bg_frame.astype(numpy.float32)
                 fg = frame.astype(numpy.float32)
@@ -472,6 +474,10 @@ def main():
     parser.add_option("--style", dest="style", type='string',
                       default='debug',)
 
+    parser.add_option("--zoom-diff", action='store_true',
+                      default=False,
+                      help="save zoomed difference image (not well tested)")
+
     (options, args) = parser.parse_args()
 
     if len(args):
@@ -489,6 +495,7 @@ def main():
          style=options.style,
          blank=options.blank,
          prefix=options.prefix,
+         do_zoom_diff=options.zoom_diff,
          )
 
 if __name__=='__main__':
