@@ -947,8 +947,18 @@ class IsoThread(threading.Thread):
         cam = self.cam
         DEBUG_ACQUIRE = self.debug_acquire
         while not cam_quit_event_isSet():
-            if buffer_pool.get_num_outstanding_buffers() > 300:
-                raise RuntimeError('We seem to be leaking buffers - will not acquire more images!')
+            if buffer_pool.get_num_outstanding_buffers() > 100:
+                # Grab some frames (wait) until the number of
+                # outstanding buffers decreases -- give processing
+                # threads time to catch up.
+                print ('*'*80+'\n')*5
+                print 'ERROR: We seem to be leaking buffers - will not acquire more images for a while!'
+                print ('*'*80+'\n')*5
+                while 1:
+                    trash = cam.grab_next_frame_blocking()
+                    if buffer_pool.get_num_outstanding_buffers() < 10:
+                        print 'Resuming normal image acquisition'
+                        break
             with get_free_buffer_from_pool( buffer_pool ) as buf:
                 _bufim = buf.get_buf()
 
