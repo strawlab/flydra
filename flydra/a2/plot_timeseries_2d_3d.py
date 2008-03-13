@@ -58,6 +58,10 @@ def doit(
         pylab.figtext(0,0,filename)
 
         h5 = PT.openFile( filename, mode='r' )
+
+        if fps is None:
+            fps = result_utils.get_fps( h5 )
+
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
         cam_ids = cam_id2camns.keys()
         if 0:
