@@ -405,7 +405,7 @@ def doit(fmf_filename=None,
                         draw.text( (rescale_factor*(i*2*radius+left_offset),0),
                                    'obj %d'%(obj_id,), font_zoomed)
 
-                        draw.text( (rescale_factor*(i*2*radius+left_offset),
+                        draw.text( (rescale_factor*(i*2*radius+left_offset)+3,
                                     rescale_factor*(absdiffy)),
                                    'max %.0f'%(this_maxabsdiff,), font_zoomed)
 
@@ -418,6 +418,8 @@ def doit(fmf_filename=None,
                             draw.ellipse( [xloc1,rescale_factor*(absdiffy+y2d)-radius_pt,
                                            xloc2,rescale_factor*(absdiffy+y2d)+radius_pt],
                                           pen_zoomed )
+                            draw.text( (xloc,rescale_factor*(absdiffy+y2d)),
+                                       'pt %d'%(pt_no,), font_zoomed )
                     draw.flush()
                     fname = 'zoomed/zoom_diff_%s_%07d.png'%(cam_id,h5_frame)
                     im.save( fname )
