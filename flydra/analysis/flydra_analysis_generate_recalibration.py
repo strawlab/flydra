@@ -50,9 +50,8 @@ def create_new_row(d2d, this_camns, this_camn_idxs, cam_ids, camn2cam_id, npoint
 
 def do_it(filename,
           efilename,
-          use_nth_observation=40,
+          use_nth_observation=None,
           h5_2d_data_filename=None,
-          use_kalman_data=True,
           start=None,
           stop=None,
           ):
@@ -66,7 +65,7 @@ def do_it(filename,
 
     results = result_utils.get_results(filename,mode='r+')
 
-    if use_kalman_data:
+    if 1:
         mylocals = {}
         myglobals = {}
         execfile(efilename,myglobals,mylocals)
@@ -99,7 +98,7 @@ def do_it(filename,
     IdMat = []
     points = []
 
-    if use_kalman_data:
+    if 1:
         for obj_id_enum, obj_id in enumerate(use_obj_ids):
             print 'obj_id %d (%d of %d)'%(obj_id, obj_id_enum+1, len(use_obj_ids))
             this_obj_id = obj_id
@@ -254,13 +253,10 @@ Then run this program::
     parser = OptionParser(usage)
 
     parser.add_option('--use-nth-observation', type='int',
-                      dest='use_nth_observation', default=40)
+                      dest='use_nth_observation', default=1)
 
     parser.add_option('--2d-data', type='string',
                       dest='h5_2d_data_filename', default=None)
-
-    parser.add_option("--disable-kalman-objs", action='store_false', default=True,
-                      dest='use_kalman_data')
 
     parser.add_option("--start", dest='start',
                       type="int",
@@ -288,13 +284,12 @@ Then run this program::
         efilename = args[1]
     else:
         efilename = None
-        if options.use_kalman_data is not False:
-            raise ValueError('Kalman objects have not been disabled, but you did not specify an EFILE (hint: specify an EFILE or use --disable-kalman-objs')
+        if 1:
+            raise ValueError('You did not specify an EFILE')
 
     do_it(h5_filename,efilename,
           use_nth_observation=options.use_nth_observation,
           h5_2d_data_filename=options.h5_2d_data_filename,
-          use_kalman_data=options.use_kalman_data,
           start=options.start,
           stop=options.stop,
           )
