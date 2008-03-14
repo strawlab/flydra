@@ -249,8 +249,8 @@ def show_it(fig,
                     found = True
                     break
             if not found:
-                if 0:
-                    print 'WARNING:point not found in data!?'
+                if 1:
+                    print 'WARNING:point not found in data -- 3D data starts before 2D I guess.'
                     continue
                 else:
                     raise RuntimeError('point not found in data!?')
