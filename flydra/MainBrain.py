@@ -268,7 +268,7 @@ class TimestampEchoReceiver(threading.Thread):
         port = flydra.common_variables.timestamp_echo_gatherer_port
         timestamp_echo_gatherer.bind((hostname, port))
 
-        last_clock_diff_measurements = {}
+        last_clock_diff_measurements = collections.defaultdict(list)
 
         while 1:
             try:
@@ -284,14 +284,15 @@ class TimestampEchoReceiver(threading.Thread):
 
             start_timestamp,remote_timestamp = struct.unpack(timestamp_echo_fmt2,timestamp_echo_buf)
 
-            tlist = last_clock_diff_measurements.setdefault(timestamp_echo_remote_ip,[])
+            tlist = last_clock_diff_measurements[timestamp_echo_remote_ip]
             tlist.append( (start_timestamp,remote_timestamp,stop_timestamp) )
             if len(tlist)==100:
                 if timestamp_echo_remote_ip not in ip2hostname:
                     ip2hostname[timestamp_echo_remote_ip]=socket.getfqdn(timestamp_echo_remote_ip)
                 remote_hostname = ip2hostname[timestamp_echo_remote_ip]
                 tarray = numpy.array(tlist)
-                del tlist[0:-1] # clear list
+
+                del tlist[:] # clear list
                 start_timestamps = tarray[:,0]
                 stop_timestamps = tarray[:,2]
                 roundtrip_duration = stop_timestamps-start_timestamps
@@ -299,7 +300,7 @@ class TimestampEchoReceiver(threading.Thread):
                 rowidx = numpy.argmin(roundtrip_duration)
                 srs = tarray[rowidx,:]
                 start_timestamp, remote_timestamp, stop_timestamp = srs
-                clock_diff_msec = (remote_timestamp-start_timestamp)*1e3
+                clock_diff_msec = abs(remote_timestamp-start_timestamp)*1e3
                 if clock_diff_msec > 1:
                     print '%s : clock diff: %.3f msec(measurement err: %.3f msec)'%(
                         remote_hostname,
@@ -734,7 +735,9 @@ class CoordinateProcessor(threading.Thread):
         self._fake_sync_event.set()
 
     def OnSynchronize(self, cam_idx, cam_id, framenumber, timestamp,
-                      realtime_coord_dict, realtime_kalman_coord_dict,
+                      realtime_coord_dict, timestamp_check_dict,
+                      timestamp_fix_dict,
+                      realtime_kalman_coord_dict,
                       oldest_timestamp_by_corrected_framenumber,
                       new_data_framenumbers):
 
@@ -748,11 +751,13 @@ class CoordinateProcessor(threading.Thread):
             # discard all previous data
             for k in realtime_coord_dict.keys():
                 del realtime_coord_dict[k]
+                del timestamp_check_dict[k]
             for k in realtime_kalman_coord_dict.keys():
                 del realtime_kalman_coord_dict[k]
             for k in oldest_timestamp_by_corrected_framenumber.keys():
                 del oldest_timestamp_by_corrected_framenumber[k]
             new_data_framenumbers.clear()
+            timestamp_fix_dict[cam_id] = timestamp
 
         #else:
         #    print cam_id,'first 2D coordinates received'
@@ -791,6 +796,8 @@ class CoordinateProcessor(threading.Thread):
         pt_size = struct.calcsize(pt_fmt)
 
         realtime_coord_dict = {}
+        timestamp_check_dict = {}
+        timestamp_fix_dict = {} # for bizarre constant timestamp offsets
         realtime_kalman_coord_dict = collections.defaultdict(dict)
         oldest_timestamp_by_corrected_framenumber = {}
 
@@ -819,6 +826,8 @@ class CoordinateProcessor(threading.Thread):
                     framenumber = self.last_framenumbers_delay[cam_idx]
                     self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
                                         realtime_coord_dict,
+                                        timestamp_check_dict,
+                                        timestamp_fix_dict,
                                         realtime_kalman_coord_dict,
                                         oldest_timestamp_by_corrected_framenumber,
                                         new_data_framenumbers )
@@ -957,6 +966,8 @@ class CoordinateProcessor(threading.Thread):
                         if timestamp-self.last_timestamps[cam_idx] > RESET_FRAMENUMBER_DURATION:
                             self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
                                                 realtime_coord_dict,
+                                                timestamp_check_dict,
+                                                timestamp_fix_dict,
                                                 realtime_kalman_coord_dict,
                                                 oldest_timestamp_by_corrected_framenumber,
                                                 new_data_framenumbers )
@@ -980,9 +991,12 @@ class CoordinateProcessor(threading.Thread):
 
                         if corrected_framenumber not in realtime_coord_dict:
                             realtime_coord_dict[corrected_framenumber] = {}
+                            timestamp_check_dict[corrected_framenumber] = {}
 
                         # For hypothesis testing: attempt 3D reconstruction of 1st point from each 2D view
                         realtime_coord_dict[corrected_framenumber][cam_id]= points_undistorted[0]
+                        #timestamp_check_dict[corrected_framenumber][cam_id]= camn_received_time
+                        timestamp_check_dict[corrected_framenumber][cam_id]= timestamp
 
                         if len( points_in_pluecker_coords_meters):
                             # save all 3D Pluecker coordinates for Kalman filtering
@@ -1271,8 +1285,10 @@ class CoordinateProcessor(threading.Thread):
                             k.sort()
                             ids = []
                             save_points = []
+                            cam_timestamps_sync_check = []
                             for cam_id in k:
                                 pt = data_dict[cam_id]
+                                cam_timestamps_sync_check.append( pt[0] )
                                 if numpy.isnan(pt[0]): # found_anything
                                     save_pt = nan, nan, nan
                                     id = 0
@@ -1288,7 +1304,30 @@ class CoordinateProcessor(threading.Thread):
                                 #print 'saving points for calibration:',ids,save_points
 
                 for finished in finished_corrected_framenumbers:
+                    if 1:
+                        #check that timestamps are in reasonable agreement (low priority)
+                        if 0:
+                            timestamps_by_cam_id = numpy.array(timestamp_check_dict[finished].values())
+                            for xy in timestamp_check_dict[finished].iteritems():
+                                print repr(xy)
+
+                        if 1:
+                            diff_from_start = []
+                            for cam_id, tmp_finished_timestamp in timestamp_check_dict[finished].iteritems():
+                                try:
+                                    timestamp_fix = timestamp_fix_dict[cam_id]
+                                except KeyError:
+                                    break
+                                diff_from_start.append( tmp_finished_timestamp - timestamp_fix )
+                            timestamps_by_cam_id = numpy.array( diff_from_start )
+
+                        if 1:
+                            if len(timestamps_by_cam_id):
+                                if numpy.max(abs(timestamps_by_cam_id - timestamps_by_cam_id[0])) > 0.005:
+                                    print 'timestamps off by more than 5 msec -- synchronization error'
+
                     del realtime_coord_dict[finished]
+                    del timestamp_check_dict[finished]
                     try:
                         del realtime_kalman_coord_dict[finished]
                     except KeyError:
@@ -1307,8 +1346,17 @@ class CoordinateProcessor(threading.Thread):
                     print 'Cameras not synchronized or network dropping packets -- unmatched 2D data accumulating'
                     k=realtime_coord_dict.keys()
                     k.sort()
+
+                    if 1:
+                        # get one sample
+                        corrected_framenumber = k[0]
+                        data_dict = realtime_coord_dict[corrected_framenumber]
+                        this_cam_ids = data_dict.keys()
+                        print ' a guess at missing cam_id(s):',list(sets.Set(self.cam_ids) - sets.Set( this_cam_ids ))
+
                     for ki in k[:-50]:
                         del realtime_coord_dict[ki]
+                        del timestamp_check_dict[ki]
 
                 if len(realtime_kalman_coord_dict)>100:
                     print 'deleting unused 3D data (this should be a rare occurrance)'
