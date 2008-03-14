@@ -959,7 +959,16 @@ class IsoThread(threading.Thread):
                 print 'ERROR: We seem to be leaking buffers - will not acquire more images for a while!'
                 print ('*'*80+'\n')*5
                 while 1:
-                    trash = cam.grab_next_frame_blocking()
+                    try:
+                        trash = cam.grab_next_frame_blocking()
+                    except cam_iface.BuffersOverflowed:
+                        msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
+                        self.log_message_queue.put((self.cam_id,now,msg))
+                        print >> sys.stderr, msg
+                    except cam_iface.FrameDataMissing:
+                        pass
+                    except cam_iface.FrameSystemCallInterruption:
+                        pass
                     if buffer_pool.get_num_outstanding_buffers() < 10:
                         print 'Resuming normal image acquisition'
                         break
