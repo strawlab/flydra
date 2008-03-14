@@ -1009,7 +1009,6 @@ class IsoThread(threading.Thread):
                 if chain is not None:
                     chainbuf._i_promise_to_return_buffer_to_the_pool = True
                     chain.fire( chainbuf ) # the end of the chain will call return_buffer()
-        print 'exiting camera IsoThread for camera',self.cam_no_str
 
 class ConsoleApp(object):
     def __init__(self, call_often=None):
