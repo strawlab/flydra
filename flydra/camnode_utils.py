@@ -23,8 +23,6 @@ class ChainLink(object):
     def append_link(self, chain ):
         if not isinstance(chain,ChainLink):
             raise ValueError("%s is not instance of ChainLink"%(str(chain),))
-        else:
-            print "%s is instance of ChainLink"%(str(chain),)
         with self._lock:
             if self._next is None:
                 self._next = chain
