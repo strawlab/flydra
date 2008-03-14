@@ -192,6 +192,7 @@ def doit(filename,
          obj_color=False,
          link_all_simultaneous_objs=True,
          show_kalman_P=False,
+         options = None,
          ):
 
     assert exclude_vel_data in ['kalman','observations'] # kalman means smoothed or filtered, depending on use_kalman_smoothing
@@ -319,7 +320,15 @@ def doit(filename,
                                       #stereo = stereo,
                                       )
 
-    lut = tvtk.LookupTable(hue_range = (0.667, 0.0))
+    if options.lut is None:
+        lut = tvtk.LookupTable(hue_range = (0.667, 0.0))
+    elif options.lut in ('gray','grey'):
+        lut = tvtk.LookupTable(hue_range = (0, 0),
+                               saturation_range = (0,0),
+                               #value_range = (0, .8), # don't go all the way to 1 to keep away from pure white
+                               value_range = (.8,0), # don't go all the way to 1 to keep away from pure white
+                               )
+
     actors = []
     actor2obj_id = {}
     #################
@@ -445,8 +454,20 @@ def doit(filename,
             if link_all_simultaneous_objs:
                 allsave.append( rows )
             if not obj_color:
-                vels = numpy.array( [rows['xvel'], rows['yvel'], rows['zvel']] )#. T
-                speeds = numpy.sqrt(numpy.sum(vels**2,axis=0))
+                if 0:
+                    # trust kalman
+                    vels = numpy.array( [rows['xvel'], rows['yvel'], rows['zvel']] )#. T
+                    speeds = numpy.sqrt(numpy.sum(vels**2,axis=0))
+                else:
+                    verts_central_diff = verts[2:,:] - verts[:-2,:]
+                    dt = 1.0/fps
+                    vels = verts_central_diff/(2*dt)
+                    speeds = numpy.sqrt(numpy.sum(vels**2,axis=1))
+                    speeds = numpy.array([speeds[0]] + list(speeds) + [speeds[-1]]) # pad end points
+                max_speed_this_obj = numpy.max(speeds)
+                if max_speed_this_obj > max_vel:
+                    print 'WARNING: max_vel = %s, but max speed is %.2f'%(max_vel,max_speed_this_obj)
+
         else:
             x0 = rows.field('x')[0]
             x1 = rows.field('x')[-1]
@@ -636,7 +657,8 @@ def doit(filename,
 
     if draw_stim_func_str:
         PluginFunc = plugin_loader(draw_stim_func_str)
-        stim_actors = PluginFunc(filename=filename)
+        stim_actors = PluginFunc(filename=filename,
+                                 force_stimulus=options.force_stimulus)
         actors.extend( stim_actors )
 
     ################################
@@ -867,7 +889,12 @@ def main():
 
     parser.add_option("--dynamic-model",
                       type="string",
-                      dest="dynamic_model",
+                      default=None,
+                      )
+
+    parser.add_option("--lut",
+                      type="string",
+                      help="lookup table (e.g. 'gray')",
                       default=None,
                       )
 
@@ -939,6 +966,10 @@ def main():
     parser.add_option("--link-all-simultaneous-objs", action='store_true', default=False,
                       dest='link_all_simultaneous_objs')
 
+    parser.add_option("--force-stimulus", action='store_true',
+                      help="raise error if stimulus condition not found",
+                      default=False)
+
     (options, args) = parser.parse_args()
 
     if options.filename is not None:
@@ -991,6 +1022,7 @@ def main():
          obj_color = options.obj_color,
          link_all_simultaneous_objs=options.link_all_simultaneous_objs,
          show_kalman_P=options.show_kalman_P,
+         options = options,
          )
 
 if __name__=='__main__':

@@ -40,7 +40,7 @@ def draw_cubic_solid(origin,size):
         actors.append(a)
     return actors
 
-def hum07(filename=None):
+def hum07(filename=None, **kwargs):
     actors = []
     # humdra setup 20071130
 
@@ -55,7 +55,7 @@ def hum07(filename=None):
 
     return actors
 
-def mama07(filename=None):
+def mama07(filename=None,**kwargs):
     actors = []
 
     if 1:
@@ -98,7 +98,7 @@ def mama07(filename=None):
         actors.append(a)
     return actors
 
-def default(filename=None):
+def default(filename=None, **kwargs):
     ### draw floor
     actors = []
     if 1:
@@ -158,10 +158,13 @@ def default(filename=None):
     ###################
     stim = None
     try:
-        condition, stim = conditions.get_condition_stimname_from_filename(filename)
+        condition, stim = conditions.get_condition_stimname_from_filename(filename, **kwargs)
         print 'Data from condition "%s",with stimulus'%(condition,),stim
     except KeyError, err:
-        print 'Unknown condition and stimname'
+        if kwargs.get('force_stimulus',False):
+            raise
+        else:
+            print 'Unknown condition and stimname'
 
     if stim is None:
         return actors

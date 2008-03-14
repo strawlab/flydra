@@ -158,8 +158,12 @@ def _initial_file_load(filename):
         data_file = kresults
         extra['kresults'] = kresults
         if hasattr(kresults.root,'textlog'):
-            time_model = flydra.analysis.result_utils.get_time_model_from_data(kresults)
-            extra['time_model'] = time_model
+            try:
+                time_model = flydra.analysis.result_utils.get_time_model_from_data(kresults)
+            except flydra.analysis.result_utils.TextlogParseError, err:
+                pass
+            else:
+                extra['time_model'] = time_model
     return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
 
 def kalman_smooth(orig_rows,

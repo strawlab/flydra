@@ -345,10 +345,14 @@ class TimeModel:
     def framestamp2timestamp(self, framestamp ):
         return framestamp*self.gain + self.offset
 
+class TextlogParseError(Exception):
+    pass
+
 def read_textlog_header(results):
     textlog = results.root.textlog.readCoordinates([0])
     infostr = textlog['message'].tostring().strip('\x00')
-    assert infostr.startswith('MainBrain running at')
+    if not infostr.startswith('MainBrain running at'):
+        raise TextlogParseError('could not parse textlog - old version?')
     fps_str = infostr.split()[3]
     parsed = {}
     parsed['fps'] = fps_str

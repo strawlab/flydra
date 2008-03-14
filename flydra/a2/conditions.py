@@ -88,6 +88,7 @@ files = {
 
     'half w/ odor':['DATA20070303_191938_smoothed.mat',
                     'DATA20070307_190812_smoothed.mat',
+                    #'DATA20070303_191938.h5', # if the .mat file has been re-calibrated, this is wrong
                     ],
 
     'half w/ odor, w/ wind':['DATA20070305_181659_smoothed.mat',
@@ -167,7 +168,7 @@ for condition, filenames in files.iteritems():
     for filename in filenames:
         _filename2stimname[filename] = stim_name
 
-def get_condition_stimname_from_filename(filename, no_post_stimname=None):
+def get_condition_stimname_from_filename(filename, no_post_stimname=None, **kwargs):
     def is_no_post_condition(condition_name):
         k=condition_name
         return k.startswith('no post') or k.startswith('phantom post')
