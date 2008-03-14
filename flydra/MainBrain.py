@@ -1688,6 +1688,7 @@ class MainBrain(object):
         self._fqdns_by_cam_id = {}
         self.set_new_camera_callback(self.IncreaseCamCounter)
         self.set_new_camera_callback(self.SendExpectedFPS)
+        self.set_new_camera_callback(self.SendCalibration)
         self.set_old_camera_callback(self.DecreaseCamCounter)
         self.currently_calibrating = threading.Event()
 
@@ -1806,6 +1807,14 @@ class MainBrain(object):
 
     def SendExpectedFPS(self,cam_id,scalar_control_info,fqdn_and_port):
         self.send_set_camera_property( cam_id, 'expected_trigger_framerate', self.fps )
+
+    def SendCalibration(self,cam_id,scalar_control_info,fqdn_and_port):
+        if self.reconstructor is not None:
+            pmat = self.reconstructor.get_pmat(cam_id)
+            intlin = self.reconstructor.get_intrinsic_linear(cam_id)
+            intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
+            scale_factor = self.reconstructor.get_scale_factor()
+            self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin, scale_factor)
 
     def DecreaseCamCounter(self,cam_id):
         try:
