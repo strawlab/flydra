@@ -246,7 +246,7 @@ class GrabClass(object):
                  cam2mainbrain_port=None,
                  cam_id=None,
                  log_message_queue=None,
-                 max_num_points=2,
+                 max_num_points=None,
                  roi2_radius=None,
                  bg_frame_interval=None,
                  bg_frame_alpha=None,
@@ -652,7 +652,8 @@ class GrabClass(object):
                 xpoints = self.realtime_analyzer.do_work(hw_roi_frame,
                                                          timestamp, framenumber, use_roi2,
                                                          use_cmp_isSet(),
-                                                         max_duration_sec=0.010, # maximum 10 msec in here
+                                                         #max_duration_sec=0.010, # maximum 10 msec in here
+                                                         max_duration_sec=self.shortest_IFI-0.0005, # give .5 msec for other processing
                                                          )
                 chainbuf.processed_points = xpoints
                 if NAUGHTY_BUT_FAST:
@@ -695,6 +696,7 @@ class GrabClass(object):
                 do_bg_maint = False
 
                 if take_background_isSet():
+                    print 'taking new bg'
                     # reset background image with current frame as mean and 0 STD
                     if cur_fisize != max_frame_size:
                         print cur_fisize
@@ -702,11 +704,13 @@ class GrabClass(object):
                         print 'ERROR: can only take background image if not using ROI'
                     else:
                         hw_roi_frame.get_32f_copy_put(running_sumsqf,max_frame_size)
+                        tmp_view = numpy.asarray(running_sumsqf)
+                        tmp_view += 1 # make initial STD=1
+                        print 'setting initial per-pixel STD to 1'
                         running_sumsqf.toself_square(max_frame_size)
 
                         hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
                         running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
-                        print 'taking new bg'
                         do_bg_maint = True
                     take_background_clear()
 
@@ -959,8 +963,8 @@ class IsoThread(threading.Thread):
                     if buffer_pool.get_num_outstanding_buffers() < 10:
                         print 'Resuming normal image acquisition'
                         break
-            with get_free_buffer_from_pool( buffer_pool ) as buf:
-                _bufim = buf.get_buf()
+            with get_free_buffer_from_pool( buffer_pool ) as chainbuf:
+                _bufim = chainbuf.get_buf()
 
                 try:
                     cam.grab_next_frame_into_buf_blocking(_bufim)
@@ -994,17 +998,17 @@ class IsoThread(threading.Thread):
                 timestamp=self.cam.get_last_timestamp()
                 framenumber=self.cam.get_last_framenumber()
 
-                buf.cam_received_time = cam_received_time
-                buf.timestamp = timestamp
-                buf.framenumber = framenumber
+                chainbuf.cam_received_time = cam_received_time
+                chainbuf.timestamp = timestamp
+                chainbuf.framenumber = framenumber
 
                 # Now we get rid of the frame from this thread by passing
                 # it to processing threads. The last one of these will
                 # return the buffer to buffer_pool when done.
                 chain = self._chain
                 if chain is not None:
-                    buf._i_promise_to_return_buffer_to_the_pool = True
-                    chain.fire( buf ) # the end of the chain will call return_buffer()
+                    chainbuf._i_promise_to_return_buffer_to_the_pool = True
+                    chain.fire( chainbuf ) # the end of the chain will call return_buffer()
         print 'exiting camera IsoThread for camera',self.cam_no_str
 
 class ConsoleApp(object):
@@ -1025,7 +1029,7 @@ class ConsoleApp(object):
 class AppState(object):
     """This class handles all camera states, properties, etc."""
     def __init__(self,
-                 max_num_points_per_camera=2,
+                 max_num_points_per_camera=None,
                  roi2_radius=None,
                  bg_frame_interval=None,
                  bg_frame_alpha=None,
@@ -1096,6 +1100,7 @@ class AppState(object):
             globals['cam_quit_event'] = threading.Event()
             globals['listen_thread_done'] = threading.Event()
             globals['take_background'] = threading.Event()
+            globals['take_background'].set()
             globals['clear_background'] = threading.Event()
             globals['collecting_background'] = threading.Event()
             globals['collecting_background'].set()
@@ -1111,7 +1116,7 @@ class AppState(object):
                 if backend.startswith('prosilica_gige'):
                     num_buffers = 50
                 else:
-                    num_buffers = 205
+                    num_buffers = 50
             N_modes = cam_iface.get_num_modes(cam_no)
             for i in range(N_modes):
                 mode_string = cam_iface.get_mode_string(cam_no,i)
@@ -1122,10 +1127,7 @@ class AppState(object):
                         use_mode = i
             if use_mode is None:
                 use_mode = 0
-            print 'attempting to initialize camera with %d buffers, mode "%s"'%(
-                num_buffers,cam_iface.get_mode_string(cam_no,use_mode))
             cam = cam_iface.Camera(cam_no,num_buffers,use_mode)
-            print 'allocated %d buffers'%num_buffers
             self.all_cams.append( cam )
 
             cam.start_camera()  # start camera
@@ -1155,8 +1157,11 @@ class AppState(object):
             port = 9833
             name = 'main_brain'
             main_brain_URI = "PYROLOC://%s:%d/%s" % (self.main_brain_hostname,port,name)
-            print 'connecting to',main_brain_URI
-            self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
+            try:
+                self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
+            except:
+                print 'ERROR while connecting to',main_brain_URI
+                raise
             self.main_brain._setOneway(['set_image','set_fps','close','log_message','receive_missing_data'])
 
         # ----------------------------------------------------------------
@@ -1166,7 +1171,6 @@ class AppState(object):
         # ----------------------------------------------------------------
 
         if not BENCHMARK or not FLYDRA_BT:
-            print 'starting TimestampEcho thread'
             # run in single-thread for benchmark
             timestamp_echo_thread=threading.Thread(target=TimestampEcho,
                                                    name='TimestampEcho')
@@ -1229,7 +1233,6 @@ class AppState(object):
                 if props['has_manual_mode']:
                     if min_value <= new_value <= max_value:
                         try:
-                            print 'setting camera property', props['name'], new_value
                             cam.set_camera_property( prop_num, new_value, 0 )
                         except:
                             print 'error while setting property %s to %d (from %d)'%(props['name'],new_value,current_value)
@@ -1344,9 +1347,7 @@ class AppState(object):
             driver_string = 'using cam_iface driver: %s (wrapper: %s)'%(
                 cam_iface.get_driver_name(),
                 cam_iface.get_wrapper_name())
-            print >> sys.stderr, driver_string
             self.log_message_queue.put((cam_id,time.time(),driver_string))
-            print 'max_num_points_per_camera',max_num_points_per_camera
 
         self.last_frames_by_cam = [ [] for c in range(num_cams) ]
         self.last_points_by_cam = [ [] for c in range(num_cams) ]
@@ -1358,8 +1359,6 @@ class AppState(object):
             self.last_measurement_time.append( time_func() )
             self.last_return_info_check.append( 0.0 ) # never
             self.n_raw_frames.append( 0 )
-
-        print 'AppState init OK'
 
     def set_quit_function(self, quit_function=None):
         self.quit_function = quit_function
@@ -1580,14 +1579,10 @@ class AppState(object):
                         print str(still_missing)
 
             elif key == 'quit':
-                print 'quitting cam',cam_no
                 globals['cam_quit_event'].set()
-                print "globals['cam_quit_event'].isSet()",globals['cam_quit_event'].isSet()
                 self.iso_threads[cam_no].join()
                 # XXX TODO: quit and join chain threads
-                print 'done with IsoThread %d - joined'%cam_no
                 cam.close()
-                print 'camera %d closed'%cam_no
                 self.cam_status[cam_no] = 'destroyed'
                 cmds=self.main_brain.close(cam_id)
             elif key == 'take_bg':
@@ -1597,7 +1592,7 @@ class AppState(object):
 
             elif key == 'start_recording':
                 if 1:
-                    print 'taking background prior to recording'
+                    print 'TEMPORARY MEASURE: taking background prior to recording'
                     globals['take_background'].set()
                 raw_filename, bg_filename = cmds[key]
 
@@ -1716,7 +1711,6 @@ def main():
     (options, args) = parser.parse_args()
 
     emulation_cal=options.emulation_cal
-    print 'emulation_cal',repr(emulation_cal)
     if emulation_cal is not None:
         emulation_cal = os.path.expanduser(emulation_cal)
         print 'emulation_cal',repr(emulation_cal)
@@ -1744,7 +1738,7 @@ def main():
     if options.num_points is not None:
         max_num_points_per_camera = options.num_points
     else:
-        max_num_points_per_camera = 2
+        max_num_points_per_camera = 20
 
     if options.background_frame_interval is not None:
         bg_frame_interval = options.background_frame_interval
@@ -1780,7 +1774,6 @@ def main():
     else:
         app=ConsoleApp(call_often = app_state.main_thread_task)
         app_state.set_quit_function( app.OnQuit )
-    print 'starting mainloop'
     app.MainLoop()
 
 if __name__=='__main__':
