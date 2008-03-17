@@ -962,8 +962,8 @@ class IsoThread(threading.Thread):
                     try:
                         trash = cam.grab_next_frame_blocking()
                     except cam_iface.BuffersOverflowed:
-                        msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
-                        self.log_message_queue.put((self.cam_id,now,msg))
+                        msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
+                        self.log_message_queue.put((self.cam_no_str,now,msg))
                         print >> sys.stderr, msg
                     except cam_iface.FrameDataMissing:
                         pass
@@ -981,16 +981,16 @@ class IsoThread(threading.Thread):
                     if DEBUG_ACQUIRE:
                         stdout_write('(O%s)'%self.cam_no_str)
                     now = time.time()
-                    msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
-                    self.log_message_queue.put((self.cam_id,now,msg))
+                    msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
+                    self.log_message_queue.put((self.cam_no_str,now,msg))
                     print >> sys.stderr, msg
                     continue
                 except cam_iface.FrameDataMissing:
                     if DEBUG_ACQUIRE:
                         stdout_write('(M%s)'%self.cam_no_str)
                     now = time.time()
-                    msg = 'Warning: frame data missing on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
-                    #self.log_message_queue.put((self.cam_id,now,msg))
+                    msg = 'Warning: frame data missing on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
+                    #self.log_message_queue.put((self.cam_no_str,now,msg))
                     print >> sys.stderr, msg
                     continue
                 except cam_iface.FrameSystemCallInterruption:
