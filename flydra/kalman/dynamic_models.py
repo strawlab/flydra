@@ -105,7 +105,7 @@ def create_dynamic_model_dict(dt=None):
         Q=Q,
         R=R)
     newdict.update(base_model_dict)
-    dynamic_models['hbird3, units: mm'] = newdict
+    dynamic_models['hummingbird dynamics, units: mm'] = newdict
     ######################################
 
     # 'fly dynamics, high precision calibration, units: mm':
