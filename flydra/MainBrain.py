@@ -531,6 +531,7 @@ class CoordinateSender(threading.Thread):
 class CoordinateProcessor(threading.Thread):
     def __init__(self,main_brain,save_profiling_data=False,
                  debug_level=None,
+                 show_sync_errors=True,
                  show_overall_latency=None):
         global hostname
         self.main_brain = main_brain
@@ -559,6 +560,7 @@ class CoordinateProcessor(threading.Thread):
         self.reconstructor = None
         self.reconstructor_meters = None
         self.tracker = None
+	self.show_sync_errors=show_sync_errors
 
         self.ip2hostname = {}
 
@@ -1321,7 +1323,7 @@ class CoordinateProcessor(threading.Thread):
                                 diff_from_start.append( tmp_finished_timestamp - timestamp_fix )
                             timestamps_by_cam_id = numpy.array( diff_from_start )
 
-                        if 1:
+                        if self.show_sync_errors:
                             if len(timestamps_by_cam_id):
                                 if numpy.max(abs(timestamps_by_cam_id - timestamps_by_cam_id[0])) > 0.005:
                                     print 'timestamps off by more than 5 msec -- synchronization error'
@@ -1687,7 +1689,7 @@ class MainBrain(object):
 
     # main MainBrain class
 
-    def __init__(self,server=None,save_profiling_data=False):
+    def __init__(self,server=None,save_profiling_data=False, show_sync_errors=True):
         global main_brain_keeper, hostname
 
         if server is not None:
@@ -1782,6 +1784,7 @@ class MainBrain(object):
                                                    save_profiling_data=save_profiling_data,
                                                    debug_level=self.debug_level,
                                                    show_overall_latency=self.show_overall_latency,
+                                                   show_sync_errors=show_sync_errors,
                                                    )
         #self.coord_processor.setDaemon(True)
         self.coord_processor.start()

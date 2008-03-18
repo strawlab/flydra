@@ -1523,10 +1523,14 @@ def main():
                       metavar="SERVER")
     parser.add_option("--disable-opengl", dest="use_opengl",
                       default=True, action="store_false")
-    parser.add_option("--save_profiling_data", dest="save_profiling_data",
+    parser.add_option("--save-profiling-data",
                       default=False, action="store_true",
                       help="save data to profile/debug the Kalman-filter based tracker (WARNING: SLOW)",
                       )
+    parser.add_option("--disable-sync-errors", dest='show_sync_errors',
+                      default=True, action="store_false",
+                      )
+    
     (options, args) = parser.parse_args()
 
     global use_opengl
@@ -1538,6 +1542,7 @@ def main():
     # create main_brain server (not started yet)
     main_brain = MainBrain.MainBrain(server=options.server,
                                      save_profiling_data=options.save_profiling_data,
+                                     show_sync_errors=options.show_sync_errors,
                                      )
 
     try:
