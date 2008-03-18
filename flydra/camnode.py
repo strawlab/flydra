@@ -783,8 +783,14 @@ class GrabClass(object):
                     local_processing_time = (time.time()-cam_received_time)*1e3
                     print 'local_processing_time % 3.1f'%local_processing_time
                 if NETWORK_PROTOCOL == 'udp':
-                    coord_socket.sendto(data,
-                                        (self.main_brain_hostname,self.cam2mainbrain_port))
+                    try:
+                        coord_socket.sendto(data,
+                                            (self.main_brain_hostname,self.cam2mainbrain_port))
+                    except socket.error, err:
+                        import traceback
+                        print >> sys.stderr, 'WARNING: ignoring error:'
+                        traceback.print_exc()
+
                 elif NETWORK_PROTOCOL == 'tcp':
                     coord_socket.send(data)
                 else:
