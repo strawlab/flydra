@@ -1,3 +1,4 @@
+import pkg_resources
 import glob, os, sys
 import matplotlib
 matplotlib.use('GTKAgg') # TkAgg doesn't work, at least without ioff(), which I haven't tried
