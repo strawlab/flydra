@@ -24,6 +24,7 @@ try:
 except ImportError, err:
     import cgtypes # cgkit 1
 import flydra.a2.pos_ori2fu
+import flydra.a2.stim_plugins as stim_plugins
 import flydra.version
 
 def print_cam_props(camera):
@@ -141,28 +142,7 @@ def do_show_cameras(results, renderers, frustums=True, labels=True, centers=True
             for ren in renderers:
                 ren.add_actor(ta)
 
-class PluginLoader:
-    def __init__(self):
-        self.all_names = []
-        pkg_env = pkg_resources.Environment()
-        self.EP = 'flydra.kdviewer.plugins'
-        for name in pkg_env:
-            egg = pkg_env[name][0]
-            for name in egg.get_entry_map(self.EP):
-                egg.activate()
-                self.all_names.append(name)
-    def __call__(self,draw_stim_func_str):
-        pkg_env = pkg_resources.Environment()
-        for name in pkg_env:
-            egg = pkg_env[name][0]
-            for name in egg.get_entry_map(self.EP):
-                if name != draw_stim_func_str:
-                    continue
-                entry_point = egg.get_entry_info(self.EP,draw_stim_func_str)
-                PluginFunc = entry_point.load()
-                return PluginFunc
-        raise ValueError('Could not find stimulus drawing plugin. Available: %s'%( str(self.all_names), ))
-plugin_loader = PluginLoader()
+plugin_loader = stim_plugins.PluginLoader()
 
 def doit(filename,
          show_obj_ids=False,
@@ -459,11 +439,14 @@ def doit(filename,
                     vels = numpy.array( [rows['xvel'], rows['yvel'], rows['zvel']] )#. T
                     speeds = numpy.sqrt(numpy.sum(vels**2,axis=0))
                 else:
-                    verts_central_diff = verts[2:,:] - verts[:-2,:]
-                    dt = 1.0/fps
-                    vels = verts_central_diff/(2*dt)
-                    speeds = numpy.sqrt(numpy.sum(vels**2,axis=1))
-                    speeds = numpy.array([speeds[0]] + list(speeds) + [speeds[-1]]) # pad end points
+                    if len(verts)>=3:
+                        verts_central_diff = verts[2:,:] - verts[:-2,:]
+                        dt = 1.0/fps
+                        vels = verts_central_diff/(2*dt)
+                        speeds = numpy.sqrt(numpy.sum(vels**2,axis=1))
+                        speeds = numpy.array([speeds[0]] + list(speeds) + [speeds[-1]]) # pad end points
+                    else:
+                        speeds = numpy.zeros( (verts.shape[1],) )
                 max_speed_this_obj = numpy.max(speeds)
                 if max_speed_this_obj > max_vel:
                     print 'WARNING: max_vel = %s, but max speed is %.2f'%(max_vel,max_speed_this_obj)
@@ -656,9 +639,11 @@ def doit(filename,
         draw_stim_func_str = 'default'
 
     if draw_stim_func_str:
-        PluginFunc = plugin_loader(draw_stim_func_str)
-        stim_actors = PluginFunc(filename=filename,
-                                 force_stimulus=options.force_stimulus)
+        PluginClass = plugin_loader(draw_stim_func_str)
+        plugin = PluginClass(filename=filename,
+                            force_stimulus=options.force_stimulus)
+        stim_actors = plugin.get_tvtk_actors()
+        print 'stim_actors',stim_actors
         actors.extend( stim_actors )
 
     ################################

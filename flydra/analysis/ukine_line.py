@@ -4,14 +4,17 @@ matplotlib.use('GTKAgg') # TkAgg doesn't work, at least without ioff(), which I 
 import pylab
 import tables
 import flydra.reconstruct
+import flydra.geom
 import numpy
 from optparse import OptionParser
 nan = numpy.nan
+import flydra.undistort
 
 def doit(filename=None,
          reconstructor_filename=None,
          dotype=False,
          meters = True,
+         options = None,
          ):
 
     assert dotype in ['line','point','ray']
@@ -22,7 +25,7 @@ def doit(filename=None,
         reconst_orig_units = flydra.reconstruct.Reconstructor(results)
     else:
         if reconstructor_filename.endswith('h5'):
-            fd = PT.openFile(reconstructor_filename,mode='r')
+            fd = tables.openFile(reconstructor_filename,mode='r')
             reconst_orig_units = flydra.reconstruct.Reconstructor(fd)
         else:
             reconst_orig_units = flydra.reconstruct.Reconstructor(reconstructor_filename)
@@ -54,7 +57,7 @@ def doit(filename=None,
             x, y = event.x, event.y
             if event.button==1:
                 if event.inaxes is not None:
-                    print >> sys.stderr, 'data coords (distorted)', event.xdata, event.ydata
+                    print >> sys.stderr, 'data coords', event.xdata, event.ydata
                     self.coords.append( (event.xdata, event.ydata) )
                     if dotype=='line':
                         if len(self.coords)>2:
@@ -79,7 +82,11 @@ def doit(filename=None,
             title_str = 'ray %s: click 1x for point'
 
         pylab.title(title_str%cam_id)
-        pylab.imshow(images[cam_id],origin='lower')
+        if options.undistorted_images:
+            im = flydra.undistort.undistort(recon,images[cam_id],cam_id)
+        else:
+            im = images[cam_id]
+        pylab.imshow(im,origin='lower')
 
         cg = ClickGetter()
         binding_id=pylab.connect('button_press_event', cg.on_click)
@@ -87,27 +94,30 @@ def doit(filename=None,
         pylab.disconnect(binding_id)
 
         if dotype=='point' and len(cg.coords) == 1:
-            x = recon.undistort(cam_id,cg.coords[0])
+            if options.undistorted_images:
+                x = cg.coords[0]
+            else:
+                x = recon.undistort(cam_id,cg.coords[0])
             click_locations.append( (cam_id,x) )
 
         if dotype=='ray' and len(cg.coords) == 1:
-            line3d= (0.16137843291180773, 0.98677164627290492, 0.00092460401458096218, -0.01537361038401263, 0.00021278581479263511, -0.0012130276850176628)
-            # a line and the camera center define a plane
-            # find the perpendicular plane on the line
-
-            # intersect the ray with this plane
-            # find closest point on original line with this intersection point
-
-            x0 = recon.undistort(cam_id,cg.coords[0])
-            line = recon.get_projected_line_from_2d(cam_id,x0)
-            print 'ray=',repr(line)
+            if options.undistorted_images:
+                x0 = cg.coords[0]
+            else:
+                x0 = recon.undistort(cam_id,cg.coords[0])
+            ray1 = recon.get_projected_line_from_2d(cam_id,x0)
+            print 'ray=',repr(ray1)
 
         if dotype=='line' and len(cg.coords) == 2:
             # user clicked 2 (or more) times
 
             # find 2d coordinates of clicked points
-            x0 = recon.undistort(cam_id,cg.coords[0])
-            x1 = recon.undistort(cam_id,cg.coords[1])
+            if options.undistorted_images:
+                x0 = cg.coords[0]
+                x1 = cg.coords[1]
+            else:
+                x0 = recon.undistort(cam_id,cg.coords[0])
+                x1 = recon.undistort(cam_id,cg.coords[1])
 
             # find 3d points on ray from camera through clicked points
             X0=numpy.dot( recon.pmat_inv[cam_id], [x0[0],x0[1],1.0] )
@@ -168,6 +178,11 @@ def main():
 
     parser.add_option("--dotype", default='point')
 
+    parser.add_option("--force-distorted-images",
+                      dest='undistorted_images',
+                      action='store_false',
+                      default=True )
+
     (options, args) = parser.parse_args()
 
     if len(args)>1:
@@ -183,6 +198,7 @@ def main():
     doit(filename = h5_filename,
          reconstructor_filename=options.reconstructor_path,
          dotype=options.dotype,
+         options = options,
          )
 
 if __name__=='__main__':

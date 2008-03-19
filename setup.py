@@ -61,6 +61,7 @@ setup(name='flydra',
     'flydra.kdviewer.plugins':['default = flydra.a2.conditions_draw:default',
                                'mama07 = flydra.a2.conditions_draw:mama07',
                                'hum07 = flydra.a2.conditions_draw:hum07',
+                               'wt0803 = flydra.a2.conditions_draw:wt0803',
                                ],
     },
       zip_safe = False, # must be false for flydra_bench
