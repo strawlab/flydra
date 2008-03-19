@@ -1,116 +1,189 @@
 import glob, os, sys
-import flydra.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 import matplotlib
 matplotlib.use('GTKAgg') # TkAgg doesn't work, at least without ioff(), which I haven't tried
 import pylab
 import tables
 import flydra.reconstruct
 import numpy
+from optparse import OptionParser
 nan = numpy.nan
 
-# base file names
+def doit(filename=None,
+         reconstructor_filename=None,
+         dotype=False,
+         meters = True,
+         ):
 
+    assert dotype in ['line','point','ray']
 
+    results = tables.openFile(filename,mode='r')
 
-base_fname = '~/%(cam)s/FLYDRA_LARGE_MOVIES/full_20061219_184851_%(cam_id)s_bg.fmf'
-# hdf5 file containing calibration data
-cal_source = 'DATA20061206_192530.kalmanized.h5'
+    if reconstructor_filename is None:
+        reconst_orig_units = flydra.reconstruct.Reconstructor(results)
+    else:
+        if reconstructor_filename.endswith('h5'):
+            fd = PT.openFile(reconstructor_filename,mode='r')
+            reconst_orig_units = flydra.reconstruct.Reconstructor(fd)
+        else:
+            reconst_orig_units = flydra.reconstruct.Reconstructor(reconstructor_filename)
 
-cams = ['cam%d'%i for i in range(1,6)]
+    if meters:
+        recon = reconst_orig_units.get_scaled(reconst_orig_units.get_scale_factor())
+    else:
+        recon = reconst_orig_units
 
-h5file = tables.openFile(cal_source,mode='r')
-recon = flydra.reconstruct.Reconstructor(h5file)
-h5file.close()
-del h5file
+    image_table = results.root.images
+    images = {}
+    for row in results.root.cam_info:
+        cam_id = row['cam_id']
 
-class ClickGetter:
-    def __init__(self):
-        self.coords = []
-    def on_click(self,event):
-        # get the x and y coords, flip y from top to bottom
-        x, y = event.x, event.y
-        if event.button==1:
-            if event.inaxes is not None:
-                print >> sys.stderr, 'data coords (distorted)', event.xdata, event.ydata
-                self.coords.append( (event.xdata, event.ydata) )
-                if len(self.coords)>2:
-                    del self.coords[0]
+        arr = getattr(image_table,cam_id)
+        image = arr.read()
+        images[cam_id] = image
+    results.close()
+    del results
 
-click_locations = []
-for cam in cams:
-    cam_id = None
-    for c in recon.cam_ids:
-        if c.startswith(cam):
-            if cam_id is not None:
-                raise RuntimeError('>1 camera per host not yet supported')
-            cam_id = c
+    cam_ids = images.keys()
+    cam_ids.sort()
 
-    fname = os.path.expanduser(base_fname%locals())
-    print >> sys.stderr, cam_id,fname
+    class ClickGetter:
+        def __init__(self):
+            self.coords = []
+        def on_click(self,event):
+            # get the x and y coords, flip y from top to bottom
+            x, y = event.x, event.y
+            if event.button==1:
+                if event.inaxes is not None:
+                    print >> sys.stderr, 'data coords (distorted)', event.xdata, event.ydata
+                    self.coords.append( (event.xdata, event.ydata) )
+                    if dotype=='line':
+                        if len(self.coords)>2:
+                            del self.coords[0]
+                    elif dotype=='point':
+                        if len(self.coords)>1:
+                            del self.coords[0]
+                    elif dotype=='ray':
+                        if len(self.coords)>1:
+                            del self.coords[0]
 
-    fmf = FlyMovieFormat.FlyMovie(fname)
-    frame,timestamp = fmf.get_frame(0)
-    fmf.close()
+    click_locations = []
 
-    pylab.imshow(frame,origin='lower')
+    for cam_id in cam_ids:
+        print >> sys.stderr, cam_id
 
-    cg = ClickGetter()
-    binding_id=pylab.connect('button_press_event', cg.on_click)
-    pylab.show()
-    pylab.disconnect(binding_id)
-    if len(cg.coords) == 2:
-        # user clicked 2 (or more) times
+        if dotype=='line':
+            title_str = 'line %s: click 2x for line'
+        elif dotype=='point':
+            title_str = 'point %s: click 1x for point'
+        elif dotype=='ray':
+            title_str = 'ray %s: click 1x for point'
 
-        # find 2d coordinates of clicked points
-        x0 = recon.undistort(cam_id,cg.coords[0])
-        x1 = recon.undistort(cam_id,cg.coords[1])
+        pylab.title(title_str%cam_id)
+        pylab.imshow(images[cam_id],origin='lower')
 
-        # find 3d points on ray from camera through clicked points
-        X0=numpy.dot( recon.pmat_inv[cam_id], [x0[0],x0[1],1.0] )
-        print 'X0',X0
-        X1=numpy.dot( recon.pmat_inv[cam_id], [x1[0],x1[1],1.0] )
-        print 'X1',X1
-        # camera center is 3rd 3d point
-        C = flydra.reconstruct.pmat2cam_center( recon.get_pmat(cam_id) )
-        C = list(C.flat)+[1.0]
-        print 'C', C
-        A = numpy.array( [X0, X1, C] )
-        print 'A',A
-        u,d,vt = numpy.linalg.svd(A,full_matrices=True)
-        Pt = vt[3,:] # plane parameters
-        p1,p2,p3,p4 = Pt[0:4]
+        cg = ClickGetter()
+        binding_id=pylab.connect('button_press_event', cg.on_click)
+        pylab.show()
+        pylab.disconnect(binding_id)
 
-        x=nan
-        y=nan
-        area=nan
-        slope=nan
-        eccentricity = 1e10
-        value_tuple = x,y,area,slope,eccentricity, p1,p2,p3,p4
-        click_locations.append( (cam_id,value_tuple) )
+        if dotype=='point' and len(cg.coords) == 1:
+            x = recon.undistort(cam_id,cg.coords[0])
+            click_locations.append( (cam_id,x) )
 
-    print >> sys.stderr
+        if dotype=='ray' and len(cg.coords) == 1:
+            line3d= (0.16137843291180773, 0.98677164627290492, 0.00092460401458096218, -0.01537361038401263, 0.00021278581479263511, -0.0012130276850176628)
+            # a line and the camera center define a plane
+            # find the perpendicular plane on the line
 
-line3d = recon.find3d( click_locations,
-                       return_X_coords = False,
-                       return_line_coords = True )
-print 'line3d=',repr(line3d)
+            # intersect the ray with this plane
+            # find closest point on original line with this intersection point
 
-##l2norms = []
-##for cam_id,orig_2d_undistorted in click_locations:
-##    predicted_2d_undistorted = recon.find2d( cam_id, X )
-##    o = numpy.asarray(orig_2d_undistorted)
-##    p = numpy.asarray(predicted_2d_undistorted)
-##    l2norm = numpy.sqrt(numpy.sum((o-p)**2))
-##    print >> sys.stderr, '%s (% 5.1f, % 5.1f) (% 5.1f,% 5.1f) % 5.1f'%(cam_id,
-##                                                        orig_2d_undistorted[0],
-##                                                        orig_2d_undistorted[1],
-##                                                        predicted_2d_undistorted[0],
-##                                                        predicted_2d_undistorted[1],
-##                                                        l2norm)
-##    l2norms.append( l2norm )
+            x0 = recon.undistort(cam_id,cg.coords[0])
+            line = recon.get_projected_line_from_2d(cam_id,x0)
+            print 'ray=',repr(line)
 
-##h5file.close()
-##print >> sys.stderr
-##print >> sys.stderr, 'mean reconstruction error:',numpy.mean(l2norms)
-##print >> sys.stderr
-##print 'X=(% 5.1f,% 5.1f,% 5.1f) # 3d location'%(X[0],X[1],X[2])
+        if dotype=='line' and len(cg.coords) == 2:
+            # user clicked 2 (or more) times
+
+            # find 2d coordinates of clicked points
+            x0 = recon.undistort(cam_id,cg.coords[0])
+            x1 = recon.undistort(cam_id,cg.coords[1])
+
+            # find 3d points on ray from camera through clicked points
+            X0=numpy.dot( recon.pmat_inv[cam_id], [x0[0],x0[1],1.0] )
+            X1=numpy.dot( recon.pmat_inv[cam_id], [x1[0],x1[1],1.0] )
+            # camera center is 3rd 3d point
+            C = flydra.reconstruct.pmat2cam_center( recon.get_pmat(cam_id) )
+            C = list(C.flat)+[1.0]
+            A = numpy.array( [X0, X1, C] )
+            u,d,vt = numpy.linalg.svd(A,full_matrices=True)
+            Pt = vt[3,:] # plane parameters
+            p1,p2,p3,p4 = Pt[0:4]
+
+            x=nan
+            y=nan
+            area=nan
+            slope=nan
+            eccentricity = 1e10
+            value_tuple = x,y,area,slope,eccentricity, p1,p2,p3,p4
+            click_locations.append( (cam_id,value_tuple) )
+
+        print >> sys.stderr
+
+    if dotype=='line':
+        line3d = recon.find3d( click_locations,
+                               return_X_coords = False,
+                               return_line_coords = True )
+        print 'line3d=',repr(line3d)
+    elif dotype=='point':
+        X = recon.find3d( click_locations, return_line_coords = False )
+
+        l2norms = []
+        for cam_id,orig_2d_undistorted in click_locations:
+            predicted_2d_undistorted = recon.find2d( cam_id, X )
+            o = numpy.asarray(orig_2d_undistorted)
+            p = numpy.asarray(predicted_2d_undistorted)
+            l2norm = numpy.sqrt(numpy.sum((o-p)**2))
+            print >> sys.stderr, '%s (% 5.1f, % 5.1f) (% 5.1f,% 5.1f) % 5.1f'%(cam_id,
+                                                                orig_2d_undistorted[0],
+                                                                orig_2d_undistorted[1],
+                                                                predicted_2d_undistorted[0],
+                                                                predicted_2d_undistorted[1],
+                                                                l2norm)
+            l2norms.append( l2norm )
+
+        print >> sys.stderr
+        print >> sys.stderr, 'mean reconstruction error:',numpy.mean(l2norms)
+        print >> sys.stderr
+        print 'X=(%s, %s, %s)'%(repr(X[0]),repr(X[1]),repr(X[2]))
+
+def main():
+    usage = '%prog FILE [options]'
+
+    parser = OptionParser(usage)
+
+    parser.add_option("-r", "--reconstructor", dest="reconstructor_path", type='string',
+                      help="calibration/reconstructor path (if not specified, defaults to FILE)",
+                      metavar="RECONSTRUCTOR")
+
+    parser.add_option("--dotype", default='point')
+
+    (options, args) = parser.parse_args()
+
+    if len(args)>1:
+        print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
+        parser.print_help()
+        return
+
+    if len(args)<1:
+        parser.print_help()
+        return
+
+    h5_filename=args[0]
+    doit(filename = h5_filename,
+         reconstructor_filename=options.reconstructor_path,
+         dotype=options.dotype,
+         )
+
+if __name__=='__main__':
+    main()
