@@ -1,3 +1,5 @@
+# emacs, this is -*-Python-*- mode
+
 cdef class ThreeTuple:
     cdef float a
     cdef float b
@@ -22,7 +24,7 @@ cdef class ThreeTuple:
         result.b = self.b-other.b
         result.c = self.c-other.c
         return result
-    
+
     def __add__(ThreeTuple self not None, ThreeTuple other not None):
         cdef ThreeTuple result
         result = ThreeTuple.__new__(ThreeTuple)
@@ -43,7 +45,7 @@ cdef class ThreeTuple:
                 return False
         else:
             raise NotImplementedError("this comparison not supported")
-    
+
     def __neg__(self):
         cdef ThreeTuple result
         result = ThreeTuple.__new__(ThreeTuple)
@@ -51,19 +53,36 @@ cdef class ThreeTuple:
         result.b = -self.b
         result.c = -self.c
         return result
-        
+
+    def __mul__(x,y):
+        cdef ThreeTuple tt
+        cdef float other
+
+        if isinstance(x,ThreeTuple):
+            tt = x
+            other = y
+        else:
+            tt = y
+            other = x
+        cdef ThreeTuple result
+        result = ThreeTuple.__new__(ThreeTuple)
+        result.a = other*tt.a
+        result.b = other*tt.b
+        result.c = other*tt.c
+        return result
+
     def cross(self, ThreeTuple other not None):
-        
+
         cdef ThreeTuple result
         result = ThreeTuple.__new__(ThreeTuple)
         result.a = self.b*other.c - self.c*other.b
         result.b = self.c*other.a - self.a*other.c
         result.c = self.a*other.b - self.b*other.a
         return result
-        
+
     def dot(self, ThreeTuple other not None):
         return self.a*other.a + self.b*other.b + self.c*other.c
-                           
+
 cdef class PlueckerLine:
     cdef ThreeTuple u
     cdef ThreeTuple v
@@ -72,7 +91,7 @@ cdef class PlueckerLine:
         self.v = v_
     def __repr__(self):
         return 'PlueckerLine(%s,%s)'%(repr(self.u),repr(self.v)) #
-    
+
     def __richcmp__(PlueckerLine x not None,
                     PlueckerLine y not None,
                     int op):
@@ -84,7 +103,7 @@ cdef class PlueckerLine:
                 return False
         else:
             raise NotImplementedError("this comparison not supported")
-    
+
     def closest(self):
         cdef ThreeTuple VxU
         cdef float UdotU
@@ -95,12 +114,12 @@ cdef class PlueckerLine:
                            VxU.c/UdotU))
     def dist2(self):
         return self.v.dot(self.v) / self.u.dot(self.u)
-    
+
     def translate(self, ThreeTuple x not None):
         cdef ThreeTuple on_line
         cdef ThreeTuple on_new_line_a
         cdef ThreeTuple on_new_line_b
-        
+
         on_line = self.closest()
         on_new_line_a = on_line+x
         on_new_line_b = on_new_line_a + self.u

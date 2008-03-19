@@ -1,5 +1,6 @@
 import math
 import numpy
+import scipy.optimize
 
 __all__=['ThreeTuple',
          'PlueckerLine',
@@ -34,6 +35,8 @@ class ThreeTuple:
         return ThreeTuple(self.vals+other.vals)
     def __mul__(self,other):
         return ThreeTuple(self.vals*other)
+    def __rmul__(self,other):
+        return ThreeTuple(self.vals*other)
     def __neg__(self):
         return ThreeTuple(-self.vals)
     def cross(self,other):
@@ -65,6 +68,29 @@ class PlueckerLine:
         return (self.v[2], -self.v[1], self.u[0], self.v[0], -self.u[1], self.u[2])
     def __repr__(self):
         return 'PlueckerLine(%s,%s)'%(repr(self.u),repr(self.v))
+    def get_my_point_closest_to_line(self,other):
+        """find point on line closest to other line"""
+
+        class ErrFMaker:
+            def __init__(self, line, other):
+                self.other = other
+                self.direction = line.u
+                self.pt0 = line.closest()
+            def get_point_by_mu( self, mu ):
+                return self.pt0 + mu*self.direction
+            def errf( self, mu_vec ):
+                mu = mu_vec[0]
+                pt = self.get_point_by_mu(mu)
+                rel_line = self.other.translate( -pt )
+                return rel_line.dist2()
+
+        # XXX I guess the implementation could be improved (i.e. sped up).
+        initial_mu = 0.0
+        efm = ErrFMaker(self,other)
+        final_mu, = scipy.optimize.fmin( efm.errf, [initial_mu], disp=0 )
+        pt = efm.get_point_by_mu( final_mu )
+        return pt
+
     def dist2(self):
         """return minimum squared distance from origin"""
         return self.v.dot(self.v) / self.u.dot(self.u)
@@ -82,7 +108,7 @@ class PlueckerLine:
 
         VxN = self.v.cross(N)
         Un = self.u*n
-        
+
         U_N = self.u.dot(N)
         pt = (VxN-Un)*(1.0/U_N)
         return pt
@@ -93,12 +119,12 @@ class PlueckerLine:
         on_new_line_a = on_line+threetuple
         on_new_line_b = on_new_line_a + self.u
         return line_from_points(on_new_line_a,on_new_line_b)
-    
+
 def line_from_points(p,q):
     """create PlueckerLine instance given 2 distinct points
 
     example2:
-    
+
     >>> p1 = ThreeTuple((2,3,7))
     >>> p2 = ThreeTuple((2,1,0))
     >>> L = line_from_points(p1,p2)
@@ -113,7 +139,7 @@ def line_from_points(p,q):
     >>> print L2.closest()
     ThreeTuple(0,2,0)
     """
-    
+
     if not isinstance(p,ThreeTuple):
         raise ValueError('must be ThreeTuple')
     if not isinstance(q,ThreeTuple):
@@ -132,11 +158,11 @@ class LineSegment:
     """part of a line between 2 endpoints
 
     >>> seg = LineSegment(ThreeTuple((0,0,0)),ThreeTuple((0,0,10)))
-    
+
     >>> point = ThreeTuple((1,0,5))
     >>> print seg.get_distance_from_point(point)
     1.0
-    
+
     >>> point = ThreeTuple((0,0,-1))
     >>> print seg.get_distance_from_point(point)
     1.0
@@ -144,9 +170,9 @@ class LineSegment:
     >>> point = ThreeTuple((2,0,0))
     >>> print seg.get_distance_from_point(point)
     2.0
-    
+
     """
-    
+
     def __init__(self,p,q):
         """create LineSegment instance given endpoints"""
         self.p = p
@@ -170,7 +196,7 @@ class LineSegment:
         # If closest point is between endpoints:
         if pc < self.length and qc < self.length:
             return closest+r
-        
+
         # closest point is closer to one endpoint
         if pc < qc:
             # closest to self.p
@@ -178,7 +204,7 @@ class LineSegment:
         else:
             # closest to self.q
             return self.q
-        
+
     def get_distance_from_point(self,r):
         return self.get_closest_point(r).dist_from(r)
 
@@ -188,7 +214,7 @@ class Plane:
             raise ValueError('must be ThreeTuple')
         self.N = normal_vec
         self.n = float(dist_from_origin)
-            
+
 def _test():
     import doctest
     doctest.testmod()
