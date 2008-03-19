@@ -27,10 +27,10 @@ def apply_distortion(x,k):
     cdist = 1 + k[0]*r2 + k[1]*r4 + k[4]*r6
 
     #print 'cdist',cdist
-    xd1 = x * nx.matrixmultiply(nx.ones((2,1)),cdist[nx.newaxis,:])
+    xd1 = x * nx.dot(nx.ones((2,1)),cdist[nx.newaxis,:])
     #print 'xd1',xd1
 
-    coeff = nx.matrixmultiply(nx.reshape( nx.transpose(nx.array([ cdist, cdist])),(2*n,1)),
+    coeff = nx.dot(nx.reshape( nx.transpose(nx.array([ cdist, cdist])),(2*n,1)),
                               nx.ones((1,3)))
     #print 'coeff',coeff
 
@@ -44,9 +44,9 @@ def apply_distortion(x,k):
                          k[2]*a3 + k[3]*a1])
 
     if 0:
-        aa = nx.matrixmultiply((2*k[2]*x[1,:] + 6*k[3]*x[0,:])[:,nx.newaxis], nx.ones((1,3)))
-        bb = nx.matrixmultiply((2*k[2]*x[0,:] + 2*k[3]*x[1,:])[:,nx.newaxis], nx.ones((1,3)))
-        cc = nx.matrixmultiply((6*k[2]*x[1,:] + 2*k[3]*x[0,:])[:,nx.newaxis], nx.ones((1,3)))
+        aa = nx.dot((2*k[2]*x[1,:] + 6*k[3]*x[0,:])[:,nx.newaxis], nx.ones((1,3)))
+        bb = nx.dot((2*k[2]*x[0,:] + 2*k[3]*x[1,:])[:,nx.newaxis], nx.ones((1,3)))
+        cc = nx.dot((6*k[2]*x[1,:] + 2*k[3]*x[0,:])[:,nx.newaxis], nx.ones((1,3)))
     #print 'aa',aa
     #print 'bb',bb
     #print 'cc',cc
@@ -88,8 +88,8 @@ class CachedUndistorter:
         if alpha is None:
             alpha = 0
 
-        
-        mx, my = mlab.meshgrid( nx.arange(nc), nx.arange(nr) )
+
+        mx, my = nx.meshgrid( nx.arange(nc), nx.arange(nr) )
         px = nx.reshape( mx, (nc*nr,) )
         py = nx.reshape( my, (nc*nr,) )
 
@@ -97,13 +97,13 @@ class CachedUndistorter:
     ##    b = nx.array( [px,
     ##                   py,
     ##                   nx.ones(px.shape)])
-        rays = nx.matrixmultiply(linalg.inv(KK_new),nx.array( [px,
+        rays = nx.dot(linalg.inv(KK_new),nx.array( [px,
                                                                py,
                                                                nx.ones(px.shape)]))
         #print 'rays',rays
 
         # Rotation: (or affine transformation):
-        rays2 = nx.matrixmultiply(nx.transpose(R),rays)
+        rays2 = nx.dot(nx.transpose(R),rays)
         #print 'rays2',rays2
 
         x = nx.array( [ rays2[0,:]/rays2[2,:], rays2[1,:]/rays2[2,] ] )
@@ -154,26 +154,26 @@ class CachedUndistorter:
 
         #print 'a2',a2
 
-        ind_lu = (px_0 * nr + py_0).astype(nx.Int)
+        ind_lu = (px_0 * nr + py_0).astype(nx.int_)
 
-        ind_ru = ((px_0 + 1) * nr + py_0).astype(nx.Int)
-        ind_ld = (px_0 * nr + (py_0 + 1)).astype(nx.Int)
-        ind_rd = ((px_0 + 1) * nr + (py_0 + 1)).astype(nx.Int)
+        ind_ru = ((px_0 + 1) * nr + py_0).astype(nx.int_)
+        ind_ld = (px_0 * nr + (py_0 + 1)).astype(nx.int_)
+        ind_rd = ((px_0 + 1) * nr + (py_0 + 1)).astype(nx.int_)
 
-        ind_new = ((px[good_points])*nr + py[good_points]).astype(nx.Int)
+        ind_new = ((px[good_points])*nr + py[good_points]).astype(nx.int_)
         indexes = ind_new, ind_lu, ind_ru, ind_ld, ind_rd, a1, a2, a3, a4
         return indexes
 
-        
+
     def rect(self,I,R=None,f=None,c=None,k=None,alpha=None,KK_new=None):
         """
 
         arguments:
-        
+
         I is image
-        
+
         optional arguments:
-        
+
         R is 3x3 rotation (of affine transformation) matrix, defaults to eye(3)
         f is focal length (horizontal and vertical), defaults to (1,1)
         c is image center (horizontal and vertical), defaults to (0,0)
@@ -214,11 +214,11 @@ def reference_rect(I,R=None,f=None,c=None,k=None,alpha=None,KK_new=None):
     """
 
     arguments:
-    
+
     I is image
 
     optional arguments:
-    
+
     R is 3x3 rotation (of affine transformation) matrix, defaults to eye(3)
     f is focal length (horizontal and vertical), defaults to (1,1)
     c is image center (horizontal and vertical), defaults to (0,0)
@@ -249,22 +249,22 @@ def reference_rect(I,R=None,f=None,c=None,k=None,alpha=None,KK_new=None):
         KK_new = nx.asarray(KK_new)
     if alpha is None:
         alpha = 0
-    
+
 
     # Note: R is the motion of the points in space
     # So: X2 = R*X where X: coord in the old reference frame, X2: coord in the new ref frame.
 
-    
+
     nr, nc = I.shape # must be 2D (grayscale) image
 
     # put I in matlab uni-dimensional index format
     I = I.copy()
     I = nx.transpose(I).copy()
-    I.ravel() 
+    I.ravel()
 
     Irec = 255.0*nx.ones((nr*nc,))
 
-    mx, my = mlab.meshgrid( nx.arange(nc), nx.arange(nr) )
+    mx, my = nx.meshgrid( nx.arange(nc), nx.arange(nr) )
     px = nx.reshape( mx, (nc*nr,) )
     py = nx.reshape( my, (nc*nr,) )
 
@@ -272,15 +272,15 @@ def reference_rect(I,R=None,f=None,c=None,k=None,alpha=None,KK_new=None):
 ##    b = nx.array( [px,
 ##                   py,
 ##                   nx.ones(px.shape)])
-    rays = nx.matrixmultiply(linalg.inverse(KK_new),nx.array( [px,
+    rays = nx.dot(linalg.inverse(KK_new),nx.array( [px,
                                                                py,
                                                                nx.ones(px.shape)]))
     #print 'rays',rays
 
     # Rotation: (or affine transformation):
-    rays2 = nx.matrixmultiply(nx.transpose(R),rays)
+    rays2 = nx.dot(nx.transpose(R),rays)
     #print 'rays2',rays2
-    
+
     x = nx.array( [ rays2[0,:]/rays2[2,:], rays2[1,:]/rays2[2,] ] )
     #print 'x',x
 
@@ -295,12 +295,12 @@ def reference_rect(I,R=None,f=None,c=None,k=None,alpha=None,KK_new=None):
     #print 'px2',px2
     #print 'py2',py2
 
-    
+
     # Interpolate between the closest pixels:
 
     px_0 = nx.floor(px2)
-    
-    
+
+
     py_0 = nx.floor(py2)
     if 0:
         py_1 = py_0 + 1;
@@ -312,12 +312,12 @@ def reference_rect(I,R=None,f=None,c=None,k=None,alpha=None,KK_new=None):
     else:
         # numpy behavior
         good_points = tmpA
-        
+
     px2 = px2[good_points]
     py2 = py2[good_points]
     px_0 = px_0[good_points]
     py_0 = py_0[good_points]
-    
+
     alpha_x = px2 - px_0
     #print 'alpha_x',alpha_x
     alpha_y = py2 - py_0
@@ -330,7 +330,7 @@ def reference_rect(I,R=None,f=None,c=None,k=None,alpha=None,KK_new=None):
     #print 'a2',a2
 
     ind_lu = (px_0 * nr + py_0).astype(nx.Int)
-    
+
     ind_ru = ((px_0 + 1) * nr + py_0).astype(nx.Int)
     ind_ld = (px_0 * nr + (py_0 + 1)).astype(nx.Int)
     ind_rd = ((px_0 + 1) * nr + (py_0 + 1)).astype(nx.Int)
@@ -343,7 +343,7 @@ def reference_rect(I,R=None,f=None,c=None,k=None,alpha=None,KK_new=None):
     # convert matlab unidimensional format into numarray format
     Irec = nx.reshape(Irec,(nc,nr))
     Irec = nx.transpose(Irec)
-    
+
     return Irec
 
 def undistort( reconstructor, distorted_image, cam_id ):
