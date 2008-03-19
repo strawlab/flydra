@@ -286,9 +286,9 @@ class wt0803:
 
             count += len(this_verts)
 
-            print 'this_verts[0]',this_verts[0]
-            print 'this_verts[-1]',this_verts[-1]
-            print
+##             print 'this_verts[0]',this_verts[0]
+##             print 'this_verts[-1]',this_verts[-1]
+##             print
 
             verts.extend( this_verts )
             lines.extend( this_lines )
