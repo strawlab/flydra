@@ -259,7 +259,7 @@ class GrabClass(object):
                  max_height=None,
                  max_width=None,
                  globals = None,
-                 options = options,
+                 options = None,
                  ):
         self.options = options
         self.globals = globals
