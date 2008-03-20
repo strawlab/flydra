@@ -259,7 +259,9 @@ class GrabClass(object):
                  max_height=None,
                  max_width=None,
                  globals = None,
+                 options = options,
                  ):
+        self.options = options
         self.globals = globals
         self.main_brain_hostname = main_brain_hostname
         if framerate is not None:
@@ -489,6 +491,7 @@ class GrabClass(object):
 
 
     def mainloop(self):
+        disable_ifi_warning = options.disable_ifi_warning
         globals = self.globals
 
         self._globals = globals
@@ -640,10 +643,11 @@ class GrabClass(object):
 
                     diff = timestamp-old_ts
                     time_per_frame = diff/(n_frames_skipped+1)
-                    if time_per_frame > 2*self.shortest_IFI:
-                        msg = 'Warning: IFI is %f on %s at %s (frame skipped?)'%(time_per_frame,self.cam_id,time.asctime())
-                        self.log_message_queue.put((self.cam_id,time.time(),msg))
-                        print >> sys.stderr, msg
+                    if not disable_ifi_warning:
+                        if time_per_frame > 2*self.shortest_IFI:
+                            msg = 'Warning: IFI is %f on %s at %s (frame skipped?)'%(time_per_frame,self.cam_id,time.asctime())
+                            self.log_message_queue.put((self.cam_id,time.time(),msg))
+                            print >> sys.stderr, msg
 
                 old_ts = timestamp
                 old_fn = framenumber
@@ -1054,9 +1058,11 @@ class AppState(object):
                  debug_acquire = False,
                  num_buffers=None,
                  mask_images = None,
-                 n_sigma = None
+                 n_sigma = None,
+                 options = None,
                  ):
 
+        self.options = options
         self.quit_function = None
 
         if main_brain_hostname is None:
@@ -1327,6 +1333,7 @@ class AppState(object):
                         max_height=cam.get_max_height(),
                         max_width=cam.get_max_width(),
                         globals=globals,
+                        options=options,
                         )
                 self.all_grabbers.append( process_cam )
 
@@ -1700,6 +1707,9 @@ def main():
                       help="print to the console information on each frame",
                       default=False)
 
+    parser.add_option("--disable-ifi-warning", action='store_true',
+                      default=False)
+
     parser.add_option("--num-points", type="int",
                       help="number of points to track per camera")
 
@@ -1776,6 +1786,7 @@ def main():
                        num_buffers = options.num_buffers,
                        mask_images = options.mask_images,
                        n_sigma = options.n_sigma,
+                       options = options,
                        )
 
     if options.wx:
