@@ -446,6 +446,14 @@
             <flag>wxLEFT|wxRIGHT</flag>
             <border>5</border>
           </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="MANUAL_RECORD_SMALL_TOGGLE">
+              <label>Toggle recording small .fmfs</label>
+            </object>
+            <option>1</option>
+            <flag>wxLEFT|wxRIGHT</flag>
+            <border>5</border>
+          </object>
         </object>
         <flag>wxEXPAND</flag>
       </object>

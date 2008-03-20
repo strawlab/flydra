@@ -1488,13 +1488,12 @@ class MainBrain(object):
                     cam['commands']['stop_recording']=None
 
         def external_start_small_recording( self, cam_id,
-                                            small_filename,
-                                            small_datafile_filename):
+                                            small_filebasename):
             with self.cam_info_lock:
                 cam = self.cam_info[cam_id]
                 cam_lock = cam['lock']
                 with cam_lock:
-                    cam['commands']['start_small_recording']=small_filename, small_datafile_filename
+                    cam['commands']['start_small_recording']=small_filebasename
 
         def external_stop_small_recording( self, cam_id):
             with self.cam_info_lock:
@@ -2135,10 +2134,9 @@ class MainBrain(object):
             else:
                 raise RuntimeError("could not find row to save movie stop frame.")
 
-    def start_small_recording(self, cam_id, small_filename, small_datafile_filename):
+    def start_small_recording(self, cam_id, small_filename):
         self.remote_api.external_start_small_recording( cam_id,
-                                                        small_filename,
-                                                        small_datafile_filename)
+                                                        small_filename)
 
     def stop_small_recording(self, cam_id):
         self.remote_api.external_stop_small_recording(cam_id)

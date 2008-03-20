@@ -429,6 +429,10 @@ class wxMainBrainApp(wx.App):
                            "MANUAL_RECORD_RAW_TOGGLE")
         wx.EVT_BUTTON(ctrl, ctrl.GetId(),self.OnRecordRawButton)
 
+        ctrl = xrc.XRCCTRL(self.cam_preview_panel,
+                           "MANUAL_RECORD_SMALL_TOGGLE")
+        wx.EVT_BUTTON(ctrl, ctrl.GetId(),self.OnRecordSmallButton)
+
         ctrl = xrc.XRCCTRL(self.cam_preview_panel,'SYNCHRONIZE_BUTTON')
         wx.EVT_BUTTON(ctrl, ctrl.GetId(), self.OnSynchronizeButton)
 
@@ -764,6 +768,14 @@ class wxMainBrainApp(wx.App):
             self.record_raw.SetValue(True)
         self.OnRecordRaw(None)
 
+    def OnRecordSmallButton(self,event):
+        if self.record_small.IsChecked():
+            #toggle value
+            self.record_small.SetValue(False)
+        else:
+            self.record_small.SetValue(True)
+        self.OnRecordSmall(None)
+
     def OnRecordRaw(self,event):
         if self.record_raw.IsChecked():
             self.OnRecordRawStart()
@@ -843,8 +855,7 @@ class wxMainBrainApp(wx.App):
             for cam_id in cam_ids:
                 basename = '~/FLYDRA_SMALL_MOVIES/small_%s_%s'%(nowstr,cam_id)
                 self.main_brain.start_small_recording(cam_id,
-                                                      basename+'.fmf',
-                                                      basename+'.smd')
+                                                      basename)
                 self._currently_recording_small_cams.append(cam_id)
             self.statusbar.SetStatusText('Small recording started on %d cameras'%(
                 len(self._currently_recording_small_cams),),0)

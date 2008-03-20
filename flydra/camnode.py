@@ -27,6 +27,9 @@ import scipy.misc.pilutil
 import numpy.dual
 
 import contextlib
+
+import motmot.ufmf.ufmf as ufmf
+
 #import flydra.debuglock
 #DebugLock = flydra.debuglock.DebugLock
 
@@ -885,6 +888,7 @@ class SaveCamData(object):
 
         while 1:
 
+            # 1: process commands
             while 1:
                 if self.cmd.empty():
                     break
@@ -901,27 +905,30 @@ class SaveCamData(object):
                     std_movie.close()
                     state = 'pass'
 
-            # first, block for images
-            with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
-                raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
-                             chainbuf.timestamp) )
-                if chainbuf.updated_bg_image is not None:
-                    meancmp.append( (chainbuf.updated_bg_image,
-                                     chainbuf.updated_cmp_image,
-                                     chainbuf.timestamp)) # these were copied in process thread
-
-            # second, grab any more that are here
-            try:
-                with camnode_utils.use_buffer_from_chain(self._chain,blocking=False) as chainbuf:
+            # 2: block for image data
+            with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf: # must do on every frame
+                if state == 'saving':
                     raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
                                  chainbuf.timestamp) )
                     if chainbuf.updated_bg_image is not None:
                         meancmp.append( (chainbuf.updated_bg_image,
                                          chainbuf.updated_cmp_image,
                                          chainbuf.timestamp)) # these were copied in process thread
+
+            # 3: grab any more that are here
+            try:
+                with camnode_utils.use_buffer_from_chain(self._chain,blocking=False) as chainbuf:
+                    if state == 'saving':
+                        raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
+                                     chainbuf.timestamp) )
+                        if chainbuf.updated_bg_image is not None:
+                            meancmp.append( (chainbuf.updated_bg_image,
+                                             chainbuf.updated_cmp_image,
+                                             chainbuf.timestamp)) # these were copied in process thread
             except Queue.Empty:
                 pass
 
+            # 4: actually save the data
             if state == 'saving':
                 for frame,timestamp in raw:
                     raw_movie.add_frame(FastImage.asfastimage(frame),timestamp,error_if_not_fast=True)
@@ -930,6 +937,79 @@ class SaveCamData(object):
                     std_movie.add_frame(FastImage.asfastimage(cmp),timestamp,error_if_not_fast=True)
             del raw[:]
             del meancmp[:]
+
+class SaveSmallData(object):
+    def __init__(self,cam_id=None):
+        self._chain = camnode_utils.ChainLink()
+        self._cam_id = cam_id
+        self.cmd = Queue.Queue()
+        
+        self._ufmf = None
+        
+    def get_chain(self):
+        return self._chain
+    def start_recording(self,
+                        small_filebasename=None,
+                        ):
+        """threadsafe"""
+        fname = small_filebasename
+        self.cmd.put( ('save',fname))
+
+    def stop_recording(self,*args,**kw):
+        """threadsafe"""
+        self.cmd.put( ('stop',) )
+
+    def mainloop(self):
+        # Note: need to accummulate frames into queue and add with .add_frames() for speed
+        # Also: old version uses fmf version 1. Not sure why.
+
+        state = 'pass'
+
+        while 1:
+
+            while 1:
+                if self.cmd.empty():
+                    break
+                cmd = self.cmd.get()
+                if cmd[0] == 'save':
+                    filename = cmd[1]
+                    state = 'saving'
+                elif cmd[0] == 'stop':
+                    if self._ufmf is not None:
+                        self._ufmf.close()
+                        self._ufmf = None
+                    state = 'pass'
+
+            # block for images
+            with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
+                if state == 'saving':
+                    if self._ufmf is None:
+                        frame1 = numpy.asarray(chainbuf.get_buf())
+                        timestamp1 = chainbuf.timestamp
+                        filename = os.path.expanduser(filename)
+                        dirname = os.path.split(filename)[0]
+                        if 1:
+                            print 'saving to',filename
+                        self._ufmf = ufmf.UfmfSaver( filename,
+                                                     frame1,
+                                                     timestamp1,
+                                                     image_radius=10 )
+                    self._tobuf( chainbuf )
+
+            # grab any more that are here
+            try:
+                with camnode_utils.use_buffer_from_chain(self._chain,blocking=False) as chainbuf:
+                    if state == 'saving':
+                        self._tobuf( chainbuf )
+            except Queue.Empty:
+                pass
+            
+            
+    def _tobuf( self, chainbuf ):
+        frame = chainbuf.get_buf()
+        if 1:
+            print 'saving %d points'%(len(chainbuf.processed_points ),)
+        self._ufmf.add_frame( frame, chainbuf.timestamp, chainbuf.processed_points )
 
 class IsoThread(threading.Thread):
     """One instance of this class for each camera. Do nothing but get
@@ -1089,6 +1169,7 @@ class AppState(object):
         self.all_cam_chains = []
         self.all_grabbers = []
         self.all_savers = []
+        self.all_small_savers = []
         self.globals = []
         self.all_cam_ids = []
 
@@ -1343,16 +1424,33 @@ class AppState(object):
                 thread.setDaemon(True)
                 thread.start()
 
-                save_cam = SaveCamData()
-                self.all_savers.append( save_cam )
-                process_cam_chain.append_link( save_cam.get_chain() )
-                thread = threading.Thread( target = save_cam.mainloop )
-                thread.setDaemon(True)
-                thread.start()
+                if 1:
+                    save_cam = SaveCamData()
+                    self.all_savers.append( save_cam )
+                    process_cam_chain.append_link( save_cam.get_chain() )
+                    thread = threading.Thread( target = save_cam.mainloop )
+                    thread.setDaemon(True)
+                    thread.start()
+                else:
+                    print 'not starting full .fmf thread'
+                    self.all_savers.append( None )
+
+                if 1:
+                    save_small = SaveSmallData()
+                    self.all_small_savers.append( save_small )
+                    process_cam_chain.append_link( save_small.get_chain() )
+                    thread = threading.Thread( target = save_small.mainloop )
+                    thread.setDaemon(True)
+                    thread.start()
+                else:
+                    print 'not starting small .fmf thread'
+                    self.all_small_savers.append( None )
+                
             else:
                 process_cam_chain = None
                 self.all_grabbers.append( None )
                 self.all_savers.append( None )
+                self.all_small_savers.append( None )
                 self.all_cam_chains.append( None )
 
             self.iso_threads[cam_no].set_chain( process_cam_chain )
@@ -1471,6 +1569,7 @@ class AppState(object):
         if cmds:
             grabber = self.all_grabbers[cam_no]
             saver = self.all_savers[cam_no]
+            small_saver = self.all_small_savers[cam_no]
             cam_id = self.all_cam_ids[cam_no]
             cam = self.all_cams[cam_no]
             #print 'handle_commands:',cam_id, cmds
@@ -1612,6 +1711,9 @@ class AppState(object):
                 globals['clear_background'].set()
 
             elif key == 'start_recording':
+                if saver is None:
+                    print 'no save thread -- cannot save movies'
+                    continue
                 if 1:
                     print 'TEMPORARY MEASURE: taking background prior to recording'
                     globals['take_background'].set()
@@ -1638,9 +1740,14 @@ class AppState(object):
                 saver.stop_recording()
 
             elif key == 'start_small_recording':
-                raise NotImplementedError('')
+                if small_saver is None:
+                    print 'no small save thread -- cannot save small movies'
+                    continue
+                
+                small_filebasename = cmds[key]
+                small_saver.start_recording(small_filebasename=small_filebasename)
             elif key == 'stop_small_recording':
-                raise NotImplementedError('')
+                small_saver.stop_recording()
             elif key == 'cal':
                 print 'setting calibration'
                 pmat, intlin, intnonlin, scale_factor = cmds[key]
