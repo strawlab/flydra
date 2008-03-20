@@ -491,7 +491,7 @@ class GrabClass(object):
 
 
     def mainloop(self):
-        disable_ifi_warning = options.disable_ifi_warning
+        disable_ifi_warning = self.options.disable_ifi_warning
         globals = self.globals
 
         self._globals = globals
