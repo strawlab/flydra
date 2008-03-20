@@ -920,10 +920,10 @@ class SaveCamData(object):
 
             if state == 'saving':
                 for frame,timestamp in raw:
-                    raw_movie.add_frame(frame,timestamp)
+                    raw_movie.add_frame(FastImage.asfastimage(frame),timestamp,error_if_not_fast=True)
                 for bg,cmp,timestamp in meancmp:
-                    bg_movie.add_frame(bg,timestamp)
-                    std_movie.add_frame(cmp,timestamp)
+                    bg_movie.add_frame(FastImage.asfastimage(bg),timestamp,error_if_not_fast=True)
+                    std_movie.add_frame(FastImage.asfastimage(cmp),timestamp,error_if_not_fast=True)
             del raw[:]
             del meancmp[:]
 
