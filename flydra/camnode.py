@@ -939,11 +939,13 @@ class SaveCamData(object):
             del meancmp[:]
 
 class SaveSmallData(object):
-    def __init__(self,cam_id=None):
+    def __init__(self,cam_id=None,
+                 options = None,
+                 ):
+        self.options = options
         self._chain = camnode_utils.ChainLink()
         self._cam_id = cam_id
         self.cmd = Queue.Queue()
-        
         self._ufmf = None
         
     def get_chain(self):
@@ -995,7 +997,7 @@ class SaveSmallData(object):
                         self._ufmf = ufmf.UfmfSaver( filename,
                                                      frame1,
                                                      timestamp1,
-                                                     image_radius=10 )
+                                                     image_radius=options.small_save_radius )
                     self._tobuf( chainbuf )
 
             # grab any more that are here
@@ -1194,7 +1196,6 @@ class AppState(object):
             globals['incoming_raw_frames']=Queue.Queue()
 #            globals['incoming_bg_frames']=Queue.Queue()
             globals['raw_fmf_and_bg_fmf']=None
-            globals['small_fmf']=None
             globals['most_recent_frame_potentially_corrupt']=None
             globals['saved_bg_frame']=False
 #            globals['current_bg_frame_and_timestamp']=None
@@ -1438,7 +1439,7 @@ class AppState(object):
                     self.all_savers.append( None )
 
                 if 1:
-                    save_small = SaveSmallData()
+                    save_small = SaveSmallData(options=self.options)
                     self.all_small_savers.append( save_small )
                     process_cam_chain.append_link( save_small.get_chain() )
                     thread = threading.Thread( target = save_small.mainloop )
@@ -1841,6 +1842,8 @@ def main():
 
     parser.add_option("--mask-images", type="string",
                       help="list of masks for each camera (uses OS-specific path separator, ':' for POSIX, ';' for Windows)")
+
+    parser.add_option("--small-save-radius", type="int", default=10)
 
     (options, args) = parser.parse_args()
 
