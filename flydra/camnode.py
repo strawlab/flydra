@@ -1009,7 +1009,7 @@ class SaveSmallData(object):
             
     def _tobuf( self, chainbuf ):
         frame = chainbuf.get_buf()
-        if 1:
+        if 0:
             print 'saving %d points'%(len(chainbuf.processed_points ),)
         self._ufmf.add_frame( frame, chainbuf.timestamp, chainbuf.processed_points )
 
