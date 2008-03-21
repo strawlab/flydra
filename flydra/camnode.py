@@ -988,6 +988,8 @@ class SaveSmallData(object):
                         timestamp1 = chainbuf.timestamp
                         filename = os.path.expanduser(filename)
                         dirname = os.path.split(filename)[0]
+                        if not os.path.exists(dirname):
+                            os.makedirs(dirname)
                         if 1:
                             print 'saving to',filename
                         self._ufmf = ufmf.UfmfSaver( filename,
@@ -1724,6 +1726,7 @@ class AppState(object):
 
                 save_dir = os.path.split(raw_filename)[0]
                 if not os.path.exists(save_dir):
+                    print 'making %s'%save_dir
                     os.makedirs(save_dir)
 
                 std_filename = bg_filename.replace('_bg','_std')
