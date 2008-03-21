@@ -997,7 +997,7 @@ class SaveSmallData(object):
                         self._ufmf = ufmf.UfmfSaver( filename,
                                                      frame1,
                                                      timestamp1,
-                                                     image_radius=options.small_save_radius )
+                                                     image_radius=self.options.small_save_radius )
                     self._tobuf( chainbuf )
 
             # grab any more that are here
