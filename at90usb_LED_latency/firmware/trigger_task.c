@@ -25,7 +25,9 @@
 
 extern bit   usb_connected;
 bit send_data_back_to_host=FALSE;
-bit button_released = TRUE;
+
+bit up_released = TRUE;
+bit down_released = TRUE;
 
 extern  uint8_t   usb_configuration_nb;
 volatile uint8_t cpt_sof=0;
@@ -308,9 +310,9 @@ void trigger_task(void)
 	if (!send_data_back_to_host) {
 	  // not waiting to send to host
 
-	  if (button_released) {
+	  if (up_released) {
 	    // will send back to host
-	    button_released = FALSE;
+	    up_released = FALSE;
 	    send_data_back_to_host = TRUE;
 	    Led0_on();
 	    Led1_on();
@@ -318,8 +320,24 @@ void trigger_task(void)
 	}
 
       } else {
-	button_released = TRUE;
+	up_released = TRUE;
 	Led0_off();
+      }
+
+
+      if (Is_joy_down()) {
+	if (!send_data_back_to_host) {
+	  // not waiting to send to host
+
+	  if (down_released) {
+	    // will send back to host
+	    down_released = FALSE;
+	    send_data_back_to_host = TRUE;
+	  }
+	}
+
+      } else {
+	down_released = TRUE;
       }
 
       Usb_select_endpoint(ENDPOINT_BULK_OUT);    //! Get Data from Host
@@ -431,7 +449,7 @@ void trigger_task(void)
 
 	    Usb_write_byte((uint8_t)(new_icr3 & 0xFF));
 	    Usb_write_byte((uint8_t)((new_icr3 >> 8) & 0xFF));
-	    Usb_write_byte(0x00);
+	    Usb_write_byte( ((uint8_t)up_released)*2 + down_released );
 	    Usb_write_byte(PORTC);
 
 	    Usb_write_byte(PINB);
