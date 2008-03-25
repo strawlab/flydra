@@ -49,7 +49,7 @@ def doit(no_listen=False,interval=None):
     if not no_listen:
 
         #hostname = socket.gethostbyname('mainbrain')
-        hostname = '127.0.0.1'
+        hostname = ''
         sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         port = common_variables.realtime_kalman_port
@@ -75,6 +75,12 @@ def doit(no_listen=False,interval=None):
     trigger_timer_max = dev.get_timer_max()
 
     while 1:
+        if 0:
+            dev_wait_dur = 5.0
+            print 'waiting %.1f seconds'%dev_wait_dur
+            input = dev.get_input(timeout_msec=int(dev_wait_dur*1000))
+            print 'got input', str(input)
+
         pre = time.time()
         dev.ext_trig3()
         post = time.time()
@@ -102,9 +108,11 @@ def doit(no_listen=False,interval=None):
 ##                     (timestamp-av)*1e3,
 ##                     (recv_ts-av)*1e3,
 ##                     )
-                print 'initial packet latency: %.1f msec (reconstruction), %.1f (receive)'%(
+                x,y,z=statevecs[0][:3]
+                print 'initial packet latency: %.1f msec (reconstruction), %.1f (receive) (pos: %.1f %.1f %.1f)'%(
                     (timestamp-av)*1e3,
                     (recv_ts-av)*1e3,
+                    x*1000,y*1000,z*1000,
                     )
             else:
                 diff = (timestamp-prev_ts)*1e3
