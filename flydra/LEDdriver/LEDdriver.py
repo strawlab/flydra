@@ -283,12 +283,16 @@ class Device:
         if 1:
             val = usb.bulk_write(self.libusb_handle, 0x06, buf, 9999)
             debug('set_output_durations result: %d'%(val,))
+        result = self.get_input() # the firmware always sends something back
+        if return_input:
+            return result
 
+    def get_input(self,timeout_msec=1000):
         if 1:
             INPUT_BUFFER = ctypes.create_string_buffer(16)
 
             try:
-                val = usb.bulk_read(self.libusb_handle, 0x82, INPUT_BUFFER, 1000)
+                val = usb.bulk_read(self.libusb_handle, 0x82, INPUT_BUFFER, timeout_msec)
                 if 0:
                     print 'read',val
             except usb.USBNoDataAvailableError:
@@ -296,8 +300,8 @@ class Device:
                     sys.stdout.write('?')
                     sys.stdout.flush()
                 val = None
-            if return_input:
-                return INPUT_BUFFER
+                return None
+            return INPUT_BUFFER
 
     def enter_dfu_mode(self):
         buf = self.OUTPUT_BUFFER # shorthand
