@@ -23,7 +23,9 @@ setup(name='flydra',
                   'flydra.kalman',
                   'flydra.analysis',
                   'flydra.a2', # new analysis
-                  'flydra.trigger'],
+                  'flydra.trigger',
+                  'flydra.LEDdriver',
+                  ],
       ext_modules= ext_modules,
       entry_points = {
     'console_scripts': [
@@ -41,6 +43,7 @@ setup(name='flydra',
     'flydra_analysis_print_camera_summary = flydra.analysis.flydra_analysis_print_camera_summary:main',
 
     'flydra_LED_driver_enter_dfu_mode = flydra.LEDdriver.LEDdriver:enter_dfu_mode',
+    'flydra_LED_test_latency = flydra.LEDdriver.LED_test_latency:main',
 
     'flydra_trigger_enter_dfu_mode = flydra.trigger:enter_dfu_mode',
     'flydra_trigger_check_device = flydra.trigger:check_device',
