@@ -140,6 +140,7 @@ if 0:
 downstream_kalman_hosts = []
 if 1:
     downstream_kalman_hosts.append( ('127.0.0.1',28931) ) # localhost
+    downstream_kalman_hosts.append( ('192.168.10.41',28931) ) # wtstim
 #    downstream_kalman_hosts.append( ('255.255.255.255',28931) ) # broadcast to every device on subnet
 if 0:
     downstream_kalman_hosts.append( ('astraw-office.kicks-ass.net',28931) ) # send off subnet
@@ -779,7 +780,7 @@ class CoordinateProcessor(threading.Thread):
 
     def run(self):
         """main loop of CoordinateProcessor"""
-        global downstream_hosts, downstream_kalman_hosts, best_realtime_data
+        global downstream_hosts, best_realtime_data
         global outgoing_UDP_socket, calib_data_lock, calib_IdMat, calib_points
         global calib_data_lock, XXX_framenumber
 
@@ -1193,11 +1194,6 @@ class CoordinateProcessor(threading.Thread):
                                             corrected_framenumber,now)
                                         if 1:
                                             self.realtime_kalman_data_queue.put(data_packet)
-                                            if 0:
-                                                for downstream_host in downstream_kalman_hosts:
-                                                    if 0:
-                                                        # XXX why does this take sooo long?
-                                                        outgoing_UDP_socket.sendto(data_packet,downstream_host)
 
                                 if SHOW_3D_PROCESSING_LATENCY:
                                     start_3d_proc_c = time.time()
