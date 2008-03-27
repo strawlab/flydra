@@ -357,7 +357,7 @@ def read_textlog_header(results,fail_on_error=True):
         else:
             return None
     infostr = textlog['message'].tostring().strip('\x00')
-    if not infostr.startswith('MainBrain running at'):
+    if not (infostr.startswith('MainBrain running at') or infostr.startswith('kalmanize running at')):
         raise TextlogParseError('could not parse textlog - old version?')
     fps_str = infostr.split()[3]
     parsed = {}
@@ -378,8 +378,11 @@ def get_fps(results,fail_on_error=True):
     return float(parsed['fps'])
 
 def get_time_model_from_data(results,debug=False,full_output=False):
-    # get the timer top value
     parsed = read_textlog_header(results)
+
+    # get the timer top value
+    if 'top' not in parsed:
+        return None
 
     timer_max = int( parsed['top'] )
     if debug:

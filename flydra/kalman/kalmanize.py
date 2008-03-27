@@ -14,6 +14,7 @@ from optparse import OptionParser
 import dynamic_models
 import flydra.save_calibration_data as save_calibration_data
 import collections
+from flydra.MainBrain import TextLogDescription
 
 KalmanEstimates = flydra_kalman_utils.KalmanEstimates
 FilteredObservations = flydra_kalman_utils.FilteredObservations
@@ -163,6 +164,7 @@ class KalmanSaver:
                  save_cal_dir=None,
                  cam_id2camns=None,
                  min_observations_to_save=0,
+                 textlog_save_lines = None,
                  debug=0):
 
         self.cam_id2camns = cam_id2camns
@@ -194,6 +196,8 @@ class KalmanSaver:
             self.h5_2d_obs = self.h5file.root.kalman_observations_2d_idxs
             self.h5_2d_obs_next_idx = len(self.h5_2d_obs)
 
+            self.h5textlog = self.h5file.root.textlog
+
         else:
             self.h5file = PT.openFile(dest_filename, mode="w", title="tracked Flydra data file")
             reconst_orig_units.save_to_h5file(self.h5file)
@@ -209,6 +213,25 @@ class KalmanSaver:
                                                        "camns and idxs")
 
             self.obj_id = -1
+
+            self.h5textlog = self.h5file.createTable(self.h5file.root,'textlog',TextLogDescription,'text log')
+
+        if 1:
+            textlog_row = self.h5textlog.row
+            cam_id = 'mainbrain'
+            timestamp = time.time()
+
+            list_of_textlog_data = [ (timestamp,cam_id,timestamp,text) for text in textlog_save_lines ]
+            for textlog_data in list_of_textlog_data:
+                (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
+                textlog_row['mainbrain_timestamp'] = mainbrain_timestamp
+                textlog_row['cam_id'] = cam_id
+                textlog_row['host_timestamp'] = host_timestamp
+                textlog_row['message'] = message
+                textlog_row.append()
+
+            self.h5textlog.flush()
+
         self.h5_xhat_names = PT.Description(KalmanEstimates().columns)._v_names
         self.h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
         self.all_kalman_calibration_data = []
@@ -336,8 +359,9 @@ def kalmanize(src_filename,
     results = get_results(src_filename)
 
     if reconstructor_filename is None:
-        reconst_orig_units = flydra.reconstruct.Reconstructor(results)
-    else:
+        reconstructor_filename = src_filename
+
+    if 1:
         if reconstructor_filename.endswith('h5'):
             fd = PT.openFile(reconstructor_filename,mode='r')
             reconst_orig_units = flydra.reconstruct.Reconstructor(fd)
@@ -351,16 +375,24 @@ def kalmanize(src_filename,
         dest_filename = os.path.splitext(results.filename)[0]+'.kalmanized.h5'
         if os.path.exists(dest_filename):
             raise ValueError('%s already exists and not explicitly requesting append with "--dest-file" option, quitting'%dest_filename)
-    h5saver = KalmanSaver(dest_filename,reconst_orig_units,save_cal_dir=save_cal_dir,cam_id2camns=cam_id2camns,
-                          min_observations_to_save=min_observations_to_save,
-                          debug=debug)
-
-    save_calibration_data = FakeThreadingEvent()
-    save_calibration_data.set()
 
     if frames_per_second is None:
         frames_per_second = get_fps(results)
         print 'read frames_per_second from file', frames_per_second
+
+    textlog_save_lines = [
+        'kalmanize running at %s fps, (hypothesis_test_max_error %s)'%(str(frames_per_second),str(max_err)),
+        'original file: %s'%(src_filename,),
+        'dynamic model: %s'%(dynamic_model,),
+        'reconstructor file: %s'%(reconstructor_filename,),
+        ]
+
+    h5saver = KalmanSaver(dest_filename,reconst_orig_units,save_cal_dir=save_cal_dir,cam_id2camns=cam_id2camns,
+                          min_observations_to_save=min_observations_to_save, textlog_save_lines=textlog_save_lines,
+                          debug=debug)
+
+    save_calibration_data = FakeThreadingEvent()
+    save_calibration_data.set()
 
     dt = 1.0/frames_per_second
     model_dict=dynamic_models.create_dynamic_model_dict(dt=dt)

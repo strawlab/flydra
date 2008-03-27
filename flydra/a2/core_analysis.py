@@ -163,7 +163,8 @@ def _initial_file_load(filename):
             except flydra.analysis.result_utils.TextlogParseError, err:
                 pass
             else:
-                extra['time_model'] = time_model
+                if time_model is not None:
+                    extra['time_model'] = time_model
     return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
 
 def kalman_smooth(orig_rows,
