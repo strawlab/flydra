@@ -3,14 +3,15 @@ import numpy
 import scipy
 from optparse import OptionParser
 import scipy.misc.pilutil
+
 def doit(filename=None):
     results = tables.openFile(filename,mode='r')
-    img = results.root.images
+    image_table = results.root.images
 
     for row in results.root.cam_info:
         cam_id = row['cam_id']
 
-        arr = getattr(img,cam_id)
+        arr = getattr(image_table,cam_id)
         image = arr.read()
         mean_luminance = numpy.mean(image.flat)
         print '%s: %dx%d, mean luminance %.1f'%(cam_id,
