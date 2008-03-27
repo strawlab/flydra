@@ -633,8 +633,8 @@ class wxMainBrainApp(wx.App):
             threshold_diff_value = xrc.XRCCTRL(previewPerCamPanel,"threshold_value")
             threshold_diff_value.SetValue( str( value ) )
         elif param == 'n_sigma':
-            value = xrc.XRCCTRL(previewPerCamPanel,"n_sigma")
-            value.SetValue( str( value ) )
+            ctrl = xrc.XRCCTRL(previewPerCamPanel,"n_sigma")
+            ctrl.SetValue( str( value ) )
         elif param == 'trigger_mode':
             ext_trig = xrc.XRCCTRL(previewPerCamPanel,
                                "EXT_TRIG")
@@ -1541,7 +1541,7 @@ def main():
     parser.add_option("--disable-sync-errors", dest='show_sync_errors',
                       default=True, action="store_false",
                       )
-    
+
     (options, args) = parser.parse_args()
 
     global use_opengl
