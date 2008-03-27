@@ -31,7 +31,7 @@ import flydra.trigger
 
 import flydra.debuglock
 
-import errno
+import warnings, errno
 
 # ensure that pytables uses numpy:
 import tables.flavor
@@ -52,7 +52,10 @@ ATTEMPT_DATA_RECOVERY = True
 #ATTEMPT_DATA_RECOVERY = False
 
 if os.name == 'posix':
-    import posix_sched
+    try:
+        import posix_sched
+    except ImportError, err:
+        warnings.warn('Could not open posix_sched module')
 
 Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here...
 
