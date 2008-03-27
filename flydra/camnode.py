@@ -244,7 +244,7 @@ def get_free_buffer_from_pool(pool):
         if not buf._i_promise_to_return_buffer_to_the_pool:
             pool.return_buffer(buf)
 
-class GrabClass(object):
+class ProcessCamClass(object):
     def __init__(self,
                  cam2mainbrain_port=None,
                  cam_id=None,
@@ -947,7 +947,7 @@ class SaveSmallData(object):
         self._cam_id = cam_id
         self.cmd = Queue.Queue()
         self._ufmf = None
-        
+
     def get_chain(self):
         return self._chain
     def start_recording(self,
@@ -1007,8 +1007,8 @@ class SaveSmallData(object):
                         self._tobuf( chainbuf )
             except Queue.Empty:
                 pass
-            
-            
+
+
     def _tobuf( self, chainbuf ):
         frame = chainbuf.get_buf()
         if 0:
@@ -1171,7 +1171,7 @@ class AppState(object):
         self.all_cams = []
         self.cam_status = []
         self.all_cam_chains = []
-        self.all_grabbers = []
+        self.all_cam_processors = []
         self.all_savers = []
         self.all_small_savers = []
         self.globals = []
@@ -1222,6 +1222,7 @@ class AppState(object):
                 else:
                     num_buffers = 50
             N_modes = cam_iface.get_num_modes(cam_no)
+            print '%d available modes:'%N_modes
             for i in range(N_modes):
                 mode_string = cam_iface.get_mode_string(cam_no,i)
                 print '  mode %d: %s'%(i,mode_string)
@@ -1232,6 +1233,7 @@ class AppState(object):
             if use_mode is None:
                 use_mode = 0
             cam = cam_iface.Camera(cam_no,num_buffers,use_mode)
+            print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_no,use_mode))
             self.all_cams.append( cam )
 
             cam.start_camera()  # start camera
@@ -1318,25 +1320,14 @@ class AppState(object):
             for prop_num in range(num_props):
                 props = cam.get_camera_property_info(prop_num)
                 current_value,auto = cam.get_camera_property( prop_num )
-                if 0:
-                    # set defaults
-                    if props['name'] == 'shutter':
-                        new_value = 300
-                    elif props['name'] == 'gain':
-                        new_value = 72
-                    elif props['name'] == 'brightness':
-                        new_value = 783
-                    else:
-                        print "WARNING: don't know default value for property %s, "\
-                              "leaving as default"%(props['name'],)
-                        new_value = current_value
-                else:
-                    new_value = current_value
+                new_value = current_value
                 min_value = props['min_value']
                 max_value = props['max_value']
+                force_manual = True
                 if props['has_manual_mode']:
-                    if min_value <= new_value <= max_value:
+                    if force_manual or min_value <= new_value <= max_value:
                         try:
+                            print 'setting camera property "%s" to manual mode'%(props['name'],)
                             cam.set_camera_property( prop_num, new_value, 0 )
                         except:
                             print 'error while setting property %s to %d (from %d)'%(props['name'],new_value,current_value)
@@ -1392,7 +1383,7 @@ class AppState(object):
             # setup chain for this camera:
             if not DISABLE_ALL_PROCESSING:
                 if 0:
-                    process_cam = ProcessCamData()
+                    cam_processor = ProcessCamData()
                 else:
                     cam.get_max_height()
                     l,b = cam.get_frame_offset()
@@ -1400,7 +1391,7 @@ class AppState(object):
                     r = l+w-1
                     t = b+h-1
                     lbrt = l,b,r,t
-                    process_cam = GrabClass(
+                    cam_processor = ProcessCamClass(
                         cam2mainbrain_port=cam2mainbrain_port,
                         cam_id=cam_id,
                         log_message_queue=self.log_message_queue,
@@ -1419,18 +1410,18 @@ class AppState(object):
                         globals=globals,
                         options=options,
                         )
-                self.all_grabbers.append( process_cam )
+                self.all_cam_processors.append( cam_processor )
 
-                process_cam_chain = process_cam.get_chain()
-                self.all_cam_chains.append(process_cam_chain)
-                thread = threading.Thread( target = process_cam.mainloop )
+                cam_processor_chain = cam_processor.get_chain()
+                self.all_cam_chains.append(cam_processor_chain)
+                thread = threading.Thread( target = cam_processor.mainloop )
                 thread.setDaemon(True)
                 thread.start()
 
                 if 1:
                     save_cam = SaveCamData()
                     self.all_savers.append( save_cam )
-                    process_cam_chain.append_link( save_cam.get_chain() )
+                    cam_processor_chain.append_link( save_cam.get_chain() )
                     thread = threading.Thread( target = save_cam.mainloop )
                     thread.setDaemon(True)
                     thread.start()
@@ -1441,22 +1432,22 @@ class AppState(object):
                 if 1:
                     save_small = SaveSmallData(options=self.options)
                     self.all_small_savers.append( save_small )
-                    process_cam_chain.append_link( save_small.get_chain() )
+                    cam_processor_chain.append_link( save_small.get_chain() )
                     thread = threading.Thread( target = save_small.mainloop )
                     thread.setDaemon(True)
                     thread.start()
                 else:
                     print 'not starting small .fmf thread'
                     self.all_small_savers.append( None )
-                
+
             else:
-                process_cam_chain = None
-                self.all_grabbers.append( None )
+                cam_processor_chain = None
+                self.all_cam_processors.append( None )
                 self.all_savers.append( None )
                 self.all_small_savers.append( None )
                 self.all_cam_chains.append( None )
 
-            self.iso_threads[cam_no].set_chain( process_cam_chain )
+            self.iso_threads[cam_no].set_chain( cam_processor_chain )
 
             # ----------------------------------------------------------------
             #
@@ -1570,7 +1561,7 @@ class AppState(object):
 
     def handle_commands(self, cam_no, cmds):
         if cmds:
-            grabber = self.all_grabbers[cam_no]
+            cam_processor = self.all_cam_processors[cam_no]
             saver = self.all_savers[cam_no]
             small_saver = self.all_small_savers[cam_no]
             cam_id = self.all_cam_ids[cam_no]
@@ -1596,15 +1587,15 @@ class AppState(object):
                         cam.set_camera_property(enum,value,0)
                     elif property_name == 'roi':
                         print 'flydra_camera_node.py: ignoring ROI command for now...'
-                        #grabber.roi = value
+                        #cam_processor.roi = value
                     elif property_name == 'n_sigma':
                         print 'setting n_sigma',value
-                        grabber.n_sigma_shared.set(value)
+                        cam_processor.n_sigma_shared.set(value)
                     elif property_name == 'diff_threshold':
                         #print 'setting diff_threshold',value
-                        grabber.diff_threshold = value # XXX TODO: FIXME: thread crossing bug
+                        cam_processor.diff_threshold = value # XXX TODO: FIXME: thread crossing bug
                     elif property_name == 'clear_threshold':
-                        grabber.clear_threshold = value # XXX TODO: FIXME: thread crossing bug
+                        cam_processor.clear_threshold = value # XXX TODO: FIXME: thread crossing bug
                     elif property_name == 'width':
                         assert cam.get_max_width() == value
                     elif property_name == 'height':
@@ -1619,7 +1610,7 @@ class AppState(object):
                         else: globals['use_cmp'].clear()
                     elif property_name == 'expected_trigger_framerate':
                         #print 'expecting trigger fps',value
-                        grabber.shortest_IFI = 1.0/value # XXX TODO: FIXME: thread crossing bug
+                        cam_processor.shortest_IFI = 1.0/value # XXX TODO: FIXME: thread crossing bug
                     elif property_name == 'max_framerate':
                         if 1:
                             #print 'ignoring request to set max_framerate'
@@ -1747,7 +1738,7 @@ class AppState(object):
                 if small_saver is None:
                     print 'no small save thread -- cannot save small movies'
                     continue
-                
+
                 small_filebasename = cmds[key]
                 small_saver.start_recording(small_filebasename=small_filebasename)
             elif key == 'stop_small_recording':
@@ -1758,9 +1749,9 @@ class AppState(object):
 
                 # XXX TODO: FIXME: thread crossing bug
                 # these three should always be done together in this order:
-                grabber.set_scale_factor( scale_factor )
-                grabber.set_pmat( pmat )
-                grabber.make_reconstruct_helper(intlin, intnonlin) # let grab thread make one
+                cam_processor.set_scale_factor( scale_factor )
+                cam_processor.set_pmat( pmat )
+                cam_processor.make_reconstruct_helper(intlin, intnonlin) # let grab thread make one
 
                 ######
                 fc1 = intlin[0,0]
