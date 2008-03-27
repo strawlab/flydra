@@ -40,6 +40,7 @@ setup(name='flydra',
     'flydra_analysis_plot_cameras = flydra.analysis.flydra_analysis_plot_cameras:main',
     'flydra_analysis_plot_kalman_data = flydra.analysis.flydra_analysis_plot_kalman_data:main',
     'flydra_analysis_plot_kalman_2d = flydra.analysis.flydra_analysis_plot_kalman_2d:main',
+    'flydra_analysis_plot_timeseries_2d_3d = flydra.a2.plot_timeseries_2d_3d:main',
     'flydra_analysis_print_camera_summary = flydra.analysis.flydra_analysis_print_camera_summary:main',
 
     'flydra_LED_driver_enter_dfu_mode = flydra.LEDdriver.LEDdriver:enter_dfu_mode',
