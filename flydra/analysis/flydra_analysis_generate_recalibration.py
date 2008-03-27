@@ -78,7 +78,12 @@ def do_it(filename,
             use_obj_ids = list(use_obj_ids.difference(bad))
         kobs = results.root.kalman_observations
         kobs_2d = results.root.kalman_observations_2d_idxs
-    reconstructor = flydra.reconstruct.Reconstructor(results)
+
+    try:
+        reconstructor = flydra.reconstruct.Reconstructor(results)
+    except tables.exceptions.NoSuchNodeError, err:
+        # no calibration saved in file
+        reconstructor = None
 
     h5_2d_data = result_utils.get_results(h5_2d_data_filename,mode='r+')
 
@@ -100,6 +105,8 @@ def do_it(filename,
     points = []
 
     if use_kalman_data:
+        if start is not None or stop is not None:
+            print 'WARNING: currently ignoring start/stop because Kalman data is being used'
         for obj_id_enum, obj_id in enumerate(use_obj_ids):
             print 'obj_id %d (%d of %d)'%(obj_id, obj_id_enum+1, len(use_obj_ids))
             this_obj_id = obj_id
@@ -166,12 +173,12 @@ def do_it(filename,
                 print 'cam_id %s: %d points'%(cam_id,npoints_by_cam_id[cam_id])
             print
 
-    if start is not None or stop is not None:
-        if start is None:
-            start = 0
-        if stop is None:
-            stop = frames.max()
+    if start is None:
+        start = 0
+    if stop is None:
+        stop = frames.max()
 
+    if not use_kalman_data:
         count = 0
         for frameno in range(start,stop+1,use_nth_observation):
             this_use_idxs=qfi.get_frame_idxs(frameno)
@@ -203,20 +210,27 @@ def do_it(filename,
     # resolution
     Res = []
     for cam_id in cam_ids:
-        Res.append( reconstructor.get_resolution(cam_id) )
+        if reconstructor is not None:
+            imsize = reconstructor.get_resolution(cam_id)
+        else:
+            image_table = results.root.images
+            arr = getattr(image_table,cam_id)
+            imsize = arr.shape[1], arr.shape[0]
+        Res.append( imsize )
     Res = numpy.array( Res )
 
-    cam_centers = numpy.asarray([reconstructor.get_camera_center(cam_id)[:,0]
-                                 for cam_id in cam_ids])
-
-    fd = open(os.path.join(calib_dir,'calibration_units.txt'),mode='w')
-    fd.write(reconstructor.get_calibration_unit()+'\n')
-    fd.close()
+    if reconstructor is not None:
+        fd = open(os.path.join(calib_dir,'calibration_units.txt'),mode='w')
+        fd.write(reconstructor.get_calibration_unit()+'\n')
+        fd.close()
 
     results.close()
     h5_2d_data.close()
 
-    save_ascii_matrix(os.path.join(calib_dir,'original_cam_centers.dat'),cam_centers)
+    if reconstructor is not None:
+        cam_centers = numpy.asarray([reconstructor.get_camera_center(cam_id)[:,0]
+                                     for cam_id in cam_ids])
+        save_ascii_matrix(os.path.join(calib_dir,'original_cam_centers.dat'),cam_centers)
     save_ascii_matrix(os.path.join(calib_dir,'IdMat.dat'),IdMat)
     save_ascii_matrix(os.path.join(calib_dir,'points.dat'),points)
     save_ascii_matrix(os.path.join(calib_dir,'Res.dat'),Res)
