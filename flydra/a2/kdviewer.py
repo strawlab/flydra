@@ -16,6 +16,7 @@ import scipy.io
 import pytz, datetime
 import pkg_resources
 import flydra.reconstruct as reconstruct
+import flydra.analysis.result_utils as result_utils
 
 pacific = pytz.timezone('US/Pacific')
 
@@ -181,20 +182,22 @@ def doit(filename,
         allsave = []
 
     if not use_kalman_smoothing:
-        if (fps is not None) or (dynamic_model is not None):
-            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting fps and dynamic model options (--fps and --dynamic-model)'
+        if (dynamic_model is not None):
+            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model option (--dynamic-model)'
             sys.exit(1)
-    else:
-        if fps is None:
-            fps = 100.0
-            import warnings
-            warnings.warn('Setting fps to default value of %f'%fps)
+
 
     ca = core_analysis.CachingAnalyzer()
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(filename)
 
     if not is_mat_file:
         mat_data = None
+        fps = result_utils.get_fps( data_file, fail_on_error=False )
+
+        if fps is None:
+            fps = 100.0
+            import warnings
+            warnings.warn('Setting fps to default value of %f'%fps)
 
     if show_n_longest is not None:
         if ((obj_start is not None) or
