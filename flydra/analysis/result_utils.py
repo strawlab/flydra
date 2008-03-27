@@ -348,8 +348,14 @@ class TimeModel:
 class TextlogParseError(Exception):
     pass
 
-def read_textlog_header(results):
-    textlog = results.root.textlog.readCoordinates([0])
+def read_textlog_header(results,fail_on_error=True):
+    try:
+        textlog = results.root.textlog.readCoordinates([0])
+    except PT.exceptions.NoSuchNodeError, err:
+        if fail_on_error:
+            raise
+        else:
+            return None
     infostr = textlog['message'].tostring().strip('\x00')
     if not infostr.startswith('MainBrain running at'):
         raise TextlogParseError('could not parse textlog - old version?')
@@ -365,8 +371,10 @@ def read_textlog_header(results):
         parsed[name]=strvalue
     return parsed
 
-def get_fps(results):
-    parsed = read_textlog_header(results)
+def get_fps(results,fail_on_error=True):
+    parsed = read_textlog_header(results,fail_on_error=fail_on_error)
+    if parsed is None and not fail_on_error:
+        return None
     return float(parsed['fps'])
 
 def get_time_model_from_data(results,debug=False,full_output=False):
