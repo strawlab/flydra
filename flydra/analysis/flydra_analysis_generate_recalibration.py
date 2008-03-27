@@ -50,7 +50,7 @@ def create_new_row(d2d, this_camns, this_camn_idxs, cam_ids, camn2cam_id, npoint
 
 def do_it(filename,
           efilename,
-          use_nth_observation=40,
+          use_nth_observation=None,
           h5_2d_data_filename=None,
           use_kalman_data=True,
           start=None,
@@ -254,7 +254,7 @@ Then run this program::
     parser = OptionParser(usage)
 
     parser.add_option('--use-nth-observation', type='int',
-                      dest='use_nth_observation', default=40)
+                      dest='use_nth_observation', default=1)
 
     parser.add_option('--2d-data', type='string',
                       dest='h5_2d_data_filename', default=None)
