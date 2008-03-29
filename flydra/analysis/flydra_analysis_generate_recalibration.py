@@ -55,6 +55,7 @@ def do_it(filename,
           use_kalman_data=True,
           start=None,
           stop=None,
+          options=None,
           ):
 
     if h5_2d_data_filename is None:
@@ -161,7 +162,7 @@ def do_it(filename,
                     this_use_idxs = [int(t) for t in this_use_idxs]
 
                 d2d = data2d.readCoordinates( this_use_idxs )
-                if len(this_camns) < 3:
+                if len(this_camns) < options.min_num_points:
                     # not enough points to contribute to calibration
                     continue
                 IdMat_row, points_row = create_new_row( d2d, this_camns, this_camn_idxs, cam_ids, camn2cam_id, npoints_by_cam_id )
@@ -193,7 +194,7 @@ def do_it(filename,
                 continue
             this_camn_idxs = numpy.array([0]*len(this_camns))
 
-            if len(this_camns) < 3:
+            if len(this_camns) < options.min_num_points:
                 # not enough points to contribute to calibration
                 continue
 
@@ -286,6 +287,10 @@ Then run this program::
                       help="last frame",
                       metavar="STOP")
 
+    parser.add_option("--min-num-points",
+                      type="int",
+                      default=3)
+
     (options, args) = parser.parse_args()
 
     if len(args)>2:
@@ -311,6 +316,7 @@ Then run this program::
           use_kalman_data=options.use_kalman_data,
           start=options.start,
           stop=options.stop,
+          options=options,
           )
 
 if __name__=='__main__':
