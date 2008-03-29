@@ -13,6 +13,7 @@ import sys, os, sets
 from optparse import OptionParser
 import flydra.reconstruct
 import flydra.analysis.result_utils as result_utils
+import progressbar
 
 def save_ascii_matrix(thefile,m):
     if hasattr(thefile,'write'):
@@ -32,7 +33,6 @@ def create_new_row(d2d, this_camns, this_camn_idxs, cam_ids, camn2cam_id, npoint
         for this_camn,this_camn_idx in zip(this_camns,this_camn_idxs):
             if camn2cam_id[this_camn] != cam_id:
                 continue
-            npoints_by_cam_id[cam_id] = npoints_by_cam_id[cam_id] + 1
 
             this_camn_d2d = d2d[d2d['camn'] == this_camn]
             for this_row in this_camn_d2d: # XXX could be sped up
@@ -43,6 +43,7 @@ def create_new_row(d2d, this_camns, this_camn_idxs, cam_ids, camn2cam_id, npoint
             IdMat_row.append( 0 )
             points_row.extend( [numpy.nan, numpy.nan, numpy.nan] )
         else:
+            npoints_by_cam_id[cam_id] = npoints_by_cam_id[cam_id] + 1
             n_pts += 1
             IdMat_row.append( 1 )
             points_row.extend( [this_row['x'], this_row['y'], 1.0] )
@@ -98,6 +99,8 @@ def do_it(filename,
     frames = data2d.cols.frame[:]
     qfi = result_utils.QuickFrameIndexer(frames)
 
+    npoints_by_ncams = {}
+
     npoints_by_cam_id = {}
     for cam_id in cam_ids:
         npoints_by_cam_id[cam_id] = 0
@@ -107,9 +110,10 @@ def do_it(filename,
 
     if use_kalman_data:
         if start is not None or stop is not None:
+            print 'start, stop',start, stop
             print 'WARNING: currently ignoring start/stop because Kalman data is being used'
         for obj_id_enum, obj_id in enumerate(use_obj_ids):
-            print 'obj_id %d (%d of %d)'%(obj_id, obj_id_enum+1, len(use_obj_ids))
+#            print 'obj_id %d (%d of %d)'%(obj_id, obj_id_enum+1, len(use_obj_ids))
             this_obj_id = obj_id
             k_use_idxs = kobs.getWhereList(
                 'obj_id==this_obj_id')
@@ -120,9 +124,13 @@ def do_it(filename,
             kframes_use = kframes[::use_nth_observation]
             obs_2d_idxs_use = obs_2d_idxs[::use_nth_observation]
 
+            widgets=['obj_id % 5d (% 2d of % 2d) '%(obj_id,obj_id_enum+1, len(use_obj_ids)), progressbar.Percentage(), ' ',
+                     progressbar.Bar(), ' ', progressbar.ETA()]
+
+            pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(kframes_use)).start()
+
             for n_kframe, (kframe, obs_2d_idx) in enumerate(zip(kframes_use,obs_2d_idxs_use)):
-                #print
-                print 'kframe %d (%d of %d)'%(kframe,n_kframe+1,len(kframes_use))
+                pbar.update(n_kframe)
                 if 0:
                     k_use_idx = k_use_idxs[n_kframe*use_nth_observation]
                     print kobs.readCoordinates( numpy.array([k_use_idx]))
@@ -165,14 +173,18 @@ def do_it(filename,
                 if len(this_camns) < options.min_num_points:
                     # not enough points to contribute to calibration
                     continue
+
+                npoints_by_ncams[ len(this_camns) ] = npoints_by_ncams.get( len(this_camns), 0 ) + 1
+
                 IdMat_row, points_row = create_new_row( d2d, this_camns, this_camn_idxs, cam_ids, camn2cam_id, npoints_by_cam_id )
 
                 IdMat.append( IdMat_row )
                 points.append( points_row )
-            print 'running total of points','-'*20
-            for cam_id in cam_ids:
-                print 'cam_id %s: %d points'%(cam_id,npoints_by_cam_id[cam_id])
-            print
+##             print 'running total of points','-'*20
+##             for cam_id in cam_ids:
+##                 print 'cam_id %s: %d points'%(cam_id,npoints_by_cam_id[cam_id])
+##             print
+            pbar.finish()
 
     if start is None:
         start = 0
@@ -198,12 +210,21 @@ def do_it(filename,
                 # not enough points to contribute to calibration
                 continue
 
+            npoints_by_ncams[ len(this_camns) ] = npoints_by_ncams.get( len(this_camns), 0 ) + 1
             count +=1
 
             IdMat_row, points_row = create_new_row( d2d, this_camns, this_camn_idxs, cam_ids, camn2cam_id, npoints_by_cam_id )
             IdMat.append( IdMat_row )
             points.append( points_row )
     print '%d points'%len(IdMat)
+
+    print 'by camera id:'
+    for cam_id in cam_ids:
+        print ' %s: %d'%(cam_id, npoints_by_cam_id[cam_id])
+    print 'by n points:'
+    for ncams in npoints_by_ncams:
+        print ' %d: %d'%(ncams, npoints_by_ncams[ncams])
+    print
 
     IdMat = numpy.array(IdMat,dtype=numpy.uint8).T
     points = numpy.array(points,dtype=numpy.float32).T
