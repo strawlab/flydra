@@ -120,24 +120,10 @@ def show_it(fig,
     subplot_by_cam_id = {}
     for i,cam_id in enumerate(unique_cam_ids):
         ax = auto_subplot(fig,i,n_rows=n_rows,n_cols=n_cols)
-
-        textcolor = (0,0,0)
-        if img_table is not None:
-            bg_arr_h5 = getattr(img_table,cam_id)
-            bg_arr = numpy.array(bg_arr_h5.read())
-            if bg_arr.max() <= 10:
-                textcolor = (1,1,1)
-
-        ax.text(0.5,0.95,'%s: %s'%(cam_id,str(cam_id2camns[cam_id])),
-                color=textcolor,
-                horizontalalignment='center',
-                verticalalignment='top',
-                transform = ax.transAxes,
-                )
+        ax.set_title( '%s: %s'%(cam_id,str(cam_id2camns[cam_id])) )
 ##        ax.set_xticks([])
 ##        ax.set_yticks([])
         subplot_by_cam_id[cam_id] = ax
-
 
     for camn in unique_camns:
         cam_id = camn2cam_id[camn]
