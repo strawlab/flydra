@@ -101,7 +101,7 @@ def doit(
                     verticalalignment='bottom',
                     transform = ax.transAxes,
                     )
-            ax.set_xlabel('pixel')
+            ax.set_ylabel('%s\npixels'%cam_id)
         ax.set_xlabel('frame')
 
         h5.close()
