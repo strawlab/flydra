@@ -172,8 +172,9 @@ class KalmanSaver:
         self.debug = 0
 
         if save_cal_dir is not None:
-            if 1:
+            if 0:
                 raise NotImplementedError("this code path is not known to work!")
+
             assert cam_id2camns is not None
             if os.path.exists(save_cal_dir):
                 raise RuntimeError('save_cal_dir exists')
@@ -308,13 +309,12 @@ class KalmanSaver:
 
         # calibration data
         self.all_kalman_calibration_data.extend( tro.saved_calibration_data )
-        if 1:
+        if self.save_cal_dir is not None:
+
             # re-save calibration data after every increment...
             self._save_kalman_calibration_data()
 
     def _save_kalman_calibration_data(self):
-        if self.save_cal_dir is None:
-            return
         data_to_save = self.all_kalman_calibration_data
         cam_ids = self.cam_id2camns.keys()
         cam_ids.sort()
@@ -392,7 +392,8 @@ def kalmanize(src_filename,
                           debug=debug)
 
     save_calibration_data = FakeThreadingEvent()
-    save_calibration_data.set()
+    if save_cal_dir is not None:
+        save_calibration_data.set()
 
     dt = 1.0/frames_per_second
     model_dict=dynamic_models.create_dynamic_model_dict(dt=dt)
