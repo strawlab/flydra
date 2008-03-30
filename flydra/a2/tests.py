@@ -3,7 +3,6 @@ import pkg_resources
 import flydra.a2.core_analysis as core_analysis
 import tables as PT
 import numpy
-import flydra.analysis.result_utils as result_utils
 
 class TestCoreAnalysis(unittest.TestCase):
     def setUp(self):
