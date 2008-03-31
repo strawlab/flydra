@@ -81,22 +81,32 @@ def doit(
             del valid_cond
             del frames
 
+        start_frame = all_data['frame'].min()
+        stop_frame = all_data['frame'].max()
+
         for cam_id_enum, cam_id in enumerate( cam_ids ):
             if cam_id in ax_by_cam:
                 ax = ax_by_cam[cam_id]
             else:
                 ax = pylab.subplot( len(cam_ids), 1, cam_id_enum+1, sharex=ax)
+                ax.set_xlim( (start_frame, stop_frame) )
                 ax_by_cam[cam_id] = ax
                 ax.fmt_xdata = str
                 ax.fmt_ydata = str
 
             camns = cam_id2camns[cam_id]
+            cam_id_n_valid = 0
             for camn in camns:
                 this_idx = numpy.nonzero( all_data['camn']==camn )[0]
                 data = all_data[this_idx]
-                ax.plot( data['frame'], data['x'], 'r.' )
-                ax.plot( data['frame'], data['y'], 'g.' )
-            ax.text(0.1,0,cam_id,
+                xdata = data['x']
+                valid = ~numpy.isnan( xdata )
+                n_valid = numpy.sum(valid)
+                cam_id_n_valid += n_valid
+                if n_valid >= 1:
+                    ax.plot( data['frame'][valid], data['x'][valid], 'r.' )
+                    ax.plot( data['frame'][valid], data['y'][valid], 'g.' )
+            ax.text(0.1,0,'%s: %d pts'%(cam_id,cam_id_n_valid),
                     horizontalalignment='left',
                     verticalalignment='bottom',
                     transform = ax.transAxes,
