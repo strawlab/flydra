@@ -65,28 +65,35 @@ def doit(fmf_filename=None,
             print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting fps and dynamic model options (--fps and --dynamic-model)'
             sys.exit(1)
 
+    fmf = FMF.FlyMovie(fmf_filename)
+    fmf_timestamps = fmf.get_all_timestamps()
+    h5 = PT.openFile( h5_filename, mode='r' )
+
     bg_fmf_filename = os.path.splitext(fmf_filename)[0] + '_bg.fmf'
     cmp_fmf_filename = os.path.splitext(fmf_filename)[0] + '_std.fmf'
 
-    try:
-        bg_fmf = FMF.FlyMovie(bg_fmf_filename)
-        cmp_fmf = FMF.FlyMovie(cmp_fmf_filename)
-    except FMF.InvalidMovieFileException, err:
-        print 'Background movie is invalid, not loading.'
-        bg_fmf = None
-        cmp_fmf = None
-        bg_fmf_timestamps = None
-        cmp_fmf_timestamps = None
-        fmf2bg = None
-    else:
+    bg_OK = False
+    if os.path.exists( bg_fmf_filename):
+        bg_OK = True
+        try:
+            bg_fmf = FMF.FlyMovie(bg_fmf_filename)
+            cmp_fmf = FMF.FlyMovie(cmp_fmf_filename)
+        except FMF.InvalidMovieFileException, err:
+            bg_OK = False
+
+    if bg_OK:
         bg_fmf_timestamps = bg_fmf.get_all_timestamps()
         cmp_fmf_timestamps = cmp_fmf.get_all_timestamps()
         assert numpy.all((bg_fmf_timestamps[1:] - bg_fmf_timestamps[:-1])>0) # ascending
         assert numpy.all((bg_fmf_timestamps == cmp_fmf_timestamps))
         fmf2bg = bg_fmf_timestamps.searchsorted( fmf_timestamps, side='right')-1
-
-    fmf = FMF.FlyMovie(fmf_filename)
-    h5 = PT.openFile( h5_filename, mode='r' )
+    else:
+        print 'Not loading background movie - it does not exist or it is invalid.'
+        bg_fmf = None
+        cmp_fmf = None
+        bg_fmf_timestamps = None
+        cmp_fmf_timestamps = None
+        fmf2bg = None
 
     if fps is None:
         fps = result_utils.get_fps( h5 )
@@ -165,8 +172,6 @@ def doit(fmf_filename=None,
             all_camn_cond = all_camn_cond | cond
     camn_idx = numpy.nonzero( all_camn_cond )[0]
 
-    fmf_timestamps = fmf.get_all_timestamps()
-
     cur_bg_idx = None
 
     # find frame correspondence
@@ -192,20 +197,21 @@ def doit(fmf_filename=None,
     last_match = frame_match_h5
     print 'done.'
 
+    if frame_match_h5 is None:
+        print >> sys.stderr, "ERROR: no timestamp corresponding to .fmf '%s' for %s in '%s'"%(
+            fmf_filename, cam_id, h5_filename)
+        h5.close()
+        sys.exit(1)
+
     if 1:
-        print 'Frames in .fmf movie and .h5 data file are in range %d - %d.'%(first_match, last_match)
+        #if first_match is not None and last_match is not None:
+        print 'Frames in both the .fmf movie and the .h5 data file are in range %d - %d.'%(first_match, last_match)
         h5frames = h5.root.data2d_distorted.read( field='frame' )[:]
         print 'The .h5 file has frames %d - %d.'%( h5frames.min(), h5frames.max() )
         del h5frames
 
     if start > stop:
         print >> sys.stderr, "ERROR: start (frame %d) is after stop (frame %d)!"%(start,stop)
-        h5.close()
-        sys.exit(1)
-
-    if frame_match_h5 is None:
-        print >> sys.stderr, "ERROR: no timestamp corresponding to .fmf '%s' for %s in '%s'"%(
-            fmf_filename, cam_id, h5_filename)
         h5.close()
         sys.exit(1)
 
@@ -519,7 +525,10 @@ def doit(fmf_filename=None,
                             draw.text( (xloc,rescale_factor*(absdiffy+y2d)),
                                        'pt %d'%(pt_no,), font_zoomed )
                     draw.flush()
-                    fname = 'zoomed/zoom_diff_%s_%07d.png'%(cam_id,h5_frame)
+                    fname = 'zoomed/zoom_diff_%(cam_id)s_%(h5_frame)07d.png'%locals()
+                    dirname = os.path.abspath(os.path.split(fname)[0])
+                    if not os.path.exists(dirname):
+                        os.makedirs(dirname)
                     im.save( fname )
 
             if PLOT=='mpl':
@@ -609,9 +618,13 @@ def doit(fmf_filename=None,
                 draw.flush()
 
         if 1:
-            fname = 'smo_%s_%07d.png'%(cam_id,h5_frame)
+            fname = 'full/smo_%(cam_id)s_%(h5_frame)07d.png'%locals()
             if prefix is not None:
                 fname = prefix + '_' + fname
+            dirname = os.path.abspath(os.path.split(fname)[0])
+            if not os.path.exists(dirname):
+                os.makedirs(dirname)
+
             #print 'saving',fname
             if PLOT=='mpl':
                 fig.savefig( fname )
