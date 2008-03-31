@@ -847,7 +847,7 @@ class ProcessCamClass(object):
                     running_sumsqf = running_sumsqf_full.roi(l, b, cur_fisize)  # set ROI view
                     noisy_pixels_mask = noisy_pixels_mask_full.roi(l, b, cur_fisize)  # set ROI view
 
-class ProcessCamData(object):
+class FakeProcessCamData(object):
     def __init__(self,cam_id=None):
         self._chain = camnode_utils.ChainLink()
         self._cam_id = cam_id
@@ -886,6 +886,10 @@ class SaveCamData(object):
 
         state = 'pass'
 
+        last_bgcmp_image_timestamp = None
+        last_bg_image = None
+        last_cmp_image = None
+
         while 1:
 
             # 1: process commands
@@ -899,6 +903,17 @@ class SaveCamData(object):
                     bg_movie = FlyMovieFormat.FlyMovieSaver(full_bg,version=1)
                     std_movie = FlyMovieFormat.FlyMovieSaver(full_std,version=1)
                     state = 'saving'
+
+                    if last_bgcmp_image_timestamp is not None:
+                        bg_movie.add_frame(FastImage.asfastimage(last_bg_image),
+                                           last_bgcmp_image_timestamp,
+                                           error_if_not_fast=True)
+                        std_movie.add_frame(FastImage.asfastimage(last_cmp_image),
+                                            last_bgcmp_image_timestamp,
+                                            error_if_not_fast=True)
+                    else:
+                        print 'WARNING: could not save initial bg and std frames'
+
                 elif cmd[0] == 'stop':
                     raw_movie.close()
                     bg_movie.close()
@@ -907,6 +922,18 @@ class SaveCamData(object):
 
             # 2: block for image data
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf: # must do on every frame
+                if chainbuf.updated_bg_image is not None:
+                    # Always keep the current bg and std images so
+                    # that we can save them when starting a new .fmf
+                    # movie save sequence.
+                    last_bgcmp_image_timestamp = chainbuf.timestamp
+                    # Keeping references to these images should be OK,
+                    # not need to copy - the Process thread already
+                    # made a copy of the realtime analyzer's internal
+                    # copy.
+                    last_bg_image = chainbuf.updated_bg_image
+                    last_cmp_image =  chainbuf.updated_cmp_image
+
                 if state == 'saving':
                     raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
                                  chainbuf.timestamp) )
@@ -929,6 +956,7 @@ class SaveCamData(object):
                 pass
 
             # 4: actually save the data
+            #   TODO: switch to add_frames() method which doesn't acquire GIL after each frame.
             if state == 'saving':
                 for frame,timestamp in raw:
                     raw_movie.add_frame(FastImage.asfastimage(frame),timestamp,error_if_not_fast=True)
@@ -1384,7 +1412,7 @@ class AppState(object):
             # setup chain for this camera:
             if not DISABLE_ALL_PROCESSING:
                 if 0:
-                    cam_processor = ProcessCamData()
+                    cam_processor = FakeProcessCamData()
                 else:
                     cam.get_max_height()
                     l,b = cam.get_frame_offset()
@@ -1709,9 +1737,6 @@ class AppState(object):
                 if saver is None:
                     print 'no save thread -- cannot save movies'
                     continue
-                if 1:
-                    print 'TEMPORARY MEASURE: taking background prior to recording'
-                    globals['take_background'].set()
                 raw_filename, bg_filename = cmds[key]
 
                 raw_filename = os.path.expanduser(raw_filename)
