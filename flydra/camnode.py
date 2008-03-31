@@ -974,7 +974,7 @@ class SaveSmallData(object):
                     break
                 cmd = self.cmd.get()
                 if cmd[0] == 'save':
-                    filename = cmd[1]
+                    filename_base = cmd[1]
                     state = 'saving'
                 elif cmd[0] == 'stop':
                     if self._ufmf is not None:
@@ -988,10 +988,11 @@ class SaveSmallData(object):
                     if self._ufmf is None:
                         frame1 = numpy.asarray(chainbuf.get_buf())
                         timestamp1 = chainbuf.timestamp
-                        filename = os.path.expanduser(filename)
-                        dirname = os.path.split(filename)[0]
+                        filename_base = os.path.expanduser(filename_base)
+                        dirname = os.path.split(filename_base)[0]
                         if not os.path.exists(dirname):
                             os.makedirs(dirname)
+                        filename = filename_base + '.ufmf'
                         if 1:
                             print 'saving to',filename
                         self._ufmf = ufmf.UfmfSaver( filename,
