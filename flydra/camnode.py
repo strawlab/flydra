@@ -1748,8 +1748,6 @@ class AppState(object):
                     os.makedirs(save_dir)
 
                 std_filename = bg_filename.replace('_bg','_std')
-                msg = 'WARNING: fly movie filenames will conflict if > 1 camera per computer'
-                print msg
 
                 saver.start_recording(
                     full_raw = raw_filename,
@@ -1839,6 +1837,7 @@ def main():
                       default=False)
 
     parser.add_option("--num-points", type="int",
+                      default=4,
                       help="number of points to track per camera")
 
     parser.add_option("--emulation-cal", type="string",
@@ -1889,10 +1888,7 @@ def main():
         #cam_iface = cam_iface_choose.import_backend('blank','ctypes')
         cam_iface.set_num_cameras(len(emulation_reconstructor.get_cam_ids()))
 
-    if options.num_points is not None:
-        max_num_points_per_camera = options.num_points
-    else:
-        max_num_points_per_camera = 20
+    max_num_points_per_camera = options.num_points
 
     if options.background_frame_interval is not None:
         bg_frame_interval = options.background_frame_interval
