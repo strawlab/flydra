@@ -64,16 +64,33 @@ def doit(fmf_filename=None,
         if (fps is not None) or (dynamic_model is not None):
             print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting fps and dynamic model options (--fps and --dynamic-model)'
             sys.exit(1)
-    else:
-        if fps is None:
-            raise NotImplementedError('TODO: find fps from .h5 file')
 
     bg_fmf_filename = os.path.splitext(fmf_filename)[0] + '_bg.fmf'
     cmp_fmf_filename = os.path.splitext(fmf_filename)[0] + '_std.fmf'
+
+    try:
+        bg_fmf = FMF.FlyMovie(bg_fmf_filename)
+        cmp_fmf = FMF.FlyMovie(cmp_fmf_filename)
+    except FMF.InvalidMovieFileException, err:
+        print 'Background movie is invalid, not loading.'
+        bg_fmf = None
+        cmp_fmf = None
+        bg_fmf_timestamps = None
+        cmp_fmf_timestamps = None
+        fmf2bg = None
+    else:
+        bg_fmf_timestamps = bg_fmf.get_all_timestamps()
+        cmp_fmf_timestamps = cmp_fmf.get_all_timestamps()
+        assert numpy.all((bg_fmf_timestamps[1:] - bg_fmf_timestamps[:-1])>0) # ascending
+        assert numpy.all((bg_fmf_timestamps == cmp_fmf_timestamps))
+        fmf2bg = bg_fmf_timestamps.searchsorted( fmf_timestamps, side='right')-1
+
     fmf = FMF.FlyMovie(fmf_filename)
-    bg_fmf = FMF.FlyMovie(bg_fmf_filename)
-    cmp_fmf = FMF.FlyMovie(cmp_fmf_filename)
     h5 = PT.openFile( h5_filename, mode='r' )
+
+    if fps is None:
+        fps = result_utils.get_fps( h5 )
+
     ca = core_analysis.CachingAnalyzer()
 
     if blank is not None:
@@ -129,6 +146,7 @@ def doit(fmf_filename=None,
             found_cam_id = cam_id
     if n!=1:
         print >> sys.stderr, 'Could not automatically determine cam_id from fmf_filename. Exiting'
+        h5.close()
         sys.exit(1)
     cam_id = found_cam_id
     my_camns = cam_id2camns[cam_id]
@@ -148,15 +166,14 @@ def doit(fmf_filename=None,
     camn_idx = numpy.nonzero( all_camn_cond )[0]
 
     fmf_timestamps = fmf.get_all_timestamps()
-    bg_fmf_timestamps = bg_fmf.get_all_timestamps()
-    cmp_fmf_timestamps = cmp_fmf.get_all_timestamps()
-    assert numpy.all((bg_fmf_timestamps[1:] - bg_fmf_timestamps[:-1])>0) # ascending
-    assert numpy.all((bg_fmf_timestamps == cmp_fmf_timestamps))
-    fmf2bg = bg_fmf_timestamps.searchsorted( fmf_timestamps, side='right')-1
+
     cur_bg_idx = None
 
     # find frame correspondence
+    print 'Finding frame correspondence... ',
+    sys.stdout.flush()
     frame_match_h5 = None
+    first_match = None
     for fmf_fno, timestamp in enumerate( fmf_timestamps ):
         timestamp_idx = numpy.nonzero(timestamp == remote_timestamps)[0]
         #print repr(timestamp), repr(timestamp_idx)
@@ -166,15 +183,30 @@ def doit(fmf_filename=None,
             frame_match_h5 = rows['frame'][0]
             if start is None:
                 start = frame_match_h5
+            if first_match is None:
+                first_match = frame_match_h5
             if stop is not None:
                 break
     if stop is None:
         stop = frame_match_h5
+    last_match = frame_match_h5
+    print 'done.'
 
-    #print
+    if 1:
+        print 'Frames in .fmf movie and .h5 data file are in range %d - %d.'%(first_match, last_match)
+        h5frames = h5.root.data2d_distorted.read( field='frame' )[:]
+        print 'The .h5 file has frames %d - %d.'%( h5frames.min(), h5frames.max() )
+        del h5frames
+
+    if start > stop:
+        print >> sys.stderr, "ERROR: start (frame %d) is after stop (frame %d)!"%(start,stop)
+        h5.close()
+        sys.exit(1)
+
     if frame_match_h5 is None:
         print >> sys.stderr, "ERROR: no timestamp corresponding to .fmf '%s' for %s in '%s'"%(
             fmf_filename, cam_id, h5_filename)
+        h5.close()
         sys.exit(1)
 
     fmf_frame2h5_frame = frame_match_h5 - fmf_fno
@@ -220,6 +252,7 @@ def doit(fmf_filename=None,
     pbar.finish()
     print 'done loading frame information.'
 
+    print 'start, stop',start, stop
     widgets[0]='stage 2 of 2: '
     pbar=progressbar.ProgressBar(widgets=widgets,maxval=(stop-start+1)).start()
     for h5_frame in range(start,stop+1):
@@ -236,11 +269,12 @@ def doit(fmf_filename=None,
             assert fmf_timestamp==fmf_timestamp2
 
             # get bg frame
-            bg_idx = fmf2bg[fmf_fno]
-            if cur_bg_idx != bg_idx:
-                bg_frame, bg_timestamp = bg_fmf.get_frame(bg_idx)
-                cmp_frame, trash = cmp_fmf.get_frame(bg_idx)
-                cur_bg_idx = bg_idx
+            if fmf2bg is not None:
+                bg_idx = fmf2bg[fmf_fno]
+                if cur_bg_idx != bg_idx:
+                    bg_frame, bg_timestamp = bg_fmf.get_frame(bg_idx)
+                    cmp_frame, trash = cmp_fmf.get_frame(bg_idx)
+                    cur_bg_idx = bg_idx
 
             timestamp_idx = numpy.nonzero(fmf_timestamp == remote_timestamps)[0]
             idxs = numpy.intersect1d( camn_idx, timestamp_idx )
