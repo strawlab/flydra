@@ -89,7 +89,6 @@ def doit(
                 ax = ax_by_cam[cam_id]
             else:
                 ax = pylab.subplot( len(cam_ids), 1, cam_id_enum+1, sharex=ax)
-                ax.set_xlim( (start_frame, stop_frame) )
                 ax_by_cam[cam_id] = ax
                 ax.fmt_xdata = str
                 ax.fmt_ydata = str
@@ -112,6 +111,7 @@ def doit(
                     transform = ax.transAxes,
                     )
             ax.set_ylabel('%s\npixels'%cam_id)
+            ax.set_xlim( (start_frame, stop_frame) )
         ax.set_xlabel('frame')
 
         h5.close()
