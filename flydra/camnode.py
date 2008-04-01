@@ -22,6 +22,13 @@ In cases B-E, some form of image/data control (play, stop, set fps)
 must be settable. Ideally, this would be possible from a Python API
 (for automated testing) and from a GUI (for visual debugging).
 
+TODO:
+
+set background and cmp images
+throttle fmf playback
+replay fmf movies (don't roll off end)
+
+
 """
 
 from __future__ import division
@@ -115,12 +122,15 @@ class DummyMainBrain:
         self.set_fps = self.noop
         self.log_message = self.noop
         self.close = self.noop
+        self.camno = 0
     def noop(self,*args,**kw):
         return
     def get_cam2mainbrain_port(self,*args,**kw):
         return 12345
     def register_new_camera(self,*args,**kw):
-        return 'camdummy_0'
+        result = 'camdummy_%d'%self.camno
+        self.camno += 1
+        return result
     def get_and_clear_commands(self,*args,**kw):
         return {}
 
@@ -128,7 +138,7 @@ class DummySocket:
     def __init__(self,*args,**kw):
         self.connect = self.noop
         self.send = self.noop
-        self.sendto = self.noop
+        #sself.sendto = self.noop
     def noop(self,*args,**kw):
         return
 
@@ -1073,6 +1083,7 @@ class ImageSource(threading.Thread):
     new frames, copy them, and pass to listener chain."""
     def __init__(self,
                  chain=None,
+                 cam=None,
                  buffer_pool=None,
                  debug_acquire = False,
                  cam_no = None,
@@ -1081,6 +1092,7 @@ class ImageSource(threading.Thread):
 
         threading.Thread.__init__(self,name='ImageSource')
         self._chain = chain
+        self.cam = cam
         self.buffer_pool = buffer_pool
         self.debug_acquire = debug_acquire
         self.cam_no_str = str(cam_no)
@@ -1090,8 +1102,6 @@ class ImageSource(threading.Thread):
         if self._chain is not None:
             raise NotImplementedError('replacing a processing chain not implemented')
         self._chain = new_chain
-#    def _grab_buffer_quick(self):
-#        time.sleep(0.05)
     def run(self):
         buffer_pool = self.buffer_pool
         cam_quit_event_isSet = self.quit_event.isSet
@@ -1142,12 +1152,6 @@ class ImageSource(threading.Thread):
                     chain.fire( chainbuf ) # the end of the chain will call return_buffer()
 
 class ImageSourceFromCamera(ImageSource):
-    def __init__(self,*args,**kwargs):
-        print 'using real image source'
-        self.cam = kwargs['cam']
-        del kwargs['cam']
-        super( ImageSourceFromCamera, self).__init__(*args,**kwargs)
-
     def _grab_buffer_quick(self):
         try:
             trash = self.cam.grab_next_frame_blocking()
@@ -1194,6 +1198,78 @@ class ImageSourceFromCamera(ImageSource):
             timestamp = framenumber = None
         return try_again_condition, timestamp, framenumber
 
+class ImageSourceFakeCamera(ImageSource):
+    def _grab_buffer_quick(self):
+        time.sleep(0.05)
+    def _grab_into_buffer(self, _bufim ):
+        # throttle control flow here...
+        try_again_condition = False
+        self.cam.grab_next_frame_into_buf_blocking(_bufim)
+        timestamp=self.cam.get_last_timestamp()
+        framenumber=self.cam.get_last_framenumber()
+        return try_again_condition, timestamp, framenumber
+
+class FakeCamera(object):
+    def start_camera(self):
+        # no-op
+        pass
+
+    def get_framerate(self):
+        return 123456
+
+    def get_num_camera_properties(self):
+        return 0
+
+    def get_trigger_mode_number(self):
+        return 0
+
+    def get_max_height(self):
+        w,h = self.get_frame_size()
+        return h
+
+    def get_max_width(self):
+        w,h = self.get_frame_size()
+        return w
+
+    def get_frame_offset(self):
+        return 0,0
+
+class FakeCameraFromFMF(FakeCamera):
+    def __init__(self,filename):
+        self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
+        self.curframe = 0
+
+    def get_frame_size(self):
+        h,w = self.fmf_recarray['frame'][0].shape
+        return w,h
+
+    def grab_next_frame_into_buf_blocking(self, buf):
+        buf = numpy.asarray( buf )
+        buf[:,:] = self.fmf_recarray['frame'][ self.curframe ]
+        self.curframe += 1
+
+    def get_last_timestamp(self):
+        i = self.curframe-1
+        return self.fmf_recarray['timestamp'][i]
+
+    def get_last_framenumber(self):
+        i = self.curframe-1
+        return i
+
+def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
+    """factory function to create fake camera and ImageSourceKlass"""
+    fname = filename_or_pseudofilename
+    if fname.endswith('.fmf'):
+        cam = FakeCameraFromFMF(fname)
+        ImageSourceKlass = ImageSourceFakeCamera
+    elif fname.endswith('.ufmf'):
+        raise NotImplementedError('patience, young grasshopper')
+    elif fname.startswith('<gaussian') and fname.endswith('>'):
+        raise NotImplementedError('patience, young grasshopper')
+    else:
+        raise ValueError('could not create emulation image source')
+    return cam, ImageSourceKlass
+
 class ConsoleApp(object):
     def __init__(self, call_often=None):
         self.call_often = call_often
@@ -1212,16 +1288,7 @@ class ConsoleApp(object):
 class AppState(object):
     """This class handles all camera states, properties, etc."""
     def __init__(self,
-                 max_num_points_per_camera=None,
-                 roi2_radius=None,
-                 bg_frame_interval=None,
-                 bg_frame_alpha=None,
-                 main_brain_hostname = None,
-                 use_mode=None,
-                 debug_drop = False, # debug dropped network packets
-                 debug_acquire = False,
-                 mask_images = None,
-                 n_sigma = None,
+                 use_dummy_mainbrain = False,
                  options = None,
                  ):
         global cam_iface
@@ -1229,11 +1296,10 @@ class AppState(object):
         self.options = options
         self.quit_function = None
 
-        if main_brain_hostname is None:
+        if options.server is None:
             self.main_brain_hostname = default_main_brain_hostname
         else:
-            self.main_brain_hostname = main_brain_hostname
-        del main_brain_hostname
+            self.main_brain_hostname = options.server
 
         self.log_message_queue = Queue.Queue()
 
@@ -1265,7 +1331,7 @@ class AppState(object):
         self.all_cam_ids = []
 
         self.reconstruct_helper = []
-        self.iso_threads = []
+        self.image_sources = []
 
         for cam_no in range(num_cams):
 
@@ -1278,8 +1344,8 @@ class AppState(object):
             self.globals.append({})
             globals = self.globals[cam_no] # shorthand
 
-            globals['debug_drop']=debug_drop
-            globals['debug_acquire']=debug_acquire
+            globals['debug_drop']=options.debug_drop
+            globals['debug_acquire']=options.debug_acquire
             globals['incoming_raw_frames']=Queue.Queue()
             globals['raw_fmf_and_bg_fmf']=None
             globals['most_recent_frame_potentially_corrupt']=None
@@ -1302,6 +1368,7 @@ class AppState(object):
             if cam_iface is not None:
                 backend = cam_iface.get_driver_name()
                 N_modes = cam_iface.get_num_modes(cam_no)
+                use_mode = options.mode_num
                 print '%d available modes:'%N_modes
                 for i in range(N_modes):
                     mode_string = cam_iface.get_mode_string(cam_no,i)
@@ -1314,28 +1381,32 @@ class AppState(object):
                     use_mode = 0
                 cam = cam_iface.Camera(cam_no,options.num_buffers,use_mode)
                 print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_no,use_mode))
+                ImageSourceKlass = ImageSourceFromCamera
+            else:
+                # call factory function
+                cam,ImageSourceKlass = create_cam_for_emulation_image_source( emulation_image_sources[cam_no] )
 
             self.all_cams.append( cam )
             cam.start_camera()  # start camera
             self.cam_status.append( 'started' )
             buffer_pool = PreallocatedBufferPool(FastImage.Size(*cam.get_frame_size()))
-            iso_thread = ImageSourceFromCamera(chain = None,
-                                               cam = cam,
-                                               buffer_pool = buffer_pool,
-                                               debug_acquire = debug_acquire,
-                                               cam_no = cam_no,
-                                               quit_event = globals['cam_quit_event'],
-                                               )
-            iso_thread.setDaemon(True)
-            iso_thread.start()
-            self.iso_threads.append( iso_thread )
+            image_source = ImageSourceKlass(chain = None,
+                                            cam = cam,
+                                            buffer_pool = buffer_pool,
+                                            debug_acquire = options.debug_acquire,
+                                            cam_no = cam_no,
+                                            quit_event = globals['cam_quit_event'],
+                                            )
+            image_source.setDaemon(True)
+            image_source.start()
+            self.image_sources.append( image_source )
 
         # ----------------------------------------------------------------
         #
         # Initialize network connections
         #
         # ----------------------------------------------------------------
-        if BENCHMARK:
+        if use_dummy_mainbrain:
             self.main_brain = DummyMainBrain()
         else:
             Pyro.core.initClient(banner=0)
@@ -1362,6 +1433,7 @@ class AppState(object):
             timestamp_echo_thread.setDaemon(True) # quit that thread if it's the only one left...
             timestamp_echo_thread.start()
 
+        mask_images = options.mask_images
         if mask_images is not None:
             mask_images = mask_images.split( os.pathsep )
 
@@ -1433,7 +1505,7 @@ class AppState(object):
             scalar_control_info['cmp'] = globals['use_cmp'].isSet()
 
             n_sigma_shared = SharedValue()
-            n_sigma_shared.set(n_sigma)
+            n_sigma_shared.set(options.n_sigma)
             scalar_control_info['n_sigma'] = n_sigma_shared.get_nowait()
 
             scalar_control_info['width'] = width
@@ -1474,10 +1546,10 @@ class AppState(object):
                         cam2mainbrain_port=cam2mainbrain_port,
                         cam_id=cam_id,
                         log_message_queue=self.log_message_queue,
-                        max_num_points=max_num_points_per_camera,
-                        roi2_radius=roi2_radius,
-                        bg_frame_interval=bg_frame_interval,
-                        bg_frame_alpha=bg_frame_alpha,
+                        max_num_points=options.num_points,
+                        roi2_radius=options.software_roi_radius,
+                        bg_frame_interval=options.background_frame_interval,
+                        bg_frame_alpha=options.background_frame_alpha,
                         cam_no=cam_no,
                         main_brain_hostname=self.main_brain_hostname,
                         mask_image=mask,
@@ -1529,7 +1601,7 @@ class AppState(object):
                 self.all_small_savers.append( None )
                 self.all_cam_chains.append( None )
 
-            self.iso_threads[cam_no].set_chain( cam_processor_chain )
+            self.image_sources[cam_no].set_chain( cam_processor_chain )
 
             # ----------------------------------------------------------------
             #
@@ -1539,10 +1611,11 @@ class AppState(object):
 
             self.reconstruct_helper.append( None )
 
-            driver_string = 'using cam_iface driver: %s (wrapper: %s)'%(
-                cam_iface.get_driver_name(),
-                cam_iface.get_wrapper_name())
-            self.log_message_queue.put((cam_id,time.time(),driver_string))
+            if cam_iface is not None:
+                driver_string = 'using cam_iface driver: %s (wrapper: %s)'%(
+                    cam_iface.get_driver_name(),
+                    cam_iface.get_wrapper_name())
+                self.log_message_queue.put((cam_id,time.time(),driver_string))
 
         self.last_frames_by_cam = [ [] for c in range(num_cams) ]
         self.last_points_by_cam = [ [] for c in range(num_cams) ]
@@ -1779,7 +1852,7 @@ class AppState(object):
 
             elif key == 'quit':
                 globals['cam_quit_event'].set()
-                self.iso_threads[cam_no].join()
+                self.image_sources[cam_no].join()
                 # XXX TODO: quit and join chain threads
                 cam.close()
                 self.cam_status[cam_no] = 'destroyed'
@@ -1846,6 +1919,23 @@ class AppState(object):
             else:
                 raise ValueError('unknown key "%s"'%key)
 
+def get_app_defaults():
+    defaults = dict(wrapper='ctypes',
+                    backend='unity',
+                    n_sigma=2.0,
+                    debug_drop=False,
+                    wx=False,
+                    debug_acquire=False,
+                    disable_ifi_warning=False,
+                    num_points=4,
+                    software_roi_radius=10,
+                    num_buffers=50,
+                    small_save_radius=10,
+                    background_frame_interval=50,
+                    background_frame_alpha=1.0/50.0,
+                    )
+    return defaults
+
 def main():
     usage_lines = ['%prog [options]',
                    '',
@@ -1857,55 +1947,55 @@ def main():
     del wrapper, backend # delete temporary variables
     usage = '\n'.join(usage_lines)
 
-    parser = OptionParser(usage)
+    parser = OptionParser(usage=usage,
+                          version="%prog 0.1")
+
+    defaults = get_app_defaults()
+    parser.set_defaults(**defaults)
 
     parser.add_option("--server", dest="server", type='string',
                       help="hostname of mainbrain SERVER",
                       metavar="SERVER")
 
     parser.add_option("--wrapper", type='string',
-                      help="cam_iface WRAPPER to use",
-                      default='ctypes',
+                      help="cam_iface WRAPPER to use [default: %default]",
                       metavar="WRAPPER")
 
     parser.add_option("--backend", type='string',
-                      help="cam_iface BACKEND to use",
-                      default='unity',
+                      help="cam_iface BACKEND to use [default: %default]",
                       metavar="BACKEND")
 
     parser.add_option("--n-sigma", type='float',
-                      default=2.0)
+                      help=("criterion used to determine if a pixel is significantly "
+                            "different than the mean [default: %default]"))
 
     parser.add_option("--debug-drop", action='store_true',
-                      help="save debugging information regarding dropped network packets",
-                      default=False)
+                      help="save debugging information regarding dropped network packets")
 
-    parser.add_option("--wx", action='store_true',
-                      default=False)
+    parser.add_option("--wx", action='store_true')
 
     parser.add_option("--debug-acquire", action='store_true',
-                      help="print to the console information on each frame",
-                      default=False)
+                      help="print to the console information on each frame")
 
-    parser.add_option("--disable-ifi-warning", action='store_true',
-                      default=False)
+    parser.add_option("--disable-ifi-warning", action='store_true')
 
     parser.add_option("--num-points", type="int",
-                      default=4,
-                      help="number of points to track per camera")
+                      help="number of points to track per cameras [default: %default]")
 
-    parser.add_option("--software-roi-radius", type="int", default=10,
-                      help="radius of software region of interest")
+    parser.add_option("--software-roi-radius", type="int",
+                      help="radius of software region of interest [default: %default]")
 
     parser.add_option("--background-frame-interval", type="int",
                       help="every N frames, add a new BG image to the accumulator")
 
     parser.add_option("--background-frame-alpha", type="float",
                       help="weight for each BG frame added to accumulator")
-    parser.add_option("--mode-num", type="int", default=None,
+
+    parser.add_option("--mode-num", type="int",
                       help="force a camera mode")
-    parser.add_option("--num-buffers", type="int", default=50,
-                      help="force number of buffers")
+
+    parser.add_option("--num-buffers", type="int",
+                      help="force number of buffers [default: %default]")
 
     parser.add_option("--mask-images", type="string",
                       help="list of masks for each camera (uses OS-specific path separator, ':' for POSIX, ';' for Windows)")
@@ -1915,9 +2005,11 @@ def main():
                             "path separator, ':' for POSIX, ';' for Windows) ends with '.fmf', "
                             "'.ufmf', or is '<random:params=x>'"))
 
-    parser.add_option("--small-save-radius", type="int", default=10)
+    parser.add_option("--small-save-radius", type="int",
+                      help='half the edge length of .ufmf movies [default: %default]')
 
     (options, args) = parser.parse_args()
+    #print dir(options)
 
     if not options.wrapper:
         print 'WRAPPER must be set'
@@ -1929,29 +2021,13 @@ def main():
         parser.print_help()
         return
 
-    max_num_points_per_camera = options.num_points
-
-    if options.background_frame_interval is not None:
-        bg_frame_interval = options.background_frame_interval
+    if BENCHMARK:
+        use_dummy_mainbrain = True
     else:
-        bg_frame_interval = 50
+        use_dummy_mainbrain = False
 
-    if options.background_frame_alpha is not None:
-        bg_frame_alpha = options.background_frame_alpha
-    else:
-        bg_frame_alpha = 1.0/50.0
-
-    app_state=AppState(max_num_points_per_camera=max_num_points_per_camera,
-                       roi2_radius=options.software_roi_radius,
-                       bg_frame_interval=bg_frame_interval,
-                       bg_frame_alpha=bg_frame_alpha,
-                       main_brain_hostname = options.server,
-                       debug_drop = options.debug_drop,
-                       debug_acquire = options.debug_acquire,
-                       use_mode = options.mode_num,
-                       mask_images = options.mask_images,
-                       n_sigma = options.n_sigma,
-                       options = options,
+    app_state=AppState(options = options,
+                       use_dummy_mainbrain = use_dummy_mainbrain,
                        )
 
     if options.wx:
@@ -1968,15 +2044,5 @@ def main():
     app.MainLoop()
 
 if __name__=='__main__':
-    if 0:
-        # profile
-
-        # seems useless -- doesn't profile other threads?
-        import hotshot
-        prof = hotshot.Profile("profile.hotshot")
-        res = prof.runcall(main)
-        prof.close()
-    else:
-        # don't profile
-        main()
+    main()
 
