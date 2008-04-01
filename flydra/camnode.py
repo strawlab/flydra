@@ -155,16 +155,6 @@ else:
 pt_fmt = '<dddddddddBBddBdddddd'
 small_datafile_fmt = '<dII'
 
-# where is the "main brain" server?
-try:
-    default_main_brain_hostname = socket.gethostbyname('brain1')
-except:
-    # try localhost
-    try:
-        default_main_brain_hostname = socket.gethostbyname(socket.gethostname())
-    except: #socket.gaierror?
-        default_main_brain_hostname = ''
-
 def TimestampEcho():
     # create listening socket
     sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -1920,6 +1910,17 @@ class AppState(object):
                 raise ValueError('unknown key "%s"'%key)
 
 def get_app_defaults():
+
+    # where is the "main brain" server?
+    try:
+        default_main_brain_hostname = socket.gethostbyname('brain1')
+    except:
+        # try localhost
+        try:
+            default_main_brain_hostname = socket.gethostbyname(socket.gethostname())
+        except: #socket.gaierror?
+            default_main_brain_hostname = ''
+
     defaults = dict(wrapper='ctypes',
                     backend='unity',
                     n_sigma=2.0,
@@ -1933,6 +1934,7 @@ def get_app_defaults():
                     small_save_radius=10,
                     background_frame_interval=50,
                     background_frame_alpha=1.0/50.0,
+                    server = default_main_brain_hostname,
                     )
     return defaults
 
@@ -1955,7 +1957,7 @@ def main():
 
     parser.add_option("--server", dest="server", type='string',
                       help="hostname of mainbrain SERVER",
-                      metavar="SERVER")
+                      metavar="SERVER [default: %default]")
 
     parser.add_option("--wrapper", type='string',
                       help="cam_iface WRAPPER to use [default: %default]",
@@ -1972,12 +1974,15 @@ def main():
     parser.add_option("--debug-drop", action='store_true',
                       help="save debugging information regarding dropped network packets")
 
-    parser.add_option("--wx", action='store_true')
+    parser.add_option("--wx", action='store_true',
+                      help="gui wx-based GUI to display images")
 
     parser.add_option("--debug-acquire", action='store_true',
                       help="print to the console information on each frame")
 
-    parser.add_option("--disable-ifi-warning", action='store_true')
+    parser.add_option("--disable-ifi-warning", action='store_true',
+                      help=("do not print a warning if the inter-frame-interval "
+                            "(IFI) is longer than expected"))
 
     parser.add_option("--num-points", type="int",
                       help="number of points to track per cameras [default: %default]")
@@ -1986,10 +1991,10 @@ def main():
                       help="radius of software region of interest [default: %default]")
 
     parser.add_option("--background-frame-interval", type="int",
-                      help="every N frames, add a new BG image to the accumulator")
+                      help="every N frames, add a new BG image to the accumulator [default: %default]")
 
     parser.add_option("--background-frame-alpha", type="float",
-                      help="weight for each BG frame added to accumulator")
+                      help="weight for each BG frame added to accumulator [default: %default]")
 
     parser.add_option("--mode-num", type="int",
                       help="force a camera mode")
