@@ -1189,15 +1189,29 @@ class ImageSourceFromCamera(ImageSource):
         return try_again_condition, timestamp, framenumber
 
 class ImageSourceFakeCamera(ImageSource):
+##     def __init__(self,*args,**kw):
+##         self.do_step = kw['do_step']
+##         self.step_done = kw['step_done']
+##         del kw['do_step']
+##         del kw['step_done']
+##         super( ImageSourceFakeCamera, self).__init__(*args,**kw)
+
     def _grab_buffer_quick(self):
         time.sleep(0.05)
     def _grab_into_buffer(self, _bufim ):
+
         # throttle control flow here...
-        try_again_condition = False
+#        self.do_step_event.wait()
         self.cam.grab_next_frame_into_buf_blocking(_bufim)
+#        self.step_done_event.set()
+
+        try_again_condition = False
         timestamp=self.cam.get_last_timestamp()
         framenumber=self.cam.get_last_framenumber()
         return try_again_condition, timestamp, framenumber
+
+class ImageSourceController(object):
+    pass
 
 class FakeCamera(object):
     def start_camera(self):
@@ -1247,18 +1261,18 @@ class FakeCameraFromFMF(FakeCamera):
         return i
 
 def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
-    """factory function to create fake camera and ImageSourceKlass"""
+    """factory function to create fake camera and ImageSourceModel"""
     fname = filename_or_pseudofilename
     if fname.endswith('.fmf'):
         cam = FakeCameraFromFMF(fname)
-        ImageSourceKlass = ImageSourceFakeCamera
+        ImageSourceModel = ImageSourceFakeCamera
     elif fname.endswith('.ufmf'):
         raise NotImplementedError('patience, young grasshopper')
     elif fname.startswith('<gaussian') and fname.endswith('>'):
         raise NotImplementedError('patience, young grasshopper')
     else:
         raise ValueError('could not create emulation image source')
-    return cam, ImageSourceKlass
+    return cam, ImageSourceModel
 
 class ConsoleApp(object):
     def __init__(self, call_often=None):
@@ -1322,6 +1336,7 @@ class AppState(object):
 
         self.reconstruct_helper = []
         self.image_sources = []
+        self.view_and_controllers = {} # for controllable image sources
 
         for cam_no in range(num_cams):
 
@@ -1371,16 +1386,23 @@ class AppState(object):
                     use_mode = 0
                 cam = cam_iface.Camera(cam_no,options.num_buffers,use_mode)
                 print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_no,use_mode))
-                ImageSourceKlass = ImageSourceFromCamera
+                ImageSourceModel = ImageSourceFromCamera
+
+                # "view" is on mainbrain and "controller" is pyro
+                # stuff. I should make fit into this MVC pattern. one
+                # day. For now, we just keep the same crappy spaghetti
+                # architecture we currently have.
+                build_view_and_controller = False
             else:
                 # call factory function
-                cam,ImageSourceKlass = create_cam_for_emulation_image_source( emulation_image_sources[cam_no] )
+                cam,ImageSourceModel = create_cam_for_emulation_image_source( emulation_image_sources[cam_no] )
+                build_view_and_controller = True
 
             self.all_cams.append( cam )
             cam.start_camera()  # start camera
             self.cam_status.append( 'started' )
             buffer_pool = PreallocatedBufferPool(FastImage.Size(*cam.get_frame_size()))
-            image_source = ImageSourceKlass(chain = None,
+            image_source = ImageSourceModel(chain = None,
                                             cam = cam,
                                             buffer_pool = buffer_pool,
                                             debug_acquire = options.debug_acquire,
@@ -1390,6 +1412,9 @@ class AppState(object):
             image_source.setDaemon(True)
             image_source.start()
             self.image_sources.append( image_source )
+            if build_view_and_controller:
+                # not done
+                self.view_and_controllers[image_source] = None, None
 
         # ----------------------------------------------------------------
         #
@@ -2046,6 +2071,10 @@ def main():
     else:
         app=ConsoleApp(call_often = app_state.main_thread_task)
         app_state.set_quit_function( app.OnQuit )
+
+    for ist in app_state.image_sources:
+        # somehow register view/controller with app
+        pass
     app.MainLoop()
 
 if __name__=='__main__':
