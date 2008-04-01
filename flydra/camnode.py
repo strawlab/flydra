@@ -523,7 +523,6 @@ class ProcessCamClass(object):
         globals = self.globals
 
         self._globals = globals
-        DEBUG_ACQUIRE = globals['debug_acquire']
         DEBUG_DROP = globals['debug_drop']
         if DEBUG_DROP:
             debug_fd = open('debug_framedrop_cam.txt',mode='w')
@@ -1080,7 +1079,7 @@ class ImageSource(threading.Thread):
                  quit_event = None,
                  ):
 
-        threading.Thread.__init__(self)
+        threading.Thread.__init__(self,name='ImageSource')
         self._chain = chain
         self.buffer_pool = buffer_pool
         self.debug_acquire = debug_acquire
@@ -1096,7 +1095,6 @@ class ImageSource(threading.Thread):
     def run(self):
         buffer_pool = self.buffer_pool
         cam_quit_event_isSet = self.quit_event.isSet
-        DEBUG_ACQUIRE = self.debug_acquire
         while not cam_quit_event_isSet():
             if buffer_pool.get_num_outstanding_buffers() > 100:
                 # Grab some frames (wait) until the number of
@@ -1117,7 +1115,7 @@ class ImageSource(threading.Thread):
                 if try_again_condition:
                     continue
 
-                if DEBUG_ACQUIRE:
+                if self.debug_acquire:
                     stdout_write(self.cam_no_str)
 
                 cam_received_time = time.time()
@@ -1168,7 +1166,7 @@ class ImageSourceFromCamera(ImageSource):
         try:
             self.cam.grab_next_frame_into_buf_blocking(_bufim)
         except cam_iface.BuffersOverflowed:
-            if DEBUG_ACQUIRE:
+            if self.debug_acquire:
                 stdout_write('(O%s)'%self.cam_no_str)
             now = time.time()
             msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
@@ -1176,7 +1174,7 @@ class ImageSourceFromCamera(ImageSource):
             print >> sys.stderr, msg
             try_again_condition = True
         except cam_iface.FrameDataMissing:
-            if DEBUG_ACQUIRE:
+            if self.debug_acquire:
                 stdout_write('(M%s)'%self.cam_no_str)
             now = time.time()
             msg = 'Warning: frame data missing on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
@@ -1184,7 +1182,7 @@ class ImageSourceFromCamera(ImageSource):
             print >> sys.stderr, msg
             try_again_condition = True
         except cam_iface.FrameSystemCallInterruption:
-            if DEBUG_ACQUIRE:
+            if self.debug_acquire:
                 stdout_write('(S%s)'%self.cam_no_str)
             try_again_condition = True
 
@@ -1222,7 +1220,6 @@ class AppState(object):
                  use_mode=None,
                  debug_drop = False, # debug dropped network packets
                  debug_acquire = False,
-                 num_buffers=None,
                  mask_images = None,
                  n_sigma = None,
                  options = None,
@@ -1284,11 +1281,9 @@ class AppState(object):
             globals['debug_drop']=debug_drop
             globals['debug_acquire']=debug_acquire
             globals['incoming_raw_frames']=Queue.Queue()
-#            globals['incoming_bg_frames']=Queue.Queue()
             globals['raw_fmf_and_bg_fmf']=None
             globals['most_recent_frame_potentially_corrupt']=None
             globals['saved_bg_frame']=False
-#            globals['current_bg_frame_and_timestamp']=None
 
             # control flow events for threading model
             globals['cam_quit_event'] = threading.Event()
@@ -1300,35 +1295,29 @@ class AppState(object):
             globals['collecting_background'].set()
             globals['export_image_name'] = 'raw'
             globals['use_cmp'] = threading.Event()
-            #globals['use_cmp'].clear()
+
             #print 'not using ongoing variance estimate'
             globals['use_cmp'].set()
 
+            if cam_iface is not None:
+                backend = cam_iface.get_driver_name()
+                N_modes = cam_iface.get_num_modes(cam_no)
+                print '%d available modes:'%N_modes
+                for i in range(N_modes):
+                    mode_string = cam_iface.get_mode_string(cam_no,i)
+                    print '  mode %d: %s'%(i,mode_string)
+                    if 'format7_0' in mode_string.lower():
+                        # prefer format7_0
+                        if use_mode is None:
+                            use_mode = i
+                if use_mode is None:
+                    use_mode = 0
+                cam = cam_iface.Camera(cam_no,options.num_buffers,use_mode)
+                print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_no,use_mode))
 
-            backend = cam_iface.get_driver_name()
-            if num_buffers is None:
-                if backend.startswith('prosilica_gige'):
-                    num_buffers = 50
-                else:
-                    num_buffers = 50
-            N_modes = cam_iface.get_num_modes(cam_no)
-            print '%d available modes:'%N_modes
-            for i in range(N_modes):
-                mode_string = cam_iface.get_mode_string(cam_no,i)
-                print '  mode %d: %s'%(i,mode_string)
-                if 'format7_0' in mode_string.lower():
-                    # prefer format7_0
-                    if use_mode is None:
-                        use_mode = i
-            if use_mode is None:
-                use_mode = 0
-            cam = cam_iface.Camera(cam_no,num_buffers,use_mode)
-            print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_no,use_mode))
             self.all_cams.append( cam )
-
             cam.start_camera()  # start camera
             self.cam_status.append( 'started' )
-
             buffer_pool = PreallocatedBufferPool(FastImage.Size(*cam.get_frame_size()))
             iso_thread = ImageSourceFromCamera(chain = None,
                                                cam = cam,
@@ -1504,7 +1493,8 @@ class AppState(object):
 
                 cam_processor_chain = cam_processor.get_chain()
                 self.all_cam_chains.append(cam_processor_chain)
-                thread = threading.Thread( target = cam_processor.mainloop )
+                thread = threading.Thread( target = cam_processor.mainloop,
+                                           name = 'cam_processor.mainloop')
                 thread.setDaemon(True)
                 thread.start()
 
@@ -1512,7 +1502,8 @@ class AppState(object):
                     save_cam = SaveCamData()
                     self.all_savers.append( save_cam )
                     cam_processor_chain.append_link( save_cam.get_chain() )
-                    thread = threading.Thread( target = save_cam.mainloop )
+                    thread = threading.Thread( target = save_cam.mainloop,
+                                               name = 'save_cam.mainloop')
                     thread.setDaemon(True)
                     thread.start()
                 else:
@@ -1523,7 +1514,8 @@ class AppState(object):
                     save_small = SaveSmallData(options=self.options)
                     self.all_small_savers.append( save_small )
                     cam_processor_chain.append_link( save_small.get_chain() )
-                    thread = threading.Thread( target = save_small.mainloop )
+                    thread = threading.Thread( target = save_small.mainloop,
+                                               name = 'save_small.mainloop')
                     thread.setDaemon(True)
                     thread.start()
                 else:
@@ -1566,16 +1558,19 @@ class AppState(object):
     def set_quit_function(self, quit_function=None):
         self.quit_function = quit_function
 
-    def append_chain(self, klass=None, args=None):
+    def append_chain(self, klass=None, args=None, basename=None):
+        if basename is None:
+            basename = 'appended thread'
         for cam_no, (cam_id, chain) in enumerate(zip(self.all_cam_ids,
                                                      self.all_cam_chains)):
             if args is None:
                 thread_instance = klass(cam_id=cam_id)
             else:
                 thread_instance = klass(*args,**dict(cam_id=cam_id))
-            print 'thread_instance',thread_instance
             chain.append_link( thread_instance.get_chain() )
-            thread = threading.Thread( target = thread_instance.mainloop )
+            name = basename + ' ' + cam_id
+            thread = threading.Thread( target = thread_instance.mainloop,
+                                       name = name )
             thread.setDaemon(True)
             thread.start()
 
@@ -1629,7 +1624,7 @@ class AppState(object):
                     try:
                         while 1:
                             (frame,timestamp,framenumber,points,lbrt,
-                                     cam_received_time) = get_raw_frame() # this may raise Queue.Empty
+                             cam_received_time) = get_raw_frame() # this may raise Queue.Empty
                             last_frames.append( (frame,timestamp,framenumber,points) ) # save for post-triggering
                             while len(last_frames)>200:
                                 del last_frames[0]
@@ -1640,7 +1635,7 @@ class AppState(object):
                                 del last_points[:100]
                                 del last_points_framenumbers[:100]
 
-                            self.n_raw_frames[cam_no] += 1 # fcn 1606
+                            self.n_raw_frames[cam_no] += 1
                     except Queue.Empty:
                         pass
 
@@ -1909,14 +1904,16 @@ def main():
                       help="weight for each BG frame added to accumulator")
     parser.add_option("--mode-num", type="int", default=None,
                       help="force a camera mode")
-    parser.add_option("--num-buffers", type="int", default=None,
+    parser.add_option("--num-buffers", type="int", default=50,
                       help="force number of buffers")
 
     parser.add_option("--mask-images", type="string",
                       help="list of masks for each camera (uses OS-specific path separator, ':' for POSIX, ';' for Windows)")
 
     parser.add_option("--emulation-image-sources", type="string",
-                      help="list of .fmf files for each camera (uses OS-specific path separator, ':' for POSIX, ';' for Windows)")
+                      help=("list of image sources for each camera (uses OS-specific "
+                            "path separator, ':' for POSIX, ';' for Windows) ends with '.fmf', "
+                            "'.ufmf', or is '<random:params=x>'"))
 
     parser.add_option("--small-save-radius", type="int", default=10)
 
@@ -1952,7 +1949,6 @@ def main():
                        debug_drop = options.debug_drop,
                        debug_acquire = options.debug_acquire,
                        use_mode = options.mode_num,
-                       num_buffers = options.num_buffers,
                        mask_images = options.mask_images,
                        n_sigma = options.n_sigma,
                        options = options,
@@ -1962,7 +1958,8 @@ def main():
         import camnodewx
         app=camnodewx.WxApp()
         if not DISABLE_ALL_PROCESSING:
-            app_state.append_chain( klass = camnodewx.DisplayCamData, args=(app,) )
+            app_state.append_chain( klass = camnodewx.DisplayCamData, args=(app,),
+                                    basename = 'camnodewx.DisplayCamData' )
         app.post_init(call_often = app_state.main_thread_task)
         app_state.set_quit_function( app.OnQuit )
     else:
