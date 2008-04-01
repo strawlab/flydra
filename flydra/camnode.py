@@ -1165,7 +1165,6 @@ class AppState(object):
                  bg_frame_interval=None,
                  bg_frame_alpha=None,
                  main_brain_hostname = None,
-                 emulation_reconstructor = None,
                  use_mode=None,
                  debug_drop = False, # debug dropped network packets
                  debug_acquire = False,
@@ -1840,9 +1839,6 @@ def main():
                       default=4,
                       help="number of points to track per camera")
 
-    parser.add_option("--emulation-cal", type="string",
-                      help="name of calibration (directory or .h5 file); Run in emulation mode.")
-
     parser.add_option("--software-roi-radius", type="int", default=10,
                       help="radius of software region of interest")
 
@@ -1863,30 +1859,17 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    emulation_cal=options.emulation_cal
-    if emulation_cal is not None:
-        emulation_cal = os.path.expanduser(emulation_cal)
-        print 'emulation_cal',repr(emulation_cal)
-        emulation_reconstructor = flydra.reconstruct.Reconstructor(
-            emulation_cal)
-    else:
-        emulation_reconstructor = None
+    if not options.wrapper:
+        print 'WRAPPER must be set'
+        parser.print_help()
+        return
 
-    if not emulation_reconstructor:
-        if not options.wrapper:
-            print 'WRAPPER must be set (except in benchmark or emulation mode)'
-            parser.print_help()
-            return
+    if not options.backend:
+        print 'BACKEND must be set'
+        parser.print_help()
+        return
 
-        if not options.backend:
-            print 'BACKEND must be set (except in benchmark or emulation mode)'
-            parser.print_help()
-            return
-        cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
-    else:
-        cam_iface = cam_iface_choose.import_backend('dummy','dummy')
-        #cam_iface = cam_iface_choose.import_backend('blank','ctypes')
-        cam_iface.set_num_cameras(len(emulation_reconstructor.get_cam_ids()))
+    cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
 
     max_num_points_per_camera = options.num_points
 
@@ -1905,7 +1888,6 @@ def main():
                        bg_frame_interval=bg_frame_interval,
                        bg_frame_alpha=bg_frame_alpha,
                        main_brain_hostname = options.server,
-                       emulation_reconstructor = emulation_reconstructor,
                        debug_drop = options.debug_drop,
                        debug_acquire = options.debug_acquire,
                        use_mode = options.mode_num,
