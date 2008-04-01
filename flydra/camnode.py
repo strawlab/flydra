@@ -1,4 +1,29 @@
 #emacs, this is -*-Python-*- mode
+
+"""
+
+There are several ways we want to acquire data:
+
+A) From live cameras (for indefinite periods).
+B) From full-frame .fmf files (of known length).
+C) From small-frame .ufmf files (of unknown length).
+D) From a live image generator (for indefinite periods).
+E) From a point generator (for indefinite periods).
+
+The processing chain normally consists of:
+
+0) Grab images from ImageSource. (This is not actually part of the chain).
+1) Processing the images in ProcessCamClass
+2) Save images in SaveCamData.
+3) Save small .ufmf images in SaveSmallData.
+4) Display images in DisplayCamData.
+
+In cases B-E, some form of image/data control (play, stop, set fps)
+must be settable. Ideally, this would be possible from a Python API
+(for automated testing) and from a GUI (for visual debugging).
+
+"""
+
 from __future__ import division
 from __future__ import with_statement
 
@@ -1044,12 +1069,11 @@ class SaveSmallData(object):
             print 'saving %d points'%(len(chainbuf.processed_points ),)
         self._ufmf.add_frame( frame, chainbuf.timestamp, chainbuf.processed_points )
 
-class IsoThread(threading.Thread):
+class ImageSource(threading.Thread):
     """One instance of this class for each camera. Do nothing but get
     new frames, copy them, and pass to listener chain."""
     def __init__(self,
                  chain=None,
-                 cam=None,
                  buffer_pool=None,
                  debug_acquire = False,
                  cam_no = None,
@@ -1058,7 +1082,6 @@ class IsoThread(threading.Thread):
 
         threading.Thread.__init__(self)
         self._chain = chain
-        self.cam = cam
         self.buffer_pool = buffer_pool
         self.debug_acquire = debug_acquire
         self.cam_no_str = str(cam_no)
@@ -1068,10 +1091,11 @@ class IsoThread(threading.Thread):
         if self._chain is not None:
             raise NotImplementedError('replacing a processing chain not implemented')
         self._chain = new_chain
+#    def _grab_buffer_quick(self):
+#        time.sleep(0.05)
     def run(self):
         buffer_pool = self.buffer_pool
         cam_quit_event_isSet = self.quit_event.isSet
-        cam = self.cam
         DEBUG_ACQUIRE = self.debug_acquire
         while not cam_quit_event_isSet():
             if buffer_pool.get_num_outstanding_buffers() > 100:
@@ -1082,53 +1106,21 @@ class IsoThread(threading.Thread):
                 print 'ERROR: We seem to be leaking buffers - will not acquire more images for a while!'
                 print ('*'*80+'\n')*5
                 while 1:
-                    try:
-                        trash = cam.grab_next_frame_blocking()
-                    except cam_iface.BuffersOverflowed:
-                        msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
-                        self.log_message_queue.put((self.cam_no_str,now,msg))
-                        print >> sys.stderr, msg
-                    except cam_iface.FrameDataMissing:
-                        pass
-                    except cam_iface.FrameSystemCallInterruption:
-                        pass
+                    self._grab_buffer_quick()
                     if buffer_pool.get_num_outstanding_buffers() < 10:
                         print 'Resuming normal image acquisition'
                         break
             with get_free_buffer_from_pool( buffer_pool ) as chainbuf:
                 _bufim = chainbuf.get_buf()
 
-                try:
-                    cam.grab_next_frame_into_buf_blocking(_bufim)
-                except cam_iface.BuffersOverflowed:
-                    if DEBUG_ACQUIRE:
-                        stdout_write('(O%s)'%self.cam_no_str)
-                    now = time.time()
-                    msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
-                    self.log_message_queue.put((self.cam_no_str,now,msg))
-                    print >> sys.stderr, msg
-                    continue
-                except cam_iface.FrameDataMissing:
-                    if DEBUG_ACQUIRE:
-                        stdout_write('(M%s)'%self.cam_no_str)
-                    now = time.time()
-                    msg = 'Warning: frame data missing on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
-                    #self.log_message_queue.put((self.cam_no_str,now,msg))
-                    print >> sys.stderr, msg
-                    continue
-                except cam_iface.FrameSystemCallInterruption:
-                    if DEBUG_ACQUIRE:
-                        stdout_write('(S%s)'%self.cam_no_str)
+                try_again_condition, timestamp, framenumber = self._grab_into_buffer( _bufim )
+                if try_again_condition:
                     continue
 
                 if DEBUG_ACQUIRE:
                     stdout_write(self.cam_no_str)
 
                 cam_received_time = time.time()
-
-                # get best guess as to when image was taken
-                timestamp=self.cam.get_last_timestamp()
-                framenumber=self.cam.get_last_framenumber()
 
                 chainbuf.cam_received_time = cam_received_time
                 chainbuf.timestamp = timestamp
@@ -1139,8 +1131,70 @@ class IsoThread(threading.Thread):
                 # return the buffer to buffer_pool when done.
                 chain = self._chain
                 if chain is not None:
+
+                    # Setting this gives responsibility to the last
+                    # chain to call
+                    # "buffer_pool.return_buffer(chainbuf)" when
+                    # done. This is acheived automatically by the
+                    # context manager in use_buffer_from_chain() and
+                    # the ChainLink.end_buf() method which returns the
+                    # buffer when the last link in the chain is done.
                     chainbuf._i_promise_to_return_buffer_to_the_pool = True
+
                     chain.fire( chainbuf ) # the end of the chain will call return_buffer()
+
+class ImageSourceFromCamera(ImageSource):
+    def __init__(self,*args,**kwargs):
+        print 'using real image source'
+        self.cam = kwargs['cam']
+        del kwargs['cam']
+        super( ImageSourceFromCamera, self).__init__(*args,**kwargs)
+
+    def _grab_buffer_quick(self):
+        try:
+            trash = self.cam.grab_next_frame_blocking()
+        except cam_iface.BuffersOverflowed:
+            msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
+            self.log_message_queue.put((self.cam_no_str,now,msg))
+            print >> sys.stderr, msg
+        except cam_iface.FrameDataMissing:
+            pass
+        except cam_iface.FrameSystemCallInterruption:
+            pass
+
+    def _grab_into_buffer(self, _bufim ):
+        try_again_condition= False
+
+        try:
+            self.cam.grab_next_frame_into_buf_blocking(_bufim)
+        except cam_iface.BuffersOverflowed:
+            if DEBUG_ACQUIRE:
+                stdout_write('(O%s)'%self.cam_no_str)
+            now = time.time()
+            msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
+            self.log_message_queue.put((self.cam_no_str,now,msg))
+            print >> sys.stderr, msg
+            try_again_condition = True
+        except cam_iface.FrameDataMissing:
+            if DEBUG_ACQUIRE:
+                stdout_write('(M%s)'%self.cam_no_str)
+            now = time.time()
+            msg = 'Warning: frame data missing on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
+            #self.log_message_queue.put((self.cam_no_str,now,msg))
+            print >> sys.stderr, msg
+            try_again_condition = True
+        except cam_iface.FrameSystemCallInterruption:
+            if DEBUG_ACQUIRE:
+                stdout_write('(S%s)'%self.cam_no_str)
+            try_again_condition = True
+
+        if not try_again_condition:
+            # get best guess as to when image was taken
+            timestamp=self.cam.get_last_timestamp()
+            framenumber=self.cam.get_last_framenumber()
+        else:
+            timestamp = framenumber = None
+        return try_again_condition, timestamp, framenumber
 
 class ConsoleApp(object):
     def __init__(self, call_often=None):
@@ -1173,6 +1227,7 @@ class AppState(object):
                  n_sigma = None,
                  options = None,
                  ):
+        global cam_iface
 
         self.options = options
         self.quit_function = None
@@ -1185,14 +1240,21 @@ class AppState(object):
 
         self.log_message_queue = Queue.Queue()
 
-        # ----------------------------------------------------------------
-        #
-        # Setup cameras
-        #
-        # ----------------------------------------------------------------
+        emulation_image_sources = options.emulation_image_sources
+        if emulation_image_sources is not None:
+            emulation_image_sources = emulation_image_sources.split( os.pathsep )
+            num_cams = len( emulation_image_sources )
+        else:
+            # ----------------------------------------------------------------
+            #
+            # Setup cameras
+            #
+            # ----------------------------------------------------------------
 
+            cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
 
-        num_cams = cam_iface.get_num_cameras()
+            num_cams = cam_iface.get_num_cameras()
+
         if num_cams == 0:
             raise RuntimeError('No cameras detected')
 
@@ -1268,13 +1330,13 @@ class AppState(object):
             self.cam_status.append( 'started' )
 
             buffer_pool = PreallocatedBufferPool(FastImage.Size(*cam.get_frame_size()))
-            iso_thread = IsoThread(chain = None,
-                                   cam = cam,
-                                   buffer_pool = buffer_pool,
-                                   debug_acquire = debug_acquire,
-                                   cam_no = cam_no,
-                                   quit_event = globals['cam_quit_event'],
-                                   )
+            iso_thread = ImageSourceFromCamera(chain = None,
+                                               cam = cam,
+                                               buffer_pool = buffer_pool,
+                                               debug_acquire = debug_acquire,
+                                               cam_no = cam_no,
+                                               quit_event = globals['cam_quit_event'],
+                                               )
             iso_thread.setDaemon(True)
             iso_thread.start()
             self.iso_threads.append( iso_thread )
@@ -1790,8 +1852,6 @@ class AppState(object):
                 raise ValueError('unknown key "%s"'%key)
 
 def main():
-    global cam_iface
-
     usage_lines = ['%prog [options]',
                    '',
                    '  available wrappers and backends:']
@@ -1855,6 +1915,9 @@ def main():
     parser.add_option("--mask-images", type="string",
                       help="list of masks for each camera (uses OS-specific path separator, ':' for POSIX, ';' for Windows)")
 
+    parser.add_option("--emulation-image-sources", type="string",
+                      help="list of .fmf files for each camera (uses OS-specific path separator, ':' for POSIX, ';' for Windows)")
+
     parser.add_option("--small-save-radius", type="int", default=10)
 
     (options, args) = parser.parse_args()
@@ -1868,8 +1931,6 @@ def main():
         print 'BACKEND must be set'
         parser.print_help()
         return
-
-    cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
 
     max_num_points_per_camera = options.num_points
 
