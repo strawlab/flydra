@@ -37,6 +37,8 @@ class WxApp(wx.App):
 
         self.frame_box = wx.BoxSizer(wx.HORIZONTAL)
         self.cic_box = wx.BoxSizer(wx.VERTICAL)
+        self.step_button_box = wx.BoxSizer(wx.HORIZONTAL)
+        self.cic_box.Add(self.step_button_box,0,wx.EXPAND)
 
         self.cam_image_canvases = {}
 
@@ -60,6 +62,8 @@ class WxApp(wx.App):
         self.timer2.Start(self.update_interval2)
 
         EVT_DISPLAYIMAGE(self, self.OnDisplayImageEvent )
+        self.widgets2controllers = {}
+        self._built_playback_GUI = False
 
         return True
     def post_init(self, call_often = None):
@@ -184,6 +188,25 @@ class WxApp(wx.App):
             absdiff_canvas.update_image( event.absdiff_buf )
             mean_canvas.update_image( event.mean_buf )
             cmp_canvas.update_image( event.cmp_buf )
+
+    def generate_view(self, model, controller ):
+
+        if hasattr(controller, 'trigger_single_frame_start' ):
+            if not self._built_playback_GUI:
+                ctrl = wx.Button(self.frame,-1,"step")
+                wx.EVT_BUTTON(ctrl, ctrl.GetId(), self.OnDoSingleFrame)
+                self.step_button_box.Add(ctrl,proportion=1,flag=wx.EXPAND)
+                self.frame.Layout()
+                self.widgets2controllers[ ctrl ] = []
+                self._built_playback_GUI = True
+
+            self.widgets2controllers[ ctrl ].append( controller )
+
+    def OnDoSingleFrame(self, event):
+        widget = event.GetEventObject()
+        controllers = self.widgets2controllers[widget]
+        for controller in controllers:
+            controller.trigger_single_frame_start()
 
 class DisplayCamData(object):
     def __init__(self, wxapp, cam_id=None):

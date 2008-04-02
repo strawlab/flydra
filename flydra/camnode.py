@@ -24,10 +24,10 @@ must be settable. Ideally, this would be possible from a Python API
 
 TODO:
 
-set background and cmp images
+set background and cmp images (at least on initialization)
+play fmf movies in wx (on button press) and console app (by default)
 throttle fmf playback
 replay fmf movies (don't roll off end)
-
 
 """
 
@@ -288,6 +288,8 @@ class ProcessCamClass(object):
                  max_width=None,
                  globals = None,
                  options = None,
+                 initial_bg_image = None,
+                 initial_cmp_image = None,
                  ):
         self.options = options
         self.globals = globals
@@ -330,6 +332,8 @@ class ProcessCamClass(object):
         self.cam_no_str = str(cam_no)
 
         self._chain = camnode_utils.ChainLink()
+        self._initial_bg_image = initial_bg_image
+        self._initial_cmp_image = initial_cmp_image
 
     def get_chain(self):
         return self._chain
@@ -571,17 +575,16 @@ class ProcessCamClass(object):
         old_fn = None
         points = []
 
-        if os.name == 'posix' and not BENCHMARK:
-            try:
-                max_priority = posix_sched.get_priority_max( posix_sched.FIFO )
-                sched_params = posix_sched.SchedParam(max_priority)
-                posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
-                msg = 'excellent, grab thread running in maximum prioity mode'
-            except Exception, x:
-                msg = 'WARNING: could not run in maximum priority mode:', str(x)
-            self.log_message_queue.put((self.cam_id,time.time(),msg))
-            print msg
-
+        ## if os.name == 'posix' and not BENCHMARK:
+        ##     try:
+        ##         max_priority = posix_sched.get_priority_max( posix_sched.FIFO )
+        ##         sched_params = posix_sched.SchedParam(max_priority)
+        ##         posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
+        ##         msg = 'excellent, grab thread running in maximum prioity mode'
+        ##     except Exception, x:
+        ##         msg = 'WARNING: could not run in maximum priority mode:', str(x)
+        ##     self.log_message_queue.put((self.cam_id,time.time(),msg))
+        ##     print msg
 
         #FastImage.set_debug(3) # let us see any images malloced, should only happen on hardware ROI size change
 
@@ -637,6 +640,13 @@ class ProcessCamClass(object):
         running_sumsqf = running_sumsqf_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
         noisy_pixels_mask = noisy_pixels_mask_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
 
+        if self._initial_bg_image is not None:
+            # If we have initial values, load them.
+
+            # implicit conversion to float32
+            numpy.asarray(running_mean_im)[:,:] = self._initial_bg_image
+            numpy.asarray(compareframe)[:,:] = self._initial_cmp_image
+            numpy.asarray(compareframe8u)[:,:] = self._initial_cmp_image
         running_mean_im.get_8u_copy_put( running_mean8u_im, cur_fisize )
 
         #################### done initializing images ############
@@ -655,6 +665,7 @@ class ProcessCamClass(object):
                 # get best guess as to when image was taken
                 timestamp=chainbuf.timestamp
                 framenumber=chainbuf.framenumber
+                print 'processed frame %d'%framenumber
 
                 if 1:
                     if old_fn is None:
@@ -1092,10 +1103,13 @@ class ImageSource(threading.Thread):
         if self._chain is not None:
             raise NotImplementedError('replacing a processing chain not implemented')
         self._chain = new_chain
+    def get_buffer_pool(self):
+        return self.buffer_pool
     def run(self):
         buffer_pool = self.buffer_pool
         cam_quit_event_isSet = self.quit_event.isSet
         while not cam_quit_event_isSet():
+            self._block_until_ready() # no-op for realtime camera processing
             if buffer_pool.get_num_outstanding_buffers() > 100:
                 # Grab some frames (wait) until the number of
                 # outstanding buffers decreases -- give processing
@@ -1141,7 +1155,24 @@ class ImageSource(threading.Thread):
 
                     chain.fire( chainbuf ) # the end of the chain will call return_buffer()
 
+class ImageSourceBaseController(object):
+    def __init__(self):
+        self.listeners = []
+    def register_listener(self, target):
+        self.listeners.append(target)
+
 class ImageSourceFromCamera(ImageSource):
+    def _block_until_ready(self):
+        # no-op for realtime camera processing
+        pass
+
+    def spawn_controller(self):
+        class ImageSourceFromCameraController(ImageSourceBaseController):
+            def quit(self):
+                print 'quitting ImageSourceFromCameraController'
+        controller = ImageSourceFakeCameraController()
+        return controller
+
     def _grab_buffer_quick(self):
         try:
             trash = self.cam.grab_next_frame_blocking()
@@ -1189,21 +1220,32 @@ class ImageSourceFromCamera(ImageSource):
         return try_again_condition, timestamp, framenumber
 
 class ImageSourceFakeCamera(ImageSource):
-##     def __init__(self,*args,**kw):
-##         self.do_step = kw['do_step']
-##         self.step_done = kw['step_done']
-##         del kw['do_step']
-##         del kw['step_done']
-##         super( ImageSourceFakeCamera, self).__init__(*args,**kw)
+    def __init__(self,*args,**kw):
+        self._do_step = threading.Event()
+        super( ImageSourceFakeCamera, self).__init__(*args,**kw)
+
+    def _block_until_ready(self):
+        # this will ping pong execution back and forth
+        self._do_step.wait()
+        self._do_step.clear()
+
+    def spawn_controller(self):
+        class ImageSourceFakeCameraController(ImageSourceBaseController):
+            def __init__(self, do_step=None):
+                self._do_step = do_step
+            def quit(self):
+                print 'quitting ImageSourceFakeCameraController'
+            def trigger_single_frame_start(self):
+                self._do_step.set()
+        controller = ImageSourceFakeCameraController(self._do_step)
+        return controller
 
     def _grab_buffer_quick(self):
         time.sleep(0.05)
-    def _grab_into_buffer(self, _bufim ):
 
+    def _grab_into_buffer(self, _bufim ):
         # throttle control flow here...
-#        self.do_step_event.wait()
         self.cam.grab_next_frame_into_buf_blocking(_bufim)
-#        self.step_done_event.set()
 
         try_again_condition = False
         timestamp=self.cam.get_last_timestamp()
@@ -1238,6 +1280,9 @@ class FakeCamera(object):
     def get_frame_offset(self):
         return 0,0
 
+    def close(self):
+        return
+
 class FakeCameraFromFMF(FakeCamera):
     def __init__(self,filename):
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
@@ -1250,6 +1295,7 @@ class FakeCameraFromFMF(FakeCamera):
     def grab_next_frame_into_buf_blocking(self, buf):
         buf = numpy.asarray( buf )
         buf[:,:] = self.fmf_recarray['frame'][ self.curframe ]
+        print 'got frame %d from .fmf file'%(self.curframe,)
         self.curframe += 1
 
     def get_last_timestamp(self):
@@ -1266,13 +1312,36 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
     if fname.endswith('.fmf'):
         cam = FakeCameraFromFMF(fname)
         ImageSourceModel = ImageSourceFakeCamera
+
+        bgfilename = os.path.splitext(fname)[0] + '_bg' + '.fmf'
+        cmpfilename = os.path.splitext(fname)[0] + '_std' + '.fmf'
+
+        fmf_ra = FlyMovieFormat.mmap_flymovie( fname )
+        bg_ra =  FlyMovieFormat.mmap_flymovie( bgfilename )
+        cmp_ra = FlyMovieFormat.mmap_flymovie( cmpfilename )
+
+        t0 = fmf_ra['timestamp'][0]
+        bg_t0 = bg_ra['timestamp'][0]
+        cmp_t0 = cmp_ra['timestamp'][0]
+
+        if not ((t0 == bg_t0) and (t0 == cmp_t0)):
+            print '*'*80
+            print 'WARNING timestamps of first image frames do not all agree. they are'
+            print ' raw .fmf: %s'%repr(t0)
+            print ' bg .fmf:  %s'%repr(bg_t0)
+            print ' std .fmf: %s'%repr(cmp_t0)
+            print '*'*80
+
+        initial_bg_image = bg_ra['frame'][0]
+        initial_cmp_image = cmp_ra['frame'][0]
+
     elif fname.endswith('.ufmf'):
         raise NotImplementedError('patience, young grasshopper')
     elif fname.startswith('<gaussian') and fname.endswith('>'):
         raise NotImplementedError('patience, young grasshopper')
     else:
         raise ValueError('could not create emulation image source')
-    return cam, ImageSourceModel
+    return cam, ImageSourceModel, initial_bg_image, initial_cmp_image
 
 class ConsoleApp(object):
     def __init__(self, call_often=None):
@@ -1288,6 +1357,9 @@ class ConsoleApp(object):
     def OnQuit(self, exit_value=0):
         self.quit_now = True
         self.exit_value = exit_value
+
+    def generate_view(self, model, controller ):
+        print 'WARNING: no view implemented for image sources that require it, will stall forever'
 
 class AppState(object):
     """This class handles all camera states, properties, etc."""
@@ -1336,7 +1408,8 @@ class AppState(object):
 
         self.reconstruct_helper = []
         self.image_sources = []
-        self.view_and_controllers = {} # for controllable image sources
+        self.image_controllers = []
+        initial_images = []
 
         for cam_no in range(num_cams):
 
@@ -1360,7 +1433,6 @@ class AppState(object):
             globals['cam_quit_event'] = threading.Event()
             globals['listen_thread_done'] = threading.Event()
             globals['take_background'] = threading.Event()
-            globals['take_background'].set()
             globals['clear_background'] = threading.Event()
             globals['collecting_background'] = threading.Event()
             globals['collecting_background'].set()
@@ -1388,15 +1460,20 @@ class AppState(object):
                 print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_no,use_mode))
                 ImageSourceModel = ImageSourceFromCamera
 
-                # "view" is on mainbrain and "controller" is pyro
-                # stuff. I should make fit into this MVC pattern. one
-                # day. For now, we just keep the same crappy spaghetti
-                # architecture we currently have.
-                build_view_and_controller = False
+                initial_bg_image = None
+                initial_cmp_image = None
+
             else:
                 # call factory function
-                cam,ImageSourceModel = create_cam_for_emulation_image_source( emulation_image_sources[cam_no] )
-                build_view_and_controller = True
+                (cam, ImageSourceModel, initial_bg_image,
+                 initial_cmp_image) = create_cam_for_emulation_image_source( emulation_image_sources[cam_no] )
+
+            if initial_bg_image is None:
+                globals['take_background'].set()
+            else:
+                globals['take_background'].clear()
+
+            initial_images.append( (initial_bg_image, initial_cmp_image) )
 
             self.all_cams.append( cam )
             cam.start_camera()  # start camera
@@ -1409,12 +1486,13 @@ class AppState(object):
                                             cam_no = cam_no,
                                             quit_event = globals['cam_quit_event'],
                                             )
+
+            controller = image_source.spawn_controller()
+
             image_source.setDaemon(True)
             image_source.start()
             self.image_sources.append( image_source )
-            if build_view_and_controller:
-                # not done
-                self.view_and_controllers[image_source] = None, None
+            self.image_controllers.append( controller )
 
         # ----------------------------------------------------------------
         #
@@ -1551,6 +1629,9 @@ class AppState(object):
                 if 0:
                     cam_processor = FakeProcessCamData()
                 else:
+
+                    initial_bg_image, initial_cmp_image = initial_images[cam_no]
+
                     cam.get_max_height()
                     l,b = cam.get_frame_offset()
                     w,h = cam.get_frame_size()
@@ -1575,6 +1656,8 @@ class AppState(object):
                         max_width=cam.get_max_width(),
                         globals=globals,
                         options=options,
+                        initial_bg_image = initial_bg_image,
+                        initial_cmp_image = initial_cmp_image,
                         )
                 self.all_cam_processors.append( cam_processor )
 
@@ -1868,6 +1951,7 @@ class AppState(object):
             elif key == 'quit':
                 globals['cam_quit_event'].set()
                 self.image_sources[cam_no].join()
+                self.image_controllers[cam_no].quit()
                 # XXX TODO: quit and join chain threads
                 cam.close()
                 self.cam_status[cam_no] = 'destroyed'
@@ -1891,7 +1975,11 @@ class AppState(object):
                     print 'making %s'%save_dir
                     os.makedirs(save_dir)
 
-                std_filename = bg_filename.replace('_bg','_std')
+                bg_fname_prefix, bg_fname_suffix = os.path.splitext(bg_filename)
+
+                assert bg_fname_prefix.endswith('_bg')
+                assert bg_fname_suffix == '.fmf'
+                std_filename = bg_fname_prefix[:-3] + '_std' + '.fmf'
 
                 saver.start_recording(
                     full_raw = raw_filename,
@@ -2072,9 +2160,9 @@ def main():
         app=ConsoleApp(call_often = app_state.main_thread_task)
         app_state.set_quit_function( app.OnQuit )
 
-    for ist in app_state.image_sources:
-        # somehow register view/controller with app
-        pass
+    for (model, controller) in zip(app_state.image_sources,
+                                   app_state.image_controllers):
+        app.generate_view( model, controller )
     app.MainLoop()
 
 if __name__=='__main__':
