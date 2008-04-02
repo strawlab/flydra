@@ -693,6 +693,8 @@ class ProcessCamClass(object):
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
                 chainbuf.updated_bg_image = None
                 chainbuf.updated_cmp_image = None
+                chainbuf.updated_running_mean_image = None
+                chainbuf.updated_running_sumsqf_image = None
 
                 hw_roi_frame = chainbuf.get_buf()
                 cam_received_time = chainbuf.cam_received_time
@@ -797,10 +799,13 @@ class ProcessCamClass(object):
 
                 if do_bg_maint:
                     if self._initial_image_dict is not None:
-                        raise NotImplementedError("cannot create initial conditions to "
-                                                  "allow ongoing background updates in replay mode")
-                    #realtime_image_analysis.do_bg_maint(
-                    motmot.realtime_image_analysis.slow.do_bg_maint(
+                        if 0:
+                            raise NotImplementedError("cannot create initial conditions to "
+                                                      "allow ongoing background updates in replay mode")
+                        else:
+                            warnings.warn('compare image is wrong!')
+                    realtime_image_analysis.do_bg_maint(
+                    #motmot.realtime_image_analysis.slow.do_bg_maint(
                         running_mean_im,#in
                         hw_roi_frame,#in
                         cur_fisize,#in
@@ -816,8 +821,8 @@ class ProcessCamClass(object):
                         bright_non_gaussian_cutoff,#in
                         noisy_pixels_mask,#in
                         bright_non_gaussian_replacement,#in
-                        #bench=0 )
-                        debug=1)
+                        bench=0 )
+                        #debug=0)
                     bg_changed = True
                     bg_frame_number = 0
 
@@ -844,6 +849,9 @@ class ProcessCamClass(object):
                         std_image = compareframe8u
                     chainbuf.updated_bg_image = numpy.array( bg_image, copy=True )
                     chainbuf.updated_cmp_image = numpy.array( std_image, copy=True )
+
+                    chainbuf.updated_running_mean_image = numpy.array( running_mean_im, copy=True )
+                    chainbuf.updated_running_sumsqf_image = numpy.array( running_sumsqf, copy=True )
 
 #                    globals['current_bg_frame_and_timestamp']=bg_image,std_image,timestamp # only used when starting to save
 ##                     if not BENCHMARK:
@@ -942,11 +950,9 @@ class SaveCamData(object):
     def get_chain(self):
         return self._chain
     def start_recording(self,
-                        full_raw = None,
-                        full_bg = None,
-                        full_std = None):
+                        raw_file_basename = None):
         """threadsafe"""
-        self.cmd.put( ('save',full_raw,full_bg,full_std) )
+        self.cmd.put( ('save',raw_file_basename) )
 
     def stop_recording(self,*args,**kw):
         """threadsafe"""
@@ -964,6 +970,10 @@ class SaveCamData(object):
         last_bgcmp_image_timestamp = None
         last_bg_image = None
         last_cmp_image = None
+        last_running_mean_image = None
+        last_running_sumsqf_image = None
+
+        save_float = True
 
         quit_event_isSet = self.quit_event.isSet
         while not quit_event_isSet():
@@ -974,19 +984,39 @@ class SaveCamData(object):
                     break
                 cmd = self.cmd.get()
                 if cmd[0] == 'save':
-                    full_raw,full_bg,full_std = cmd[1:]
-                    raw_movie = FlyMovieFormat.FlyMovieSaver(full_raw,version=1)
-                    bg_movie = FlyMovieFormat.FlyMovieSaver(full_bg,version=1)
-                    std_movie = FlyMovieFormat.FlyMovieSaver(full_std,version=1)
+                    raw_file_basename = cmd[1]
+                    full_raw = raw_file_basename + '.fmf'
+                    full_bg = raw_file_basename + '_mean.fmf'
+                    full_std = raw_file_basename + '_mean2.fmf'
+                    raw_movie = FlyMovieFormat.FlyMovieSaver(full_raw,
+                                                             format='MONO8',
+                                                             bits_per_pixel=8,
+                                                             version=3)
+                    bg_movie = FlyMovieFormat.FlyMovieSaver(full_bg,
+                                                            format='MONO32f',
+                                                            bits_per_pixel=32,
+                                                            version=3)
+                    std_movie = FlyMovieFormat.FlyMovieSaver(full_std,
+                                                             format='MONO32f',
+                                                             bits_per_pixel=32,
+                                                             version=3)
                     state = 'saving'
 
                     if last_bgcmp_image_timestamp is not None:
-                        bg_movie.add_frame(FastImage.asfastimage(last_bg_image),
-                                           last_bgcmp_image_timestamp,
-                                           error_if_not_fast=True)
-                        std_movie.add_frame(FastImage.asfastimage(last_cmp_image),
-                                            last_bgcmp_image_timestamp,
-                                            error_if_not_fast=True)
+                        if save_float:
+                            bg_movie.add_frame(FastImage.asfastimage(last_running_mean_image),
+                                               last_bgcmp_image_timestamp,
+                                               error_if_not_fast=True)
+                            std_movie.add_frame(FastImage.asfastimage(last_running_sumsqf_image),
+                                                last_bgcmp_image_timestamp,
+                                                error_if_not_fast=True)
+                        else:
+                            bg_movie.add_frame(FastImage.asfastimage(last_bg_image),
+                                               last_bgcmp_image_timestamp,
+                                               error_if_not_fast=True)
+                            std_movie.add_frame(FastImage.asfastimage(last_cmp_image),
+                                                last_bgcmp_image_timestamp,
+                                                error_if_not_fast=True)
                     else:
                         print 'WARNING: could not save initial bg and std frames'
 
@@ -1010,12 +1040,17 @@ class SaveCamData(object):
                     last_bg_image = chainbuf.updated_bg_image
                     last_cmp_image =  chainbuf.updated_cmp_image
 
+                    last_running_mean_image = chainbuf.updated_running_mean_image
+                    last_running_sumsqf_image = chainbuf.updated_running_sumsqf_image
+
                 if state == 'saving':
                     raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
                                  chainbuf.timestamp) )
                     if chainbuf.updated_bg_image is not None:
                         meancmp.append( (chainbuf.updated_bg_image,
                                          chainbuf.updated_cmp_image,
+                                         chainbuf.updated_running_mean_image,
+                                         chainbuf.updated_running_sumsqf_image,
                                          chainbuf.timestamp)) # these were copied in process thread
 
             # 3: grab any more that are here
@@ -1027,6 +1062,8 @@ class SaveCamData(object):
                         if chainbuf.updated_bg_image is not None:
                             meancmp.append( (chainbuf.updated_bg_image,
                                              chainbuf.updated_cmp_image,
+                                             chainbuf.updated_running_mean_image,
+                                             chainbuf.updated_running_sumsqf_image,
                                              chainbuf.timestamp)) # these were copied in process thread
             except Queue.Empty:
                 pass
@@ -1036,9 +1073,13 @@ class SaveCamData(object):
             if state == 'saving':
                 for frame,timestamp in raw:
                     raw_movie.add_frame(FastImage.asfastimage(frame),timestamp,error_if_not_fast=True)
-                for bg,cmp,timestamp in meancmp:
-                    bg_movie.add_frame(FastImage.asfastimage(bg),timestamp,error_if_not_fast=True)
-                    std_movie.add_frame(FastImage.asfastimage(cmp),timestamp,error_if_not_fast=True)
+                for bg,cmp,running_mean,running_sumsqf,timestamp in meancmp:
+                    if save_float:
+                        bg_movie.add_frame(FastImage.asfastimage(running_mean),timestamp,error_if_not_fast=True)
+                        std_movie.add_frame(FastImage.asfastimage(running_sumsqf),timestamp,error_if_not_fast=True)
+                    else:
+                        bg_movie.add_frame(FastImage.asfastimage(bg),timestamp,error_if_not_fast=True)
+                        std_movie.add_frame(FastImage.asfastimage(cmp),timestamp,error_if_not_fast=True)
             del raw[:]
             del meancmp[:]
 
@@ -2040,27 +2081,17 @@ class AppState(object):
                 if saver is None:
                     print 'no save thread -- cannot save movies'
                     continue
-                raw_filename, bg_filename = cmds[key]
+                raw_file_basename = cmds[key]
 
-                raw_filename = os.path.expanduser(raw_filename)
-                bg_filename = os.path.expanduser(bg_filename)
+                raw_file_basename = os.path.expanduser(raw_file_basename)
 
-                save_dir = os.path.split(raw_filename)[0]
+                save_dir = os.path.split(raw_file_basename)[0]
                 if not os.path.exists(save_dir):
                     print 'making %s'%save_dir
                     os.makedirs(save_dir)
 
-                bg_fname_prefix, bg_fname_suffix = os.path.splitext(bg_filename)
-
-                assert bg_fname_prefix.endswith('_bg')
-                assert bg_fname_suffix == '.fmf'
-                std_filename = bg_fname_prefix[:-3] + '_std' + '.fmf'
-
                 saver.start_recording(
-                    full_raw = raw_filename,
-                    full_bg = bg_filename,
-                    full_std = std_filename,
-                    )
+                    raw_file_basename = raw_file_basename)
 
             elif key == 'stop_recording':
                 saver.stop_recording()

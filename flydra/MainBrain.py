@@ -1472,12 +1472,12 @@ class MainBrain(object):
                 with cam_lock:
                     cam['commands']['get_im']=None
 
-        def external_start_recording( self, cam_id, raw_filename, bg_filename):
+        def external_start_recording( self, cam_id, raw_file_basename):
             with self.cam_info_lock:
                 cam = self.cam_info[cam_id]
                 cam_lock = cam['lock']
                 with cam_lock:
-                    cam['commands']['start_recording']=raw_filename, bg_filename
+                    cam['commands']['start_recording']=raw_file_basename
 
         def external_stop_recording( self, cam_id):
             with self.cam_info_lock:
@@ -2094,15 +2094,15 @@ class MainBrain(object):
         else:
             self.show_overall_latency.clear()
 
-    def start_recording(self, cam_id, raw_filename, bg_filename):
+    def start_recording(self, cam_id, raw_file_basename):
         global XXX_framenumber
 
-        self.remote_api.external_start_recording( cam_id, raw_filename, bg_filename)
+        self.remote_api.external_start_recording( cam_id, raw_file_basename)
         approx_start_frame = XXX_framenumber
-        self._currently_recording_movies[ cam_id ] = (raw_filename, approx_start_frame)
+        self._currently_recording_movies[ cam_id ] = (raw_file_basename, approx_start_frame)
         if self.is_saving_data():
             self.h5movie_info.row['cam_id'] = cam_id
-            self.h5movie_info.row['filename'] = raw_filename
+            self.h5movie_info.row['filename'] = raw_file_basename+'.fmf'
             self.h5movie_info.row['approx_start_frame'] = approx_start_frame
             self.h5movie_info.row.append()
             self.h5movie_info.flush()
@@ -2111,14 +2111,14 @@ class MainBrain(object):
         global XXX_framenumber
         self.remote_api.external_stop_recording(cam_id)
         approx_stop_frame = XXX_framenumber
-        raw_filename, approx_start_frame = self._currently_recording_movies[ cam_id ]
+        raw_file_basename, approx_start_frame = self._currently_recording_movies[ cam_id ]
         del self._currently_recording_movies[ cam_id ]
         # modify save file to include approximate movie stop time
         if self.is_saving_data():
             nrow = None
             for r in self.h5movie_info:
                 # get row in table
-                if (r['cam_id'] == cam_id and r['filename'] == raw_filename and
+                if (r['cam_id'] == cam_id and r['filename'] == raw_file_basename and
                     r['approx_start_frame']==approx_start_frame):
                     nrow =r.nrow
                     break

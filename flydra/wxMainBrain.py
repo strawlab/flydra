@@ -813,8 +813,7 @@ class wxMainBrainApp(wx.App):
             for cam_id in cam_ids:
                 basename = '~/FLYDRA_LARGE_MOVIES/full_%s_%s'%(nowstr,cam_id)
                 self.main_brain.start_recording(cam_id,
-                                                basename+'.fmf',
-                                                basename+'_bg.fmf')
+                                                basename)
                 self._currently_recording_cams.append(cam_id)
             self.statusbar.SetStatusText('Recording started on %d cameras'%(
                 len(self._currently_recording_cams),),0)
