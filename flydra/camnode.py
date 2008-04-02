@@ -988,6 +988,7 @@ class SaveCamData(object):
                     full_raw = raw_file_basename + '.fmf'
                     full_bg = raw_file_basename + '_mean.fmf'
                     full_std = raw_file_basename + '_mean2.fmf'
+                    print 'saving movies','-'*50
                     raw_movie = FlyMovieFormat.FlyMovieSaver(full_raw,
                                                              format='MONO8',
                                                              bits_per_pixel=8,
@@ -1021,6 +1022,7 @@ class SaveCamData(object):
                         print 'WARNING: could not save initial bg and std frames'
 
                 elif cmd[0] == 'stop':
+                    print 'done saving movies','-'*50
                     raw_movie.close()
                     bg_movie.close()
                     std_movie.close()
