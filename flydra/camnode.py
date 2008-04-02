@@ -1241,10 +1241,7 @@ class ImageSource(threading.Thread):
                     chain.fire( chainbuf ) # the end of the chain will call return_buffer()
 
 class ImageSourceBaseController(object):
-    def __init__(self):
-        self.listeners = []
-    def register_listener(self, target):
-        self.listeners.append(target)
+    pass
 
 class ImageSourceFromCamera(ImageSource):
     def _block_until_ready(self):
@@ -1252,10 +1249,7 @@ class ImageSourceFromCamera(ImageSource):
         pass
 
     def spawn_controller(self):
-        class ImageSourceFromCameraController(ImageSourceBaseController):
-            def quit(self):
-                print 'quitting ImageSourceFromCameraController'
-        controller = ImageSourceFakeCameraController()
+        controller = ImageSourceBaseController()
         return controller
 
     def _grab_buffer_quick(self):
@@ -1336,9 +1330,6 @@ class ImageSourceFakeCamera(ImageSource):
         timestamp=self.cam.get_last_timestamp()
         framenumber=self.cam.get_last_framenumber()
         return try_again_condition, timestamp, framenumber
-
-class ImageSourceController(object):
-    pass
 
 class FakeCamera(object):
     def start_camera(self):
@@ -1446,7 +1437,7 @@ class ConsoleApp(object):
         self.exit_value = exit_value
 
     def generate_view(self, model, controller ):
-        print 'WARNING: no view implemented for image sources that require it, will stall forever'
+        print 'WARNING: no view implemented for image sources that require it.'
 
 class AppState(object):
     """This class handles all camera states, properties, etc."""
