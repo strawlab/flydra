@@ -1312,8 +1312,6 @@ class ImageSourceFakeCamera(ImageSource):
         class ImageSourceFakeCameraController(ImageSourceBaseController):
             def __init__(self, do_step=None):
                 self._do_step = do_step
-            def quit(self):
-                print 'quitting ImageSourceFakeCameraController'
             def trigger_single_frame_start(self):
                 self._do_step.set()
         controller = ImageSourceFakeCameraController(self._do_step)
@@ -2056,9 +2054,7 @@ class AppState(object):
                         print str(still_missing)
 
             elif key == 'quit':
-                globals['cam_quit_event'].set()
-                self.image_sources[cam_no].join()
-                self.image_controllers[cam_no].quit()
+                self.image_sources[cam_no].join(0.1)
                 # XXX TODO: quit and join chain threads
                 cam.close()
                 self.cam_status[cam_no] = 'destroyed'
