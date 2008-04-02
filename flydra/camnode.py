@@ -61,6 +61,7 @@ import numpy.dual
 import contextlib
 
 import motmot.ufmf.ufmf as ufmf
+import motmot.realtime_image_analysis.slow
 
 #import flydra.debuglock
 #DebugLock = flydra.debuglock.DebugLock
@@ -171,6 +172,10 @@ def TimestampEcho():
             if err.args[0] == errno.EINTR: # interrupted system call
                 continue
             raise
+
+        if struct is None: # this line prevents bizarre interpreter shutdown errors
+            return
+
         newbuf = buf + struct.pack( fmt, time.time() )
         sender.sendto(newbuf,(orig_host,sendto_port))
 
@@ -288,8 +293,7 @@ class ProcessCamClass(object):
                  max_width=None,
                  globals = None,
                  options = None,
-                 initial_bg_image = None,
-                 initial_cmp_image = None,
+                 initial_image_dict = None,
                  ):
         self.options = options
         self.globals = globals
@@ -332,8 +336,7 @@ class ProcessCamClass(object):
         self.cam_no_str = str(cam_no)
 
         self._chain = camnode_utils.ChainLink()
-        self._initial_bg_image = initial_bg_image
-        self._initial_cmp_image = initial_cmp_image
+        self._initial_image_dict = initial_image_dict
 
     def get_chain(self):
         return self._chain
@@ -523,6 +526,24 @@ class ProcessCamClass(object):
 
 
     def mainloop(self):
+
+        def reverse_cmp_frame( compareframe8u, mean_im, alpha, cur_im, n_sigma=1.0 ):
+            #print 'reversed compareframe8u',compareframe8u
+            mean2 = mean_im.astype(numpy.float32)**2
+            #print 'reversed mean2',mean2
+
+            compareframe8u = compareframe8u.astype(numpy.float32) # can't un-round, but...
+            running_stdframe = compareframe8u/n_sigma
+            running_stdframe = running_stdframe**2
+            # can't de-abs()
+            std2 = running_stdframe
+            running_sumsqf = std2 + mean2
+            #print 'reversed running_sumsqf'
+            #print running_sumsqf
+
+            R = (running_sumsqf - alpha*cur_im)/(1-alpha)
+            return R
+
         disable_ifi_warning = self.options.disable_ifi_warning
         globals = self.globals
 
@@ -640,13 +661,27 @@ class ProcessCamClass(object):
         running_sumsqf = running_sumsqf_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
         noisy_pixels_mask = noisy_pixels_mask_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
 
-        if self._initial_bg_image is not None:
+        if self._initial_image_dict is not None:
             # If we have initial values, load them.
 
             # implicit conversion to float32
-            numpy.asarray(running_mean_im)[:,:] = self._initial_bg_image
-            numpy.asarray(compareframe)[:,:] = self._initial_cmp_image
-            numpy.asarray(compareframe8u)[:,:] = self._initial_cmp_image
+            numpy.asarray(running_mean_im_full)[:,:] = self._initial_image_dict['bg']
+            numpy.asarray(compareframe_full)[:,:] = self._initial_image_dict['cmp']
+            numpy.asarray(compareframe8u_full)[:,:] = self._initial_image_dict['cmp']
+
+            # This is also necessary in case we are in an ongoing
+            # background collection mode.  reverse the computation to
+            # get running_sumsqf, which is the estimate of the squared
+            # pixel values.
+            if 1:
+                __nx_running_sumsqf = reverse_cmp_frame(  self._initial_image_dict['cmp'],
+                                                          self._initial_image_dict['bg'],
+                                                          self.bg_frame_alpha,
+                                                          self._initial_image_dict['raw'],
+                                                          n_sigma=self.n_sigma_shared.get_nowait() )
+            else:
+                __nx_running_sumsqf = self._initial_bg_image**2
+            numpy.asarray(running_sumsqf)[:,:] = __nx_running_sumsqf
         running_mean_im.get_8u_copy_put( running_mean8u_im, cur_fisize )
 
         #################### done initializing images ############
@@ -665,7 +700,6 @@ class ProcessCamClass(object):
                 # get best guess as to when image was taken
                 timestamp=chainbuf.timestamp
                 framenumber=chainbuf.framenumber
-                print 'processed frame %d'%framenumber
 
                 if 1:
                     if old_fn is None:
@@ -762,7 +796,11 @@ class ProcessCamClass(object):
                         do_bg_maint = True
 
                 if do_bg_maint:
-                    realtime_image_analysis.do_bg_maint(
+                    if self._initial_image_dict is not None:
+                        raise NotImplementedError("cannot create initial conditions to "
+                                                  "allow ongoing background updates in replay mode")
+                    #realtime_image_analysis.do_bg_maint(
+                    motmot.realtime_image_analysis.slow.do_bg_maint(
                         running_mean_im,#in
                         hw_roi_frame,#in
                         cur_fisize,#in
@@ -778,7 +816,8 @@ class ProcessCamClass(object):
                         bright_non_gaussian_cutoff,#in
                         noisy_pixels_mask,#in
                         bright_non_gaussian_replacement,#in
-                        bench=0 )
+                        #bench=0 )
+                        debug=1)
                     bg_changed = True
                     bg_frame_number = 0
 
@@ -895,10 +934,11 @@ class FakeProcessCamData(object):
                 buf.processed_points = [ (10,20) ]
 
 class SaveCamData(object):
-    def __init__(self,cam_id=None):
+    def __init__(self,cam_id=None,quit_event=None):
         self._chain = camnode_utils.ChainLink()
         self._cam_id = cam_id
         self.cmd = Queue.Queue()
+        self.quit_event = quit_event
     def get_chain(self):
         return self._chain
     def start_recording(self,
@@ -925,7 +965,8 @@ class SaveCamData(object):
         last_bg_image = None
         last_cmp_image = None
 
-        while 1:
+        quit_event_isSet = self.quit_event.isSet
+        while not quit_event_isSet():
 
             # 1: process commands
             while 1:
@@ -1004,12 +1045,14 @@ class SaveCamData(object):
 class SaveSmallData(object):
     def __init__(self,cam_id=None,
                  options = None,
+                 quit_event = None,
                  ):
         self.options = options
         self._chain = camnode_utils.ChainLink()
         self._cam_id = cam_id
         self.cmd = Queue.Queue()
         self._ufmf = None
+        self.quit_event = quit_event
 
     def get_chain(self):
         return self._chain
@@ -1030,7 +1073,8 @@ class SaveSmallData(object):
 
         state = 'pass'
 
-        while 1:
+        quit_event_isSet = self.quit_event.isSet
+        while not quit_event_isSet():
 
             while 1:
                 if self.cmd.empty():
@@ -1295,7 +1339,6 @@ class FakeCameraFromFMF(FakeCamera):
     def grab_next_frame_into_buf_blocking(self, buf):
         buf = numpy.asarray( buf )
         buf[:,:] = self.fmf_recarray['frame'][ self.curframe ]
-        print 'got frame %d from .fmf file'%(self.curframe,)
         self.curframe += 1
 
     def get_last_timestamp(self):
@@ -1332,8 +1375,11 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
             print ' std .fmf: %s'%repr(cmp_t0)
             print '*'*80
 
-        initial_bg_image = bg_ra['frame'][0]
-        initial_cmp_image = cmp_ra['frame'][0]
+        initial_image_dict = {'bg':bg_ra['frame'][0],
+                              'cmp':cmp_ra['frame'][0],
+                              'raw':fmf_ra['frame'][0]}
+        if len( bg_ra['frame'] ) > 1:
+            raise NotImplementedError("no current support for reading back multi-frame background/cmp")
 
     elif fname.endswith('.ufmf'):
         raise NotImplementedError('patience, young grasshopper')
@@ -1341,7 +1387,7 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
         raise NotImplementedError('patience, young grasshopper')
     else:
         raise ValueError('could not create emulation image source')
-    return cam, ImageSourceModel, initial_bg_image, initial_cmp_image
+    return cam, ImageSourceModel, initial_image_dict
 
 class ConsoleApp(object):
     def __init__(self, call_often=None):
@@ -1370,7 +1416,7 @@ class AppState(object):
         global cam_iface
 
         self.options = options
-        self.quit_function = None
+        self._real_quit_function = None
 
         if options.server is None:
             self.main_brain_hostname = default_main_brain_hostname
@@ -1410,6 +1456,7 @@ class AppState(object):
         self.image_sources = []
         self.image_controllers = []
         initial_images = []
+        self.critical_threads = []
 
         for cam_no in range(num_cams):
 
@@ -1460,20 +1507,18 @@ class AppState(object):
                 print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_no,use_mode))
                 ImageSourceModel = ImageSourceFromCamera
 
-                initial_bg_image = None
-                initial_cmp_image = None
-
+                initial_image_dict = None
             else:
                 # call factory function
-                (cam, ImageSourceModel, initial_bg_image,
-                 initial_cmp_image) = create_cam_for_emulation_image_source( emulation_image_sources[cam_no] )
+                (cam, ImageSourceModel,
+                 initial_image_dict)  = create_cam_for_emulation_image_source( emulation_image_sources[cam_no] )
 
-            if initial_bg_image is None:
+            if initial_image_dict is None:
                 globals['take_background'].set()
             else:
                 globals['take_background'].clear()
 
-            initial_images.append( (initial_bg_image, initial_cmp_image) )
+            initial_images.append( initial_image_dict )
 
             self.all_cams.append( cam )
             cam.start_camera()  # start camera
@@ -1630,7 +1675,7 @@ class AppState(object):
                     cam_processor = FakeProcessCamData()
                 else:
 
-                    initial_bg_image, initial_cmp_image = initial_images[cam_no]
+                    initial_image_dict = initial_images[cam_no]
 
                     cam.get_max_height()
                     l,b = cam.get_frame_offset()
@@ -1656,8 +1701,7 @@ class AppState(object):
                         max_width=cam.get_max_width(),
                         globals=globals,
                         options=options,
-                        initial_bg_image = initial_bg_image,
-                        initial_cmp_image = initial_cmp_image,
+                        initial_image_dict = initial_image_dict,
                         )
                 self.all_cam_processors.append( cam_processor )
 
@@ -1667,27 +1711,34 @@ class AppState(object):
                                            name = 'cam_processor.mainloop')
                 thread.setDaemon(True)
                 thread.start()
+                self.critical_threads.append( thread )
 
                 if 1:
-                    save_cam = SaveCamData()
+                    save_cam = SaveCamData(
+                        quit_event=globals['cam_quit_event'],
+                        )
                     self.all_savers.append( save_cam )
                     cam_processor_chain.append_link( save_cam.get_chain() )
                     thread = threading.Thread( target = save_cam.mainloop,
                                                name = 'save_cam.mainloop')
                     thread.setDaemon(True)
                     thread.start()
+                    self.critical_threads.append( thread )
                 else:
                     print 'not starting full .fmf thread'
                     self.all_savers.append( None )
 
                 if 1:
-                    save_small = SaveSmallData(options=self.options)
+                    save_small = SaveSmallData(options=self.options,
+                                               quit_event=globals['cam_quit_event'],
+                                               )
                     self.all_small_savers.append( save_small )
                     cam_processor_chain.append_link( save_small.get_chain() )
                     thread = threading.Thread( target = save_small.mainloop,
                                                name = 'save_small.mainloop')
                     thread.setDaemon(True)
                     thread.start()
+                    self.critical_threads.append( thread )
                 else:
                     print 'not starting small .fmf thread'
                     self.all_small_savers.append( None )
@@ -1726,24 +1777,42 @@ class AppState(object):
             self.last_return_info_check.append( 0.0 ) # never
             self.n_raw_frames.append( 0 )
 
+    def quit_function(self,exit_value):
+        for globals in self.globals:
+            globals['cam_quit_event'].set()
+
+        for thread in self.critical_threads:
+            if thread.isAlive():
+                thread.join(0.01)
+
+        if self._real_quit_function is not None:
+            self._real_quit_function(exit_value)
+
     def set_quit_function(self, quit_function=None):
-        self.quit_function = quit_function
+        self._real_quit_function = quit_function
 
     def append_chain(self, klass=None, args=None, basename=None):
         if basename is None:
             basename = 'appended thread'
         for cam_no, (cam_id, chain) in enumerate(zip(self.all_cam_ids,
                                                      self.all_cam_chains)):
+            globals = self.globals[cam_no]
+            kwargs = dict(cam_id=cam_id,
+                          quit_event=globals['cam_quit_event'],
+                          )
+
             if args is None:
-                thread_instance = klass(cam_id=cam_id)
+                thread_instance = klass(**kwargs)
             else:
-                thread_instance = klass(*args,**dict(cam_id=cam_id))
+                thread_instance = klass(*args,**kwargs)
+
             chain.append_link( thread_instance.get_chain() )
             name = basename + ' ' + cam_id
             thread = threading.Thread( target = thread_instance.mainloop,
                                        name = name )
             thread.setDaemon(True)
             thread.start()
+            self.critical_threads.append( thread )
 
     def main_thread_task(self):
         """gets called often in mainloop of app"""
@@ -1772,6 +1841,12 @@ class AppState(object):
                 if self.quit_function is None:
                     raise RuntimeError('all cameras closed, but no quit_function set')
                 self.quit_function(0)
+
+            # if any threads have died, quit
+            for thread in self.critical_threads:
+                if not thread.isAlive():
+                    print 'ERROR: thread %s died unexpectedly. Quitting'%(thread.getName())
+                    self.quit_function(1)
 
             if not DISABLE_ALL_PROCESSING:
                 for cam_no, cam_id in enumerate(self.all_cam_ids):

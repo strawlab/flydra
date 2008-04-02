@@ -91,8 +91,6 @@ class WxApp(wx.App):
             wx.PostEvent(self, event)
 
     def OnDisplayImageEvent(self, event):
-        #print 'got display image for %s in wx mainloop'%event.cam_id
-
         if event.cam_id not in self.cam_image_canvases:
             parent = self.frame
 
@@ -209,7 +207,10 @@ class WxApp(wx.App):
             controller.trigger_single_frame_start()
 
 class DisplayCamData(object):
-    def __init__(self, wxapp, cam_id=None):
+    def __init__(self, wxapp,
+                 cam_id=None,
+                 quit_event=None,
+                 ):
         self._chain = camnode_utils.ChainLink()
         self._wxapp = wxapp
         self._cam_id = cam_id
