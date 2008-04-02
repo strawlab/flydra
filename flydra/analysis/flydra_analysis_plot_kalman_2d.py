@@ -133,15 +133,17 @@ def show_it(fig,
         xs = data2d.readCoordinates( this_camn_idxs, field='x')
         ys = data2d.readCoordinates( this_camn_idxs, field='y')
 
-        valid_idx = numpy.nonzero( ~numpy.isnan(xs) )[0]
-        idx_first_valid = valid_idx[0]
-        idx_last_valid = valid_idx[-1]
-        tmp_frames = data2d.readCoordinates( this_camn_idxs, field='frame')
-
         if img_table is not None:
             bg_arr_h5 = getattr(img_table,cam_id)
             bg_arr = bg_arr_h5.read()
             ax.imshow( bg_arr, origin='lower',cmap=cm.pink )
+
+        valid_idx = numpy.nonzero( ~numpy.isnan(xs) )[0]
+        if not len(valid_idx):
+            continue
+        idx_first_valid = valid_idx[0]
+        idx_last_valid = valid_idx[-1]
+        tmp_frames = data2d.readCoordinates( this_camn_idxs, field='frame')
 
         ax.plot([xs[idx_first_valid]],[ys[idx_first_valid]],
                 'ro',label='first point')
