@@ -27,6 +27,7 @@ import MainBrain
 from MainBrain import DEBUG
 import wx
 from wx import xrc
+import pyglet.gl.lib
 
 PLOTPANEL = True
 if PLOTPANEL:
@@ -1409,9 +1410,13 @@ class wxMainBrainApp(wx.App):
                     image, show_fps, points, image_coords = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
                     if image is not None:
                         if hasattr(self.cam_image_canvas,'update_image_and_drawings'):
-                            self.cam_image_canvas.update_image_and_drawings(cam_id,image,
-                                                                            points=points,
-                                                                            sort_add=True)
+                            try:
+                                self.cam_image_canvas.update_image_and_drawings(cam_id,image,
+                                                                                points=points,
+                                                                                sort_add=True)
+                            except pyglet.gl.lib.GLException, err:
+                                print 'WARNING: ignoring GLException'
+                                traceback.print_exc()
                     if show_fps is not None:
                         show_fps_label = xrc.XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
                         show_fps_label.SetLabel('fps: %.1f'%show_fps)
