@@ -479,7 +479,9 @@ class wxMainBrainApp(wx.App):
         all_cams = self.cameras.keys()
         all_cams.sort()
         cam_number = all_cams.index(cam_id)
-        acp_box.Insert(cam_number,previewPerCamPanel,1,wx.EXPAND | wx.ALL,border=3)
+        acp_box.Insert(cam_number,previewPerCamPanel,0,wx.EXPAND | wx.ALL,border=3)
+        # arrgh, cannot make the scrolled container expand... This doesn't do it:
+        acp_box.Fit(self.preview_per_cam_scrolled_container)
 
         # set staticbox label
         box = previewPerCamPanel.GetSizer()
@@ -551,9 +553,10 @@ class wxMainBrainApp(wx.App):
         params = scalar_control_info.keys()
         params.sort()
         params.reverse()
-        for param in params:
-            if param not in ['shutter','gain','brightness']:
-                continue
+        camprops = scalar_control_info['camprops']
+        camprops.sort()
+        for param in camprops:
+            print 'values for camera property',param
             current_value, min_value, max_value = scalar_control_info[param]
             grid.Add( wx.StaticText(per_cam_controls_panel,wx.NewId(),param),
                      0,wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL )

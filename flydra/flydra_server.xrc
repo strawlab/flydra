@@ -459,7 +459,7 @@
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="PreviewPerCamPanel">
-          <size>10,200</size>
+          <size>10,300</size>
         </object>
         <flag>wxEXPAND</flag>
       </object>

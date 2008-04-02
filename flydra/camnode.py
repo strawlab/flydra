@@ -1636,6 +1636,7 @@ class AppState(object):
             CAM_CONTROLS = globals['cam_controls']
 
             num_props = cam.get_num_camera_properties()
+            prop_names = []
             for prop_num in range(num_props):
                 props = cam.get_camera_property_info(prop_num)
                 current_value,auto = cam.get_camera_property( prop_num )
@@ -1659,7 +1660,9 @@ class AppState(object):
                 current_value = new_value
                 scalar_control_info[props['name']] = (current_value,
                                                       min_value, max_value)
+                prop_names.append( props['name'] )
 
+            scalar_control_info['camprops'] = prop_names
             diff_threshold = 11
             scalar_control_info['diff_threshold'] = diff_threshold
             clear_threshold = 0.2
