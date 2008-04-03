@@ -233,34 +233,34 @@ class WxApp(wx.App):
 class DisplayCamData(object):
     def __init__(self, wxapp,
                  cam_id=None,
-                 quit_event=None,
                  ):
         self._chain = camnode_utils.ChainLink()
         self._wxapp = wxapp
         self._cam_id = cam_id
-        self._quit_event = quit_event
     def get_chain(self):
         return self._chain
     def mainloop(self):
         NAUGHTY_BUT_FAST = True
-        quit_event_isSet = self._quit_event.isSet
-        while not quit_event_isSet():
-            with camnode_utils.use_buffer_from_chain(self._chain) as buf:
+        while 1:
+            with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
+                if chainbuf.quit_now:
+                    # XXX TODO: Send done event to GUI.
+                    break
                 # post images and processed points to wx
-                if hasattr(buf,'processed_points'):
-                    pts = buf.processed_points
+                if hasattr(chainbuf,'processed_points'):
+                    pts = chainbuf.processed_points
                 else:
                     pts = None
                 if NAUGHTY_BUT_FAST:
-                    buf_copy = buf.get_buf() # not a copy at all!
-                    absdiff = buf.absdiff8u_im_full
-                    mean = buf.mean8u_im_full
-                    cmp = buf.compareframe8u_full
+                    buf_copy = chainbuf.get_buf() # not a copy at all!
+                    absdiff = chainbuf.absdiff8u_im_full
+                    mean = chainbuf.mean8u_im_full
+                    cmp = chainbuf.compareframe8u_full
                 else:
-                    buf_copy = numpy.array( buf.get_buf(), copy=True )
-                    absdiff = numpy.array( buf.absdiff8u_im_full, copy=True )
-                    mean = numpy.array( buf.mean8u_im_full, copy=True )
-                    cmp = numpy.array( buf.compareframe8u_full, copy=True )
+                    buf_copy = numpy.array( chainbuf.get_buf(), copy=True )
+                    absdiff = numpy.array( chainbuf.absdiff8u_im_full, copy=True )
+                    mean = numpy.array( chainbuf.mean8u_im_full, copy=True )
+                    cmp = numpy.array( chainbuf.compareframe8u_full, copy=True )
 
             wx.PostEvent(self._wxapp, DisplayImageEvent(buf=buf_copy,
                                                         pts=pts,

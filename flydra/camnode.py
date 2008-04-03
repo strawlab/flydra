@@ -22,13 +22,6 @@ In cases B-E, some form of image/data control (play, stop, set fps)
 must be settable. Ideally, this would be possible from a Python API
 (for automated testing) and from a GUI (for visual debugging).
 
-TODO:
-
-set background and cmp images (at least on initialization)
-play fmf movies in wx (on button press) and console app (by default)
-throttle fmf playback
-replay fmf movies (don't roll off end)
-
 """
 
 from __future__ import division
@@ -257,10 +250,12 @@ class PreallocatedBufferPool(object):
         self._lock = threading.Lock()
         # start: vars access controlled by self._lock
         self._allocated_pool = []
-        self._buffers_handed_out = 0
         #   end: vars access controlled by self._lock
 
         self.set_size(size)
+        self._buffers_handed_out = 0 # self._zero_buffer_lock is set when this is 0
+        self._zero_buffer_lock = threading.Event()
+        self._zero_buffer_lock.set()
 
     def set_size(self,size):
         """size is FastImage.Size() instance"""
@@ -276,6 +271,7 @@ class PreallocatedBufferPool(object):
             else:
                 buffer = PreallocatedBuffer(self._size,self)
             self._buffers_handed_out += 1
+            self._zero_buffer_lock.clear()
             return buffer
 
     def return_buffer(self,buffer):
@@ -285,8 +281,14 @@ class PreallocatedBufferPool(object):
             if buffer.get_size() == self._size:
                 self._allocated_pool.append( buffer )
 
+            if self._buffers_handed_out == 0:
+                self._zero_buffer_lock.set()
+
     def get_num_outstanding_buffers(self):
         return self._buffers_handed_out
+
+    def wait_for_0_outstanding_buffers(self,*args):
+        self._zero_buffer_lock.wait(*args)
 
 @contextlib.contextmanager
 def get_free_buffer_from_pool(pool):
@@ -681,8 +683,10 @@ class ProcessCamClass(object):
         incoming_raw_frames_queue = globals['incoming_raw_frames']
         incoming_raw_frames_queue_put = incoming_raw_frames_queue.put
 
-        while not cam_quit_event_isSet():
+        while 1:#not cam_quit_event_isSet():
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
+                if chainbuf.quit_now:
+                    break
                 chainbuf.updated_bg_image = None
                 chainbuf.updated_cmp_image = None
                 chainbuf.updated_running_mean_image = None
@@ -932,7 +936,6 @@ class SaveCamData(object):
         self._chain = camnode_utils.ChainLink()
         self._cam_id = cam_id
         self.cmd = Queue.Queue()
-        self.quit_event = quit_event
     def get_chain(self):
         return self._chain
     def start_recording(self,
@@ -961,8 +964,7 @@ class SaveCamData(object):
 
         save_float = True
 
-        quit_event_isSet = self.quit_event.isSet
-        while not quit_event_isSet():
+        while 1:
 
             # 1: process commands
             while 1:
@@ -1016,6 +1018,9 @@ class SaveCamData(object):
 
             # 2: block for image data
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf: # must do on every frame
+                if chainbuf.quit_now:
+                    break
+
                 if chainbuf.updated_bg_image is not None:
                     # Always keep the current bg and std images so
                     # that we can save them when starting a new .fmf
@@ -1044,6 +1049,9 @@ class SaveCamData(object):
             # 3: grab any more that are here
             try:
                 with camnode_utils.use_buffer_from_chain(self._chain,blocking=False) as chainbuf:
+                    if chainbuf.quit_now:
+                        break
+
                     if state == 'saving':
                         raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
                                      chainbuf.timestamp) )
@@ -1074,14 +1082,12 @@ class SaveCamData(object):
 class SaveSmallData(object):
     def __init__(self,cam_id=None,
                  options = None,
-                 quit_event = None,
                  ):
         self.options = options
         self._chain = camnode_utils.ChainLink()
         self._cam_id = cam_id
         self.cmd = Queue.Queue()
         self._ufmf = None
-        self.quit_event = quit_event
 
     def get_chain(self):
         return self._chain
@@ -1102,8 +1108,7 @@ class SaveSmallData(object):
 
         state = 'pass'
 
-        quit_event_isSet = self.quit_event.isSet
-        while not quit_event_isSet():
+        while 1:
 
             while 1:
                 if self.cmd.empty():
@@ -1120,6 +1125,9 @@ class SaveSmallData(object):
 
             # block for images
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
+                if chainbuf.quit_now:
+                    break
+
                 if state == 'saving':
                     if self._ufmf is None:
                         frame1 = numpy.asarray(chainbuf.get_buf())
@@ -1140,6 +1148,9 @@ class SaveSmallData(object):
             # grab any more that are here
             try:
                 with camnode_utils.use_buffer_from_chain(self._chain,blocking=False) as chainbuf:
+                    if chainbuf.quit_now:
+                        break
+
                     if state == 'saving':
                         self._tobuf( chainbuf )
             except Queue.Empty:
@@ -1195,7 +1206,11 @@ class ImageSource(threading.Thread):
                     if buffer_pool.get_num_outstanding_buffers() < 10:
                         print 'Resuming normal image acquisition'
                         break
+
+            # this gets a new (unused) buffer from the preallocated pool
             with get_free_buffer_from_pool( buffer_pool ) as chainbuf:
+                chainbuf.quit_now = False
+
                 _bufim = chainbuf.get_buf()
 
                 try_again_condition, timestamp, framenumber = self._grab_into_buffer( _bufim )
@@ -1214,8 +1229,7 @@ class ImageSource(threading.Thread):
                 # Now we get rid of the frame from this thread by passing
                 # it to processing threads. The last one of these will
                 # return the buffer to buffer_pool when done.
-                chain = self._chain
-                if chain is not None:
+                if self._chain is not None:
 
                     # Setting this gives responsibility to the last
                     # chain to call
@@ -1226,7 +1240,15 @@ class ImageSource(threading.Thread):
                     # buffer when the last link in the chain is done.
                     chainbuf._i_promise_to_return_buffer_to_the_pool = True
 
-                    chain.fire( chainbuf ) # the end of the chain will call return_buffer()
+                    self._chain.fire( chainbuf ) # the end of the chain will call return_buffer()
+        # now, we are quitting, so fire one last event through the chain to signal quit
+        with get_free_buffer_from_pool( buffer_pool ) as chainbuf:
+            chainbuf.quit_now = True
+
+            # see above for this stuff
+            if self._chain is not None:
+                chainbuf._i_promise_to_return_buffer_to_the_pool = True
+                self._chain.fire( chainbuf )
 
 class ImageSourceBaseController(object):
     pass
@@ -1287,21 +1309,37 @@ class ImageSourceFromCamera(ImageSource):
         return try_again_condition, timestamp, framenumber
 
 class ImageSourceFakeCamera(ImageSource):
+
+    # XXX TODO: I should actually just incorporate all the fake cam
+    # stuff in this class. There doesn't seem to be much point in
+    # having a separate fake cam class. On the other hand, the fake
+    # cam gets called by another thread, so the separation would be
+    # less clear about what is running in which thread.
+
     def __init__(self,*args,**kw):
         self._do_step = threading.Event()
         self._fake_cam = kw['cam']
         super( ImageSourceFakeCamera, self).__init__(*args,**kw)
 
     def _block_until_ready(self):
-        # this will ping pong execution back and forth
-        self._do_step.wait()
-        self._do_step.clear()
+        while 1:
+            if self.quit_event.isSet():
+                return
+
+            # This lock ping-pongs execution back and forth between
+            # "acquire" and process.
+
+            self._do_step.wait(0.01) # timeout
+            if self._do_step.isSet():
+                self._do_step.clear()
+                return
 
     def spawn_controller(self):
         class ImageSourceFakeCameraController(ImageSourceBaseController):
-            def __init__(self, do_step=None, fake_cam=None):
+            def __init__(self, do_step=None, fake_cam=None, quit_event=None):
                 self._do_step = do_step
                 self._fake_cam = fake_cam
+                self._quit_event = quit_event
             def trigger_single_frame_start(self):
                 self._do_step.set()
             def set_to_frame_0(self):
@@ -1309,15 +1347,20 @@ class ImageSourceFakeCamera(ImageSource):
             def is_finished(self):
                 #print 'self._fake_cam.is_finished()',self._fake_cam.is_finished()
                 return self._fake_cam.is_finished()
-        controller = ImageSourceFakeCameraController(self._do_step,self._fake_cam)
+            def quit_now(self):
+                self._quit_event.set()
+            def get_n_frames(self):
+                return self._fake_cam.get_n_frames()
+        controller = ImageSourceFakeCameraController(self._do_step,
+                                                     self._fake_cam,
+                                                     self.quit_event)
         return controller
 
     def _grab_buffer_quick(self):
         time.sleep(0.05)
 
     def _grab_into_buffer(self, _bufim ):
-        # throttle control flow here...
-        self.cam.grab_next_frame_into_buf_blocking(_bufim)
+        self.cam.grab_next_frame_into_buf_blocking(_bufim, self.quit_event)
 
         try_again_condition = False
         timestamp=self.cam.get_last_timestamp()
@@ -1357,36 +1400,42 @@ class FakeCameraFromFMF(FakeCamera):
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
         if 0:
             print 'short!'
-            self.fmf_recarray = self.fmf_recarray[:10]
+            self.fmf_recarray = self.fmf_recarray[:1000]
 
+        self._n_frames = len(self.fmf_recarray)
         self._curframe = SharedValue1(0)
-        self.frame_offset = 0
+        self._frame_offset = 0
+
+    def get_n_frames(self):
+        return self._n_frames
 
     def get_frame_size(self):
         h,w = self.fmf_recarray['frame'][0].shape
         return w,h
 
-    def grab_next_frame_into_buf_blocking(self, buf):
+    def grab_next_frame_into_buf_blocking(self, buf, quit_event):
         buf = numpy.asarray( buf )
         curframe = self._curframe.get()
         while self.is_finished():
+            if quit_event.isSet():
+                return
             # We're being asked to go off the end here...
             # wait until we get told to return to beginning.
             time.sleep(0.05)
             curframe = self._curframe.get()
         buf[:,:] = self.fmf_recarray['frame'][ curframe ]
-        self.last_timestamp = self.fmf_recarray['timestamp'][ curframe ]
-        self.last_framenumber = curframe + self.frame_offset
+        self._last_timestamp = self.fmf_recarray['timestamp'][ curframe ]
+        self._last_framenumber = curframe + self._frame_offset
         self._curframe.set( curframe + 1 )
 
     def get_last_timestamp(self):
-        return self.last_timestamp
+        return self._last_timestamp
 
     def get_last_framenumber(self):
-        return self.last_framenumber
+        return self._last_framenumber
 
     def set_to_frame_0(self):
-        self.frame_offset += self._curframe.get()
+        self._frame_offset += self._curframe.get()
         self._curframe.set( 0 )
 
     def is_finished(self):
@@ -1768,9 +1817,7 @@ class AppState(object):
                 self.critical_threads.append( thread )
 
                 if 1:
-                    save_cam = SaveCamData(
-                        quit_event=globals['cam_quit_event'],
-                        )
+                    save_cam = SaveCamData()
                     self.all_savers.append( save_cam )
                     cam_processor_chain.append_link( save_cam.get_chain() )
                     thread = threading.Thread( target = save_cam.mainloop,
@@ -1783,9 +1830,7 @@ class AppState(object):
                     self.all_savers.append( None )
 
                 if 1:
-                    save_small = SaveSmallData(options=self.options,
-                                               quit_event=globals['cam_quit_event'],
-                                               )
+                    save_small = SaveSmallData(options=self.options)
                     self.all_small_savers.append( save_small )
                     cam_processor_chain.append_link( save_small.get_chain() )
                     thread = threading.Thread( target = save_small.mainloop,
@@ -1851,20 +1896,31 @@ class AppState(object):
     def set_quit_function(self, quit_function=None):
         self._real_quit_function = quit_function
 
-    def append_chain(self, klass=None, args=None, basename=None):
+    def append_chain(self,
+                     klass=None,
+                     args=None,
+                     basename=None,
+                     kwargs=None,
+                     kwargs_per_instance=None,
+                     ):
         if basename is None:
             basename = 'appended thread'
+        targets = {}
         for cam_no, (cam_id, chain) in enumerate(zip(self.all_cam_ids,
                                                      self.all_cam_chains)):
             globals = self.globals[cam_no]
-            kwargs = dict(cam_id=cam_id,
-                          quit_event=globals['cam_quit_event'],
-                          )
+            base_kwargs = dict(cam_id=cam_id)
+
+            if kwargs is not None:
+                base_kwargs.update( kwargs )
+
+            if kwargs_per_instance is not None:
+                base_kwargs.update( kwargs_per_instance[ cam_no ] )
 
             if args is None:
-                thread_instance = klass(**kwargs)
+                thread_instance = klass(**base_kwargs)
             else:
-                thread_instance = klass(*args,**kwargs)
+                thread_instance = klass(*args,**base_kwargs)
 
             chain.append_link( thread_instance.get_chain() )
             name = basename + ' ' + cam_id
@@ -1873,6 +1929,8 @@ class AppState(object):
             thread.setDaemon(True)
             thread.start()
             self.critical_threads.append( thread )
+            targets[cam_id] = thread_instance
+        return targets
 
     def main_thread_task(self):
         """gets called often in mainloop of app"""
