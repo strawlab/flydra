@@ -313,6 +313,8 @@ class ProcessCamClass(object):
                  cam_no=-1,
                  main_brain_hostname=None,
                  mask_image=None,
+                 diff_threshold_shared=None,
+                 clear_threshold_shared=None,
                  n_sigma_shared=None,
                  framerate = None,
                  lbrt=None,
@@ -335,6 +337,9 @@ class ProcessCamClass(object):
 
         self.bg_frame_alpha = bg_frame_alpha
         self.bg_frame_interval = bg_frame_interval
+
+        self.diff_threshold_shared = diff_threshold_shared
+        self.clear_threshold_shared = clear_threshold_shared
         self.n_sigma_shared = n_sigma_shared
 
         self.new_roi = threading.Event()
@@ -357,9 +362,12 @@ class ProcessCamClass(object):
                                                                           max_num_points,
                                                                           roi2_radius,
                                                                           )
+        self.realtime_analyzer.diff_threshold = self.diff_threshold_shared.get_nowait()
+        self.realtime_analyzer.clear_threshold = self.clear_threshold_shared.get_nowait()
+
         self._hlper = None
         self._pmat = None
-        self._scale_factor = None
+        self._scale_factor = None # for 3D calibration stuff
         self.cam_no_str = str(cam_no)
 
         self._chain = camnode_utils.ChainLink()
@@ -367,18 +375,6 @@ class ProcessCamClass(object):
 
     def get_chain(self):
         return self._chain
-
-    def get_clear_threshold(self):
-        return self.realtime_analyzer.clear_threshold
-    def set_clear_threshold(self, value):
-        self.realtime_analyzer.clear_threshold = value
-    clear_threshold = property( get_clear_threshold, set_clear_threshold )
-
-    def get_diff_threshold(self):
-        return self.realtime_analyzer.diff_threshold
-    def set_diff_threshold(self, value):
-        self.realtime_analyzer.diff_threshold = value
-    diff_threshold = property( get_diff_threshold, set_diff_threshold )
 
     def get_scale_factor(self):
         return self._scale_factor
@@ -848,6 +844,14 @@ class ProcessCamClass(object):
 ##                         globals['incoming_bg_frames'].put(
 ##                             (bg_image,std_image,timestamp,framenumber) ) # save it
                     bg_changed = False
+
+                if self.diff_threshold_shared.is_new_value_waiting():
+                    self.realtime_analyzer.diff_threshold = (
+                        self.diff_threshold_shared.get_nowait() )
+
+                if self.clear_threshold_shared.is_new_value_waiting():
+                    self.realtime_analyzer.clear_threshold = (
+                        self.clear_threshold_shared.get_nowait() )
 
                 # XXX could speed this with a join operation I think
                 data = struct.pack('<ddliI',timestamp,cam_received_time,
@@ -1400,7 +1404,7 @@ class FakeCameraFromFMF(FakeCamera):
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
         if 0:
             print 'short!'
-            self.fmf_recarray = self.fmf_recarray[:1000]
+            self.fmf_recarray = self.fmf_recarray[800:1000]
 
         self._n_frames = len(self.fmf_recarray)
         self._curframe = SharedValue1(0)
@@ -1476,7 +1480,7 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
         initial_image_dict = {'mean':mean_ra['frame'][0],
                               'mean2':mean2_ra['frame'][0],
                               'raw':fmf_ra['frame'][0]}
-        if len( mean_ra['frame'] ) > 1:
+        if 0 and len( mean_ra['frame'] ) > 1:
             print ("no current support for reading back multi-frame "
                    "background/cmp. (But this should not be necessary, "
                    "as you can reconstruct them, anyway.)")
@@ -1664,7 +1668,7 @@ class AppState(object):
         #
         # ----------------------------------------------------------------
 
-        if not BENCHMARK or not FLYDRA_BT:
+        if (not use_dummy_mainbrain) and ((not BENCHMARK) or (not FLYDRA_BT)):
             # run in single-thread for benchmark
             timestamp_echo_thread=threading.Thread(target=TimestampEcho,
                                                    name='TimestampEcho')
@@ -1733,10 +1737,14 @@ class AppState(object):
                 prop_names.append( props['name'] )
 
             scalar_control_info['camprops'] = prop_names
-            diff_threshold = 11
-            scalar_control_info['diff_threshold'] = diff_threshold
-            clear_threshold = 0.2
-            scalar_control_info['clear_threshold'] = clear_threshold
+
+            diff_threshold_shared = SharedValue()
+            diff_threshold_shared.set(options.diff_threshold)
+            scalar_control_info['diff_threshold'] = diff_threshold_shared.get_nowait()
+
+            clear_threshold_shared = SharedValue()
+            clear_threshold_shared.set(options.clear_threshold)
+            scalar_control_info['clear_threshold'] = clear_threshold_shared.get_nowait()
             scalar_control_info['visible_image_view'] = 'raw'
 
             try:
@@ -1797,6 +1805,8 @@ class AppState(object):
                         cam_no=cam_no,
                         main_brain_hostname=self.main_brain_hostname,
                         mask_image=mask,
+                        diff_threshold_shared=diff_threshold_shared,
+                        clear_threshold_shared=clear_threshold_shared,
                         n_sigma_shared=n_sigma_shared,
                         framerate=None,
                         lbrt=lbrt,
@@ -2041,10 +2051,9 @@ class AppState(object):
                         print 'setting n_sigma',value
                         cam_processor.n_sigma_shared.set(value)
                     elif property_name == 'diff_threshold':
-                        #print 'setting diff_threshold',value
-                        cam_processor.diff_threshold = value # XXX TODO: FIXME: thread crossing bug
+                        cam_processor.diff_threshold_shared.set(value)
                     elif property_name == 'clear_threshold':
-                        cam_processor.clear_threshold = value # XXX TODO: FIXME: thread crossing bug
+                        cam_processor.clear_threshold_shared.set(value)
                     elif property_name == 'width':
                         assert cam.get_max_width() == value
                     elif property_name == 'height':
@@ -2229,6 +2238,9 @@ def get_app_defaults():
                     background_frame_interval=50,
                     background_frame_alpha=1.0/50.0,
                     server = default_main_brain_hostname,
+                    diff_threshold = 11,
+                    clear_threshold = 0.2,
+                    mask_images = None,
                     )
     return defaults
 
