@@ -97,6 +97,7 @@ if os.name == 'posix' and sys.platform != 'darwin':
     import posix_sched
 
 class SharedValue:
+    # in fview
     def __init__(self):
         self.evt = threading.Event()
         self._val = None
@@ -113,9 +114,29 @@ class SharedValue:
         self.evt.clear()
         return val
     def get_nowait(self):
+        # race condition here -- see comments in fview.py
         val = self._val
         self.evt.clear()
         return val
+
+class SharedValue1(object):
+    # in trackem
+    def __init__(self,initial_value):
+        self._val = initial_value
+        self.lock = threading.Lock()
+    def get(self):
+        self.lock.acquire()
+        try:
+            val = self._val
+        finally:
+            self.lock.release()
+        return val
+    def set(self,new_value):
+        self.lock.acquire()
+        try:
+            self._val = new_value
+        finally:
+            self.lock.release()
 
 class DummyMainBrain:
     def __init__(self,*args,**kw):
@@ -665,23 +686,8 @@ class ProcessCamClass(object):
             # If we have initial values, load them.
 
             # implicit conversion to float32
-            numpy.asarray(running_mean_im_full)[:,:] = self._initial_image_dict['bg']
-            numpy.asarray(compareframe_full)[:,:] = self._initial_image_dict['cmp']
-            numpy.asarray(compareframe8u_full)[:,:] = self._initial_image_dict['cmp']
-
-            # This is also necessary in case we are in an ongoing
-            # background collection mode.  reverse the computation to
-            # get running_sumsqf, which is the estimate of the squared
-            # pixel values.
-            if 1:
-                __nx_running_sumsqf = reverse_cmp_frame(  self._initial_image_dict['cmp'],
-                                                          self._initial_image_dict['bg'],
-                                                          self.bg_frame_alpha,
-                                                          self._initial_image_dict['raw'],
-                                                          n_sigma=self.n_sigma_shared.get_nowait() )
-            else:
-                __nx_running_sumsqf = self._initial_bg_image**2
-            numpy.asarray(running_sumsqf)[:,:] = __nx_running_sumsqf
+            numpy.asarray(running_mean_im_full)[:,:] = self._initial_image_dict['mean']
+            numpy.asarray(running_sumsqf)[:,:] = self._initial_image_dict['mean2']
         running_mean_im.get_8u_copy_put( running_mean8u_im, cur_fisize )
 
         #################### done initializing images ############
@@ -798,12 +804,6 @@ class ProcessCamClass(object):
                         do_bg_maint = True
 
                 if do_bg_maint:
-                    if self._initial_image_dict is not None:
-                        if 0:
-                            raise NotImplementedError("cannot create initial conditions to "
-                                                      "allow ongoing background updates in replay mode")
-                        else:
-                            warnings.warn('compare image is wrong!')
                     realtime_image_analysis.do_bg_maint(
                     #motmot.realtime_image_analysis.slow.do_bg_maint(
                         running_mean_im,#in
@@ -1303,6 +1303,7 @@ class ImageSourceFromCamera(ImageSource):
 class ImageSourceFakeCamera(ImageSource):
     def __init__(self,*args,**kw):
         self._do_step = threading.Event()
+        self._fake_cam = kw['cam']
         super( ImageSourceFakeCamera, self).__init__(*args,**kw)
 
     def _block_until_ready(self):
@@ -1312,11 +1313,14 @@ class ImageSourceFakeCamera(ImageSource):
 
     def spawn_controller(self):
         class ImageSourceFakeCameraController(ImageSourceBaseController):
-            def __init__(self, do_step=None):
+            def __init__(self, do_step=None, fake_cam=None):
                 self._do_step = do_step
+                self._fake_cam = fake_cam
             def trigger_single_frame_start(self):
                 self._do_step.set()
-        controller = ImageSourceFakeCameraController(self._do_step)
+            def set_to_frame_0(self):
+                self._fake_cam.set_to_frame_0()
+        controller = ImageSourceFakeCameraController(self._do_step,self._fake_cam)
         return controller
 
     def _grab_buffer_quick(self):
@@ -1362,7 +1366,8 @@ class FakeCamera(object):
 class FakeCameraFromFMF(FakeCamera):
     def __init__(self,filename):
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
-        self.curframe = 0
+        self.curframe = SharedValue1(0)
+        self.frame_offset = 0
 
     def get_frame_size(self):
         h,w = self.fmf_recarray['frame'][0].shape
@@ -1370,16 +1375,26 @@ class FakeCameraFromFMF(FakeCamera):
 
     def grab_next_frame_into_buf_blocking(self, buf):
         buf = numpy.asarray( buf )
-        buf[:,:] = self.fmf_recarray['frame'][ self.curframe ]
-        self.curframe += 1
+        curframe = self.curframe.get()
+        while curframe >= len( self.fmf_recarray['frame'] ):
+            # We're being asked to go off the end here...
+            # wait until we get told to return to beginning.
+            time.sleep(0.05)
+            curframe = self.curframe.get()
+        buf[:,:] = self.fmf_recarray['frame'][ curframe ]
+        self.last_timestamp = self.fmf_recarray['timestamp'][ curframe ]
+        self.last_framenumber = curframe + self.frame_offset
+        self.curframe.set( curframe + 1 )
 
     def get_last_timestamp(self):
-        i = self.curframe-1
-        return self.fmf_recarray['timestamp'][i]
+        return self.last_timestamp
 
     def get_last_framenumber(self):
-        i = self.curframe-1
-        return i
+        return self.last_framenumber
+
+    def set_to_frame_0(self):
+        self.frame_offset += self.curframe.get()
+        self.curframe.set( 0 )
 
 def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
     """factory function to create fake camera and ImageSourceModel"""
@@ -1388,30 +1403,32 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
         cam = FakeCameraFromFMF(fname)
         ImageSourceModel = ImageSourceFakeCamera
 
-        bgfilename = os.path.splitext(fname)[0] + '_bg' + '.fmf'
-        cmpfilename = os.path.splitext(fname)[0] + '_std' + '.fmf'
+        mean_filename = os.path.splitext(fname)[0] + '_mean' + '.fmf'
+        mean2_filename = os.path.splitext(fname)[0] + '_mean2' + '.fmf'
 
         fmf_ra = FlyMovieFormat.mmap_flymovie( fname )
-        bg_ra =  FlyMovieFormat.mmap_flymovie( bgfilename )
-        cmp_ra = FlyMovieFormat.mmap_flymovie( cmpfilename )
+        mean_ra =  FlyMovieFormat.mmap_flymovie( mean_filename )
+        mean2_ra = FlyMovieFormat.mmap_flymovie( mean2_filename )
 
         t0 = fmf_ra['timestamp'][0]
-        bg_t0 = bg_ra['timestamp'][0]
-        cmp_t0 = cmp_ra['timestamp'][0]
+        mean_t0 = mean_ra['timestamp'][0]
+        mean2_t0 = mean2_ra['timestamp'][0]
 
-        if not ((t0 == bg_t0) and (t0 == cmp_t0)):
+        if not ((t0 >= mean_t0) and (t0 >= mean2_t0)):
             print '*'*80
-            print 'WARNING timestamps of first image frames do not all agree. they are'
+            print 'WARNING timestamps of first image frame is not before mean image timestamps. they are'
             print ' raw .fmf: %s'%repr(t0)
-            print ' bg .fmf:  %s'%repr(bg_t0)
-            print ' std .fmf: %s'%repr(cmp_t0)
+            print ' mean .fmf:  %s'%repr(mean_t0)
+            print ' mean2 .fmf: %s'%repr(mean2_t0)
             print '*'*80
 
-        initial_image_dict = {'bg':bg_ra['frame'][0],
-                              'cmp':cmp_ra['frame'][0],
+        initial_image_dict = {'mean':mean_ra['frame'][0],
+                              'mean2':mean2_ra['frame'][0],
                               'raw':fmf_ra['frame'][0]}
-        if len( bg_ra['frame'] ) > 1:
-            raise NotImplementedError("no current support for reading back multi-frame background/cmp")
+        if len( mean_ra['frame'] ) > 1:
+            print ("no current support for reading back multi-frame "
+                   "background/cmp. (But this should not be necessary, "
+                   "as you can reconstruct them, anyway.)")
 
     elif fname.endswith('.ufmf'):
         raise NotImplementedError('patience, young grasshopper')

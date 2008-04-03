@@ -54,6 +54,11 @@ class WxApp(wx.App):
 
         wx.EVT_CLOSE(self.frame, self.OnWindowClose)
 
+        ID_Timer  = wx.NewId()
+        self.timer = wx.Timer(self,      # object to send the event to
+                              ID_Timer)  # event id to use
+        #wx.EVT_TIMER(self,  ID_Timer, wrap_loud(self.frame,self.OnDoSingleFrame))
+        wx.EVT_TIMER(self,  ID_Timer, self.OnDoSingleFrame)
 
         ID_Timer2 = wx.NewId()
         self.timer2 = wx.Timer(self, ID_Timer2)
@@ -62,7 +67,7 @@ class WxApp(wx.App):
         self.timer2.Start(self.update_interval2)
 
         EVT_DISPLAYIMAGE(self, self.OnDisplayImageEvent )
-        self.widgets2controllers = {}
+        self.controllers = []
         self._built_playback_GUI = False
 
         return True
@@ -188,23 +193,42 @@ class WxApp(wx.App):
             cmp_canvas.update_image( event.cmp_buf )
 
     def generate_view(self, model, controller ):
-
+        self.controllers.append( controller )
         if hasattr(controller, 'trigger_single_frame_start' ):
             if not self._built_playback_GUI:
+
                 ctrl = wx.Button(self.frame,-1,"step")
                 wx.EVT_BUTTON(ctrl, ctrl.GetId(), self.OnDoSingleFrame)
                 self.step_button_box.Add(ctrl,proportion=1,flag=wx.EXPAND)
+
+                ctrl = wx.Button(self.frame,-1,"play 100 fps")
+                wx.EVT_BUTTON(ctrl, ctrl.GetId(), self.OnPlay100Fps)
+                self.step_button_box.Add(ctrl,proportion=1,flag=wx.EXPAND)
+
+                ctrl = wx.Button(self.frame,-1,"stop")
+                wx.EVT_BUTTON(ctrl, ctrl.GetId(), self.OnStopPlaying)
+                self.step_button_box.Add(ctrl,proportion=1,flag=wx.EXPAND)
+
+                ctrl = wx.Button(self.frame,-1,"frame 0")
+                wx.EVT_BUTTON(ctrl, ctrl.GetId(), self.OnFrame0)
+                self.step_button_box.Add(ctrl,proportion=1,flag=wx.EXPAND)
+
                 self.frame.Layout()
-                self.widgets2controllers[ ctrl ] = []
                 self._built_playback_GUI = True
 
-            self.widgets2controllers[ ctrl ].append( controller )
+    def OnPlay100Fps(self, event):
+        self.timer.Start(10) # call every n msec
+
+    def OnStopPlaying(self, event):
+        self.timer.Stop() # call every n msec
 
     def OnDoSingleFrame(self, event):
-        widget = event.GetEventObject()
-        controllers = self.widgets2controllers[widget]
-        for controller in controllers:
+        for controller in self.controllers:
             controller.trigger_single_frame_start()
+
+    def OnFrame0(self, event):
+        for controller in self.controllers:
+            controller.set_to_frame_0()
 
 class DisplayCamData(object):
     def __init__(self, wxapp,
