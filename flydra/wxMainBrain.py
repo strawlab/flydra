@@ -298,7 +298,7 @@ class wxMainBrainApp(wx.App):
 
         ID_Timer  = wx.NewId()
         self.timer = wx.Timer(self,      # object to send the event to
-                             ID_Timer)  # event id to use
+                              ID_Timer)  # event id to use
         wx.EVT_TIMER(self,  ID_Timer, wrap_loud(self.frame,self.OnTimer))
         self.update_interval=100
         self.timer.Start(self.update_interval) # call every n msec
@@ -307,7 +307,7 @@ class wxMainBrainApp(wx.App):
         # raw image update timer
         ID_Timer2  = wx.NewId()
         self.timer2 = wx.Timer(self,      # object to send the event to
-                              ID_Timer2)  # event id to use
+                               ID_Timer2)  # event id to use
         wx.EVT_TIMER(self,  ID_Timer2, self.OnUpdateRawImages)
         self.update_interval2=2000
         self.timer2.Start(self.update_interval2) # call every n msec
