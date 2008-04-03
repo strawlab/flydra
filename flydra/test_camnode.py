@@ -67,9 +67,10 @@ class GatherResults(object):
             raise RuntimeError('asking for results when not done!')
         return numpy.array(self._results_fnos), numpy.array(self._results_data)
 
-def analyze_file(filenames):
-    defaults = camnode.get_app_defaults()
-    options = OptionsDict(defaults)
+def analyze_file(filenames,options = None):
+    if options is None:
+        defaults = camnode.get_app_defaults()
+        options = OptionsDict(defaults)
 
     options.emulation_image_sources = filenames
 
