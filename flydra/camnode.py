@@ -96,6 +96,9 @@ import motmot.FastImage.FastImage as FastImage
 if os.name == 'posix' and sys.platform != 'darwin':
     import posix_sched
 
+import flydra.debuglock
+DebugLock = flydra.debuglock.DebugLock
+
 class SharedValue:
     # in fview
     def __init__(self):
@@ -123,6 +126,7 @@ class SharedValue1(object):
     # in trackem
     def __init__(self,initial_value):
         self._val = initial_value
+        #self.lock = DebugLock('SharedValue1')
         self.lock = threading.Lock()
     def get(self):
         self.lock.acquire()
@@ -547,24 +551,6 @@ class ProcessCamClass(object):
 
 
     def mainloop(self):
-
-        def reverse_cmp_frame( compareframe8u, mean_im, alpha, cur_im, n_sigma=1.0 ):
-            #print 'reversed compareframe8u',compareframe8u
-            mean2 = mean_im.astype(numpy.float32)**2
-            #print 'reversed mean2',mean2
-
-            compareframe8u = compareframe8u.astype(numpy.float32) # can't un-round, but...
-            running_stdframe = compareframe8u/n_sigma
-            running_stdframe = running_stdframe**2
-            # can't de-abs()
-            std2 = running_stdframe
-            running_sumsqf = std2 + mean2
-            #print 'reversed running_sumsqf'
-            #print running_sumsqf
-
-            R = (running_sumsqf - alpha*cur_im)/(1-alpha)
-            return R
-
         disable_ifi_warning = self.options.disable_ifi_warning
         globals = self.globals
 
@@ -1320,6 +1306,9 @@ class ImageSourceFakeCamera(ImageSource):
                 self._do_step.set()
             def set_to_frame_0(self):
                 self._fake_cam.set_to_frame_0()
+            def is_finished(self):
+                #print 'self._fake_cam.is_finished()',self._fake_cam.is_finished()
+                return self._fake_cam.is_finished()
         controller = ImageSourceFakeCameraController(self._do_step,self._fake_cam)
         return controller
 
@@ -1366,7 +1355,11 @@ class FakeCamera(object):
 class FakeCameraFromFMF(FakeCamera):
     def __init__(self,filename):
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
-        self.curframe = SharedValue1(0)
+        if 0:
+            print 'short!'
+            self.fmf_recarray = self.fmf_recarray[:10]
+
+        self._curframe = SharedValue1(0)
         self.frame_offset = 0
 
     def get_frame_size(self):
@@ -1375,16 +1368,16 @@ class FakeCameraFromFMF(FakeCamera):
 
     def grab_next_frame_into_buf_blocking(self, buf):
         buf = numpy.asarray( buf )
-        curframe = self.curframe.get()
-        while curframe >= len( self.fmf_recarray['frame'] ):
+        curframe = self._curframe.get()
+        while self.is_finished():
             # We're being asked to go off the end here...
             # wait until we get told to return to beginning.
             time.sleep(0.05)
-            curframe = self.curframe.get()
+            curframe = self._curframe.get()
         buf[:,:] = self.fmf_recarray['frame'][ curframe ]
         self.last_timestamp = self.fmf_recarray['timestamp'][ curframe ]
         self.last_framenumber = curframe + self.frame_offset
-        self.curframe.set( curframe + 1 )
+        self._curframe.set( curframe + 1 )
 
     def get_last_timestamp(self):
         return self.last_timestamp
@@ -1393,8 +1386,17 @@ class FakeCameraFromFMF(FakeCamera):
         return self.last_framenumber
 
     def set_to_frame_0(self):
-        self.frame_offset += self.curframe.get()
-        self.curframe.set( 0 )
+        self.frame_offset += self._curframe.get()
+        self._curframe.set( 0 )
+
+    def is_finished(self):
+        # this can is called by any thread
+        #print "len( self.fmf_recarray['frame'] )",len( self.fmf_recarray['frame'] )
+        #print "self._curframe.get()",self._curframe.get()
+        result = self._curframe.get() >= len( self.fmf_recarray['frame'] )
+        #print result
+        #print
+        return result
 
 def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
     """factory function to create fake camera and ImageSourceModel"""
@@ -1502,8 +1504,8 @@ class AppState(object):
         self.all_cam_ids = []
 
         self.reconstruct_helper = []
-        self.image_sources = []
-        self.image_controllers = []
+        self._image_sources = []
+        self._image_controllers = []
         initial_images = []
         self.critical_threads = []
 
@@ -1585,8 +1587,8 @@ class AppState(object):
 
             image_source.setDaemon(True)
             image_source.start()
-            self.image_sources.append( image_source )
-            self.image_controllers.append( controller )
+            self._image_sources.append( image_source )
+            self._image_controllers.append( controller )
 
         # ----------------------------------------------------------------
         #
@@ -1802,7 +1804,7 @@ class AppState(object):
                 self.all_small_savers.append( None )
                 self.all_cam_chains.append( None )
 
-            self.image_sources[cam_no].set_chain( cam_processor_chain )
+            self._image_sources[cam_no].set_chain( cam_processor_chain )
 
             # ----------------------------------------------------------------
             #
@@ -1828,6 +1830,12 @@ class AppState(object):
             self.last_measurement_time.append( time_func() )
             self.last_return_info_check.append( 0.0 ) # never
             self.n_raw_frames.append( 0 )
+
+    def get_image_sources(self):
+        return self._image_sources
+
+    def get_image_controllers(self):
+        return self._image_controllers
 
     def quit_function(self,exit_value):
         for globals in self.globals:
@@ -2076,7 +2084,7 @@ class AppState(object):
                         print str(still_missing)
 
             elif key == 'quit':
-                self.image_sources[cam_no].join(0.1)
+                self._image_sources[cam_no].join(0.1)
                 # XXX TODO: quit and join chain threads
                 cam.close()
                 self.cam_status[cam_no] = 'destroyed'
@@ -2275,8 +2283,8 @@ def main():
         app=ConsoleApp(call_often = app_state.main_thread_task)
         app_state.set_quit_function( app.OnQuit )
 
-    for (model, controller) in zip(app_state.image_sources,
-                                   app_state.image_controllers):
+    for (model, controller) in zip(app_state.get_image_sources(),
+                                   app_state.get_image_controllers()):
         app.generate_view( model, controller )
     app.MainLoop()
 

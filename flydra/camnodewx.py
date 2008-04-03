@@ -238,11 +238,13 @@ class DisplayCamData(object):
         self._chain = camnode_utils.ChainLink()
         self._wxapp = wxapp
         self._cam_id = cam_id
+        self._quit_event = quit_event
     def get_chain(self):
         return self._chain
     def mainloop(self):
         NAUGHTY_BUT_FAST = True
-        while 1:
+        quit_event_isSet = self._quit_event.isSet
+        while not quit_event_isSet():
             with camnode_utils.use_buffer_from_chain(self._chain) as buf:
                 # post images and processed points to wx
                 if hasattr(buf,'processed_points'):
