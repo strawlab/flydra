@@ -672,12 +672,22 @@ class ProcessCamClass(object):
             # implicit conversion to float32
             numpy.asarray(running_mean_im_full)[:,:] = self._initial_image_dict['mean']
             numpy.asarray(running_sumsqf)[:,:] = self._initial_image_dict['mean2']
+
+            if 1:
+                print 'WARNING: ignoring initial images and taking new background'
+                globals['take_background'].set()
+
+        else:
+            globals['take_background'].set()
+
         running_mean_im.get_8u_copy_put( running_mean8u_im, cur_fisize )
 
         #################### done initializing images ############
 
         incoming_raw_frames_queue = globals['incoming_raw_frames']
         incoming_raw_frames_queue_put = incoming_raw_frames_queue.put
+
+        initial_take_bg_state = None
 
         while 1:#not cam_quit_event_isSet():
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
@@ -765,6 +775,26 @@ class ProcessCamClass(object):
 
                 do_bg_maint = False
 
+                if initial_take_bg_state is not None:
+                    assert initial_take_bg_state == 'gather'
+                    if 1:
+                        n_initial_take = 50
+                        initial_take_frames.append( numpy.array(hw_roi_frame,copy=True) )
+                        if len( initial_take_frames ) >= n_initial_take:
+
+                            initial_take_frames = numpy.array( initial_take_frames, dtype=numpy.float32 )
+                            mean_frame = numpy.mean( initial_take_frames, axis=0)
+                            mean2_frame = numpy.sum(initial_take_frames**2, axis=0)/len( initial_take_frames )
+
+                            numpy.asarray(running_mean_im)[:,:] = mean_frame
+                            numpy.asarray(running_sumsqf)[:,:] = mean2_frame
+                            print 'using slow method, calculated mean and mean2 frames from first %d frames'%(n_initial_take,)
+
+                            # we're done with initial transient, set stuff
+                            do_bg_maint = True
+                            initial_take_bg_state = None
+                            del initial_take_frames
+
                 if take_background_isSet():
                     print 'taking new bg'
                     # reset background image with current frame as mean and 0 STD
@@ -773,15 +803,17 @@ class ProcessCamClass(object):
                         print max_frame_size
                         print 'ERROR: can only take background image if not using ROI'
                     else:
-                        hw_roi_frame.get_32f_copy_put(running_sumsqf,max_frame_size)
-                        tmp_view = numpy.asarray(running_sumsqf)
-                        tmp_view += 1 # make initial STD=1
-                        print 'setting initial per-pixel STD to 1'
-                        running_sumsqf.toself_square(max_frame_size)
+                        if 0:
+                            # old way
+                            hw_roi_frame.get_32f_copy_put(running_sumsqf,max_frame_size)
+                            running_sumsqf.toself_square(max_frame_size)
 
-                        hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
-                        running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
-                        do_bg_maint = True
+                            hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
+                            running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
+                            do_bg_maint = True
+                        else:
+                            initial_take_bg_state = 'gather'
+                            initial_take_frames = [ numpy.array(hw_roi_frame,copy=True) ]
                     take_background_clear()
 
                 if collecting_background_isSet():
@@ -791,7 +823,8 @@ class ProcessCamClass(object):
 
                 if do_bg_maint:
                     realtime_image_analysis.do_bg_maint(
-                    #motmot.realtime_image_analysis.slow.do_bg_maint(
+                    #print 'doing slow bg maint, frame', chainbuf.framenumber
+                    #tmpresult = motmot.realtime_image_analysis.slow.do_bg_maint(
                         running_mean_im,#in
                         hw_roi_frame,#in
                         cur_fisize,#in
@@ -809,6 +842,7 @@ class ProcessCamClass(object):
                         bright_non_gaussian_replacement,#in
                         bench=0 )
                         #debug=0)
+                    #chainbuf.real_std_est= tmpresult
                     bg_changed = True
                     bg_frame_number = 0
 
@@ -833,6 +867,7 @@ class ProcessCamClass(object):
                     else:
                         bg_image = running_mean8u_im
                         std_image = compareframe8u
+
                     chainbuf.updated_bg_image = numpy.array( bg_image, copy=True )
                     chainbuf.updated_cmp_image = numpy.array( std_image, copy=True )
 
@@ -1404,7 +1439,7 @@ class FakeCameraFromFMF(FakeCamera):
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
         if 0:
             print 'short!'
-            self.fmf_recarray = self.fmf_recarray[800:1000]
+            self.fmf_recarray = self.fmf_recarray[:600]
 
         self._n_frames = len(self.fmf_recarray)
         self._curframe = SharedValue1(0)
@@ -2226,7 +2261,13 @@ def get_app_defaults():
 
     defaults = dict(wrapper='ctypes',
                     backend='unity',
-                    n_sigma=2.0,
+
+                    # these are the most important 2D tracking parameters:
+                    diff_threshold = 5,
+                    n_sigma=7.0,
+
+                    clear_threshold = 0.3,
+
                     debug_drop=False,
                     wx=False,
                     debug_acquire=False,
@@ -2238,8 +2279,6 @@ def get_app_defaults():
                     background_frame_interval=50,
                     background_frame_alpha=1.0/50.0,
                     server = default_main_brain_hostname,
-                    diff_threshold = 11,
-                    clear_threshold = 0.2,
                     mask_images = None,
                     )
     return defaults

@@ -56,19 +56,21 @@ class GatherResults(object):
                 if 0 and self._verbose:
                     sys.stdout.write('.')
                     sys.stdout.flush()
-                # post images and processed points to wx
-                if hasattr(chainbuf,'processed_points'):
+
+                if 1:
                     pts = chainbuf.processed_points
                     fno = chainbuf.framenumber
                     for pt in pts:
                         self._results_data.append( pt )
                         self._results_fnos.append( fno )
-                        if (hasattr(chainbuf,'updated_bg_image') and
-                            chainbuf.updated_bg_image is not None):
-                            self._results_bg_ims[ fno ]['bg'] = chainbuf.updated_bg_image
-                            self._results_bg_ims[ fno ]['cmp'] = chainbuf.updated_cmp_image
-                            self._results_bg_ims[ fno ]['mean'] = chainbuf.updated_running_mean_image
-                            self._results_bg_ims[ fno ]['mean2'] = chainbuf.updated_running_sumsqf_image
+                    if (hasattr(chainbuf,'updated_bg_image') and
+                        chainbuf.updated_bg_image is not None):
+                        self._results_bg_ims[ fno ]['bg'] = chainbuf.updated_bg_image
+                        self._results_bg_ims[ fno ]['cmp'] = chainbuf.updated_cmp_image
+                        self._results_bg_ims[ fno ]['mean'] = chainbuf.updated_running_mean_image
+                        self._results_bg_ims[ fno ]['mean2'] = chainbuf.updated_running_sumsqf_image
+                        if hasattr(chainbuf, 'real_std_est'):
+                            self._results_bg_ims[ fno ]['real_std_est'] = chainbuf.real_std_est
         self._done = True
     def get_results(self):
         if not self._done:
@@ -147,11 +149,15 @@ def analyze_file(filenames,options = None):
     for cam_id, gather_result_instance in result_gatherers.iteritems():
         fnos, data, more_data_dict = gather_result_instance.get_results()
         results[cam_id] = (fnos, data, more_data_dict)
-    return results
+    vars = {}
+    for k in options.__dict__.keys():
+        if not k.startswith('_'):
+            vars[k] = getattr(options,k)
+    return results, vars
 
 def main():
     filenames = '/media/disk/mamarama/20080402/full_20080402_163045_mama04_0.fmf'
-    results = analyze_file(filenames)#, use_wx=True)
+    results,vars = analyze_file(filenames)#, use_wx=True)
     for cam_id,(fnos, data) in results.iteritems():
         pylab.figure()
         pylab.plot( fnos, data[:,0], 'r.')
