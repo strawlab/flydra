@@ -6,6 +6,7 @@ import camnode, camnode_utils
 import sys, time
 import numpy
 import pylab
+import collections
 
 # get default options
 class OptionsDict:
@@ -28,6 +29,7 @@ class GatherResults(object):
         self._done = False
         self._total_frames = total_frames
         self._verbose = verbose
+        self._results_bg_ims = collections.defaultdict(dict)
 
     def get_chain(self):
         return self._chain
@@ -61,11 +63,17 @@ class GatherResults(object):
                     for pt in pts:
                         self._results_data.append( pt )
                         self._results_fnos.append( fno )
+                        if (hasattr(chainbuf,'updated_bg_image') and
+                            chainbuf.updated_bg_image is not None):
+                            self._results_bg_ims[ fno ]['bg'] = chainbuf.updated_bg_image
+                            self._results_bg_ims[ fno ]['cmp'] = chainbuf.updated_cmp_image
+                            self._results_bg_ims[ fno ]['mean'] = chainbuf.updated_running_mean_image
+                            self._results_bg_ims[ fno ]['mean2'] = chainbuf.updated_running_sumsqf_image
         self._done = True
     def get_results(self):
         if not self._done:
             raise RuntimeError('asking for results when not done!')
-        return numpy.array(self._results_fnos), numpy.array(self._results_data)
+        return numpy.array(self._results_fnos), numpy.array(self._results_data), self._results_bg_ims
 
 def analyze_file(filenames,options = None):
     if options is None:
@@ -137,8 +145,8 @@ def analyze_file(filenames,options = None):
 
     results = {}
     for cam_id, gather_result_instance in result_gatherers.iteritems():
-        fnos, data = gather_result_instance.get_results()
-        results[cam_id] = (fnos, data)
+        fnos, data, more_data_dict = gather_result_instance.get_results()
+        results[cam_id] = (fnos, data, more_data_dict)
     return results
 
 def main():
