@@ -13,12 +13,14 @@ from optparse import OptionParser
 import flydra.reconstruct as reconstruct
 
 import matplotlib
+import matplotlib.ticker
 import pylab
 
 import flydra.analysis.result_utils as result_utils
 import core_analysis
 
 import pytz, datetime
+
 pacific = pytz.timezone('US/Pacific')
 
 all_kalman_lines = {}
@@ -42,6 +44,7 @@ def doit(
          fps=None,
          use_kalman_smoothing=True,
          dynamic_model = None,
+         options = None,
          ):
 
     if not use_kalman_smoothing:
@@ -98,13 +101,25 @@ def doit(
             for camn in camns:
                 this_idx = numpy.nonzero( all_data['camn']==camn )[0]
                 data = all_data[this_idx]
+
                 xdata = data['x']
                 valid = ~numpy.isnan( xdata )
-                n_valid = numpy.sum(valid)
+
+                data = data[valid]
+                del valid
+
+                if options.area_threshold > 0.0:
+                    area = data['area']
+
+                    valid2 = area >= options.area_threshold
+                    data = data[valid2]
+                    del valid2
+
+                n_valid = len( data )
                 cam_id_n_valid += n_valid
                 if n_valid >= 1:
-                    ax.plot( data['frame'][valid], data['x'][valid], 'r.' )
-                    ax.plot( data['frame'][valid], data['y'][valid], 'g.' )
+                    ax.plot( data['frame'], data['x'], 'r.' )
+                    ax.plot( data['frame'], data['y'], 'g.' )
             ax.text(0.1,0,'%s: %d pts'%(cam_id,cam_id_n_valid),
                     horizontalalignment='left',
                     verticalalignment='bottom',
@@ -240,6 +255,10 @@ def main():
     parser.add_option("--fps", dest='fps', type='float',
                       help="frames per second (used for Kalman filtering/smoothing)")
 
+    parser.add_option("--area-threshold", type='float',
+                      default = 0.0,
+                      help="area of 2D point required for plotting (NOTE: this is not related to the threshold used for Kalmanization)")
+
     parser.add_option("--dynamic-model",
                       type="string",
                       dest="dynamic_model",
@@ -256,6 +275,7 @@ def main():
         fps = options.fps,
         dynamic_model = options.dynamic_model,
         use_kalman_smoothing=options.use_kalman_smoothing,
+        options = options,
         )
 
 if __name__=='__main__':
