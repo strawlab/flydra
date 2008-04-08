@@ -777,8 +777,8 @@ class ProcessCamClass(object):
 
                 if initial_take_bg_state is not None:
                     assert initial_take_bg_state == 'gather'
+                    n_initial_take = 50
                     if 1:
-                        n_initial_take = 50
                         initial_take_frames.append( numpy.array(hw_roi_frame,copy=True) )
                         if len( initial_take_frames ) >= n_initial_take:
 
@@ -794,6 +794,29 @@ class ProcessCamClass(object):
                             do_bg_maint = True
                             initial_take_bg_state = None
                             del initial_take_frames
+                    elif 0:
+                        # faster approach (currently seems broken)
+
+                        # accummulate sum
+
+                        # I could re-write this to use IPP instead of
+                        # numpy, but would that really matter much?
+                        npy_view =  numpy.asarray(hw_roi_frame)
+                        numpy.asarray(running_mean_im)[:,:] = numpy.asarray(running_mean_im) +  npy_view
+                        numpy.asarray(running_sumsqf)[:,:]  = numpy.asarray(running_sumsqf)  +  npy_view.astype(numpy.float32)**2
+                        initial_take_frames_done += 1
+                        del npy_view
+
+                        if initial_take_frames_done >= n_initial_take:
+
+                            # now divide to take average
+                            numpy.asarray(running_mean_im)[:,:] = numpy.asarray(running_mean_im) / initial_take_frames_done
+                            numpy.asarray(running_sumsqf)[:,:]  = numpy.asarray(running_sumsqf) / initial_take_frames_done
+
+                            # we're done with initial transient, set stuff
+                            do_bg_maint = True
+                            initial_take_bg_state = None
+                            del initial_take_frames_done
 
                 if take_background_isSet():
                     print 'taking new bg'
@@ -813,7 +836,20 @@ class ProcessCamClass(object):
                             do_bg_maint = True
                         else:
                             initial_take_bg_state = 'gather'
-                            initial_take_frames = [ numpy.array(hw_roi_frame,copy=True) ]
+                            if 1:
+                                initial_take_frames = [ numpy.array(hw_roi_frame,copy=True) ] # for slow approach
+                            elif 0:
+
+                                initial_take_frames_done = 1 # for faster approach
+
+                                # set running_mean_im
+                                hw_roi_frame.get_32f_copy_put(running_mean_im,cur_fisize)
+                                running_mean_im.get_8u_copy_put( running_mean8u_im, max_frame_size )
+
+                                # set running_sumsqf
+                                hw_roi_frame.get_32f_copy_put(running_sumsqf,max_frame_size)
+                                running_sumsqf.toself_square(max_frame_size)
+
                     take_background_clear()
 
                 if collecting_background_isSet():
