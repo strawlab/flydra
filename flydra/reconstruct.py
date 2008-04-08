@@ -833,7 +833,7 @@ class Reconstructor:
 
         Implements a linear triangulation method to find a 3D
         point. For example, see Hartley & Zisserman section 12.2
-        (p.312).
+        (p.312). Also, 12.8 for intersecting lines.
 
         Note: For a function which does hyptothesis testing to
         selectively choose 2D to incorporate, see
@@ -974,7 +974,7 @@ class Reconstructor:
 
     def get_projected_line_from_2d(self,cam_id,xy):
         "see also SingleCameraCalibration.get_example_3d_point_creating_image_point()"""
-        # XXX Could use nullspace method?
+        # XXX Could use nullspace method of back-projection of lines (that pass through camera center, HZ section 8.1)
         # image of 2d point in 3d space (on optical ray)
         XY = self.find3d_single_cam(cam_id,(xy[0],xy[1],1.0))
         XY = XY[:3,0]/XY[3] # convert to rank1
