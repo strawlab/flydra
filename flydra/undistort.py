@@ -1,15 +1,8 @@
-if 1:
-    import numpy as nx
-    import numpy.linalg as linalg
-    from numpy import inf, nan
-else:
-    import numarray as nx
-    import numarray.linear_algebra as linalg
-    from numarray.ieeespecial import inf, nan
+import numpy as nx
+import numpy.linalg as linalg
+from numpy import inf, nan
 
 import math
-
-import matplotlib.mlab as mlab
 
 def apply_distortion(x,k):
     if len(k) < 5:
@@ -79,14 +72,19 @@ class CachedUndistorter:
             k = (0,0,0,0,0)
         else:
             k = nx.asarray(k)
+
+        if alpha is None:
+            alpha = 0
+
         if KK_new is None:
+            if alpha != 0:
+                raise ValueError('I guess KK_new is wrong in this case, but I am not sure '
+                                 '- the 2nd column, 1st row should be f[0]*alpha')
             KK_new = nx.array([[ f[0], 0, c[0]],
                                [ 0,  f[1], c[1]],
                                [ 0,    0,   1]])
         else:
             KK_new = nx.asarray(KK_new)
-        if alpha is None:
-            alpha = 0
 
 
         mx, my = nx.meshgrid( nx.arange(nc), nx.arange(nr) )
@@ -98,8 +96,8 @@ class CachedUndistorter:
     ##                   py,
     ##                   nx.ones(px.shape)])
         rays = nx.dot(linalg.inv(KK_new),nx.array( [px,
-                                                               py,
-                                                               nx.ones(px.shape)]))
+                                                    py,
+                                                    nx.ones(px.shape)]))
         #print 'rays',rays
 
         # Rotation: (or affine transformation):
