@@ -9,6 +9,7 @@ cdef double cinf
 cinf = inf
 
 import flydra.common_variables
+import flydra.undistort
 
 cdef float MINIMUM_ECCENTRICITY
 MINIMUM_ECCENTRICITY = flydra.common_variables.MINIMUM_ECCENTRICITY
@@ -132,17 +133,36 @@ cdef class ReconstructHelper:
         y = ( yl - self.cc2 ) / self.fc2
 
         r_2 = x*x + y*y
-        term1 = self.k1*r_2 + self.k2*r_2**2
-        xd = x + x*term1 + (2*self.p1*x*y + self.p2*(r_2+2*x**2))
+        r_4 = r_2**2
+        term1 = self.k1*r_2 + self.k2*r_4
 
-        # XXX OpenCV manual may be wrong -- double check this eqn
-        # (esp. first self.p2 term):
-        yd = y + y*term1 + (2*self.p2*x*y + self.p2*(r_2+2*y**2))
+        # OpenCV manual (chaper 6, "3D reconstruction", "camera
+        # calibration" section) seems to disagree with
+        # http://www.vision.caltech.edu/bouguetj/calib_doc/htmls/parameters.html
+
+        # Furthermore, implementations in cvundistort.cpp seem still
+        # unrelated.  Finally, project_points2.m in Bouguet's code is
+        # consistent with his webpage and this below.
+
+        xd = x + x*term1 + (2*self.p1*x*y + self.p2*(r_2+2*x**2))
+        yd = y + y*term1 + (self.p1*(r_2+2*y**2) + 2*self.p2*x*y)
 
         xd = (self.fc1)*xd + (self.cc1)
         yd = (self.fc2)*yd + (self.cc2)
 
         return (xd, yd)
+
+    def undistort_image(self, numpy_image ):
+        assert len(numpy_image.shape)==2
+        assert numpy_image.dtype == numpy.uint8
+
+        f = self.fc1, self.fc2 # focal length
+        c = self.cc1, self.cc2 # center
+        k = self.k1, self.k2, self.p1, self.p2, 0  # NL terms: r^2, r^4, tan1, tan2, r^6
+
+        imnew = flydra.undistort.rect(numpy_image, f=f, c=c, k=k) # perform the undistortion
+        imnew = imnew.astype(numpy.uint8)
+        return imnew
 
 def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
                                                 float ACCEPTABLE_DISTANCE_PIXELS,
@@ -324,5 +344,64 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
             if isnan(Lcoords[0]):
                 Lcoords = None
     return X, Lcoords, cam_ids_used, mean_dist
+
+## def undistort_image( char* src, int srcstep,
+##                      char* dst, int dststep,
+##                      int width, int height,
+##                      float u0, float v0,
+##                      float fx, float fy,
+##                      float k1, float k2,
+##                      float p1, float p2,
+##                      int cn):
+##     """derived from cvundistort.cpp"""
+
+##     cdef int u, v, i
+##     cdef float y, y2, ky, k2y, _2p1y, _3p1y2, p2y2, _fy, _fx
+##     cdef float x, x2, kx, d, _u, _v, iu, iv, ifx, ify
+##     cdef float a0, a1, b0, b1
+##     cdef char* ptr
+##     float t0, t1
+
+##     _fx = 1.f/fx
+##     _fy = 1.f/fy
+
+##     for v from 0 <= v < height:
+##         dst = dst + dststep;
+
+##         y = (v - v0)*_fy
+##         y2 = y*y
+##         ky = 1 + (k1 + k2*y2)*y2;
+##         k2y = 2*k2*y2
+##         _2p1y = 2*p1*y
+##         _3p1y2 = 3*p1*y2
+##         p2y2 = p2*y2
+
+##         for u from 0 <= u < width:
+##             x = (u - u0)*_fx
+##             x2 = x*x
+##             kx = (k1 + k2*x2)*x2
+##             d = kx + ky + k2y*x2
+##             _u = fx*(x*(d + _2p1y) + p2y2 + (3*p2)*x2) + u0
+##             _v = fy*(y*(d + (2*p2)*x) + _3p1y2 + p1*x2) + v0
+##             iu = cvRound(_u*(1 << ICV_WARP_SHIFT))
+##             iv = cvRound(_v*(1 << ICV_WARP_SHIFT))
+##             ifx = iu & ICV_WARP_MASK
+##             ify = iv & ICV_WARP_MASK
+
+##             a0 = icvLinearCoeffs[ifx*2]
+##             a1 = icvLinearCoeffs[ifx*2 + 1]
+##             b0 = icvLinearCoeffs[ify*2]
+##             b1 = icvLinearCoeffs[ify*2 + 1]
+
+##             if( <unsigned>iv < <unsigned>(height - 1) &&
+##                 <unsigned>iu < <unsigned>(width - 1) ):
+##                 ptr = src + iv*srcstep + iu*cn
+##                 for i from 0 <= i < cn:
+##                     t0 = a1*CV_8TO32F(ptr[i]) + a0*CV_8TO32F(ptr[i+cn])
+##                     t1 = a1*CV_8TO32F(ptr[i+srcstep]) + a0*CV_8TO32F(ptr[i + srcstep + cn])
+##                     dst[u*cn + i] = <char>cvRound(b1*t0 + b0*t1)
+##             else:
+##                 for i from 0 <= i < cn:
+##                     dst[u*cn + i] = 0
 
 find_best_3d = hypothesis_testing_algorithm__find_best_3d # old name
