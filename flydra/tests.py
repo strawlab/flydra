@@ -1,9 +1,12 @@
 import unittest
 import reconstruct
 import pkg_resources
-
+import flydra.reconstruct_utils as reconstruct_utils
 import flydra.geom
 import flydra.fastgeom
+import flydra.undistort
+import numpy
+import scipy.optimize
 
 try:
     import numpy.testing.parametric as parametric
@@ -112,7 +115,6 @@ class TestGeomParametric(parametric.ParametricTestCase):
         assert lnx == geom.PlueckerLine(geom.ThreeTuple((0,0,-1)),
                                         geom.ThreeTuple((0,-2,0)))
 
-
 class TestReconstructor(unittest.TestCase):
     def test_from_sample_directory(self):
         caldir = pkg_resources.resource_filename(__name__,"sample_calibration")
@@ -123,9 +125,99 @@ class TestReconstructor(unittest.TestCase):
         import pickle
         pickle.dumps(x)
 
+class TestNonlinearDistortion(parametric.ParametricTestCase):
+    _indepParTestPrefix = 'test_coord_undistort'
+    def test_coord_undistort(self):
+        if 1:
+            xys = [ ( 10, 20 ),
+                    ( 600, 20 ),
+                    ( 320, 240 ),
+                    ]
+
+            # sample data from real lens - mild radial distortion
+            fc1, fc2, cc1, cc2, k1, k2, p1, p2, alpha_c = (1149.1142578125, 1144.7752685546875, 327.5, 245.0, -0.47600057721138, 0.34306392073631287, 0.0, 0.0, 0.0)
+            helper_args = (fc1, fc2, cc1, cc2, k1, k2, p1, p2)
+
+            yield (self.tst_distort,        xys, helper_args)
+            yield (self.tst_undistort_mesh, xys, helper_args)
+            yield (self.tst_undistort_orig, xys, helper_args)
+
+        if 1:
+            xys = [ ( 10, 20 ),
+                    ( 600, 20 ),
+                    ( 320, 240 ),
+                    ]
+
+            # same as above, with a little tangential distortion
+            fc1, fc2, cc1, cc2, k1, k2, p1, p2, alpha_c = (1149.1142578125, 1144.7752685546875, 327.5, 245.0, -0.47600057721138, 0.34306392073631287, 0.1, 0.05, 0.0)
+            helper_args = (fc1, fc2, cc1, cc2, k1, k2, p1, p2)
+
+            yield (self.tst_distort,        xys, helper_args)
+            yield (self.tst_undistort_mesh, xys, helper_args)
+            yield (self.tst_undistort_orig, xys, helper_args)
+
+    def _distort( self, helper_args, xy ):
+        fc1, fc2, cc1, cc2, k1, k2, p1, p2 = helper_args
+
+        # this is the distortion model we're using:
+        xl, yl = xy
+        x = (xl-cc1)/fc1
+        y = (yl-cc2)/fc2
+        r2 = x**2 + y**2
+        r4 = r2**2
+        term1 = k1*r2 + k2*r4
+
+        # Tangential distortion: see
+        # http://www.vision.caltech.edu/bouguetj/calib_doc/htmls/parameters.html
+
+        xd = x + x*term1 + ( 2*p1*x*y       + p2*(r2+2*x**2) )
+        yd = y + y*term1 + ( p1*(r2+2*y**2) + 2*p2*x*y       )
+
+        xd = fc1*xd + cc1
+        yd = fc2*yd + cc2
+        return xd, yd
+
+    def _undistort( self, helper_args, xy ):
+        helper = reconstruct_utils.ReconstructHelper( *helper_args )
+        lbrt = ( -100,-100,800,700 )
+        dm = flydra.undistort.DistortionMesh( helper, lbrt )
+        x,y= xy
+        undistorted_xs, undistorted_ys = dm.undistort_points( [x],[y] )
+        assert len(undistorted_xs)==1
+        assert len(undistorted_ys)==1
+        return undistorted_xs[0], undistorted_ys[0]
+
+    def tst_distort(self, pinhole_xys, helper_args ):
+        helper = reconstruct_utils.ReconstructHelper( *helper_args )
+        for xy in pinhole_xys:
+            xd, yd = self._distort( helper_args, xy )
+            test_x, test_y = helper.distort( *xy )
+
+            rtol=1e-4 # float32 not very accurate
+            assert numpy.allclose([xd,yd], [test_x, test_y], rtol=rtol)
+
+    def tst_undistort_mesh(self, distorted_xys, helper_args ):
+        helper = reconstruct_utils.ReconstructHelper( *helper_args )
+        for xy in distorted_xys:
+            undistorted_xy = self._undistort( helper_args, xy)
+            redistorted_xy = helper.distort( *undistorted_xy )
+
+            rtol = 1e-3 # distortion mesh not very accurate
+            assert numpy.allclose( xy, redistorted_xy, rtol=rtol)
+
+    def tst_undistort_orig(self, distorted_xys, helper_args ):
+        helper = reconstruct_utils.ReconstructHelper( *helper_args )
+        for xy in distorted_xys:
+            undistorted_xy = helper.undistort(*xy)
+            redistorted_xy = helper.distort( *undistorted_xy )
+
+            rtol = 1e-3 # distortion mesh not very accurate
+            assert numpy.allclose( xy, redistorted_xy, rtol=rtol)
+
 def get_test_suite():
     ts=unittest.TestSuite([unittest.makeSuite(TestGeomParametric),
                            unittest.makeSuite(TestReconstructor),
+                           unittest.makeSuite(TestNonlinearDistortion),
                            ])
     return ts
 
