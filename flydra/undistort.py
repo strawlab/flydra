@@ -391,6 +391,7 @@ class DistortionMesh:
         return undistorted_x, undistorted_y
 
     def undistort_image(self, distorted_image, interpolation='nearest' ):
+        # this doesn't seem to work yet. Maybe improve nan behavior in delaunay?
         if interpolation!='nearest':
             raise NotImplementedError('not done yet')
         if not len(distorted_image.shape)==2:
