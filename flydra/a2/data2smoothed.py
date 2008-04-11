@@ -43,11 +43,11 @@ def convert(infilename,
 
         try:
             table_data2d = h52d.root.data2d_distorted # Table to get timestamps from. (If you don't have timestamps, use the '--no-timestamps' option.)
-            drift_estimates = result_utils.drift_estimates( h52d )
-            camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h52d)
-        except:
-            print 'Error reading from file',h52d.filename
-            raise
+        except tables.exceptions.NoSuchNodeError, err:
+            print >> sys.stderr, "No timestamps in file. Either specify not to save timestamps ('--no-timestamps') or specify the original .h5 file with the timestamps ('--time-data=FILE2D')"
+            sys.exit(1)
+        drift_estimates = result_utils.drift_estimates( h52d )
+        camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h52d)
 
         hostnames = drift_estimates['hostnames']
         gain = {}; offset = {};
