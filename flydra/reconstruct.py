@@ -544,37 +544,6 @@ class Reconstructor:
                     params['K11'], params['K22'], params['K13'], params['K23'],
                     params['kc1'], params['kc2'], params['kc3'], params['kc4'])
 
-                if 1:
-                    ## check consistency of .rad file with calibration matrix
-                    pmat = self.Pmat[cam_id]
-                    intrinsic_parameters, cam_rotation = my_rq(pmat[:,:3])
-                    eps = 1e-6
-                    if abs(intrinsic_parameters[2,2]-1.0)>eps:
-                        print 'WARNING: expected last row/col of intrinsic parameter matrix to be unity'
-                        print 'intrinsic_parameters[2,2]',intrinsic_parameters[2,2]
-##                        if do_normalize_pmat:
-##                            print 'WARNING: normalizing the intrinsic parameters'
-##                            intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
-##                        else:
-                        raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
-
-                    fc1 = intrinsic_parameters[0,0]
-                    cc1 = intrinsic_parameters[0,2]
-                    fc2 = intrinsic_parameters[1,1]
-                    cc2 = intrinsic_parameters[1,2]
-                    if WARN_CALIB_DIFF:
-                        if ((fc1 != params['K11']) or
-                            (fc2 != params['K22']) or
-                            (cc1 != params['K13']) or
-                            (cc2 != params['K23'])):
-                            print 'WARNING: *.rad file and *.Pmat.cal files differ for',cam_id
-                            print "                  .Pmat.cal    .rad"
-                            print "focal length X:",fc1,params['K11']
-                            print "focal length Y:",fc2,params['K22']
-                            print "principal point X:",cc1,params['K13']
-                            print "principal point Y:",cc2,params['K23']
-                            print
-
             filename = os.path.join(use_cal_source,'calibration_units.txt')
             if os.path.exists(filename):
                 fd = file(filename,'r')
@@ -717,25 +686,7 @@ class Reconstructor:
         # non linear parameters
         for i, cam_id in enumerate(self.cam_ids):
             fname = 'basename%d.rad'%(i+1)
-            rad_fd = open(os.path.join(new_dirname,fname),'w')
-            K = self._helper[cam_id].get_K()
-            nlparams = self._helper[cam_id].get_nlparams()
-            k1, k2, p1, p2 = nlparams
-            rad_fd.write('K11 = %s\n'%repr(K[0,0]))
-            rad_fd.write('K12 = %s\n'%repr(K[0,1]))
-            rad_fd.write('K13 = %s\n'%repr(K[0,2]))
-            rad_fd.write('K21 = %s\n'%repr(K[1,0]))
-            rad_fd.write('K22 = %s\n'%repr(K[1,1]))
-            rad_fd.write('K23 = %s\n'%repr(K[1,2]))
-            rad_fd.write('K31 = %s\n'%repr(K[2,0]))
-            rad_fd.write('K32 = %s\n'%repr(K[2,1]))
-            rad_fd.write('K33 = %s\n'%repr(K[2,2]))
-            rad_fd.write('\n')
-            rad_fd.write('kc1 = %s\n'%repr(k1))
-            rad_fd.write('kc2 = %s\n'%repr(k2))
-            rad_fd.write('kc3 = %s\n'%repr(p1))
-            rad_fd.write('kc4 = %s\n'%repr(p2))
-            rad_fd.close()
+            self._helper[cam_id].save_to_rad_file( os.path.join(new_dirname,fname) )
 
         fd = open(os.path.join(new_dirname,'calibration_units.txt'),mode='w')
         fd.write(self.get_calibration_unit()+'\n')

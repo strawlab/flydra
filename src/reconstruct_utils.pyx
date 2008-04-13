@@ -26,9 +26,9 @@ def make_ReconstructHelper(*args,**kw):
     return ReconstructHelper(*args,**kw)
 
 cdef class ReconstructHelper:
-    cdef float fc1, fc2, cc1, cc2
-    cdef float k1, k2, p1, p2
-    cdef float alpha_c
+    cdef double fc1, fc2, cc1, cc2
+    cdef double k1, k2, p1, p2
+    cdef double alpha_c
 
     def __init__(self, fc1, fc2, cc1, cc2, k1, k2, p1, p2, alpha_c=0 ):
         """create instance of ReconstructHelper
@@ -57,6 +57,27 @@ cdef class ReconstructHelper:
                 self.k1, self.k2, self.p1, self.p2, self.alpha_c)
         return (make_ReconstructHelper, args)
 
+    def save_to_rad_file( self, fname ):
+        rad_fd = open(fname,'w')
+        K = self.get_K()
+        nlparams = self.get_nlparams()
+        k1, k2, p1, p2 = nlparams
+        rad_fd.write('K11 = %s\n'%repr(K[0,0]))
+        rad_fd.write('K12 = %s\n'%repr(K[0,1]))
+        rad_fd.write('K13 = %s\n'%repr(K[0,2]))
+        rad_fd.write('K21 = %s\n'%repr(K[1,0]))
+        rad_fd.write('K22 = %s\n'%repr(K[1,1]))
+        rad_fd.write('K23 = %s\n'%repr(K[1,2]))
+        rad_fd.write('K31 = %s\n'%repr(K[2,0]))
+        rad_fd.write('K32 = %s\n'%repr(K[2,1]))
+        rad_fd.write('K33 = %s\n'%repr(K[2,2]))
+        rad_fd.write('\n')
+        rad_fd.write('kc1 = %s\n'%repr(k1))
+        rad_fd.write('kc2 = %s\n'%repr(k2))
+        rad_fd.write('kc3 = %s\n'%repr(p1))
+        rad_fd.write('kc4 = %s\n'%repr(p2))
+        rad_fd.close()
+
     def __richcmp__(self,other,op):
 
         if op == 2 or op == 3:
@@ -79,7 +100,7 @@ cdef class ReconstructHelper:
     def get_nlparams(self):
         return (self.k1, self.k2, self.p1, self.p2)
 
-    def undistort(self, float x_kk, float y_kk):
+    def undistort(self, double x_kk, double y_kk):
         """undistort 2D coordinate pair
 
         Iteratively performs an undistortion using camera intrinsic
@@ -91,10 +112,10 @@ cdef class ReconstructHelper:
         used.
         """
 
-        cdef float xl, yl
+        cdef double xl, yl
 
-        cdef float xd, yd, x, y
-        cdef float r_2, k_radial, delta_x, delta_y
+        cdef double xd, yd, x, y
+        cdef double r_2, k_radial, delta_x, delta_y
         cdef int i
 
         # undoradial.m / CalTechCal/normalize.m
@@ -124,10 +145,10 @@ cdef class ReconstructHelper:
         yl = (self.fc2)*y + (self.cc2)
         return (xl, yl)
 
-    def distort(self, float xl, float yl):
+    def distort(self, double xl, double yl):
         """distort 2D coordinate pair"""
 
-        cdef float x, y, r_2, term1, xd, yd
+        cdef double x, y, r_2, term1, xd, yd
 
         x = ( xl - self.cc1 ) / self.fc1
         y = ( yl - self.cc2 ) / self.fc2
@@ -165,7 +186,7 @@ cdef class ReconstructHelper:
         return imnew
 
 def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
-                                                float ACCEPTABLE_DISTANCE_PIXELS,
+                                                double ACCEPTABLE_DISTANCE_PIXELS,
                                                 int debug=0):
     """Use hypothesis testing algorithm to find best 3D point
 
