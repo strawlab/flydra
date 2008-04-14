@@ -1276,7 +1276,7 @@ class wxMainBrainApp(wx.App):
             self.pass_all_keystrokes = False
         if doit:
             fd = open(save_filename,'wb')
-            fd.write(repr(all_params))
+            fd.write(repr(all_params)) # should use pprint
             fd.close()
 
     def OnStartCalibration(self, event):
