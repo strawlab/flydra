@@ -37,6 +37,7 @@ import flydra.kalman.dynamic_models
 
 import pkg_resources
 from optparse import OptionParser
+import pprint
 
 SCROLLED=True
 if SCROLLED:
@@ -1276,7 +1277,7 @@ class wxMainBrainApp(wx.App):
             self.pass_all_keystrokes = False
         if doit:
             fd = open(save_filename,'wb')
-            fd.write(repr(all_params)) # should use pprint
+            fd.write(pprint.pformat(all_params))
             fd.close()
 
     def OnStartCalibration(self, event):
