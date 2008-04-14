@@ -538,11 +538,7 @@ class Reconstructor:
                         res=self.Res[cam_id]).helper
                     continue
 
-                params = {}
-                execfile(filename,params)
-                self._helper[cam_id] = reconstruct_utils.ReconstructHelper(
-                    params['K11'], params['K22'], params['K13'], params['K23'],
-                    params['kc1'], params['kc2'], params['kc3'], params['kc4'])
+                self._helper[cam_id] = reconstruct_utils.make_ReconstructHelper_from_rad_file(filename)
 
             filename = os.path.join(use_cal_source,'calibration_units.txt')
             if os.path.exists(filename):

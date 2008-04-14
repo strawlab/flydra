@@ -22,6 +22,14 @@ cdef extern from "math.h":
     int isnan(double x)
     int isinf(double x)
 
+def make_ReconstructHelper_from_rad_file(filename):
+    params = {}
+    execfile(filename,params)
+    helper = ReconstructHelper(
+        params['K11'], params['K22'], params['K13'], params['K23'],
+        params['kc1'], params['kc2'], params['kc3'], params['kc4'])
+    return helper
+
 def make_ReconstructHelper(*args,**kw):
     return ReconstructHelper(*args,**kw)
 
@@ -57,25 +65,30 @@ cdef class ReconstructHelper:
                 self.k1, self.k2, self.p1, self.p2, self.alpha_c)
         return (make_ReconstructHelper, args)
 
-    def save_to_rad_file( self, fname ):
+    def save_to_rad_file( self, fname, comments=None ):
         rad_fd = open(fname,'w')
         K = self.get_K()
         nlparams = self.get_nlparams()
         k1, k2, p1, p2 = nlparams
-        rad_fd.write('K11 = %s\n'%repr(K[0,0]))
-        rad_fd.write('K12 = %s\n'%repr(K[0,1]))
-        rad_fd.write('K13 = %s\n'%repr(K[0,2]))
-        rad_fd.write('K21 = %s\n'%repr(K[1,0]))
-        rad_fd.write('K22 = %s\n'%repr(K[1,1]))
-        rad_fd.write('K23 = %s\n'%repr(K[1,2]))
-        rad_fd.write('K31 = %s\n'%repr(K[2,0]))
-        rad_fd.write('K32 = %s\n'%repr(K[2,1]))
-        rad_fd.write('K33 = %s\n'%repr(K[2,2]))
+        rad_fd.write('K11 = %s;\n'%repr(K[0,0]))
+        rad_fd.write('K12 = %s;\n'%repr(K[0,1]))
+        rad_fd.write('K13 = %s;\n'%repr(K[0,2]))
+        rad_fd.write('K21 = %s;\n'%repr(K[1,0]))
+        rad_fd.write('K22 = %s;\n'%repr(K[1,1]))
+        rad_fd.write('K23 = %s;\n'%repr(K[1,2]))
+        rad_fd.write('K31 = %s;\n'%repr(K[2,0]))
+        rad_fd.write('K32 = %s;\n'%repr(K[2,1]))
+        rad_fd.write('K33 = %s;\n'%repr(K[2,2]))
         rad_fd.write('\n')
-        rad_fd.write('kc1 = %s\n'%repr(k1))
-        rad_fd.write('kc2 = %s\n'%repr(k2))
-        rad_fd.write('kc3 = %s\n'%repr(p1))
-        rad_fd.write('kc4 = %s\n'%repr(p2))
+        rad_fd.write('kc1 = %s;\n'%repr(k1))
+        rad_fd.write('kc2 = %s;\n'%repr(k2))
+        rad_fd.write('kc3 = %s;\n'%repr(p1))
+        rad_fd.write('kc4 = %s;\n'%repr(p2))
+        rad_fd.write('\n')
+        if comments is not None:
+            comments = str(comments)
+        rad_fd.write("comments = '%s';\n"%comments)
+        rad_fd.write('\n')
         rad_fd.close()
 
     def __richcmp__(self,other,op):
