@@ -527,7 +527,6 @@ class Reconstructor:
 
             # load non linear parameters
             rad_files = glob.glob(os.path.join(use_cal_source,'*.rad'))
-            assert len(rad_files) < 10
             rad_files.sort() # cheap trick to associate camera number with file
             for cam_id, filename in map( None, cam_ids, rad_files ):
                 if filename is None:
