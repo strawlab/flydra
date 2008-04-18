@@ -351,7 +351,7 @@ def doit(filename,
             print '  estimate frames: %d - %d (%d frames)'%(
                 my_rows['frame'][0],
                 my_rows['frame'][-1],
-                my_rows['frame'][-1]-my_rows['frame'][0]),
+                int(my_rows['frame'][-1])-(my_rows['frame'][0])),
             if fps is None:
                 fpses = [60.0, 100.0, 200.0]
             else:
