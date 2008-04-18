@@ -21,6 +21,10 @@ from optparse import OptionParser
 
 D2R = math.pi/180.0
 
+def info(msg):
+    if 0:
+        print msg
+
 def visualize_distortions( ax, helper, width=None, height=None ):
     if (width is None) or (height is None):
         K = helper.get_K()
@@ -30,9 +34,7 @@ def visualize_distortions( ax, helper, width=None, height=None ):
             height = y0*2
         if width is None:
             width = x0*2
-        if 0:
-            import warnings
-            warnings.warn('guessing image width and/or height from principal point')
+        info('guessing image width and/or height from principal point')
 
     aspect = width/height
     nwide = 50
@@ -154,10 +156,11 @@ def find_subgraph_similar_direction(G,
     return result
 
 class CornerNode:
-    def __init__(self,x,y,name):
+    def __init__(self,x,y,name,aspect_ratio=1.0):
         self._x=x
         self._y=y
         self._name=name
+        self._aspect_radio=aspect_ratio
     def __repr__(self):
         return self._name
     def get_pos(self):
@@ -169,6 +172,7 @@ class CornerNode:
 
         yd = y2-y1
         xd = x2-x1
+        xd *= self._aspect_radio
         mag = math.sqrt(xd**2 + yd**2)
         return math.atan2(yd/mag, xd/mag)
     def get_distance_from( self, v ):
@@ -178,6 +182,7 @@ class CornerNode:
 
         yd = y2-y1
         xd = x2-x1
+        xd *= self._aspect_radio
         mag = math.sqrt(xd**2 + yd**2)
         return mag
 
@@ -187,11 +192,12 @@ def points2graph(x,y,
                  angle_thresh=30*D2R,
                  show_clusters=False,
                  show_clusters_frame=None,
+                 aspect_ratio = 1.0,                 
                  ):
     x = numpy.array(x)
     y = numpy.array(y)
     tri = delaunay.Triangulation(x, y)
-    nodes = [ CornerNode(xi,yi,str(i)) for i,(xi,yi) in enumerate(zip(x,y)) ]
+    nodes = [ CornerNode(xi,yi,str(i),aspect_ratio=aspect_ratio) for i,(xi,yi) in enumerate(zip(x,y)) ]
 
     segx = []
     segy = []
@@ -595,6 +601,7 @@ def binarize( im ):
 def get_similar_direction_graphs(fname,frame,
                                  use='binary',return_early=False,
                                  debug_line_finding=False,
+                                 aspect_ratio = 1.0,
                                  ):
     fmf = FlyMovieFormat.mmap_flymovie(fname)
 
@@ -641,8 +648,7 @@ def get_similar_direction_graphs(fname,frame,
                              cv.TermCriteria(cv.TERMCRIT_EPS|cv.TERMCRIT_ITER,
                                              10,3))
     else:
-        import warnings
-        warnings.warn('not doing sub-pixel corner location')
+        info('not doing sub-pixel corner location')
 
     cv.ReleaseImage( im_ptr )
 
@@ -656,6 +662,7 @@ def get_similar_direction_graphs(fname,frame,
     graph, nodes = points2graph(x, y,
                                 show_clusters=debug_line_finding,
                                 show_clusters_frame=show_clusters_frame,
+                                aspect_ratio = aspect_ratio,                                
                                 )
     if return_early:
         print 'returning early with entire super-graph'
@@ -707,6 +714,12 @@ def main():
     parser.add_option("--view-results-quick", action='store_true',
                       default=False)
 
+    parser.add_option("--find-and-show",
+                      help=("find checkerboard intersections and "
+                            "display them (don't compute distortion)"),
+                      action='store_true',
+                      default=False)
+
     (cli_options, args) = parser.parse_args()
     if not len(args)==1:
         raise RuntimeError('one command-line argument is needed - the configFile')
@@ -726,7 +739,9 @@ def main():
         do_plot = False,
         )
 
-
+    if cli_options.find_and_show:
+        #defaults['return_early'] = True
+        defaults['do_plot'] = True
 
     configFile = os.path.abspath( configFile)
     if not os.path.exists( configFile ):
@@ -766,27 +781,37 @@ def main():
                                                   use=options.use,
                                                   return_early=options.return_early,
                                                   debug_line_finding = options.debug_line_finding,
+                                                  aspect_ratio = options.aspect_ratio,
                                                   )
         start_idx = len(all_graphs)
         all_graphs.extend( similar_direction_graphs )
         stop_idx = len(all_graphs)
         graph_idxs_by_frames.append( range(start_idx,stop_idx) )
         all_imnx_use.append( imnx_use )
+        
+        if cli_options.find_and_show:
+            print 'edges for frame %d ---------------'%frame
+            for subgraph in similar_direction_graphs:
+                print subgraph.edges()
+            print
 
         # XXX uses last image
     similar_direction_graphs = all_graphs
 
     did_plot = False
     if options.do_plot:
+
         frame_mpl_figures = {}
         # plot original, distorted image
         for j, frame_no in enumerate(options.frames):
             frame_mpl_figures[frame_no] = pylab.figure()
-            if not options.return_early:
+            if (options.return_early or cli_options.find_and_show):
+                im_ax = pylab.subplot(1,1,1)
+            else:
                 im_ax = frame_mpl_figures[frame_no].add_subplot(2,1,1)
             for i in graph_idxs_by_frames[j]: # get points for last image
                 subgraph = similar_direction_graphs[i]
-                if options.debug_line_finding:
+                if options.debug_line_finding or cli_options.find_and_show:
                     pos = {}
                     for node in subgraph.nodes():
                         pos[node] = node.get_pos()
@@ -821,7 +846,7 @@ def main():
                               cmap=pylab.cm.pink,
                               )
 
-        if not options.return_early:
+        if not (options.return_early or cli_options.find_and_show):
             grid_figure = pylab.figure()
             distorted_grid_axes = grid_figure.add_subplot(3,1,1)
             for j,frame_idxs in enumerate(graph_idxs_by_frames):
@@ -856,7 +881,7 @@ def main():
 
         did_plot = True
 
-    if 0 or options.return_early:
+    if options.return_early or cli_options.find_and_show:
         pylab.show()
         sys.exit()
 
