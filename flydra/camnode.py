@@ -1157,12 +1157,17 @@ class SaveCamData(object):
 class SaveSmallData(object):
     def __init__(self,cam_id=None,
                  options = None,
+                 mkdir_lock = None,
                  ):
         self.options = options
         self._chain = camnode_utils.ChainLink()
         self._cam_id = cam_id
         self.cmd = Queue.Queue()
         self._ufmf = None
+        if mkdir_lock is not None:
+            self._mkdir_lock = mkdir_lock
+        else:
+            self._mkdir_lock = threading.Lock()            
 
     def get_chain(self):
         return self._chain
@@ -1209,8 +1214,12 @@ class SaveSmallData(object):
                         timestamp1 = chainbuf.timestamp
                         filename_base = os.path.expanduser(filename_base)
                         dirname = os.path.split(filename_base)[0]
-                        if not os.path.exists(dirname):
-                            os.makedirs(dirname)
+                        with self._mkdir_lock.acquire():
+                            # Because this is a multi-threaded
+                            # program, sometimes another thread will
+                            # try to create this directory.
+                            if not os.path.exists(dirname):
+                                os.makedirs(dirname)
                         filename = filename_base + '.ufmf'
                         if 1:
                             print 'saving to',filename
@@ -1750,6 +1759,8 @@ class AppState(object):
         if mask_images is not None:
             mask_images = mask_images.split( os.pathsep )
 
+        save_small_data_mkdir_lock = threading.Lock()
+
         for cam_no in range(num_cams):
             cam = self.all_cams[cam_no]
             width,height = cam.get_frame_size()
@@ -1911,7 +1922,8 @@ class AppState(object):
                     self.all_savers.append( None )
 
                 if 1:
-                    save_small = SaveSmallData(options=self.options)
+                    save_small = SaveSmallData(options=self.options,
+                                               mkdir_lock = save_small_data_mkdir_lock)
                     self.all_small_savers.append( save_small )
                     cam_processor_chain.append_link( save_small.get_chain() )
                     thread = threading.Thread( target = save_small.mainloop,
