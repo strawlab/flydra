@@ -101,6 +101,7 @@ def doit(fmf_filename=None,
     ca = core_analysis.CachingAnalyzer()
 
     if blank is not None:
+        # use frame number as "blank image"
         fmf.seek(blank)
         blank_image, blank_timestamp = fmf.get_next_frame()
         fmf.seek(0)
