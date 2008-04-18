@@ -216,17 +216,12 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
     cdef double x, y, orig_x, orig_y, new_x, new_y
     cdef double dist, mean_dist, least_err
 
-    cdef int MAX_CAMERAS
-    # 10 = MAX_CAMERAS
     cdef double least_err_by_n_cameras[10] # fake dict (index = key)
-    MAX_CAMERAS = 10 # should be a compile-time define
 
     svd = numpy.dual.svd # eliminate global name lookup
 
     cam_ids = recon.cam_ids # shorthand
     max_n_cams = len(cam_ids)
-    if max_n_cams > MAX_CAMERAS:
-        raise ValueError("too many cameras -- MAX_CAMERAS = %d"%(MAX_CAMERAS,))
 
     # Initialize least_err_by_n_cameras to be infinity.  Note that
     # values at 0th and 1st index will always remain infinity.
