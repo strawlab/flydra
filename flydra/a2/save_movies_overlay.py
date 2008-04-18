@@ -16,6 +16,8 @@ import tables as PT
 from optparse import OptionParser
 import flydra.reconstruct as reconstruct
 import sets
+import motmot.ufmf.ufmf as ufmf
+import flydra.a2.utils as utils
 
 #PLOT='mpl'
 PLOT='image'
@@ -65,7 +67,10 @@ def doit(fmf_filename=None,
             print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting fps and dynamic model options (--fps and --dynamic-model)'
             sys.exit(1)
 
-    fmf = FMF.FlyMovie(fmf_filename)
+    if fmf_filename.endswith('.ufmf'):
+        fmf = ufmf.FlyMovieEmulator(fmf_filename)
+    else:
+        fmf = FMF.FlyMovie(fmf_filename)
     fmf_timestamps = fmf.get_all_timestamps()
     h5 = PT.openFile( h5_filename, mode='r' )
 
@@ -172,6 +177,8 @@ def doit(fmf_filename=None,
         else:
             all_camn_cond = all_camn_cond | cond
     camn_idx = numpy.nonzero( all_camn_cond )[0]
+    cam_remote_timestamps = remote_timestamps[camn_idx]
+    cam_remote_timestamps_find = utils.FastFinder( cam_remote_timestamps )
 
     cur_bg_idx = None
 
@@ -193,10 +200,6 @@ def doit(fmf_filename=None,
                 first_match = frame_match_h5
             if stop is not None:
                 break
-    if stop is None:
-        stop = frame_match_h5
-    last_match = frame_match_h5
-    print 'done.'
 
     if frame_match_h5 is None:
         print >> sys.stderr, "ERROR: no timestamp corresponding to .fmf '%s' for %s in '%s'"%(
@@ -204,9 +207,17 @@ def doit(fmf_filename=None,
         h5.close()
         sys.exit(1)
 
+    print 'done.'
+
+    if stop is None:
+        stop = frame_match_h5
+        last_match = frame_match_h5
+        print 'Frames in both the .fmf movie and the .h5 data file are in range %d - %d.'%(first_match, last_match)
+    else:
+        print 'Frames in both the .fmf movie and the .h5 data file start at %d.'%(first_match,)
+
     if 1:
         #if first_match is not None and last_match is not None:
-        print 'Frames in both the .fmf movie and the .h5 data file are in range %d - %d.'%(first_match, last_match)
         h5frames = h5.root.data2d_distorted.read( field='frame' )[:]
         print 'The .h5 file has frames %d - %d.'%( h5frames.min(), h5frames.max() )
         del h5frames
@@ -241,6 +252,7 @@ def doit(fmf_filename=None,
     # step through .fmf file to get map of h5frame <-> fmfframe
     mymap = {}
     all_frame = h5.root.data2d_distorted.read(field='frame')
+    cam_all_frame = all_frame[ camn_idx ]
 
     widgets=['stage 1 of 2: ',cam_id, ' ', progressbar.Percentage(), ' ',
              progressbar.Bar(), ' ', progressbar.ETA()]
@@ -248,10 +260,10 @@ def doit(fmf_filename=None,
     pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(fmf_timestamps)).start()
     for fmf_fno, fmf_timestamp in enumerate( fmf_timestamps ):
         pbar.update(fmf_fno)
-        timestamp_idx = numpy.nonzero(fmf_timestamp == remote_timestamps)[0]
-        idxs = numpy.intersect1d( camn_idx, timestamp_idx )
+        # idxs = numpy.nonzero(cam_remote_timestamps==fmf_timestamp)[0]
+        idxs = cam_remote_timestamps_find.get_idxs_of_equal(fmf_timestamp)
         if len(idxs):
-            this_frame = all_frame[idxs]
+            this_frame = cam_all_frame[idxs]
             real_h5_frame = int(this_frame[0])
             # we only should have one frame here
             assert numpy.all( real_h5_frame== this_frame )
@@ -273,7 +285,7 @@ def doit(fmf_filename=None,
             # get frame
             fmf.seek(fmf_fno)
             frame, fmf_timestamp2 = fmf.get_next_frame()
-            assert fmf_timestamp==fmf_timestamp2
+            assert fmf_timestamp==fmf_timestamp2, "timestamps of .fmf frames don't match"
 
             # get bg frame
             if fmf2bg is not None:

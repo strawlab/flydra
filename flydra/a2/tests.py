@@ -1,8 +1,9 @@
-import unittest
 import pkg_resources
-import flydra.a2.core_analysis as core_analysis
+import unittest
 import tables as PT
 import numpy
+import flydra.a2.core_analysis as core_analysis
+import flydra.a2.utils as utils
 
 class TestCoreAnalysis(unittest.TestCase):
     def setUp(self):
@@ -241,8 +242,20 @@ class TestCoreAnalysis(unittest.TestCase):
 ##                 print Xsmooth[i], Xorig[i]
 ##             print
 
+class TestUtils(unittest.TestCase):
+    def test_fast_finder(self):
+        a = numpy.array([1,2,3,3,2,1,2.3])
+        bs = [0, 1, 2, 1.1]
+        af = utils.FastFinder(a)
+        for b in bs:
+            idxs1 = af.get_idxs_of_equal(b)
+            idxs2 = numpy.nonzero(a==b)[0]
+            assert idxs1.shape == idxs2.shape
+            assert numpy.allclose( idxs1, idxs2 )
+
 def get_test_suite():
     ts=unittest.TestSuite([unittest.makeSuite(TestCoreAnalysis),
+                           unittest.makeSuite(TestUtils),
                            ]
                           )
     return ts
