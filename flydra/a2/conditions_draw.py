@@ -135,6 +135,55 @@ class mama07:
         actors.append(a)
         return actors
 
+class mama20080414:
+    def __init__(self,filename=None,**kwargs):
+        self.filename = filename
+        self.kwargs = kwargs
+    def get_tvtk_actors(self):
+        filename = self.filename
+        kwargs = self.kwargs
+
+        actors = []
+
+        # mamarama
+        z = 0
+        N = 64
+        radius = 1.0
+        center = numpy.array([ 0.1,0.8,0])
+
+        verts = []
+        vi = 0 # vert idx
+        lines = []
+        theta = numpy.linspace(0,2*math.pi,N,endpoint=False)
+        X = radius*numpy.cos(theta) + center[0]
+        Y = radius*numpy.sin(theta) + center[1]
+        height = .762
+        for z in numpy.linspace(0,height,4):
+            Z = numpy.zeros(theta.shape) + center[2] + z
+            v = numpy.array([X,Y,Z]).T
+            for i in range(N):
+                verts.append( v[i] )
+
+            for i in range(N-1):
+                lines.append( [i+vi,i+1+vi] )
+            lines.append( [vi+N-1,vi] )
+
+            vi += (N)
+
+        pd = tvtk.PolyData()
+        pd.points = verts
+        pd.lines = lines
+        pt = tvtk.TubeFilter(radius=0.001,input=pd,
+                             number_of_sides=4,
+                             vary_radius='vary_radius_off',
+                             )
+        m = tvtk.PolyDataMapper(input=pt.output)
+        a = tvtk.Actor(mapper=m)
+        a.property.color = .9, .9, .9
+        a.property.specular = 0.3
+        actors.append(a)
+        return actors
+
 class default:
     def __init__(self,filename=None, **kwargs):
         self.filename = filename
