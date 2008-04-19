@@ -178,12 +178,12 @@ def doit(
             w = numpy.ones( x.shape )
             X = numpy.vstack( (x,y,z,w) ).T
             frame = kalman_rows['frame'][cond]
-            print '%d %d %d'%(frame[0],obj_id, len(frame))
+            #print '%d %d %d'%(frame[0],obj_id, len(frame))
 
             for cam_id in cam_ids:
                 ax = ax_by_cam[cam_id]
                 x2d = R.find2d(cam_id,X,distorted=True)
-                print '%d %d %s (%f,%f)'%(obj_id,frame[0],cam_id,x2d[0,0],x2d[1,0])
+                #print '%d %d %s (%f,%f)'%(obj_id,frame[0],cam_id,x2d[0,0],x2d[1,0])
                 ax.text( frame[0], x2d[0,0], '%d'%obj_id )
                 thisline,=ax.plot( frame, x2d[0,:], 'b-', picker=5) # 5 points tolerance
                 all_kalman_lines[thisline] = obj_id
