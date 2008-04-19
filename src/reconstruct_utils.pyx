@@ -1,5 +1,6 @@
 #emacs, this is -*-Python-*- mode
 # $Id: $
+#cimport c_lib
 
 import numpy
 import numpy.dual
@@ -216,7 +217,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
     cdef double x, y, orig_x, orig_y, new_x, new_y
     cdef double dist, mean_dist, least_err
 
-    cdef double least_err_by_n_cameras[10] # fake dict (index = key)
+    #cdef double *least_err_by_n_cameras # fake dict (index = key)
 
     svd = numpy.dual.svd # eliminate global name lookup
 
@@ -225,8 +226,12 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
 
     # Initialize least_err_by_n_cameras to be infinity.  Note that
     # values at 0th and 1st index will always remain infinity.
-    for i from 0 <= i <= max_n_cams:
-        least_err_by_n_cameras[i] = cinf
+    ## least_err_by_n_cameras = <double*>c_lib.malloc(max_n_cams*sizeof(double))
+    ## if least_err_by_n_cameras == <double*>0:
+    ##     raise MemoryError('Failed to allocate memory')
+    ## for i from 0 <= i <= max_n_cams:
+    ##     least_err_by_n_cameras[i] = cinf
+    least_err_by_n_cameras = [cinf]*max_n_cams
 
     allA = numpy.zeros( (2*max_n_cams,4), dtype=numpy.float64)
     bad_cam_ids = []
@@ -322,6 +327,8 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
     # now we have the best estimate for 2 views, 3 views, ...
     best_n_cams = 2
     least_err = least_err_by_n_cameras[2]
+    if debug>5:
+        print 'HYPOTHESIS TEST - least_err, ACCEPTABLE_DISTANCE_PIXELS: %f, %f'%(least_err,ACCEPTABLE_DISTANCE_PIXELS)
     mean_dist = least_err
     if not (least_err < ACCEPTABLE_DISTANCE_PIXELS):
         raise NoAcceptablePointFound('least error was %f'%least_err)
@@ -372,6 +379,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
                         -(P[1]*Q[0]) + P[0]*Q[1] )
             if isnan(Lcoords[0]):
                 Lcoords = None
+    ## c_lib.free(least_err_by_n_cameras)
     return X, Lcoords, cam_ids_used, mean_dist
 
 ## def undistort_image( char* src, int srcstep,
