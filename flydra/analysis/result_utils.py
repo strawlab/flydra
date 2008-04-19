@@ -150,21 +150,6 @@ def get_results(filename,mode='r+'):
 ##            print 'done'
 
     if hasattr(h5file.root,'data2d_distorted'):
-        if 1:
-            print 'WARNING: index creation disabled - some operations may be very slow'
-        else:
-            frame_col = h5file.root.data2d_distorted.cols.frame
-            if frame_col.index is None:
-                if h5file._isWritable():
-                    print 'creating index on data2d_distorted.cols.frame ...'
-                    try:
-                        frame_col.createIndex()
-                        print 'done'
-                    except PT.exceptions.NoIndexingError, err:
-                        print 'WARNING: indexing not supported in free version of PyTables 2.0 - some operations may be very slow'
-                else:
-                    print 'WARNING: file is not writable and cannot create index - some operations may be very slow'
-
     ##        timestamp_col = h5file.root.data2d_distorted.cols.timestamp
     ##        if timestamp_col.index is None:
     ##            print 'creating index on data2d_distorted.cols.timestamp ...'
