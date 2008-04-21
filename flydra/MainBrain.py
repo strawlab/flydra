@@ -178,6 +178,7 @@ class MovieInfo(PT.IsDescription):
     approx_stop_frame  = PT.Int64Col(pos=3)
 
 class Info3D(PT.IsDescription):
+    # This is for the non-Kalman version.
     frame      = PT.Int64Col(pos=0)
 
     x          = PT.Float32Col(pos=1)
