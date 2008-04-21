@@ -109,12 +109,7 @@
           </object>
           <object class="sizeritem">
             <object class="wxChoice" name="kalman_parameters_choice">
-              <content>
-                <item>fly dynamics, high precision calibration, units: mm</item>
-                <item>fly dynamics, low precision calibration, units: mm</item>
-                <item>hummingbird dynamics, units: mm</item>
-              </content>
-              <selection>0</selection>
+              <content/>
             </object>
           </object>
         </object>

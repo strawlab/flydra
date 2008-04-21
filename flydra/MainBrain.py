@@ -81,6 +81,7 @@ def get_rc_params():
     defaultParams = {
         'frames_per_second'  : 100.0,
         'hypothesis_test_max_acceptable_error' : 50.0,
+        'kalman_model' :'fly dynamics, high precision calibration, units: mm',
         }
     fviewrc_fname = motmot.utils.config.rc_fname(filename='mainbrainrc',
                                                  dirname='.flydra')

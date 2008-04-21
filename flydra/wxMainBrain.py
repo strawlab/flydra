@@ -650,13 +650,22 @@ class wxMainBrainApp(wx.App):
 
     def OnKalmanParametersChange(self,event=None):
         ctrl = xrc.XRCCTRL(self.status_panel,
-                       "kalman_parameters_choice")
+                           "kalman_parameters_choice")
         kalman_param_string = ctrl.GetStringSelection()
+        print 'str(kalman_param_string)',str(kalman_param_string)
         fps = self.main_brain.get_fps()
         dt = 1.0/fps
         model_dicts = flydra.kalman.dynamic_models.create_dynamic_model_dict(dt = dt)
         kalman_model = model_dicts[str(kalman_param_string)]
-        self.main_brain.set_new_tracker(kalman_model=kalman_model)
+        
+        MainBrain.rc_params['kalman_model'] = str(kalman_param_string)
+        MainBrain.save_rc_params()
+
+        if self.main_brain.reconstructor is not None:
+            print 'setting model to',kalman_model
+            self.main_brain.set_new_tracker(kalman_model=kalman_model)
+        else:
+            print 'no reconstructor, not setting kalman model'
 
     def PreviewPerCamClose(self,cam_id):
         previewPerCamPanel=self.cameras[cam_id]['previewPerCamPanel']
@@ -665,7 +674,7 @@ class wxMainBrainApp(wx.App):
 
     def InitSnapshotPanel(self):
         snapshot_cam_choice = xrc.XRCCTRL(self.snapshot_panel,
-                                         "snapshot_cam_choice")
+                                          "snapshot_cam_choice")
         snapshot_button = xrc.XRCCTRL(self.snapshot_panel,
                                   "snapshot_button")
         snapshot_colormap = xrc.XRCCTRL(self.snapshot_panel,
@@ -673,15 +682,15 @@ class wxMainBrainApp(wx.App):
         fixed_color_range = xrc.XRCCTRL(self.snapshot_panel,
                                     "fixed_color_range")
         wx.EVT_CHECKBOX(fixed_color_range, fixed_color_range.GetId(),
-                     self.OnFixedColorRange)
+                        self.OnFixedColorRange)
         wx.EVT_BUTTON(snapshot_button, snapshot_button.GetId(),
-                   self.OnSnapshot)
+                      self.OnSnapshot)
         wx.EVT_CHOICE(snapshot_colormap, snapshot_colormap.GetId(),
-                   self.OnSnapshotColormap)
+                      self.OnSnapshotColormap)
         wx.EVT_LISTBOX(snapshot_cam_choice, snapshot_cam_choice.GetId(),
-                   self.OnSnapshot)
+                       self.OnSnapshot)
         wx.EVT_LISTBOX_DCLICK(snapshot_cam_choice, snapshot_cam_choice.GetId(),
-                           self.OnSnapshot)
+                              self.OnSnapshot)
         snapshot_plot = xrc.XRCCTRL(self.snapshot_panel,"snapshot_plot")
         sizer = wx.BoxSizer(wx.VERTICAL)
 
@@ -697,10 +706,10 @@ class wxMainBrainApp(wx.App):
     def SnapshotPerCamInit(self,cam_id):
         # Choice control
         snapshot_cam_choice = xrc.XRCCTRL(self.snapshot_panel,
-                                         "snapshot_cam_choice")
+                                          "snapshot_cam_choice")
         orig_selection = snapshot_cam_choice.GetStringSelection()
         cam_list = [snapshot_cam_choice.GetString(i) for i in
-                     range(snapshot_cam_choice.GetCount())]
+                    range(snapshot_cam_choice.GetCount())]
 
         while not 0==snapshot_cam_choice.GetCount():
             snapshot_cam_choice.Delete(0)
@@ -955,7 +964,7 @@ class wxMainBrainApp(wx.App):
 
     def InitStatusPanel(self):
         ctrl = xrc.XRCCTRL(self.status_panel,
-                           "kalman_parameters_choice")
+                           "kalman_parameters_choice")                
         wx.EVT_CHOICE(ctrl, ctrl.GetId(),
                       self.OnKalmanParametersChange)
 
@@ -1203,12 +1212,36 @@ class wxMainBrainApp(wx.App):
 
         if 1:
             ctrl = xrc.XRCCTRL(self.status_panel,
-                           "HYPOTHESIS_TEST_MAX_ERR")
+                               "HYPOTHESIS_TEST_MAX_ERR")
             ctrl.SetValue(str(self.main_brain.get_hypothesis_test_max_error()))
             wxvt.Validator(ctrl,
                            ctrl.GetId(),
                            self.OnHypothesisTestMaxError,
                            validate_positive_float)
+        if 1:
+            fps = self.main_brain.get_fps()
+            dt = 1.0/fps
+            model_dicts = flydra.kalman.dynamic_models.create_dynamic_model_dict(dt = dt)
+            model_names = model_dicts.keys()
+            model_names.sort()
+            print 'loading models',model_dicts.keys()
+
+            ctrl = xrc.XRCCTRL(self.status_panel,
+                               "kalman_parameters_choice")
+            
+            found_rc_default = None
+            for i,model_name in enumerate(model_names):
+                ctrl.Append(model_name)
+                if MainBrain.rc_params['kalman_model'] == model_name:
+                    found_rc_default = i
+            ctrl.GetParent().GetSizer().Layout()
+            if not found_rc_default:
+                found_rc_default = 0
+                print 'WARNING: could not find rc default for kalman model name'
+            else:
+                print 'found model name %d: %s'%(i,model_names[i])
+            ctrl.SetSelection( found_rc_default )
+            self.OnKalmanParametersChange()
 
         self.main_brain.set_new_camera_callback(self.OnNewCamera)
         self.main_brain.set_old_camera_callback(self.OnOldCamera)
