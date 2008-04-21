@@ -865,8 +865,7 @@ def main():
                       help="last object ID to plot",
                       metavar="OBJSTOP")
 
-    parser.add_option("--obj-only", type="string",
-                      dest="obj_only")
+    parser.add_option("--obj-only", type="string")
 
     parser.add_option("--draw-stim",
                       type="string",
