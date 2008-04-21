@@ -17,6 +17,8 @@ import collections
 from flydra.MainBrain import TextLogDescription
 
 KalmanEstimates = flydra_kalman_utils.KalmanEstimates
+KalmanEstimatesVelOnly = flydra_kalman_utils.KalmanEstimatesVelOnly
+
 FilteredObservations = flydra_kalman_utils.FilteredObservations
 convert_format = flydra_kalman_utils.convert_format
 
@@ -165,8 +167,9 @@ class KalmanSaver:
                  cam_id2camns=None,
                  min_observations_to_save=0,
                  textlog_save_lines = None,
+                 ss=None,
                  debug=0):
-
+        assert ss is not None, 'state vector space must be specified'
         self.cam_id2camns = cam_id2camns
         self.min_observations_to_save = min_observations_to_save
         self.debug = 0
@@ -180,6 +183,11 @@ class KalmanSaver:
                 raise RuntimeError('save_cal_dir exists')
             os.mkdir(save_cal_dir)
         self.save_cal_dir = save_cal_dir
+
+        if ss==9:
+            kalman_estimates_description = KalmanEstimates # With Acceleration
+        elif ss==6:
+            kalman_estimates_description = KalmanEstimatesVelOnly
 
         if os.path.exists(dest_filename):
             self.h5file = PT.openFile(dest_filename, mode="r+")
@@ -202,7 +210,7 @@ class KalmanSaver:
         else:
             self.h5file = PT.openFile(dest_filename, mode="w", title="tracked Flydra data file")
             reconst_orig_units.save_to_h5file(self.h5file)
-            self.h5_xhat = self.h5file.createTable(self.h5file.root,'kalman_estimates', KalmanEstimates,
+            self.h5_xhat = self.h5file.createTable(self.h5file.root,'kalman_estimates', kalman_estimates_description,
                                                    "Kalman a posteri estimates of tracked object")
             self.h5_obs = self.h5file.createTable(self.h5file.root,'kalman_observations', FilteredObservations,
                                                   "observations of tracked object")
@@ -233,7 +241,7 @@ class KalmanSaver:
 
             self.h5textlog.flush()
 
-        self.h5_xhat_names = PT.Description(KalmanEstimates().columns)._v_names
+        self.h5_xhat_names = PT.Description(kalman_estimates_description().columns)._v_names
         self.h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
         self.all_kalman_calibration_data = []
 
@@ -296,7 +304,8 @@ class KalmanSaver:
         xhat_data = numpy.array(tro.xhats, dtype=numpy.float32)
         timestamps = numpy.array(tro.timestamps, dtype=numpy.float64)
         P_data_full = numpy.array(tro.Ps, dtype=numpy.float32)
-        P_data_save = P_data_full[:,numpy.arange(9),numpy.arange(9)] # get diagonal
+        ss = P_data_full.shape[1] # state vector size
+        P_data_save = P_data_full[:,numpy.arange(ss),numpy.arange(ss)] # get diagonal
         obj_id_array = numpy.empty(frames.shape, dtype=numpy.uint32)
         obj_id_array.fill(self.obj_id)
         list_of_xhats = [xhat_data[:,i] for i in range(xhat_data.shape[1])]
@@ -355,6 +364,8 @@ def kalmanize(src_filename,
         dynamic_model = 'fly dynamics, high precision calibration, units: mm'
         import warnings
         warnings.warn('dynamic model not specified. using "%s"'%dynamic_model)
+    else:
+        print 'using dynamic model "%s"'%dynamic_model
 
     results = get_results(src_filename)
 
@@ -387,14 +398,6 @@ def kalmanize(src_filename,
         'reconstructor file: %s'%(reconstructor_filename,),
         ]
 
-    h5saver = KalmanSaver(dest_filename,reconst_orig_units,save_cal_dir=save_cal_dir,cam_id2camns=cam_id2camns,
-                          min_observations_to_save=min_observations_to_save, textlog_save_lines=textlog_save_lines,
-                          debug=debug)
-
-    save_calibration_data = FakeThreadingEvent()
-    if save_cal_dir is not None:
-        save_calibration_data.set()
-
     dt = 1.0/frames_per_second
     model_dict=dynamic_models.create_dynamic_model_dict(dt=dt)
     try:
@@ -402,6 +405,21 @@ def kalmanize(src_filename,
     except KeyError:
         print 'valid model names:',model_dict.keys()
         raise
+
+    ss = kalman_model['ss']
+
+    h5saver = KalmanSaver(dest_filename,
+                          reconst_orig_units,
+                          save_cal_dir=save_cal_dir,
+                          cam_id2camns=cam_id2camns,
+                          min_observations_to_save=min_observations_to_save,
+                          textlog_save_lines=textlog_save_lines,
+                          ss=ss,
+                          debug=debug)
+
+    save_calibration_data = FakeThreadingEvent()
+    if save_cal_dir is not None:
+        save_calibration_data.set()
 
     tracker = Tracker(reconstructor_meters,
                       scale_factor=reconst_orig_units.get_scale_factor(),

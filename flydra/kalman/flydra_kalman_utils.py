@@ -29,6 +29,24 @@ class KalmanEstimates(PT.IsDescription):
     P77        = PT.Float32Col(pos=19)
     P88        = PT.Float32Col(pos=20)
 
+class KalmanEstimatesVelOnly(PT.IsDescription):
+    obj_id     = PT.UInt32Col(pos=0)
+    frame      = PT.UInt64Col(pos=1)
+    timestamp  = PT.Float64Col(pos=2) # time of reconstruction
+    x          = PT.Float32Col(pos=3)
+    y          = PT.Float32Col(pos=4)
+    z          = PT.Float32Col(pos=5)
+    xvel       = PT.Float32Col(pos=6)
+    yvel       = PT.Float32Col(pos=7)
+    zvel       = PT.Float32Col(pos=8)
+    # save diagonal of P matrix
+    P00        = PT.Float32Col(pos=12)
+    P11        = PT.Float32Col(pos=13)
+    P22        = PT.Float32Col(pos=14)
+    P33        = PT.Float32Col(pos=15)
+    P44        = PT.Float32Col(pos=16)
+    P55        = PT.Float32Col(pos=17)
+
 class FilteredObservations(PT.IsDescription):
     obj_id     = PT.UInt32Col(pos=0)
     frame      = PT.UInt64Col(pos=1)

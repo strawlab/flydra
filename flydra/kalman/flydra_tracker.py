@@ -65,7 +65,6 @@ class TrackedObject:
                  scale_factor=None,
                  kalman_model=None,
                  save_calibration_data=None,
-                 max_frames_skipped=25,
                  save_all_data=False,
                  area_threshold=0,
                  ):
@@ -91,19 +90,22 @@ class TrackedObject:
         else:
             self.scale_factor = scale_factor
         first_observation_meters = first_observation_orig_units*self.scale_factor
-        initial_x = numpy.hstack((first_observation_meters, # convert to mm from meters
-                                  (0,0,0, 0,0,0))) # zero velocity and acceleration
         ss = kalman_model['ss']
+        initial_x = numpy.zeros( (ss,) )
+        initial_x[:3] = first_observation_meters
         P_k1=numpy.eye(ss) # initial state error covariance guess
         for i in range(0,3):
             P_k1[i,i]=kalman_model['initial_position_covariance_estimate']
         for i in range(3,6):
             P_k1[i,i]=kalman_model.get('initial_velocity_covariance_estimate',0)
-        for i in range(6,9):
-            P_k1[i,i]=kalman_model['initial_acceleration_covariance_estimate']
+        if ss >= 9:
+            for i in range(6,9):
+                P_k1[i,i]=kalman_model['initial_acceleration_covariance_estimate']
 
         self.n_sigma_accept = kalman_model['n_sigma_accept']
         self.max_variance = kalman_model['max_variance_dist_meters']**2 # square so that it is in variance units
+
+        self.max_frames_skipped = kalman_model['max_frames_skipped']
 
         self.my_kalman = kalman.KalmanFilter(kalman_model['A'],
                                              kalman_model['C'],
@@ -133,7 +135,7 @@ class TrackedObject:
             self.save_calibration_data = save_calibration_data
         self.saved_calibration_data = []
 
-        self.max_frames_skipped=max_frames_skipped
+        self.max_frames_skipped=kalman_model['max_frames_skipped']
 
         # Don't run kalman filter with initial data, as this would
         # cause error estimates to drop too low.
@@ -527,7 +529,6 @@ class Tracker:
                             scale_factor=self.scale_factor,
                             kalman_model=self.kalman_model,
                             save_calibration_data=self.save_calibration_data,
-                            max_frames_skipped=self.max_frames_skipped,
                             save_all_data=self.save_all_data,
                             area_threshold=self.area_threshold,
                             )

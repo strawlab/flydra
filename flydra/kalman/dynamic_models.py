@@ -1,7 +1,7 @@
 import numpy
 import math
 
-def _get_A_C_arrays(dt=None):
+def _get_decreasing_accel_model(dt=None):
     """get linear dynamical system matrices A and C
 
     dt is the time-step in seconds
@@ -29,7 +29,7 @@ def _get_A_C_arrays(dt=None):
                      [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,   ad     ,   0.     ,    0. ],
                      [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,   0.     ,   ad     ,    0. ],
                      [   0. ,    0. ,    0. ,    0. ,    0. ,    0. ,   0.     ,   0.     ,    ad]])
-    A_model_name = 'fixed_accel'
+    A_model_name = 'decreasing_accel'
 
     # measurement prediction matrix
     C = numpy.zeros((os,ss))
@@ -51,6 +51,43 @@ def _get_A_C_arrays(dt=None):
              }
     return model
 
+def _get_fixed_vel_model(dt=None):
+    """get linear dynamical system matrices A and C
+
+    dt is the time-step in seconds
+    """
+    # distance units are in m
+    # time units are in sec
+    # thus, velocity is (m/sec)
+
+    ss = 6 # length of state vector (state size)
+    os = 3 # length of observation vector (observation size)
+
+    # state vector describes a particle in brownian motion
+    # [ x y z xvel yvel zvel]
+
+    # process update matrix (time evolution update matrix)
+    A = numpy.array([[   1. ,    0. ,    0. ,   dt  ,    0. ,    0. ],
+                     [   0. ,    1. ,    0. ,    0. ,   dt  ,    0. ],
+                     [   0. ,    0. ,    1. ,    0. ,    0. ,   dt  ],
+                     [   0. ,    0. ,    0. ,    1. ,    0. ,    0. ],
+                     [   0. ,    0. ,    0. ,    0. ,    1. ,    0. ],
+                     [   0. ,    0. ,    0. ,    0. ,    0. ,    1. ]])
+    A_model_name = 'fixed_vel'
+
+    # measurement prediction matrix
+    C = numpy.zeros((os,ss))
+    C[:os,:os] = numpy.eye(os) # directly measure x,y,z positions
+
+    model = {'A':A,
+             'A_model_name':A_model_name,
+             'C':C,
+             'ss':ss,
+             'os':os,
+             'dt':dt,
+             }
+    return model
+
 def get_dynamic_model_dict(*args,**kw):
     import warnings
     warnings.warn('DeprecationWarning: call create_dynamic_model_dict(), not old get_dynamic_model_dict')
@@ -61,16 +98,15 @@ def create_dynamic_model_dict(dt=None):
 
     dt is the time-step in seconds
     """
-    base_model_dict = _get_A_C_arrays(dt)
-
-    ss = 9 # length of state vector (state size)
-    os = 3 # length of observation vector (observation size)
-
     dynamic_models = {}
 
     ######################################
     # 'hbird3, units: mm':
     # process covariance
+    base_model_dict = _get_decreasing_accel_model(dt)
+    ss = base_model_dict['ss']
+    os = base_model_dict['os']
+
     Q = numpy.zeros((ss,ss))
     for i in range(0,3):
         #Q[i,i] = (0.005)**2
@@ -102,6 +138,7 @@ def create_dynamic_model_dict(dt=None):
         #initial_acceleration_covariance_estimate=15,
         initial_velocity_covariance_estimate=50,
         initial_acceleration_covariance_estimate=150,
+        max_frames_skipped=25,
         Q=Q,
         R=R)
     newdict.update(base_model_dict)
@@ -110,6 +147,10 @@ def create_dynamic_model_dict(dt=None):
 
     # 'fly dynamics, high precision calibration, units: mm':
     # process covariance
+    base_model_dict = _get_decreasing_accel_model(dt)
+    ss = base_model_dict['ss']
+    os = base_model_dict['os']
+
     Q = numpy.zeros((ss,ss))
     for i in range(0,3):
         Q[i,i] = (0.001)**2
@@ -128,10 +169,44 @@ def create_dynamic_model_dict(dt=None):
         max_variance_dist_meters=0.02,
         initial_position_covariance_estimate=1e-6,
         initial_acceleration_covariance_estimate=15,
+        max_frames_skipped=25,
         Q=Q,
         R=R)
     newdict.update(base_model_dict)
     dynamic_models['fly dynamics, high precision calibration, units: mm'] = newdict
+
+    ## ##################################################
+
+    ######################################
+
+    # 'mamarama, units: mm':
+    # process covariance
+
+    base_model_dict = _get_fixed_vel_model(dt)
+    ss = base_model_dict['ss']
+    os = base_model_dict['os']
+
+    Q = numpy.zeros((ss,ss))
+    for i in range(0,3):
+        Q[i,i] = (0.01)**2
+    for i in range(3,6):
+        Q[i,i] = (0.5)**2
+
+    # measurement noise covariance matrix
+    R = 1e-2*numpy.eye(os)
+
+    newdict = dict(
+        min_dist_to_believe_new_meters=0.08, # 8 cm
+        min_dist_to_believe_new_sigma=3.0,
+        n_sigma_accept=7.0,
+        max_variance_dist_meters=0.08,
+        initial_position_covariance_estimate=1e-6,
+        initial_acceleration_covariance_estimate=15,
+        max_frames_skipped=10,
+        Q=Q,
+        R=R)
+    newdict.update(base_model_dict)
+    dynamic_models['mamarama, units: mm'] = newdict
 
     ## ##################################################
 
