@@ -14,18 +14,14 @@ PT_TUPLE_IDX_Y = flydra.data_descriptions.PT_TUPLE_IDX_Y
 PT_TUPLE_IDX_AREA = flydra.data_descriptions.PT_TUPLE_IDX_AREA
 PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 
-packet_header_fmt = '<idB' # XXX check format
+packet_header_fmt = '<idBB' # XXX check format
 packet_header_fmtsize = struct.calcsize(packet_header_fmt)
 
 super_packet_header_fmt = '<H'
 super_packet_header_fmtsize = struct.calcsize(super_packet_header_fmt)
 super_packet_subheader = 'H'
 
-state_size = 9
 err_size = 1
-#per_tracked_object_fmt = 'I' + 'f'*(state_size+err_size) # obj_id + state vector
-per_tracked_object_fmt = 'f'*(state_size+err_size)
-per_tracked_object_fmtsize = struct.calcsize(per_tracked_object_fmt)
 
 class FakeThreadingEvent:
     def isSet(self):
@@ -550,10 +546,13 @@ class Tracker:
 
     def encode_data_packet(self,corrected_framenumber,timestamp):
         N = len(self.live_tracked_objects)
+        state_size = self.kalman_model['ss']
         data_packet = struct.pack(packet_header_fmt,
                                   corrected_framenumber,
                                   timestamp,
-                                  N)
+                                  N,
+                                  state_size)
+        per_tracked_object_fmt = 'f'*(state_size+err_size)
         for idx,tro in enumerate(self.live_tracked_objects):
             if not len(tro.xhats):
                 continue
@@ -568,8 +567,10 @@ def decode_data_packet(buf):
     header = buf[:packet_header_fmtsize]
     rest = buf[packet_header_fmtsize:]
 
-    (corrected_framenumber,timestamp,N) = struct.unpack(
+    (corrected_framenumber,timestamp,N,state_size) = struct.unpack(
         packet_header_fmt,header)
+    per_tracked_object_fmt = 'f'*(state_size+err_size)
+    per_tracked_object_fmtsize = struct.calcsize(per_tracked_object_fmt)
     state_vecs = []
     for i in range(N):
         this_tro = rest[:per_tracked_object_fmtsize]
