@@ -58,7 +58,10 @@ def doit(
 
     for filename in filenames:
 
-        pylab.figtext(0,0,filename)
+        figtitle = filename
+        if options.obj_only is not None:
+            figtitle += ' only showing objects: ' + ' '.join(map(str,options.obj_only))
+        pylab.figtext(0,0,figtitle)
 
         h5 = PT.openFile( filename, mode='r' )
 
@@ -145,6 +148,9 @@ def doit(
         R = reconstruct.Reconstructor(data_file)
         R = R.get_scaled( R.get_scale_factor() )
 
+        if options.obj_only is not None:
+            use_obj_ids = options.obj_only
+
         print 'loading frame numbers for kalman objects (estimates)'
         kalman_rows = []
         for obj_id in use_obj_ids:
@@ -226,7 +232,14 @@ def doit(
             kobs_2d = kresults.root.kalman_observations_2d_idxs
 
             # sort data into by-obj-id
-
+            for obj_id in use_obj_ids:
+                obs_idxs = numpy.nonzero( obj_ids == obj_id )[0]
+                for obs_idx in obs_idxs:
+                    camns_and_idxs = kobs_2d[ int(obs_2d_idxs[obs_idx]) ] # cast to int (from numpy scalar type) for pytables
+                    if 1:
+                        frame = kframes[obs_idx]
+                        print 'frame %d, camns_and_idxs: %s'%(frame,str(camns_and_idxs))
+                        raise NotImplementedError('') # haven't gotten any further...
 
     if len(filenames):
         fig.canvas.mpl_connect('pick_event', onpick_callback)
@@ -265,7 +278,12 @@ def main():
                       default=None,
                       )
 
+    parser.add_option("--obj-only", type="string")
+
     (options, args) = parser.parse_args()
+
+    if options.obj_only is not None:
+        options.obj_only = core_analysis.parse_seq(options.obj_only)
 
     doit(
         filenames=args,
