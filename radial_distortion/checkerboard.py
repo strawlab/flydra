@@ -406,12 +406,14 @@ class Objective:
             xys = numpy.array([ node.get_pos() for node in ordered ])
             self._xys.append( xys )
 
-    def get_default_p0(self):
+    def get_default_p0(self,config=None):
         """create initial estimate of parameter vector"""
-        x0 = self._width/2.0
-        y0 = self._height/2.0
-        r1 = 0
-        r2 = 0
+	if config is None:
+            config={}
+        x0 = config.get( 'K13', self._width/2.0)
+        y0 = config.get( 'K23', self._height/2.0)
+        r1 = config.get( 'kc1', 0.0)
+        r2 = config.get( 'kc2', 0.0)
         params = [x0, y0, r1, r2]
 
         for orig_xys in self._xys:
@@ -598,15 +600,12 @@ def binarize( im ):
     newim = numpy.where( im > median, numpy.uint8(255), numpy.uint8(0) )
     return newim
 
-def get_similar_direction_graphs(fname,frame,
+def get_similar_direction_graphs(fmf,frame,
                                  use='binary',return_early=False,
                                  debug_line_finding=False,
                                  aspect_ratio = 1.0,
                                  ):
-    fmf = FlyMovieFormat.mmap_flymovie(fname)
-
     bg_im = fmf['frame'][0]
-
     imnx_orig = fmf['frame'][frame]
 
     imnx_no_bg = get_non_background( imnx_orig, bg_im )
@@ -720,6 +719,11 @@ def main():
                       action='store_true',
                       default=False)
 
+    parser.add_option("--debug-nodes",
+                      help="display node numbers and print edges",
+                      action='store_true',
+                      default=False)
+
     (cli_options, args) = parser.parse_args()
     if not len(args)==1:
         raise RuntimeError('one command-line argument is needed - the configFile')
@@ -737,6 +741,12 @@ def main():
         aspect_ratio = 1.0,
         tol=0,
         do_plot = False,
+	
+	K13 = None, # center guess X
+	K23 = None, # center guess Y
+	
+	kc1 = 0.0, # initial guess of radial distortion
+	kc2 = 0.0, # initial guess of radial distortion
         )
 
     if cli_options.find_and_show:
@@ -775,9 +785,12 @@ def main():
     all_graphs = []
     graph_idxs_by_frames = []
     all_imnx_use = []
+    
+    fmf = FlyMovieFormat.mmap_flymovie(options.fname)
+    
     for frame in options.frames:
         (similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary,
-         imnx_use) = get_similar_direction_graphs(options.fname,frame,
+         imnx_use) = get_similar_direction_graphs(fmf,frame,
                                                   use=options.use,
                                                   return_early=options.return_early,
                                                   debug_line_finding = options.debug_line_finding,
@@ -789,8 +802,8 @@ def main():
         graph_idxs_by_frames.append( range(start_idx,stop_idx) )
         all_imnx_use.append( imnx_use )
         
-        if cli_options.find_and_show:
-            print 'edges for frame %d ---------------'%frame
+        if cli_options.debug_nodes:
+            print 'edges for frame %d ================'%frame
             for subgraph in similar_direction_graphs:
                 print subgraph.edges()
             print
@@ -811,7 +824,7 @@ def main():
                 im_ax = frame_mpl_figures[frame_no].add_subplot(2,1,1)
             for i in graph_idxs_by_frames[j]: # get points for last image
                 subgraph = similar_direction_graphs[i]
-                if options.debug_line_finding or cli_options.find_and_show:
+                if options.debug_line_finding or cli_options.debug_nodes:
                     pos = {}
                     for node in subgraph.nodes():
                         pos[node] = node.get_pos()
@@ -895,7 +908,7 @@ def main():
                          aspect_ratio=options.aspect_ratio,
                          )
 
-        p0 = obj.get_default_p0()
+        p0 = obj.get_default_p0(config)
         print 'p0',p0[:4]
 
         if 0:
