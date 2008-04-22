@@ -14,15 +14,8 @@ from optparse import OptionParser
 import flydra.reconstruct
 import flydra.analysis.result_utils as result_utils
 import progressbar
-
-def save_ascii_matrix(thefile,m):
-    if hasattr(thefile,'write'):
-        fd=thefile
-    else:
-        fd=open(thefile,mode='wb')
-    for row in m:
-        fd.write( ' '.join(map(str,row)) )
-        fd.write( '\n' )
+import numpy
+from flydra.reconstruct import save_ascii_matrix
 
 def create_new_row(d2d, this_camns, this_camn_idxs, cam_ids, camn2cam_id, npoints_by_cam_id):
     n_pts = 0
@@ -124,7 +117,7 @@ def do_it(filename,
             kframes_use = kframes[::use_nth_observation]
             obs_2d_idxs_use = obs_2d_idxs[::use_nth_observation]
 
-            widgets=['obj_id % 5d (% 2d of % 2d) '%(obj_id,obj_id_enum+1, len(use_obj_ids)), progressbar.Percentage(), ' ',
+            widgets=['obj_id % 5d (% 3d of % 3d) '%(obj_id,obj_id_enum+1, len(use_obj_ids)), progressbar.Percentage(), ' ',
                      progressbar.Bar(), ' ', progressbar.ETA()]
 
             pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(kframes_use)).start()
@@ -252,10 +245,10 @@ def do_it(filename,
     if reconstructor is not None:
         cam_centers = numpy.asarray([reconstructor.get_camera_center(cam_id)[:,0]
                                      for cam_id in cam_ids])
-        save_ascii_matrix(os.path.join(calib_dir,'original_cam_centers.dat'),cam_centers)
-    save_ascii_matrix(os.path.join(calib_dir,'IdMat.dat'),IdMat)
-    save_ascii_matrix(os.path.join(calib_dir,'points.dat'),points)
-    save_ascii_matrix(os.path.join(calib_dir,'Res.dat'),Res)
+        save_ascii_matrix(cam_centers,os.path.join(calib_dir,'original_cam_centers.dat'))
+    save_ascii_matrix(IdMat,os.path.join(calib_dir,'IdMat.dat'))
+    save_ascii_matrix(points,os.path.join(calib_dir,'points.dat'))
+    save_ascii_matrix(Res,os.path.join(calib_dir,'Res.dat'))
 
     fd = open(os.path.join(calib_dir,'camera_order.txt'),'w')
     for cam_id in cam_ids:
