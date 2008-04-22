@@ -131,7 +131,6 @@ def doit(
             ax.set_ylabel('%s\npixels'%cam_id)
             ax.set_xlim( (start_frame, stop_frame) )
         ax.set_xlabel('frame')
-
         h5.close()
 
     if kalman_filename is not None:
@@ -196,6 +195,7 @@ def doit(
                 thisline,=ax.plot( frame, x2d[1,:], 'y-', picker=5) # 5 points tolerance
                 all_kalman_lines[thisline] = obj_id
                 ax.set_ylim([-100,800])
+                ax.set_xlim( (start_frame, stop_frame) )
 
         if 0:
             # this is forked from flydra_analysis_plot_kalman_2d.py
@@ -240,6 +240,7 @@ def doit(
                         frame = kframes[obs_idx]
                         print 'frame %d, camns_and_idxs: %s'%(frame,str(camns_and_idxs))
                         raise NotImplementedError('') # haven't gotten any further...
+        data_file.close()
 
     if len(filenames):
         fig.canvas.mpl_connect('pick_event', onpick_callback)
