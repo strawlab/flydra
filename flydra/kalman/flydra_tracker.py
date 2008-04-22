@@ -309,14 +309,14 @@ class TrackedObject:
         used_camns_and_idxs = []
         if debug>2:
             print '_filter_data():'
-            print '  dist2cmp %f = self.n_sigma_accept * %f'%(dist2cmp,mean_variance_estimate)
+            print ' dist2cmp %f = self.n_sigma_accept * mean_variance_estimate = %f * %f'%(dist2cmp, self.n_sigma_accept, mean_variance_estimate)
         for camn,candidate_point_list in data_dict.iteritems():
             cam_id = camn2cam_id[camn]
 
             if debug>2:
                 predicted_2d = self.reconstructor_meters.find2d(cam_id,a_priori_observation_prediction)
-                print 'camn',camn,'cam_id',cam_id
-                print 'predicted_2d',predicted_2d
+                print '  cam_id',cam_id,'camn',camn,'--------'
+                print '    predicted_2d',predicted_2d
 
             # For large numbers of 2d points in data_dict, probably
             # faster to compute 2d image of error ellipsoid and see if
@@ -337,7 +337,7 @@ class TrackedObject:
 
                 if debug>2:
                     frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
-                    print '->', dist2, pt_undistorted[:2], '(idx %d, area %f)'%(frame_pt_idx,pt_area)
+                    print '    ->', dist2, pt_undistorted[:2], '(idx %d, area %f)'%(frame_pt_idx,pt_area)
 
                 if dist2<dist2cmp and pt_area > self.area_threshold:
                     if debug>2:
@@ -361,8 +361,6 @@ class TrackedObject:
                     print 'best match idx %d (%s)'%(closest_idx, str(pt_undistorted[:2]))
         # Now cam_ids_and_points2d has just the 2d points we'll use for this reconstruction
         if len(cam_ids_and_points2d)>=2:
-            if debug>=1:
-                print len(cam_ids_and_points2d) # XXX ADS
             observation_meters = self.reconstructor_meters.find3d( cam_ids_and_points2d, return_line_coords = False)
             if len(cam_ids_and_points2d)>=3:
                 if self.save_calibration_data.isSet():
