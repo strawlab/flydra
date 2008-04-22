@@ -248,7 +248,7 @@ def do_it(filename,
         save_ascii_matrix(cam_centers,os.path.join(calib_dir,'original_cam_centers.dat'))
     save_ascii_matrix(IdMat,os.path.join(calib_dir,'IdMat.dat'))
     save_ascii_matrix(points,os.path.join(calib_dir,'points.dat'))
-    save_ascii_matrix(Res,os.path.join(calib_dir,'Res.dat'))
+    save_ascii_matrix(Res,os.path.join(calib_dir,'Res.dat'),isint=True)
 
     fd = open(os.path.join(calib_dir,'camera_order.txt'),'w')
     for cam_id in cam_ids:

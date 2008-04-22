@@ -37,9 +37,12 @@ def load_ascii_matrix(filename):
     lines = buf.split('\n')[:-1]
     return nx.array([map(float,line.split()) for line in lines])
 
-def save_ascii_matrix(M,fd):
+def save_ascii_matrix(M,fd,isint=False):
     def fmt(f):
-        return '% 8e'%f
+        if isint:
+            return '%d'%f
+        else:
+            return '% 8e'%f
     A = nx.asarray(M)
     if len(A.shape) == 1:
         A=nx.reshape(A, (1,A.shape[0]) )
