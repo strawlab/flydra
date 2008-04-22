@@ -1614,43 +1614,49 @@ class AppState(object):
             emulation_image_sources = emulation_image_sources.split( os.pathsep )
             num_cams = len( emulation_image_sources )
         else:
-            # ----------------------------------------------------------------
+            ##################################################################
             #
             # Setup cameras
             #
-            # ----------------------------------------------------------------
+            ##################################################################
 
             cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
 
-            num_cams = cam_iface.get_num_cameras()
+            all_cam_info_list = [
+                (cam_iface.get_camera_info(i),i) for i in range(cam_iface.get_num_cameras()) ]
+            all_cam_info_list.sort() # make sure list is always in same order for given cameras
+            all_cam_info_list.reverse() # any ordering will do, but reverse for historical reasons
+            cam_order = [ x[1] for x in all_cam_info_list]
+            print 'camera order',cam_order
+            num_cams = len(cam_order)
 
         if num_cams == 0:
             raise RuntimeError('No cameras detected')
 
-        self.all_cams = []
-        self.cam_status = []
-        self.all_cam_chains = []
-        self.all_cam_processors = []
-        self.all_savers = []
-        self.all_small_savers = []
-        self.globals = []
-        self.all_cam_ids = []
+        self.all_cams = [None]*num_cams
+        self.cam_status = [None]*num_cams
+        self.all_cam_chains = [None]*num_cams
+        self.all_cam_processors = [None]*num_cams
+        self.all_savers = [None]*num_cams
+        self.all_small_savers = [None]*num_cams
+        self.globals = [None]*num_cams
+        self.all_cam_ids = [None]*num_cams
 
         self.reconstruct_helper = []
-        self._image_sources = []
-        self._image_controllers = []
-        initial_images = []
+        self._image_sources = [None]*num_cams
+        self._image_controllers = [None]*num_cams
+        initial_images = [None]*num_cams
         self.critical_threads = []
-
+        
         for cam_no in range(num_cams):
 
-            # ----------------------------------------------------------------
+            ##################################################################
             #
             # Initialize "global" variables
             #
-            # ----------------------------------------------------------------
+            ##################################################################
 
-            self.globals.append({})
+            self.globals[cam_no] = {} # intialize
             globals = self.globals[cam_no] # shorthand
 
             globals['debug_drop']=options.debug_drop
@@ -1675,11 +1681,12 @@ class AppState(object):
 
             if cam_iface is not None:
                 backend = cam_iface.get_driver_name()
-                N_modes = cam_iface.get_num_modes(cam_no)
+                N_modes = cam_iface.get_num_modes(cam_order[cam_no])
                 use_mode = options.mode_num
+                print 'camera info:',cam_iface.get_camera_info(cam_order[cam_no])
                 print '%d available modes:'%N_modes
                 for i in range(N_modes):
-                    mode_string = cam_iface.get_mode_string(cam_no,i)
+                    mode_string = cam_iface.get_mode_string(cam_order[cam_no],i)
                     print '  mode %d: %s'%(i,mode_string)
                     if 'format7_0' in mode_string.lower():
                         # prefer format7_0
@@ -1687,8 +1694,8 @@ class AppState(object):
                             use_mode = i
                 if use_mode is None:
                     use_mode = 0
-                cam = cam_iface.Camera(cam_no,options.num_buffers,use_mode)
-                print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_no,use_mode))
+                cam = cam_iface.Camera(cam_order[cam_no],options.num_buffers,use_mode)
+                print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_order[cam_no],use_mode))
                 ImageSourceModel = ImageSourceFromCamera
 
                 initial_image_dict = None
@@ -1702,11 +1709,11 @@ class AppState(object):
             else:
                 globals['take_background'].clear()
 
-            initial_images.append( initial_image_dict )
+            initial_images[cam_no] = initial_image_dict
 
-            self.all_cams.append( cam )
+            self.all_cams[cam_no] = cam
             cam.start_camera()  # start camera
-            self.cam_status.append( 'started' )
+            self.cam_status[cam_no]= 'started'
             buffer_pool = PreallocatedBufferPool(FastImage.Size(*cam.get_frame_size()))
             image_source = ImageSourceModel(chain = None,
                                             cam = cam,
@@ -1720,14 +1727,15 @@ class AppState(object):
 
             image_source.setDaemon(True)
             image_source.start()
-            self._image_sources.append( image_source )
-            self._image_controllers.append( controller )
+            self._image_sources[cam_no] = image_source
+            self._image_controllers[cam_no]= controller 
 
-        # ----------------------------------------------------------------
+        ##################################################################
         #
         # Initialize network connections
         #
-        # ----------------------------------------------------------------
+        ##################################################################
+
         if use_dummy_mainbrain:
             self.main_brain = DummyMainBrain()
         else:
@@ -1742,11 +1750,11 @@ class AppState(object):
                 raise
             self.main_brain._setOneway(['set_image','set_fps','close','log_message','receive_missing_data'])
 
-        # ----------------------------------------------------------------
+        ##################################################################
         #
         # Initialize more stuff
         #
-        # ----------------------------------------------------------------
+        ##################################################################
 
         if (not use_dummy_mainbrain) and ((not BENCHMARK) or (not FLYDRA_BT)):
             # run in single-thread for benchmark
@@ -1853,14 +1861,14 @@ class AppState(object):
                                                          scalar_control_info,
                                                          port)
 
-            self.all_cam_ids.append(cam_id)
+            self.all_cam_ids[cam_no]=cam_id
             cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(self.all_cam_ids[cam_no])
 
-            # ----------------------------------------------------------------
+            ##################################################################
             #
             # Processing chains
             #
-            # ----------------------------------------------------------------
+            ##################################################################
 
             # setup chain for this camera:
             if not DISABLE_ALL_PROCESSING:
@@ -1898,10 +1906,10 @@ class AppState(object):
                         options=options,
                         initial_image_dict = initial_image_dict,
                         )
-                self.all_cam_processors.append( cam_processor )
+                self.all_cam_processors[cam_no]= cam_processor
 
                 cam_processor_chain = cam_processor.get_chain()
-                self.all_cam_chains.append(cam_processor_chain)
+                self.all_cam_chains[cam_no]=cam_processor_chain
                 thread = threading.Thread( target = cam_processor.mainloop,
                                            name = 'cam_processor.mainloop')
                 thread.setDaemon(True)
@@ -1910,7 +1918,7 @@ class AppState(object):
 
                 if 1:
                     save_cam = SaveCamData()
-                    self.all_savers.append( save_cam )
+                    self.all_savers[cam_no]= save_cam
                     cam_processor_chain.append_link( save_cam.get_chain() )
                     thread = threading.Thread( target = save_cam.mainloop,
                                                name = 'save_cam.mainloop')
@@ -1919,12 +1927,11 @@ class AppState(object):
                     self.critical_threads.append( thread )
                 else:
                     print 'not starting full .fmf thread'
-                    self.all_savers.append( None )
 
                 if 1:
                     save_small = SaveSmallData(options=self.options,
                                                mkdir_lock = save_small_data_mkdir_lock)
-                    self.all_small_savers.append( save_small )
+                    self.all_small_savers[cam_no]= save_small
                     cam_processor_chain.append_link( save_small.get_chain() )
                     thread = threading.Thread( target = save_small.mainloop,
                                                name = 'save_small.mainloop')
@@ -1933,22 +1940,17 @@ class AppState(object):
                     self.critical_threads.append( thread )
                 else:
                     print 'not starting small .fmf thread'
-                    self.all_small_savers.append( None )
 
             else:
                 cam_processor_chain = None
-                self.all_cam_processors.append( None )
-                self.all_savers.append( None )
-                self.all_small_savers.append( None )
-                self.all_cam_chains.append( None )
 
             self._image_sources[cam_no].set_chain( cam_processor_chain )
 
-            # ----------------------------------------------------------------
+            ##################################################################
             #
             # Misc
             #
-            # ----------------------------------------------------------------
+            ##################################################################
 
             self.reconstruct_helper.append( None )
 
@@ -1961,13 +1963,9 @@ class AppState(object):
         self.last_frames_by_cam = [ [] for c in range(num_cams) ]
         self.last_points_by_cam = [ [] for c in range(num_cams) ]
         self.last_points_framenumbers_by_cam = [ [] for c in range(num_cams) ]
-        self.n_raw_frames = []
-        self.last_measurement_time = []
-        self.last_return_info_check = []
-        for cam_no in range(num_cams):
-            self.last_measurement_time.append( time_func() )
-            self.last_return_info_check.append( 0.0 ) # never
-            self.n_raw_frames.append( 0 )
+        self.n_raw_frames = [0 for i in range(num_cams)]
+        self.last_measurement_time = [time_func() for i in range(num_cams)]
+        self.last_return_info_check = [ 0.0 for i in range(num_cams)]
 
     def get_image_sources(self):
         return self._image_sources
