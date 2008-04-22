@@ -75,6 +75,7 @@ def validate_positive_float(val_str):
 
 def wrap_loud( wxparent, func ):
     class LoudWrapper:
+        """show a message dialog when a function call fails"""
         def __init__(self,wxparent,func):
             self.func = func
             self.wxparent = wxparent
@@ -1391,6 +1392,12 @@ class wxMainBrainApp(wx.App):
         ctrl.SetValue(str(n_pts))
 
     def OnTimer(self, event):
+        if not hasattr( self, 'last_timer'):
+            self.last_timer = time.time()
+        now = time.time()
+        if (now-self.last_timer) > 1.0:
+            print 'timer took more than 1 sec to be called!'
+        self.last_timer = now
         DEBUG('4')
         if not hasattr(self,'main_brain'):
             return # quitting
