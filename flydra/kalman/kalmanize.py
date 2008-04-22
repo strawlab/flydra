@@ -158,6 +158,11 @@ option to this program.
             print
         print
         print '-'*80
+    elif debug > 2:
+        print 'At end of frame %d, all live tracked objects:'%frame
+        for tro in tracker.live_tracked_objects:
+            print '%d observations, %d estimates for %s'%(len(tro.xhats),len(tro.observations_data),tro)
+        print
 
 class KalmanSaver:
     def __init__(self,
