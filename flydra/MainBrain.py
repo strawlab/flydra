@@ -29,8 +29,6 @@ import flydra.fastgeom as geom
 import flydra.data_descriptions
 import flydra.trigger
 
-import flydra.debuglock
-
 import warnings, errno
 
 # ensure that pytables uses numpy:
