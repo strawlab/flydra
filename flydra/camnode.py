@@ -1214,7 +1214,8 @@ class SaveSmallData(object):
                         timestamp1 = chainbuf.timestamp
                         filename_base = os.path.expanduser(filename_base)
                         dirname = os.path.split(filename_base)[0]
-                        with self._mkdir_lock.acquire():
+                        
+                        with self._mkdir_lock:
                             # Because this is a multi-threaded
                             # program, sometimes another thread will
                             # try to create this directory.
