@@ -193,12 +193,12 @@ def create_dynamic_model_dict(dt=None):
         Q[i,i] = (0.5)**2
 
     # measurement noise covariance matrix
-    R = 1e-2*numpy.eye(os)
+    R = 1e-3*numpy.eye(os)
 
     newdict = dict(
         min_dist_to_believe_new_meters=0.08, # 8 cm
         min_dist_to_believe_new_sigma=3.0,
-        n_sigma_accept=7.0,
+        n_sigma_accept=20.0,
         max_variance_dist_meters=0.08,
         initial_position_covariance_estimate=1e-6,
         initial_acceleration_covariance_estimate=15,
