@@ -1,5 +1,6 @@
 import numpy
 import math
+import warnings
 
 def _get_decreasing_accel_model(dt=None):
     """get linear dynamical system matrices A and C
@@ -89,15 +90,16 @@ def _get_fixed_vel_model(dt=None):
     return model
 
 def get_dynamic_model_dict(*args,**kw):
-    import warnings
     warnings.warn('DeprecationWarning: call create_dynamic_model_dict(), not old get_dynamic_model_dict')
     return create_dynamic_model_dict(*args,**kw)
 
-def create_dynamic_model_dict(dt=None):
+def create_dynamic_model_dict(dt=None,disable_warning=False):
     """get linear dynamical system matrices
 
     dt is the time-step in seconds
     """
+    if not disable_warning:
+        warnings.warn('using deprecated function "create_dynamic_model_dict". Use ',DeprecationWarning,stacklevel=2)
     dynamic_models = {}
 
     ######################################
@@ -196,13 +198,23 @@ def create_dynamic_model_dict(dt=None):
     R = 1e-3*numpy.eye(os)
 
     newdict = dict(
+
+        # data association parameters
+
+        # birth model
         min_dist_to_believe_new_meters=0.08, # 8 cm
         min_dist_to_believe_new_sigma=3.0,
-        n_sigma_accept=20.0,
-        max_variance_dist_meters=0.08,
         initial_position_covariance_estimate=1e-6,
         initial_acceleration_covariance_estimate=15,
+
+        # support existint object
+        n_sigma_accept=20.0, # geometric euclidian distance
+
+        # death model
+        max_variance_dist_meters=0.08,
         max_frames_skipped=10,
+
+        # kalman filter parameters
         Q=Q,
         R=R)
     newdict.update(base_model_dict)
@@ -211,3 +223,48 @@ def create_dynamic_model_dict(dt=None):
     ## ##################################################
 
     return dynamic_models
+
+class EKFAllParams(dict):
+    """abstract base class hold all parameters for data association and EK filtering"""
+    def __init__(self):
+        self['ss'] = 6
+        self['isEKF']=True
+
+class MamaramaMMEKFAllParams(EKFAllParams):
+    def __init__(self,dt=None):
+        super( MamaramaMMEKFAllParams, self).__init__()
+        assert dt is not None
+        linear_dict = get_kalman_model( name='mamarama, units: mm',
+                                        dt=dt )
+
+        # update some parameters from linear model
+        for key in ['min_dist_to_believe_new_meters',
+                    'min_dist_to_believe_new_sigma',
+                    'initial_position_covariance_estimate',
+                    'n_sigma_accept',
+                    'max_frames_skipped',
+                    'A',
+                    'Q',
+                    ]:
+            self[key] = linear_dict[key]
+        self['ekf_observation_covariance_pixels'] = numpy.array( [[1.0, 0.0],
+                                                                  [0.0, 1.0]],
+                                                                 dtype=numpy.float64 )
+        self['max_variance_dist_meters']=2 # let grow huge
+        self['n_sigma_accept']=20 # accept virtually anything
+
+def get_kalman_model( name=None, dt=None ):
+    if name.startswith('EKF'):
+        if name == 'EKF mamarama, units: mm':
+            kalman_model = MamaramaMMEKFAllParams(dt=dt)
+        else:
+            raise KeyError('unknown EKF model: %s'%str(name))
+    else:
+        model_dict = create_dynamic_model_dict(dt=dt,disable_warning=True)
+        try:
+            kalman_model = model_dict[name]
+        except KeyError, err:
+            raise KeyError('"%s", valid model names: %s'%(str(name),str(model_dict.keys())))
+    return kalman_model
+
+
