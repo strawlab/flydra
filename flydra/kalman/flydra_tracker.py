@@ -112,6 +112,7 @@ class TrackedObject:
                 initial_x=initial_x,
                 initial_P=P_k1,
                 )
+            self.ekf_observation_covariance_pixels = kalman_model['ekf_observation_covariance_pixels']
         else:
             # non-EKF
             self.my_kalman = kalman.KalmanFilter(kalman_model['A'],
@@ -223,16 +224,27 @@ class TrackedObject:
                 print
 
             # Step 2. Filter incoming 2D data to use informative points
-            observation_meters, used_camns_and_idxs = self._filter_data(xhatminus, Pminus,
-                                                                        data_dict,
-                                                                        camn2cam_id,
-                                                                        debug=debug1)
+            (observation_meters, used_camns_and_idxs,
+             cam_ids_and_points2d) = self._filter_data(xhatminus, Pminus,
+                                                       data_dict,
+                                                       camn2cam_id,
+                                                       debug=debug1)
             if debug1>2:
                 print 'observation_meters, used_camns_and_idxs',observation_meters,used_camns_and_idxs
 
             # Step 3. Incorporate observation to estimate a posteri
-            xhat, P = self.my_kalman.step2__calculate_a_posteri(xhatminus, Pminus,
-                                                                observation_meters)
+            if isinstance(self.my_kalman, kalman_ekf.EKF):
+                prediction_3d = xhatminus[:3]
+                pmats_and_points_cov = [ (self.reconstructor_meters.get_pmat(cam_id),
+                                          self.reconstructor_meters.get_pinhole_model_with_jacobian(cam_id),
+                                          xy2d_observed,
+                                          self.ekf_observation_covariance_pixels)
+                                         for (cam_id,xy2d_observed) in cam_ids_and_points2d]
+                xhat, P = self.my_kalman.step2__calculate_a_posteri(xhatminus, Pminus,
+                                                                    pmats_and_points_cov)
+            else:
+                xhat, P = self.my_kalman.step2__calculate_a_posteri(xhatminus, Pminus,
+                                                                    y=observation_meters)
 
             # calculate mean variance of x y z position (assumes first three components of state vector are position)
             Pmean = numpy.sqrt(numpy.sum([P[i,i]**2 for i in range(3)]))
@@ -247,7 +259,7 @@ class TrackedObject:
             # threshold at which it should be terminated.
             if Pmean > self.max_variance:
                 self.kill_me = True
-                if debug1>2:
+                if debug1>1:
                     print 'will kill next time because Pmean too large (%f > %f)'%(Pmean,self.max_variance)
 
             ############ save outputs ###############
@@ -297,7 +309,19 @@ class TrackedObject:
 
     def _filter_data(self, xhatminus, Pminus, data_dict, camn2cam_id,
                      debug=0):
-        """given state estimate, select useful incoming data and make new observation"""
+        """given state estimate, select useful incoming data and make new observation
+
+        This function "solves" the data association problem. 2D
+        observations are associated with a kalman object if they are
+        with some distance between a predicted image of the object on
+        the camera plane. The distance estimation is made in 3D as the
+        Euclidian distance between the ray in 3D space corresponding
+        to the image point observed and the predicted 3D location of
+        the kalman object. (Other distance metrics could also be
+        implemented, such as 2D Euclidian distance on the image
+        plane.)
+
+        """
         # For each camera, predict 2D image location and error distance
 
         prediction_3d = xhatminus[:3]
@@ -355,22 +379,25 @@ class TrackedObject:
 
             if closest_idx is not None:
                 pt_undistorted, projected_line_meters = candidate_point_list[closest_idx]
-                cam_ids_and_points2d.append( (cam_id,(pt_undistorted[PT_TUPLE_IDX_X],
-                                                      pt_undistorted[PT_TUPLE_IDX_Y])))
+                observed_2d = pt_undistorted[PT_TUPLE_IDX_X], pt_undistorted[PT_TUPLE_IDX_Y]
+                cam_ids_and_points2d.append( (cam_id,observed_2d) )
                 frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                 used_camns_and_idxs.append( (camn, frame_pt_idx, closest_idx) )
-
                 if debug>2:
                     print 'best match idx %d (%s)'%(closest_idx, str(pt_undistorted[:2]))
+
         # Now cam_ids_and_points2d has just the 2d points we'll use for this reconstruction
-        if len(cam_ids_and_points2d)>=2:
+        if len(cam_ids_and_points2d)==1:
+            # keep 3D "observation" because we need to save 2d observations
+            observation_meters = numpy.nan*numpy.ones( (3,))
+        elif len(cam_ids_and_points2d)>=2:
             observation_meters = self.reconstructor_meters.find3d( cam_ids_and_points2d, return_line_coords = False)
             if len(cam_ids_and_points2d)>=3:
                 if self.save_calibration_data.isSet():
                     self.saved_calibration_data.append( cam_ids_and_points2d )
         else:
             observation_meters = None
-        return observation_meters, used_camns_and_idxs
+        return observation_meters, used_camns_and_idxs, cam_ids_and_points2d
 
 class Tracker:
     """

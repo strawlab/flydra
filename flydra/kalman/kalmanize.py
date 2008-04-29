@@ -347,7 +347,7 @@ def kalmanize(src_filename,
               stop_frame=None,
               exclude_cam_ids=None,
               exclude_camns=None,
-              dynamic_model=None,
+              dynamic_model_name=None,
               save_cal_dir=None,
               debug=False,
               frames_per_second=None,
@@ -365,12 +365,12 @@ def kalmanize(src_filename,
     if exclude_camns is None:
         exclude_camns = []
 
-    if dynamic_model is None:
-        dynamic_model = 'fly dynamics, high precision calibration, units: mm'
+    if dynamic_model_name is None:
+        dynamic_model_name = 'fly dynamics, high precision calibration, units: mm'
         import warnings
-        warnings.warn('dynamic model not specified. using "%s"'%dynamic_model)
+        warnings.warn('dynamic model not specified. using "%s"'%dynamic_model_name)
     else:
-        print 'using dynamic model "%s"'%dynamic_model
+        print 'using dynamic model "%s"'%dynamic_model_name
 
     results = get_results(src_filename)
 
@@ -399,18 +399,12 @@ def kalmanize(src_filename,
     textlog_save_lines = [
         'kalmanize running at %s fps, (hypothesis_test_max_error %s)'%(str(frames_per_second),str(max_err)),
         'original file: %s'%(src_filename,),
-        'dynamic model: %s'%(dynamic_model,),
+        'dynamic model: %s'%(dynamic_model_name,),
         'reconstructor file: %s'%(reconstructor_filename,),
         ]
 
     dt = 1.0/frames_per_second
-    model_dict=dynamic_models.create_dynamic_model_dict(dt=dt)
-    try:
-        kalman_model = model_dict[dynamic_model]
-    except KeyError:
-        print 'valid model names:',model_dict.keys()
-        raise
-
+    kalman_model = dynamic_models.get_kalman_model( name=dynamic_model_name, dt=dt )
     ss = kalman_model['ss']
 
     h5saver = KalmanSaver(dest_filename,
@@ -464,6 +458,9 @@ def kalmanize(src_filename,
     last_frame = None
     frame_data = {}
     time1 = time.time()
+    RAM_HEAVY_BUT_FAST=True
+    if RAM_HEAVY_BUT_FAST:
+        data2d_recarray = data2d[:] # needs lots of RAM for big data files
     for row_idx in row_idxs:
         new_frame = frames_array[row_idx]
         if start_frame is not None:
@@ -472,10 +469,10 @@ def kalmanize(src_filename,
         if stop_frame is not None:
             if new_frame > stop_frame:
                 continue
-        time3 = time.time()
-        row = data2d[row_idx]
-        time4 = time.time()
-        accum_time += (time4-time3)
+        if RAM_HEAVY_BUT_FAST:
+            row = data2d_recarray[row_idx]
+        else:
+            row = data2d[row_idx]
         new_frame_test_cmp = row['frame']
         assert new_frame_test_cmp==new_frame
 
@@ -501,9 +498,7 @@ def kalmanize(src_filename,
                     time2 = time.time()
                     dur = time2-time1
                     fps = frame_count/dur
-                    dur2 = dur-accum_time
-                    fps2 = frame_count/dur2
-                    print 'frame % 10d, mean speed so far: %.1f fps (%.1f fps without pytables)'%(last_frame,fps,fps2)
+                    print 'frame % 10d, mean speed so far: %.1f fps'%(last_frame,fps)
 
             ########################################
             frame_data = collections.defaultdict(list)
@@ -592,7 +587,7 @@ def main():
                       )
 
     parser.add_option("--fps", dest='fps', type='float',
-                      help="frames per second (used for Kalman filtering/smoothing)")
+                      help="frames per second (used for Kalman filtering)")
 
     parser.add_option("--max-err", type='float',
                       default=50.0,
@@ -644,14 +639,15 @@ def main():
 
     src_filename = args[0]
 
-    kalmanize(src_filename,
+    args = (src_filename,)
+    kwargs = dict(
               dest_filename=options.dest_filename,
               reconstructor_filename=options.reconstructor_path,
               start_frame=options.start,
               stop_frame=options.stop,
               exclude_cam_ids=options.exclude_cam_ids,
               exclude_camns=options.exclude_camns,
-              dynamic_model = options.dynamic_model,
+              dynamic_model_name = options.dynamic_model,
               save_cal_dir = options.save_cal_dir,
               debug = options.debug,
               frames_per_second = options.fps,
@@ -659,6 +655,18 @@ def main():
               area_threshold=options.area_threshold,
               min_observations_to_save=options.min_observations_to_save,
               )
+
+    if int(os.environ.get('PROFILE','0')):
+        import cProfile
+        import lsprofcalltree
+        p = cProfile.Profile()
+        p.runctx('kalmanize(*args, **kwargs)',globals(),locals())
+        k = lsprofcalltree.KCacheGrind(p)
+        data = open(os.path.expanduser('~/kalmanize.kgrind'), 'w+')
+        k.output(data)
+        data.close()
+    else:
+        kalmanize(*args, **kwargs)
 
 if __name__=='__main__':
     main()

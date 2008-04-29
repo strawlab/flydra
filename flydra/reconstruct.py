@@ -9,6 +9,7 @@ import time
 from flydra.common_variables import MINIMUM_ECCENTRICITY
 import scipy.linalg
 import traceback
+import flydra.pmat_jacobian
 
 WARN_CALIB_DIFF = False
 
@@ -607,11 +608,13 @@ class Reconstructor:
                 raise NotImplementedError('cannot handle case where each camera has a different scale factor')
 
         self.pmat_inv = {}
+        self.pinhole_model_with_jacobian = {}
         for cam_id in cam_ids:
             # For speed reasons, make sure self.Pmat has only numpy arrays.
             self.Pmat[cam_id] = numpy.array(self.Pmat[cam_id])
 
             self.pmat_inv[cam_id] = numpy.linalg.pinv(self.Pmat[cam_id])
+            self.pinhole_model_with_jacobian[cam_id] = flydra.pmat_jacobian.PinholeCameraModelWithJacobian(self.Pmat[cam_id])
 
         self.cam_combinations = [s for s in setOfSubsets(cam_ids) if len(s) >=2]
         def cmpfunc(a,b):
@@ -757,6 +760,9 @@ class Reconstructor:
 
     def get_pmat(self, cam_id):
         return self.Pmat[cam_id]
+
+    def get_pinhole_model_with_jacobian(self, cam_id):
+        return self.pinhole_model_with_jacobian[cam_id]
 
     def get_camera_center(self, cam_id):
         # should be called get_cam_center?
