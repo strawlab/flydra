@@ -20,6 +20,7 @@ import flydra.analysis.result_utils as result_utils
 import core_analysis
 
 import pytz, datetime
+import collections
 
 pacific = pytz.timezone('US/Pacific')
 
@@ -94,7 +95,10 @@ def doit(
             if cam_id in ax_by_cam:
                 ax = ax_by_cam[cam_id]
             else:
-                ax = pylab.subplot( len(cam_ids), 1, cam_id_enum+1, sharex=ax)
+                n_subplots = len(cam_ids)
+                if kalman_filename is not None:
+                    n_subplots += 1
+                ax = pylab.subplot( n_subplots, 1, cam_id_enum+1, sharex=ax)
                 ax_by_cam[cam_id] = ax
                 ax.fmt_xdata = str
                 ax.fmt_ydata = str
@@ -134,6 +138,13 @@ def doit(
         h5.close()
 
     if kalman_filename is not None:
+        if 1:
+            ax = pylab.subplot( n_subplots, 1, n_subplots, sharex=ax)
+            ax_by_cam['kalman pmean'] = ax
+            ax.fmt_xdata = str
+            ax.fmt_ydata = str
+            ax.set_ylabel('3d error')
+
         frame_start = start
         frame_stop = stop
 
@@ -196,13 +207,20 @@ def doit(
                 all_kalman_lines[thisline] = obj_id
                 ax.set_ylim([-100,800])
                 ax.set_xlim( (start_frame, stop_frame) )
+            if 1:
 
-        if 0:
+                ax = ax_by_cam['kalman pmean']
+                P00 = kalman_rows['P00'][cond]
+                P11 = kalman_rows['P11'][cond]
+                P22 = kalman_rows['P22'][cond]
+                Pmean = numpy.sqrt( P00**2 + P11**2 + P22**2 ) # variance
+                std = numpy.sqrt(Pmean) # standard deviation (in meters)
+                ax.plot( frame, std, 'k-')
+
+
+        if 1:
+            # plot 2D data contributing to 3D object
             # this is forked from flydra_analysis_plot_kalman_2d.py
-
-            # Not finished for now -- we don't need to see what 2D
-            # point contributed to the 3D point. Besides,
-            # save_movies_overlay.py does that anyway.
 
             kresults = PT.openFile(kalman_filename,mode='r')
             kobs = kresults.root.kalman_observations
@@ -225,21 +243,26 @@ def doit(
             else:
                 k_use_idxs = numpy.arange(kobs.nrows)
 
-            obj_ids = kobs.read(field='obj_id')[k_use_idxs]
             obs_2d_idxs = kobs.read(field='obs_2d_idx')[k_use_idxs]
             kframes = kframes[k_use_idxs]
 
             kobs_2d = kresults.root.kalman_observations_2d_idxs
+            # this will be slooow...
+            used_cam_ids = collections.defaultdict(list)
+            for obs_2d_idx,kframe in zip(obs_2d_idxs,kframes):
+                obs_2d_row = kobs_2d[int(obs_2d_idx)]
+                #print kframe,obs_2d_row
+                for camn in obs_2d_row[::2]:
+                    cam_id = camn2cam_id[camn]
+                    used_cam_ids[cam_id].append(kframe)
+            for cam_id,kframes_used in used_cam_ids.iteritems():
+                kframes_used = numpy.array(kframes_used)
+                yval = -99*numpy.ones_like(kframes_used)
+                ax = ax_by_cam[cam_id]
+                ax.plot( kframes_used, yval, 'kx' )
+                ax.set_ylim([-100,800])
+                ax.set_xlim( (start_frame, stop_frame) )
 
-            # sort data into by-obj-id
-            for obj_id in use_obj_ids:
-                obs_idxs = numpy.nonzero( obj_ids == obj_id )[0]
-                for obs_idx in obs_idxs:
-                    camns_and_idxs = kobs_2d[ int(obs_2d_idxs[obs_idx]) ] # cast to int (from numpy scalar type) for pytables
-                    if 1:
-                        frame = kframes[obs_idx]
-                        print 'frame %d, camns_and_idxs: %s'%(frame,str(camns_and_idxs))
-                        raise NotImplementedError('') # haven't gotten any further...
         data_file.close()
 
     if len(filenames):
