@@ -1,6 +1,7 @@
 import numpy
 import time
 import adskalman as kalman
+import flydra.kalman.ekf as kalman_ekf
 #import flydra.geom as geom
 import flydra.fastgeom as geom
 import math, struct
@@ -103,12 +104,22 @@ class TrackedObject:
 
         self.max_frames_skipped = kalman_model['max_frames_skipped']
 
-        self.my_kalman = kalman.KalmanFilter(kalman_model['A'],
-                                             kalman_model['C'],
-                                             kalman_model['Q'],
-                                             kalman_model['R'],
-                                             initial_x,
-                                             P_k1)
+        if kalman_model.get( 'isEKF', False):
+            # EKF
+            self.my_kalman = kalman_ekf.EKF(
+                A=kalman_model['A'],
+                Q=kalman_model['Q'],
+                initial_x=initial_x,
+                initial_P=P_k1,
+                )
+        else:
+            # non-EKF
+            self.my_kalman = kalman.KalmanFilter(kalman_model['A'],
+                                                 kalman_model['C'],
+                                                 kalman_model['Q'],
+                                                 kalman_model['R'],
+                                                 initial_x,
+                                                 P_k1)
         self.frames = [frame]
         self.xhats = [initial_x]
         self.timestamps = [time.time()]
@@ -220,14 +231,8 @@ class TrackedObject:
                 print 'observation_meters, used_camns_and_idxs',observation_meters,used_camns_and_idxs
 
             # Step 3. Incorporate observation to estimate a posteri
-            try:
-                xhat, P = self.my_kalman.step2__calculate_a_posteri(xhatminus, Pminus,
-                                                                    observation_meters)
-            except OverflowError,err:
-                print 'OVERFLOW ERROR:'
-                print 'self.kill_me',self.kill_me
-                print 'frames_skipped',type(frames_skipped),frames_skipped
-                raise err
+            xhat, P = self.my_kalman.step2__calculate_a_posteri(xhatminus, Pminus,
+                                                                observation_meters)
 
             # calculate mean variance of x y z position (assumes first three components of state vector are position)
             Pmean = numpy.sqrt(numpy.sum([P[i,i]**2 for i in range(3)]))
@@ -293,28 +298,26 @@ class TrackedObject:
     def _filter_data(self, xhatminus, Pminus, data_dict, camn2cam_id,
                      debug=0):
         """given state estimate, select useful incoming data and make new observation"""
-        # 1. For each camera, predict 2D image location and error distance
+        # For each camera, predict 2D image location and error distance
 
-        a_priori_observation_prediction = xhatminus[:3] # equiv. to "dot(self.my_kalman.C,xhatminus)"
-
-        variance_estimate = numpy.array([Pminus[i,i] for i in range(3)]) # maybe equiv. to "dot(self.my_kalman.C,Pminus[i,i])"
-        if 0:
-            mean_variance_estimate = numpy.sum(abs(variance_estimate)) # Will calls this "Manhattan distance".
-        else:
-            mean_variance_estimate = numpy.sqrt(numpy.sum(variance_estimate**2)) # L2 norm distance
-        dist2cmp = self.n_sigma_accept*mean_variance_estimate
-        neg_predicted_3d = -geom.ThreeTuple( a_priori_observation_prediction )
+        prediction_3d = xhatminus[:3]
+        # rough estimate of variance
+        covariance_diagonal = numpy.array([Pminus[i,i] for i in range(3)])
+        something_like_variance = numpy.sqrt(numpy.sum(covariance_diagonal**2)) # L2 norm distance
+        sigma = numpy.sqrt(something_like_variance)
+        dist2cmp = self.n_sigma_accept*sigma
+        neg_predicted_3d = -geom.ThreeTuple( prediction_3d )
         cam_ids_and_points2d = []
 
         used_camns_and_idxs = []
         if debug>2:
             print '_filter_data():'
-            print ' dist2cmp %f = self.n_sigma_accept * mean_variance_estimate = %f * %f'%(dist2cmp, self.n_sigma_accept, mean_variance_estimate)
+            print ' dist2cmp %f = self.n_sigma_accept * sigma = %f * %f'%(dist2cmp, self.n_sigma_accept, sigma)
         for camn,candidate_point_list in data_dict.iteritems():
             cam_id = camn2cam_id[camn]
 
             if debug>2:
-                predicted_2d = self.reconstructor_meters.find2d(cam_id,a_priori_observation_prediction)
+                predicted_2d = self.reconstructor_meters.find2d(cam_id,prediction_3d)
                 print '  cam_id',cam_id,'camn',camn,'--------'
                 print '    predicted_2d',predicted_2d
 
