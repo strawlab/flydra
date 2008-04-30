@@ -109,6 +109,8 @@ class WxApp(wx.App):
 
     def OnDisplayImageEvent(self, event):
         if event.cam_id not in self.cam_image_canvases:
+            # first frame for this cam_id
+
             parent = self.frame
 
             cam_row_box = wx.StaticBoxSizer(wx.StaticBox(parent,-1,event.cam_id),wx.HORIZONTAL)
@@ -200,6 +202,7 @@ class WxApp(wx.App):
             else:
                 self.cam_image_canvases[event.cam_id] = (raw_canvas,)
         else:
+            # this is not the first frame for this cam_id - just display it
             if self._full_debug_images:
                 (raw_canvas, absdiff_canvas, mean_canvas, cmp_canvas) = self.cam_image_canvases[event.cam_id]
             else:
@@ -265,7 +268,7 @@ class DisplayCamData(object):
     def get_chain(self):
         return self._chain
     def mainloop(self):
-        NAUGHTY_BUT_FAST = True
+        NAUGHTY_BUT_FAST = False
         while 1:
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
                 if chainbuf.quit_now:
