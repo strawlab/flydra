@@ -204,6 +204,8 @@ class TextLogDescription(PT.IsDescription):
 
 FilteredObservations = flydra.kalman.flydra_kalman_utils.FilteredObservations
 KalmanEstimates = flydra.kalman.flydra_kalman_utils.KalmanEstimates
+kalman_observations_2d_idxs_type = flydra.kalman.flydra_kalman_utils.kalman_observations_2d_idxs_type
+
 h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
 h5_xhat_names = PT.Description(KalmanEstimates().columns)._v_names
 
@@ -2227,7 +2229,7 @@ class MainBrain(object):
                                                        expectedrows=expected_rows)
                 self.h5_2d_obs = self.h5file.createVLArray(self.h5file.root,
                                                            'kalman_observations_2d_idxs',
-                                                           PT.UInt16Atom(), # dtype should match with tro.observations_2d
+                                                           kalman_observations_2d_idxs_type(), # dtype should match with tro.observations_2d
                                                            "camns and idxs")
                 self.h5_2d_obs_next_idx = 0
             else:

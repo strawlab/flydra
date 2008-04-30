@@ -55,6 +55,8 @@ class FilteredObservations(PT.IsDescription):
     z          = PT.Float32Col(pos=4)
     obs_2d_idx = PT.UInt64Col(pos=5) # index into VLArray 'kalman_observations_2d_idxs'
 
+kalman_observations_2d_idxs_type = PT.UInt16Atom
+
 def convert_format(current_data,camn2cam_id,area_threshold=0.0):
     """convert data from format used for Kalman tracker to hypothesis tester"""
     found_data_dict = {}

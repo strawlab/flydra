@@ -21,6 +21,7 @@ KalmanEstimatesVelOnly = flydra_kalman_utils.KalmanEstimatesVelOnly
 
 FilteredObservations = flydra_kalman_utils.FilteredObservations
 convert_format = flydra_kalman_utils.convert_format
+kalman_observations_2d_idxs_type = flydra_kalman_utils.kalman_observations_2d_idxs_type
 
 class FakeThreadingEvent:
     def __init__(self):
@@ -223,7 +224,7 @@ class KalmanSaver:
             self.h5_2d_obs_next_idx = 0
             self.h5_2d_obs = self.h5file.createVLArray(self.h5file.root,
                                                        'kalman_observations_2d_idxs',
-                                                       PT.UInt16Atom(), # dtype should match with tro.observations_2d
+                                                       kalman_observations_2d_idxs_type(), # dtype should match with tro.observations_2d
                                                        "camns and idxs")
 
             self.obj_id = -1
@@ -629,6 +630,7 @@ def main():
         options.exclude_camns = [int(camn) for camn in options.exclude_camns.split()]
 
     if len(args)>1:
+        print 'args',args
         print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
         parser.print_help()
         return

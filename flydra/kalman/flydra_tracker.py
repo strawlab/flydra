@@ -29,7 +29,7 @@ class FakeThreadingEvent:
         return False
 
 def obs2d_hashable( arr ):
-    assert arr.dtype == numpy.uint8
+    assert arr.dtype == numpy.uint16
     assert len(arr.shape)==1
 
     # sort array based on camn
@@ -38,7 +38,7 @@ def obs2d_hashable( arr ):
     camn_order = numpy.argsort(camns)
 
     # fill new array with sorted values
-    newarr = numpy.zeros( (len(arr),), dtype = numpy.uint8 )
+    newarr = numpy.zeros( (len(arr),), dtype = numpy.uint16 )
     newarr[ camn_order*2 ] = camns
     newarr[ camn_order*2+1 ] = pt_idx
 
@@ -274,7 +274,7 @@ class TrackedObject:
                 this_observations_2d = []
                 for (camn, frame_pt_idx, dd_idx) in used_camns_and_idxs:
                     this_observations_2d.extend( [camn,frame_pt_idx] )
-                this_observations_2d = numpy.array( this_observations_2d, dtype=numpy.uint8 ) # convert to numpy
+                this_observations_2d = numpy.array( this_observations_2d, dtype=numpy.uint16 ) # convert to numpy
                 self.observations_2d.append( this_observations_2d )
                 this_observations_2d_hash = obs2d_hashable( this_observations_2d )
             if debug1>2:
