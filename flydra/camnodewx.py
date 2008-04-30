@@ -53,6 +53,7 @@ class WxApp(wx.App):
         self.SetTopWindow(self.frame)
 
         wx.EVT_CLOSE(self.frame, self.OnWindowClose)
+        wx.EVT_KEY_DOWN(self, self.OnKeyDown)
 
         ID_Timer  = wx.NewId()
         self.timer = wx.Timer(self,      # object to send the event to
@@ -71,11 +72,22 @@ class WxApp(wx.App):
         self._built_playback_GUI = False
 
         return True
-    def post_init(self, call_often = None):
+    def post_init(self, call_often = None, full=False):
         self.call_often = call_often
+        self._full_debug_images=full
 
     def OnWindowClose(self, event):
         event.Skip() # propagate event up the chain...
+    def OnKeyDown(self, event):
+        keycode = event.GetKeyCode()
+        if keycode==wx.WXK_F11:
+            if self.frame.IsFullScreen():
+                self.frame.ShowFullScreen(False)
+            else:
+                self.frame.ShowFullScreen(True)
+        else:
+            event.Skip()
+            return
 
     def OnQuit(self, dummy_event=None):
         self.frame.Close() # results in call to OnWindowClose()
@@ -110,87 +122,98 @@ class WxApp(wx.App):
             pygim = ArrayInterfaceImage(event.buf,allow_copy=False)
             raw_canvas.new_image(pygim)
 
+            height,width = numpy.asarray(event.buf).shape
+
             im_box.Add(raw_canvas,proportion=1,
                        flag=wx.EXPAND|wx.ALL,border=2)
-            im_box.Add(wx.StaticText(parent,-1,"raw image"),
+            im_box.Add(wx.StaticText(parent,-1,"raw image (%d x %d)"%(width,height)),
                        proportion=0,flag=wx.ALIGN_CENTRE|wx.ALL,
                        border=2)
 
             cam_row_box.Add(im_box,proportion=1,
                             flag=wx.EXPAND|wx.ALL,border=2)
 
-            # absdiff image
-            im_box = wx.BoxSizer(wx.VERTICAL)
+            if self._full_debug_images:
+                # absdiff image
+                im_box = wx.BoxSizer(wx.VERTICAL)
 
-            absdiff_canvas = PointDisplayCanvas(parent,-1)
-            absdiff_canvas.set_fullcanvas(True)
+                absdiff_canvas = PointDisplayCanvas(parent,-1)
+                absdiff_canvas.set_fullcanvas(True)
 
-            # event.absdiff_buf is (naughtily) not locked or copied between threads
-            pygim = ArrayInterfaceImage(event.absdiff_buf,allow_copy=False)
-            absdiff_canvas.new_image(pygim)
+                # event.absdiff_buf is (naughtily) not locked or copied between threads
+                pygim = ArrayInterfaceImage(event.absdiff_buf,allow_copy=False)
+                absdiff_canvas.new_image(pygim)
 
-            im_box.Add(absdiff_canvas,proportion=1,
-                       flag=wx.EXPAND|wx.ALL,border=2)
-            im_box.Add(wx.StaticText(parent,-1,"modified absdiff image"),
-                       proportion=0,flag=wx.ALIGN_CENTRE|wx.ALL,
-                       border=2)
-            cam_row_box.Add(im_box,proportion=1,
-                            flag=wx.EXPAND|wx.ALL,border=2)
+                im_box.Add(absdiff_canvas,proportion=1,
+                           flag=wx.EXPAND|wx.ALL,border=2)
+                im_box.Add(wx.StaticText(parent,-1,"modified absdiff image"),
+                           proportion=0,flag=wx.ALIGN_CENTRE|wx.ALL,
+                           border=2)
+                cam_row_box.Add(im_box,proportion=1,
+                                flag=wx.EXPAND|wx.ALL,border=2)
 
-            # mean image
-            im_box = wx.BoxSizer(wx.VERTICAL)
+                # mean image
+                im_box = wx.BoxSizer(wx.VERTICAL)
 
-            mean_canvas = PointDisplayCanvas(parent,-1)
-            mean_canvas.set_fullcanvas(True)
+                mean_canvas = PointDisplayCanvas(parent,-1)
+                mean_canvas.set_fullcanvas(True)
 
-            # event.mean_buf is (naughtily) not locked or copied between threads
-            pygim = ArrayInterfaceImage(event.mean_buf,allow_copy=False)
-            mean_canvas.new_image(pygim)
+                # event.mean_buf is (naughtily) not locked or copied between threads
+                pygim = ArrayInterfaceImage(event.mean_buf,allow_copy=False)
+                mean_canvas.new_image(pygim)
 
-            im_box.Add(mean_canvas,proportion=1,
-                       flag=wx.EXPAND|wx.ALL,border=2)
-            im_box.Add(wx.StaticText(parent,-1,"mean image"),
-                       proportion=0,flag=wx.ALIGN_CENTRE|wx.ALL,
-                       border=2)
+                im_box.Add(mean_canvas,proportion=1,
+                           flag=wx.EXPAND|wx.ALL,border=2)
+                im_box.Add(wx.StaticText(parent,-1,"mean image"),
+                           proportion=0,flag=wx.ALIGN_CENTRE|wx.ALL,
+                           border=2)
 
-            cam_row_box.Add(im_box,proportion=1,
-                            flag=wx.EXPAND|wx.ALL,border=2)
+                cam_row_box.Add(im_box,proportion=1,
+                                flag=wx.EXPAND|wx.ALL,border=2)
 
 
-            # cmp image
-            im_box = wx.BoxSizer(wx.VERTICAL)
+                # cmp image
+                im_box = wx.BoxSizer(wx.VERTICAL)
 
-            cmp_canvas = PointDisplayCanvas(parent,-1)
-            cmp_canvas.set_fullcanvas(True)
+                cmp_canvas = PointDisplayCanvas(parent,-1)
+                cmp_canvas.set_fullcanvas(True)
 
-            # event.cmp_buf is (naughtily) not locked or copied between threads
-            pygim = ArrayInterfaceImage(event.cmp_buf,allow_copy=False)
-            cmp_canvas.new_image(pygim)
+                # event.cmp_buf is (naughtily) not locked or copied between threads
+                pygim = ArrayInterfaceImage(event.cmp_buf,allow_copy=False)
+                cmp_canvas.new_image(pygim)
 
-            im_box.Add(cmp_canvas,proportion=1,
-                       flag=wx.EXPAND|wx.ALL,border=2)
-            im_box.Add(wx.StaticText(parent,-1,"cmp image"),
-                       proportion=0,flag=wx.ALIGN_CENTRE|wx.ALL,
-                       border=2)
+                im_box.Add(cmp_canvas,proportion=1,
+                           flag=wx.EXPAND|wx.ALL,border=2)
+                im_box.Add(wx.StaticText(parent,-1,"cmp image"),
+                           proportion=0,flag=wx.ALIGN_CENTRE|wx.ALL,
+                           border=2)
 
-            cam_row_box.Add(im_box,proportion=1,
-                            flag=wx.EXPAND|wx.ALL,border=2)
+                cam_row_box.Add(im_box,proportion=1,
+                                flag=wx.EXPAND|wx.ALL,border=2)
 
 
             self.cic_box.Add(cam_row_box,proportion=1,flag=wx.EXPAND)
 
             parent.Layout()
-            self.cam_image_canvases[event.cam_id] = (raw_canvas, absdiff_canvas, mean_canvas, cmp_canvas)
+            if self._full_debug_images:
+                self.cam_image_canvases[event.cam_id] = (raw_canvas, absdiff_canvas, mean_canvas, cmp_canvas)
+            else:
+                self.cam_image_canvases[event.cam_id] = (raw_canvas,)
         else:
-            (raw_canvas, absdiff_canvas, mean_canvas, cmp_canvas) = self.cam_image_canvases[event.cam_id]
+            if self._full_debug_images:
+                (raw_canvas, absdiff_canvas, mean_canvas, cmp_canvas) = self.cam_image_canvases[event.cam_id]
+            else:
+                (raw_canvas,) = self.cam_image_canvases[event.cam_id]
+
             points = event.pts
             point_colors, linesegs,lineseg_colors = None,None,None
             raw_canvas.extra_points_linesegs = (
                 points,point_colors, linesegs,lineseg_colors)
             raw_canvas.update_image( event.buf )
-            absdiff_canvas.update_image( event.absdiff_buf )
-            mean_canvas.update_image( event.mean_buf )
-            cmp_canvas.update_image( event.cmp_buf )
+            if self._full_debug_images:
+                absdiff_canvas.update_image( event.absdiff_buf )
+                mean_canvas.update_image( event.mean_buf )
+                cmp_canvas.update_image( event.cmp_buf )
 
     def generate_view(self, model, controller ):
         self.controllers.append( controller )
@@ -233,10 +256,12 @@ class WxApp(wx.App):
 class DisplayCamData(object):
     def __init__(self, wxapp,
                  cam_id=None,
+                 full=False,
                  ):
         self._chain = camnode_utils.ChainLink()
         self._wxapp = wxapp
         self._cam_id = cam_id
+        self._full_debug_images=full
     def get_chain(self):
         return self._chain
     def mainloop(self):
@@ -253,19 +278,27 @@ class DisplayCamData(object):
                     pts = None
                 if NAUGHTY_BUT_FAST:
                     buf_copy = chainbuf.get_buf() # not a copy at all!
-                    absdiff = chainbuf.absdiff8u_im_full
-                    mean = chainbuf.mean8u_im_full
-                    cmp = chainbuf.compareframe8u_full
+                    if self._full_debug_images:
+                        absdiff = chainbuf.absdiff8u_im_full
+                        mean = chainbuf.mean8u_im_full
+                        cmp = chainbuf.compareframe8u_full
                 else:
                     buf_copy = numpy.array( chainbuf.get_buf(), copy=True )
-                    absdiff = numpy.array( chainbuf.absdiff8u_im_full, copy=True )
-                    mean = numpy.array( chainbuf.mean8u_im_full, copy=True )
-                    cmp = numpy.array( chainbuf.compareframe8u_full, copy=True )
+                    if self._full_debug_images:
+                        absdiff = numpy.array( chainbuf.absdiff8u_im_full, copy=True )
+                        mean = numpy.array( chainbuf.mean8u_im_full, copy=True )
+                        cmp = numpy.array( chainbuf.compareframe8u_full, copy=True )
+
+            kwargs = {}
+            if self._full_debug_images:
+                kwargs.update( dict(
+                    absdiff_buf=absdiff,
+                    mean_buf=mean,
+                    cmp_buf=cmp,
+                    ))
 
             wx.PostEvent(self._wxapp, DisplayImageEvent(buf=buf_copy,
                                                         pts=pts,
                                                         cam_id=self._cam_id,
-                                                        absdiff_buf=absdiff,
-                                                        mean_buf=mean,
-                                                        cmp_buf=cmp,
+                                                        **kwargs
                                                         ))

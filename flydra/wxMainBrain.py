@@ -1,26 +1,6 @@
 #!/usr/bin/env python
 # $Id$
 
-# TODO:
-#
-# hotkeys for
-#   running average on all cameras (DONE)
-#   take bg image on all cameras (DONE)
-#   clean bg image on all cameras (DONE)
-#   record data (auto filename) (DONE)
-#   record movie (auto filename)
-# make sound when tracking (DONE)
-# toggle for save movie only when point found
-# toggle for external trigger (DONE)
-# add various bells and whistles for John
-#   John's wishlist:
-#     ROI GUI to use top-left, width, height
-
-# In other files:
-#  don't crash camera servers when hard-drives not mounted
-#  use ROI surrounding maximum point (DONE)
-#  save clear_threshold and diff_threshold camera settings (really?)
-
 import sys, threading, time, os, copy, socket
 import traceback
 import MainBrain
@@ -658,7 +638,7 @@ class wxMainBrainApp(wx.App):
         dt = 1.0/fps
         model_dicts = flydra.kalman.dynamic_models.create_dynamic_model_dict(dt = dt)
         kalman_model = model_dicts[str(kalman_param_string)]
-        
+
         MainBrain.rc_params['kalman_model'] = str(kalman_param_string)
         MainBrain.save_rc_params()
 
@@ -965,7 +945,7 @@ class wxMainBrainApp(wx.App):
 
     def InitStatusPanel(self):
         ctrl = xrc.XRCCTRL(self.status_panel,
-                           "kalman_parameters_choice")                
+                           "kalman_parameters_choice")
         wx.EVT_CHOICE(ctrl, ctrl.GetId(),
                       self.OnKalmanParametersChange)
 
@@ -1229,7 +1209,7 @@ class wxMainBrainApp(wx.App):
 
             ctrl = xrc.XRCCTRL(self.status_panel,
                                "kalman_parameters_choice")
-            
+
             found_rc_default = None
             for i,model_name in enumerate(model_names):
                 ctrl.Append(model_name)

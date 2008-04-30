@@ -1167,7 +1167,7 @@ class SaveSmallData(object):
         if mkdir_lock is not None:
             self._mkdir_lock = mkdir_lock
         else:
-            self._mkdir_lock = threading.Lock()            
+            self._mkdir_lock = threading.Lock()
 
     def get_chain(self):
         return self._chain
@@ -1214,7 +1214,7 @@ class SaveSmallData(object):
                         timestamp1 = chainbuf.timestamp
                         filename_base = os.path.expanduser(filename_base)
                         dirname = os.path.split(filename_base)[0]
-                        
+
                         with self._mkdir_lock:
                             # Because this is a multi-threaded
                             # program, sometimes another thread will
@@ -1648,7 +1648,7 @@ class AppState(object):
         self._image_controllers = [None]*num_cams
         initial_images = [None]*num_cams
         self.critical_threads = []
-        
+
         for cam_no in range(num_cams):
 
             ##################################################################
@@ -1729,7 +1729,7 @@ class AppState(object):
             image_source.setDaemon(True)
             image_source.start()
             self._image_sources[cam_no] = image_source
-            self._image_controllers[cam_no]= controller 
+            self._image_controllers[cam_no]= controller
 
         ##################################################################
         #
@@ -2367,7 +2367,10 @@ def main():
                       help="save debugging information regarding dropped network packets")
 
     parser.add_option("--wx", action='store_true',
-                      help="gui wx-based GUI to display images")
+                      help="gui wx-based GUI to display raw images")
+
+    parser.add_option("--wx-full", action='store_true',
+                      help="gui wx-based GUI to display raw and processed images")
 
     parser.add_option("--debug-acquire", action='store_true',
                       help="print to the console information on each frame")
@@ -2427,13 +2430,15 @@ def main():
                        use_dummy_mainbrain = use_dummy_mainbrain,
                        )
 
-    if options.wx:
+    if options.wx or options.wx_full:
+        full = bool(options.wx_full)
         import camnodewx
         app=camnodewx.WxApp()
         if not DISABLE_ALL_PROCESSING:
             app_state.append_chain( klass = camnodewx.DisplayCamData, args=(app,),
+                                    kwargs = dict(full=full),
                                     basename = 'camnodewx.DisplayCamData' )
-        app.post_init(call_often = app_state.main_thread_task)
+        app.post_init(call_often = app_state.main_thread_task,full=full)
         app_state.set_quit_function( app.OnQuit )
     else:
         app=ConsoleApp(call_often = app_state.main_thread_task)
