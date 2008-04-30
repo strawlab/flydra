@@ -250,8 +250,14 @@ class MamaramaMMEKFAllParams(EKFAllParams):
         self['ekf_observation_covariance_pixels'] = numpy.array( [[1.0, 0.0],
                                                                   [0.0, 1.0]],
                                                                  dtype=numpy.float64 )
-        self['max_variance_dist_meters']=2 # let grow huge
-        self['n_sigma_accept']=20 # accept virtually anything
+        if 1:
+            # restrictive (better for e.g. making new calibration)
+            self['max_variance_dist_meters']=0.35
+            self['n_sigma_accept']=10
+        else:
+            # loosy-goosy
+            self['max_variance_dist_meters']=2 # let grow huge
+            self['n_sigma_accept']=40
 
 def get_kalman_model( name=None, dt=None ):
     if name.startswith('EKF'):
