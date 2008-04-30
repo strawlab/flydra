@@ -143,7 +143,7 @@ def doit(
             ax_by_cam['kalman pmean'] = ax
             ax.fmt_xdata = str
             ax.fmt_ydata = str
-            ax.set_ylabel('3d error')
+            ax.set_ylabel('3d error\nmeters')
 
         frame_start = start
         frame_stop = stop
