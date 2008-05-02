@@ -964,7 +964,7 @@ class CoordinateProcessor(threading.Thread):
                             points_undistorted.append( no_point_tuple )
                         data = data[end:]
 
-                        # -----------------------------------------------
+                        # ===================================================
 
                         # XXX hack? make data available via cam_dict
                         cam_dict = self.main_brain.remote_api.cam_info[cam_id]
@@ -1387,11 +1387,11 @@ class MainBrain(object):
 
     class RemoteAPI(Pyro.core.ObjBase):
 
-        # ----------------------------------------------------------------
+        # ================================================================
         #
         # Methods called locally
         #
-        # ----------------------------------------------------------------
+        # ================================================================
 
         def post_init(self, main_brain):
             """call after __init__"""
@@ -1442,9 +1442,7 @@ class MainBrain(object):
                 cam_lock = cam['lock']
                 with cam_lock:
                     coord_and_image = cam['image']
-                    cam['image'] = None
                     fps = cam['fps']
-                    cam['fps'] = None
                     points_distorted = cam['points_distorted'][:]
             # NB: points are distorted (and therefore align
             # with distorted image)
@@ -1552,7 +1550,7 @@ class MainBrain(object):
                 with cam_lock:
                     cam['commands']['cal']= pmat, intlin, intnonlin, scale_factor
                     cam['is_calibrated'] = True
-        # --- thread boundary -----------------------------------------
+        # === thread boundary =========================================
 
         def listen(self,daemon):
             """thread mainloop"""
@@ -1575,7 +1573,7 @@ class MainBrain(object):
                         self.close(cam_id)
             self.thread_done.set()
 
-        # ----------------------------------------------------------------
+        # ================================================================
         #
         # Methods called remotely from cameras
         #
@@ -1583,7 +1581,7 @@ class MainBrain(object):
         # the thread boundary without using locks, especially to GUI
         # or OpenGL.
         #
-        # ----------------------------------------------------------------
+        # ================================================================
 
         def register_new_camera(self,cam_no,scalar_control_info,port):
             """register new camera, return cam_id (caller: remote camera)"""
@@ -1685,7 +1683,7 @@ class MainBrain(object):
                 with self.changed_cam_lock:
                     self.old_cam_ids.append(cam_id)
 
-    #------- end of RemoteAPI class
+    ######## end of RemoteAPI class
 
     # main MainBrain class
 
@@ -1694,7 +1692,7 @@ class MainBrain(object):
 
         if server is not None:
             hostname = server
-        print 'running mainbrain at hostname %s'%hostname
+        print 'running mainbrain at hostname "%s"'%hostname
 
         assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
 
@@ -1745,7 +1743,6 @@ class MainBrain(object):
         self.last_saved_data_time = 0.0
         self.last_trigger_framecount_check_time = 0.0
 
-        self.last_images = {}
         self._currently_recording_movies = {}
 
         self.reconstructor = None
@@ -2046,10 +2043,6 @@ class MainBrain(object):
         (image, fps, points_distorted,
          image_coords) = self.remote_api.external_get_image_fps_points(cam_id)
 
-        if image is not None:
-            self.last_images[cam_id] = image
-        else:
-            image = self.last_images.get(cam_id,None)
         return image, fps, points_distorted, image_coords
 
     def fake_synchronize(self):
@@ -2144,7 +2137,7 @@ class MainBrain(object):
 
     def quit(self):
         """closes any files being saved and closes camera connections"""
-        # XXX ----- non-isolated calls to remote_api being done ----
+        # XXX ====== non-isolated calls to remote_api being done ======
         # this may be called twice: once explicitly and once by __del__
         with self.remote_api.cam_info_lock:
             cam_ids = self.remote_api.cam_info.keys()

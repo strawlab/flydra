@@ -1797,6 +1797,16 @@ class AppState(object):
             # get settings
             scalar_control_info = {}
 
+            if 1:
+                # trigger modes
+                N_trigger_modes = cam.get_num_trigger_modes()
+                print '  %d available trigger modes:'%N_trigger_modes
+                for i in range(N_trigger_modes):
+                    mode_string = cam.get_trigger_mode_string(i)
+                    print '  mode %d: %s'%(i,mode_string)
+                scalar_control_info['N_trigger_modes'] = N_trigger_modes
+                # XXX TODO: scalar_control_info['trigger_mode'] # current value
+
             globals['cam_controls'] = {}
             CAM_CONTROLS = globals['cam_controls']
 
@@ -2141,7 +2151,7 @@ class AppState(object):
                     elif property_name == 'height':
                         assert cam.get_max_height() == value
                     elif property_name == 'trigger_mode':
-                        #print 'cam.set_trigger_mode_number( value )',value
+                        print 'cam.set_trigger_mode_number( value )',value
                         cam.set_trigger_mode_number( value )
                     elif property_name == 'cmp':
                         if value:
@@ -2152,7 +2162,7 @@ class AppState(object):
                         #print 'expecting trigger fps',value
                         cam_processor.shortest_IFI = 1.0/value # XXX TODO: FIXME: thread crossing bug
                     elif property_name == 'max_framerate':
-                        if 1:
+                        if 0:
                             #print 'ignoring request to set max_framerate'
                             pass
                         else:

@@ -339,9 +339,12 @@
             <object class="wxBoxSizer">
               <orient>wxHORIZONTAL</orient>
               <object class="sizeritem">
-                <object class="wxCheckBox" name="EXT_TRIG">
-                  <label>external trigger</label>
+                <object class="wxStaticText">
+                  <label>Trig mode</label>
                 </object>
+              </object>
+              <object class="sizeritem">
+                <object class="wxTextCtrl" name="trigger_mode_number"/>
               </object>
             </object>
           </object>
@@ -500,7 +503,8 @@
           <object class="sizeritem">
             <object class="wxListBox" name="snapshot_cam_choice">
               <content>
-                <item/></content>
+                <item/>
+              </content>
             </object>
             <option>1</option>
             <flag>wxEXPAND</flag>
@@ -675,7 +679,8 @@
               <object class="sizeritem">
                 <object class="wxCheckListBox" name="record_raw_cam_select_checklist">
                   <content>
-                    <item/></content>
+                    <item/>
+                  </content>
                 </object>
                 <option>1</option>
                 <flag>wxEXPAND</flag>
@@ -689,7 +694,7 @@
         <flag>wxEXPAND</flag>
       </object>
     </object>
-    <style></style>
+    <style/>
   </object>
   <object class="wxDialog" name="ROI_DIALOG">
     <title>Region of interest</title>
@@ -762,7 +767,7 @@
               <label>OK</label>
             </object>
             <option>1</option>
-            <flag></flag>
+            <flag/>
           </object>
         </object>
         <flag>wxEXPAND</flag>
@@ -798,7 +803,7 @@
           </object>
           <object class="sizeritem">
             <object class="wxStaticText">
-              <label></label>
+              <label/>
             </object>
             <flag>wxLEFT|wxRIGHT</flag>
             <border>3</border>

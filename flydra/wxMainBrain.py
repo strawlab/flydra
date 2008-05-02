@@ -424,9 +424,7 @@ class wxMainBrainApp(wx.App):
         box = wx.BoxSizer(wx.VERTICAL)
         dynamic_image_panel.SetSizer(box)
 
-        #self.cam_image_canvas = wxvideo.DynamicImageCanvas(dynamic_image_panel,-1)
         self.cam_image_canvas = wxglvideo.DynamicImageCanvas(dynamic_image_panel,-1)
-        self.cam_image_canvas.minimum_eccentricity = common_variables.MINIMUM_ECCENTRICITY
         box.Add(self.cam_image_canvas,1,wx.EXPAND)
         dynamic_image_panel.Layout()
 
@@ -497,6 +495,12 @@ class wxMainBrainApp(wx.App):
         ctrl.SetValue( str( val ) )
         wx.EVT_TEXT(ctrl, ctrl.GetId(), self.OnSetCameraNSigma)
 
+        trigger_mode_value = xrc.XRCCTRL(previewPerCamPanel,"trigger_mode_number")
+        val = 0 #TODO: scalar_control_info['trigger_mode']
+        assert (0<= val) and (val < scalar_control_info['N_trigger_modes'])
+        #trigger_mode_value.SetValue( str( val ) )
+        wx.EVT_TEXT(trigger_mode_value, trigger_mode_value.GetId(), self.OnSetTriggerModeNumber)
+
         threshold_value = xrc.XRCCTRL(previewPerCamPanel,"threshold_value")
         val = scalar_control_info['diff_threshold']
         threshold_value.SetValue( str( val ) )
@@ -521,12 +525,6 @@ class wxMainBrainApp(wx.App):
         wx.EVT_CHOICE(view_image_choice, view_image_choice.GetId(),
                    self.OnSetViewImageChoice)
 
-        ext_trig = xrc.XRCCTRL(previewPerCamPanel,
-                           "EXT_TRIG")
-        val = scalar_control_info['trigger_mode']
-        ext_trig.SetValue( val )
-        wx.EVT_CHECKBOX(ext_trig, ext_trig.GetId(), self.OnExtTrig)
-
         per_cam_controls_panel = xrc.XRCCTRL(previewPerCamPanel,
                                          "PerCameraControlsContainer")
         grid = wx.FlexGridSizer(0,3,0,0) # 3 columns
@@ -538,7 +536,6 @@ class wxMainBrainApp(wx.App):
         camprops = scalar_control_info['camprops']
         camprops.sort()
         for param in camprops:
-            print 'values for camera property',param
             current_value, min_value, max_value = scalar_control_info[param]
             grid.Add( wx.StaticText(per_cam_controls_panel,wx.NewId(),param),
                      0,wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL )
@@ -622,9 +619,7 @@ class wxMainBrainApp(wx.App):
             ctrl = xrc.XRCCTRL(previewPerCamPanel,"n_sigma")
             ctrl.SetValue( str( value ) )
         elif param == 'trigger_mode':
-            ext_trig = xrc.XRCCTRL(previewPerCamPanel,
-                               "EXT_TRIG")
-            ext_trig.SetValue( value )
+            print 'WARNING: skipping trigger mode update in display'
         else:
             if param not in ('roi','width','height'):
                 print 'WARNING: could not update panel display for',param
@@ -633,7 +628,6 @@ class wxMainBrainApp(wx.App):
         ctrl = xrc.XRCCTRL(self.status_panel,
                            "kalman_parameters_choice")
         kalman_param_string = ctrl.GetStringSelection()
-        print 'str(kalman_param_string)',str(kalman_param_string)
         fps = self.main_brain.get_fps()
         dt = 1.0/fps
         model_dicts = flydra.kalman.dynamic_models.create_dynamic_model_dict(dt = dt)
@@ -1422,6 +1416,7 @@ class wxMainBrainApp(wx.App):
             for cam_id in self.cameras.keys():
                 if hasattr(self.cam_image_canvas,'set_red_points'):
                     self.cam_image_canvas.set_red_points(cam_id,None)
+
         if self.current_page == 'preview':
             for cam_id in self.cameras.keys():
                 cam = self.cameras[cam_id]
@@ -1434,13 +1429,10 @@ class wxMainBrainApp(wx.App):
                     image, show_fps, points, image_coords = self.main_brain.get_last_image_fps(cam_id) # returns None if no new image
                     if image is not None:
                         if hasattr(self.cam_image_canvas,'update_image_and_drawings'):
-                            try:
-                                self.cam_image_canvas.update_image_and_drawings(cam_id,image,
-                                                                                points=points,
-                                                                                sort_add=True)
-                            except pyglet.gl.lib.GLException, err:
-                                print 'WARNING: ignoring GLException'
-                                traceback.print_exc()
+                            # XXX TODO don't redraw image if image hasn't changed, just update point positions
+                            self.cam_image_canvas.update_image_and_drawings(cam_id,image,
+                                                                            points=points,
+                                                                            sort_add=True)
                     if show_fps is not None:
                         show_fps_label = xrc.XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
                         show_fps_label.SetLabel('fps: %.1f'%show_fps)
@@ -1452,7 +1444,6 @@ class wxMainBrainApp(wx.App):
                 event.RequestMore()
 
     def OnNewCamera(self, cam_id, scalar_control_info, fqdnport):
-        print 'new camera attached: '+cam_id
         # bookkeeping
         self.cameras[cam_id] = {'scalar_control_info':scalar_control_info,
                                 }
@@ -1524,13 +1515,15 @@ class wxMainBrainApp(wx.App):
         value = widget.GetStringSelection()
         self.main_brain.send_set_camera_property(cam_id,'visible_image_view',value)
 
-    def OnExtTrig(self, event):
+    def OnSetTriggerModeNumber(self,event):
         widget = event.GetEventObject()
         cam_id = self._get_cam_id_for_button(widget)
-        self.main_brain.send_set_camera_property( cam_id, 'trigger_mode', widget.IsChecked() )
+        value = event.GetString()
+        if value:
+            value = int(value)
+            self.main_brain.send_set_camera_property(cam_id,'trigger_mode',value)
 
     def OnOldCamera(self, cam_id):
-        print 'camera detached: '+cam_id
         sys.stdout.flush()
         self.OnRecordRawStop(warn=False)
 
@@ -1590,13 +1583,11 @@ def main():
 
         # hand control to GUI
         app.MainLoop()
-        print 'mainloop over'
         del app
 
     finally:
         # stop main_brain server
         main_brain.quit()
-        print '2nd(?) call to quit?'
 
 if __name__ == '__main__':
     if 0:
