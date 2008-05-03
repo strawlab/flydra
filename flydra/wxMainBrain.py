@@ -497,7 +497,8 @@ class wxMainBrainApp(wx.App):
 
         trigger_mode_value = xrc.XRCCTRL(previewPerCamPanel,"trigger_mode_number")
         val = 0 #TODO: scalar_control_info['trigger_mode']
-        assert (0<= val) and (val < scalar_control_info['N_trigger_modes'])
+        N_trigger_modes = scalar_control_info.get('N_trigger_modes',2) # hack for old camnodes
+        assert (0<= val) and (val < N_trigger_modes)
         #trigger_mode_value.SetValue( str( val ) )
         wx.EVT_TEXT(trigger_mode_value, trigger_mode_value.GetId(), self.OnSetTriggerModeNumber)
 
