@@ -881,6 +881,11 @@ class ProcessCamClass(object):
                     #chainbuf.real_std_est= tmpresult
                     bg_changed = True
                     bg_frame_number = 0
+                
+                if 1:
+                    if framenumber % 200 == 0:
+                        mean_std = numpy.mean( numpy.mean( numpy.array(running_stdframe,dtype=numpy.float32 )))
+                        print '%s mean STD %.2f'%(self.cam_id,mean_std)
 
                 if clear_background_isSet():
                     # reset background image with 0 mean and 0 STD
