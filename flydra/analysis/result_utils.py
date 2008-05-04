@@ -156,7 +156,7 @@ def get_results(filename,mode='r+'):
     ##            timestamp_col.createIndex()
     ##            print 'done'
 
-        if not hasattr(h5file.root,'data2d_camera_summary') and h5file._isWritable():
+        if 0 and not hasattr(h5file.root,'data2d_camera_summary') and h5file._isWritable():
             print 'creating data2d camera summary ...'
             create_data2d_camera_summary(h5file)
             print 'done'
