@@ -192,7 +192,8 @@ def doit(filename,
 
     if not is_mat_file:
         mat_data = None
-        fps = result_utils.get_fps( data_file, fail_on_error=False )
+        if fps is None:
+            fps = result_utils.get_fps( data_file, fail_on_error=False )
 
         if fps is None:
             fps = 100.0
@@ -242,7 +243,7 @@ def doit(filename,
             n_frames = n_frames_list.pop()
             obj_ids = obj_ids_by_n_frames[n_frames]
             obj_only.extend( obj_ids)
-            if len(obj_only) > show_n_longest:
+            if len(obj_only) >= show_n_longest:
                 break
 
         print 'longest traces = ',obj_only

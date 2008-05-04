@@ -287,7 +287,7 @@ class KalmanSaver:
 
         this_idxs = numpy.array( this_idxs, dtype=numpy.uint64 ) # becomes obs_2d_idx (index into 'kalman_observations_2d_idxs')
 
-        # save observations
+        # save observations ####################################
         observations_frames = numpy.array(tro.observations_frames, dtype=numpy.uint64)
         obj_id_array = numpy.empty(observations_frames.shape, dtype=numpy.uint32)
         obj_id_array.fill(self.obj_id)
@@ -295,6 +295,7 @@ class KalmanSaver:
         list_of_obs = [observations_data[:,i] for i in range(observations_data.shape[1])]
         array_list = [obj_id_array,observations_frames]+list_of_obs+[this_idxs]
         obs_recarray = numpy.rec.fromarrays( array_list, names = self.h5_obs_names)
+        last_observation_frame = observations_frames[-1]
 
         if debugADS:
             print 'kalman observations: --------------'
@@ -304,18 +305,29 @@ class KalmanSaver:
         self.h5_obs.append(obs_recarray)
         self.h5_obs.flush()
 
-        # save xhat info (kalman estimates)
+        # save xhat info (kalman estimates) ##################
 
         frames = numpy.array(tro.frames, dtype=numpy.uint64)
         xhat_data = numpy.array(tro.xhats, dtype=numpy.float32)
         timestamps = numpy.array(tro.timestamps, dtype=numpy.float64)
         P_data_full = numpy.array(tro.Ps, dtype=numpy.float32)
+
+        # don't guess after last observation
+        cond = frames <= last_observation_frame
+        frames = frames[cond]
+        xhat_data = xhat_data[cond]
+        timestamps = timestamps[cond]
+        P_data_full = P_data_full[cond]
+
         ss = P_data_full.shape[1] # state vector size
         P_data_save = P_data_full[:,numpy.arange(ss),numpy.arange(ss)] # get diagonal
+
         obj_id_array = numpy.empty(frames.shape, dtype=numpy.uint32)
         obj_id_array.fill(self.obj_id)
+
         list_of_xhats = [xhat_data[:,i] for i in range(xhat_data.shape[1])]
         list_of_Ps = [P_data_save[:,i] for i in range(P_data_save.shape[1])]
+
         xhats_recarray = numpy.rec.fromarrays([obj_id_array,frames,timestamps]+list_of_xhats+list_of_Ps,
                                               names = self.h5_xhat_names)
 

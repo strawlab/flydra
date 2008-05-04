@@ -16,14 +16,12 @@ import tables as PT
 from optparse import OptionParser
 import flydra.reconstruct as reconstruct
 import flydra.analysis.result_utils as result_utils
-
+import flydra.a2.stim_plugins as stim_plugins
 import matplotlib
 rcParams = matplotlib.rcParams
 rcParams['xtick.major.pad'] = 10
 rcParams['ytick.major.pad'] = 10
 import pylab
-
-import flydra.analysis.result_utils as result_utils
 
 import core_analysis
 
@@ -36,13 +34,14 @@ def plot_err( ax, x, mean, err, color=None ):
 
 class Frames2Time:
     def __init__(self,frame0,fps):
-        self.f0 = int(frame0)
+        self.f0 = frame0
         self.fps = fps
     def __call__(self,farr):
-        farr = numpy.array(farr,dtype=numpy.int64)
         f = farr-self.f0
         f2  = f/self.fps
         return f2
+
+plugin_loader = stim_plugins.PluginLoader()
 
 def doit(
          kalman_filename=None,
@@ -52,6 +51,7 @@ def doit(
          start = None,
          stop = None,
          obj_only = None,
+         draw_stim_func_str = None,
          ):
 
     if not use_kalman_smoothing:
@@ -75,29 +75,25 @@ def doit(
             import warnings
             warnings.warn('Setting fps to default value of %f'%fps)
 
-    fig = pylab.figure(figsize=(6,4))
-    figtitle=kalman_filename
+    fig = pylab.figure(figsize=(5,8))
+    figtitle = kalman_filename.split('.')[0]
     pylab.figtext(0,0,figtitle)
 
     ax = None
     subplot ={}
-    subplots = ['x','y','z','vel','accel']
-    #subplots = ['x','y','z','vel','accel']
+    subplots = ['xy','xz']
     for i, name in enumerate(subplots):
         ax = fig.add_subplot(len(subplots),1,i+1,sharex=ax)
-        ax.grid(True)
+        #ax.grid(True)
         subplot[name] = ax
 
     dt = 1.0/fps
-
-    all_vels = []
 
     if obj_only is not None:
         use_obj_ids = [i for i in use_obj_ids if i in obj_only]
 
     allX = {}
     frame0 = None
-
     for obj_id in use_obj_ids:
         try:
             kalman_rows =  ca.load_data( obj_id, data_file,
@@ -125,88 +121,42 @@ def doit(
                 continue
 
             frame = kalman_rows['frame']
+
+
+        ## fprev = 0
+        ## for f in frame:
+        ##     print f, f-fprev
+        ##     fprev=f
+
         Xx = kalman_rows['x']
         Xy = kalman_rows['y']
         Xz = kalman_rows['z']
 
-        if frame0 is None:
-            frame0 = frame[0]
-        f2t = Frames2Time(frame0,fps)
+        line, = subplot['xy'].plot( Xx, Xy, '.', label='obj %d'%obj_id )
 
-        kws = {}
-        if 0:
-            if obj_id == 158:
-                kws['color'] = .9, .8, 0
-            elif obj_id == 160:
-                kws['color'] = 0, .45, .70
-
-        line,=subplot['x'].plot( f2t(frame), Xx, label='obj %d'%obj_id, linewidth=2, **kws )
         props = dict(color = line.get_color(),
                      linewidth = line.get_linewidth() )
+        subplot['xz'].plot( Xx, Xz, '.', label='obj %d'%obj_id, **props )
 
-        subplot['y'].plot( f2t(frame), Xy, label='obj %d'%obj_id, **props )
-        subplot['z'].plot( f2t(frame), Xz, label='obj %d'%obj_id, **props )
+    if draw_stim_func_str:
+        PluginClass = plugin_loader(draw_stim_func_str)
+        plugin = PluginClass(filename=kalman_filename,
+                            force_stimulus=True)
+        stim_lines = plugin.get_3d_lines()
 
-        X = numpy.array([Xx,Xy,Xz])
-        if 0:
-            allX[obj_id] = X
+        for stim_line in stim_lines:
+            subplot['xy'].plot( stim_line[:,0], stim_line[:,1], 'k-' )
+            subplot['xz'].plot( stim_line[:,0], stim_line[:,2], 'k-' )
 
-        dist_central_diff = (X[:,2:]-X[:,:-2])
-        vel_central_diff = dist_central_diff/(2*dt)
+    subplot['xy'].set_aspect('equal')
+    subplot['xz'].set_aspect('equal')
 
-        vel2mag = numpy.sqrt(numpy.sum(vel_central_diff**2,axis=0))
+    subplot['xy'].set_xlabel('x (m)')
+    subplot['xy'].set_ylabel('y (m)')
 
-        frames2 = frame[1:-1]
+    subplot['xz'].set_xlabel('x (m)')
+    subplot['xz'].set_ylabel('z (m)')
 
-        accel4mag = (vel2mag[2:]-vel2mag[:-2])/(2*dt)
-        frames4 = frames2[1:-1]
-
-        c = line.get_color()
-        subplot['vel'].plot(f2t(frames2), vel2mag, label='obj %d'%obj_id, **props )
-        subplot['accel'].plot( f2t(frames4), accel4mag, label='obj %d'%obj_id, **props )
-        all_vels.append(vel2mag)
-    all_vels = numpy.hstack(all_vels)
-
-    if 1:
-        all_vels = all_vels[ all_vels < 2.0 ]
-        print 'WARNING: clipping all velocities > 2.0 m/s'
-    subplot['x'].set_ylim([0,2])
-    subplot['x'].set_yticks([0,1,2])
-    subplot['x'].set_ylabel(r'x ($m$)')
-
-    subplot['y'].set_ylim([0,3])
-    subplot['y'].set_yticks([0,1.5,3])
-    subplot['y'].set_ylabel(r'y ($m$)')
-
-    subplot['z'].set_ylim([0,2])
-    subplot['z'].set_yticks([0,1,2])
-    subplot['z'].set_ylabel(r'z ($m$)')
-
-    subplot['vel'].set_ylim([0,10])
-    subplot['vel'].set_yticks([0,5,10])
-    subplot['vel'].set_ylabel(r'vel ($m/s$)')
-
-    subplot['accel'].set_ylabel(r'acceleration ($m/s^{2}$)')
-    subplot['accel'].set_yticks([-100,0,100])
-    subplot['accel'].set_xlabel(r'time ($s$)')
-
-    if 0:
-        X1 = allX[158]
-        X2 = allX[160]
-        dist = numpy.sqrt(numpy.sum((X1-X2)**2,axis=0))
-        subplot['dist'].plot( f2t(frame), dist, label='obj %d'%obj_id, **props )
-
-        subplot['dist'].set_ylabel(r'distance ($m$)')
-
-    fig = pylab.figure()
-    figtitle=kalman_filename
-    pylab.figtext(0,0,figtitle)
-
-    ax = fig.add_subplot(1,1,1)
-    bins = numpy.linspace(0,2,30)
-    ax.hist(all_vels, bins=bins)
-    ax.set_ylabel('counts')
-    ax.set_xlabel('velocity (m/s)')
     pylab.show()
 
 def main():
@@ -241,6 +191,13 @@ def main():
     parser.add_option("--obj-only", type="string",
                       dest="obj_only")
 
+    parser.add_option("--draw-stim",
+                      type="string",
+                      dest="draw_stim_func_str",
+                      default=None,
+                      help="possible values: %s"%str(plugin_loader.all_names),
+                      )
+
     (options, args) = parser.parse_args()
 
     if len(args):
@@ -255,6 +212,7 @@ def main():
          fps = options.fps,
          dynamic_model = options.dynamic_model,
          use_kalman_smoothing=options.use_kalman_smoothing,
+         draw_stim_func_str = options.draw_stim_func_str,
          start=options.start,
          stop=options.stop,
          obj_only=options.obj_only,

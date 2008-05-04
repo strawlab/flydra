@@ -238,8 +238,8 @@ class MamaramaMMEKFAllParams(EKFAllParams):
                                         dt=dt )
 
         # update some parameters from linear model
-        for key in ['min_dist_to_believe_new_meters',
-                    'min_dist_to_believe_new_sigma',
+        for key in [#'min_dist_to_believe_new_meters',
+                    #'min_dist_to_believe_new_sigma',
                     'initial_position_covariance_estimate',
                     'n_sigma_accept',
                     'max_frames_skipped',
@@ -250,6 +250,9 @@ class MamaramaMMEKFAllParams(EKFAllParams):
         self['ekf_observation_covariance_pixels'] = numpy.array( [[1.0, 0.0],
                                                                   [0.0, 1.0]],
                                                                  dtype=numpy.float64 )
+        self['min_dist_to_believe_new_meters']=0.2
+        self['min_dist_to_believe_new_sigma']=10.0
+
         if 1:
             # restrictive (better for e.g. making new calibration)
             self['max_variance_dist_meters']=0.35

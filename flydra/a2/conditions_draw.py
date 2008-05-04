@@ -64,7 +64,10 @@ def simple_tvtk(verts,polys):
         actors.append(a)
     return actors
 
-class hum07:
+class DrawBase(object):
+    pass
+
+class hum07(DrawBase):
     def __init__(self, filename=None, **kwargs):
         self.filename = filename
         self.kwargs = kwargs
@@ -86,7 +89,7 @@ class hum07:
 
         return actors
 
-class mama07:
+class mama07(DrawBase):
     def __init__(self,filename=None,**kwargs):
         self.filename = filename
         self.kwargs = kwargs
@@ -135,21 +138,21 @@ class mama07:
         actors.append(a)
         return actors
 
-class mama20080414:
+class mama20080414(DrawBase):
     def __init__(self,filename=None,**kwargs):
-        self.filename = filename
         self.kwargs = kwargs
-    def get_tvtk_actors(self):
-        filename = self.filename
-        kwargs = self.kwargs
-
-        actors = []
-
+        self.z = 0
+        self.N = 64
+        self.radius = 1.0
+        self.center = numpy.array([ 0.1,0.8,0])
+        self.height = .762
+    def _get_verts_lines(self):
         # mamarama
-        z = 0
-        N = 64
-        radius = 1.0
-        center = numpy.array([ 0.1,0.8,0])
+        z = self.z
+        N = self.N
+        radius = self.radius
+        center = self.center
+        height = self.height
 
         verts = []
         vi = 0 # vert idx
@@ -157,7 +160,6 @@ class mama20080414:
         theta = numpy.linspace(0,2*math.pi,N,endpoint=False)
         X = radius*numpy.cos(theta) + center[0]
         Y = radius*numpy.sin(theta) + center[1]
-        height = .762
         for z in numpy.linspace(0,height,4):
             Z = numpy.zeros(theta.shape) + center[2] + z
             v = numpy.array([X,Y,Z]).T
@@ -169,6 +171,21 @@ class mama20080414:
             lines.append( [vi+N-1,vi] )
 
             vi += (N)
+        return verts, lines
+
+    def get_3d_lines(self):
+        result = []
+
+        verts,lines = self._get_verts_lines()
+        for line in lines:
+            this_line = numpy.array([ verts[i] for i in line ])
+            result.append( this_line )
+        return result
+
+    def get_tvtk_actors(self):
+        actors = []
+
+        verts,lines = self._get_verts_lines()
 
         pd = tvtk.PolyData()
         pd.points = verts
@@ -184,7 +201,16 @@ class mama20080414:
         actors.append(a)
         return actors
 
-class default:
+class mama20080501(mama20080414):
+    def __init__(self,filename=None,**kwargs):
+        self.kwargs = kwargs
+        self.z = 0
+        self.N = 64
+        self.radius = 1.0
+        self.center = numpy.array([ 0.1,0.5,0])
+        self.height = .762
+
+class default(DrawBase):
     def __init__(self,filename=None, **kwargs):
         self.filename = filename
         self.kwargs = kwargs
@@ -289,7 +315,7 @@ class default:
             actors.append(a)
         return actors
 
-class wt0803:
+class wt0803(DrawBase):
     def __init__(self,**kwargs):
         pass
     def get_lines(self):
