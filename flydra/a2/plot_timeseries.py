@@ -56,13 +56,19 @@ def doit(
 
     if not use_kalman_smoothing:
         if (dynamic_model is not None):
-            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model options (--dynamic-model)'
-            sys.exit(1)
+            print >> sys.stderr, 'WARNING: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model options (--dynamic-model)'
 
     ca = core_analysis.CachingAnalyzer()
 
     if kalman_filename is not None:
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
+
+    if dynamic_model is None:
+        dynamic_model = extra['dynamic_model_name']
+        print 'detected file loaded with dynamic model "%s"'%dynamic_model
+        if dynamic_model.startswith('EKF '):
+            dynamic_model = dynamic_model[4:]
+        print '  for smoothing, will use dynamic model "%s"'%dynamic_model
 
     if not is_mat_file:
         mat_data = None
@@ -102,7 +108,7 @@ def doit(
         try:
             kalman_rows =  ca.load_data( obj_id, data_file,
                                          use_kalman_smoothing=use_kalman_smoothing,
-                                         kalman_dynamic_model = dynamic_model,
+                                         dynamic_model_name = dynamic_model,
                                          frames_per_second=fps,
                                          )
         except core_analysis.ObjectIDDataError:
@@ -171,23 +177,23 @@ def doit(
         all_vels = all_vels[ all_vels < 2.0 ]
         print 'WARNING: clipping all velocities > 2.0 m/s'
     subplot['x'].set_ylim([0,2])
-    subplot['x'].set_yticks([0,1,2])
+    #subplot['x'].set_yticks([0,1,2])
     subplot['x'].set_ylabel(r'x ($m$)')
 
     subplot['y'].set_ylim([0,3])
-    subplot['y'].set_yticks([0,1.5,3])
+    #subplot['y'].set_yticks([0,1.5,3])
     subplot['y'].set_ylabel(r'y ($m$)')
 
     subplot['z'].set_ylim([0,2])
-    subplot['z'].set_yticks([0,1,2])
+    #subplot['z'].set_yticks([0,1,2])
     subplot['z'].set_ylabel(r'z ($m$)')
 
     subplot['vel'].set_ylim([0,10])
-    subplot['vel'].set_yticks([0,5,10])
+    #subplot['vel'].set_yticks([0,5,10])
     subplot['vel'].set_ylabel(r'vel ($m/s$)')
 
     subplot['accel'].set_ylabel(r'acceleration ($m/s^{2}$)')
-    subplot['accel'].set_yticks([-100,0,100])
+    #subplot['accel'].set_yticks([-100,0,100])
     subplot['accel'].set_xlabel(r'time ($s$)')
 
     if 0:

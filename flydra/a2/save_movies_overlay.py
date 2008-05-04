@@ -119,6 +119,15 @@ def doit(fmf_filename=None,
 
     if kalman_filename is not None:
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
+
+        if dynamic_model is None:
+            dynamic_model = extra['dynamic_model_name']
+            print 'detected file loaded with dynamic model "%s"'%dynamic_model
+            if dynamic_model.startswith('EKF '):
+                dynamic_model = dynamic_model[4:]
+            print '  for smoothing, will use dynamic model "%s"'%dynamic_model
+
+
         if is_mat_file:
             raise ValueError('cannot use .mat file for kalman_filename '
                              'because it is missing the reconstructor '
@@ -132,7 +141,7 @@ def doit(fmf_filename=None,
         for obj_id in use_obj_ids:
             my_rows = ca.load_data( obj_id, data_file,
                                     use_kalman_smoothing=use_kalman_smoothing,
-                                    kalman_dynamic_model = dynamic_model,
+                                    dynamic_model_name = dynamic_model,
                                     frames_per_second=fps,
                                     )
             kalman_rows.append(my_rows)

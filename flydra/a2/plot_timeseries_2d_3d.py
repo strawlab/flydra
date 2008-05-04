@@ -160,6 +160,12 @@ def doit(
         if options.obj_only is not None:
             use_obj_ids = options.obj_only
 
+        if dynamic_model is None:
+            dynamic_model = extra['dynamic_model_name']
+            print 'detected file loaded with dynamic model "%s"'%dynamic_model
+            if dynamic_model.startswith('EKF '):
+                dynamic_model = dynamic_model[4:]
+            print '  for smoothing, will use dynamic model "%s"'%dynamic_model
 
         for use_kalman_smoothing in [True,False]:
             print 'loading frame numbers for kalman objects (estimates)'
@@ -167,7 +173,7 @@ def doit(
             for obj_id in use_obj_ids:
                 my_rows = ca.load_data( obj_id, data_file,
                                         use_kalman_smoothing=use_kalman_smoothing,
-                                        kalman_dynamic_model = dynamic_model,
+                                        dynamic_model_name = dynamic_model,
                                         frames_per_second=fps,
                                         )
                 kalman_rows.append(my_rows)

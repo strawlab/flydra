@@ -104,7 +104,7 @@ class TestCoreAnalysis(unittest.TestCase):
                 ######## 2. perform Kalman smoothing
                 rows = core_analysis.observations2smoothed(obj_id,orig_rows,
                                                            frames_per_second=fps,
-                                                           kalman_dynamic_model=model,
+                                                           dynamic_model_name=model,
                                                            )  # do Kalman smoothing
 
                 ######## 3. compare observations with smoothed
@@ -145,7 +145,7 @@ class TestCoreAnalysis(unittest.TestCase):
                                                 data_file,
                                                 use_kalman_smoothing=True,
                                                 frames_per_second=fps,
-                                                kalman_dynamic_model=model,
+                                                dynamic_model_name=model,
                                                 )
                 if is_mat_file:
                     # all data is kalman smoothed in matfile
@@ -154,7 +154,7 @@ class TestCoreAnalysis(unittest.TestCase):
                                               data_file,
                                               use_kalman_smoothing=False,
                                               frames_per_second=fps,
-                                              kalman_dynamic_model=model,
+                                              dynamic_model_name=model,
                                               )
                 filt = []
                 smooth = []
@@ -180,7 +180,7 @@ class TestCoreAnalysis(unittest.TestCase):
                                                                    data_file,
                                                                    use_kalman_smoothing=use_kalman_smoothing,
                                                                    frames_per_second=fps,
-                                                                   kalman_dynamic_model=model,
+                                                                   dynamic_model_name=model,
                                                                    hide_first_point=False,
                                                                    method='position based',
                                                                    method_params={'downsample':1,
@@ -189,7 +189,7 @@ class TestCoreAnalysis(unittest.TestCase):
                     rows = self.ca.load_data( obj_id, data_file,
                                               use_kalman_smoothing=use_kalman_smoothing,
                                               frames_per_second=fps,
-                                              kalman_dynamic_model=model,
+                                              dynamic_model_name=model,
                                               ) # load kalman data
 
                     # if rows are missing in original kalman data, we can interpolate here:
@@ -211,7 +211,7 @@ class TestCoreAnalysis(unittest.TestCase):
                     rows = self.ca.load_data( obj_id, data_file,
                                               use_kalman_smoothing=use_kalman_smoothing,
                                               frames_per_second=fps,
-                                              kalman_dynamic_model=model,
+                                              dynamic_model_name=model,
                                               ) # load kalman data
                     #print 'use_kalman_smoothing',use_kalman_smoothing
                     test_obj_ids = obj_id*numpy.ones_like(rows['obj_id'])
