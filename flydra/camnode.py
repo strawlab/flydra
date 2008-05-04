@@ -2332,6 +2332,7 @@ def get_app_defaults():
 
                     debug_drop=False,
                     wx=False,
+                    sdl=False,
                     debug_acquire=False,
                     disable_ifi_warning=False,
                     num_points=4,
@@ -2381,11 +2382,14 @@ def main():
     parser.add_option("--debug-drop", action='store_true',
                       help="save debugging information regarding dropped network packets")
 
+    parser.add_option("--sdl", action='store_true',
+                      help="SDL-based display of raw images")
+
     parser.add_option("--wx", action='store_true',
-                      help="gui wx-based GUI to display raw images")
+                      help="wx-based GUI to display raw images")
 
     parser.add_option("--wx-full", action='store_true',
-                      help="gui wx-based GUI to display raw and processed images")
+                      help="wx-based GUI to display raw and processed images")
 
     parser.add_option("--debug-acquire", action='store_true',
                       help="print to the console information on each frame")
@@ -2446,6 +2450,7 @@ def main():
                        )
 
     if options.wx or options.wx_full:
+        assert options.sdl == False, 'cannot have wx and sdl simultaneously enabled!'
         full = bool(options.wx_full)
         import camnodewx
         app=camnodewx.WxApp()
@@ -2454,6 +2459,14 @@ def main():
                                     kwargs = dict(full=full),
                                     basename = 'camnodewx.DisplayCamData' )
         app.post_init(call_often = app_state.main_thread_task,full=full)
+        app_state.set_quit_function( app.OnQuit )
+    elif options.sdl:
+        import camnodesdl
+        app=camnodesdl.SdlApp(
+                              call_often = app_state.main_thread_task)
+        if not DISABLE_ALL_PROCESSING:
+            app_state.append_chain( klass = camnodesdl.DisplayCamData, args=(app,),
+                                    basename = 'camnodesdl.DisplayCamData' )
         app_state.set_quit_function( app.OnQuit )
     else:
         app=ConsoleApp(call_often = app_state.main_thread_task)
