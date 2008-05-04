@@ -50,8 +50,7 @@ def doit(
 
     if not use_kalman_smoothing:
         if (fps is not None) or (dynamic_model is not None):
-            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting fps and dynamic model options (--fps and --dynamic-model)'
-            sys.exit(1)
+            print >> sys.stderr, 'WARNING: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting fps and dynamic model options (--fps and --dynamic-model)'
 
     ax = None
     ax_by_cam = {}
@@ -161,107 +160,112 @@ def doit(
         if options.obj_only is not None:
             use_obj_ids = options.obj_only
 
-        print 'loading frame numbers for kalman objects (estimates)'
-        kalman_rows = []
-        for obj_id in use_obj_ids:
-            my_rows = ca.load_data( obj_id, data_file,
-                                    use_kalman_smoothing=use_kalman_smoothing,
-                                    kalman_dynamic_model = dynamic_model,
-                                    frames_per_second=fps,
-                                    )
-            kalman_rows.append(my_rows)
-        kalman_rows = numpy.concatenate( kalman_rows )
-        kalman_3d_frame = kalman_rows['frame']
 
-        if start is not None or stop is not None:
-            if start is None:
-                start = -numpy.inf
-            if stop is None:
-                stop = numpy.inf
-            valid_cond = (kalman_3d_frame >= start) & (kalman_3d_frame <= stop)
+        for use_kalman_smoothing in [True,False]:
+            print 'loading frame numbers for kalman objects (estimates)'
+            kalman_rows = []
+            for obj_id in use_obj_ids:
+                my_rows = ca.load_data( obj_id, data_file,
+                                        use_kalman_smoothing=use_kalman_smoothing,
+                                        kalman_dynamic_model = dynamic_model,
+                                        frames_per_second=fps,
+                                        )
+                kalman_rows.append(my_rows)
+            kalman_rows = numpy.concatenate( kalman_rows )
+            kalman_3d_frame = kalman_rows['frame']
 
-            kalman_rows = kalman_rows[valid_cond]
-            kalman_3d_frame = kalman_3d_frame[valid_cond]
+            if start is not None or stop is not None:
+                if start is None:
+                    start = -numpy.inf
+                if stop is None:
+                    stop = numpy.inf
+                valid_cond = (kalman_3d_frame >= start) & (kalman_3d_frame <= stop)
 
-        obj_ids = kalman_rows['obj_id']
-        use_obj_ids = numpy.unique( obj_ids )
-        print 'plotting %d Kalman objects'%(len(use_obj_ids),)
-        for obj_id in use_obj_ids:
-            cond = obj_ids == obj_id
-            x = kalman_rows['x'][cond]
-            y = kalman_rows['y'][cond]
-            z = kalman_rows['z'][cond]
-            w = numpy.ones( x.shape )
-            X = numpy.vstack( (x,y,z,w) ).T
-            frame = kalman_rows['frame'][cond]
-            #print '%d %d %d'%(frame[0],obj_id, len(frame))
+                kalman_rows = kalman_rows[valid_cond]
+                kalman_3d_frame = kalman_3d_frame[valid_cond]
 
-            for cam_id in cam_ids:
-                ax = ax_by_cam[cam_id]
-                x2d = R.find2d(cam_id,X,distorted=True)
-                #print '%d %d %s (%f,%f)'%(obj_id,frame[0],cam_id,x2d[0,0],x2d[1,0])
-                ax.text( frame[0], x2d[0,0], '%d'%obj_id )
-                thisline,=ax.plot( frame, x2d[0,:], 'b-', picker=5) # 5 points tolerance
-                all_kalman_lines[thisline] = obj_id
-                thisline,=ax.plot( frame, x2d[1,:], 'y-', picker=5) # 5 points tolerance
-                all_kalman_lines[thisline] = obj_id
-                ax.set_ylim([-100,800])
-                ax.set_xlim( (start_frame, stop_frame) )
-            if 1:
+            obj_ids = kalman_rows['obj_id']
+            use_obj_ids = numpy.unique( obj_ids )
+            print 'plotting %d Kalman objects'%(len(use_obj_ids),)
+            for obj_id in use_obj_ids:
+                cond = obj_ids == obj_id
+                x = kalman_rows['x'][cond]
+                y = kalman_rows['y'][cond]
+                z = kalman_rows['z'][cond]
+                w = numpy.ones( x.shape )
+                X = numpy.vstack( (x,y,z,w) ).T
+                frame = kalman_rows['frame'][cond]
+                #print '%d %d %d'%(frame[0],obj_id, len(frame))
 
-                ax = ax_by_cam['kalman pmean']
-                P00 = kalman_rows['P00'][cond]
-                P11 = kalman_rows['P11'][cond]
-                P22 = kalman_rows['P22'][cond]
-                Pmean = numpy.sqrt( P00**2 + P11**2 + P22**2 ) # variance
-                std = numpy.sqrt(Pmean) # standard deviation (in meters)
-                ax.plot( frame, std, 'k-')
+                if use_kalman_smoothing:
+                    kwprops = dict(lw=0.5)
+                else:
+                    kwprops = dict(lw=1)
 
+                for cam_id in cam_ids:
+                    ax = ax_by_cam[cam_id]
+                    x2d = R.find2d(cam_id,X,distorted=True)
+                    #print '%d %d %s (%f,%f)'%(obj_id,frame[0],cam_id,x2d[0,0],x2d[1,0])
+                    ax.text( frame[0], x2d[0,0], '%d'%obj_id )
+                    thisline,=ax.plot( frame, x2d[0,:], 'b-', picker=5, **kwprops) # 5 points tolerance
+                    all_kalman_lines[thisline] = obj_id
+                    thisline,=ax.plot( frame, x2d[1,:], 'y-', picker=5, **kwprops) # 5 points tolerance
+                    all_kalman_lines[thisline] = obj_id
+                    ax.set_ylim([-100,800])
+                    ax.set_xlim( (start_frame, stop_frame) )
+                if not use_kalman_smoothing:
+                    ax = ax_by_cam['kalman pmean']
+                    P00 = kalman_rows['P00'][cond]
+                    P11 = kalman_rows['P11'][cond]
+                    P22 = kalman_rows['P22'][cond]
+                    Pmean = numpy.sqrt( P00**2 + P11**2 + P22**2 ) # variance
+                    std = numpy.sqrt(Pmean) # standard deviation (in meters)
+                    ax.plot( frame, std, 'k-')
 
-        if 1:
-            # plot 2D data contributing to 3D object
-            # this is forked from flydra_analysis_plot_kalman_2d.py
+            if not use_kalman_smoothing:
+                # plot 2D data contributing to 3D object
+                # this is forked from flydra_analysis_plot_kalman_2d.py
 
-            kresults = PT.openFile(kalman_filename,mode='r')
-            kobs = kresults.root.kalman_observations
-            kframes = kobs.read(field='frame')
-            if frame_start is not None:
-                k_after_start = numpy.nonzero( kframes>=frame_start )[0]
-            else:
-                k_after_start = None
-            if frame_stop is not None:
-                k_before_stop = numpy.nonzero( kframes<=frame_stop )[0]
-            else:
-                k_before_stop = None
+                kresults = PT.openFile(kalman_filename,mode='r')
+                kobs = kresults.root.kalman_observations
+                kframes = kobs.read(field='frame')
+                if frame_start is not None:
+                    k_after_start = numpy.nonzero( kframes>=frame_start )[0]
+                else:
+                    k_after_start = None
+                if frame_stop is not None:
+                    k_before_stop = numpy.nonzero( kframes<=frame_stop )[0]
+                else:
+                    k_before_stop = None
 
-            if k_after_start is not None and k_before_stop is not None:
-                k_use_idxs = numpy.intersect1d(k_after_start,k_before_stop)
-            elif k_after_start is not None:
-                k_use_idxs = k_after_start
-            elif k_before_stop is not None:
-                k_use_idxs = k_before_stop
-            else:
-                k_use_idxs = numpy.arange(kobs.nrows)
+                if k_after_start is not None and k_before_stop is not None:
+                    k_use_idxs = numpy.intersect1d(k_after_start,k_before_stop)
+                elif k_after_start is not None:
+                    k_use_idxs = k_after_start
+                elif k_before_stop is not None:
+                    k_use_idxs = k_before_stop
+                else:
+                    k_use_idxs = numpy.arange(kobs.nrows)
 
-            obs_2d_idxs = kobs.read(field='obs_2d_idx')[k_use_idxs]
-            kframes = kframes[k_use_idxs]
+                obs_2d_idxs = kobs.read(field='obs_2d_idx')[k_use_idxs]
+                kframes = kframes[k_use_idxs]
 
-            kobs_2d = kresults.root.kalman_observations_2d_idxs
-            # this will be slooow...
-            used_cam_ids = collections.defaultdict(list)
-            for obs_2d_idx,kframe in zip(obs_2d_idxs,kframes):
-                obs_2d_row = kobs_2d[int(obs_2d_idx)]
-                #print kframe,obs_2d_row
-                for camn in obs_2d_row[::2]:
-                    cam_id = camn2cam_id[camn]
-                    used_cam_ids[cam_id].append(kframe)
-            for cam_id,kframes_used in used_cam_ids.iteritems():
-                kframes_used = numpy.array(kframes_used)
-                yval = -99*numpy.ones_like(kframes_used)
-                ax = ax_by_cam[cam_id]
-                ax.plot( kframes_used, yval, 'kx' )
-                ax.set_ylim([-100,800])
-                ax.set_xlim( (start_frame, stop_frame) )
+                kobs_2d = kresults.root.kalman_observations_2d_idxs
+                # this will be slooow...
+                used_cam_ids = collections.defaultdict(list)
+                for obs_2d_idx,kframe in zip(obs_2d_idxs,kframes):
+                    obs_2d_row = kobs_2d[int(obs_2d_idx)]
+                    #print kframe,obs_2d_row
+                    for camn in obs_2d_row[::2]:
+                        cam_id = camn2cam_id[camn]
+                        used_cam_ids[cam_id].append(kframe)
+                for cam_id,kframes_used in used_cam_ids.iteritems():
+                    kframes_used = numpy.array(kframes_used)
+                    yval = -99*numpy.ones_like(kframes_used)
+                    ax = ax_by_cam[cam_id]
+                    ax.plot( kframes_used, yval, 'kx' )
+                    ax.set_ylim([-100,800])
+                    ax.set_xlim( (start_frame, stop_frame) )
 
         data_file.close()
 

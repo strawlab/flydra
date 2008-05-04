@@ -5,6 +5,7 @@ tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy
 import math, os, sys
 import scipy.io
+import pprint
 DEBUG = False
 
 import adskalman
@@ -165,10 +166,12 @@ def _initial_file_load(filename):
             else:
                 if time_model is not None:
                     extra['time_model'] = time_model
+        if hasattr(kresults.root.kalman_estimates.attrs,'dynamic_model_name'):
+            extra['dynamic_model_name'] = kresults.root.kalman_estimates.attrs.dynamic_model_name
     return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
 
 def kalman_smooth(orig_rows,
-                  kalman_dynamic_model=None,
+                  dynamic_model_name=None,
                   frames_per_second=None):
     obs_frames = orig_rows['frame']
     if len(obs_frames)<2:
@@ -194,32 +197,32 @@ def kalman_smooth(orig_rows,
     # assemble observations (in meters)
     obs = numpy.vstack(( x,y,z )).T
 
+    if dynamic_model_name is None:
+        dynamic_model_name = 'fly dynamics, high precision calibration, units: mm'
+        import warnings
+        warnings.warn('No Kalman model specified. Using "%s" for Kalman smoothing'%(dynamic_model_name,))
+
+    model = flydra.kalman.dynamic_models.get_kalman_model(name=dynamic_model_name,dt=(1.0/frames_per_second))
+    if model['dt'] != 1.0/frames_per_second:
+        raise ValueError('specified fps disagrees with model')
+
     # initial state guess: postion = observation, other parameters = 0
-    ss = 9
+    ss = model['ss']
     init_x = numpy.zeros( (ss,) )
     init_x[:3] = obs[0,:]
 
-    P_k1=numpy.eye(ss) # initial state error covariance guess
-    initial_position_covariance_estimate = 1e-6 # default: initial guess 1mm ( (1e-3)**2 meters)
-    initial_acceleration_covariance_estimate = 15 # default: arbitrary initial guess, rather large
+    P_k1=numpy.zeros((ss,ss)) # initial state error covariance guess
 
     for i in range(0,3):
-        P_k1[i,i]=initial_position_covariance_estimate
-    for i in range(6,9):
-        P_k1[i,i]=initial_acceleration_covariance_estimate
+        P_k1[i,i]=model['initial_position_covariance_estimate']
+    for i in range(3,6):
+        P_k1[i,i]=model.get('initial_velocity_covariance_estimate',0.0)
+    if ss > 6:
+        for i in range(6,9):
+            P_k1[i,i]=model.get('initial_acceleration_covariance_estimate',0.0)
 
-    if kalman_dynamic_model is None:
-        kalman_dynamic_model = 'fly dynamics, high precision calibration, units: mm'
-        import warnings
-        warnings.warn('using "%s" for Kalman smoothing'%(kalman_dynamic_model,))
-
-    model_dict = flydra.kalman.dynamic_models.create_dynamic_model_dict(dt=(1.0/frames_per_second))
-    if kalman_dynamic_model not in model_dict:
-        raise ValueError("'%s' not in list of known dynamic models. Known models: %s"%(
-            kalman_dynamic_model, model_dict.keys()))
-    model = model_dict[kalman_dynamic_model]
-    if model['dt'] != 1.0/frames_per_second:
-        raise ValueError('specified fps disagrees with model')
+    if not 'C' in model:
+        raise ValueError('model does not have a linear observation matrix "C".')
     xsmooth, Psmooth = adskalman.kalman_smoother(obs,
                                                  model['A'],
                                                  model['C'],
@@ -234,10 +237,10 @@ def observations2smoothed(obj_id,
                           orig_rows,
                           obj_id_fill_value='orig',
                           frames_per_second=None,
-                          kalman_dynamic_model=None
+                          dynamic_model_name=None
                           ):
 
-    KalmanEstimates = flydra.kalman.flydra_kalman_utils.KalmanEstimates
+    KalmanEstimates = flydra.kalman.flydra_kalman_utils.get_kalman_estimates_table_description_for_model_name(name=dynamic_model_name)
     field_names = tables.Description(KalmanEstimates().columns)._v_names
 
     if not len(orig_rows):
@@ -249,16 +252,20 @@ def observations2smoothed(obj_id,
 
     frames, xsmooth, Psmooth, obj_id_array = kalman_smooth(orig_rows,
                                                            frames_per_second=frames_per_second,
-                                                           kalman_dynamic_model=kalman_dynamic_model)
-
-    list_of_xhats = [xsmooth[:,0],xsmooth[:,1],xsmooth[:,2],
-                     xsmooth[:,3],xsmooth[:,4],xsmooth[:,5],
-                     xsmooth[:,6],xsmooth[:,7],xsmooth[:,8],
-                     ]
-    list_of_Ps = [Psmooth[:,0,0],Psmooth[:,1,1],Psmooth[:,2,2],
-                  Psmooth[:,3,3],Psmooth[:,4,4],Psmooth[:,5,5],
-                  Psmooth[:,6,6],Psmooth[:,7,7],Psmooth[:,8,8],
-                  ]
+                                                           dynamic_model_name=dynamic_model_name)
+    ss = xsmooth.shape[1]
+    if 1:
+        list_of_xhats = [xsmooth[:,i] for i in range(ss)]
+        list_of_Ps    = [Psmooth[:,i,i] for i in range(ss)]
+    else:
+        list_of_xhats = [xsmooth[:,0],xsmooth[:,1],xsmooth[:,2],
+                         xsmooth[:,3],xsmooth[:,4],xsmooth[:,5],
+                         xsmooth[:,6],xsmooth[:,7],xsmooth[:,8],
+                         ]
+        list_of_Ps = [Psmooth[:,0,0],Psmooth[:,1,1],Psmooth[:,2,2],
+                      Psmooth[:,3,3],Psmooth[:,4,4],Psmooth[:,5,5],
+                      Psmooth[:,6,6],Psmooth[:,7,7],Psmooth[:,8,8],
+                      ]
     timestamps = numpy.zeros( (len(frames),))
 
     if obj_id_fill_value == 'orig':
@@ -273,51 +280,51 @@ def observations2smoothed(obj_id,
                                 names = field_names)
     return rows
 
-def matfile2rows(data_file,obj_id):
-    import warnings
-    warnings.warn('using the slow matfile2rows -- use the faster CachingAnalyzer.load_data()')
+# def matfile2rows(data_file,obj_id):
+#     import warnings
+#     warnings.warn('using the slow matfile2rows -- use the faster CachingAnalyzer.load_data()')
 
-    obj_ids = data_file['kalman_obj_id']
-    cond = obj_ids == obj_id
-    if 0:
-        obj_idxs = numpy.nonzero(cond)[0]
-        indexer = obj_idxs
-    else:
-        # benchmarking showed this is 20% faster
-        indexer = cond
+#     obj_ids = data_file['kalman_obj_id']
+#     cond = obj_ids == obj_id
+#     if 0:
+#         obj_idxs = numpy.nonzero(cond)[0]
+#         indexer = obj_idxs
+#     else:
+#         # benchmarking showed this is 20% faster
+#         indexer = cond
 
-    obj_id_array = data_file['kalman_obj_id'][cond]
-    obj_id_array = obj_id_array.astype(numpy.uint32)
-    id_frame = data_file['kalman_frame'][cond]
-    id_x = data_file['kalman_x'][cond]
-    id_y = data_file['kalman_y'][cond]
-    id_z = data_file['kalman_z'][cond]
-    id_xvel = data_file['kalman_xvel'][cond]
-    id_yvel = data_file['kalman_yvel'][cond]
-    id_zvel = data_file['kalman_zvel'][cond]
-    id_xaccel = data_file['kalman_xaccel'][cond]
-    id_yaccel = data_file['kalman_yaccel'][cond]
-    id_zaccel = data_file['kalman_xaccel'][cond]
+#     obj_id_array = data_file['kalman_obj_id'][cond]
+#     obj_id_array = obj_id_array.astype(numpy.uint32)
+#     id_frame = data_file['kalman_frame'][cond]
+#     id_x = data_file['kalman_x'][cond]
+#     id_y = data_file['kalman_y'][cond]
+#     id_z = data_file['kalman_z'][cond]
+#     id_xvel = data_file['kalman_xvel'][cond]
+#     id_yvel = data_file['kalman_yvel'][cond]
+#     id_zvel = data_file['kalman_zvel'][cond]
+#     id_xaccel = data_file['kalman_xaccel'][cond]
+#     id_yaccel = data_file['kalman_yaccel'][cond]
+#     id_zaccel = data_file['kalman_xaccel'][cond]
 
-    KalmanEstimates = flydra.kalman.flydra_kalman_utils.KalmanEstimates
-    field_names = tables.Description(KalmanEstimates().columns)._v_names
-    list_of_xhats = [id_x,id_y,id_z,
-                     id_xvel,id_yvel,id_zvel,
-                     id_xaccel,id_yaccel,id_zaccel,
-                     ]
-    z = numpy.nan*numpy.ones(id_x.shape)
-    list_of_Ps = [z,z,z,
-                  z,z,z,
-                  z,z,z,
+#     KalmanEstimates = flydra.kalman.flydra_kalman_utils.KalmanEstimates
+#     field_names = tables.Description(KalmanEstimates().columns)._v_names
+#     list_of_xhats = [id_x,id_y,id_z,
+#                      id_xvel,id_yvel,id_zvel,
+#                      id_xaccel,id_yaccel,id_zaccel,
+#                      ]
+#     z = numpy.nan*numpy.ones(id_x.shape)
+#     list_of_Ps = [z,z,z,
+#                   z,z,z,
+#                   z,z,z,
 
-                  ]
-    timestamps = numpy.zeros( (len(frames),))
-    list_of_cols = [obj_id_array,id_frame,timestamps]+list_of_xhats+list_of_Ps
-    assert len(list_of_cols)==len(field_names) # double check that definition didn't change on us
-    rows = numpy.rec.fromarrays(list_of_cols,
-                                names = field_names)
+#                   ]
+#     timestamps = numpy.zeros( (len(frames),))
+#     list_of_cols = [obj_id_array,id_frame,timestamps]+list_of_xhats+list_of_Ps
+#     assert len(list_of_cols)==len(field_names) # double check that definition didn't change on us
+#     rows = numpy.rec.fromarrays(list_of_cols,
+#                                 names = field_names)
 
-    return rows
+#     return rows
 
 xtable = {'x':'kalman_x',
           'y':'kalman_y',
@@ -434,7 +441,7 @@ class CachingAnalyzer:
         return rows
 
     def load_data(self,obj_id,data_file,use_kalman_smoothing=True,
-                  frames_per_second=None, kalman_dynamic_model=None):
+                  frames_per_second=None, dynamic_model_name=None):
         """Load Kalman state estimates from data_file.
 
         If use_kalman_smoothing is True, the data are passed through a
@@ -508,7 +515,7 @@ class CachingAnalyzer:
                 # do Kalman smoothing
                 rows = observations2smoothed(obj_id,orig_rows,
                                              frames_per_second=frames_per_second,
-                                             kalman_dynamic_model=kalman_dynamic_model,
+                                             dynamic_model_name=dynamic_model_name,
                                              )
 
         if not len(rows):
@@ -552,7 +559,7 @@ class CachingAnalyzer:
                                      method='position based',
                                      method_params=None,
                                      hide_first_point=True, # velocity bad there
-                                     kalman_dynamic_model=None,
+                                     dynamic_model_name=None,
                                      ):
         """calculate trajectory metrics
 
@@ -579,7 +586,7 @@ class CachingAnalyzer:
 
         rows = self.load_data( obj_id, data_file,use_kalman_smoothing=use_kalman_smoothing,
                                frames_per_second=frames_per_second,
-                               kalman_dynamic_model=kalman_dynamic_model,
+                               dynamic_model_name=dynamic_model_name,
                                )
         numpyerr = numpy.seterr(all='raise')
         try:
@@ -726,12 +733,12 @@ class CachingAnalyzer:
                      obj_id,
                      data_file,#result_h5_file or .mat dictionary
                      frames_per_second=None,
-                     kalman_dynamic_model=None,
+                     dynamic_model_name=None,
                      ):
         rows = self.load_data( obj_id, data_file,
                                use_kalman_smoothing=True,
                                frames_per_second=frames_per_second,
-                               kalman_dynamic_model=kalman_dynamic_model,
+                               dynamic_model_name=dynamic_model_name,
                                )
         results = {}
         results['kalman_smoothed_rows'] = rows
@@ -742,7 +749,7 @@ class CachingAnalyzer:
                         data_file,#result_h5_file or .mat dictionary
                         use_kalman_smoothing=True,
                         frames_per_second=None,
-                        kalman_dynamic_model=None,
+                        dynamic_model_name=None,
                         method='position based',
                         method_params=None,
                         ):
@@ -776,7 +783,7 @@ class CachingAnalyzer:
         rows = self.load_data( obj_id, data_file,
                                use_kalman_smoothing=use_kalman_smoothing,
                                frames_per_second=frames_per_second,
-                               kalman_dynamic_model=kalman_dynamic_model,
+                               dynamic_model_name=dynamic_model_name,
                                )
 
 

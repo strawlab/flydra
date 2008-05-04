@@ -1,6 +1,7 @@
 import tables as PT
 import numpy
 import flydra.data_descriptions
+import flydra.kalman.dynamic_models
 
 PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 PT_TUPLE_IDX_AREA = flydra.data_descriptions.PT_TUPLE_IDX_AREA
@@ -46,6 +47,15 @@ class KalmanEstimatesVelOnly(PT.IsDescription):
     P33        = PT.Float32Col(pos=15)
     P44        = PT.Float32Col(pos=16)
     P55        = PT.Float32Col(pos=17)
+
+def get_kalman_estimates_table_description_for_model_name( name=None ):
+    dt = 1.0 # doesn't matter -- just getting state space size
+    model = flydra.kalman.dynamic_models.get_kalman_model( name=name, dt=1.0 )
+    ss = model['ss']
+    if ss == 6:
+        return KalmanEstimatesVelOnly
+    elif ss == 9:
+        return KalmanEstimates
 
 class FilteredObservations(PT.IsDescription):
     obj_id     = PT.UInt32Col(pos=0)

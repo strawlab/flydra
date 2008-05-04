@@ -203,11 +203,9 @@ class TextLogDescription(PT.IsDescription):
     message = PT.StringCol(255,pos=3)
 
 FilteredObservations = flydra.kalman.flydra_kalman_utils.FilteredObservations
-KalmanEstimates = flydra.kalman.flydra_kalman_utils.KalmanEstimates
 kalman_observations_2d_idxs_type = flydra.kalman.flydra_kalman_utils.kalman_observations_2d_idxs_type
 
 h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
-h5_xhat_names = PT.Description(KalmanEstimates().columns)._v_names
 
 # allow rapid building of numpy.rec.array:
 Info2DCol_description = PT.Description(Info2D().columns)._v_nestedDescr
@@ -642,6 +640,7 @@ class CoordinateProcessor(threading.Thread):
         self.reconstructor_meters = self.reconstructor.get_scaled(scale_factor)
 
     def set_new_tracker(self,kalman_model=None):
+        # called from main thread, must lock to send to realtime coord thread
         evt = self.main_brain.accumulate_kalman_calibration_data
         scale_factor = self.reconstructor.get_scale_factor()
         tracker = flydra.kalman.flydra_tracker.Tracker(self.reconstructor_meters,
@@ -2175,9 +2174,21 @@ class MainBrain(object):
             scale_factor = self.reconstructor.get_scale_factor()
             self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin, scale_factor )
 
-    def set_new_tracker(self,*args,**kws):
+    def set_new_tracker(self,kalman_model_name=None):
+        if self.is_saving_data():
+            raise RuntimeError('will not set Kalman parameters while saving data')
+
+        fps = self.get_fps()
+        dt = 1.0/fps
+        kalman_model = flydra.kalman.dynamic_models.get_kalman_model(name=kalman_model_name,dt=dt)
+
+        func = flydra.kalman.flydra_kalman_utils.get_kalman_estimates_table_description_for_model_name
+        self.KalmanEstimatesDescription = func(name=kalman_model_name)
+
+        self.h5_xhat_names = PT.Description(self.KalmanEstimatesDescription().columns)._v_names
+
         # send params over to realtime coords thread
-        self.coord_processor.set_new_tracker(*args,**kws)
+        self.coord_processor.set_new_tracker(kalman_model=kalman_model)
 
     def __del__(self):
         self.quit()
@@ -2214,7 +2225,7 @@ class MainBrain(object):
         if self.reconstructor is not None:
             self.reconstructor.save_to_h5file(self.h5file)
             if DO_KALMAN:
-                self.h5data3d_kalman_estimates = ct(root,'kalman_estimates', KalmanEstimates,
+                self.h5data3d_kalman_estimates = ct(root,'kalman_estimates', self.KalmanEstimatesDescription,
                                                     "3d data (from Kalman filter)",
                                                     expectedrows=expected_rows)
                 self.h5data3d_kalman_observations = ct(root,'kalman_observations', FilteredObservations,
@@ -2438,7 +2449,7 @@ class MainBrain(object):
                     list_of_Ps = [P_data_save[:,i] for i in range(P_data_save.shape[1])]
                     xhats_recarray = numpy.rec.fromarrays(
                         [obj_id_array,frames,timestamps]+list_of_xhats+list_of_Ps,
-                        names = h5_xhat_names)
+                        names = self.h5_xhat_names)
                     self.h5data3d_kalman_estimates.append( xhats_recarray )
                     self.h5data3d_kalman_estimates.flush()
 

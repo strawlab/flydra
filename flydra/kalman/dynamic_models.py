@@ -90,7 +90,7 @@ def _get_fixed_vel_model(dt=None):
     return model
 
 def get_dynamic_model_dict(*args,**kw):
-    warnings.warn('DeprecationWarning: call create_dynamic_model_dict(), not old get_dynamic_model_dict')
+    warnings.warn('DeprecationWarning: call "get_kalman_model()", not old "get_dynamic_model_dict()"')
     return create_dynamic_model_dict(*args,**kw)
 
 def create_dynamic_model_dict(dt=None,disable_warning=False):
@@ -99,7 +99,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
     dt is the time-step in seconds
     """
     if not disable_warning:
-        warnings.warn('using deprecated function "create_dynamic_model_dict". Use ',DeprecationWarning,stacklevel=2)
+        warnings.warn('using deprecated function "create_dynamic_model_dict()". Use "get_kalman_model()"',DeprecationWarning,stacklevel=2)
     dynamic_models = {}
 
     ######################################
@@ -204,8 +204,9 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
         # birth model
         min_dist_to_believe_new_meters=0.08, # 8 cm
         min_dist_to_believe_new_sigma=3.0,
+
         initial_position_covariance_estimate=1e-6,
-        initial_acceleration_covariance_estimate=15,
+        initial_velocity_covariance_estimate=1,
 
         # support existint object
         n_sigma_accept=20.0, # geometric euclidian distance
@@ -245,6 +246,7 @@ class MamaramaMMEKFAllParams(EKFAllParams):
                     'max_frames_skipped',
                     'A',
                     'Q',
+                    'dt',
                     ]:
             self[key] = linear_dict[key]
         self['ekf_observation_covariance_pixels'] = numpy.array( [[1.0, 0.0],

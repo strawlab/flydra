@@ -629,17 +629,14 @@ class wxMainBrainApp(wx.App):
         ctrl = xrc.XRCCTRL(self.status_panel,
                            "kalman_parameters_choice")
         kalman_param_string = ctrl.GetStringSelection()
-        fps = self.main_brain.get_fps()
-        dt = 1.0/fps
-        model_dicts = flydra.kalman.dynamic_models.create_dynamic_model_dict(dt = dt)
-        kalman_model = model_dicts[str(kalman_param_string)]
+        name=str(kalman_param_string)
 
-        MainBrain.rc_params['kalman_model'] = str(kalman_param_string)
+        MainBrain.rc_params['kalman_model'] = name
         MainBrain.save_rc_params()
 
         if self.main_brain.reconstructor is not None:
             print 'setting model to',kalman_model
-            self.main_brain.set_new_tracker(kalman_model=kalman_model)
+            self.main_brain.set_new_tracker(kalman_model_name=name)
         else:
             print 'no reconstructor, not setting kalman model'
 

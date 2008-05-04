@@ -168,7 +168,7 @@ def doit(filename,
          exclude_vel_mps = None,
          exclude_vel_data = 'kalman',
          stereo = False,
-         dynamic_model = None,
+         dynamic_model_name = None,
          show_cameras=False,
          obj_color=False,
          link_all_simultaneous_objs=True,
@@ -182,7 +182,7 @@ def doit(filename,
         allsave = []
 
     if not use_kalman_smoothing:
-        if (dynamic_model is not None):
+        if (dynamic_model_name is not None):
             print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model option (--dynamic-model)'
             sys.exit(1)
 
@@ -190,7 +190,15 @@ def doit(filename,
     ca = core_analysis.CachingAnalyzer()
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(filename)
 
+    if dynamic_model_name is None:
+        dynamic_model_name = extra['dynamic_model_name']
+        print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
+        if dynamic_model_name.startswith('EKF '):
+            dynamic_model_name = dynamic_model_name[4:]
+        print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
+
     if not is_mat_file:
+
         mat_data = None
         if fps is None:
             fps = result_utils.get_fps( data_file, fail_on_error=False )
@@ -216,7 +224,7 @@ def doit(filename,
             try:
                 rows = ca.load_data( obj_id, data_file,
                                      use_kalman_smoothing=use_kalman_smoothing,
-                                     kalman_dynamic_model = dynamic_model,
+                                     dynamic_model_name = dynamic_model_name,
                                      frames_per_second=fps)
             except core_analysis.ObjectIDDataError,err:
                 continue
@@ -324,6 +332,7 @@ def doit(filename,
         raise ValueError('no trajectories to plot')
 
     had_any_obj_id_data = False
+    obj_id2verts_frames = {}
     for obj_id_enum,obj_id in enumerate(use_obj_ids):
         if (obj_id_enum%100)==0 and len(use_obj_ids) > 5:
             print 'obj_id %d of %d'%(obj_id_enum,len(use_obj_ids))
@@ -341,7 +350,7 @@ def doit(filename,
             try:
                 my_rows = ca.load_data( obj_id, data_file,
                                         use_kalman_smoothing=use_kalman_smoothing,
-                                        kalman_dynamic_model = dynamic_model,
+                                        dynamic_model_name = dynamic_model_name,
                                         frames_per_second=fps)
             except core_analysis.ObjectIDDataError, err:
                 continue
@@ -396,7 +405,7 @@ def doit(filename,
 
         rows = ca.load_data( obj_id, data_file,
                              use_kalman_smoothing=use_kalman_smoothing,
-                             kalman_dynamic_model = dynamic_model,
+                             dynamic_model_name = dynamic_model_name,
                              frames_per_second=fps)
 
         if len(rows):
@@ -415,7 +424,7 @@ def doit(filename,
                                     data_file,
                                     use_kalman_smoothing=use_kalman_smoothing,
                                     frames_per_second=fps,
-                                    kalman_dynamic_model = dynamic_model)
+                                    dynamic_model_name = dynamic_model_name)
             except Exception, err:
                 if 1:
                     raise
@@ -432,6 +441,8 @@ def doit(filename,
                 rows = rows[ok]
 
             verts = numpy.array( [rows['x'], rows['y'], rows['z']] ).T
+            obj_id2verts_frames[obj_id] = (verts, rows['frame'])
+
             if show_kalman_P:
                 Ps_position = numpy.array( [rows['P00'], rows['P11'], rows['P22']] ).T
                 Ps_position = numpy.sqrt( Ps_position) # put in distance units, not variance units
@@ -647,16 +658,9 @@ def doit(filename,
         plugin = PluginClass(filename=filename,
                             force_stimulus=options.force_stimulus)
         stim_actors = plugin.get_tvtk_actors()
-        print 'stim_actors',stim_actors
         actors.extend( stim_actors )
 
     ################################
-
-    if 0:
-        a=tvtk.AxesActor(normalized_tip_length=(0.4, 0.4, 0.4),
-                         normalized_shaft_length=(0.6, 0.6, 0.6),
-                         shaft_type='cylinder')
-        actors.append(a)
 
     if show_only_track_ends:
         pd = tvtk.PolyData()
@@ -690,13 +694,6 @@ def doit(filename,
 
     for a in actors:
         ren.add_actor(a)
-
-    if 0:
-        # this isn't working yet
-        axes2 = tvtk.CubeAxesActor2D()
-        axes2.camera = ren.active_camera
-        #axes2.input = verts
-        ren.add_actor(axes2)
 
     if 1:
         # Inspired by pyface.tvtk.decorated_scene
@@ -796,7 +793,14 @@ def doit(filename,
                     found.add(objid)
                 found = list(found)
                 found.sort()
-                print ' '.join(map(str,found))
+
+                # find frame for each point found
+                for objid in found:
+                    verts, this_obj_frames = obj_id2verts_frames[objid]
+                    dists3d = verts-picker.pick_position
+                    dists = numpy.sum(dists3d**2,axis=1)
+                    idx = numpy.argmin(dists)
+                    print 'obj_id %d, frame %d'%(objid,this_obj_frames[idx])
 
             if 1:
                 imf = tvtk.WindowToImageFilter(input=rw, input_buffer_type='rgba' )
@@ -1005,7 +1009,7 @@ def main():
          save_still = options.save_still,
          exclude_vel_mps = options.exclude_vel_mps,
          stereo = options.stereo,
-         dynamic_model = options.dynamic_model,
+         dynamic_model_name = options.dynamic_model,
          show_cameras = options.show_cameras,
          obj_color = options.obj_color,
          link_all_simultaneous_objs=options.link_all_simultaneous_objs,

@@ -173,9 +173,9 @@ class KalmanSaver:
                  cam_id2camns=None,
                  min_observations_to_save=0,
                  textlog_save_lines = None,
-                 ss=None,
+                 dynamic_model_name=None,
+                 dynamic_model=None,
                  debug=0):
-        assert ss is not None, 'state vector space must be specified'
         self.cam_id2camns = cam_id2camns
         self.min_observations_to_save = min_observations_to_save
         self.debug = 0
@@ -190,10 +190,8 @@ class KalmanSaver:
             os.mkdir(save_cal_dir)
         self.save_cal_dir = save_cal_dir
 
-        if ss==9:
-            kalman_estimates_description = KalmanEstimates # With Acceleration
-        elif ss==6:
-            kalman_estimates_description = KalmanEstimatesVelOnly
+        func = flydra.kalman.flydra_kalman_utils.get_kalman_estimates_table_description_for_model_name
+        kalman_estimates_description = func(name=dynamic_model_name)
 
         if os.path.exists(dest_filename):
             self.h5file = PT.openFile(dest_filename, mode="r+")
@@ -218,6 +216,9 @@ class KalmanSaver:
             reconst_orig_units.save_to_h5file(self.h5file)
             self.h5_xhat = self.h5file.createTable(self.h5file.root,'kalman_estimates', kalman_estimates_description,
                                                    "Kalman a posteri estimates of tracked object")
+            self.h5_xhat.attrs.dynamic_model_name = dynamic_model_name
+            self.h5_xhat.attrs.dynamic_model = dynamic_model
+
             self.h5_obs = self.h5file.createTable(self.h5file.root,'kalman_observations', FilteredObservations,
                                                   "observations of tracked object")
 
@@ -418,7 +419,6 @@ def kalmanize(src_filename,
 
     dt = 1.0/frames_per_second
     kalman_model = dynamic_models.get_kalman_model( name=dynamic_model_name, dt=dt )
-    ss = kalman_model['ss']
 
     h5saver = KalmanSaver(dest_filename,
                           reconst_orig_units,
@@ -426,7 +426,8 @@ def kalmanize(src_filename,
                           cam_id2camns=cam_id2camns,
                           min_observations_to_save=min_observations_to_save,
                           textlog_save_lines=textlog_save_lines,
-                          ss=ss,
+                          dynamic_model_name=dynamic_model_name,
+                          dynamic_model=kalman_model,
                           debug=debug)
 
     save_calibration_data = FakeThreadingEvent()
