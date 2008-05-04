@@ -273,6 +273,7 @@ class DisplayCamData(object):
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
                 if chainbuf.quit_now:
                     # XXX TODO: Send done event to GUI.
+                    print 'TODO: send quit event to GUI for cam_id %s'%(self._cam_id)
                     break
                 # post images and processed points to wx
                 if hasattr(chainbuf,'processed_points'):
