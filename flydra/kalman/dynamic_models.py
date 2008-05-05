@@ -242,7 +242,6 @@ class MamaramaMMEKFAllParams(EKFAllParams):
         for key in [#'min_dist_to_believe_new_meters',
                     #'min_dist_to_believe_new_sigma',
                     'initial_position_covariance_estimate',
-                    'n_sigma_accept',
                     'max_frames_skipped',
                     'A',
                     'Q',
