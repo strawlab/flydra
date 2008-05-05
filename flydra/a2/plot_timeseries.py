@@ -220,7 +220,7 @@ def main():
 
     parser = OptionParser(usage)
 
-    parser.add_option("--kalman", dest="kalman_filename", type='string',
+    parser.add_option("-k", "--kalman", dest="kalman_filename", type='string',
                       help=".h5 file with kalman data and 3D reconstructor")
 
     parser.add_option("--fps", dest='fps', type='float',

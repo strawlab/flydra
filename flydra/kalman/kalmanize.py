@@ -296,7 +296,13 @@ class KalmanSaver:
         list_of_obs = [observations_data[:,i] for i in range(observations_data.shape[1])]
         array_list = [obj_id_array,observations_frames]+list_of_obs+[this_idxs]
         obs_recarray = numpy.rec.fromarrays( array_list, names = self.h5_obs_names)
-        last_observation_frame = observations_frames[-1]
+        if 1:
+            # End tracking at last non-nan observation (must be > 1 camera for final points).
+            idx = numpy.nonzero(~numpy.isnan(observations_data))[0][-1]
+            last_observation_frame = observations_frames[idx]
+        else:
+            # End tracking at last observation (can be 1 camera for final points).
+            last_observation_frame = observations_frames[-1]
 
         if debugADS:
             print 'kalman observations: --------------'

@@ -92,13 +92,20 @@ def doit(
     if obj_only is not None:
         use_obj_ids = [i for i in use_obj_ids if i in obj_only]
 
+    if dynamic_model is None:
+        dynamic_model = extra['dynamic_model_name']
+        print 'detected file loaded with dynamic model "%s"'%dynamic_model
+        if dynamic_model.startswith('EKF '):
+            dynamic_model = dynamic_model[4:]
+        print '  for smoothing, will use dynamic model "%s"'%dynamic_model
+
     allX = {}
     frame0 = None
     for obj_id in use_obj_ids:
         try:
             kalman_rows =  ca.load_data( obj_id, data_file,
                                          use_kalman_smoothing=use_kalman_smoothing,
-                                         kalman_dynamic_model = dynamic_model,
+                                         dynamic_model_name = dynamic_model,
                                          frames_per_second=fps,
                                          )
         except core_analysis.ObjectIDDataError:
@@ -164,7 +171,7 @@ def main():
 
     parser = OptionParser(usage)
 
-    parser.add_option("--kalman", dest="kalman_filename", type='string',
+    parser.add_option("-k", "--kalman", dest="kalman_filename", type='string',
                       help=".h5 file with kalman data and 3D reconstructor")
 
     parser.add_option("--fps", dest='fps', type='float',

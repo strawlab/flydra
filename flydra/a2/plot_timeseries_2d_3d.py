@@ -56,6 +56,8 @@ def doit(
     ax_by_cam = {}
     fig = pylab.figure()
 
+    assert len(filenames)>=1, 'must give at least one filename!'
+
     for filename in filenames:
 
         figtitle = filename
@@ -171,12 +173,16 @@ def doit(
             print 'loading frame numbers for kalman objects (estimates)'
             kalman_rows = []
             for obj_id in use_obj_ids:
-                my_rows = ca.load_data( obj_id, data_file,
-                                        use_kalman_smoothing=use_kalman_smoothing,
-                                        dynamic_model_name = dynamic_model,
-                                        frames_per_second=fps,
-                                        )
-                kalman_rows.append(my_rows)
+                try:
+                    my_rows = ca.load_data( obj_id, data_file,
+                                            use_kalman_smoothing=use_kalman_smoothing,
+                                            dynamic_model_name = dynamic_model,
+                                            frames_per_second=fps,
+                                            )
+                    kalman_rows.append(my_rows)
+                except core_analysis.NotEnoughDataToSmoothError, err:
+                    # OK, we don't have data from this obj_id
+                    pass
             kalman_rows = numpy.concatenate( kalman_rows )
             kalman_3d_frame = kalman_rows['frame']
 
