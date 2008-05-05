@@ -256,7 +256,7 @@ class MamaramaMMEKFAllParams(EKFAllParams):
 
         if 1:
             # restrictive (better for e.g. making new calibration)
-            self['max_variance_dist_meters']=0.35
+            self['max_variance_dist_meters']=0.25
             self['n_sigma_accept']=10
         else:
             # loosy-goosy
