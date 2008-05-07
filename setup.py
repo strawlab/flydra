@@ -46,6 +46,7 @@ setup(name='flydra',
     'flydra_analysis_plot_timeseries_3d = flydra.a2.plot_timeseries:main',
     'flydra_analysis_plot_top_view = flydra.a2.plot_top_view:main',
     'flydra_analysis_print_camera_summary = flydra.analysis.flydra_analysis_print_camera_summary:main',
+    'flydra_analysis_save_movies_overlay = flydra.a2.save_movies_overlay:main',
 
     'flydra_LED_driver_enter_dfu_mode = flydra.LEDdriver.LEDdriver:enter_dfu_mode',
     'flydra_LED_test_latency = flydra.LEDdriver.LED_test_latency:main',
