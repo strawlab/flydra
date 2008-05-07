@@ -803,7 +803,7 @@ def doit(filename,
                     print 'obj_id %d, frame %d'%(objid,this_obj_frames[idx])
 
             if 1:
-                imf = tvtk.WindowToImageFilter(input=rw, input_buffer_type='rgba' )
+                imf = tvtk.WindowToImageFilter(input=rw, input_buffer_type='rgba', read_front_buffer='off')
                 writer = tvtk.PNGWriter()
 
                 imf.update()
@@ -820,7 +820,7 @@ def doit(filename,
         rwi.start()
         print_cam_props( ren.active_camera )
     else:
-        imf = tvtk.WindowToImageFilter(input=rw, input_buffer_type='rgba' )
+        imf = tvtk.WindowToImageFilter(input=rw, input_buffer_type='rgba',read_front_buffer='off' )
         writer = tvtk.PNGWriter()
 
         imf.update()

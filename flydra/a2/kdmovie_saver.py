@@ -213,7 +213,7 @@ def doit(filename,
 
         ren.add_actor( scalar_bar )
 
-    imf = tvtk.WindowToImageFilter(input=rw)
+    imf = tvtk.WindowToImageFilter(input=rw,read_front_buffer='off')
     writer = tvtk.PNGWriter()
 
     ####################### end draw permanently on stuff ############################
