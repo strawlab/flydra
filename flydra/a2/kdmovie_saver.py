@@ -48,7 +48,7 @@ class AnimationPath(object):
         lower_t = file_ts[lower_idx]
         file_dt = file_ts[upper_idx]-lower_t
         frac = (t-lower_t)/file_dt
-        
+
         pos_lower = self.data[lower_idx,1:4]
         ori_lower = cgtypes.quat(self.data[lower_idx,4:8])
 
@@ -75,7 +75,7 @@ def doit(filename,
          output_dir='.',
          cam_only_move_duration=5.0,
          ):
-    
+
     if animation_path_fname is None:
         animation_path_fname = pkg_resources.resource_filename(__name__,"kdmovie_saver_default_path.kmp")
     camera_animation_path = AnimationPath(animation_path_fname)
@@ -91,7 +91,7 @@ def doit(filename,
             del sys.path[0]
     except IOError, err:
         print 'not a .mat file at %s, treating as .hdf5 file'%(os.path.join(data_path, data_filename))
-    
+
     if mat_data is not None:
         obj_ids = mat_data['kalman_obj_id']
         obj_ids = obj_ids.astype( numpy.uint32 )
@@ -103,24 +103,24 @@ def doit(filename,
         is_mat_file = False
 
     filename_trimmed = os.path.split(os.path.splitext(filename)[0])[-1]
-    
+
     assert obj_only is not None
 
     #################
     rw = tvtk.RenderWindow(size=(1024, 768))
-    
+
     ren = tvtk.Renderer(background=(1.0,1.0,1.0))
     camera = ren.active_camera
-        
+
     rw.add_renderer(ren)
-    
+
     lut = tvtk.LookupTable(hue_range = (0.667, 0.0))
     #################
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
-        
+
     ca = core_analysis.CachingAnalyzer()
-    
+
     if len(obj_only)==1:
         animate_path = True
         # allow path to grow during trajectory
@@ -128,7 +128,7 @@ def doit(filename,
         animate_path = False
         obj_verts = []
         speeds = []
- 
+
     for obj_id in obj_only:
 
         if not is_mat_file:
@@ -147,20 +147,20 @@ def doit(filename,
                                                   method='position based',
                                                   method_params={'downsample':1,
                                                                  })
-    
+
         if len(obj_only)==1:
             obj_verts = results['X_kalmanized']
             speeds = results['speed_kalmanized']
         else:
             obj_verts.append( results['X_kalmanized'] )
             speeds.append( results['speed_kalmanized'] )
-            
+
     if not len(obj_only)==1:
         obj_verts = numpy.concatenate(obj_verts,axis=0)
         speeds = numpy.concatenate(speeds,axis=0)
-        
+
     ####################### start draw permanently on stuff ############################
-    
+
     if draw_stim_func_str:
         def my_import(name):
             mod = __import__(name)
@@ -175,8 +175,8 @@ def doit(filename,
         print '*'*80,'drew with custom code'
         for stim_actor in stim_actors:
             ren.add_actor( stim_actor )
-            
-    ####################### 
+
+    #######################
 
     if max_vel == 'auto':
         max_vel = speeds.max()
@@ -191,26 +191,26 @@ def doit(filename,
         if vertical_scale:
             scalar_bar = tvtk.ScalarBarActor(orientation='vertical',
                                              width=0.08, height=0.4)
-        else: 
+        else:
             scalar_bar = tvtk.ScalarBarActor(orientation='horizontal',
                                              width=0.4, height=0.08)
         scalar_bar.title = "Speed (m/s)"
         scalar_bar.lookup_table = vel_mapper.lookup_table
-        
+
         scalar_bar.property.color = 0.0, 0.0, 0.0 # black
 
         scalar_bar.title_text_property.color = 0.0, 0.0, 0.0
         scalar_bar.title_text_property.shadow = False
-        
+
         scalar_bar.label_text_property.color = 0.0, 0.0, 0.0
         scalar_bar.label_text_property.shadow = False
-        
+
  	scalar_bar.position_coordinate.coordinate_system = 'normalized_viewport'
         if vertical_scale:
             scalar_bar.position_coordinate.value = 0.01, 0.01, 0.0
         else:
             scalar_bar.position_coordinate.value = 0.1, 0.01, 0.0
-        
+
         ren.add_actor( scalar_bar )
 
     imf = tvtk.WindowToImageFilter(input=rw)
@@ -227,7 +227,7 @@ def doit(filename,
     else:
         data_dt = 0.0
         dur = 0.0
-        
+
     t_now = 0.0
     frame_number = 0
     while t_now <= dur:
@@ -281,7 +281,7 @@ def doit(filename,
             writer.write()
 
         ren.remove_actor(a)
-        
+
     ren.add_actor(a) # restore actors removed
     dur = dur+cam_only_move_duration
 
@@ -309,25 +309,25 @@ def doit(filename,
 
     if not is_mat_file:
         kresults.close()
-        
+
 def main():
     usage = '%prog FILE [options]'
-    
+
     parser = OptionParser(usage)
-    
+
     parser.add_option("-f", "--file", dest="filename", type='string',
                       help="hdf5 file with data to display FILE",
                       metavar="FILE")
 
     parser.add_option("--obj-only", type="string",
                       dest="obj_only")
-    
+
     parser.add_option("--draw-stim",
                       type="string",
                       dest="draw_stim_func_str",
                       default="flydra.a2.conditions_draw:draw_default_stim",
                       )
-    
+
     parser.add_option("--cam-only-move-duration", type="float", # formerly called hover
                       dest="cam_only_move_duration",
                       default=5.0)
@@ -337,21 +337,21 @@ def main():
 
     parser.add_option("--animation_path_fname",type="string",
                       dest="animation_path_fname")
-    
+
     parser.add_option("--min-length", dest="min_length", type="int",
                       help="minimum number of tracked points (not observations!) required to plot",
                       default=10,)
-    
+
     parser.add_option("--radius", type="float",
                       help="radius of line (in meters)",
                       default=0.002,
                       metavar="RADIUS")
-    
+
     parser.add_option("--max-vel", type="string",
                       help="maximum velocity of colormap",
                       dest='max_vel',
                       default='auto')
-    
+
     parser.add_option("--disable-kalman-smoothing", action='store_false',dest='use_kalman_smoothing',
                       default=True,
                       help="show original, causal Kalman filtered data (rather than Kalman smoothed observations)")
@@ -363,16 +363,16 @@ def main():
 
     if options.filename is not None:
         args.append(options.filename)
-        
+
     if len(args)>1:
         print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
         parser.print_help()
         return
-    
+
     if len(args)<1:
         parser.print_help()
         return
-        
+
     h5_filename=args[0]
 
     if options.obj_only is not None:
@@ -396,7 +396,7 @@ def main():
          animation_path_fname = options.animation_path_fname,
          output_dir = options.output_dir,
          )
-    
+
 if __name__=='__main__':
     main()
 
