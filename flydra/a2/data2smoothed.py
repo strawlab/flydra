@@ -10,6 +10,8 @@ from optparse import OptionParser
 import flydra.analysis.flydra_analysis_convert_to_mat
 import tables
 import flydra.analysis.result_utils as result_utils
+import flydra.a2.utils as utils
+import warnings
 
 def cam_id2hostname(cam_id):
     hostname = '_'.join(   cam_id.split('_')[:-1] )
@@ -22,6 +24,7 @@ def convert(infilename,
             file_time_data=None,
             do_nothing=False, # set to true to test for file existance
             stop_obj_id=None,
+            dynamic_model_name=None,
             ):
     if stop_obj_id is None:
         stop_obj_id=numpy.inf
@@ -46,6 +49,7 @@ def convert(infilename,
         except tables.exceptions.NoSuchNodeError, err:
             print >> sys.stderr, "No timestamps in file. Either specify not to save timestamps ('--no-timestamps') or specify the original .h5 file with the timestamps ('--time-data=FILE2D')"
             sys.exit(1)
+
         drift_estimates = result_utils.drift_estimates( h52d )
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h52d)
 
@@ -70,20 +74,21 @@ def convert(infilename,
 
         print 'caching Kalman obj_ids...'
         obs_obj_ids = table_kobs.read(field='obj_id')
+        obs_obj_ids_find = utils.FastFinder( obs_obj_ids )
         print 'finding unique obj_ids...'
         unique_obj_ids = numpy.unique(obs_obj_ids)
         print '(found %d)'%(len(unique_obj_ids),)
         print 'finding 2d data for each obj_id...'
         timestamp_time = numpy.zeros( unique_obj_ids.shape, dtype=numpy.float64)
+        table_kobs_frame = table_kobs.read(field='frame')
+
         for obj_id_enum,obj_id in enumerate(unique_obj_ids):
             if obj_id > stop_obj_id:
                 break
             if obj_id_enum%100==0:
                 print '%d of %d'%(obj_id_enum,len(unique_obj_ids))
-            valid_cond = obs_obj_ids == obj_id
-            idxs = numpy.nonzero(valid_cond)[0]
-            idx0 = idxs[0]
-            framenumber = table_kobs[idx0]['frame']
+            idx0 = obs_obj_ids_find.get_idxs_of_equal( obj_id )[0]
+            framenumber = table_kobs_frame[idx0]
             if tables.__version__ <= '1.3.3': # pytables numpy scalar workaround
                 framenumber = int(framenumber)
 
@@ -122,7 +127,18 @@ def convert(infilename,
         extra_vars = None
 
     ca = core_analysis.CachingAnalyzer()
-    obj_ids = ca.get_obj_ids(infilename)
+    obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(infilename)
+    if dynamic_model_name is None:
+        dynamic_model_name = extra.get('dynamic_model_name',None)
+        if dynamic_model_name is None:
+            dynamic_model_name = 'fly dynamics, high precision calibration, units: mm'
+            warnings.warn('no dynamic model specified, using "%s"'%dynamic_model_name)
+        else:
+            print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
+        if dynamic_model_name.startswith('EKF '):
+            dynamic_model_name = dynamic_model_name[4:]
+        print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
+
     allrows = []
     for i,obj_id in enumerate(obj_ids):
         if obj_id > stop_obj_id:
@@ -131,7 +147,9 @@ def convert(infilename,
             print '%d of %d'%(i,len(obj_ids))
         results = ca.get_smoothed(obj_id,
                                   infilename,
-                                  frames_per_second=frames_per_second)
+                                  frames_per_second=frames_per_second,
+                                  dynamic_model_name=dynamic_model_name,
+                                  )
         rows = results['kalman_smoothed_rows']
         allrows.append(rows)
 
@@ -157,6 +175,11 @@ def main():
     parser.add_option("--no-timestamps",action='store_true',dest='no_timestamps',default=False)
     parser.add_option("--stop",dest='stop_obj_id',default=None,type='int')
     parser.add_option("--profile",action='store_true',dest='profile',default=False)
+    parser.add_option("--dynamic-model",
+                      type="string",
+                      dest="dynamic_model",
+                      default=None,
+                      )
     (options, args) = parser.parse_args()
 
     if len(args)>1:
@@ -170,7 +193,12 @@ def main():
 
     infilename = args[0]
     outfilename = os.path.splitext(infilename)[0] + '_smoothed.mat'
-    cmd_str = 'convert(infilename,outfilename,file_time_data=options.file2d,save_timestamps = not options.no_timestamps,stop_obj_id=options.stop_obj_id)'
+    cmd_str = """convert(infilename,outfilename,
+                       file_time_data=options.file2d,
+                       save_timestamps = not options.no_timestamps,
+                       stop_obj_id=options.stop_obj_id,
+                       dynamic_model_name=options.dynamic_model,
+                       )"""
     if options.profile:
         import cProfile
         import lsprofcalltree
