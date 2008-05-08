@@ -78,8 +78,8 @@ def doit(fmf_filename=None,
     fmf_timestamps = fmf.get_all_timestamps()
     h5 = PT.openFile( h5_filename, mode='r' )
 
-    bg_fmf_filename = os.path.splitext(fmf_filename)[0] + '_bg.fmf'
-    cmp_fmf_filename = os.path.splitext(fmf_filename)[0] + '_std.fmf'
+    bg_fmf_filename = os.path.splitext(fmf_filename)[0] + '_mean.fmf'
+    cmp_fmf_filename = os.path.splitext(fmf_filename)[0] + '_mean2.fmf'
 
     bg_OK = False
     if os.path.exists( bg_fmf_filename):
@@ -139,12 +139,16 @@ def doit(fmf_filename=None,
         print 'loading frame numbers for kalman objects (estimates)'
         kalman_rows = []
         for obj_id in use_obj_ids:
-            my_rows = ca.load_data( obj_id, data_file,
-                                    use_kalman_smoothing=use_kalman_smoothing,
-                                    dynamic_model_name = dynamic_model,
-                                    frames_per_second=fps,
-                                    )
-            kalman_rows.append(my_rows)
+            try:
+                my_rows = ca.load_data( obj_id, data_file,
+                                        use_kalman_smoothing=use_kalman_smoothing,
+                                        dynamic_model_name = dynamic_model,
+                                        frames_per_second=fps,
+                                        )
+            except core_analysis.NotEnoughDataToSmoothError:
+                print 'not enough data to smooth for obj_id %d, skipping...'%obj_id
+            else:
+                kalman_rows.append(my_rows)
 
         if len(kalman_rows):
             kalman_rows = numpy.concatenate( kalman_rows )
@@ -369,6 +373,7 @@ def doit(fmf_filename=None,
                     # Zoomed difference image for this frame
                     bg = bg_frame.astype(numpy.float32)
                     cmp = cmp_frame.astype(numpy.float32)
+                    cmp = numpy.sqrt(bg-cmp) # find standard deviation
                     diff_im = fg-bg
 
                     zoom_diffs = []
