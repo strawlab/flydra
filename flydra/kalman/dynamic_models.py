@@ -264,6 +264,8 @@ class MamaramaMMEKFAllParams(EKFAllParams):
             self['n_sigma_accept']=40
 
 def get_kalman_model( name=None, dt=None ):
+    if name is None:
+        raise ValueError('cannot get Kalman model unless name is specified')
     if name.startswith('EKF'):
         if name == 'EKF mamarama, units: mm':
             kalman_model = MamaramaMMEKFAllParams(dt=dt)
