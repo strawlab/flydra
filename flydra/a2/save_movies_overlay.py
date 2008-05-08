@@ -181,6 +181,8 @@ def doit(fmf_filename=None,
     cam_id = found_cam_id
     my_camns = cam_id2camns[cam_id]
 
+    cam_center_meters = R.get_camera_center(cam_id)
+
     if PLOT=='mpl':
         fig = pylab.figure()
     remote_timestamps = h5.root.data2d_distorted.read(field='timestamp')
@@ -646,7 +648,12 @@ def doit(fmf_filename=None,
                         draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
                                       pen3d )
                     if style=='debug':
-                        draw.text( (x+5,y), 'obj %d (%.3f, %.3f, %.3f +- ~%f)'%(obj_id,X,Y,Z,Pmean_meters), font3d )
+                        pt_dist_meters = numpy.sqrt( (X-cam_center_meters[0])**2 +
+                                                     (Y-cam_center_meters[1])**2 +
+                                                     (Z-cam_center_meters[2])**2)
+                        draw.text( (x+5,y), 'obj %d (%.3f, %.3f, %.3f +- ~%f), dist %.2f'%(
+                            obj_id,X,Y,Z,Pmean_meters,pt_dist_meters),
+                                   font3d )
 
                 if style=='debug':
                     for (xy,XYZ,obj_id,obs_info) in kobs_vert_images:
@@ -655,7 +662,10 @@ def doit(fmf_filename=None,
                         X,Y,Z=XYZ
                         draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
                                       pen_obs )
-                        draw.text( (x+5,y), 'obj %d (%.3f, %.3f, %.3f)'%(obj_id,X,Y,Z), font_obs )
+                        pt_dist_meters = numpy.sqrt( (X-cam_center_meters[0])**2 +
+                                                     (Y-cam_center_meters[1])**2 +
+                                                     (Z-cam_center_meters[2])**2)
+                        draw.text( (x+5,y), 'obj %d (%.3f, %.3f, %.3f), dist %.2f'%(obj_id,X,Y,Z,pt_dist_meters), font_obs )
                         (this_cam_ids, this_camn_idxs) = obs_info
                         for i,(obs_cam_id,pt_no) in enumerate( zip(*obs_info) ):
                             draw.text( (x+15,y+(i+1)*10),
