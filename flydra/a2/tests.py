@@ -252,6 +252,12 @@ class TestUtils(unittest.TestCase):
             idxs2 = numpy.nonzero(a==b)[0]
             assert idxs1.shape == idxs2.shape
             assert numpy.allclose( idxs1, idxs2 )
+        for b in bs:
+            idx1 = af.get_first_idx_of_assumed_equal(b)
+            aval = a[idx1]
+            if aval != b:
+                if b in a:
+                    raise ValueError('b in a, but not found')
 
 def get_test_suite():
     ts=unittest.TestSuite([unittest.makeSuite(TestCoreAnalysis),

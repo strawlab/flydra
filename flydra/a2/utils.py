@@ -15,8 +15,17 @@ class FastFinder(object):
         testval = numpy.asarray(testval)
         assert len( testval.shape)==0, 'can only find equality of a scalar'
 
-        left_idxs = numpy.searchsorted( self.sorted, testval, side='left' )
-        right_idxs = numpy.searchsorted( self.sorted, testval, side='right' )
+        left_idxs = self.sorted.searchsorted( testval, side='left' )
+        right_idxs = self.sorted.searchsorted( testval, side='right' )
 
         this_idxs = self.idxs[left_idxs:right_idxs]
         return this_idxs
+    def get_first_idx_of_assumed_equal(self,testval):
+        """performs fast search on sorted data"""
+        testval = numpy.asarray(testval)
+        assert len( testval.shape)==0, 'can only find equality of a scalar'
+
+        left_idx = self.sorted.searchsorted( testval, side='left' )
+
+        this_idx = self.idxs[left_idx]
+        return this_idx
