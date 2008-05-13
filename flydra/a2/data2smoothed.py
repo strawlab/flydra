@@ -13,6 +13,8 @@ import flydra.analysis.result_utils as result_utils
 import flydra.a2.utils as utils
 import warnings
 
+import fastsearch.downsamp
+
 def cam_id2hostname(cam_id):
     hostname = '_'.join(   cam_id.split('_')[:-1] )
     return hostname
@@ -50,6 +52,15 @@ def convert(infilename,
             print >> sys.stderr, "No timestamps in file. Either specify not to save timestamps ('--no-timestamps') or specify the original .h5 file with the timestamps ('--time-data=FILE2D')"
             sys.exit(1)
 
+        print 'caching raw 2D data...',
+        sys.stdout.flush()
+        table_data2d_frames = table_data2d.read(field='frame')
+        table_data2d_frames_find = fastsearch.downsamp.DownSampledPreSearcher( table_data2d_frames )
+        table_data2d_camns = table_data2d.read(field='camn')
+        table_data2d_timestamps = table_data2d.read(field='timestamp')
+        print 'done'
+        print '(cached index of %d frame values of dtype %s)'%(len(table_data2d_frames),str(table_data2d_frames.dtype))
+
         drift_estimates = result_utils.drift_estimates( h52d )
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h52d)
 
@@ -74,7 +85,7 @@ def convert(infilename,
 
         print 'caching Kalman obj_ids...'
         obs_obj_ids = table_kobs.read(field='obj_id')
-        obs_obj_ids_find = utils.FastFinder( obs_obj_ids )
+        obs_obj_ids_find = fastsearch.downsamp.DownSampledPreSearcher( obs_obj_ids )
         print 'finding unique obj_ids...'
         unique_obj_ids = numpy.unique(obs_obj_ids)
         print '(found %d)'%(len(unique_obj_ids),)
@@ -87,17 +98,24 @@ def convert(infilename,
                 break
             if obj_id_enum%100==0:
                 print '%d of %d'%(obj_id_enum,len(unique_obj_ids))
-            idx0 = obs_obj_ids_find.get_idxs_of_equal( obj_id )[0]
+            idx0 = obs_obj_ids_find.index( obj_id )
             framenumber = table_kobs_frame[idx0]
             if tables.__version__ <= '1.3.3': # pytables numpy scalar workaround
                 framenumber = int(framenumber)
 
             remote_timestamp = numpy.nan
-            this_camn = None
-            for row in table_data2d.where('frame == framenumber'):
-                this_camn = row['camn']
-                remote_timestamp = row['timestamp']
-                break
+
+            if 0:
+                this_camn = None
+                for row in table_data2d.where('frame == framenumber'):
+                    this_camn = row['camn']
+                    remote_timestamp = row['timestamp']
+                    break
+            elif 1:
+                # alternative (faster?) method
+                frame_idx = table_data2d_frames_find.index( framenumber )
+                this_camn = table_data2d_camns[frame_idx]
+                remote_timestamp = table_data2d_timestamps[frame_idx]
 
             if this_camn is None:
                 print 'skipping frame %d (obj %d): no data2d_distorted data'%(framenumber,obj_id)
