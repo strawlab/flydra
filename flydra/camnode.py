@@ -881,8 +881,8 @@ class ProcessCamClass(object):
                     #chainbuf.real_std_est= tmpresult
                     bg_changed = True
                     bg_frame_number = 0
-                
-                if 1:
+
+                if self.options.debug_std:
                     if framenumber % 200 == 0:
                         mean_std = numpy.mean( numpy.mean( numpy.array(running_stdframe,dtype=numpy.float32 )))
                         print '%s mean STD %.2f'%(self.cam_id,mean_std)
@@ -2381,6 +2381,9 @@ def main():
 
     parser.add_option("--debug-drop", action='store_true',
                       help="save debugging information regarding dropped network packets")
+
+    parser.add_option("--debug-std", action='store_true',
+                      help="show mean pixel STD every 200 frames")
 
     parser.add_option("--sdl", action='store_true',
                       help="SDL-based display of raw images")
