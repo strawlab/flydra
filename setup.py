@@ -28,6 +28,7 @@ setup(name='flydra',
                   'flydra.a2', # new analysis
                   'flydra.trigger',
                   'flydra.LEDdriver',
+                  'flydra.radial_distortion',
                   ],
       ext_modules= ext_modules,
       entry_points = {
