@@ -635,7 +635,7 @@ class wxMainBrainApp(wx.App):
         MainBrain.save_rc_params()
 
         if self.main_brain.reconstructor is not None:
-            print 'setting model to',kalman_model
+            print 'setting model to',name
             self.main_brain.set_new_tracker(kalman_model_name=name)
         else:
             print 'no reconstructor, not setting kalman model'
