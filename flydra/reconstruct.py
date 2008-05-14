@@ -475,9 +475,11 @@ class Reconstructor:
         else:
             self.cal_source_type = 'pytables'
 
+        close_cal_source = False
         if self.cal_source_type == 'pytables filename':
             import tables as PT # PyTables
             use_cal_source = PT.openFile(self.cal_source,mode='r')
+            close_cal_source = True
             self.cal_source_type = 'pytables'
         else:
             use_cal_source = self.cal_source
@@ -632,6 +634,9 @@ class Reconstructor:
         self._cam_centers_cache = {}
         for cam_id in self.cam_ids:
             self._cam_centers_cache[cam_id] = self.get_camera_center(cam_id)[:,0] # make rank-1
+
+        if close_cal_source:
+            use_cal_source.close()
 
     def __ne__(self,other):
         return not (self==other)
@@ -924,11 +929,13 @@ class Reconstructor:
             return x
 
     def find3d_single_cam(self,cam_id,x):
-        "see also SingleCameraCalibration.get_example_3d_point_creating_image_point()"""
+        """see also SingleCameraCalibration.get_example_3d_point_creating_image_point()"""
         return nx.dot(self.pmat_inv[cam_id], as_column(x))
 
     def get_projected_line_from_2d(self,cam_id,xy):
-        "see also SingleCameraCalibration.get_example_3d_point_creating_image_point()"""
+        """project undistorted points into pluecker line
+
+        see also SingleCameraCalibration.get_example_3d_point_creating_image_point()"""
         # XXX Could use nullspace method of back-projection of lines (that pass through camera center, HZ section 8.1)
         # image of 2d point in 3d space (on optical ray)
         XY = self.find3d_single_cam(cam_id,(xy[0],xy[1],1.0))
