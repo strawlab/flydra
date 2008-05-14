@@ -18,53 +18,13 @@ import scipy.cluster.vq
 import simplenx as NX
 
 from optparse import OptionParser
+from visualize_distortions import visualize_distortions
 
 D2R = math.pi/180.0
 
 def info(msg):
     if 0:
         print msg
-
-def visualize_distortions( ax, helper, width=None, height=None ):
-    if (width is None) or (height is None):
-        K = helper.get_K()
-        x0 = K[0,2]
-        y0 = K[1,2]
-        if height is None:
-            height = y0*2
-        if width is None:
-            width = x0*2
-        info('guessing image width and/or height from principal point')
-
-    aspect = width/height
-    nwide = 50
-    nhigh = int(nwide/aspect)
-    x = numpy.linspace(0,width,nwide)
-    y = numpy.linspace(0,height,nhigh)
-
-    X,Y = numpy.meshgrid(x,y)
-    shape = X.shape
-
-    Xu = numpy.nan*numpy.ones(shape)
-    Yu = numpy.nan*numpy.ones(shape)
-    for i in range(shape[0]):
-        for j in range(shape[1]):
-            Xu[i,j], Yu[i,j] = helper.undistort( X[i,j], Y[i,j] )
-
-    U = Xu-X
-    V = Yu-Y
-    dsi = slice(0,shape[0],3)
-    dsj = slice(0,shape[1],3)
-    ax.quiver( X[dsi,dsj],Y[dsi,dsj], U[dsi,dsj],V[dsi,dsj], units='x', scale=1.0)
-
-    shift_mag = numpy.sqrt(U**2 + V**2)
-    CS = pylab.contour(X,Y,shift_mag)
-    pylab.clabel(CS, inline=1, fontsize=10)
-
-    K = helper.get_K()
-    x0 = K[0,2]
-    y0 = K[1,2]
-    ax.plot([x0],[y0],'ko')
 
 def get_color(i):
     colors = ['r','g','b','y','c']
@@ -192,7 +152,7 @@ def points2graph(x,y,
                  angle_thresh=30*D2R,
                  show_clusters=False,
                  show_clusters_frame=None,
-                 aspect_ratio = 1.0,                 
+                 aspect_ratio = 1.0,
                  ):
     x = numpy.array(x)
     y = numpy.array(y)
@@ -661,7 +621,7 @@ def get_similar_direction_graphs(fmf,frame,
     graph, nodes = points2graph(x, y,
                                 show_clusters=debug_line_finding,
                                 show_clusters_frame=show_clusters_frame,
-                                aspect_ratio = aspect_ratio,                                
+                                aspect_ratio = aspect_ratio,
                                 )
     if return_early:
         print 'returning early with entire super-graph'
@@ -741,10 +701,10 @@ def main():
         aspect_ratio = 1.0,
         tol=0,
         do_plot = False,
-	
+
 	K13 = None, # center guess X
 	K23 = None, # center guess Y
-	
+
 	kc1 = 0.0, # initial guess of radial distortion
 	kc2 = 0.0, # initial guess of radial distortion
         )
@@ -785,9 +745,9 @@ def main():
     all_graphs = []
     graph_idxs_by_frames = []
     all_imnx_use = []
-    
+
     fmf = FlyMovieFormat.mmap_flymovie(options.fname)
-    
+
     for frame in options.frames:
         (similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary,
          imnx_use) = get_similar_direction_graphs(fmf,frame,
@@ -801,7 +761,7 @@ def main():
         stop_idx = len(all_graphs)
         graph_idxs_by_frames.append( range(start_idx,stop_idx) )
         all_imnx_use.append( imnx_use )
-        
+
         if cli_options.debug_nodes:
             print 'edges for frame %d ================'%frame
             for subgraph in similar_direction_graphs:

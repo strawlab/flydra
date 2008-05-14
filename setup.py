@@ -59,6 +59,7 @@ setup(name='flydra',
     'flydra_trigger_latency_test = flydra.trigger.latency_test:main',
 
     'flydra_images_export = flydra.a2.flydra_images_export:main',
+    'flydra_visualize_distortions = flydra.radial_distortion.visualize_distortions:main',
 
     'kdviewer = flydra.a2.kdviewer:main',
     'kdmovie_saver = flydra.a2.kdmovie_saver:main',
