@@ -162,7 +162,7 @@ def convert(infilename,
         if obj_id > stop_obj_id:
             break
         if i%100 == 0:
-            print '%d of %d'%(i,len(use_obj_ids))
+            print '%d of %d'%(i,len(obj_ids))
         results = ca.get_smoothed(obj_id,
                                   infilename,
                                   frames_per_second=frames_per_second,
