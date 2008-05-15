@@ -10,7 +10,7 @@ PT_TUPLE_IDX_FRAME_PT_IDX = 10
 # 2D data format for PyTables:
 class Info2D(PT.IsDescription):
     camn         = PT.UInt16Col(pos=0)
-    frame        = PT.Int64Col(pos=1)
+    frame        = PT.UInt64Col(pos=1)
     timestamp    = PT.FloatCol(pos=2)
     cam_received_timestamp  = PT.FloatCol(pos=3)
     x            = PT.Float32Col(pos=4)
