@@ -388,19 +388,19 @@ class CachingAnalyzer:
 
     def initial_file_load(self,filename):
         if filename not in self.loaded_filename_cache:
-            obj_ids, use_obj_ids, is_mat_file, data_file, extra = _initial_file_load(filename)
+            obj_ids, unique_obj_ids, is_mat_file, data_file, extra = _initial_file_load(filename)
 
             diff = numpy.int64(obj_ids[1:])-numpy.int64(obj_ids[:-1])
             assert numpy.all(diff >= 0) # make sure obj_ids in ascending order for fast search
 
-            self.loaded_filename_cache[filename] = (obj_ids, use_obj_ids, is_mat_file, extra)
+            self.loaded_filename_cache[filename] = (obj_ids, unique_obj_ids, is_mat_file, extra)
             self.loaded_filename_cache2[filename] = data_file # maintain only a weak ref to data file
 
-        (obj_ids, use_obj_ids, is_mat_file, extra) = self.loaded_filename_cache[filename]
+        (obj_ids, unique_obj_ids, is_mat_file, extra) = self.loaded_filename_cache[filename]
         data_file                                  = self.loaded_filename_cache2[filename]
 
         self.loaded_datafile_cache[data_file] = True
-        return obj_ids, use_obj_ids, is_mat_file, data_file, extra
+        return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
 
     def has_obj_id(self, obj_id, data_file):
         import warnings
@@ -458,7 +458,7 @@ class CachingAnalyzer:
         # for backwards compatibility, allow user to pass in string identifying filename
         if isinstance(data_file,str):
             filename = data_file
-            obj_ids, use_obj_ids, is_mat_file, data_file, extra = self.initial_file_load(filename)
+            obj_ids, unique_obj_ids, is_mat_file, data_file, extra = self.initial_file_load(filename)
             self.keep_references.append( data_file ) # prevent from garbage collection with weakref
 
         is_mat_file = check_is_mat_file(data_file)
