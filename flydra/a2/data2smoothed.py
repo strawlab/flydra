@@ -145,7 +145,7 @@ def convert(infilename,
         extra_vars = None
 
     ca = core_analysis.CachingAnalyzer()
-    obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(infilename)
+    all_obj_ids, obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(infilename)
     if dynamic_model_name is None:
         dynamic_model_name = extra.get('dynamic_model_name',None)
         if dynamic_model_name is None:
@@ -162,7 +162,7 @@ def convert(infilename,
         if obj_id > stop_obj_id:
             break
         if i%100 == 0:
-            print '%d of %d'%(i,len(obj_ids))
+            print '%d of %d'%(i,len(use_obj_ids))
         results = ca.get_smoothed(obj_id,
                                   infilename,
                                   frames_per_second=frames_per_second,
