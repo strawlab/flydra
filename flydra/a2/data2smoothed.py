@@ -13,7 +13,7 @@ import flydra.analysis.result_utils as result_utils
 import flydra.a2.utils as utils
 import warnings
 
-import fastsearch.downsamp
+import fastsearch.binarysearch
 
 def cam_id2hostname(cam_id):
     hostname = '_'.join(   cam_id.split('_')[:-1] )
@@ -54,8 +54,8 @@ def convert(infilename,
 
         print 'caching raw 2D data...',
         sys.stdout.flush()
-        table_data2d_frames = table_data2d.read(field='frame')
-        table_data2d_frames_find = fastsearch.downsamp.DownSampledPreSearcher( table_data2d_frames )
+        table_data2d_frames = table_data2d.read(field='frame').astype(numpy.uint64) # cast to uint64 for fast searching
+        table_data2d_frames_find = fastsearch.binarysearch.BinarySearcher( table_data2d_frames )
         table_data2d_camns = table_data2d.read(field='camn')
         table_data2d_timestamps = table_data2d.read(field='timestamp')
         print 'done'
