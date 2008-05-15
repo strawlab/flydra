@@ -957,6 +957,57 @@ class Reconstructor:
                                        scale_factor=self.scale_factor,
                                        )
 
+    def get_distorted_line_segments(self, cam_id, line3d ):
+        dummy = [0,0,0] # dummy 3D coordinate
+
+        # project 3d line into projected 2d line
+        dummy2d, proj = self.find2d(cam_id, dummy, line3d)
+
+        # now distort 2d line into 2d line segments
+
+        # calculate undistorted 2d line segments
+
+        # line at x = -100
+        l = numpy.array([1,0,100])
+
+        # line at x = 1000
+        r = numpy.array([1,0,-1000])
+
+
+        lh = numpy.cross(proj,l)
+        rh = numpy.cross(proj,r)
+
+        if lh[2]==0 or rh[2]==0:
+            if 1:
+                raise NotImplementedError('cannot deal with exactly vertical lines')
+            b = numpy.array([0,1,100])
+            t = numpy.array([0,1,-1000])
+            bh = numpy.cross(proj,b)
+            th = numpy.cross(proj,t)
+
+        x0 = lh[0]/lh[2]
+        y0 = lh[1]/lh[2]
+
+        x1 = rh[0]/rh[2]
+        y1 = rh[1]/rh[2]
+
+        dy = y1-y0
+        dx = x1-x0
+        n_pts = 10000
+        frac = numpy.linspace(0,1,n_pts)
+        xs = x0 + frac*dx
+        ys = y0 + frac*dy
+
+        # distort 2d segments
+        xs_d = []
+        ys_d = []
+        for xy in zip(xs,ys):
+            x_distorted, y_distorted = self.distort(cam_id,xy)
+            if -100<=x_distorted<=800 and -100<=y_distorted<=800:
+                xs_d.append( x_distorted )
+                ys_d.append( y_distorted )
+        return xs_d, ys_d
+
 def test():
     import flydra.generate_fake_calibration as gfc
     recon = gfc.generate_calibration()
