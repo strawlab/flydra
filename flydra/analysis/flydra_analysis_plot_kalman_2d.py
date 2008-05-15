@@ -60,7 +60,11 @@ class ShowIt(object):
             ax = event.inaxes  # the axes instance
             cam_id = self.find_cam_id(ax)
 
+            xlim = ax.get_xlim()
+            ylim = ax.get_ylim()
             ax.plot([event.xdata],[event.ydata],'bx')
+            ax.set_xlim(xlim)
+            ax.set_ylim(ylim)
 
             if self.reconstructor is None:
                 return
