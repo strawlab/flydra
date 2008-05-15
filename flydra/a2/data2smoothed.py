@@ -13,7 +13,7 @@ import flydra.analysis.result_utils as result_utils
 import flydra.a2.utils as utils
 import warnings
 
-import fastsearch.downsamp
+import fastsearch.binarysearch
 
 def cam_id2hostname(cam_id):
     hostname = '_'.join(   cam_id.split('_')[:-1] )
@@ -85,7 +85,7 @@ def convert(infilename,
 
         print 'caching Kalman obj_ids...'
         obs_obj_ids = table_kobs.read(field='obj_id')
-        obs_obj_ids_find = fastsearch.downsamp.DownSampledPreSearcher( obs_obj_ids )
+        obs_obj_ids_find = fastsearch.binarysearch.BinarySearcher( obs_obj_ids )
         print 'finding unique obj_ids...'
         unique_obj_ids = numpy.unique(obs_obj_ids)
         print '(found %d)'%(len(unique_obj_ids),)
