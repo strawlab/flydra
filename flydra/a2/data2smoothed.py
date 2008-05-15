@@ -13,7 +13,7 @@ import flydra.analysis.result_utils as result_utils
 import flydra.a2.utils as utils
 import warnings
 
-import fastsearch.binarysearch
+import fastsearch.downsamp
 
 def cam_id2hostname(cam_id):
     hostname = '_'.join(   cam_id.split('_')[:-1] )
