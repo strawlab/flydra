@@ -85,7 +85,6 @@ def convert(infilename,
 
         print 'caching Kalman obj_ids...'
         obs_obj_ids = table_kobs.read(field='obj_id')
-        obs_obj_ids_find = fastsearch.binarysearch.BinarySearcher( obs_obj_ids )
         print 'finding unique obj_ids...'
         unique_obj_ids = numpy.unique(obs_obj_ids)
         print '(found %d)'%(len(unique_obj_ids),)
@@ -98,7 +97,10 @@ def convert(infilename,
                 break
             if obj_id_enum%100==0:
                 print '%d of %d'%(obj_id_enum,len(unique_obj_ids))
-            idx0 = obs_obj_ids_find.index( obj_id )
+            valid_cond = obs_obj_ids == obj_id
+            idxs = numpy.nonzero(valid_cond)[0]
+            idx0 = numpy.min(idxs)
+
             framenumber = table_kobs_frame[idx0]
             if tables.__version__ <= '1.3.3': # pytables numpy scalar workaround
                 framenumber = int(framenumber)
