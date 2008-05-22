@@ -2112,7 +2112,7 @@ class MainBrain(object):
             nrow = None
             for r in self.h5movie_info:
                 # get row in table
-                if (r['cam_id'] == cam_id and r['filename'] == raw_file_basename and
+                if (r['cam_id'] == cam_id and r['filename'] == raw_file_basename+'.fmf' and
                     r['approx_start_frame']==approx_start_frame):
                     nrow =r.nrow
                     break
