@@ -153,6 +153,9 @@ def doit(
         subplot['y'].plot( f2t(frame), Xy, label='obj %d'%obj_id, **props )
         subplot['z'].plot( f2t(frame), Xz, label='obj %d'%obj_id, **props )
 
+        if 1:
+            subplot['z'].text( f2t(frame[0]), Xz[0], '%d'%obj_id )
+
         X = numpy.array([Xx,Xy,Xz])
         if 0:
             allX[obj_id] = X
@@ -176,15 +179,15 @@ def doit(
     if 1:
         all_vels = all_vels[ all_vels < 2.0 ]
         print 'WARNING: clipping all velocities > 2.0 m/s'
-    subplot['x'].set_ylim([0,2])
+    subplot['x'].set_ylim([-1,1])
     #subplot['x'].set_yticks([0,1,2])
     subplot['x'].set_ylabel(r'x ($m$)')
 
-    subplot['y'].set_ylim([0,3])
+    subplot['y'].set_ylim([-0.5,1.5])
     #subplot['y'].set_yticks([0,1.5,3])
     subplot['y'].set_ylabel(r'y ($m$)')
 
-    subplot['z'].set_ylim([0,2])
+    subplot['z'].set_ylim([0,1])
     #subplot['z'].set_yticks([0,1,2])
     subplot['z'].set_ylabel(r'z ($m$)')
 
