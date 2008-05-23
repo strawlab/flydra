@@ -370,10 +370,16 @@ class Objective:
         """create initial estimate of parameter vector"""
 	if config is None:
             config={}
-        x0 = config.get( 'K13', self._width/2.0)
-        y0 = config.get( 'K23', self._height/2.0)
+        # K13 and K23 may be None in dict, thus default value in config.get() won't work.
+        x0 = config.get('K13')
+        y0 = config.get('K23')
+        if x0 is None:
+            x0 = self._width/2.0
+        if y0 is None:
+            y0 = self._height/2.0
         r1 = config.get( 'kc1', 0.0)
         r2 = config.get( 'kc2', 0.0)
+
         params = [x0, y0, r1, r2]
 
         for orig_xys in self._xys:
@@ -879,6 +885,8 @@ def main():
             sys.exit()
 
         initial_err = obj.sumsq_err(p0)
+        if numpy.isnan(initial_err):
+            raise ValueError('initial error evaluation failed')
         print 'initial_err',initial_err
         print 'calculating results for file %s ...'%(options.rad_fname)
 
