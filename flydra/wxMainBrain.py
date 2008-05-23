@@ -1193,11 +1193,7 @@ class wxMainBrainApp(wx.App):
                            validate_positive_float)
         if 1:
             fps = self.main_brain.get_fps()
-            dt = 1.0/fps
-            model_dicts = flydra.kalman.dynamic_models.create_dynamic_model_dict(dt = dt)
-            model_names = model_dicts.keys()
-            model_names.sort()
-            print 'loading models',model_dicts.keys()
+            model_names = flydra.kalman.dynamic_models.get_model_names()
 
             ctrl = xrc.XRCCTRL(self.status_panel,
                                "kalman_parameters_choice")

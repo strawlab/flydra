@@ -262,12 +262,24 @@ class MamaramaMMEKFAllParams(EKFAllParams):
             self['max_variance_dist_meters']=2 # let grow huge
             self['n_sigma_accept']=40
 
+ekf_models = {'EKF mamarama, units: mm':MamaramaMMEKFAllParams,
+              }
+
+def get_model_names(ekf_ok=True):
+    model_dict = create_dynamic_model_dict(dt=0.01,disable_warning=True)
+    valid_names = model_dict.keys()
+    if ekf_ok:
+        valid_names += ekf_models.keys()
+    valid_names.sort()
+    return valid_names
+
 def get_kalman_model( name=None, dt=None ):
     if name is None:
         raise ValueError('cannot get Kalman model unless name is specified')
     if name.startswith('EKF'):
-        if name == 'EKF mamarama, units: mm':
-            kalman_model = MamaramaMMEKFAllParams(dt=dt)
+        if name in ekf_models:
+            klass = ekf_models[name]
+            kalman_model = klass(dt=dt)
         else:
             raise KeyError('unknown EKF model: %s'%str(name))
     else:
@@ -275,7 +287,8 @@ def get_kalman_model( name=None, dt=None ):
         try:
             kalman_model = model_dict[name]
         except KeyError, err:
-            raise KeyError('"%s", valid model names: %s'%(str(name),str(model_dict.keys())))
+            valid_names = get_model_names()
+            raise KeyError("'%s', valid model names: %s"%(str(name),', '.join(map(repr,valid_names))))
     return kalman_model
 
 
