@@ -1641,7 +1641,7 @@ class MainBrain(object):
                     deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                              corrected_framenumber,
                                              remote_timestamp, camn_received_time)
-                                            +point_tuple[:9]
+                                            +point_tuple[:5]
                                             +(frame_pt_idx,))
             self.main_brain.queue_data2d.put(deferred_2d_data)
 
