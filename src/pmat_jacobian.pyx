@@ -23,6 +23,8 @@ pv_z = sympy.diff(v,z)
 pv_w = sympy.diff(v,w)
 
 """
+def make_PinholeCameraModelWithJacobian(*args,**kw):
+    return PinholeCameraModelWithJacobian(*args,**kw)
 
 cdef class PinholeCameraModelWithJacobian:
     """Represent the 3D projection of a camera.
@@ -42,6 +44,12 @@ cdef class PinholeCameraModelWithJacobian:
         self.P00, self.P01, self.P02, self.P03 = P[0,:]
         self.P10, self.P11, self.P12, self.P13 = P[1,:]
         self.P20, self.P21, self.P22, self.P23 = P[2,:]
+
+    def __reduce__(self):
+        """this allows PinholeCameraModelWithJacobian to be pickled"""
+        args = (self.pmat,)
+        return (make_PinholeCameraModelWithJacobian, args)
+
     cdef void evaluate_jacobian_at_(self,double x,double y,double z,double w,
                                     double *ux, double *uy, double *uz, double *uw,
                                     double *vx, double *vy, double *vz, double *vw):
