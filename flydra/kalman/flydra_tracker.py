@@ -226,7 +226,7 @@ class TrackedObject:
                 print Pminus
                 print
 
-            # Step 2. Filter incoming 2D data to use informative points
+            # Step 2. Filter incoming 2D data to use informative points (data association)
             (observation_meters, used_camns_and_idxs,
              cam_ids_and_points2d) = self._filter_data(xhatminus, Pminus,
                                                        data_dict,
@@ -486,6 +486,7 @@ class Tracker:
         best_by_hash = {}
         to_rewind = []
         # I could easily parallelize this========================================
+        # this is map:
         for idx,tro in enumerate(self.live_tracked_objects):
             used_camns_and_idxs, kill_me, obs2d_hash, Pmean = tro.calculate_a_posteri_estimate(frame,
                                                                                                data_dict,
@@ -493,6 +494,7 @@ class Tracker:
                                                                                                debug1=debug2,
                                                                                                )
             all_to_gobble.extend( used_camns_and_idxs )
+        # this is reduce:
             if kill_me:
                 kill_idxs.append( idx )
             if obs2d_hash is not None:
