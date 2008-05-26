@@ -564,6 +564,12 @@ def kalmanize(src_filename,
                                                   row['slope'],row['eccentricity'],
                                                   row['frame_pt_idx'])
 
+        if 1:
+            # new columns added to data2d_distorted format. XXX TODO Don't fail if these don't exist.
+            cur_val = row['cur_val']
+            mean_val = row['mean_val']
+            nstd_val = row['nstd_val']
+
         # XXX for now, do not calculate 3D plane for each point. This
         # is because we are punting on calculating p1,p2,p3,p4 from
         # the point, slope, and reconstructor.
@@ -574,7 +580,7 @@ def kalmanize(src_filename,
         # Keep in sync with kalmanize.py and data_descriptions.py
         pt_undistorted = (x_undistorted,y_undistorted,
                           area,slope,eccentricity,
-                          p1,p2,p3,p4, line_found, frame_pt_idx)
+                          p1,p2,p3,p4, line_found, frame_pt_idx, cur_val, mean_val, nstd_val)
 
         pluecker_hz_meters=reconstructor_meters.get_projected_line_from_2d(
             cam_id,(x_undistorted,y_undistorted))
