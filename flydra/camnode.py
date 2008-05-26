@@ -171,7 +171,7 @@ if sys.platform == 'win32':
 else:
     time_func = time.time
 
-pt_fmt = '<dddddddddBBddBddddddB' # keep in sync with MainBrain.py
+pt_fmt = '<dddddddddBBddBddddddBB' # keep in sync with MainBrain.py
 small_datafile_fmt = '<dII'
 
 def TimestampEcho():
@@ -440,7 +440,7 @@ class ProcessCamClass(object):
     def _convert_to_old_format(self, xpoints ):
         points = []
         for xpt in xpoints:
-            (x0_abs, y0_abs, area, slope, eccentricity, max_abs_diff) = xpt
+            (x0_abs, y0_abs, area, slope, eccentricity, max_abs_diff, max_std_diff) = xpt
 
 
             if numpy.isnan(slope):
@@ -496,7 +496,7 @@ class ProcessCamClass(object):
                   x0u, y0u,
                   ray_valid,
                   ray0, ray1, ray2, ray3, ray4, ray5,
-                  max_abs_diff)
+                  max_abs_diff, max_std_diff)
             points.append( pt )
         return points
 
@@ -736,7 +736,7 @@ class ProcessCamClass(object):
                                                          use_cmp_isSet(),
                                                          #max_duration_sec=0.010, # maximum 10 msec in here
                                                          max_duration_sec=self.shortest_IFI-0.0005, # give .5 msec for other processing
-                                                         return_max_abs_diff=1,
+                                                         return_max_diff_values=1,
                                                          )
                 chainbuf.processed_points = xpoints
                 if NAUGHTY_BUT_FAST:

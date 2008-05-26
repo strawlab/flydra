@@ -68,6 +68,7 @@ PT_TUPLE_IDX_X = flydra.data_descriptions.PT_TUPLE_IDX_X
 PT_TUPLE_IDX_Y = flydra.data_descriptions.PT_TUPLE_IDX_Y
 PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 PT_TUPLE_IDX_MAX_ABS_DIFF_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MAX_ABS_DIFF_IDX
+PT_TUPLE_IDX_MAX_STD_DIFF_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MAX_STD_DIFF_IDX
 
 # these calibration data are global, but that's a hack...
 calib_data_lock = threading.Lock()
@@ -800,7 +801,7 @@ class CoordinateProcessor(threading.Thread):
 
         header_fmt = '<ddliI'
         header_size = struct.calcsize(header_fmt)
-        pt_fmt = '<dddddddddBBddBddddddB' # keep in sync with camnode.py
+        pt_fmt = '<dddddddddBBddBddddddBB' # keep in sync with camnode.py
         pt_size = struct.calcsize(pt_fmt)
 
         realtime_coord_dict = {}
@@ -928,7 +929,7 @@ class CoordinateProcessor(threading.Thread):
                                  x_undistorted,y_undistorted,
                                  ray_valid,
                                  ray0, ray1, ray2, ray3, ray4, ray5, # pluecker coords from cam center to detected point
-                                 max_abs_diff,
+                                 max_abs_diff, max_std_diff,
                                  )= struct.unpack(pt_fmt,data[start:end])
                                 # nan cannot get sent across network in platform-independent way
                                 if not line_found:
@@ -947,7 +948,7 @@ class CoordinateProcessor(threading.Thread):
                                 pt_distorted = (x_distorted,y_distorted,
                                                 area,slope,eccentricity,
                                                 p1,p2,p3,p4, line_found, frame_pt_idx,
-                                                max_abs_diff)
+                                                max_abs_diff, max_std_diff)
                                 if ray_valid:
                                     points_in_pluecker_coords_meters.append( (pt_undistorted,
                                                                               geom.line_from_HZline((ray0,ray1,
@@ -993,11 +994,12 @@ class CoordinateProcessor(threading.Thread):
                                 # temporal correlation of movie frames to 2D data.
                                 frame_pt_idx = point_tuple[PT_TUPLE_IDX_FRAME_PT_IDX]
                                 max_abs_diff = point_tuple[PT_TUPLE_IDX_MAX_ABS_DIFF_IDX]
+                                max_std_diff = point_tuple[PT_TUPLE_IDX_MAX_STD_DIFF_IDX]
                                 deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                                          corrected_framenumber,
                                                          timestamp,camn_received_time)
                                                         +point_tuple[:5]
-                                                        +(frame_pt_idx,max_abs_diff))
+                                                        +(frame_pt_idx,max_abs_diff,max_std_diff))
                         # save new frame data
 
                         if corrected_framenumber not in realtime_coord_dict:
@@ -1643,11 +1645,12 @@ class MainBrain(object):
                     # temporal correlation of movie frames to 2D data.
                     frame_pt_idx = point_tuple[PT_TUPLE_IDX_FRAME_PT_IDX]
                     max_abs_diff = point_tuple[PT_TUPLE_IDX_MAX_ABS_DIFF_IDX]
+                    max_std_diff = point_tuple[PT_TUPLE_IDX_MAX_STD_DIFF_IDX]
                     deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                              corrected_framenumber,
                                              remote_timestamp, camn_received_time)
                                             +point_tuple[:5]
-                                            +(frame_pt_idx,max_abs_diff))
+                                            +(frame_pt_idx,max_abs_diff,max_std_diff))
             self.main_brain.queue_data2d.put(deferred_2d_data)
 
         def set_fps(self,cam_id,fps):

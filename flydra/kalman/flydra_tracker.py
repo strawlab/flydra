@@ -366,7 +366,9 @@ class TrackedObject:
                 if debug>2:
                     frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                     max_abs_diff = pt_undistorted[PT_TUPLE_IDX_MAX_ABS_DIFF_IDX]
-                    print '    ->', dist2, pt_undistorted[:2], '(idx %d, area %f, max abs diff %d)'%(frame_pt_idx,pt_area,max_abs_diff)
+                    max_std_diff = pt_undistorted[PT_TUPLE_IDX_MAX_STD_DIFF_IDX]
+                    print '    ->', dist2, pt_undistorted[:2], '(idx %d, area %f, max abs diff %d, max std diff %d)'%(
+                        frame_pt_idx,pt_area,max_abs_diff,max_std_diff)
 
                 if dist2<dist2cmp and pt_area > self.area_threshold:
                     if debug>2:
