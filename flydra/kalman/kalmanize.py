@@ -564,11 +564,16 @@ def kalmanize(src_filename,
                                                   row['slope'],row['eccentricity'],
                                                   row['frame_pt_idx'])
 
-        if 1:
-            # new columns added to data2d_distorted format. XXX TODO Don't fail if these don't exist.
+        try:
+            # new columns added to data2d_distorted format.
             cur_val = row['cur_val']
             mean_val = row['mean_val']
             nstd_val = row['nstd_val']
+        except IndexError, err:
+            # Don't fail if these columns don't exist.
+            cur_val = 0
+            mean_val = 0
+            nstd_val = 0
 
         # XXX for now, do not calculate 3D plane for each point. This
         # is because we are punting on calculating p1,p2,p3,p4 from
