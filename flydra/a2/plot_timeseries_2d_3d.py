@@ -169,6 +169,88 @@ def doit(
                 dynamic_model = dynamic_model[4:]
             print '  for smoothing, will use dynamic model "%s"'%dynamic_model
 
+        if options.reproj_error:
+            reproj_error = collections.defaultdict(list)
+            max_reproj_error = {}
+            kalman_rows = []
+            for obj_id in use_obj_ids:
+                kalman_rows.append(
+                    ca.load_observations( obj_id, data_file ) )
+            kalman_rows = numpy.concatenate( kalman_rows )
+            kalman_3d_frame = kalman_rows['frame']
+
+            if start is not None or stop is not None:
+                if start is None:
+                    start = -numpy.inf
+                if stop is None:
+                    stop = numpy.inf
+                valid_cond = (kalman_3d_frame >= start) & (kalman_3d_frame <= stop)
+
+                kalman_rows = kalman_rows[valid_cond]
+                kalman_3d_frame = kalman_3d_frame[valid_cond]
+
+            # modified from save_movies_overlay
+            for this_3d_row_enum,this_3d_row in enumerate(kalman_rows):
+                if this_3d_row_enum%100 == 0:
+                    print 'doing reprojection error for MLE 3d estimate for row %d of %d'%(this_3d_row_enum, len(kalman_rows))
+                vert = numpy.array([this_3d_row['x'],this_3d_row['y'],this_3d_row['z']])
+                obj_id = this_3d_row['obj_id']
+                if numpy.isnan( vert[0] ):
+                    # no observation this frame
+                    continue
+                obs_2d_idx = this_3d_row['obs_2d_idx']
+                kobs_2d_data = data_file.root.kalman_observations_2d_idxs[int(obs_2d_idx)]
+
+                # parse VLArray
+                this_camns = kobs_2d_data[0::2]
+                this_camn_idxs = kobs_2d_data[1::2]
+
+                # find original 2d data
+                obs2d = all_data[ all_data['frame'] == this_3d_row['frame'] ] # narrow down search
+
+                for camn,this_camn_idx in zip(this_camns,this_camn_idxs):
+                    cam_id = camn2cam_id[camn]
+
+                    # do projection to camera image plane
+                    vert_image = R.find2d(cam_id,vert,distorted=True)
+
+                    new_cond = (obs2d['camn']==camn) & (obs2d['frame_pt_idx']==this_camn_idx)
+                    assert numpy.sum(new_cond)==1
+
+                    x=obs2d[new_cond]['x'][0]
+                    y=obs2d[new_cond]['y'][0]
+
+                    this_reproj_error = numpy.sqrt((vert_image[0]-x)**2 + (vert_image[1]-y)**2)
+                    if this_reproj_error > 100:
+                        print '  reprojection error > 100 (%.1f) at frame %d for camera %s, obj_id %d'%(
+                            this_reproj_error, this_3d_row['frame'],  cam_id, obj_id)
+                    if numpy.isnan(this_reproj_error):
+                        print 'error:'
+                        print this_camns, this_camn_idxs
+                        print cam_id
+                        print vert_image
+                        print vert
+                        raise ValueError('nan at frame %d'%(this_3d_row['frame']))
+                    reproj_error[cam_id].append( this_reproj_error )
+                    if cam_id in max_reproj_error:
+                        cur_max_frame, cur_max_reproj_error, cur_obj_id = max_reproj_error[cam_id]
+                        if this_reproj_error > cur_max_reproj_error:
+                            max_reproj_error[cam_id] = (this_3d_row['frame'], this_reproj_error, obj_id)
+                    else:
+                        max_reproj_error[cam_id] = (this_3d_row['frame'], this_reproj_error, obj_id)
+
+            del kalman_rows, kalman_3d_frame, obj_ids
+            print 'mean reprojection errors:'
+            cam_ids = reproj_error.keys()
+            cam_ids.sort()
+            for cam_id in cam_ids:
+                errors = reproj_error[cam_id]
+                mean_error = numpy.mean(errors)
+                worst_frame, worst_error, worst_obj_id = max_reproj_error[cam_id]
+                print ' %s: %.1f (worst: frame %d, obj_id %d, error %.1f)'%(
+                    cam_id, mean_error, worst_frame, worst_obj_id, worst_error)
+            print
+
         for use_kalman_smoothing in [True,False]:
             print 'loading frame numbers for kalman objects (estimates)'
             kalman_rows = []
@@ -304,6 +386,10 @@ def main():
     parser.add_option("--disable-kalman-smoothing", action='store_false',dest='use_kalman_smoothing',
                       default=True,
                       help="show original, causal Kalman filtered data (rather than Kalman smoothed observations)")
+
+    parser.add_option("--reproj-error", action='store_true',
+                      default=False,
+                      help="calculate and print to console the mean reprojection error for each camera")
 
     parser.add_option("--fps", dest='fps', type='float',
                       help="frames per second (used for Kalman filtering/smoothing)")
