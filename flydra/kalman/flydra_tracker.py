@@ -83,6 +83,8 @@ class TrackedObject:
         self.save_all_data = save_all_data
         self.kill_me = False
         self.reconstructor_meters = reconstructor_meters
+        self.undistorted_pixel_euclidian_distance_accept=kalman_model['undistorted_pixel_euclidian_distance_accept']
+
         self.current_frameno = frame
         if scale_factor is None:
             print 'WARNING: no scale_factor given in flydra_tracker, assuming 1e-3'
@@ -322,7 +324,8 @@ class TrackedObject:
         to the image point observed and the predicted 3D location of
         the kalman object. (Other distance metrics could also be
         implemented, such as 2D Euclidian distance on the image
-        plane.)
+        plane. Note that a crude threshold for this is already
+        implemented with undistorted_pixel_euclidian_distance_accept.)
 
         """
         # For each camera, predict 2D image location and error distance
@@ -332,7 +335,8 @@ class TrackedObject:
         covariance_diagonal = numpy.array([Pminus[i,i] for i in range(3)])
         something_like_variance = numpy.sqrt(numpy.sum(covariance_diagonal**2)) # L2 norm distance
         sigma = numpy.sqrt(something_like_variance)
-        dist2cmp = self.n_sigma_accept*sigma
+        dist2cmp = (self.n_sigma_accept*sigma)**2 # dist2 is squared distance, so calculate squared comparison value
+        pixel_dist_cmp = self.undistorted_pixel_euclidian_distance_accept
         neg_predicted_3d = -geom.ThreeTuple( prediction_3d )
         cam_ids_and_points2d = []
 
@@ -343,10 +347,13 @@ class TrackedObject:
         for camn,candidate_point_list in data_dict.iteritems():
             cam_id = camn2cam_id[camn]
 
+            if pixel_dist_cmp is not None:
+                predicted_2d_distorted = self.reconstructor_meters.find2d(cam_id,prediction_3d,distorted=True)
+
             if debug>2:
-                predicted_2d = self.reconstructor_meters.find2d(cam_id,prediction_3d)
+                predicted_2d_undistorted = self.reconstructor_meters.find2d(cam_id,prediction_3d,distorted=False)
                 print '  cam_id',cam_id,'camn',camn,'--------'
-                print '    predicted_2d',predicted_2d
+                print '    predicted_2d (undistorted)',predicted_2d_undistorted
 
             # For large numbers of 2d points in data_dict, probably
             # faster to compute 2d image of error ellipsoid and see if
@@ -362,18 +369,33 @@ class TrackedObject:
             closest_idx = None
             for idx,(pt_undistorted,projected_line_meters) in enumerate(candidate_point_list):
                 # find closest distance between projected_line and predicted position for each 2d point
-                dist2=projected_line_meters.translate(neg_predicted_3d).dist2()
+                dist2=projected_line_meters.translate(neg_predicted_3d).dist2() # squared distance between prediction and camera ray
                 pt_area = pt_undistorted[PT_TUPLE_IDX_AREA]
+
+                pixel_dist_criterion_passed = True
+                if pixel_dist_cmp is not None:
+                    # XXX TODO: fixme: should just pass in distorted pixel coordinates, but saves reorganizing all this code.
+                    # Also, it seems that this isn't always perfect. (Because distort is not exact inverse of undistort?)
+                    pt_x_undist =  pt_undistorted[PT_TUPLE_IDX_X]
+                    pt_y_undist =  pt_undistorted[PT_TUPLE_IDX_Y]
+                    pt_x_dist, pt_y_dist = self.reconstructor_meters.distort( cam_id, (pt_x_undist, pt_y_undist) )
+                    pixel_dist = numpy.sqrt((predicted_2d_distorted[0] - pt_x_dist)**2 + (predicted_2d_distorted[1] - pt_y_dist)**2)
+                    if pixel_dist > pixel_dist_cmp:
+                        pixel_dist_criterion_passed = False
 
                 if debug>2:
                     frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                     cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
                     mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
                     nstd_val = pt_undistorted[PT_TUPLE_IDX_NSTD_VAL_IDX]
-                    print '    ->', dist2, pt_undistorted[:2], '(idx %d, area %f, cur %d, mean %d, nstd %d)'%(
-                        frame_pt_idx,pt_area,cur_val,mean_val,nstd_val)
+                    if pixel_dist_cmp is not None:
+                        extra_print = 'distorted pixel_dist = %.1f (criterion passed=%s)'%(pixel_dist,str(pixel_dist_criterion_passed))
+                    else:
+                        extra_print = ''
+                    print '    ->', dist2, pt_undistorted[:2], '(idx %d, area %f, cur %d, mean %d, nstd %d) %s'%(
+                        frame_pt_idx,pt_area,cur_val,mean_val,nstd_val,extra_print)
 
-                if dist2<dist2cmp and pt_area > self.area_threshold:
+                if dist2<dist2cmp and pt_area > self.area_threshold and pixel_dist_criterion_passed:
                     if debug>2:
                         print '       (acceptable)'
                     if dist2<closest_dist2:
