@@ -6,8 +6,9 @@ PT_TUPLE_IDX_X = 0
 PT_TUPLE_IDX_Y = 1
 PT_TUPLE_IDX_AREA = 2
 PT_TUPLE_IDX_FRAME_PT_IDX = 10
-PT_TUPLE_IDX_MAX_ABS_DIFF_IDX = 11
-PT_TUPLE_IDX_MAX_STD_DIFF_IDX = 12
+PT_TUPLE_IDX_CUR_VAL_IDX = 11
+PT_TUPLE_IDX_MEAN_VAL_IDX = 12
+PT_TUPLE_IDX_NSTD_VAL_IDX = 13
 
 # 2D data format for PyTables:
 class Info2D(PT.IsDescription):
@@ -21,5 +22,6 @@ class Info2D(PT.IsDescription):
     slope        = PT.Float32Col(pos=7)
     eccentricity = PT.Float32Col(pos=8)
     frame_pt_idx = PT.UInt8Col(pos=9)
-    max_abs_diff = PT.UInt8Col(pos=10)
-    max_std_diff = PT.UInt8Col(pos=11)
+    cur_val      = PT.UInt8Col(pos=10)
+    mean_val     = PT.UInt8Col(pos=11)
+    nstd_val     = PT.UInt8Col(pos=12)
