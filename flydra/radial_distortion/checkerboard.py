@@ -567,7 +567,7 @@ def binarize( im ):
     return newim
 
 def get_similar_direction_graphs(fmf,frame,
-                                 use='binary',return_early=False,
+                                 use='raw',return_early=False,
                                  debug_line_finding=False,
                                  aspect_ratio = 1.0,
                                  ):
@@ -576,11 +576,14 @@ def get_similar_direction_graphs(fmf,frame,
 
     imnx_no_bg = get_non_background( imnx_orig, bg_im )
     imnx_binary = binarize(imnx_no_bg)
+    imnx_rawbinary = binarize(imnx_orig)
 
     if use == 'no_bg':
         imnx_use = imnx_no_bg
     elif use == 'binary':
         imnx_use = imnx_binary
+    elif use == 'rawbinary':
+        imnx_use = imnx_rawbinary
     elif use == 'raw':
         imnx_use = imnx_orig
     else:
@@ -632,7 +635,7 @@ def get_similar_direction_graphs(fmf,frame,
     if return_early:
         print 'returning early with entire super-graph'
         similar_direction_graphs = [graph]
-        return similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary, imnx_use
+        return similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary, imnx_use, inmx_rawbinary
 
     similar_direction_graphs = [] # collection of all the graphs of similar directions
     for node in nodes:
@@ -667,7 +670,7 @@ def get_similar_direction_graphs(fmf,frame,
                 filtered.append( graph )
         similar_direction_graphs = filtered
 
-    return similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary, imnx_use
+    return similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary, imnx_use, imnx_rawbinary
 
 def main():
     parser = OptionParser(usage='%prog CONFIG_FILE',
@@ -756,12 +759,12 @@ def main():
 
     for frame in options.frames:
         (similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary,
-         imnx_use) = get_similar_direction_graphs(fmf,frame,
-                                                  use=options.use,
-                                                  return_early=options.return_early,
-                                                  debug_line_finding = options.debug_line_finding,
-                                                  aspect_ratio = options.aspect_ratio,
-                                                  )
+         imnx_use, imnx_rawbinary) = get_similar_direction_graphs(fmf,frame,
+                                                                  use=options.use,
+                                                                  return_early=options.return_early,
+                                                                  debug_line_finding = options.debug_line_finding,
+                                                                  aspect_ratio = options.aspect_ratio,
+                                                                  )
         start_idx = len(all_graphs)
         all_graphs.extend( similar_direction_graphs )
         stop_idx = len(all_graphs)
@@ -912,10 +915,10 @@ def main():
 
         helper = obj.get_helper_for_params( pfinal )
         mesg = mesg.replace('\n',' ')
-        helper.save_to_rad_file( options.rad_fname, comments = 'leastsq result %d: %s'%(ier,mesg) )
 
         print 'pfinal',repr(pfinal[:4])
         final_err=obj.sumsq_err( pfinal )
+        helper.save_to_rad_file( options.rad_fname, comments = 'final err %.1f, leastsq result %d: %s'%(final_err, ier, mesg) )
         print 'final_err',final_err
         if numpy.allclose(final_err,initial_err):
             print 'WARNING: no improvement after fitting. Reduce tolerance ("tol") and try again.'
