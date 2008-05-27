@@ -654,11 +654,14 @@ class Reconstructor:
         scc = self.get_SingleCameraCalibration(cam_id)
         return scc.get_extrinsic_parameter_matrix()
 
-    def get_scaled(self,scale_factor):
+    def get_scaled(self,scale_factor=None):
         """change units (e.g. from mm to meters)
 
         Note: some of the data structures are shared with the unscaled original
         """
+        if scale_factor is None:
+            scale_factor = self.get_scale_factor()
+
         # get original calibration
         orig_sccs = [self.get_SingleCameraCalibration(cam_id) for cam_id in self.cam_ids]
         scaled_sccs = [scc.get_scaled(scale_factor) for scc in orig_sccs]
@@ -798,6 +801,9 @@ class Reconstructor:
         selectively choose 2D to incorporate, see
         hypothesis_testing_algorithm__find_best_3d() in
         reconstruct_utils.
+
+        The data should already be undistorted before passing to this
+        function.
 
         """
         svd = scipy.linalg.svd
