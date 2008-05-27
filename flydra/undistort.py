@@ -357,6 +357,8 @@ def undistort( reconstructor, distorted_image, cam_id ):
 
 class DistortionMesh:
     def __init__(self, helper, undistorted_bounds_lbrt, xdim = 200, ydim=200 ):
+        if 1:
+            raise RuntimeError("This class is disabled because it's not very accurate in its current form.")
         l,b,r,t = undistorted_bounds_lbrt
 
         # create grid (this is undistorted, and thus represents a euclidian grid)
