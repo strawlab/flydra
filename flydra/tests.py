@@ -127,34 +127,35 @@ class TestReconstructor(unittest.TestCase):
 
 class TestNonlinearDistortion(parametric.ParametricTestCase):
     _indepParTestPrefix = 'test_coord_undistort'
+
     def test_coord_undistort(self):
-        if 1:
-            xys = [ ( 10, 20 ),
-                    ( 600, 20 ),
-                    ( 320, 240 ),
-                    ]
+        xys = [ ( 10, 20 ),
+                ( 600, 20 ),
+                ( 320, 240 ),
+                ( 10, 490 ),
+                ]
 
-            # sample data from real lens - mild radial distortion
-            fc1, fc2, cc1, cc2, k1, k2, p1, p2, alpha_c = (1149.1142578125, 1144.7752685546875, 327.5, 245.0, -0.47600057721138, 0.34306392073631287, 0.0, 0.0, 0.0)
-            helper_args = (fc1, fc2, cc1, cc2, k1, k2, p1, p2)
+        all_helper_args = []
+        # sample data from real lens - mild radial distortion
+        fc1, fc2, cc1, cc2, k1, k2, p1, p2, alpha_c = (1149.1142578125, 1144.7752685546875, 327.5, 245.0, -0.47600057721138, 0.34306392073631287, 0.0, 0.0, 0.0)
+        helper_args = (fc1, fc2, cc1, cc2, k1, k2, p1, p2)
+        all_helper_args.append( helper_args )
 
+        # same as above, with a little tangential distortion
+        fc1, fc2, cc1, cc2, k1, k2, p1, p2, alpha_c = (1149.1142578125, 1144.7752685546875, 327.5, 245.0, -0.47600057721138, 0.34306392073631287, 0.1, 0.05, 0.0)
+        helper_args = (fc1, fc2, cc1, cc2, k1, k2, p1, p2)
+        all_helper_args.append( helper_args )
+
+        # sample data from real lens - major radial distortion
+        fc1, fc2, cc1, cc2, k1, k2, p1, p2, alpha_c = (1000, 1000, 317.64022687190129, 253.60089300842131, -1.5773930368340232, 1.9308294843687406, 0.0, 0.0, 0.0)
+        helper_args = (fc1, fc2, cc1, cc2, k1, k2, p1, p2)
+        all_helper_args.append( helper_args )
+
+        for helper_args in all_helper_args:
             yield (self.tst_distort,        xys, helper_args)
-            yield (self.tst_undistort_mesh, xys, helper_args)
+##            yield (self.tst_undistort_mesh, xys, helper_args)
             yield (self.tst_undistort_orig, xys, helper_args)
-
-        if 1:
-            xys = [ ( 10, 20 ),
-                    ( 600, 20 ),
-                    ( 320, 240 ),
-                    ]
-
-            # same as above, with a little tangential distortion
-            fc1, fc2, cc1, cc2, k1, k2, p1, p2, alpha_c = (1149.1142578125, 1144.7752685546875, 327.5, 245.0, -0.47600057721138, 0.34306392073631287, 0.1, 0.05, 0.0)
-            helper_args = (fc1, fc2, cc1, cc2, k1, k2, p1, p2)
-
-            yield (self.tst_distort,        xys, helper_args)
-            yield (self.tst_undistort_mesh, xys, helper_args)
-            yield (self.tst_undistort_orig, xys, helper_args)
+            yield (self.tst_roundtrip,      xys, helper_args)
 
     def _distort( self, helper_args, xy ):
         fc1, fc2, cc1, cc2, k1, k2, p1, p2 = helper_args
@@ -177,15 +178,15 @@ class TestNonlinearDistortion(parametric.ParametricTestCase):
         yd = fc2*yd + cc2
         return xd, yd
 
-    def _undistort( self, helper_args, xy ):
-        helper = reconstruct_utils.ReconstructHelper( *helper_args )
-        lbrt = ( -100,-100,800,700 )
-        dm = flydra.undistort.DistortionMesh( helper, lbrt )
-        x,y= xy
-        undistorted_xs, undistorted_ys = dm.undistort_points( [x],[y] )
-        assert len(undistorted_xs)==1
-        assert len(undistorted_ys)==1
-        return undistorted_xs[0], undistorted_ys[0]
+    ## def _undistort( self, helper_args, xy ):
+    ##     helper = reconstruct_utils.ReconstructHelper( *helper_args )
+    ##     lbrt = ( -100,-100,800,700 )
+    ##     dm = flydra.undistort.DistortionMesh( helper, lbrt )
+    ##     x,y= xy
+    ##     undistorted_xs, undistorted_ys = dm.undistort_points( [x],[y] )
+    ##     assert len(undistorted_xs)==1
+    ##     assert len(undistorted_ys)==1
+    ##     return undistorted_xs[0], undistorted_ys[0]
 
     def tst_distort(self, pinhole_xys, helper_args ):
         helper = reconstruct_utils.ReconstructHelper( *helper_args )
@@ -196,14 +197,21 @@ class TestNonlinearDistortion(parametric.ParametricTestCase):
             rtol=1e-4 # float32 not very accurate
             assert numpy.allclose([xd,yd], [test_x, test_y], rtol=rtol)
 
-    def tst_undistort_mesh(self, distorted_xys, helper_args ):
+    def tst_roundtrip(self, xys_orig_distorted, helper_args ):
         helper = reconstruct_utils.ReconstructHelper( *helper_args )
-        for xy in distorted_xys:
-            undistorted_xy = self._undistort( helper_args, xy)
-            redistorted_xy = helper.distort( *undistorted_xy )
+        for xy_orig_distorted in xys_orig_distorted:
+            xy_undistorted = helper.undistort( xy_orig_distorted[0], xy_orig_distorted[1] )
+            xy_distorted = helper.distort( xy_undistorted[0], xy_undistorted[1] )
+            assert numpy.allclose( xy_distorted, xy_orig_distorted )
 
-            rtol = 1e-3 # distortion mesh not very accurate
-            assert numpy.allclose( xy, redistorted_xy, rtol=rtol)
+    ## def tst_undistort_mesh(self, distorted_xys, helper_args ):
+    ##     helper = reconstruct_utils.ReconstructHelper( *helper_args )
+    ##     for xy in distorted_xys:
+    ##         undistorted_xy = self._undistort( helper_args, xy)
+    ##         redistorted_xy = helper.distort( *undistorted_xy )
+
+    ##         rtol = 1e-3 # distortion mesh not very accurate
+    ##         assert numpy.allclose( xy, redistorted_xy, rtol=rtol)
 
     def tst_undistort_orig(self, distorted_xys, helper_args ):
         helper = reconstruct_utils.ReconstructHelper( *helper_args )
@@ -211,8 +219,7 @@ class TestNonlinearDistortion(parametric.ParametricTestCase):
             undistorted_xy = helper.undistort(*xy)
             redistorted_xy = helper.distort( *undistorted_xy )
 
-            rtol = 1e-3 # distortion mesh not very accurate
-            assert numpy.allclose( xy, redistorted_xy, rtol=rtol)
+            assert numpy.allclose( xy, redistorted_xy)
 
 def get_test_suite():
     ts=unittest.TestSuite([unittest.makeSuite(TestGeomParametric),
@@ -222,4 +229,8 @@ def get_test_suite():
     return ts
 
 if __name__=='__main__':
-    unittest.main()
+    if 0:
+        ts = get_test_suite()
+        ts.debug()
+    else:
+        unittest.main()
