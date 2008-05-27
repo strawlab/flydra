@@ -532,9 +532,8 @@ class Reconstructor:
             res_fd.close()
 
             # load non linear parameters
-            rad_files = glob.glob(os.path.join(use_cal_source,'*.rad'))
-            rad_files.sort() # cheap trick to associate camera number with file
-            for cam_id, filename in map( None, cam_ids, rad_files ):
+            for cam_id_enum, cam_id in enumerate(cam_ids):
+                filename = os.path.join(use_cal_source,'basename%d.rad'%(cam_id_enum+1,))
                 if filename is None:
                     print 'WARNING: no non-linear data (e.g. radial distortion) in calibration for %s'%cam_id
                     self._helper[cam_id] = SingleCameraCalibration_from_basic_pmat(
