@@ -389,7 +389,8 @@ class TrackedObject:
                     mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
                     nstd_val = pt_undistorted[PT_TUPLE_IDX_NSTD_VAL_IDX]
                     if pixel_dist_cmp is not None:
-                        extra_print = 'distorted pixel_dist = %.1f (criterion passed=%s)'%(pixel_dist,str(pixel_dist_criterion_passed))
+                        extra_print = 'distorted %.1f %.1f (pixel_dist = %.1f, criterion passed=%s)'%(
+                            pt_x_dist, pt_y_dist, pixel_dist, str(pixel_dist_criterion_passed))
                     else:
                         extra_print = ''
                     print '    ->', dist2, pt_undistorted[:2], '(idx %d, area %f, cur %d, mean %d, nstd %d) %s'%(
