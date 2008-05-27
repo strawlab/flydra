@@ -83,7 +83,7 @@ class TrackedObject:
         self.save_all_data = save_all_data
         self.kill_me = False
         self.reconstructor_meters = reconstructor_meters
-        self.undistorted_pixel_euclidian_distance_accept=kalman_model['undistorted_pixel_euclidian_distance_accept']
+        self.distorted_pixel_euclidian_distance_accept=kalman_model['distorted_pixel_euclidian_distance_accept']
 
         self.current_frameno = frame
         if scale_factor is None:
@@ -325,7 +325,7 @@ class TrackedObject:
         the kalman object. (Other distance metrics could also be
         implemented, such as 2D Euclidian distance on the image
         plane. Note that a crude threshold for this is already
-        implemented with undistorted_pixel_euclidian_distance_accept.)
+        implemented with distorted_pixel_euclidian_distance_accept.)
 
         """
         # For each camera, predict 2D image location and error distance
@@ -336,7 +336,7 @@ class TrackedObject:
         something_like_variance = numpy.sqrt(numpy.sum(covariance_diagonal**2)) # L2 norm distance
         sigma = numpy.sqrt(something_like_variance)
         dist2cmp = (self.n_sigma_accept*sigma)**2 # dist2 is squared distance, so calculate squared comparison value
-        pixel_dist_cmp = self.undistorted_pixel_euclidian_distance_accept
+        pixel_dist_cmp = self.distorted_pixel_euclidian_distance_accept
         neg_predicted_3d = -geom.ThreeTuple( prediction_3d )
         cam_ids_and_points2d = []
 

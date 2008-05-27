@@ -254,7 +254,7 @@ class MamaramaMMEKFAllParams(EKFAllParams):
         self['min_dist_to_believe_new_meters']=0.2
         self['min_dist_to_believe_new_sigma']=10.0
 
-        self['undistorted_pixel_euclidian_distance_accept']=20.0
+        self['distorted_pixel_euclidian_distance_accept']=20.0 # distance in the raw image plane (i.e. before radial undistortion)
 
         if 1:
             # restrictive (better for e.g. making new calibration)
