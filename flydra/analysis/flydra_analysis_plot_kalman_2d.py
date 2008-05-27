@@ -38,6 +38,7 @@ class ShowIt(object):
     def __init__(self):
         self.subplot_by_cam_id = {}
         self.reconstructor = None
+        self.cam_ids_and_points2d = []
 
     def find_cam_id(self,ax):
         found = False
@@ -50,7 +51,36 @@ class ShowIt(object):
         return cam_id
 
     def on_key_press(self,event):
-        if event.key=='p':
+
+        if event.key=='c':
+            del self.cam_ids_and_points2d[:]
+
+        elif event.key=='i':
+            if self.reconstructor is None:
+                return
+
+            X = self.reconstructor.find3d(self.cam_ids_and_points2d,return_X_coords = True, return_line_coords=False)
+            print 'maximum liklihood intersection:'
+            print repr(X)
+            if 1:
+                print 'reprojection errors:'
+                for (cam_id, value_tuple) in self.cam_ids_and_points2d:
+                    newx,newy=self.reconstructor.find2d(cam_id,X,distorted=True)
+                    origx,origy=self.reconstructor.undistort(cam_id, value_tuple[:2] )
+                    reproj_error = numpy.sqrt((newx-origx)**2+(newy-origy)**2)
+                    print '  %s: %.1f'%(cam_id,reproj_error)
+                print
+
+            for cam_id, ax in self.subplot_by_cam_id.iteritems():
+                newx,newy=self.reconstructor.find2d(cam_id,X,distorted=True)
+                xlim = ax.get_xlim()
+                ylim = ax.get_ylim()
+                ax.plot([newx],[newy],'co',ms=5)
+                ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
+            pylab.draw()
+
+        elif event.key=='p':
             # new point -- project onto other images
 
             if not event.inaxes:
@@ -70,6 +100,7 @@ class ShowIt(object):
                 return
 
             x,y = self.reconstructor.undistort(cam_id, [event.xdata, event.ydata])
+            self.cam_ids_and_points2d.append(  (cam_id, (x,y)) )
             line3d = self.reconstructor.get_projected_line_from_2d(cam_id,[x,y])
 
             cam_ids = self.subplot_by_cam_id.keys()
@@ -114,13 +145,18 @@ class ShowIt(object):
         else:
             reconstructor_source = None
             if reconstructor_filename is None:
-                if hasattr(results.root,'calibration'):
+                if kalman_filename is not None:
+                    reconstructor_source = kalman_filename
+                elif hasattr(results.root,'calibration'):
                     reconstructor_source = results
             else:
                 reconstructor_source = reconstructor_filename
 
             if reconstructor_source is not None:
                 self.reconstructor = flydra.reconstruct.Reconstructor(reconstructor_source)
+
+        if 1:
+            self.reconstructor = self.reconstructor.get_scaled()
 
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(results)
 
@@ -239,8 +275,6 @@ class ShowIt(object):
                 #ax.set_ylim([0,res[1]])
                 ax.set_ylim([bg_arr.shape[0],0])
 
-        results.close()
-
         binding_id = fig.canvas.mpl_connect('key_press_event', self.on_key_press)
 
         if kalman_filename is None:
@@ -303,7 +337,13 @@ class ShowIt(object):
                 print kframe,'==============='
                 print 'this_use_idxs', this_use_idxs
 
-            d2d = data2d.readCoordinates( this_use_idxs )
+            try:
+                d2d = data2d.readCoordinates( this_use_idxs )
+            except:
+                print repr(this_use_idxs)
+                print type(this_use_idxs)
+                print this_use_idxs.dtype
+                raise
             if debugADS:
                 print 'd2d -=--=--=--=--=-'
                 for row in d2d:
@@ -345,6 +385,7 @@ class ShowIt(object):
                 ax.legend()
         print 'note: could/should also plot re-projection of Kalman filtered/smoothed data'
 
+        results.close()
         kresults.close()
 
 def main():
