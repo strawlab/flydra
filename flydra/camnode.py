@@ -356,10 +356,12 @@ class ProcessCamClass(object):
             # mask is currently an array of bool
             mask_image = mask_image.astype(numpy.uint8)*255
         self.mask_image = mask_image
+        self.max_num_points=max_num_points
+
         self.realtime_analyzer = realtime_image_analysis.RealtimeAnalyzer(lbrt,
                                                                           self.max_width,
                                                                           self.max_height,
-                                                                          max_num_points,
+                                                                          self.max_num_points,
                                                                           roi2_radius,
                                                                           )
         self.realtime_analyzer.diff_threshold = self.diff_threshold_shared.get_nowait()
@@ -738,6 +740,9 @@ class ProcessCamClass(object):
                                                          max_duration_sec=self.shortest_IFI-0.0005, # give .5 msec for other processing
                                                          return_debug_values=1,
                                                          )
+                if len(xpoints)>=self.max_num_points:
+                    msg = 'Warning: cannot save acquire points this frame because maximum number already acheived'
+                    print >> sys.stderr, msg
                 chainbuf.processed_points = xpoints
                 if NAUGHTY_BUT_FAST:
                     chainbuf.absdiff8u_im_full = absdiff8u_im_full
@@ -2324,7 +2329,7 @@ def get_app_defaults():
                     sdl=False,
                     debug_acquire=False,
                     disable_ifi_warning=False,
-                    num_points=4,
+                    num_points=20,
                     software_roi_radius=10,
                     num_buffers=50,
                     small_save_radius=10,
