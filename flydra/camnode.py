@@ -70,7 +70,7 @@ def DEBUG(*args):
         sys.stdout.flush()
 
 if not BENCHMARK:
-    import Pyro.core, Pyro.errors
+    import Pyro.core, Pyro.errors, Pyro.util
     Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here!
     Pyro.config.PYRO_TRACELEVEL = 3
     Pyro.config.PYRO_USER_TRACELEVEL = 3
@@ -2045,6 +2045,10 @@ class AppState(object):
                     cmds=self.main_brain.get_and_clear_commands(cam_id)
                 except KeyError:
                     print 'main brain appears to have lost cam_id',cam_id
+                except Exception, x:
+                    print >> sys.stderr,'Remote traceback:','*'*30
+                    print >> sys.stderr,''.join(Pyro.util.getPyroTraceback(x))
+                    raise
                 else:
                     self.handle_commands(cam_no,cmds)
 
