@@ -1045,8 +1045,6 @@ class SaveCamData(object):
         last_running_mean_image = None
         last_running_sumsqf_image = None
 
-        save_float = True
-
         while 1:
 
             # 1: process commands
@@ -1075,20 +1073,12 @@ class SaveCamData(object):
                     state = 'saving'
 
                     if last_bgcmp_image_timestamp is not None:
-                        if save_float:
-                            bg_movie.add_frame(FastImage.asfastimage(last_running_mean_image),
-                                               last_bgcmp_image_timestamp,
-                                               error_if_not_fast=True)
-                            std_movie.add_frame(FastImage.asfastimage(last_running_sumsqf_image),
-                                                last_bgcmp_image_timestamp,
-                                                error_if_not_fast=True)
-                        else:
-                            bg_movie.add_frame(FastImage.asfastimage(last_bg_image),
-                                               last_bgcmp_image_timestamp,
-                                               error_if_not_fast=True)
-                            std_movie.add_frame(FastImage.asfastimage(last_cmp_image),
-                                                last_bgcmp_image_timestamp,
-                                                error_if_not_fast=True)
+                        bg_movie.add_frame(FastImage.asfastimage(last_running_mean_image),
+                                           last_bgcmp_image_timestamp,
+                                           error_if_not_fast=True)
+                        std_movie.add_frame(FastImage.asfastimage(last_running_sumsqf_image),
+                                            last_bgcmp_image_timestamp,
+                                            error_if_not_fast=True)
                     else:
                         print 'WARNING: could not save initial bg and std frames'
 
@@ -1153,12 +1143,8 @@ class SaveCamData(object):
                 for frame,timestamp in raw:
                     raw_movie.add_frame(FastImage.asfastimage(frame),timestamp,error_if_not_fast=True)
                 for bg,cmp,running_mean,running_sumsqf,timestamp in meancmp:
-                    if save_float:
-                        bg_movie.add_frame(FastImage.asfastimage(running_mean),timestamp,error_if_not_fast=True)
-                        std_movie.add_frame(FastImage.asfastimage(running_sumsqf),timestamp,error_if_not_fast=True)
-                    else:
-                        bg_movie.add_frame(FastImage.asfastimage(bg),timestamp,error_if_not_fast=True)
-                        std_movie.add_frame(FastImage.asfastimage(cmp),timestamp,error_if_not_fast=True)
+                    bg_movie.add_frame(FastImage.asfastimage(running_mean),timestamp,error_if_not_fast=True)
+                    std_movie.add_frame(FastImage.asfastimage(running_sumsqf),timestamp,error_if_not_fast=True)
             del raw[:]
             del meancmp[:]
 
