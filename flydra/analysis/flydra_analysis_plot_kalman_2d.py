@@ -155,7 +155,7 @@ class ShowIt(object):
             if reconstructor_source is not None:
                 self.reconstructor = flydra.reconstruct.Reconstructor(reconstructor_source)
 
-        if 1:
+        if self.reconstructor is not None:
             self.reconstructor = self.reconstructor.get_scaled()
 
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(results)
