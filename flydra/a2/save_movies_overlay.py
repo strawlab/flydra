@@ -23,6 +23,9 @@ import flydra.a2.utils as utils
 PLOT='image'
 
 if PLOT=='mpl':
+    import warnings
+    warnings.warn('using mpl for PLOT has not been used in a long time')
+
     import matplotlib
     matplotlib.use('Agg')
     import pylab
@@ -55,7 +58,6 @@ def doit(fmf_filename=None,
          stop=None,
          style='debug',
          blank=None,
-         prefix=None,
          do_zoom=False,
          do_zoom_diff=False,
          ):
@@ -373,9 +375,9 @@ def doit(fmf_filename=None,
                     zoom_scaled_black = -zoom_luminance_offset/zoom_luminance_scale
 
                     # Zoomed difference image for this frame
-                    bg = bg_frame.astype(numpy.float32)
-                    cmp = cmp_frame.astype(numpy.float32)
-                    cmp = numpy.sqrt(bg-cmp) # find standard deviation
+                    bg = bg_frame.astype(numpy.float32) # running_mean
+                    cmp = cmp_frame.astype(numpy.float32) # running_sumsqf, (already float32, probably)
+                    cmp = numpy.sqrt(cmp-bg**2) # approximates standard deviation
                     diff_im = fg-bg
 
                     zoom_diffs = []
@@ -385,6 +387,7 @@ def doit(fmf_filename=None,
 
                     maxabsdiff = []
                     maxcmp = []
+                    meancmp = []
                 plotted_pt_nos = sets.Set()
                 radius=10
                 h,w = fg.shape
@@ -417,14 +420,28 @@ def doit(fmf_filename=None,
 
                             maxabsdiff.append( abs(zoom_diff ).max() )
                             maxcmp.append( zoom_cmp.max() )
+                            meancmp.append( numpy.mean(zoom_cmp) )
 
                         obj_ids.append( obj_id )
 
                         this2d = []
-                        for pt_no, (x2d,y2d) in enumerate(zip(rows['x'],rows['y'])):
+                        for pt_no in range(len(rows['x'])):
+                            row = rows[pt_no]
+                            x2d = row['x']
+                            y2d = row['y']
+                            area = row['area']
+                            try:
+                                cur_val  = row['cur_val']
+                                mean_val = row['mean_val']
+                                nstd_val = row['nstd_val']
+                            except IndexError:
+                                # older format didn't save these
+                                cur_val = 0
+                                mean_val = 0
+                                nstd_val = 0
                             if ((minx <= x2d <= maxx) and
                                 (miny <= y2d <= maxy)):
-                                this2d.append( (x2d-minx,y2d-miny,pt_no) )
+                                this2d.append( (x2d-minx,y2d-miny,pt_no,area,cur_val,mean_val,nstd_val) )
                                 plotted_pt_nos.add( int(pt_no) )
                         this2ds.append( this2d )
                 all_pt_nos = sets.Set(range( len( rows) ))
@@ -433,6 +450,16 @@ def doit(fmf_filename=None,
                 for pt_no in missing_pt_nos:
                     this_row = rows[pt_no]
                     (x2d,y2d) = this_row['x'], this_row['y']
+                    area = this_row['area']
+                    try:
+                        cur_val  = this_row['cur_val']
+                        mean_val = this_row['mean_val']
+                        nstd_val = this_row['nstd_val']
+                    except IndexError:
+                        # older format didn't save these
+                        cur_val = 0
+                        mean_val = 0
+                        nstd_val = 0
                     x=x2d
                     y=y2d
 
@@ -463,6 +490,7 @@ def doit(fmf_filename=None,
 
                             maxabsdiff.append( abs(zoom_diff ).max() )
                             maxcmp.append( zoom_cmp.max() )
+                            meancmp.append( numpy.mean(zoom_cmp) )
 
                         obj_ids.append( None )
 
@@ -470,7 +498,7 @@ def doit(fmf_filename=None,
                         if 1:
                             if ((minx <= x2d <= maxx) and
                                 (miny <= y2d <= maxy)):
-                                this2d.append( (x2d-minx,y2d-miny,pt_no) )
+                                this2d.append( (x2d-minx,y2d-miny,pt_no,area,cur_val,mean_val,nstd_val) )
                                 plotted_pt_nos.add( int(pt_no) )
                         this2ds.append( this2d )
 
@@ -499,7 +527,7 @@ def doit(fmf_filename=None,
                                  ]
                         labels = [None,
                                   'diff (s.)',
-                                  'cmp (s.)',
+                                  'std (s.)',
                                   'absdiff (s.)',
                                   None,
                                   'raw',
@@ -516,7 +544,8 @@ def doit(fmf_filename=None,
 
                     rightpart = numpy.vstack(row_ims)
                     leftpart = numpy.zeros( (rightpart.shape[0], left_offset) )
-                    newframe = numpy.hstack( [leftpart, rightpart] )
+                    rightborder = numpy.zeros( (rightpart.shape[0], 50) )
+                    newframe = numpy.hstack( [leftpart, rightpart,rightborder] )
 
                     newframe = numpy.clip( newframe, 0, 255)
                     im = newframe.astype( numpy.uint8 ) # scale and offset
@@ -541,7 +570,7 @@ def doit(fmf_filename=None,
                             absdiffy = cumy
                         elif (do_zoom and label == 'raw'):
                             absdiffy = cumy
-                        if label == 'cmp (s.)':
+                        if label == 'std (s.)':
                             cmpy = cumy
                         cumy += row_im.shape[0]
 
@@ -551,8 +580,8 @@ def doit(fmf_filename=None,
                                        'obj %d'%(obj_id,), font_zoomed)
 
                     if do_zoom_diff:
-                        for i, (this_maxabsdiff, this_maxcmp) in enumerate(
-                            zip(maxabsdiff, maxcmp) ):
+                        for i, (this_maxabsdiff, this_maxcmp, this_meancmp) in enumerate(
+                            zip(maxabsdiff, maxcmp, meancmp) ):
 
                             draw.text( (rescale_factor*(i*2*radius+left_offset)+3,
                                         rescale_factor*(absdiffy)),
@@ -560,11 +589,11 @@ def doit(fmf_filename=None,
 
                             draw.text( (rescale_factor*(i*2*radius+left_offset)+3,
                                         rescale_factor*(cmpy)),
-                                       'max %.0f'%(this_maxcmp,), font_zoomed)
+                                       'max %.0f, mean %.1f'%(this_maxcmp,this_meancmp), font_zoomed)
 
                     radius_pt = 3
                     for i,this2d in enumerate(this2ds):
-                        for (x2d, y2d, pt_no) in this2d:
+                        for (x2d, y2d, pt_no, area, cur_val, mean_val, nstd_val) in this2d:
                             xloc = rescale_factor*( x2d + i*2*radius + left_offset )
                             xloc1 = xloc - radius_pt
                             xloc2 = xloc + radius_pt
@@ -572,10 +601,12 @@ def doit(fmf_filename=None,
                                            xloc2,rescale_factor*(absdiffy+y2d)+radius_pt],
                                           pen_zoomed )
                             draw.text( (xloc,rescale_factor*(absdiffy+y2d)),
-                                       'pt %d'%(pt_no,), font_zoomed )
+                                       'pt %d (%.1f, %d, %d, %d)'%(pt_no, area, cur_val, mean_val, nstd_val), font_zoomed )
                     draw.flush()
-                    fname = 'zoomed/zoom_diff_%(cam_id)s_%(h5_frame)07d.png'%locals()
-                    dirname = os.path.abspath(os.path.split(fname)[0])
+
+                    dirname = 'zoomed_%s'%h5_filename
+                    fname = os.path.join(dirname,'zoom_diff_%(cam_id)s_%(h5_frame)07d.png'%locals())
+                    #dirname = os.path.abspath(os.path.split(fname)[0])
                     if not os.path.exists(dirname):
                         os.makedirs(dirname)
                     im.save( fname )
@@ -675,10 +706,8 @@ def doit(fmf_filename=None,
                 draw.flush()
 
         if 1:
-            fname = 'full/smo_%(cam_id)s_%(h5_frame)07d.png'%locals()
-            if prefix is not None:
-                fname = prefix + '_' + fname
-            dirname = os.path.abspath(os.path.split(fname)[0])
+            dirname = 'full_%s'%h5_filename
+            fname = os.path.join(dirname,'smo_%(cam_id)s_%(h5_frame)07d.png'%locals())
             if not os.path.exists(dirname):
                 os.makedirs(dirname)
 
@@ -708,9 +737,6 @@ def main():
 
     parser.add_option("--kalman", dest="kalman_filename", type='string',
                       help=".h5 file with kalman data and 3D reconstructor")
-
-    parser.add_option("--prefix", dest="prefix", type='string',
-                      help="prefix for output image filenames")
 
     parser.add_option("--start", dest="start", type='int',
                       help="start frame (.h5 frame number reference)")
@@ -761,7 +787,6 @@ def main():
          stop=options.stop,
          style=options.style,
          blank=options.blank,
-         prefix=options.prefix,
          do_zoom=options.zoom,
          do_zoom_diff=options.zoom_diff,
          )
