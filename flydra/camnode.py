@@ -446,12 +446,16 @@ class ProcessCamClass(object):
         points = []
         hw_roi_frame = numpy.asarray( hw_roi_frame )
         for xpt in xpoints:
-            (x0_abs, y0_abs, area, slope, eccentricity, index_x, index_y) = xpt
+            try:
+                (x0_abs, y0_abs, area, slope, eccentricity, index_x, index_y) = xpt
+            except:
+                print 'xpt',xpt
+                raise
 
             # Find values at location in image that triggered
             # point. Cast to Python int and floats.
             cur_val = int(hw_roi_frame[index_y,index_x])
-            mean_val = float(running_mean_in[index_y, index_x])
+            mean_val = float(running_mean_im[index_y, index_x])
             mean2_val = float(mean2[index_y, index_x])
 
             if numpy.isnan(slope):
