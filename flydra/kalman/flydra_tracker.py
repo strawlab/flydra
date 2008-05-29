@@ -16,7 +16,7 @@ PT_TUPLE_IDX_AREA = flydra.data_descriptions.PT_TUPLE_IDX_AREA
 PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
 PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
-PT_TUPLE_IDX_NSTD_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_NSTD_VAL_IDX
+PT_TUPLE_IDX_MEAN2_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN2_VAL_IDX
 
 packet_header_fmt = '<idBB' # XXX check format
 packet_header_fmtsize = struct.calcsize(packet_header_fmt)
@@ -387,14 +387,14 @@ class TrackedObject:
                     frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                     cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
                     mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
-                    nstd_val = pt_undistorted[PT_TUPLE_IDX_NSTD_VAL_IDX]
+                    mean2_val = pt_undistorted[PT_TUPLE_IDX_MEAN2_VAL_IDX]
                     if pixel_dist_cmp is not None:
                         extra_print = 'distorted %.1f %.1f (pixel_dist = %.1f, criterion passed=%s)'%(
                             pt_x_dist, pt_y_dist, pixel_dist, str(pixel_dist_criterion_passed))
                     else:
                         extra_print = ''
-                    print '    ->', dist2, pt_undistorted[:2], '(idx %d, area %f, cur %d, mean %d, nstd %d) %s'%(
-                        frame_pt_idx,pt_area,cur_val,mean_val,nstd_val,extra_print)
+                    print '    ->', dist2, pt_undistorted[:2], '(idx %d, area %f, cur %d, mean %d, mean2 %d) %s'%(
+                        frame_pt_idx,pt_area,cur_val,mean_val,mean2_val,extra_print)
 
                 if dist2<dist2cmp and pt_area > self.area_threshold and pixel_dist_criterion_passed:
                     if debug>2:
