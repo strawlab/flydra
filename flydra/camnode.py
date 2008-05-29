@@ -171,7 +171,7 @@ if sys.platform == 'win32':
 else:
     time_func = time.time
 
-pt_fmt = '<dddddddddBBddBddddddBBB' # keep in sync with MainBrain.py
+pt_fmt = '<dddddddddBBddBddddddBdd' # keep in sync with MainBrain.py
 small_datafile_fmt = '<dII'
 
 def TimestampEcho():
@@ -439,11 +439,20 @@ class ProcessCamClass(object):
         self._hlper = reconstruct_utils.ReconstructHelper(
             fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
 
-    def _convert_to_old_format(self, xpoints ):
+    def _convert_to_wire_order(self, xpoints, hw_roi_frame, running_mean_im, mean2 ):
+        """the images passed in are already in roi coords, as are index_x and index_y.
+        convert to values for sending.
+        """
         points = []
+        hw_roi_frame = numpy.asarray( hw_roi_frame )
         for xpt in xpoints:
-            (x0_abs, y0_abs, area, slope, eccentricity, cur_val, mean_val, nstd_val) = xpt
+            (x0_abs, y0_abs, area, slope, eccentricity, index_x, index_y) = xpt
 
+            # Find values at location in image that triggered
+            # point. Cast to Python int and floats.
+            cur_val = int(hw_roi_frame[index_y,index_x])
+            mean_val = float(running_mean_in[index_y, index_x])
+            mean2_val = float(mean2[index_y, index_x])
 
             if numpy.isnan(slope):
                 run = numpy.nan
@@ -498,7 +507,7 @@ class ProcessCamClass(object):
                   x0u, y0u,
                   ray_valid,
                   ray0, ray1, ray2, ray3, ray4, ray5,
-                  cur_val, mean_val, nstd_val)
+                  cur_val, mean_val, mean2_val)
             points.append( pt )
         return points
 
@@ -752,7 +761,7 @@ class ProcessCamClass(object):
                     chainbuf.absdiff8u_im_full = numpy.array(absdiff8u_im_full,copy=True)
                     chainbuf.mean8u_im_full = numpy.array(running_mean8u_im_full,copy=True)
                     chainbuf.compareframe8u_full = numpy.array(compareframe8u_full,copy=True)
-                points = self._convert_to_old_format( xpoints )
+                points = self._convert_to_wire_order( xpoints, hw_roi_frame, running_mean_im, mean2)
 
                 work_done_time = time.time()
 

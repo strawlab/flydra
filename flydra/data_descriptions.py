@@ -8,7 +8,7 @@ PT_TUPLE_IDX_AREA = 2
 PT_TUPLE_IDX_FRAME_PT_IDX = 10
 PT_TUPLE_IDX_CUR_VAL_IDX = 11
 PT_TUPLE_IDX_MEAN_VAL_IDX = 12
-PT_TUPLE_IDX_NSTD_VAL_IDX = 13
+PT_TUPLE_IDX_MEAN2_VAL_IDX = 13
 
 # 2D data format for PyTables:
 class Info2D(PT.IsDescription):
@@ -23,5 +23,5 @@ class Info2D(PT.IsDescription):
     eccentricity = PT.Float32Col(pos=8)
     frame_pt_idx = PT.UInt8Col(pos=9)
     cur_val      = PT.UInt8Col(pos=10)
-    mean_val     = PT.UInt8Col(pos=11)
-    nstd_val     = PT.UInt8Col(pos=12)
+    mean_val     = PT.Float32Col(pos=11)
+    mean2_val    = PT.Float32Col(pos=12)
