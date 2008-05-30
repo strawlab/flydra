@@ -238,6 +238,13 @@ class TestMahalanobis(unittest.TestCase):
         loc3d = flydra.mahalanobis.line_fit_3d( ln, mu, S)
         assert numpy.allclose(loc3d, (10.0, 0.0, 0.0) )
 
+    def test_dist(self):
+        x = numpy.array(( 0, 0, 0))
+        y = numpy.array(( 2, 0, 0))
+        sigma = numpy.eye(3)
+        four = flydra.mahalanobis.dist2( x, y, sigma )
+        assert four==4.0
+
 def get_test_suite():
     ts=unittest.TestSuite([unittest.makeSuite(TestGeomParametric),
                            unittest.makeSuite(TestReconstructor),

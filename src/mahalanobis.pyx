@@ -1,4 +1,5 @@
 #emacs, this is -*-Python-*- mode
+import numpy
 
 def line_fit_2d(line_2d, mu, sigma):
     """find the point closest to mu on the line according to Mahalanois distance"""
@@ -39,3 +40,7 @@ def line_fit_3d(line_pluecker, mu, sigma):
 
     loc3d = (a+s*d, b+s*e, c+s*f)
     return loc3d
+
+def dist2(x,mu,sigma):
+    """return the squared Mahalanobis distance"""
+    return numpy.dot( (x-mu).T, numpy.dot( sigma, (x-mu) ) )
