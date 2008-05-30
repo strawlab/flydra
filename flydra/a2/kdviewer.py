@@ -26,6 +26,7 @@ except ImportError, err:
     import cgtypes # cgkit 1
 import flydra.a2.pos_ori2fu
 import flydra.a2.stim_plugins as stim_plugins
+from flydra.a2.experiment_layout import get_tvtk_actors_for_file
 import flydra.version
 
 def print_cam_props(camera):
@@ -651,12 +652,17 @@ def doit(filename,
     ################################
 
     if draw_stim_func_str is None:
-        draw_stim_func_str = 'default'
+        if 0:
+            draw_stim_func_str = 'default'
+        else:
+            # new style
+            stim_actors = get_tvtk_actors_for_file(filename=filename)
+            actors.extend( stim_actors )
 
     if draw_stim_func_str:
         PluginClass = plugin_loader(draw_stim_func_str)
         plugin = PluginClass(filename=filename,
-                            force_stimulus=options.force_stimulus)
+                             force_stimulus=options.force_stimulus)
         stim_actors = plugin.get_tvtk_actors()
         actors.extend( stim_actors )
 
