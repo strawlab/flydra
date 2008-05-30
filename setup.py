@@ -14,6 +14,9 @@ ext_modules.append(Extension(name='flydra.reconstruct_utils',
 ext_modules.append(Extension(name='flydra.pmat_jacobian',
                              sources=['src/pmat_jacobian.pyx']))
 
+ext_modules.append(Extension(name='flydra.mahalanobis',
+                             sources=['src/mahalanobis.pyx']))
+
 ext_modules.append(Extension(name='flydra.fastgeom',
                              sources=['src/fastgeom.pyx']))
 

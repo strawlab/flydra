@@ -84,7 +84,9 @@ class PlueckerLine:
                 rel_line = self.other.translate( -pt )
                 return rel_line.dist2()
 
-        # XXX I guess the implementation could be improved (i.e. sped up).
+        # XXX TODO. The implementation could be improved (i.e. sped up).
+        import warnings
+        warnings.warn('slow/lazy way to find closest point to line')
         initial_mu = 0.0
         efm = ErrFMaker(self,other)
         final_mu, = scipy.optimize.fmin( efm.errf, [initial_mu], disp=0 )

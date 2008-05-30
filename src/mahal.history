@@ -1,0 +1,132 @@
+# for 2d
+1  : import sympy
+2  : import numpy
+3  : x = numpy.zeros((2,1))
+4  : S = numpy.eye(2)
+5  : y = numpy.ones((2,1))
+6  : x
+7  : y
+8  : S
+9  : numpy.dot(S,x)
+10 : numpy.dot(S,x.T)
+11 : numpy.dot(x.T,S)
+12 : S
+13 : x
+14 : S
+15 : S[0,1]=2
+16 : S
+17 : S[1,0]=3
+18 : S[1,1]=4
+19 : S
+20 : x
+21 : x[0,0]=10
+22 : x[1,0]=11
+23 : x
+24 : y
+25 : numpy.dot(S,x.T)
+26 : numpy.dot(S,x)
+27 : x[1,0]=121
+28 : numpy.dot(S,x)
+29 : #?sympy.sympify
+30 : sympy.sympify('[[S00,S01],[S10,S11]')
+31 : sympy.sympify('[[S00,S01],[S10,S11]]')
+32 : S00=sympy.symbol('S00')
+33 : S00=sympy.Symbol('S00')
+34 : S01=sympy.Symbol('S01')
+35 : S10=sympy.Symbol('S10')
+36 : S11=sympy.Symbol('S11')
+37 : S00 
+38 : sympy.Matrix(([S00,S01],[S10,S11]))
+39 : S=sympy.Matrix(([S00,S01],[S10,S11]))
+40 : #?S.dot
+41 : x,y=sympy.symbols('xy')
+42 : x 
+43 : y 
+44 : x0=sympy.Symbol('x0')
+45 : x1=sympy.Symbol('x1')
+46 : y1=sympy.Symbol('yx1')
+47 : y1=sympy.Symbol('y1')
+48 : y0=sympy.Symbol('y0')
+49 : post = sympy.Matrix(([y0-x0],[y1-x1]))
+50 : post
+51 : S
+52 : S.dot(post)
+53 : post.T
+54 : S.dot(post.T)
+55 : S
+56 : #?S.dot?
+57 : S * post
+58 : post
+59 : pre = sympy.Matrix([y0-x0,y1-x1])
+60 : pre
+61 : post
+62 : pre = sympy.Matrix(([y0-x0,y1-x1]))
+63 : pre
+64 : pre.shape
+65 : post
+66 : post.shape
+67 : pre = post.T
+68 : pre.shape
+69 : pre
+70 : pre*S*post
+71 : sympy.diff(pre*S*post,y0)
+72 : pre*S*post
+73 : maha2 = (pre*S*post)[0,0]
+74 : maha2 
+75 : sympy.diff(maha2,y0)
+76 : sympy.diff(maha2,y1)
+77 : S
+78 : pre
+79 : post
+80 : maha2 
+81 : #?maha2.subs
+82 : a,b,c,d=symbols('abcd')
+83 : a,b,c,d=sympy.symbols('abcd')
+84 : maha2.subs(y0,'a+sb')
+85 : maha2 
+86 : maha2.subs(y1,'c+sd')
+87 : maha2a=maha2.subs(y0,'a+sb')
+88 : maha2b=maha2a.subs(y1,'c+sd')
+89 : maha2b 
+90 : sympy.diff(maha2b,s)
+91 : s=sympy.symbols('s')
+92 : sympy.diff(maha2b,s)
+93 : maha2b 
+94 : maha2a=maha2.subs(y0,'a+s*b')
+95 : maha2b=maha2a.subs(y1,'c+s*d')
+96 : maha2b 
+97 : sympy.diff(maha2b,s)
+98 : sympy.solve(sympy.diff(maha2b,s),s)
+
+# for 3d
+1 : import sympy, numpy
+2 : S00=sympy.Symbol('S00')
+3 : S01=sympy.Symbol('S01')
+4 : S02=sympy.Symbol('S02')
+5 : S10=sympy.Symbol('S10')
+6 : S11=sympy.Symbol('S11')
+7 : S12=sympy.Symbol('S12')
+8 : S20=sympy.Symbol('S20')
+9 : S21=sympy.Symbol('S21')
+10: S22=sympy.Symbol('S22')
+11: x0=sympy.Symbol('x0')
+12: x1=sympy.Symbol('x1')
+13: x2=sympy.Symbol('x2')
+14: y0=sympy.Symbol('y0')
+15: y1=sympy.Symbol('y1')
+16: y2=sympy.Symbol('y2')
+17: post=sympy.Matrix(([y0-x0],[y1-x1],[y2-x2]))
+18: S=sympy.Matrix(([S00,S01,S02],[S10,S11,S12],[S20,S21,S22]))
+19: pre=post.T
+20: pre
+21: post
+22: S
+23: maha3=(pre*S*post)[0,0]
+24: abcdefs=sympy.sumbols('abcdefs')
+25: a,b,c,d,e,f,s=sympy.sumbols('abcdefs')
+26: a,b,c,d,e,f,s=sympy.symbols('abcdefs')
+27: tmp = maha3
+28: tmp = tmp.subs(y0,'a+s*d')
+29: tmp = tmp.subs(y1,'b+s*e')
+30: tmp = tmp.subs(y2,'c+s*f')
+31: sympy.solve(sympy.diff(tmp,s),s)

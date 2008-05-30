@@ -7,6 +7,7 @@ import flydra.fastgeom
 import flydra.undistort
 import numpy
 import scipy.optimize
+import flydra.mahalanobis
 
 try:
     import numpy.testing.parametric as parametric
@@ -221,10 +222,27 @@ class TestNonlinearDistortion(parametric.ParametricTestCase):
 
             assert numpy.allclose( xy, redistorted_xy)
 
+class TestMahalanobis(unittest.TestCase):
+    def test_2d(self):
+        line_2d = 0,0, 1,0 # line passes through 0,0 in direction 1,0 (i.e. with slope 0/1)
+        mu = (10,1)
+        S = numpy.eye(2)
+        loc2d = flydra.mahalanobis.line_fit_2d( line_2d, mu, S)
+        assert numpy.allclose(loc2d, (10.0,0.0) )
+
+    def test_3d(self):
+        ln = flydra.geom.PlueckerLine(flydra.geom.ThreeTuple((0,0,0)),
+                                      flydra.geom.ThreeTuple((1,0,0)))
+        mu = numpy.array((10.0,1,0,0,0,0))
+        S = numpy.eye(6)
+        loc3d = flydra.mahalanobis.line_fit_3d( ln, mu, S)
+        assert numpy.allclose(loc3d, (10.0, 0.0, 0.0) )
+
 def get_test_suite():
     ts=unittest.TestSuite([unittest.makeSuite(TestGeomParametric),
                            unittest.makeSuite(TestReconstructor),
                            unittest.makeSuite(TestNonlinearDistortion),
+                           unittest.makeSuite(TestMahalanobis),
                            ])
     return ts
 
