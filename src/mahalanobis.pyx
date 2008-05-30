@@ -41,6 +41,11 @@ def line_fit_3d(line_pluecker, mu, sigma):
     loc3d = (a+s*d, b+s*e, c+s*f)
     return loc3d
 
-def dist2(x,mu,sigma):
+def dist2(x,mu,sigma,least_dimensions_fixup=True):
     """return the squared Mahalanobis distance"""
+    if least_dimensions_fixup:
+        ndim = min(len(x),len(mu))
+        x = numpy.asarray(x[:ndim])
+        mu = numpy.asarray(mu[:ndim])
+        sigma = numpy.asarray(sigma[:ndim,:ndim])
     return numpy.dot( (x-mu).T, numpy.dot( sigma, (x-mu) ) )

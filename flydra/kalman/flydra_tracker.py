@@ -4,6 +4,8 @@ import adskalman as kalman
 import flydra.kalman.ekf as kalman_ekf
 #import flydra.geom as geom
 import flydra.fastgeom as geom
+import flydra.geom
+import flydra.mahalanobis as mahalanobis
 import math, struct
 import flydra.data_descriptions
 import collections
@@ -104,7 +106,6 @@ class TrackedObject:
             for i in range(6,9):
                 P_k1[i,i]=kalman_model['initial_acceleration_covariance_estimate']
 
-        self.n_sigma_accept = kalman_model['n_sigma_accept']
         self.max_variance = kalman_model['max_variance_dist_meters']**2 # square so that it is in variance units
 
         self.max_frames_skipped = kalman_model['max_frames_skipped']
@@ -312,6 +313,10 @@ class TrackedObject:
         self.my_kalman.xhat_k1 = self.xhats[-1]
         self.my_kalman.P_k1 = self.Ps[-1]
 
+    def some_rough_negative_log_liklihood( self, pt_area, cur_val, mean_val, mean2_val ):
+        return 0.0
+
+
     def _filter_data(self, xhatminus, Pminus, data_dict, camn2cam_id,
                      debug=0):
         """given state estimate, select useful incoming data and make new observation
@@ -324,18 +329,13 @@ class TrackedObject:
         to the image point observed and the predicted 3D location of
         the kalman object. (Other distance metrics could also be
         implemented, such as 2D Euclidian distance on the image
-        plane. Note that a crude threshold for this is already
-        implemented with distorted_pixel_euclidian_distance_accept.)
+        plane. Note that a raw threshold for this is implemented with
+        distorted_pixel_euclidian_distance_accept.)
 
         """
         # For each camera, predict 2D image location and error distance
 
         prediction_3d = xhatminus[:3]
-        # rough estimate of variance
-        covariance_diagonal = numpy.array([Pminus[i,i] for i in range(3)])
-        something_like_variance = numpy.sqrt(numpy.sum(covariance_diagonal**2)) # L2 norm distance
-        sigma = numpy.sqrt(something_like_variance)
-        dist2cmp = (self.n_sigma_accept*sigma)**2 # dist2 is squared distance, so calculate squared comparison value
         pixel_dist_cmp = self.distorted_pixel_euclidian_distance_accept
         neg_predicted_3d = -geom.ThreeTuple( prediction_3d )
         cam_ids_and_points2d = []
@@ -343,7 +343,6 @@ class TrackedObject:
         used_camns_and_idxs = []
         if debug>2:
             print '_filter_data():'
-            print ' dist2cmp %f = self.n_sigma_accept * sigma = %f * %f'%(dist2cmp, self.n_sigma_accept, sigma)
         for camn,candidate_point_list in data_dict.iteritems():
             cam_id = camn2cam_id[camn]
 
@@ -355,27 +354,51 @@ class TrackedObject:
                 print '  cam_id',cam_id,'camn',camn,'--------'
                 print '    predicted_2d (undistorted)',predicted_2d_undistorted
 
+            # Iterate over all 2D data. Find the 2D point which minimizes::
+            #    f(area, maxabsdiff, etc) + d(y,xhat).
+
+            # According to Kristin, this is equivalent to choosing the
+            # point with maximum cumulative probability::
+            #    p( y_t | x_t ) p( x_t, x_{t-1})
+
+            # [In this case f(area,...) represents negative log of
+            # the liklihood of observation y given x.]
+
             # For large numbers of 2d points in data_dict, probably
             # faster to compute 2d image of error ellipsoid and see if
             # data_dict points fall inside that. For now, however,
-            # compute distance individually
+            # compute distance in 3d. This avoids having to do a
+            # (nonlinear) perspective projection of a multivariante
+            # normal.
 
-            # Use the first acceptable 2d point match as it's probably
-            # best from distance-from-mean-image-background
-            # perspective, but remove from further consideration all
-            # 2d points that meet consideration critereon.
-
-            closest_dist2 = numpy.inf
+            least_nll = numpy.inf
             closest_idx = None
             for idx,(pt_undistorted,projected_line_meters) in enumerate(candidate_point_list):
+                # find point on ray with closest Mahalanobis distance.
+                if 1:
+                    import warnings
+                    warnings.warn('using slow threetuple')
+                    u = projected_line_meters.u
+                    v = projected_line_meters.v
+                    projected_line_meters = flydra.geom.PlueckerLine(flydra.geom.ThreeTuple((u.a,u.b,u.c)),
+                                                                     flydra.geom.ThreeTuple((v.a,v.b,v.c)))
+                best_3d_location = mahalanobis.line_fit_3d( projected_line_meters, xhatminus, Pminus )
+
                 # find closest distance between projected_line and predicted position for each 2d point
-                dist2=projected_line_meters.translate(neg_predicted_3d).dist2() # squared distance between prediction and camera ray
+                dist2=mahalanobis.dist2( best_3d_location, xhatminus, Pminus ) # squared distance between prediction and camera ray
                 pt_area = pt_undistorted[PT_TUPLE_IDX_AREA]
+                cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
+                mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
+                mean2_val = pt_undistorted[PT_TUPLE_IDX_MEAN2_VAL_IDX]
+                
+                p_y_x = self.some_rough_negative_log_liklihood( pt_area, cur_val, mean_val, mean2_val )
+                dist = numpy.sqrt(dist2)
+                
+                nll_this_point = p_y_x + dist # negative log liklihood of this point
 
                 pixel_dist_criterion_passed = True
                 if pixel_dist_cmp is not None:
                     # XXX TODO: fixme: should just pass in distorted pixel coordinates, but saves reorganizing all this code.
-                    # Also, it seems that this isn't always perfect. (Because distort is not exact inverse of undistort?)
                     pt_x_undist =  pt_undistorted[PT_TUPLE_IDX_X]
                     pt_y_undist =  pt_undistorted[PT_TUPLE_IDX_Y]
                     pt_x_dist, pt_y_dist = self.reconstructor_meters.distort( cam_id, (pt_x_undist, pt_y_undist) )
@@ -393,16 +416,16 @@ class TrackedObject:
                             pt_x_dist, pt_y_dist, pixel_dist, str(pixel_dist_criterion_passed))
                     else:
                         extra_print = ''
-                    print '    ->', dist2, pt_undistorted[:2], '(idx %d, area %f, cur %d, mean %d, mean2 %d) %s'%(
-                        frame_pt_idx,pt_area,cur_val,mean_val,mean2_val,extra_print)
+                    #print '    ->', dist2, pt_undistorted[:2], '(idx %d, area %f, cur %d, mean %d, mean2 %d) %s'%(
+                    #    frame_pt_idx,pt_area,cur_val,mean_val,mean2_val,extra_print)
 
-                if dist2<dist2cmp and pt_area > self.area_threshold and pixel_dist_criterion_passed:
+                if pixel_dist_criterion_passed:
                     if debug>2:
                         print '       (acceptable)'
-                    if dist2<closest_dist2:
+                    if nll_this_point < least_nll:
                         if debug>2:
                             print '       (so far the best -- taking)'
-                        closest_dist2 = dist2
+                        least_nll = nll_this_point
                         closest_idx = idx
                 elif debug>2:
                     print '       (not acceptable)'

@@ -259,11 +259,9 @@ class MamaramaMMEKFAllParams(EKFAllParams):
         if 1:
             # restrictive (better for e.g. making new calibration)
             self['max_variance_dist_meters']=0.25
-            self['n_sigma_accept']=10
         else:
             # loosy-goosy
             self['max_variance_dist_meters']=2 # let grow huge
-            self['n_sigma_accept']=40
 
 ekf_models = {'EKF mamarama, units: mm':MamaramaMMEKFAllParams,
               }

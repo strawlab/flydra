@@ -1,9 +1,9 @@
 # emacs, this is -*-Python-*- mode
 
 cdef class ThreeTuple:
-    cdef float a
-    cdef float b
-    cdef float c
+    cdef readonly double a
+    cdef readonly double b
+    cdef readonly double c
     def __init__(self,vals):
         cdef ThreeTuple tt
         if isinstance(vals,ThreeTuple):
@@ -24,6 +24,9 @@ cdef class ThreeTuple:
         result.b = self.b-other.b
         result.c = self.c-other.c
         return result
+
+#     def __iter__(self):
+#         return __iter__((self.a, self.b, self.c))
 
     def __add__(ThreeTuple self not None, ThreeTuple other not None):
         cdef ThreeTuple result
@@ -84,13 +87,21 @@ cdef class ThreeTuple:
         return self.a*other.a + self.b*other.b + self.c*other.c
 
 cdef class PlueckerLine:
-    cdef ThreeTuple u
-    cdef ThreeTuple v
+    cdef readonly ThreeTuple u
+    cdef readonly ThreeTuple v
     def __init__(self, ThreeTuple u_ not None, ThreeTuple v_ not None):
         self.u = u_
         self.v = v_
     def __repr__(self):
         return 'PlueckerLine(%s,%s)'%(repr(self.u),repr(self.v)) #
+
+#     property u:
+#         def __get__(self):
+#             return self.u
+
+#     property v:
+#         def __get__(self):
+#             return self.v
 
     def __richcmp__(PlueckerLine x not None,
                     PlueckerLine y not None,
