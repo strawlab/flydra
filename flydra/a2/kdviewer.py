@@ -25,7 +25,6 @@ try:
 except ImportError, err:
     import cgtypes # cgkit 1
 import flydra.a2.pos_ori2fu
-import flydra.a2.stim_plugins as stim_plugins
 from flydra.a2.experiment_layout import get_tvtk_actors_for_file
 import flydra.version
 
@@ -143,8 +142,6 @@ def do_show_cameras(results, renderers, frustums=True, labels=True, centers=True
 
             for ren in renderers:
                 ren.add_actor(ta)
-
-plugin_loader = stim_plugins.PluginLoader()
 
 def doit(filename,
          show_obj_ids=False,
@@ -656,11 +653,22 @@ def doit(filename,
             draw_stim_func_str = 'default'
         else:
             # new style
-            stim_actors = get_tvtk_actors_for_file(filename=filename)
+            stim_actors = get_tvtk_actors_for_file(filename=filename,
+                                                   force_stimulus=options.force_stimulus,
+                                                   )
             actors.extend( stim_actors )
 
     if draw_stim_func_str:
-        PluginClass = plugin_loader(draw_stim_func_str)
+        import flydra.a2.stim_plugins as stim_plugins
+        plugin_loader = stim_plugins.PluginLoader()
+
+        try:
+            PluginClass = plugin_loader(draw_stim_func_str)
+        except Exception,err:
+            print 'possible values for --draw-stim:'
+            print plugin_loader.all_names
+            raise
+
         plugin = PluginClass(filename=filename,
                              force_stimulus=options.force_stimulus)
         stim_actors = plugin.get_tvtk_actors()
@@ -882,7 +890,7 @@ def main():
                       type="string",
                       dest="draw_stim_func_str",
                       default=None,
-                      help="possible values: %s"%str(plugin_loader.all_names),
+                      help="name of drawing plugin. use a non-existant name to print list of availabe names",
                       )
 
     parser.add_option("--dynamic-model",
