@@ -10,6 +10,7 @@ import datetime
 import sets
 import sys
 from optparse import OptionParser
+import matplotlib
 import pylab
 import flydra.reconstruct
 import flydra.analysis.result_utils as result_utils
@@ -51,6 +52,7 @@ class ShowIt(object):
         return cam_id
 
     def on_key_press(self,event):
+        print 'received key',repr(event.key)
 
         if event.key=='c':
             del self.cam_ids_and_points2d[:]
@@ -89,6 +91,7 @@ class ShowIt(object):
 
             ax = event.inaxes  # the axes instance
             cam_id = self.find_cam_id(ax)
+            print 'click on',cam_id
 
             xlim = ax.get_xlim()
             ylim = ax.get_ylim()
@@ -97,6 +100,7 @@ class ShowIt(object):
             ax.set_ylim(ylim)
 
             if self.reconstructor is None:
+                print 'no reconstructor... cannot plot projection'
                 return
 
             x,y = self.reconstructor.undistort(cam_id, [event.xdata, event.ydata])
@@ -199,7 +203,8 @@ class ShowIt(object):
 
         print 'reading cameras'
         frames = frames[use_idxs]#data2d.readCoordinates( use_idxs, field='frame')
-        print 'frame range: %d - %d'%( frames[0], frames[-1] )
+        if len(frames):
+            print 'frame range: %d - %d'%( frames[0], frames[-1] )
         camns = data2d.read(field='camn')
         camns = camns[use_idxs]
         #camns = data2d.readCoordinates( use_idxs, field='camn')
@@ -207,6 +212,12 @@ class ShowIt(object):
         unique_cam_ids = list(sets.Set([camn2cam_id[camn] for camn in unique_camns]))
         unique_cam_ids.sort()
         print '%d cameras with data'%(len(unique_cam_ids),)
+
+        if 1:
+            # plot all cameras, not just those with data
+            all_cam_ids = cam_id2camns.keys()
+            all_cam_ids.sort()
+            unique_cam_ids = all_cam_ids
 
         if len(unique_cam_ids)==1:
             n_rows=1
@@ -228,6 +239,19 @@ class ShowIt(object):
     ##        ax.set_yticks([])
             self.subplot_by_cam_id[cam_id] = ax
 
+        for cam_id in unique_cam_ids:
+            ax = self.subplot_by_cam_id[cam_id]
+            if img_table is not None:
+                bg_arr_h5 = getattr(img_table,cam_id)
+                bg_arr = bg_arr_h5.read()
+                ax.imshow( bg_arr, origin='lower',cmap=cm.pink )
+
+            if self.reconstructor is not None:
+                res = self.reconstructor.get_resolution(cam_id)
+                ax.set_xlim([0,res[0]])
+                #ax.set_ylim([0,res[1]])
+                ax.set_ylim([res[1],0])
+
         for camn in unique_camns:
             cam_id = camn2cam_id[camn]
             ax = self.subplot_by_cam_id[cam_id]
@@ -235,11 +259,6 @@ class ShowIt(object):
 
             xs = data2d.readCoordinates( this_camn_idxs, field='x')
             ys = data2d.readCoordinates( this_camn_idxs, field='y')
-
-            if img_table is not None:
-                bg_arr_h5 = getattr(img_table,cam_id)
-                bg_arr = bg_arr_h5.read()
-                ax.imshow( bg_arr, origin='lower',cmap=cm.pink )
 
             valid_idx = numpy.nonzero( ~numpy.isnan(xs) )[0]
             if not len(valid_idx):
