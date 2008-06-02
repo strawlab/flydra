@@ -124,7 +124,9 @@ class TestReconstructor(unittest.TestCase):
         caldir = pkg_resources.resource_filename(__name__,"sample_calibration")
         x=reconstruct.Reconstructor(caldir)
         import pickle
-        pickle.dumps(x)
+        xpickle = pickle.dumps(x)
+        x2=pickle.loads(xpickle)
+        assert x2==x
 
 class TestNonlinearDistortion(parametric.ParametricTestCase):
     _indepParTestPrefix = 'test_coord_undistort'
