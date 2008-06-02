@@ -239,8 +239,7 @@ class MamaramaMMEKFAllParams(EKFAllParams):
                                         dt=dt )
 
         # update some parameters from linear model
-        for key in [#'min_dist_to_believe_new_meters',
-                    #'min_dist_to_believe_new_sigma',
+        for key in [
                     'initial_position_covariance_estimate',
                     'max_frames_skipped',
                     'A',
