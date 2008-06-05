@@ -102,10 +102,12 @@ def do_it(filename,
     points = []
 
     if use_kalman_data:
+        row_keys = []
         if start is not None or stop is not None:
             print 'start, stop',start, stop
             print 'WARNING: currently ignoring start/stop because Kalman data is being used'
         for obj_id_enum, obj_id in enumerate(use_obj_ids):
+            row_keys.append( ( len(points), obj_id ) )
 #            print 'obj_id %d (%d of %d)'%(obj_id, obj_id_enum+1, len(use_obj_ids))
             this_obj_id = obj_id
             k_use_idxs = kobs.getWhereList(
@@ -185,6 +187,7 @@ def do_it(filename,
         stop = frames.max()
 
     if not use_kalman_data:
+        row_keys = None
         count = 0
         for frameno in range(start,stop+1,use_nth_observation):
             this_use_idxs=qfi.get_frame_idxs(frameno)
@@ -254,6 +257,10 @@ def do_it(filename,
     for cam_id in cam_ids:
         fd.write('%s\n'%cam_id)
     fd.close()
+
+    if row_keys is not None:
+        row_keys = numpy.array(row_keys)
+        save_ascii_matrix(row_keys,os.path.join(calib_dir,'obj_ids_zero_indexed.dat'),isint=True)
 
 def main():
     usage = '%prog FILE EFILE [options]'
