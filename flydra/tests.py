@@ -8,6 +8,8 @@ import flydra.undistort
 import numpy
 import scipy.optimize
 import flydra.mahalanobis
+import xml.etree.ElementTree as ET
+import StringIO
 
 try:
     import numpy.testing.parametric as parametric
@@ -127,6 +129,26 @@ class TestReconstructor(unittest.TestCase):
         xpickle = pickle.dumps(x)
         x2=pickle.loads(xpickle)
         assert x2==x
+    def test_xml(self):
+        caldir = pkg_resources.resource_filename(__name__,"sample_calibration")
+        x=reconstruct.Reconstructor(caldir)
+
+        root = ET.Element("xml")
+        x.add_element(root)
+
+        tree = ET.ElementTree(root)
+        fd = StringIO.StringIO()
+        tree.write(fd)
+        if 0:
+            tree.write("test.xml")
+
+        fd.seek(0)
+
+        root = ET.parse(fd).getroot()
+        assert root.tag == 'xml'
+        assert len(root)==1
+        y = reconstruct.Reconstructor_from_xml(root[0])
+        assert x==y
 
 class TestNonlinearDistortion(parametric.ParametricTestCase):
     _indepParTestPrefix = 'test_coord_undistort'

@@ -11,6 +11,7 @@ cinf = inf
 
 import flydra.common_variables
 import flydra.undistort
+import xml.etree.ElementTree as ET
 
 cdef float MINIMUM_ECCENTRICITY
 MINIMUM_ECCENTRICITY = flydra.common_variables.MINIMUM_ECCENTRICITY
@@ -31,13 +32,24 @@ def make_ReconstructHelper_from_rad_file(filename):
         params['kc1'], params['kc2'], params['kc3'], params['kc4'])
     return helper
 
+def ReconstructHelper_from_xml(elem):
+    assert ET.iselement(elem)
+    assert elem.tag == "non_linear_parameters"
+
+    args = []
+    for name in ['fc1','fc2','cc1','cc2','k1','k2','p1','p2','alpha_c']:
+        args.append( float(elem.find(name).text) )
+    args = tuple(args)
+    helper = ReconstructHelper(*args)
+    return helper
+
 def make_ReconstructHelper(*args,**kw):
     return ReconstructHelper(*args,**kw)
 
 cdef class ReconstructHelper:
-    cdef double fc1, fc2, cc1, cc2
-    cdef double k1, k2, p1, p2
-    cdef double alpha_c
+    cdef readonly double fc1, fc2, cc1, cc2
+    cdef readonly double k1, k2, p1, p2
+    cdef readonly double alpha_c
 
     def __init__(self, fc1, fc2, cc1, cc2, k1, k2, p1, p2, alpha_c=0 ):
         """create instance of ReconstructHelper
@@ -65,6 +77,15 @@ cdef class ReconstructHelper:
         args = (self.fc1, self.fc2, self.cc1, self.cc2,
                 self.k1, self.k2, self.p1, self.p2, self.alpha_c)
         return (make_ReconstructHelper, args)
+
+    def add_element(self, parent):
+        """add self as XML element to parent"""
+        assert ET.iselement(parent)
+        elem = ET.SubElement(parent,"non_linear_parameters")
+
+        for name in ['fc1','fc2','cc1','cc2','k1','k2','p1','p2','alpha_c']:
+            e = ET.SubElement(elem, name)
+            e.text = repr( getattr(self,name) )
 
     def save_to_rad_file( self, fname, comments=None ):
         rad_fd = open(fname,'w')

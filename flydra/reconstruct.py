@@ -10,6 +10,8 @@ from flydra.common_variables import MINIMUM_ECCENTRICITY
 import scipy.linalg
 import traceback
 import flydra.pmat_jacobian
+import xml.etree.ElementTree as ET
+import StringIO
 
 WARN_CALIB_DIFF = False
 
@@ -205,7 +207,7 @@ class SingleCameraCalibration:
         if pm.shape != (3,4):
             raise ValueError('Pmat must have shape (3,4)')
         if len(res) != 2:
-            raise ValueError('len(res) must be 2')
+            raise ValueError('len(res) must be 2 (res = %s)'%repr(res))
 
         self.cam_id=cam_id
         self.Pmat=Pmat
@@ -386,6 +388,34 @@ class SingleCameraCalibration:
         fd.write(    'radial_params = %s, %s\n'%(repr(k1),repr(k2)))
         fd.write(    'tangential_params = %s, %s\n'%(repr(p1),repr(p2)))
 
+    def add_element(self,parent):
+        """add self as XML element to parent"""
+        assert ET.iselement(parent)
+        elem = ET.SubElement(parent,"single_camera_calibration")
+
+        cam_id = ET.SubElement(elem, "cam_id")
+        cam_id.text = self.cam_id
+
+        pmat = ET.SubElement(elem, "calibration_matrix")
+        fd = StringIO.StringIO()
+        save_ascii_matrix(self.Pmat,fd)
+        mystr = fd.getvalue()
+        mystr = mystr.strip()
+        mystr = mystr.replace('\n','; ')
+        pmat.text = mystr
+        fd.close()
+
+        res = ET.SubElement(elem, "resolution")
+        res.text = ' '.join(map(str,self.res))
+
+        pp = ET.SubElement(elem, "principal_point")
+        pp.text = ' '.join(map(str,self.pp))
+
+        scale_factor = ET.SubElement(elem, "scale_factor")
+        scale_factor.text = str(self.scale_factor)
+
+        self.helper.add_element( elem )
+
 def SingleCameraCalibration_fromfile(filename):
     params={}
     execfile(filename,params)
@@ -410,6 +440,24 @@ def SingleCameraCalibration_fromfile(filename):
                                    Pmat=pmat,
                                    res=res,
                                    pp=pp,
+                                   helper=helper)
+
+def SingleCameraCalibration_from_xml(elem):
+    assert ET.iselement(elem)
+    assert elem.tag == "single_camera_calibration"
+    cam_id = elem.find("cam_id").text
+    pmat = numpy.array(numpy.mat(elem.find("calibration_matrix").text))
+    res = numpy.array(numpy.mat(elem.find("resolution").text))[0,:]
+    pp = numpy.array(numpy.mat(elem.find("principal_point").text))[0,:]
+    scale_factor = float(elem.find("scale_factor").text)
+    helper_elem = elem.find("non_linear_parameters")
+    helper = reconstruct_utils.ReconstructHelper_from_xml(helper_elem)
+
+    return SingleCameraCalibration(cam_id=cam_id,
+                                   Pmat=pmat,
+                                   res=res,
+                                   pp=pp,
+                                   scale_factor=scale_factor,
                                    helper=helper)
 
 def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
@@ -444,6 +492,15 @@ def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
     return SingleCameraCalibration(Pmat=M,
                                    helper=helper,
                                    **kw)
+
+def Reconstructor_from_xml(elem):
+    assert ET.iselement(elem)
+    assert elem.tag == "multi_camera_reconstructor"
+    sccs = []
+    for child in elem:
+        scc = SingleCameraCalibration_from_xml(child)
+        sccs.append( scc )
+    return Reconstructor(sccs)
 
 class Reconstructor:
     def __init__(self,
@@ -1012,6 +1069,14 @@ class Reconstructor:
                 xs_d.append( x_distorted )
                 ys_d.append( y_distorted )
         return xs_d, ys_d
+
+    def add_element(self,parent):
+        """add self as XML element to parent"""
+        assert ET.iselement(parent)
+        elem = ET.SubElement(parent,"multi_camera_reconstructor")
+        for cam_id in self.cam_ids:
+            scc = self.get_SingleCameraCalibration(cam_id)
+            scc.add_element(elem)
 
 def test():
     import flydra.generate_fake_calibration as gfc
