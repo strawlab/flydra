@@ -184,7 +184,7 @@ class SingleCameraCalibration:
                  cam_id=None, # non-optional
                  Pmat=None,   # non-optional
                  res=None,    # non-optional
-                 pp=None,
+#                 pp=None,
                  helper=None,
                  scale_factor=None # scale_factor is for conversion to meters (e.g. should be 1e-3 if your units are mm)
                  ):
@@ -213,15 +213,15 @@ class SingleCameraCalibration:
         self.Pmat=Pmat
         self.res=res
 
-        pp_guess = False
-        if pp is None:
-            pp = self.res[0]/2.0,self.res[1]/2.0
-            pp_guess = True
-        if len(pp) != 2:
-            raise ValueError('len(pp) must be 2')
-        self.pp = pp
+##         pp_guess = False
+##         if pp is None:
+##             pp = self.res[0]/2.0,self.res[1]/2.0
+##             pp_guess = True
+##         if len(pp) != 2:
+##             raise ValueError('len(pp) must be 2')
+## #        self.pp = pp
 
-        if 1:
+        if 0:
             center = self.get_image_center()
             if ((pp[0]-center[0])**2 + (pp[1]-center[1])**2 ) > 5:
                 if WARN_CALIB_DIFF:
@@ -265,7 +265,7 @@ class SingleCameraCalibration:
         return not (self==other)
 
     def __eq__(self,other):
-        return (numpy.allclose(self.pp,other.pp) and
+        return (#numpy.allclose(self.pp,other.pp) and
                 (self.cam_id == other.cam_id) and
                 numpy.allclose(self.Pmat,other.Pmat) and
                 numpy.allclose(self.res,other.res) and
@@ -288,11 +288,11 @@ class SingleCameraCalibration:
         else:
             new_scale_factor = None
 
-        scaled = SingleCameraCalibration(self.cam_id,
-                                         scaled_Pmat,
-                                         self.res,
-                                         self.pp,
-                                         self.helper,
+        scaled = SingleCameraCalibration(cam_id=self.cam_id,
+                                         Pmat=scaled_Pmat,
+                                         res=self.res,
+#                                         self.pp,
+                                         helper=self.helper,
                                          scale_factor=new_scale_factor)
         return scaled
 
@@ -346,8 +346,9 @@ class SingleCameraCalibration:
         #import flydra.geom as geom
         import flydra.fastgeom as geom
         c1 = self.get_cam_center()[:,0]
+        pp = self.get_image_center()
 
-        x2d = (self.pp[0],self.pp[1],1.0)
+        x2d = (pp[0],pp[1],1.0)
         c2 = numpy.dot(self.pmat_inv, as_column(x2d))[:,0]
         c2 = c2[:3]/c2[3]
         c1 = geom.ThreeTuple(c1)
@@ -356,11 +357,12 @@ class SingleCameraCalibration:
 
     def get_up_vector(self):
         # create up vector from image plane
-        x2d_a = (self.pp[0],self.pp[1],1.0)
+        pp = self.get_image_center()
+        x2d_a = (pp[0],pp[1],1.0)
         c2_a = numpy.dot(self.pmat_inv, as_column(x2d_a))[:,0]
         c2_a = c2_a[:3]/c2_a[3]
 
-        x2d_b = (self.pp[0],self.pp[1]+1,1.0)
+        x2d_b = (pp[0],pp[1]+1,1.0)
         c2_b = numpy.dot(self.pmat_inv, as_column(x2d_b))[:,0]
         c2_b = c2_b[:3]/c2_b[3]
 
@@ -377,7 +379,7 @@ class SingleCameraCalibration:
         fd.write(    '       ]\n')
 
         fd.write(    'res = (%d,%d)\n'%(self.res[0],self.res[1]))
-        fd.write(    'pp = (%s,%s)\n'%(repr(self.pp[0]),repr(self.pp[1])))
+#        fd.write(    'pp = (%s,%s)\n'%(repr(self.pp[0]),repr(self.pp[1])))
 
         fd.write(    'K = [\n')
         for row in self.helper.get_K():
@@ -408,8 +410,8 @@ class SingleCameraCalibration:
         res = ET.SubElement(elem, "resolution")
         res.text = ' '.join(map(str,self.res))
 
-        pp = ET.SubElement(elem, "principal_point")
-        pp.text = ' '.join(map(str,self.pp))
+#        pp = ET.SubElement(elem, "principal_point")
+#        pp.text = ' '.join(map(str,self.pp))
 
         scale_factor = ET.SubElement(elem, "scale_factor")
         scale_factor.text = str(self.scale_factor)
