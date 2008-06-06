@@ -450,7 +450,6 @@ def SingleCameraCalibration_from_xml(elem):
     cam_id = elem.find("cam_id").text
     pmat = numpy.array(numpy.mat(elem.find("calibration_matrix").text))
     res = numpy.array(numpy.mat(elem.find("resolution").text))[0,:]
-    pp = numpy.array(numpy.mat(elem.find("principal_point").text))[0,:]
     scale_factor = float(elem.find("scale_factor").text)
     helper_elem = elem.find("non_linear_parameters")
     helper = reconstruct_utils.ReconstructHelper_from_xml(helper_elem)
@@ -458,7 +457,6 @@ def SingleCameraCalibration_from_xml(elem):
     return SingleCameraCalibration(cam_id=cam_id,
                                    Pmat=pmat,
                                    res=res,
-                                   pp=pp,
                                    scale_factor=scale_factor,
                                    helper=helper)
 

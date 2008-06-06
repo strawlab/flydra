@@ -17,6 +17,7 @@ import pytz, datetime
 import pkg_resources
 import flydra.reconstruct as reconstruct
 import flydra.analysis.result_utils as result_utils
+import flydra.a2.xml_stimulus as xml_stimulus
 
 pacific = pytz.timezone('US/Pacific')
 
@@ -25,7 +26,7 @@ try:
 except ImportError, err:
     import cgtypes # cgkit 1
 import flydra.a2.pos_ori2fu
-from flydra.a2.experiment_layout import get_tvtk_actors_for_file
+#from flydra.a2.experiment_layout import get_tvtk_actors_for_file
 import flydra.version
 
 def print_cam_props(camera):
@@ -643,20 +644,29 @@ def doit(filename,
         a.property.specular = 0.3
         actors.append(a)
 
-    if not is_mat_file:
-        extra['kresults'].close()
-
     ################################
 
-    if draw_stim_func_str is None:
-        if 0:
-            draw_stim_func_str = 'default'
-        else:
-            # new style
-            stim_actors = get_tvtk_actors_for_file(filename=filename,
-                                                   force_stimulus=options.force_stimulus,
-                                                   )
-            actors.extend( stim_actors )
+    ## if draw_stim_func_str is None:
+    ##     if 0:
+    ##         draw_stim_func_str = 'default'
+    ##     else:
+    ##         # new style
+    ##         stim_actors = get_tvtk_actors_for_file(filename=filename,
+    ##                                                force_stimulus=options.force_stimulus,
+    ##                                                )
+    ##         actors.extend( stim_actors )
+
+    if options.stim_xml is not None:
+        stim_xml = xml_stimulus.xml_stimulus_from_filename( options.stim_xml )
+        if not is_mat_file:
+            R = reconstruct.Reconstructor(data_file)
+            stim_xml.verify_reconstructor(R)
+
+        if not is_mat_file:
+            assert data_file.filename.startswith('DATA') and data_file.filename.endswith('.h5')
+            file_timestamp = data_file.filename[4:19]
+            stim_xml.verify_timestamp( file_timestamp )
+        actors.extend(stim_xml.get_tvtk_actors())
 
     if draw_stim_func_str:
         import flydra.a2.stim_plugins as stim_plugins
@@ -675,6 +685,10 @@ def doit(filename,
         actors.extend( stim_actors )
 
     ################################
+
+    if not is_mat_file:
+        # make sure this is after all uses of data_file
+        extra['kresults'].close()
 
     if show_only_track_ends:
         pd = tvtk.PolyData()
@@ -891,6 +905,12 @@ def main():
                       dest="draw_stim_func_str",
                       default=None,
                       help="name of drawing plugin. use a non-existant name to print list of availabe names",
+                      )
+
+    parser.add_option("--stim-xml",
+                      type="string",
+                      default=None,
+                      help="name of XML file with stimulus info",
                       )
 
     parser.add_option("--dynamic-model",
