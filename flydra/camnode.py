@@ -2148,8 +2148,13 @@ class AppState(object):
                         enum = CAM_CONTROLS[property_name]
                         if type(value) == tuple: # setting whole thing
                             props = cam.get_camera_property_info(enum)
-                            assert value[1] == props['min_value']
-                            assert value[2] == props['max_value']
+                            #print 'props:',props
+                            if value[1] != props['min_value']:
+                                import warnings
+                                warnings.warn('value[1] != props["min_value"] (%d != %d)'%(value[1], props['min_value']))
+                            if value[2] != props['max_value']:
+                                import warnings
+                                warnings.warn('value[2] != props["max_value"] (%d != %d)'%(value[2], props['max_value']))
                             value = value[0]
                         cam.set_camera_property(enum,value,0)
                     elif property_name == 'roi':
