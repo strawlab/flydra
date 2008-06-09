@@ -15,6 +15,7 @@ import pylab
 import flydra.reconstruct
 import flydra.analysis.result_utils as result_utils
 import matplotlib.cm as cm
+import flydra.a2.xml_stimulus as xml_stimulus
 
 def auto_subplot(fig,n,n_rows=2,n_cols=3):
     # 2 rows and n_cols
@@ -132,6 +133,7 @@ class ShowIt(object):
                 frame_stop = None,
                 show_nth_frame = None,
                 reconstructor_filename=None,
+                options=None,
                 ):
 
         if show_nth_frame == 0:
@@ -158,6 +160,21 @@ class ShowIt(object):
 
             if reconstructor_source is not None:
                 self.reconstructor = flydra.reconstruct.Reconstructor(reconstructor_source)
+
+        if options.stim_xml:
+            stim_xml = xml_stimulus.xml_stimulus_from_filename( options.stim_xml )
+            if self.reconstructor is not None:
+                try:
+                    stim_xml.verify_reconstructor(self.reconstructor)
+                except:
+                    if 0:
+                        print 'reconstructors are different'
+                        print self.reconstructor
+                        print '-'*80
+                        print stim_xml.get_reconstructor()
+                    raise
+            file_timestamp = results.filename[4:19]
+            stim_xml.verify_timestamp( file_timestamp )
 
         if self.reconstructor is not None:
             self.reconstructor = self.reconstructor.get_scaled()
@@ -252,6 +269,8 @@ class ShowIt(object):
                 #ax.set_ylim([0,res[1]])
                 ax.set_ylim([res[1],0])
 
+            if options.stim_xml is not None:
+                stim_xml.plot_stim( ax, cam_id )
         for camn in unique_camns:
             cam_id = camn2cam_id[camn]
             ax = self.subplot_by_cam_id[cam_id]
@@ -436,6 +455,12 @@ def main():
                       dest='show_nth_frame',
                       help='show Nth frame number (0=none)')
 
+    parser.add_option("--stim-xml",
+                      type="string",
+                      default=None,
+                      help="name of XML file with stimulus info",
+                      )
+
     (options, args) = parser.parse_args()
 
     if options.filename is not None:
@@ -461,6 +486,7 @@ def main():
                    frame_stop = options.stop,
                    show_nth_frame = options.show_nth_frame,
                    reconstructor_filename=options.reconstructor_path,
+                   options=options,
                    )
     pylab.show()
 
