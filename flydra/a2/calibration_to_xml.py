@@ -33,6 +33,8 @@ def pretty_dump(e, ind=''):
 
 def doit(calsource,options=None):
     r = reconstruct.Reconstructor(calsource)
+    if options.scaled:
+        r = r.get_scaled()
     root = ET.Element("root")
     r.add_element(root)
     child = root[0]
@@ -51,6 +53,9 @@ def main():
     parser = OptionParser(usage)
 
     parser.add_option("--pretty", action='store_true',
+                      default=False)
+
+    parser.add_option("--scaled", action='store_true',
                       default=False)
 
     (options, args) = parser.parse_args()
