@@ -18,7 +18,7 @@ PT_TUPLE_IDX_AREA = flydra.data_descriptions.PT_TUPLE_IDX_AREA
 PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
 PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
-PT_TUPLE_IDX_MEAN2_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN2_VAL_IDX
+PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_IDX
 
 packet_header_fmt = '<idBB' # XXX check format
 packet_header_fmtsize = struct.calcsize(packet_header_fmt)
@@ -313,7 +313,7 @@ class TrackedObject:
         self.my_kalman.xhat_k1 = self.xhats[-1]
         self.my_kalman.P_k1 = self.Ps[-1]
 
-    def some_rough_negative_log_liklihood( self, pt_area, cur_val, mean_val, mean2_val ):
+    def some_rough_negative_log_liklihood( self, pt_area, cur_val, mean_val, sumsqf_val ):
         return 0.0
 
 
@@ -389,11 +389,11 @@ class TrackedObject:
                 pt_area = pt_undistorted[PT_TUPLE_IDX_AREA]
                 cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
                 mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
-                mean2_val = pt_undistorted[PT_TUPLE_IDX_MEAN2_VAL_IDX]
-                
-                p_y_x = self.some_rough_negative_log_liklihood( pt_area, cur_val, mean_val, mean2_val )
+                sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
+
+                p_y_x = self.some_rough_negative_log_liklihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
                 dist = numpy.sqrt(dist2)
-                
+
                 nll_this_point = p_y_x + dist # negative log liklihood of this point
 
                 pixel_dist_criterion_passed = True
@@ -410,14 +410,14 @@ class TrackedObject:
                     frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                     cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
                     mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
-                    mean2_val = pt_undistorted[PT_TUPLE_IDX_MEAN2_VAL_IDX]
+                    sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
                     if pixel_dist_cmp is not None:
                         extra_print = 'distorted %.1f %.1f (pixel_dist = %.1f, criterion passed=%s)'%(
                             pt_x_dist, pt_y_dist, pixel_dist, str(pixel_dist_criterion_passed))
                     else:
                         extra_print = ''
-                    #print '    ->', dist2, pt_undistorted[:2], '(idx %d, area %f, cur %d, mean %d, mean2 %d) %s'%(
-                    #    frame_pt_idx,pt_area,cur_val,mean_val,mean2_val,extra_print)
+                    #print '    ->', dist2, pt_undistorted[:2], '(idx %d, area %f, cur %d, mean %d, sumsqf %d) %s'%(
+                    #    frame_pt_idx,pt_area,cur_val,mean_val,sumsqf_val,extra_print)
 
                 if pixel_dist_criterion_passed:
                     if debug>2:

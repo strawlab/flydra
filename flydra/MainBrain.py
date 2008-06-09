@@ -69,7 +69,7 @@ PT_TUPLE_IDX_Y = flydra.data_descriptions.PT_TUPLE_IDX_Y
 PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
 PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
-PT_TUPLE_IDX_MEAN2_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN2_VAL_IDX
+PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_IDX
 
 # these calibration data are global, but that's a hack...
 calib_data_lock = threading.Lock()
@@ -930,7 +930,7 @@ class CoordinateProcessor(threading.Thread):
                                  x_undistorted,y_undistorted,
                                  ray_valid,
                                  ray0, ray1, ray2, ray3, ray4, ray5, # pluecker coords from cam center to detected point
-                                 cur_val, mean_val, mean2_val,
+                                 cur_val, mean_val, sumsqf_val,
                                  )= struct.unpack(pt_fmt,data[start:end])
                                 # nan cannot get sent across network in platform-independent way
                                 if not line_found:
@@ -949,7 +949,7 @@ class CoordinateProcessor(threading.Thread):
                                 pt_distorted = (x_distorted,y_distorted,
                                                 area,slope,eccentricity,
                                                 p1,p2,p3,p4, line_found, frame_pt_idx,
-                                                cur_val, mean_val, mean2_val)
+                                                cur_val, mean_val, sumsqf_val)
                                 if ray_valid:
                                     points_in_pluecker_coords_meters.append( (pt_undistorted,
                                                                               geom.line_from_HZline((ray0,ray1,
@@ -996,12 +996,12 @@ class CoordinateProcessor(threading.Thread):
                                 frame_pt_idx = point_tuple[PT_TUPLE_IDX_FRAME_PT_IDX]
                                 cur_val = point_tuple[PT_TUPLE_IDX_CUR_VAL_IDX]
                                 mean_val = point_tuple[PT_TUPLE_IDX_MEAN_VAL_IDX]
-                                mean2_val = point_tuple[PT_TUPLE_IDX_MEAN2_VAL_IDX]
+                                sumsqf_val = point_tuple[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
                                 deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                                          corrected_framenumber,
                                                          timestamp,camn_received_time)
                                                         +point_tuple[:5]
-                                                        +(frame_pt_idx,cur_val,mean_val,mean2_val))
+                                                        +(frame_pt_idx,cur_val,mean_val,sumsqf_val))
                         # save new frame data
 
                         if corrected_framenumber not in realtime_coord_dict:
@@ -1649,7 +1649,7 @@ class MainBrain(object):
                         frame_pt_idx = point_tuple[PT_TUPLE_IDX_FRAME_PT_IDX]
                         cur_val = point_tuple[PT_TUPLE_IDX_CUR_VAL_IDX]
                         mean_val = point_tuple[PT_TUPLE_IDX_MEAN_VAL_IDX]
-                        mean2_val = point_tuple[PT_TUPLE_IDX_MEAN2_VAL_IDX]
+                        sumsqf_val = point_tuple[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
                     except:
                         print >> sys.stderr, 'error while appending point_tuple',point_tuple
                         raise
@@ -1657,7 +1657,7 @@ class MainBrain(object):
                                              corrected_framenumber,
                                              remote_timestamp, camn_received_time)
                                             +point_tuple[:5]
-                                            +(frame_pt_idx,cur_val,mean_val,mean2_val))
+                                            +(frame_pt_idx,cur_val,mean_val,sumsqf_val))
             self.main_brain.queue_data2d.put(deferred_2d_data)
 
         def set_fps(self,cam_id,fps):

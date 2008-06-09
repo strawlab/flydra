@@ -439,7 +439,7 @@ class ProcessCamClass(object):
         self._hlper = reconstruct_utils.ReconstructHelper(
             fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
 
-    def _convert_to_wire_order(self, xpoints, hw_roi_frame, running_mean_im, mean2 ):
+    def _convert_to_wire_order(self, xpoints, hw_roi_frame, running_mean_im, sumsqf ):
         """the images passed in are already in roi coords, as are index_x and index_y.
         convert to values for sending.
         """
@@ -456,7 +456,7 @@ class ProcessCamClass(object):
             # point. Cast to Python int and floats.
             cur_val = int(hw_roi_frame[index_y,index_x])
             mean_val = float(running_mean_im[index_y, index_x])
-            mean2_val = float(mean2[index_y, index_x])
+            sumsqf_val = float(sumsqf[index_y, index_x])
 
             if numpy.isnan(slope):
                 run = numpy.nan
@@ -511,7 +511,7 @@ class ProcessCamClass(object):
                   x0u, y0u,
                   ray_valid,
                   ray0, ray1, ray2, ray3, ray4, ray5,
-                  cur_val, mean_val, mean2_val)
+                  cur_val, mean_val, sumsqf_val)
             points.append( pt )
         return points
 
@@ -688,7 +688,7 @@ class ProcessCamClass(object):
 
             # implicit conversion to float32
             numpy.asarray(running_mean_im_full)[:,:] = self._initial_image_dict['mean']
-            numpy.asarray(running_sumsqf)[:,:] = self._initial_image_dict['mean2']
+            numpy.asarray(running_sumsqf)[:,:] = self._initial_image_dict['sumsqf']
 
             if 1:
                 print 'WARNING: ignoring initial images and taking new background'
@@ -805,11 +805,11 @@ class ProcessCamClass(object):
 
                             initial_take_frames = numpy.array( initial_take_frames, dtype=numpy.float32 )
                             mean_frame = numpy.mean( initial_take_frames, axis=0)
-                            mean2_frame = numpy.sum(initial_take_frames**2, axis=0)/len( initial_take_frames )
+                            sumsqf_frame = numpy.sum(initial_take_frames**2, axis=0)/len( initial_take_frames )
 
                             numpy.asarray(running_mean_im)[:,:] = mean_frame
-                            numpy.asarray(running_sumsqf)[:,:] = mean2_frame
-                            print 'using slow method, calculated mean and mean2 frames from first %d frames'%(n_initial_take,)
+                            numpy.asarray(running_sumsqf)[:,:] = sumsqf_frame
+                            print 'using slow method, calculated mean and sumsqf frames from first %d frames'%(n_initial_take,)
 
                             # we're done with initial transient, set stuff
                             do_bg_maint = True
@@ -1074,7 +1074,7 @@ class SaveCamData(object):
                     raw_file_basename = cmd[1]
                     full_raw = raw_file_basename + '.fmf'
                     full_bg = raw_file_basename + '_mean.fmf'
-                    full_std = raw_file_basename + '_mean2.fmf'
+                    full_std = raw_file_basename + '_sumsqf.fmf'
                     print 'saving movies','-'*50
                     raw_movie = FlyMovieFormat.FlyMovieSaver(full_raw,
                                                              format='MONO8',
@@ -1552,26 +1552,26 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
         ImageSourceModel = ImageSourceFakeCamera
 
         mean_filename = os.path.splitext(fname)[0] + '_mean' + '.fmf'
-        mean2_filename = os.path.splitext(fname)[0] + '_mean2' + '.fmf'
+        sumsqf_filename = os.path.splitext(fname)[0] + '_sumsqf' + '.fmf'
 
         fmf_ra = FlyMovieFormat.mmap_flymovie( fname )
         mean_ra =  FlyMovieFormat.mmap_flymovie( mean_filename )
-        mean2_ra = FlyMovieFormat.mmap_flymovie( mean2_filename )
+        sumsqf_ra = FlyMovieFormat.mmap_flymovie( sumsqf_filename ) # not really mean2 (actually running_sumsqf)
 
         t0 = fmf_ra['timestamp'][0]
         mean_t0 = mean_ra['timestamp'][0]
-        mean2_t0 = mean2_ra['timestamp'][0]
+        sumsqf_t0 = sumsqf_ra['timestamp'][0]
 
-        if not ((t0 >= mean_t0) and (t0 >= mean2_t0)):
+        if not ((t0 >= mean_t0) and (t0 >= sumsqf_t0)):
             print '*'*80
             print 'WARNING timestamps of first image frame is not before mean image timestamps. they are'
             print ' raw .fmf: %s'%repr(t0)
             print ' mean .fmf:  %s'%repr(mean_t0)
-            print ' mean2 .fmf: %s'%repr(mean2_t0)
+            print ' sumsqf .fmf: %s'%repr(sumsqf_t0)
             print '*'*80
 
         initial_image_dict = {'mean':mean_ra['frame'][0],
-                              'mean2':mean2_ra['frame'][0],
+                              'sumsqf':sumsqf_ra['frame'][0],  # not really mean2 (actually running_sumsqf)
                               'raw':fmf_ra['frame'][0]}
         if 0 and len( mean_ra['frame'] ) > 1:
             print ("no current support for reading back multi-frame "
