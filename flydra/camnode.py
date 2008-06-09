@@ -765,7 +765,7 @@ class ProcessCamClass(object):
                     chainbuf.absdiff8u_im_full = numpy.array(absdiff8u_im_full,copy=True)
                     chainbuf.mean8u_im_full = numpy.array(running_mean8u_im_full,copy=True)
                     chainbuf.compareframe8u_full = numpy.array(compareframe8u_full,copy=True)
-                points = self._convert_to_wire_order( xpoints, hw_roi_frame, running_mean_im, mean2)
+                points = self._convert_to_wire_order( xpoints, hw_roi_frame, running_mean_im, running_sumsqf)
 
                 work_done_time = time.time()
 
