@@ -24,6 +24,7 @@ rcParams['ytick.major.pad'] = 10
 import pylab
 
 import core_analysis
+import flydra.a2.xml_stimulus as xml_stimulus
 
 import pytz, datetime
 pacific = pytz.timezone('US/Pacific')
@@ -51,7 +52,7 @@ def doit(
          start = None,
          stop = None,
          obj_only = None,
-         draw_stim_func_str = None,
+         options = None,
          ):
 
     if not use_kalman_smoothing:
@@ -74,6 +75,9 @@ def doit(
             fps = 100.0
             import warnings
             warnings.warn('Setting fps to default value of %f'%fps)
+        reconstructor = reconstruct.Reconstructor(data_file)
+    else:
+        reconstructor = None
 
     fig = pylab.figure(figsize=(5,8))
     figtitle = kalman_filename.split('.')[0]
@@ -145,15 +149,27 @@ def doit(
                      linewidth = line.get_linewidth() )
         subplot['xz'].plot( Xx, Xz, '.', label='obj %d'%obj_id, **props )
 
-    if draw_stim_func_str:
-        PluginClass = plugin_loader(draw_stim_func_str)
-        plugin = PluginClass(filename=kalman_filename,
-                            force_stimulus=True)
-        stim_lines = plugin.get_3d_lines()
+    ## if draw_stim_func_str:
+    ##     PluginClass = plugin_loader(draw_stim_func_str)
+    ##     plugin = PluginClass(filename=kalman_filename,
+    ##                         force_stimulus=True)
+    ##     stim_lines = plugin.get_3d_lines()
 
-        for stim_line in stim_lines:
-            subplot['xy'].plot( stim_line[:,0], stim_line[:,1], 'k-' )
-            subplot['xz'].plot( stim_line[:,0], stim_line[:,2], 'k-' )
+    ##     for stim_line in stim_lines:
+    ##         subplot['xy'].plot( stim_line[:,0], stim_line[:,1], 'k-' )
+    ##         subplot['xz'].plot( stim_line[:,0], stim_line[:,2], 'k-' )
+    if options.stim_xml:
+        stim_xml = xml_stimulus.xml_stimulus_from_filename( options.stim_xml )
+        if reconstructor is not None:
+            stim_xml.verify_reconstructor(reconstructor)
+        file_timestamp = data_file.filename[4:19]
+        stim_xml.verify_timestamp( file_timestamp )
+        def xy_project(X):
+            return X[0], X[1]
+        def xz_project(X):
+            return X[0], X[2]
+        stim_xml.plot_stim( subplot['xy'], projection=xy_project )
+        stim_xml.plot_stim( subplot['xz'], projection=xz_project )
 
     subplot['xy'].set_aspect('equal')
     subplot['xz'].set_aspect('equal')
@@ -198,11 +214,10 @@ def main():
     parser.add_option("--obj-only", type="string",
                       dest="obj_only")
 
-    parser.add_option("--draw-stim",
+    parser.add_option("--stim-xml",
                       type="string",
-                      dest="draw_stim_func_str",
                       default=None,
-                      help="possible values: %s"%str(plugin_loader.all_names),
+                      help="name of XML file with stimulus info",
                       )
 
     (options, args) = parser.parse_args()
@@ -219,10 +234,10 @@ def main():
          fps = options.fps,
          dynamic_model = options.dynamic_model,
          use_kalman_smoothing=options.use_kalman_smoothing,
-         draw_stim_func_str = options.draw_stim_func_str,
          start=options.start,
          stop=options.stop,
          obj_only=options.obj_only,
+         options=options,
          )
 
 if __name__=='__main__':

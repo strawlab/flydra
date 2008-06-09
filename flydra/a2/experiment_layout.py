@@ -3,7 +3,49 @@ import numpy
 from numpy import array
 from enthought.tvtk.api import tvtk
 
-def cylindrical_post(verts=None,diameter=None):
+def cylindrical_arena(info=None):
+    assert numpy.allclose(info['axis'],numpy.array([0,0,1])), "only vertical areas supported at the moment"
+
+    N = 128
+    theta = numpy.linspace(0,2*numpy.pi,N)
+    r = info['diameter']/2.0
+    xs = r*numpy.cos( theta ) + info['origin'][0]
+    ys = r*numpy.sin( theta ) + info['origin'][1]
+
+    z_levels = numpy.linspace(info['origin'][2],info['origin'][2]+info['height'],5)
+
+    verts = []
+    vi = 0 # vert idx
+    lines = []
+
+    for z in z_levels:
+        zs = z*numpy.ones_like(xs)
+        v = numpy.array([xs,ys,zs]).T
+        for i in range(N):
+            verts.append( v[i] )
+
+        for i in range(N-1):
+            lines.append( [i+vi,i+1+vi] )
+        lines.append( [vi+N-1,vi] )
+
+        vi += (N)
+    pd = tvtk.PolyData()
+    pd.points = verts
+    pd.lines = lines
+    pt = tvtk.TubeFilter(radius=0.001,input=pd,
+                         number_of_sides=4,
+                         vary_radius='vary_radius_off',
+                         )
+    m = tvtk.PolyDataMapper(input=pt.output)
+    a = tvtk.Actor(mapper=m)
+    a.property.color = .9, .9, .9
+    a.property.specular = 0.3
+    return [a]
+
+def cylindrical_post(info=None):
+    verts=info['verts']
+    diameter=info['diameter']
+
     radius = diameter/2.0
     actors = []
     verts = numpy.asarray(verts)

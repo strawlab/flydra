@@ -164,15 +164,7 @@ class ShowIt(object):
         if options.stim_xml:
             stim_xml = xml_stimulus.xml_stimulus_from_filename( options.stim_xml )
             if self.reconstructor is not None:
-                try:
-                    stim_xml.verify_reconstructor(self.reconstructor)
-                except:
-                    if 0:
-                        print 'reconstructors are different'
-                        print self.reconstructor
-                        print '-'*80
-                        print stim_xml.get_reconstructor()
-                    raise
+                stim_xml.verify_reconstructor(self.reconstructor)
             file_timestamp = results.filename[4:19]
             stim_xml.verify_timestamp( file_timestamp )
 
@@ -270,7 +262,7 @@ class ShowIt(object):
                 ax.set_ylim([res[1],0])
 
             if options.stim_xml is not None:
-                stim_xml.plot_stim( ax, cam_id )
+                stim_xml.plot_stim_over_distorted_image( ax, cam_id )
         for camn in unique_camns:
             cam_id = camn2cam_id[camn]
             ax = self.subplot_by_cam_id[cam_id]
