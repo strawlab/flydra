@@ -8,7 +8,7 @@ PT_TUPLE_IDX_AREA = 2
 PT_TUPLE_IDX_FRAME_PT_IDX = 10
 PT_TUPLE_IDX_CUR_VAL_IDX = 11
 PT_TUPLE_IDX_MEAN_VAL_IDX = 12
-PT_TUPLE_IDX_MEAN2_VAL_IDX = 13
+PT_TUPLE_IDX_SUMSQF_VAL_IDX = 13
 
 # 2D data format for PyTables:
 class Info2D(PT.IsDescription):
@@ -21,7 +21,7 @@ class Info2D(PT.IsDescription):
     area         = PT.Float32Col(pos=6)
     slope        = PT.Float32Col(pos=7)
     eccentricity = PT.Float32Col(pos=8)
-    frame_pt_idx = PT.UInt8Col(pos=9)
+    frame_pt_idx = PT.UInt8Col(pos=9) # index of point if there were > 1 points in frame
     cur_val      = PT.UInt8Col(pos=10)
     mean_val     = PT.Float32Col(pos=11)
-    mean2_val    = PT.Float32Col(pos=12)
+    sumsqf_val   = PT.Float32Col(pos=12) # estimate of <x^2> (running_sumsqf)
