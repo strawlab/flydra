@@ -113,7 +113,7 @@ def doit(
                                          )
         except core_analysis.ObjectIDDataError:
             continue
-        kobs_rows = ca.load_observations( obj_id, data_file )
+        kobs_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file )
 
         frame = kalman_rows['frame']
 
