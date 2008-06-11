@@ -143,6 +143,14 @@ def doit(
         Xy = kalman_rows['y']
         Xz = kalman_rows['z']
 
+        if options.max_z is not None:
+            cond = Xz <= options.max_z
+
+            Xx = numpy.ma.masked_where(~cond,Xx)
+            Xy = numpy.ma.masked_where(~cond,Xy)
+            Xz = numpy.ma.masked_where(~cond,Xz)
+            subplot['xz'].axhline( options.max_z )
+
         line, = subplot['xy'].plot( Xx, Xy, '.', label='obj %d'%obj_id )
 
         props = dict(color = line.get_color(),
@@ -202,6 +210,8 @@ def main():
                       dest="dynamic_model",
                       default=None,
                       )
+
+    parser.add_option("--max-z", type="float")
 
     parser.add_option("--start", type="int",
                       help="first frame to plot",
