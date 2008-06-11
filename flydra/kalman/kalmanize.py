@@ -568,12 +568,14 @@ def kalmanize(src_filename,
             # new columns added to data2d_distorted format.
             cur_val = row['cur_val']
             mean_val = row['mean_val']
-            nstd_val = row['nstd_val']
+            sumsqf_val = row['sumsqf_val']
         except IndexError, err:
+            import warnings
+            warnings.warn('ignoring IndexError because your 2D does not have expected column',RuntimeWarning)
             # Don't fail if these columns don't exist.
             cur_val = 0
             mean_val = 0
-            nstd_val = 0
+            sumsqf_val = 0
 
         # XXX for now, do not calculate 3D plane for each point. This
         # is because we are punting on calculating p1,p2,p3,p4 from
@@ -585,7 +587,7 @@ def kalmanize(src_filename,
         # Keep in sync with kalmanize.py and data_descriptions.py
         pt_undistorted = (x_undistorted,y_undistorted,
                           area,slope,eccentricity,
-                          p1,p2,p3,p4, line_found, frame_pt_idx, cur_val, mean_val, nstd_val)
+                          p1,p2,p3,p4, line_found, frame_pt_idx, cur_val, mean_val, sumsqf_val)
 
         pluecker_hz_meters=reconstructor_meters.get_projected_line_from_2d(
             cam_id,(x_undistorted,y_undistorted))
