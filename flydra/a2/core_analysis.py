@@ -137,7 +137,8 @@ def check_is_mat_file(data_file):
 
 def get_data(filename):
     import warnings
-    warnings.warn('DeprecationWarning: instead of get_data(), use CachingAnalyzer.initial_file_load(filename)')
+    warnings.warn('instead of get_data(), use CachingAnalyzer.initial_file_load(filename)',
+                  DeprecationWarning)
     return _initial_file_load(filename)
 
 def _initial_file_load(filename):
@@ -414,6 +415,20 @@ class CachingAnalyzer:
 
     def load_observations(self,obj_id,data_file):
         """Load observations used for Kalman state estimates from data_file.
+        """
+
+        warnings.warn( "using deprecated method load_observations() "
+                       "- use load_dynamics_free_MLE_position() instead.",
+                       DeprecationWarning )
+
+        return self.load_dynamics_free_MLE_position(obj_id,data_file)
+
+    def load_dynamics_free_MLE_position(self,obj_id,data_file):
+        """Load maximum likelihood estimate of object position from data_file.
+
+        This estimate is independent of any Kalman-filter dynamics,
+        and simply represents the least-squares intersection of the
+        rays from each camera's observation.
         """
         is_mat_file = check_is_mat_file(data_file)
 
