@@ -313,7 +313,7 @@ class TrackedObject:
         self.my_kalman.xhat_k1 = self.xhats[-1]
         self.my_kalman.P_k1 = self.Ps[-1]
 
-    def some_rough_negative_log_liklihood( self, pt_area, cur_val, mean_val, sumsqf_val ):
+    def some_rough_negative_log_likelihood( self, pt_area, cur_val, mean_val, sumsqf_val ):
         if 1:
             return 0.0
 
@@ -386,7 +386,7 @@ class TrackedObject:
             #    p( y_t | x_t ) p( x_t, x_{t-1})
 
             # [In this case f(area,...) represents negative log of
-            # the liklihood of observation y given x.]
+            # the likelihood of observation y given x.]
 
             # For large numbers of 2d points in data_dict, probably
             # faster to compute 2d image of error ellipsoid and see if
@@ -415,10 +415,10 @@ class TrackedObject:
                 mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
                 sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
 
-                p_y_x = self.some_rough_negative_log_liklihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
+                p_y_x = self.some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
                 dist = numpy.sqrt(dist2)
 
-                nll_this_point = p_y_x + dist # negative log liklihood of this point
+                nll_this_point = p_y_x + dist # negative log likelihood of this point
 
                 pixel_dist_criterion_passed = True
                 if pixel_dist_cmp is not None:
