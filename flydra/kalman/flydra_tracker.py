@@ -195,7 +195,7 @@ class TrackedObject:
         # For each frame that was skipped, step the Kalman filter.
         # Since we have no observation, the estimated error will
         # rise.
-        frames_skipped = frame-self.current_frameno-1
+        frames_skipped = int(frame)-int(self.current_frameno)-1 # cast from numpy.uint64
 
         if debug1>2:
             print 'doing',self,'============--'
@@ -314,7 +314,31 @@ class TrackedObject:
         self.my_kalman.P_k1 = self.Ps[-1]
 
     def some_rough_negative_log_liklihood( self, pt_area, cur_val, mean_val, sumsqf_val ):
-        return 0.0
+        if 1:
+            return 0.0
+
+        if mean_val != 0:
+            curmean = cur_val/mean_val
+        else:
+            curmean = cur_val
+        std = numpy.sqrt(mean_val**2 - sumsqf_val)
+        absdiff = abs( cur_val - mean_val )
+        if std != 0.0:
+            n_std = absdiff/std
+        else:
+            n_std = numpy.inf
+
+        if curmean > 1.0:
+            if (curmean > 1.1) and (n_std>5.0):
+                result = 0.0
+            else:
+                result = numpy.inf
+        else:
+            if (curmean < 0.972) and (n_std>4.71):
+                result = 0.0
+            else:
+                result = numpy.inf
+        return result
 
 
     def _filter_data(self, xhatminus, Pminus, data_dict, camn2cam_id,
