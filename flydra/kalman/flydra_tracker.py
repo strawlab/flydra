@@ -8,6 +8,7 @@ import flydra.geom
 import flydra.mahalanobis as mahalanobis
 import math, struct
 import flydra.data_descriptions
+from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 import collections
 
 __all__ = ['TrackedObject','Tracker','decode_data_packet']
@@ -313,29 +314,6 @@ class TrackedObject:
         self.my_kalman.xhat_k1 = self.xhats[-1]
         self.my_kalman.P_k1 = self.Ps[-1]
 
-    def some_rough_negative_log_likelihood( self, pt_area, cur_val, mean_val, sumsqf_val ):
-        curmean = cur_val/mean_val
-
-        std = numpy.sqrt(abs(mean_val**2 - sumsqf_val))
-        absdiff = abs( cur_val - mean_val )
-        if std == 0.0:
-            n_std = 100.0
-        else:
-            n_std = absdiff/std
-
-        if curmean > 1.0:
-            if (curmean > 1.1) and (n_std>5.0):
-                result = 0.0
-            else:
-                result = numpy.inf
-        else:
-            if (curmean < 0.972) and (n_std>4.71):
-                result = 0.0
-            else:
-                result = numpy.inf
-        return result
-
-
     def _filter_data(self, xhatminus, Pminus, data_dict, camn2cam_id,
                      debug=0):
         """given state estimate, select useful incoming data and make new observation
@@ -410,7 +388,7 @@ class TrackedObject:
                 mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
                 sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
 
-                p_y_x = self.some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
+                p_y_x = some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
                 dist = numpy.sqrt(dist2)
 
                 nll_this_point = p_y_x + dist # negative log likelihood of this point
