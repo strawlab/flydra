@@ -72,6 +72,8 @@ setup(name='flydra',
     'flydra_textlog2csv = flydra.a2.flydra_textlog2csv:main',
 
     'flydra_checkerboard = flydra.radial_distortion.checkerboard:main',
+
+    'flydra_analysis_print_kalmanize_makefile_location = flydra.a2.print_kalmanize_makefile_location:main',
     ],
     'gui_scripts': [
     'flydra_mainbrain = flydra.wxMainBrain:main',
@@ -93,6 +95,7 @@ setup(name='flydra',
                     'flydra.a2':['kdmovie_saver_default_path.kmp',
                                  'sample_*.h5',
                                  'sample_*.mat',
+                                 'Makefile.kalmanize',
                                  ],
                     },
       )
