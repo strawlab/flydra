@@ -314,19 +314,14 @@ class TrackedObject:
         self.my_kalman.P_k1 = self.Ps[-1]
 
     def some_rough_negative_log_likelihood( self, pt_area, cur_val, mean_val, sumsqf_val ):
-        if 1:
-            return 0.0
+        curmean = cur_val/mean_val
 
-        if mean_val != 0:
-            curmean = cur_val/mean_val
-        else:
-            curmean = cur_val
-        std = numpy.sqrt(mean_val**2 - sumsqf_val)
+        std = numpy.sqrt(abs(mean_val**2 - sumsqf_val))
         absdiff = abs( cur_val - mean_val )
-        if std != 0.0:
-            n_std = absdiff/std
+        if std == 0.0:
+            n_std = 100.0
         else:
-            n_std = numpy.inf
+            n_std = absdiff/std
 
         if curmean > 1.0:
             if (curmean > 1.1) and (n_std>5.0):
