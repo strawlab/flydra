@@ -15,6 +15,7 @@ import dynamic_models
 import flydra.save_calibration_data as save_calibration_data
 import collections
 from flydra.MainBrain import TextLogDescription
+from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 
 KalmanEstimates = flydra_kalman_utils.KalmanEstimates
 KalmanEstimatesVelOnly = flydra_kalman_utils.KalmanEstimatesVelOnly
@@ -454,16 +455,6 @@ def kalmanize(src_filename,
 
     done_frames = []
 
-    time1 = time.time()
-    print 'loading all frame numbers...'
-    frames_array = numpy.asarray(data2d.read(field='frame'))
-    time2 = time.time()
-    print 'done in %.1f sec'%(time2-time1)
-
-    row_idxs = numpy.argsort(frames_array)
-
-    print '2D data range: %d<frame<%d'%(frames_array[row_idxs[0]], frames_array[row_idxs[-1]])
-
     if 0:
         print '-='*40
         print '-='*40
@@ -480,7 +471,44 @@ def kalmanize(src_filename,
     time1 = time.time()
     RAM_HEAVY_BUT_FAST=True
     if RAM_HEAVY_BUT_FAST:
+        time1 = time.time()
+        print 'loading all 2D data...'
         data2d_recarray = data2d[:] # needs lots of RAM for big data files
+        time2 = time.time()
+        print 'done in %.1f sec'%(time2-time1)
+
+        if 'sumsqf_val' in data2d_recarray.dtype.fields:
+            sumsqf_val = data2d_recarray['sumsqf_val']
+        else:
+            sumsqf_val = None
+
+        nll = some_rough_negative_log_likelihood(pt_area=None,
+                                                 cur_val=data2d_recarray['cur_val'],
+                                                 mean_val=data2d_recarray['mean_val'],
+                                                 sumsqf_val=sumsqf_val)
+        nonzero_prob = numpy.isfinite(nll)
+        orig_num_rows = len(data2d_recarray)
+        data2d_recarray = data2d_recarray[nonzero_prob]
+        filtered_num_rows = len(data2d_recarray)
+        print ('%d of %d rows have non-zero probability and will be '
+               'considered'%(filtered_num_rows,orig_num_rows))
+
+        frames_array = data2d_recarray['frame']
+    else:
+        time1 = time.time()
+        print 'loading all frame numbers...'
+        frames_array = numpy.asarray(data2d.read(field='frame'))
+        time2 = time.time()
+        print 'done in %.1f sec'%(time2-time1)
+
+        import warnings
+        warnings.warn('No pre-filtering of data based on zero '
+                      'probability -- more data association work is '
+                      'being done than necessary')
+
+    row_idxs = numpy.argsort(frames_array)
+    print '2D data range: %d<frame<%d'%(frames_array[row_idxs[0]], frames_array[row_idxs[-1]])
+
     for row_idx in row_idxs:
         new_frame = frames_array[row_idx]
         if start_frame is not None:
@@ -564,20 +592,14 @@ def kalmanize(src_filename,
                                                   row['slope'],row['eccentricity'],
                                                   row['frame_pt_idx'])
 
-        try:
-            # new columns added to data2d_distorted format.
-            cur_val = row['cur_val']
-            mean_val = row['mean_val']
-            sumsqf_val = row['sumsqf_val']
-        except IndexError, err:
-            import warnings
-            warnings.warn('ignoring IndexError because your 2D does not have expected column',RuntimeWarning)
-            # Don't fail if these columns don't exist.
-            cur_val = 0
-            mean_val = 0
-            sumsqf_val = 0
+        if 'cur_val' in row.dtype.fields: cur_val = row['cur_val']
+        else: cur_val = None
+        if 'mean_val' in row.dtype.fields: mean_val = row['mean_val']
+        else: mean_val = None
+        if 'sumsqf_val' in row.dtype.fields: sumsqf_val = row['sumsqf_val']
+        else: sumsqf_val = None
 
-        # XXX for now, do not calculate 3D plane for each point. This
+         # XXX for now, do not calculate 3D plane for each point. This
         # is because we are punting on calculating p1,p2,p3,p4 from
         # the point, slope, and reconstructor.
 
