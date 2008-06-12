@@ -1424,6 +1424,8 @@ class wxMainBrainApp(wx.App):
                     if image is not None:
                         if hasattr(self.cam_image_canvas,'update_image_and_drawings'):
                             # XXX TODO don't redraw image if image hasn't changed, just update point positions
+
+                            # XXX TODO only show points with non-zero probability (or according to a slider-set scale)
                             self.cam_image_canvas.update_image_and_drawings(cam_id,image,
                                                                             points=points,
                                                                             sort_add=True)
