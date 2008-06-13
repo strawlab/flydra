@@ -1,10 +1,9 @@
 # $Id$
 from setuptools import setup
 from distutils.core import Extension
+import flydra.version
 
-from motmot.utils.utils import get_svnversion_persistent
-version_str = '0.3.dev%(svnversion)s'
-version = get_svnversion_persistent('flydra/version.py',version_str)
+version = flydra.version.__version__
 
 ext_modules = []
 
