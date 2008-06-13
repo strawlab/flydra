@@ -419,7 +419,7 @@ class CachingAnalyzer:
 
         warnings.warn( "using deprecated method load_observations() "
                        "- use load_dynamics_free_MLE_position() instead.",
-                       DeprecationWarning )
+                       DeprecationWarning, stacklevel=2 )
 
         return self.load_dynamics_free_MLE_position(obj_id,data_file)
 

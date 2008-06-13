@@ -16,7 +16,6 @@ import tables as PT
 from optparse import OptionParser
 import flydra.reconstruct as reconstruct
 import flydra.analysis.result_utils as result_utils
-import flydra.a2.stim_plugins as stim_plugins
 import matplotlib
 rcParams = matplotlib.rcParams
 rcParams['xtick.major.pad'] = 10
@@ -42,23 +41,26 @@ class Frames2Time:
         f2  = f/self.fps
         return f2
 
-plugin_loader = stim_plugins.PluginLoader()
+def plot_top_and_side_views(subplot=None,
+                            kalman_filename=None,
+                            fps=None,
+                            dynamic_model=None,
+                            use_kalman_smoothing=None,
+                            options=None,
+                            ):
+    """
+    inputs
+    ------
+    subplot - a dictionary of matplotlib axes instances with keys 'xy' and/or 'xz'
+    fps - the framerate of the data
+    """
+    assert subplot is not None
+    assert kalman_filename is not None
+    assert options is not None
 
-def doit(
-         kalman_filename=None,
-         fps=None,
-         use_kalman_smoothing=True,
-         dynamic_model = None,
-         start = None,
-         stop = None,
-         obj_only = None,
-         options = None,
-         ):
-
-    if not use_kalman_smoothing:
-        if (dynamic_model is not None):
-            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model options (--dynamic-model)'
-            sys.exit(1)
+    start=options.start
+    stop=options.stop
+    obj_only=options.obj_only
 
     ca = core_analysis.CachingAnalyzer()
 
@@ -79,23 +81,6 @@ def doit(
     else:
         reconstructor = None
 
-    fig = pylab.figure(figsize=(5,8))
-    figtitle = kalman_filename.split('.')[0]
-    pylab.figtext(0,0,figtitle)
-
-    ax = None
-    subplot ={}
-    subplots = ['xy','xz']
-    for i, name in enumerate(subplots):
-        ax = fig.add_subplot(len(subplots),1,i+1,sharex=ax)
-        #ax.grid(True)
-        subplot[name] = ax
-
-    dt = 1.0/fps
-
-    if obj_only is not None:
-        use_obj_ids = [i for i in use_obj_ids if i in obj_only]
-
     if dynamic_model is None:
         dynamic_model = extra['dynamic_model_name']
         print 'detected file loaded with dynamic model "%s"'%dynamic_model
@@ -103,18 +88,26 @@ def doit(
             dynamic_model = dynamic_model[4:]
         print '  for smoothing, will use dynamic model "%s"'%dynamic_model
 
+    subplots = subplot.keys()
+    subplots.sort() # ensure consistency across runs
+
+    dt = 1.0/fps
+
+    if obj_only is not None:
+        use_obj_ids = [i for i in use_obj_ids if i in obj_only]
+
     allX = {}
     frame0 = None
     for obj_id in use_obj_ids:
         try:
-            kalman_rows =  ca.load_data( obj_id, data_file,
-                                         use_kalman_smoothing=use_kalman_smoothing,
-                                         dynamic_model_name = dynamic_model,
-                                         frames_per_second=fps,
-                                         )
+            kalman_rows = ca.load_data( obj_id, data_file,
+                                        use_kalman_smoothing=use_kalman_smoothing,
+                                        dynamic_model_name = dynamic_model,
+                                        frames_per_second=fps,
+                                        )
         except core_analysis.ObjectIDDataError:
             continue
-        kobs_rows = ca.load_observations( obj_id, data_file )
+        kobs_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file )
 
         frame = kalman_rows['frame']
 
@@ -132,12 +125,6 @@ def doit(
                 continue
 
             frame = kalman_rows['frame']
-
-
-        ## fprev = 0
-        ## for f in frame:
-        ##     print f, f-fprev
-        ##     fprev=f
 
         Xx = kalman_rows['x']
         Xy = kalman_rows['y']
@@ -157,15 +144,6 @@ def doit(
                      linewidth = line.get_linewidth() )
         subplot['xz'].plot( Xx, Xz, '.', label='obj %d'%obj_id, **props )
 
-    ## if draw_stim_func_str:
-    ##     PluginClass = plugin_loader(draw_stim_func_str)
-    ##     plugin = PluginClass(filename=kalman_filename,
-    ##                         force_stimulus=True)
-    ##     stim_lines = plugin.get_3d_lines()
-
-    ##     for stim_line in stim_lines:
-    ##         subplot['xy'].plot( stim_line[:,0], stim_line[:,1], 'k-' )
-    ##         subplot['xz'].plot( stim_line[:,0], stim_line[:,2], 'k-' )
     if options.stim_xml:
         stim_xml = xml_stimulus.xml_stimulus_from_filename( options.stim_xml )
         if reconstructor is not None:
@@ -187,6 +165,38 @@ def doit(
 
     subplot['xz'].set_xlabel('x (m)')
     subplot['xz'].set_ylabel('z (m)')
+
+def doit(kalman_filename=None,
+         fps=None,
+         use_kalman_smoothing=True,
+         dynamic_model = None,
+         options = None,
+         ):
+
+    if not use_kalman_smoothing:
+        if (dynamic_model is not None):
+            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model options (--dynamic-model)'
+            sys.exit(1)
+
+    fig = pylab.figure(figsize=(5,8))
+    figtitle = kalman_filename.split('.')[0]
+    pylab.figtext(0,0,figtitle)
+
+    ax = None
+    subplot ={}
+    subplots = ['xy','xz']
+    for i, name in enumerate(subplots):
+        ax = fig.add_subplot(len(subplots),1,i+1,sharex=ax)
+        #ax.grid(True)
+        subplot[name] = ax
+
+    plot_top_and_side_views(subplot=subplot,
+                            kalman_filename=kalman_filename,
+                            fps=fps,
+                            dynamic_model=dynamic_model,
+                            use_kalman_smoothing=use_kalman_smoothing,
+                            options=options,
+                            )
 
     pylab.show()
 
@@ -244,9 +254,6 @@ def main():
          fps = options.fps,
          dynamic_model = options.dynamic_model,
          use_kalman_smoothing=options.use_kalman_smoothing,
-         start=options.start,
-         stop=options.stop,
-         obj_only=options.obj_only,
          options=options,
          )
 
