@@ -1044,7 +1044,11 @@ class CachingAnalyzer:
     # Implementatation details below
     ###################################
 
-    def __init__(self):
+    def __init__(self,is_global=False):
+        if not is_global:
+            import warnings
+            warnings.warn("maybe you want to use the global CachingAnalyzer instance? (Call 'get_global_CachingAnalyzer()'.)", stacklevel=2)
+
         self.keep_references = [] # a list of strong references
 
         self.loaded_h5_cache = {}
@@ -1132,6 +1136,15 @@ class CachingAnalyzer:
 
     def __del__(self):
         self.close()
+
+global _global_ca_instance
+_global_ca_instance = None
+
+def get_global_CachingAnalyzer():
+    global _global_ca_instance
+    if _global_ca_instance is None:
+        _global_ca_instance = CachingAnalyzer(is_global=True)
+    return _global_ca_instance
 
 if __name__=='__main__':
     ca = CachingAnalyzer()

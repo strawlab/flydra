@@ -62,7 +62,12 @@ def plot_top_and_side_views(subplot=None,
     stop=options.stop
     obj_only=options.obj_only
 
-    ca = core_analysis.CachingAnalyzer()
+    if not use_kalman_smoothing:
+        if (dynamic_model is not None):
+            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model options (--dynamic-model)'
+            sys.exit(1)
+
+    ca = core_analysis.core_analysis.get_global_CachingAnalyzer()
 
     if kalman_filename is not None:
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
@@ -172,11 +177,6 @@ def doit(kalman_filename=None,
          dynamic_model = None,
          options = None,
          ):
-
-    if not use_kalman_smoothing:
-        if (dynamic_model is not None):
-            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model options (--dynamic-model)'
-            sys.exit(1)
 
     fig = pylab.figure(figsize=(5,8))
     figtitle = kalman_filename.split('.')[0]

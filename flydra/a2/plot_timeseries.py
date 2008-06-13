@@ -44,21 +44,21 @@ class Frames2Time:
         f2  = f/self.fps
         return f2
 
-def doit(
-         kalman_filename=None,
-         fps=None,
-         use_kalman_smoothing=True,
-         dynamic_model = None,
-         start = None,
-         stop = None,
-         obj_only = None,
-         ):
+def plot_timeseries(subplot=None,options = None):
+    kalman_filename=options.kalman_filename
+
+    start=options.start
+    stop=options.stop
+    obj_only=options.obj_only
+    fps = options.fps
+    dynamic_model = options.dynamic_model
+    use_kalman_smoothing=options.use_kalman_smoothing
 
     if not use_kalman_smoothing:
         if (dynamic_model is not None):
             print >> sys.stderr, 'WARNING: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model options (--dynamic-model)'
 
-    ca = core_analysis.CachingAnalyzer()
+    ca = core_analysis.get_global_CachingAnalyzer()
 
     if kalman_filename is not None:
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
@@ -80,19 +80,6 @@ def doit(
             fps = 100.0
             import warnings
             warnings.warn('Setting fps to default value of %f'%fps)
-
-    fig = pylab.figure(figsize=(6,4))
-    figtitle=kalman_filename
-    pylab.figtext(0,0,figtitle)
-
-    ax = None
-    subplot ={}
-    subplots = ['x','y','z','vel','accel']
-    #subplots = ['x','y','z','vel','accel']
-    for i, name in enumerate(subplots):
-        ax = fig.add_subplot(len(subplots),1,i+1,sharex=ax)
-        ax.grid(True)
-        subplot[name] = ax
 
     dt = 1.0/fps
 
@@ -207,15 +194,41 @@ def doit(
 
         subplot['dist'].set_ylabel(r'distance ($m$)')
 
+    if 1:
+        ax = subplot['vel_hist']
+        bins = numpy.linspace(0,2,30)
+        ax.hist(all_vels, bins=bins)
+        ax.set_ylabel('counts')
+        ax.set_xlabel('velocity (m/s)')
+
+def doit(
+         options = None,
+         ):
+
+    fig = pylab.figure(figsize=(6,4))
+    figtitle=options.kalman_filename
+    pylab.figtext(0,0,figtitle)
+
+    ax = None
+    subplot ={}
+    subplots = ['x','y','z','vel','accel']
+    #subplots = ['x','y','z','vel','accel']
+    for i, name in enumerate(subplots):
+        ax = fig.add_subplot(len(subplots),1,i+1,sharex=ax)
+        ax.grid(True)
+        subplot[name] = ax
+
+
     fig = pylab.figure()
-    figtitle=kalman_filename
+    figtitle=options.kalman_filename
     pylab.figtext(0,0,figtitle)
 
     ax = fig.add_subplot(1,1,1)
-    bins = numpy.linspace(0,2,30)
-    ax.hist(all_vels, bins=bins)
-    ax.set_ylabel('counts')
-    ax.set_xlabel('velocity (m/s)')
+    subplot['vel_hist'] = ax
+
+    plot_timeseries(subplot=subplot,
+                    options = options,
+                    )
     pylab.show()
 
 def main():
@@ -259,14 +272,7 @@ def main():
     if options.obj_only is not None:
         options.obj_only = core_analysis.parse_seq(options.obj_only)
 
-    doit(
-         kalman_filename=options.kalman_filename,
-         fps = options.fps,
-         dynamic_model = options.dynamic_model,
-         use_kalman_smoothing=options.use_kalman_smoothing,
-         start=options.start,
-         stop=options.stop,
-         obj_only=options.obj_only,
+    doit(options=options,
          )
 
 if __name__=='__main__':
