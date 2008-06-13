@@ -42,10 +42,6 @@ class Frames2Time:
         return f2
 
 def plot_top_and_side_views(subplot=None,
-                            kalman_filename=None,
-                            fps=None,
-                            dynamic_model=None,
-                            use_kalman_smoothing=None,
                             options=None,
                             ):
     """
@@ -55,8 +51,15 @@ def plot_top_and_side_views(subplot=None,
     fps - the framerate of the data
     """
     assert subplot is not None
-    assert kalman_filename is not None
+
     assert options is not None
+
+    kalman_filename=options.kalman_filename
+    fps = options.fps
+    dynamic_model = options.dynamic_model
+    use_kalman_smoothing=options.use_kalman_smoothing
+
+    assert kalman_filename is not None
 
     start=options.start
     stop=options.stop
@@ -67,7 +70,7 @@ def plot_top_and_side_views(subplot=None,
             print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model options (--dynamic-model)'
             sys.exit(1)
 
-    ca = core_analysis.core_analysis.get_global_CachingAnalyzer()
+    ca = core_analysis.get_global_CachingAnalyzer()
 
     if kalman_filename is not None:
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
@@ -171,12 +174,9 @@ def plot_top_and_side_views(subplot=None,
     subplot['xz'].set_xlabel('x (m)')
     subplot['xz'].set_ylabel('z (m)')
 
-def doit(kalman_filename=None,
-         fps=None,
-         use_kalman_smoothing=True,
-         dynamic_model = None,
-         options = None,
+def doit(options = None,
          ):
+    kalman_filename=options.kalman_filename
 
     fig = pylab.figure(figsize=(5,8))
     figtitle = kalman_filename.split('.')[0]
@@ -187,14 +187,9 @@ def doit(kalman_filename=None,
     subplots = ['xy','xz']
     for i, name in enumerate(subplots):
         ax = fig.add_subplot(len(subplots),1,i+1,sharex=ax)
-        #ax.grid(True)
         subplot[name] = ax
 
     plot_top_and_side_views(subplot=subplot,
-                            kalman_filename=kalman_filename,
-                            fps=fps,
-                            dynamic_model=dynamic_model,
-                            use_kalman_smoothing=use_kalman_smoothing,
                             options=options,
                             )
 
@@ -250,10 +245,6 @@ def main():
         options.obj_only = core_analysis.parse_seq(options.obj_only)
 
     doit(
-         kalman_filename=options.kalman_filename,
-         fps = options.fps,
-         dynamic_model = options.dynamic_model,
-         use_kalman_smoothing=options.use_kalman_smoothing,
          options=options,
          )
 
