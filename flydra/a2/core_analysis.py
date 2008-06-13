@@ -8,7 +8,7 @@ import scipy.io
 import pprint
 DEBUG = False
 
-import adskalman
+import adskalman.adskalman as adskalman
 import flydra.kalman.dynamic_models
 import flydra.kalman.flydra_kalman_utils
 import flydra.analysis.result_utils
