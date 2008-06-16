@@ -241,10 +241,10 @@ def plot_timeseries(subplot=None,options = None):
                 if flystate == 'flying':
                     # only do this once
                     if options.show_obj_id:
-                        subplot['z'].text( f2t(frame.data[0]), Xz.data[0], '%d'%(obj_id,) )
-
-
-
+                        if isinstance(frame,numpy.ma.MaskedArray):
+                            subplot['z'].text( f2t(frame.data[0]), Xz.data[0], '%d'%(obj_id,) )
+                        else:
+                            subplot['z'].text( f2t(frame[0]), Xz[0], '%d'%(obj_id,) )
 
             # Grr, would like to simplify, but see http://scipy.org/scipy/numpy/ticket/820
             X = numpy.ma.vstack((Xx[numpy.newaxis,:],Xy[numpy.newaxis,:],Xz[numpy.newaxis,:]))
@@ -274,7 +274,7 @@ def plot_timeseries(subplot=None,options = None):
                 kws['color'] = line.get_color()
 
             if len( accel4mag.compressed()) and 'accel' in subplot:
-                line,=subplot['accel'].plot( f2t(frames4), accel4mag, label='obj %d (%s)'%(obj_id,flystate), **props )
+                line,=subplot['accel'].plot( f2t(frames4), accel4mag, label='obj %d (%s)'%(obj_id,flystate), **kws )
                 kws['color'] = line.get_color()
 
             if flystate=='flying':
