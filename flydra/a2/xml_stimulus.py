@@ -217,3 +217,18 @@ def xml_stimulus_from_filename( filename, timestamp_string=None ):
         return stim
     else:
         raise ValueError('unknown XML file')
+
+def print_kh5_files_in_fanout(filename):
+    sf = xml_fanout_from_filename( filename )
+    for single_episode in sf.root.findall("single_episode"):
+        for kh5_file in single_episode.findall('kh5_file'):
+            print kh5_file.attrib['name'],
+    print
+
+def main():
+    import sys
+    filename = sys.argv[1]
+    print_kh5_files_in_fanout( filename )
+
+if __name__=='__main__':
+    main()

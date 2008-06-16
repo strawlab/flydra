@@ -71,6 +71,15 @@ def plot_top_and_side_views(subplot=None,
 
     assert options is not None
 
+    if not hasattr(options,'show_track_ends'):
+        options.show_track_ends = False
+
+    if not hasattr(options,'unicolor'):
+        options.unicolor = False
+
+    if not hasattr(options,'show_landing'):
+        options.show_landing = False
+
     kalman_filename=options.kalman_filename
     fps = options.fps
     dynamic_model = options.dynamic_model
@@ -96,11 +105,14 @@ def plot_top_and_side_views(subplot=None,
         file_timestamp = data_file.filename[4:19]
         fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
         include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp( timestamp_string=file_timestamp )
+        walking_start_stops = fanout.get_walking_start_stops_for_timestamp( timestamp_string=file_timestamp )
         if include_obj_ids is not None:
             use_obj_ids = include_obj_ids
         if exclude_obj_ids is not None:
             use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
         stim_xml = fanout.get_stimulus_for_timestamp(timestamp_string=file_timestamp)
+    else:
+        walking_start_stops = []
 
     if not is_mat_file:
         mat_data = None
@@ -134,11 +146,11 @@ def plot_top_and_side_views(subplot=None,
     subplot['xy'].set_aspect('equal')
     subplot['xz'].set_aspect('equal')
 
-    subplot['xy'].set_xlabel('x (m)')
-    subplot['xy'].set_ylabel('y (m)')
+    subplot['xy'].set_xlabel('x ($m$)')
+    subplot['xy'].set_ylabel('y ($m$)')
 
-    subplot['xz'].set_xlabel('x (m)')
-    subplot['xz'].set_ylabel('z (m)')
+    subplot['xz'].set_xlabel('x ($m$)')
+    subplot['xz'].set_ylabel('z ($m$)')
 
     if options.stim_xml:
         if reconstructor is not None:
@@ -178,7 +190,7 @@ def plot_top_and_side_views(subplot=None,
             if not len(kalman_rows):
                 continue
 
-            frame = kalman_rows['frame']
+        frame = kalman_rows['frame']
 
         Xx = kalman_rows['x']
         Xy = kalman_rows['y']
@@ -187,19 +199,39 @@ def plot_top_and_side_views(subplot=None,
         if options.max_z is not None:
             cond = Xz <= options.max_z
 
+            frame = numpy.ma.masked_where(~cond,frame)
             Xx = numpy.ma.masked_where(~cond,Xx)
             Xy = numpy.ma.masked_where(~cond,Xy)
             Xz = numpy.ma.masked_where(~cond,Xz)
             with keep_axes_dimensions_if( subplot['xz'], options.stim_xml ):
                 subplot['xz'].axhline( options.max_z )
 
-        with keep_axes_dimensions_if( subplot['xy'], options.stim_xml ):
-            line, = subplot['xy'].plot( Xx, Xy, '.', label='obj %d'%obj_id )
+        kws = {'markersize':0.5}
+        if options.unicolor:
+            kws['color'] = 'k'
 
-        props = dict(color = line.get_color(),
-                     linewidth = line.get_linewidth() )
+        landing_idxs = []
+        for walkstart,walkstop in walking_start_stops:
+            if walkstart in frame:
+                tmp_idx = numpy.nonzero(frame==walkstart)[0][0]
+                landing_idxs.append(tmp_idx)
+
+        with keep_axes_dimensions_if( subplot['xy'], options.stim_xml ):
+            line, = subplot['xy'].plot( Xx, Xy, '.', label='obj %d'%obj_id, **kws)
+            kws['color'] = line.get_color()
+            if options.show_track_ends:
+                subplot['xy'].plot( [Xx[0],Xx[-1]], [Xy[0],Xy[-1]], 'cd', ms=6, label='track end')
+            if options.show_landing:
+                for landing_idx in landing_idxs:
+                    subplot['xy'].plot( [Xx[landing_idx]], [Xy[landing_idx]], 'rD', ms=10, label='landing')
+
         with keep_axes_dimensions_if( subplot['xz'], options.stim_xml ):
-            subplot['xz'].plot( Xx, Xz, '.', label='obj %d'%obj_id, **props )
+            subplot['xz'].plot( Xx, Xz, '.', label='obj %d'%obj_id, **kws )
+            if options.show_track_ends:
+                subplot['xz'].plot( [Xx[0],Xx[-1]], [Xz[0],Xz[-1]], 'cd', ms=6, label='track end')
+            if options.show_landing:
+                for landing_idx in landing_idxs:
+                    subplot['xz'].plot( [Xx[landing_idx]], [Xz[landing_idx]], 'rD', ms=10, label='landing')
 
 def doit(options = None,
          ):

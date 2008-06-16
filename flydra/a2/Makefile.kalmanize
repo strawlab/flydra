@@ -1,7 +1,13 @@
+# emacs, this is a -*-makefile-*-
+
 include kalman_products.mk
 
 %.kh5 : %.h5
 	rm -f $@
 	flydra_kalmanize $< -r $(CALFILE) --max-err=$(MAXERR) --min-observations-to-save=$(MINOBS) --dynamic-model=$(MODEL) --dest-file $@
 
-.PHONY: default
+%.png : %.kh5 fanout.xml
+	rm -f $@
+	flydra_analysis_plot_summary -k $< --stim-xml fanout.xml
+
+.PHONY: default figs

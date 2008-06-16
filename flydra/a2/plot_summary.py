@@ -12,17 +12,38 @@ import os
 
 def doit(options=None):
     fig=pylab.figure(figsize=(10,7.5))
+    figtitle = options.kalman_filename.split('.')[0]
+    pylab.figtext(0,0,figtitle)
+
     subplot={}
-    subplot['z']=fig.add_subplot(3,1,1)
-    subplot['xy']=fig.add_subplot(3,1,2)
-    subplot['xz']=fig.add_subplot(3,1,3)
+    subplot['xy']=fig.add_subplot(3,1,1)
+    subplot['xz']=fig.add_subplot(3,1,2)#,sharex=subplot['xy'])
+    subplot['z']=fig.add_subplot(3,1,3)
 
     in_fname = options.kalman_filename
-    out_fname = 'summary-' + os.path.splitext(in_fname)[0] + '.png'
+    #out_fname = 'summary-' + os.path.splitext(in_fname)[0] + '.png'
+    out_fname = os.path.splitext(in_fname)[0] + '.png'
 
-    print 'saving',out_fname
+    print 'plotting'
+    options.unicolor = True
+    options.show_obj_id = False
+    options.show_landing = True
+    options.show_track_ends = True
+    plot_timeseries.plot_timeseries(subplot=subplot,
+                                    options=options)
+
     plot_top_view.plot_top_and_side_views(subplot=subplot,
                                           options=options)
+
+    for key in ['xy','xz']:
+        subplot[key].set_frame_on(False)
+        subplot[key].set_xticks([])
+        subplot[key].set_yticks([])
+        subplot[key].set_xlabel('')
+        subplot[key].set_ylabel('')
+
+    print 'saving',out_fname
+
     fig.savefig(out_fname)
 
 def main():

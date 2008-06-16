@@ -52,6 +52,21 @@ class Frames2Time:
 def plot_timeseries(subplot=None,options = None):
     kalman_filename=options.kalman_filename
 
+    if not hasattr(options,'frames'):
+        options.frames = False
+
+    if not hasattr(options,'show_landing'):
+        options.show_landing = False
+
+    if not hasattr(options,'unicolor'):
+        options.unicolor = False
+
+    if not hasattr(options,'show_obj_id'):
+        options.show_obj_id = True
+
+    if not hasattr(options,'show_track_ends'):
+        options.show_track_ends = False
+
     start=options.start
     stop=options.stop
     obj_only=options.obj_only
@@ -190,23 +205,46 @@ def plot_timeseries(subplot=None,options = None):
                 def identity(x): return x
                 f2t = identity
 
-            kws = {}
-            if 0:
-                if obj_id == 158:
-                    kws['color'] = .9, .8, 0
-                elif obj_id == 160:
-                    kws['color'] = 0, .45, .70
+            kws = {'linewidth':2}
+            if options.unicolor:
+                kws['color'] = 'k'
 
-            line,=subplot['x'].plot( f2t(frame), Xx, label='obj %d (%s)'%(obj_id,flystate),
-                                     linewidth=2, **kws )
-            props = dict(color = line.get_color(),
-                         linewidth = line.get_linewidth() )
+            line = None
 
-            subplot['y'].plot( f2t(frame), Xy, label='obj %d (%s)'%(obj_id,flystate), **props )
-            subplot['z'].plot( f2t(frame), Xz, label='obj %d (%s)'%(obj_id,flystate), **props )
+            if 'x' in subplot:
+                line,=subplot['x'].plot( f2t(frame), Xx, label='obj %d (%s)'%(obj_id,flystate),**kws )
+                kws['color'] = line.get_color()
 
-            if 1:
-                subplot['z'].text( f2t(frame[0]), Xz[0], '%d'%(obj_id,) )
+            if 'y' in subplot:
+                line,=subplot['y'].plot( f2t(frame), Xy, label='obj %d (%s)'%(obj_id,flystate), **kws )
+                kws['color'] = line.get_color()
+
+            if 'z' in subplot:
+                # plot landing time
+                if options.show_landing:
+                    if flystate == 'flying': # only do this once
+                        for walkstart,walkstop in walking_start_stops:
+                            if walkstart in frame.data:
+                                landing_dix = numpy.nonzero(frame.data==walkstart)[0][0]
+                                subplot['z'].plot( [f2t(walkstart)], [Xz.data[landing_dix]], 'rD', ms=10, label='landing' )
+
+                if options.show_track_ends:
+                    if flystate == 'flying': # only do this once
+                        if isinstance(frame,numpy.ma.MaskedArray):
+                            subplot['z'].plot( f2t([frame.data[0],frame.data[-1]]), [Xz.data[0],Xz.data[-1]], 'cd', ms=6, label='track end' )
+                        else:
+                            subplot['z'].plot( f2t([frame[0],frame[-1]]), [Xz[0],Xz[-1]], 'cd', ms=6, label='track end' )
+
+                line,=subplot['z'].plot( f2t(frame), Xz, label='obj %d (%s)'%(obj_id,flystate), **kws )
+                kws['color'] = line.get_color()
+
+                if flystate == 'flying':
+                    # only do this once
+                    if options.show_obj_id:
+                        subplot['z'].text( f2t(frame.data[0]), Xz.data[0], '%d'%(obj_id,) )
+
+
+
 
             # Grr, would like to simplify, but see http://scipy.org/scipy/numpy/ticket/820
             X = numpy.ma.vstack((Xx[numpy.newaxis,:],Xy[numpy.newaxis,:],Xz[numpy.newaxis,:]))
@@ -231,10 +269,14 @@ def plot_timeseries(subplot=None,options = None):
             accel4mag = (vel2mag[2:]-vel2mag[:-2])/(2*dt)
             frames4 = frames2[1:-1]
 
-            c = line.get_color()
-            subplot['vel'].plot(f2t(frames2), vel2mag, label='obj %d (%s)'%(obj_id,flystate), **props )
-            if len( accel4mag.compressed()):
-                subplot['accel'].plot( f2t(frames4), accel4mag, label='obj %d (%s)'%(obj_id,flystate), **props )
+            if 'vel' in subplot:
+                line,=subplot['vel'].plot(f2t(frames2), vel2mag, label='obj %d (%s)'%(obj_id,flystate), **kws )
+                kws['color'] = line.get_color()
+
+            if len( accel4mag.compressed()) and 'accel' in subplot:
+                line,=subplot['accel'].plot( f2t(frames4), accel4mag, label='obj %d (%s)'%(obj_id,flystate), **props )
+                kws['color'] = line.get_color()
+
             if flystate=='flying':
                 valid_vel2mag = vel2mag.compressed()
                 ## print 'appending vel2mag',obj_id,len(valid_vel2mag)
@@ -251,38 +293,36 @@ def plot_timeseries(subplot=None,options = None):
             import warnings
             warnings.warn('clipping all velocities > 2.0 m/s')
 
-    subplot['x'].set_ylim([-1,1])
-    #subplot['x'].set_yticks([0,1,2])
-    subplot['x'].set_ylabel(r'x ($m$)')
-
-    subplot['y'].set_ylim([-0.5,1.5])
-    #subplot['y'].set_yticks([0,1.5,3])
-    subplot['y'].set_ylabel(r'y ($m$)')
-
-    subplot['z'].set_ylim([0,1])
-    #subplot['z'].set_yticks([0,1,2])
-    subplot['z'].set_ylabel(r'z ($m$)')
-
-    subplot['vel'].set_ylim([0,2])
-    #subplot['vel'].set_yticks([0,5,10])
-    subplot['vel'].set_ylabel(r'vel ($m/s$)')
-
-    subplot['accel'].set_ylabel(r'acceleration ($m/s^{2}$)')
-    #subplot['accel'].set_yticks([-100,0,100])
     if not options.frames:
-        subplot['accel'].set_xlabel(r'time ($s$)')
+        xlabel = 'time ($s$)'
     else:
-        subplot['accel'].set_xlabel(r'frame')
+        xlabel = 'frame'
 
-    if 0:
-        X1 = allX[158]
-        X2 = allX[160]
-        dist = numpy.sqrt(numpy.sum((X1-X2)**2,axis=0))
-        subplot['dist'].plot( f2t(frame), dist, label='obj %d'%obj_id, **props )
+    if 'x' in subplot:
+        subplot['x'].set_ylim([-1,1])
+        subplot['x'].set_ylabel(r'x ($m$)')
+        subplot['x'].set_xlabel(xlabel)
 
-        subplot['dist'].set_ylabel(r'distance ($m$)')
+    if 'y' in subplot:
+        subplot['y'].set_ylim([-0.5,1.5])
+        subplot['y'].set_ylabel(r'y ($m$)')
+        subplot['y'].set_xlabel(xlabel)
 
-    if 1:
+    if 'z' in subplot:
+        subplot['z'].set_ylim([0,1])
+        subplot['z'].set_ylabel(r'z ($m$)')
+        subplot['z'].set_xlabel(xlabel)
+
+    if 'vel' in subplot:
+        subplot['vel'].set_ylim([0,2])
+        subplot['vel'].set_ylabel(r'vel ($m/s$)')
+        subplot['vel'].set_xlabel(xlabel)
+
+    if 'accel' in subplot:
+        subplot['accel'].set_ylabel(r'acceleration ($m/s^{2}$)')
+        subplot['accel'].set_xlabel(xlabel)
+
+    if 'vel_hist' in subplot:
         ax = subplot['vel_hist']
         bins = numpy.linspace(0,2,50)
         ax.set_title('excluding walking')
