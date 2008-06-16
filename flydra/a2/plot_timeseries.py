@@ -8,14 +8,16 @@ if 1:
     import tables.flavor
     tables.flavor.restrict_flavors(keep=['numpy'])
 
+from optparse import OptionParser
 import sets, os, sys, math
 
 import pkg_resources
 import numpy
 import tables as PT
-from optparse import OptionParser
 import flydra.reconstruct as reconstruct
 import flydra.analysis.result_utils as result_utils
+import analysis_options
+import flydra.a2.xml_stimulus as xml_stimulus
 
 import matplotlib
 rcParams = matplotlib.rcParams
@@ -36,7 +38,10 @@ def plot_err( ax, x, mean, err, color=None ):
 
 class Frames2Time:
     def __init__(self,frame0,fps):
-        self.f0 = int(frame0)
+        if not isinstance(frame0,numpy.ma.MaskedArray):
+            self.f0 = int(frame0)
+        else:
+            self.f0 = int(frame0.data)
         self.fps = fps
     def __call__(self,farr):
         farr = numpy.array(farr,dtype=numpy.int64)
@@ -56,12 +61,27 @@ def plot_timeseries(subplot=None,options = None):
 
     if not use_kalman_smoothing:
         if (dynamic_model is not None):
-            print >> sys.stderr, 'WARNING: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model options (--dynamic-model)'
+            print >> sys.stderr, ('WARNING: disabling Kalman smoothing '
+                                  '(--disable-kalman-smoothing) is incompatable '
+                                  'with setting dynamic model options (--dynamic-model)')
 
     ca = core_analysis.get_global_CachingAnalyzer()
 
     if kalman_filename is not None:
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
+
+    if options.stim_xml:
+        file_timestamp = data_file.filename[4:19]
+        fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
+        include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp( timestamp_string=file_timestamp )
+        walking_start_stops = fanout.get_walking_start_stops_for_timestamp( timestamp_string=file_timestamp )
+        if include_obj_ids is not None:
+            use_obj_ids = include_obj_ids
+        if exclude_obj_ids is not None:
+            use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
+    else:
+        walking_start_stops = []
+
 
     if dynamic_model is None:
         dynamic_model = extra['dynamic_model_name']
@@ -118,54 +138,119 @@ def plot_timeseries(subplot=None,options = None):
                 continue
 
             frame = kalman_rows['frame']
-        Xx = kalman_rows['x']
-        Xy = kalman_rows['y']
-        Xz = kalman_rows['z']
 
-        if frame0 is None:
-            frame0 = frame[0]
-        f2t = Frames2Time(frame0,fps)
+        walking_and_flying_kalman_rows = kalman_rows # preserve original data
 
-        kws = {}
-        if 0:
-            if obj_id == 158:
-                kws['color'] = .9, .8, 0
-            elif obj_id == 160:
-                kws['color'] = 0, .45, .70
+        for flystate in ['flying','walking']:
+            if flystate=='flying':
+                # assume flying unless we're told it's walking
+                state_cond = numpy.ones( frame.shape, dtype=numpy.bool )
+            else:
+                state_cond = numpy.zeros( frame.shape, dtype=numpy.bool )
 
-        line,=subplot['x'].plot( f2t(frame), Xx, label='obj %d'%obj_id, linewidth=2, **kws )
-        props = dict(color = line.get_color(),
-                     linewidth = line.get_linewidth() )
+            if len(walking_start_stops):
+                frame = walking_and_flying_kalman_rows['frame']
 
-        subplot['y'].plot( f2t(frame), Xy, label='obj %d'%obj_id, **props )
-        subplot['z'].plot( f2t(frame), Xz, label='obj %d'%obj_id, **props )
+                ## print 'obj_id, flystate, len(frame)',obj_id, flystate, len(frame),'*'*20
+                for walkstart,walkstop in walking_start_stops:
+                    frame = walking_and_flying_kalman_rows['frame'] # restore
 
-        if 1:
-            subplot['z'].text( f2t(frame[0]), Xz[0], '%d'%obj_id )
+                    ## print 'walkstart,walkstop, frame[0], frame[-1]',walkstart,walkstop, frame[0], frame[-1]
+                    # handle each bout of walking
+                    walking_bout = numpy.ones( frame.shape, dtype=numpy.bool)
+                    ## print '  numpy.sum(walking_bout)',numpy.sum(walking_bout)
+                    if walkstart is not None:
+                        walking_bout &= ( frame >= walkstart )
+                    ## print '  numpy.sum(walking_bout)',numpy.sum(walking_bout)
+                    if walkstop is not None:
+                        walking_bout &= ( frame <= walkstop )
+                    ## print '  numpy.sum(walking_bout)',numpy.sum(walking_bout)
+                    if flystate=='flying':
+                        state_cond &= ~walking_bout
+                    else:
+                        state_cond |= walking_bout
+                ## print
 
-        X = numpy.array([Xx,Xy,Xz])
-        if 0:
-            allX[obj_id] = X
+                masked_cond = ~state_cond
+                ## print 'masking',numpy.ma.sum( masked_cond ),'values for',flystate
+                kalman_rows = numpy.ma.masked_where( ~state_cond, walking_and_flying_kalman_rows )
+                frame = kalman_rows['frame']
+                ## print 'len(frame.compressed())',len(frame.compressed())
 
-        dist_central_diff = (X[:,2:]-X[:,:-2])
-        vel_central_diff = dist_central_diff/(2*dt)
+            Xx = kalman_rows['x']
+            Xy = kalman_rows['y']
+            Xz = kalman_rows['z']
 
-        vel2mag = numpy.sqrt(numpy.sum(vel_central_diff**2,axis=0))
+            if frame0 is None:
+                frame0 = frame[0]
 
-        frames2 = frame[1:-1]
+            if not options.frames:
+                f2t = Frames2Time(frame0,fps)
+            else:
+                def identity(x): return x
+                f2t = identity
 
-        accel4mag = (vel2mag[2:]-vel2mag[:-2])/(2*dt)
-        frames4 = frames2[1:-1]
+            kws = {}
+            if 0:
+                if obj_id == 158:
+                    kws['color'] = .9, .8, 0
+                elif obj_id == 160:
+                    kws['color'] = 0, .45, .70
 
-        c = line.get_color()
-        subplot['vel'].plot(f2t(frames2), vel2mag, label='obj %d'%obj_id, **props )
-        subplot['accel'].plot( f2t(frames4), accel4mag, label='obj %d'%obj_id, **props )
-        all_vels.append(vel2mag)
+            line,=subplot['x'].plot( f2t(frame), Xx, label='obj %d (%s)'%(obj_id,flystate),
+                                     linewidth=2, **kws )
+            props = dict(color = line.get_color(),
+                         linewidth = line.get_linewidth() )
+
+            subplot['y'].plot( f2t(frame), Xy, label='obj %d (%s)'%(obj_id,flystate), **props )
+            subplot['z'].plot( f2t(frame), Xz, label='obj %d (%s)'%(obj_id,flystate), **props )
+
+            if 1:
+                subplot['z'].text( f2t(frame[0]), Xz[0], '%d'%(obj_id,) )
+
+            # Grr, would like to simplify, but see http://scipy.org/scipy/numpy/ticket/820
+            X = numpy.ma.vstack((Xx[numpy.newaxis,:],Xy[numpy.newaxis,:],Xz[numpy.newaxis,:]))
+
+            if 0:
+                allX[obj_id] = X
+
+            ## print 'X.compressed().shape',X.compressed().shape
+
+            dist_central_diff = (X[:,2:]-X[:,:-2])
+            vel_central_diff = dist_central_diff/(2*dt)
+            ## print 'type(vel_central_diff)',type(vel_central_diff)
+            ## print 'vel_central_diff.shape',vel_central_diff.shape
+
+            ## print 'type(vel_central_diff**2)',type(vel_central_diff**2)
+            ## print '(vel_central_diff**2).shape',(vel_central_diff**2).shape
+
+            vel2mag = numpy.ma.sqrt(numpy.ma.sum(vel_central_diff**2,axis=0))
+
+            frames2 = frame[1:-1]
+
+            accel4mag = (vel2mag[2:]-vel2mag[:-2])/(2*dt)
+            frames4 = frames2[1:-1]
+
+            c = line.get_color()
+            subplot['vel'].plot(f2t(frames2), vel2mag, label='obj %d (%s)'%(obj_id,flystate), **props )
+            if len( accel4mag.compressed()):
+                subplot['accel'].plot( f2t(frames4), accel4mag, label='obj %d (%s)'%(obj_id,flystate), **props )
+            if flystate=='flying':
+                valid_vel2mag = vel2mag.compressed()
+                ## print 'appending vel2mag',obj_id,len(valid_vel2mag)
+                ## print 'type(X)',type(X)
+                ## print 'type(Xx)',type(Xx)
+                ## print type(valid_vel2mag)
+                all_vels.append(valid_vel2mag)
     all_vels = numpy.hstack(all_vels)
 
     if 1:
-        all_vels = all_vels[ all_vels < 2.0 ]
-        print 'WARNING: clipping all velocities > 2.0 m/s'
+        cond = all_vels < 2.0
+        if numpy.ma.sum(cond) != len(all_vels):
+            all_vels = all_vels[ cond ]
+            import warnings
+            warnings.warn('clipping all velocities > 2.0 m/s')
+
     subplot['x'].set_ylim([-1,1])
     #subplot['x'].set_yticks([0,1,2])
     subplot['x'].set_ylabel(r'x ($m$)')
@@ -178,13 +263,16 @@ def plot_timeseries(subplot=None,options = None):
     #subplot['z'].set_yticks([0,1,2])
     subplot['z'].set_ylabel(r'z ($m$)')
 
-    subplot['vel'].set_ylim([0,10])
+    subplot['vel'].set_ylim([0,2])
     #subplot['vel'].set_yticks([0,5,10])
     subplot['vel'].set_ylabel(r'vel ($m/s$)')
 
     subplot['accel'].set_ylabel(r'acceleration ($m/s^{2}$)')
     #subplot['accel'].set_yticks([-100,0,100])
-    subplot['accel'].set_xlabel(r'time ($s$)')
+    if not options.frames:
+        subplot['accel'].set_xlabel(r'time ($s$)')
+    else:
+        subplot['accel'].set_xlabel(r'frame')
 
     if 0:
         X1 = allX[158]
@@ -196,9 +284,15 @@ def plot_timeseries(subplot=None,options = None):
 
     if 1:
         ax = subplot['vel_hist']
-        bins = numpy.linspace(0,2,30)
-        ax.hist(all_vels, bins=bins)
-        ax.set_ylabel('counts')
+        bins = numpy.linspace(0,2,50)
+        ax.set_title('excluding walking')
+        pdf, bins, patches = ax.hist(all_vels, bins=bins, normed=True)
+        np = numpy
+        ## print 'np.sum(pdf * np.diff(bins))',np.sum(pdf * np.diff(bins))
+        ## print 'pdf',pdf
+        ## print 'bins',bins
+        ax.set_xlim(0,2)
+        ax.set_ylabel('probability density')
         ax.set_xlabel('velocity (m/s)')
 
 def doit(
@@ -225,6 +319,7 @@ def doit(
 
     ax = fig.add_subplot(1,1,1)
     subplot['vel_hist'] = ax
+    ax.grid(True)
 
     plot_timeseries(subplot=subplot,
                     options = options,
@@ -236,43 +331,22 @@ def main():
 
     parser = OptionParser(usage)
 
-    parser.add_option("-k", "--kalman", dest="kalman_filename", type='string',
-                      help=".h5 file with kalman data and 3D reconstructor")
+    analysis_options.add_common_options( parser )
 
-    parser.add_option("--fps", dest='fps', type='float',
-                      help="frames per second (used for Kalman filtering/smoothing)")
-
-    parser.add_option("--disable-kalman-smoothing", action='store_false',dest='use_kalman_smoothing',
-                      default=True,
-                      help="show original, causal Kalman filtered data (rather than Kalman smoothed observations)")
-
-    parser.add_option("--dynamic-model",
-                      type="string",
-                      dest="dynamic_model",
-                      default=None,
-                      )
-
-    parser.add_option("--start", type="int",
-                      help="first frame to plot",
-                      metavar="START")
-
-    parser.add_option("--stop", type="int",
-                      help="last frame to plot",
-                      metavar="STOP")
-
-    parser.add_option("--obj-only", type="string",
-                      dest="obj_only")
+    parser.add_option("--frames", action='store_true',
+                      help="plot horizontal axis in frame number (not seconds)",
+                      default=False)
 
     (options, args) = parser.parse_args()
+
+    if options.obj_only is not None:
+        options.obj_only = core_analysis.parse_seq(options.obj_only)
 
     if len(args):
         parser.print_help()
         return
 
-    if options.obj_only is not None:
-        options.obj_only = core_analysis.parse_seq(options.obj_only)
-
-    doit(options=options,
+    doit( options=options,
          )
 
 if __name__=='__main__':

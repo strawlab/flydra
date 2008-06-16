@@ -2,6 +2,9 @@ import xml.etree.ElementTree as ET
 import flydra.reconstruct as reconstruct
 import flydra.a2.experiment_layout as experiment_layout
 import numpy
+import os
+import hashlib
+from core_analysis import parse_seq
 
 class Stimulus(object):
 
@@ -96,10 +99,13 @@ class Stimulus(object):
     def plot_stim( self, ax, projection=None ):
         assert projection is not None
 
+        plotted_anything = False
+
         for child in self.root:
             if child.tag in ['multi_camera_reconstructor','valid_h5_times']:
                 continue
             elif child.tag == 'cylindrical_arena':
+                plotted_anything = True
                 info = self._get_info_for_cylindrical_arena(child)
                 assert numpy.allclose(info['axis'],numpy.array([0,0,1])), "only vertical areas supported at the moment"
 
@@ -118,6 +124,7 @@ class Stimulus(object):
                         plotx.append(x2d); ploty.append(y2d)
                     ax.plot( plotx, ploty, 'k-' )
             elif child.tag == 'cylindrical_post':
+                plotted_anything = True
                 info = self._get_info_for_cylindrical_post(child)
                 xs, ys = [], []
                 # XXX TODO: extrude line into cylinder
@@ -128,7 +135,85 @@ class Stimulus(object):
             else:
                 import warnings
                 warnings.warn("Unknown node: %s"%child.tag)
+        if not plotted_anything:
+            import warnings
+            warnings.warn("Did not plot any stimulus")
 
-def xml_stimulus_from_filename( filename ):
+class StimulusFanout(object):
+    def __init__(self,root):
+        assert root.tag == 'stimulus_fanout_xml'
+        assert root.attrib['version']=='1'
+        self.root = root
+    def _get_episode_for_timestamp( self, timestamp_string=None ):
+        for single_episode in self.root.findall("single_episode"):
+            for kh5_file in single_episode.findall("kh5_file"):
+                fname = kh5_file.attrib['name']
+                fname_timestamp_string = os.path.splitext(fname)[0][4:]
+                if fname_timestamp_string == timestamp_string:
+                    if 1:
+                        # check that the file has not changed
+                        #print 'fname',fname
+                        expected_md5 = kh5_file.attrib['md5sum']
+                        m = hashlib.md5()
+                        m.update(open(fname,mode='rb').read())
+                        actual_md5 = m.hexdigest()
+                        #print expected_md5
+                        #print actual_md5
+                        assert expected_md5==actual_md5
+                    stim_fname = single_episode.find("stimxml_file").attrib['name']
+                    return single_episode, kh5_file, stim_fname
+        raise ValueError("could not find timestamp_string '%s'"%timestamp_string)
+    def get_walking_start_stops_for_timestamp( self, timestamp_string=None ):
+        single_episode, kh5_file, stim_fname = self._get_episode_for_timestamp(timestamp_string=timestamp_string)
+        start_stops = []
+        for walking in single_episode.findall("walking"):
+            start = walking.attrib.get('start',None) # frame number
+            stop = walking.attrib.get('stop',None) # frame number
+            if start is not None: start = int(start)
+            if stop is not None: stop = int(stop)
+            start_stops.append( (start,stop) )
+        return start_stops
+    def get_obj_ids_for_timestamp( self, timestamp_string=None ):
+        single_episode, kh5_file, stim_fname = self._get_episode_for_timestamp(timestamp_string=timestamp_string)
+        include_ids = None
+        exclude_ids = None
+        for include in kh5_file.findall('include'):
+            if include_ids is None:
+                include_ids = []
+            if include.text is not None:
+                obj_ids = parse_seq( include.text )
+                include_ids.extend( obj_ids )
+            else:
+                obj_ids = None
+        for exclude in kh5_file.findall('exclude'):
+            if exclude_ids is None:
+                exclude_ids = []
+            if exclude.text is not None:
+                obj_ids = parse_seq( exclude.text )
+                exclude_ids.extend( obj_ids )
+            else:
+                obj_ids = None
+        return include_ids, exclude_ids
+    def get_stimulus_for_timestamp( self, timestamp_string=None ):
+        single_episode, kh5_file, stim_fname = self._get_episode_for_timestamp(timestamp_string=timestamp_string)
+        root = ET.parse(stim_fname).getroot()
+        stim = Stimulus(root)
+        #stim.verify_timestamp( fname_timestamp_string )
+        return stim
+
+def xml_fanout_from_filename( filename ):
     root = ET.parse(filename).getroot()
-    return Stimulus(root)
+    sf = StimulusFanout(root)
+    return sf
+
+def xml_stimulus_from_filename( filename, timestamp_string=None ):
+    root = ET.parse(filename).getroot()
+    if root.tag == 'stimxml':
+        return Stimulus(root)
+    elif root.tag == 'stimulus_fanout_xml':
+        assert timestamp_string is not None
+        sf = xml_fanout_from_filename( filename )
+        stim = sf.get_stimulus_for_timestamp( timestamp_string=timestamp_string )
+        return stim
+    else:
+        raise ValueError('unknown XML file')

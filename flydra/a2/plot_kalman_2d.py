@@ -69,7 +69,8 @@ class ShowIt(object):
                 print 'reprojection errors:'
                 for (cam_id, value_tuple) in self.cam_ids_and_points2d:
                     newx,newy=self.reconstructor.find2d(cam_id,X,distorted=True)
-                    origx,origy=self.reconstructor.undistort(cam_id, value_tuple[:2] )
+                    #origx,origy=self.reconstructor.undistort(cam_id, value_tuple[:2] )
+                    origx,origy=value_tuple[:2]
                     reproj_error = numpy.sqrt((newx-origx)**2+(newy-origy)**2)
                     print '  %s: %.1f'%(cam_id,reproj_error)
                 print
@@ -162,11 +163,11 @@ class ShowIt(object):
                 self.reconstructor = flydra.reconstruct.Reconstructor(reconstructor_source)
 
         if options.stim_xml:
-            stim_xml = xml_stimulus.xml_stimulus_from_filename( options.stim_xml )
+            file_timestamp = results.filename[4:19]
+            stim_xml = xml_stimulus.xml_stimulus_from_filename( options.stim_xml,
+                                                                timestamp_string=file_timestamp )
             if self.reconstructor is not None:
                 stim_xml.verify_reconstructor(self.reconstructor)
-            file_timestamp = results.filename[4:19]
-            stim_xml.verify_timestamp( file_timestamp )
 
         if self.reconstructor is not None:
             self.reconstructor = self.reconstructor.get_scaled()

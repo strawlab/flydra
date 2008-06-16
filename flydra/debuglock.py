@@ -1,5 +1,4 @@
 import threading, sys, time, traceback
-from contextlib import contextmanager
 
 class DebugLock(object):
     def __init__(self,name,verbose=False):
@@ -23,7 +22,7 @@ class DebugLock(object):
             lat = (tstop-tstart)*1000.0
             if lat > latency_warn_msec:
                 print '          **** WARNING acquisition time %.1f msec'%lat
-        
+
         if self.verbose:
             frame = sys._getframe()
             traceback.print_stack(frame)
@@ -46,4 +45,4 @@ class DebugLock(object):
         self.release()
         if etype:
             print '*****',self.name,'error on __exit__',threading.currentThread()
-            raise 
+            raise

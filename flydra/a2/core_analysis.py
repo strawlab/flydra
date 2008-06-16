@@ -519,9 +519,10 @@ class CachingAnalyzer:
                     obs_idxs = []
                     for oi in obj_id:
                         obs_idxs.append( numpy.nonzero(obs_obj_ids == oi)[0] )
-                        print 'oi',oi
-                        print 'len(obs_idxs[-1])',len(obs_idxs[-1])
-                        print
+                        ## print 'oi',oi
+                        ## print 'oi',type(oi)
+                        ## print 'len(obs_idxs[-1])',len(obs_idxs[-1])
+                        ## print
                     obs_idxs = numpy.concatenate( obs_idxs )
 
                 # Kalman observations are already always in meters, no scale factor needed
