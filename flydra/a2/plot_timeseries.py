@@ -166,31 +166,23 @@ def plot_timeseries(subplot=None,options = None):
             if len(walking_start_stops):
                 frame = walking_and_flying_kalman_rows['frame']
 
-                ## print 'obj_id, flystate, len(frame)',obj_id, flystate, len(frame),'*'*20
                 for walkstart,walkstop in walking_start_stops:
                     frame = walking_and_flying_kalman_rows['frame'] # restore
 
-                    ## print 'walkstart,walkstop, frame[0], frame[-1]',walkstart,walkstop, frame[0], frame[-1]
                     # handle each bout of walking
                     walking_bout = numpy.ones( frame.shape, dtype=numpy.bool)
-                    ## print '  numpy.sum(walking_bout)',numpy.sum(walking_bout)
                     if walkstart is not None:
                         walking_bout &= ( frame >= walkstart )
-                    ## print '  numpy.sum(walking_bout)',numpy.sum(walking_bout)
                     if walkstop is not None:
                         walking_bout &= ( frame <= walkstop )
-                    ## print '  numpy.sum(walking_bout)',numpy.sum(walking_bout)
                     if flystate=='flying':
                         state_cond &= ~walking_bout
                     else:
                         state_cond |= walking_bout
-                ## print
 
                 masked_cond = ~state_cond
-                ## print 'masking',numpy.ma.sum( masked_cond ),'values for',flystate
                 kalman_rows = numpy.ma.masked_where( ~state_cond, walking_and_flying_kalman_rows )
                 frame = kalman_rows['frame']
-                ## print 'len(frame.compressed())',len(frame.compressed())
 
             Xx = kalman_rows['x']
             Xy = kalman_rows['y']
@@ -220,20 +212,19 @@ def plot_timeseries(subplot=None,options = None):
                 kws['color'] = line.get_color()
 
             if 'z' in subplot:
+                frame_data = numpy.ma.array_data( frame ) # works if frame is masked or not
+
                 # plot landing time
                 if options.show_landing:
                     if flystate == 'flying': # only do this once
                         for walkstart,walkstop in walking_start_stops:
-                            if walkstart in frame.data:
-                                landing_dix = numpy.nonzero(frame.data==walkstart)[0][0]
+                            if walkstart in frame_data:
+                                landing_dix = numpy.nonzero(frame_data==walkstart)[0][0]
                                 subplot['z'].plot( [f2t(walkstart)], [Xz.data[landing_dix]], 'rD', ms=10, label='landing' )
 
                 if options.show_track_ends:
                     if flystate == 'flying': # only do this once
-                        if isinstance(frame,numpy.ma.MaskedArray):
-                            subplot['z'].plot( f2t([frame.data[0],frame.data[-1]]), [Xz.data[0],Xz.data[-1]], 'cd', ms=6, label='track end' )
-                        else:
-                            subplot['z'].plot( f2t([frame[0],frame[-1]]), [Xz[0],Xz[-1]], 'cd', ms=6, label='track end' )
+                        subplot['z'].plot( f2t([frame_data[0],frame_data[-1]]), [Xz.data[0],Xz.data[-1]], 'cd', ms=6, label='track end' )
 
                 line,=subplot['z'].plot( f2t(frame), Xz, label='obj %d (%s)'%(obj_id,flystate), **kws )
                 kws['color'] = line.get_color()
@@ -241,26 +232,16 @@ def plot_timeseries(subplot=None,options = None):
                 if flystate == 'flying':
                     # only do this once
                     if options.show_obj_id:
-                        if isinstance(frame,numpy.ma.MaskedArray):
-                            subplot['z'].text( f2t(frame.data[0]), Xz.data[0], '%d'%(obj_id,) )
-                        else:
-                            subplot['z'].text( f2t(frame[0]), Xz[0], '%d'%(obj_id,) )
+                        subplot['z'].text( f2t(frame_data[0]), Xz.data[0], '%d'%(obj_id,) )
 
-            # Grr, would like to simplify, but see http://scipy.org/scipy/numpy/ticket/820
-            X = numpy.ma.vstack((Xx[numpy.newaxis,:],Xy[numpy.newaxis,:],Xz[numpy.newaxis,:]))
-
-            if 0:
-                allX[obj_id] = X
-
-            ## print 'X.compressed().shape',X.compressed().shape
+            if numpy.__version__ >= '1.2.0':
+                X = numpy.ma.array((Xx,Xy,Xz))
+            else:
+                # See http://scipy.org/scipy/numpy/ticket/820
+                X = numpy.ma.vstack((Xx[numpy.newaxis,:],Xy[numpy.newaxis,:],Xz[numpy.newaxis,:]))
 
             dist_central_diff = (X[:,2:]-X[:,:-2])
             vel_central_diff = dist_central_diff/(2*dt)
-            ## print 'type(vel_central_diff)',type(vel_central_diff)
-            ## print 'vel_central_diff.shape',vel_central_diff.shape
-
-            ## print 'type(vel_central_diff**2)',type(vel_central_diff**2)
-            ## print '(vel_central_diff**2).shape',(vel_central_diff**2).shape
 
             vel2mag = numpy.ma.sqrt(numpy.ma.sum(vel_central_diff**2,axis=0))
 
@@ -279,10 +260,6 @@ def plot_timeseries(subplot=None,options = None):
 
             if flystate=='flying':
                 valid_vel2mag = vel2mag.compressed()
-                ## print 'appending vel2mag',obj_id,len(valid_vel2mag)
-                ## print 'type(X)',type(X)
-                ## print 'type(Xx)',type(Xx)
-                ## print type(valid_vel2mag)
                 all_vels.append(valid_vel2mag)
     all_vels = numpy.hstack(all_vels)
 
@@ -328,9 +305,6 @@ def plot_timeseries(subplot=None,options = None):
         ax.set_title('excluding walking')
         pdf, bins, patches = ax.hist(all_vels, bins=bins, normed=True)
         np = numpy
-        ## print 'np.sum(pdf * np.diff(bins))',np.sum(pdf * np.diff(bins))
-        ## print 'pdf',pdf
-        ## print 'bins',bins
         ax.set_xlim(0,2)
         ax.set_ylabel('probability density')
         ax.set_xlabel('velocity (m/s)')
