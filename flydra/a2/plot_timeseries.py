@@ -212,7 +212,7 @@ def plot_timeseries(subplot=None,options = None):
                 kws['color'] = line.get_color()
 
             if 'z' in subplot:
-                frame_data = numpy.ma.array_data( frame ) # works if frame is masked or not
+                frame_data = numpy.ma.getdata( frame ) # works if frame is masked or not
 
                 # plot landing time
                 if options.show_landing:
@@ -244,6 +244,7 @@ def plot_timeseries(subplot=None,options = None):
             vel_central_diff = dist_central_diff/(2*dt)
 
             vel2mag = numpy.ma.sqrt(numpy.ma.sum(vel_central_diff**2,axis=0))
+            xy_vel2mag = numpy.ma.sqrt(numpy.ma.sum(vel_central_diff[:2,:]**2,axis=0))
 
             frames2 = frame[1:-1]
 
@@ -252,6 +253,10 @@ def plot_timeseries(subplot=None,options = None):
 
             if 'vel' in subplot:
                 line,=subplot['vel'].plot(f2t(frames2), vel2mag, label='obj %d (%s)'%(obj_id,flystate), **kws )
+                kws['color'] = line.get_color()
+
+            if 'xy_vel' in subplot:
+                line,=subplot['xy_vel'].plot(f2t(frames2), xy_vel2mag, label='obj %d (%s)'%(obj_id,flystate), **kws )
                 kws['color'] = line.get_color()
 
             if len( accel4mag.compressed()) and 'accel' in subplot:
@@ -295,6 +300,11 @@ def plot_timeseries(subplot=None,options = None):
         subplot['vel'].set_ylabel(r'vel ($m/s$)')
         subplot['vel'].set_xlabel(xlabel)
 
+    if 'xy_vel' in subplot:
+        #subplot['xy_vel'].set_ylim([0,2])
+        subplot['xy_vel'].set_ylabel(r'horiz vel ($m/s$)')
+        subplot['xy_vel'].set_xlabel(xlabel)
+
     if 'accel' in subplot:
         subplot['accel'].set_ylabel(r'acceleration ($m/s^{2}$)')
         subplot['accel'].set_xlabel(xlabel)
@@ -319,7 +329,7 @@ def doit(
 
     ax = None
     subplot ={}
-    subplots = ['x','y','z','vel','accel']
+    subplots = ['x','y','z','xy_vel','vel','accel']
     #subplots = ['x','y','z','vel','accel']
     for i, name in enumerate(subplots):
         ax = fig.add_subplot(len(subplots),1,i+1,sharex=ax)
