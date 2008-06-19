@@ -52,7 +52,8 @@ class Stimulus(object):
         verts = []
         for v in child:
             if v.tag == 'vert':
-                verts.append(numpy.array(map(float,v.text.split())))
+                vtext=v.text.replace(',',' ')
+                verts.append(numpy.array(map(float,vtext.split())))
             elif v.tag == 'diameter':
                 diameter = float(v.text)
             else:
