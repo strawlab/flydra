@@ -657,15 +657,18 @@ def doit(filename,
     ##         actors.extend( stim_actors )
 
     if options.stim_xml is not None:
-        stim_xml = xml_stimulus.xml_stimulus_from_filename( options.stim_xml )
+        file_timestamp = data_file.filename[4:19]
+        fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
+        stim_xml = fanout.get_stimulus_for_timestamp(timestamp_string=file_timestamp)
         if not is_mat_file:
             R = reconstruct.Reconstructor(data_file)
             stim_xml.verify_reconstructor(R)
 
         if not is_mat_file:
-            assert data_file.filename.startswith('DATA') and data_file.filename.endswith('.h5')
+            assert (data_file.filename.startswith('DATA') and
+                    (data_file.filename.endswith('.h5')
+                     or data_file.filename.endswith('.kh5')))
             file_timestamp = data_file.filename[4:19]
-            stim_xml.verify_timestamp( file_timestamp )
         actors.extend(stim_xml.get_tvtk_actors())
 
     if draw_stim_func_str:

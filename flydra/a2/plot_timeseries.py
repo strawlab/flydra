@@ -224,7 +224,7 @@ def plot_timeseries(subplot=None,options = None):
 
                 if options.show_track_ends:
                     if flystate == 'flying': # only do this once
-                        subplot['z'].plot( f2t([frame_data[0],frame_data[-1]]), [Xz.data[0],Xz.data[-1]], 'cd', ms=6, label='track end' )
+                        subplot['z'].plot( f2t([frame_data[0],frame_data[-1]]), [numpy.ma.getdata(Xz)[0],numpy.ma.getdata(Xz)[-1]], 'cd', ms=6, label='track end' )
 
                 line,=subplot['z'].plot( f2t(frame), Xz, label='obj %d (%s)'%(obj_id,flystate), **kws )
                 kws['color'] = line.get_color()
@@ -232,7 +232,7 @@ def plot_timeseries(subplot=None,options = None):
                 if flystate == 'flying':
                     # only do this once
                     if options.show_obj_id:
-                        subplot['z'].text( f2t(frame_data[0]), Xz.data[0], '%d'%(obj_id,) )
+                        subplot['z'].text( f2t(frame_data[0]), numpy.ma.getdata(Xz)[0], '%d'%(obj_id,) )
 
             if numpy.__version__ >= '1.2.0':
                 X = numpy.ma.array((Xx,Xy,Xz))
@@ -266,7 +266,10 @@ def plot_timeseries(subplot=None,options = None):
             if flystate=='flying':
                 valid_vel2mag = vel2mag.compressed()
                 all_vels.append(valid_vel2mag)
-    all_vels = numpy.hstack(all_vels)
+    if len(all_vels):
+        all_vels = numpy.hstack(all_vels)
+    else:
+        all_vels = numpy.array([],dtype=float)
 
     if 1:
         cond = all_vels < 2.0

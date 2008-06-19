@@ -26,17 +26,10 @@ class Stimulus(object):
         assert R == other_R
 
     def verify_timestamp(self,timestamp):
-        timestamp_in_file = False
-        for child in self.root:
-            if child.tag == 'valid_h5_times':
-                valid_times = child.text.split()
-                for vt in valid_times:
-                    if timestamp == vt.strip():
-                        timestamp_in_file = True
-                        break
-            if timestamp_in_file == True:
-                break
-        assert timestamp_in_file
+        if 1:
+            import warnings
+            warnings.warn("This function does not do anything anymore.",DeprecationWarning,stacklevel=2)
+            return
 
     def _get_info_for_cylindrical_arena(self,child):
         assert child.tag == 'cylindrical_arena'
