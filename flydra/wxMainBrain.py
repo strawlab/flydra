@@ -8,12 +8,15 @@ from MainBrain import DEBUG
 import wx
 from wx import xrc
 import pyglet.gl.lib
+import numpy
 
 PLOTPANEL = True
 if PLOTPANEL:
     from MatplotlibPanel import PlotPanel
 import common_variables
 import flydra.kalman.dynamic_models
+from flydra.kalman.point_prob import some_rough_negative_log_likelihood
+import flydra.data_descriptions
 
 import pkg_resources
 from optparse import OptionParser
@@ -194,6 +197,12 @@ class wxMainBrainApp(wx.App):
         viewmenu.Append(ID_toggle_image_tinting, "Tint clipped data",
                         "Tints clipped pixels green", wx.ITEM_CHECK)
         wx.EVT_MENU(self, ID_toggle_image_tinting, self.OnToggleTint)
+
+        ID_toggle_show_likely_points_only = wx.NewId()
+        viewmenu.Append(ID_toggle_show_likely_points_only, "Show only likely points",
+                        "Show only likely points", wx.ITEM_CHECK)
+        wx.EVT_MENU(self, ID_toggle_show_likely_points_only, self.OnShowLikelyPointsOnly)
+        self.show_likely_points_only = False
 
         ID_draw_points = wx.NewId()
         viewmenu.Append(ID_draw_points, "Draw points",
@@ -1115,6 +1124,9 @@ class wxMainBrainApp(wx.App):
     def OnToggleTint(self, event):
         self.cam_image_canvas.set_clipping( event.IsChecked() )
 
+    def OnShowLikelyPointsOnly(self, event):
+        self.show_likely_points_only = event.IsChecked()
+
     def OnToggleDrawPoints(self, event):
         self.cam_image_canvas.set_display_points( event.IsChecked() )
 
@@ -1412,6 +1424,11 @@ class wxMainBrainApp(wx.App):
                     self.cam_image_canvas.set_red_points(cam_id,None)
 
         if self.current_page == 'preview':
+            PT_TUPLE_IDX_AREA = flydra.data_descriptions.PT_TUPLE_IDX_AREA
+            PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
+            PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
+            PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_IDX
+
             for cam_id in self.cameras.keys():
                 cam = self.cameras[cam_id]
                 if not cam.has_key('previewPerCamPanel'):
@@ -1426,6 +1443,22 @@ class wxMainBrainApp(wx.App):
                             # XXX TODO don't redraw image if image hasn't changed, just update point positions
 
                             # XXX TODO only show points with non-zero probability (or according to a slider-set scale)
+                            if self.show_likely_points_only:
+                                good_pts = []
+                                for pt in points:
+                                    if numpy.isnan(pt[0]):
+                                        continue
+                                    pt_area = pt[PT_TUPLE_IDX_AREA]
+                                    cur_val = pt[PT_TUPLE_IDX_CUR_VAL_IDX]
+                                    mean_val = pt[PT_TUPLE_IDX_MEAN_VAL_IDX]
+                                    sumsqf_val = pt[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
+                                    nll = some_rough_negative_log_likelihood(pt_area=pt_area,
+                                                                             cur_val=cur_val,
+                                                                             mean_val=mean_val,
+                                                                             sumsqf_val=sumsqf_val)
+                                    if numpy.isfinite(nll):
+                                        good_pts.append (pt )
+                                points = good_pts
                             self.cam_image_canvas.update_image_and_drawings(cam_id,image,
                                                                             points=points,
                                                                             sort_add=True)
