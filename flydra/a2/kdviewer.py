@@ -531,14 +531,17 @@ def doit(filename,
 #            if numpy.any(speeds>max_vel):
 #                print 'WARNING: maximum speed (%.3f m/s) exceeds color map max'%(speeds.max(),)
 
+            sphere_kw = dict(
+                theta_resolution=3,
+                phi_resolution=3,
+                )
             if show_kalman_P:
                 scale_mode = 'scale_by_vector_components'
                 pd.point_data.vectors = Ps_position
                 #sphere_radius = radius*1e3
-                sphere_kw = {}
             else:
                 scale_mode = 'data_scaling_off'
-                sphere_kw = dict(radius=radius)
+                sphere_kw.update(dict(radius=radius))
 
             g = tvtk.Glyph3D(scale_mode=scale_mode,
                              vector_mode = 'use_vector',
