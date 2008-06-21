@@ -33,7 +33,7 @@ def auto_subplot(fig,n,n_rows=2,n_cols=3):
     bottom = row*y_size + y_space
     w = (1.0/n_cols) - x_space
     h = y_size - 2*y_space
-    return fig.add_axes([left,bottom,w,h])
+    return fig.add_axes([left,bottom,w,h],autoscale_on=False)
 
 
 class ShowIt(object):
