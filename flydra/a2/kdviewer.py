@@ -661,8 +661,7 @@ def doit(filename,
 
     if options.stim_xml is not None:
         file_timestamp = data_file.filename[4:19]
-        fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
-        stim_xml = fanout.get_stimulus_for_timestamp(timestamp_string=file_timestamp)
+        stim_xml = xml_stimulus.xml_stimulus_from_filename(options.stim_xml,timestamp_string=file_timestamp)
         if not is_mat_file:
             R = reconstruct.Reconstructor(data_file)
             stim_xml.verify_reconstructor(R)
