@@ -306,7 +306,7 @@ class ShowIt(object):
                 #ax.set_ylim([0,res[1]])
                 ax.set_ylim([bg_arr.shape[0],0])
 
-        binding_id = fig.canvas.mpl_connect('key_press_event', self.on_key_press)
+        fig.canvas.mpl_connect('key_press_event', self.on_key_press)
 
         if kalman_filename is None:
             return
