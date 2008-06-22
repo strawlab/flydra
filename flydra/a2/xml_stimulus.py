@@ -14,6 +14,9 @@ class Stimulus(object):
         self.root = root
         self._R = None
 
+    def get_root(self):
+        return self.root
+
     def _get_reconstructor(self):
         if self._R is None:
             r_node = self.root.find("multi_camera_reconstructor")
