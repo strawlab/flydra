@@ -31,6 +31,9 @@ def parse_seq( input ):
     return seq
 
 def fast_startstopidx_on_sorted_array( sorted_array, value ):
+    if hasattr(value,'dtype') and sorted_array.dtype != value.dtype:
+        import warnings
+        warnings.warn('searchsorted is probably very slow because of different dtypes')
     idx_left = sorted_array.searchsorted( value, side='left' )
     idx_right = sorted_array.searchsorted( value, side='right' )
     return idx_left, idx_right
@@ -183,6 +186,9 @@ def kalman_smooth(orig_rows,
     fend = obs_frames.max()
     assert fstart < fend
     frames = numpy.arange(fstart,fend+1)
+    if frames.dtype != obs_frames.dtype:
+        import warnings
+        warnings.warn('searchsorted is probably very slow because of different dtypes')
     idx = frames.searchsorted(obs_frames)
 
     x = numpy.empty( frames.shape, dtype=numpy.float )

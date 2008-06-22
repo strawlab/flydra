@@ -1,11 +1,9 @@
 import math
-import cgtypes
-from numarray.ieeespecial import nan
+import cgkit.cgtypes as cgtypes # cgkit 2.x
 import numpy as nx
 import numpy
-import numarray
-import Numeric
-array_types = [numpy.ndarray, Numeric.ArrayType, numarray.numarraycore.NumArray]
+
+nan = nx.nan
 
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
@@ -57,7 +55,7 @@ def world2body( U, roll_angle = 0 ):
     """convert world coordinates to body-relative coordinates
 
     inputs:
-    
+
     U is a unit vector indicating directon of body long axis
     roll_angle is the roll angle (in radians)
 
@@ -118,7 +116,7 @@ def euler_to_quat(roll=0.0,pitch=0.0,yaw=0.0):
     # see http://www.euclideanspace.com/maths/geometry/rotations/conversions/eulerToQuaternion/index.htm
 
     # Supposedly the order is heading first, then attitude, the bank.
-    
+
     heading = yaw
     attitude = pitch
     bank = roll
@@ -136,7 +134,7 @@ def euler_to_quat(roll=0.0,pitch=0.0,yaw=0.0):
     z =c1*s2*c3 - s1*c2*s3;
     z, y = y, -z
     return cgtypes.quat(w,x,y,z)
-    
+
 ##    a,b,c=roll,-pitch,yaw
 ##    Qx = cgtypes.quat( math.cos(a/2.0), math.sin(a/2.0), 0, 0 )
 ##    Qy = cgtypes.quat( math.cos(b/2.0), 0, math.sin(b/2.0), 0 )
@@ -185,20 +183,20 @@ AssertionError
 
 """
 
-    if str(U[0]) == 'nan':
+    if numpy.isnan(U[0]):
         return (nan,nan)
     assert is_unit_vector(U)
-        
+
     yaw = math.atan2( U[1],U[0] )
     xy_r = math.sqrt(U[0]**2+U[1]**2)
     pitch = math.atan2( U[2], xy_r )
     return yaw, pitch
-    
+
 def orientation_to_quat( U, roll_angle=0 ):
     """convert world coordinates to body-relative coordinates
 
     inputs:
-    
+
     U is a unit vector indicating directon of body long axis
     roll_angle is the roll angle (in radians)
 
@@ -213,14 +211,14 @@ def orientation_to_quat( U, roll_angle=0 ):
     if 0:
         result = QuatSeq()
         for u in U:
-            if str(u[0]) == 'nan':
+            if numpy.isnan(u[0]):
                 result.append( cgtypes.quat((nan,nan,nan,nan)))
             else:
                 yaw, pitch = orientation_to_euler( u )
                 result.append( euler_to_quat(yaw=yaw, pitch=pitch, roll=roll_angle))
         return result
     else:
-        if str(U[0]) == 'nan':
+        if numpy.isnan(U[0]):
             return cgtypes.quat((nan,nan,nan,nan))
         yaw, pitch = orientation_to_euler( U )
         return euler_to_quat(yaw=yaw, pitch=pitch, roll=roll_angle)
@@ -240,9 +238,9 @@ def quat_to_euler(q):
 
     at singularities (north and south pole), assumes roll = 0
     """
-    
+
     # See http://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToEuler/
-    
+
     eps=1e-14
     qw = q.w; qx = q.x; qy = q.z; qz = -q.y
     pitch_y = 2*qx*qy + 2*qz*qw
@@ -273,12 +271,12 @@ class ObjectiveFunctionPosition:
         no_distance_penalty_idxs -- indexes into p where fit data
             should not be penalized (probably because 'original data'
             was interpolated and is of no value)
-        
+
         """
         self.p = p
         self.h = h
         self.alpha = alpha
-        
+
         self.p_err_weights = nx.ones( (len(p),) )
         if no_distance_penalty_idxs is not None:
             for i in no_distance_penalty_idxs:
@@ -310,7 +308,7 @@ class ObjectiveFunctionPosition:
                     self.P[i,j] = P_i_j+PERTURB
                     F_Pj = self.objective_function.eval(P)
                     self.P[i,j] = P_i_j
-                    
+
                     dFdP.append( (F_Pj-self.F_P)/PERTURB )
                 return dFdP
         _pd_finder = PDfinder(self,P)
@@ -321,11 +319,11 @@ def smooth_position( P, delta_t, alpha, lmbda, eps, verbose=False ):
     """smooth a sequence of positions
 
     see the following citation for details:
-    
+
     "Noise Smoothing for VR Equipment in Quaternions," C.C. Hsieh,
     Y.C. Fang, M.E. Wang, C.K. Wang, M.J. Kim, S.Y. Shin, and
     T.C. Woo, IIE Transactions, vol. 30, no. 7, pp. 581-587, 1998
-    
+
     P are the positions as in an n x m array, where n is the number of
     data points and m is the number of dimensions in which the data is
     measured.
@@ -375,7 +373,7 @@ class QuatSeq(list):
         if isinstance(other,QuatSeq):
             assert len(self) == len(other)
             return QuatSeq([ p*q for p,q in zip(self,other) ])
-        elif type(other) in array_types:
+        elif hasattr(other,'shape'): # ndarray
             assert len(other.shape)==2
             if other.shape[1] == 3:
                 other = nx.concatenate( (nx.zeros((other.shape[0],1)),
@@ -444,12 +442,12 @@ class ObjectiveFunctionQuats:
         self.h2 = self.h**2
         self.beta = beta
         self.gamma = gamma
-        
+
         self.q_err_weights = nx.ones( (len(q),) )
         if no_distance_penalty_idxs is not None:
             for i in no_distance_penalty_idxs:
                 self.q_err_weights[i] = 0
-        
+
     def _getDistance(self, qs):
         if 0:
             if 0:
@@ -461,7 +459,7 @@ class ObjectiveFunctionQuats:
             qtest_orients = quat_to_orient(qs)
             L2dist = nx.sum((qtest_orients-self.qorients)**2,axis=1)
             return nx.sum(L2dist)
-            
+
     def _getRoll(self, qs):
         return sum([quat_to_absroll(q) for q in qs])
     def _getEnergy(self, qs):
@@ -475,7 +473,7 @@ class ObjectiveFunctionQuats:
             return D + self.beta*E # eqn. 23
         R = self._getRoll(qs)
         return D + self.beta*E + self.gamma*R # eqn. 23
-    
+
     def get_del_G(self,Q):
         class PDfinder:
             """partial derivative finder"""
@@ -490,7 +488,7 @@ class ObjectiveFunctionQuats:
 
                 q_i = self.Q[i]
                 q_i_inverse = q_i.inverse()
-                
+
                 qx = q_i*cgtypes.quat(0,PERTURB,0,0).exp()
                 self.Q[i] = qx
                 G_Qx = self.objective_function.eval(self.Q)
@@ -574,12 +572,12 @@ def _test():
                 print 'yet another problem at',repr((yaw,pitch))
                 print
                 had_err = True
-                
+
             total_count += 1
             if had_err:
                 err_count += 1
     print 'Error count: (%d of %d)'%(err_count,total_count)
-                
+
     # do doctest
     import doctest, PQmath
     return doctest.testmod(PQmath)
