@@ -18,6 +18,7 @@ import flydra.reconstruct as reconstruct
 import flydra.analysis.result_utils as result_utils
 import analysis_options
 import flydra.a2.xml_stimulus as xml_stimulus
+import flydra.a2.flypos
 
 import matplotlib
 rcParams = matplotlib.rcParams
@@ -85,6 +86,7 @@ def plot_timeseries(subplot=None,options = None):
     if kalman_filename is not None:
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
 
+    do_fuse = False
     if options.stim_xml:
         file_timestamp = data_file.filename[4:19]
         fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
@@ -94,6 +96,7 @@ def plot_timeseries(subplot=None,options = None):
             use_obj_ids = include_obj_ids
         if exclude_obj_ids is not None:
             use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
+        do_fuse = True
     else:
         walking_start_stops = []
 
@@ -126,17 +129,25 @@ def plot_timeseries(subplot=None,options = None):
     allX = {}
     frame0 = None
 
+    fuse_did_once = False
     for obj_id in use_obj_ids:
-        try:
-            kalman_rows =  ca.load_data( obj_id, data_file,
-                                         use_kalman_smoothing=use_kalman_smoothing,
-                                         dynamic_model_name = dynamic_model,
-                                         frames_per_second=fps,
-                                         )
-        except core_analysis.ObjectIDDataError:
-            continue
-        kobs_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file )
-
+        if not do_fuse:
+            try:
+                kalman_rows =  ca.load_data( obj_id, data_file,
+                                             use_kalman_smoothing=use_kalman_smoothing,
+                                             dynamic_model_name = dynamic_model,
+                                             frames_per_second=fps,
+                                             )
+            except core_analysis.ObjectIDDataError:
+                continue
+            #kobs_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file )
+        else:
+            if fuse_did_once:
+                break
+            fuse_did_once = True
+            kalman_rows = flydra.a2.flypos.fuse_obj_ids(use_obj_ids, data_file,
+                                                        dynamic_model_name = dynamic_model,
+                                                        frames_per_second=fps)
         frame = kalman_rows['frame']
 
         if (start is not None) or (stop is not None):
