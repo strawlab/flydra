@@ -945,7 +945,8 @@ class CoordinateProcessor(threading.Thread):
                                 # Keep in sync with kalmanize.py and data_descriptions.py
                                 pt_undistorted = (x_undistorted,y_undistorted,
                                                   area,slope,eccentricity,
-                                                  p1,p2,p3,p4, line_found, frame_pt_idx)
+                                                  p1,p2,p3,p4, line_found, frame_pt_idx,
+                                                  cur_val, mean_val, sumsqf_val)
                                 pt_distorted = (x_distorted,y_distorted,
                                                 area,slope,eccentricity,
                                                 p1,p2,p3,p4, line_found, frame_pt_idx,
