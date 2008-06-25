@@ -86,7 +86,7 @@ class TrackedObject:
         self.save_all_data = save_all_data
         self.kill_me = False
         self.reconstructor_meters = reconstructor_meters
-        self.distorted_pixel_euclidian_distance_accept=kalman_model['distorted_pixel_euclidian_distance_accept']
+        self.distorted_pixel_euclidian_distance_accept=kalman_model.get('distorted_pixel_euclidian_distance_accept',None)
 
         self.current_frameno = frame
         if scale_factor is None:
