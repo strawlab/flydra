@@ -1384,7 +1384,7 @@ class wxMainBrainApp(wx.App):
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc
         if not self.main_brain.coord_processor.isAlive():
             dlg = wx.MessageDialog( self.frame, 'Error: the coordinate processor '
-                                    'thread dieed expectedly. You should re-start '
+                                    'thread died unexpectedly. You should re-start '
                                     'this program.', 'Unexpected error!',
                                      wx.OK | wx.ICON_ERROR )
             try:
