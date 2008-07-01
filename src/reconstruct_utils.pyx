@@ -27,6 +27,8 @@ cdef extern from "math.h":
 def make_ReconstructHelper_from_rad_file(filename):
     params = {}
     execfile(filename,params)
+    if params['K12'] != 0:
+        raise NotImplementedError('need to properly roundtrip alpha_c != 0')
     helper = ReconstructHelper(
         params['K11'], params['K22'], params['K13'], params['K23'],
         params['kc1'], params['kc2'], params['kc3'], params['kc4'])
@@ -114,12 +116,24 @@ cdef class ReconstructHelper:
         rad_fd.close()
 
     def __richcmp__(self,other,op):
+        # cmp op
+        #  < 0
+        # <= 1
+        # == 2
+        # != 3
+        #  > 4
+        # >= 5
 
-        if op == 2 or op == 3:
-            result = (numpy.allclose(self.get_K(),other.get_K()) and
+        if isinstance(other, ReconstructHelper):
+            isequal = (numpy.allclose(self.get_K(),other.get_K()) and
                       numpy.allclose(self.get_nlparams(),other.get_nlparams()) )
-            if op == 3:
-                result = not result
+        else:
+            isequal = False
+
+        if op in [1,2,5]:
+            result = isequal
+        elif op == 3:
+            result = not isequal
         else:
             result = False
         return result
