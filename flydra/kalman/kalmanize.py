@@ -476,19 +476,21 @@ def kalmanize(src_filename,
         data2d_recarray = data2d[:] # needs lots of RAM for big data files
         time2 = time.time()
         print 'done in %.1f sec'%(time2-time1)
-
-        if 'sumsqf_val' in data2d_recarray.dtype.fields:
-            sumsqf_val = data2d_recarray['sumsqf_val']
-        else:
-            sumsqf_val = None
-
-        nll = some_rough_negative_log_likelihood(pt_area=None,
-                                                 cur_val=data2d_recarray['cur_val'],
-                                                 mean_val=data2d_recarray['mean_val'],
-                                                 sumsqf_val=sumsqf_val)
-        nonzero_prob = numpy.isfinite(nll)
         orig_num_rows = len(data2d_recarray)
-        data2d_recarray = data2d_recarray[nonzero_prob]
+
+        if 'cur_val' in data2d_recarray.dtype.fields:
+            if 'sumsqf_val' in data2d_recarray.dtype.fields:
+                sumsqf_val = data2d_recarray['sumsqf_val']
+            else:
+                sumsqf_val = None
+
+            nll = some_rough_negative_log_likelihood(pt_area=None,
+                                                     cur_val=data2d_recarray['cur_val'],
+                                                     mean_val=data2d_recarray['mean_val'],
+                                                     sumsqf_val=sumsqf_val)
+            nonzero_prob = numpy.isfinite(nll)
+            data2d_recarray = data2d_recarray[nonzero_prob]
+
         filtered_num_rows = len(data2d_recarray)
         print ('%d of %d rows have non-zero probability and will be '
                'considered'%(filtered_num_rows,orig_num_rows))

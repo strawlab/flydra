@@ -388,7 +388,10 @@ class TrackedObject:
                 mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
                 sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
 
-                p_y_x = some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
+                if cur_val is not None:
+                    p_y_x = some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
+                else:
+                    p_y_x = 0.0 # no penalty
                 dist = numpy.sqrt(dist2)
 
                 nll_this_point = p_y_x + dist # negative log likelihood of this point
