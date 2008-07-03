@@ -4,15 +4,16 @@ import flydra.a2.experiment_layout as experiment_layout
 import numpy
 import os
 import hashlib
-from core_analysis import parse_seq
+from core_analysis import parse_seq, check_hack_postmultiply
 
 class Stimulus(object):
 
-    def __init__(self,root):
+    def __init__(self,root,hack_postmultiply=None):
         assert root.tag == 'stimxml'
         assert root.attrib['version']=='1'
         self.root = root
         self._R = None
+        self.hack_postmultiply = check_hack_postmultiply(hack_postmultiply)
 
     def get_root(self):
         return self.root
@@ -50,6 +51,29 @@ class Stimulus(object):
                 raise ValueError('unknown tag: %s'%v.tag)
         return info
 
+    def _get_info_for_cubic_arena(self,child):
+        assert child.tag == 'cubic_arena'
+        info = {}
+        did_it = False
+        for child1 in child:
+            if child1.tag == 'verts4x4':
+                if did_it:
+                    raise ValueError('already parsed a verts4x4 attribute for this cubic_arena')
+                did_it = True
+                verts = []
+                for v in child1:
+                    if v.tag == 'vert':
+                        vtext=v.text.replace(',',' ')
+                        verts.append(numpy.array(map(float,vtext.split())))
+                        assert len(verts[-1])==3
+                assert len(verts)==8
+                info['verts4x4'] = verts
+            elif child1.tag == 'tube_diameter':
+                info['tube_diameter'] = float(child1.text)
+            else:
+                raise ValueError('unknown tag: %s'%child1.tag)
+        return info
+
     def _get_info_for_cylindrical_post(self,child):
         assert child.tag == 'cylindrical_post'
         verts = []
@@ -71,6 +95,9 @@ class Stimulus(object):
             elif child.tag == 'cylindrical_arena':
                 info = self._get_info_for_cylindrical_arena(child)
                 actors.extend( experiment_layout.cylindrical_arena(info=info))
+            elif child.tag == 'cubic_arena':
+                info = self._get_info_for_cubic_arena(child)
+                actors.extend( experiment_layout.cubic_arena(info=info,hack_postmultiply=self.hack_postmultiply))
             elif child.tag == 'cylindrical_post':
                 info = self._get_info_for_cylindrical_post(child)
                 actors.extend( experiment_layout.cylindrical_post(info=info))
@@ -191,10 +218,10 @@ class StimulusFanout(object):
             else:
                 obj_ids = None
         return include_ids, exclude_ids
-    def get_stimulus_for_timestamp( self, timestamp_string=None ):
+    def get_stimulus_for_timestamp( self, timestamp_string=None,hack_postmultiply=None ):
         single_episode, kh5_file, stim_fname = self._get_episode_for_timestamp(timestamp_string=timestamp_string)
         root = ET.parse(stim_fname).getroot()
-        stim = Stimulus(root)
+        stim = Stimulus(root,hack_postmultiply=hack_postmultiply)
         #stim.verify_timestamp( fname_timestamp_string )
         return stim
 
@@ -203,14 +230,14 @@ def xml_fanout_from_filename( filename ):
     sf = StimulusFanout(root)
     return sf
 
-def xml_stimulus_from_filename( filename, timestamp_string=None ):
+def xml_stimulus_from_filename( filename, timestamp_string=None, hack_postmultiply=None ):
     root = ET.parse(filename).getroot()
     if root.tag == 'stimxml':
-        return Stimulus(root)
+        return Stimulus(root,hack_postmultiply=hack_postmultiply)
     elif root.tag == 'stimulus_fanout_xml':
         assert timestamp_string is not None
         sf = xml_fanout_from_filename( filename )
-        stim = sf.get_stimulus_for_timestamp( timestamp_string=timestamp_string )
+        stim = sf.get_stimulus_for_timestamp( timestamp_string=timestamp_string,hack_postmultiply=hack_postmultiply )
         return stim
     else:
         raise ValueError('unknown XML file')

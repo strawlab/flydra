@@ -38,7 +38,7 @@ def print_cam_props(camera):
     print 'camera.clipping_range = ',camera.clipping_range
     print 'camera.parallel_scale = ',camera.parallel_scale
 
-def do_show_cameras(results, renderers, frustums=True, labels=True, centers=True, length=2.0):
+def do_show_cameras(results, renderers, frustums=True, axes=True, labels=True, centers=True, length=2.0):
     if isinstance(results,reconstruct.Reconstructor):
         R = results
     else:
@@ -70,6 +70,41 @@ def do_show_cameras(results, renderers, frustums=True, labels=True, centers=True
         ballActor.property.specular_power = 30
         for ren in renderers:
             ren.add_actor(ballActor)
+    if axes:
+        for cam_id in R.Pmat.keys():
+            pmat = R.get_pmat( cam_id )
+
+            intrinsic_parameters, rotation_matrix = reconstruct.my_rq(pmat[:,:3])
+            U = rotation_matrix[2,:] # 3rd row of rotation matrix (idea from drawscene.m in MultiCamSelfCal)
+            U=U/math.sqrt(U[0]**2 + U[1]**2 + U[2]**2) # normalize
+
+            C = reconstruct.pmat2cam_center(pmat) # column vector (matrix)
+            C = C[:,0] # 1d array
+            X = C+length*U
+
+            verts = []
+            lines = []
+
+            verts.append( C )
+            verts.append( X )
+            print 'verts'
+            print verts
+            print
+            lines.append( [0,1] )
+
+            pd = tvtk.PolyData()
+            pd.points = verts
+            pd.lines = lines
+            pt = tvtk.TubeFilter(radius=0.001,input=pd,
+                                 number_of_sides=4,
+                                 vary_radius='vary_radius_off',
+                                 )
+            m = tvtk.PolyDataMapper(input=pt.output)
+
+            a = tvtk.Actor(mapper=m)
+            a.property.color = .9, .9, .9
+            a.property.specular = 0.3
+            ren.add_actor(a)
 
     if frustums:
         line_points = tvtk.Points()
@@ -84,6 +119,15 @@ def do_show_cameras(results, renderers, frustums=True, labels=True, centers=True
             C = reconstruct.pmat2cam_center(pmat) # X is column vector (matrix)
             C = numpy.array(C.flat)
 
+            # cam orientation (used to select direction of ray)
+            intrinsic_parameters, rotation_matrix = reconstruct.my_rq(pmat[:,:3])
+            U = rotation_matrix[2,:] # 3rd row of rotation matrix (idea from drawscene.m in MultiCamSelfCal)
+            U=U/math.sqrt(U[0]**2 + U[1]**2 + U[2]**2) # normalize
+            cam_axis = U
+
+
+            # Note that this seems to only arbitrarily get direction
+            # of ray (could be in front or behind camera).
             z = 1
             first_vert = None
 
@@ -99,6 +143,18 @@ def do_show_cameras(results, renderers, frustums=True, labels=True, centers=True
                     U = X-C # direction
                     # rescale to unit length
                     U=U/math.sqrt(U[0]**2 + U[1]**2 + U[2]**2)
+
+                    if 1:
+                        # select direction closest to cam axis
+                        U1 = U
+                        U2 = -U
+                        d1squared = numpy.sum((U1-cam_axis)**2)
+                        d2squared = numpy.sum((U2-cam_axis)**2)
+                        if d1squared<d2squared:
+                            U=U1
+                        else:
+                            U=U2
+
                     X = C+length*U
 
                     line_points.insert_next_point(*X)
@@ -185,8 +241,10 @@ def doit(filename,
             print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model option (--dynamic-model)'
             sys.exit(1)
 
-
-    ca = core_analysis.CachingAnalyzer()
+    if options.hack_postmultiply is not None:
+        if show_cameras:
+            raise RuntimeError('cannot show cameras if hack_postmultiply is being used')
+    ca = core_analysis.get_global_CachingAnalyzer(hack_postmultiply=options.hack_postmultiply)
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(filename)
 
     if dynamic_model_name is None:
@@ -661,7 +719,10 @@ def doit(filename,
 
     if options.stim_xml is not None:
         file_timestamp = data_file.filename[4:19]
-        stim_xml = xml_stimulus.xml_stimulus_from_filename(options.stim_xml,timestamp_string=file_timestamp)
+        stim_xml = xml_stimulus.xml_stimulus_from_filename(options.stim_xml,
+                                                           timestamp_string=file_timestamp,
+                                                           hack_postmultiply=options.hack_postmultiply,
+                                                           )
         if not is_mat_file:
             R = reconstruct.Reconstructor(data_file)
             stim_xml.verify_reconstructor(R)
@@ -966,7 +1027,7 @@ def main():
                       help="display in stereo (red-blue analglyphic)",
                       default=False)
 
-    parser.add_option("--show-cameras", action='store_true',dest='show_cameras',
+    parser.add_option("--show-cameras", action='store_true',
                       help="show camera locations/frustums",
                       default=False)
 
@@ -1000,6 +1061,9 @@ def main():
     parser.add_option("--force-stimulus", action='store_true',
                       help="raise error if stimulus condition not found",
                       default=False)
+
+    parser.add_option("--hack-postmultiply", type='string',
+                      help="multiply 3D coordinates by a 3x4 matrix")
 
     (options, args) = parser.parse_args()
 

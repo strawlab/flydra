@@ -16,6 +16,16 @@ import flydra.analysis.result_utils
 import weakref
 import warnings
 
+def check_hack_postmultiply(hack_postmultiply):
+    if hack_postmultiply is not None:
+        if isinstance( hack_postmultiply, basestring):
+            #filename
+            txt = file(hack_postmultiply,mode='r').read()
+            hack_postmultiply = eval(txt)
+        hack_postmultiply = numpy.asarray(hack_postmultiply)
+        assert hack_postmultiply.shape == (3,4)
+    return hack_postmultiply
+
 class ObjectIDDataError(Exception):
     pass
 
@@ -32,7 +42,6 @@ def parse_seq( input ):
 
 def fast_startstopidx_on_sorted_array( sorted_array, value ):
     if hasattr(value,'dtype') and sorted_array.dtype != value.dtype:
-        import warnings
         warnings.warn('searchsorted is probably very slow because of different dtypes')
     idx_left = sorted_array.searchsorted( value, side='left' )
     idx_right = sorted_array.searchsorted( value, side='right' )
@@ -139,7 +148,6 @@ def check_is_mat_file(data_file):
         return False
 
 def get_data(filename):
-    import warnings
     warnings.warn('instead of get_data(), use CachingAnalyzer.initial_file_load(filename)',
                   DeprecationWarning)
     return _initial_file_load(filename)
@@ -187,7 +195,6 @@ def kalman_smooth(orig_rows,
     assert fstart < fend
     frames = numpy.arange(fstart,fend+1)
     if frames.dtype != obs_frames.dtype:
-        import warnings
         warnings.warn('searchsorted is probably very slow because of different dtypes')
     idx = frames.searchsorted(obs_frames)
 
@@ -207,7 +214,6 @@ def kalman_smooth(orig_rows,
 
     if dynamic_model_name is None:
         dynamic_model_name = 'fly dynamics, high precision calibration, units: mm'
-        import warnings
         warnings.warn('No Kalman model specified. Using "%s" for Kalman smoothing'%(dynamic_model_name,))
 
     model = flydra.kalman.dynamic_models.get_kalman_model(name=dynamic_model_name,dt=(1.0/frames_per_second))
@@ -291,7 +297,6 @@ def observations2smoothed(obj_id,
     return rows
 
 # def matfile2rows(data_file,obj_id):
-#     import warnings
 #     warnings.warn('using the slow matfile2rows -- use the faster CachingAnalyzer.load_data()')
 
 #     obj_ids = data_file['kalman_obj_id']
@@ -410,7 +415,6 @@ class CachingAnalyzer:
         return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
 
     def has_obj_id(self, obj_id, data_file):
-        import warnings
         warnings.warn('slow implementation of .has_obj_id()')
         try:
             self.load_data(obj_id,data_file,use_kalman_smoothing=False)
@@ -462,6 +466,18 @@ class CachingAnalyzer:
         rows = kresults.root.kalman_observations.readCoordinates(idxs)
         if not len(rows):
             raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
+
+        if self.hack_postmultiply is not None:
+            warnings.warn('Using postmultiplication hack')
+
+            input = numpy.array([rows['x'], rows['y'], rows['z'], numpy.ones_like(rows['x'])])
+            output = numpy.dot(self.hack_postmultiply,input)
+            rows['x']=output[0,:]
+            rows['y']=output[1,:]
+            rows['z']=output[2,:]
+            rows['xvel']=numpy.nan
+            rows['yvel']=numpy.nan
+            rows['zvel']=numpy.nan
         return rows
 
     def load_data(self,obj_id,data_file,use_kalman_smoothing=True,
@@ -592,6 +608,19 @@ class CachingAnalyzer:
 
         if not len(rows):
             raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
+
+        if self.hack_postmultiply is not None:
+            warnings.warn('Using postmultiplication hack')
+
+            input = numpy.array([rows['x'], rows['y'], rows['z'], numpy.ones_like(rows['x'])])
+            output = numpy.dot(self.hack_postmultiply,input)
+            rows['x']=output[0,:]
+            rows['y']=output[1,:]
+            rows['z']=output[2,:]
+            rows['xvel']=numpy.nan
+            rows['yvel']=numpy.nan
+            rows['zvel']=numpy.nan
+
         return rows
 
     def get_raw_positions(self,
@@ -1051,9 +1080,10 @@ class CachingAnalyzer:
     # Implementatation details below
     ###################################
 
-    def __init__(self,is_global=False):
+    def __init__(self,hack_postmultiply=None,is_global=False):
+        self.hack_postmultiply = check_hack_postmultiply(hack_postmultiply)
+
         if not is_global:
-            import warnings
             warnings.warn("maybe you want to use the global CachingAnalyzer instance? (Call 'get_global_CachingAnalyzer()'.)", stacklevel=2)
 
         self.keep_references = [] # a list of strong references
@@ -1147,10 +1177,10 @@ class CachingAnalyzer:
 global _global_ca_instance
 _global_ca_instance = None
 
-def get_global_CachingAnalyzer():
+def get_global_CachingAnalyzer(**kwargs):
     global _global_ca_instance
     if _global_ca_instance is None:
-        _global_ca_instance = CachingAnalyzer(is_global=True)
+        _global_ca_instance = CachingAnalyzer(is_global=True,**kwargs)
     return _global_ca_instance
 
 if __name__=='__main__':

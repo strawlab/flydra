@@ -81,7 +81,7 @@ def plot_timeseries(subplot=None,options = None):
                                   '(--disable-kalman-smoothing) is incompatable '
                                   'with setting dynamic model options (--dynamic-model)')
 
-    ca = core_analysis.get_global_CachingAnalyzer()
+    ca = core_analysis.get_global_CachingAnalyzer(hack_postmultiply=options.hack_postmultiply)
 
     if kalman_filename is not None:
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
