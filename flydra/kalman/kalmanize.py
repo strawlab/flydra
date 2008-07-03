@@ -16,6 +16,7 @@ import flydra.save_calibration_data as save_calibration_data
 import collections
 from flydra.MainBrain import TextLogDescription
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
+from flydra.reconstruct import do_3d_operations_on_2d_point
 
 KalmanEstimates = flydra_kalman_utils.KalmanEstimates
 KalmanEstimatesVelOnly = flydra_kalman_utils.KalmanEstimatesVelOnly
@@ -204,7 +205,10 @@ class KalmanSaver:
             self.h5_obs = self.h5file.root.kalman_observations
 
             obj_ids = self.h5_xhat.read(field='obj_id')
-            self.obj_id = obj_ids.max()
+            if len(obj_ids):
+                self.obj_id = obj_ids.max()+1
+            else:
+                self.obj_id = 1
             del obj_ids
 
 
@@ -604,20 +608,39 @@ def kalmanize(src_filename,
         if 'sumsqf_val' in row.dtype.fields: sumsqf_val = row['sumsqf_val']
         else: sumsqf_val = None
 
-         # XXX for now, do not calculate 3D plane for each point. This
-        # is because we are punting on calculating p1,p2,p3,p4 from
-        # the point, slope, and reconstructor.
+        if 0:
+            # XXX for now, do not calculate 3D plane for each point. This
+            # is because we are punting on calculating p1,p2,p3,p4 from
+            # the point, slope, and reconstructor.
 
-        line_found = False
-        p1, p2, p3, p4 = numpy.nan, numpy.nan, numpy.nan, numpy.nan
+            line_found = False
+            p1, p2, p3, p4 = numpy.nan, numpy.nan, numpy.nan, numpy.nan
+
+            pluecker_hz_meters=reconstructor_meters.get_projected_line_from_2d(
+                cam_id,(x_undistorted,y_undistorted))
+        else:
+            pmat_inv = reconst_orig_units.get_pmat_inv(cam_id)
+            pmat_meters_inv = reconstructor_meters.get_pmat_inv(cam_id)
+            camera_center = reconst_orig_units.get_camera_center(cam_id)
+            camera_center = numpy.hstack((camera_center[:,0],[1]))
+            camera_center_meters = reconstructor_meters.get_camera_center(cam_id)
+            camera_center_meters = numpy.hstack((camera_center_meters[:,0],[1]))
+            helper = reconstructor_meters.get_reconstruct_helper_dict()[cam_id]
+            rise=slope
+            run=1.0
+            (p1, p2, p3, p4,
+             ray0, ray1, ray2, ray3, ray4, ray5) = do_3d_operations_on_2d_point(helper, x_undistorted,y_undistorted,
+                                                                                pmat_inv, pmat_meters_inv,
+                                                                                camera_center, camera_center_meters,
+                                                                                x_distorted,y_distorted,
+                                                                                rise, run)
+            line_found = not numpy.isnan(p1)
+            pluecker_hz_meters = (ray0, ray1, ray2, ray3, ray4, ray5)
 
         # Keep in sync with kalmanize.py and data_descriptions.py
         pt_undistorted = (x_undistorted,y_undistorted,
                           area,slope,eccentricity,
                           p1,p2,p3,p4, line_found, frame_pt_idx, cur_val, mean_val, sumsqf_val)
-
-        pluecker_hz_meters=reconstructor_meters.get_projected_line_from_2d(
-            cam_id,(x_undistorted,y_undistorted))
 
         projected_line_meters=geom.line_from_HZline(pluecker_hz_meters)
 

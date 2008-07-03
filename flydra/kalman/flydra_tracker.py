@@ -16,6 +16,13 @@ __all__ = ['TrackedObject','Tracker','decode_data_packet']
 PT_TUPLE_IDX_X = flydra.data_descriptions.PT_TUPLE_IDX_X
 PT_TUPLE_IDX_Y = flydra.data_descriptions.PT_TUPLE_IDX_Y
 PT_TUPLE_IDX_AREA = flydra.data_descriptions.PT_TUPLE_IDX_AREA
+PT_TUPLE_IDX_SLOPE = flydra.data_descriptions.PT_TUPLE_IDX_SLOPE
+PT_TUPLE_IDX_ECCENTRICITY = flydra.data_descriptions.PT_TUPLE_IDX_ECCENTRICITY
+PT_TUPLE_IDX_P1 = flydra.data_descriptions.PT_TUPLE_IDX_P1
+PT_TUPLE_IDX_P2 = flydra.data_descriptions.PT_TUPLE_IDX_P2
+PT_TUPLE_IDX_P3 = flydra.data_descriptions.PT_TUPLE_IDX_P3
+PT_TUPLE_IDX_P4 = flydra.data_descriptions.PT_TUPLE_IDX_P4
+
 PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
 PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
@@ -104,7 +111,7 @@ class TrackedObject:
             line3d_orig_units = flydra.geom.line_from_HZline(first_observation_Lcoords_orig_units) # PlueckerLine instance
             loc = line3d_orig_units.closest() # closest point on line to origin
             loc_meters = loc*self.scale_factor
-            line3d_meters = line_from_points( loc_meters, loc_meters+line3d_orig_units.direction() )
+            line3d_meters = flydra.geom.line_from_points( loc_meters, loc_meters+line3d_orig_units.direction() )
             first_observation_Lcoords = line3d_meters.to_hz()
         ss = kalman_model['ss']
         initial_x = numpy.zeros( (ss,) )
@@ -257,9 +264,9 @@ class TrackedObject:
                 prediction_3d = xhatminus[:3]
                 pmats_and_points_cov = [ (self.reconstructor_meters.get_pmat(cam_id),
                                           self.reconstructor_meters.get_pinhole_model_with_jacobian(cam_id),
-                                          xy2d_observed,
+                                          value_tuple[:2],#just first 2 components (x,y) become xy2d_observed
                                           self.ekf_observation_covariance_pixels)
-                                         for (cam_id,xy2d_observed) in cam_ids_and_points2d]
+                                         for (cam_id,value_tuple) in cam_ids_and_points2d]
                 xhat, P = self.my_kalman.step2__calculate_a_posteri(xhatminus, Pminus,
                                                                     pmats_and_points_cov)
             else:
@@ -458,7 +465,20 @@ class TrackedObject:
 
             if closest_idx is not None:
                 pt_undistorted, projected_line_meters = candidate_point_list[closest_idx]
-                observed_2d = pt_undistorted[PT_TUPLE_IDX_X], pt_undistorted[PT_TUPLE_IDX_Y]
+                if 0:
+                    # only points
+                    observed_2d = pt_undistorted[PT_TUPLE_IDX_X], pt_undistorted[PT_TUPLE_IDX_Y]
+                else:
+                    # with orientation
+                    observed_2d = (pt_undistorted[PT_TUPLE_IDX_X],
+                                   pt_undistorted[PT_TUPLE_IDX_Y],
+                                   pt_undistorted[PT_TUPLE_IDX_AREA],
+                                   pt_undistorted[PT_TUPLE_IDX_SLOPE],
+                                   pt_undistorted[PT_TUPLE_IDX_ECCENTRICITY],
+                                   pt_undistorted[PT_TUPLE_IDX_P1],
+                                   pt_undistorted[PT_TUPLE_IDX_P2],
+                                   pt_undistorted[PT_TUPLE_IDX_P3],
+                                   pt_undistorted[PT_TUPLE_IDX_P4])
                 cam_ids_and_points2d.append( (cam_id,observed_2d) )
                 frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                 used_camns_and_idxs.append( (camn, frame_pt_idx, closest_idx) )

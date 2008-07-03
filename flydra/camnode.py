@@ -83,6 +83,8 @@ else:
     ConnectionClosedError = NonExistantError
 import flydra.reconstruct_utils as reconstruct_utils
 import flydra.reconstruct
+from flydra.reconstruct import do_3d_operations_on_2d_point
+
 import camnode_utils
 import motmot.FastImage.FastImage as FastImage
 #FastImage.set_debug(3)
@@ -301,6 +303,8 @@ def get_free_buffer_from_pool(pool):
         if not buf._i_promise_to_return_buffer_to_the_pool:
             pool.return_buffer(buf)
 
+
+
 class ProcessCamClass(object):
     def __init__(self,
                  cam2mainbrain_port=None,
@@ -479,11 +483,11 @@ class ProcessCamClass(object):
                     # (If we have self._hlper _pmat_inv, we can assume we have
                     # self._pmat_inv and sef._pmat_meters.)
                     (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4,
-                     ray5) = self.do_3d_operations_on_2d_point(x0u,y0u,#self._hlper.undistort,
-                                                               self._pmat_inv, self._pmat_meters_inv,
-                                                               self._camera_center, self._camera_center_meters,
-                                                               x0_abs, y0_abs,
-                                                               rise, run)
+                     ray5) = do_3d_operations_on_2d_point(self._hlper,x0u,y0u,
+                                                          self._pmat_inv, self._pmat_meters_inv,
+                                                          self._camera_center, self._camera_center_meters,
+                                                          x0_abs, y0_abs,
+                                                          rise, run)
                     ray_valid = True
             else:
                 x0u = x0_abs # fake undistorted data
@@ -514,56 +518,6 @@ class ProcessCamClass(object):
                   cur_val, mean_val, sumsqf_val)
             points.append( pt )
         return points
-
-    def do_3d_operations_on_2d_point(self, x0u, y0u,
-                                     pmat_inv, pmat_meters_inv,
-                                     camera_center, camera_center_meters,
-                                     x0_abs, y0_abs,
-                                     rise, run):
-
-            matrixmultiply = numpy.dot
-            svd = numpy.dual.svd # use fastest ATLAS/fortran libraries
-
-            # calculate plane containing camera origin and found line
-            # in 3D world coords
-
-            # Step 1) Find world coordinates points defining plane:
-            #    A) found point
-            found_point_image_plane = [x0u,y0u,1.0]
-            X0=matrixmultiply(pmat_inv,found_point_image_plane)
-
-            #    B) another point on found line
-            x1u, y1u = self._hlper.undistort(x0_abs+run,y0_abs+rise)
-            X1=matrixmultiply(pmat_inv,[x1u,y1u,1.0])
-
-            #    C) world coordinates of camera center already known
-
-            # Step 2) Find world coordinates of plane
-            A = nx.array( [ X0, X1, camera_center] ) # 3 points define plane
-            try:
-                u,d,vt=svd(A,full_matrices=True)
-            except:
-                print 'rise,run',rise,run
-                print 'pmat_inv',pmat_inv
-                print 'X0, X1, camera_center',X0, X1, camera_center
-                raise
-            Pt = vt[3,:] # plane parameters
-
-            p1,p2,p3,p4 = Pt[0:4]
-            if numpy.isnan(p1):
-                print 'ERROR: SVD returned nan'
-
-            # calculate pluecker coords of 3D ray from camera center to point
-            # calculate 3D coords of point on image plane
-            X0meters = numpy.dot(pmat_meters_inv, found_point_image_plane )
-            X0meters = X0meters[:3]/X0meters[3] # convert to shape = (3,)
-            # project line
-            pluecker_meters = pluecker_from_verts(X0meters,camera_center_meters)
-            (ray0, ray1, ray2, ray3, ray4, ray5) = pluecker_meters # unpack
-
-            return (p1, p2, p3, p4,
-                    ray0, ray1, ray2, ray3, ray4, ray5)
-
 
     def mainloop(self):
         disable_ifi_warning = self.options.disable_ifi_warning

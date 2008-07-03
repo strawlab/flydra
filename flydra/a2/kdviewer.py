@@ -447,13 +447,52 @@ def doit(filename,
             g = tvtk.Glyph3D(scale_mode='data_scaling_off',
                              vector_mode = 'use_vector',
                              input=pd)
-            ss = tvtk.SphereSource(radius = radius/3)
+            print 'radius/3',radius/3
+            ss = tvtk.SphereSource(radius = radius/3,
+                                   #theta_resolution=3,
+                                   #phi_resolution=3,
+                                   )
             g.source = ss.output
             vel_mapper = tvtk.PolyDataMapper(input=g.output)
             a = tvtk.Actor(mapper=vel_mapper)
             a.property.color = 1.0, 0.0, 0.0
             actors.append(a)
             actor2obj_id[a] = obj_id
+
+            show_observations_orientation = True
+            direction_length = 0.06 # 3 cm
+            if show_observations_orientation:
+                obs_lcoords = numpy.array([obs_rows['hz_line0'],
+                                           obs_rows['hz_line1'],
+                                           obs_rows['hz_line2'],
+                                           obs_rows['hz_line3'],
+                                           obs_rows['hz_line4'],
+                                           obs_rows['hz_line5']]).T
+                line_direction = reconstruct.line_direction(obs_lcoords)
+                heads = obs_X+line_direction*direction_length
+                tails = obs_X-line_direction*direction_length
+                verts = numpy.vstack((heads,tails))
+                tubes = [ [i,i+len(heads)] for i in range(len(heads)) ]
+
+                print obs_X[:5,:]
+                print verts[:5,:]
+
+                pd = tvtk.PolyData()
+                pd.points = verts
+                pd.lines = tubes
+
+                pt = tvtk.TubeFilter(radius=0.001,input=pd,
+                                     number_of_sides=4,
+                                     vary_radius='vary_radius_off',
+                                     )
+                m = tvtk.PolyDataMapper(input=pt.output)
+                a = tvtk.Actor(mapper=m)
+                a.property.color = (1,0,0) # red
+                a.property.specular = 0.3
+                actors.append(a)
+                actor2obj_id[a] = obj_id
+
+                del verts # make sure it's not used below
 
         rows = ca.load_data( obj_id, data_file,
                              use_kalman_smoothing=use_kalman_smoothing,

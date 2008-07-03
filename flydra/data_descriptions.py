@@ -1,10 +1,17 @@
 import tables as PT
 
-# This describes indexes in the "pt_undistorted" tuple.
-# These are used in MainBrain.py and flydra_tracker.py
+# This describes indexes in the "pt_undistorted" tuple.  These are
+# used in MainBrain.py, flydra_tracker.py, and kalmanize.py
 PT_TUPLE_IDX_X = 0
 PT_TUPLE_IDX_Y = 1
 PT_TUPLE_IDX_AREA = 2
+PT_TUPLE_IDX_SLOPE = 3
+PT_TUPLE_IDX_ECCENTRICITY = 4
+PT_TUPLE_IDX_P1 = 5
+PT_TUPLE_IDX_P2 = 6
+PT_TUPLE_IDX_P3 = 7
+PT_TUPLE_IDX_P4 = 8
+PT_TUPLE_IDX_LINE_FOUND = 9
 PT_TUPLE_IDX_FRAME_PT_IDX = 10
 PT_TUPLE_IDX_CUR_VAL_IDX = 11
 PT_TUPLE_IDX_MEAN_VAL_IDX = 12

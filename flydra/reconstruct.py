@@ -179,6 +179,71 @@ def normalize_pmat(pmat):
     assert numpy.allclose(pmat2cam_center(pmat_orig),pmat2cam_center(pmat))
     return pmat
 
+def do_3d_operations_on_2d_point(helper,
+                                 x0u, y0u, # undistorted coords
+                                 pmat_inv, pmat_meters_inv,
+                                 camera_center, camera_center_meters,
+                                 x0_abs, y0_abs, # distorted coords
+                                 rise, run):
+    """this function is a hack"""
+
+    matrixmultiply = numpy.dot
+    svd = numpy.dual.svd # use fastest ATLAS/fortran libraries
+
+    found_point_image_plane = [x0u,y0u,1.0]
+
+    if not numpy.isnan(rise):
+        # calculate plane containing camera origin and found line
+        # in 3D world coords
+
+        # Step 1) Find world coordinates points defining plane:
+        #    A) found point
+        X0=matrixmultiply(pmat_inv,found_point_image_plane)
+
+        #    B) another point on found line
+        if 1:
+            # The right way - convert the slope in distorted coords to
+            # slope in undistorted coords.
+            dirvec = numpy.array([run,rise])
+            dirvec = dirvec/numpy.sqrt( numpy.sum( dirvec**2 )) # normalize
+            dirvec *= 0.1 # make really small
+            x1u, y1u = helper.undistort(x0_abs+dirvec[0],y0_abs+dirvec[1])
+            X1=matrixmultiply(pmat_inv,[x1u,y1u,1.0])
+        else:
+            # The wrong way - assume slope is the same in distorted and undistorted coords
+            x1u, y1u = x0u+run, y0u+rise
+            X1=matrixmultiply(pmat_inv,[x1u,y1u,1.0])
+
+        #    C) world coordinates of camera center already known
+
+        # Step 2) Find world coordinates of plane
+        A = nx.array( [ X0, X1, camera_center] ) # 3 points define plane
+        try:
+            u,d,vt=svd(A,full_matrices=True)
+        except:
+            print 'rise,run',rise,run
+            print 'pmat_inv',pmat_inv
+            print 'X0, X1, camera_center',X0, X1, camera_center
+            raise
+        Pt = vt[3,:] # plane parameters
+
+        p1,p2,p3,p4 = Pt[0:4]
+        if numpy.isnan(p1):
+            print 'ERROR: SVD returned nan'
+    else:
+        p1,p2,p3,p4 = numpy.nan,numpy.nan, numpy.nan,numpy.nan
+
+    # calculate pluecker coords of 3D ray from camera center to point
+    # calculate 3D coords of point on image plane
+    X0meters = numpy.dot(pmat_meters_inv, found_point_image_plane )
+    X0meters = X0meters[:3]/X0meters[3] # convert to shape = (3,)
+    # project line
+    pluecker_meters = pluecker_from_verts(X0meters,camera_center_meters)
+    (ray0, ray1, ray2, ray3, ray4, ray5) = pluecker_meters # unpack
+
+    return (p1, p2, p3, p4,
+            ray0, ray1, ray2, ray3, ray4, ray5)
+
 class SingleCameraCalibration:
     def __init__(self,
                  cam_id=None, # non-optional
@@ -574,13 +639,15 @@ class Reconstructor:
                 assert len(mi_col)==1
                 self.minimum_eccentricity = mi_col[0]
             elif self.cal_source_type == 'normal files':
-                min_e_fname = os.path.join(new_dirname,'minimum_eccentricity.txt')
+                min_e_fname = os.path.join(use_cal_source,'minimum_eccentricity.txt')
                 if os.path.exists(min_e_fname):
                     fd = open(min_e_fname,'r')
                     self.minimum_eccentricity = float( fd.read().strip() )
                     fd.close()
             if self.minimum_eccentricity is None:
                 # use default
+                if 0:
+                    1/0
                 warnings.warn('No minimum eccentricity specified, using default')
                 self.minimum_eccentricity=DEFAULT_MINIMUM_ECCENTRICITY
         else:
@@ -858,6 +925,9 @@ class Reconstructor:
     def get_pmat(self, cam_id):
         return self.Pmat[cam_id]
 
+    def get_pmat_inv(self, cam_id):
+        return self.pmat_inv[cam_id]
+
     def get_pinhole_model_with_jacobian(self, cam_id):
         return self.pinhole_model_with_jacobian[cam_id]
 
@@ -908,6 +978,8 @@ class Reconstructor:
                 # only point information ( no line )
                 x,y = value_tuple
                 have_line_coords = False
+                if return_line_coords:
+                    raise ValueError('requesting 3D line coordinates, but no 2D line coordinates given')
             else:
                 # get shape information from each view of a blob:
                 x,y,area,slope,eccentricity, p1,p2,p3,p4 = value_tuple
