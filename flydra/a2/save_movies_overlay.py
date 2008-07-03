@@ -395,11 +395,34 @@ def doit(fmf_filename=None,
 
             # get 3D observation data
             kobs_vert_images = []
+            kobs_ori_verts_images_a = [] # for 3D orientation
+            kobs_ori_verts_images_b = [] # for 3D orientation
             if kalman_filename is not None:
                 data_3d_idxs = numpy.nonzero(h5_frame == kobs_3d_frame)[0]
                 these_3d_rows = kobs_rows[data_3d_idxs]
                 for this_3d_row in these_3d_rows:
                     vert = numpy.array([this_3d_row['x'],this_3d_row['y'],this_3d_row['z']])
+                    if 1:
+                        line_length = 0.16 # 16 cm total
+                        hzline = numpy.array([this_3d_row['hz_line0'],
+                                              this_3d_row['hz_line1'],
+                                              this_3d_row['hz_line2'],
+                                              this_3d_row['hz_line3'],
+                                              this_3d_row['hz_line4'],
+                                              this_3d_row['hz_line5']])
+                        direction = reconstruct.line_direction(hzline)
+                        for (start_frac,stop_frac,target) in [ (-1.0,-0.5,kobs_ori_verts_images_a),
+                                                               ( 1.0, 0.5,kobs_ori_verts_images_b) ]:
+                            v1 = vert+(start_frac*direction*line_length)
+                            v2 = vert+(stop_frac*direction*line_length)
+                            u = v2-v1
+
+                            # plot several verts to deal with camera distortion
+                            ori_verts = [v1+inc*u  for inc in numpy.linspace(0,1.0,3)]
+
+                            ori_verts_images = [ R.find2d(cam_id,ori_vert,distorted=True) for ori_vert in ori_verts ]
+                            target.append( ori_verts_images )
+
                     vert_image = R.find2d(cam_id,vert,distorted=True)
                     obs_2d_idx = this_3d_row['obs_2d_idx']
                     kobs_2d_data = data_file.root.kalman_observations_2d_idxs[int(obs_2d_idx)]
@@ -791,7 +814,7 @@ def doit(fmf_filename=None,
 
                 if style=='debug':
                     for (xy,XYZ,obj_id,obs_info) in kobs_vert_images:
-                        radius=3
+                        radius=9
                         x,y= xy
                         X,Y,Z=XYZ
                         draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
@@ -805,6 +828,10 @@ def doit(fmf_filename=None,
                             draw.text( (x+15,y+(i+1)*10),
                                        '%s pt %d'%(obs_cam_id,pt_no), font_obs )
 
+                    for kobs_ori_verts_images in [kobs_ori_verts_images_a,kobs_ori_verts_images_b]:
+                        for ori_verts_images in kobs_ori_verts_images:
+                            ori_verts_images = numpy.array( ori_verts_images )
+                            draw.line( ori_verts_images.flatten(), pen_obs )
 
                 draw.flush()
 
