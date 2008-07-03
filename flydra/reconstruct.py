@@ -6,12 +6,12 @@ import numpy
 import sets
 import flydra.reconstruct_utils as reconstruct_utils # in pyrex/C for speed
 import time
-from flydra.common_variables import MINIMUM_ECCENTRICITY
+from flydra.common_variables import MINIMUM_ECCENTRICITY as DEFAULT_MINIMUM_ECCENTRICITY
 import scipy.linalg
 import traceback
 import flydra.pmat_jacobian
 import xml.etree.ElementTree as ET
-import StringIO
+import StringIO, warnings
 
 WARN_CALIB_DIFF = False
 
@@ -497,15 +497,22 @@ def Reconstructor_from_xml(elem):
     assert ET.iselement(elem)
     assert elem.tag == "multi_camera_reconstructor"
     sccs = []
+    minimum_eccentricity = None
     for child in elem:
-        scc = SingleCameraCalibration_from_xml(child)
-        sccs.append( scc )
-    return Reconstructor(sccs)
+        if child.tag == "single_camera_calibration":
+            scc = SingleCameraCalibration_from_xml(child)
+            sccs.append( scc )
+        elif child.tag == 'minimum_eccentricity':
+            minimum_eccentricity = float(child.text)
+        else:
+            raise ValueError('unknown tag: %s'%child.tag)
+    return Reconstructor(sccs,minimum_eccentricity=minimum_eccentricity)
 
 class Reconstructor:
     def __init__(self,
                  cal_source = None,
                  do_normalize_pmat=True,
+                 minimum_eccentricity=None,
                  ):
         """
         inputs
@@ -541,7 +548,6 @@ class Reconstructor:
         else:
             use_cal_source = self.cal_source
 
-
         if self.cal_source_type == 'normal files':
             fd = open(os.path.join(use_cal_source,'camera_order.txt'),'r')
             cam_ids = fd.read().split('\n')
@@ -557,6 +563,29 @@ class Reconstructor:
                 cam_ids.append( node.name )
         elif self.cal_source_type=='SingleCameraCalibration instances':
             cam_ids = [scci.cam_id for scci in use_cal_source]
+
+        if minimum_eccentricity is None:
+            self.minimum_eccentricity = None
+
+            # not specified in call to constructor
+            if self.cal_source_type == 'pytables':
+                # load from file
+                mi_col = results.root.calibration.additional_info[:]['minimum_eccentricity']
+                assert len(mi_col)==1
+                self.minimum_eccentricity = mi_col[0]
+            elif self.cal_source_type == 'normal files':
+                min_e_fname = os.path.join(new_dirname,'minimum_eccentricity.txt')
+                if os.path.exists(min_e_fname):
+                    fd = open(min_e_fname,'r')
+                    self.minimum_eccentricity = float( fd.read().strip() )
+                    fd.close()
+            if self.minimum_eccentricity is None:
+                # use default
+                warnings.warn('No minimum eccentricity specified, using default')
+                self.minimum_eccentricity=DEFAULT_MINIMUM_ECCENTRICITY
+        else:
+            # use the value that was passed in to constructor
+            self.minimum_eccentricity=minimum_eccentricity
 
         N = len(cam_ids)
         # load calibration matrices
@@ -722,7 +751,7 @@ class Reconstructor:
         # get original calibration
         orig_sccs = [self.get_SingleCameraCalibration(cam_id) for cam_id in self.cam_ids]
         scaled_sccs = [scc.get_scaled(scale_factor) for scc in orig_sccs]
-        return Reconstructor(scaled_sccs)
+        return Reconstructor(scaled_sccs,minimum_eccentricity=self.minimum_eccentricity)
 
     def get_cam_ids(self):
         return self.cam_ids
@@ -735,6 +764,10 @@ class Reconstructor:
         fd = open(os.path.join(new_dirname,'camera_order.txt'),'w')
         for cam_id in self.cam_ids:
             fd.write(cam_id+'\n')
+        fd.close()
+
+        fd = open(os.path.join(new_dirname,'minimum_eccentricity.txt'),'w')
+        fd.write(repr(self.minimum_eccentricity)+'\n')
         fd.close()
 
         res_fd = open(os.path.join(new_dirname,'Res.dat'),'w')
@@ -815,7 +848,7 @@ class Reconstructor:
                 row['cal_source'] = self.cal_source
             else:
                 row['cal_source'] = self.cal_source.filename
-        row['minimum_eccentricity'] = MINIMUM_ECCENTRICITY
+        row['minimum_eccentricity'] = self.minimum_eccentricity
         row.append()
         h5additional_info.flush()
 
@@ -886,7 +919,7 @@ class Reconstructor:
                 A.append( y*row2 - Pmat[1,:] )
 
             if return_line_coords and have_line_coords:
-                if eccentricity > MINIMUM_ECCENTRICITY: # require a bit of elongation
+                if eccentricity > self.minimum_eccentricity: # require a bit of elongation
                     P.append( (p1,p2,p3,p4) )
 
         # Calculate best point
@@ -1077,6 +1110,9 @@ class Reconstructor:
         for cam_id in self.cam_ids:
             scc = self.get_SingleCameraCalibration(cam_id)
             scc.add_element(elem)
+        if 1:
+            me_elem = ET.SubElement(elem,"minimum_eccentricity")
+            me_elem.text = repr(self.minimum_eccentricity)
 
 def test():
     import flydra.generate_fake_calibration as gfc

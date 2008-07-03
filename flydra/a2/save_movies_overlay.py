@@ -657,39 +657,38 @@ def doit(fmf_filename=None,
                             xloc2 = xloc + radius_pt
                             yloc = rescale_factor*(absdiffy+y2d)
 
-                            if eccentricity<2:
-                                # only draw circle if not drawing line
+                            if eccentricity<R.minimum_eccentricity:
+                                # only draw circle if not drawing slope line
                                 draw.ellipse( [xloc1,yloc-radius_pt,
                                                xloc2,yloc+radius_pt],
                                               pen_zoomed )
-
-                            direction = numpy.array( [1,slope] )
-                            direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
-                            pos = numpy.array([xloc,yloc])
-                            if style=='debug':
-                                for sign in [-1,1]:
-                                    if not (eccentricity*10)>20:
-                                        continue
-                                    p1 = pos+sign*(eccentricity*10*direction)
-                                    p2 = pos+sign*(             20*direction)
-                                    draw.line( [p1[0],p1[1], p2[0],p2[1]],
-                                               pen_zoomed )
-                            elif style=='pretty':
-                                radius = 20
-                                vec = direction*radius
-                                for sign in [-1,1]:
-                                    p1 = pos+sign*(1.2*vec)
-                                    p2 = pos+sign*(0.5*vec)
-                                    draw.line( [p1[0],p1[1], p2[0],p2[1]],
-                                               pen_zoomed )
+                            else:
+                                # draw slope line
+                                direction = numpy.array( [1,slope] )
+                                direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
+                                pos = numpy.array([xloc,yloc])
+                                if style=='debug':
+                                    for sign in [-1,1]:
+                                        p1 = pos+sign*(eccentricity*10*direction)
+                                        p2 = pos+sign*(R.minimum_eccentricity*10*direction)
+                                        draw.line( [p1[0],p1[1], p2[0],p2[1]],
+                                                   pen_zoomed )
+                                elif style=='pretty':
+                                    radius = 20
+                                    vec = direction*radius
+                                    for sign in [-1,1]:
+                                        p1 = pos+sign*(1.2*vec)
+                                        p2 = pos+sign*(0.5*vec)
+                                        draw.line( [p1[0],p1[1], p2[0],p2[1]],
+                                                   pen_zoomed )
                             if style=='debug':
                                 if cur_val is None:
                                     draw.text( (xloc,rescale_factor*(absdiffy+y2d)),
-                                               'pt %d (%.1f)'%(pt_no, area), font_zoomed )
+                                               'pt %d (%.1f, %.1f)'%(pt_no, area, eccentricity), font_zoomed )
                                 else:
                                     draw.text( (xloc,rescale_factor*(absdiffy+y2d)),
-                                               'pt %d (%.1f, %d, %d, %d)'%(pt_no, area,
-                                                                           cur_val, mean_val, nstd_val),
+                                               'pt %d (%.1f, %.1f, %d, %d, %d)'%(pt_no, area, eccentricity,
+                                                                                 cur_val, mean_val, nstd_val),
                                                font_zoomed )
                     draw.flush()
 
@@ -755,17 +754,15 @@ def doit(fmf_filename=None,
                             draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
                                           pen2d )
 
-                        # plot slope
-                        if 1:
+                        # plot slope line
+                        if not eccentricity<R.minimum_eccentricity:
                             direction = numpy.array( [1,slope] )
                             direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
                             if style=='debug':
                                 pos = numpy.array( [x,y] )
                                 for sign in [-1,1]:
-                                    if not (eccentricity*10)>20:
-                                        continue
                                     p1 = pos+sign*(eccentricity*10*direction)
-                                    p2 = pos+sign*(             20*direction)
+                                    p2 = pos+sign*(R.minimum_eccentricity*10*direction)
                                     draw.line( [p1[0],p1[1], p2[0],p2[1]],
                                                pen2d )
                             elif style=='pretty':
@@ -812,7 +809,7 @@ def doit(fmf_filename=None,
                 draw.flush()
 
         if 1:
-            dirname = 'full_%s_movies'%os.path.splitexit(h5_filename)[0]
+            dirname = 'full_%s_movies'%os.path.splitext(h5_filename)[0]
             fname = os.path.join(dirname,'smo_%(cam_id)s_%(h5_frame)07d.png'%locals())
             if not os.path.exists(dirname):
                 os.makedirs(dirname)

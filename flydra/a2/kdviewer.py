@@ -39,14 +39,14 @@ def print_cam_props(camera):
     print 'camera.parallel_scale = ',camera.parallel_scale
 
 def do_show_cameras(results, renderers, frustums=True, axes=True, labels=True, centers=True, length=2.0):
+    actors = []
+
     if isinstance(results,reconstruct.Reconstructor):
         R = results
     else:
         R = reconstruct.Reconstructor(results)
-
     R = R.get_scaled( R.get_scale_factor() )
 
-    actors = []
     if centers:
         cam_centers = tvtk.Points()
 
@@ -68,8 +68,8 @@ def do_show_cameras(results, renderers, frustums=True, axes=True, labels=True, c
         ballActor.property.diffuse_color = (1,0,0)
         ballActor.property.specular = .3
         ballActor.property.specular_power = 30
-        for ren in renderers:
-            ren.add_actor(ballActor)
+        actors.append(ballActor)
+
     if axes:
         for cam_id in R.Pmat.keys():
             pmat = R.get_pmat( cam_id )
@@ -87,9 +87,6 @@ def do_show_cameras(results, renderers, frustums=True, axes=True, labels=True, c
 
             verts.append( C )
             verts.append( X )
-            print 'verts'
-            print verts
-            print
             lines.append( [0,1] )
 
             pd = tvtk.PolyData()
@@ -104,7 +101,7 @@ def do_show_cameras(results, renderers, frustums=True, axes=True, labels=True, c
             a = tvtk.Actor(mapper=m)
             a.property.color = .9, .9, .9
             a.property.specular = 0.3
-            ren.add_actor(a)
+            actors.append(a)
 
     if frustums:
         line_points = tvtk.Points()
@@ -183,8 +180,7 @@ def do_show_cameras(results, renderers, frustums=True, axes=True, labels=True, c
         p.diffuse_color = 1,0,0
         p.specular = .3
         p.specular_power = 30
-        for ren in renderers:
-            ren.add_actor(profile)
+        actors.append(profile)
 
     if labels:
         for cam_id, pmat in R.Pmat.iteritems():
@@ -196,9 +192,8 @@ def do_show_cameras(results, renderers, frustums=True, axes=True, labels=True, c
             pc = ta.position_coordinate
             pc.coordinate_system = 'world'
             pc.value = X
-
-            for ren in renderers:
-                ren.add_actor(ta)
+            actors.append(ta)
+    return actors
 
 def doit(filename,
          show_obj_ids=False,
@@ -340,11 +335,13 @@ def doit(filename,
         ren = tvtk.Renderer(background=(1.0,1.0,1.0)) # white
 
     camera = ren.active_camera
+    actors = []
+    actor2obj_id = {}
 
     if show_cameras:
         if is_mat_file:
             raise RuntimeError('.mat file does not contain camera information')
-        do_show_cameras(extra['kresults'], [ren])
+        actors.extend( do_show_cameras(extra['kresults'], [ren]) )
 
     if 0:
         camera.parallel_projection =  0
@@ -378,8 +375,6 @@ def doit(filename,
                                value_range = (.8,0), # don't go all the way to 1 to keep away from pure white
                                )
 
-    actors = []
-    actor2obj_id = {}
     #################
 
     if show_only_track_ends:
@@ -430,7 +425,7 @@ def doit(filename,
             print
 
         if show_observations:
-            obs_rows = ca.load_observations( obj_id, data_file)
+            obs_rows = ca.load_dynamics_free_MLE_position(obj_id, data_file)
 
             if start is not None or stop is not None:
                 obs_frames = obs_rows['frame']
