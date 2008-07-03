@@ -17,6 +17,10 @@ from optparse import OptionParser
 import flydra.reconstruct as reconstruct
 import sets
 import motmot.ufmf.ufmf as ufmf
+CALC_SLOPE=False # allow re-computing slope from saved image data
+if CALC_SLOPE:
+    import motmot.FastImage.FastImage as FastImage
+    import motmot.realtime_image_analysis.realtime_image_analysis as realtime_image_analysis
 import flydra.a2.utils as utils
 
 #PLOT='mpl'
@@ -47,6 +51,49 @@ def ensure_minsize_image( arr, (h,w), fill=0):
         arr_new[:arr.shape[0],:arr.shape[1]] = arr
         arr=arr_new
     return arr
+
+def calc_slope_eccentricity(zoom_fg, h5_frame):
+    # calculate slope and eccentricity of a small image region
+    if 0:
+        slopeimx_bright = -numpy.array( zoom_fg, dtype=numpy.float32) # make target white
+        slopeimx_mean = numpy.mean( slopeimx_bright )
+        slopeimx_bright = slopeimx_bright-slopeimx_mean # bring mean to zero
+        slopeimx_bright = numpy.clip(slopeimx_bright,0,255)
+    elif 0:
+        slopeimx_bright = 255-numpy.array( zoom_fg, dtype=numpy.float32) # make target white
+        slopeimx_bright = numpy.clip(slopeimx_bright,0,255)
+    elif 1:
+        # This seems to work best. Assumes slopeimx is darker than background
+        fac = 10
+        slopeimx_bright = 255-numpy.array( zoom_fg, dtype=numpy.float32) # make target white
+        slopeimx_bright = slopeimx_bright - (numpy.max( slopeimx_bright) - fac )
+        slopeimx_bright = numpy.clip(slopeimx_bright,0,255)
+        slopeimx_bright *= (255.0/fac)
+
+    slopeimx_bright = slopeimx_bright.astype(numpy.uint8)
+    if 1:
+        slope_im = slopeimx_bright
+    slopeimx_bright = FastImage.asfastimage( slopeimx_bright )
+    (slope,eccentricity) = realtime_image_analysis.fit_slope( slopeimx_bright )
+
+    if 0:
+        # save actual image used for calculating slope
+        slope_im=Image.fromstring('L',
+                                  (slope_im.shape[1],slope_im.shape[0]),
+                                  slope_im.tostring())
+        w,h = slope_im.size
+        rescale_factor = 5
+        slope_im = slope_im.resize( (rescale_factor*w, rescale_factor*h) )
+        slope_im = slope_im.convert('RGB')
+        slope_draw = aggdraw.Draw(slope_im)
+        slope_draw.text( (5,5), '%3f'%slope,
+                         aggdraw.Font((230, 159, 0),
+                                      '/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf',
+                                      size=20))
+        slope_draw.flush()
+        fname = 'slope_im_%06d.bmp'%(h5_frame,)
+        slope_im = slope_im.save(fname)
+    return slope,eccentricity
 
 def doit(fmf_filename=None,
          h5_filename=None,
@@ -109,7 +156,7 @@ def doit(fmf_filename=None,
     if fps is None:
         fps = result_utils.get_fps( h5 )
 
-    ca = core_analysis.CachingAnalyzer()
+    ca = core_analysis.get_global_CachingAnalyzer()
 
     if blank is not None:
         # use frame number as "blank image"
@@ -159,8 +206,8 @@ def doit(fmf_filename=None,
             print 'loading frame numbers for kalman objects (observations)'
             kobs_rows = []
             for obj_id in use_obj_ids:
-                my_rows = ca.load_observations( obj_id, data_file,
-                                                )
+                my_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file,
+                                                              )
                 kobs_rows.append(my_rows)
             kobs_rows = numpy.concatenate( kobs_rows )
             kobs_3d_frame = kobs_rows['frame']
@@ -183,7 +230,8 @@ def doit(fmf_filename=None,
     cam_id = found_cam_id
     my_camns = cam_id2camns[cam_id]
 
-    cam_center_meters = R.get_camera_center(cam_id)
+    if kalman_filename is not None:
+        cam_center_meters = R.get_camera_center(cam_id)
 
     if PLOT=='mpl':
         fig = pylab.figure()
@@ -430,36 +478,42 @@ def doit(fmf_filename=None,
                             x2d = row['x']
                             y2d = row['y']
                             area = row['area']
+                            slope = row['slope']
+                            eccentricity = row['eccentricity']
                             try:
                                 cur_val  = row['cur_val']
                                 mean_val = row['mean_val']
                                 nstd_val = row['nstd_val']
                             except IndexError:
                                 # older format didn't save these
-                                cur_val = 0
-                                mean_val = 0
-                                nstd_val = 0
+                                cur_val = None
+                                mean_val = None
+                                nstd_val = None
                             if ((minx <= x2d <= maxx) and
                                 (miny <= y2d <= maxy)):
-                                this2d.append( (x2d-minx,y2d-miny,pt_no,area,cur_val,mean_val,nstd_val) )
+                                this2d.append( (x2d-minx,y2d-miny,pt_no,area,slope,eccentricity,cur_val,mean_val,nstd_val) )
                                 plotted_pt_nos.add( int(pt_no) )
                         this2ds.append( this2d )
                 all_pt_nos = sets.Set(range( len( rows) ))
-                missing_pt_nos = list(all_pt_nos-plotted_pt_nos)
-
+                missing_pt_nos = list(all_pt_nos-plotted_pt_nos) # those not plotted yet due to being kalman objects
                 for pt_no in missing_pt_nos:
                     this_row = rows[pt_no]
                     (x2d,y2d) = this_row['x'], this_row['y']
                     area = this_row['area']
+                    if CALC_SLOPE:
+                        slope,eccentricity = None,None
+                    else:
+                        slope = this_row['slope']
+                        eccentricity = this_row['eccentricity']
                     try:
                         cur_val  = this_row['cur_val']
                         mean_val = this_row['mean_val']
                         nstd_val = this_row['nstd_val']
                     except IndexError:
                         # older format didn't save these
-                        cur_val = 0
-                        mean_val = 0
-                        nstd_val = 0
+                        cur_val = None
+                        mean_val = None
+                        nstd_val = None
                     x=x2d
                     y=y2d
 
@@ -471,8 +525,12 @@ def doit(fmf_filename=None,
                         maxy = min(h,miny+(2*radius))
 
                         zoom_fg = fg[miny:maxy, minx:maxx]
+
+                        if CALC_SLOPE:
+                            slope,eccentricity = calc_slope_eccentricity(zoom_fg, h5_frame)
                         zoom_fg =  ensure_minsize_image( zoom_fg,  (2*radius, 2*radius ))
                         zoom_fgs.append( zoom_fg )
+
 
                         if do_zoom_diff:
                             zoom_diff = diff_im[miny:maxy, minx:maxx]
@@ -498,7 +556,7 @@ def doit(fmf_filename=None,
                         if 1:
                             if ((minx <= x2d <= maxx) and
                                 (miny <= y2d <= maxy)):
-                                this2d.append( (x2d-minx,y2d-miny,pt_no,area,cur_val,mean_val,nstd_val) )
+                                this2d.append( (x2d-minx,y2d-miny,pt_no,area,slope,eccentricity,cur_val,mean_val,nstd_val) )
                                 plotted_pt_nos.add( int(pt_no) )
                         this2ds.append( this2d )
 
@@ -593,24 +651,56 @@ def doit(fmf_filename=None,
 
                     radius_pt = 3
                     for i,this2d in enumerate(this2ds):
-                        for (x2d, y2d, pt_no, area, cur_val, mean_val, nstd_val) in this2d:
+                        for (x2d, y2d, pt_no, area, slope, eccentricity, cur_val, mean_val, nstd_val) in this2d:
                             xloc = rescale_factor*( x2d + i*2*radius + left_offset )
                             xloc1 = xloc - radius_pt
                             xloc2 = xloc + radius_pt
-                            draw.ellipse( [xloc1,rescale_factor*(absdiffy+y2d)-radius_pt,
-                                           xloc2,rescale_factor*(absdiffy+y2d)+radius_pt],
-                                          pen_zoomed )
-                            draw.text( (xloc,rescale_factor*(absdiffy+y2d)),
-                                       'pt %d (%.1f, %d, %d, %d)'%(pt_no, area, cur_val, mean_val, nstd_val), font_zoomed )
+                            yloc = rescale_factor*(absdiffy+y2d)
+
+                            if eccentricity<2:
+                                # only draw circle if not drawing line
+                                draw.ellipse( [xloc1,yloc-radius_pt,
+                                               xloc2,yloc+radius_pt],
+                                              pen_zoomed )
+
+                            direction = numpy.array( [1,slope] )
+                            direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
+                            pos = numpy.array([xloc,yloc])
+                            if style=='debug':
+                                for sign in [-1,1]:
+                                    if not (eccentricity*10)>20:
+                                        continue
+                                    p1 = pos+sign*(eccentricity*10*direction)
+                                    p2 = pos+sign*(             20*direction)
+                                    draw.line( [p1[0],p1[1], p2[0],p2[1]],
+                                               pen_zoomed )
+                            elif style=='pretty':
+                                radius = 20
+                                vec = direction*radius
+                                for sign in [-1,1]:
+                                    p1 = pos+sign*(1.2*vec)
+                                    p2 = pos+sign*(0.5*vec)
+                                    draw.line( [p1[0],p1[1], p2[0],p2[1]],
+                                               pen_zoomed )
+                            if style=='debug':
+                                if cur_val is None:
+                                    draw.text( (xloc,rescale_factor*(absdiffy+y2d)),
+                                               'pt %d (%.1f)'%(pt_no, area), font_zoomed )
+                                else:
+                                    draw.text( (xloc,rescale_factor*(absdiffy+y2d)),
+                                               'pt %d (%.1f, %d, %d, %d)'%(pt_no, area,
+                                                                           cur_val, mean_val, nstd_val),
+                                               font_zoomed )
                     draw.flush()
 
-                    dirname = 'zoomed_%s'%h5_filename
+                    dirname = 'zoomed_%s_movies'%os.path.splitext(h5_filename)[0]
                     fname = os.path.join(dirname,'zoom_diff_%(cam_id)s_%(h5_frame)07d.png'%locals())
                     #dirname = os.path.abspath(os.path.split(fname)[0])
                     if not os.path.exists(dirname):
                         os.makedirs(dirname)
                     im.save( fname )
 
+            # full image
             if PLOT=='mpl':
                 pylab.imshow( frame,
                               origin='lower',
@@ -644,25 +734,19 @@ def doit(fmf_filename=None,
                     draw.text( (0,0), 'frame %d, %s timestamp %s - %s'%(
                         h5_frame, cam_id, repr(fmf_timestamp), strtime), font2d )
 
+                # plot extracted data for full image
                 if len(idxs):
                     for pt_no,(x,y,area,slope,eccentricity) in enumerate(zip(rows['x'],
                                                                              rows['y'],
                                                                              rows['area'],rows['slope'],
                                                                              rows['eccentricity'])):
+
                         if style=='debug':
                             radius = numpy.sqrt(area/(2*numpy.pi))
                             draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
                                           pen2d )
 
                             pos = numpy.array( [x,y] )
-                            if 0:
-                                direction = numpy.array( [slope,1] )
-                                direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
-                                vec = direction*eccentricity
-                                p1 = pos+vec
-                                p2 = pos-vec
-                                draw.line(    [p1[0],p1[1], p2[0],p2[1]],
-                                              pen2d )
                             tmp_str = 'pt %d (area %f)'%(pt_no,area)
                             tmpw,tmph = draw.textsize(tmp_str, font2d )
                             draw.text( (x+5,y-tmph-1), tmp_str, font2d )
@@ -670,6 +754,28 @@ def doit(fmf_filename=None,
                             radius = 30
                             draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
                                           pen2d )
+
+                        # plot slope
+                        if 1:
+                            direction = numpy.array( [1,slope] )
+                            direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
+                            if style=='debug':
+                                pos = numpy.array( [x,y] )
+                                for sign in [-1,1]:
+                                    if not (eccentricity*10)>20:
+                                        continue
+                                    p1 = pos+sign*(eccentricity*10*direction)
+                                    p2 = pos+sign*(             20*direction)
+                                    draw.line( [p1[0],p1[1], p2[0],p2[1]],
+                                               pen2d )
+                            elif style=='pretty':
+                                vec = direction*radius
+                                pos = numpy.array( [x,y] )
+                                for sign in [-1,1]:
+                                    p1 = pos+sign*(1.2*vec)
+                                    p2 = pos+sign*(0.5*vec)
+                                    draw.line( [p1[0],p1[1], p2[0],p2[1]],
+                                               pen2d )
 
                 for (xy,XYZ,obj_id,Pmean_meters) in kalman_vert_images:
                     if style in ['debug','pretty']:
@@ -706,7 +812,7 @@ def doit(fmf_filename=None,
                 draw.flush()
 
         if 1:
-            dirname = 'full_%s'%h5_filename
+            dirname = 'full_%s_movies'%os.path.splitexit(h5_filename)[0]
             fname = os.path.join(dirname,'smo_%(cam_id)s_%(h5_frame)07d.png'%locals())
             if not os.path.exists(dirname):
                 os.makedirs(dirname)
@@ -773,7 +879,7 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    if len(args):
+    if len(args) or (options.fmf_filename is None):
         parser.print_help()
         return
 
