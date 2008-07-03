@@ -1175,7 +1175,7 @@ class CoordinateProcessor(threading.Thread):
                                     # Can't do any 3D math without at least 2 cameras giving good
                                     # data.
                                     try:
-                                        (this_observation_orig_units, line3d, cam_ids_used,
+                                        (this_observation_orig_units, this_observation_Lcoords_orig_units, cam_ids_used,
                                          min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
                                             self.reconstructor,
                                             found_data_dict,
@@ -1190,6 +1190,7 @@ class CoordinateProcessor(threading.Thread):
                                         if self.save_profiling_data:
                                             self.data_dict_queue.append(('join',(corrected_framenumber,
                                                                                  this_observation_orig_units,
+                                                                                 this_observation_Lcoords_orig_units,
                                                                                  this_observation_camns,
                                                                                  this_observation_idxs
                                                                                  )))
@@ -1198,6 +1199,7 @@ class CoordinateProcessor(threading.Thread):
                                         if believably_new:
                                             self.tracker.join_new_obj( corrected_framenumber,
                                                                        this_observation_orig_units,
+                                                                       this_observation_Lcoords_orig_units,
                                                                        this_observation_camns,
                                                                        this_observation_idxs
                                                                        )

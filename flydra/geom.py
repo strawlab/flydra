@@ -102,6 +102,8 @@ class PlueckerLine:
         UdotU = self.u.dot(self.u)
         h = Homogeneous3D(VxU,UdotU)
         return h.to_3tup()
+    def direction(self):
+        return self.u
     def intersect(self,plane):
         if not isinstance(plane,Plane):
             raise NotImplementedError('only Plane intersections implemented')

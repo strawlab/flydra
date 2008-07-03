@@ -21,6 +21,8 @@ PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
 PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
 PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_IDX
 
+NO_LCOORDS = numpy.nan,numpy.nan,numpy.nan,  numpy.nan,numpy.nan,numpy.nan
+
 packet_header_fmt = '<idBB' # XXX check format
 packet_header_fmtsize = struct.calcsize(packet_header_fmt)
 
@@ -63,6 +65,7 @@ class TrackedObject:
                  reconstructor_meters, # the Reconstructor instance
                  frame, # frame number of first data
                  first_observation_orig_units, # first data
+                 first_observation_Lcoords_orig_units, # first data
                  first_observation_camns,
                  first_observation_idxs,
                  scale_factor=None,
@@ -95,6 +98,14 @@ class TrackedObject:
         else:
             self.scale_factor = scale_factor
         first_observation_meters = first_observation_orig_units*self.scale_factor
+        if first_observation_Lcoords_orig_units is None:
+            first_observation_Lcoords = NO_LCOORDS
+        else:
+            line3d_orig_units = flydra.geom.line_from_HZline(first_observation_Lcoords_orig_units) # PlueckerLine instance
+            loc = line3d_orig_units.closest() # closest point on line to origin
+            loc_meters = loc*self.scale_factor
+            line3d_meters = line_from_points( loc_meters, loc_meters+line3d_orig_units.direction() )
+            first_observation_Lcoords = line3d_meters.to_hz()
         ss = kalman_model['ss']
         initial_x = numpy.zeros( (ss,) )
         initial_x[:3] = first_observation_meters
@@ -135,6 +146,7 @@ class TrackedObject:
 
         self.observations_frames = [frame]
         self.observations_data = [first_observation_meters]
+        self.observations_Lcoords = [first_observation_Lcoords]
 
         first_observations_2d_pre = [[camn,idx] for camn,idx in zip(first_observation_camns,first_observation_idxs)]
         first_observations_2d = []
@@ -231,13 +243,14 @@ class TrackedObject:
                 print
 
             # Step 2. Filter incoming 2D data to use informative points (data association)
-            (observation_meters, used_camns_and_idxs,
+            (observation_meters, Lcoords, used_camns_and_idxs,
              cam_ids_and_points2d) = self._filter_data(xhatminus, Pminus,
                                                        data_dict,
                                                        camn2cam_id,
                                                        debug=debug1)
             if debug1>2:
                 print 'observation_meters, used_camns_and_idxs',observation_meters,used_camns_and_idxs
+                print 'Lcoords',Lcoords
 
             # Step 3. Incorporate observation to estimate a posteri
             if isinstance(self.my_kalman, kalman_ekf.EKF):
@@ -278,6 +291,10 @@ class TrackedObject:
             if observation_meters is not None:
                 self.observations_frames.append( frame )
                 self.observations_data.append( observation_meters )
+                if Lcoords is None:
+                    self.observations_Lcoords.append( NO_LCOORDS )
+                else:
+                    self.observations_Lcoords.append( Lcoords )
                 this_observations_2d = []
                 for (camn, frame_pt_idx, dd_idx) in used_camns_and_idxs:
                     this_observations_2d.extend( [camn,frame_pt_idx] )
@@ -308,6 +325,7 @@ class TrackedObject:
         if self.observations_frames[-1] == frame:
             self.observations_frames.pop()
             self.observations_data.pop()
+            self.observations_Lcoords.pop()
             self.observations_2d.pop()
 
         # reset self.my_kalman
@@ -318,7 +336,7 @@ class TrackedObject:
                      debug=0):
         """given state estimate, select useful incoming data and make new observation
 
-        This function "solves" the data association problem. 2D
+        This function 'solves' the data association problem. 2D
         observations are associated with a kalman object if they are
         with some distance between a predicted image of the object on
         the camera plane. The distance estimation is made in 3D as the
@@ -371,7 +389,15 @@ class TrackedObject:
             least_nll = numpy.inf
             closest_idx = None
             for idx,(pt_undistorted,projected_line_meters) in enumerate(candidate_point_list):
-                # find point on ray with closest Mahalanobis distance.
+
+                # Iterate over each candidate point. Each point has:
+                #  * index 'idx'
+                #  * a bunch of data (such as 2D coordinates x and y)
+                #    'pt_undistorted',
+                #  * and the 3D line passing through that ray and the
+                #    image plane.
+
+                # Find point on ray with closest Mahalanobis distance.
                 if 1:
                     import warnings
                     warnings.warn('using slow threetuple')
@@ -439,18 +465,19 @@ class TrackedObject:
                 if debug>2:
                     print 'best match idx %d (%s)'%(closest_idx, str(pt_undistorted[:2]))
 
+        Lcoords = None # default to no line coordinates
         # Now cam_ids_and_points2d has just the 2d points we'll use for this reconstruction
         if len(cam_ids_and_points2d)==1:
             # keep 3D "observation" because we need to save 2d observations
             observation_meters = numpy.nan*numpy.ones( (3,))
         elif len(cam_ids_and_points2d)>=2:
-            observation_meters = self.reconstructor_meters.find3d( cam_ids_and_points2d, return_line_coords = False)
+            observation_meters, Lcoords = self.reconstructor_meters.find3d( cam_ids_and_points2d, return_line_coords = True)
             if len(cam_ids_and_points2d)>=3:
                 if self.save_calibration_data.isSet():
                     self.saved_calibration_data.append( cam_ids_and_points2d )
         else:
             observation_meters = None
-        return observation_meters, used_camns_and_idxs, cam_ids_and_points2d
+        return observation_meters, Lcoords, used_camns_and_idxs, cam_ids_and_points2d
 
 class Tracker:
     """
@@ -597,12 +624,14 @@ class Tracker:
     def join_new_obj(self,
                      frame,
                      first_observation_orig_units,
+                     first_observation_Lcoords_orig_units,
                      first_observation_camns,
                      first_observation_idxs,
                      debug=0):
         tro = TrackedObject(self.reconstructor_meters,
                             frame,
                             first_observation_orig_units,
+                            first_observation_Lcoords_orig_units,
                             first_observation_camns,
                             first_observation_idxs,
                             scale_factor=self.scale_factor,

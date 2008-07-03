@@ -475,9 +475,6 @@ class CachingAnalyzer:
             rows['x']=output[0,:]
             rows['y']=output[1,:]
             rows['z']=output[2,:]
-            rows['xvel']=numpy.nan
-            rows['yvel']=numpy.nan
-            rows['zvel']=numpy.nan
         return rows
 
     def load_data(self,obj_id,data_file,use_kalman_smoothing=True,
