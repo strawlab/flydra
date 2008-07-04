@@ -1,7 +1,9 @@
 import math
 import cgkit.cgtypes as cgtypes # cgkit 2.x
 import numpy as nx
+import numpy as np
 import numpy
+import time
 
 nan = nx.nan
 
@@ -42,14 +44,24 @@ def rotate_velocity_by_orientation(vel,orient):
     # this is backwards from a normal quaternion rotation
     return orient.inverse()*vel*orient
 
-def is_unit_vector(U):
+def is_unit_vector(U,eps=1e-10):
     V = nx.asarray(U)
+    Visdim1=False
     if len(V.shape)==1:
         V = V[nx.newaxis,:]
+        Visdim1=True
     V = V**2
     mag = nx.sqrt(nx.sum(V,axis=1))
-#    return nx.sum(nx.abs(mag-1.0)) < 1e-15
-    return nx.sum(abs(mag-1.0)) < 1e-15
+    result = abs(mag-1.0) < eps
+
+    # consider nans to be unit vectors
+    if Visdim1:
+        if np.isnan(mag[0]):
+            result = True
+    else:
+        result[ np.isnan(mag) ] = True
+
+    return result
 
 def world2body( U, roll_angle = 0 ):
     """convert world coordinates to body-relative coordinates
@@ -592,6 +604,99 @@ class CachingObjectiveFunctionQuats(ObjectiveFunctionQuats):
             for (idx,orig_val) in context_info:
                 self._cache_omega_dot[idx] = orig_val
         return result
+
+class QuatSmoother(object):
+    def __init__(self,
+                 frames_per_second=None,
+                 beta=1.0,
+                 gamma=0.0,
+                 lambda2=1e-11,
+                 percent_error_eps_quats=9,
+                 epsilon2 = 0,
+                 max_iter2 = 2000,
+                 ):
+
+        self.delta_t = 1.0/frames_per_second
+        self.beta=       beta
+        self.gamma=      gamma
+        self.lambda2=    lambda2
+        self.percent_error_eps_quats=percent_error_eps_quats
+        self.epsilon2 =  epsilon2
+        self.max_iter2 = max_iter2
+
+    def smooth_directions(self, direction_vec,
+                          display_progress=False,
+                          objective_func_name='CachingObjectiveFunctionQuats'):
+        assert len(direction_vec.shape)==2
+        assert direction_vec.shape[1]==3
+
+        Q = QuatSeq([ orientation_to_quat(U) for U in direction_vec ])
+        Qsmooth = self.smooth_quats(Q,display_progress=display_progress,objective_func_name=objective_func_name)
+        direction_vec_smooth = quat_to_orient(Qsmooth)
+        return direction_vec_smooth
+
+    def smooth_quats(self,
+                     Q,
+                     display_progress=False,
+                     objective_func_name='CachingObjectiveFunctionQuats'):
+        if objective_func_name == 'CachingObjectiveFunctionQuats':
+            of_class = CachingObjectiveFunctionQuats
+        elif objective_func_name == 'ObjectiveFunctionQuats':
+            of_class = ObjectiveFunctionQuats
+        if display_progress: print 'constructing objective function...'
+        of = of_class(Q, self.delta_t, self.beta, self.gamma)
+        if display_progress: print 'done constructing objective function.'
+        #no_distance_penalty_idxs=slerped_q_idxs)
+
+        #lambda2 = 2e-9
+        #lambda2 = 1e-9
+        #lambda2 = 1e-11
+        Q_k = Q[:] # make copy
+        last_err = None
+        count = 0
+        while count<self.max_iter2:
+            count += 1
+            if display_progress: start = time.time()
+            if display_progress: print 'initializing cache'
+            of.set_cache_qs(Q_k) # set the cache (no-op on non-caching version)
+            if display_progress: print 'computing del_G'
+            del_G = of.get_del_G(Q_k)
+            if display_progress: print 'del_G done'
+            D = of._getDistance(Q_k)
+            if display_progress: print 'D done'
+            E = of._getEnergy(Q_k)
+            if display_progress: print 'E done'
+            R = of._getRoll(Q_k)
+            if display_progress: print '  G = %s + %s*%s + %s*%s'%(str(D),str(self.beta),str(E),str(self.gamma),str(R))
+            if display_progress: stop = time.time()
+            err = np.sqrt(np.sum(np.array(abs(del_G))**2))
+            if err < self.epsilon2:
+                if display_progress: print 'reached epsilon2'
+                break
+            elif last_err is not None:
+                pct_err = (last_err-err)/last_err*100.0
+                if display_progress: print 'Q elapsed: % 6.2f secs,'%(stop-start,),
+                if display_progress: print 'current gradient:',err,
+                if display_progress: print '   (%4.2f%%)'%(pct_err,)
+
+                if err > last_err:
+                    if display_progress: print 'ERROR: error is increasing, aborting'
+                    break
+                if pct_err < self.percent_error_eps_quats:
+                    if display_progress: print 'reached percent_error_eps_quats'
+                    break
+            else:
+                if display_progress: print 'Q elapsed: % 6.2f secs,'%(stop-start,),
+                if display_progress: print 'current gradient:',err
+                pass
+            last_err = err
+            Q_k = Q_k*(del_G*-self.lambda2).exp()
+        if count>=self.max_iter2:
+            if display_progress: print 'reached max_iter2'
+            pass
+        Qsmooth = Q_k
+        return Qsmooth
+
 
 def _test():
     # test math
