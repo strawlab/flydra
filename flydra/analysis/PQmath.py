@@ -424,7 +424,7 @@ class QuatSeq(list):
     def to_numpy(self):
         return numpy.vstack( (self.w, self.x, self.y, self.z) )
 
-class ObjectiveFunctionQuats:
+class ObjectiveFunctionQuats(object):
     """methods from Kim, Hsieh, Wang, Wang, Fang, Woo"""
     def __init__(self, q, h, beta, gamma, no_distance_penalty_idxs=None):
         self.q = q
@@ -448,7 +448,9 @@ class ObjectiveFunctionQuats:
             for i in no_distance_penalty_idxs:
                 self.q_err_weights[i] = 0
 
-    def _getDistance(self, qs):
+    def _getDistance(self, qs,changed_idx=None):
+        # This distance function is independent of "roll" angle, and
+        # thus doesn't penalize changes in roll.
         if 0:
             if 0:
                 # convert back and forth from orientation to eliminate roll
@@ -460,18 +462,18 @@ class ObjectiveFunctionQuats:
             L2dist = nx.sum((qtest_orients-self.qorients)**2,axis=1)
             return nx.sum(L2dist)
 
-    def _getRoll(self, qs):
+    def _getRoll(self, qs,changed_idx=None):
         return sum([quat_to_absroll(q) for q in qs])
-    def _getEnergy(self, qs):
+    def _getEnergy(self, qs,changed_idx=None):
         omega_dot = ((qs[1:-1].inverse()*qs[2:]).log() -
                      (qs[:-2].inverse()*qs[1:-1]).log()) / self.h2
-        return sum( abs( omega_dot )**2 )
-    def eval(self,qs):
-        D = self._getDistance(qs)
-        E = self._getEnergy(qs)
+        return nx.sum( abs( omega_dot )**2 )
+    def eval(self,qs,changed_idx=None):
+        D = self._getDistance(qs,changed_idx=changed_idx)
+        E = self._getEnergy(qs,changed_idx=changed_idx)
         if self.gamma == 0:
             return D + self.beta*E # eqn. 23
-        R = self._getRoll(qs)
+        R = self._getRoll(qs,changed_idx=changed_idx)
         return D + self.beta*E + self.gamma*R # eqn. 23
 
     def get_del_G(self,Q):
@@ -491,17 +493,17 @@ class ObjectiveFunctionQuats:
 
                 qx = q_i*cgtypes.quat(0,PERTURB,0,0).exp()
                 self.Q[i] = qx
-                G_Qx = self.objective_function.eval(self.Q)
+                G_Qx = self.objective_function.eval(self.Q,changed_idx=i)
                 dist_x = abs((q_i_inverse*qx).log())
 
                 qy = q_i*cgtypes.quat(0,0,PERTURB,0).exp()
                 self.Q[i] = qy
-                G_Qy = self.objective_function.eval(self.Q)
+                G_Qy = self.objective_function.eval(self.Q,changed_idx=i)
                 dist_y = abs((q_i_inverse*qy).log())
 
                 qz = q_i*cgtypes.quat(0,0,0,PERTURB).exp()
                 self.Q[i] = qz
-                G_Qz = self.objective_function.eval(self.Q)
+                G_Qz = self.objective_function.eval(self.Q,changed_idx=i)
                 dist_z = abs((q_i_inverse*qz).log())
 
                 self.Q[i] = q_i
@@ -514,6 +516,82 @@ class ObjectiveFunctionQuats:
         pd_finder = PDfinder(self,Q)
         del_G_Q = QuatSeq([ pd_finder.eval_pd(i) for i in range(len(Q)) ])
         return del_G_Q
+
+    def set_cache_qs(self,qs):
+        # no-op
+        pass
+
+class CachingObjectiveFunctionQuats(ObjectiveFunctionQuats):
+    """This class should is a fast version of ObjectiveFunctionQuats when used properly"""
+    def __init__(self, *args, **kwargs):
+        super( CachingObjectiveFunctionQuats, self ).__init__(*args, **kwargs)
+        self.cache_qs = None
+
+    def set_cache_qs(self,qs):
+        # initialize the cache
+        self.cache_qs = qs[:] # copy
+        self._getDistance(self.cache_qs,init_cache=True)
+        self._getEnergy(self.cache_qs,init_cache=True)
+    def _calc_changed(self,qs):
+        import warnings
+        warnings.warn('maximum performance not acheived because search forced')
+        changed_idx = None
+        for i in range(len(qs)):
+            if not qs[i] == self.cache_qs[i]:
+                changed_idx = i
+                break
+        return changed_idx
+
+    def _getDistance(self, qs, init_cache=False, changed_idx=None):
+        # This distance function is independent of "roll" angle, and
+        # thus doesn't penalize changes in roll.
+        if init_cache:
+            # test distance of orientations in R3 (L2 norm)
+            qtest_orients = quat_to_orient(qs)
+            self._cache_L2dist = nx.sum((qtest_orients-self.qorients)**2,axis=1)
+            assert changed_idx is None
+        elif changed_idx is None:
+            changed_idx = self._calc_changed(qs)
+
+        if changed_idx is not None:
+            qtest_orient = quat_to_orient(qs[changed_idx])
+            new_val = nx.sum((qtest_orient-self.qorients[changed_idx])**2) # no axis, 1 dim
+
+            orig_val = self._cache_L2dist[changed_idx]
+            self._cache_L2dist[changed_idx] = new_val
+
+        result = nx.sum( self._cache_L2dist )
+
+        if changed_idx is not None:
+            self._cache_L2dist[changed_idx] = orig_val # restore cache
+        return result
+
+    def _getEnergy(self, qs, init_cache=False, changed_idx=None):
+        if init_cache:
+            self._cache_omega_dot = ((qs[1:-1].inverse()*qs[2:]).log() -
+                                     (qs[:-2].inverse()*qs[1:-1]).log()) / self.h2
+            assert changed_idx is None
+        elif changed_idx is None:
+            changed_idx = self._calc_changed(qs)
+
+        if changed_idx is not None:
+            fix_idx_center = changed_idx-1 # central index into cache_omega_dot
+            context_info = []
+            for offset in [-1,0,1]: # results aren't entirely local
+                idx = fix_idx_center+offset
+                if (idx < 0) or (idx >= len(self._cache_omega_dot)):
+                    continue
+
+                orig_val = self._cache_omega_dot[idx]
+                new_val = ((qs[ idx+1 ].inverse()*qs[ idx+2 ]).log() -
+                           (qs[ idx ].inverse()*qs[ idx+1 ]).log())/ self.h2
+                context_info.append( (idx,orig_val))
+                self._cache_omega_dot[idx] = new_val
+        result = nx.sum( abs( self._cache_omega_dot )**2 )
+        if changed_idx is not None:
+            for (idx,orig_val) in context_info:
+                self._cache_omega_dot[idx] = orig_val
+        return result
 
 def _test():
     # test math
