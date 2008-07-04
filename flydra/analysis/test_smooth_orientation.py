@@ -50,20 +50,8 @@ class TestPQmath(unittest.TestCase):
     def test_Qsmooth_both(self):
         Qsmooth_slow = self._tst_of(ObjectiveFunctionQuats)
         Qsmooth_cache = self._tst_of(CachingObjectiveFunctionQuats)
-        print 'Qsmooth_slow'
-        print Qsmooth_slow
-        print 'Qsmooth_cache'
-        print Qsmooth_cache
         for qs, qc in zip(Qsmooth_slow,Qsmooth_cache):
-            print qs,qc
-            try:
-                assert qs==qc
-            except:
-                print 'repr(qs.w - qc.w)',repr(qs.w - qc.w)
-                print 'repr(qs.x - qc.x)',repr(qs.x - qc.x)
-                print 'repr(qs.y - qc.y)',repr(qs.y - qc.y)
-                print 'repr(qs.z - qc.z)',repr(qs.z - qc.z)
-                raise
+            assert qs==qc
 
     def _tst_of(self,of):
         of = of(self.Q, self.delta_t, self.beta, self.gamma)
