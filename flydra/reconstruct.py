@@ -1,6 +1,7 @@
 # $Id$
 import os, glob, sys, math
 opj=os.path.join
+import numpy as np
 import numpy as nx
 import numpy
 import sets
@@ -101,7 +102,7 @@ def pts2Lcoords(A,B):
     return Lmatrix2Lcoords(pts2Lmatrix(A,B))
 
 def norm_vec(V):
-    Va = nx.asarray(V)
+    Va = np.asarray(V,dtype=np.float64) # force double precision floats
     if len(Va.shape)==1:
         # vector
         U = Va/math.sqrt(Va[0]**2 + Va[1]**2 + Va[2]**2) # normalize
