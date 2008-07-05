@@ -2,6 +2,7 @@ import pkg_resources
 import unittest
 import tables as PT
 import numpy
+import numpy as np
 import flydra.a2.core_analysis as core_analysis
 import flydra.a2.utils as utils
 
@@ -77,7 +78,9 @@ class TestCoreAnalysis(unittest.TestCase):
                                                                    frames_per_second=100.0,
                                                                    method='position based',
                                                                    method_params={'downsample':1,
-                                                                                  })
+                                                                                  },
+                                                                   dynamic_model_name='fly dynamics, high precision calibration, units: mm',
+                                                                   )
                 except core_analysis.NoObjectIDError:
                     pass
                 else:
@@ -259,9 +262,31 @@ class TestUtils(unittest.TestCase):
                 if b in a:
                     raise ValueError('b in a, but not found')
 
+class TestChooseOrientations(unittest.TestCase):
+    def test_choose_orientations(self):
+        x = numpy.linspace(0,1000,10)
+        y = numpy.ones_like(x)
+        z = numpy.ones_like(x)
+        rows = np.recarray( x.shape, dtype=[('x',np.float),
+                                            ('y',np.float),
+                                            ('z',np.float)])
+        rows['x']=x; rows['y']=y; rows['z']=z
+        directions = np.zeros((len(x),3))
+        directions[:,0] = np.random.randn( len(x) )
+
+        mag = np.sqrt(np.sum(directions**2,axis=1))
+        directions = directions/mag[:,np.newaxis]
+        #print directions
+        new_dir = core_analysis.choose_orientations(rows,directions,frames_per_second=1,
+                                                    elevation_up_bias_degrees=0)
+        assert new_dir.shape == directions.shape
+        assert np.alltrue(~np.isnan(new_dir))
+
+
 def get_test_suite():
     ts=unittest.TestSuite([unittest.makeSuite(TestCoreAnalysis),
                            unittest.makeSuite(TestUtils),
+                           unittest.makeSuite(TestChooseOrientations),
                            ]
                           )
     return ts
