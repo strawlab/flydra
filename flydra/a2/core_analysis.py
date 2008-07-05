@@ -3,6 +3,7 @@ import tables
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy
+import numpy as np
 import math, os, sys
 import scipy.io
 import pprint
@@ -12,6 +13,8 @@ import adskalman.adskalman as adskalman
 import flydra.kalman.dynamic_models
 import flydra.kalman.flydra_kalman_utils
 import flydra.analysis.result_utils
+import flydra.reconstruct
+import flydra.analysis.PQmath as PQmath
 
 import weakref
 import warnings
@@ -382,6 +385,107 @@ class LazyRecArrayMimic2:
     def __len__(self):
         return len(self.view['kalman_x'])
 
+def choose_orientations(rows, directions, frames_per_second=None,
+                        velocity_weight=1.0,
+                        max_velocity_weight=1.0,
+                        elevation_up_bias_degrees=45.0, # tip the velocity angle closer +Z by this amount (maximally)
+                        ):
+    X = np.array([rows['x'], rows['y'], rows['z']]).T
+    #ADS print "rows['x'].shape",rows['x'].shape
+    assert len(X.shape)==2
+    velocity = (X[1:]-X[:-1])*frames_per_second
+    #ADS print 'velocity.shape',velocity.shape
+    speed = np.sqrt(np.sum(velocity**2,axis=1))
+    #ADS print 'speed.shape',speed.shape
+    w = np.min( [max_velocity_weight*np.ones_like(speed),
+                 velocity_weight*speed],
+                axis=0)
+    #ADS print 'directions.shape',directions.shape
+    #ADS print 'w.shape',w.shape
+
+    velocity_direction = velocity/speed[:,np.newaxis]
+    if elevation_up_bias_degrees != 0:
+        body_axis = np.cross(velocity_direction, np.array([0,0,1.0]))
+
+        dist_from_zplus = np.arccos( np.dot(velocity_direction,np.array([0,0,1.0])))
+        bias_rad = elevation_up_bias_degrees*D2R
+        velocity_biaser = [ cgtypes.quat().from_angle_axis(bias_rad,ax) for ax in body_axis ]
+        biased_velocity_direction = [ cgtypes.vec3( *(velocity_direction[i,:]) )*velocity_biaser[i] for i in range(len(velocity))]
+        biased_velocity_direction = numpy.array([ [v[0], v[1], v[2]] for v in biased_velocity_direction ])
+        biased_velocity_direction[ dist_from_zplus <= bias_rad, : ] = numpy.array([0,0,1])
+    else:
+        biased_velocity_direction = velocity_direction
+
+    # allocate space for storing the optimal path
+    signs = [1,-1]
+    stateprev = np.zeros((len(directions)-1,len(signs)),dtype=bool)
+
+    tmpcost = [0,0]
+    costprevnew = [0,0]
+    costprev = [0,0]
+
+    # iterate over each time point
+    for i in range(1,len(directions)):
+        #ADS print 'i',i
+
+        #ADS print 'directions[i]',directions[i]
+        #ADS print 'directions[i-1]',directions[i-1]
+
+        for enum_current,sign_current in enumerate(signs):
+            direction_current = sign_current*directions[i]
+            #ADS print
+            #ADS print 'sign_current',sign_current,'-'*50
+            for enum_previous,sign_previous in enumerate(signs):
+                direction_previous = sign_previous*directions[i-1]
+                ## print 'direction_current'
+                ## print direction_current
+                ## print 'biased_velocity_direction'
+                ## print biased_velocity_direction
+                #ADS print 'sign_previous',sign_previous,'-'*20
+                #ADS print 'w[i-1]',w[i-1]
+                ## a=(1-w[i-1])*np.arccos( np.dot( direction_current, direction_previous))
+
+                ## b=np.dot( direction_current, biased_velocity_direction[i] )
+                ## print a.shape
+                ## print b.shape
+
+                flip_term = np.arccos( np.dot( direction_current, direction_previous))
+                vel_term = np.arccos( np.dot( direction_current, biased_velocity_direction[i-1] ))
+                #ADS print 'flip_term',flip_term,'*',(1-w[i-1])
+                #ADS print 'vel_term',vel_term,'*',w[i-1]
+
+                if (not np.isnan(direction_current[0])) and (not np.isnan(direction_previous[0])):
+                    cost_current = ( (1-w[i-1])*np.arccos( np.dot( direction_current, direction_previous)) +
+                                     w[i-1]*np.arccos( np.dot( direction_current, biased_velocity_direction[i-1] )) )
+                else:
+                    cost_current = 0.0
+                #ADS print 'cost_current', cost_current
+                tmpcost[enum_previous] = costprev[enum_previous] + cost_current
+            #ADS print 'tmpcost',tmpcost
+            best_enum_previous = np.argmin( tmpcost )
+            #ADS print 'enum_current',enum_current
+            #ADS print 'best_enum_previous',best_enum_previous
+            stateprev[i-1,enum_current] = best_enum_previous
+            costprevnew[enum_current] = tmpcost[best_enum_previous]
+        #ADS print 'costprevnew',costprevnew
+        costprev[:] = costprevnew[:]
+    #ADS print '='*100
+    #ADS print 'costprev',costprev
+    best_enum_current = np.argmin(costprev)
+    #ADS print 'best_enum_current',best_enum_current
+    sign_current = signs[best_enum_current]
+    directions[-1] *= sign_current
+    for i in range(len(directions)-2,-1,-1):
+        #ADS print 'i',i
+        #ADS print 'stateprev[i]',stateprev[i]
+        best_enum_current = stateprev[i,best_enum_current]
+        #ADS print 'best_enum_current'
+        #ADS print best_enum_current
+        sign_current = signs[best_enum_current]
+        #ADS print 'sign_current',sign_current
+        directions[i] *= sign_current
+    return directions
+
 class CachingAnalyzer:
 
     """
@@ -394,7 +498,8 @@ class CachingAnalyzer:
      memeory consumption.)
 
      2. get traces with CachingAnalyzer.load_data() (for kalman data)
-     or CachingAnalyzer.load_observations() (for observations)
+     or CachingAnalyzer.load_dynamics_free_MLE_position() (for maximum
+     likelihood estimates of position without any dynamical model)
 
     """
 
@@ -433,7 +538,7 @@ class CachingAnalyzer:
 
         return self.load_dynamics_free_MLE_position(obj_id,data_file)
 
-    def load_dynamics_free_MLE_position(self,obj_id,data_file):
+    def load_dynamics_free_MLE_position(self,obj_id,data_file,with_directions=False):
         """Load maximum likelihood estimate of object position from data_file.
 
         This estimate is independent of any Kalman-filter dynamics,
@@ -475,7 +580,21 @@ class CachingAnalyzer:
             rows['x']=output[0,:]
             rows['y']=output[1,:]
             rows['z']=output[2,:]
-        return rows
+
+        if with_directions:
+            # Fixme: This method should return directions=None if
+            # these data aren't in file:
+            hzlines = numpy.array([rows['hz_line0'],
+                                   rows['hz_line1'],
+                                   rows['hz_line2'],
+                                   rows['hz_line3'],
+                                   rows['hz_line4'],
+                                   rows['hz_line5']]).T
+            directions = flydra.reconstruct.line_direction(hzlines)
+            assert numpy.alltrue(PQmath.is_unit_vector(directions))
+            return rows, directions
+        else:
+            return rows
 
     def load_data(self,obj_id,data_file,use_kalman_smoothing=True,
                   frames_per_second=None, dynamic_model_name=None):

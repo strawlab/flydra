@@ -9,6 +9,7 @@ import sets, os, sys, math
 import pkg_resources
 from enthought.tvtk.api import tvtk
 import numpy
+import numpy as np
 import tables as PT
 from optparse import OptionParser
 import core_analysis
@@ -18,6 +19,7 @@ import pkg_resources
 import flydra.reconstruct as reconstruct
 import flydra.analysis.result_utils as result_utils
 import flydra.a2.xml_stimulus as xml_stimulus
+import flydra.analysis.PQmath as PQmath
 
 pacific = pytz.timezone('US/Pacific')
 
@@ -425,7 +427,7 @@ def doit(filename,
             print
 
         if show_observations:
-            obs_rows = ca.load_dynamics_free_MLE_position(obj_id, data_file)
+            obs_rows, obs_directions = ca.load_dynamics_free_MLE_position(obj_id, data_file, with_directions=True)
 
             if start is not None or stop is not None:
                 obs_frames = obs_rows['frame']
@@ -433,12 +435,14 @@ def doit(filename,
                 ok2 = obs_frames <= stop
                 ok = ok1 & ok2
                 obs_rows = obs_rows[ok]
+                obs_directions = obs_directions[ok]
 
             obs_x = obs_rows['x']
             obs_y = obs_rows['y']
             obs_z = obs_rows['z']
             obs_frames = obs_rows['frame']
-            print '  observation frames: %d - %d'%(obs_frames[0], obs_frames[-1])
+            if len(obs_frames):
+                print '  observation frames: %d - %d'%(obs_frames[0], obs_frames[-1])
             obs_X = numpy.vstack((obs_x,obs_y,obs_z)).T
 
             pd = tvtk.PolyData()
@@ -461,21 +465,29 @@ def doit(filename,
 
             show_observations_orientation = True
             direction_length = 0.06 # 3 cm
-            if show_observations_orientation:
-                obs_lcoords = numpy.array([obs_rows['hz_line0'],
-                                           obs_rows['hz_line1'],
-                                           obs_rows['hz_line2'],
-                                           obs_rows['hz_line3'],
-                                           obs_rows['hz_line4'],
-                                           obs_rows['hz_line5']]).T
-                line_direction = reconstruct.line_direction(obs_lcoords)
-                heads = obs_X+line_direction*direction_length
-                tails = obs_X-line_direction*direction_length
-                verts = numpy.vstack((heads,tails))
-                tubes = [ [i,i+len(heads)] for i in range(len(heads)) ]
+            if show_observations_orientation and len(obs_directions):
+                assert numpy.alltrue(PQmath.is_unit_vector(obs_directions))
+                obs_directions = core_analysis.choose_orientations(obs_rows, obs_directions,
+                                                                   frames_per_second=fps,
+                                                                   elevation_up_bias_degrees=0,
+                                                                   )
+                assert numpy.alltrue(PQmath.is_unit_vector(obs_directions))
+                directions_to_show = obs_directions
 
-                print obs_X[:5,:]
-                print verts[:5,:]
+                if 1:
+                    # run smoother (shouldn't do this for obsevations, just testing...)
+                    smoother = PQmath.QuatSmoother(frames_per_second=fps)
+                    bad_idxs = np.nonzero(np.isnan(obs_directions[:,0]))[0]
+                    smooth_directions = smoother.smooth_directions(obs_directions,
+                                                                   #objective_func_name='ObjectiveFunctionQuats',
+                                                                   display_progress=True,
+                                                                   no_distance_penalty_idxs=bad_idxs)
+                    directions_to_show = smooth_directions
+
+                heads = obs_X+directions_to_show*direction_length
+                verts = numpy.vstack((heads,obs_X))
+
+                tubes = [ [i,i+len(heads)] for i in range(len(heads)) ]
 
                 pd = tvtk.PolyData()
                 pd.points = verts

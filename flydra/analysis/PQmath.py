@@ -7,6 +7,10 @@ import time
 
 nan = nx.nan
 
+class NoIndexChangedClass:
+    pass
+no_index_changed = NoIndexChangedClass()
+
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
 
@@ -294,7 +298,10 @@ class ObjectiveFunctionPosition:
             for i in no_distance_penalty_idxs:
                 self.p_err_weights[i] = 0
     def _getDistance(self, ps):
-        return nx.sum(self.p_err_weights*nx.sum((self.p - ps)**2, axis=1))
+        result = nx.sum(self.p_err_weights*nx.sum((self.p - ps)**2, axis=1))
+        assert not np.isnan(result)
+        return result
+
     def _getEnergy(self, ps):
         d2p = (ps[2:] - 2*ps[1:-1] + ps[:-2]) / (self.h**2)
         return  nx.sum( nx.sum(d2p**2,axis=1))
@@ -399,6 +406,9 @@ class QuatSeq(list):
             except (ValueError, TypeError):
                 raise TypeError('only know how to multiply QuatSeq with QuatSeq, n*3 array or float')
             return QuatSeq([ p*other for p in self])
+    def copy(self):
+        """return a deep copy of self"""
+        return QuatSeq([cgtypes.quat(q) for q in self])
     def __div__(self,other):
         try:
             other = float(other)
@@ -436,50 +446,84 @@ class QuatSeq(list):
     def to_numpy(self):
         return numpy.vstack( (self.w, self.x, self.y, self.z) )
 
+def _calc_idxs_and_fixup_q(no_distance_penalty_idxs,q):
+    valid_cond = None
+    if no_distance_penalty_idxs is not None:
+        valid_cond = np.ones( len(q),dtype=np.bool )
+        for i in no_distance_penalty_idxs:
+            valid_cond[i] = 0
+
+            # Set missing quaternion to some arbitrary value. The
+            # _getEnergy() cost term should push it around to
+            # minimize accelerations and it won't get counted in
+            # the distance penalty.
+            q[i] = cgtypes.quat(1,0,0,0)
+    else:
+        no_distance_penalty_idxs = []
+
+    for i,qi in enumerate(q):
+        if numpy.any(numpy.isnan([qi.w,qi.x,qi.y,qi.z])):
+            if not i in no_distance_penalty_idxs:
+                raise ValueError("you are passing data with 'nan' "
+                                 "values, but have not set the "
+                                     "no_distance_penalty_idxs argument")
+    return valid_cond, no_distance_penalty_idxs, q
+
 class ObjectiveFunctionQuats(object):
     """methods from Kim, Hsieh, Wang, Wang, Fang, Woo"""
     def __init__(self, q, h, beta, gamma, no_distance_penalty_idxs=None):
-        self.q = q
+        q = q.copy() # make copy so we don't screw up original below
+
+        (self.valid_cond, no_distance_penalty_idxs, q) = _calc_idxs_and_fixup_q(no_distance_penalty_idxs,q)
+
         if 1:
             if 0:
+                # XXX this hasn't been tested in a long time...
                 # convert back and forth from orientation to eliminate roll
                 #ori = quat_to_orient(self.q)
                 #no_roll_quat = orientation_to_quat(quat_to_orient(self.q))
                 self.q_inverse = orientation_to_quat(quat_to_orient(self.q)).inverse()
             else:
-                self.qorients = quat_to_orient(self.q)
+                self.qorients = quat_to_orient(q)
         else:
-            self.q_inverse = self.q.inverse()
+            self.q_inverse = q.inverse()
         self.h = h
         self.h2 = self.h**2
         self.beta = beta
         self.gamma = gamma
 
-        self.q_err_weights = nx.ones( (len(q),) )
-        if no_distance_penalty_idxs is not None:
-            for i in no_distance_penalty_idxs:
-                self.q_err_weights[i] = 0
+        self.no_distance_penalty_idxs = no_distance_penalty_idxs
 
     def _getDistance(self, qs,changed_idx=None):
         # This distance function is independent of "roll" angle, and
         # thus doesn't penalize changes in roll.
         if 0:
+            # XXX this hasn't been tested in a long time...
             if 0:
                 # convert back and forth from orientation to eliminate roll
                 qs = orientation_to_quat(quat_to_orient(qs))
-            return sum( self.q_err_weights* (abs(    (self.q_inverse * qs).log() )**2))
+            return sum( (abs(    (self.q_inverse * qs).log() )**2))
         else:
             # test distance of orientations in R3 (L2 norm)
             qtest_orients = quat_to_orient(qs)
             L2dist = nx.sum((qtest_orients-self.qorients)**2,axis=1)
-            return nx.sum(L2dist)
+            result = nx.sum(L2dist[self.valid_cond])
+            assert not np.isnan(result)
+            return result
 
     def _getRoll(self, qs,changed_idx=None):
         return sum([quat_to_absroll(q) for q in qs])
     def _getEnergy(self, qs,changed_idx=None):
+
+        # We do not hide values at no_distance_penalty_idxs here
+        # because we want qs to be any value -- that's the point. (Not
+        # a good idea to set to nan.)
+
         omega_dot = ((qs[1:-1].inverse()*qs[2:]).log() -
                      (qs[:-2].inverse()*qs[1:-1]).log()) / self.h2
-        return nx.sum( abs( omega_dot )**2 )
+        result = nx.sum( abs( omega_dot )**2 )
+        assert not np.isnan(result)
+        return result
     def eval(self,qs,changed_idx=None):
         D = self._getDistance(qs,changed_idx=changed_idx)
         E = self._getEnergy(qs,changed_idx=changed_idx)
@@ -491,10 +535,17 @@ class ObjectiveFunctionQuats(object):
     def get_del_G(self,Q):
         class PDfinder:
             """partial derivative finder"""
-            def __init__(self,objective_function,Q):
+            def __init__(self,objective_function,Q,no_distance_penalty_idxs=None):
+                if no_distance_penalty_idxs is None:
+                    self.no_distance_penalty_idxs = []
+                else:
+                    self.no_distance_penalty_idxs = no_distance_penalty_idxs
                 self.objective_function = objective_function
                 self.Q = Q
-                self.G_Q = self.objective_function.eval(Q) # G evaluated at Q
+                # G evaluated at Q
+                self.G_Q = self.objective_function.eval(Q,
+                                                        changed_idx=no_index_changed, # nothing has changed yet
+                                                        )
             def eval_pd(self,i):
                 # evaluate 3 values (perturbations in x,y,z directions)
                 PERTURB = 1e-6 # perturbation amount (must be less than sqrt(pi))
@@ -525,6 +576,7 @@ class ObjectiveFunctionQuats(object):
                                     (G_Qy-self.G_Q)/dist_y,
                                     (G_Qz-self.G_Q)/dist_z)
                 return qdir
+        ##print 'Q',Q,'='*200
         pd_finder = PDfinder(self,Q)
         del_G_Q = QuatSeq([ pd_finder.eval_pd(i) for i in range(len(Q)) ])
         return del_G_Q
@@ -541,10 +593,11 @@ class CachingObjectiveFunctionQuats(ObjectiveFunctionQuats):
 
     def set_cache_qs(self,qs):
         # initialize the cache
-        self.cache_qs = qs[:] # copy
+        self.cache_qs = qs.copy() # copy
         self._getDistance(self.cache_qs,init_cache=True)
         self._getEnergy(self.cache_qs,init_cache=True)
     def _calc_changed(self,qs):
+        1/0
         import warnings
         warnings.warn('maximum performance not acheived because search forced')
         changed_idx = None
@@ -565,17 +618,21 @@ class CachingObjectiveFunctionQuats(ObjectiveFunctionQuats):
         elif changed_idx is None:
             changed_idx = self._calc_changed(qs)
 
-        if changed_idx is not None:
+        mixin_new_results_with_cache = ((changed_idx is not None) and
+                                        (not isinstance(changed_idx,NoIndexChangedClass)))
+        if mixin_new_results_with_cache:
             qtest_orient = quat_to_orient(qs[changed_idx])
             new_val = nx.sum((qtest_orient-self.qorients[changed_idx])**2) # no axis, 1 dim
 
             orig_val = self._cache_L2dist[changed_idx]
             self._cache_L2dist[changed_idx] = new_val
 
-        result = nx.sum( self._cache_L2dist )
+        result = nx.sum( self._cache_L2dist[self.valid_cond] )
 
-        if changed_idx is not None:
+        if mixin_new_results_with_cache:
             self._cache_L2dist[changed_idx] = orig_val # restore cache
+
+        assert not np.isnan(result)
         return result
 
     def _getEnergy(self, qs, init_cache=False, changed_idx=None):
@@ -586,7 +643,9 @@ class CachingObjectiveFunctionQuats(ObjectiveFunctionQuats):
         elif changed_idx is None:
             changed_idx = self._calc_changed(qs)
 
-        if changed_idx is not None:
+        mixin_new_results_with_cache = ((changed_idx is not None) and
+                                        (not isinstance(changed_idx,NoIndexChangedClass)))
+        if mixin_new_results_with_cache:
             fix_idx_center = changed_idx-1 # central index into cache_omega_dot
             context_info = []
             for offset in [-1,0,1]: # results aren't entirely local
@@ -600,9 +659,12 @@ class CachingObjectiveFunctionQuats(ObjectiveFunctionQuats):
                 context_info.append( (idx,orig_val))
                 self._cache_omega_dot[idx] = new_val
         result = nx.sum( abs( self._cache_omega_dot )**2 )
-        if changed_idx is not None:
+
+        if mixin_new_results_with_cache:
             for (idx,orig_val) in context_info:
                 self._cache_omega_dot[idx] = orig_val
+
+        assert not np.isnan(result)
         return result
 
 class QuatSmoother(object):
@@ -624,34 +686,37 @@ class QuatSmoother(object):
         self.epsilon2 =  epsilon2
         self.max_iter2 = max_iter2
 
-    def smooth_directions(self, direction_vec,
-                          display_progress=False,
-                          objective_func_name='CachingObjectiveFunctionQuats'):
+    def smooth_directions(self, direction_vec,**kwargs):
         assert len(direction_vec.shape)==2
         assert direction_vec.shape[1]==3
 
         Q = QuatSeq([ orientation_to_quat(U) for U in direction_vec ])
-        Qsmooth = self.smooth_quats(Q,display_progress=display_progress,objective_func_name=objective_func_name)
+        Qsmooth = self.smooth_quats(Q,**kwargs)
         direction_vec_smooth = quat_to_orient(Qsmooth)
         return direction_vec_smooth
 
     def smooth_quats(self,
                      Q,
                      display_progress=False,
-                     objective_func_name='CachingObjectiveFunctionQuats'):
+                     objective_func_name='CachingObjectiveFunctionQuats',
+                     no_distance_penalty_idxs=None,
+                     ):
         if objective_func_name == 'CachingObjectiveFunctionQuats':
             of_class = CachingObjectiveFunctionQuats
         elif objective_func_name == 'ObjectiveFunctionQuats':
             of_class = ObjectiveFunctionQuats
         if display_progress: print 'constructing objective function...'
-        of = of_class(Q, self.delta_t, self.beta, self.gamma)
+        of = of_class(Q, self.delta_t, self.beta, self.gamma,no_distance_penalty_idxs=no_distance_penalty_idxs)
         if display_progress: print 'done constructing objective function.'
-        #no_distance_penalty_idxs=slerped_q_idxs)
 
         #lambda2 = 2e-9
         #lambda2 = 1e-9
         #lambda2 = 1e-11
-        Q_k = Q[:] # make copy
+        Q_k = Q.copy() # make copy
+
+        # make all Q_k elements valid so that we can improve them.
+        (valid_cond, no_distance_penalty_idxs, Q_k) = _calc_idxs_and_fixup_q(no_distance_penalty_idxs,Q_k)
+
         last_err = None
         count = 0
         while count<self.max_iter2:
@@ -662,14 +727,15 @@ class QuatSmoother(object):
             if display_progress: print 'computing del_G'
             del_G = of.get_del_G(Q_k)
             if display_progress: print 'del_G done'
-            D = of._getDistance(Q_k)
+            D = of._getDistance(Q_k,changed_idx=no_index_changed) # no change since we set the cache a few lines ago
             if display_progress: print 'D done'
-            E = of._getEnergy(Q_k)
+            E = of._getEnergy(Q_k,changed_idx=no_index_changed) # no change since we set the cache a few lines ago
             if display_progress: print 'E done'
             R = of._getRoll(Q_k)
             if display_progress: print '  G = %s + %s*%s + %s*%s'%(str(D),str(self.beta),str(E),str(self.gamma),str(R))
             if display_progress: stop = time.time()
             err = np.sqrt(np.sum(np.array(abs(del_G))**2))
+
             if err < self.epsilon2:
                 if display_progress: print 'reached epsilon2'
                 break
