@@ -471,7 +471,19 @@ def _calc_idxs_and_fixup_q(no_distance_penalty_idxs,q):
 
 class ObjectiveFunctionQuats(object):
     """methods from Kim, Hsieh, Wang, Wang, Fang, Woo"""
-    def __init__(self, q, h, beta, gamma, no_distance_penalty_idxs=None):
+    def __init__(self, q, h, beta, gamma,
+                 ignore_direction_sign=False,
+                 no_distance_penalty_idxs=None):
+        """
+        parameters
+        ==========
+        ignore_direction_sign - on each timestep, the distance term
+        for each orientation will be the smallest of 2 possibilities:
+        co-directional and anti-directional with the original
+        direction vector. Note that this may make the derivative
+        non-continuous and hence the entire operation unstable.
+
+        """
         q = q.copy() # make copy so we don't screw up original below
 
         (self.valid_cond, no_distance_penalty_idxs, q) = _calc_idxs_and_fixup_q(no_distance_penalty_idxs,q)
@@ -493,6 +505,7 @@ class ObjectiveFunctionQuats(object):
         self.gamma = gamma
 
         self.no_distance_penalty_idxs = no_distance_penalty_idxs
+        self.ignore_direction_sign = ignore_direction_sign
 
     def _getDistance(self, qs,changed_idx=None):
         # This distance function is independent of "roll" angle, and
@@ -506,7 +519,13 @@ class ObjectiveFunctionQuats(object):
         else:
             # test distance of orientations in R3 (L2 norm)
             qtest_orients = quat_to_orient(qs)
-            L2dist = nx.sum((qtest_orients-self.qorients)**2,axis=1)
+            if self.ignore_direction_sign:
+                # test both directions, take the minimum distance
+                L2dist1 = nx.sum((qtest_orients-self.qorients)**2,axis=1)
+                L2dist2 = nx.sum((qtest_orients+self.qorients)**2,axis=1)
+                L2dist = np.min( L2dist1, L2dist2, axis=1 )
+            else:
+                L2dist = nx.sum((qtest_orients-self.qorients)**2,axis=1)
             result = nx.sum(L2dist[self.valid_cond])
             assert not np.isnan(result)
             return result
@@ -622,7 +641,14 @@ class CachingObjectiveFunctionQuats(ObjectiveFunctionQuats):
                                         (not isinstance(changed_idx,NoIndexChangedClass)))
         if mixin_new_results_with_cache:
             qtest_orient = quat_to_orient(qs[changed_idx])
-            new_val = nx.sum((qtest_orient-self.qorients[changed_idx])**2) # no axis, 1 dim
+
+            if self.ignore_direction_sign:
+                # test both directions, take the minimum distance
+                new_val1 = nx.sum((qtest_orient-self.qorients[changed_idx])**2) # no axis, 1 dim
+                new_val2 = nx.sum((qtest_orient+self.qorients[changed_idx])**2) # no axis, 1 dim
+                new_val = np.min(new_val1,new_val2)
+            else:
+                new_val = nx.sum((qtest_orient-self.qorients[changed_idx])**2) # no axis, 1 dim
 
             orig_val = self._cache_L2dist[changed_idx]
             self._cache_L2dist[changed_idx] = new_val

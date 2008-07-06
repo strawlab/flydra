@@ -107,6 +107,7 @@ def doit(fmf_filename=None,
          blank=None,
          do_zoom=False,
          do_zoom_diff=False,
+         options=None,
          ):
     if do_zoom_diff and do_zoom:
         raise ValueError('can use do_zoom or do_zoom_diff, but not both')
@@ -193,6 +194,7 @@ def doit(fmf_filename=None,
                                         use_kalman_smoothing=use_kalman_smoothing,
                                         dynamic_model_name = dynamic_model,
                                         frames_per_second=fps,
+                                        return_smoothed_directions = options.smooth_orientations,
                                         )
             except core_analysis.NotEnoughDataToSmoothError:
                 print 'not enough data to smooth for obj_id %d, skipping...'%obj_id
@@ -382,9 +384,13 @@ def doit(fmf_filename=None,
         if 1:
             # get 3D estimates data
             kalman_vert_images = []
+            kalman_ori_verts_images = [] # for 3D orientation
+            kalman_raw_ori_verts_images = [] # for 3D orientation
+
             if kalman_filename is not None:
                 data_3d_idxs = numpy.nonzero(h5_frame == kalman_3d_frame)[0]
                 these_3d_rows = kalman_rows[data_3d_idxs]
+                line_length = 0.30 # 20 cm total
                 for this_3d_row in these_3d_rows:
                     vert = numpy.array([this_3d_row['x'],this_3d_row['y'],this_3d_row['z']])
                     vert_image = R.find2d(cam_id,vert,distorted=True)
@@ -392,6 +398,19 @@ def doit(fmf_filename=None,
                     Pmean = numpy.sqrt(numpy.sum(P**2))
                     Pmean_meters = numpy.sqrt(Pmean)
                     kalman_vert_images.append( (vert_image, vert, this_3d_row['obj_id'], Pmean_meters) )
+
+                    for target, dir_x_name, dir_y_name, dir_z_name in [ (kalman_ori_verts_images,'dir_x','dir_y','dir_z'),
+                                                                        (kalman_raw_ori_verts_images,'rawdir_x','rawdir_y','rawdir_z')]:
+                        direction = numpy.array([this_3d_row[dir_x_name],this_3d_row[dir_y_name],this_3d_row[dir_z_name]])
+                        start_frac, stop_frac = 0.3,1.0
+                        v1 = vert+(start_frac*direction*line_length)
+                        v2 = vert+( stop_frac*direction*line_length)
+                        u = v2-v1
+
+                        # plot several verts to deal with camera distortion
+                        ori_verts = [v1+inc*u  for inc in numpy.linspace(0,1.0,6)]
+                        ori_verts_images = [ R.find2d(cam_id,ori_vert,distorted=True) for ori_vert in ori_verts ]
+                        target.append( ori_verts_images )
 
             # get 3D observation data
             kobs_vert_images = []
@@ -414,7 +433,7 @@ def doit(fmf_filename=None,
                         for (start_frac,stop_frac,target) in [ (-1.0,-0.5,kobs_ori_verts_images_a),
                                                                ( 1.0, 0.5,kobs_ori_verts_images_b) ]:
                             v1 = vert+(start_frac*direction*line_length)
-                            v2 = vert+(stop_frac*direction*line_length)
+                            v2 = vert+( stop_frac*direction*line_length)
                             u = v2-v1
 
                             # plot several verts to deal with camera distortion
@@ -804,6 +823,14 @@ def doit(fmf_filename=None,
                         X,Y,Z=XYZ
                         draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
                                       pen3d )
+                        for ori_verts_images in kalman_ori_verts_images:
+                            ori_verts_images = numpy.array( ori_verts_images )
+                            draw.line( ori_verts_images.flatten(), pen3d )
+                        if style=='debug':
+                            for ori_verts_images in kalman_raw_ori_verts_images:
+                                ori_verts_images = numpy.array( ori_verts_images )
+                                draw.line( ori_verts_images.flatten(), pen3d )
+
                     if style=='debug':
                         pt_dist_meters = numpy.sqrt( (X-cam_center_meters[0])**2 +
                                                      (Y-cam_center_meters[1])**2 +
@@ -860,7 +887,7 @@ def main():
     parser = OptionParser(usage)
 
     parser.add_option("--fmf", dest="fmf_filename", type='string',
-                      help=".fmf filename (REQUIRED)")
+                      help=".fmf (or .ufmf) filename (REQUIRED)")
 
     parser.add_option("--h5", dest="h5_filename", type='string',
                       help=".h5 file with data2d_distorted (REQUIRED)")
@@ -897,6 +924,10 @@ def main():
                       default=False,
                       help="save zoomed image (not well tested)")
 
+    parser.add_option("--smooth-orientations", action='store_true',
+                      help="use slow quaternion-based smoother if orientation data is available",
+                      default=False)
+
     parser.add_option("--zoom-diff", action='store_true',
                       default=False,
                       help="save zoomed difference image (not well tested)")
@@ -919,6 +950,7 @@ def main():
          blank=options.blank,
          do_zoom=options.zoom,
          do_zoom_diff=options.zoom_diff,
+         options=options,
          )
 
 if __name__=='__main__':

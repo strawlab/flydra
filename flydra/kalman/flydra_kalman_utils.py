@@ -48,14 +48,46 @@ class KalmanEstimatesVelOnly(PT.IsDescription):
     P44        = PT.Float32Col(pos=16)
     P55        = PT.Float32Col(pos=17)
 
-def get_kalman_estimates_table_description_for_model_name( name=None ):
+class KalmanEstimatesVelOnlyWithDirection(PT.IsDescription):
+    obj_id     = PT.UInt32Col(pos=0)
+    frame      = PT.UInt64Col(pos=1)
+    timestamp  = PT.Float64Col(pos=2) # time of reconstruction
+    x          = PT.Float32Col(pos=3)
+    y          = PT.Float32Col(pos=4)
+    z          = PT.Float32Col(pos=5)
+    xvel       = PT.Float32Col(pos=6)
+    yvel       = PT.Float32Col(pos=7)
+    zvel       = PT.Float32Col(pos=8)
+    # save diagonal of P matrix
+    P00        = PT.Float32Col(pos=12)
+    P11        = PT.Float32Col(pos=13)
+    P22        = PT.Float32Col(pos=14)
+    P33        = PT.Float32Col(pos=15)
+    P44        = PT.Float32Col(pos=16)
+    P55        = PT.Float32Col(pos=17)
+    # save estimated direction of long body axis
+    rawdir_x = PT.Float32Col(pos=18)
+    rawdir_y = PT.Float32Col(pos=19)
+    rawdir_z = PT.Float32Col(pos=20)
+    dir_x = PT.Float32Col(pos=21)
+    dir_y = PT.Float32Col(pos=22)
+    dir_z = PT.Float32Col(pos=23)
+
+def get_kalman_estimates_table_description_for_model_name( name=None,
+                                                           allocate_space_for_direction=False  ):
     dt = 1.0 # doesn't matter -- just getting state space size
     model = flydra.kalman.dynamic_models.get_kalman_model( name=name, dt=1.0 )
     ss = model['ss']
     if ss == 6:
-        return KalmanEstimatesVelOnly
+        if allocate_space_for_direction:
+            return KalmanEstimatesVelOnlyWithDirection
+        else:
+            return KalmanEstimatesVelOnly
     elif ss == 9:
-        return KalmanEstimates
+        if allocate_space_for_direction:
+            raise NotImplementedError('')
+        else:
+            return KalmanEstimates
 
 class FilteredObservations(PT.IsDescription):
     obj_id     = PT.UInt32Col(pos=0)

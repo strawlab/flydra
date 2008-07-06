@@ -472,19 +472,8 @@ def doit(filename,
                                                                    elevation_up_bias_degrees=0,
                                                                    )
                 assert numpy.alltrue(PQmath.is_unit_vector(obs_directions))
-                directions_to_show = obs_directions
 
-                if 1:
-                    # run smoother (shouldn't do this for obsevations, just testing...)
-                    smoother = PQmath.QuatSmoother(frames_per_second=fps)
-                    bad_idxs = np.nonzero(np.isnan(obs_directions[:,0]))[0]
-                    smooth_directions = smoother.smooth_directions(obs_directions,
-                                                                   #objective_func_name='ObjectiveFunctionQuats',
-                                                                   display_progress=True,
-                                                                   no_distance_penalty_idxs=bad_idxs)
-                    directions_to_show = smooth_directions
-
-                heads = obs_X+directions_to_show*direction_length
+                heads = obs_X+obs_directions*direction_length
                 verts = numpy.vstack((heads,obs_X))
 
                 tubes = [ [i,i+len(heads)] for i in range(len(heads)) ]
@@ -527,7 +516,9 @@ def doit(filename,
                                     data_file,
                                     use_kalman_smoothing=use_kalman_smoothing,
                                     frames_per_second=fps,
-                                    dynamic_model_name = dynamic_model_name)
+                                    dynamic_model_name = dynamic_model_name,
+                                    return_smoothed_directions = options.smooth_orientations,
+                                    )
             except Exception, err:
                 if 1:
                     raise
@@ -544,6 +535,10 @@ def doit(filename,
                 rows = rows[ok]
 
             verts = numpy.array( [rows['x'], rows['y'], rows['z']] ).T
+            if options.smooth_orientations:
+                verts_directions = numpy.array( [rows['dir_x'], rows['dir_y'], rows['dir_z']] ).T
+            else:
+                verts_directions = numpy.array( [rows['rawdir_x'], rows['rawdir_y'], rows['rawdir_z']] ).T
             obj_id2verts_frames[obj_id] = (verts, rows['frame'])
 
             if show_kalman_P:
@@ -668,6 +663,26 @@ def doit(filename,
                     a.property.color = .9, .9, .9
             actors.append(a)
             actor2obj_id[a] = obj_id
+
+            if 1:
+                smoothed_ori_verts = numpy.vstack((verts,verts+(0.06*verts_directions)))
+                tubes = [ [i,i+len(verts)] for i in range(len(verts)) ]
+
+                pd = tvtk.PolyData()
+                pd.points = smoothed_ori_verts
+                pd.lines = tubes
+
+                pt = tvtk.TubeFilter(radius=0.001,input=pd,
+                                     number_of_sides=4,
+                                     vary_radius='vary_radius_off',
+                                     )
+                m = tvtk.PolyDataMapper(input=pt.output)
+                a = tvtk.Actor(mapper=m)
+                a.property.color = (1,0,0) # red
+                a.property.specular = 0.3
+                actors.append(a)
+                actor2obj_id[a] = obj_id
+
 
         if show_obj_ids:
             if len(verts):
@@ -1106,6 +1121,10 @@ def main():
 
     parser.add_option("--force-stimulus", action='store_true',
                       help="raise error if stimulus condition not found",
+                      default=False)
+
+    parser.add_option("--smooth-orientations", action='store_true',
+                      help="use slow quaternion-based smoother if orientation data is available",
                       default=False)
 
     parser.add_option("--hack-postmultiply", type='string',

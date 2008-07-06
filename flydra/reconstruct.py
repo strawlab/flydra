@@ -791,6 +791,9 @@ class Reconstructor:
         if close_cal_source:
             use_cal_source.close()
 
+    def set_minimum_eccentricity(self,minimum_eccentricity):
+        self.minimum_eccentricity = minimum_eccentricity
+
     def __ne__(self,other):
         return not (self==other)
 

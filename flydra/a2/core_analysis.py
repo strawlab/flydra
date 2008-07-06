@@ -15,6 +15,7 @@ import flydra.kalman.flydra_kalman_utils
 import flydra.analysis.result_utils
 import flydra.reconstruct
 import flydra.analysis.PQmath as PQmath
+import cgkit.cgtypes as cgtypes
 
 import weakref
 import warnings
@@ -248,16 +249,17 @@ def kalman_smooth(orig_rows,
                                                  init_x,
                                                  P_k1,
                                                  valid_data_idx=idx)
-    return frames, xsmooth, Psmooth, obj_id_array
+    return frames, xsmooth, Psmooth, obj_id_array, idx
 
 def observations2smoothed(obj_id,
                           orig_rows,
                           obj_id_fill_value='orig',
                           frames_per_second=None,
-                          dynamic_model_name=None
+                          dynamic_model_name=None,
+                          allocate_space_for_direction=False,
                           ):
-
-    KalmanEstimates = flydra.kalman.flydra_kalman_utils.get_kalman_estimates_table_description_for_model_name(name=dynamic_model_name)
+    KalmanEstimates = flydra.kalman.flydra_kalman_utils.get_kalman_estimates_table_description_for_model_name(
+        name=dynamic_model_name, allocate_space_for_direction=allocate_space_for_direction)
     field_names = tables.Description(KalmanEstimates().columns)._v_names
 
     if not len(orig_rows):
@@ -269,9 +271,9 @@ def observations2smoothed(obj_id,
 
     #print "orig_rows['frame'][-1]",orig_rows['frame'][-1]
 
-    frames, xsmooth, Psmooth, obj_id_array = kalman_smooth(orig_rows,
-                                                           frames_per_second=frames_per_second,
-                                                           dynamic_model_name=dynamic_model_name)
+    frames, xsmooth, Psmooth, obj_id_array, fanout_idx = kalman_smooth(orig_rows,
+                                                                       frames_per_second=frames_per_second,
+                                                                       dynamic_model_name=dynamic_model_name)
     ss = xsmooth.shape[1]
     if 1:
         list_of_xhats = [xsmooth[:,i] for i in range(ss)]
@@ -294,10 +296,21 @@ def observations2smoothed(obj_id,
     else:
         raise ValueError("unknown value for obj_id_fill_value")
     list_of_cols = [obj_id_array2,frames,timestamps]+list_of_xhats+list_of_Ps
+    if allocate_space_for_direction:
+
+        rawdir_x = np.nan*np.ones( (len(frames),), dtype=np.float32 )
+        rawdir_y = np.nan*np.ones( (len(frames),), dtype=np.float32 )
+        rawdir_z = np.nan*np.ones( (len(frames),), dtype=np.float32 )
+
+        dir_x = np.nan*np.ones( (len(frames),), dtype=np.float32 )
+        dir_y = np.nan*np.ones( (len(frames),), dtype=np.float32 )
+        dir_z = np.nan*np.ones( (len(frames),), dtype=np.float32 )
+
+        list_of_cols += [rawdir_x,rawdir_y,rawdir_z,dir_x,dir_y,dir_z]
     assert len(list_of_cols)==len(field_names) # double check that definition didn't change on us
     rows = numpy.rec.fromarrays(list_of_cols,
                                 names = field_names)
-    return rows
+    return rows, fanout_idx
 
 # def matfile2rows(data_file,obj_id):
 #     warnings.warn('using the slow matfile2rows -- use the faster CachingAnalyzer.load_data()')
@@ -386,10 +399,17 @@ class LazyRecArrayMimic2:
         return len(self.view['kalman_x'])
 
 def choose_orientations(rows, directions, frames_per_second=None,
-                        velocity_weight=1.0,
+                        velocity_weight_gain=.2,#5.0,
+                        #min_velocity_weight=0.0,
                         max_velocity_weight=1.0,
                         elevation_up_bias_degrees=45.0, # tip the velocity angle closer +Z by this amount (maximally)
                         ):
+    D2R = np.pi/180
+    if DEBUG:
+        frames = rows['frame']
+        cond = (77830 < frames) & (frames < 77860 )
+        idxs = np.nonzero(cond)[0]
+
     X = np.array([rows['x'], rows['y'], rows['z']]).T
     #ADS print "rows['x'].shape",rows['x'].shape
     assert len(X.shape)==2
@@ -397,22 +417,36 @@ def choose_orientations(rows, directions, frames_per_second=None,
     #ADS print 'velocity.shape',velocity.shape
     speed = np.sqrt(np.sum(velocity**2,axis=1))
     #ADS print 'speed.shape',speed.shape
-    w = np.min( [max_velocity_weight*np.ones_like(speed),
-                 velocity_weight*speed],
-                axis=0)
+    w = velocity_weight_gain*speed
+    w = np.min( [max_velocity_weight*np.ones_like(speed), w], axis=0 )
+    #w = np.max( [min_velocity_weight*np.ones_like(speed), w], axis=0 )
     #ADS print 'directions.shape',directions.shape
     #ADS print 'w.shape',w.shape
 
     velocity_direction = velocity/speed[:,np.newaxis]
     if elevation_up_bias_degrees != 0:
-        body_axis = np.cross(velocity_direction, np.array([0,0,1.0]))
+        rot1_axis = np.cross(velocity_direction, np.array([0,0,1.0]))
 
         dist_from_zplus = np.arccos( np.dot(velocity_direction,np.array([0,0,1.0])))
-        bias_rad = elevation_up_bias_degrees*D2R
-        velocity_biaser = [ cgtypes.quat().from_angle_axis(bias_rad,ax) for ax in body_axis ]
-        biased_velocity_direction = [ cgtypes.vec3( *(velocity_direction[i,:]) )*velocity_biaser[i] for i in range(len(velocity))]
+        bias_radians = elevation_up_bias_degrees*D2R
+        velocity_biaser = [ cgtypes.quat().fromAngleAxis(bias_radians,ax) for ax in rot1_axis ]
+        biased_velocity_direction = [ velocity_biaser[i].rotateVec(cgtypes.vec3(*(velocity_direction[i]))) for i in range(len(velocity))]
         biased_velocity_direction = numpy.array([ [v[0], v[1], v[2]] for v in biased_velocity_direction ])
-        biased_velocity_direction[ dist_from_zplus <= bias_rad, : ] = numpy.array([0,0,1])
+        biased_velocity_direction[ dist_from_zplus <= bias_radians, : ] = numpy.array([0,0,1])
+
+        if DEBUG:
+            R2D = 180.0/np.pi
+            for i in idxs:
+                print
+                print 'frame',frames[i]
+                print 'X[i]',X[i,:]
+                print 'X[i+1]',X[i+1,:]
+                print 'velocity',velocity[i]
+                print 'vel dir',velocity_direction[i]
+                print 'biaser',velocity_biaser[i]
+                print 'bbiased dir',biased_velocity_direction[i]
+                print 'dist (deg)',(dist_from_zplus[i]*R2D)
+
     else:
         biased_velocity_direction = velocity_direction
 
@@ -430,9 +464,20 @@ def choose_orientations(rows, directions, frames_per_second=None,
 
         #ADS print 'directions[i]',directions[i]
         #ADS print 'directions[i-1]',directions[i-1]
+        if DEBUG and i in idxs:
+            print
+            #print 'i',i
+            print 'frame',frames[i],'='*50
+            print 'directions[i]',directions[i]
+            print 'directions[i-1]',directions[i-1]
+            print 'velocity weight w[i-1]',w[i-1]
+            print 'speed',speed[i-1]
+            print 'velocity_direction[i-1]',velocity_direction[i-1]
+            print 'biased_velocity_direction[i-1]',biased_velocity_direction[i-1]
 
         for enum_current,sign_current in enumerate(signs):
             direction_current = sign_current*directions[i]
+            vel_term = np.arccos( np.dot( direction_current, biased_velocity_direction[i-1] ))
             #ADS print
             #ADS print 'sign_current',sign_current,'-'*50
             for enum_previous,sign_previous in enumerate(signs):
@@ -450,17 +495,28 @@ def choose_orientations(rows, directions, frames_per_second=None,
                 ## print b.shape
 
                 flip_term = np.arccos( np.dot( direction_current, direction_previous))
-                vel_term = np.arccos( np.dot( direction_current, biased_velocity_direction[i-1] ))
                 #ADS print 'flip_term',flip_term,'*',(1-w[i-1])
                 #ADS print 'vel_term',vel_term,'*',w[i-1]
 
-                if (not np.isnan(direction_current[0])) and (not np.isnan(direction_previous[0])):
-                    cost_current = ( (1-w[i-1])*np.arccos( np.dot( direction_current, direction_previous)) +
-                                     w[i-1]*np.arccos( np.dot( direction_current, biased_velocity_direction[i-1] )) )
-                else:
-                    cost_current = 0.0
+                cost_current = 0.0
+                if not np.isnan(vel_term):
+                    cost_current += vel_term
+                if not np.isnan(flip_term):
+                    cost_current += flip_term
+
+                ## if (not np.isnan(direction_current[0])) and (not np.isnan(direction_previous[0])):
+                ##     # normal case - no nans
+                ##     cost_current = ( (1-w[i-1])*flip_term + w[i-1]*vel_term )
+                ##     cost_current = 0.0
+
                 #ADS print 'cost_current', cost_current
                 tmpcost[enum_previous] = costprev[enum_previous] + cost_current
+                if DEBUG and i in idxs:
+                    print '  (sign_current %d)'%sign_current, '-'*10
+                    print '  (sign_previous %d)'%sign_previous
+                    print '  flip_term',flip_term
+                    print '  vel_term',vel_term
+
             #ADS print 'tmpcost',tmpcost
             best_enum_previous = np.argmin( tmpcost )
             #ADS print 'enum_current',enum_current
@@ -484,7 +540,120 @@ def choose_orientations(rows, directions, frames_per_second=None,
         sign_current = signs[best_enum_current]
         #ADS print 'sign_current',sign_current
         directions[i] *= sign_current
+
+    if DEBUG:
+        for i in idxs:
+            print 'ultimate directions:'
+            print 'frame',frames[i],directions[i]
     return directions
+
+class PreSmoothedDataCache(object):
+    def __init__(self):
+        self.cache_h5files_by_data_file = {}
+
+    def query_results(self,obj_id,data_file,orig_rows,
+                      frames_per_second=None,
+                      dynamic_model_name=None,
+                      return_smoothed_directions=False,
+                      ):
+
+        # XXX TODO fixme: save values of frames_per_second and
+        # dynamic_model_name (and svn revision?) and
+        # return_smoothed_directions to check against cache
+
+        if frames_per_second is None: raise ValueError('frames_per_second must be specified')
+        if dynamic_model_name is None: raise ValueError('dynamic_model_name must be specified')
+
+        # get cached datafile for this data_file
+        if data_file not in self.cache_h5files_by_data_file:
+            cache_h5file_name = os.path.abspath(os.path.splitext(data_file.filename)[0]) + '.kh5-smoothcache'
+            if os.path.exists( cache_h5file_name ):
+                # loading cache file
+                cache_h5file = tables.openFile( cache_h5file_name, mode='r+' )
+            else:
+                # creating cache file
+                cache_h5file = tables.openFile( cache_h5file_name, mode='w' )
+            self.cache_h5files_by_data_file[data_file] = cache_h5file
+
+        h5file = self.cache_h5files_by_data_file[data_file]
+
+        # load or create cached rows for this obj_id
+        tablename = 'obj_id%d'%obj_id
+        if return_smoothed_directions:
+            tablename = 'smoothed_'+tablename
+
+        # XXX todo: delete un-smoothed table once smoothed version is
+        # made and return the smoothed version in all circumstances if
+        # it exists. (possibly clearing the smooted values to ensure
+        # no one depends on broken behavior.)
+
+        if hasattr(h5file.root,tablename):
+            # pre-existing table is found
+            h5table = getattr(h5file.root,tablename)
+            rows = h5table[:]
+        else:
+            # pre-existing table NOT found
+            h5table = None
+            allocate_space_for_direction = False
+            if 'hz_line0' in orig_rows.dtype.fields:
+                allocate_space_for_direction = True
+
+            rows, fanout_idx = observations2smoothed(obj_id,orig_rows,
+                                                     frames_per_second=frames_per_second,
+                                                     dynamic_model_name=dynamic_model_name,
+                                                     allocate_space_for_direction=allocate_space_for_direction,
+                                                     )
+
+            if 1:
+                orig_hzlines = numpy.array([orig_rows['hz_line0'],
+                                            orig_rows['hz_line1'],
+                                            orig_rows['hz_line2'],
+                                            orig_rows['hz_line3'],
+                                            orig_rows['hz_line4'],
+                                            orig_rows['hz_line5']]).T
+                hzlines = np.nan*np.ones( (len(rows),6) )
+                for i,orig_hzline in zip(fanout_idx,orig_hzlines):
+                    hzlines[i,:] = orig_hzline
+
+                # compute 3 vecs
+                directions = flydra.reconstruct.line_direction(hzlines)
+                # make consistent
+
+                # send kalman-smoothed position estimates (the velocity will be determined from this)
+                directions = choose_orientations(rows, directions, frames_per_second=frames_per_second,
+                                                 #velocity_weight=1.0,
+                                                 #max_velocity_weight=1.0,
+                                                 elevation_up_bias_degrees=45.0, # don't tip the velocity angle
+                                                 )
+                rows['rawdir_x'] = directions[:,0]
+                rows['rawdir_y'] = directions[:,1]
+                rows['rawdir_z'] = directions[:,2]
+
+                if return_smoothed_directions:
+                    smoother = PQmath.QuatSmoother(frames_per_second=frames_per_second,
+                                                   beta=1.0,
+                                                   percent_error_eps_quats=1,
+                                                   )
+                    bad_idxs = np.nonzero(np.isnan(directions[:,0]))[0]
+                    smooth_directions = smoother.smooth_directions(directions,
+                                                                   display_progress=True,
+                                                                   no_distance_penalty_idxs=bad_idxs)
+                    rows['dir_x'] = smooth_directions[:,0]
+                    rows['dir_y'] = smooth_directions[:,1]
+                    rows['dir_z'] = smooth_directions[:,2]
+            if h5table is None:
+                if 1:
+                    filters = tables.Filters(1, complib='lzo') # compress
+                else:
+                    filters = tables.Filters(0)
+
+                h5file.createTable(h5file.root,
+                                   tablename,
+                                   rows,
+                                   filters=filters)
+            else:
+                raise NotImplementedError('apprending to existing table not supported')
+        return rows
 
 class CachingAnalyzer:
 
@@ -597,7 +766,9 @@ class CachingAnalyzer:
             return rows
 
     def load_data(self,obj_id,data_file,use_kalman_smoothing=True,
-                  frames_per_second=None, dynamic_model_name=None):
+                  frames_per_second=None, dynamic_model_name=None,
+                  return_smoothed_directions=False,
+                  ):
         """Load Kalman state estimates from data_file.
 
         If use_kalman_smoothing is True, the data are passed through a
@@ -666,8 +837,14 @@ class CachingAnalyzer:
                 # Kalman observations are already always in meters, no scale factor needed
                 orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs)
 
-                if 1:
-                    warnings.warn('abondoning all observations where only 1 camera data present')
+                if 1 :
+                    warnings.warn('Due to Kalman smoothing, all '
+                                  'observations using only 1 camera '
+                                  'will be ignored.  This is because '
+                                  'the Kalman smoothing process '
+                                  'needs multiple camera data to '
+                                  'triangulate a position')
+
                     # filter out observations in which are nan (only 1 camera contributed)
                     cond = ~numpy.isnan(orig_rows['x'])
                     orig_rows = orig_rows[cond]
@@ -716,11 +893,12 @@ class CachingAnalyzer:
                 if len(orig_rows)==1:
                     raise NotEnoughDataToSmoothError('not enough data from obj_id %d was found'%obj_id)
 
-                # do Kalman smoothing
-                rows = observations2smoothed(obj_id,orig_rows,
-                                             frames_per_second=frames_per_second,
-                                             dynamic_model_name=dynamic_model_name,
-                                             )
+                rows = self._smooth_cache.query_results(obj_id,data_file,orig_rows,
+                                                        frames_per_second=frames_per_second,
+                                                        dynamic_model_name=dynamic_model_name,
+                                                        return_smoothed_directions=return_smoothed_directions,
+                                                        )
+
 
         if not len(rows):
             raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
@@ -1196,11 +1374,14 @@ class CachingAnalyzer:
     # Implementatation details below
     ###################################
 
+    # for class CachingAnalyzer
     def __init__(self,hack_postmultiply=None,is_global=False):
         self.hack_postmultiply = check_hack_postmultiply(hack_postmultiply)
 
         if not is_global:
             warnings.warn("maybe you want to use the global CachingAnalyzer instance? (Call 'get_global_CachingAnalyzer()'.)", stacklevel=2)
+
+        self._smooth_cache = PreSmoothedDataCache()
 
         self.keep_references = [] # a list of strong references
 

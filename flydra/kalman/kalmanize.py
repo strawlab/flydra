@@ -1,4 +1,5 @@
 import numpy
+import numpy as np
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
 #import flydra.geom as geom
@@ -6,6 +7,7 @@ import flydra.fastgeom as geom
 import time, math
 from flydra.analysis.result_utils import get_results, get_caminfo_dicts, \
      get_resolution, get_fps
+import tables
 import tables as PT
 import os, sys, pprint
 from flydra_tracker import Tracker
@@ -218,15 +220,20 @@ class KalmanSaver:
             self.h5textlog = self.h5file.root.textlog
 
         else:
+            if 1:
+                filters = tables.Filters(1, complib='lzo') # compress
+            else:
+                filters = tables.Filters(0)
+
             self.h5file = PT.openFile(dest_filename, mode="w", title="tracked Flydra data file")
             reconst_orig_units.save_to_h5file(self.h5file)
             self.h5_xhat = self.h5file.createTable(self.h5file.root,'kalman_estimates', kalman_estimates_description,
-                                                   "Kalman a posteri estimates of tracked object")
+                                                   "Kalman a posteri estimates of tracked object",filters=filters)
             self.h5_xhat.attrs.dynamic_model_name = dynamic_model_name
             self.h5_xhat.attrs.dynamic_model = dynamic_model
 
             self.h5_obs = self.h5file.createTable(self.h5file.root,'kalman_observations', FilteredObservations,
-                                                  "observations of tracked object")
+                                                  "observations of tracked object",filters=filters)
 
             self.h5_2d_obs_next_idx = 0
             self.h5_2d_obs = self.h5file.createVLArray(self.h5file.root,
@@ -382,6 +389,7 @@ def kalmanize(src_filename,
               max_err=None,
               area_threshold=0,
               min_observations_to_save=0,
+              options=None,
               ):
 
     if debug:
@@ -411,6 +419,9 @@ def kalmanize(src_filename,
             reconst_orig_units = flydra.reconstruct.Reconstructor(fd)
         else:
             reconst_orig_units = flydra.reconstruct.Reconstructor(reconstructor_filename)
+
+    if options.force_minimum_eccentricity is not None:
+        reconst_orig_units.set_minimum_eccentricity(options.force_minimum_eccentricity)
 
     reconstructor_meters = reconst_orig_units.get_scaled(reconst_orig_units.get_scale_factor())
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
@@ -628,6 +639,14 @@ def kalmanize(src_filename,
             helper = reconstructor_meters.get_reconstruct_helper_dict()[cam_id]
             rise=slope
             run=1.0
+            if np.isinf(rise):
+                if rise > 0:
+                    rise=1.0
+                    run=0.0
+                else:
+                    rise=-1.0
+                    run=0.0
+
             (p1, p2, p3, p4,
              ray0, ray1, ray2, ray3, ray4, ray5) = do_3d_operations_on_2d_point(helper, x_undistorted,y_undistorted,
                                                                                 pmat_inv, pmat_meters_inv,
@@ -704,6 +723,9 @@ def main():
     parser.add_option("--min-observations-to-save", type='int', default=2,
                       help='minimum number of observations required for a kalman object to be saved')
 
+    parser.add_option("--force-minimum-eccentricity", type='float',
+                      default=None)
+
     (options, args) = parser.parse_args()
     if options.exclude_cam_ids is not None:
         options.exclude_cam_ids = options.exclude_cam_ids.split()
@@ -738,6 +760,7 @@ def main():
               max_err = options.max_err,
               area_threshold=options.area_threshold,
               min_observations_to_save=options.min_observations_to_save,
+              options=options,
               )
 
     if int(os.environ.get('PROFILE','0')):

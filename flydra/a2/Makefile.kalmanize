@@ -4,7 +4,7 @@ include kalman_products.mk
 
 %.kh5 : %.h5
 	rm -f $@
-	flydra_kalmanize $< -r $(CALFILE) --max-err=$(MAXERR) --min-observations-to-save=$(MINOBS) --dynamic-model=$(MODEL) --dest-file $@
+	flydra_kalmanize $< -r $(CALFILE) --max-err=$(MAXERR) --min-observations-to-save=$(MINOBS) --dynamic-model=$(MODEL) --force-minimum-eccentricity=$(MIN_ECCENTRICITY) --dest-file $@
 
 %.png : %.kh5 fanout.xml
 	rm -f $@
