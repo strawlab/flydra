@@ -22,6 +22,7 @@ if CALC_SLOPE:
     import motmot.FastImage.FastImage as FastImage
     import motmot.realtime_image_analysis.realtime_image_analysis as realtime_image_analysis
 import flydra.a2.utils as utils
+import flydra.a2.aggdraw_coord_shifter as aggdraw_coord_shifter
 
 #PLOT='mpl'
 PLOT='image'
@@ -86,6 +87,9 @@ def calc_slope_eccentricity(zoom_fg, h5_frame):
         slope_im = slope_im.resize( (rescale_factor*w, rescale_factor*h) )
         slope_im = slope_im.convert('RGB')
         slope_draw = aggdraw.Draw(slope_im)
+        #slope_draw = aggdraw_coord_shifter.CoordShiftDraw(slope_im)
+        #slope_im = slope_draw.get_image()
+
         slope_draw.text( (5,5), '%3f'%slope,
                          aggdraw.Font((230, 159, 0),
                                       '/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf',
@@ -109,6 +113,10 @@ def doit(fmf_filename=None,
          do_zoom_diff=False,
          options=None,
          ):
+
+    if options.flip_y and options.rotate_180:
+        raise ValueError('can use flip_y or rotate_180, but not both')
+
     if do_zoom_diff and do_zoom:
         raise ValueError('can use do_zoom or do_zoom_diff, but not both')
 
@@ -656,7 +664,15 @@ def doit(fmf_filename=None,
                     rescale_factor = 5
                     im = im.resize( (rescale_factor*w, rescale_factor*h) )
                     im = im.convert('RGB')
-                    draw = aggdraw.Draw(im)
+                    #draw = aggdraw.Draw(im)
+                    if options.flip_y:
+                        xform = aggdraw_coord_shifter.XformFlipY(ymax=(im.size[1]-1))
+                    elif options.rotate_180:
+                        xform = aggdraw_coord_shifter.XformRotate180(xmax=(im.size[0]-1),ymax=(im.size[1]-1))
+                    else:
+                        xform = aggdraw_coord_shifter.XformIdentity()
+                    draw = aggdraw_coord_shifter.CoordShiftDraw(im) # zoomed image
+                    im = draw.get_image()
 
                     cumy = 0
                     absdiffy = None
@@ -765,14 +781,24 @@ def doit(fmf_filename=None,
                                     (frame.shape[1],frame.shape[0]),
                                     frame.tostring())
                 im = im.convert('RGB')
-                draw = aggdraw.Draw(im)
+                #draw = aggdraw.Draw(im)
+                if options.flip_y:
+                    xform = aggdraw_coord_shifter.XformFlipY(ymax=(frame.shape[0]-1))
+                elif options.rotate_180:
+                    xform = aggdraw_coord_shifter.XformRotate180(xmax=(frame.shape[1]-1),ymax=(frame.shape[0]-1))
+                else:
+                    xform = aggdraw_coord_shifter.XformIdentity()
+                draw = aggdraw_coord_shifter.CoordShiftDraw(im,xform)
+                im = draw.get_image()
 
                 if style=='debug':
                     try:
                         strtime = datetime.datetime.fromtimestamp(mainbrain_timestamp,pacific)
                     except:
                         strtime = '<no 2d data timestamp>'
-                    draw.text( (0,0), 'frame %d, %s timestamp %s - %s'%(
+                    #draw.text( (0,0), 'frame %d, %s timestamp %s - %s'%(
+                    #    h5_frame, cam_id, repr(fmf_timestamp), strtime), font2d )
+                    draw.text_noxform( (0,0), 'frame %d, %s timestamp %s - %s'%(
                         h5_frame, cam_id, repr(fmf_timestamp), strtime), font2d )
 
                 # plot extracted data for full image
@@ -790,7 +816,8 @@ def doit(fmf_filename=None,
                             pos = numpy.array( [x,y] )
                             tmp_str = 'pt %d (area %f)'%(pt_no,area)
                             tmpw,tmph = draw.textsize(tmp_str, font2d )
-                            draw.text( (x+5,y-tmph-1), tmp_str, font2d )
+                            #draw.text( (x+5,y-tmph-1), tmp_str, font2d )
+                            draw.text_smartshift( (x+5,y-tmph-1), (x,y), tmp_str, font2d )
                         elif style=='pretty':
                             radius = 30
                             draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
@@ -835,9 +862,12 @@ def doit(fmf_filename=None,
                         pt_dist_meters = numpy.sqrt( (X-cam_center_meters[0])**2 +
                                                      (Y-cam_center_meters[1])**2 +
                                                      (Z-cam_center_meters[2])**2)
-                        draw.text( (x+5,y), 'obj %d (%.3f, %.3f, %.3f +- ~%f), dist %.2f'%(
+                        ## draw.text( (x+5,y), 'obj %d (%.3f, %.3f, %.3f +- ~%f), dist %.2f'%(
+                        ##     obj_id,X,Y,Z,Pmean_meters,pt_dist_meters),
+                        ##            font3d )
+                        draw.text_smartshift( (x+5,y), (x,y), 'obj %d (%.3f, %.3f, %.3f +- ~%f), dist %.2f'%(
                             obj_id,X,Y,Z,Pmean_meters,pt_dist_meters),
-                                   font3d )
+                                              font3d )
 
                 if style=='debug':
                     for (xy,XYZ,obj_id,obs_info) in kobs_vert_images:
@@ -849,10 +879,13 @@ def doit(fmf_filename=None,
                         pt_dist_meters = numpy.sqrt( (X-cam_center_meters[0])**2 +
                                                      (Y-cam_center_meters[1])**2 +
                                                      (Z-cam_center_meters[2])**2)
-                        draw.text( (x+5,y), 'obj %d (%.3f, %.3f, %.3f), dist %.2f'%(obj_id,X,Y,Z,pt_dist_meters), font_obs )
+                        ## draw.text( (x+5,y), 'obj %d (%.3f, %.3f, %.3f), dist %.2f'%(obj_id,X,Y,Z,pt_dist_meters), font_obs )
+                        draw.text_smartshift( (x+5,y), (x,y), 'obj %d (%.3f, %.3f, %.3f), dist %.2f'%(obj_id,X,Y,Z,pt_dist_meters), font_obs )
                         (this_cam_ids, this_camn_idxs) = obs_info
                         for i,(obs_cam_id,pt_no) in enumerate( zip(*obs_info) ):
-                            draw.text( (x+15,y+(i+1)*10),
+                            ## draw.text( (x+15,y+(i+1)*10),
+                            ##            '%s pt %d'%(obs_cam_id,pt_no), font_obs )
+                            draw.text_smartshift( (x+15,y+(i+1)*10), (x,y),
                                        '%s pt %d'%(obs_cam_id,pt_no), font_obs )
 
                     for kobs_ori_verts_images in [kobs_ori_verts_images_a,kobs_ori_verts_images_b]:
@@ -931,6 +964,12 @@ def main():
     parser.add_option("--zoom-diff", action='store_true',
                       default=False,
                       help="save zoomed difference image (not well tested)")
+
+    parser.add_option("--flip-y", action='store_true',
+                      default=False)
+
+    parser.add_option("--rotate-180", action='store_true',
+                      default=False)
 
     (options, args) = parser.parse_args()
 
