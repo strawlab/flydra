@@ -664,7 +664,7 @@ def doit(filename,
             actors.append(a)
             actor2obj_id[a] = obj_id
 
-            if 1:
+            if options.smooth_orientations or options.body_axis:
                 smoothed_ori_verts = numpy.vstack((verts,verts+(0.06*verts_directions)))
                 tubes = [ [i,i+len(verts)] for i in range(len(verts)) ]
 
@@ -1124,7 +1124,11 @@ def main():
                       default=False)
 
     parser.add_option("--smooth-orientations", action='store_true',
-                      help="use slow quaternion-based smoother if orientation data is available",
+                      help="use slow quaternion-based smoother",
+                      default=False)
+
+    parser.add_option("--body-axis", action='store_true',
+                      help="show body axis (orientation) data if available",
                       default=False)
 
     parser.add_option("--hack-postmultiply", type='string',

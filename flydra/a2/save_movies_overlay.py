@@ -137,7 +137,9 @@ def doit(fmf_filename=None,
     h5 = PT.openFile( h5_filename, mode='r' )
 
     bg_fmf_filename = os.path.splitext(fmf_filename)[0] + '_mean.fmf'
-    cmp_fmf_filename = os.path.splitext(fmf_filename)[0] + '_mean2.fmf'
+    cmp_fmf_filename = os.path.splitext(fmf_filename)[0] + '_sumsqf.fmf'
+    if not os.path.exists( cmp_fmf_filename ):
+        cmp_fmf_filename = os.path.splitext(fmf_filename)[0] + '_mean2.fmf' #old version
 
     bg_OK = False
     if os.path.exists( bg_fmf_filename):
