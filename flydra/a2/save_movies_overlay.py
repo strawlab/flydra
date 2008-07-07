@@ -673,7 +673,7 @@ def doit(fmf_filename=None,
                         xform = aggdraw_coord_shifter.XformRotate180(xmax=(im.size[0]-1),ymax=(im.size[1]-1))
                     else:
                         xform = aggdraw_coord_shifter.XformIdentity()
-                    draw = aggdraw_coord_shifter.CoordShiftDraw(im) # zoomed image
+                    draw = aggdraw_coord_shifter.CoordShiftDraw(im,xform) # zoomed image
                     im = draw.get_image()
 
                     cumy = 0
