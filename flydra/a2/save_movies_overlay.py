@@ -409,18 +409,20 @@ def doit(fmf_filename=None,
                     Pmean_meters = numpy.sqrt(Pmean)
                     kalman_vert_images.append( (vert_image, vert, this_3d_row['obj_id'], Pmean_meters) )
 
-                    for target, dir_x_name, dir_y_name, dir_z_name in [ (kalman_ori_verts_images,'dir_x','dir_y','dir_z'),
-                                                                        (kalman_raw_ori_verts_images,'rawdir_x','rawdir_y','rawdir_z')]:
-                        direction = numpy.array([this_3d_row[dir_x_name],this_3d_row[dir_y_name],this_3d_row[dir_z_name]])
-                        start_frac, stop_frac = 0.3,1.0
-                        v1 = vert+(start_frac*direction*line_length)
-                        v2 = vert+( stop_frac*direction*line_length)
-                        u = v2-v1
+                    if options.body_axis or options.smooth_orientations:
 
-                        # plot several verts to deal with camera distortion
-                        ori_verts = [v1+inc*u  for inc in numpy.linspace(0,1.0,6)]
-                        ori_verts_images = [ R.find2d(cam_id,ori_vert,distorted=True) for ori_vert in ori_verts ]
-                        target.append( ori_verts_images )
+                        for target, dir_x_name, dir_y_name, dir_z_name in [ (kalman_ori_verts_images,'dir_x','dir_y','dir_z'),
+                                                                            (kalman_raw_ori_verts_images,'rawdir_x','rawdir_y','rawdir_z')]:
+                            direction = numpy.array([this_3d_row[dir_x_name],this_3d_row[dir_y_name],this_3d_row[dir_z_name]])
+                            start_frac, stop_frac = 0.3,1.0
+                            v1 = vert+(start_frac*direction*line_length)
+                            v2 = vert+( stop_frac*direction*line_length)
+                            u = v2-v1
+
+                            # plot several verts to deal with camera distortion
+                            ori_verts = [v1+inc*u  for inc in numpy.linspace(0,1.0,6)]
+                            ori_verts_images = [ R.find2d(cam_id,ori_vert,distorted=True) for ori_vert in ori_verts ]
+                            target.append( ori_verts_images )
 
             # get 3D observation data
             kobs_vert_images = []
@@ -666,15 +668,17 @@ def doit(fmf_filename=None,
                     rescale_factor = 5
                     im = im.resize( (rescale_factor*w, rescale_factor*h) )
                     im = im.convert('RGB')
-                    #draw = aggdraw.Draw(im)
-                    if options.flip_y:
-                        xform = aggdraw_coord_shifter.XformFlipY(ymax=(im.size[1]-1))
-                    elif options.rotate_180:
-                        xform = aggdraw_coord_shifter.XformRotate180(xmax=(im.size[0]-1),ymax=(im.size[1]-1))
+                    if 1:
+                        draw = aggdraw.Draw(im)
                     else:
-                        xform = aggdraw_coord_shifter.XformIdentity()
-                    draw = aggdraw_coord_shifter.CoordShiftDraw(im,xform) # zoomed image
-                    im = draw.get_image()
+                        if options.flip_y:
+                            xform = aggdraw_coord_shifter.XformFlipY(ymax=(im.size[1]-1))
+                        elif options.rotate_180:
+                            xform = aggdraw_coord_shifter.XformRotate180(xmax=(im.size[0]-1),ymax=(im.size[1]-1))
+                        else:
+                            xform = aggdraw_coord_shifter.XformIdentity()
+                        draw = aggdraw_coord_shifter.CoordShiftDraw(im,xform) # zoomed image
+                        im = draw.get_image()
 
                     cumy = 0
                     absdiffy = None
@@ -826,24 +830,25 @@ def doit(fmf_filename=None,
                                           pen2d )
 
                         # plot slope line
-                        if not eccentricity<R.minimum_eccentricity:
-                            direction = numpy.array( [1,slope] )
-                            direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
-                            if style=='debug':
-                                pos = numpy.array( [x,y] )
-                                for sign in [-1,1]:
-                                    p1 = pos+sign*(eccentricity*10*direction)
-                                    p2 = pos+sign*(R.minimum_eccentricity*10*direction)
-                                    draw.line( [p1[0],p1[1], p2[0],p2[1]],
-                                               pen2d )
-                            elif style=='pretty':
-                                vec = direction*radius
-                                pos = numpy.array( [x,y] )
-                                for sign in [-1,1]:
-                                    p1 = pos+sign*(1.2*vec)
-                                    p2 = pos+sign*(0.5*vec)
-                                    draw.line( [p1[0],p1[1], p2[0],p2[1]],
-                                               pen2d )
+                        if options.body_axis or options.smooth_orientations:
+                            if not eccentricity<R.minimum_eccentricity:
+                                direction = numpy.array( [1,slope] )
+                                direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
+                                if style=='debug':
+                                    pos = numpy.array( [x,y] )
+                                    for sign in [-1,1]:
+                                        p1 = pos+sign*(eccentricity*10*direction)
+                                        p2 = pos+sign*(R.minimum_eccentricity*10*direction)
+                                        draw.line( [p1[0],p1[1], p2[0],p2[1]],
+                                                   pen2d )
+                                elif style=='pretty':
+                                    vec = direction*radius
+                                    pos = numpy.array( [x,y] )
+                                    for sign in [-1,1]:
+                                        p1 = pos+sign*(1.2*vec)
+                                        p2 = pos+sign*(0.5*vec)
+                                        draw.line( [p1[0],p1[1], p2[0],p2[1]],
+                                                   pen2d )
 
                 for (xy,XYZ,obj_id,Pmean_meters) in kalman_vert_images:
                     if style in ['debug','pretty']:
@@ -960,7 +965,11 @@ def main():
                       help="save zoomed image (not well tested)")
 
     parser.add_option("--smooth-orientations", action='store_true',
-                      help="use slow quaternion-based smoother if orientation data is available",
+                      help="use slow quaternion-based smoother if body axis data is available",
+                      default=False)
+
+    parser.add_option("--body-axis", action='store_true',
+                      help="use body axis data is available",
                       default=False)
 
     parser.add_option("--zoom-diff", action='store_true',
