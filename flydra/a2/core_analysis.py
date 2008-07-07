@@ -578,18 +578,21 @@ class PreSmoothedDataCache(object):
         h5file = self.cache_h5files_by_data_file[data_file]
 
         # load or create cached rows for this obj_id
-        tablename = 'obj_id%d'%obj_id
-        if return_smoothed_directions:
-            tablename = 'smoothed_'+tablename
+        unsmoothed_tablename = 'obj_id%d'%obj_id
+        smoothed_tablename = 'smoothed_'+unsmoothed_tablename
 
-        # XXX todo: delete un-smoothed table once smoothed version is
-        # made and return the smoothed version in all circumstances if
-        # it exists. (possibly clearing the smooted values to ensure
-        # no one depends on broken behavior.)
-
-        if hasattr(h5file.root,tablename):
+        if hasattr(h5file.root,smoothed_tablename):
             # pre-existing table is found
-            h5table = getattr(h5file.root,tablename)
+            h5table = getattr(h5file.root,smoothed_tablename)
+            rows = h5table[:]
+            if not return_smoothed_directions:
+                # force users to ask for smoothed directions if they are wanted.
+                rows['dir_x'] = np.nan
+                rows['dir_y'] = np.nan
+                rows['dir_z'] = np.nan
+        elif hasattr(h5file.root,unsmoothed_tablename) and (not return_smoothed_directions):
+            # pre-existing table is found
+            h5table = getattr(h5file.root,unsmoothed_tablename)
             rows = h5table[:]
         else:
             # pre-existing table NOT found
@@ -604,43 +607,51 @@ class PreSmoothedDataCache(object):
                                                      allocate_space_for_direction=allocate_space_for_direction,
                                                      )
 
-            if 1:
-                orig_hzlines = numpy.array([orig_rows['hz_line0'],
-                                            orig_rows['hz_line1'],
-                                            orig_rows['hz_line2'],
-                                            orig_rows['hz_line3'],
-                                            orig_rows['hz_line4'],
-                                            orig_rows['hz_line5']]).T
-                hzlines = np.nan*np.ones( (len(rows),6) )
-                for i,orig_hzline in zip(fanout_idx,orig_hzlines):
-                    hzlines[i,:] = orig_hzline
+            orig_hzlines = numpy.array([orig_rows['hz_line0'],
+                                        orig_rows['hz_line1'],
+                                        orig_rows['hz_line2'],
+                                        orig_rows['hz_line3'],
+                                        orig_rows['hz_line4'],
+                                        orig_rows['hz_line5']]).T
+            hzlines = np.nan*np.ones( (len(rows),6) )
+            for i,orig_hzline in zip(fanout_idx,orig_hzlines):
+                hzlines[i,:] = orig_hzline
 
-                # compute 3 vecs
-                directions = flydra.reconstruct.line_direction(hzlines)
-                # make consistent
+            # compute 3 vecs
+            directions = flydra.reconstruct.line_direction(hzlines)
+            # make consistent
 
-                # send kalman-smoothed position estimates (the velocity will be determined from this)
-                directions = choose_orientations(rows, directions, frames_per_second=frames_per_second,
-                                                 #velocity_weight=1.0,
-                                                 #max_velocity_weight=1.0,
-                                                 elevation_up_bias_degrees=45.0, # don't tip the velocity angle
-                                                 )
-                rows['rawdir_x'] = directions[:,0]
-                rows['rawdir_y'] = directions[:,1]
-                rows['rawdir_z'] = directions[:,2]
+            # send kalman-smoothed position estimates (the velocity will be determined from this)
+            directions = choose_orientations(rows, directions, frames_per_second=frames_per_second,
+                                             #velocity_weight=1.0,
+                                             #max_velocity_weight=1.0,
+                                             elevation_up_bias_degrees=45.0, # don't tip the velocity angle
+                                             )
+            rows['rawdir_x'] = directions[:,0]
+            rows['rawdir_y'] = directions[:,1]
+            rows['rawdir_z'] = directions[:,2]
 
-                if return_smoothed_directions:
-                    smoother = PQmath.QuatSmoother(frames_per_second=frames_per_second,
-                                                   beta=1.0,
-                                                   percent_error_eps_quats=1,
-                                                   )
-                    bad_idxs = np.nonzero(np.isnan(directions[:,0]))[0]
-                    smooth_directions = smoother.smooth_directions(directions,
-                                                                   display_progress=True,
-                                                                   no_distance_penalty_idxs=bad_idxs)
-                    rows['dir_x'] = smooth_directions[:,0]
-                    rows['dir_y'] = smooth_directions[:,1]
-                    rows['dir_z'] = smooth_directions[:,2]
+            if return_smoothed_directions:
+                save_tablename = smoothed_tablename
+                smoother = PQmath.QuatSmoother(frames_per_second=frames_per_second,
+                                               beta=1.0,
+                                               percent_error_eps_quats=1,
+                                               )
+                bad_idxs = np.nonzero(np.isnan(directions[:,0]))[0]
+                smooth_directions = smoother.smooth_directions(directions,
+                                                               display_progress=True,
+                                                               no_distance_penalty_idxs=bad_idxs)
+                rows['dir_x'] = smooth_directions[:,0]
+                rows['dir_y'] = smooth_directions[:,1]
+                rows['dir_z'] = smooth_directions[:,2]
+
+                if hasattr(h5file.root,unsmoothed_tablename):
+                    # XXX todo: delete un-smoothed table once smoothed version is
+                    # made.
+                    warnings.warn('implementation detail: should drop unsmoothed table')
+            else:
+                save_tablename = unsmoothed_tablename
+
             if h5table is None:
                 if 1:
                     filters = tables.Filters(1, complib='lzo') # compress
@@ -648,7 +659,7 @@ class PreSmoothedDataCache(object):
                     filters = tables.Filters(0)
 
                 h5file.createTable(h5file.root,
-                                   tablename,
+                                   save_tablename,
                                    rows,
                                    filters=filters)
             else:
@@ -914,6 +925,24 @@ class CachingAnalyzer:
             rows['xvel']=numpy.nan
             rows['yvel']=numpy.nan
             rows['zvel']=numpy.nan
+
+
+            input = numpy.array([rows['rawdir_x'], rows['rawdir_y'], rows['rawdir_z'], numpy.ones_like(rows['rawdir_x'])])
+            output = numpy.dot(self.hack_postmultiply,input)
+            # renormalize vectors after hack
+            output = flydra.reconstruct.norm_vec(output.T).T
+            rows['rawdir_x']=output[0,:]
+            rows['rawdir_y']=output[1,:]
+            rows['rawdir_z']=output[2,:]
+
+            if return_smoothed_directions:
+                input = numpy.array([rows['dir_x'], rows['dir_y'], rows['dir_z'], numpy.ones_like(rows['dir_x'])])
+                output = numpy.dot(self.hack_postmultiply,input)
+                # renormalize vectors after hack
+                output = flydra.reconstruct.norm_vec(output.T).T
+                rows['dir_x']=output[0,:]
+                rows['dir_y']=output[1,:]
+                rows['dir_z']=output[2,:]
 
         return rows
 
@@ -1467,6 +1496,8 @@ class CachingAnalyzer:
             if preloaded_dict['self_should_close']:
                 preloaded_dict['kresults'].close()
                 preloaded_dict['self_should_close'] = False
+        for h5file in self._smooth_cache.cache_h5files_by_data_file.itervalues():
+            h5file.close()
 
     def __del__(self):
         self.close()
