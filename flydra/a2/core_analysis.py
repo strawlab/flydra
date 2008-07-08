@@ -597,39 +597,37 @@ class PreSmoothedDataCache(object):
         else:
             # pre-existing table NOT found
             h5table = None
-            allocate_space_for_direction = False
-            if 'hz_line0' in orig_rows.dtype.fields:
-                allocate_space_for_direction = True
-
+            have_body_axis_information = 'hz_line0' in orig_rows.dtype.fields
             rows, fanout_idx = observations2smoothed(obj_id,orig_rows,
                                                      frames_per_second=frames_per_second,
                                                      dynamic_model_name=dynamic_model_name,
-                                                     allocate_space_for_direction=allocate_space_for_direction,
+                                                     allocate_space_for_direction=have_body_axis_information,
                                                      )
 
-            orig_hzlines = numpy.array([orig_rows['hz_line0'],
-                                        orig_rows['hz_line1'],
-                                        orig_rows['hz_line2'],
-                                        orig_rows['hz_line3'],
-                                        orig_rows['hz_line4'],
-                                        orig_rows['hz_line5']]).T
-            hzlines = np.nan*np.ones( (len(rows),6) )
-            for i,orig_hzline in zip(fanout_idx,orig_hzlines):
-                hzlines[i,:] = orig_hzline
+            if have_body_axis_information:
+                orig_hzlines = numpy.array([orig_rows['hz_line0'],
+                                            orig_rows['hz_line1'],
+                                            orig_rows['hz_line2'],
+                                            orig_rows['hz_line3'],
+                                            orig_rows['hz_line4'],
+                                            orig_rows['hz_line5']]).T
+                hzlines = np.nan*np.ones( (len(rows),6) )
+                for i,orig_hzline in zip(fanout_idx,orig_hzlines):
+                    hzlines[i,:] = orig_hzline
 
-            # compute 3 vecs
-            directions = flydra.reconstruct.line_direction(hzlines)
-            # make consistent
+                # compute 3 vecs
+                directions = flydra.reconstruct.line_direction(hzlines)
+                # make consistent
 
-            # send kalman-smoothed position estimates (the velocity will be determined from this)
-            directions = choose_orientations(rows, directions, frames_per_second=frames_per_second,
-                                             #velocity_weight=1.0,
-                                             #max_velocity_weight=1.0,
-                                             elevation_up_bias_degrees=45.0, # don't tip the velocity angle
-                                             )
-            rows['rawdir_x'] = directions[:,0]
-            rows['rawdir_y'] = directions[:,1]
-            rows['rawdir_z'] = directions[:,2]
+                # send kalman-smoothed position estimates (the velocity will be determined from this)
+                directions = choose_orientations(rows, directions, frames_per_second=frames_per_second,
+                                                 #velocity_weight=1.0,
+                                                 #max_velocity_weight=1.0,
+                                                 elevation_up_bias_degrees=45.0, # don't tip the velocity angle
+                                                 )
+                rows['rawdir_x'] = directions[:,0]
+                rows['rawdir_y'] = directions[:,1]
+                rows['rawdir_z'] = directions[:,2]
 
             if return_smoothed_directions:
                 save_tablename = smoothed_tablename

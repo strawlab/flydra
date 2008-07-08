@@ -535,10 +535,14 @@ def doit(filename,
                 rows = rows[ok]
 
             verts = numpy.array( [rows['x'], rows['y'], rows['z']] ).T
-            if options.smooth_orientations:
-                verts_directions = numpy.array( [rows['dir_x'], rows['dir_y'], rows['dir_z']] ).T
+            have_body_axis_information = 'rawdir_x' in rows.dtype.fields
+            if have_body_axis_information:
+                if options.smooth_orientations:
+                    verts_directions = numpy.array( [rows['dir_x'], rows['dir_y'], rows['dir_z']] ).T
+                else:
+                    verts_directions = numpy.array( [rows['rawdir_x'], rows['rawdir_y'], rows['rawdir_z']] ).T
             else:
-                verts_directions = numpy.array( [rows['rawdir_x'], rows['rawdir_y'], rows['rawdir_z']] ).T
+                verts_directions = None
             obj_id2verts_frames[obj_id] = (verts, rows['frame'])
 
             if show_kalman_P:
@@ -664,7 +668,7 @@ def doit(filename,
             actors.append(a)
             actor2obj_id[a] = obj_id
 
-            if options.smooth_orientations or options.body_axis:
+            if verts_directions is not None and (options.smooth_orientations or options.body_axis):
                 smoothed_ori_verts = numpy.vstack((verts,verts+(0.06*verts_directions)))
                 tubes = [ [i,i+len(verts)] for i in range(len(verts)) ]
 
