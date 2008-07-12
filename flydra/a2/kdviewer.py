@@ -635,8 +635,8 @@ def doit(filename,
 #                print 'WARNING: maximum speed (%.3f m/s) exceeds color map max'%(speeds.max(),)
 
             sphere_kw = dict(
-                theta_resolution=3,
-                phi_resolution=3,
+                theta_resolution=10,
+                phi_resolution=10,
                 )
             if show_kalman_P:
                 scale_mode = 'scale_by_vector_components'

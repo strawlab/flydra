@@ -198,6 +198,8 @@ def doit(fmf_filename=None,
 
         print 'loading frame numbers for kalman objects (estimates)'
         kalman_rows = []
+        if options.obj_only is not None:
+            use_obj_ids = options.obj_only
         for obj_id in use_obj_ids:
             try:
                 my_rows = ca.load_data( obj_id, data_file,
@@ -982,7 +984,12 @@ def main():
     parser.add_option("--rotate-180", action='store_true',
                       default=False)
 
+    parser.add_option("--obj-only", type="string")
+
     (options, args) = parser.parse_args()
+
+    if options.obj_only is not None:
+        options.obj_only = core_analysis.parse_seq(options.obj_only)
 
     if len(args) or (options.fmf_filename is None):
         parser.print_help()
