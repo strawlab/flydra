@@ -1446,6 +1446,12 @@ class FakeCamera(object):
     def close(self):
         return
 
+    def get_num_trigger_modes(self):
+        return 1
+
+    def get_trigger_mode_string(self,i):
+        return 'fake camera trigger'
+
 class FakeCameraFromFMF(FakeCamera):
     def __init__(self,filename):
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
