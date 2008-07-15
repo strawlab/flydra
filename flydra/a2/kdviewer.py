@@ -245,11 +245,14 @@ def doit(filename,
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(filename)
 
     if dynamic_model_name is None:
-        dynamic_model_name = extra['dynamic_model_name']
-        print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
-        if dynamic_model_name.startswith('EKF '):
-            dynamic_model_name = dynamic_model_name[4:]
-        print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
+        if 'dynamic_model_name' in extra:
+            dynamic_model_name = extra['dynamic_model_name']
+            print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
+            if dynamic_model_name.startswith('EKF '):
+                dynamic_model_name = dynamic_model_name[4:]
+            print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
+        else:
+            print 'no dynamic model name specified, and it could not be determined from the file, either'
 
     if not is_mat_file:
 
