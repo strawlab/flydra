@@ -1,4 +1,6 @@
 # emacs, this is -*-Python-*- mode
+def make_ThreeTuple(a,b,c):
+    return ThreeTuple((a,b,c))
 
 cdef class ThreeTuple:
     cdef readonly double a
@@ -13,6 +15,12 @@ cdef class ThreeTuple:
             self.c = tt.c
             return
         self.a, self.b, self.c = vals
+
+    def __reduce__(self):
+        """this allows ThreeTuple to be pickled"""
+        args = (self.a, self.b, self.c)
+        return (make_ThreeTuple, args)
+
     def __repr__(self):
         return 'ThreeTuple( (%f,%f,%f))'%((self.a),
                                          (self.b),
@@ -86,12 +94,19 @@ cdef class ThreeTuple:
     def dot(self, ThreeTuple other not None):
         return self.a*other.a + self.b*other.b + self.c*other.c
 
+def make_PlueckerLine(u,v):
+    return PlueckerLine(u,v)
+
 cdef class PlueckerLine:
     cdef readonly ThreeTuple u
     cdef readonly ThreeTuple v
     def __init__(self, ThreeTuple u_ not None, ThreeTuple v_ not None):
         self.u = u_
         self.v = v_
+    def __reduce__(self):
+        """this allows PlueckerLine to be pickled"""
+        args = (self.u, self.v)
+        return (make_PlueckerLine, args)
     def __repr__(self):
         return 'PlueckerLine(%s,%s)'%(repr(self.u),repr(self.v)) #
 

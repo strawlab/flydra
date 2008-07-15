@@ -10,6 +10,7 @@ import scipy.optimize
 import flydra.mahalanobis
 import xml.etree.ElementTree as ET
 import StringIO
+import pickle
 
 try:
     import numpy.testing.parametric as parametric
@@ -42,6 +43,7 @@ class TestGeomParametric(parametric.ParametricTestCase):
                          self.tst_tuple_multiply2,
                          self.tst_line_closest1,
                          self.tst_line_translate,
+                         self.tst_pickle,
                          self.tst_line_from_points,
                          self.tst_init]:
                 yield (test, mod)
@@ -117,6 +119,13 @@ class TestGeomParametric(parametric.ParametricTestCase):
         lnx = ln.translate(c)
         assert lnx == geom.PlueckerLine(geom.ThreeTuple((0,0,-1)),
                                         geom.ThreeTuple((0,-2,0)))
+    def tst_pickle(self,geom):
+        a = geom.ThreeTuple((0,0,1))
+        b = geom.ThreeTuple((0,1,0))
+        ln = geom.PlueckerLine(a,b)
+        buf = pickle.dumps(ln)
+        ln2 = pickle.loads(buf)
+        assert ln == ln2
 
 class TestReconstructor(unittest.TestCase):
     def test_from_sample_directory(self):
@@ -125,7 +134,6 @@ class TestReconstructor(unittest.TestCase):
     def test_pickle(self):
         caldir = pkg_resources.resource_filename(__name__,"sample_calibration")
         x=reconstruct.Reconstructor(caldir)
-        import pickle
         xpickle = pickle.dumps(x)
         x2=pickle.loads(xpickle)
         assert x2==x
