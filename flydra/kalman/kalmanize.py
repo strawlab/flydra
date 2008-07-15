@@ -9,6 +9,8 @@ from flydra.analysis.result_utils import get_results, get_caminfo_dicts, \
      get_resolution, get_fps
 import tables
 import tables as PT
+import warnings
+warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
 import os, sys, pprint
 from flydra_tracker import Tracker
 import flydra_kalman_utils
@@ -403,7 +405,6 @@ def kalmanize(src_filename,
 
     if dynamic_model_name is None:
         dynamic_model_name = 'fly dynamics, high precision calibration, units: mm'
-        import warnings
         warnings.warn('dynamic model not specified. using "%s"'%dynamic_model_name)
     else:
         print 'using dynamic model "%s"'%dynamic_model_name
@@ -521,7 +522,6 @@ def kalmanize(src_filename,
         time2 = time.time()
         print 'done in %.1f sec'%(time2-time1)
 
-        import warnings
         warnings.warn('No pre-filtering of data based on zero '
                       'probability -- more data association work is '
                       'being done than necessary')

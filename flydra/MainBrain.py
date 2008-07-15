@@ -14,6 +14,7 @@ import numpy as nx
 from numpy import nan, inf
 near_inf = 9.999999e20
 import Queue
+import tables
 import tables as PT
 pytables_filt = numpy.asarray
 import atexit
@@ -30,6 +31,7 @@ import flydra.data_descriptions
 import flydra.trigger
 
 import warnings, errno
+warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
 
 # ensure that pytables uses numpy:
 import tables.flavor
@@ -672,7 +674,8 @@ class CoordinateProcessor(threading.Thread):
                 (tracked_object.frames, tracked_object.xhats, tracked_object.Ps,
                  tracked_object.timestamps,
                  tracked_object.observations_frames, tracked_object.observations_data,
-                 tracked_object.observations_2d ) )
+                 tracked_object.observations_2d, tracked_object.observations_Lcoords,
+                 ) )
 
         if len(tracked_object.saved_calibration_data):
             self.main_brain.queue_kalman_calibration_data.put( tracked_object.saved_calibration_data )
@@ -2418,7 +2421,7 @@ class MainBrain(object):
 ##                    len(list_of_3d_data),)
                 for (tro_frames, tro_xhats, tro_Ps, tro_timestamps,
                      obs_frames, obs_data,
-                     observations_2d) in list_of_3d_data:
+                     observations_2d, obs_Lcoords) in list_of_3d_data:
 
                     if len(obs_frames)<MIN_KALMAN_OBSERVATIONS_TO_SAVE:
                         # only save data with at least 10 observations
@@ -2448,7 +2451,7 @@ class MainBrain(object):
                     obj_id_array = numpy.empty(observations_frames.shape, dtype=numpy.uint32)
                     obj_id_array.fill(obj_id)
                     observations_data = numpy.array(obs_data, dtype=numpy.float32)
-                    observations_Lcoords = numpy.array(tro.observations_Lcoords, dtype=numpy.float32)
+                    observations_Lcoords = numpy.array(obs_Lcoords, dtype=numpy.float32)
                     list_of_obs = [observations_data[:,i] for i in range(observations_data.shape[1])]
                     list_of_lines = [observations_Lcoords[:,i] for i in range(observations_Lcoords.shape[1])]
                     array_list = [obj_id_array,observations_frames]+list_of_obs+[this_idxs]+list_of_lines
