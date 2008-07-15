@@ -2460,7 +2460,8 @@ class MainBrain(object):
                     timestamps = numpy.array(tro_timestamps, dtype=numpy.float64)
                     xhat_data = numpy.array(tro_xhats, dtype=numpy.float32)
                     P_data_full = numpy.array(tro_Ps, dtype=numpy.float32)
-                    P_data_save = P_data_full[:,numpy.arange(9),numpy.arange(9)] # get diagonal
+                    ss = P_data_full.shape[1] # state size
+                    P_data_save = P_data_full[:,numpy.arange(ss),numpy.arange(ss)] # get diagonal
                     obj_id_array = numpy.empty(frames.shape, dtype=numpy.uint32)
                     obj_id_array.fill(obj_id)
                     list_of_xhats = [xhat_data[:,i] for i in range(xhat_data.shape[1])]
