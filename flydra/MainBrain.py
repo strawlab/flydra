@@ -2201,15 +2201,17 @@ class MainBrain(object):
 
         fps = self.get_fps()
         dt = 1.0/fps
-        kalman_model = flydra.kalman.dynamic_models.get_kalman_model(name=kalman_model_name,dt=dt)
+        dynamic_model = flydra.kalman.dynamic_models.get_kalman_model(name=kalman_model_name,dt=dt)
 
         func = flydra.kalman.flydra_kalman_utils.get_kalman_estimates_table_description_for_model_name
         self.KalmanEstimatesDescription = func(name=kalman_model_name)
+        self.dynamic_model=dynamic_model
+        self.dynamic_model_name=kalman_model_name
 
         self.h5_xhat_names = PT.Description(self.KalmanEstimatesDescription().columns)._v_names
 
         # send params over to realtime coords thread
-        self.coord_processor.set_new_tracker(kalman_model=kalman_model)
+        self.coord_processor.set_new_tracker(kalman_model=dynamic_model)
 
     def __del__(self):
         self.quit()
@@ -2249,6 +2251,9 @@ class MainBrain(object):
                 self.h5data3d_kalman_estimates = ct(root,'kalman_estimates', self.KalmanEstimatesDescription,
                                                     "3d data (from Kalman filter)",
                                                     expectedrows=expected_rows)
+                self.h5data3d_kalman_estimates.attrs.dynamic_model_name = self.dynamic_model_name
+                self.h5data3d_kalman_estimates.attrs.dynamic_model = self.dynamic_model
+
                 self.h5data3d_kalman_observations = ct(root,'kalman_observations', FilteredObservations,
                                                        "3d data (input to Kalman filter)",
                                                        expectedrows=expected_rows)
