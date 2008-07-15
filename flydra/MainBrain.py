@@ -2448,8 +2448,10 @@ class MainBrain(object):
                     obj_id_array = numpy.empty(observations_frames.shape, dtype=numpy.uint32)
                     obj_id_array.fill(obj_id)
                     observations_data = numpy.array(obs_data, dtype=numpy.float32)
+                    observations_Lcoords = numpy.array(tro.observations_Lcoords, dtype=numpy.float32)
                     list_of_obs = [observations_data[:,i] for i in range(observations_data.shape[1])]
-                    array_list = [obj_id_array,observations_frames]+list_of_obs+[this_idxs]
+                    list_of_lines = [observations_Lcoords[:,i] for i in range(observations_Lcoords.shape[1])]
+                    array_list = [obj_id_array,observations_frames]+list_of_obs+[this_idxs]+list_of_lines
                     obs_recarray = numpy.rec.fromarrays(array_list, names = h5_obs_names)
 
                     if len(obs_recarray):
