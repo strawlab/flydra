@@ -2452,8 +2452,9 @@ class MainBrain(object):
                     array_list = [obj_id_array,observations_frames]+list_of_obs+[this_idxs]
                     obs_recarray = numpy.rec.fromarrays(array_list, names = h5_obs_names)
 
-                    self.h5data3d_kalman_observations.append(obs_recarray)
-                    self.h5data3d_kalman_observations.flush()
+                    if len(obs_recarray):
+                        self.h5data3d_kalman_observations.append(obs_recarray)
+                        self.h5data3d_kalman_observations.flush()
 
                     # save xhat info (kalman estimates)
                     frames = numpy.array(tro_frames, dtype=numpy.uint64)
@@ -2469,8 +2470,10 @@ class MainBrain(object):
                     xhats_recarray = numpy.rec.fromarrays(
                         [obj_id_array,frames,timestamps]+list_of_xhats+list_of_Ps,
                         names = self.h5_xhat_names)
-                    self.h5data3d_kalman_estimates.append( xhats_recarray )
-                    self.h5data3d_kalman_estimates.flush()
+
+                    if len(xhats_recarray):
+                        self.h5data3d_kalman_estimates.append( xhats_recarray )
+                        self.h5data3d_kalman_estimates.flush()
 
         else:
             # ** 3d data - hypothesis testing **
