@@ -266,36 +266,40 @@ def doit(filename,
             warnings.warn('Setting fps to default value of %f'%fps)
 
     if show_n_longest is not None:
-        if ((obj_start is not None) or
-            (obj_end is not None) or
-            (obj_only is not None)):
-            raise ValueError("show_n_longest incompatible with other limiters")
+        if obj_only is not None:
+            raise ValueError("show_n_longest incompatible with --obj-only limiter")
 
         obj_ids_by_n_frames = {}
         for i,obj_id in enumerate(use_obj_ids):
+            if (obj_start is not None) and (obj_id < obj_start):
+                continue
+            if (obj_end is not None) and (obj_id > obj_end):
+                continue
+
             if i%100==0:
                 print 'doing %d of %d'%(i,len(use_obj_ids))
 
             if not ca.has_obj_id(obj_id, data_file):
                 continue
             try:
+                obs_rows = ca.load_dynamics_free_MLE_position(obj_id,data_file)
+            except core_analysis.ObjectIDDataError,err:
+                continue
+
+            n_frames = int(obs_rows['frame'][-1])-int(obs_rows['frame'][0])+1
+
+            if exclude_vel_mps and exclude_vel_data == 'kalman':
                 rows = ca.load_data( obj_id, data_file,
                                      use_kalman_smoothing=use_kalman_smoothing,
                                      dynamic_model_name = dynamic_model_name,
                                      frames_per_second=fps)
-            except core_analysis.ObjectIDDataError,err:
-                continue
-
-            frames = rows['frame']
-            n_frames = rows['frame'][-1]-rows['frame'][0]+1
-
-            if exclude_vel_mps and exclude_vel_data != 'kalman':
-                raise NotImplementedError('')
-
-            if exclude_vel_mps and exclude_vel_data == 'kalman':
-                vel = numpy.sqrt(rows['xvel']**2 + rows['yvel']**2 + rows['zvel']**2)
-                mean_vel = numpy.mean(vel)
-                if mean_vel < exclude_vel_mps:
+                # central difference to find velocity
+                velx = (rows['x'][2:]-rows['x'][:-2])*2*fps
+                vely = (rows['y'][2:]-rows['y'][:-2])*2*fps
+                velz = (rows['z'][2:]-rows['z'][:-2])*2*fps
+                vel_mag = numpy.sqrt(velx**2 + vely**2 + velz**2)
+                median_vel_mag = numpy.median(vel_mag)
+                if median_vel_mag < exclude_vel_mps:
                     continue
 
             obj_ids_by_n_frames.setdefault( n_frames, [] ).append( obj_id )
@@ -504,12 +508,24 @@ def doit(filename,
 
         if len(rows):
             frames = rows['frame']
-            n_frames = rows['frame'][-1]-rows['frame'][0]+1
+            n_frames = int(rows['frame'][-1])-int(rows['frame'][0])+1
         else:
             n_frames = 0
 
         if n_frames < int(min_length):
             continue
+
+        if not show_n_longest: # already did this for show_n_longest above
+            if exclude_vel_mps and exclude_vel_data == 'kalman':
+                # central difference to find velocity
+                velx = (rows['x'][2:]-rows['x'][:-2])*2*fps
+                vely = (rows['y'][2:]-rows['y'][:-2])*2*fps
+                velz = (rows['z'][2:]-rows['z'][:-2])*2*fps
+                vel_mag = numpy.sqrt(velx**2 + vely**2 + velz**2)
+                median_vel_mag = numpy.median(vel_mag)
+                if median_vel_mag < exclude_vel_mps:
+                    continue
+
         had_any_obj_id_data = True
 
         if not show_only_track_ends:
@@ -1075,7 +1091,7 @@ def main():
                       default=0.25)
 
     parser.add_option("--exclude-vel", type="float",
-                      help="exclude traces with mean velocity less than this value",
+                      help="exclude traces with median velocity less than this value",
                       dest='exclude_vel_mps',
                       default=None)
 
