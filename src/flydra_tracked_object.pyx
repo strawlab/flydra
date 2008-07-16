@@ -1,4 +1,6 @@
 #emacs, this is -*-Python-*- mode
+cimport c_lib
+
 import numpy
 import numpy as np
 import time
@@ -12,6 +14,9 @@ import math, struct
 import flydra.data_descriptions
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 import collections
+
+cdef double c_inf
+c_inf = np.inf
 
 __all__ = ['TrackedObject']
 
@@ -49,7 +54,7 @@ def obs2d_hashable( arr ):
     val = newarr.tostring()
     return val
 
-ctypedef int bool
+ctypedef int mybool
 
 cdef class TrackedObject:
     """
@@ -59,7 +64,7 @@ cdef class TrackedObject:
 
     """
     cdef long current_frameno, max_frames_skipped
-    cdef bool kill_me, save_all_data
+    cdef mybool kill_me, save_all_data
     cdef object save_calibration_data
     cdef public object saved_calibration_data
     cdef double area_threshold
@@ -240,7 +245,7 @@ cdef class TrackedObject:
 
         this_observations_2d_hash = None
         used_camns_and_idxs = []
-        Pmean = np.inf
+        Pmean = c_inf
         if not self.kill_me:
             self.current_frameno = frame
             # Step 1.B. Update Kalman to provide a priori estimates for this frame
@@ -360,6 +365,8 @@ cdef class TrackedObject:
 
         """
         # For each camera, predict 2D image location and error distance
+        cdef double least_nll, nll_this_point
+        cdef double dist2, dist, p_y_x
 
         prediction_3d = xhatminus[:3]
         pixel_dist_cmp = self.distorted_pixel_euclidian_distance_accept
@@ -397,7 +404,7 @@ cdef class TrackedObject:
             # (nonlinear) perspective projection of a multivariante
             # normal.
 
-            least_nll = numpy.inf
+            least_nll = c_inf
             closest_idx = None
             for idx,(pt_undistorted,projected_line_meters) in enumerate(candidate_point_list):
 
@@ -429,7 +436,7 @@ cdef class TrackedObject:
                     p_y_x = some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
                 else:
                     p_y_x = 0.0 # no penalty
-                dist = numpy.sqrt(dist2)
+                dist = c_lib.sqrt(dist2)
 
                 nll_this_point = p_y_x + dist # negative log likelihood of this point
 
