@@ -698,13 +698,22 @@ class CachingAnalyzer:
         return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
 
     def has_obj_id(self, obj_id, data_file):
-        warnings.warn('slow implementation of .has_obj_id()')
-        try:
-            self.load_data(obj_id,data_file,use_kalman_smoothing=False)
-        except NoObjectIDError, err:
-            return False
+        if self.loaded_datafile_cache[data_file]:
+            # previously loaded, just find it in cache
+            found = False
+            for filename in self.loaded_filename_cache.keys():
+                data_file_test = self.loaded_filename_cache2[filename]
+                if data_file_test == data_file:
+                    found = True
+            assert found is True
+            (obj_ids, unique_obj_ids, is_mat_file, extra) = self.loaded_filename_cache[filename]
+        elif isinstance(data_file,basestring):
+            filename = data_file
+            obj_ids, unique_obj_ids, is_mat_file, data_file, extra = self.initial_file_load(filename)
+            self.keep_references.append( data_file ) # prevent from garbage collection with weakref
         else:
-            return True
+            raise ValueError('data_file was expected to be a filename string or an already-loaded file')
+        return obj_id in unique_obj_ids
 
     def load_observations(self,obj_id,data_file):
         """Load observations used for Kalman state estimates from data_file.
