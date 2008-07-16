@@ -39,6 +39,82 @@ super_packet_subheader = 'H'
 
 err_size = 1
 
+
+class AsyncApplier(object):
+    def __init__(self,mylist,name,args=None,kwargs=None,targets=None):
+        self.mylist = mylist
+        self.name = name
+        self.args = args
+        self.kwargs = kwargs
+        self.targets = targets
+    def get(self):
+        """wait for and return asynchronous results"""
+        if self.targets is None:
+            targets = range(len(self.mylist))
+        else:
+            targets = self.targets
+
+        if self.args is not None:
+            if self.kwargs is not None:
+                results = [getattr(self.mylist[i],self.name)(*self.args,**self.kwargs) for i in targets]
+            else:
+                results = [getattr(self.mylist[i],self.name)(*self.args) for i in targets]
+        else:
+            if self.kwargs is not None:
+                results = [getattr(self.mylist[i],self.name)(**self.kwargs) for i in targets]
+            else:
+                results = [getattr(self.mylist[i],self.name)() for i in targets]
+
+        return results
+
+class RemoteProxy(object):
+    def __init__(self,obj):
+        self._obj=obj
+    def __getattr__(self,name):
+        return getattr(self._obj,name)
+
+class TrackedObjectKeeper(object):
+    """proxy to keep all tracked objects, possibly in other processes
+
+    Load balancing, as such, is acheived by equalizing number of live
+    objects across processes.
+
+    """
+    def __init__(self,klass):
+        self._tros = []
+        self._klass = klass
+    def remove_from_remote(self,targets=None):
+        """remove from remote server and return as local object"""
+        if targets is None:
+            targets = range(len(self._tros))
+        else:
+            targets = targets[:]
+            targets.sort()
+        targets.reverse()
+        results = [RemoteProxy(self._tros[i]) for i in targets]
+        for i in targets:
+            del self._tros[i]
+        return results
+    def make_new(self,*args,**kwargs):
+        instance = self._klass(*args,**kwargs)
+        self._tros.append( instance )
+    def get_async_applier(self,name,args=None,kwargs=None,targets=None):
+        return AsyncApplier(self._tros,name,args=None,kwargs=None,targets=None)
+    def rmap_async(self, name, *args, **kwargs):
+        """asynchronous reverse map function
+
+        Applies the same set of args and kwargs to every element.
+
+        """
+        return AsyncApplier(self._tros, name, args, kwargs)
+    def rmap(self, name, *args, **kwargs):
+        """reverse map function
+
+        Applies the same set of args and kwargs to every element.
+
+        """
+        return self.rmap_async(name,*args,**kwargs).get()
+
 class FakeThreadingEvent:
     def isSet(self):
         return False
@@ -530,7 +606,7 @@ class Tracker:
         self.area_threshold = area_threshold
         self.save_all_data = save_all_data
         self.reconstructor_meters=reconstructor_meters
-        self.live_tracked_objects = []
+        self.live_tracked_objects = TrackedObjectKeeper( TrackedObject )
         self.dead_tracked_objects = [] # save for getting data out
         self.kill_tracker_callbacks = []
 
@@ -557,8 +633,8 @@ class Tracker:
         X = Xmm*self.scale_factor
         min_dist_to_believe_new_meters = self.kalman_model['min_dist_to_believe_new_meters']
         min_dist_to_believe_new_nsigma = self.kalman_model['min_dist_to_believe_new_sigma']
-        for idx,tro in enumerate(self.live_tracked_objects):
-            dist_meters, dist_nsigma = tro.distance_in_meters_and_nsigma( X )
+        results = self.live_tracked_objects.rmap( 'distance_in_meters_and_nsigma', X ) # reverse map
+        for (dist_meters, dist_nsigma) in results:
             if debug>5:
                 print 'distance in meters, nsigma:',dist_meters, dist_nsigma, tro
             if ((dist_nsigma < min_dist_to_believe_new_nsigma) or
@@ -580,12 +656,14 @@ class Tracker:
         to_rewind = []
         # I could easily parallelize this========================================
         # this is map:
-        for idx,tro in enumerate(self.live_tracked_objects):
-            used_camns_and_idxs, kill_me, obs2d_hash, Pmean = tro.calculate_a_posteri_estimate(frame,
-                                                                                               data_dict,
-                                                                                               camn2cam_id,
-                                                                                               debug1=debug2,
-                                                                                               )
+        results = self.live_tracked_objects.rmap( 'calculate_a_posteri_estimate',
+                                                  frame,
+                                                  data_dict,
+                                                  camn2cam_id,
+                                                  debug1=debug2,
+                                                  )
+        for idx,result in enumerate(results):
+            used_camns_and_idxs, kill_me, obs2d_hash, Pmean = result
             all_to_gobble.extend( used_camns_and_idxs )
         # this is reduce:
             if kill_me:
@@ -626,18 +704,11 @@ class Tracker:
             # object (which has higher error) so that 2 Kalman objects
             # don't start sharing all observations.
 
-            for rewind_idx in to_rewind:
-                tro = self.live_tracked_objects[rewind_idx]
-                tro.remove_previous_observation(debug1=debug2)
+            self.live_tracked_objects.get_async_applier('remove_previous_observation', kwargs=dict(debug1=debug2), targets=to_rewind).get()
 
         # remove tracked objects from live list (when their error grows too large)
-        kill_idxs.reverse()
-        for kill_idx in kill_idxs:
-            tro = self.live_tracked_objects.pop( kill_idx )
-            tro.kill()
-            if self.save_all_data or len(tro.observations_frames)>1:
-                # require more than single observation to save
-                self.dead_tracked_objects.append( tro )
+        self.live_tracked_objects.get_async_applier('kill', targets=kill_idxs).get()
+        self.dead_tracked_objects.extend(self.live_tracked_objects.remove_from_remote(targets=kill_idxs))
         self._flush_dead_queue()
         return data_dict
 
@@ -648,24 +719,24 @@ class Tracker:
                      first_observation_camns,
                      first_observation_idxs,
                      debug=0):
-        tro = TrackedObject(self.reconstructor_meters,
-                            frame,
-                            first_observation_orig_units,
-                            first_observation_Lcoords_orig_units,
-                            first_observation_camns,
-                            first_observation_idxs,
-                            scale_factor=self.scale_factor,
-                            kalman_model=self.kalman_model,
-                            save_calibration_data=self.save_calibration_data,
-                            save_all_data=self.save_all_data,
-                            area_threshold=self.area_threshold,
-                            )
-        self.live_tracked_objects.append(tro)
+
+        self.live_tracked_objects.make_new(self.reconstructor_meters,
+                                           frame,
+                                           first_observation_orig_units,
+                                           first_observation_Lcoords_orig_units,
+                                           first_observation_camns,
+                                           first_observation_idxs,
+                                           scale_factor=self.scale_factor,
+                                           kalman_model=self.kalman_model,
+                                           save_calibration_data=self.save_calibration_data,
+                                           save_all_data=self.save_all_data,
+                                           area_threshold=self.area_threshold,
+                                           )
     def kill_all_trackers(self):
-        while len(self.live_tracked_objects):
-            tro = self.live_tracked_objects.pop()
-            tro.kill()
-            self.dead_tracked_objects.append( tro )
+        self.live_tracked_objects.get_async_applier('kill').get()
+        self.dead_tracked_objects.extend(
+            self.live_tracked_objects.remove_from_remote()
+            )
         self._flush_dead_queue()
     def set_killed_tracker_callback(self,callback):
         self.kill_tracker_callbacks.append( callback )
@@ -677,6 +748,8 @@ class Tracker:
                 callback(tro)
 
     def encode_data_packet(self,corrected_framenumber,timestamp):
+        if 1:
+            raise NotImplementedError('encode_data_packet() not working yet since switch to parallel trackers')
         N = len(self.live_tracked_objects)
         state_size = self.kalman_model['ss']
         data_packet = struct.pack(packet_header_fmt,
