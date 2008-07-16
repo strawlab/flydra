@@ -466,9 +466,8 @@ def doit(filename,
             actors.append(a)
             actor2obj_id[a] = obj_id
 
-            show_observations_orientation = True
             direction_length = 0.06 # 3 cm
-            if show_observations_orientation and len(obs_directions):
+            if options.show_observations_orientation and len(obs_directions):
                 assert numpy.alltrue(PQmath.is_unit_vector(obs_directions))
                 obs_directions = core_analysis.choose_orientations(obs_rows, obs_directions,
                                                                    frames_per_second=fps,
@@ -1088,8 +1087,11 @@ def main():
 
     parser.add_option("--show-only-track-ends", action='store_true',dest='show_only_track_ends')
 
-    parser.add_option("--show-observations", action='store_true',dest='show_observations',
+    parser.add_option("--show-observations", action='store_true',
                       help="show observations")
+
+    parser.add_option("--show-observations-orientation", action='store_true',
+                      help="show body axis observations")
 
     parser.add_option("--stereo", action='store_true',dest='stereo',
                       help="display in stereo (red-blue analglyphic)",
