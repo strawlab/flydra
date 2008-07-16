@@ -1,15 +1,17 @@
 import numpy
+import numpy as np
 import time
-import adskalman as kalman
 import flydra.kalman.ekf as kalman_ekf
 #import flydra.geom as geom
 import flydra.fastgeom as geom
 import flydra.geom
 import flydra.mahalanobis as mahalanobis
-import math, struct
+import os, math, struct
 import flydra.data_descriptions
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
-import collections
+import warnings, collections
+
+import flydra_tracked_object
 from flydra_tracked_object import TrackedObject
 
 __all__ = ['TrackedObject','Tracker','decode_data_packet']
@@ -98,9 +100,159 @@ class TrackedObjectKeeper(object):
         """
         return self.rmap_async(name,*args,**kwargs).get()
 
-class FakeThreadingEvent:
-    def isSet(self):
-        return False
+class AsyncApplierIPythonParallel(object):
+    def __init__(self,mec,mylist):
+        self._mylist = mylist
+        self._mec = mec
+    def get(self):
+        pr_list = [entry[2] for entry in self._mylist]
+        self._mec.barrier(pr_list) # wait until all pending are done
+        results = []
+        for (ip_target, result_name, pr) in self._mylist:
+            this_result = pr.get_result(block=True)
+            if 0:
+                print 'got result',this_result
+                print 'got result len',len(this_result)
+                print 'got result',type(this_result)
+                print 'got result',dir(this_result)
+                results.append( this_result[0] )
+            else:
+                results.extend( self._mec.pull( result_name, targets=[ip_target] ) )
+        return results
+
+class RemoteProxyIPythonParallel(object):
+    def __init__(self,mec,ip_target,remote_name):
+        self._mec = mec
+        self._ip_target = ip_target
+        self._remote_name = remote_name
+    def __del__(self):
+        self._mec.execute('del %s'%self._remote_name,targets=[self._ip_target])
+    def __getattr__(self,attr_name):
+        fullname = '%s.%s'%(self._remote_name,attr_name)
+        self._mec.execute('tmp=%s'%fullname,targets=[self._ip_target])
+        return self._mec.pull('tmp',targets=[self._ip_target])
+
+class TrackedObjectKeeperIPythonParallel(object):
+    """proxy to keep all tracked objects, possibly in other processes
+
+    Load balancing, as such, is acheived by equalizing number of live
+    objects across processes.
+
+    """
+    def __init__(self,klass):
+        from IPython.kernel import client
+        self._mec = client.MultiEngineClient()
+        assert klass == TrackedObject
+
+        if 1:
+            fname = flydra_tracked_object.__file__
+            base,ext = os.path.splitext(fname)
+            if ext=='.pyc':
+                ext = '.py'
+            fname = base+ext
+            fd = open(fname,mode='r')
+            objstr = fd.read()
+            self._mec.execute(objstr)
+        else:
+            self._mec.execute('from flydra.kalman.flydra_tracked_object import TrackedObject')
+        print 'executed remote code OK',self._mec.get_ids()
+        self._tro_handles = []
+        self._count = 0
+        self._uniq = 0
+    def _make_unique(self):
+        self._uniq += 1
+        return 'uniq%d'%self._uniq
+    def remove_from_remote(self,targets=None):
+        """remove from remote server and return as local object"""
+        if targets is None:
+            targets = range(len(self._tro_handles))
+        else:
+            targets = targets[:]
+            targets.sort()
+
+        results = []
+        targets.reverse()
+        for t in targets:
+            (ip_target,remote_name) =self._tro_handles[t]
+            this_result = RemoteProxyIPythonParallel( self._mec, ip_target,remote_name)
+            #this_result = self._mec.pull( remote_name, targets=[ip_target] )
+            results.append(this_result)
+
+            del self._tro_handles[t]
+            self._count -= 1
+        #print 'count',self._count
+        return results
+    def make_new(self,*args,**kwargs):
+        remote_name = self._make_unique()
+
+        N_remote = len(self._mec.get_ids())
+        N_per_target = np.zeros( (N_remote,) )
+        for ip_target,tmp in self._tro_handles:
+            N_per_target[ip_target] += 1
+        ip_target = int(np.argmin(N_per_target))
+        self._mec.push( dict(args=args,kwargs=kwargs), targets=[ip_target] )
+        self._mec.execute('%s = TrackedObject(*args,**kwargs)'%remote_name,targets=[ip_target])
+
+        self._tro_handles.append( (ip_target,remote_name) )
+        self._count += 1
+        #print 'count',self._count
+    def get_async_applier(self,attr_name,args=None,kwargs=None,targets=None):
+        if targets is None:
+            targets = range(self._count)
+        tmp = []
+        for t in targets:
+            ip_target,instance_name = self._tro_handles[t]
+            ip_targets = [ip_target]
+            result_name = 'result' # XXX, fixme?, should make unique
+            pushdict = {}
+            callstr = []
+            if args is not None:
+                pushdict['args']=args
+                callstr.append('*args')
+            if kwargs is not None:
+                pushdict['kwargs']=kwargs
+                callstr.append('**kwargs')
+            self._mec.push( pushdict, targets=ip_targets )
+            execstr = '%s = %s.%s(%s)'%(result_name,instance_name,attr_name,','.join(callstr))
+            pr = self._mec.execute(execstr,
+                                   targets=ip_targets,
+                                   block=False)
+            tmp.append( (ip_target, result_name, pr) )
+        return AsyncApplierIPythonParallel( self._mec, tmp )
+    def rmap_async(self, attr_name, *args, **kwargs):
+        """asynchronous reverse map function
+
+        Applies the same set of args and kwargs to every element.
+
+        """
+        targets = range(self._count)
+        tmp = []
+        for t in targets:
+            ip_target,instance_name = self._tro_handles[t]
+            ip_targets = [ip_target]
+            result_name = 'result' # XXX, fixme?, should make unique
+            pushdict = {}
+            callstr = []
+            if args is not None:
+                pushdict['args']=args
+                callstr.append('*args')
+            if kwargs is not None:
+                pushdict['kwargs']=kwargs
+                callstr.append('**kwargs')
+            self._mec.push( pushdict, targets=ip_targets )
+            execstr = '%s = %s.%s(%s)'%(result_name,instance_name,attr_name,','.join(callstr))
+            pr = self._mec.execute(execstr,
+                                   targets=ip_targets,
+                                   block=False)
+            tmp.append( (ip_target, result_name, pr) )
+        return AsyncApplierIPythonParallel(  self._mec, tmp )
+    def rmap(self, name, *args, **kwargs):
+        """reverse map function
+
+        Applies the same set of args and kwargs to every element.
+
+        """
+        return self.rmap_async(name,*args,**kwargs).get()
 
 class Tracker:
     """
@@ -133,6 +285,7 @@ class Tracker:
         self.area_threshold = area_threshold
         self.save_all_data = save_all_data
         self.reconstructor_meters=reconstructor_meters
+        #self.live_tracked_objects = TrackedObjectKeeperIPythonParallel( TrackedObject )
         self.live_tracked_objects = TrackedObjectKeeper( TrackedObject )
         self.dead_tracked_objects = [] # save for getting data out
         self.kill_tracker_callbacks = []
@@ -275,24 +428,26 @@ class Tracker:
                 callback(tro)
 
     def encode_data_packet(self,corrected_framenumber,timestamp):
-        if 1:
-            raise NotImplementedError('encode_data_packet() not working yet since switch to parallel trackers')
-        N = len(self.live_tracked_objects)
         state_size = self.kalman_model['ss']
-        data_packet = struct.pack(packet_header_fmt,
-                                  corrected_framenumber,
-                                  timestamp,
-                                  N,
-                                  state_size)
+        results = self.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
+
+        data_packets_more = []
         per_tracked_object_fmt = 'f'*(state_size+err_size)
-        for idx,tro in enumerate(self.live_tracked_objects):
-            if not len(tro.xhats):
+        for result in results:
+            if result is None:
                 continue
-            xhat = tro.xhats[-1]
-            P = tro.Ps[-1]
+            xhat,P = result
             meanP = math.sqrt(numpy.sum(numpy.array([P[i,i]**2 for i in range(3)])))
             data_values = [xhat[i] for i in range(state_size)]+[meanP]
-            data_packet += struct.pack(per_tracked_object_fmt,*data_values)
+            data_packets_more.append( struct.pack(per_tracked_object_fmt,*data_values) )
+
+        N = len(data_packets)
+        data_packet1 = struct.pack(packet_header_fmt,
+                                   corrected_framenumber,
+                                   timestamp,
+                                   N,
+                                   state_size)
+        data_packet = ''.join( [data_packet1]+data_packets_more )
         return data_packet
 
 def decode_data_packet(buf):

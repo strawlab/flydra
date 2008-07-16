@@ -459,6 +459,9 @@ def kalmanize(src_filename,
     save_calibration_data = FakeThreadingEvent()
     if save_cal_dir is not None:
         save_calibration_data.set()
+    else:
+        # hack to deal with ipython engine being unable to serialize instances
+        save_calibration_data = None
 
     tracker = Tracker(reconstructor_meters,
                       scale_factor=reconst_orig_units.get_scale_factor(),

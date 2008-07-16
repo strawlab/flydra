@@ -1,6 +1,6 @@
 import numpy
 import time
-import adskalman as kalman
+import adskalman.adskalman as kalman
 import flydra.kalman.ekf as kalman_ekf
 #import flydra.geom as geom
 import flydra.fastgeom as geom
@@ -150,10 +150,7 @@ class TrackedObject:
 
         self.observations_2d = [first_observations_2d]
 
-        if save_calibration_data is None:
-            self.save_calibration_data = FakeThreadingEvent()
-        else:
-            self.save_calibration_data = save_calibration_data
+        self.save_calibration_data = save_calibration_data
         self.saved_calibration_data = []
 
         self.max_frames_skipped=kalman_model['max_frames_skipped']
@@ -480,8 +477,15 @@ class TrackedObject:
         elif len(cam_ids_and_points2d)>=2:
             observation_meters, Lcoords = self.reconstructor_meters.find3d( cam_ids_and_points2d, return_line_coords = True)
             if len(cam_ids_and_points2d)>=3:
-                if self.save_calibration_data.isSet():
+                if self.save_calibration_data is not None and self.save_calibration_data.isSet():
                     self.saved_calibration_data.append( cam_ids_and_points2d )
         else:
             observation_meters = None
         return observation_meters, Lcoords, used_camns_and_idxs, cam_ids_and_points2d
+
+    def get_most_recent_data(self):
+        if not len(self.xhats):
+            return
+        xhat = self.xhats[-1]
+        P = self.Ps[-1]
+        return xhat,P
