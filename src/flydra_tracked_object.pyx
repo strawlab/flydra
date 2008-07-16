@@ -1,4 +1,6 @@
+#emacs, this is -*-Python-*- mode
 import numpy
+import numpy as np
 import time
 import adskalman.adskalman as kalman
 import flydra.kalman.ekf as kalman_ekf
@@ -47,17 +49,31 @@ def obs2d_hashable( arr ):
     val = newarr.tostring()
     return val
 
-class TrackedObject:
+ctypedef int bool
+
+cdef class TrackedObject:
     """
     Track one object using a Kalman filter.
 
     TrackedObject handles all internal units in meters, but external interfaces are original units
 
     """
+    cdef long current_frameno, max_frames_skipped
+    cdef bool kill_me, save_all_data
+    cdef object save_calibration_data
+    cdef public object saved_calibration_data
+    cdef double area_threshold
+    cdef object reconstructor_meters, my_kalman
+    cdef double distorted_pixel_euclidian_distance_accept, scale_factor
+    cdef double max_variance
+    cdef object ekf_observation_covariance_pixels
+
+    cdef public object frames, xhats, timestamps, Ps, observations_data, observations_Lcoords
+    cdef public object observations_frames, observations_2d
 
     def __init__(self,
                  reconstructor_meters, # the Reconstructor instance
-                 frame, # frame number of first data
+                 long frame, # frame number of first data
                  first_observation_orig_units, # first data
                  first_observation_Lcoords_orig_units, # first data
                  first_observation_camns,
@@ -83,7 +99,7 @@ class TrackedObject:
         self.save_all_data = save_all_data
         self.kill_me = False
         self.reconstructor_meters = reconstructor_meters
-        self.distorted_pixel_euclidian_distance_accept=kalman_model.get('distorted_pixel_euclidian_distance_accept',None)
+        self.distorted_pixel_euclidian_distance_accept=kalman_model.get('distorted_pixel_euclidian_distance_accept',np.inf)
 
         self.current_frameno = frame
         if scale_factor is None:
@@ -187,10 +203,11 @@ class TrackedObject:
             else:
                 break
 
-    def calculate_a_posteri_estimate(self,frame,
-                                     data_dict,
-                                     camn2cam_id,
-                                     debug1=0):
+    def calculate_a_posteri_estimate(self,
+                                     long frame,
+                                     object data_dict,
+                                     object camn2cam_id,
+                                     int debug1=0):
         # Step 1. Update Kalman state to a priori estimates for this frame.
         # Step 1.A. Update Kalman state for each skipped frame.
 
@@ -199,7 +216,9 @@ class TrackedObject:
         # For each frame that was skipped, step the Kalman filter.
         # Since we have no observation, the estimated error will
         # rise.
-        frames_skipped = int(frame)-int(self.current_frameno)-1 # cast from numpy.uint64
+        cdef long i,frames_skipped
+        cdef double Pmean
+        frames_skipped = frame-self.current_frameno-1
 
         if debug1>2:
             print 'doing',self,'============--'
@@ -221,7 +240,7 @@ class TrackedObject:
 
         this_observations_2d_hash = None
         used_camns_and_idxs = []
-        Pmean = None
+        Pmean = np.inf
         if not self.kill_me:
             self.current_frameno = frame
             # Step 1.B. Update Kalman to provide a priori estimates for this frame
@@ -323,8 +342,9 @@ class TrackedObject:
         self.my_kalman.xhat_k1 = self.xhats[-1]
         self.my_kalman.P_k1 = self.Ps[-1]
 
-    def _filter_data(self, xhatminus, Pminus, data_dict, camn2cam_id,
-                     debug=0):
+    cpdef _filter_data(self, object xhatminus, object Pminus,
+                       object data_dict, object camn2cam_id,
+                       int debug=0):
         """given state estimate, select useful incoming data and make new observation
 
         This function 'solves' the data association problem. 2D

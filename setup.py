@@ -1,6 +1,6 @@
 # $Id$
 from setuptools import setup
-from distutils.core import Extension
+from distutils.core import Extension # actually monkey-patched by setuptools
 import flydra.version
 
 version = flydra.version.__version__
@@ -12,6 +12,9 @@ ext_modules.append(Extension(name='flydra.reconstruct_utils',
 
 ext_modules.append(Extension(name='flydra.pmat_jacobian',
                              sources=['src/pmat_jacobian.pyx']))
+
+ext_modules.append(Extension(name='flydra.kalman.flydra_tracked_object',
+                             sources=['src/flydra_tracked_object.c'])) # auto-generate with cython
 
 ext_modules.append(Extension(name='flydra.mahalanobis',
                              sources=['src/mahalanobis.pyx']))
