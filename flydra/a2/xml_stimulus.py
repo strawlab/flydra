@@ -88,6 +88,11 @@ class Stimulus(object):
                 raise ValueError('unknown tag: %s'%v.tag)
         return {'verts':verts, 'diameter':diameter}
 
+    def iterate_posts(self):
+        for child in self.root:
+            if child.tag == 'cylindrical_post':
+                yield self._get_info_for_cylindrical_post(child)
+
     def get_tvtk_actors(self):
         actors = []
         for child in self.root:
