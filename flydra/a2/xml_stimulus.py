@@ -2,6 +2,7 @@ import xml.etree.ElementTree as ET
 import flydra.reconstruct as reconstruct
 import flydra.a2.experiment_layout as experiment_layout
 import numpy
+import numpy as np
 import os
 import hashlib
 from core_analysis import parse_seq, check_hack_postmultiply
@@ -106,8 +107,101 @@ class Stimulus(object):
                 warnings.warn("Unknown node: %s"%child.tag)
         return actors
 
+    def get_distorted_linesegs( self, cam_id ):
+        # mainly copied from self.plot_stim_over_distorted_image()
+        R = self._get_reconstructor()
+        R = R.get_scaled()
+        class Projection:
+            def __init__(self,R,cam_id):
+                self.R = R
+                self.w,self.h = R.get_resolution(cam_id)
+                self.cam_id = cam_id
+            def project(self,X):
+                x,y = self.R.find2d(self.cam_id,X,distorted=True)
+                if (x<0) or (x>( self.w-1)):
+                    return None
+                if (y<0) or (y>( self.h-1)):
+                    return None
+                return x,y
+        P = Projection(R,cam_id)
+        return self._get_linesegs( projection=P.project )
+
+    def _get_linesegs( self, projection=None ):
+        """good for OpenGL type stuff"""
+        assert projection is not None
+        plotted_anything = False
+
+        linesegs = []
+        lineseg_colors = []
+
+        for child in self.root:
+            if child.tag in ['multi_camera_reconstructor','valid_h5_times']:
+                continue
+            elif child.tag == 'cylindrical_arena':
+                plotted_anything = True
+                info = self._get_info_for_cylindrical_arena(child)
+                assert numpy.allclose(info['axis'],numpy.array([0,0,1])), "only vertical areas supported at the moment"
+
+                N = 128
+                theta = numpy.linspace(0,2*numpy.pi,N)
+                r = info['diameter']/2.0
+                xs = r*numpy.cos( theta ) + info['origin'][0]
+                ys = r*numpy.sin( theta ) + info['origin'][1]
+
+                z_levels = numpy.linspace(info['origin'][2],info['origin'][2]+info['height'],5)
+                for z in z_levels:
+                    this_lineseg = []
+                    for (x,y) in zip(xs,ys):
+                        X = x,y,z
+                        result = projection(X)
+                        if result is None:
+                            # reset line segment
+                            if len(this_lineseg)>2:
+                                linesegs.append( this_lineseg )
+                                lineseg_colors.append( (1,.5,.5,1) )
+                                this_lineseg = []
+                        else:
+                            this_lineseg.extend( result )
+                    if len(this_lineseg)>2:
+                        linesegs.append( this_lineseg )
+                        lineseg_colors.append( (1,.5,.5,1) )
+            elif child.tag == 'cylindrical_post':
+                plotted_anything = True
+                info = self._get_info_for_cylindrical_post(child)
+                xs, ys = [], []
+                # XXX TODO: extrude line into cylinder
+                this_lineseg = []
+                Xs = info['verts']
+                assert len(Xs)==2
+                Xs = np.asarray(Xs)
+                X0 = Xs[0]
+                dir_vec = Xs[1]-Xs[0]
+                fracs = np.linspace(0,1,10)
+                for frac in fracs:
+                    result = projection(X0+frac*dir_vec)
+                    if result is None:
+                        # reset line segment
+                        if len(this_lineseg)>2:
+                            linesegs.append( this_lineseg )
+                            lineseg_colors.append( (.5,.5,1,1) )
+                            this_lineseg = []
+                    else:
+                        this_lineseg.extend( result )
+                if len(this_lineseg)>2:
+                    linesegs.append( this_lineseg )
+                    lineseg_colors.append( (.5,.5,1,1) )
+            else:
+                import warnings
+                warnings.warn("Unknown node: %s"%child.tag)
+        if not plotted_anything:
+            import warnings
+            warnings.warn("Did not plot any stimulus")
+        if 0:
+            return [ ( -1,-1, 10,20, 30,40, 30, 400) ], [ (1,.5,.5,1) ]
+        return linesegs, lineseg_colors
+
     def plot_stim_over_distorted_image( self, ax, cam_id ):
-       # we want to work with scaled coordinates
+        # we want to work with scaled coordinates
         R = self._get_reconstructor()
         R = R.get_scaled()
 
@@ -253,6 +347,16 @@ def main():
     import sys
     filename = sys.argv[1]
     print_kh5_files_in_fanout( filename )
+
+def print_linesegs():
+    import sys
+    filename = sys.argv[1]
+    stim = xml_stimulus_from_filename( filename )
+    linesegs, colors= stim.get_distorted_linesegs('mama01_0')
+    for i in range(len(linesegs)):
+        print linesegs[i]
+        print colors[i]
+        print
 
 if __name__=='__main__':
     main()

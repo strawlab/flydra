@@ -9,6 +9,7 @@ import wx
 from wx import xrc
 import pyglet.gl.lib
 import numpy
+import flydra.a2.xml_stimulus
 
 PLOTPANEL = True
 if PLOTPANEL:
@@ -93,7 +94,6 @@ class wxMainBrainApp(wx.App):
             import motmot.wxglvideo.simple_overlay as wxglvideo
         else:
             import motmot.wxvideo.wxvideo as wxglvideo
-
 
         self.pass_all_keystrokes = False
         wx.InitAllImageHandlers()
@@ -208,6 +208,12 @@ class wxMainBrainApp(wx.App):
         viewmenu.Append(ID_draw_points, "Draw points",
                         "Draw 2D points and orientation", wx.ITEM_CHECK)
         wx.EVT_MENU(self, ID_draw_points, self.OnToggleDrawPoints)
+
+        self.show_xml_stim = None
+        ID_show_xml_stimulus = wx.NewId()
+        viewmenu.Append(ID_show_xml_stimulus, "Show XML stimulus...",
+                        "Show XML based stimulus")
+        wx.EVT_MENU(self, ID_show_xml_stimulus, self.OnShowXMLStimulus)
 
         ID_set_timer = wx.NewId()
         viewmenu.Append(ID_set_timer, "Set update timer...",
@@ -1130,6 +1136,34 @@ class wxMainBrainApp(wx.App):
     def OnToggleDrawPoints(self, event):
         self.cam_image_canvas.set_display_points( event.IsChecked() )
 
+    def OnShowXMLStimulus(self, event):
+        if self.main_brain.reconstructor is None:
+            dlg = wx.MessageDialog( self.frame, 'No XML stimulus will be shown until calibration is loaded.',
+                                   'xml stimulus', wx.OK | wx.ICON_INFORMATION )
+            try:
+                dlg.ShowModal()
+            finally:
+                dlg.Destroy()
+
+        doit=False
+        dlg = wx.FileDialog( self.frame, "Select .xml stimulus file",
+                            style = wx.OPEN,
+                            #defaultDir = os.environ.get('HOME',''),
+                            wildcard = '*.xml',
+                            )
+        try:
+            self.pass_all_keystrokes = True
+            if dlg.ShowModal() == wx.ID_OK:
+                open_filename = dlg.GetPath()
+                doit = True
+        finally:
+            dlg.Destroy()
+        if doit:
+            stim = flydra.a2.xml_stimulus.xml_stimulus_from_filename( open_filename )
+            if self.main_brain.reconstructor is not None:
+                stim.verify_reconstructor(self.main_brain.reconstructor)
+            self.show_xml_stim = stim
+
     def OnSetTimer(self, event):
         dlg=wx.TextEntryDialog(self.frame, 'What interval should the display be updated at (msec)?',
                               'Set display update interval',str(self.update_interval))
@@ -1459,8 +1493,22 @@ class wxMainBrainApp(wx.App):
                                     if numpy.isfinite(nll):
                                         good_pts.append (pt )
                                 points = good_pts
+                            if self.show_xml_stim is not None:
+                                regenerate = True
+                                if hasattr(self, '_cached_xml_stim'):
+                                    if self._cached_xml_stim is self.show_xml_stim:
+                                        regenerate = False
+                                if regenerate:
+                                    self._cached_linesegs, self._cached_lineseg_colors = self.show_xml_stim.get_distorted_linesegs( cam_id )
+                                    self._cached_xml_stim = self.show_xml_stim
+                                linesegs, lineseg_colors = self._cached_linesegs, self._cached_lineseg_colors
+                            else:
+                                linesegs = None
+                                lineseg_colors = None
                             self.cam_image_canvas.update_image_and_drawings(cam_id,image,
                                                                             points=points,
+                                                                            linesegs=linesegs,
+                                                                            lineseg_colors=lineseg_colors,
                                                                             sort_add=True)
                     if show_fps is not None:
                         show_fps_label = xrc.XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
