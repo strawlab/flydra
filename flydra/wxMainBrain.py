@@ -1499,9 +1499,17 @@ class wxMainBrainApp(wx.App):
                                     if self._cached_xml_stim is self.show_xml_stim:
                                         regenerate = False
                                 if regenerate:
-                                    self._cached_linesegs, self._cached_lineseg_colors = self.show_xml_stim.get_distorted_linesegs( cam_id )
+                                    segs, segcolors = self.show_xml_stim.get_distorted_linesegs( cam_id )
+                                    self._cached_linesegs = {}
+                                    self._cached_lineseg_colors = {}
+                                    self._cached_linesegs[cam_id] = segs
+                                    self._cached_lineseg_colors[cam_id] = segcolors
                                     self._cached_xml_stim = self.show_xml_stim
-                                linesegs, lineseg_colors = self._cached_linesegs, self._cached_lineseg_colors
+                                if cam_id not in self._cached_linesegs:
+                                    segs, segcolors = self.show_xml_stim.get_distorted_linesegs( cam_id )
+                                    self._cached_linesegs[cam_id] = segs
+                                    self._cached_lineseg_colors[cam_id] = segcolors
+                                linesegs, lineseg_colors = self._cached_linesegs[cam_id], self._cached_lineseg_colors[cam_id]
                             else:
                                 linesegs = None
                                 lineseg_colors = None
