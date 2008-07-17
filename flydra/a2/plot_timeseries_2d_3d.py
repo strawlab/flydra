@@ -150,7 +150,7 @@ def doit(
         frame_stop = stop
 
         # copied from save_movies_overlay.py
-        ca = core_analysis.CachingAnalyzer()
+        ca = core_analysis.get_global_CachingAnalyzer()
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
         if is_mat_file:
             raise ValueError('cannot use .mat file for kalman_filename '
