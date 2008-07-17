@@ -1150,6 +1150,7 @@ class CoordinateProcessor(threading.Thread):
                                     # "hypothesis testing" algorithm on remaining data to see if there
                                     # are new objects.
 
+                                    scale_factor = self.tracker.scale_factor
                                     results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
                                     Xs = []
                                     for result in results:
