@@ -221,14 +221,11 @@ class default(DrawBase):
         ### draw floor
         actors = []
 
-        floorz = 0.0
-
-        x0 = 0.007
-        x1 = 1.007
-        y0 = .065
-        y1 = .365
-        #z0 = -.028
-        z0 = floorz-.06
+        x0 = -1.5/2
+        x1 = 1.5/2
+        y0 = -.305/2
+        y1 = .305/2
+        z0 = .314
 
         inc = 0.05
         if 1:
@@ -293,7 +290,6 @@ class default(DrawBase):
         for verts in all_verts:
 
             verts = numpy.asarray(verts)
-            floorz = min(floorz, verts[:,2].min() )
             pd = tvtk.PolyData()
 
             np = len(verts) - 1
