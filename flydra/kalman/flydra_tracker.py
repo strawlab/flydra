@@ -445,7 +445,9 @@ class Tracker:
             data_values = [xhat[i] for i in range(state_size)]+[meanP]
             data_packets_more.append( struct.pack(per_tracked_object_fmt,*data_values) )
 
-        N = len(data_packets)
+        N = len(data_packets_more)
+        if N==0:
+            return None
         data_packet1 = struct.pack(packet_header_fmt,
                                    corrected_framenumber,
                                    timestamp,
