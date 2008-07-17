@@ -1582,6 +1582,10 @@ class AppState(object):
 
         self.log_message_queue = Queue.Queue()
 
+        force_cam_ids = options.force_cam_ids
+        if force_cam_ids is not None:
+            force_cam_ids = force_cam_ids.split(',')
+
         emulation_image_sources = options.emulation_image_sources
         if emulation_image_sources is not None:
             emulation_image_sources = emulation_image_sources.split( os.pathsep )
@@ -1840,9 +1844,15 @@ class AppState(object):
 
             # register self with remote server
             port = 9834 + cam_no # for local Pyro server
+            if force_cam_ids is None:
+                force_cam_id = None
+            else:
+                force_cam_id = force_cam_ids[cam_no]
             cam_id = self.main_brain.register_new_camera(cam_no,
                                                          scalar_control_info,
-                                                         port)
+                                                         port,
+                                                         force_cam_id=force_cam_id,
+                                                         )
 
             self.all_cam_ids[cam_no]=cam_id
             cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(self.all_cam_ids[cam_no])
@@ -2402,6 +2412,9 @@ def main():
                       help=("list of image sources for each camera (uses OS-specific "
                             "path separator, ':' for POSIX, ';' for Windows) ends with '.fmf', "
                             "'.ufmf', or is '<random:params=x>'"))
+
+    parser.add_option("--force-cam-ids", type="string",
+                      help="list of names for each camera (comma separated)")
 
     parser.add_option("--small-save-radius", type="int",
                       help='half the edge length of .ufmf movies [default: %default]')

@@ -1600,7 +1600,7 @@ class MainBrain(object):
         #
         # ================================================================
 
-        def register_new_camera(self,cam_no,scalar_control_info,port):
+        def register_new_camera(self,cam_no,scalar_control_info,port,force_cam_id=None):
             """register new camera, return cam_id (caller: remote camera)"""
 
             caller= self.daemon.getLocalStorage().caller # XXX Pyro hack??
@@ -1608,8 +1608,10 @@ class MainBrain(object):
             caller_ip, caller_port = caller_addr
             fqdn = socket.getfqdn(caller_ip)
 
-            #cam_id = '%s:%d:%d'%(fqdn,cam_no,caller_port)
-            cam_id = '%s_%d'%(fqdn,cam_no)
+            if force_cam_id is None:
+                cam_id = '%s_%d'%(fqdn,cam_no)
+            else:
+                cam_id = force_cam_id
 
             cam2mainbrain_data_port = self.main_brain.coord_processor.connect(cam_id)
             with self.cam_info_lock:
