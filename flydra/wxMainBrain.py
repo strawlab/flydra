@@ -439,7 +439,12 @@ class wxMainBrainApp(wx.App):
         box = wx.BoxSizer(wx.VERTICAL)
         dynamic_image_panel.SetSizer(box)
 
-        self.cam_image_canvas = wxglvideo.DynamicImageCanvas(dynamic_image_panel,-1)
+        if int(os.environ.get('WXGLVIDEO_FORCE_ATTRIBLIST','0')):
+            child_kwargs={}
+            child_kwargs['attribList']=0
+        else:
+            child_kwargs=None
+        self.cam_image_canvas = wxglvideo.DynamicImageCanvas(dynamic_image_panel,-1,child_kwargs=child_kwargs)
         box.Add(self.cam_image_canvas,1,wx.EXPAND)
         dynamic_image_panel.Layout()
 
