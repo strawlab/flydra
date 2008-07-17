@@ -1606,6 +1606,8 @@ class MainBrain(object):
 
             #cam_id = '%s:%d:%d'%(fqdn,cam_no,caller_port)
             cam_id = '%s_%d'%(fqdn,cam_no)
+            cam_id_map = rc_params.get('cam_id_map',{}) # reassign cam_ids
+            cam_id = cam_id_map.get(cam_id,cam_id)
 
             cam2mainbrain_data_port = self.main_brain.coord_processor.connect(cam_id)
             with self.cam_info_lock:
