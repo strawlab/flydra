@@ -194,10 +194,13 @@ def kalman_smooth(orig_rows,
     if len(obs_frames)<2:
         raise ValueError('orig_rows must have 2 or more rows of data')
 
+    if np.max(obs_frames) <= np.iinfo(np.int64).max: # OK to cast to int64 from uint64
+        obs_frames = np.asarray( obs_frames, dtype=np.int64 )
+
     fstart = obs_frames.min()
     fend = obs_frames.max()
     assert fstart < fend
-    frames = numpy.arange(fstart,fend+1)
+    frames = numpy.arange(fstart,fend+1, dtype=np.int64)
     if frames.dtype != obs_frames.dtype:
         warnings.warn('searchsorted is probably very slow because of different dtypes')
     idx = frames.searchsorted(obs_frames)
