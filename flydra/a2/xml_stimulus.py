@@ -176,7 +176,7 @@ class Stimulus(object):
                 Xs = np.asarray(Xs)
                 X0 = Xs[0]
                 dir_vec = Xs[1]-Xs[0]
-                fracs = np.linspace(0,1,10)
+                fracs = np.linspace(0,1,100)
                 for frac in fracs:
                     result = projection(X0+frac*dir_vec)
                     if result is None:
