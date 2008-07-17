@@ -68,6 +68,8 @@ class TrackedObjectKeeper(object):
     def __init__(self,klass):
         self._tros = []
         self._klass = klass
+    def how_many_are_living(self):
+        return len(self._tros)
     def remove_from_remote(self,targets=None):
         """remove from remote server and return as local object"""
         if targets is None:
@@ -159,6 +161,8 @@ class TrackedObjectKeeperIPythonParallel(object):
         self._tro_handles = []
         self._count = 0
         self._uniq = 0
+    def how_many_are_living(self):
+        return len(self._tro_handles)
     def _make_unique(self):
         self._uniq += 1
         return 'uniq%d'%self._uniq
