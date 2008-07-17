@@ -433,8 +433,7 @@ class wxMainBrainApp(wx.App):
         box = wx.BoxSizer(wx.VERTICAL)
         dynamic_image_panel.SetSizer(box)
 
-        self.cam_image_canvas = wxglvideo.DynamicImageCanvas(dynamic_image_panel,-1,
-                                                             child_kwargs={'attribList':wx.glcanvas.WX_GL_DOUBLEBUFFER})
+        self.cam_image_canvas = wxglvideo.DynamicImageCanvas(dynamic_image_panel,-1)
         box.Add(self.cam_image_canvas,1,wx.EXPAND)
         dynamic_image_panel.Layout()
 
