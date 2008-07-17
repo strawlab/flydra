@@ -661,7 +661,11 @@ class CoordinateProcessor(threading.Thread):
                 tracker = copy.copy(self.tracker)
                 tracker.save_calibration_data = None
                 tracker.kill_tracker_callbacks = []
-                tracker.live_tracked_objects = []
+                if 1:
+                    raise NotImplementedError('')
+                else:
+                    # this is the old call, it needs to be fixed...
+                    tracker.live_tracked_objects = []
                 tracker.dead_tracked_objects = []
                 self.data_dict_queue.append( ('tracker',tracker))
 
@@ -1102,13 +1106,18 @@ class CoordinateProcessor(threading.Thread):
                                     self.camn2cam_id)
 
                                 if self.debug_level.isSet():
-                                    print '%d live objects:'%(len(self.tracker.live_tracked_objects),),
-                                    for tro in self.tracker.live_tracked_objects:
-                                        print tro.xhats[-1][:3],
+                                    print '%d live objects:'%(self.tracker.live_tracked_objects.how_many_are_living(),),
+                                    results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
+                                    Xs = []
+                                    for result in results:
+                                        if result is None:
+                                            continue
+                                        last_xhat,P = result
+                                        print last_xhat[:3]
                                     print
 
                                 if self.save_profiling_data:
-                                    self.data_dict_queue.append(('ntrack',len(self.tracker.live_tracked_objects)))
+                                    self.data_dict_queue.append(('ntrack',self.tracker.live_tracked_objects.how_many_are_living()))
 
                                 now = time.time()
                                 if SHOW_3D_PROCESSING_LATENCY:
@@ -1141,21 +1150,16 @@ class CoordinateProcessor(threading.Thread):
                                     # "hypothesis testing" algorithm on remaining data to see if there
                                     # are new objects.
 
-                                    if len(self.tracker.live_tracked_objects):
-                                        #print '%d tracked objects:'%( len(self.tracker.live_tracked_objects), )
-                                        #for obj0 in self.tracker.live_tracked_objects:
-                                        #    print '%s: %d points so far'%(str(obj0),len(obj0.xhats))
-                                        scale_factor = self.tracker.scale_factor
-                                        Xs = []
-                                        for obj in self.tracker.live_tracked_objects:
-                                            if len(obj.xhats)>10: # must track for a period of time before being displayed
-                                                last_xhat = obj.xhats[-1]
-                                                X = last_xhat[0]/scale_factor, last_xhat[1]/scale_factor, last_xhat[2]/scale_factor
-                                                Xs.append(X)
-                                        if len(Xs):
-                                            best_realtime_data = Xs, 0.0
-                                        else:
-                                            best_realtime_data = None
+                                    results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
+                                    Xs = []
+                                    for result in results:
+                                        if result is None:
+                                            continue
+                                        last_xhat,P = result
+                                        X = last_xhat[0]/scale_factor, last_xhat[1]/scale_factor, last_xhat[2]/scale_factor
+                                        Xs.append(X)
+                                    if len(Xs):
+                                        best_realtime_data = Xs, 0.0
                                     else:
                                         best_realtime_data = None
 
@@ -1207,7 +1211,7 @@ class CoordinateProcessor(threading.Thread):
                                                                        this_observation_idxs
                                                                        )
                                 if 1:
-                                    if len(self.tracker.live_tracked_objects):
+                                    if self.tracker.live_tracked_objects.how_many_are_living():
                                         data_packet = self.tracker.encode_data_packet(
                                             corrected_framenumber,now)
                                         if 1:
