@@ -1,7 +1,11 @@
 # Start the mainbrain and several fake cameras in a way that allows
 # profiling and testing the whole shebang.
 
-import subprocess, threading, os, time, signal, sys
+# Note, it would be also nice to do emulation bypassing the
+# ProcessCamClass part of the stack -- no need to test background
+# subtraction and so on...
+
+import subprocess, threading, os, time, signal, sys, socket
 import Pyro.core
 import flydra.common_variables
 
@@ -21,10 +25,10 @@ class RemoteCameraSource(Pyro.core.ObjBase):
     def get_last_timestamp(self,id):
         return self.last_timestamps[id]
     def get_last_framenumber(self,id):
+        print 'self.last_framenumbers[id]',id,self.last_framenumbers[id]
         return self.last_framenumbers[id]
     def get_point_list(self,id):
         # implement synchronization stuff
-        print 'get_point_list called'
         time.sleep(0.016)
         self.last_timestamps[id] = time.time()
         self.last_framenumbers[id] = self.last_framenumbers.get(id,-1)+1
@@ -73,15 +77,30 @@ def start_cameras():
     ro = ProcessRunner( ['flydra_camera_node',
                          '--emulation-image-sources=%s'%emulation_image_sources,
                          '--debug-acquire',
+                         '--wx',
+                         '--disable-ifi-warning',
                          ],
                         env=newenv)
     return ro
 
+def wait_for_mainbrain_to_come_alive():
+    # Give the main brain time to start.
+    port = flydra.common_variables.mainbrain_port
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    while 1:
+        try:
+            s.connect(('localhost', port))
+        except socket.error, err:
+            if err.args[0] == 111: # connection refused
+                continue
+        else:
+            break # it accepted so, mainbrain is alive
+    s.close()
+
 def main():
     mb_runner = start_mainbrain()
 
-    # Give the main brain time to start. (How to just block until ready?)
-    time.sleep(3.0)
+    wait_for_mainbrain_to_come_alive()
 
     Pyro.core.initServer(banner=0)
     hostname = 'localhost'
