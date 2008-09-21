@@ -268,8 +268,12 @@ class Stimulus(object):
                 plotted_anything = True
                 info = self._get_info_for_cylindrical_post(child)
                 xs, ys = [], []
-                # XXX TODO: extrude line into cylinder
-                for X in info['verts']:
+                assert len(info['verts'])==2
+                X0 = info['verts'][0]
+                X1 = info['verts'][1]
+                dX = X1-X0
+                for frac in np.linspace(0,1.0,50):
+                    X = X0 + frac*dX
                     result = projection(X)
                     if result is None:
                         v2x, v2y = np.nan, np.nan
