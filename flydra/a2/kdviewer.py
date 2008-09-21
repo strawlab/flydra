@@ -733,8 +733,8 @@ def doit(filename,
                              vector_mode = 'use_vector',
                              input=pd)
             ss = tvtk.SphereSource(radius = 0.005,
-                                   theta_resolution=3,
-                                   phi_resolution=3,
+                                   theta_resolution=7,
+                                   phi_resolution=7,
                                    )
             g.source = ss.output
             mapper = tvtk.PolyDataMapper(input=g.output)
