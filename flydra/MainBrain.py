@@ -152,8 +152,7 @@ if 1:
 if 0:
     downstream_kalman_hosts.append( ('astraw-office.kicks-ass.net',28931) ) # send off subnet
 
-if len(downstream_hosts) or len(downstream_kalman_hosts):
-    outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # 2D data format for PyTables:
 Info2D = flydra.data_descriptions.Info2D
@@ -1590,6 +1589,29 @@ class MainBrain(object):
                         print 'main_brain WARNING: lost %s at %s'%(cam_id,time.asctime())
                         self.close(cam_id)
             self.thread_done.set()
+
+        # ================================================================
+        #
+        # Methods called remotely from listeners
+        #
+        # These all get called in their own thread.  Don't call across
+        # the thread boundary without using locks, especially to GUI
+        # or OpenGL.
+        #
+        # ================================================================
+
+        def register_downstream_kalman_host(self,host,port):
+            global downstream_kalman_hosts
+            downstream_kalman_hosts.append( (host,port) )
+
+        def remove_downstream_kalman_host(self,host,port):
+            global downstream_kalman_hosts
+            host_tuple = (host,port)
+            try:
+                i = downstream_kalman_hosts.index( host_tuple )
+            except ValueError:
+                return # could not find entry
+            del downstream_kalman_hosts[i]
 
         # ================================================================
         #
