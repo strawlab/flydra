@@ -629,15 +629,9 @@ def doit(filename,
 
 
         if show_saccades:
-            saccades = ca.detect_saccades(obj_id,
-                                          data_file,
-                                          use_kalman_smoothing=use_kalman_smoothing,
-                                          frames_per_second=fps,
-                                          method='position based',
-                                          method_params={'downsample':1,
-                                                         'horizontal only':False,
-                                                         #'horizontal only':True,
-                                                         })
+            saccades = core_analysis.detect_saccades(rows,
+                                                     frames_per_second=fps,
+                                                     )
             saccade_verts = saccades['X']
             saccade_times = saccades['times']
 
@@ -733,8 +727,8 @@ def doit(filename,
                              vector_mode = 'use_vector',
                              input=pd)
             ss = tvtk.SphereSource(radius = 0.005,
-                                   theta_resolution=7,
-                                   phi_resolution=7,
+                                   theta_resolution=8,
+                                   phi_resolution=8,
                                    )
             g.source = ss.output
             mapper = tvtk.PolyDataMapper(input=g.output)

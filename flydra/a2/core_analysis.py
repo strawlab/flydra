@@ -836,7 +836,7 @@ def detect_saccades(rows,
         ###################
         # peak detection
 
-        thresh_rad2 = method_params.get('threshold angular velocity (rad/s)',300*DEG2RAD)
+        thresh_rad2 = method_params.get('threshold angular velocity (rad/s)',200*DEG2RAD)
 
         if horizontal_only:
             pos_peak_idxsG = find_peaks(dheadingG_dt,thresh_rad2)
