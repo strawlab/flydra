@@ -1013,8 +1013,6 @@ class SaveCamData(object):
         state = 'pass'
 
         last_bgcmp_image_timestamp = None
-        last_bg_image = None
-        last_cmp_image = None
         last_running_mean_image = None
         last_running_sumsqf_image = None
 
@@ -1076,9 +1074,6 @@ class SaveCamData(object):
                     # not need to copy - the Process thread already
                     # made a copy of the realtime analyzer's internal
                     # copy.
-                    last_bg_image = chainbuf.updated_bg_image
-                    last_cmp_image =  chainbuf.updated_cmp_image
-
                     last_running_mean_image = chainbuf.updated_running_mean_image
                     last_running_sumsqf_image = chainbuf.updated_running_sumsqf_image
 
@@ -1153,7 +1148,13 @@ class SaveSmallData(object):
         # Note: need to accummulate frames into queue and add with .add_frames() for speed
         # Also: old version uses fmf version 1. Not sure why.
 
+        meancmp = []
+
         state = 'pass'
+
+        last_bgcmp_image_timestamp = None
+        last_running_mean_image = None
+        last_running_sumsqf_image = None
 
         while 1:
 
@@ -1163,11 +1164,35 @@ class SaveSmallData(object):
                 cmd = self.cmd.get()
                 if cmd[0] == 'save':
                     filename_base = cmd[1]
+                    raw_file_basename = os.path.expanduser(os.path.splitext(filename_base)[0])
+
+                    full_bg = raw_file_basename + '_mean.fmf'
+                    full_std = raw_file_basename + '_sumsqf.fmf'
+                    bg_movie = FlyMovieFormat.FlyMovieSaver(full_bg,
+                                                            format='MONO32f',
+                                                            bits_per_pixel=32,
+                                                            version=3)
+                    std_movie = FlyMovieFormat.FlyMovieSaver(full_std,
+                                                             format='MONO32f',
+                                                             bits_per_pixel=32,
+                                                             version=3)
                     state = 'saving'
+                    if last_bgcmp_image_timestamp is not None:
+                        bg_movie.add_frame(FastImage.asfastimage(last_running_mean_image),
+                                           last_bgcmp_image_timestamp,
+                                           error_if_not_fast=True)
+                        std_movie.add_frame(FastImage.asfastimage(last_running_sumsqf_image),
+                                            last_bgcmp_image_timestamp,
+                                            error_if_not_fast=True)
+                    else:
+                        print 'WARNING: could not save initial bg and std frames'
+
                 elif cmd[0] == 'stop':
                     if self._ufmf is not None:
                         self._ufmf.close()
                         self._ufmf = None
+                    bg_movie.close()
+                    std_movie.close()
                     state = 'pass'
 
             # block for images
@@ -1175,7 +1200,25 @@ class SaveSmallData(object):
                 if chainbuf.quit_now:
                     break
 
+                if chainbuf.updated_bg_image is not None:
+                    # Always keep the current bg and std images so
+                    # that we can save them when starting a new .fmf
+                    # movie save sequence.
+                    last_bgcmp_image_timestamp = chainbuf.timestamp
+                    # Keeping references to these images should be OK,
+                    # not need to copy - the Process thread already
+                    # made a copy of the realtime analyzer's internal
+                    # copy.
+                    last_running_mean_image = chainbuf.updated_running_mean_image
+                    last_running_sumsqf_image = chainbuf.updated_running_sumsqf_image
+
                 if state == 'saving':
+                    if chainbuf.updated_bg_image is not None:
+                        meancmp.append( (chainbuf.updated_bg_image,
+                                         chainbuf.updated_cmp_image,
+                                         chainbuf.updated_running_mean_image,
+                                         chainbuf.updated_running_sumsqf_image,
+                                         chainbuf.timestamp)) # these were copied in process thread
                     if self._ufmf is None:
                         frame1 = numpy.asarray(chainbuf.get_buf())
                         timestamp1 = chainbuf.timestamp
@@ -1204,10 +1247,23 @@ class SaveSmallData(object):
                         break
 
                     if state == 'saving':
-                        self._tobuf( chainbuf )
+                        self._tobuf( chainbuf ) # actually save the .ufmf data
+                        if chainbuf.updated_bg_image is not None:
+                            meancmp.append( (chainbuf.updated_bg_image,
+                                             chainbuf.updated_cmp_image,
+                                             chainbuf.updated_running_mean_image,
+                                             chainbuf.updated_running_sumsqf_image,
+                                             chainbuf.timestamp)) # these were copied in process thread
             except Queue.Empty:
                 pass
 
+            # actually save the data
+            #   TODO: switch to add_frames() method which doesn't acquire GIL after each frame.
+            if state == 'saving':
+                for bg,cmp,running_mean,running_sumsqf,timestamp in meancmp:
+                    bg_movie.add_frame(FastImage.asfastimage(running_mean),timestamp,error_if_not_fast=True)
+                    std_movie.add_frame(FastImage.asfastimage(running_sumsqf),timestamp,error_if_not_fast=True)
+            del meancmp[:]
 
     def _tobuf( self, chainbuf ):
         frame = chainbuf.get_buf()
@@ -1242,6 +1298,7 @@ class ImageSource(threading.Thread):
     def get_buffer_pool(self):
         return self.buffer_pool
     def run(self):
+        print 'ImageSource running in process',os.getpid()
         buffer_pool = self.buffer_pool
         cam_quit_event_isSet = self.quit_event.isSet
         while not cam_quit_event_isSet():
