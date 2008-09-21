@@ -66,20 +66,23 @@ class Device:
             usb.find_devices()
 
         busses = usb.get_busses()
+        idVendor = 0x1781
+        idProduct = 0x0BB1
 
         found = False
         for bus in busses:
             for dev in bus.devices:
                 debug('idVendor: 0x%04x idProduct: 0x%04x'%(dev.descriptor.idVendor,
                                                             dev.descriptor.idProduct))
-                if (dev.descriptor.idVendor == 0x1781 and
-                    dev.descriptor.idProduct == 0x0BB1):
+                if (dev.descriptor.idVendor == idVendor and
+                    dev.descriptor.idProduct == idProduct):
                     found = True
                     break
             if found:
                 break
         if not found:
-            raise RuntimeError("Cannot find device. (Perhaps run with environment variable REQUIRE_FLYDRA_TRIGGER=0.)")
+            raise RuntimeError("Cannot find LED driver device (vendor %x, product %x)."%(
+                idVendor, idProduct))
 
         debug('found device',dev)
         self.libusb_handle = usb.open(dev)
