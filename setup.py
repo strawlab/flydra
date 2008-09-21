@@ -38,8 +38,15 @@ setup(name='flydra',
       ext_modules= ext_modules,
       entry_points = {
     'console_scripts': [
+
+# running experiments
     'flydra_camera_node = flydra.camnode:main',
+# benchmarking/testing
     'flydra_bench = flydra.flydra_bench:main',
+    'flydra_LED_test_latency = flydra.LEDdriver.LED_test_latency:main',
+    'flydra_simulator = flydra.flydra_simulator:main',
+
+# analysis
     'flydra_kalmanize = flydra.kalman.kalmanize:main',
 
     'flydra_analysis_convert_to_mat = flydra.analysis.flydra_analysis_convert_to_mat:main',
@@ -56,28 +63,28 @@ setup(name='flydra',
     'flydra_analysis_plot_top_view = flydra.a2.plot_top_view:main',
     'flydra_analysis_print_camera_summary = flydra.analysis.flydra_analysis_print_camera_summary:main',
     'flydra_analysis_save_movies_overlay = flydra.a2.save_movies_overlay:main',
+    'flydra_images_export = flydra.a2.flydra_images_export:main',
+    'kdviewer = flydra.a2.kdviewer:main',
+    'kdmovie_saver = flydra.a2.kdmovie_saver:main',
+    'data2smoothed = flydra.a2.data2smoothed:main',
+    'flydra_textlog2csv = flydra.a2.flydra_textlog2csv:main',
+    'flydra_analysis_print_kalmanize_makefile_location = flydra.a2.print_kalmanize_makefile_location:main',
 
+# upload firmware to USB devices
     'flydra_LED_driver_enter_dfu_mode = flydra.LEDdriver.LEDdriver:enter_dfu_mode',
-    'flydra_LED_test_latency = flydra.LEDdriver.LED_test_latency:main',
-
     'flydra_trigger_enter_dfu_mode = flydra.trigger:enter_dfu_mode',
+
+# trigger device
     'flydra_trigger_check_device = flydra.trigger:check_device',
     'flydra_trigger_set_frequency = flydra.trigger:set_frequency',
     'flydra_trigger_trigger_once = flydra.trigger:trigger_once',
     'flydra_trigger_latency_test = flydra.trigger.latency_test:main',
 
-    'flydra_images_export = flydra.a2.flydra_images_export:main',
+# camera calibration
     'flydra_visualize_distortions = flydra.radial_distortion.visualize_distortions:main',
-
-    'kdviewer = flydra.a2.kdviewer:main',
-    'kdmovie_saver = flydra.a2.kdmovie_saver:main',
-    'data2smoothed = flydra.a2.data2smoothed:main',
-    'flydra_textlog2csv = flydra.a2.flydra_textlog2csv:main',
-
     'flydra_checkerboard = flydra.radial_distortion.checkerboard:main',
-
-    'flydra_analysis_print_kalmanize_makefile_location = flydra.a2.print_kalmanize_makefile_location:main',
     ],
+
     'gui_scripts': [
     'flydra_mainbrain = flydra.wxMainBrain:main',
     ],
