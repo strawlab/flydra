@@ -1,4 +1,3 @@
-# $Id$
 ENABLED = True
 
 if ENABLED:
@@ -12,7 +11,7 @@ if ENABLED:
     from matplotlib.backends.backend_wx import NavigationToolbar2Wx
     from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
     from matplotlib.mlab import meshgrid
-    
+
 import wx
 
 #origin = 'lower' # will have to change extent?
@@ -61,12 +60,12 @@ class PlotPanel(wx.Panel):
 
             self.cax = self.fig.add_axes([0.85,0.1,0.075,0.85])
             self.fig.colorbar( self.im, cax=self.cax, orientation='vertical')
-            
-            self.lines = a.plot([0],[0],'o') 	 
+
+            self.lines = a.plot([0],[0],'o')
             pylab.setp(self.lines[0],'markerfacecolor','None')
-            white = (1.0,1.0,1.0) 	 
+            white = (1.0,1.0,1.0)
             blue = (0.0,0.0,1.0)
-            pylab.setp(self.lines[0],'markeredgecolor',blue) 	 
+            pylab.setp(self.lines[0],'markeredgecolor',blue)
             pylab.setp(self.lines[0],'markeredgewidth',2)
             a.grid('on')
             self.toolbar.update() # Not sure why this is needed - ADS
@@ -75,14 +74,14 @@ class PlotPanel(wx.Panel):
         cmap = getattr( matplotlib.cm, cmap_str)
         self.im.set_cmap( cmap )
         # XXX probably a hack, because it generates a new instance
-        self.fig.colorbar( self.im, cax=self.cax, orientation='vertical') 
+        self.fig.colorbar( self.im, cax=self.cax, orientation='vertical')
 
     def set_fixed_color_range(self,is_fixed):
         self.cmap_is_fixed = is_fixed
 
     def GetToolBar(self):
         if ENABLED:
-            # You will need to override GetToolBar if you are using an 
+            # You will need to override GetToolBar if you are using an
             # unmanaged toolbar in your frame
             return self.toolbar
 
@@ -99,15 +98,15 @@ class PlotPanel(wx.Panel):
                 if vmin==vmax:
                     vmax=vmin+1
                 self.im.set_clim(vmin,vmax)
-                
+
                 # XXX probably a hack, because it generates a new
                 # instance.
                 # It seems to be necessary, though, because colorbar
                 # doesn't get notified of clim changes.
                 self.fig.colorbar( self.im, cax=self.cax, orientation='vertical')
-                
+
             self.im.set_array(image)
-        
+
     def set_points(self,points):
         if ENABLED:
             xs = []
@@ -121,7 +120,7 @@ class PlotPanel(wx.Panel):
     def draw(self):
         if ENABLED:
             self.canvas.draw()
-		
+
     def onEraseBackground(self, evt):
         # this is supposed to prevent redraw flicker on some X servers...
         pass

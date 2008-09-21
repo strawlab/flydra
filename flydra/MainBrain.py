@@ -1,5 +1,3 @@
-# $Id$
-
 # TODO:
 # 1. make variable eccentricity threshold dependent on area (bigger area = lower threshold)
 from __future__ import with_statement, division

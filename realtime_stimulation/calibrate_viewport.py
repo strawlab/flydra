@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# $Id$
 from __future__ import division
 import VisionEgg
 VisionEgg.start_default_logging(); VisionEgg.watch_exceptions()
@@ -127,7 +126,7 @@ pressing_down = 0
 pressing_shift = 0
 
 while not quit_now:
-    
+
     for event in pygame.event.get():
         if event.type == KEYDOWN:
             if event.key == pygame.locals.K_f:
@@ -179,7 +178,7 @@ while not quit_now:
         change = change*100
 
     #######################
-    
+
     if status_var_main == 'fov_x':
         status_var_sub = 'scalar'
         fov_x = fov_x + change*fov_x
@@ -202,7 +201,7 @@ while not quit_now:
             vec = get_vec( status_var_sub )
             up = nx.array(up) + vec*change*1
             tmp = up*get_vec( status_var_sub )
-            status_var_value = tmp[0] + tmp[1] + tmp[2]            
+            status_var_value = tmp[0] + tmp[1] + tmp[2]
 
     projection = SimplePerspectiveProjection(fov_x=fov_x,
                                              aspect_ratio=aspect_ratio)

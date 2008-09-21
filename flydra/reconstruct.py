@@ -1,4 +1,3 @@
-# $Id$
 import os, glob, sys, math
 opj=os.path.join
 import numpy as np

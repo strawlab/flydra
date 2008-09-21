@@ -1,6 +1,4 @@
 #!/usr/bin/env python
-# $Id$
-
 import sys, threading, time, os, copy, socket
 import traceback
 import MainBrain
