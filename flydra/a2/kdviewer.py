@@ -210,7 +210,6 @@ def doit(filename,
          min_length=10,
          show_saccades = True,
          show_observations = False,
-         show_saccade_times = False,
          draw_stim_func_str = None,
          use_kalman_smoothing=True,
          fps=None,
@@ -655,7 +654,6 @@ def doit(filename,
                                                      frames_per_second=fps,
                                                      )
             saccade_verts = saccades['X']
-            saccade_times = saccades['times']
 
 
         #################
@@ -760,16 +758,6 @@ def doit(filename,
             a.property.opacity = 0.3
             actors.append(a)
             actor2obj_id[a] = obj_id
-
-        if show_saccade_times:
-            # show time of each saccade
-            for X,showtime in zip(saccade_verts,saccade_times):
-                ta = tvtk.TextActor(input=str( showtime ))
-                ta.property.color = 0.0, 0.0, 0.0 # black
-                ta.position_coordinate.coordinate_system = 'world'
-                ta.position_coordinate.value = tuple(X)
-                actors.append(ta)
-                actor2obj_id[a] = obj_id
 
     if link_all_simultaneous_objs:
         allsave = numpy.concatenate(allsave)
@@ -1137,9 +1125,6 @@ def main():
                       default = None,
                       help="frames per second (used for Kalman filtering/smoothing)")
 
-    parser.add_option("--show-saccade-times", action='store_true',dest='show_saccade_times',
-                      help="show saccade times")
-
     parser.add_option("--disable-kalman-smoothing", action='store_false',
                       dest='use_kalman_smoothing',
                       default=True,
@@ -1217,7 +1202,6 @@ def main():
          min_length = options.min_length,
          show_saccades = options.show_saccades,
          show_observations = options.show_observations,
-         show_saccade_times = options.show_saccade_times,
          draw_stim_func_str = options.draw_stim_func_str,
          fps = options.fps,
          vertical_scale = options.vertical_scale,
