@@ -1,9 +1,10 @@
 import numpy
+import numpy as np
 import flydra.a2.core_analysis as core_analysis
 import adskalman.adskalman as adskalman
 import flydra.kalman.dynamic_models
 import flydra.analysis.PQmath as PQmath
-import sys
+import sys, warnings
 
 def find_first_idxs(to_search,searched):
     result = []
@@ -46,6 +47,13 @@ def fuse_obj_ids(use_obj_ids, data_file,
 
         this_x = kalman_rows['x']
         full_obs_idx = ~numpy.isnan(this_x)
+        if 1:
+            warnings.warn('dropping last ML estimate of position in fuse_obj_ids because it is frequently noisy')
+            full_obs_idx = np.nonzero(full_obs_idx)[0]
+            full_obs_idx = full_obs_idx[:-1]
+            if not len(full_obs_idx):
+                warnings.warn('no data used for obj_id %d in fuse_obj_ids()'%obj_id)
+                continue # no data
         frames.append( kalman_rows['frame'][full_obs_idx] )
         xs.append( kalman_rows['x'][full_obs_idx] )
         ys.append( kalman_rows['y'][full_obs_idx] )
