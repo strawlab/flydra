@@ -1306,6 +1306,11 @@ class ImageSourceBaseController(object):
     pass
 
 class ImageSourceFromCamera(ImageSource):
+    def __init__(self,*args,**kwargs):
+        ImageSource.__init__(self,*args,**kwargs)
+        self._prosilica_hack_last_framenumber = None
+        self._prosilica_hack_framenumber_offset = 0
+        
     def _block_until_ready(self):
         # no-op for realtime camera processing
         pass
@@ -1356,6 +1361,16 @@ class ImageSourceFromCamera(ImageSource):
             # get best guess as to when image was taken
             timestamp=self.cam.get_last_timestamp()
             framenumber=self.cam.get_last_framenumber()
+            
+            # Hack to deal with Prosilica framenumber resetting at
+            # 65535 (even though it's an unsigned long).
+            
+            if framenumber==1 and self._prosilica_hack_last_framenumber == 65535:
+                # We're dealing with a Prosilica camera which just
+                # rolled over.
+                self._prosilica_hack_framenumber_offset += 65636
+            self._prosilica_hack_last_framenumber = framenumber
+            framenumber += self._prosilica_hack_framenumber_offset
         else:
             timestamp = framenumber = None
         return try_again_condition, timestamp, framenumber
@@ -1491,7 +1506,7 @@ class FakeCameraFromNetwork(FakeCamera):
 
     def get_last_framenumber(self):
         self._ensure_remote()
-        return self.remote.get_last_timestamp(self.id) # this will block...
+        return self.remote.get_last_framenumber(self.id) # this will block...
 
 class FakeCameraFromFMF(FakeCamera):
     def __init__(self,filename):
