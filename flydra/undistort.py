@@ -2,7 +2,7 @@ import numpy
 import numpy as nx
 import numpy.linalg as linalg
 from numpy import inf, nan
-import scikits.delaunay as delaunay
+import matplotlib.delaunay as delaunay
 
 import math
 
