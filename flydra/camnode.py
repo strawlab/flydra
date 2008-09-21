@@ -661,7 +661,7 @@ class ProcessCamClass(object):
 
         initial_take_bg_state = None
 
-        while 1:#not cam_quit_event_isSet():
+        while 1:
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
                 if chainbuf.quit_now:
                     break
@@ -1720,6 +1720,9 @@ class AppState(object):
         if emulation_image_sources is not None:
             emulation_image_sources = emulation_image_sources.split( os.pathsep )
             num_cams = len( emulation_image_sources )
+        elif options.simulate_point_extraction is not None:
+            image_sources = options.simulate_point_extraction.split( os.pathsep )
+            num_cams = len( image_sources )
         else:
             ##################################################################
             #
@@ -1806,7 +1809,11 @@ class AppState(object):
                 ImageSourceModel = ImageSourceFromCamera
 
                 initial_image_dict = None
-            else:
+            elif options.simulate_point_extraction: # emulate points
+                # call factory function
+                (cam, ImageSourceModel,
+                 initial_image_dict)  = create_cam_for_emulation_image_source( image_sources[cam_no] )
+            else: # emulate full images
                 # call factory function
                 (cam, ImageSourceModel,
                  initial_image_dict)  = create_cam_for_emulation_image_source( emulation_image_sources[cam_no] )
@@ -1819,23 +1826,28 @@ class AppState(object):
             initial_images[cam_no] = initial_image_dict
 
             self.all_cams[cam_no] = cam
-            cam.start_camera()  # start camera
+            if cam is not None:
+                cam.start_camera()  # start camera
             self.cam_status[cam_no]= 'started'
-            buffer_pool = PreallocatedBufferPool(FastImage.Size(*cam.get_frame_size()))
-            image_source = ImageSourceModel(chain = None,
-                                            cam = cam,
-                                            buffer_pool = buffer_pool,
-                                            debug_acquire = options.debug_acquire,
-                                            cam_no = cam_no,
-                                            quit_event = globals['cam_quit_event'],
-                                            )
+            if ImageSourceModel is not None:
+                buffer_pool = PreallocatedBufferPool(FastImage.Size(*cam.get_frame_size()))
+                image_source = ImageSourceModel(chain = None,
+                                                cam = cam,
+                                                buffer_pool = buffer_pool,
+                                                debug_acquire = options.debug_acquire,
+                                                cam_no = cam_no,
+                                                quit_event = globals['cam_quit_event'],
+                                                )
 
-            controller = image_source.spawn_controller()
+                controller = image_source.spawn_controller()
 
-            image_source.setDaemon(True)
-            image_source.start()
-            self._image_sources[cam_no] = image_source
-            self._image_controllers[cam_no]= controller
+                image_source.setDaemon(True)
+                image_source.start()
+                self._image_sources[cam_no] = image_source
+                self._image_controllers[cam_no]= controller
+            else:
+                self._image_sources[cam_no] = None
+                self._image_controllers[cam_no]= None
 
         ##################################################################
         #
@@ -2542,6 +2554,9 @@ def main():
                       help=("list of image sources for each camera (uses OS-specific "
                             "path separator, ':' for POSIX, ';' for Windows) ends with '.fmf', "
                             "'.ufmf', or is '<random:params=x>'"))
+
+    parser.add_option("--simulate-point-extraction", type="string",
+                      help="list of image sources for each camera")
 
     parser.add_option("--force-cam-ids", type="string",
                       help="list of names for each camera (comma separated)")

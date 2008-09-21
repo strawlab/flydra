@@ -8,6 +8,7 @@
 import subprocess, threading, os, time, signal, sys, socket, errno
 import Pyro.core
 import flydra.common_variables
+from optparse import OptionParser
 
 class RemoteCameraSource(Pyro.core.ObjBase):
     # === Methods called locally ==================================
@@ -65,7 +66,7 @@ def start_mainbrain():
     ro = ProcessRunner( ['flydra_mainbrain'], env=newenv)
     return ro
 
-def start_cameras():
+def start_cameras(full_image_emulation=False):
     newenv = {}
     newenv.update( os.environ )
     N_cameras = 5
@@ -73,14 +74,23 @@ def start_cameras():
     for i in range(N_cameras):
         port = 8430+i
         cam_strs.append( '<net %d 640 480>'%port )
-    emulation_image_sources = ':'.join(cam_strs)
-    ro = ProcessRunner( ['flydra_camera_node',
-                         '--emulation-image-sources=%s'%emulation_image_sources,
-                         '--debug-acquire',
-                         '--wx',
-                         '--disable-ifi-warning',
-                         ],
-                        env=newenv)
+        image_sources = os.pathsep.join(cam_strs)
+    if full_image_emulation:
+        args = ['flydra_camera_node',
+                '--emulation-image-sources=%s'%image_sources,
+                '--debug-acquire', # temporary
+                '--wx',
+                '--disable-ifi-warning',
+                ]
+    else:
+        args = ['flydra_camera_node',
+                '--simulate-point-extraction=%s'%image_sources,
+                '--debug-acquire', # temporary
+                '--wx',
+                '--disable-ifi-warning', # temporary?
+                ]
+
+    ro = ProcessRunner( args, env=newenv)
     return ro
 
 def wait_for_mainbrain_to_come_alive():
@@ -98,6 +108,14 @@ def wait_for_mainbrain_to_come_alive():
     s.close()
 
 def main():
+
+    parser = OptionParser(usage='%prog [options]',
+                          version="%prog 0.1")
+    parser.add_option("--full-images", action='store_true')
+    (options, args) = parser.parse_args()
+
+    full_image_emulation = options.full_images
+
     mb_runner = start_mainbrain()
 
     wait_for_mainbrain_to_come_alive()
@@ -117,7 +135,7 @@ def main():
                                    args=(daemon,))
     listen_thread.start()
 
-    cam_runner = start_cameras()
+    cam_runner = start_cameras(full_image_emulation=full_image_emulation)
 
     while 1:
         if cam_runner.query() is not None:
