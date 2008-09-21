@@ -1,4 +1,3 @@
-# $Id$
 from setuptools import setup
 from distutils.core import Extension # actually monkey-patched by setuptools
 import flydra.version
