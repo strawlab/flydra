@@ -340,9 +340,10 @@ class StimulusFanout(object):
                     stim_fname = single_episode.find("stimxml_file").attrib['name']
                     if self._my_directory is not None:
                         stim_fname = os.path.join( self._my_directory, stim_fname )
+                    if bad_md5_found:
+                        raise ValueError("could not find timestamp_string '%s' with valid md5sum. (Bad md5sum found.)"%timestamp_string)
+                    # return first found episode -- XXX TODO should return them all!
                     return single_episode, kh5_file, stim_fname
-        if bad_md5_found:
-            raise ValueError("could not find timestamp_string '%s' with valid md5sum. (Bad md5sum found.)"%timestamp_string)
         raise ValueError("could not find timestamp_string '%s'"%timestamp_string)
     def get_walking_start_stops_for_timestamp( self, timestamp_string=None ):
         single_episode, kh5_file, stim_fname = self._get_episode_for_timestamp(timestamp_string=timestamp_string)
@@ -356,6 +357,10 @@ class StimulusFanout(object):
         return start_stops
     def get_obj_ids_for_timestamp( self, timestamp_string=None ):
         single_episode, kh5_file, stim_fname = self._get_episode_for_timestamp(timestamp_string=timestamp_string)
+        for include in single_episode.findall('include'):
+            raise ValueError('<single_episode> has <include> tag')
+        for exclude in single_episode.findall('exclude'):
+            raise ValueError('<single_episode> has <exclude> tag')
         include_ids = None
         exclude_ids = None
         for include in kh5_file.findall('include'):
