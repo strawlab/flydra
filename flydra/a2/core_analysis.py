@@ -667,6 +667,234 @@ class PreSmoothedDataCache(object):
                 raise NotImplementedError('apprending to existing table not supported')
         return rows
 
+
+def detect_saccades(rows,
+                    frames_per_second=None,
+                    method='position based',
+                    method_params=None,
+                    ):
+    """detect saccades defined as exceeding a threshold in heading angular velocity
+
+    arguments:
+    ----------
+    rows - a structured array such as that returned by load_data()
+
+    method_params for 'position based':
+    -----------------------------------
+    'downsample' - decimation factor
+    'threshold angular velocity (rad/s)' - threshold for saccade detection
+    'minimum speed' - minimum velocity for detecting a saccade
+    'horizontal only' - only use *heading* angular velocity and *horizontal* speed (like Tamerro & Dickinson 2002)
+
+    returns:
+    --------
+    results - dictionary, see below
+
+    results dictionary contains:
+    -----------------------------------
+    'indices' - array of ints, indices into h5file at moment of saccade
+    'frames' - array of ints, frame numbers of moment of saccade
+    'times' - array of floats, seconds since beginning of trace at moment of saccade
+    'X' - n by 3 array of floats, 3D position at each saccade
+
+    """
+    if method_params is None:
+        method_params = {}
+
+    RAD2DEG = 180/numpy.pi
+    DEG2RAD = 1.0/RAD2DEG
+
+    results = {}
+
+    if method == 'position based':
+        ##############
+        # load data
+        framesA = rows['frame'] # time index A - original time points
+        xsA = rows['x']
+        ysA = rows['y']
+        zsA = rows['z']
+        XA = numpy.vstack((xsA,ysA,zsA)).T
+
+        time_A = (framesA - framesA[0])/frames_per_second
+
+        ##############
+        # downsample
+        skip = method_params.get('downsample',3)
+
+        Aindex = numpy.arange(len(framesA))
+        AindexB = my_decimate( Aindex, skip )
+        AindexB = numpy.round(AindexB).astype(numpy.int)
+
+        xsB = my_decimate(xsA,skip) # time index B - downsampled by 'skip' amount
+        ysB = my_decimate(ysA,skip)
+        zsB = my_decimate(zsA,skip)
+        time_B = my_decimate(time_A,skip)
+
+        ###############################
+        # calculate horizontal velocity
+
+        # central difference
+        xdiffsF = xsB[2:]-xsB[:-2] # time index F - points B, but inside one point each end
+        ydiffsF = ysB[2:]-ysB[:-2]
+        zdiffsF = zsB[2:]-zsB[:-2]
+        time_F = time_B[1:-1]
+        AindexF = AindexB[1:-1]
+
+        delta_tBC = skip/frames_per_second # delta_t valid for B and C time indices
+        delta_tF = 2*delta_tBC # delta_t valid for F time indices
+
+        xvelsF = xdiffsF/delta_tF
+        yvelsF = ydiffsF/delta_tF
+        zvelsF = zdiffsF/delta_tF
+
+        ## # forward difference
+        ## xdiffsC = xsB[1:]-xsB[:-1] # time index C - midpoints between points B, just inside old B endpoints
+        ## ydiffsC = ysB[1:]-ysB[:-1]
+        ## zdiffsC = zsB[1:]-zsB[:-1]
+        ## time_C = (time_B[1:] + time_B[:-1])*0.5
+
+        ## xvelsC = xdiffsC/delta_tBC
+        ## yvelsC = ydiffsC/delta_tBC
+        ## zvelsC = zdiffsC/delta_tBC
+
+        horizontal_only = method_params.get('horizontal only',True)
+
+        if horizontal_only:
+            ###################
+            # calculate heading
+
+            ## headingsC = numpy.arctan2( ydiffsC, xdiffsC )
+            headingsF = numpy.arctan2( ydiffsF, xdiffsF )
+
+            ## headingsC_u = numpy.unwrap(headingsC)
+            headingsF_u = numpy.unwrap(headingsF)
+
+           ## # central difference of forward difference
+           ## dheadingD_dt = (headingsC_u[2:]-headingsC_u[:-2])/(2*delta_tBC) # index now the same as C, but starts one later
+           ## time_D = time_C[1:-1]
+
+           ## # forward difference of forward difference
+           ## dheadingE_dt = (headingsC_u[1:]-headingsC_u[:-1])/(delta_tBC) # index now the same as B, but starts one later
+           ## time_E = (time_C[1:]+time_C[:-1])*0.5
+
+            # central difference of central difference
+            dheadingG_dt = (headingsF_u[2:]-headingsF_u[:-2])/(2*delta_tF) # index now the same as F, but starts one later
+            time_G = time_F[1:-1]
+
+            ## # forward difference of central difference
+            ## dheadingH_dt = (headingsF_u[1:]-headingsF_u[:-1])/(delta_tF) # index now the same as B?, but starts one later
+            ## time_H = (time_F[1:]+time_F[:-1])*0.5
+
+            if DEBUG:
+                import pylab
+                pylab.figure()
+                #pylab.plot( time_D, dheadingD_dt*RAD2DEG, 'k.-', label = 'forward, central')
+                #pylab.plot( time_E, dheadingE_dt*RAD2DEG, 'r.-', label = 'forward, forward')
+                pylab.plot( time_G, dheadingG_dt*RAD2DEG, 'g.-', lw = 2, label = 'central, central')
+                #pylab.plot( time_H, dheadingH_dt*RAD2DEG, 'b.-', label = 'central, forward')
+                pylab.legend()
+                pylab.xlabel('s')
+                pylab.ylabel('deg/s')
+
+            if DEBUG:
+                import pylab
+                pylab.figure()
+                frame_G = framesA[AindexF][1:-1]
+                pylab.plot( frame_G, dheadingG_dt*RAD2DEG, 'g.-', lw = 2, label = 'central, central')
+                pylab.legend()
+                pylab.xlabel('frame')
+                pylab.ylabel('deg/s')
+
+        else: # not horizontal only
+
+            #central diff
+            velsF = numpy.vstack((xvelsF,yvelsF,zvelsF)).T
+            speedsF = numpy.sqrt(numpy.sum(velsF**2,axis=1))
+            norm_velsF = velsF / speedsF[:,numpy.newaxis] # make norm vectors ( mag(x)=1 )
+            delta_tG = delta_tF
+            cos_angle_diffsG = [] # time base K - between F
+            for i in range(len(norm_velsF)-2):
+                v1 = norm_velsF[i+2]
+                v2 = norm_velsF[i]
+                cos_angle_diff = numpy.dot(v1,v2) # dot product = mag(a) * mag(b) * cos(theta)
+                cos_angle_diffsG.append( cos_angle_diff )
+            angle_diffG = numpy.arccos(cos_angle_diffsG)
+            angular_velG = angle_diffG/(2*delta_tG)
+
+            ## vels2 = numpy.vstack((xvels2,yvels2,zvels2)).T
+            ## speeds2 = numpy.sqrt(numpy.sum(vels2**2,axis=1))
+            ## norm_vels2 = vels2 / speeds2[:,numpy.newaxis] # make norm vectors ( mag(x)=1 )
+            ## cos_angle_diffs = [1] # set initial angular vel to 0 (cos(0)=1)
+            ## for i in range(len(norm_vels2)-1):
+            ##     v1 = norm_vels2[i+1]
+            ##     v2 = norm_vels2[i]
+            ##     cos_angle_diff = numpy.dot(v1,v2) # dot product = mag(a) * mag(b) * cos(theta)
+            ##     cos_angle_diffs.append( cos_angle_diff )
+            ## angle_diff = numpy.arccos(cos_angle_diffs)
+            ## angular_vel = angle_diff/delta_t2
+
+        ###################
+        # peak detection
+
+        thresh_rad2 = method_params.get('threshold angular velocity (rad/s)',300*DEG2RAD)
+
+        if horizontal_only:
+            pos_peak_idxsG = find_peaks(dheadingG_dt,thresh_rad2)
+            neg_peak_idxsG = find_peaks(-dheadingG_dt,thresh_rad2)
+
+            peak_idxsG = pos_peak_idxsG + neg_peak_idxsG
+
+            if DEBUG:
+                import pylab
+                pylab.figure()
+                pylab.plot( dheadingG_dt*RAD2DEG  )
+                pylab.ylabel('heading angular vel (deg/s)')
+                for i in peak_idxsG:
+                    pylab.axvline( i )
+                pylab.plot( peak_idxsG, dheadingG_dt[peak_idxsG]*RAD2DEG ,'k.')
+        else:
+            peak_idxsG = find_peaks(angular_velG,thresh_rad2)
+
+        orig_idxsG = numpy.array(peak_idxsG,dtype=numpy.int)
+
+        ####################
+        # make sure peak is at time when velocity exceed minimum threshold
+        min_vel = method_params.get('minimum speed',0.02)
+
+        orig_idxsF = orig_idxsG+1 # convert G timebase to F
+        if horizontal_only:
+            h_speedsF = numpy.sqrt(numpy.sum((numpy.vstack((xvelsF,yvelsF)).T)**2,axis=1))
+            valid_condF = h_speedsF[orig_idxsF] > min_vel
+        else:
+            valid_condF = speedsF[orig_idxsF] > min_vel
+        valid_idxsF = orig_idxsF[valid_condF]
+
+        ####################
+        # output parameters
+
+        valid_idxsA = AindexF[valid_idxsF]
+        #results['indices'] = take_idxs2[valid_idxs] # this seems silly -- how could it be done?
+        results['frames'] = framesA[valid_idxsA]
+        results['times'] = time_F[valid_idxsF]
+        results['X'] = XA[valid_idxsA]
+
+        if DEBUG and horizontal_only:
+            pylab.figure()
+            ax=pylab.subplot(2,1,1)
+            pylab.plot( time_G,dheadingG_dt*RAD2DEG )
+            pylab.ylabel('heading angular vel (deg/s)')
+            for t in results['times']:
+                pylab.axvline(t)
+
+            pylab.plot(time_G[peak_idxsG],dheadingG_dt[peak_idxsG]*RAD2DEG,'ko')
+
+            ax=pylab.subplot(2,1,2,sharex=ax)
+            pylab.plot( time_F, h_speedsF)
+    else:
+        raise ValueError('unknown saccade detection algorithm')
+
+    return results
+
 class CachingAnalyzer:
 
     """
@@ -1176,237 +1404,6 @@ class CachingAnalyzer:
                                )
         results = {}
         results['kalman_smoothed_rows'] = rows
-        return results
-
-    def detect_saccades(self,
-                        obj_id,
-                        data_file,#result_h5_file or .mat dictionary
-                        use_kalman_smoothing=True,
-                        frames_per_second=None,
-                        dynamic_model_name=None,
-                        method='position based',
-                        method_params=None,
-                        ):
-        """detect saccades defined as exceeding a threshold in heading angular velocity
-
-        arguments:
-        ----------
-        obj_id - int, the object id
-        data_file - string of pytables filename, the pytables file object, or data dict from .mat file
-        use_kalman_smoothing - boolean, if False use original, causal Kalman filtered data (rather than Kalman smoothed observations)
-
-        method_params for 'position based':
-        -----------------------------------
-        'downsample' - decimation factor
-        'threshold angular velocity (rad/s)' - threshold for saccade detection
-        'minimum speed' - minimum velocity for detecting a saccade
-        'horizontal only' - only use *heading* angular velocity and *horizontal* speed (like Tamerro & Dickinson 2002)
-
-        returns:
-        --------
-        results - dictionary, see below
-
-        results dictionary contains:
-        -----------------------------------
-        'indices' - array of ints, indices into h5file at moment of saccade
-        'frames' - array of ints, frame numbers of moment of saccade
-        'times' - array of floats, seconds since beginning of trace at moment of saccade
-        'X' - n by 3 array of floats, 3D position at each saccade
-
-        """
-        rows = self.load_data( obj_id, data_file,
-                               use_kalman_smoothing=use_kalman_smoothing,
-                               frames_per_second=frames_per_second,
-                               dynamic_model_name=dynamic_model_name,
-                               )
-
-
-        if method_params is None:
-            method_params = {}
-
-        RAD2DEG = 180/numpy.pi
-        DEG2RAD = 1.0/RAD2DEG
-
-        results = {}
-
-        if method == 'position based':
-            ##############
-            # load data
-            framesA = rows['frame'] # time index A - original time points
-            xsA = rows['x']
-            ysA = rows['y']
-            zsA = rows['z']
-            XA = numpy.vstack((xsA,ysA,zsA)).T
-
-            time_A = (framesA - framesA[0])/frames_per_second
-
-            ##############
-            # downsample
-            skip = method_params.get('downsample',3)
-
-            Aindex = numpy.arange(len(framesA))
-            AindexB = my_decimate( Aindex, skip )
-            AindexB = numpy.round(AindexB).astype(numpy.int)
-
-            xsB = my_decimate(xsA,skip) # time index B - downsampled by 'skip' amount
-            ysB = my_decimate(ysA,skip)
-            zsB = my_decimate(zsA,skip)
-            time_B = my_decimate(time_A,skip)
-
-            ###############################
-            # calculate horizontal velocity
-
-            # central difference
-            xdiffsF = xsB[2:]-xsB[:-2] # time index F - points B, but inside one point each end
-            ydiffsF = ysB[2:]-ysB[:-2]
-            zdiffsF = zsB[2:]-zsB[:-2]
-            time_F = time_B[1:-1]
-            AindexF = AindexB[1:-1]
-
-            delta_tBC = skip/frames_per_second # delta_t valid for B and C time indices
-            delta_tF = 2*delta_tBC # delta_t valid for F time indices
-
-            xvelsF = xdiffsF/delta_tF
-            yvelsF = ydiffsF/delta_tF
-            zvelsF = zdiffsF/delta_tF
-
-##            # forward difference
-##            xdiffsC = xsB[1:]-xsB[:-1] # time index C - midpoints between points B, just inside old B endpoints
-##            ydiffsC = ysB[1:]-ysB[:-1]
-##            zdiffsC = zsB[1:]-zsB[:-1]
-##            time_C = (time_B[1:] + time_B[:-1])*0.5
-
-##            xvelsC = xdiffsC/delta_tBC
-##            yvelsC = ydiffsC/delta_tBC
-##            zvelsC = zdiffsC/delta_tBC
-
-            horizontal_only = method_params.get('horizontal only',True)
-
-            if horizontal_only:
-                ###################
-                # calculate heading
-
-##                headingsC = numpy.arctan2( ydiffsC, xdiffsC )
-                headingsF = numpy.arctan2( ydiffsF, xdiffsF )
-
-##                headingsC_u = numpy.unwrap(headingsC)
-                headingsF_u = numpy.unwrap(headingsF)
-
-##                # central difference of forward difference
-##                dheadingD_dt = (headingsC_u[2:]-headingsC_u[:-2])/(2*delta_tBC) # index now the same as C, but starts one later
-##                time_D = time_C[1:-1]
-
-##                # forward difference of forward difference
-##                dheadingE_dt = (headingsC_u[1:]-headingsC_u[:-1])/(delta_tBC) # index now the same as B, but starts one later
-##                time_E = (time_C[1:]+time_C[:-1])*0.5
-
-                # central difference of central difference
-                dheadingG_dt = (headingsF_u[2:]-headingsF_u[:-2])/(2*delta_tF) # index now the same as F, but starts one later
-                time_G = time_F[1:-1]
-
-##                # forward difference of central difference
-##                dheadingH_dt = (headingsF_u[1:]-headingsF_u[:-1])/(delta_tF) # index now the same as B?, but starts one later
-##                time_H = (time_F[1:]+time_F[:-1])*0.5
-
-                if DEBUG:
-                    import pylab
-                    pylab.figure()
-                    pylab.plot( time_D, dheadingD_dt*RAD2DEG, 'k.-', label = 'forward, central')
-                    pylab.plot( time_E, dheadingE_dt*RAD2DEG, 'r.-', label = 'forward, forward')
-                    pylab.plot( time_G, dheadingG_dt*RAD2DEG, 'g.-', lw = 2, label = 'central, central')
-                    pylab.plot( time_H, dheadingH_dt*RAD2DEG, 'b.-', label = 'central, forward')
-                    pylab.legend()
-                    pylab.xlabel('s')
-                    pylab.ylabel('deg/s')
-
-            else: # not horizontal only
-
-                #central diff
-                velsF = numpy.vstack((xvelsF,yvelsF,zvelsF)).T
-                speedsF = numpy.sqrt(numpy.sum(velsF**2,axis=1))
-                norm_velsF = velsF / speedsF[:,numpy.newaxis] # make norm vectors ( mag(x)=1 )
-                delta_tG = delta_tF
-                cos_angle_diffsG = [] # time base K - between F
-                for i in range(len(norm_velsF)-2):
-                    v1 = norm_velsF[i+2]
-                    v2 = norm_velsF[i]
-                    cos_angle_diff = numpy.dot(v1,v2) # dot product = mag(a) * mag(b) * cos(theta)
-                    cos_angle_diffsG.append( cos_angle_diff )
-                angle_diffG = numpy.arccos(cos_angle_diffsG)
-                angular_velG = angle_diffG/(2*delta_tG)
-
-##                vels2 = numpy.vstack((xvels2,yvels2,zvels2)).T
-##                speeds2 = numpy.sqrt(numpy.sum(vels2**2,axis=1))
-##                norm_vels2 = vels2 / speeds2[:,numpy.newaxis] # make norm vectors ( mag(x)=1 )
-##                cos_angle_diffs = [1] # set initial angular vel to 0 (cos(0)=1)
-##                for i in range(len(norm_vels2)-1):
-##                    v1 = norm_vels2[i+1]
-##                    v2 = norm_vels2[i]
-##                    cos_angle_diff = numpy.dot(v1,v2) # dot product = mag(a) * mag(b) * cos(theta)
-##                    cos_angle_diffs.append( cos_angle_diff )
-##                angle_diff = numpy.arccos(cos_angle_diffs)
-##                angular_vel = angle_diff/delta_t2
-
-            ###################
-            # peak detection
-
-            thresh_rad2 = method_params.get('threshold angular velocity (rad/s)',300*DEG2RAD)
-
-            if horizontal_only:
-                pos_peak_idxsG = find_peaks(dheadingG_dt,thresh_rad2)
-                neg_peak_idxsG = find_peaks(-dheadingG_dt,thresh_rad2)
-
-                peak_idxsG = pos_peak_idxsG + neg_peak_idxsG
-
-                if DEBUG:
-                    import pylab
-                    pylab.figure()
-                    pylab.plot( dheadingG_dt*RAD2DEG  )
-                    pylab.ylabel('heading angular vel (deg/s)')
-                    for i in peak_idxsG:
-                        pylab.axvline( i )
-                    pylab.plot( peak_idxsG, dheadingG_dt[peak_idxsG]*RAD2DEG ,'k.')
-            else:
-                peak_idxsG = find_peaks(angular_velG,thresh_rad2)
-
-            orig_idxsG = numpy.array(peak_idxsG,dtype=numpy.int)
-
-            ####################
-            # make sure peak is at time when velocity exceed minimum threshold
-            min_vel = method_params.get('minimum speed',0.04)
-
-            orig_idxsF = orig_idxsG+1 # convert G timebase to F
-            if horizontal_only:
-                h_speedsF = numpy.sqrt(numpy.sum((numpy.vstack((xvelsF,yvelsF)).T)**2,axis=1))
-                valid_condF = h_speedsF[orig_idxsF] > min_vel
-            else:
-                valid_condF = speedsF[orig_idxsF] > min_vel
-            valid_idxsF = orig_idxsF[valid_condF]
-
-            ####################
-            # output parameters
-
-            valid_idxsA = AindexF[valid_idxsF]
-            #results['indices'] = take_idxs2[valid_idxs] # this seems silly -- how could it be done?
-            results['frames'] = framesA[valid_idxsA]
-            results['times'] = time_F[valid_idxsF]
-            results['X'] = XA[valid_idxsA]
-
-            if DEBUG and horizontal_only:
-                pylab.figure()
-                ax=pylab.subplot(2,1,1)
-                pylab.plot( time_G,dheadingG_dt*RAD2DEG )
-                pylab.ylabel('heading angular vel (deg/s)')
-                for t in results['times']:
-                    pylab.axvline(t)
-
-                pylab.plot(time_G[peak_idxsG],dheadingG_dt[peak_idxsG]*RAD2DEG,'ko')
-
-                ax=pylab.subplot(2,1,2,sharex=ax)
-                pylab.plot( time_F, h_speedsF)
-        else:
-            raise ValueError('unknown saccade detection algorithm')
-
         return results
 
     ###################################
