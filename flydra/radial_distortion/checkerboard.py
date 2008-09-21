@@ -10,7 +10,7 @@ import pylab
 import scipy.optimize
 import scipy.misc.pilutil
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
-from scikits import delaunay
+from matplotlib import delaunay
 import flydra.reconstruct_utils as reconstruct_utils # in pyrex/C for speed
 import flydra.undistort
 import scipy.cluster.vq
