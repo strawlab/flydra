@@ -13,6 +13,19 @@ class StimProjection(object):
     def project(self,X):
         raise NotImplementedError('abstract base class method called')
 
+class FlydraReconstructProjection(StimProjection):
+    def __init__(self,R,cam_id):
+        self.R = R
+        self.w,self.h = R.get_resolution(cam_id)
+        self.cam_id = cam_id
+    def project(self,X):
+        x,y = self.R.find2d(self.cam_id,X,distorted=True)
+        if (x<0) or (x>( self.w-1)):
+            return None
+        if (y<0) or (y>( self.h-1)):
+            return None
+        return x,y
+
 class SimpleOrthographicXYProjection(StimProjection):
     def project(self,X):
         return X[0], X[1]
@@ -130,19 +143,7 @@ class Stimulus(object):
         # mainly copied from self.plot_stim_over_distorted_image()
         R = self._get_reconstructor()
         R = R.get_scaled()
-        class MyProjection(StimProjection):
-            def __init__(self,R,cam_id):
-                self.R = R
-                self.w,self.h = R.get_resolution(cam_id)
-                self.cam_id = cam_id
-            def project(self,X):
-                x,y = self.R.find2d(self.cam_id,X,distorted=True)
-                if (x<0) or (x>( self.w-1)):
-                    return None
-                if (y<0) or (y>( self.h-1)):
-                    return None
-                return x,y
-        P = MyProjection(R,cam_id)
+        P = FlydraReconstructProjection(R,cam_id)
         return self._get_linesegs( projection=P.project )
 
     def _get_linesegs( self, projection=None ):
@@ -224,18 +225,12 @@ class Stimulus(object):
         # we want to work with scaled coordinates
         R = self._get_reconstructor()
         R = R.get_scaled()
-
-        class MyProjection(StimProjection):
-            def __init__(self,R,cam_id):
-                self.R = R
-                self.cam_id = cam_id
-            def project(self,X):
-                return self.R.find2d(self.cam_id,X,distorted=True)
-        P = MyProjection(R,cam_id)
-        self.plot_stim( ax, projection=P.project )
+        P = FlydraReconstructProjection(R,cam_id)
+        self.plot_stim( ax, projection=P )
 
     def plot_stim( self, ax, projection=None ):
         if not isinstance(projection,StimProjection):
+            print 'projection',projection
             raise ValueError('projection must be instance of xml_stimulus.StimProjection class')
 
         plotted_anything = False
@@ -259,7 +254,11 @@ class Stimulus(object):
                     plotx, ploty = [],[]
                     for (x,y) in zip(xs,ys):
                         X = x,y,z
-                        x2d, y2d = projection(X)
+                        result = projection(X)
+                        if result is None:
+                            x2d,y2d = np.nan, np.nan
+                        else:
+                            x2d, y2d = result
                         plotx.append(x2d); ploty.append(y2d)
                     ax.plot( plotx, ploty, 'k-' )
             elif child.tag == 'cylindrical_post':
@@ -268,8 +267,12 @@ class Stimulus(object):
                 xs, ys = [], []
                 # XXX TODO: extrude line into cylinder
                 for X in info['verts']:
-                    v2 = projection(X)
-                    xs.append(v2[0]); ys.append(v2[1])
+                    result = projection(X)
+                    if result is None:
+                        v2x, v2y = np.nan, np.nan
+                    else:
+                        v2x, v2y = result
+                    xs.append(v2x); ys.append(v2y)
                 ax.plot( xs, ys, 'k-', linewidth=5 )
             else:
                 import warnings
@@ -284,6 +287,7 @@ class StimulusFanout(object):
         assert root.attrib['version']=='1'
         self.root = root
     def _get_episode_for_timestamp( self, timestamp_string=None ):
+        bad_md5_found = False
         for single_episode in self.root.findall("single_episode"):
             for kh5_file in single_episode.findall("kh5_file"):
                 fname = kh5_file.attrib['name']
@@ -298,9 +302,12 @@ class StimulusFanout(object):
                         actual_md5 = m.hexdigest()
                         #print expected_md5
                         #print actual_md5
-                        assert expected_md5==actual_md5
+                        if not expected_md5==actual_md5:
+                            bad_md5_found = True
                     stim_fname = single_episode.find("stimxml_file").attrib['name']
                     return single_episode, kh5_file, stim_fname
+        if bad_md5_found:
+            raise ValueError("could not find timestamp_string '%s' with valid md5sum. (Bad md5sum found.)"%timestamp_string)
         raise ValueError("could not find timestamp_string '%s'"%timestamp_string)
     def get_walking_start_stops_for_timestamp( self, timestamp_string=None ):
         single_episode, kh5_file, stim_fname = self._get_episode_for_timestamp(timestamp_string=timestamp_string)
