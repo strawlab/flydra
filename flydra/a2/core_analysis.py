@@ -692,7 +692,6 @@ def detect_saccades(rows,
 
     results dictionary contains:
     -----------------------------------
-    'indices' - array of ints, indices into h5file at moment of saccade
     'frames' - array of ints, frame numbers of moment of saccade
     'times' - array of floats, seconds since beginning of trace at moment of saccade
     'X' - n by 3 array of floats, 3D position at each saccade
@@ -873,7 +872,6 @@ def detect_saccades(rows,
         # output parameters
 
         valid_idxsA = AindexF[valid_idxsF]
-        #results['indices'] = take_idxs2[valid_idxs] # this seems silly -- how could it be done?
         results['frames'] = framesA[valid_idxsA]
         results['times'] = time_F[valid_idxsF]
         results['X'] = XA[valid_idxsA]
@@ -1017,6 +1015,8 @@ class CachingAnalyzer:
     def load_data(self,obj_id,data_file,use_kalman_smoothing=True,
                   frames_per_second=None, dynamic_model_name=None,
                   return_smoothed_directions=False,
+                  flystate='both', # 'both', 'walking', or 'flying'
+                  walking_start_stops=None, # list of (start,stop)
                   ):
         """Load Kalman state estimates from data_file.
 
@@ -1182,6 +1182,43 @@ class CachingAnalyzer:
                 rows['dir_y']=output[1,:]
                 rows['dir_z']=output[2,:]
 
+        assert flystate in ['both', 'walking', 'flying']
+        if walking_start_stops is None:
+            walking_start_stops = []
+
+        ############################
+        # filter based on flystate
+        ############################
+
+        walking_and_flying_kalman_rows = rows # preserve original data
+        frame = walking_and_flying_kalman_rows['frame']
+
+        if flystate != 'both':
+            if flystate=='flying':
+                # assume flying unless we're told it's walking
+                state_cond = numpy.ones( frame.shape, dtype=numpy.bool )
+            else:
+                state_cond = numpy.zeros( frame.shape, dtype=numpy.bool )
+
+            if len(walking_start_stops):
+                for walkstart,walkstop in walking_start_stops:
+                    frame = walking_and_flying_kalman_rows['frame'] # restore
+
+                    # handle each bout of walking
+                    walking_bout = numpy.ones( frame.shape, dtype=numpy.bool)
+                    if walkstart is not None:
+                        walking_bout &= ( frame >= walkstart )
+                    if walkstop is not None:
+                        walking_bout &= ( frame <= walkstop )
+                    if flystate=='flying':
+                        state_cond &= ~walking_bout
+                    else:
+                        state_cond |= walking_bout
+
+                masked_cond = ~state_cond
+                n_filtered = np.sum(masked_cond)
+                rows = numpy.ma.masked_where( ~state_cond, walking_and_flying_kalman_rows )
+                rows = rows.compressed()
         return rows
 
     def get_raw_positions(self,

@@ -208,7 +208,7 @@ AssertionError
     pitch = math.atan2( U[2], xy_r )
     return yaw, pitch
 
-def orientation_to_quat( U, roll_angle=0 ):
+def orientation_to_quat( U, roll_angle=0, force_pitch_0=False ):
     """convert world coordinates to body-relative coordinates
 
     inputs:
@@ -237,6 +237,8 @@ def orientation_to_quat( U, roll_angle=0 ):
         if numpy.isnan(U[0]):
             return cgtypes.quat((nan,nan,nan,nan))
         yaw, pitch = orientation_to_euler( U )
+        if force_pitch_0:
+            pitch=0
         return euler_to_quat(yaw=yaw, pitch=pitch, roll=roll_angle)
 
 def quat_to_orient(S3):

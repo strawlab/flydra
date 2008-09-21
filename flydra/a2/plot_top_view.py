@@ -155,12 +155,8 @@ def plot_top_and_side_views(subplot=None,
     if options.stim_xml:
         if reconstructor is not None:
             stim_xml.verify_reconstructor(reconstructor)
-        def xy_project(X):
-            return X[0], X[1]
-        def xz_project(X):
-            return X[0], X[2]
-        stim_xml.plot_stim( subplot['xy'], projection=xy_project )
-        stim_xml.plot_stim( subplot['xz'], projection=xz_project )
+        stim_xml.plot_stim( subplot['xy'], projection=xml_stimulus.SimpleOrthographicXYProjection() )
+        stim_xml.plot_stim( subplot['xz'], projection=xml_stimulus.SimpleOrthographicXZProjection() )
 
     allX = {}
     frame0 = None

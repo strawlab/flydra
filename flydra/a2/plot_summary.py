@@ -1,7 +1,6 @@
 from __future__ import division
-
+import numpy as np
 import matplotlib
-matplotlib.use('Agg')
 import pylab
 
 import plot_timeseries
@@ -16,9 +15,11 @@ def doit(options=None):
     pylab.figtext(0,0,figtitle)
 
     subplot={}
-    subplot['xy']=fig.add_subplot(3,1,1)
-    subplot['xz']=fig.add_subplot(3,1,2)#,sharex=subplot['xy'])
-    subplot['z']=fig.add_subplot(3,1,3)
+    subplot['xy']=fig.add_axes((0.05, 0.55, .9, .45))
+    subplot['xz']=fig.add_axes((0.05, 0.35, .9, .2 ))#,sharex=subplot['xy'])
+
+    subplot['z']=fig.add_axes(( 0.05, 0.1, 0.8, 0.2 ))
+    subplot['z_hist']=fig.add_axes((0.85, 0.1, 0.1, 0.2 ),sharey=subplot['z'])
 
     in_fname = options.kalman_filename
     #out_fname = 'summary-' + os.path.splitext(in_fname)[0] + '.png'
@@ -45,6 +46,8 @@ def doit(options=None):
     print 'saving',out_fname
 
     fig.savefig(out_fname)
+    if options.interactive:
+        pylab.show()
 
 def main():
     usage = '%prog [options]'
@@ -53,10 +56,20 @@ def main():
 
     analysis_options.add_common_options( parser )
 
+    parser.add_option("--interactive", action='store_true',
+                      default=False)
+
+    parser.add_option("--fuse", action='store_true',
+                      help="fuse object ids corresponding to a single fly (requires stim-xml fanout)",
+                      default=False)
+
     (options, args) = parser.parse_args()
 
     if options.obj_only is not None:
         options.obj_only = core_analysis.parse_seq(options.obj_only)
+
+    if not options.interactive:
+        matplotlib.use('Agg')
 
     if len(args):
         parser.print_help()

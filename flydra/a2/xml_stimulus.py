@@ -285,30 +285,32 @@ class Stimulus(object):
             warnings.warn("Did not plot any stimulus")
 
 class StimulusFanout(object):
-    def __init__(self,root):
+    def __init__(self,root,my_directory=None):
         if not root.tag == 'stimulus_fanout_xml':
             raise WrongXMLTypeError('not the correct xml type')
         assert root.attrib['version']=='1'
         self.root = root
+        self._my_directory = my_directory
     def _get_episode_for_timestamp( self, timestamp_string=None ):
         bad_md5_found = False
         for single_episode in self.root.findall("single_episode"):
             for kh5_file in single_episode.findall("kh5_file"):
                 fname = kh5_file.attrib['name']
-                fname_timestamp_string = os.path.splitext(fname)[0][4:]
+                fname_timestamp_string = os.path.splitext(os.path.split(fname)[-1])[0][4:]
                 if fname_timestamp_string == timestamp_string:
                     if 1:
                         # check that the file has not changed
-                        #print 'fname',fname
                         expected_md5 = kh5_file.attrib['md5sum']
                         m = hashlib.md5()
+                        if self._my_directory is not None:
+                            fname = os.path.join( self._my_directory, fname )
                         m.update(open(fname,mode='rb').read())
                         actual_md5 = m.hexdigest()
-                        #print expected_md5
-                        #print actual_md5
                         if not expected_md5==actual_md5:
                             bad_md5_found = True
                     stim_fname = single_episode.find("stimxml_file").attrib['name']
+                    if self._my_directory is not None:
+                        stim_fname = os.path.join( self._my_directory, stim_fname )
                     return single_episode, kh5_file, stim_fname
         if bad_md5_found:
             raise ValueError("could not find timestamp_string '%s' with valid md5sum. (Bad md5sum found.)"%timestamp_string)
@@ -350,10 +352,15 @@ class StimulusFanout(object):
         stim = Stimulus(root,hack_postmultiply=hack_postmultiply)
         #stim.verify_timestamp( fname_timestamp_string )
         return stim
+    def iterate_single_episodes(self):
+        for child in self.root:
+            if child.tag == 'single_episode':
+                yield child
 
 def xml_fanout_from_filename( filename ):
     root = ET.parse(filename).getroot()
-    sf = StimulusFanout(root)
+    my_directory=os.path.split( filename )[0]
+    sf = StimulusFanout(root,my_directory=my_directory)
     return sf
 
 def xml_stimulus_from_filename( filename, timestamp_string=None, hack_postmultiply=None ):

@@ -10,7 +10,7 @@ if 1:
 
 from optparse import OptionParser
 import sets, os, sys, math
-
+import numpy as np
 import pkg_resources
 import numpy
 import tables as PT
@@ -96,7 +96,8 @@ def plot_timeseries(subplot=None,options = None):
             use_obj_ids = include_obj_ids
         if exclude_obj_ids is not None:
             use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
-        do_fuse = True
+        if options.fuse:
+            do_fuse = True
     else:
         walking_start_stops = []
 
@@ -128,6 +129,9 @@ def plot_timeseries(subplot=None,options = None):
 
     allX = {}
     frame0 = None
+
+    line2obj_id = {}
+    Xz_all = []
 
     fuse_did_once = False
     for obj_id in use_obj_ids:
@@ -175,8 +179,6 @@ def plot_timeseries(subplot=None,options = None):
                 state_cond = numpy.zeros( frame.shape, dtype=numpy.bool )
 
             if len(walking_start_stops):
-                frame = walking_and_flying_kalman_rows['frame']
-
                 for walkstart,walkstop in walking_start_stops:
                     frame = walking_and_flying_kalman_rows['frame'] # restore
 
@@ -208,7 +210,9 @@ def plot_timeseries(subplot=None,options = None):
                 def identity(x): return x
                 f2t = identity
 
-            kws = {'linewidth':2}
+            kws = {'linewidth':2,
+                   'picker':5,
+                   }
             if options.unicolor:
                 kws['color'] = 'k'
 
@@ -216,10 +220,12 @@ def plot_timeseries(subplot=None,options = None):
 
             if 'x' in subplot:
                 line,=subplot['x'].plot( f2t(frame), Xx, label='obj %d (%s)'%(obj_id,flystate),**kws )
+                line2obj_id[line]=obj_id
                 kws['color'] = line.get_color()
 
             if 'y' in subplot:
                 line,=subplot['y'].plot( f2t(frame), Xy, label='obj %d (%s)'%(obj_id,flystate), **kws )
+                line2obj_id[line]=obj_id
                 kws['color'] = line.get_color()
 
             if 'z' in subplot:
@@ -239,11 +245,19 @@ def plot_timeseries(subplot=None,options = None):
 
                 line,=subplot['z'].plot( f2t(frame), Xz, label='obj %d (%s)'%(obj_id,flystate), **kws )
                 kws['color'] = line.get_color()
+                line2obj_id[line]=obj_id
 
                 if flystate == 'flying':
                     # only do this once
                     if options.show_obj_id:
                         subplot['z'].text( f2t(frame_data[0]), numpy.ma.getdata(Xz)[0], '%d'%(obj_id,) )
+                        line2obj_id[line]=obj_id
+
+            if flystate=='flying':
+                Xz_all.append( np.ma.array(Xz).compressed() )
+                #bins = np.linspace(0,.8,30)
+                #print 'Xz.shape',Xz.shape
+                #pylab.hist(Xz, bins=bins)
 
             if numpy.__version__ >= '1.2.0':
                 X = numpy.ma.array((Xx,Xy,Xz))
@@ -264,14 +278,17 @@ def plot_timeseries(subplot=None,options = None):
 
             if 'vel' in subplot:
                 line,=subplot['vel'].plot(f2t(frames2), vel2mag, label='obj %d (%s)'%(obj_id,flystate), **kws )
+                line2obj_id[line]=obj_id
                 kws['color'] = line.get_color()
 
             if 'xy_vel' in subplot:
                 line,=subplot['xy_vel'].plot(f2t(frames2), xy_vel2mag, label='obj %d (%s)'%(obj_id,flystate), **kws )
+                line2obj_id[line]=obj_id
                 kws['color'] = line.get_color()
 
             if len( accel4mag.compressed()) and 'accel' in subplot:
                 line,=subplot['accel'].plot( f2t(frames4), accel4mag, label='obj %d (%s)'%(obj_id,flystate), **kws )
+                line2obj_id[line]=obj_id
                 kws['color'] = line.get_color()
 
             if flystate=='flying':
@@ -304,10 +321,33 @@ def plot_timeseries(subplot=None,options = None):
         subplot['y'].set_ylabel(r'y ($m$)')
         subplot['y'].set_xlabel(xlabel)
 
+    max_z = None
+    if options.stim_xml:
+        file_timestamp = options.kalman_filename[4:19]
+        stim_xml = xml_stimulus.xml_stimulus_from_filename( options.stim_xml, timestamp_string=file_timestamp )
+        post_max_zs = []
+        for post_num,post in enumerate(stim_xml.iterate_posts()):
+            post_max_zs.append( max( post['verts'][0][2], post['verts'][1][2] )) # max post height
+        if len(post_max_zs):
+            max_z = min( post_max_zs ) # take shortest of posts
+
     if 'z' in subplot:
         subplot['z'].set_ylim([0,1])
         subplot['z'].set_ylabel(r'z ($m$)')
         subplot['z'].set_xlabel(xlabel)
+        if max_z is not None:
+            subplot['z'].axhline(max_z,color='m')
+
+    if 'z_hist' in subplot:# and flystate=='flying':
+        Xz_all = np.hstack(Xz_all)
+        bins = np.linspace(0,.8,30)
+        ax = subplot['z_hist']
+        ax.hist(Xz_all, bins=bins,orientation='horizontal')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        xlim = ax.get_xlim().copy()
+        ax.set_xlim((xlim[1],xlim[0]))
+        ax.axhline(max_z,color='m')
 
     if 'vel' in subplot:
         subplot['vel'].set_ylim([0,2])
@@ -328,16 +368,16 @@ def plot_timeseries(subplot=None,options = None):
         bins = numpy.linspace(0,2,50)
         ax.set_title('excluding walking')
         pdf, bins, patches = ax.hist(all_vels, bins=bins, normed=True)
-        np = numpy
         ax.set_xlim(0,2)
         ax.set_ylabel('probability density')
         ax.set_xlabel('velocity (m/s)')
+    return line2obj_id
 
 def doit(
          options = None,
          ):
 
-    fig = pylab.figure(figsize=(6,4))
+    fig = pylab.figure()#figsize=(6,4))
     figtitle=options.kalman_filename
     pylab.figtext(0,0,figtitle)
 
@@ -350,18 +390,46 @@ def doit(
         ax.grid(True)
         subplot[name] = ax
 
+    if 0:
+        fig = pylab.figure()
+        figtitle=options.kalman_filename
+        pylab.figtext(0,0,figtitle)
 
-    fig = pylab.figure()
-    figtitle=options.kalman_filename
-    pylab.figtext(0,0,figtitle)
+        ax = fig.add_subplot(1,1,1)
+        subplot['vel_hist'] = ax
+        ax.grid(True)
 
-    ax = fig.add_subplot(1,1,1)
-    subplot['vel_hist'] = ax
-    ax.grid(True)
+    line2obj_id = plot_timeseries(subplot=subplot,
+                                  options = options,
+                                  )
+    class  MyPickObj(object):
+        def __init__(self,line2obj_id):
+            self.line2obj_id = line2obj_id
+            self.obj_ids = []
+        def onpick(self,event):
+            if isinstance(event.artist,matplotlib.lines.Line2D):
+                thisline = event.artist
+                obj_id = self.line2obj_id[thisline]
+                if obj_id not in self.obj_ids:
+                    self.obj_ids.append( obj_id )
+                    print 'picked',obj_id
+                    print 'all:'
+                    print self.obj_ids
+                else:
+                    print '(already had obj_id %d)'%obj_id
+        def on_key_press(self,event):
+            print 'received key',repr(event.key)
+            if event.key=='c':
+                del self.obj_ids[:]
+            if event.key=='l':
+                del self.obj_ids[-1]
+            print 'all:'
+            print self.obj_ids
 
-    plot_timeseries(subplot=subplot,
-                    options = options,
-                    )
+    pick_receiver = MyPickObj(line2obj_id)
+    fig.canvas.mpl_connect('pick_event', pick_receiver.onpick)
+    fig.canvas.mpl_connect('key_press_event', pick_receiver.on_key_press)
+
     pylab.show()
 
 def main():
@@ -373,6 +441,10 @@ def main():
 
     parser.add_option("--frames", action='store_true',
                       help="plot horizontal axis in frame number (not seconds)",
+                      default=False)
+
+    parser.add_option("--fuse", action='store_true',
+                      help="fuse object ids corresponding to a single fly (requires stim-xml fanout)",
                       default=False)
 
     (options, args) = parser.parse_args()

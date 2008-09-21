@@ -42,7 +42,7 @@ def fuse_obj_ids(use_obj_ids, data_file,
             tmp = kalman_rows['frame']
             #print tmp
 
-            assert tmp[0] > frames[-1][-1] # ensure new frames follow last
+            assert tmp[0] > frames[-1][-1] # ensure new frames follow last (hmm, why do we care? this seems wrong, anyway...)
             assert numpy.all((tmp[1:]-tmp[:-1]) > 0) # ensure new frames are ordered
 
         this_x = kalman_rows['x']
@@ -166,13 +166,13 @@ def fuse_obj_ids(use_obj_ids, data_file,
                                        names='frame,x,y,z')
     return recarray
 
-def pos2ori(X):
+def pos2ori(X,force_pitch_0=False):
     # forward difference
     dX = X[1:,:]-X[:-1,:]
     dXU = dX / numpy.sqrt(numpy.sum(dX**2,axis=1))[:,numpy.newaxis] # make unit vectors
     Q = []
     for U in dXU:
-        q = PQmath.orientation_to_quat( U, roll_angle=0 )
+        q = PQmath.orientation_to_quat( U, roll_angle=0, force_pitch_0=force_pitch_0 )
         Q.append(q)
     # make same length as X
     Q.append(Q[-1])
