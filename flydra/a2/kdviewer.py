@@ -220,7 +220,6 @@ def doit(filename,
          exclude_vel_mps = None,
          exclude_vel_data = 'kalman',
          stereo = False,
-         dynamic_model_name = None,
          show_cameras=False,
          obj_color=False,
          link_all_simultaneous_objs=True,
@@ -234,15 +233,34 @@ def doit(filename,
         allsave = []
 
     if not use_kalman_smoothing:
-        if (dynamic_model_name is not None):
+        if (options.dynamic_model is not None):
             print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model option (--dynamic-model)'
             sys.exit(1)
+    dynamic_model_name = options.dynamic_model
 
     if options.hack_postmultiply is not None:
         if show_cameras:
             raise RuntimeError('cannot show cameras if hack_postmultiply is being used')
     ca = core_analysis.get_global_CachingAnalyzer(hack_postmultiply=options.hack_postmultiply)
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(filename)
+
+    if options.stim_xml is not None:
+        file_timestamp = data_file.filename[4:19]
+        stim_xml = xml_stimulus.xml_stimulus_from_filename(options.stim_xml,
+                                                           timestamp_string=file_timestamp,
+                                                           hack_postmultiply=options.hack_postmultiply,
+                                                           )
+        try:
+            fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
+        except xml_stimulus.WrongXMLTypeError:
+            pass
+        else:
+            include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp( timestamp_string=file_timestamp )
+            if include_obj_ids is not None:
+                use_obj_ids = include_obj_ids
+            if exclude_obj_ids is not None:
+                use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
+            print 'using object ids specified in fanout .xml file'
 
     if dynamic_model_name is None:
         if 'dynamic_model_name' in extra:
@@ -795,11 +813,11 @@ def doit(filename,
     ##         actors.extend( stim_actors )
 
     if options.stim_xml is not None:
-        file_timestamp = data_file.filename[4:19]
-        stim_xml = xml_stimulus.xml_stimulus_from_filename(options.stim_xml,
-                                                           timestamp_string=file_timestamp,
-                                                           hack_postmultiply=options.hack_postmultiply,
-                                                           )
+        ## file_timestamp = data_file.filename[4:19]
+        ## stim_xml = xml_stimulus.xml_stimulus_from_filename(options.stim_xml,
+        ##                                                    timestamp_string=file_timestamp,
+        ##                                                    hack_postmultiply=options.hack_postmultiply,
+        ##                                                    )
         if not is_mat_file:
             R = reconstruct.Reconstructor(data_file)
             stim_xml.verify_reconstructor(R)
@@ -1153,6 +1171,10 @@ def main():
     parser.add_option("--hack-postmultiply", type='string',
                       help="multiply 3D coordinates by a 3x4 matrix")
 
+    ## parser.add_option("--fuse", action='store_true',
+    ##                   help='fuse obj_ids specified in fanout .xml file into one contiguous trace',
+    ##                   default=False)
+
     (options, args) = parser.parse_args()
 
     if options.filename is not None:
@@ -1200,7 +1222,6 @@ def main():
          save_still = options.save_still,
          exclude_vel_mps = options.exclude_vel_mps,
          stereo = options.stereo,
-         dynamic_model_name = options.dynamic_model,
          show_cameras = options.show_cameras,
          obj_color = options.obj_color,
          link_all_simultaneous_objs=options.link_all_simultaneous_objs,

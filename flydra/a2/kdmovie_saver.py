@@ -14,7 +14,8 @@ import core_analysis
 import stimulus_positions
 import scipy.io
 import conditions
-
+import flydra.a2.xml_stimulus as xml_stimulus
+import flydra.reconstruct as reconstruct
 import pkg_resources
 from flydra.a2.pos_ori2fu import pos_ori2fu
 try:
@@ -74,7 +75,14 @@ def doit(filename,
          animation_path_fname = None,
          output_dir='.',
          cam_only_move_duration=5.0,
+         options=None,
          ):
+
+    if not use_kalman_smoothing:
+        if (dynamic_model_name is not None):
+            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model option (--dynamic-model)'
+            sys.exit(1)
+    dynamic_model_name = options.dynamic_model
 
     if animation_path_fname is None:
         animation_path_fname = pkg_resources.resource_filename(__name__,"kdmovie_saver_default_path.kmp")
@@ -92,19 +100,43 @@ def doit(filename,
     except IOError, err:
         print 'not a .mat file at %s, treating as .hdf5 file'%(os.path.join(data_path, data_filename))
 
-    if mat_data is not None:
-        obj_ids = mat_data['kalman_obj_id']
-        obj_ids = obj_ids.astype( numpy.uint32 )
-        obs_obj_ids = obj_ids # use as observation length, even though these aren't observations
-        is_mat_file = True
+    ca = core_analysis.get_global_CachingAnalyzer(hack_postmultiply=options.hack_postmultiply)
+    obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(filename)
+
+    if obj_only is not None:
+        use_obj_ids = obj_only
+
+    if options.stim_xml is not None:
+        file_timestamp = data_file.filename[4:19]
+        stim_xml = xml_stimulus.xml_stimulus_from_filename(options.stim_xml,
+                                                           timestamp_string=file_timestamp,
+                                                           hack_postmultiply=options.hack_postmultiply,
+                                                           )
+    try:
+        fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
+    except xml_stimulus.WrongXMLTypeError:
+        pass
     else:
-        kresults = PT.openFile(filename,mode="r")
-        obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id')
-        is_mat_file = False
+        include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp( timestamp_string=file_timestamp )
+        if include_obj_ids is not None:
+            use_obj_ids = include_obj_ids
+        if exclude_obj_ids is not None:
+            use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
+        print 'using object ids specified in fanout .xml file'
+
+    if dynamic_model_name is None:
+        if 'dynamic_model_name' in extra:
+            dynamic_model_name = extra['dynamic_model_name']
+            print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
+            if dynamic_model_name.startswith('EKF '):
+                dynamic_model_name = dynamic_model_name[4:]
+            print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
+        else:
+            print 'no dynamic model name specified, and it could not be determined from the file, either'
 
     filename_trimmed = os.path.split(os.path.splitext(filename)[0])[-1]
 
-    assert obj_only is not None
+    assert use_obj_ids is not None
 
     #################
     rw = tvtk.RenderWindow(size=(1024, 768))
@@ -119,9 +151,7 @@ def doit(filename,
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
 
-    ca = core_analysis.CachingAnalyzer()
-
-    if len(obj_only)==1:
+    if len(use_obj_ids)==1:
         animate_path = True
         # allow path to grow during trajectory
     else:
@@ -129,52 +159,83 @@ def doit(filename,
         obj_verts = []
         speeds = []
 
-    for obj_id in obj_only:
-
-        if not is_mat_file:
-            n_observations = numpy.sum(obs_obj_ids == obj_id)
-            if int(n_observations) < int(min_length):
-                print 'WARNING: n_observerations < min_length'
-            data_file = kresults
-        else:
-            data_file = mat_data
+    for obj_id in use_obj_ids:
 
         print 'loading %d'%obj_id
         results = ca.calculate_trajectory_metrics(obj_id,
                                                   data_file,
                                                   use_kalman_smoothing=use_kalman_smoothing,
                                                   frames_per_second=data_fps,
-                                                  method='position based',
-                                                  method_params={'downsample':1,
-                                                                 })
+                                                  dynamic_model_name=dynamic_model_name,
+                                                  #method='position based',
+                                                  #method_params={'downsample':1,
+                                                  #               },
+                                                  )
 
-        if len(obj_only)==1:
+        if len(use_obj_ids)==1:
             obj_verts = results['X_kalmanized']
             speeds = results['speed_kalmanized']
         else:
             obj_verts.append( results['X_kalmanized'] )
             speeds.append( results['speed_kalmanized'] )
 
-    if not len(obj_only)==1:
+    if not len(use_obj_ids)==1:
         obj_verts = numpy.concatenate(obj_verts,axis=0)
         speeds = numpy.concatenate(speeds,axis=0)
 
     ####################### start draw permanently on stuff ############################
 
-    if draw_stim_func_str:
-        def my_import(name):
-            mod = __import__(name)
-            components = name.split('.')
-            for comp in components[1:]:
-                mod = getattr(mod, comp)
-            return mod
-        draw_stim_module_name, draw_stim_func_name = draw_stim_func_str.strip().split(':')
-        draw_stim_module = my_import(draw_stim_module_name)
-        draw_stim_func = getattr(draw_stim_module, draw_stim_func_name)
-        stim_actors = draw_stim_func(filename=filename)
-        print '*'*80,'drew with custom code'
-        for stim_actor in stim_actors:
-            ren.add_actor( stim_actor )
+    if options.stim_xml is not None:
+
+        if not is_mat_file:
+            R = reconstruct.Reconstructor(data_file)
+            stim_xml.verify_reconstructor(R)
+
+        if not is_mat_file:
+            assert (data_file.filename.startswith('DATA') and
+                    (data_file.filename.endswith('.h5')
+                     or data_file.filename.endswith('.kh5')))
+            file_timestamp = data_file.filename[4:19]
+        actors = stim_xml.get_tvtk_actors()
+        for actor in actors:
+            ren.add_actor( actor )
+
+    if 1:
+        if 0:
+            # Inspired by pyface.tvtk.decorated_scene
+            marker = tvtk.OrientationMarkerWidget()
+
+        axes = tvtk.AxesActor()
+        axes.set(
+            #normalized_tip_length=(0.04, 0.4, 0.4),
+            #normalized_shaft_length=(0.6, 0.6, 0.6),
+            shaft_type='cylinder',
+            total_length=( .15, .15, .15),
+            )
+
+        if 1:
+            axes.x_axis_label_text = ''
+            axes.y_axis_label_text = ''
+            axes.z_axis_label_text = ''
+        else:
+            p = axes.x_axis_caption_actor2d.caption_text_property
+            axes.y_axis_caption_actor2d.caption_text_property = p
+            axes.z_axis_caption_actor2d.caption_text_property = p
+            p.color = 0.0, 0.0, 0.0 # black
+        #axes.camera = camera
+        print dir(axes)
+        #axes.attachment_point_coordinate = (0,0,0)
+        axes.origin = (-.5,1,0)
+
+        if 0:
+            rwi = rw.interactor
+            print 'rwi',rwi
+            marker.orientation_marker = axes
+            #marker.interactive = False
+            marker.interactor = rwi
+            marker.enabled = True
+
+        ren.add_actor( axes )
 
     #######################
 
@@ -299,7 +360,7 @@ def doit(filename,
             imf.update()
             imf.modified()
             writer.input = imf.output
-            if len(obj_only)==1:
+            if len(use_obj_ids)==1:
                 fname = 'movie_%s_%03d_frame%05d.png'%(filename_trimmed,obj_id,frame_number)
             else:
                 fname = 'movie_%s_many_frame%05d.png'%(filename_trimmed,frame_number)
@@ -308,7 +369,7 @@ def doit(filename,
             writer.write()
 
     if not is_mat_file:
-        kresults.close()
+        data_file.close()
 
 def main():
     usage = '%prog FILE [options]'
@@ -319,8 +380,7 @@ def main():
                       help="hdf5 file with data to display FILE",
                       metavar="FILE")
 
-    parser.add_option("--obj-only", type="string",
-                      dest="obj_only")
+    parser.add_option("--obj-only", type="string")
 
     parser.add_option("--draw-stim",
                       type="string",
@@ -335,8 +395,7 @@ def main():
     parser.add_option("--output-dir", type="string",
                       dest="output_dir")
 
-    parser.add_option("--animation_path_fname",type="string",
-                      dest="animation_path_fname")
+    parser.add_option("--animation-path-fname",type="string")
 
     parser.add_option("--min-length", dest="min_length", type="int",
                       help="minimum number of tracked points (not observations!) required to plot",
@@ -358,6 +417,20 @@ def main():
 
     parser.add_option("--vertical-scale", action='store_true',dest='vertical_scale',
                       help="scale bar has vertical orientation")
+
+    parser.add_option("--stim-xml",
+                      type="string",
+                      default=None,
+                      help="name of XML file with stimulus info",
+                      )
+
+    parser.add_option("--hack-postmultiply", type='string',
+                      help="multiply 3D coordinates by a 3x4 matrix")
+
+    parser.add_option("--dynamic-model",
+                      type="string",
+                      default=None,
+                      )
 
     (options, args) = parser.parse_args()
 
@@ -395,6 +468,7 @@ def main():
          floor=True,
          animation_path_fname = options.animation_path_fname,
          output_dir = options.output_dir,
+         options=options,
          )
 
 if __name__=='__main__':

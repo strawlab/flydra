@@ -7,6 +7,9 @@ import os
 import hashlib
 from core_analysis import parse_seq, check_hack_postmultiply
 
+class WrongXMLTypeError(Exception):
+    pass
+
 class StimProjection(object):
     def __call__(self,*args,**kwargs):
         return self.project(*args,**kwargs)
@@ -283,7 +286,8 @@ class Stimulus(object):
 
 class StimulusFanout(object):
     def __init__(self,root):
-        assert root.tag == 'stimulus_fanout_xml'
+        if not root.tag == 'stimulus_fanout_xml':
+            raise WrongXMLTypeError('not the correct xml type')
         assert root.attrib['version']=='1'
         self.root = root
     def _get_episode_for_timestamp( self, timestamp_string=None ):
