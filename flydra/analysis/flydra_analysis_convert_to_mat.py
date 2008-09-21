@@ -79,10 +79,15 @@ def do_it(filename=None,
                  kalman_z = table1['z'],
                  kalman_xvel = table1['xvel'],
                  kalman_yvel = table1['yvel'],
-                 kalman_zvel = table1['zvel'],
+                 kalman_zvel = table1['zvel'])
+    if 'xaccel' in table1:
+        # acceleration state not in newer dynamic models
+        dict2 = dict(
                  kalman_xaccel = table1['xaccel'],
                  kalman_yaccel = table1['yaccel'],
                  kalman_zaccel = table1['zaccel'])
+        data.update(dict2)
+
     if not ignore_observations:
         extra = dict(
             observation_obj_id = table2['obj_id'],
