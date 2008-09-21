@@ -1601,7 +1601,12 @@ class MainBrain(object):
 
         def register_downstream_kalman_host(self,host,port):
             global downstream_kalman_hosts
-            downstream_kalman_hosts.append( (host,port) )
+            addr = (host,port)
+            if addr not in downstream_kalman_hosts:
+                print 'appending to kalman host list:',addr
+                downstream_kalman_hosts.append( (host,port) )
+            else:
+                print 'already in kalman host list:',addr
 
         def remove_downstream_kalman_host(self,host,port):
             global downstream_kalman_hosts
