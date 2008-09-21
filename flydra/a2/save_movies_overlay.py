@@ -114,6 +114,8 @@ def doit(fmf_filename=None,
          options=None,
          ):
 
+    R = None # initially set to none
+
     if options.flip_y and options.rotate_180:
         raise ValueError('can use flip_y or rotate_180, but not both')
 
@@ -822,7 +824,7 @@ def doit(fmf_filename=None,
                                           pen2d )
 
                             pos = numpy.array( [x,y] )
-                            tmp_str = 'pt %d (area %f)'%(pt_no,area)
+                            tmp_str = 'pt %d (area %.1f, ecc %.1f)'%(pt_no,area,eccentricity)
                             tmpw,tmph = draw.textsize(tmp_str, font2d )
                             #draw.text( (x+5,y-tmph-1), tmp_str, font2d )
                             draw.text_smartshift( (x+5,y-tmph-1), (x,y), tmp_str, font2d )
@@ -833,14 +835,17 @@ def doit(fmf_filename=None,
 
                         # plot slope line
                         if options.body_axis or options.smooth_orientations:
-                            if not eccentricity<R.minimum_eccentricity:
+                            if ((R is None) or (not eccentricity<R.minimum_eccentricity)):
                                 direction = numpy.array( [1,slope] )
                                 direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
                                 if style=='debug':
                                     pos = numpy.array( [x,y] )
                                     for sign in [-1,1]:
                                         p1 = pos+sign*(eccentricity*10*direction)
-                                        p2 = pos+sign*(R.minimum_eccentricity*10*direction)
+                                        if R is None:
+                                            p2 = pos+sign*(                   1.0*10*direction)
+                                        else:
+                                            p2 = pos+sign*(R.minimum_eccentricity*10*direction)
                                         draw.line( [p1[0],p1[1], p2[0],p2[1]],
                                                    pen2d )
                                 elif style=='pretty':
