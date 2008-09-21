@@ -1,44 +1,43 @@
 # Start the mainbrain and 5 fake cameras in a way that allows
 # profiling and testing the whole shebang.
 
-import subprocess, threading, os, time, signal
+import subprocess, os, time, signal, sys
 
-def run_process( args, env=None, quit_event=None, sleep_interval=0.1 ):
-    popen = subprocess.Popen(args,env=env)
-    while 1:
-        print 'process',args
-        time.sleep(sleep_interval)
-        if quit_event.isSet():
-            print 'killing process running',args
+class ProcessRunner(object):
+    def __init__( self, args, env=None ):
+        self.popen = subprocess.Popen(args,env=env)
+        self.args = args
+        self.returncode = None
+    def query(self, quit_now=False):
+        print 'process',self.args
+        if quit_now:
+            print 'killing process running',self.args
             # attempt to kill nicely...
-            os.kill( popen.pid, signal.SIGTERM )
+            os.kill( self.popen.pid, signal.SIGTERM )
             while 1:
-                if popen.poll():
+                if self.popen.poll():
                     # process ended
                     break
                 time.sleep(0.1)
-            if not popen.poll():
+            if not self.popen.poll():
                 # attempt to kill less nicely...
-                os.kill( popen.pid, signal.SIGKILL )
+                os.kill( self.popen.pid, signal.SIGKILL )
             # kill child
-            popen.wait()
-            break
-        if popen.poll():
-            print 'process ended',args
+            self.popen.wait()
+            self.returncode = self.popen.returncode
+        if self.popen.poll():
             # process ended
-            break
-    return popen.returncode
+            print 'process ended',self.args
+            self.returncode = self.popen.returncode
+        return self.returncode
 
-def run_mainbrain(quit_event):
-    print 'calling mainbrain'
+def start_mainbrain():
     newenv = {'REQUIRE_FLYDRA_TRIGGER':'0'}
     newenv.update( os.environ )
-    run_process( ['flydra_mainbrain'], env=newenv, quit_event=quit_event )
-    #subprocess.check_call(
-    #                      env=newenv)
-    print 'done with mainbrain'
+    ro = ProcessRunner( ['flydra_mainbrain'], env=newenv)
+    return ro
 
-def run_cameras(quit_event):
+def start_cameras():
     print 'calling cameras'
     newenv = {}
     newenv.update( os.environ )
@@ -48,36 +47,29 @@ def run_cameras(quit_event):
         port = 8430+i
         cam_strs.append( '<net %d>'%port )
     emulation_image_sources = ':'.join(cam_strs)
-    run_process( ['flydra_camera_node',
-                  '--emulation-image-sources=%s'%emulation_image_sources],
-                 env=newenv, quit_event=quit_event )
-    ## subprocess.check_call(['flydra_camera_node'],
-    ##                       env=newenv)
-    print 'done calling cameras'
+    ro = ProcessRunner( ['flydra_camera_node',
+                         '--emulation-image-sources=%s'%emulation_image_sources],
+                        env=newenv)
+    return ro
 
 def main():
-    mbdone = threading.Event()
-    mbt = threading.Thread(target=run_mainbrain,args=(mbdone,))
-    mbt.start()
-
+    mb_runner = start_mainbrain()
     # give the main brain a second to start?
 
-    cdone = threading.Event()
-    ct = threading.Thread(target=run_cameras,args=(cdone,))
-    ct.start()
+    cam_runner = start_cameras()
 
     while 1:
-        if not ct.isAlive():
-            mbdone.set()
-            print 'ct done'
-            mbt.join()
+        if cam_runner.query() is not None:
+            returncode = cam_runner.returncode
+            print 'cam done'
+            mb_runner.query(quit_now=True)
             break
-        if not mbt.isAlive():
-            cdone.set()
+        if mb_runner.query() is not None:
+            returncode = mb_runner.returncode
             print 'mb done'
-            ct.join()
+            cam_runner.query(quit_now=True)
             break
         time.sleep(0.1)
-
+    sys.exit(returncode)
 
 
