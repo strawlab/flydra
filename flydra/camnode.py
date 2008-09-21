@@ -1310,7 +1310,7 @@ class ImageSourceFromCamera(ImageSource):
         ImageSource.__init__(self,*args,**kwargs)
         self._prosilica_hack_last_framenumber = None
         self._prosilica_hack_framenumber_offset = 0
-        
+
     def _block_until_ready(self):
         # no-op for realtime camera processing
         pass
@@ -1361,11 +1361,14 @@ class ImageSourceFromCamera(ImageSource):
             # get best guess as to when image was taken
             timestamp=self.cam.get_last_timestamp()
             framenumber=self.cam.get_last_framenumber()
-            
+
             # Hack to deal with Prosilica framenumber resetting at
             # 65535 (even though it's an unsigned long).
-            
-            if framenumber==1 and self._prosilica_hack_last_framenumber == 65535:
+
+            _prosilica_hack_max_skipped_frames = 100
+            if ((framenumber<=_prosilica_hack_max_skipped_frames) and
+                (self._prosilica_hack_last_framenumber >= 65536-_prosilica_hack_max_skipped_frames) and
+                (self._prosilica_hack_last_framenumber < 65536)):
                 # We're dealing with a Prosilica camera which just
                 # rolled over.
                 self._prosilica_hack_framenumber_offset += 65636
