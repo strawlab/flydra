@@ -47,6 +47,7 @@ import threading, time, socket, sys, struct, select, math, warnings
 import Queue
 import numpy
 import numpy as nx
+import numpy as np
 import errno
 import scipy.misc.pilutil
 import numpy.dual
@@ -1452,6 +1453,46 @@ class FakeCamera(object):
     def get_trigger_mode_string(self,i):
         return 'fake camera trigger'
 
+class FakeCameraFromNetwork(FakeCamera):
+    def __init__(self,id,frame_size):
+        self.id = id
+        self.frame_size = frame_size
+        self.remote = None
+
+    def get_frame_size(self):
+        return self.frame_size
+
+    def _ensure_remote(self):
+        if self.remote is None:
+            hostname = 'localhost'
+            port = flydra.common_variables.emulated_camera_control
+            name = 'remote_camera_source'
+            remote_URI = "PYROLOC://%s:%d/%s" % (hostname,port,name)
+            self.remote = Pyro.core.getProxyForURI(remote_URI)
+
+    def grab_next_frame_into_buf_blocking(self,buf, quit_event):
+        # XXX TODO: implement quit_event checking
+        self._ensure_remote()
+
+        pt_list = self.remote.get_point_list(self.id) # this will block...
+        w,h = self.frame_size
+        new_raw = np.asarray( buf )
+        assert new_raw.shape == (h,w)
+        for pt in pt_list:
+            x,y = pt
+            xi = int(round(x))
+            yi = int(round(y))
+            new_raw[yi,xi] = 10
+        return new_raw
+
+    def get_last_timestamp(self):
+        self._ensure_remote()
+        return self.remote.get_last_timestamp(self.id) # this will block...
+
+    def get_last_framenumber(self):
+        self._ensure_remote()
+        return self.remote.get_last_timestamp(self.id) # this will block...
+
 class FakeCameraFromFMF(FakeCamera):
     def __init__(self,filename):
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
@@ -1540,8 +1581,21 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
 
     elif fname.endswith('.ufmf'):
         raise NotImplementedError('patience, young grasshopper')
-    elif fname.startswith('<gaussian') and fname.endswith('>'):
-        raise NotImplementedError('patience, young grasshopper')
+    elif fname.startswith('<net') and fname.endswith('>'):
+        args = fname[4:-1].strip()
+        args = args.split()
+        port, width, height = map(int, args)
+        cam = FakeCameraFromNetwork(port,(width,height))
+        ImageSourceModel = ImageSourceFakeCamera
+        w,h = cam.get_frame_size()
+
+        mean = np.ones( (h,w), dtype=np.uint8 )
+        sumsqf = np.ones( (h,w), dtype=np.uint8 )
+        raw = np.ones( (h,w), dtype=np.uint8 )
+
+        initial_image_dict = {'mean':mean,
+                              'sumsqf':sumsqf,
+                              'raw':raw}
     else:
         raise ValueError('could not create emulation image source')
     return cam, ImageSourceModel, initial_image_dict
