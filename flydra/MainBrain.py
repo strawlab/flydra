@@ -1571,9 +1571,8 @@ class MainBrain(object):
 
         def listen(self,daemon):
             """thread mainloop"""
-            quit_now_isSet = self.quit_now.isSet
             hr = daemon.handleRequests
-            while not quit_now_isSet():
+            while not self.quit_now.isSet():
                 try:
                     hr(0.1) # block on select for n seconds
                 except select.error, err:
