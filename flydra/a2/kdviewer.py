@@ -5,6 +5,7 @@ if 1:
     tables.flavor.restrict_flavors(keep=['numpy'])
 
 import sets, os, sys, math
+import warnings
 
 import pkg_resources
 from enthought.tvtk.api import tvtk
@@ -280,7 +281,6 @@ def doit(filename,
 
         if fps is None:
             fps = 100.0
-            import warnings
             warnings.warn('Setting fps to default value of %f'%fps)
 
     if show_n_longest is not None:
@@ -307,10 +307,14 @@ def doit(filename,
             n_frames = int(obs_rows['frame'][-1])-int(obs_rows['frame'][0])+1
 
             if exclude_vel_mps and exclude_vel_data == 'kalman':
-                rows = ca.load_data( obj_id, data_file,
-                                     use_kalman_smoothing=use_kalman_smoothing,
-                                     dynamic_model_name = dynamic_model_name,
-                                     frames_per_second=fps)
+                try:
+                    rows = ca.load_data( obj_id, data_file,
+                                         use_kalman_smoothing=use_kalman_smoothing,
+                                         dynamic_model_name = dynamic_model_name,
+                                         frames_per_second=fps)
+                except core_analysis.NotEnoughDataToSmoothError:
+                    warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
+                    continue
                 # central difference to find velocity
                 velx = (rows['x'][2:]-rows['x'][:-2])*2*fps
                 vely = (rows['y'][2:]-rows['y'][:-2])*2*fps

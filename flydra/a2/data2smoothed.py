@@ -165,15 +165,17 @@ def convert(infilename,
             break
         if i%100 == 0:
             print '%d of %d'%(i,len(obj_ids))
-        results = ca.get_smoothed(obj_id,
-                                  infilename,
-                                  frames_per_second=frames_per_second,
-                                  dynamic_model_name=dynamic_model_name,
-                                  )
+        try:
+            results = ca.get_smoothed(obj_id,
+                                      infilename,
+                                      frames_per_second=frames_per_second,
+                                      dynamic_model_name=dynamic_model_name,
+                                      )
+        except core_analysis.NotEnoughDataToSmoothError:
+            warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
+            continue
         rows = results['kalman_smoothed_rows']
         allrows.append(rows)
-
-        #
 
     allrows = numpy.concatenate( allrows )
     recarray = numpy.rec.array(allrows)
