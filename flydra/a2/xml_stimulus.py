@@ -7,6 +7,20 @@ import os
 import hashlib
 from core_analysis import parse_seq, check_hack_postmultiply
 
+class StimProjection(object):
+    def __call__(self,*args,**kwargs):
+        return self.project(*args,**kwargs)
+    def project(self,X):
+        raise NotImplementedError('abstract base class method called')
+
+class SimpleOrthographicXYProjection(StimProjection):
+    def project(self,X):
+        return X[0], X[1]
+
+class SimpleOrthographicXZProjection(StimProjection):
+    def project(self,X):
+        return X[0], X[2]
+
 class Stimulus(object):
 
     def __init__(self,root,hack_postmultiply=None):
@@ -116,7 +130,7 @@ class Stimulus(object):
         # mainly copied from self.plot_stim_over_distorted_image()
         R = self._get_reconstructor()
         R = R.get_scaled()
-        class Projection:
+        class MyProjection(StimProjection):
             def __init__(self,R,cam_id):
                 self.R = R
                 self.w,self.h = R.get_resolution(cam_id)
@@ -128,12 +142,13 @@ class Stimulus(object):
                 if (y<0) or (y>( self.h-1)):
                     return None
                 return x,y
-        P = Projection(R,cam_id)
+        P = MyProjection(R,cam_id)
         return self._get_linesegs( projection=P.project )
 
     def _get_linesegs( self, projection=None ):
         """good for OpenGL type stuff"""
-        assert projection is not None
+        if not isinstance(projection,StimProjection):
+            raise ValueError('projection must be instance of xml_stimulus.StimProjection class')
         plotted_anything = False
 
         linesegs = []
@@ -210,17 +225,18 @@ class Stimulus(object):
         R = self._get_reconstructor()
         R = R.get_scaled()
 
-        class Projection:
+        class MyProjection(StimProjection):
             def __init__(self,R,cam_id):
                 self.R = R
                 self.cam_id = cam_id
             def project(self,X):
                 return self.R.find2d(self.cam_id,X,distorted=True)
-        P = Projection(R,cam_id)
+        P = MyProjection(R,cam_id)
         self.plot_stim( ax, projection=P.project )
 
     def plot_stim( self, ax, projection=None ):
-        assert projection is not None
+        if not isinstance(projection,StimProjection):
+            raise ValueError('projection must be instance of xml_stimulus.StimProjection class')
 
         plotted_anything = False
 
