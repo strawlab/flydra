@@ -1326,6 +1326,7 @@ class CachingAnalyzer:
                 ysB = my_decimate(ysA,skip)
                 zsB = my_decimate(zsA,skip)
                 time_B = my_decimate(time_A,skip)
+                framesB = my_decimate(framesA,skip)
 
                 XB = numpy.vstack((xsB,ysB,zsB)).T
 
@@ -1337,6 +1338,8 @@ class CachingAnalyzer:
                 ydiffsF = ysB[2:]-ysB[:-2]
                 zdiffsF = zsB[2:]-zsB[:-2]
                 time_F = time_B[1:-1]
+                frame_F = framesB[1:-1]
+
                 XF = XB[1:-1]
                 AindexF = AindexB[1:-1]
 
@@ -1411,6 +1414,7 @@ class CachingAnalyzer:
                 results['vel_kalmanized'] = velA[slicer] # raw velocity data from Kalman (not otherwise downsampled or smoothed)
                 results['speed_kalmanized'] = speedA[slicer] # raw speed data from Kalman (not otherwise downsampled or smoothed)
 
+                results['frame'] = frame_F[slicer] # times for most data
                 results['time_t'] = time_F[slicer] # times for most data
                 results['X_t'] = XF[slicer]
                 results['vels_t'] = velsF[slicer] # 3D velocity
