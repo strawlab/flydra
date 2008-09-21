@@ -1616,7 +1616,8 @@ class ConsoleApp(object):
         self.exit_value = exit_value
 
     def generate_view(self, model, controller ):
-        print 'WARNING: no view implemented for image sources that require it.'
+        if hasattr(controller, 'trigger_single_frame_start' ):
+            raise NotImplementedError('no control in ConsoleApp for %s'%controller)
 
 class AppState(object):
     """This class handles all camera states, properties, etc."""
