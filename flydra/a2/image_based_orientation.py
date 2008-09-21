@@ -91,8 +91,8 @@ def doit(h5_filename=None,
                         # find 2D point corresponding to object
                         if camn!=obs_camn:
                             continue
-                        for h5_2d_row_idx in h5_2d_row_idxs:
-                            if obs_camn_pt_no !=
+                        ## for h5_2d_row_idx in h5_2d_row_idxs:
+                        ##     ## if obs_camn_pt_no !=
 
             if 1:
                 # guess cam_id
