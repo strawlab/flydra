@@ -255,6 +255,10 @@ class ShowIt(object):
                 bg_arr_h5 = getattr(img_table,cam_id)
                 bg_arr = bg_arr_h5.read()
                 ax.imshow( bg_arr, origin='lower',cmap=cm.pink )
+                ax.set_autoscale_on(True)
+                ax.autoscale_view()
+                pylab.draw()
+                ax.set_autoscale_on(False)
 
             if self.reconstructor is not None:
                 res = self.reconstructor.get_resolution(cam_id)
@@ -295,16 +299,6 @@ class ShowIt(object):
             if 0:
                 for x,y,frame in zip(xs[::5],ys[::5],tmp_frames[::5]):
                     ax.text(x,y,'%d'%(frame,))
-
-            if self.reconstructor is not None:
-                res = self.reconstructor.get_resolution(cam_id)
-                ax.set_xlim([0,res[0]])
-                #ax.set_ylim([0,res[1]])
-                ax.set_ylim([res[1],0])
-            elif bg_arr is not None:
-                ax.set_xlim([0,bg_arr.shape[1]])
-                #ax.set_ylim([0,res[1]])
-                ax.set_ylim([bg_arr.shape[0],0])
 
         fig.canvas.mpl_connect('key_press_event', self.on_key_press)
 
