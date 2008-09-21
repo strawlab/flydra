@@ -14,16 +14,13 @@ import warnings, collections
 import flydra_tracked_object
 from flydra_tracked_object import TrackedObject
 
+# Need all these names for backwards compatibility:
+from data_packets import decode_data_packet, encode_super_packet, \
+     decode_super_packet, packet_header_fmt, packet_header_fmtsize, \
+     super_packet_header_fmt, super_packet_header_fmtsize, \
+     super_packet_subheader, err_size
+
 __all__ = ['TrackedObject','Tracker','decode_data_packet']
-
-packet_header_fmt = '<idBB' # XXX check format
-packet_header_fmtsize = struct.calcsize(packet_header_fmt)
-
-super_packet_header_fmt = '<H'
-super_packet_header_fmtsize = struct.calcsize(super_packet_header_fmt)
-super_packet_subheader = 'H'
-
-err_size = 1
 
 class AsyncApplier(object):
     def __init__(self,mylist,name,args=None,kwargs=None,targets=None):
@@ -432,6 +429,7 @@ class Tracker:
                 callback(tro)
 
     def encode_data_packet(self,corrected_framenumber,timestamp):
+        # keep in sync data_packets.py's decode_data_packet()
         state_size = self.kalman_model['ss']
         results = self.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
 
@@ -455,55 +453,6 @@ class Tracker:
                                    state_size)
         data_packet = ''.join( [data_packet1]+data_packets_more )
         return data_packet
-
-def decode_data_packet(buf):
-    header = buf[:packet_header_fmtsize]
-    rest = buf[packet_header_fmtsize:]
-
-    (corrected_framenumber,timestamp,N,state_size) = struct.unpack(
-        packet_header_fmt,header)
-    per_tracked_object_fmt = 'f'*(state_size+err_size)
-    per_tracked_object_fmtsize = struct.calcsize(per_tracked_object_fmt)
-    state_vecs = []
-    for i in range(N):
-        this_tro = rest[:per_tracked_object_fmtsize]
-        rest = rest[per_tracked_object_fmtsize:]
-
-        results = struct.unpack(per_tracked_object_fmt,this_tro)
-        state_vec = results[:state_size]
-        meanP = results[state_size]
-        state_vecs.append( state_vec )
-    return corrected_framenumber, timestamp, state_vecs, meanP
-
-def encode_super_packet( data_packets ):
-    n = len(data_packets)
-    sizes = [ len(p) for p in data_packets ]
-    fmt = super_packet_header_fmt + (super_packet_subheader)*n
-    super_packet_header = struct.pack( fmt, n, *sizes )
-    final_packet = super_packet_header + ''.join(data_packets)
-    return final_packet
-
-def decode_super_packet( super_packet ):
-    header = super_packet[:super_packet_header_fmtsize]
-    rest = super_packet[super_packet_header_fmtsize:]
-
-    (n,) = struct.unpack(super_packet_header_fmt,header)
-    fmt2 = (super_packet_subheader)*n
-    fmt2size = struct.calcsize(fmt2)
-
-    subheader = rest[:fmt2size]
-    data_packets_joined = rest[fmt2size:]
-    sizes = struct.unpack( fmt2, subheader )
-
-    data_packets = []
-    next_packets = data_packets_joined
-
-    for sz in sizes:
-        this_packet = next_packets[:sz]
-        next_packets = next_packets[sz:]
-
-        data_packets.append( this_packet )
-    return data_packets
 
 
 def test():
