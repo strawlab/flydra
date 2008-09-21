@@ -91,6 +91,7 @@ def convert(infilename,
         print 'finding 2d data for each obj_id...'
         timestamp_time = numpy.zeros( unique_obj_ids.shape, dtype=numpy.float64)
         table_kobs_frame = table_kobs.read(field='frame')
+        assert table_kobs_frame.dtype == table_data2d_frames.dtype # otherwise very slow
 
         for obj_id_enum,obj_id in enumerate(unique_obj_ids):
             if obj_id > stop_obj_id:
@@ -102,22 +103,16 @@ def convert(infilename,
             idx0 = numpy.min(idxs)
 
             framenumber = table_kobs_frame[idx0]
-            if tables.__version__ <= '1.3.3': # pytables numpy scalar workaround
-                framenumber = int(framenumber)
-
             remote_timestamp = numpy.nan
 
-            if 0:
-                this_camn = None
-                for row in table_data2d.where('frame == framenumber'):
-                    this_camn = row['camn']
-                    remote_timestamp = row['timestamp']
-                    break
-            elif 1:
-                # alternative (faster?) method
+            this_camn = None
+            try:
+                # this just gets first index -- we're only trying to find camn here
                 frame_idx = table_data2d_frames_find.index( framenumber )
                 this_camn = table_data2d_camns[frame_idx]
                 remote_timestamp = table_data2d_timestamps[frame_idx]
+            except KeyError:
+                this_camn=None
 
             if this_camn is None:
                 print 'skipping frame %d (obj %d): no data2d_distorted data'%(framenumber,obj_id)
