@@ -147,7 +147,7 @@ class Stimulus(object):
         R = self._get_reconstructor()
         R = R.get_scaled()
         P = FlydraReconstructProjection(R,cam_id)
-        return self._get_linesegs( projection=P.project )
+        return self._get_linesegs( projection=P )
 
     def _get_linesegs( self, projection=None ):
         """good for OpenGL type stuff"""
