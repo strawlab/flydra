@@ -231,9 +231,11 @@ class Stimulus(object):
         P = FlydraReconstructProjection(R,cam_id)
         self.plot_stim( ax, projection=P )
 
-    def plot_stim( self, ax, projection=None, post_colors=None, show_post_num=False ):
-        if post_colors is None:
-            post_colors = {}
+    def plot_stim( self, ax, projection=None,
+                   post_colors=None,
+                   show_post_num=False,
+                   draw_post_as_circle=False,
+                   ):
         if not isinstance(projection,StimProjection):
             print 'projection',projection
             raise ValueError('projection must be instance of xml_stimulus.StimProjection class')
@@ -272,19 +274,35 @@ class Stimulus(object):
                 info = self._get_info_for_cylindrical_post(child)
                 xs, ys = [], []
                 assert len(info['verts'])==2
+                r = info['diameter']/2.0
                 X0 = info['verts'][0]
                 X1 = info['verts'][1]
-                dX = X1-X0
-                for frac in np.linspace(0,1.0,50):
-                    X = X0 + frac*dX
-                    result = projection(X)
-                    if result is None:
-                        v2x, v2y = np.nan, np.nan
-                    else:
-                        v2x, v2y = result
-                    xs.append(v2x); ys.append(v2y)
-                post_color = post_colors.get( post_num, 'k')
-                ax.plot( xs, ys, '-', color=post_color, linewidth=5 )
+
+                if post_colors is None:
+                    post_color = 'k'
+                else:
+                    post_color = post_colors[ post_num ]
+
+                if draw_post_as_circle:
+                    Xav = (X0+X1)/2.0
+                    theta = np.linspace(0,2*np.pi,100)
+                    xo = r*np.cos(theta)
+                    yo = r*np.sin(theta)
+                    ax.fill( Xav[0]+xo, Xav[1]+yo, '-',
+                             facecolor=post_color, edgecolor='none')
+                else:
+                    dX = X1-X0
+                    for frac in np.linspace(0,1.0,50):
+                        X = X0 + frac*dX
+                        result = projection(X)
+                        if result is None:
+                            v2x, v2y = np.nan, np.nan
+                        else:
+                            v2x, v2y = result
+                        xs.append(v2x); ys.append(v2y)
+
+                    ax.plot( xs, ys, '-', color=post_color, linewidth=5 )
+
                 if show_post_num:
                     ax.text( xs[0], ys[0], 'post %d'%post_num )
                 post_num += 1
