@@ -707,9 +707,9 @@ class ProcessCamClass(object):
                                                          max_duration_sec=self.shortest_IFI-0.0005, # give .5 msec for other processing
                                                          return_debug_values=1,
                                                          )
-                if len(xpoints)>=self.max_num_points:
-                    msg = 'Warning: cannot save acquire points this frame because maximum number already acheived'
-                    print >> sys.stderr, msg
+                ## if len(xpoints)>=self.max_num_points:
+                ##     msg = 'Warning: cannot save acquire points this frame because maximum number already acheived'
+                ##     print >> sys.stderr, msg
                 chainbuf.processed_points = xpoints
                 if NAUGHTY_BUT_FAST:
                     chainbuf.absdiff8u_im_full = absdiff8u_im_full
