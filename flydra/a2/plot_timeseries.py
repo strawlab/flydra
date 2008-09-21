@@ -9,7 +9,7 @@ if 1:
     tables.flavor.restrict_flavors(keep=['numpy'])
 
 from optparse import OptionParser
-import sets, os, sys, math
+import sets, os, sys, math, hashlib
 import numpy as np
 import pkg_resources
 import numpy
@@ -84,6 +84,10 @@ def plot_timeseries(subplot=None,options = None):
     ca = core_analysis.get_global_CachingAnalyzer(hack_postmultiply=options.hack_postmultiply)
 
     if kalman_filename is not None:
+        m = hashlib.md5()
+        m.update(open(kalman_filename,mode='rb').read())
+        actual_md5 = m.hexdigest()
+        print 'opening kalman file %s %s'%(kalman_filename,actual_md5)
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
 
     do_fuse = False
@@ -412,19 +416,22 @@ def doit(
                 obj_id = self.line2obj_id[thisline]
                 if obj_id not in self.obj_ids:
                     self.obj_ids.append( obj_id )
+                    self.obj_ids.sort()
                     print 'picked',obj_id
                     print 'all:'
                     print self.obj_ids
-                else:
-                    print '(already had obj_id %d)'%obj_id
+                ## else:
+                ##     print '(already had obj_id %d)'%obj_id
         def on_key_press(self,event):
-            print 'received key',repr(event.key)
+            #print 'received key',repr(event.key)
             if event.key=='c':
                 del self.obj_ids[:]
+                print self.obj_ids
             if event.key=='l':
                 del self.obj_ids[-1]
-            print 'all:'
-            print self.obj_ids
+                print self.obj_ids
+            #print 'all:'
+            #print self.obj_ids
 
     pick_receiver = MyPickObj(line2obj_id)
     fig.canvas.mpl_connect('pick_event', pick_receiver.onpick)
