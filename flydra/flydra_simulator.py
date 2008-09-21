@@ -5,7 +5,7 @@
 # ProcessCamClass part of the stack -- no need to test background
 # subtraction and so on...
 
-import subprocess, threading, os, time, signal, sys, socket
+import subprocess, threading, os, time, signal, sys, socket, errno
 import Pyro.core
 import flydra.common_variables
 
@@ -91,7 +91,7 @@ def wait_for_mainbrain_to_come_alive():
         try:
             s.connect(('localhost', port))
         except socket.error, err:
-            if err.args[0] == 111: # connection refused
+            if err.args[0] == errno.ECONNREFUSED: # connection refused
                 continue
         else:
             break # it accepted so, mainbrain is alive
