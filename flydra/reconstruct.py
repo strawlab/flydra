@@ -647,10 +647,11 @@ class Reconstructor:
                     fd.close()
             if self.minimum_eccentricity is None:
                 # use default
-                if 0:
-                    1/0
-                warnings.warn('No minimum eccentricity specified, using default')
-                self.minimum_eccentricity=DEFAULT_MINIMUM_ECCENTRICITY
+                if int(os.environ.get('FORCE_MINIMUM_ECCENTRICITY','0')):
+                    raise ValueError('minimum_eccentricity cannot be default')
+                else:
+                    warnings.warn('No minimum eccentricity specified, using default')
+                    self.minimum_eccentricity=DEFAULT_MINIMUM_ECCENTRICITY
         else:
             # use the value that was passed in to constructor
             self.minimum_eccentricity=minimum_eccentricity

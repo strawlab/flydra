@@ -414,15 +414,18 @@ def kalmanize(src_filename,
     if reconstructor_filename is None:
         reconstructor_filename = src_filename
 
+
     if 1:
         if reconstructor_filename.endswith('h5'):
             fd = PT.openFile(reconstructor_filename,mode='r')
-            reconst_orig_units = flydra.reconstruct.Reconstructor(fd)
+            reconst_orig_units = flydra.reconstruct.Reconstructor(fd,
+                                                                  minimum_eccentricity=options.force_minimum_eccentricity)
         else:
-            reconst_orig_units = flydra.reconstruct.Reconstructor(reconstructor_filename)
-
+            reconst_orig_units = flydra.reconstruct.Reconstructor(reconstructor_filename,
+                                                                  minimum_eccentricity=options.force_minimum_eccentricity)
     if options.force_minimum_eccentricity is not None:
-        reconst_orig_units.set_minimum_eccentricity(options.force_minimum_eccentricity)
+        if reconst_orig_units.minimum_eccentricity != options.force_minimum_eccentricity:
+            raise ValueError('could not force minimum_eccentricity')
 
     reconstructor_meters = reconst_orig_units.get_scaled(reconst_orig_units.get_scale_factor())
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
