@@ -1772,7 +1772,7 @@ class AppState(object):
             self.main_brain = DummyMainBrain()
         else:
             Pyro.core.initClient(banner=0)
-            port = 9833
+            port = flydra.common_variables.mainbrain_port
             name = 'main_brain'
             main_brain_URI = "PYROLOC://%s:%d/%s" % (self.main_brain_hostname,port,name)
             try:

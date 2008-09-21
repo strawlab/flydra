@@ -15,3 +15,4 @@ min_cam2mainbrain_data_port = 34813 # totally arbitrary, gets communicated
 realtime_kalman_port = 28931
 
 emulated_camera_control = 9645
+mainbrain_port = 9833

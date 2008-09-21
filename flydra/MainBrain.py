@@ -1756,7 +1756,7 @@ class MainBrain(object):
 
         Pyro.core.initServer(banner=0)
 
-        port = 9833
+        port = flydra.common_variables.mainbrain_port
 
         # start Pyro server
         daemon = Pyro.core.Daemon(host=hostname,port=port)
