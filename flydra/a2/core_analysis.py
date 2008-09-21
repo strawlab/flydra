@@ -693,7 +693,6 @@ def detect_saccades(rows,
     results dictionary contains:
     -----------------------------------
     'frames' - array of ints, frame numbers of moment of saccade
-    'times' - array of floats, seconds since beginning of trace at moment of saccade
     'X' - n by 3 array of floats, 3D position at each saccade
 
     """
@@ -873,7 +872,8 @@ def detect_saccades(rows,
 
         valid_idxsA = AindexF[valid_idxsF]
         results['frames'] = framesA[valid_idxsA]
-        results['times'] = time_F[valid_idxsF]
+        #results['times'] = time_F[valid_idxsF]
+        saccade_times = time_F[valid_idxsF] # don't save - user should use frames and indices
         results['X'] = XA[valid_idxsA]
 
         if DEBUG and horizontal_only:
@@ -881,7 +881,7 @@ def detect_saccades(rows,
             ax=pylab.subplot(2,1,1)
             pylab.plot( time_G,dheadingG_dt*RAD2DEG )
             pylab.ylabel('heading angular vel (deg/s)')
-            for t in results['times']:
+            for t in saccade_times:
                 pylab.axvline(t)
 
             pylab.plot(time_G[peak_idxsG],dheadingG_dt[peak_idxsG]*RAD2DEG,'ko')

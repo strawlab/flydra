@@ -231,13 +231,16 @@ class Stimulus(object):
         P = FlydraReconstructProjection(R,cam_id)
         self.plot_stim( ax, projection=P )
 
-    def plot_stim( self, ax, projection=None ):
+    def plot_stim( self, ax, projection=None, post_colors=None, show_post_num=False ):
+        if post_colors is None:
+            post_colors = {}
         if not isinstance(projection,StimProjection):
             print 'projection',projection
             raise ValueError('projection must be instance of xml_stimulus.StimProjection class')
 
         plotted_anything = False
 
+        post_num = 0
         for child in self.root:
             if child.tag in ['multi_camera_reconstructor','valid_h5_times']:
                 continue
@@ -280,7 +283,11 @@ class Stimulus(object):
                     else:
                         v2x, v2y = result
                     xs.append(v2x); ys.append(v2y)
-                ax.plot( xs, ys, 'k-', linewidth=5 )
+                post_color = post_colors.get( post_num, 'k')
+                ax.plot( xs, ys, '-', color=post_color, linewidth=5 )
+                if show_post_num:
+                    ax.text( xs[0], ys[0], 'post %d'%post_num )
+                post_num += 1
             else:
                 import warnings
                 warnings.warn("Unknown node: %s"%child.tag)

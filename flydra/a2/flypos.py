@@ -92,6 +92,8 @@ def fuse_obj_ids(use_obj_ids, data_file,
     xs_all[idxs] = xs
     ys_all[idxs] = ys
     zs_all[idxs] = zs
+    orig_data_present = np.zeros( frames_all.shape, dtype=bool )
+    orig_data_present[idxs] = True
 
     # "obs" == "observations" == ML estimates of position without dynamics
     if 0:
@@ -160,10 +162,12 @@ def fuse_obj_ids(use_obj_ids, data_file,
         sys.exit()
 
     recarray = numpy.rec.fromarrays([frames_all,
-                                        X[:,0],
-                                        X[:,1],
-                                        X[:,2]],
-                                       names='frame,x,y,z')
+                                     X[:,0],
+                                     X[:,1],
+                                     X[:,2],
+                                     orig_data_present,
+                                     ],
+                                    names='frame,x,y,z,orig_data_present')
     return recarray
 
 def pos2ori(X,force_pitch_0=False):
