@@ -269,7 +269,7 @@ class TestMahalanobis(unittest.TestCase):
                                       flydra.geom.ThreeTuple((1,0,0)))
         mu = numpy.array((10.0,1,0,0,0,0))
         S = numpy.eye(6)
-        S_inv = np.linalg.inv( S )
+        S_inv = np.linalg.inv( S[:3,:3] )
         loc3d = flydra.mahalanobis.line_fit_3d( ln, mu, S_inv)
         assert numpy.allclose(loc3d, (10.0, 0.0, 0.0) )
 

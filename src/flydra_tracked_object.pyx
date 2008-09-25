@@ -408,7 +408,7 @@ cdef class TrackedObject:
             closest_idx = None
 
             if len( candidate_point_list ):
-                Pminus_inv = numpy.linalg.inv( Pminus )
+                Pminus_inv = numpy.linalg.inv( Pminus[:3,:3] )
             else:
                 Pminus_inv = None
 
