@@ -6,6 +6,7 @@ import flydra.geom
 import flydra.fastgeom
 import flydra.undistort
 import numpy
+import numpy as np
 import scipy.optimize
 import flydra.mahalanobis
 import xml.etree.ElementTree as ET
@@ -259,7 +260,8 @@ class TestMahalanobis(unittest.TestCase):
         line_2d = 0,0, 1,0 # line passes through 0,0 in direction 1,0 (i.e. with slope 0/1)
         mu = (10,1)
         S = numpy.eye(2)
-        loc2d = flydra.mahalanobis.line_fit_2d( line_2d, mu, S)
+        S_inv = np.linalg.inv( S )
+        loc2d = flydra.mahalanobis.line_fit_2d( line_2d, mu, S_inv)
         assert numpy.allclose(loc2d, (10.0,0.0) )
 
     def test_3d(self):
@@ -267,14 +269,16 @@ class TestMahalanobis(unittest.TestCase):
                                       flydra.geom.ThreeTuple((1,0,0)))
         mu = numpy.array((10.0,1,0,0,0,0))
         S = numpy.eye(6)
-        loc3d = flydra.mahalanobis.line_fit_3d( ln, mu, S)
+        S_inv = np.linalg.inv( S )
+        loc3d = flydra.mahalanobis.line_fit_3d( ln, mu, S_inv)
         assert numpy.allclose(loc3d, (10.0, 0.0, 0.0) )
 
     def test_dist(self):
         x = numpy.array(( 0, 0, 0))
         y = numpy.array(( 2, 0, 0))
         sigma = numpy.eye(3)
-        four = flydra.mahalanobis.dist2( x, y, sigma )
+        sigma_inv = np.linalg.inv( sigma )
+        four = flydra.mahalanobis.dist2( x, y, sigma_inv )
         assert four==4.0
 
 def get_test_suite():

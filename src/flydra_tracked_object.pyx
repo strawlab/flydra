@@ -406,7 +406,14 @@ cdef class TrackedObject:
 
             least_nll = c_inf
             closest_idx = None
-            for idx,(pt_undistorted,projected_line_meters) in enumerate(candidate_point_list):
+
+            if len( candidate_point_list ):
+                Pminus_inv = numpy.linalg.inv( Pminus )
+            else:
+                Pminus_inv = None
+
+            for idx,(pt_undistorted,projected_line_meters) in enumerate(
+                candidate_point_list):
 
                 # Iterate over each candidate point. Each point has:
                 #  * index 'idx'
@@ -421,12 +428,17 @@ cdef class TrackedObject:
                     warnings.warn('using slow threetuple')
                     u = projected_line_meters.u
                     v = projected_line_meters.v
-                    projected_line_meters = flydra.geom.PlueckerLine(flydra.geom.ThreeTuple((u.a,u.b,u.c)),
-                                                                     flydra.geom.ThreeTuple((v.a,v.b,v.c)))
-                best_3d_location = mahalanobis.line_fit_3d( projected_line_meters, xhatminus, Pminus )
+                    projected_line_meters = flydra.geom.PlueckerLine(
+                        flydra.geom.ThreeTuple((u.a,u.b,u.c)),
+                        flydra.geom.ThreeTuple((v.a,v.b,v.c)))
+                best_3d_location = mahalanobis.line_fit_3d(
+                    projected_line_meters, xhatminus, Pminus_inv )
 
                 # find closest distance between projected_line and predicted position for each 2d point
-                dist2=mahalanobis.dist2( best_3d_location, xhatminus, Pminus ) # squared distance between prediction and camera ray
+                #   squared distance between prediction and camera ray
+                dist2=mahalanobis.dist2( best_3d_location,
+                                         xhatminus,
+                                         Pminus_inv )
                 pt_area = pt_undistorted[PT_TUPLE_IDX_AREA]
                 cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
                 mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]

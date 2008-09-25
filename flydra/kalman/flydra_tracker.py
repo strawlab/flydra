@@ -5,10 +5,8 @@ import flydra.kalman.ekf as kalman_ekf
 #import flydra.geom as geom
 import flydra.fastgeom as geom
 import flydra.geom
-import flydra.mahalanobis as mahalanobis
 import os, math, struct
 import flydra.data_descriptions
-from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 import warnings, collections
 
 import flydra_tracked_object
@@ -325,8 +323,8 @@ class Tracker:
         return believably_new
 
     def calculate_a_posteri_estimates(self,frame,data_dict,camn2cam_id,debug2=0):
-        # Allow earlier tracked objects to be greedy and take all the
-        # data they want.
+        # Allow earlier tracked objects to take all the data they
+        # want.
 
         if debug2>1:
             print self,'gobbling all data for frame %d'%(frame,)
