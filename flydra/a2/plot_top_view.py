@@ -13,6 +13,7 @@ import sets, os, sys, math
 
 import pkg_resources
 import numpy
+import numpy as np
 import tables as PT
 import flydra.reconstruct as reconstruct
 import flydra.analysis.result_utils as result_utils
@@ -26,6 +27,7 @@ import core_analysis
 import flydra.a2.xml_stimulus as xml_stimulus
 import analysis_options
 from optparse import OptionParser
+import densities # from scikits.learn
 
 import pytz, datetime
 pacific = pytz.timezone('US/Pacific')
@@ -214,6 +216,13 @@ def plot_top_and_side_views(subplot=None,
 
         with keep_axes_dimensions_if( subplot['xy'], options.stim_xml ):
             line, = subplot['xy'].plot( Xx, Xy, '.', label='obj %d'%obj_id, **kws)
+            if options.ellipsoids:
+                for i in range(len(Xx)):
+                    rowi = kalman_rows[i]
+                    mu = [rowi['x'], rowi['y'], rowi['z']]
+                    va = np.diag([rowi['P00'],rowi['P11'],rowi['P22']]) # diagonal elements of P
+                    ellx,elly = densities.gauss_ell( mu, va, [0,1], 30, 0.39 )
+                    ellipse_line, = subplot['xy'].plot( ellx, elly, color=line.get_color())
             kws['color'] = line.get_color()
             if options.show_track_ends:
                 subplot['xy'].plot( [Xx[0],Xx[-1]], [Xy[0],Xy[-1]], 'cd', ms=6, label='track end')
@@ -256,7 +265,7 @@ def main():
     parser = OptionParser(usage)
 
     analysis_options.add_common_options( parser )
-
+    parser.add_option("--ellipsoids", action='store_true', default='false')
     (options, args) = parser.parse_args()
 
     if options.obj_only is not None:
