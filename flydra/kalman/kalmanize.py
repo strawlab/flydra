@@ -153,23 +153,12 @@ option to this program.
     if debug > 5:
         print
         print 'At end of frame %d, all live tracked objects:'%frame
-        for tro in tracker.live_tracked_objects:
-            print tro
-            for i in range(len(tro.xhats)):
-                this_Pmean = math.sqrt(tro.Ps[i][0,0]**2 + tro.Ps[i][1,1]**2 + tro.Ps[i][2,2]**2)
-                print '  ',i,tro.frames[i],tro.xhats[i][:3],this_Pmean,
-                if tro.frames[i] in tro.observations_frames:
-                    j =  tro.observations_frames.index(  tro.frames[i] )
-                    print tro.observations_data[j]
-                else:
-                    print
-            print
+        tracker.live_tracked_objects.rmap( 'debug_info', level=debug )
         print
         print '-'*80
     elif debug > 2:
         print 'At end of frame %d, all live tracked objects:'%frame
-        for tro in tracker.live_tracked_objects:
-            print '%d observations, %d estimates for %s'%(len(tro.xhats),len(tro.observations_data),tro)
+        tracker.live_tracked_objects.rmap( 'debug_info', level=debug )
         print
 
 class KalmanSaver:
@@ -404,7 +393,7 @@ def kalmanize(src_filename,
         exclude_camns = []
 
     if dynamic_model_name is None:
-        dynamic_model_name = 'fly dynamics, high precision calibration, units: mm'
+        dynamic_model_name = 'EKF mamarama, units: mm'
         warnings.warn('dynamic model not specified. using "%s"'%dynamic_model_name)
     else:
         print 'using dynamic model "%s"'%dynamic_model_name
