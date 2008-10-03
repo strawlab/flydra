@@ -62,6 +62,16 @@ class keep_axes_dimensions_if(object):
         if etype:
             raise eval
 
+def get_covariance(rowi):
+    try:
+        va = np.array( [[ rowi['P00'], rowi['P01'], rowi['P02']],
+                        [ rowi['P01'], rowi['P11'], rowi['P12']],
+                        [ rowi['P02'], rowi['P12'], rowi['P22']]] )
+    except IndexError:
+        # no off-diagonal elements
+        va = np.diag([rowi['P00'],rowi['P11'],rowi['P22']]) # diagonal elements of P
+    return va
+
 def plot_top_and_side_views(subplot=None,
                             options=None,
                             ):
@@ -226,7 +236,7 @@ def plot_top_and_side_views(subplot=None,
                 for i in range(len(Xx)):
                     rowi = kalman_rows[i]
                     mu = [rowi['x'], rowi['y'], rowi['z']]
-                    va = np.diag([rowi['P00'],rowi['P11'],rowi['P22']]) # diagonal elements of P
+                    va = get_covariance( rowi )
                     ellx,elly = densities.gauss_ell( mu, va, [0,1], 30, 0.39 )
                     ellipse_line, = subplot['xy'].plot( ellx, elly, color=kws['color'])
             if options.show_track_ends:
@@ -242,7 +252,7 @@ def plot_top_and_side_views(subplot=None,
                 for i in range(len(Xx)):
                     rowi = kalman_rows[i]
                     mu = [rowi['x'], rowi['y'], rowi['z']]
-                    va = np.diag([rowi['P00'],rowi['P11'],rowi['P22']]) # diagonal elements of P
+                    va = get_covariance( rowi )
                     ellx,ellz = densities.gauss_ell( mu, va, [0,2], 30, 0.39 )
                     ellipse_line, = subplot['xz'].plot( ellx, ellz, color=kws['color'])
 

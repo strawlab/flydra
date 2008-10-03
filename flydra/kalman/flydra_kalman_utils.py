@@ -1,5 +1,7 @@
 import tables as PT
 import numpy
+import numpy as np
+import warnings
 import flydra.data_descriptions
 import flydra.kalman.dynamic_models
 
@@ -41,12 +43,12 @@ class KalmanEstimatesVelOnly(PT.IsDescription):
     yvel       = PT.Float32Col(pos=7)
     zvel       = PT.Float32Col(pos=8)
     # save diagonal of P matrix
-    P00        = PT.Float32Col(pos=12)
-    P11        = PT.Float32Col(pos=13)
-    P22        = PT.Float32Col(pos=14)
-    P33        = PT.Float32Col(pos=15)
-    P44        = PT.Float32Col(pos=16)
-    P55        = PT.Float32Col(pos=17)
+    P00        = PT.Float32Col(pos=9)
+    P11        = PT.Float32Col(pos=10)
+    P22        = PT.Float32Col(pos=11)
+    P33        = PT.Float32Col(pos=12)
+    P44        = PT.Float32Col(pos=13)
+    P55        = PT.Float32Col(pos=14)
 
 class KalmanEstimatesVelOnlyWithDirection(PT.IsDescription):
     obj_id     = PT.UInt32Col(pos=0)
@@ -59,8 +61,57 @@ class KalmanEstimatesVelOnlyWithDirection(PT.IsDescription):
     yvel       = PT.Float32Col(pos=7)
     zvel       = PT.Float32Col(pos=8)
     # save diagonal of P matrix
-    P00        = PT.Float32Col(pos=12)
-    P11        = PT.Float32Col(pos=13)
+    P00        = PT.Float32Col(pos=9)
+    P11        = PT.Float32Col(pos=10)
+    P22        = PT.Float32Col(pos=11)
+    P33        = PT.Float32Col(pos=12)
+    P44        = PT.Float32Col(pos=13)
+    P55        = PT.Float32Col(pos=14)
+    # save estimated direction of long body axis
+    rawdir_x = PT.Float32Col(pos=15)
+    rawdir_y = PT.Float32Col(pos=16)
+    rawdir_z = PT.Float32Col(pos=17)
+    dir_x = PT.Float32Col(pos=18)
+    dir_y = PT.Float32Col(pos=19)
+    dir_z = PT.Float32Col(pos=20)
+
+class KalmanEstimatesVelOnlyPositionCovariance(PT.IsDescription):
+    obj_id     = PT.UInt32Col(pos=0)
+    frame      = PT.UInt64Col(pos=1)
+    timestamp  = PT.Float64Col(pos=2) # time of reconstruction
+    x          = PT.Float32Col(pos=3)
+    y          = PT.Float32Col(pos=4)
+    z          = PT.Float32Col(pos=5)
+    xvel       = PT.Float32Col(pos=6)
+    yvel       = PT.Float32Col(pos=7)
+    zvel       = PT.Float32Col(pos=8)
+    # save parts of P matrix
+    P00        = PT.Float32Col(pos=9)
+    P01        = PT.Float32Col(pos=10)
+    P02        = PT.Float32Col(pos=11)
+    P11        = PT.Float32Col(pos=12)
+    P12        = PT.Float32Col(pos=13)
+    P22        = PT.Float32Col(pos=14)
+    P33        = PT.Float32Col(pos=15)
+    P44        = PT.Float32Col(pos=16)
+    P55        = PT.Float32Col(pos=27)
+
+class KalmanEstimatesVelOnlyWithDirectionPositionCovariance(PT.IsDescription):
+    obj_id     = PT.UInt32Col(pos=0)
+    frame      = PT.UInt64Col(pos=1)
+    timestamp  = PT.Float64Col(pos=2) # time of reconstruction
+    x          = PT.Float32Col(pos=3)
+    y          = PT.Float32Col(pos=4)
+    z          = PT.Float32Col(pos=5)
+    xvel       = PT.Float32Col(pos=6)
+    yvel       = PT.Float32Col(pos=7)
+    zvel       = PT.Float32Col(pos=8)
+    # save parts of P matrix
+    P00        = PT.Float32Col(pos=9)
+    P01        = PT.Float32Col(pos=10)
+    P02        = PT.Float32Col(pos=11)
+    P11        = PT.Float32Col(pos=12)
+    P12        = PT.Float32Col(pos=13)
     P22        = PT.Float32Col(pos=14)
     P33        = PT.Float32Col(pos=15)
     P44        = PT.Float32Col(pos=16)
@@ -73,23 +124,54 @@ class KalmanEstimatesVelOnlyWithDirection(PT.IsDescription):
     dir_y = PT.Float32Col(pos=22)
     dir_z = PT.Float32Col(pos=23)
 
-def get_kalman_estimates_table_description_for_model_name( name=None,
-                                                           allocate_space_for_direction=False  ):
-    dt = 1.0 # doesn't matter -- just getting state space size
-    model = flydra.kalman.dynamic_models.get_kalman_model( name=name, dt=1.0 )
-    ss = model['ss']
-    if ss == 6:
-        if allocate_space_for_direction:
-            return KalmanEstimatesVelOnlyWithDirection
-        else:
-            return KalmanEstimatesVelOnly
-    elif ss == 9:
-        if allocate_space_for_direction:
+class KalmanSaveInfo(object):
+    def __init__(self,name=None,
+                 allocate_space_for_direction=False,
+                 save_covariance = 'position' # or 'full' or 'diag'
+                 # 'position' means to save full covariance for upper 3x3, diag for rest
+                 ):
+        if save_covariance =='full':
             raise NotImplementedError('')
+        assert save_covariance in ['position','diag']
+        self.save_covariance = save_covariance
+        dt = 1.0 # doesn't matter -- just getting state space size
+        model = flydra.kalman.dynamic_models.get_kalman_model( name=name, dt=1.0 )
+        ss = model['ss']
+        if ss == 6:
+            if self.save_covariance == 'diag':
+                if allocate_space_for_direction:
+                    self.description = KalmanEstimatesVelOnlyWithDirection
+                else:
+                    self.description = KalmanEstimatesVelOnly
+            else:
+                # 'position'
+                if allocate_space_for_direction:
+                    self.description = KalmanEstimatesVelOnlyWithDirectionPositionCovariance
+                else:
+                    self.description = KalmanEstimatesVelOnlyPositionCovariance
+                # indices for upper part of covariance matrix (which is symmetric, so this is sufficient)
+                self.rows = np.array([0,0,0, 1,1, 2, 3, 4, 5])
+                self.cols = np.array([0,1,2, 1,2, 2, 3, 4, 5])
+        elif ss == 9:
+            assert self.save_covariance == 'diag'
+            if allocate_space_for_direction:
+                raise NotImplementedError('')
+            else:
+                self.desription = KalmanEstimates
+    def get_description(self):
+        return self.description
+    def covar_mat_to_covar_entries(self,M):
+        if self.save_covariance  == 'diag':
+            return np.diag(M).tolist()
         else:
-            return KalmanEstimates
+            return np.asarray(M)[self.rows,self.cols].tolist()
+    def covar_mats_to_covar_entries(self,Ms):
+        result = []
+        for (row,col) in zip(self.rows,self.cols):
+            result.append( Ms[:,row,col] )
+        return result
 
-class FilteredObservations(PT.IsDescription):
+class FilteredObservations(PT.IsDescription): # Not really "observations" but ML estimates
     obj_id     = PT.UInt32Col(pos=0)
     frame      = PT.UInt64Col(pos=1)
     x          = PT.Float32Col(pos=2)

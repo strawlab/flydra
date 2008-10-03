@@ -22,10 +22,7 @@ from flydra.MainBrain import TextLogDescription
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 from flydra.reconstruct import do_3d_operations_on_2d_point
 
-KalmanEstimates = flydra_kalman_utils.KalmanEstimates
-KalmanEstimatesVelOnly = flydra_kalman_utils.KalmanEstimatesVelOnly
-
-FilteredObservations = flydra_kalman_utils.FilteredObservations
+FilteredObservations = flydra_kalman_utils.FilteredObservations # Not really "observations" but ML estimates
 convert_format = flydra_kalman_utils.convert_format
 kalman_observations_2d_idxs_type = flydra_kalman_utils.kalman_observations_2d_idxs_type
 
@@ -186,8 +183,8 @@ class KalmanSaver:
             os.mkdir(save_cal_dir)
         self.save_cal_dir = save_cal_dir
 
-        func = flydra.kalman.flydra_kalman_utils.get_kalman_estimates_table_description_for_model_name
-        kalman_estimates_description = func(name=dynamic_model_name)
+        self.kalman_saver_info_instance = flydra_kalman_utils.KalmanSaveInfo(name=dynamic_model_name)
+        kalman_estimates_description = self.kalman_saver_info_instance.get_description()
 
         if os.path.exists(dest_filename):
             self.h5file = PT.openFile(dest_filename, mode="r+")
@@ -332,14 +329,11 @@ class KalmanSaver:
         timestamps = timestamps[cond]
         P_data_full = P_data_full[cond]
 
-        ss = P_data_full.shape[1] # state vector size
-        P_data_save = P_data_full[:,numpy.arange(ss),numpy.arange(ss)] # get diagonal
-
         obj_id_array = numpy.empty(frames.shape, dtype=numpy.uint32)
         obj_id_array.fill(self.obj_id)
 
-        list_of_xhats = [xhat_data[:,i] for i in range(xhat_data.shape[1])]
-        list_of_Ps = [P_data_save[:,i] for i in range(P_data_save.shape[1])]
+        list_of_xhats = [xhat_data[:,i] for i in range(xhat_data.shape[1])] # one list entry per column
+        list_of_Ps = self.kalman_saver_info_instance.covar_mats_to_covar_entries(P_data_full)
 
         xhats_recarray = numpy.rec.fromarrays([obj_id_array,frames,timestamps]+list_of_xhats+list_of_Ps,
                                               names = self.h5_xhat_names)

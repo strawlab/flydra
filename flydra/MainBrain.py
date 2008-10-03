@@ -19,7 +19,7 @@ import atexit
 import pickle, copy
 
 import motmot.utils.config
-import flydra.kalman.flydra_kalman_utils
+import flydra.kalman.flydra_kalman_utils as flydra_kalman_utils
 import flydra.kalman.flydra_tracker
 import flydra.save_calibration_data as save_calibration_data
 import flydra.fastgeom as geom
@@ -204,8 +204,8 @@ class TextLogDescription(PT.IsDescription):
     host_timestamp = PT.FloatCol(pos=2)
     message = PT.StringCol(255,pos=3)
 
-FilteredObservations = flydra.kalman.flydra_kalman_utils.FilteredObservations
-kalman_observations_2d_idxs_type = flydra.kalman.flydra_kalman_utils.kalman_observations_2d_idxs_type
+FilteredObservations = flydra_kalman_utils.FilteredObservations
+kalman_observations_2d_idxs_type = flydra_kalman_utils.kalman_observations_2d_idxs_type
 
 h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
 
@@ -819,7 +819,7 @@ class CoordinateProcessor(threading.Thread):
 
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)
 
-        convert_format = flydra.kalman.flydra_kalman_utils.convert_format # shorthand
+        convert_format = flydra_kalman_utils.convert_format # shorthand
 
         max_error = self.main_brain.get_hypothesis_test_max_error()
 
@@ -2234,8 +2234,8 @@ class MainBrain(object):
         dt = 1.0/fps
         dynamic_model = flydra.kalman.dynamic_models.get_kalman_model(name=kalman_model_name,dt=dt)
 
-        func = flydra.kalman.flydra_kalman_utils.get_kalman_estimates_table_description_for_model_name
-        self.KalmanEstimatesDescription = func(name=kalman_model_name)
+        self.kalman_saver_info_instance = flydra_kalman_utils.KalmanSaveInfo(name=kalman_model_name)
+        self.KalmanEstimatesDescription = self.kalman_saver_info_instance.get_description()
         self.dynamic_model=dynamic_model
         self.dynamic_model_name=kalman_model_name
 
@@ -2501,12 +2501,11 @@ class MainBrain(object):
                     timestamps = numpy.array(tro_timestamps, dtype=numpy.float64)
                     xhat_data = numpy.array(tro_xhats, dtype=numpy.float32)
                     P_data_full = numpy.array(tro_Ps, dtype=numpy.float32)
-                    ss = P_data_full.shape[1] # state size
-                    P_data_save = P_data_full[:,numpy.arange(ss),numpy.arange(ss)] # get diagonal
                     obj_id_array = numpy.empty(frames.shape, dtype=numpy.uint32)
                     obj_id_array.fill(obj_id)
                     list_of_xhats = [xhat_data[:,i] for i in range(xhat_data.shape[1])]
-                    list_of_Ps = [P_data_save[:,i] for i in range(P_data_save.shape[1])]
+                    ksii = self.kalman_saver_info_instance
+                    list_of_Ps = ksii.covar_mats_to_covar_entries(P_data_full)
                     xhats_recarray = numpy.rec.fromarrays(
                         [obj_id_array,frames,timestamps]+list_of_xhats+list_of_Ps,
                         names = self.h5_xhat_names)
