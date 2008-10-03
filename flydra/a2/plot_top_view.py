@@ -216,14 +216,14 @@ def plot_top_and_side_views(subplot=None,
 
         with keep_axes_dimensions_if( subplot['xy'], options.stim_xml ):
             line, = subplot['xy'].plot( Xx, Xy, '.', label='obj %d'%obj_id, **kws)
+            kws['color'] = line.get_color()
             if options.ellipsoids:
                 for i in range(len(Xx)):
                     rowi = kalman_rows[i]
                     mu = [rowi['x'], rowi['y'], rowi['z']]
                     va = np.diag([rowi['P00'],rowi['P11'],rowi['P22']]) # diagonal elements of P
                     ellx,elly = densities.gauss_ell( mu, va, [0,1], 30, 0.39 )
-                    ellipse_line, = subplot['xy'].plot( ellx, elly, color=line.get_color())
-            kws['color'] = line.get_color()
+                    ellipse_line, = subplot['xy'].plot( ellx, elly, color=kws['color'])
             if options.show_track_ends:
                 subplot['xy'].plot( [Xx[0],Xx[-1]], [Xy[0],Xy[-1]], 'cd', ms=6, label='track end')
             if options.show_landing:
@@ -231,7 +231,16 @@ def plot_top_and_side_views(subplot=None,
                     subplot['xy'].plot( [Xx[landing_idx]], [Xy[landing_idx]], 'rD', ms=10, label='landing')
 
         with keep_axes_dimensions_if( subplot['xz'], options.stim_xml ):
-            subplot['xz'].plot( Xx, Xz, '.', label='obj %d'%obj_id, **kws )
+            line,=subplot['xz'].plot( Xx, Xz, '.', label='obj %d'%obj_id, **kws )
+            kws['color'] = line.get_color()
+            if options.ellipsoids:
+                for i in range(len(Xx)):
+                    rowi = kalman_rows[i]
+                    mu = [rowi['x'], rowi['y'], rowi['z']]
+                    va = np.diag([rowi['P00'],rowi['P11'],rowi['P22']]) # diagonal elements of P
+                    ellx,ellz = densities.gauss_ell( mu, va, [0,2], 30, 0.39 )
+                    ellipse_line, = subplot['xz'].plot( ellx, ellz, color=kws['color'])
+
             if options.show_track_ends:
                 subplot['xz'].plot( [Xx[0],Xx[-1]], [Xz[0],Xz[-1]], 'cd', ms=6, label='track end')
             if options.show_landing:
@@ -265,7 +274,7 @@ def main():
     parser = OptionParser(usage)
 
     analysis_options.add_common_options( parser )
-    parser.add_option("--ellipsoids", action='store_true', default='false')
+    parser.add_option("--ellipsoids", action='store_true', default=False)
     (options, args) = parser.parse_args()
 
     if options.obj_only is not None:
