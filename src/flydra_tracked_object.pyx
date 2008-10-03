@@ -1,6 +1,10 @@
 #emacs, this is -*-Python-*- mode
 cimport c_lib
 
+# NOTE: 'observations_meters' is not the observation vector for an EKF
+# based tracker. 'observations_meters' is really just the ML estimate
+# of target position based on the camera image detections.
+
 import numpy
 import numpy as np
 import time
@@ -69,7 +73,8 @@ cdef class TrackedObject:
     cdef public object saved_calibration_data
     cdef double area_threshold
     cdef object reconstructor_meters, my_kalman
-    cdef double distorted_pixel_euclidian_distance_accept, scale_factor
+    cdef double scale_factor
+    cdef object distorted_pixel_euclidian_distance_accept
     cdef double max_variance
     cdef object ekf_observation_covariance_pixels
 
@@ -104,7 +109,7 @@ cdef class TrackedObject:
         self.save_all_data = save_all_data
         self.kill_me = False
         self.reconstructor_meters = reconstructor_meters
-        self.distorted_pixel_euclidian_distance_accept=kalman_model.get('distorted_pixel_euclidian_distance_accept',np.inf)
+        self.distorted_pixel_euclidian_distance_accept=kalman_model.get('distorted_pixel_euclidian_distance_accept',None)
 
         self.current_frameno = frame
         if scale_factor is None:
@@ -179,12 +184,28 @@ cdef class TrackedObject:
         # Don't run kalman filter with initial data, as this would
         # cause error estimates to drop too low.
 
+    def debug_info(self,level=3):
+        if level > 5:
+            print self
+            for i in range(len(self.xhats)):
+                this_Pmean = math.sqrt(self.Ps[i][0,0]**2 + self.Ps[i][1,1]**2 + self.Ps[i][2,2]**2)
+                print '  ',i,self.frames[i],self.xhats[i][:3],this_Pmean,
+                if self.frames[i] in self.observations_frames:
+                    j =  self.observations_frames.index(  self.frames[i] )
+                    print self.observations_data[j]
+                else:
+                    print
+            print
+        elif level > 2:
+            print '%d observations, %d estimates for %s'%(len(self.xhats),len(self.observations_data),self)
+
     def distance_in_meters_and_nsigma( self, testx ):
         xhat = self.xhats[-1][:3]
 
         dist2 = numpy.sum((testx-xhat)**2) # distance squared
         dist = numpy.sqrt(dist2)
 
+        # XXX This should be mahalanobis distance, probably.
         P = self.Ps[-1]
         Pmean = numpy.sqrt(numpy.sum([P[i,i]**2 for i in range(3)])) # sigma squared
         sigma = numpy.sqrt(Pmean)
@@ -264,8 +285,8 @@ cdef class TrackedObject:
                                                        camn2cam_id,
                                                        debug=debug1)
             if debug1>2:
-                print 'observation_meters, used_camns_and_idxs',observation_meters,used_camns_and_idxs
-                print 'Lcoords',Lcoords
+                print 'position MLE, used_camns_and_idxs',observation_meters,used_camns_and_idxs
+                print 'Lcoords (3D body orientation) : %s'%str(Lcoords)
 
             # Step 3. Incorporate observation to estimate a posteri
             if isinstance(self.my_kalman, kalman_ekf.EKF):
@@ -282,7 +303,10 @@ cdef class TrackedObject:
                                                                     y=observation_meters)
 
             # calculate mean variance of x y z position (assumes first three components of state vector are position)
+
+            # XXX should probably use trace/N (mean of variances) or determinant (volume of variance)
             Pmean = numpy.sqrt(numpy.sum([P[i,i]**2 for i in range(3)]))
+
             if debug1>2:
                 print 'xhat'
                 print xhat
@@ -367,6 +391,10 @@ cdef class TrackedObject:
         # For each camera, predict 2D image location and error distance
         cdef double least_nll, nll_this_point
         cdef double dist2, dist, p_y_x
+        cdef int gated_in, pixel_dist_criterion_passed
+
+        cdef double pt_area, mean_val, sumsqf_val
+        cdef int cur_val
 
         prediction_3d = xhatminus[:3]
         pixel_dist_cmp = self.distorted_pixel_euclidian_distance_accept
@@ -407,10 +435,7 @@ cdef class TrackedObject:
             least_nll = c_inf
             closest_idx = None
 
-            if len( candidate_point_list ):
-                Pminus_inv = numpy.linalg.inv( Pminus[:3,:3] )
-            else:
-                Pminus_inv = None
+            Pminus_inv = None # defer inverting Pminus until necessary.
 
             for idx,(pt_undistorted,projected_line_meters) in enumerate(
                 candidate_point_list):
@@ -422,35 +447,9 @@ cdef class TrackedObject:
                 #  * and the 3D line passing through that ray and the
                 #    image plane.
 
-                # Find point on ray with closest Mahalanobis distance.
-                if 1:
-                    import warnings
-                    warnings.warn('using slow threetuple')
-                    u = projected_line_meters.u
-                    v = projected_line_meters.v
-                    projected_line_meters = flydra.geom.PlueckerLine(
-                        flydra.geom.ThreeTuple((u.a,u.b,u.c)),
-                        flydra.geom.ThreeTuple((v.a,v.b,v.c)))
-                best_3d_location = mahalanobis.line_fit_3d(
-                    projected_line_meters, xhatminus, Pminus_inv )
+                gated_in = False
 
-                # find closest distance between projected_line and predicted position for each 2d point
-                #   squared distance between prediction and camera ray
-                dist2=mahalanobis.dist2( best_3d_location,
-                                         xhatminus,
-                                         Pminus_inv )
-                pt_area = pt_undistorted[PT_TUPLE_IDX_AREA]
-                cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
-                mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
-                sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
-
-                if cur_val is not None:
-                    p_y_x = some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
-                else:
-                    p_y_x = 0.0 # no penalty
-                dist = c_lib.sqrt(dist2)
-
-                nll_this_point = p_y_x + dist # negative log likelihood of this point
+                # First, a quick gating based on image plane distance.
 
                 pixel_dist_criterion_passed = True
                 if pixel_dist_cmp is not None:
@@ -462,20 +461,63 @@ cdef class TrackedObject:
                     if pixel_dist > pixel_dist_cmp:
                         pixel_dist_criterion_passed = False
 
+                if pixel_dist_criterion_passed:
+
+                    # Second, a quick gating based on image attributes.
+
+                    pt_area = pt_undistorted[PT_TUPLE_IDX_AREA]
+                    cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
+                    mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
+                    sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
+
+                    if cur_val is not None:
+                        p_y_x = some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
+                    else:
+                        p_y_x = 0.0 # no penalty
+
+                    if np.isfinite(p_y_x):
+                        gated_in = True
+
+                        # Find point on ray with closest Mahalanobis distance.
+
+                        if 1:
+                            import warnings
+                            warnings.warn('using slow threetuple')
+                            u = projected_line_meters.u
+                            v = projected_line_meters.v
+                            projected_line_meters = flydra.geom.PlueckerLine(
+                                flydra.geom.ThreeTuple((u.a,u.b,u.c)),
+                                flydra.geom.ThreeTuple((v.a,v.b,v.c)))
+                        if Pminus_inv is None:
+                            Pminus_inv = numpy.linalg.inv( Pminus[:3,:3] )
+                        best_3d_location = mahalanobis.line_fit_3d(
+                            projected_line_meters, xhatminus, Pminus_inv )
+
+                        # find closest distance between projected_line and predicted position for each 2d point
+                        #   squared distance between prediction and camera ray
+                        dist2=mahalanobis.dist2( best_3d_location,
+                                                 xhatminus,
+                                                 Pminus_inv )
+                        dist = c_lib.sqrt(dist2)
+                        nll_this_point = p_y_x + dist # negative log likelihood of this point
+
                 if debug>2:
                     frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                     cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
                     mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
                     sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
-                    if pixel_dist_cmp is not None:
-                        extra_print = 'distorted %.1f %.1f (pixel_dist = %.1f, criterion passed=%s)'%(
-                            pt_x_dist, pt_y_dist, pixel_dist, str(pixel_dist_criterion_passed))
-                    else:
-                        extra_print = ''
-                    #print '    ->', dist2, pt_undistorted[:2], '(idx %d, area %f, cur %d, mean %d, sumsqf %d) %s'%(
-                    #    frame_pt_idx,pt_area,cur_val,mean_val,sumsqf_val,extra_print)
+                    extra_print = []
+                    if pixel_dist_criterion_passed:
+                        extra_print.append('(pt_area %f, cur %d, mean %.1f, sumsqf %.1f)'%(
+                            pt_area,cur_val,mean_val,sumsqf_val))
 
-                if pixel_dist_criterion_passed:
+                    if gated_in:
+                        extra_print.append('distorted %.1f %.1f (pixel_dist = %.1f, mahal dist = %.1f, criterion passed=%s)'%(
+                            pt_x_dist, pt_y_dist, pixel_dist, dist, str(pixel_dist_criterion_passed)))
+                    print '    ->', dist2, pt_undistorted[:2], '(idx %d) %s'%(
+                        frame_pt_idx,' '.join(extra_print))
+
+                if gated_in:
                     if debug>2:
                         print '       (acceptable)'
                     if nll_this_point < least_nll:
