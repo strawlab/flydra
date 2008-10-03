@@ -8,6 +8,7 @@ import sets, os, sys, math
 
 import pkg_resources
 import numpy
+import numpy as np
 import tables as PT
 from optparse import OptionParser
 import flydra.reconstruct as reconstruct
@@ -17,6 +18,7 @@ import matplotlib.ticker
 import pylab
 
 import flydra.analysis.result_utils as result_utils
+from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 import core_analysis
 
 import pytz, datetime
@@ -72,9 +74,6 @@ def doit(
 
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
         cam_ids = cam_id2camns.keys()
-        if 0:
-            print 'removing cam3'
-            cam_ids = [cam_id for cam_id in cam_ids if 'cam3' not in cam_id]
         cam_ids.sort()
 
         all_data = h5.root.data2d_distorted[:]
@@ -122,6 +121,16 @@ def doit(
                     valid2 = area >= options.area_threshold
                     data = data[valid2]
                     del valid2
+
+                if options.likely_only:
+                    pt_area = data['area']
+                    cur_val = data['cur_val']
+                    mean_val = data['mean_val']
+                    sumsqf_val = data['sumsqf_val']
+
+                    p_y_x = some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val )
+                    valid3 = np.isfinite(p_y_x)
+                    data = data[valid3]
 
                 n_valid = len( data )
                 cam_id_n_valid += n_valid
@@ -397,6 +406,9 @@ def main():
     parser.add_option("--area-threshold", type='float',
                       default = 0.0,
                       help="area of 2D point required for plotting (NOTE: this is not related to the threshold used for Kalmanization)")
+
+    parser.add_option("--likely-only", action='store_true', default=False,
+                      help='plot only points that are deemed likely to be true positives')
 
     parser.add_option("--dynamic-model",
                       type="string",
