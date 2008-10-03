@@ -315,7 +315,7 @@ class Tracker:
         results = self.live_tracked_objects.rmap( 'distance_in_meters_and_nsigma', X ) # reverse map
         for (dist_meters, dist_nsigma) in results:
             if debug>5:
-                print 'distance in meters, nsigma:',dist_meters, dist_nsigma, tro
+                print 'distance in meters, nsigma:',dist_meters, dist_nsigma
             if ((dist_nsigma < min_dist_to_believe_new_nsigma) or
                 (dist_meters < min_dist_to_believe_new_meters)):
                 believably_new = False
