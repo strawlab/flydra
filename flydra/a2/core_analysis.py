@@ -261,8 +261,11 @@ def observations2smoothed(obj_id,
                           dynamic_model_name=None,
                           allocate_space_for_direction=False,
                           ):
-    KalmanEstimates = flydra.kalman.flydra_kalman_utils.get_kalman_estimates_table_description_for_model_name(
-        name=dynamic_model_name, allocate_space_for_direction=allocate_space_for_direction)
+    ksii = flydra.kalman.flydra_kalman_utils.KalmanSaveInfo(
+        name=dynamic_model_name,
+        allocate_space_for_direction=allocate_space_for_direction
+        )
+    KalmanEstimates = ksii.get_description()
     field_names = tables.Description(KalmanEstimates().columns)._v_names
 
     if not len(orig_rows):
@@ -278,17 +281,17 @@ def observations2smoothed(obj_id,
                                                                        frames_per_second=frames_per_second,
                                                                        dynamic_model_name=dynamic_model_name)
     ss = xsmooth.shape[1]
-    if 1:
+    if ksii.get_save_covariance()=='diag':
         list_of_xhats = [xsmooth[:,i] for i in range(ss)]
         list_of_Ps    = [Psmooth[:,i,i] for i in range(ss)]
-    else:
+    elif ksii.get_save_covariance()=='position':
         list_of_xhats = [xsmooth[:,0],xsmooth[:,1],xsmooth[:,2],
                          xsmooth[:,3],xsmooth[:,4],xsmooth[:,5],
-                         xsmooth[:,6],xsmooth[:,7],xsmooth[:,8],
                          ]
-        list_of_Ps = [Psmooth[:,0,0],Psmooth[:,1,1],Psmooth[:,2,2],
+        list_of_Ps = [Psmooth[:,0,0],Psmooth[:,0,1],Psmooth[:,0,2],
+                      Psmooth[:,1,1],Psmooth[:,1,2],
+                      Psmooth[:,2,2],
                       Psmooth[:,3,3],Psmooth[:,4,4],Psmooth[:,5,5],
-                      Psmooth[:,6,6],Psmooth[:,7,7],Psmooth[:,8,8],
                       ]
     timestamps = numpy.zeros( (len(frames),))
 

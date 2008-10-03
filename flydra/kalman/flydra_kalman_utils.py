@@ -160,6 +160,8 @@ class KalmanSaveInfo(object):
                 self.desription = KalmanEstimates
     def get_description(self):
         return self.description
+    def get_save_covariance(self):
+        return self.save_covariance
     def covar_mat_to_covar_entries(self,M):
         if self.save_covariance  == 'diag':
             return np.diag(M).tolist()
