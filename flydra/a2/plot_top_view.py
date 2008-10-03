@@ -219,7 +219,7 @@ def plot_top_and_side_views(subplot=None,
             with keep_axes_dimensions_if( subplot['xz'], options.stim_xml ):
                 subplot['xz'].axhline( options.max_z )
 
-        kws = {'markersize':0.5}
+        kws = {'markersize':options.markersize}
         if options.unicolor:
             kws['color'] = 'k'
 
@@ -290,6 +290,7 @@ def main():
 
     analysis_options.add_common_options( parser )
     parser.add_option("--ellipsoids", action='store_true', default=False)
+    parser.add_option("--markersize", type='float',default=0.5)
     (options, args) = parser.parse_args()
 
     if options.obj_only is not None:
