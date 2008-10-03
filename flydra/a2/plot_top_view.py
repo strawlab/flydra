@@ -29,6 +29,8 @@ import analysis_options
 from optparse import OptionParser
 import densities # from scikits.learn
 
+import warnings
+
 import pytz, datetime
 pacific = pytz.timezone('US/Pacific')
 
@@ -87,6 +89,9 @@ def plot_top_and_side_views(subplot=None,
     dynamic_model = options.dynamic_model
     use_kalman_smoothing=options.use_kalman_smoothing
 
+    if options.ellipsoids and use_kalman_smoothing:
+        warnings.warn('plotting ellipsoids while using Kalman smoothing does not reveal original error estimates')
+
     assert kalman_filename is not None
 
     start=options.start
@@ -124,7 +129,6 @@ def plot_top_and_side_views(subplot=None,
 
         if fps is None:
             fps = 100.0
-            import warnings
             warnings.warn('Setting fps to default value of %f'%fps)
         reconstructor = reconstruct.Reconstructor(data_file)
     else:
@@ -133,9 +137,10 @@ def plot_top_and_side_views(subplot=None,
     if dynamic_model is None:
         dynamic_model = extra['dynamic_model_name']
         print 'detected file loaded with dynamic model "%s"'%dynamic_model
-        if dynamic_model.startswith('EKF '):
-            dynamic_model = dynamic_model[4:]
-        print '  for smoothing, will use dynamic model "%s"'%dynamic_model
+        if use_kalman_smoothing:
+            if dynamic_model.startswith('EKF '):
+                dynamic_model = dynamic_model[4:]
+            print '  for smoothing, will use dynamic model "%s"'%dynamic_model
 
     subplots = subplot.keys()
     subplots.sort() # ensure consistency across runs
