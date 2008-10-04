@@ -18,6 +18,51 @@ WARN_CALIB_DIFF = False
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
 
+
+def mat2quat(m):
+    """Initialize q from either a mat3 or mat4 and returns self."""
+    # XXX derived from cgkit-1.2.0/cgtypes.pyx
+
+    class PseudoQuat(object):
+        pass
+
+    q=PseudoQuat()
+
+    d1 = m[0,0]
+    d2 = m[1,1]
+    d3 = m[2,2]
+    t = d1+d2+d3+1.0
+    if t>0.0:
+        s = 0.5/np.sqrt(t)
+        q.w = 0.25/s
+        q.x = (m[2,1]-m[1,2])*s
+        q.y = (m[0,2]-m[2,0])*s
+        q.z = (m[1,0]-m[0,1])*s
+    else:
+        ad1 = abs(d1)
+        ad2 = abs(d2)
+        ad3 = abs(d3)
+        if ad1>=ad2 and ad1>=ad3:
+            s = np.sqrt(1.0+d1-d2-d3)*2.0
+            q.x = 0.5/s
+            q.y = (m[0,1]+m[1,0])/s
+            q.z = (m[0,2]+m[2,0])/s
+            q.w = (m[1,2]+m[2,1])/s
+        elif ad2>=ad1 and ad2>=ad3:
+            s = np.sqrt(1.0+d2-d1-d3)*2.0
+            q.x = (m[0,1]+m[1,0])/s
+            q.y = 0.5/s
+            q.z = (m[1,2]+m[2,1])/s
+            q.w = (m[0,2]+m[2,0])/s
+        else:
+            s = np.sqrt(1.0+d3-d1-d2)*2.0
+            q.x = (m[0,2]+m[2,0])/s
+            q.y = (m[1,2]+m[2,1])/s
+            q.z = 0.5/s
+            q.w = (m[0,1]+m[1,0])/s
+
+    return q
+
 def my_rq(M):
     """RQ decomposition, ensures diagonal of R is positive"""
     R,K = scipy.linalg.rq(M)
@@ -454,6 +499,36 @@ class SingleCameraCalibration:
         k1,k2,p1,p2 = self.helper.get_nlparams()
         fd.write(    'radial_params = %s, %s\n'%(repr(k1),repr(k2)))
         fd.write(    'tangential_params = %s, %s\n'%(repr(p1),repr(p2)))
+
+    def get_sba_format_line(self):
+        # From the sba demo/README.txt::
+        #
+        #   The file for the camera motion parameters has a separate
+        #   line for every camera, each line containing 12 parameters
+        #   (the five intrinsic parameters in the order focal length
+        #   in x pixels, principal point coordinates in pixels, aspect
+        #   ratio [i.e. focalY/focalX] and skew factor, plus a 4
+        #   element quaternion for rotation and a 3 element vector for
+        #   translation).
+        K,R = self.get_KR()
+        t = self.get_t()[:,0] # drop a dimension
+
+        # extract sba parameters from intrinsic parameter matrix
+        focal = K[0,0]
+        ppx = K[0,2]
+        ppy = K[1,2]
+        aspect = K[1,1]/K[0,0]
+        skew = K[0,1]
+
+        # extract rotation quaternion from rotation matrix
+        q=mat2quat(R)
+
+        qw=q.w; qx=q.x; qy=q.y; qz=q.z
+        t0=t[0]; t1=t[1]; t2=t[2]
+        result = ('%(focal)s %(ppx)s %(ppy)s %(aspect)s %(skew)s '
+                  '%(qw)s %(qx)s %(qy)s %(qz)s '
+                  '%(t0)s %(t1)s %(t2)s'%locals())
+        return result
 
     def add_element(self,parent):
         """add self as XML element to parent"""
@@ -1189,6 +1264,13 @@ class Reconstructor:
         if 1:
             me_elem = ET.SubElement(elem,"minimum_eccentricity")
             me_elem.text = repr(self.minimum_eccentricity)
+
+def test_sba():
+    import flydra.generate_fake_calibration as gfc
+    recon = gfc.generate_calibration()
+    for cam_id in recon.cam_ids:
+        scc = recon.get_SingleCameraCalibration(cam_id)
+        sba_line = scc.get_sba_format_line()
 
 def test():
     import flydra.generate_fake_calibration as gfc

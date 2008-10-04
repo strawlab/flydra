@@ -107,6 +107,8 @@ cdef class PlueckerLine:
         """this allows PlueckerLine to be pickled"""
         args = (self.u, self.v)
         return (make_PlueckerLine, args)
+    def to_hz(self):
+        return (self.v.c, -self.v.b, self.u.a, self.v.a, -self.u.b, self.u.c)
     def __repr__(self):
         return 'PlueckerLine(%s,%s)'%(repr(self.u),repr(self.v)) #
 
