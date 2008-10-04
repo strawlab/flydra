@@ -2,7 +2,7 @@ from __future__ import division
 import numpy
 import scipy.linalg
 import flydra.reconstruct as reconstruct
-import cgkit.cgtypes as cgtypes # cgkit 2
+import cgtypes # cgkit 1.x
 
 def generate_calibration(n_cameras = 1):
     pi = numpy.pi
