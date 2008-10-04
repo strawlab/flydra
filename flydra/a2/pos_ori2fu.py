@@ -2,7 +2,7 @@ try:
     import cgtypes # cgtypes 1.2.x
 except ImportError, err:
     import cgkit.cgtypes as cgtypes # cgkit 2.0
-    
+
 import numpy
 
 # See math in kdviewer.py (annotatePick function)
@@ -47,20 +47,20 @@ def test():
         vu = rotate(q,up)
         assert check_close( fp,forward)
         assert check_close( vu,up)
-    
+
         q = cgtypes.quat().fromAngleAxis(numpy.pi, cgtypes.vec3(1,0,0) )
         fp = rotate(q,forward)
         vu = rotate(q,up)
         assert check_close( fp,(0,0,1))
         assert check_close( vu, (0,-1,0))
-    
+
         q = cgtypes.quat().fromAngleAxis(numpy.pi/2, cgtypes.vec3(0,1,0) )
         q_mat = q.toMat4()
         fp = rotate(q,forward)
         vu = rotate(q,up)
         assert check_close( fp,(-1,0,0))
         assert check_close( vu, (0,1,0))
-        
+
         fp2 = q_mat*forward
         assert check_close( fp,fp2)
         vu2 = q_mat*up
@@ -78,7 +78,7 @@ def test():
             assert check_close( r1, r2 )
             print
 
-        q =  cgtypes.quat().fromAngleAxis(46.891594344015928*D2R, 
+        q =  cgtypes.quat().fromAngleAxis(46.891594344015928*D2R,
                                           (-0.99933050325884276, -0.028458760896155278, 0.022992263583291334))
 
         a = cgtypes.vec3(1,0,0)
@@ -87,7 +87,7 @@ def test():
         test_rotate(q,a)
         test_rotate(q,b)
         test_rotate(q,c)
-    
+
     if 1:
         pos = (0.40262157300195972, 0.12141447782035097, 1.0)
         ori = cgtypes.quat().fromAngleAxis(0.0, (0.0, 0.0, 1.0))
