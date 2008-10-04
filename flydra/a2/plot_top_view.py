@@ -186,20 +186,32 @@ def plot_top_and_side_views(subplot=None,
                                         )
         except core_analysis.ObjectIDDataError:
             continue
-        kobs_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file )
+
+        if options.show_observations:
+            kobs_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file )
 
         frame = kalman_rows['frame']
+        if options.show_observations:
+            frame_obs = kobs_rows['frame']
 
         if (start is not None) or (stop is not None):
             valid_cond = numpy.ones( frame.shape, dtype=numpy.bool )
+            if options.show_observations:
+                valid_obs_cond = np.ones( frame_obs.shape, dtype=numpy.bool)
 
             if start is not None:
                 valid_cond = valid_cond & (frame >= start)
+                if options.show_observations:
+                    valid_obs_cond = valid_obs_cond & (frame_obs >= start)
 
             if stop is not None:
                 valid_cond = valid_cond & (frame <= stop)
+                if options.show_observations:
+                    valid_obs_cond = valid_obs_cond & (frame_obs <= stop)
 
             kalman_rows = kalman_rows[valid_cond]
+            if options.show_observations:
+                kobs_rows = kobs_rows[valid_obs_cond]
             if not len(kalman_rows):
                 continue
 
@@ -220,6 +232,8 @@ def plot_top_and_side_views(subplot=None,
                 subplot['xz'].axhline( options.max_z )
 
         kws = {'markersize':options.markersize}
+        print "kws['markersize']",kws['markersize']
+
         if options.unicolor:
             kws['color'] = 'k'
 
@@ -241,9 +255,18 @@ def plot_top_and_side_views(subplot=None,
                     ellipse_line, = subplot['xy'].plot( ellx, elly, color=kws['color'])
             if options.show_track_ends:
                 subplot['xy'].plot( [Xx[0],Xx[-1]], [Xy[0],Xy[-1]], 'cd', ms=6, label='track end')
+            if options.show_obj_id:
+                subplot['xy'].text( Xx[0], Xy[0], str(obj_id))
             if options.show_landing:
                 for landing_idx in landing_idxs:
                     subplot['xy'].plot( [Xx[landing_idx]], [Xy[landing_idx]], 'rD', ms=10, label='landing')
+            if options.show_observations:
+                mykw = {}
+                mykw.update(kws)
+                mykw['markersize']*=5
+                subplot['xy'].plot( kobs_rows['x'],
+                                    kobs_rows['y'], 'x', label='obj %d'%obj_id, **mykw)
+
 
         with keep_axes_dimensions_if( subplot['xz'], options.stim_xml ):
             line,=subplot['xz'].plot( Xx, Xz, '.', label='obj %d'%obj_id, **kws )
@@ -258,9 +281,19 @@ def plot_top_and_side_views(subplot=None,
 
             if options.show_track_ends:
                 subplot['xz'].plot( [Xx[0],Xx[-1]], [Xz[0],Xz[-1]], 'cd', ms=6, label='track end')
+            if options.show_obj_id:
+                subplot['xz'].text( Xx[0], Xz[0], str(obj_id))
             if options.show_landing:
                 for landing_idx in landing_idxs:
                     subplot['xz'].plot( [Xx[landing_idx]], [Xz[landing_idx]], 'rD', ms=10, label='landing')
+            if options.show_observations:
+                mykw = {}
+                mykw.update(kws)
+                mykw['markersize']*=5
+                subplot['xz'].plot( kobs_rows['x'],
+                                    kobs_rows['z'], 'x', label='obj %d'%obj_id, **mykw)
+
+
 
 def doit(options = None,
          ):
@@ -290,6 +323,8 @@ def main():
 
     analysis_options.add_common_options( parser )
     parser.add_option("--ellipsoids", action='store_true', default=False)
+    parser.add_option("--show-obj-id", action='store_true', default=False)
+    parser.add_option("--show-observations", action='store_true', default=False)
     parser.add_option("--markersize", type='float',default=0.5)
     (options, args) = parser.parse_args()
 
