@@ -6,9 +6,9 @@ import cgkit.cgtypes as cgtypes # cgkit 2
 
 def generate_calibration(n_cameras = 1):
     pi = numpy.pi
-    
+
     sccs = []
-    
+
     # 1. extrinsic parameters:
     if 1:
         # method 1:
@@ -23,7 +23,7 @@ def generate_calibration(n_cameras = 1):
 
         cc = numpy.c_[x,y,z]
         #cam_up = numpy.array((0,0,1))
-        
+
         #cam_ups = numpy.resize(cam_up,cc.shape)
         #cam_forwads = -cc
         cam_centers = r*cc + common_point
@@ -48,7 +48,7 @@ def generate_calibration(n_cameras = 1):
                 #print 'R',R
                 #print
                 Rs.append(R)
-            
+
         else:
             # (Camera coords: looking forward -z, up +y, right +x)
             R = cgtypes.mat3().identity()
@@ -89,7 +89,7 @@ def generate_calibration(n_cameras = 1):
         R = Rs[cam_no]
         C = cam_centers[cam_no][:,numpy.newaxis]
 
-        K = numpy.array((( fc1, alpha_c*fc1, cc1), 
+        K = numpy.array((( fc1, alpha_c*fc1, cc1),
                          ( 0, fc2, cc2),
                          ( 0, 0, 1)))
         t = numpy.dot( -R, C )
@@ -147,10 +147,10 @@ def generate_calibration(n_cameras = 1):
                     print 'WARNING: weird sign error in calibration math FIXME!'
     recon = reconstruct.Reconstructor(sccs)
     return recon
-        
+
 def test():
     generate_calibration()
-    
+
 if __name__=='__main__':
     test()
-    
+
