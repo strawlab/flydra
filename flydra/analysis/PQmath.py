@@ -1,5 +1,5 @@
 import math
-import cgkit.cgtypes as cgtypes # cgkit 2.x
+import cgtypes # cgkit 1.x
 import numpy as nx
 import numpy as np
 import numpy

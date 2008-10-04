@@ -15,7 +15,7 @@ import flydra.kalman.flydra_kalman_utils
 import flydra.analysis.result_utils
 import flydra.reconstruct
 import flydra.analysis.PQmath as PQmath
-import cgkit.cgtypes as cgtypes
+import cgtypes # cgkit 1.x
 
 import weakref
 import warnings

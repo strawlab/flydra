@@ -24,10 +24,7 @@ import flydra.analysis.PQmath as PQmath
 
 pacific = pytz.timezone('US/Pacific')
 
-try:
-    import cgkit.cgtypes as cgtypes # cgkit 2
-except ImportError, err:
-    import cgtypes # cgkit 1
+import cgtypes # cgkit 1.x
 import flydra.a2.pos_ori2fu
 #from flydra.a2.experiment_layout import get_tvtk_actors_for_file
 import flydra.version

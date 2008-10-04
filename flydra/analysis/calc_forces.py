@@ -14,7 +14,7 @@ import numpy as nx
 import numpy.numarray.mlab as mlab
 
 import flydra.reconstruct as reconstruct
-import cgkit.cgtypes as cgtypes
+import cgtypes # cgkit 1.x
 import tables # pytables
 import scipy.signal
 import scipy.io

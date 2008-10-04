@@ -2,7 +2,6 @@ import pkg_resources
 
 import numpy as np
 from PQmath import ObjectiveFunctionQuats, QuatSeq, orientation_to_quat, quat_to_orient, CachingObjectiveFunctionQuats, QuatSmoother
-import cgkit.cgtypes
 import time
 import nose
 

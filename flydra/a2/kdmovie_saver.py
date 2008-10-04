@@ -18,10 +18,7 @@ import flydra.a2.xml_stimulus as xml_stimulus
 import flydra.reconstruct as reconstruct
 import pkg_resources
 from flydra.a2.pos_ori2fu import pos_ori2fu
-try:
-    import cgtypes # cgtypes 1.2.x
-except ImportError, err:
-    import cgkit.cgtypes as cgtypes # cgkit 2.0
+import cgtypes # cgtypes 1.x
 
 class AnimationPath(object):
     def __init__(self,fname):
