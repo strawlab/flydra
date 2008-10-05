@@ -81,7 +81,11 @@ def plot_timeseries(subplot=None,options = None):
                                   '(--disable-kalman-smoothing) is incompatable '
                                   'with setting dynamic model options (--dynamic-model)')
 
-    ca = core_analysis.get_global_CachingAnalyzer(hack_postmultiply=options.hack_postmultiply)
+    if hasattr(options,'hack_postmultiply'):
+        hack_postmultiply=options.hack_postmultiply
+    else:
+        hack_postmultiply=None
+    ca = core_analysis.get_global_CachingAnalyzer(hack_postmultiply=hack_postmultiply)
 
     if kalman_filename is not None:
         m = hashlib.md5()
@@ -311,18 +315,18 @@ def plot_timeseries(subplot=None,options = None):
             warnings.warn('clipping all velocities > 2.0 m/s')
 
     if not options.frames:
-        xlabel = 'time ($s$)'
+        xlabel = 'time (s)'
     else:
         xlabel = 'frame'
 
     if 'x' in subplot:
         subplot['x'].set_ylim([-1,1])
-        subplot['x'].set_ylabel(r'x ($m$)')
+        subplot['x'].set_ylabel(r'x (m)')
         subplot['x'].set_xlabel(xlabel)
 
     if 'y' in subplot:
         subplot['y'].set_ylim([-0.5,1.5])
-        subplot['y'].set_ylabel(r'y ($m$)')
+        subplot['y'].set_ylabel(r'y (m)')
         subplot['y'].set_xlabel(xlabel)
 
     max_z = None
@@ -337,7 +341,7 @@ def plot_timeseries(subplot=None,options = None):
 
     if 'z' in subplot:
         subplot['z'].set_ylim([0,1])
-        subplot['z'].set_ylabel(r'z ($m$)')
+        subplot['z'].set_ylabel(r'z (m)')
         subplot['z'].set_xlabel(xlabel)
         if max_z is not None:
             subplot['z'].axhline(max_z,color='m')
@@ -355,16 +359,16 @@ def plot_timeseries(subplot=None,options = None):
 
     if 'vel' in subplot:
         subplot['vel'].set_ylim([0,2])
-        subplot['vel'].set_ylabel(r'vel ($m/s$)')
+        subplot['vel'].set_ylabel(r'vel (m/s)')
         subplot['vel'].set_xlabel(xlabel)
 
     if 'xy_vel' in subplot:
         #subplot['xy_vel'].set_ylim([0,2])
-        subplot['xy_vel'].set_ylabel(r'horiz vel ($m/s$)')
+        subplot['xy_vel'].set_ylabel(r'horiz vel (m/s)')
         subplot['xy_vel'].set_xlabel(xlabel)
 
     if 'accel' in subplot:
-        subplot['accel'].set_ylabel(r'acceleration ($m/s^{2}$)')
+        subplot['accel'].set_ylabel(r'acceleration (m/(s^2))')
         subplot['accel'].set_xlabel(xlabel)
 
     if 'vel_hist' in subplot:
