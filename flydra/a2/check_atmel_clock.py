@@ -5,6 +5,7 @@ import numpy
 import numpy as np
 import pylab
 import flydra.analysis.result_utils
+import sys
 
 if 1:
     # load the file
@@ -18,7 +19,8 @@ if 1:
 ##     filename = 'DATA20070319_204348.h5'
 ##     filename = 'DATA20071115_202838.h5'
 #    filename = 'DATA20080220_182114.h5'
-    filename = 'DATA20080715_181455.h5'
+#    filename = 'DATA20080715_181455.h5'
+    filename = '/home/astraw/DATA20081004_185032.h5'
     kresults = tables.openFile(filename,mode="r")
     time_model, full_output = flydra.analysis.result_utils.get_time_model_from_data(kresults,
                                                                                     debug=True,
@@ -107,6 +109,11 @@ if 1:
         if 0:
             pylab.figure()
             pylab.plot(    framenumber,'.')
+
+    print 'saving latency'
+    np.save('latency_msec',latency_msec)
+    print 'done'
+    sys.exit(0)
 
     if 1:
         pylab.figure()
