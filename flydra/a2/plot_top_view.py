@@ -34,10 +34,6 @@ import warnings
 import pytz, datetime
 pacific = pytz.timezone('US/Pacific')
 
-def plot_err( ax, x, mean, err, color=None ):
-    ax.plot( x, mean+err, color=color)
-    ax.plot( x, mean-err, color=color)
-
 class Frames2Time:
     def __init__(self,frame0,fps):
         self.f0 = frame0
@@ -74,6 +70,9 @@ def get_covariance(rowi):
 
 def plot_top_and_side_views(subplot=None,
                             options=None,
+                            obs_mew=None,
+                            scale=1.0,
+                            units='m',
                             ):
     """
     inputs
@@ -163,11 +162,11 @@ def plot_top_and_side_views(subplot=None,
     subplot['xy'].set_aspect('equal')
     subplot['xz'].set_aspect('equal')
 
-    subplot['xy'].set_xlabel('x ($m$)')
-    subplot['xy'].set_ylabel('y ($m$)')
+    subplot['xy'].set_xlabel('x ($%s$)'%units)
+    subplot['xy'].set_ylabel('y ($%s$)'%units)
 
-    subplot['xz'].set_xlabel('x ($m$)')
-    subplot['xz'].set_ylabel('z ($m$)')
+    subplot['xz'].set_xlabel('x ($%s$)'%units)
+    subplot['xz'].set_ylabel('z ($%s$)'%units)
 
     if options.stim_xml:
         if reconstructor is not None:
@@ -232,7 +231,6 @@ def plot_top_and_side_views(subplot=None,
                 subplot['xz'].axhline( options.max_z )
 
         kws = {'markersize':options.markersize}
-        print "kws['markersize']",kws['markersize']
 
         if options.unicolor:
             kws['color'] = 'k'
@@ -244,7 +242,7 @@ def plot_top_and_side_views(subplot=None,
                 landing_idxs.append(tmp_idx)
 
         with keep_axes_dimensions_if( subplot['xy'], options.stim_xml ):
-            line, = subplot['xy'].plot( Xx, Xy, '.', label='obj %d'%obj_id, **kws)
+            line, = subplot['xy'].plot( Xx*scale, Xy*scale, '.', label='obj %d'%obj_id, **kws)
             kws['color'] = line.get_color()
             if options.ellipsoids:
                 for i in range(len(Xx)):
@@ -252,24 +250,38 @@ def plot_top_and_side_views(subplot=None,
                     mu = [rowi['x'], rowi['y'], rowi['z']]
                     va = get_covariance( rowi )
                     ellx,elly = densities.gauss_ell( mu, va, [0,1], 30, 0.39 )
-                    ellipse_line, = subplot['xy'].plot( ellx, elly, color=kws['color'])
+                    ellipse_line, = subplot['xy'].plot( ellx*scale, elly*scale, color=kws['color'])
             if options.show_track_ends:
-                subplot['xy'].plot( [Xx[0],Xx[-1]], [Xy[0],Xy[-1]], 'cd', ms=6, label='track end')
+                subplot['xy'].plot( [Xx[0]*scale,Xx[-1]*scale],
+                                    [Xy[0]*scale,
+                                     Xy[-1]*scale],
+                                    'cd', ms=6, label='track end')
             if options.show_obj_id:
-                subplot['xy'].text( Xx[0], Xy[0], str(obj_id))
+                subplot['xy'].text( Xx[0]*scale, Xy[0]*scale,
+                                    str(obj_id))
             if options.show_landing:
                 for landing_idx in landing_idxs:
-                    subplot['xy'].plot( [Xx[landing_idx]], [Xy[landing_idx]], 'rD', ms=10, label='landing')
+                    subplot['xy'].plot( [Xx[landing_idx]*scale],
+                                        [Xy[landing_idx]*scale],
+                                        'rD', ms=10, label='landing')
             if options.show_observations:
                 mykw = {}
                 mykw.update(kws)
                 mykw['markersize']*=5
-                subplot['xy'].plot( kobs_rows['x'],
-                                    kobs_rows['y'], 'x', label='obj %d'%obj_id, **mykw)
+                mykw['mew']=obs_mew
+
+                badcond = np.isnan( kobs_rows['x'] )
+                Xox = np.ma.masked_where(badcond,kobs_rows['x'])
+                Xoy = np.ma.masked_where(badcond,kobs_rows['y'])
+
+                subplot['xy'].plot( Xox*scale,
+                                    Xoy*scale,
+                                    'x', label='obj %d'%obj_id, **mykw)
 
 
         with keep_axes_dimensions_if( subplot['xz'], options.stim_xml ):
-            line,=subplot['xz'].plot( Xx, Xz, '.', label='obj %d'%obj_id, **kws )
+            line,=subplot['xz'].plot( Xx*scale, Xz*scale,
+                                      '.', label='obj %d'%obj_id, **kws )
             kws['color'] = line.get_color()
             if options.ellipsoids:
                 for i in range(len(Xx)):
@@ -277,21 +289,35 @@ def plot_top_and_side_views(subplot=None,
                     mu = [rowi['x'], rowi['y'], rowi['z']]
                     va = get_covariance( rowi )
                     ellx,ellz = densities.gauss_ell( mu, va, [0,2], 30, 0.39 )
-                    ellipse_line, = subplot['xz'].plot( ellx, ellz, color=kws['color'])
+                    ellipse_line, = subplot['xz'].plot( ellx*scale,
+                                                        ellz*scale,
+                                                        color=kws['color'])
 
             if options.show_track_ends:
-                subplot['xz'].plot( [Xx[0],Xx[-1]], [Xz[0],Xz[-1]], 'cd', ms=6, label='track end')
+                subplot['xz'].plot( [Xx[0]*scale, Xx[-1]*scale],
+                                    [Xz[0]*scale,Xz[-1]*scale],
+                                    'cd', ms=6, label='track end')
             if options.show_obj_id:
-                subplot['xz'].text( Xx[0], Xz[0], str(obj_id))
+                subplot['xz'].text( Xx[0]*scale, Xz[0]*scale,
+                                    str(obj_id))
             if options.show_landing:
                 for landing_idx in landing_idxs:
-                    subplot['xz'].plot( [Xx[landing_idx]], [Xz[landing_idx]], 'rD', ms=10, label='landing')
+                    subplot['xz'].plot( [Xx[landing_idx]*scale],
+                                        [Xz[landing_idx]*scale],
+                                        'rD', ms=10, label='landing')
             if options.show_observations:
                 mykw = {}
                 mykw.update(kws)
                 mykw['markersize']*=5
-                subplot['xz'].plot( kobs_rows['x'],
-                                    kobs_rows['z'], 'x', label='obj %d'%obj_id, **mykw)
+                mykw['mew']=obs_mew
+
+                badcond = np.isnan( kobs_rows['x'] )
+                Xox = np.ma.masked_where(badcond,kobs_rows['x'])
+                Xoz = np.ma.masked_where(badcond,kobs_rows['z'])
+
+                subplot['xz'].plot( Xox*scale,
+                                    Xoz*scale,
+                                    'x', label='obj %d'%obj_id, **mykw)
 
 
 
