@@ -20,6 +20,35 @@ import cgtypes # cgkit 1.x
 import weakref
 import warnings
 
+def rotate_vec(q,v):
+    """rotate vector v by quaternion q"""
+
+    # Note -- if you have a lot of vectors per quaternion, it's faster
+    # to convert quat to matrix and multiply.
+
+    qv = cgtypes.quat(0, *v) # make quaternion from vector with w=0
+    qresult = q*qv*q.inverse()
+    return cgtypes.vec3( qresult.x, qresult.y, qresult.z )
+
+def test_rotate_vec():
+    q=cgtypes.quat().fromAngleAxis(np.pi,(0,0,1))
+    v=cgtypes.vec3(1,0,0)
+    expected = cgtypes.vec3(-1,0,0)
+    actual=rotate_vec(q,v)
+    assert np.allclose( expected, actual )
+    if hasattr(q,'rotateVec'):
+        # cgkit 2.x check
+        assert np.allclose( expected, q.rotateVec(v) )
+
+    q=cgtypes.quat().fromAngleAxis(0.5*np.pi,(0,0,1))
+    v=cgtypes.vec3(1,0,0)
+    expected = cgtypes.vec3(0,1,0)
+    actual=rotate_vec(q,v)
+    assert np.allclose( expected, actual )
+    if hasattr(q,'rotateVec'):
+        # cgkit 2.x check
+        assert np.allclose( expected, q.rotateVec(v) )
+
 def check_hack_postmultiply(hack_postmultiply):
     if hack_postmultiply is not None:
         if isinstance( hack_postmultiply, basestring):
@@ -436,7 +465,8 @@ def choose_orientations(rows, directions, frames_per_second=None,
         dist_from_zplus = np.arccos( np.dot(velocity_direction,np.array([0,0,1.0])))
         bias_radians = elevation_up_bias_degrees*D2R
         velocity_biaser = [ cgtypes.quat().fromAngleAxis(bias_radians,ax) for ax in rot1_axis ]
-        biased_velocity_direction = [ velocity_biaser[i].rotateVec(cgtypes.vec3(*(velocity_direction[i]))) for i in range(len(velocity))]
+        biased_velocity_direction = [ rotate_vec( velocity_biaser[i],
+                                                  cgtypes.vec3(*(velocity_direction[i]))) for i in range(len(velocity))]
         biased_velocity_direction = numpy.array([ [v[0], v[1], v[2]] for v in biased_velocity_direction ])
         biased_velocity_direction[ dist_from_zplus <= bias_radians, : ] = numpy.array([0,0,1])
 
