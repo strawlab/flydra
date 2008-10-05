@@ -162,11 +162,11 @@ def plot_top_and_side_views(subplot=None,
     subplot['xy'].set_aspect('equal')
     subplot['xz'].set_aspect('equal')
 
-    subplot['xy'].set_xlabel('x ($%s$)'%units)
-    subplot['xy'].set_ylabel('y ($%s$)'%units)
+    subplot['xy'].set_xlabel('x (%s)'%units)
+    subplot['xy'].set_ylabel('y (%s)'%units)
 
-    subplot['xz'].set_xlabel('x ($%s$)'%units)
-    subplot['xz'].set_ylabel('z ($%s$)'%units)
+    subplot['xz'].set_xlabel('x (%s)'%units)
+    subplot['xz'].set_ylabel('z (%s)'%units)
 
     if options.stim_xml:
         if reconstructor is not None:
