@@ -1341,12 +1341,6 @@ class CachingAnalyzer:
                 XA = numpy.vstack((xsA,ysA,zsA)).T
                 time_A = (framesA - framesA[0])/frames_per_second
 
-                xvelsA = rows['xvel']
-                yvelsA = rows['yvel']
-                zvelsA = rows['zvel']
-                velA = numpy.vstack((xvelsA,yvelsA,zvelsA)).T
-                speedA = numpy.sqrt(numpy.sum(velA**2,axis=1))
-
                 ##############
                 # downsample
                 skip = method_params.get('downsample',3)
@@ -1444,8 +1438,6 @@ class CachingAnalyzer:
                     results['kalman_smoothed_rows'] = rows
                 results['time_kalmanized'] = time_A[slicer]  # times for position data
                 results['X_kalmanized'] = XA[slicer] # raw position data from Kalman (not otherwise downsampled or smoothed)
-                results['vel_kalmanized'] = velA[slicer] # raw velocity data from Kalman (not otherwise downsampled or smoothed)
-                results['speed_kalmanized'] = speedA[slicer] # raw speed data from Kalman (not otherwise downsampled or smoothed)
 
                 results['frame'] = frame_F[slicer] # times for most data
                 results['time_t'] = time_F[slicer] # times for most data
