@@ -354,7 +354,7 @@ def doit(filename,
         rw.set(stereo_type='red_blue',
                stereo_render=stereo)
 
-    if show_obj_ids:
+    if show_obj_ids or (options.show_frames!=0):
         # Because I can't get black text right now (despite trying),
         # make background blue to see white text. - ADS
         ren = tvtk.Renderer(background=(0.6,0.6,1.0)) # blue
@@ -563,12 +563,13 @@ def doit(filename,
                     print err
                     continue
 
+            frames = rows['frame']
             if start is not None or stop is not None:
-                frames = rows['frame']
                 ok1 = frames >= start
                 ok2 = frames <= stop
                 ok = ok1 & ok2
                 rows = rows[ok]
+                frames = rows['frame']
 
             verts = numpy.array( [rows['x'], rows['y'], rows['z']] ).T
             have_body_axis_information = 'rawdir_x' in rows.dtype.fields
@@ -688,12 +689,14 @@ def doit(filename,
             if show_observations:
                 a.property.opacity = 0.3 # sets transparency/alpha
             if obj_color:
-                if obj_id == 158:
+                if obj_id%4==0:
                     a.property.color = .9, .8, 0
-                elif obj_id == 160:
+                if obj_id%4==1:
                     a.property.color = 0, .45, .70
-                else:
-                    a.property.color = .9, .9, .9
+                if obj_id%4==2:
+                    a.property.color = .3, .65, .10
+                if obj_id%4==3:
+                    a.property.color = 0, 1, 0
             actors.append(a)
             actor2obj_id[a] = obj_id
 
@@ -733,6 +736,22 @@ def doit(filename,
                 actor2obj_id[a] = obj_id
             else:
                 print 'no data for obj_id %d'%obj_id
+
+        if options.show_frames != 0:
+            if len(frames):
+
+                docond = (frames%options.show_frames)==0
+                doframes = frames[docond]
+                doverts = verts[docond]
+
+                for thisframe,thisvert in zip(doframes,doverts):
+                    obj_id_ta = tvtk.TextActor(input='%d'%thisframe)
+                    obj_id_ta.property = tvtk.Property2D(color = (0.0, 0.0, 0.0), # black
+                                                         )
+                    obj_id_ta.position_coordinate.coordinate_system = 'world'
+                    obj_id_ta.position_coordinate.value = tuple(thisvert)
+                    actors.append(obj_id_ta)
+                    actor2obj_id[a] = obj_id
 
         ##################
 
@@ -1098,6 +1117,9 @@ def main():
 
     parser.add_option("--show-obj-ids", action='store_true',dest='show_obj_ids',
                       help="show object ID numbers at start of trajectory")
+
+    parser.add_option("--show-frames", type='int', default=0,
+                      help="show frame number interval (0=no frame numbers)")
 
     parser.add_option("--show-saccades", action='store_true',dest='show_saccades',
                       help="show saccades")
