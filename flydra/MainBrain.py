@@ -1026,15 +1026,14 @@ class CoordinateProcessor(threading.Thread):
                             realtime_kalman_coord_dict[corrected_framenumber][absolute_cam_no]=(
                                 points_in_pluecker_coords_meters)
 
-                        if self.show_overall_latency.isSet():
-                            if n_pts:
-                                inc_val = 1
-                            else:
-                                inc_val = 0
+                        if n_pts:
+                            inc_val = 1
+                        else:
+                            inc_val = 0
 
                         if corrected_framenumber in oldest_timestamp_by_corrected_framenumber:
                             orig_timestamp,n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
-                            oldest = min(timestamp, orig_timestamp):
+                            oldest = min(timestamp, orig_timestamp)
                             oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ] = (oldest,n+inc_val)
                             del oldest, n, orig_timestamp
                         else:
