@@ -83,6 +83,7 @@ def get_rc_params():
         'frames_per_second'  : 100.0,
         'hypothesis_test_max_acceptable_error' : 50.0,
         'kalman_model' :'fly dynamics, high precision calibration, units: mm',
+        'max_reconstruction_latency_sec':0.04, # 40 msec
         }
     fviewrc_fname = motmot.utils.config.rc_fname(filename='mainbrainrc',
                                                  dirname='.flydra')
@@ -95,6 +96,8 @@ def save_rc_params():
                                               dirname='.flydra')
     motmot.utils.config.save_rc_params(save_fname,rc_params)
 rc_params = get_rc_params()
+max_reconstruction_latency_sec = rc_params['max_reconstruction_latency_sec']
+
 ########
 
 XXX_framenumber = 0
@@ -1028,15 +1031,14 @@ class CoordinateProcessor(threading.Thread):
                                 inc_val = 1
                             else:
                                 inc_val = 0
-                            if corrected_framenumber in oldest_timestamp_by_corrected_framenumber:
-                                orig_timestamp,n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
-                                if timestamp < orig_timestamp:
-                                    oldest = timestamp
-                                else:
-                                    oldest = orig_timestamp
-                                oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ] = (oldest,n+inc_val)
-                            else:
-                                oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ] = timestamp, inc_val
+
+                        if corrected_framenumber in oldest_timestamp_by_corrected_framenumber:
+                            orig_timestamp,n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
+                            oldest = min(timestamp, orig_timestamp):
+                            oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ] = (oldest,n+inc_val)
+                            del oldest, n, orig_timestamp
+                        else:
+                            oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ] = timestamp, inc_val
 
                         new_data_framenumbers.add( corrected_framenumber ) # insert into set
 
@@ -1067,6 +1069,11 @@ class CoordinateProcessor(threading.Thread):
                 ########################################################################
 
                 for corrected_framenumber in new_data_framenumbers:
+                    oldest_camera_timestamp, n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
+                    if (time.time() - oldest_camera_timestamp) > max_reconstruction_latency_sec:
+                        print 'maximum reconstruction latency exceeded -- skipping 3D reconstruction'
+                        continue
+
                     data_dict = realtime_coord_dict[corrected_framenumber]
                     if len(data_dict)==len(self.cam_ids): # all camera data arrived
 
