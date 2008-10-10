@@ -30,6 +30,7 @@ def decode_data_packet(buf):
     return corrected_framenumber, timestamp, state_vecs, meanP
 
 def encode_super_packet( data_packets ):
+    # These data packets come from flydra_tracker.Tracker.encode_data_packet()
     n = len(data_packets)
     sizes = [ len(p) for p in data_packets ]
     fmt = super_packet_header_fmt + (super_packet_subheader)*n
