@@ -399,6 +399,16 @@ class ProcessCamClass(object):
     def get_pmat(self):
         return self._pmat
     def set_pmat(self,value):
+        if value is None:
+            self._pmat = None
+            self._camera_center = None
+            self._pmat_inv = None
+            self._scale_factor = None
+            self._pmat_meters = None
+            self._pmat_meters_inv = None
+            self._camera_center_meters = None
+            return
+
         self._pmat = numpy.asarray(value)
 
         P = self._pmat
@@ -435,6 +445,10 @@ class ProcessCamClass(object):
         self._camera_center_meters = nx.array( [ X/T, Y/T, Z/T, 1.0 ] )
 
     def make_reconstruct_helper(self, intlin, intnonlin):
+        if intlin is None and innonlin is None:
+            self._hlper = None
+            return
+
         fc1 = intlin[0,0]
         fc2 = intlin[1,1]
         cc1 = intlin[0,2]
