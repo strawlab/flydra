@@ -4,9 +4,22 @@ import numpy as np
 import warnings
 import flydra.data_descriptions
 import flydra.kalman.dynamic_models
+from flydra.kalman.point_prob import some_rough_negative_log_likelihood
+
+PT_TUPLE_IDX_X = flydra.data_descriptions.PT_TUPLE_IDX_X
+PT_TUPLE_IDX_Y = flydra.data_descriptions.PT_TUPLE_IDX_Y
+PT_TUPLE_IDX_AREA = flydra.data_descriptions.PT_TUPLE_IDX_AREA
+PT_TUPLE_IDX_SLOPE = flydra.data_descriptions.PT_TUPLE_IDX_SLOPE
+PT_TUPLE_IDX_ECCENTRICITY = flydra.data_descriptions.PT_TUPLE_IDX_ECCENTRICITY
+PT_TUPLE_IDX_P1 = flydra.data_descriptions.PT_TUPLE_IDX_P1
+PT_TUPLE_IDX_P2 = flydra.data_descriptions.PT_TUPLE_IDX_P2
+PT_TUPLE_IDX_P3 = flydra.data_descriptions.PT_TUPLE_IDX_P3
+PT_TUPLE_IDX_P4 = flydra.data_descriptions.PT_TUPLE_IDX_P4
 
 PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
-PT_TUPLE_IDX_AREA = flydra.data_descriptions.PT_TUPLE_IDX_AREA
+PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
+PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
+PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_IDX
 
 class KalmanEstimates(PT.IsDescription):
     obj_id     = PT.UInt32Col(pos=0)
@@ -189,7 +202,7 @@ class FilteredObservations(PT.IsDescription): # Not really "observations" but ML
 
 kalman_observations_2d_idxs_type = PT.UInt16Atom
 
-def convert_format(current_data,camn2cam_id,area_threshold=0.0):
+def convert_format(current_data,camn2cam_id,area_threshold=0.0,only_likely=False):
     """convert data from format used for Kalman tracker to hypothesis tester"""
     found_data_dict = {}
     first_idx_by_camn = {}
@@ -206,6 +219,19 @@ def convert_format(current_data,camn2cam_id,area_threshold=0.0):
                     continue
 
                 cam_id = camn2cam_id[camn]
+
+                if only_likely:
+                    # a quick gating based on image attributes.
+
+                    pt_area = pt_undistorted[PT_TUPLE_IDX_AREA]
+                    cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
+                    mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
+                    sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
+
+                    p_y_x = some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
+                    if not np.isfinite(p_y_x):
+                        continue
+
                 found_data_dict[cam_id] = pt_undistorted[:9]
                 first_idx_by_camn[camn] = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                 break # algorithm only accepts 1 point per camera

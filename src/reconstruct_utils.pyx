@@ -236,7 +236,7 @@ cdef class ReconstructHelper:
 
 def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
                                                 double ACCEPTABLE_DISTANCE_PIXELS,
-                                                int debug=0):
+                                                int debug=0, int max_n_cams=5):
     """Use hypothesis testing algorithm to find best 3D point
 
     Finds combination of cameras which uses the most number of cameras
@@ -245,7 +245,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
     variable ACCEPTABLE_DISTANCE_PIXELS.
 
     """
-    cdef int max_n_cams, n_cams, best_n_cams, alloc_n_cams
+    cdef int n_cams, best_n_cams, alloc_n_cams
     cdef int i
     cdef int missing_cam_data
     cdef double alpha
@@ -257,19 +257,13 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
     svd = numpy.dual.svd # eliminate global name lookup
 
     cam_ids = recon.cam_ids # shorthand
-    max_n_cams = len(cam_ids)
-    alloc_n_cams = max_n_cams+1 # allow 0-based indexing to last camera
+    max_n_cams = min(len(cam_ids), max_n_cams)
 
     # Initialize least_err_by_n_cameras to be infinity.  Note that
     # values at 0th and 1st index will always remain infinity.
-    ## least_err_by_n_cameras = <double*>c_lib.malloc(alloc_n_cams*sizeof(double))
-    ## if least_err_by_n_cameras == <double*>0:
-    ##     raise MemoryError('Failed to allocate memory')
-    ## for i from 0 <= i <= max_n_cams:
-    ##     least_err_by_n_cameras[i] = cinf
-    least_err_by_n_cameras = [cinf]*(alloc_n_cams) # allow 0-based indexing to last camera
 
-    allA = numpy.zeros( (2*alloc_n_cams,4), dtype=numpy.float64)
+    least_err_by_n_cameras = [cinf]*(max_n_cams+1) # allow 0-based indexing to last camera
+    allA = numpy.zeros( (2*(len(cam_ids)+1),4), dtype=numpy.float64)
     bad_cam_ids = []
     cam_id2idx = {}
     all2d = {}

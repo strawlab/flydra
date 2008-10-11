@@ -83,7 +83,8 @@ def get_rc_params():
         'frames_per_second'  : 100.0,
         'hypothesis_test_max_acceptable_error' : 50.0,
         'kalman_model' :'fly dynamics, high precision calibration, units: mm',
-        'max_reconstruction_latency_sec':0.04, # 40 msec
+        'max_reconstruction_latency_sec':0.06, # 60 msec
+        'max_N_hypothesis_test':3,
         }
     fviewrc_fname = motmot.utils.config.rc_fname(filename='mainbrainrc',
                                                  dirname='.flydra')
@@ -97,7 +98,7 @@ def save_rc_params():
     motmot.utils.config.save_rc_params(save_fname,rc_params)
 rc_params = get_rc_params()
 max_reconstruction_latency_sec = rc_params['max_reconstruction_latency_sec']
-
+max_N_hypothesis_test =  rc_params['max_N_hypothesis_test']
 ########
 
 XXX_framenumber = 0
@@ -640,6 +641,10 @@ class CoordinateProcessor(threading.Thread):
         with self.all_data_lock:
             self.reconstructor = r
 
+        if r is None:
+            self.reconstructor_meters = None
+            return
+
         # get version that operates in meters
         scale_factor = self.reconstructor.get_scale_factor()
         self.reconstructor_meters = self.reconstructor.get_scaled(scale_factor)
@@ -1174,7 +1179,8 @@ class CoordinateProcessor(threading.Thread):
                                 found_data_dict,first_idx_by_camn = convert_format(
                                     pluecker_coords_by_camn,
                                     self.camn2cam_id,
-                                    area_threshold=0.0)
+                                    area_threshold=0.0,
+                                    only_likely=True)
 
                                 if SHOW_3D_PROCESSING_LATENCY:
                                     if len(found_data_dict) < 2:
@@ -1190,7 +1196,9 @@ class CoordinateProcessor(threading.Thread):
                                          min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
                                             self.reconstructor,
                                             found_data_dict,
-                                            max_error)
+                                            max_error,
+                                            max_n_cams=max_N_hypothesis_test,
+                                            )
                                     except ru.NoAcceptablePointFound, err:
                                         pass
                                     else:
@@ -1241,7 +1249,9 @@ class CoordinateProcessor(threading.Thread):
                                 (X, line3d, cam_ids_used,min_mean_dist
                                  ) = ru.hypothesis_testing_algorithm__find_best_3d(
                                     self.reconstructor,
-                                    found_data_dict)
+                                    found_data_dict,
+                                    max_n_cams=max_N_hypothesis_test,
+                                    )
                             except:
                                 # this prevents us from bombing this thread...
                                 print 'WARNING:'
@@ -2231,6 +2241,17 @@ class MainBrain(object):
             intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
             scale_factor = self.reconstructor.get_scale_factor()
             self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin, scale_factor )
+
+    def clear_calibration(self):
+        if self.is_saving_data():
+            raise RuntimeError("Cannot unload calibration while saving data")
+        cam_ids = self.remote_api.external_get_cam_ids()
+        self.reconstructor = None
+
+        self.coord_processor.set_reconstructor(self.reconstructor)
+
+        for cam_id in cam_ids:
+            self.remote_api.external_set_cal( cam_id, None, None, None, None )
 
     def set_new_tracker(self,kalman_model_name=None):
         if self.is_saving_data():

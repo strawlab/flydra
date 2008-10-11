@@ -213,6 +213,11 @@ class wxMainBrainApp(wx.App):
                         "Show XML based stimulus")
         wx.EVT_MENU(self, ID_show_xml_stimulus, self.OnShowXMLStimulus)
 
+        ID_hide_xml_stimulus = wx.NewId()
+        viewmenu.Append(ID_hide_xml_stimulus, "Hide XML stimulus",
+                        "Hide XML based stimulus")
+        wx.EVT_MENU(self, ID_hide_xml_stimulus, self.OnHideXMLStimulus)
+
         ID_set_timer = wx.NewId()
         viewmenu.Append(ID_set_timer, "Set update timer...",
                         "Sets interval at which display is updated")
@@ -405,6 +410,10 @@ class wxMainBrainApp(wx.App):
         load_cal = xrc.XRCCTRL(self.cam_preview_panel,
                            "LOAD_CAL")
         wx.EVT_BUTTON(load_cal, load_cal.GetId(), self.OnLoadCal)
+
+        clear_cal = xrc.XRCCTRL(self.cam_preview_panel,
+                           "CLEAR_CAL")
+        wx.EVT_BUTTON(clear_cal, clear_cal.GetId(), self.OnClearCal)
 
         ctrl = xrc.XRCCTRL(self.cam_preview_panel,
                            "MANUAL_TRIGGER_DEVICE_PREVIEW1") # EXT TRIG1
@@ -1048,6 +1057,14 @@ class wxMainBrainApp(wx.App):
             cal_status_check.Enable(False)
             self.OnKalmanParametersChange() # send current Kalman parameters
 
+    def OnClearCal(self,event):
+        cal_status_check = xrc.XRCCTRL(self.cam_preview_panel,
+                                       "CAL_STATUS_CHECK")
+        cal_status_check.Enable(True)
+        cal_status_check.SetValue(False)
+        cal_status_check.Enable(False)
+        self.main_brain.clear_calibration()
+
     def OnFixedColorRange(self, event):
         if PLOTPANEL:
             self.plotpanel.set_fixed_color_range(event.IsChecked())
@@ -1166,6 +1183,9 @@ class wxMainBrainApp(wx.App):
             if self.main_brain.reconstructor is not None:
                 stim.verify_reconstructor(self.main_brain.reconstructor)
             self.show_xml_stim = stim
+
+    def OnHideXMLStimulus(self, event):
+        self.show_xml_stim = None
 
     def OnSetTimer(self, event):
         dlg=wx.TextEntryDialog(self.frame, 'What interval should the display be updated at (msec)?',
@@ -1444,17 +1464,18 @@ class wxMainBrainApp(wx.App):
                         self.last_sound_time = now
                 if self.current_page == 'preview':
                     r=self.main_brain.reconstructor
-                    for cam_id in self.cameras.keys():
-                        pts = []
-                        for X in Xs:
-                            pt=r.find2d(cam_id,X,
-                                        distorted=True)
-                            pts.append( pt )
-                        #print cam_id, pts
-                        #pt_undist,ln=r.find2d(cam_id,data3d,
-                        #               Lcoords=line3d,distorted=False)
-                        #self.cam_image_canvas.set_red_points(cam_id,([pt],[ln]))
-                        self.cam_image_canvas.set_red_points(cam_id,pts)
+                    if r is not None:
+                        for cam_id in self.cameras.keys():
+                            pts = []
+                            for X in Xs:
+                                pt=r.find2d(cam_id,X,
+                                            distorted=True)
+                                pts.append( pt )
+                            #print cam_id, pts
+                            #pt_undist,ln=r.find2d(cam_id,data3d,
+                            #               Lcoords=line3d,distorted=False)
+                            #self.cam_image_canvas.set_red_points(cam_id,([pt],[ln]))
+                            self.cam_image_canvas.set_red_points(cam_id,pts)
         else:
             for cam_id in self.cameras.keys():
                 if hasattr(self.cam_image_canvas,'set_red_points'):

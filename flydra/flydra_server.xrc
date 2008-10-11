@@ -392,6 +392,12 @@
               <label>Load calibration...</label>
             </object>
             <option>1</option>
+            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="CLEAR_CAL">
+              <label>Clear calibration</label>
+            </object>
           </object>
         </object>
         <flag>wxEXPAND</flag>
