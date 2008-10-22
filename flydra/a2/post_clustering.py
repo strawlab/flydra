@@ -13,7 +13,6 @@ from optparse import OptionParser
 import flydra.a2.core_analysis as core_analysis
 import flydra.a2.flypos
 import flydra.a2.analysis_options as analysis_options
-import pylab
 
 import flydra.a2.posts as posts
 
@@ -87,6 +86,8 @@ def create_analysis_array( rec, subsample_factor=20, frames_per_second=None ):
                 idx2 = np.arange(this_start_idx,this_stop_idx)
                 assert np.allclose(idx1,idx2)
             if 1:
+                import pylab
+
                 # make plot
                 xi = rec['x'][this_start_idx:this_stop_idx]
                 yi = rec['y'][this_start_idx:this_stop_idx]
@@ -117,10 +118,17 @@ def create_analysis_array( rec, subsample_factor=20, frames_per_second=None ):
     A = [ horizontal_angular_velocity,
           downsamp(rec['vel_horiz'][start_idx:stop_idx]),
           downsamp(rec['vel_z'][start_idx:stop_idx]),
-          downsamp(closest_dist[start_idx:stop_idx]),
+          downsamp(closest_dist[start_idx:stop_idx]), # NL func or binarize on this?
           downsamp(post_angle),
           downsamp(sin_post_angle),
           ]
+    A_names = ['angular velocity about Z axis (rad/sec)',
+               'horizontal velocity (m/sec)',
+               'vertical velocity (m/sec)',
+               'distance to closest post (m)',
+               'angle to post (rad)',
+               'sin(angle to post)',
+               ]
     A = [np.array(ai) for ai in A]
     if 1:
         shape = None
@@ -132,8 +140,17 @@ def create_analysis_array( rec, subsample_factor=20, frames_per_second=None ):
             except:
                 print 'assertion failed for row %d'%i
                 raise
-    A = np.array(A).T
-    return A, rowlabels
+    A = np.array(A).T # observations = rows, attributes = columns
+    return A, rowlabels, A_names
+
+def normalize_array(A):
+    column_means = np.mean(A,axis=0)
+    column_std = np.std(A,axis=0)
+    norm_info = {'means':column_means,
+                 'std':column_std}
+    normA = (A - column_means)/column_std
+    return normA,norm_info
+
 
 def doit(options=None):
     if options.obj_only is not None:
@@ -145,14 +162,68 @@ def doit(options=None):
     results_recarrays = [results_recarray]
     all_A = []
     for results_recarray in results_recarrays:
-        A, rowlabels = create_analysis_array( results_recarray,
-                                              frames_per_second=fps )
+        A, rowlabels, A_names = create_analysis_array( results_recarray,
+                                                       frames_per_second=fps )
         all_A.append(A)
 
     # combine all observations into one giant array
+    print np.set_printoptions(linewidth=150,suppress=True)
     A=np.vstack(all_A)
-    print 'array size',A.shape
-    u,s,vt = np.linalg.svd(A)
+    normA,norm_info = normalize_array(A)
+    print 'array size',normA.shape
+    U,s,Vh = np.linalg.svd(normA,full_matrices=False)
+    print 'U.shape',U.shape
+    print 'U[:10]'
+    print U[:10]
+    print 's'
+    print s
+    print 'Vh.shape',Vh.shape
+    print 'Vh'
+    print Vh
+
+    if 1:
+        import matplotlib.pyplot as plt
+        if 1:
+            fig=plt.figure()
+
+            ax = fig.add_subplot(2,2,1)
+            ax.plot( U[:,0], U[:,1], '.')
+            ax.set_aspect('equal')
+            plt.xlabel('U0')
+            plt.ylabel('U1')
+
+            ax = fig.add_subplot(2,2,2)
+            ax.plot( U[:,2], U[:,1], '.')
+            ax.set_aspect('equal')
+            plt.xlabel('U2')
+            plt.ylabel('U1')
+
+            ax = fig.add_subplot(2,2,3)
+            ax.plot( U[:,0], U[:,2], '.')
+            ax.set_aspect('equal')
+            plt.xlabel('U0')
+            plt.ylabel('U2')
+
+        if 1:
+            N = Vh.shape[1]
+            plt.figure()
+            ind = np.arange(N)
+            width = 0.2
+            if 1:
+                Vh = Vh.T
+                print 'plotting columns of Vh'
+            rects1 = plt.bar(ind, Vh[0,:], width, color='r')
+            rects2 = plt.bar(ind+width, Vh[1,:], width, color='y')
+            rects3 = plt.bar(ind+2*width, Vh[2,:], width, color='g')
+
+            plt.ylabel('Factor')
+            locs, labels = plt.xticks(ind+width, A_names )
+            plt.setp(labels, 'rotation', 'vertical')
+            plt.legend( (rects1[0], rects2[0], rects3[0]), ('Vh0 (s %.1f)'%s[0],
+                                                            'Vh1 (s %.1f)'%s[1],
+                                                            'Vh2 (s %.1f)'%s[2]) )
+
+        plt.show()
 
 def main():
     usage = '%prog [options]'
