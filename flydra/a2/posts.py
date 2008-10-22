@@ -5,7 +5,7 @@ if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
     tables.flavor.restrict_flavors(keep=['numpy'])
-import sets, os, sys, math, time
+import sets, os, sys, math, time, warnings
 
 import numpy
 import numpy as np
@@ -17,7 +17,6 @@ import flydra.a2.analysis_options as analysis_options
 import flydra.analysis.result_utils as result_utils
 import flydra.a2.flypos
 import flydra.geom as geom
-import pylab
 
 R2D = 180/numpy.pi
 
@@ -519,12 +518,14 @@ def plot_angle_dist(subplot=None,results_recarray=None,fps=None):
             ax = subplot['angle']
             line, = ax.plot( time_seconds, plot_coords(pt_a_fly_retina), '.' )
             ax.plot( time_seconds, plot_coords(pt_b_fly_retina), '.', color = line.get_color() )
+            ax.grid(True)
 
         if 'dist' in subplot:
             # distance to closest point of post
             ax = subplot['dist']
-            line, = ax.plot( time_seconds, pt_c_fly_retina_dist, '.' )
-            ax.plot( time_seconds, pt_c_fly_retina_dist, '.', color = line.get_color() )
+            #line, = ax.plot( time_seconds, pt_c_fly_retina_dist*100.0, '.' )
+            ax.plot( time_seconds, pt_c_fly_retina_dist*100.0, '.', color = line.get_color() )
+            ax.grid(True)
 
         if 'dist_vs_angle' in subplot:
             ax = subplot['dist_vs_angle']
@@ -537,9 +538,15 @@ def plot_angle_dist(subplot=None,results_recarray=None,fps=None):
             all_pt_c_fly_retina.append( pt_c_fly_retina.compressed() )
 
     if 'dist_vs_angle_static' in subplot:
-        x = numpy.linspace(0,1,100) # 1 meter
+        dist_from = 'cylinder_edge'
+        #dist_from = 'cylinder_center'
+        x = numpy.linspace(0,.6,500) # 60 cm
         y = numpy.zeros_like(x)
         xy = numpy.hstack( (x[:,numpy.newaxis], y[:,numpy.newaxis]) )
+
+        post_diameter = 0.05
+        warnings.warn('WARNING: fixing post_diameter to %.1f'%post_diameter)
+
 
         radius = post_diameter/2.0
         pt_a, pt_b = calc_circle_tangent_points(radius,xy)
@@ -554,8 +561,20 @@ def plot_angle_dist(subplot=None,results_recarray=None,fps=None):
         angular_size = numpy.mod(angle_a - angle_b, 2*numpy.pi)
 
         ax = subplot['dist_vs_angle_static']
-        ax.plot( x, angular_size*R2D )
-        ax.set_xlabel('distance (m)')
+        kwargs=dict(lw=3)
+        if dist_from=='cylinder_center':
+            ax.plot( x*100.0, angular_size*R2D, **kwargs)
+
+        elif dist_from=='cylinder_edge':
+            xnew = x-radius
+            if 0:
+                # pt_c[0] is nan, so this check fails
+                pt_c = calc_closest_points(radius,xy)
+                xnew2 = x-pt_c[:,0]
+                assert np.allclose(xnew,xnew2)
+            ax.plot( xnew*100.0, angular_size*R2D, **kwargs)
+        ax.grid(True)
+        ax.set_xlabel('distance (cm)')
         ax.set_ylabel('retinal size (deg)')
 
     if 'angle' in subplot:
@@ -624,21 +643,29 @@ def doit(options=None):
     if options.obj_only is not None:
         raise ValueError('obj_only is not a valid option for this function')
 
-    kalman_rows, fps, stim_xml = read_files_and_fuse_ids(options=options)
+    kalman_rows, fps, stim_xml, saccade_results = read_files_and_fuse_ids(options=options)
     results_recarray = calc_retinal_coord_array(kalman_rows, fps, stim_xml)
+    #import matplotlib
+    #matplotlib.use('GTKAgg')
+    import pylab
 
     subplot={}
     if 1:
-        fig = pylab.figure()
-        fig.text(0,0, options.kalman_filename )
-        ax=fig.add_subplot(3,1,1)
+        fig1 = pylab.figure(figsize=(8,6))
+        fig1.text(0,0, options.kalman_filename )
+        ax=fig1.add_subplot(2,1,1)
         subplot['angle']=ax
-        ax=fig.add_subplot(3,1,2,sharex=ax)
-        subplot['dist']=ax
-        ax=fig.add_subplot(3,1,3,sharex=ax)
-        subplot['z']=ax
+        post_angle_axes = ax
 
-    if 1:
+        ax=fig1.add_subplot(2,1,2,sharex=ax)
+        subplot['dist']=ax
+        post_dist_axes = ax
+
+
+        ## ax=fig.add_subplot(3,1,3,sharex=ax)
+        ## subplot['z']=ax
+
+    if 0:
         fig2 = pylab.figure()
         ax=fig2.add_subplot(2,1,1)
         subplot['dist_vs_angle']=ax
@@ -646,18 +673,43 @@ def doit(options=None):
         ax=fig2.add_subplot(2,1,2,sharex=ax,sharey=ax)
         subplot['dist_vs_angle_hist']=ax
 
-    if 0:
-        fig3 = pylab.figure()
-        ax=fig3.add_subplot(1,1,1)
-        subplot['dist_vs_angle_static']=ax
-
     if 1:
+        fig3 = pylab.figure(figsize=(4,4))
+        static_angle_ax=fig3.add_subplot(1,1,1)
+        subplot['dist_vs_angle_static']=static_angle_ax
+        ax.set_ylim((0,72))
+        ax.set_xlim((0,60))
+
+    if 0:
         fig4 = pylab.figure()
         ax=fig4.add_subplot(2,1,1)
         subplot['closest_dist_vs_angle']=ax
         ax.set_title('closest post only')
 
     plot_angle_dist(subplot=subplot,results_recarray=results_recarray,fps=fps)
+
+    if 1:
+        ax = post_angle_axes
+        ax.set_yticks([-180,-90,0,90,180])
+
+        ax = post_dist_axes
+        ax.set_xlim((49.5,56.5))
+        ax.set_ylim((0,80))
+        for ext in ['.png']:
+            fname = 'post_angle_over_time'+ext
+            fig1.savefig(fname)#,dpi=55)
+            print 'saved',fname
+
+
+        ax=static_angle_ax
+        ax.set_ylim((0,72))
+        ax.set_xlim((0,60))
+
+        for ext in ['.png','.svg']:
+        #for ext in ['.png','.pdf','.svg']:
+            fname = 'post_angular_size_static'+ext
+            fig3.savefig(fname)#,dpi=55)
+            print 'saved',fname
 
     if 0:
         fig4 = pylab.figure()
@@ -670,7 +722,8 @@ def doit(options=None):
 
         subplot['dist_vs_angle'].set_title('bad')
 
-    pylab.show()
+    #print 'show() called'
+    #pylab.show()
 
 def main():
     usage = '%prog [options]'

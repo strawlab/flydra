@@ -104,121 +104,133 @@ if 0:
 
     pylab.show()
 
-class FlyId(object):
 
-    """
+try:
+    FlyId
+except NameError:
+    define_classes = True
+else:
+    define_classes = False
 
-    Abstraction to make it possbile (easy?) to add support for
-    multiple flies per .kh5 file or a fly split across .kh5 files.
+if define_classes:
+    class FlyId(object):
 
-    """
+        """
 
-    def __init__(self,kalman_filename):
-        if not os.path.exists(kalman_filename):
-            raise ValueError('kalman_filename %s does not exist'%kalman_filename)
-        self._kalman_filename = kalman_filename
-        orig_dir = os.path.split(os.path.realpath(kalman_filename))[0]
-        test_fanout_filename = os.path.join( orig_dir, 'fanout.xml' )
-        if os.path.exists(test_fanout_filename):
-            self._fanout_filename = test_fanout_filename
-        else:
-            raise RuntimeError('could not find fanout file name (guessed %s)'%test_fanout_filename)
-        self._fanout = xml_stimulus.xml_fanout_from_filename( self._fanout_filename )
-        ca = core_analysis.get_global_CachingAnalyzer()
-        obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(self._kalman_filename)
-        fps = result_utils.get_fps( data_file )
-        self._fps = fps
-        file_timestamp = data_file.filename[4:19]
-        self._stim_xml = self._fanout.get_stimulus_for_timestamp(timestamp_string=file_timestamp)
-    def __repr__(self):
-        return 'FlyId("%s")'%self._kalman_filename
-    def get_fps(self):
-        """return frames per second"""
-        return self._fps
-    def get_stim_xml(self):
-        return self._stim_xml
-    def get_overriden(self,stim_xml):
-        return OverriddenFlyId(self._kalman_filename,stim_xml)
-    def get_list_of_kalman_rows(self,flystate='flying'):
-        ca = core_analysis.get_global_CachingAnalyzer()
-        obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(self._kalman_filename)
+        Abstraction to make it possbile (easy?) to add support for
+        multiple flies per .kh5 file or a fly split across .kh5 files.
 
-        if 1:
-            dynamic_model = extra['dynamic_model_name']
-            if dynamic_model.startswith('EKF '):
-                dynamic_model = dynamic_model[4:]
-        self._dynamic_model = dynamic_model
+        """
 
-        file_timestamp = data_file.filename[4:19]
-        include_obj_ids, exclude_obj_ids = self._fanout.get_obj_ids_for_timestamp( timestamp_string=file_timestamp )
-        walking_start_stops = self._fanout.get_walking_start_stops_for_timestamp( timestamp_string=file_timestamp )
-        if include_obj_ids is not None:
-            use_obj_ids = include_obj_ids
-        if exclude_obj_ids is not None:
-            use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
-
-        result = []
-        dropped_obj_ids=[]
-        for obj_id in use_obj_ids:
-            try:
-                kalman_rows = ca.load_data( obj_id, data_file,
-                                            dynamic_model_name = dynamic_model,
-                                            frames_per_second=self._fps,
-                                            flystate='flying',
-                                            walking_start_stops=walking_start_stops,
-                                            )
-            except core_analysis.NotEnoughDataToSmoothError:
-                dropped_obj_ids.append(obj_id)
-                continue
-            except:
-                print >> sys.stderr, "error (below) while processing %s %d"%(data_file.filename, obj_id)
-                raise
+        def __init__(self,kalman_filename):
+            if not os.path.exists(kalman_filename):
+                raise ValueError('kalman_filename %s does not exist'%kalman_filename)
+            self._kalman_filename = kalman_filename
+            orig_dir = os.path.split(os.path.realpath(kalman_filename))[0]
+            test_fanout_filename = os.path.join( orig_dir, 'fanout.xml' )
+            if os.path.exists(test_fanout_filename):
+                self._fanout_filename = test_fanout_filename
             else:
-                if len(kalman_rows) < 3:
+                raise RuntimeError('could not find fanout file name (guessed %s)'%test_fanout_filename)
+            self._fanout = xml_stimulus.xml_fanout_from_filename( self._fanout_filename )
+            ca = core_analysis.get_global_CachingAnalyzer()
+            obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(self._kalman_filename)
+            fps = result_utils.get_fps( data_file )
+            self._fps = fps
+            file_timestamp = data_file.filename[4:19]
+            self._stim_xml = self._fanout.get_stimulus_for_timestamp(timestamp_string=file_timestamp)
+        def __repr__(self):
+            return 'FlyId("%s")'%self._kalman_filename
+        def get_fps(self):
+            """return frames per second"""
+            return self._fps
+        def get_stim_xml(self):
+            return self._stim_xml
+        def get_overriden(self,stim_xml):
+            return OverriddenFlyId(self._kalman_filename,stim_xml)
+        def get_list_of_kalman_rows(self,flystate='flying'):
+            ca = core_analysis.get_global_CachingAnalyzer()
+            obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(self._kalman_filename)
+
+            if 1:
+                dynamic_model = extra['dynamic_model_name']
+                if dynamic_model.startswith('EKF '):
+                    dynamic_model = dynamic_model[4:]
+            self._dynamic_model = dynamic_model
+
+            file_timestamp = data_file.filename[4:19]
+            include_obj_ids, exclude_obj_ids = self._fanout.get_obj_ids_for_timestamp( timestamp_string=file_timestamp )
+            walking_start_stops = self._fanout.get_walking_start_stops_for_timestamp( timestamp_string=file_timestamp )
+            if include_obj_ids is not None:
+                use_obj_ids = include_obj_ids
+            if exclude_obj_ids is not None:
+                use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
+
+            result = []
+            dropped_obj_ids=[]
+            for obj_id in use_obj_ids:
+                try:
+                    kalman_rows = ca.load_data( obj_id, data_file,
+                                                dynamic_model_name = dynamic_model,
+                                                frames_per_second=self._fps,
+                                                flystate='flying',
+                                                walking_start_stops=walking_start_stops,
+                                                )
+                except core_analysis.NotEnoughDataToSmoothError:
                     dropped_obj_ids.append(obj_id)
                     continue
-                result.append(kalman_rows)
-        if len( dropped_obj_ids ):
-            print >> sys.stderr, 'due to short length of data, dropped obj_ids (in %s):'%data_file.filename, dropped_obj_ids
-        return result
+                except:
+                    print >> sys.stderr, "error (below) while processing %s %d"%(data_file.filename, obj_id)
+                    raise
+                else:
+                    if len(kalman_rows) < 3:
+                        dropped_obj_ids.append(obj_id)
+                        continue
+                    result.append(kalman_rows)
+            if len( dropped_obj_ids ):
+                print >> sys.stderr, 'due to short length of data, dropped obj_ids (in %s):'%data_file.filename, dropped_obj_ids
+            return result
 
-class OverriddenFlyId(FlyId):
-    def __init__(self,kalman_filename,forced_stim_xml):
-        super(OverriddenFlyId,self).__init__(kalman_filename)
-        self._stim_xml = forced_stim_xml
-    def __repr__(self):
-        return 'OverriddenFlyId("%s",%s)'%(self._kalman_filename,self._stim_xml)
+    class OverriddenFlyId(FlyId):
+        def __init__(self,kalman_filename,forced_stim_xml):
+            super(OverriddenFlyId,self).__init__(kalman_filename)
+            self._stim_xml = forced_stim_xml
+        def __repr__(self):
+            return 'OverriddenFlyId("%s",%s)'%(self._kalman_filename,self._stim_xml)
 
-class Treatment(list):
-    def get_giant_arrays(self):
-        if not hasattr(self, '_giant_cache'):
-            self._giant_cache = make_giant_arrays( self )
-        return self._giant_cache
+    class Treatment(list):
+        def get_giant_arrays(self):
+            if not hasattr(self, '_giant_cache'):
+                self._giant_cache = make_giant_arrays( self )
+            return self._giant_cache
 
-class OverrideIterator(object):
-    def __init__(self,orig):
-        self._orig = orig
-        self._place = 0
-    def next(self):
-        if self._place >= len(self._orig):
-            raise StopIteration()
-        result = self._orig[self._place]
-        self._place += 1
-        return result
+    class OverrideIterator(object):
+        def __init__(self,orig):
+            self._orig = orig
+            self._place = 0
+        def next(self):
+            if self._place >= len(self._orig):
+                raise StopIteration()
+            result = self._orig[self._place]
+            self._place += 1
+            return result
 
-class TreatmentOverride(Treatment):
-    def __init__(self,*args,**kwargs):
-        self.newkws = {}
-        if 'stim_xml' in kwargs:
-            self.newkws['stim_xml']=kwargs['stim_xml']
-            del kwargs['stim_xml']
-        super(TreatmentOverride,self).__init__(*args,**kwargs)
-    def __iter__(self):
-        return OverrideIterator(self)
-    def __getitem__(self,name):
-        orig = super(TreatmentOverride,self).__getitem__(name)
-        overriden = orig.get_overriden(self.newkws['stim_xml'])
-        return overriden
+    class TreatmentOverride(Treatment):
+        def __init__(self,*args,**kwargs):
+            self.newkws = {}
+            if 'stim_xml' in kwargs:
+                self.newkws['stim_xml']=kwargs['stim_xml']
+                del kwargs['stim_xml']
+            super(TreatmentOverride,self).__init__(*args,**kwargs)
+        def __iter__(self):
+            return OverrideIterator(self)
+        def __getitem__(self,name):
+            orig = super(TreatmentOverride,self).__getitem__(name)
+            overriden = orig.get_overriden(self.newkws['stim_xml'])
+            return overriden
+        def get_non_overriden_item(self,name):
+            orig = super(TreatmentOverride,self).__getitem__(name)
+            return orig
 
 def make_giant_arrays( treatment, graphical_debug=False ):
     all_kalman_rows = []
@@ -333,8 +345,16 @@ _white_magenta_data = {'red':   ((0.0, 1.0, 1.0),   (1.0, 1.0, 1.0)),
                        'blue':  ((0.0, 1.0, 1.0),   (1.0, 1.0, 1.0))}
 white_magenta = colors.LinearSegmentedColormap('white_magenta', _white_magenta_data, LUTSIZE)
 
+gray_level = 0.5
+_white_gray_data = {'red':   ((0.0, 1.0, 1.0),   (1.0, gray_level, gray_level)),
+                     'green': ((0.0, 1.0, 1.0),   (1.0, gray_level, gray_level)),
+                     'blue':  ((0.0, 1.0, 1.0),   (1.0, gray_level, gray_level))}
+white_gray = colors.LinearSegmentedColormap('white_gray', _white_gray_data, LUTSIZE)
 
-def do_turning_plots( subplot, treatment, condition_name):
+
+def do_turning_plots( orig_subplot, treatment, condition_name):
+    subplot = {}
+    subplot.update(orig_subplot)
     #results_recarray, all_saccade_idxs = make_giant_arrays( treatment )
     results_recarray, all_saccade_idxs = treatment.get_giant_arrays()
     closest_dist = np.ma.array(results_recarray[ 'closest_dist' ],mask=results_recarray[ 'closest_dist_mask' ])
@@ -342,8 +362,10 @@ def do_turning_plots( subplot, treatment, condition_name):
     angle_of_closest_dist = np.ma.array(results_recarray[ 'angle_of_closest_dist' ],mask=results_recarray[ 'closest_dist_mask' ])
     #approaching = abs(post_angle) < np.pi # heading with 90 degrees of post center
 
-    if 'lines' in subplot:
-        ax = subplot['lines']
+    key = 'lines'
+    if key in subplot:
+        ax = subplot[key]
+        del subplot[key]
         ax.plot(closest_dist, angle_of_closest_dist, '.',ms=1)#, ms=0.5 )
         for idx in all_saccade_idxs:
             if not closest_dist.mask[idx]:
@@ -352,6 +374,7 @@ def do_turning_plots( subplot, treatment, condition_name):
     for key in subplot.keys():
         if key.startswith('post_angle_at_dist'):
             ax = subplot[key]
+            del subplot[key]
             print 'key',key
             key = key[len('post_angle_at_dist'):]
             args = np.array(map(int,key.strip().split()))
@@ -414,13 +437,17 @@ def do_turning_plots( subplot, treatment, condition_name):
 
     # hexbin stuff:
     gridsize = 30,20
-    if 'hexbin_counts' in subplot:
-        ax = subplot['hexbin_counts']
+    key='hexbin_counts'
+    if key in subplot:
+        ax = subplot[key]
+        del subplot[key]
         ax.hexbin(closest_dist, angle_of_closest_dist, cmap=white_magenta, gridsize=gridsize)
         ax.set_frame_on(False)
-    if 'hexbin_flux' in subplot:
-        ax = subplot['hexbin_flux']
 
+    key='hexbin_flux'
+    if key in subplot:
+        ax = subplot[key]
+        del subplot[key]
         # With reduce function as sum and the variable speed, 3
         # observations at .333 m/s will contribute equally as 1
         # observation at 1 m/s. Thus, slower flies don't get
@@ -437,24 +464,32 @@ def do_turning_plots( subplot, treatment, condition_name):
                                )
         ax.set_frame_on(False)
 
-    if 'hexbin_angular_vel' in subplot:
-        ax = subplot['hexbin_angular_vel']
+    key='hexbin_angular_vel'
+    if key in subplot:
+        ax = subplot[key]
+        del subplot[key]
         ax.hexbin(closest_dist, angle_of_closest_dist,
                   C=results_recarray['horizontal_angular_velocity'],
                   vmin = -10,vmax= 10,
                   cmap=magenta_white_green, gridsize=gridsize,
                   )
         ax.set_frame_on(False)
-    if 'hexbin_abs_angular_vel' in subplot:
-        ax = subplot['hexbin_abs_angular_vel']
+
+    key='hexbin_abs_angular_vel'
+    if key in subplot:
+        ax = subplot[key]
+        del subplot[key]
         ax.hexbin(closest_dist, angle_of_closest_dist,
                   C=abs(results_recarray['horizontal_angular_velocity']),
                   vmin = -10,vmax= 10,
                   cmap=magenta_white_green, gridsize=gridsize,
                   )
         ax.set_frame_on(False)
-    if 'hexbin_vel' in subplot:
-        ax = subplot['hexbin_vel']
+
+    key='hexbin_vel'
+    if key in subplot:
+        ax = subplot[key]
+        del subplot[key]
         C = results_recarray[ 'vel_horiz' ]
         #C = closest_dist_speed
         collection = ax.hexbin(closest_dist, angle_of_closest_dist, C=C,
@@ -462,18 +497,124 @@ def do_turning_plots( subplot, treatment, condition_name):
                                cmap=white_magenta, gridsize=gridsize,
                                )
         ax.set_frame_on(False)
-    if 'lines_angular_vel' in subplot:
-        horizontal_angular_velocity = results_recarray['horizontal_angular_velocity']
-        ax = subplot['lines_angular_vel']
+
+    key='lines_angular_vel'
+    if key in subplot:
+        ax = subplot[key]
+        del subplot[key]
         ax.scatter(closest_dist, angle_of_closest_dist,
                    c=horizontal_angular_velocity, s=3,
                    vmin=-200*D2R, vmax=200*D2R,
                    edgecolors='none' )
         ax.set_xlabel('post distance (m)')
         ax.set_ylabel('post angle (rad)')
+
+    key='saccade_rate_vs_dist'
+    if key in subplot:
+        ax = subplot[key]
+        del subplot[key]
+
+        if 0:
+            fps = 60.0
+            warnings.warn('WARNING: fixing fps to %.1f'%fps)
+        else:
+            fps = treatment[0].get_fps()
+            for i in range(1,len(treatment)):
+                assert fps == treatment[i].get_fps()
+
+        bin_edges = np.linspace(0,.6,32)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:])/2
+        bin_assignments = bin_edges.searchsorted( closest_dist, side='left')
+        result = []
+        set1 = set(map(int,all_saccade_idxs))
+
+        for bin_number in range(1,len(bin_edges)):
+            idxs_in_this_bin = np.nonzero(bin_assignments==bin_number)[0]
+            N_observations = len(idxs_in_this_bin)
+
+
+            set2 = set(map(int,idxs_in_this_bin))
+            N_saccades = len( set1.intersection( set2) )
+            rate = (N_saccades/float(N_observations))*fps
+            result.append(rate)
+        ax.plot( bin_centers*100, result, lw=3, label=condition_name )
+
+        ax.set_xlabel('post distance (cm)')
+        ax.set_ylabel('saccade rate (/s)')
+        ax.set_yticks([0, 2, 4])
+
+    key='horiz_vel_vs_dist'
+    if key in subplot:
+        ax = subplot[key]
+        del subplot[key]
+
+        bin_edges = np.linspace(0,.6,32)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:])/2
+        bin_assignments = bin_edges.searchsorted( closest_dist, side='left')
+
+        result_mean = []
+        result_median = []
+        for bin_number in range(1,len(bin_edges)):
+            idxs_in_this_bin = np.nonzero(bin_assignments==bin_number)[0]
+            this_horiz_vel = results_recarray['vel_horiz'][idxs_in_this_bin]
+            this_horiz_vel = np.ma.masked_where( np.isnan(this_horiz_vel), this_horiz_vel ).compressed()
+
+            result_mean.append( np.mean( this_horiz_vel ))
+            result_median.append( np.median( this_horiz_vel ))
+        ax.plot( bin_centers*100, result_mean, lw=3, label=('mean '+condition_name ) )
+        #ax.plot( bin_centers, result_median, label=('median '+condition_name ) )
+
+        ax.set_xlabel('post distance (cm)')
+        ax.set_ylabel('mean horizontal velocity (m/s)')
+        ax.set_ylim( (0, 0.55))
+        ax.set_yticks( [ 0, .2, .4 ])
+
+    key='z_vs_dist'
+    if key in subplot:
+        ax = subplot[key]
+        del subplot[key]
+
+        bin_edges = np.linspace(0,.6,32)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:])/2
+        bin_assignments = bin_edges.searchsorted( closest_dist, side='left')
+
+        result_mean = []
+        result_median = []
+        result_min = []
+        result_max = []
+        for bin_number in range(1,len(bin_edges)):
+            idxs_in_this_bin = np.nonzero(bin_assignments==bin_number)[0]
+            this_z = results_recarray['z'][idxs_in_this_bin]
+            this_z = np.ma.masked_where( np.isnan(this_z), this_z ).compressed()
+
+            result_mean.append( np.mean( this_z ))
+            result_median.append( np.median( this_z ))
+            result_min.append( np.min( this_z ))
+            result_max.append( np.max( this_z ))
+        ax.plot( bin_centers*100, result_mean, lw=3, label=('mean '+condition_name ) )
+        ax.plot( bin_centers*100, result_median, label=('median '+condition_name ) )
+        ax.plot( bin_centers*100, result_min, label=('min '+condition_name ) )
+        ax.plot( bin_centers*100, result_max, label=('max '+condition_name ) )
+
+        ax.set_xlabel('post distance (cm)')
+        ax.set_ylabel('z (m)')
+
+    key='horiz_vel_vs_dist_hexbin'
+    if key in subplot:
+        ax = subplot[key]
+        del subplot[key]
+
+        collection = ax.hexbin(closest_dist, results_recarray['vel_horiz'],
+                               #vmin = 0, vmax= 1,
+                               cmap=white_gray, gridsize=(20,30),
+                               )
+        ax.set_xlabel('post distance (m)')
+        ax.set_ylabel('mean horizontal velocity (m/s)')
+
     for key in subplot.keys():
         if key.startswith('turn_func'):
             ax = subplot[key]
+            del subplot[key]
             print 'key',key
             key = key[9:]
             args = np.array(map(int,key.strip().split()))
@@ -487,11 +628,12 @@ def do_turning_plots( subplot, treatment, condition_name):
                 colname ='horizontal_angular_velocity_%dmsec_delay'%this_delay
             this_turn_vel = results_recarray[colname][this_cond]
             if 1:
-                x = np.clip(this_post_angle,-np.pi,np.pi)
-                y = np.clip(this_turn_vel,-20,20)
+                #x = np.clip(this_post_angle,-np.pi,np.pi)
+                x = this_post_angle
+                y = np.clip(this_turn_vel,-550*D2R,550*D2R)
                 ax.hexbin( x*R2D,y*R2D,
                            gridsize=(33,51),
-                           cmap=white_magenta,
+                           cmap=white_gray,
                            )
                 ax.xaxis.set_ticks_position('none')
                 ax.yaxis.set_ticks_position('none')
@@ -559,12 +701,72 @@ def do_turning_plots( subplot, treatment, condition_name):
             ## ax.set_ylabel('fly angular velocity (rad/sec)')
             ax.set_xlabel('post angle (deg)')
             ax.set_ylabel('fly angular velocity (deg/sec)')
+            ax.xaxis.get_label().set_size(16)
+            ax.yaxis.get_label().set_size(16)
             ax.set_ylim((-500,500))
             ax.set_xticks([-180,-90,0,90,180])
             ax.set_yticks([-500,-250,0,250,500])
 
+    key='top_view_abs_angular_vel'
+    if key in subplot:
+        ax = subplot[key]
+        del subplot[key]
+
+        C = abs(results_recarray[ 'horizontal_angular_velocity' ])
+        x = results_recarray[ 'x' ]
+        y = results_recarray[ 'y' ]
+        z = results_recarray['z']
+        cond = (z < 0.4)
+
+        ax.hexbin(x[cond],y[cond], C=C[cond]*R2D,
+                  vmin=0*D2R, vmax=650,
+                  gridsize=25,
+                  #cmap=white_gray,
+                  )
+        if hasattr( treatment, 'get_non_overriden_item' ):
+            # don't draw posts unless they were really there
+            flyid = treatment.get_non_overriden_item(0)
+        else:
+            flyid = treatment[0]
+        stim_xml = flyid.get_stim_xml()
+        # equality checking not implemented...
+        #for i in range(1,len(treatment)):
+        #    assert stim_xml == treatment[i].get_stim_xml()
+        stim_xml.plot_stim( ax, projection=xml_stimulus.SimpleOrthographicXYProjection())
+        ax.set_aspect('equal')
+
+    key='top_view_horiz_vel'
+    if key in subplot:
+        ax = subplot[key]
+        del subplot[key]
+
+        C = abs(results_recarray[ 'vel_horiz'])
+        x = results_recarray[ 'x' ]
+        y = results_recarray[ 'y' ]
+        z = results_recarray['z']
+        cond = (z < 0.4)
+
+        ax.hexbin(x[cond],y[cond], C=C[cond],
+                  vmin=0*D2R, vmax=0.7,
+                  gridsize=25,
+                  #cmap=white_gray,
+                  )
+        if hasattr( treatment, 'get_non_overriden_item' ):
+            # don't draw posts unless they were really there
+            flyid = treatment.get_non_overriden_item(0)
+        else:
+            flyid = treatment[0]
+        stim_xml = flyid.get_stim_xml()
+        # equality checking not implemented...
+        #for i in range(1,len(treatment)):
+        #    assert stim_xml == treatment[i].get_stim_xml()
+        stim_xml.plot_stim( ax, projection=xml_stimulus.SimpleOrthographicXYProjection())
+        ax.set_aspect('equal')
+
     n_pts = len( closest_dist.filled() )
     print '%s: %d data points (%.1f seconds at 60 fps)'%(condition_name, n_pts, n_pts/60.0 )
+    if len(subplot.keys()):
+        warnings.warn('unprocessed subplots: %s'%str(subplot.keys()))
 
 try:
     single_post_experiments
@@ -726,6 +928,132 @@ if __name__=='__main__':
             subplot['post_angle_at_dist 20 40'].legend()
             subplot['post_angle_at_dist 40 60'].legend()
 
+        if 1:
+            n_rows = len(condition_names)
+            n_cols = 1
+
+            ax = None
+            #fig = plt.figure(frameon=False,figsize=(4.5,9))
+            fig = plt.figure(figsize=(4.5,9))
+            for row, condition_name in enumerate(condition_names):
+                subplot = {}
+                this_ax = fig.add_subplot(n_rows,n_cols,(row*n_cols)+1,sharex=ax,sharey=ax)
+                subplot['top_view_abs_angular_vel'] = this_ax
+                if ax is None:
+                    ax = this_ax
+                do_turning_plots( subplot, comparison[condition_name], condition_name )
+                this_ax.set_frame_on(False)
+                ylim = this_ax.get_ylim()
+                this_ax.set_ylim( (ylim[0],ylim[1]+.1))
+                this_ax.set_xticks([])
+                this_ax.set_yticks([])
+
+            collection = ax.collections[0]
+            cax = fig.add_axes( (0.85, 0.05, .05, .9))
+            cbar = fig.colorbar(collection, cax=cax, ax=ax )
+
+            import pylab
+            pylab.subplots_adjust(left=0.12, right=.88)
+
+            for ext in ['.png','.svg']:
+            #for ext in ['.png','.pdf','.svg']:
+                fname = 'top_view_abs_angular_velocity'+ext
+                fig.savefig(fname)#,dpi=55)
+                print 'saved',fname
+
+        if 1:
+            n_rows = len(condition_names)
+            n_cols = 1
+
+            ax = None
+            #fig = plt.figure(frameon=False,figsize=(4.5,9))
+            fig = plt.figure(figsize=(4.5,9))
+            for row, condition_name in enumerate(condition_names):
+                subplot = {}
+                this_ax = fig.add_subplot(n_rows,n_cols,(row*n_cols)+1,sharex=ax,sharey=ax)
+                subplot['top_view_horiz_vel'] = this_ax
+                if ax is None:
+                    ax = this_ax
+                do_turning_plots( subplot, comparison[condition_name], condition_name )
+                this_ax.set_frame_on(False)
+                ylim = this_ax.get_ylim()
+                this_ax.set_ylim( (ylim[0],ylim[1]+.1))
+                this_ax.set_xticks([])
+                this_ax.set_yticks([])
+
+            collection = ax.collections[0]
+            cax = fig.add_axes( (0.85, 0.05, .05, .9))
+            cbar = fig.colorbar(collection, cax=cax, ax=ax )
+
+            import pylab
+            pylab.subplots_adjust(left=0.12, right=.88)
+
+            for ext in ['.png','.svg']:
+            #for ext in ['.png','.pdf','.svg']:
+                fname = 'top_view_horiz_vel'+ext
+                fig.savefig(fname)#,dpi=55)
+                print 'saved',fname
+
+        if 0:
+            # maybe nice to put posts.py static angle plot in here?
+            n_rows = 2
+            n_cols = 1
+
+            fig = plt.figure(figsize=(4.5,5))
+            ax = None
+            row = 0
+
+            subplot = {}
+            subplot['saccade_rate_vs_dist'] = fig.add_subplot(n_rows,n_cols,(row*n_cols)+1,sharex=ax)
+            subplot['horiz_vel_vs_dist']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+2,sharex=ax)
+            #subplot['z_vs_dist']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+2,sharex=ax)
+
+            for condition_name in condition_names:
+                do_turning_plots( subplot, comparison[condition_name], condition_name )
+
+            ax = subplot['saccade_rate_vs_dist']
+            ax.set_xticklabels([])
+            ax.set_xlabel('')
+
+            #subplot['saccade_rate_vs_dist'].legend()
+            #subplot['horiz_vel_vs_dist'].legend()
+            #subplot['z_vs_dist'].legend()
+            import pylab
+            pylab.subplots_adjust(left=0.15, right=.96, hspace=0)
+
+            for ext in ['.png','.svg']:
+            #for ext in ['.png','.pdf','.svg']:
+                fname = 'saccades_and_velocity'+ext
+                fig.savefig(fname)#,dpi=55)
+                print 'saved',fname
+
+        if 0:
+            n_rows = 2
+            n_cols = 1
+
+            fig = plt.figure()
+            ax = None
+
+            #PRETTY_NONINTERACTIVE=False # make pretty
+            PRETTY_NONINTERACTIVE=True # make pretty
+
+            for row, condition_name in enumerate(condition_names):
+                subplot = {}
+                subplot['horiz_vel_vs_dist'] = fig.add_subplot(n_rows,n_cols,(row*n_cols)+1,sharex=ax,sharey=ax)
+                if (not PRETTY_NONINTERACTIVE) and (ax is None):
+                    ax = subplot['horiz_vel_vs_dist']
+                subplot['horiz_vel_vs_dist_hexbin']  = subplot['horiz_vel_vs_dist'] # same axes
+                do_turning_plots( subplot, comparison[condition_name], condition_name )
+
+                this_ax = subplot['horiz_vel_vs_dist_hexbin']
+                if not PRETTY_NONINTERACTIVE:
+                    this_ax.set_title( condition_name )
+                else:
+                    this_ax.set_xlabel('')
+                    if row==0:
+                        this_ax.set_xticklabels([])
+                    this_ax.set_xlim((0,50))
+
         if 0:
             n_rows = len(condition_names)
             n_cols = 6
@@ -752,9 +1080,9 @@ if __name__=='__main__':
                 do_turning_plots( subplot, comparison[condition_name], condition_name )
 
 
-        if 1:
+        if 0:
             PRETTY_NONINTERACTIVE=False
-            PRETTY_NONINTERACTIVE=True # make pretty, but nice interactive features (sharex) disabled
+            #PRETTY_NONINTERACTIVE=True # make pretty, but nice interactive features (sharex) disabled
             #for delay_msec in [0,50,100,150]:
             for delay_msec in [0]:
                 plot_p_values = False
@@ -764,7 +1092,7 @@ if __name__=='__main__':
                 fig = plt.figure(figsize=(14.2,9.1875))
                 if PRETTY_NONINTERACTIVE:
                     import pylab
-                    pylab.subplots_adjust(left=0.07, right=.99,top=0.96)
+                    pylab.subplots_adjust(left=0.07, right=.99,top=0.96, wspace=0.0, hspace=0.05)
                 if not PRETTY_NONINTERACTIVE:
                     fig.text(0,0,'assuming %d msec latency'%delay_msec)
                 ax = None
@@ -775,35 +1103,39 @@ if __name__=='__main__':
                     subplot = {}
                     if PRETTY_NONINTERACTIVE:
                         ax=None
-                    subplot[key_start+'0 10'] = fig.add_subplot(n_rows,n_cols,(row*n_cols)+1,sharex=ax,sharey=ax)
+                    subplot[key_start+'50 60'] = fig.add_subplot(n_rows,n_cols,(row*n_cols)+1,sharex=ax,sharey=ax)
                     if (not PRETTY_NONINTERACTIVE) and (ax is None):
-                        ax = subplot[key_start+'0 10']
-                    subplot[key_start+'10 20']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+2,sharex=ax,sharey=ax)
-                    subplot[key_start+'20 30']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+3,sharex=ax,sharey=ax)
-                    subplot[key_start+'30 40']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+4,sharex=ax,sharey=ax)
-                    subplot[key_start+'40 50']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+5,sharex=ax,sharey=ax)
-                    subplot[key_start+'50 60']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+6,sharex=ax,sharey=ax)
+                        ax = subplot[key_start+'50 60']
+                    subplot[key_start+'40 50']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+2,sharex=ax,sharey=ax)
+                    subplot[key_start+'30 40']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+3,sharex=ax,sharey=ax)
+                    subplot[key_start+'20 30']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+4,sharex=ax,sharey=ax)
+                    subplot[key_start+'10 20']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+5,sharex=ax,sharey=ax)
+                    subplot[key_start+'0 10']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+6,sharex=ax,sharey=ax)
 
                     if not PRETTY_NONINTERACTIVE:
-                        subplot[key_start+'0 10'].set_title( condition_name )
+                        subplot[key_start+'50 60'].set_title( condition_name )
                     do_turning_plots( subplot, comparison[condition_name], condition_name )
                     if PRETTY_NONINTERACTIVE:
                         if row == 0:
                             for key in subplot:
                                 subplot[key].set_xlabel('')
+                                subplot[key].set_xticklabels([])
                         for key,ax in subplot.iteritems():
-                            if key != (key_start+'0 10'): # for all but first column
+                            if key != (key_start+'50 60'): # for all but first column
                                 ax.set_ylabel('')
                                 ax.set_yticklabels( [] )
                         for ax in subplot.itervalues():
                             del ax.texts[:] # remove all axes text
+                            ax.set_ylim((-560,560))
+                            ax.set_xlabel('')
+                            ax.set_ylabel('')
                             for label in ax.get_xticklabels():
                                 plt.setp(label,
                                          rotation=-75)
-                        #print 'key',key
-                        ax = subplot[(key_start+'0 10')]
-                        #print 'ax.get_ylabel()',ax.get_ylabel()
-                        #print 'ax.get_yticklabels()',[label for label in ax.get_yticklabels()]
+                        ## #print 'key',key
+                        ## ax = subplot[(key_start+'0 10')]
+                        ## #print 'ax.get_ylabel()',ax.get_ylabel()
+                        ## #print 'ax.get_yticklabels()',[label for label in ax.get_yticklabels()]
 
                 if plot_p_values:
                     # make this optional so we don't have to keep subplot names in sync
@@ -858,6 +1190,7 @@ if __name__=='__main__':
                         fname = 'turn_functions'+ext
                         fig.savefig(fname)#,dpi=55)
                         print 'saved',fname
-
+        if len(subplot.keys()):
+            warnings.warn('unplotted keys: %s'%str(subplot.keys()))
         plt.show()
 
