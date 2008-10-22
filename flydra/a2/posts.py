@@ -249,6 +249,7 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
 
     closest_all_pt_c_fly_retina_dist = []
     closest_all_pt_c_fly_retina_dist_speed = []
+    closest_all_pt_c_fly_retina_dist_accel = []
     closest_all_pt_c_fly_retina = []
     closest_all_pt_c_fly_retina_mask = []
 
@@ -293,6 +294,12 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
         pt_c_fly_retina = numpy.mod(pt_c_fly_retina_abs - fly_direction_2D, 2*numpy.pi )
         pt_d_fly_retina = numpy.mod(pt_d_fly_retina_abs - fly_direction_2D, 2*numpy.pi )
 
+        # center about 0 (shift branch cut from 0/2pi to -pi/pi)
+        pt_a_fly_retina = np.mod(pt_a_fly_retina+np.pi,2*np.pi)-np.pi
+        pt_b_fly_retina = np.mod(pt_b_fly_retina+np.pi,2*np.pi)-np.pi
+        pt_c_fly_retina = np.mod(pt_c_fly_retina+np.pi,2*np.pi)-np.pi
+        pt_d_fly_retina = np.mod(pt_d_fly_retina+np.pi,2*np.pi)-np.pi
+
         # put in fly retinal coords (distance)
         pt_a_fly_retina_dist = numpy.hypot( pt_a_fly[:,0], pt_a_fly[:,1] )
         pt_b_fly_retina_dist = numpy.hypot( pt_b_fly[:,0], pt_b_fly[:,1] )
@@ -303,6 +310,11 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
         pt_c_fly_retina_dist_speed = np.hstack(([pt_c_fly_retina_dist_speed[0]],
                                                 pt_c_fly_retina_dist_speed,
                                                 [pt_c_fly_retina_dist_speed[-1]])) # pad ends to maintain length
+
+        pt_c_fly_retina_dist_accel = (pt_c_fly_retina_dist_speed[2:]-pt_c_fly_retina_dist_speed[:-2])/(2*dt)
+        pt_c_fly_retina_dist_accel = np.hstack(([pt_c_fly_retina_dist_accel[0]],
+                                                pt_c_fly_retina_dist_accel,
+                                                [pt_c_fly_retina_dist_accel[-1]]))
 
         result_col_arrays.append( pt_a_fly_retina )
         result_col_names.append( post_name+'_pt_a_fly_retina' )
@@ -343,10 +355,12 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
         closest_all_pt_c_fly_retina.append( numpy.ma.getdata(pt_c_fly_retina) )
         closest_all_pt_c_fly_retina_mask.append( numpy.ma.getmask(pt_c_fly_retina_dist) )
         closest_all_pt_c_fly_retina_dist_speed.append( pt_c_fly_retina_dist_speed )
+        closest_all_pt_c_fly_retina_dist_accel.append( pt_c_fly_retina_dist_accel )
 
     # stack each post as a row
     closest_all_pt_c_fly_retina_dist = np.ma.array(closest_all_pt_c_fly_retina_dist,mask=closest_all_pt_c_fly_retina_mask)
     closest_all_pt_c_fly_retina_dist_speed = np.ma.array(closest_all_pt_c_fly_retina_dist_speed,mask=closest_all_pt_c_fly_retina_mask)
+    closest_all_pt_c_fly_retina_dist_accel = np.ma.array(closest_all_pt_c_fly_retina_dist_accel,mask=closest_all_pt_c_fly_retina_mask)
     closest_all_pt_c_fly_retina = np.ma.array(closest_all_pt_c_fly_retina,mask=closest_all_pt_c_fly_retina_mask)
 
     # find closest row
@@ -355,12 +369,16 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
 
     closest_dist = closest_all_pt_c_fly_retina_dist[ taker, col_idx ]
     closest_dist_speed = closest_all_pt_c_fly_retina_dist_speed[ taker, col_idx ]
+    closest_dist_accel = closest_all_pt_c_fly_retina_dist_accel[ taker, col_idx ]
     angle_of_closest_dist = closest_all_pt_c_fly_retina[ taker, col_idx ]
     result_col_arrays.append( closest_dist )
     result_col_names.append( 'closest_dist' )
 
     result_col_arrays.append( closest_dist_speed )
     result_col_names.append( 'closest_dist_speed' )
+
+    result_col_arrays.append( closest_dist_accel )
+    result_col_names.append( 'closest_dist_accel' )
 
     result_col_arrays.append( np.ma.getmask(closest_dist) )
     result_col_names.append( 'closest_dist_mask' )

@@ -97,6 +97,7 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
 
     closest_dist = np.ma.array(rec[ 'closest_dist' ],mask=rec[ 'closest_dist_mask' ])
     closest_dist_speed = np.ma.array(rec[ 'closest_dist_speed' ],mask=rec[ 'closest_dist_mask' ])
+    closest_dist_accel = np.ma.array(rec[ 'closest_dist_accel' ],mask=rec[ 'closest_dist_mask' ])
     angle_of_closest_dist = np.ma.array(rec[ 'angle_of_closest_dist' ],mask=rec[ 'closest_dist_mask' ])
     post_angle = angle_of_closest_dist[start_idx:stop_idx]
     try:
@@ -111,7 +112,20 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
     def downsamp(arr):
         N_observations = len(arr)//subsample_factor
         x = np.ma.reshape(arr, (N_observations,subsample_factor))
-        x = np.ma.mean(x,axis=1)
+        if 0:
+            x = np.ma.mean(x,axis=1)
+        else:
+            result = []
+            for i in range(x.shape[0]):
+                #col = x[:,j]
+                col = x[i,:]
+                col = np.ma.asarray(col).compressed()
+                if len(col)>2:
+                    result.append( np.median( col ) )
+                else:
+                    result.append( np.mean( col ) )
+            x = np.array(result)
+        #x = np.ma.median(x,axis=1)
         return x
 
     A = [ horizontal_angular_velocity,
@@ -120,6 +134,7 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
           downsamp(vel_mag[start_idx:stop_idx]),
           downsamp(closest_dist[start_idx:stop_idx]), # NL func or binarize on this?
           downsamp(closest_dist_speed[start_idx:stop_idx]),
+          downsamp(closest_dist_accel[start_idx:stop_idx]),
           downsamp(post_angle),
           downsamp(sin_post_angle),
           ]
@@ -129,6 +144,7 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
                'speed (m/sec)',
                'distance to closest post (m)',
                'speed from closest post (m/sec)',
+               'accel from closest post (m/sec/sec)',
                'angle to post (rad)',
                'sin(angle to post)',
                ]
@@ -484,6 +500,7 @@ def load_A_matrix( options=None ):
                    A_names=A_names,
                    all_rowlabels=all_rowlabels,
                    orig_data_by_trace_id=orig_data_by_trace_id,
+                   stim_xml=stim_xml,
                    )
     return results
 
@@ -495,6 +512,7 @@ def doit(options=None):
     A_names=my_results['A_names']
     all_rowlabels=my_results['all_rowlabels']
     orig_data_by_trace_id=my_results['orig_data_by_trace_id']
+    stim_xml=my_results['stim_xml']
 
     normA,norm_info = normalize_array(A)
     U,s,Vh = np.linalg.svd(normA,full_matrices=False)
@@ -503,8 +521,8 @@ def doit(options=None):
     if 1:
         # print summary information
         print 'A names:'
-        for A_name in A_names:
-            print '  ',A_name
+        for i,A_name in enumerate(A_names):
+            print '  %d: %s'%(i,A_name)
 
         print np.set_printoptions(linewidth=150,suppress=True)
         print 'array size',normA.shape
@@ -516,6 +534,21 @@ def doit(options=None):
         print 'Vh.shape',Vh.shape
         print 'Vh'
         print Vh
+
+        if 0:
+            # show reconstruction with reduced dimensionality
+            n_vals = 6
+            n_rows = 10
+
+            normA_test = np.dot( U[:n_rows, :n_vals], np.dot( np.diag(s[:n_vals]), Vh[:n_vals,:] ) )
+
+            norm_A_actual = normA[:n_rows]
+
+            print 'normA_test'
+            print normA_test
+            print 'norm_A_actual'
+            print norm_A_actual
+            sys.exit(0)
 
     if 0:
         # plot non-contiguous timeseries of all data in A matrix and original data. skips missing data
@@ -564,13 +597,13 @@ def doit(options=None):
 
         plt.show()
 
-    if 0:
+    if 1:
         # plot timeseries of all original data and corresponding A matrix (time-contiguous)
         import matplotlib.pyplot as plt
 
         orig_col_names = ['x','y','z']
-        A_col_nums = [0,1,2,3,4]
-        U_col_nums = [0,1,2]
+        A_col_nums = [0,1,2,3,4,7]
+        U_col_nums = []#0,1,2]
 
         def mytake(arr, ma_idx):
             ma_idx = np.ma.masked_where( np.isnan( ma_idx ), ma_idx ).astype(int)
@@ -630,13 +663,14 @@ def doit(options=None):
 #        plt.show()
 
 
-    if 0:
+    if 1:
         # top and side views colored by attributes
 
         import matplotlib.pyplot as plt
+        import matplotlib.cm as cm
 
-        arrnames = ['A','A','A', 'A', 'U','U','U']
-        cols = [ 0,1,2, 3, 0,1,2 ]
+        arrnames = ['A','A','A', 'A', 'A']# 'U','U','U']
+        cols = [ 0,1,2, 3, 7,]# 0,1,2 ]
 
         ax = None
         for arrname, j in zip(arrnames,cols):
@@ -653,8 +687,8 @@ def doit(options=None):
             y = []
             z = []
             c = []
+            post_angle = []
             post_speed = []
-            post_speed_column = A_names.index('speed from closest post (m/sec)')
 
             for i in range(len(col)):
                 rows_by_trace_id = data.elems_by_trace_id_for_Aidxs( [i] )
@@ -663,16 +697,19 @@ def doit(options=None):
                     y.append( rows['y'] )
                     z.append( rows['z'] )
                     c.append( [arr[i,j]]*len(rows) )
-                    post_speed.append( [A[i,post_speed_column]]*len(rows) )
-
+                    post_speed.append( [A[i,A_names.index('speed from closest post (m/sec)')]]*len(rows) )
+                    post_angle.append( [A[i,A_names.index('angle to post (rad)')]]*len(rows) )
             x = np.hstack(x)
             y = np.hstack(y)
             z = np.hstack(z)
             c = np.hstack(c)
             post_speed = np.hstack(post_speed)
+            post_angle = np.hstack(post_angle)
 
-            approaching = post_speed < 0
-            #point_size = approaching*5 + 5 # 5 if leaving closest post, 10 if approaching
+            #approaching = post_speed < 0
+            D2R = np.pi/180.0
+            #approaching = (post_speed < 0) & ( abs(post_angle) < 30*D2R ) # decreasing distance and heading with 30 degrees of post center
+            approaching = abs(post_angle) < 30*D2R # heading with 30 degrees of post center
 
             fig = plt.figure()
 
@@ -680,19 +717,25 @@ def doit(options=None):
             ax = fig.add_axes( (0.05, 0.65, .8, .3), sharex=ax)
             ax.set_title(col_name)
             ax.set_aspect('equal')
-            ax.scatter(x[approaching],z[approaching],c=c[approaching],edgecolors='none',s=10)
-            ax.scatter(x[~approaching],z[~approaching],c=c[~approaching],edgecolors='none',s=5)
+            collection = ax.scatter(x[~approaching],z[~approaching],c=c[~approaching],edgecolors='none',s=2)
+            ax.scatter(x[approaching],z[approaching],c=c[approaching],edgecolors='none',s=10,
+                       cmap=collection.cmap,
+                       norm=collection.norm)
             stim_xml.plot_stim(ax, projection=xml_stimulus.SimpleOrthographicXZProjection() )
 
             # X vs Y
             ax = fig.add_axes( (0.05, 0.05, .8, .55),sharex=ax )
-            mappable = ax.scatter(x[approaching],y[approaching],c=c[approaching],edgecolors='none',s=10)
-            mappable = ax.scatter(x[~approaching],y[~approaching],c=c[~approaching],edgecolors='none',s=5)
+            ax.scatter(x[~approaching],y[~approaching],c=c[~approaching],edgecolors='none',s=2,
+                       cmap=collection.cmap,
+                       norm=collection.norm)
+            ax.scatter(x[approaching],y[approaching],c=c[approaching],edgecolors='none',s=10,
+                       cmap=collection.cmap,
+                       norm=collection.norm)
             stim_xml.plot_stim(ax, projection=xml_stimulus.SimpleOrthographicXYProjection() )
             ax.set_aspect('equal')
 
             cax = fig.add_axes( (0.9, 0.05, .02, .9))
-            cbar = fig.colorbar(mappable, cax=cax, ax=ax )
+            cbar = fig.colorbar(collection, cax=cax, ax=ax )
 
 #        plt.show()
 
@@ -702,16 +745,24 @@ def doit(options=None):
 
         post_dist_column = A_names.index('distance to closest post (m)')
         post_speed_column = A_names.index('speed from closest post (m/sec)')
+        post_accel_column = A_names.index('accel from closest post (m/sec/sec)')
 
         post_dist = A[:,post_dist_column]
         post_speed = A[:,post_speed_column]
+        post_accel = A[:,post_accel_column]
         horiz_vel = A[:,A_names.index('horizontal velocity (m/sec)')]
+        post_angle = A[:,A_names.index('angle to post (rad)')]
+
         speed = A[:,A_names.index('speed (m/sec)')]
         Arow = np.arange(len(A))
 
-        approaching = post_speed < 0
+        #approaching = post_speed < 0
+        approaching = abs(post_angle) < 30*D2R # heading with 30 degrees of post center
         this_Arow = Arow[approaching]
         contig_chunk_idxs = utils.get_contig_chunk_idxs( this_Arow )
+        if 1:
+            # only take sequences with > 1 observation
+            contig_chunk_idxs = [ tup for tup in contig_chunk_idxs if (tup[1]-tup[0])>1 ]
         tup2line = {}
 
         fig = plt.figure()
@@ -721,11 +772,10 @@ def doit(options=None):
             this_start,this_stop = tup
             astart = this_Arow[this_start]
             astop = this_Arow[this_stop-1]+1
-            line,=ax.plot( post_dist[astart:astop], -post_speed[astart:astop], 'o-' )
+            line,=ax.plot( post_dist[astart:astop], post_speed[astart:astop], 'o-' )
             tup2line[tup]=line
         ax.set_xlabel('distance to closest post (m)')
         ax.set_ylabel('speed to closest post (m/sec)')
-
 
         ax = fig.add_subplot(3,1,2,sharex=ax)
         for tup in contig_chunk_idxs:
@@ -733,9 +783,9 @@ def doit(options=None):
             this_start,this_stop = tup
             astart = this_Arow[this_start]
             astop = this_Arow[this_stop-1]+1
-            ax.plot( post_dist[astart:astop], horiz_vel[astart:astop], 'o-', color=line.get_color() )
+            ax.plot( post_dist[astart:astop], post_accel[astart:astop], 'o-', color=line.get_color()  )
         ax.set_xlabel('distance to closest post (m)')
-        ax.set_ylabel('horizontal velocity (m/sec)')
+        ax.set_ylabel('accel from closest post (m/sec/sec)')
 
         ax = fig.add_subplot(3,1,3,sharex=ax)
         for tup in contig_chunk_idxs:
@@ -743,9 +793,34 @@ def doit(options=None):
             this_start,this_stop = tup
             astart = this_Arow[this_start]
             astop = this_Arow[this_stop-1]+1
-            ax.plot( post_dist[astart:astop], speed[astart:astop], 'o-', color=line.get_color() )
+
+            a_pred = (post_speed[astart:astop])**2/(2*post_dist[astart:astop])
+
+            ax.plot( post_dist[astart:astop], a_pred, 'o-', color=line.get_color()  )
         ax.set_xlabel('distance to closest post (m)')
-        ax.set_ylabel('speed (m/sec)')
+        ax.set_ylabel("Larry's model predicted accel (m/sec/sec)")
+
+
+        if 0:
+            ax = fig.add_subplot(4,1,4,sharex=ax)
+            for tup in contig_chunk_idxs:
+                line = tup2line[tup]
+                this_start,this_stop = tup
+                astart = this_Arow[this_start]
+                astop = this_Arow[this_stop-1]+1
+                ax.plot( post_dist[astart:astop], horiz_vel[astart:astop], 'o-', color=line.get_color() )
+            ax.set_xlabel('distance to closest post (m)')
+            ax.set_ylabel('horizontal velocity (m/sec)')
+
+            ax = fig.add_subplot(4,1,5,sharex=ax)
+            for tup in contig_chunk_idxs:
+                line = tup2line[tup]
+                this_start,this_stop = tup
+                astart = this_Arow[this_start]
+                astop = this_Arow[this_stop-1]+1
+                ax.plot( post_dist[astart:astop], speed[astart:astop], 'o-', color=line.get_color() )
+            ax.set_xlabel('distance to closest post (m)')
+            ax.set_ylabel('speed (m/sec)')
 
 
         plt.show()
@@ -807,7 +882,7 @@ def doit(options=None):
 
             ind = np.arange(N)
             width = 0.2
-            if 1:
+            if 0:
                 Vh = Vh.T
                 print 'plotting columns of Vh'
             rects1 = plt.bar(ind, Vh[0,:], width, color='r')
