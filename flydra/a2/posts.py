@@ -247,18 +247,20 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
     result_col_arrays.append( fly_direction_2D )
     result_col_names.append( 'fly_direction_2D' )
 
-    ## all_pt_c_fly_retina_dist = []
-    ## all_pt_c_fly_retina = []
-
     closest_all_pt_c_fly_retina_dist = []
+    closest_all_pt_c_fly_retina_dist_speed = []
     closest_all_pt_c_fly_retina = []
     closest_all_pt_c_fly_retina_mask = []
+
+    max_z = np.inf
+    for post_num,post in enumerate(stim_xml.iterate_posts()):
+        max_post_z = max( post['verts'][0][2], post['verts'][1][2] ) # max post height
+        max_z = min( max_z, max_post_z ) # take shortest of posts
 
     for post_num,post in enumerate(stim_xml.iterate_posts()):
         post_name = 'post%d'%post_num
 
         intersections = intersect_line_with_iso_z_plane( post['verts'], X[:,2] )
-        max_post_z = max( post['verts'][0][2], post['verts'][1][2] ) # max post height
         intersections = intersections[:,:2] # drop Z coord
 
         # put in post coords
@@ -297,6 +299,11 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
         pt_c_fly_retina_dist = numpy.hypot( pt_c_fly[:,0], pt_c_fly[:,1] )
         pt_d_fly_retina_dist = numpy.hypot( pt_d_fly[:,0], pt_d_fly[:,1] )
 
+        pt_c_fly_retina_dist_speed = (pt_c_fly_retina_dist[2:]-pt_c_fly_retina_dist[:-2])/(2*dt)
+        pt_c_fly_retina_dist_speed = np.hstack(([pt_c_fly_retina_dist_speed[0]],
+                                                pt_c_fly_retina_dist_speed,
+                                                [pt_c_fly_retina_dist_speed[-1]])) # pad ends to maintain length
+
         result_col_arrays.append( pt_a_fly_retina )
         result_col_names.append( post_name+'_pt_a_fly_retina' )
         result_col_arrays.append( pt_b_fly_retina )
@@ -315,7 +322,7 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
         result_col_arrays.append( pt_d_fly_retina_dist )
         result_col_names.append( post_name+'_pt_d_fly_retina_dist' )
 
-        bad_cond = (X[:,2] > max_post_z)
+        bad_cond = (X[:,2] > max_z)
 
         result_col_arrays.append( bad_cond )
         result_col_names.append( post_name+'_bad_cond' )
@@ -335,9 +342,11 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
         closest_all_pt_c_fly_retina_dist.append( numpy.ma.getdata(pt_c_fly_retina_dist) )
         closest_all_pt_c_fly_retina.append( numpy.ma.getdata(pt_c_fly_retina) )
         closest_all_pt_c_fly_retina_mask.append( numpy.ma.getmask(pt_c_fly_retina_dist) )
+        closest_all_pt_c_fly_retina_dist_speed.append( pt_c_fly_retina_dist_speed )
 
     # stack each post as a row
     closest_all_pt_c_fly_retina_dist = np.ma.array(closest_all_pt_c_fly_retina_dist,mask=closest_all_pt_c_fly_retina_mask)
+    closest_all_pt_c_fly_retina_dist_speed = np.ma.array(closest_all_pt_c_fly_retina_dist_speed,mask=closest_all_pt_c_fly_retina_mask)
     closest_all_pt_c_fly_retina = np.ma.array(closest_all_pt_c_fly_retina,mask=closest_all_pt_c_fly_retina_mask)
 
     # find closest row
@@ -345,9 +354,13 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
     col_idx = numpy.arange(len(taker))
 
     closest_dist = closest_all_pt_c_fly_retina_dist[ taker, col_idx ]
+    closest_dist_speed = closest_all_pt_c_fly_retina_dist_speed[ taker, col_idx ]
     angle_of_closest_dist = closest_all_pt_c_fly_retina[ taker, col_idx ]
     result_col_arrays.append( closest_dist )
     result_col_names.append( 'closest_dist' )
+
+    result_col_arrays.append( closest_dist_speed )
+    result_col_names.append( 'closest_dist_speed' )
 
     result_col_arrays.append( np.ma.getmask(closest_dist) )
     result_col_names.append( 'closest_dist_mask' )
@@ -505,7 +518,6 @@ def plot_angle_dist(subplot=None,results_recarray=None,fps=None):
         time_seconds = numpy.arange( len(z) )/float(fps)
 
         ax.plot( time_seconds, z, '-' )
-        #ax.axhline(max_post_z)
 
         ax.set_xlabel('time (s)')
         ax.set_ylabel('z (m)')
