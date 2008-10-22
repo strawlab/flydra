@@ -19,6 +19,7 @@ import atexit
 import pickle, copy
 
 import motmot.utils.config
+import flydra.version
 import flydra.kalman.flydra_kalman_utils as flydra_kalman_utils
 import flydra.kalman.flydra_tracker
 import flydra.save_calibration_data as save_calibration_data
@@ -2373,7 +2374,9 @@ class MainBrain(object):
         list_of_textlog_data = [
             (timestamp,cam_id,timestamp, 'MainBrain running at %s fps, (top %s, hypothesis_test_max_error %s)'%(
             str(self.fps),str(self.trigger_timer_max),str(self.get_hypothesis_test_max_error())
-            ))
+            )),
+            (timestamp,cam_id,timestamp, 'using flydra version %s'%(
+             flydra.version.__version__,)),
             ]
         for textlog_data in list_of_textlog_data:
             (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
