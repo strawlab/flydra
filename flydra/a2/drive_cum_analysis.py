@@ -422,6 +422,8 @@ def do_turning_plots( subplot, treatment, condition_name):
         # observation at 1 m/s. Thus, slower flies don't get
         # disproportionately counted.
 
+        # This doesn't seem to work as (well as?) I expected.
+
         # Which speed to use?
         C = results_recarray[ 'vel_horiz' ]
         #C = closest_dist_speed
@@ -434,6 +436,13 @@ def do_turning_plots( subplot, treatment, condition_name):
         ax = subplot['hexbin_angular_vel']
         ax.hexbin(closest_dist, angle_of_closest_dist,
                   C=results_recarray['horizontal_angular_velocity'],
+                  vmin = -10,vmax= 10,
+                  cmap=magenta_white_green, gridsize=gridsize,
+                  )
+    if 'hexbin_abs_angular_vel' in subplot:
+        ax = subplot['hexbin_abs_angular_vel']
+        ax.hexbin(closest_dist, angle_of_closest_dist,
+                  C=abs(results_recarray['horizontal_angular_velocity']),
                   vmin = -10,vmax= 10,
                   cmap=magenta_white_green, gridsize=gridsize,
                   )
@@ -651,7 +660,7 @@ if __name__=='__main__':
         condition_names = comparison.keys()
         condition_names.sort()
 
-        if 1:
+        if 0:
             n_rows = 1
             n_cols = 2
 
@@ -674,7 +683,7 @@ if __name__=='__main__':
             subplot['post_angle_at_dist 0 15'].legend()
             subplot['post_angle_at_dist 15 45'].legend()
 
-        if 1:
+        if 0:
             n_rows = 1
             n_cols = 3
 
@@ -713,7 +722,7 @@ if __name__=='__main__':
                     ax = subplot['lines_angular_vel']
                 subplot['lines']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+2,sharex=ax,sharey=ax)
                 subplot['hexbin_counts']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+3,sharex=ax,sharey=ax)
-                subplot['hexbin_flux']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+4,sharex=ax,sharey=ax)
+                subplot['hexbin_abs_angular_vel']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+4,sharex=ax,sharey=ax)
                 subplot['hexbin_angular_vel']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+5,sharex=ax,sharey=ax)
 
                 subplot['hexbin_vel']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+6,sharex=ax,sharey=ax)
