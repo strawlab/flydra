@@ -105,6 +105,8 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
         print post_angle
         raise
 
+    vel_mag = np.sqrt(rec['vel_x']**2 + rec['vel_y']**2 + rec['vel_z']**2)
+
     def downsamp(arr):
         N_observations = len(arr)//subsample_factor
         x = np.ma.reshape(arr, (N_observations,subsample_factor))
@@ -114,6 +116,7 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
     A = [ horizontal_angular_velocity,
           downsamp(rec['vel_horiz'][start_idx:stop_idx]),
           downsamp(rec['vel_z'][start_idx:stop_idx]),
+          downsamp(vel_mag[start_idx:stop_idx]),
           downsamp(closest_dist[start_idx:stop_idx]), # NL func or binarize on this?
           downsamp(closest_dist_speed[start_idx:stop_idx]),
           downsamp(post_angle),
@@ -122,6 +125,7 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
     A_names = ['angular velocity about Z axis (rad/sec)',
                'horizontal velocity (m/sec)',
                'vertical velocity (m/sec)',
+               'speed (m/sec)',
                'distance to closest post (m)',
                'speed from closest post (m/sec)',
                'angle to post (rad)',
@@ -647,6 +651,7 @@ def doit(options=None):
 #        plt.show()
 
     if 1:
+        # plot dist vs velocity for post approach
         import matplotlib.pyplot as plt
 
         post_dist_column = A_names.index('distance to closest post (m)')
@@ -654,40 +659,48 @@ def doit(options=None):
 
         post_dist = A[:,post_dist_column]
         post_speed = A[:,post_speed_column]
+        horiz_vel = A[:,A_names.index('horizontal velocity (m/sec)')]
+        speed = A[:,A_names.index('speed (m/sec)')]
         Arow = np.arange(len(A))
 
         approaching = post_speed < 0
+        this_Arow = Arow[approaching]
+        contig_chunk_idxs = utils.get_contig_chunk_idxs( this_Arow )
+        tup2line = {}
 
-        if 0:
-            conds = [ ('approaching',approaching),
-                      ('retreating',~approaching),
-                      ('all',np.ones( (len(post_dist),), dtype=np.bool )),
-                      ]
-        else:
-            conds = [ ('approaching',approaching),
-                      ]
         fig = plt.figure()
-        for i,(cond_name,cond) in enumerate(conds):
-            ax = fig.add_subplot(len(conds),1,i+1)
 
-            if 0:
-                ax.plot( post_dist[cond], post_speed[cond], '.' )
-            else:
-                this_Arow = Arow[cond]
-                contig_chunk_idxs = utils.get_contig_chunk_idxs( this_Arow )
-                for this_start,this_stop in contig_chunk_idxs:
-                    astart = this_Arow[this_start]
-                    astop = this_Arow[this_stop-1]+1
-                    ax.plot( post_dist[astart:astop], post_speed[astart:astop], 'o-' )
-            ax.set_xlabel('distance to closest post (m)')
-            ax.set_ylabel('speed from closest post (m/sec)')
+        ax = fig.add_subplot(3,1,1)
+        for tup in contig_chunk_idxs:
+            this_start,this_stop = tup
+            astart = this_Arow[this_start]
+            astop = this_Arow[this_stop-1]+1
+            line,=ax.plot( post_dist[astart:astop], -post_speed[astart:astop], 'o-' )
+            tup2line[tup]=line
+        ax.set_xlabel('distance to closest post (m)')
+        ax.set_ylabel('speed to closest post (m/sec)')
 
-            if len(conds)>1:
-                ax.text(0,1,cond_name,
-                        transform=ax.transAxes,
-                        horizontalalignment='left',
-                        verticalalignment='top',
-                        )
+
+        ax = fig.add_subplot(3,1,2,sharex=ax)
+        for tup in contig_chunk_idxs:
+            line = tup2line[tup]
+            this_start,this_stop = tup
+            astart = this_Arow[this_start]
+            astop = this_Arow[this_stop-1]+1
+            ax.plot( post_dist[astart:astop], horiz_vel[astart:astop], 'o-', color=line.get_color() )
+        ax.set_xlabel('distance to closest post (m)')
+        ax.set_ylabel('horizontal velocity (m/sec)')
+
+        ax = fig.add_subplot(3,1,3,sharex=ax)
+        for tup in contig_chunk_idxs:
+            line = tup2line[tup]
+            this_start,this_stop = tup
+            astart = this_Arow[this_start]
+            astop = this_Arow[this_stop-1]+1
+            ax.plot( post_dist[astart:astop], speed[astart:astop], 'o-', color=line.get_color() )
+        ax.set_xlabel('distance to closest post (m)')
+        ax.set_ylabel('speed (m/sec)')
+
 
         plt.show()
 
