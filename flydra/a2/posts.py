@@ -208,7 +208,6 @@ def read_files_and_fuse_ids(options=None):
 
 def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
     """return recarray with a row for each row of kalman_rows, but processed to include stimulus-relative columns"""
-
     result_col_arrays = []
     result_col_names = []
 
@@ -257,10 +256,13 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
     closest_all_pt_c_fly_retina = []
     closest_all_pt_c_fly_retina_mask = []
 
-    max_z = np.inf
+    max_post_zs = []
     for post_num,post in enumerate(stim_xml.iterate_posts()):
         max_post_z = max( post['verts'][0][2], post['verts'][1][2] ) # max post height
-        max_z = min( max_z, max_post_z ) # take shortest of posts
+        max_post_zs.append( max_post_z )
+    if not len(max_post_zs):
+        raise ValueError('post-based analysis requires (at least one) post')
+    max_z = min( max_post_zs )
 
     for post_num,post in enumerate(stim_xml.iterate_posts()):
         post_name = 'post%d'%post_num
