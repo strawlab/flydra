@@ -223,15 +223,26 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
     result_col_arrays.append( X[:,2] )
     result_col_names.append( 'z' )
 
-    hz = fps
-    dt = 1.0/hz
+    dt = 1.0/fps
 
-    # find fly horizontal velocity direction using central difference
-    central_diff_2D = X[2:,:2] - X[:-2,:2]
-    fly_direction_2D = numpy.angle( central_diff_2D[:,0] + central_diff_2D[:,1]*1j )
+    fly_velocity = (X[2:,:] - X[:-2,:])/(2*dt)
     # pad with nan to keep same length
-    assert len(fly_direction_2D.shape)==1
-    fly_direction_2D = np.hstack( ([np.nan], fly_direction_2D, [np.nan]) )
+    fly_velocity = np.vstack(( [[np.nan,np.nan,np.nan]],
+                               fly_velocity,
+                               [[np.nan,np.nan,np.nan]] ))
+    # find fly horizontal velocity direction using central difference
+    fly_direction_2D = numpy.angle( fly_velocity[:,0] + fly_velocity[:,1]*1j )
+
+    result_col_arrays.append( fly_velocity[:,0] )
+    result_col_names.append( 'vel_x' )
+    result_col_arrays.append( fly_velocity[:,1] )
+    result_col_names.append( 'vel_y' )
+    result_col_arrays.append( fly_velocity[:,2] )
+    result_col_names.append( 'vel_z' )
+
+    vel_horiz = np.sqrt(np.sum(fly_velocity[:,:2]**2,axis=1))
+    result_col_arrays.append( vel_horiz )
+    result_col_names.append( 'vel_horiz' )
 
     result_col_arrays.append( fly_direction_2D )
     result_col_names.append( 'fly_direction_2D' )
@@ -470,7 +481,7 @@ def plot_angle_dist(subplot=None,results_recarray=None,fps=None):
             all_pt_c_fly_retina_dist = all_pt_c_fly_retina_dist[cond]
             all_pt_c_fly_retina = all_pt_c_fly_retina[cond]
 
-        ax.hexbin( all_pt_c_fly_retina_dist, plot_coords(all_pt_c_fly_retina))
+        ax.hexbin( all_pt_c_fly_retina_dist, plot_coords(all_pt_c_fly_retina), gridsize = (40,20))
         ax.set_xlabel('distance (m)')
         ax.set_ylabel('retinal position (deg)')
 
@@ -484,7 +495,7 @@ def plot_angle_dist(subplot=None,results_recarray=None,fps=None):
 
     if 'closest_dist_vs_angle_hist' in subplot:
         ax = subplot['closest_dist_vs_angle_hist']
-        ax.hexbin( closest_dist, plot_coords(angle_of_closest_dist))
+        ax.hexbin( closest_dist, plot_coords(angle_of_closest_dist), gridsize = (40,20))
 
     if 'z' in subplot:
         ax = subplot['z']
@@ -500,6 +511,9 @@ def plot_angle_dist(subplot=None,results_recarray=None,fps=None):
         ax.set_ylabel('z (m)')
 
 def doit(options=None):
+    if options.obj_only is not None:
+        raise ValueError('obj_only is not a valid option for this function')
+
     kalman_rows, fps, stim_xml = read_files_and_fuse_ids(options=options)
     results_recarray = calc_retinal_coord_array(kalman_rows, fps, stim_xml)
 
@@ -553,17 +567,8 @@ def main():
 
     parser = OptionParser(usage)
 
-    parser.add_option("--save-envmap", action='store_true',
-                      default=False)
-
-    parser.add_option("--plot-receptors", action='store_true',
-                      default=False)
-
     analysis_options.add_common_options( parser )
     (options, args) = parser.parse_args()
-
-    if options.obj_only is not None:
-        options.obj_only = core_analysis.parse_seq(options.obj_only)
 
     if len(args):
         parser.print_help()
