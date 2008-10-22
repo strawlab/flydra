@@ -13,6 +13,9 @@ import flydra.a2.flypos
 import scipy.stats
 import random
 
+D2R = np.pi/180
+R2D = 180/np.pi
+
 def monte_carlo_resample_hist( x, x_edges,
                                N_resamples = 100,
                                frac_observations_per_resample = 0.01,
@@ -341,7 +344,7 @@ def do_turning_plots( subplot, treatment, condition_name):
 
     if 'lines' in subplot:
         ax = subplot['lines']
-        ax.plot(closest_dist, angle_of_closest_dist, '.', ms=0.5 )
+        ax.plot(closest_dist, angle_of_closest_dist, '.',ms=1)#, ms=0.5 )
         for idx in all_saccade_idxs:
             if not closest_dist.mask[idx]:
                 ax.plot([closest_dist[idx]], [angle_of_closest_dist[idx]], 'rx')
@@ -414,6 +417,7 @@ def do_turning_plots( subplot, treatment, condition_name):
     if 'hexbin_counts' in subplot:
         ax = subplot['hexbin_counts']
         ax.hexbin(closest_dist, angle_of_closest_dist, cmap=white_magenta, gridsize=gridsize)
+        ax.set_frame_on(False)
     if 'hexbin_flux' in subplot:
         ax = subplot['hexbin_flux']
 
@@ -431,6 +435,7 @@ def do_turning_plots( subplot, treatment, condition_name):
                                vmin = 0, vmax= 1, reduce_C_function=np.sum,
                                cmap=white_magenta, gridsize=gridsize, bins='log',
                                )
+        ax.set_frame_on(False)
 
     if 'hexbin_angular_vel' in subplot:
         ax = subplot['hexbin_angular_vel']
@@ -439,6 +444,7 @@ def do_turning_plots( subplot, treatment, condition_name):
                   vmin = -10,vmax= 10,
                   cmap=magenta_white_green, gridsize=gridsize,
                   )
+        ax.set_frame_on(False)
     if 'hexbin_abs_angular_vel' in subplot:
         ax = subplot['hexbin_abs_angular_vel']
         ax.hexbin(closest_dist, angle_of_closest_dist,
@@ -446,6 +452,7 @@ def do_turning_plots( subplot, treatment, condition_name):
                   vmin = -10,vmax= 10,
                   cmap=magenta_white_green, gridsize=gridsize,
                   )
+        ax.set_frame_on(False)
     if 'hexbin_vel' in subplot:
         ax = subplot['hexbin_vel']
         C = results_recarray[ 'vel_horiz' ]
@@ -454,12 +461,12 @@ def do_turning_plots( subplot, treatment, condition_name):
                                vmin = 0, vmax= 1,
                                cmap=white_magenta, gridsize=gridsize,
                                )
+        ax.set_frame_on(False)
     if 'lines_angular_vel' in subplot:
         horizontal_angular_velocity = results_recarray['horizontal_angular_velocity']
         ax = subplot['lines_angular_vel']
-        D2R = np.pi/180
         ax.scatter(closest_dist, angle_of_closest_dist,
-                   c=horizontal_angular_velocity, s=2,
+                   c=horizontal_angular_velocity, s=3,
                    vmin=-200*D2R, vmax=200*D2R,
                    edgecolors='none' )
         ax.set_xlabel('post distance (m)')
@@ -482,10 +489,13 @@ def do_turning_plots( subplot, treatment, condition_name):
             if 1:
                 x = np.clip(this_post_angle,-np.pi,np.pi)
                 y = np.clip(this_turn_vel,-20,20)
-                ax.hexbin( x,y,
-                           gridsize=(23,31),
+                ax.hexbin( x*R2D,y*R2D,
+                           gridsize=(33,51),
                            cmap=white_magenta,
                            )
+                ax.xaxis.set_ticks_position('none')
+                ax.yaxis.set_ticks_position('none')
+                ax.set_frame_on(False)
                 ax.grid(True)
                 ax.text(0,0,'%d pts (%d flies)'%( len(this_turn_vel), len(treatment)),
                         transform=ax.transAxes,
@@ -538,12 +548,20 @@ def do_turning_plots( subplot, treatment, condition_name):
                 angle_bin_center = (angle_bin_edges[1:]+angle_bin_edges[:-1])/2
                 ax.angle_bin_center = angle_bin_center # return result
 
-                ax.plot( angle_bin_center, mean_vel_binned, 'b-' )
-                ax.plot( angle_bin_center, median_vel_binned, 'g-' )
+                ax.plot( angle_bin_center*R2D, mean_vel_binned*R2D, 'b-', lw=3 )
+                ax.plot( angle_bin_center*R2D, median_vel_binned*R2D, 'g-', lw=3 )
 
-            ax.set_title(key)
-            ax.set_xlabel('post angle (rad)')
-            ax.set_ylabel('fly angular velocity (rad/sec)')
+            ax.text(0.5,1,key,
+                    transform=ax.transAxes,
+                    verticalalignment='top',
+                    horizontalalignment='center')
+            ## ax.set_xlabel('post angle (rad)')
+            ## ax.set_ylabel('fly angular velocity (rad/sec)')
+            ax.set_xlabel('post angle (deg)')
+            ax.set_ylabel('fly angular velocity (deg/sec)')
+            ax.set_ylim((-500,500))
+            ax.set_xticks([-180,-90,0,90,180])
+            ax.set_yticks([-500,-250,0,250,500])
 
     n_pts = len( closest_dist.filled() )
     print '%s: %d data points (%.1f seconds at 60 fps)'%(condition_name, n_pts, n_pts/60.0 )
@@ -606,10 +624,10 @@ if load_data:
         ])
 
     four_post_experiments = Treatment([
-        FlyId('DATA20080618_200651.kh5'),
-        FlyId('DATA20080618_201015.kh5'),
-        FlyId('DATA20080618_201833.kh5'),
-        FlyId('DATA20080618_204324.kh5'),
+        ## FlyId('DATA20080618_200651.kh5'),
+        ## FlyId('DATA20080618_201015.kh5'),
+        ## FlyId('DATA20080618_201833.kh5'),
+        ## FlyId('DATA20080618_204324.kh5'),
 
         FlyId('DATA20080619_170010.kh5'),
         FlyId('DATA20080619_172513.kh5'),
@@ -708,7 +726,7 @@ if __name__=='__main__':
             subplot['post_angle_at_dist 20 40'].legend()
             subplot['post_angle_at_dist 40 60'].legend()
 
-        if 1:
+        if 0:
             n_rows = len(condition_names)
             n_cols = 6
 
@@ -735,71 +753,111 @@ if __name__=='__main__':
 
 
         if 1:
+            PRETTY_NONINTERACTIVE=False
+            PRETTY_NONINTERACTIVE=True # make pretty, but nice interactive features (sharex) disabled
             #for delay_msec in [0,50,100,150]:
             for delay_msec in [0]:
-                n_rows = len(condition_names)+1
-                n_cols = 7
-                fig = plt.figure()
-                fig.text(0,0,'assuming %d msec latency'%delay_msec)
+                plot_p_values = False
+                n_rows = len(condition_names)+int(plot_p_values)
+                n_cols = 6
+                #fig = plt.figure(frameon=False,figsize=(14.2,9.1875))
+                fig = plt.figure(figsize=(14.2,9.1875))
+                if PRETTY_NONINTERACTIVE:
+                    import pylab
+                    pylab.subplots_adjust(left=0.07, right=.99,top=0.96)
+                if not PRETTY_NONINTERACTIVE:
+                    fig.text(0,0,'assuming %d msec latency'%delay_msec)
                 ax = None
                 key_start = 'turn_func %d '%delay_msec
-                result = {}
+                if plot_p_values:
+                    result = {}
                 for row, condition_name in enumerate(condition_names):
                     subplot = {}
-                    subplot[key_start+'0 5'] = fig.add_subplot(n_rows,n_cols,(row*n_cols)+1,sharex=ax,sharey=ax)
-                    if ax is None:
-                        ax = subplot[key_start+'0 5']
-                    subplot[key_start+'5 10']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+2,sharex=ax,sharey=ax)
-                    subplot[key_start+'10 15']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+3,sharex=ax,sharey=ax)
-                    subplot[key_start+'15 20']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+4,sharex=ax,sharey=ax)
-                    subplot[key_start+'20 25']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+5,sharex=ax,sharey=ax)
-                    subplot[key_start+'25 50']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+6,sharex=ax,sharey=ax)
-                    subplot[key_start+'50 60']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+7,sharex=ax,sharey=ax)
+                    if PRETTY_NONINTERACTIVE:
+                        ax=None
+                    subplot[key_start+'0 10'] = fig.add_subplot(n_rows,n_cols,(row*n_cols)+1,sharex=ax,sharey=ax)
+                    if (not PRETTY_NONINTERACTIVE) and (ax is None):
+                        ax = subplot[key_start+'0 10']
+                    subplot[key_start+'10 20']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+2,sharex=ax,sharey=ax)
+                    subplot[key_start+'20 30']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+3,sharex=ax,sharey=ax)
+                    subplot[key_start+'30 40']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+4,sharex=ax,sharey=ax)
+                    subplot[key_start+'40 50']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+5,sharex=ax,sharey=ax)
+                    subplot[key_start+'50 60']  = fig.add_subplot(n_rows,n_cols,(row*n_cols)+6,sharex=ax,sharey=ax)
 
-                    subplot[key_start+'0 5'].set_title( condition_name )
+                    if not PRETTY_NONINTERACTIVE:
+                        subplot[key_start+'0 10'].set_title( condition_name )
                     do_turning_plots( subplot, comparison[condition_name], condition_name )
-                    angle_bin_center =  subplot[key_start+'0 5'].angle_bin_center # same across all
-                    result[condition_name] = []
-                    result[condition_name].append( subplot[key_start+'0 5'].vels_by_bin ) # column_number 0
-                    result[condition_name].append( subplot[key_start+'5 10'].vels_by_bin ) # column_number 1
-                    result[condition_name].append( subplot[key_start+'10 15'].vels_by_bin )
-                    result[condition_name].append( subplot[key_start+'15 20'].vels_by_bin )
-                    result[condition_name].append( subplot[key_start+'20 25'].vels_by_bin )
-                    result[condition_name].append( subplot[key_start+'25 50'].vels_by_bin )
-                    result[condition_name].append( subplot[key_start+'50 60'].vels_by_bin )
+                    if PRETTY_NONINTERACTIVE:
+                        if row == 0:
+                            for key in subplot:
+                                subplot[key].set_xlabel('')
+                        for key,ax in subplot.iteritems():
+                            if key != (key_start+'0 10'): # for all but first column
+                                ax.set_ylabel('')
+                                ax.set_yticklabels( [] )
+                        for ax in subplot.itervalues():
+                            del ax.texts[:] # remove all axes text
+                            for label in ax.get_xticklabels():
+                                plt.setp(label,
+                                         rotation=-75)
+                        #print 'key',key
+                        ax = subplot[(key_start+'0 10')]
+                        #print 'ax.get_ylabel()',ax.get_ylabel()
+                        #print 'ax.get_yticklabels()',[label for label in ax.get_yticklabels()]
 
-                row = 3
-                assert len(condition_names)==2
-                pax = None
-                for column_number in range(len(result[condition_names[0]])):
-                    p_values = np.zeros( (len(angle_bin_center),) )
-                    for i in range(len(angle_bin_center)):
-                        dist_a = result[condition_names[0]][column_number][i]
-                        dist_b = result[condition_names[1]][column_number][i]
-                        if 1:
-                            newlen = min(len(dist_a), len(dist_b))
-                            if newlen < 20:
-                                warnings.warn('N for Wilcoxon test is less than 20')
-                            print 'trimming N samples in distribution (down to %d)'%newlen
-                            idxs_a = range(len(dist_a))
-                            idxs_b = range(len(dist_b))
-                            random.shuffle( idxs_a )
-                            random.shuffle( idxs_b )
-                            idxs_a = idxs_a[:newlen]
-                            idxs_b = idxs_b[:newlen]
-                            dist_a = dist_a[idxs_a]
-                            dist_b = dist_b[idxs_b]
-                        T,pval = scipy.stats.wilcoxon(dist_a,dist_b)
-                        p_values[i] = pval
-                    print (n_rows,
-                           n_cols,
-                           (row-1)*n_cols + column_number+1)
-                    pax = fig.add_subplot(n_rows,
-                                          n_cols,
-                                          (row-1)*n_cols + column_number+1,
-                                          sharex=ax, sharey=pax )
-                    pax.plot( angle_bin_center, p_values, 'o' )
-                    pax.set_yscale('log')
-                    pax.set_ylim((1e-6,1))
+                if plot_p_values:
+                    # make this optional so we don't have to keep subplot names in sync
+                    angle_bin_center =  subplot[key_start+'0 10'].angle_bin_center # these values are the same across all trials
+                    result[condition_name] = []
+                    result[condition_name].append( subplot[key_start+'0 10'].vels_by_bin ) # column_number 0
+                    result[condition_name].append( subplot[key_start+'10 20'].vels_by_bin ) # column_number 1
+                    result[condition_name].append( subplot[key_start+'20 30'].vels_by_bin )
+                    result[condition_name].append( subplot[key_start+'30 40'].vels_by_bin )
+                    result[condition_name].append( subplot[key_start+'40 50'].vels_by_bin )
+                    result[condition_name].append( subplot[key_start+'50 60'].vels_by_bin )
+                    #result[condition_name].append( subplot[key_start+'50 60'].vels_by_bin )
+
+                if plot_p_values:
+                    row = 3
+                    assert len(condition_names)==2
+                    pax = None
+                    for column_number in range(len(result[condition_names[0]])):
+                        p_values = np.zeros( (len(angle_bin_center),) )
+                        for i in range(len(angle_bin_center)):
+                            dist_a = result[condition_names[0]][column_number][i]
+                            dist_b = result[condition_names[1]][column_number][i]
+                            if 1:
+                                newlen = min(len(dist_a), len(dist_b))
+                                if newlen < 20:
+                                    warnings.warn('N for Wilcoxon test is less than 20')
+                                print 'trimming N samples in distribution (down to %d)'%newlen
+                                idxs_a = range(len(dist_a))
+                                idxs_b = range(len(dist_b))
+                                random.shuffle( idxs_a )
+                                random.shuffle( idxs_b )
+                                idxs_a = idxs_a[:newlen]
+                                idxs_b = idxs_b[:newlen]
+                                dist_a = dist_a[idxs_a]
+                                dist_b = dist_b[idxs_b]
+                            T,pval = scipy.stats.wilcoxon(dist_a,dist_b)
+                            p_values[i] = pval
+                        print (n_rows,
+                               n_cols,
+                               (row-1)*n_cols + column_number+1)
+                        pax = fig.add_subplot(n_rows,
+                                              n_cols,
+                                              (row-1)*n_cols + column_number+1,
+                                              sharex=ax, sharey=pax )
+                        pax.plot( angle_bin_center, p_values, 'o' )
+                        pax.set_yscale('log')
+                        pax.set_ylim((1e-10,1))
+
+                if PRETTY_NONINTERACTIVE:
+                    for ext in ['.png']:#,'.pdf','.svg']:
+                    #for ext in ['.png','.pdf','.svg']:
+                        fname = 'turn_functions'+ext
+                        fig.savefig(fname)#,dpi=55)
+                        print 'saved',fname
+
         plt.show()
 
