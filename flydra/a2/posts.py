@@ -288,6 +288,7 @@ def plot_angle_dist(subplot=None,options=None,bad=False):
         pt_d_fly_retina_dist = numpy.ma.masked_where( bad_cond, pt_d_fly_retina_dist )
 
         def plot_coords(arr):
+            arr = numpy.array(arr,copy=True) # don't modify original
             # wrap around 0 radians, convert to degrees
             arr += numpy.pi
             arr = numpy.mod( arr, 2*numpy.pi )
