@@ -22,6 +22,10 @@ import flydra.a2.utils as utils
 def angle_diff(ang1,ang2):
     return np.mod((ang1-ang2)+np.pi,2*np.pi)-np.pi
 
+def make_branch_cut_pi(arr):
+    """shift the branch cut of angles (in radians) from 0/2pi to -pi/+pi."""
+    return np.mod(arr+np.pi,2*np.pi)-np.pi
+
 def test_angle_diff():
     ang1 = np.array([np.pi-0.001, -0.001,  0.001, np.pi+0.001])
     ang2 = np.array([np.pi+0.001,  0.001, -0.001, np.pi-0.001])
@@ -100,12 +104,9 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
     closest_dist_accel = np.ma.array(rec[ 'closest_dist_accel' ],mask=rec[ 'closest_dist_mask' ])
     angle_of_closest_dist = np.ma.array(rec[ 'angle_of_closest_dist' ],mask=rec[ 'closest_dist_mask' ])
     post_angle = angle_of_closest_dist[start_idx:stop_idx]
-    try:
-        sin_post_angle = np.sin( post_angle )
-    except:
-        print 'post_angle'
-        print post_angle
-        raise
+
+    post_angle_x = np.cos( post_angle ) # allow treating with linear distance operators
+    post_angle_y = np.sin( post_angle )
 
     vel_mag = np.sqrt(rec['vel_x']**2 + rec['vel_y']**2 + rec['vel_z']**2)
 
@@ -135,8 +136,8 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
           downsamp(closest_dist[start_idx:stop_idx]), # NL func or binarize on this?
           downsamp(closest_dist_speed[start_idx:stop_idx]),
           downsamp(closest_dist_accel[start_idx:stop_idx]),
-          downsamp(post_angle),
-          downsamp(sin_post_angle),
+          downsamp(post_angle_x),
+          downsamp(post_angle_y),
           ]
     A_names = ['angular velocity about Z axis (rad/sec)',
                'horizontal velocity (m/sec)',
@@ -145,8 +146,8 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
                'distance to closest post (m)',
                'speed from closest post (m/sec)',
                'accel from closest post (m/sec/sec)',
-               'angle to post (rad)',
-               'sin(angle to post)',
+               'angle to post (X)',
+               'angle to post (Y)',
                ]
     A = [np.ma.array(ai,fill_value=np.nan) for ai in A]
     A = [ai.filled() for ai in A] # convert masked entries to nan
@@ -687,7 +688,8 @@ def doit(options=None):
             y = []
             z = []
             c = []
-            post_angle = []
+            post_angle_x = []
+            post_angle_y = []
             post_speed = []
 
             for i in range(len(col)):
@@ -698,13 +700,17 @@ def doit(options=None):
                     z.append( rows['z'] )
                     c.append( [arr[i,j]]*len(rows) )
                     post_speed.append( [A[i,A_names.index('speed from closest post (m/sec)')]]*len(rows) )
-                    post_angle.append( [A[i,A_names.index('angle to post (rad)')]]*len(rows) )
+                    post_angle_x.append( [A[i,A_names.index('angle to post (X)')]]*len(rows) )
+                    post_angle_y.append( [A[i,A_names.index('angle to post (Y)')]]*len(rows) )
             x = np.hstack(x)
             y = np.hstack(y)
             z = np.hstack(z)
             c = np.hstack(c)
             post_speed = np.hstack(post_speed)
-            post_angle = np.hstack(post_angle)
+            post_angle_x = np.hstack(post_angle_x)
+            post_angle_y = np.hstack(post_angle_y)
+
+            post_angle = make_branch_cut_pi(np.arctan2( post_angle_y, post_angle_x ))
 
             #approaching = post_speed < 0
             D2R = np.pi/180.0
@@ -751,7 +757,10 @@ def doit(options=None):
         post_speed = A[:,post_speed_column]
         post_accel = A[:,post_accel_column]
         horiz_vel = A[:,A_names.index('horizontal velocity (m/sec)')]
-        post_angle = A[:,A_names.index('angle to post (rad)')]
+        #post_angle = A[:,A_names.index('angle to post (rad)')]
+        post_angle_x = A[:,A_names.index('angle to post (X)')]
+        post_angle_y = A[:,A_names.index('angle to post (Y)')]
+        post_angle = make_branch_cut_pi(np.arctan2( post_angle_y, post_angle_x ))
 
         speed = A[:,A_names.index('speed (m/sec)')]
         Arow = np.arange(len(A))
