@@ -396,7 +396,7 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml,
         # accumulate per-post results:
         closest_all_pt_c_fly_retina_dist.append( numpy.ma.getdata(pt_c_fly_retina_dist) )
         closest_all_pt_c_fly_retina.append( numpy.ma.getdata(pt_c_fly_retina) )
-        closest_all_pt_c_fly_retina_mask.append( numpy.ma.getmask(pt_c_fly_retina_dist) )
+        closest_all_pt_c_fly_retina_mask.append( numpy.ma.getmaskarray(pt_c_fly_retina_dist) )
         closest_all_pt_c_fly_retina_dist_speed.append( pt_c_fly_retina_dist_speed )
         closest_all_pt_c_fly_retina_dist_accel.append( pt_c_fly_retina_dist_accel )
 
@@ -423,7 +423,7 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml,
     result_col_arrays.append( closest_dist_accel )
     result_col_names.append( 'closest_dist_accel' )
 
-    result_col_arrays.append( np.ma.getmask(closest_dist) )
+    result_col_arrays.append( np.ma.getmaskarray(closest_dist) )
     result_col_names.append( 'closest_dist_mask' )
 
     result_col_arrays.append( angle_of_closest_dist )
@@ -436,6 +436,18 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml,
 
         result_col_arrays.append( horizontal_angular_velocity )
         result_col_names.append( 'horizontal_angular_velocity' )
+
+        for delay in [50,100,150]: # msec
+            n_steps_delay = int(np.round((delay/1000.0) /dt))
+            if len(horizontal_angular_velocity) > n_steps_delay:
+                delayed_hv = np.hstack((
+                    horizontal_angular_velocity[n_steps_delay:],
+                    [np.nan]*n_steps_delay ))
+            else:
+                delayed_hv =  np.array([np.nan]*len(horizontal_angular_velocity) )
+
+            result_col_arrays.append( delayed_hv )
+            result_col_names.append( 'horizontal_angular_velocity_%dmsec_delay'%delay )
 
         post_angle = angle_of_closest_dist
         post_angle_x = np.cos( post_angle ) # allow treating with linear distance operators
