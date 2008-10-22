@@ -16,6 +16,7 @@ import flydra.a2.analysis_options as analysis_options
 
 import flydra.a2.posts as posts
 import flydra.a2.xml_stimulus as xml_stimulus
+import flydra.a2.utils as utils
 
 def angle_diff(ang1,ang2):
     return np.mod((ang1-ang2)+np.pi,2*np.pi)-np.pi
@@ -94,6 +95,7 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
                                                    frames_per_second=frames_per_second)
 
     closest_dist = np.ma.array(rec[ 'closest_dist' ],mask=rec[ 'closest_dist_mask' ])
+    closest_dist_speed = np.ma.array(rec[ 'closest_dist_speed' ],mask=rec[ 'closest_dist_mask' ])
     angle_of_closest_dist = np.ma.array(rec[ 'angle_of_closest_dist' ],mask=rec[ 'closest_dist_mask' ])
     post_angle = angle_of_closest_dist[start_idx:stop_idx]
     try:
@@ -113,6 +115,7 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
           downsamp(rec['vel_horiz'][start_idx:stop_idx]),
           downsamp(rec['vel_z'][start_idx:stop_idx]),
           downsamp(closest_dist[start_idx:stop_idx]), # NL func or binarize on this?
+          downsamp(closest_dist_speed[start_idx:stop_idx]),
           downsamp(post_angle),
           downsamp(sin_post_angle),
           ]
@@ -120,6 +123,7 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
                'horizontal velocity (m/sec)',
                'vertical velocity (m/sec)',
                'distance to closest post (m)',
+               'speed from closest post (m/sec)',
                'angle to post (rad)',
                'sin(angle to post)',
                ]
@@ -250,33 +254,56 @@ class DataAssoc(object):
     def __init__(self, all_rowlabels, trace_ids, orig_data_by_trace_id, orig_row_offset_by_trace_id):
         self._all_rowlabels = np.ma.asarray(all_rowlabels)
         assert len(self._all_rowlabels.shape) == 1 # 1d array
-        self._trace_ids = trace_ids
+        self._trace_ids = np.asarray(trace_ids)
+        assert len(self._trace_ids.shape)==1
         self._orig_data_by_trace_id = orig_data_by_trace_id
         for value in self._orig_data_by_trace_id.itervalues():
             if not isinstance(value,np.ndarray):
                 raise TypeError("original data must be numpy arrays!") # required for indexing
+        self._orig_row_offset_by_trace_id = orig_row_offset_by_trace_id
 
-        self.orig_trace_id_and_idxs_from_A_row = []
+        if 1:
+            # find all rowlabels corresponding to each trace_id...
+            start_Aidxs = {}
+            for trace_id, start_Aidx in self._orig_row_offset_by_trace_id.iteritems():
+                start_Aidxs[start_Aidx]=trace_id
+            sas = start_Aidxs.keys()
+            sas.sort()
+
+            self._rowlabel_startstop_by_trace_id = {}
+            for i,start_Aidx in enumerate(sas):
+                trace_id = start_Aidxs[start_Aidx]
+                if (i+1)>=len(sas):
+                    stop_idx = len(self._all_rowlabels)
+                else:
+                    stop_idx = sas[i+1]
+                self._rowlabel_startstop_by_trace_id[trace_id] = (start_Aidx, stop_idx)
+
+        self._orig_trace_id_and_idxs_from_A_row = []
+
         for i,trace_id in enumerate(self._trace_ids):
             cond = self._all_rowlabels==i
             cum_orig_idxs = np.nonzero(cond)[0]
             if len(cum_orig_idxs)==0:
                 raise RuntimeError('the generated data must come from somewhere, but could not find it in rowlabels!')
-            ## if i==27:
-            ##     print 'self._all_rowlabels[130:150]',self._all_rowlabels[130:150]
-            ##     print 'cond[130:150]',cond[130:150]
-            ##     print 'cum_orig_idxs',cum_orig_idxs
 
             offset = orig_row_offset_by_trace_id[trace_id]
             orig_idxs = cum_orig_idxs - offset
 
             orig_idxs = orig_idxs.tolist()
-            self.orig_trace_id_and_idxs_from_A_row.append( (trace_id, orig_idxs) )
+            self._orig_trace_id_and_idxs_from_A_row.append( (trace_id, orig_idxs) )
+
+    def get_rowlabels_for_trace_id(self,trace_id):
+        start_idx,stop_idx = self._rowlabel_startstop_by_trace_id[trace_id]
+        cond = np.arange(start_idx,stop_idx)
+        #cond = self._trace_ids == trace_id
+        result = self._all_rowlabels[cond]
+        return result
 
     def idxs_by_trace_id_for_Aidxs(self,ind):
         x=collections.defaultdict(list)
         for ii in ind:
-            trace_id, orig_idxs = self.orig_trace_id_and_idxs_from_A_row[ii]
+            trace_id, orig_idxs = self._orig_trace_id_and_idxs_from_A_row[ii]
             x[trace_id].extend( orig_idxs )
 
         # convert to numpy arrays (in normal dict) and return
@@ -316,9 +343,18 @@ def test_data_assoc_1():
          [5,6]] # from trace B rows 1,2,3,4,5,6,7
     trace_ids = [a,a,b,b] # must be same length as A
     all_rowlabels = [ 0, 0, 0, 0, 1,1, 2, 3,3,3,3,3,3,3] # one element for every element of all orig_data
+    [a,a,a,a, a,a, b, b,b,b,b,b,b,b,b]
     orig_row_offset_by_trace_id = {a:0, # of all_rowlabels into trace_id specific elements
                                    b:6}
     d = DataAssoc(all_rowlabels, trace_ids, orig_data_by_trace_id, orig_row_offset_by_trace_id)
+
+    rowlabels_a = d.get_rowlabels_for_trace_id(a)
+    print rowlabels_a
+    assert np.allclose( rowlabels_a, [ 0, 0, 0, 0, 1,1 ] )
+
+    rowlabels_b = d.get_rowlabels_for_trace_id(b)
+    print rowlabels_b
+    assert np.allclose( rowlabels_b, [ 2, 3,3,3,3,3,3,3] )
 
     # get all data from a
     results1 = d.idxs_by_trace_id_for_Aidxs( [0,1] )
@@ -415,6 +451,11 @@ def doit(options=None):
 
 
     if 1:
+        # print summary information
+        print 'A names:'
+        for A_name in A_names:
+            print '  ',A_name
+
         print np.set_printoptions(linewidth=150,suppress=True)
         print 'array size',normA.shape
         print 'U.shape',U.shape
@@ -426,59 +467,229 @@ def doit(options=None):
         print 'Vh'
         print Vh
 
-    if 1:
+    if 0:
+        # plot non-contiguous timeseries of all data in A matrix and original data. skips missing data
         import matplotlib.pyplot as plt
 
+        orig_col_names = ['x','y','z']
+        A_col_nums = [0,1,2]
+        U_col_nums = [0,1,2]
+
+        accum = collections.defaultdict(list)
+        for i in range(len(U)):
+            rows_by_trace_id = data.elems_by_trace_id_for_Aidxs( [i] )
+            for trace_id, rows in rows_by_trace_id.iteritems():
+                for orig_col_name in orig_col_names:
+                    accum[orig_col_name].append( rows[orig_col_name] )
+                for A_col_num in A_col_nums:
+                    A_col_name = A_names[A_col_num]
+                    accum[A_col_name].append( A[i,A_col_num] * np.ones( (len(rows),)) )
+                for U_col_num in U_col_nums:
+                    U_col_name = 'U%d'%U_col_num
+                    accum[U_col_name].append( U[i,U_col_num] * np.ones( (len(rows),)) )
+
+        subplot_keys = accum.keys()
+        subplot_keys.sort()
+        for i, subplot_key in enumerate(subplot_keys):
+            accum[subplot_key] = np.ma.hstack( accum[subplot_key] )
+        if 1:
+            del subplot_keys[subplot_keys.index('x')]
+            del subplot_keys[subplot_keys.index('y')]
+            del subplot_keys[subplot_keys.index('z')]
+            subplot_keys.insert(0,'z')
+            subplot_keys.insert(0,'y')
+            subplot_keys.insert(0,'x')
+        N_subplots = len(subplot_keys)
+        fig = plt.figure()
         ax = None
-        for j in range(3):
-            col = U[:,j]
+        for i, subplot_key in enumerate(subplot_keys):
+            ax = fig.add_subplot(N_subplots,1,1+i,sharex=ax)
+            line, = ax.plot( accum[subplot_key], '.' )
+
+            ax.text(0,1,subplot_key,
+                    transform=ax.transAxes,
+                    horizontalalignment='left',
+                    verticalalignment='top',
+                    )
+
+        plt.show()
+
+    if 0:
+        # plot timeseries of all original data and corresponding A matrix (time-contiguous)
+        import matplotlib.pyplot as plt
+
+        orig_col_names = ['x','y','z']
+        A_col_nums = [0,1,2,3,4]
+        U_col_nums = [0,1,2]
+
+        def mytake(arr, ma_idx):
+            ma_idx = np.ma.masked_where( np.isnan( ma_idx ), ma_idx ).astype(int)
+            ma_idx.set_fill_value(0)
+            idx_filled = ma_idx.filled()
+
+            result = arr[idx_filled,...]
+            result[ ma_idx.mask ] = np.nan
+            return result
+
+        accum = collections.defaultdict(list)
+        for trace_id,rows in orig_data_by_trace_id.iteritems():
+            this_rowlabels = data.get_rowlabels_for_trace_id(trace_id)
+            assert len(this_rowlabels) == len(rows)
+
+            this_A = mytake( A, this_rowlabels )
+            this_U = mytake( U, this_rowlabels )
+
+            for orig_col_name in orig_col_names:
+                accum[orig_col_name].append( rows[orig_col_name] )
+            for A_col_num in A_col_nums:
+                A_col_name = A_names[A_col_num]
+                accum[A_col_name].append( this_A[:,A_col_num] * np.ones( (len(rows),)) )
+            for U_col_num in U_col_nums:
+                U_col_name = 'U%d'%U_col_num
+                accum[U_col_name].append( this_U[:,U_col_num] * np.ones( (len(rows),)) )
+
+        subplot_keys = accum.keys()
+        subplot_keys.sort()
+        for i, subplot_key in enumerate(subplot_keys):
+            accum[subplot_key] = np.ma.hstack( accum[subplot_key] )
+        if 1:
+            del subplot_keys[subplot_keys.index('x')]
+            del subplot_keys[subplot_keys.index('y')]
+            del subplot_keys[subplot_keys.index('z')]
+            subplot_keys.insert(0,'z')
+            subplot_keys.insert(0,'y')
+            subplot_keys.insert(0,'x')
+        N_subplots = len(subplot_keys)
+        fig = plt.figure()
+        ax = None
+        for i, subplot_key in enumerate(subplot_keys):
+            ax = fig.add_subplot(N_subplots,1,1+i,sharex=ax)
+            line, = ax.plot( accum[subplot_key], '.' )
+
+            from matplotlib.transforms import offset_copy
+            transOffset = offset_copy(ax.transData, fig=fig,
+                                      x = 5, y=5, units='dots')
+
+            ax.text(0,1,subplot_key,
+                    transform=ax.transAxes,
+                    #transform=transOffset,
+                    horizontalalignment='left',
+                    verticalalignment='top',
+                    )
+
+#        plt.show()
+
+
+    if 0:
+        # top and side views colored by attributes
+
+        import matplotlib.pyplot as plt
+
+        arrnames = ['A','A','A', 'A', 'U','U','U']
+        cols = [ 0,1,2, 3, 0,1,2 ]
+
+        ax = None
+        for arrname, j in zip(arrnames,cols):
+            if arrname == 'A':
+                arr = A
+                col_name = A_names[j]
+            elif arrname == 'U':
+                arr = U
+                col_name = 'U%d'%j
+            col = arr[:,j]
             all_rows_idx = np.arange(len(col))
 
             x = []
             y = []
             z = []
             c = []
+            post_speed = []
+            post_speed_column = A_names.index('speed from closest post (m/sec)')
+
             for i in range(len(col)):
                 rows_by_trace_id = data.elems_by_trace_id_for_Aidxs( [i] )
                 for trace_id, rows in rows_by_trace_id.iteritems():
                     x.append( rows['x'] )
                     y.append( rows['y'] )
                     z.append( rows['z'] )
-                    c.append( [U[i,j]]*len(rows) )
-                    break # only first trace_id
+                    c.append( [arr[i,j]]*len(rows) )
+                    post_speed.append( [A[i,post_speed_column]]*len(rows) )
 
             x = np.hstack(x)
             y = np.hstack(y)
             z = np.hstack(z)
             c = np.hstack(c)
+            post_speed = np.hstack(post_speed)
+
+            approaching = post_speed < 0
+            #point_size = approaching*5 + 5 # 5 if leaving closest post, 10 if approaching
 
             fig = plt.figure()
-            ax = fig.add_subplot(2,1,1,sharex=ax)
-            ax.scatter(x,y,c=c,edgecolors='none',s=5)
-            stim_xml.plot_stim(ax, projection=xml_stimulus.SimpleOrthographicXYProjection() )
-            #ax.plot(x,c)
-            ax.set_aspect('equal')
-            ax.set_title('U%d'%j)
 
-            ax = fig.add_subplot(2,1,2,sharex=ax)
+            # X vs Z
+            ax = fig.add_axes( (0.05, 0.65, .8, .3), sharex=ax)
+            ax.set_title(col_name)
             ax.set_aspect('equal')
-            ax.scatter(x,z,c=c,edgecolors='none',s=5)
+            ax.scatter(x[approaching],z[approaching],c=c[approaching],edgecolors='none',s=10)
+            ax.scatter(x[~approaching],z[~approaching],c=c[~approaching],edgecolors='none',s=5)
             stim_xml.plot_stim(ax, projection=xml_stimulus.SimpleOrthographicXZProjection() )
 
+            # X vs Y
+            ax = fig.add_axes( (0.05, 0.05, .8, .55),sharex=ax )
+            mappable = ax.scatter(x[approaching],y[approaching],c=c[approaching],edgecolors='none',s=10)
+            mappable = ax.scatter(x[~approaching],y[~approaching],c=c[~approaching],edgecolors='none',s=5)
+            stim_xml.plot_stim(ax, projection=xml_stimulus.SimpleOrthographicXYProjection() )
+            ax.set_aspect('equal')
+
+            cax = fig.add_axes( (0.9, 0.05, .02, .9))
+            cbar = fig.colorbar(mappable, cax=cax, ax=ax )
+
+#        plt.show()
+
+    if 1:
+        import matplotlib.pyplot as plt
+
+        post_dist_column = A_names.index('distance to closest post (m)')
+        post_speed_column = A_names.index('speed from closest post (m/sec)')
+
+        post_dist = A[:,post_dist_column]
+        post_speed = A[:,post_speed_column]
+        Arow = np.arange(len(A))
+
+        approaching = post_speed < 0
+
+        if 0:
+            conds = [ ('approaching',approaching),
+                      ('retreating',~approaching),
+                      ('all',np.ones( (len(post_dist),), dtype=np.bool )),
+                      ]
+        else:
+            conds = [ ('approaching',approaching),
+                      ]
+        fig = plt.figure()
+        for i,(cond_name,cond) in enumerate(conds):
+            ax = fig.add_subplot(len(conds),1,i+1)
+
             if 0:
-                rows_by_trace_id = data.elems_by_trace_id_for_Aidxs( all_rows_idx )
-                for trace_id, rows in rows_by_trace_id.iteritems():
-                    fig=plt.figure()
-                    ax = fig.add_subplot(2,1,1)
-                    ax.scatter(rows['x'],rows['y'],c=col)
-                    ax.set_aspect('equal')
-                    ax.set_title('U%d'%j)
+                ax.plot( post_dist[cond], post_speed[cond], '.' )
+            else:
+                this_Arow = Arow[cond]
+                contig_chunk_idxs = utils.get_contig_chunk_idxs( this_Arow )
+                for this_start,this_stop in contig_chunk_idxs:
+                    astart = this_Arow[this_start]
+                    astop = this_Arow[this_stop-1]+1
+                    ax.plot( post_dist[astart:astop], post_speed[astart:astop], 'o-' )
+            ax.set_xlabel('distance to closest post (m)')
+            ax.set_ylabel('speed from closest post (m/sec)')
 
-                    ax = fig.add_subplot(2,1,2)
-                    ax.scatter(rows['x'],rows['z'],c=col)
-                    ax.set_aspect('equal')
+            if len(conds)>1:
+                ax.text(0,1,cond_name,
+                        transform=ax.transAxes,
+                        horizontalalignment='left',
+                        verticalalignment='top',
+                        )
+
         plt.show()
-
 
     if PICK:
         global line2data
