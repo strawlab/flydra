@@ -287,7 +287,7 @@ if PICK:
 
         print 'onpick1 called:',event
 
-        if isinstance(event.artist,matplotlib.lines.Line2D): # why is Line2D in the namespace??
+        if isinstance(event.artist,matplotlib.lines.Line2D):
             thisline = event.artist
             data,myax = line2data[thisline]
             # data is DataAssoc instance
