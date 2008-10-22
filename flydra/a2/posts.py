@@ -200,7 +200,11 @@ def read_files_and_fuse_ids(options=None):
             valid_cond &= (frame <= options.stop)
 
         kalman_rows = kalman_rows[valid_cond]
-    return kalman_rows,fps,stim_xml
+
+    # find saccades
+    saccade_results = core_analysis.detect_saccades( kalman_rows,
+                                                     frames_per_second=fps )
+    return kalman_rows,fps,stim_xml, saccade_results
 
 def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
     """return recarray with a row for each row of kalman_rows, but processed to include stimulus-relative columns"""

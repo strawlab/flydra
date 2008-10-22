@@ -463,7 +463,7 @@ def load_A_matrix( options=None ):
     if options.obj_only is not None:
         raise ValueError('obj_only is not a valid option for this function')
 
-    kalman_rows, fps, stim_xml = posts.read_files_and_fuse_ids(options=options)
+    kalman_rows, fps, stim_xml, saccade_results = posts.read_files_and_fuse_ids(options=options)
     trace_id = options.kalman_filename
     results_recarray = posts.calc_retinal_coord_array(kalman_rows, fps, stim_xml)
 
@@ -499,10 +499,10 @@ def load_A_matrix( options=None ):
                    orig_data_by_trace_id=orig_data_by_trace_id,
                    stim_xml=stim_xml,
                    )
-    return results
+    return results, saccade_results
 
 def doit(options=None):
-    my_results=load_A_matrix( options )
+    my_results, saccade_results =load_A_matrix( options )
 
     A=my_results['A']
     data=my_results['data']
@@ -1002,6 +1002,11 @@ def doit(options=None):
                     ax.plot( rows['x'][cond], rows['y'][cond], '.', color=color )
 
                 stim_xml.plot_stim(ax, projection=xml_stimulus.SimpleOrthographicXYProjection() )
+
+                ax.plot( saccade_results['X'][:,0],
+                         saccade_results['X'][:,1],
+                         'rx', ms=10 )
+
                 ax.set_xlabel('X (m)')
                 ax.set_ylabel('Y (m)')
                 ax.set_aspect('equal')
@@ -1031,6 +1036,8 @@ def doit(options=None):
                     color = NSFlabel2color[this_cluster_label]
                     cond = this_cluster_labels==this_cluster_label
                     ax.plot( rows['frame'][cond], rows['x'][cond], '.', color=color )
+                for saccade_frame in saccade_results['frames']:
+                    ax.axvline( saccade_frame )
                 ax.set_ylabel('X (m)')
 
                 ax = fig.add_subplot(3,1,3,sharex=ax)
