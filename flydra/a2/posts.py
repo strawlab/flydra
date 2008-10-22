@@ -255,6 +255,8 @@ def read_files_and_fuse_ids(options=None):
 def calc_retinal_coord_array(kalman_rows,fps,stim_xml,
                              angular_velocity_method='linear_velocity', # tangent to direction of travel
                              extra_columns=None, # list of tuples of ('name',ndarray)
+                             closest_method='closest angle', # also 'closest distance'
+                             #closest_method='closest distance',
                              ):
     """return recarray with a row for each row of kalman_rows, but processed to include stimulus-relative columns"""
     orig_row_length = len(kalman_rows)
@@ -431,7 +433,10 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml,
     closest_all_pt_c_fly_retina = np.ma.array(closest_all_pt_c_fly_retina,mask=closest_all_pt_c_fly_retina_mask)
 
     # find closest row
-    taker = np.ma.argmin( closest_all_pt_c_fly_retina_dist, axis=0 )
+    if closest_method=='closest distance':
+        taker = np.ma.argmin( closest_all_pt_c_fly_retina_dist, axis=0 )
+    elif closest_method=='closest angle':
+        taker = np.ma.argmin( abs(closest_all_pt_c_fly_retina), axis=0 )
     col_idx = numpy.arange(len(taker))
 
     closest_dist = closest_all_pt_c_fly_retina_dist[ taker, col_idx ]

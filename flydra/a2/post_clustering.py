@@ -280,7 +280,7 @@ class DataAssoc(object):
 
         if 1:
             # find all rowlabels corresponding to each trace_id...
-            start_Aidxs = {}
+            start_Aidxs = {} # index into the rowlabels array starting again for each trace id
             for trace_id, start_Aidx in self._orig_row_offset_by_trace_id.iteritems():
                 start_Aidxs[start_Aidx]=trace_id
             sas = start_Aidxs.keys()
@@ -298,15 +298,20 @@ class DataAssoc(object):
         self._orig_trace_id_and_idxs_from_A_row = []
 
         for i,trace_id in enumerate(self._trace_ids):
-            cond = self._all_rowlabels==i
-            cum_orig_idxs = np.nonzero(cond)[0]
+            # i is index into A (selects row)
+            cond = self._all_rowlabels==i # find the rowlabels for this row of A
+            cum_orig_idxs = np.nonzero(cond)[0]  # convert to indices into original data (modulo offset)
             if len(cum_orig_idxs)==0:
                 raise RuntimeError('the generated data must come from somewhere, but could not find it in rowlabels!')
 
-            offset = orig_row_offset_by_trace_id[trace_id]
-            orig_idxs = cum_orig_idxs - offset
+            offset = orig_row_offset_by_trace_id[trace_id] # index into A
+            orig_idxs = cum_orig_idxs - offset # convert to original rowlabels
 
             orig_idxs = orig_idxs.tolist()
+            print 'i,trace_id',i,trace_id
+            print 'orig_idxs'
+            print orig_idxs
+            print
             self._orig_trace_id_and_idxs_from_A_row.append( (trace_id, orig_idxs) )
 
     def get_rowlabels_for_trace_id(self,trace_id):
@@ -317,6 +322,13 @@ class DataAssoc(object):
         return result
 
     def idxs_by_trace_id_for_Aidxs(self,ind):
+        """return indices of original data given an indices into A
+
+        Return value is a dict of (key,values) where key is trace_id
+        and values are indices into original data.
+
+        """
+
         x=collections.defaultdict(list)
         for ii in ind:
             trace_id, orig_idxs = self._orig_trace_id_and_idxs_from_A_row[ii]
@@ -359,17 +371,17 @@ def test_data_assoc_1():
          [5,6]] # from trace B rows 1,2,3,4,5,6,7
     trace_ids = [a,a,b,b] # must be same length as A
     all_rowlabels = [ 0, 0, 0, 0, 1,1, 2, 3,3,3,3,3,3,3] # one element for every element of all orig_data
-    [a,a,a,a, a,a, b, b,b,b,b,b,b,b,b]
+    #               [ a, a, a, a, a,a, b, b,b,b,b,b,b,b]
     orig_row_offset_by_trace_id = {a:0, # of all_rowlabels into trace_id specific elements
                                    b:6}
     d = DataAssoc(all_rowlabels, trace_ids, orig_data_by_trace_id, orig_row_offset_by_trace_id)
 
     rowlabels_a = d.get_rowlabels_for_trace_id(a)
-    print rowlabels_a
+    print 'rowlabels_a',rowlabels_a
     assert np.allclose( rowlabels_a, [ 0, 0, 0, 0, 1,1 ] )
 
     rowlabels_b = d.get_rowlabels_for_trace_id(b)
-    print rowlabels_b
+    print 'rowlabels_b',rowlabels_b
     assert np.allclose( rowlabels_b, [ 2, 3,3,3,3,3,3,3] )
 
     # get all data from a
@@ -1024,5 +1036,9 @@ def main():
     doit( options=options )
 
 if __name__=='__main__':
-    results = main()
+    if 0:
+        results = main()
+    else:
+        print 'testing'
+        test_data_assoc_1()
 
