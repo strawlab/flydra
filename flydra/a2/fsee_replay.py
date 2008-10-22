@@ -1,0 +1,162 @@
+from __future__ import division
+from __future__ import with_statement
+import pkg_resources
+if 1:
+    # deal with old files, forcing to numpy
+    import tables.flavor
+    tables.flavor.restrict_flavors(keep=['numpy'])
+import sets, os, sys, math
+
+import numpy
+import tables as PT
+from optparse import OptionParser
+import flydra.a2.xml_stimulus as xml_stimulus
+import flydra.a2.xml_stimulus_osg as xml_stimulus_osg
+import flydra.a2.core_analysis as core_analysis
+import flydra.a2.analysis_options as analysis_options
+import flydra.analysis.result_utils as result_utils
+import flydra.a2.flypos
+import fsee
+import fsee.Observer
+import fsee.plot_utils
+import pylab
+
+class PathMaker:
+    def __init__(self,P=None,Q=None,data_dt=None,sample_dt=None,frame=None):
+        self.P = P
+        self.Q = Q
+        self.data_dt = data_dt
+        if sample_dt != data_dt:
+            raise NotImplementedError('no interpolation implemented')
+        self.cur_idx = 0
+        self.frame = frame
+
+    def get_frame(self):
+        """get frame number of just-returned position and orientation"""
+        if self.cur_idx <= 0:
+            raise RuntimeError('only query get_frame() after calling step()')
+        return self.frame[self.cur_idx-1]
+
+    def step(self):
+        cur_pos = self.P[self.cur_idx]
+        cur_ori = self.Q[self.cur_idx]
+        self.cur_idx += 1
+        return cur_pos, cur_ori
+
+def doit(options=None):
+    assert options is not None
+    assert options.stim_xml is not None
+
+    ca = core_analysis.get_global_CachingAnalyzer()
+
+    obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(options.kalman_filename)
+
+    fps = result_utils.get_fps( data_file )
+
+    if 1:
+        dynamic_model = extra['dynamic_model_name']
+        print 'detected file loaded with dynamic model "%s"'%dynamic_model
+        if dynamic_model.startswith('EKF '):
+            dynamic_model = dynamic_model[4:]
+        print '  for smoothing, will use dynamic model "%s"'%dynamic_model
+
+    if 1:
+        file_timestamp = data_file.filename[4:19]
+        fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
+        include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp( timestamp_string=file_timestamp )
+        walking_start_stops = fanout.get_walking_start_stops_for_timestamp( timestamp_string=file_timestamp )
+        if include_obj_ids is not None:
+            use_obj_ids = include_obj_ids
+        if exclude_obj_ids is not None:
+            use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
+        stim_xml = fanout.get_stimulus_for_timestamp(timestamp_string=file_timestamp)
+        stim_xml = xml_stimulus_osg.StimulusWithOSG( stim_xml.get_root() )
+
+    kalman_rows = flydra.a2.flypos.fuse_obj_ids(use_obj_ids, data_file,
+                                              dynamic_model_name = dynamic_model,
+                                              frames_per_second=fps)
+    frame = kalman_rows['frame']
+    if (options.start is not None) or (options.stop is not None):
+        valid_cond = numpy.ones( frame.shape, dtype=numpy.bool )
+        if options.start is not None:
+            valid_cond &= (frame >= options.start)
+        if options.stop is not None:
+            valid_cond &= (frame <= options.stop)
+
+        kalman_rows = kalman_rows[valid_cond]
+    frame = kalman_rows['frame']
+    X = numpy.array( [kalman_rows['x'],
+                      kalman_rows['y'],
+                      kalman_rows['z']]).T
+
+    Q = flydra.a2.flypos.pos2ori(X,force_pitch_0=True)
+
+    hz = fps
+    dt = 1.0/hz
+    path_maker = PathMaker(P=X,Q=Q,data_dt=dt,sample_dt=dt,frame=frame)
+
+
+    with stim_xml.OSG_model_path() as osg_model_path:
+        vision = fsee.Observer.Observer(model_path=osg_model_path,
+                                        #scale=1000.0, # convert model from meters to mm
+                                        hz=hz,
+                                        skybox_basename=None,
+                                        full_spectrum=True,
+                                        optics='buchner71',
+                                        do_luminance_adaptation=False,
+                                        )
+        count = 0
+        while count < len(X):
+            count += 1
+            cur_pos, cur_ori = path_maker.step()
+            frame = path_maker.get_frame()
+            vision.step(cur_pos,cur_ori)
+
+            if options.save_envmap:
+                vision.save_last_environment_map('envmap%07d.png'%frame)
+
+            if options.plot_receptors:
+                if frame%50==0:
+                    print 'saving',frame
+                R = vision.get_last_retinal_imageR()
+                G = vision.get_last_retinal_imageG()
+                B = vision.get_last_retinal_imageB()
+
+                fname = 'receptors%07d'%frame
+                fig = fsee.plot_utils.plot_receptor_and_emd_fig(
+                    R=R,G=G,B=B,
+                    figsize=(10,5),
+                    dpi=100,
+                    save_fname=fname+'.png',
+                    optics=vision.get_optics(),
+                    proj='stere',
+                    )
+                pylab.close(fig)
+
+def main():
+    usage = '%prog [options]'
+
+    parser = OptionParser(usage)
+
+    parser.add_option("--save-envmap", action='store_true',
+                      default=False)
+
+    parser.add_option("--plot-receptors", action='store_true',
+                      default=False)
+
+    analysis_options.add_common_options( parser )
+    (options, args) = parser.parse_args()
+
+    if options.obj_only is not None:
+        options.obj_only = core_analysis.parse_seq(options.obj_only)
+
+    if len(args):
+        parser.print_help()
+        return
+
+    doit( options=options,
+         )
+
+if __name__=='__main__':
+    main()
+
