@@ -9,6 +9,7 @@ import flydra.a2.core_analysis as core_analysis
 import flydra.a2.analysis_options as analysis_options
 import flydra.analysis.result_utils as result_utils
 import flydra.a2.flypos
+import flydra.a2.post_clustering as post_clustering
 
 import scipy.stats
 import random
@@ -31,6 +32,10 @@ def calc_hash(mystr):
         max_hash += 1
         hashed_values[mystr] = hash_int
     return hash_int
+
+def make_trace_id_from_flyid_and_objid(flyid,obj_id):
+    return 'trace(%s,%d)'%(repr(flyid),obj_id)
+    #return calc_hash('trace(%s,%d)'%(repr(flyid),obj_id))
 
 def monte_carlo_resample_hist( x, x_edges,
                                N_resamples = 100,
@@ -169,6 +174,7 @@ if define_classes:
         def get_overriden(self,stim_xml):
             return OverriddenFlyId(self._kalman_filename,stim_xml)
         def get_list_of_kalman_rows(self,flystate='flying'):
+            """return a list, with one entry per obj_id, of arrays of data"""
             ca = core_analysis.get_global_CachingAnalyzer()
             obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(self._kalman_filename)
 
@@ -211,6 +217,8 @@ if define_classes:
                 print >> sys.stderr, 'due to short length of data, dropped obj_ids (in %s):'%data_file.filename, dropped_obj_ids
 
             newresult = []
+            self._final_used_obj_ids = []
+            # XXX perhaps orig_data_present should be true for all frames of an obj_id...
             for kr in result:
                 arrays = []
                 names = []
@@ -223,7 +231,42 @@ if define_classes:
                 arrays.append( orig_data_present )
                 names.append( 'orig_data_present' )
                 newresult.append( np.rec.fromarrays( arrays, names=names ) )
+                self._final_used_obj_ids.append( int(kr['obj_id'][0]))
             return newresult
+
+        def get_obj_ids(self):
+            if not hasattr(self,'_final_used_obj_ids'):
+                self.get_list_of_kalman_rows()
+            return self._final_used_obj_ids
+
+        def get_saccade_analysis_arrays(self):
+            if hasattr(self,'_saccade_cluster_cache'):
+                return self._saccade_cluster_cache
+            fps = self.get_fps()
+            stim_xml = self.get_stim_xml()
+            all_obj_ids = []
+            all_new_coords = []
+            all_rowlabels = []
+            trace_ids = []
+            A_names = None
+            for kalman_rows in self.get_list_of_kalman_rows(): # by fly id
+                obj_id = kalman_rows['obj_id'][0]
+                assert np.all( kalman_rows['obj_id']==obj_id )
+                trace_id = make_trace_id_from_flyid_and_objid(self,obj_id)
+                saccade_results = core_analysis.detect_saccades( kalman_rows,
+                                                                 frames_per_second=fps )
+                results = load_saccade_based_A_matrix(kalman_rows,fps,stim_xml,saccade_results)
+                if 1:
+                    assert len(results['rowlabels']) == len(kalman_rows)
+                A_names = results['A_names']
+                if len(results['A']):
+                    all_obj_ids.append( obj_id )
+                    all_new_coords.append( results['A'] )
+                    all_rowlabels.append( results['rowlabels'] )
+                    trace_ids.append( trace_id )
+            self._saccade_cluster_cache = (all_obj_ids, all_new_coords, all_rowlabels,
+                                           trace_ids, A_names)
+            return self._saccade_cluster_cache
 
     class OverriddenFlyId(FlyId):
         def __init__(self,kalman_filename,forced_stim_xml):
@@ -256,12 +299,15 @@ if define_classes:
                 self.newkws['stim_xml']=kwargs['stim_xml']
                 del kwargs['stim_xml']
             super(TreatmentOverride,self).__init__(*args,**kwargs)
+            self._cached_overriden_by_name = {}
         def __iter__(self):
             return OverrideIterator(self)
         def __getitem__(self,name):
-            orig = super(TreatmentOverride,self).__getitem__(name)
-            overriden = orig.get_overriden(self.newkws['stim_xml'])
-            return overriden
+            if name not in self._cached_overriden_by_name:
+                orig = super(TreatmentOverride,self).__getitem__(name)
+                overriden = orig.get_overriden(self.newkws['stim_xml'])
+                self._cached_overriden_by_name[name] = overriden
+            return self._cached_overriden_by_name[name]
         def get_non_overriden_item(self,name):
             orig = super(TreatmentOverride,self).__getitem__(name)
             return orig
@@ -329,6 +375,9 @@ def make_giant_arrays( treatment, graphical_debug=False ):
                 ax2.plot( closest_dist.compressed(), angle_of_closest_dist.compressed(),
                           '.', color=line.get_color() )
                 ax3.plot( this_rcoords['x'], this_rcoords['y'], '.', label='obj %d'%obj_id, color=line.get_color() )
+                ## ax4.plot( closest_dist.compressed(), np.cos(angle_of_closest_dist).compressed(),
+                ##           '.', color=line.get_color() )
+
             stim_xml.plot_stim( ax1,
                                 projection=xml_stimulus.SimpleOrthographicXYProjection())
             stim_xml.plot_stim( ax3,
@@ -415,6 +464,29 @@ def do_turning_plots( orig_subplot, treatment, condition_name):
         for idx in all_saccade_idxs:
             if not closest_dist.mask[idx]:
                 ax.plot([closest_dist[idx]], [angle_of_closest_dist[idx]], 'rx')
+
+    for key in subplot.keys():
+        key_start = 'post_angle_hist '
+        if key.startswith(key_start):
+            ax = subplot[key]
+            del subplot[key]
+            print 'key',key
+            key = key[len(key_start):]
+            args = np.array(map(int,key.strip().split()))
+            dist_min_cm = args[0]
+            dist_max_cm = args[1]
+
+            dist_min = dist_min_cm /100.0
+            dist_max = dist_max_cm /100.0
+
+            cond = (dist_min <= closest_dist) & (closest_dist < dist_max)
+            this_angle = angle_of_closest_dist[cond]
+            this_angle = np.ma.masked_where( np.isnan(this_angle), this_angle)
+
+            this_angle = this_angle.compressed()
+            bin_edges = np.linspace(-np.pi,np.pi,20)
+            ax.hist( this_angle, bins=bin_edges, alpha=0.5, normed=True)#, new=True )
+            ax.grid(True)
 
     for key in subplot.keys():
         if key.startswith('post_angle_at_dist'):
@@ -910,61 +982,207 @@ def do_turning_plots( orig_subplot, treatment, condition_name):
         warnings.warn('unprocessed subplots: %s'%str(subplot.keys()))
     return
 
-def do_segment_and_identify_plots( orig_subplot, treatment, condition_name):
+def create_saccade_analysis_array( results_recarray,
+                                   frames_per_second=None,
+                                   saccade_results=None,
+                                   ):
+    # should add horizontal angular rate to this
+    A = []
+    A_names = ['final_post_dist',
+               'post_x',
+               'post_y',
+               #'final_horiz_velocity',
+               ]
+    prev_saccade_idx = 0
+    frames = results_recarray['frame']
+    rowlabels = np.nan*np.ones(frames.shape)
+    current_row = 0
+    saccade_frames = np.sort(saccade_results['frames'])
+    for next_saccade_frame in saccade_frames:
+        cond = frames==next_saccade_frame
+        assert np.ma.sum(cond)==1
+        next_saccade_idx = np.nonzero(cond)[0][0]
+
+        # break into chunks of ISI
+        this_rcoords = results_recarray[prev_saccade_idx:next_saccade_idx]
+
+        closest_dist = np.ma.array(this_rcoords[ 'closest_dist' ],mask=this_rcoords[ 'closest_dist_mask' ])
+        angle_of_closest_dist = np.ma.array(this_rcoords[ 'angle_of_closest_dist' ],mask=this_rcoords[ 'closest_dist_mask' ])
+
+        angle_of_closest_dist = np.ma.masked_where( np.isnan(angle_of_closest_dist), angle_of_closest_dist)
+
+        # analyze for results
+        post_x_all = np.cos(angle_of_closest_dist)
+        post_y_all = np.sin(angle_of_closest_dist)
+
+        post_x = post_x_all.mean()
+        post_y = post_y_all.mean()
+
+        good_post_dist = np.ma.compressed(closest_dist)
+        if not len(good_post_dist):
+            prev_saccade_idx = next_saccade_idx
+            continue
+
+        #print '** post_x_mean',post_x
+
+        final_post_dist = good_post_dist[-1]
+        A.append( (final_post_dist, post_x, post_y) )
+
+        rowlabels[prev_saccade_idx:next_saccade_idx] = current_row
+        current_row += 1
+        prev_saccade_idx = next_saccade_idx
+        del next_saccade_idx
+    A = np.array(A)
+    if 1:
+        rl = np.ma.masked_where(np.isnan(rowlabels),rowlabels)
+        rlu = np.unique1d(rl)
+        for i in range(len(A)):
+            assert (i in rlu), 'row not in rowlabel'
+    return A, rowlabels, A_names
+
+def load_saccade_based_A_matrix( kalman_rows,
+                                 fps, stim_xml,
+                                 saccade_results):
+    """modeled after post_clustering.load_A_matrix()"""
+    results_recarray = posts.calc_retinal_coord_array( kalman_rows, fps, stim_xml)
+    A, rowlabels, A_names = create_saccade_analysis_array( results_recarray,
+                                                           frames_per_second=fps,
+                                                           saccade_results=saccade_results,
+                                                           )
+    results = dict(A=A,
+                   A_names=A_names,
+                   rowlabels=rowlabels,
+                   results_recarray=results_recarray,
+                   )
+    return results
+
+
+def do_saccade_clusters( orig_subplot, treatment, condition_name):
     subplot = {}
     subplot.update(orig_subplot)
 
-    results_recarray, all_saccade_idxs = treatment.get_giant_arrays()
-    closest_dist = np.ma.array(results_recarray[ 'closest_dist' ],mask=results_recarray[ 'closest_dist_mask' ])
-    closest_dist_speed = np.ma.array(results_recarray[ 'closest_dist_speed' ],mask=results_recarray[ 'closest_dist_mask' ])
-    angle_of_closest_dist = np.ma.array(results_recarray[ 'angle_of_closest_dist' ],mask=results_recarray[ 'closest_dist_mask' ])
-    #approaching = abs(post_angle) < np.pi # heading with 90 degrees of post center
+    all_new_coords = []
+    print 'getting data for condition',condition_name,'='*50
+    for flyid in treatment:
+        stim_xml = flyid.get_stim_xml()
+        fps = flyid.get_fps()
+        (this_obj_ids, this_new_coords, this_rowlabels, this_trace_ids, this_A_names) = \
+                          flyid.get_saccade_analysis_arrays()
+        if not len(this_new_coords):
+            continue
+        all_new_coords.extend( this_new_coords )
+        A_names = this_A_names # should always be the same
+        if 1:
+            #print 'this_new_coords ',this_new_coords
+            this_A = np.concatenate( this_new_coords )
+            Amean = this_A.mean(axis=0)
+            print condition_name,'Fly mean,',flyid, Amean
 
+    A = np.concatenate( all_new_coords )
 
-    # segment each fly by saccades
-    all_flyid_hash = results_recarray['flyid_hash']
-    all_flyid_hash = np.unique1d(all_flyid_hash)
-    for flyid_hash in all_flyid_hash:
-        this_fly_cond = results_recarray['flyid_hash']==flyid_hash
-        this_fly_idxs = np.nonzero(this_fly_cond)[0]
-        print 'this_fly_idxs.shape, all_saccade_idxs.shape',this_fly_idxs.shape, all_saccade_idxs.shape
-        this_fly_saccade_idxs = np.intersect1d( this_fly_idxs, all_saccade_idxs[:,0])
-        assert np.allclose( this_fly_idxs[1:]-this_fly_idxs[:-1], 1 ) # contiguous
-        this_fly_start_idx = this_fly_idxs[0]
-        this_fly_stop_idx = this_fly_idxs[-1]+1
-
-        this_fly_rows = results_recarray[this_fly_start_idx:this_fly_stop_idx]
-        this_fly_saccade_idxs -= this_fly_start_idx
-
-        curr_start_idx = 0
-        graphical_debug = True
-        if graphical_debug:
-            #debug
-            fig = plt.figure()
-            global hashed_values
-            for key,hash_int in hashed_values.iteritems():
-                if hash_int == flyid_hash:
-                    fig.text(0,0,key)
-
-        for curr_stop_idx in this_fly_saccade_idxs:
-            this_saccade_rows = this_fly_rows[curr_start_idx:curr_stop_idx]
-            if graphical_debug:
-                # debug
-                plt.plot( this_saccade_rows['frame'],
-                          this_saccade_rows['x']
-                          )
-
-            curr_start_idx = curr_stop_idx
-        if graphical_debug:
-            #debug
-            plt.show()
-            #sys.exit(0)
-
-    key = 'x'
+    key = 'coord_space_hexbin'
     if key in subplot:
         ax = subplot[key]
         del subplot[key]
-        # XXX add
+
+        #ax.plot( A[:,0], A[:,1], '.' )
+        ax.hexbin( np.clip(A[:,0],0,1), A[:,1], gridsize=(30,20),
+                   xmin = 0, xmax = 1,
+                   ymin = -1, ymax = 1,
+                   )
+        ax.set_xlabel( A_names[0])
+        ax.set_ylabel( A_names[1])
+
+    for key in subplot.keys():
+        key_start = 'top_view '
+        if 1 and key.startswith(key_start):
+            ax = subplot[key]
+            del subplot[key]
+            flyid_repr = key[len(key_start):]
+
+            found = False
+            for flyid in treatment:
+                if repr(flyid)==flyid_repr:
+                    found=True
+                    break
+            if not found:
+                raise ValueError('I could not find %s'%flyid_repr)
+
+            (this_obj_ids,this_new_coords, this_rowlabels, this_trace_ids, this_A_names) = \
+                              flyid.get_saccade_analysis_arrays()
+            list_of_kalman_rows = flyid.get_list_of_kalman_rows()
+            for kr in list_of_kalman_rows:
+                obj_id = kr['obj_id'][0]
+                line,=ax.plot( kr['x'], kr['y'], '.', color='0.5' )
+                if obj_id not in this_obj_ids:
+                    continue
+                i = this_obj_ids.index(obj_id)
+                A = this_new_coords[i]
+                rowlabels = this_rowlabels[i]
+                for Arow,Avalue in enumerate(A):
+                    cond = Arow == rowlabels
+                    idx = np.ma.nonzero(cond)[0]
+                    Acol_idx = 1
+                    if np.isnan(A[Arow,Acol_idx]):
+                        continue
+                    #colors = -np.arccos(A[Arow,Acol_idx])*np.ones( (len(idx),))
+                    colors = A[Arow,Acol_idx]*np.ones( (len(idx),))
+                    this_coll = ax.scatter( kr['x'][idx], kr['y'][idx], c=colors,
+                                            vmin=-1, vmax=1, edgecolor='none',
+                                            cmap=cm.hot)
+                    this_coll.set_zorder(10)
+
+                    line, = ax.plot( [kr['x'][idx][0]], [kr['y'][idx][0]], 'ko', zorder=11)
+
+            stim_xml = flyid.get_stim_xml()
+            stim_xml.plot_stim( ax,
+                                projection=xml_stimulus.SimpleOrthographicXYProjection())
+
+    for key in subplot.keys():
+        key_start = 'segmented '
+        if 1 and key.startswith(key_start):
+            ax = subplot[key]
+            del subplot[key]
+            flyid_repr = key[len(key_start):]
+
+            found = False
+            for flyid in treatment:
+                if repr(flyid)==flyid_repr:
+                    found=True
+                    break
+            if not found:
+                raise ValueError('I could not find %s'%flyid_repr)
+
+            (this_obj_ids,this_new_coords, this_rowlabels, this_trace_ids, this_A_names) = \
+                              flyid.get_saccade_analysis_arrays()
+            list_of_kalman_rows = flyid.get_list_of_kalman_rows()
+            for kr in list_of_kalman_rows:
+                obj_id = kr['obj_id'][0]
+                line,=ax.plot( kr['x'], kr['y'], '.', color='0.5', ms=2 )
+                if obj_id not in this_obj_ids:
+                    continue
+                i = this_obj_ids.index(obj_id)
+                A = this_new_coords[i]
+                rowlabels = this_rowlabels[i]
+                for Arow,Avalue in enumerate(A):
+                    cond = Arow == rowlabels
+                    idx = np.ma.nonzero(cond)[0]
+                    Acol_idx = 1
+                    if np.isnan(A[Arow,Acol_idx]):
+                        continue
+
+                    if not ((A[Arow,0] <= 0.113) and (A[Arow,1] >= 0.8)):
+                        continue
+
+                    ax.plot( kr['x'][idx], kr['y'][idx], 'b.', ms=4, zorder=10)
+                    line, = ax.plot( [kr['x'][idx][0]], [kr['y'][idx][0]], 'go', zorder=11,
+                                     mec='g')
+
+            stim_xml = flyid.get_stim_xml()
+            stim_xml.plot_stim( ax,
+                                projection=xml_stimulus.SimpleOrthographicXYProjection(),
+                                draw_post_as_circle=True,
+                                )
 
     if len(subplot.keys()):
         warnings.warn('unprocessed subplots: %s'%str(subplot.keys()))
@@ -1026,12 +1244,16 @@ if load_data:
         FlyId('DATA20080609_205215.kh5'),
 
         ])
+    no_post_experiments_short = Treatment([
+        FlyId('DATA20080602_201151.kh5'),
+        #FlyId('DATA20080602_203633.kh5'),
+        ])
 
     four_post_experiments = Treatment([
-        ## FlyId('DATA20080618_200651.kh5'),
-        ## FlyId('DATA20080618_201015.kh5'),
-        ## FlyId('DATA20080618_201833.kh5'),
-        ## FlyId('DATA20080618_204324.kh5'),
+        ## ## FlyId('DATA20080618_200651.kh5'),
+        ## ## FlyId('DATA20080618_201015.kh5'),
+        ## ## FlyId('DATA20080618_201833.kh5'),
+        ## ## FlyId('DATA20080618_204324.kh5'),
 
         FlyId('DATA20080619_170010.kh5'),
         FlyId('DATA20080619_172513.kh5'),
@@ -1049,6 +1271,10 @@ if load_data:
         FlyId('DATA20080626_211341.kh5'),
 
         ])
+    four_post_experiments_short = Treatment([
+        FlyId('DATA20080619_170010.kh5'),
+        #FlyId('DATA20080619_172513.kh5'),
+        ])
     post_vs_nopost = {'post':single_post_experiments,
                       'empty':no_post_experiments,
                       }
@@ -1063,10 +1289,15 @@ if load_data:
                              'virtual posts':TreatmentOverride(no_post_experiments,
                                                               stim_xml=four_virtual_posts_stim_xml),
                              }
+    posts_vs_virtualposts_short = {'posts':four_post_experiments_short,
+                                   'virtual posts':TreatmentOverride(no_post_experiments_short,
+                                                                     stim_xml=four_virtual_posts_stim_xml),
+                                   }
 
     comparisons = {'post_vs_virtualpost':post_vs_virtualpost,
                    'post_vs_nopost':post_vs_nopost,
                    'posts_vs_virtualposts':posts_vs_virtualposts,
+                   'posts_vs_virtualposts_short':posts_vs_virtualposts_short,
                    }
 
 if __name__=='__main__':
@@ -1076,16 +1307,64 @@ if __name__=='__main__':
 
         #comparison_name = 'post_vs_virtualpost'
         comparison_name = 'posts_vs_virtualposts'
+        #comparison_name = 'posts_vs_virtualposts_short'
         comparison = comparisons[comparison_name]
         condition_names = comparison.keys()
         condition_names.sort()
 
         if 1:
+            n_rows = 1
+            n_cols = len(condition_names)
             fig = plt.figure()
-            subplot={}
-            subplot['x'] = fig.add_subplot(1,1,1)
-            for row, condition_name in enumerate(condition_names):
-                do_segment_and_identify_plots( subplot, comparison[condition_name], condition_name )
+            row=0
+            ax=None
+            for col, condition_name in enumerate(condition_names):
+                subplot={}
+                this_ax = fig.add_subplot(n_rows,
+                                          n_cols,
+                                          (row*n_cols)+col+1,sharex=ax,sharey=ax)
+                if ax is None:
+                    ax = this_ax
+                subplot['coord_space_hexbin'] = this_ax
+                do_saccade_clusters( subplot,
+                                     comparison[condition_name],
+                                     condition_name )
+        if 0:
+            for condition_name in condition_names:
+                treatment = comparison[condition_name]
+                for count,flyid in enumerate(treatment):
+                    if count >3:
+                        break
+                    fig = plt.figure()
+                    fig.text(0,0,'%s: %s'%(condition_name, repr(flyid)))
+                    subplot = {}
+                    this_ax = fig.add_subplot(1,1,1)
+                    this_ax.set_frame_on(False)
+                    subplot['top_view %s'%repr(flyid)] = this_ax
+                    do_saccade_clusters( subplot,
+                                         comparison[condition_name],
+                                         condition_name )
+                    this_ax.set_xticks([])
+                    this_ax.set_yticks([])
+                    this_ax.set_aspect('equal')
+                    collection=this_ax.collections[0]
+                    fig.colorbar(collection,ax=this_ax,cax=None)
+        if 1:
+            for condition_name in condition_names:
+                treatment = comparison[condition_name]
+                for count,flyid in enumerate(treatment):
+                    fig = plt.figure()
+                    fig.text(0,0,'%s: %s'%(condition_name, repr(flyid)))
+                    subplot = {}
+                    this_ax = fig.add_subplot(1,1,1)
+                    this_ax.set_frame_on(False)
+                    subplot['segmented %s'%repr(flyid)] = this_ax
+                    do_saccade_clusters( subplot,
+                                         comparison[condition_name],
+                                         condition_name )
+                    this_ax.set_xticks([])
+                    this_ax.set_yticks([])
+                    this_ax.set_aspect('equal')
 
         if 0:
             n_rows = 1
@@ -1235,6 +1514,28 @@ if __name__=='__main__':
                 fname = 'saccades_and_velocity'+ext
                 fig.savefig(fname)#,dpi=55)
                 print 'saved',fname
+
+        if 0: # histogram of closest post angle by distance
+            n_rows = 1
+            n_cols = 6
+
+            fig = plt.figure()
+            key_start = 'post_angle_hist '
+            ax = None
+            row = 0
+
+            subplot = {}
+            subplot[key_start+'50 60'] = fig.add_subplot(n_rows,n_cols,(row*n_cols)+1,sharex=ax)
+            if 1:
+                ax = subplot[key_start+'50 60']
+            subplot[key_start+'40 50'] = fig.add_subplot(n_rows,n_cols,(row*n_cols)+2,sharex=ax)
+            subplot[key_start+'30 40'] = fig.add_subplot(n_rows,n_cols,(row*n_cols)+3,sharex=ax)
+            subplot[key_start+'20 30'] = fig.add_subplot(n_rows,n_cols,(row*n_cols)+4,sharex=ax)
+            subplot[key_start+'10 20'] = fig.add_subplot(n_rows,n_cols,(row*n_cols)+5,sharex=ax)
+            subplot[key_start+ '0 10'] = fig.add_subplot(n_rows,n_cols,(row*n_cols)+6,sharex=ax)
+
+            for condition_name in condition_names:
+                do_turning_plots( subplot, comparison[condition_name], condition_name )
 
         if 0:
             n_rows = 2
