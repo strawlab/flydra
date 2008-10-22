@@ -10,6 +10,7 @@ import sets, os, sys, math, time, collections
 import numpy
 import numpy as np
 from optparse import OptionParser
+import scipy.integrate
 import flydra.a2.core_analysis as core_analysis
 import flydra.a2.flypos
 import flydra.a2.analysis_options as analysis_options
@@ -409,6 +410,34 @@ def test_data_assoc_1():
 def doit(options=None):
     if options.obj_only is not None:
         raise ValueError('obj_only is not a valid option for this function')
+
+    if 0:
+        import matplotlib.pyplot as plt
+
+        accel = -0.5
+        def dX_dt(X,t=0):
+            # X[0] = velocity
+            # X[1] = position
+            return np.array( [ accel, X[0] ] )
+
+        X0 = np.array([1, 0])
+
+        t = np.linspace(0,2,200)
+        X, infodict = scipy.integrate.odeint(dX_dt, X0, t, full_output=True)
+
+        vel = X[:,0]
+        pos = X[:,1]
+
+        fig = plt.figure()
+        ax = fig.add_subplot(3,1,1)
+        ax.plot(t,vel)
+
+        ax = fig.add_subplot(3,1,2)
+        ax.plot(t,pos)
+
+        ax = fig.add_subplot(3,1,3)
+        ax.plot( pos, vel, 'o-')
+        plt.show()
 
     kalman_rows, fps, stim_xml = posts.read_files_and_fuse_ids(options=options)
     trace_id = options.kalman_filename
