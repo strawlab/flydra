@@ -1,5 +1,5 @@
 from __future__ import division
-import os, sys
+import os, sys, warnings
 
 import numpy as np
 
@@ -15,6 +15,22 @@ import random
 
 D2R = np.pi/180
 R2D = 180/np.pi
+
+global hashed_values, max_hash
+hashed_values = {}
+max_hash = 0
+
+def calc_hash(mystr):
+    global hashed_values, max_hash
+
+    # XXX fixme: should switch to a real hash-generation algorithm
+
+    hash_int = hashed_values.get(mystr,None)
+    if hash_int is None:
+        hash_int = max_hash
+        max_hash += 1
+        hashed_values[mystr] = hash_int
+    return hash_int
 
 def monte_carlo_resample_hist( x, x_edges,
                                N_resamples = 100,
@@ -141,6 +157,10 @@ if define_classes:
             self._stim_xml = self._fanout.get_stimulus_for_timestamp(timestamp_string=file_timestamp)
         def __repr__(self):
             return 'FlyId("%s")'%self._kalman_filename
+        def get_hash(self):
+            mystr = repr(self)
+            hash_int = calc_hash(mystr)
+            return hash_int
         def get_fps(self):
             """return frames per second"""
             return self._fps
@@ -189,7 +209,21 @@ if define_classes:
                     result.append(kalman_rows)
             if len( dropped_obj_ids ):
                 print >> sys.stderr, 'due to short length of data, dropped obj_ids (in %s):'%data_file.filename, dropped_obj_ids
-            return result
+
+            newresult = []
+            for kr in result:
+                arrays = []
+                names = []
+                for name in kr.dtype.names:
+                    arrays.append( kr[name] )
+                    names.append( name )
+                # Add extra field that fuse_obj_ids also adds
+                # All true:
+                orig_data_present = np.ones( kr['x'].shape, dtype=bool )
+                arrays.append( orig_data_present )
+                names.append( 'orig_data_present' )
+                newresult.append( np.rec.fromarrays( arrays, names=names ) )
+            return newresult
 
     class OverriddenFlyId(FlyId):
         def __init__(self,kalman_filename,forced_stim_xml):
@@ -239,10 +273,14 @@ def make_giant_arrays( treatment, graphical_debug=False ):
     for flyid in treatment:
         try:
             list_of_kalman_rows = flyid.get_list_of_kalman_rows() # one for each obj_id
+            flyid_hash = [ flyid.get_hash()*np.ones(kr.shape,dtype=int)
+                           for kr in list_of_kalman_rows ]
             list_of_rcoords = [ posts.calc_retinal_coord_array( kr,
                                                                 flyid.get_fps(),
-                                                                flyid.get_stim_xml() ) \
-                                for kr in list_of_kalman_rows ]
+                                                                flyid.get_stim_xml(),
+                                                                extra_columns=[('flyid_hash',tfh)],
+                                                                ) \
+                                for (kr,tfh) in zip(list_of_kalman_rows,flyid_hash) ]
             rcoords.extend( list_of_rcoords )
             saccades.extend( [ core_analysis.detect_saccades( kr,
                                                               frames_per_second=flyid.get_fps() )
@@ -256,8 +294,8 @@ def make_giant_arrays( treatment, graphical_debug=False ):
             # verify the above works as intended
             saccade_results = saccades[-1]
             for i,(search_frame, sX) in enumerate(zip(saccade_results['frames'],
-                                                    saccade_results['X'],
-                                                    )):
+                                                      saccade_results['X'],
+                                                      )):
                 print
                 print 'search_frame',search_frame
                 print 'sX',sX
@@ -291,8 +329,10 @@ def make_giant_arrays( treatment, graphical_debug=False ):
                 ax2.plot( closest_dist.compressed(), angle_of_closest_dist.compressed(),
                           '.', color=line.get_color() )
                 ax3.plot( this_rcoords['x'], this_rcoords['y'], '.', label='obj %d'%obj_id, color=line.get_color() )
-            stim_xml.plot_stim( ax1, projection=xml_stimulus.SimpleOrthographicXYProjection())
-            stim_xml.plot_stim( ax3, projection=xml_stimulus.SimpleOrthographicXYProjection())
+            stim_xml.plot_stim( ax1,
+                                projection=xml_stimulus.SimpleOrthographicXYProjection())
+            stim_xml.plot_stim( ax3,
+                                projection=xml_stimulus.SimpleOrthographicXYProjection())
             ax1.legend()
             ax3.legend()
             ax1.set_aspect('equal')
@@ -301,18 +341,20 @@ def make_giant_arrays( treatment, graphical_debug=False ):
             plt.show()
 
     results_recarray = np.concatenate( rcoords )
+    flyid_hash = np.concatenate( flyid_hash )
 
     # find row idx for each saccade in saccades
     offset = 0
     all_saccade_idxs = []
-    for i in range(len(saccades)):
-        assert len(all_kalman_rows[i]) == len(rcoords[i])
-        saccade_results = saccades[i]
+    for i in range(len(saccades)): # iterate over per-fly results
+        assert len(all_kalman_rows[i]) == len(rcoords[i]) # double check assumption
+        saccade_results = saccades[i] # get per-fly saccade_idxs
         # XXX fixme: speedup with searchsorted type thing
         search_frames = saccade_results['frames']
         for j,search_frame in enumerate(search_frames):
+            # find each row corresponding to a saccade
             cond = all_kalman_rows[i]['frame'] == search_frame
-            assert np.sum(cond)==1
+            assert np.sum(cond)==1 # there should be only one
             found_idx = np.nonzero(cond)[0]
             all_saccade_idxs.append( found_idx + offset )
             if 0:
@@ -322,11 +364,15 @@ def make_giant_arrays( treatment, graphical_debug=False ):
                 print saccade_results['X'][j]
         offset += len( all_kalman_rows[i] )
     all_saccade_idxs = np.array( all_saccade_idxs )
+    print 'orig all_saccade_idxs.shape',all_saccade_idxs.shape
     del rcoords
     return results_recarray, all_saccade_idxs
 
 import matplotlib as mpl
 import matplotlib.colors as colors
+import matplotlib.cm as cm
+import matplotlib.mlab as mlab
+
 LUTSIZE = mpl.rcParams['image.lut']
 # x y0 y1 tuples
 _magenta_green_data = {'red':   ((0., 1., 1.),(1.0, 0.0, 0.0)),
@@ -355,7 +401,6 @@ white_gray = colors.LinearSegmentedColormap('white_gray', _white_gray_data, LUTS
 def do_turning_plots( orig_subplot, treatment, condition_name):
     subplot = {}
     subplot.update(orig_subplot)
-    #results_recarray, all_saccade_idxs = make_giant_arrays( treatment )
     results_recarray, all_saccade_idxs = treatment.get_giant_arrays()
     closest_dist = np.ma.array(results_recarray[ 'closest_dist' ],mask=results_recarray[ 'closest_dist_mask' ])
     closest_dist_speed = np.ma.array(results_recarray[ 'closest_dist_speed' ],mask=results_recarray[ 'closest_dist_mask' ])
@@ -524,20 +569,66 @@ def do_turning_plots( orig_subplot, treatment, condition_name):
 
         bin_edges = np.linspace(0,.6,32)
         bin_centers = (bin_edges[:-1] + bin_edges[1:])/2
-        bin_assignments = bin_edges.searchsorted( closest_dist, side='left')
-        result = []
-        set1 = set(map(int,all_saccade_idxs))
+        if 1:
+            # calculate per-fly results
+            all_flyid_hash = results_recarray['flyid_hash']
+            all_flyid_hash = np.unique1d(all_flyid_hash)
 
-        for bin_number in range(1,len(bin_edges)):
-            idxs_in_this_bin = np.nonzero(bin_assignments==bin_number)[0]
-            N_observations = len(idxs_in_this_bin)
+            bin_assignments = bin_edges.searchsorted( closest_dist, side='left')
+            result = []
+            set1 = set(map(int,all_saccade_idxs))
+            for bin_number in range(1,len(bin_edges)):
+                cond_in_this_bin = bin_assignments==bin_number
+                this_bin_result = []
+                # per-fly means and then std of those means
+                for flyid_hash in all_flyid_hash:
+                    this_fly_cond = results_recarray['flyid_hash']==flyid_hash
+                    this_fly_in_this_bin_cond = cond_in_this_bin & this_fly_cond
+
+                    N_observations = np.ma.sum(this_fly_in_this_bin_cond)
+                    this_fly_in_this_bin_idx = np.nonzero(this_fly_in_this_bin_cond)[0]
+
+                    set2 = set(map(int,this_fly_in_this_bin_idx))
+                    N_saccades = len( set1.intersection( set2) )
+                    if N_observations > 0:
+                        rate = (N_saccades/float(N_observations))*fps
+                    else:
+                        rate = np.nan
+                    this_bin_result.append( rate )
+                this_bin_result = np.array(this_bin_result)
+                result.append(this_bin_result)
+            result = np.array(result)
+            result = np.ma.masked_where( np.isnan(result), result )
+
+            # mean and std across per-fly result
+            result_mean = result.mean(axis=1)
+            result_std = result.std(axis=1)
+
+            result_N = np.sum(~np.ma.getmaskarray(result),axis=1)
+            line,=ax.plot( bin_centers*100, result_mean, lw=3, label=condition_name )
+            if 0:
+                ax.plot( bin_centers*100, result_mean-result_std, lw=1,color=line.get_color())
+                ax.plot( bin_centers*100, result_mean+result_std, lw=1,color=line.get_color())
+            else:
+                xs,ys=mlab.poly_between( bin_centers*100, result_mean-result_std, result_mean+result_std )
+                ax.fill(xs,ys,facecolor=line.get_color(),edgecolor='none',alpha=0.4)
+
+        else:
+            # accumulate across all flies
+            bin_assignments = bin_edges.searchsorted( closest_dist, side='left')
+            result = []
+            set1 = set(map(int,all_saccade_idxs))
+
+            for bin_number in range(1,len(bin_edges)):
+                idxs_in_this_bin = np.nonzero(bin_assignments==bin_number)[0]
+                N_observations = len(idxs_in_this_bin)
 
 
-            set2 = set(map(int,idxs_in_this_bin))
-            N_saccades = len( set1.intersection( set2) )
-            rate = (N_saccades/float(N_observations))*fps
-            result.append(rate)
-        ax.plot( bin_centers*100, result, lw=3, label=condition_name )
+                set2 = set(map(int,idxs_in_this_bin))
+                N_saccades = len( set1.intersection( set2) )
+                rate = (N_saccades/float(N_observations))*fps
+                result.append(rate)
+            ax.plot( bin_centers*100, result, lw=3, label=condition_name )
 
         ax.set_xlabel('post distance (cm)')
         ax.set_ylabel('saccade rate (/s)')
@@ -550,19 +641,53 @@ def do_turning_plots( orig_subplot, treatment, condition_name):
 
         bin_edges = np.linspace(0,.6,32)
         bin_centers = (bin_edges[:-1] + bin_edges[1:])/2
-        bin_assignments = bin_edges.searchsorted( closest_dist, side='left')
+        if 1:
+            all_flyid_hash = results_recarray['flyid_hash']
+            all_flyid_hash = np.unique1d(all_flyid_hash)
 
-        result_mean = []
-        result_median = []
-        for bin_number in range(1,len(bin_edges)):
-            idxs_in_this_bin = np.nonzero(bin_assignments==bin_number)[0]
-            this_horiz_vel = results_recarray['vel_horiz'][idxs_in_this_bin]
-            this_horiz_vel = np.ma.masked_where( np.isnan(this_horiz_vel), this_horiz_vel ).compressed()
+            bin_assignments = bin_edges.searchsorted( closest_dist, side='left')
+            result = []
+            for bin_number in range(1,len(bin_edges)):
+                cond_in_this_bin = bin_assignments==bin_number
+                this_bin_result = []
+                # per-fly means and then std of those means
+                for flyid_hash in all_flyid_hash:
+                    this_fly_cond = results_recarray['flyid_hash']==flyid_hash
+                    this_fly_in_this_bin_cond = cond_in_this_bin & this_fly_cond
+                    this_horiz_vel = results_recarray['vel_horiz'][this_fly_in_this_bin_cond]
+                    this_horiz_vel = np.ma.masked_where( np.isnan(this_horiz_vel), this_horiz_vel ).compressed()
+                    this_bin_result.append( np.mean( this_horiz_vel ))
+                this_bin_result = np.array(this_bin_result)
+                result.append(this_bin_result)
+            result = np.array(result)
+            result = np.ma.masked_where( np.isnan(result), result )
+            # mean and std across per-fly result
+            result_mean = result.mean(axis=1)
+            result_std = result.std(axis=1)
 
-            result_mean.append( np.mean( this_horiz_vel ))
-            result_median.append( np.median( this_horiz_vel ))
-        ax.plot( bin_centers*100, result_mean, lw=3, label=('mean '+condition_name ) )
-        #ax.plot( bin_centers, result_median, label=('median '+condition_name ) )
+            result_N = np.sum(~np.ma.getmaskarray(result),axis=1)
+            line,=ax.plot( bin_centers*100, result_mean, lw=3, label=condition_name )
+            if 0:
+                ax.plot( bin_centers*100, result_mean-result_std, lw=1,color=line.get_color())
+                ax.plot( bin_centers*100, result_mean+result_std, lw=1,color=line.get_color())
+            else:
+                xs,ys=mlab.poly_between( bin_centers*100, result_mean-result_std, result_mean+result_std )
+                ax.fill(xs,ys,facecolor=line.get_color(),edgecolor='none',alpha=0.4)
+
+        else:
+            bin_assignments = bin_edges.searchsorted( closest_dist, side='left')
+
+            result_mean = []
+            result_median = []
+            for bin_number in range(1,len(bin_edges)):
+                idxs_in_this_bin = np.nonzero(bin_assignments==bin_number)[0]
+                this_horiz_vel = results_recarray['vel_horiz'][idxs_in_this_bin]
+                this_horiz_vel = np.ma.masked_where( np.isnan(this_horiz_vel), this_horiz_vel ).compressed()
+
+                result_mean.append( np.mean( this_horiz_vel ))
+                result_median.append( np.median( this_horiz_vel ))
+            ax.plot( bin_centers*100, result_mean, lw=3, label=('mean '+condition_name ) )
+            #ax.plot( bin_centers, result_median, label=('median '+condition_name ) )
 
         ax.set_xlabel('post distance (cm)')
         ax.set_ylabel('mean horizontal velocity (m/s)')
@@ -719,9 +844,10 @@ def do_turning_plots( orig_subplot, treatment, condition_name):
         cond = (z < 0.4)
 
         ax.hexbin(x[cond],y[cond], C=C[cond]*R2D,
-                  vmin=0*D2R, vmax=650,
+                  vmin=0*D2R, vmax=500,
                   gridsize=25,
                   #cmap=white_gray,
+                  cmap=cm.hot,
                   )
         if hasattr( treatment, 'get_non_overriden_item' ):
             # don't draw posts unless they were really there
@@ -732,7 +858,14 @@ def do_turning_plots( orig_subplot, treatment, condition_name):
         # equality checking not implemented...
         #for i in range(1,len(treatment)):
         #    assert stim_xml == treatment[i].get_stim_xml()
-        stim_xml.plot_stim( ax, projection=xml_stimulus.SimpleOrthographicXYProjection())
+        post_colors = {}
+        for post_num in range(4):
+            post_colors[post_num]='b'
+        stim_xml.plot_stim( ax,
+                            projection=xml_stimulus.SimpleOrthographicXYProjection(),
+                            draw_post_as_circle=True,
+                            post_colors=post_colors,
+                            )
         ax.set_aspect('equal')
 
     key='top_view_horiz_vel'
@@ -747,9 +880,10 @@ def do_turning_plots( orig_subplot, treatment, condition_name):
         cond = (z < 0.4)
 
         ax.hexbin(x[cond],y[cond], C=C[cond],
-                  vmin=0*D2R, vmax=0.7,
+                  vmin=0*D2R, vmax=0.5,
                   gridsize=25,
                   #cmap=white_gray,
+                  cmap=cm.hot,
                   )
         if hasattr( treatment, 'get_non_overriden_item' ):
             # don't draw posts unless they were really there
@@ -760,13 +894,81 @@ def do_turning_plots( orig_subplot, treatment, condition_name):
         # equality checking not implemented...
         #for i in range(1,len(treatment)):
         #    assert stim_xml == treatment[i].get_stim_xml()
-        stim_xml.plot_stim( ax, projection=xml_stimulus.SimpleOrthographicXYProjection())
+        post_colors = {}
+        for post_num in range(4):
+            post_colors[post_num]='b'
+        stim_xml.plot_stim( ax,
+                            projection=xml_stimulus.SimpleOrthographicXYProjection(),
+                            draw_post_as_circle=True,
+                            post_colors=post_colors,
+                            )
         ax.set_aspect('equal')
 
     n_pts = len( closest_dist.filled() )
     print '%s: %d data points (%.1f seconds at 60 fps)'%(condition_name, n_pts, n_pts/60.0 )
     if len(subplot.keys()):
         warnings.warn('unprocessed subplots: %s'%str(subplot.keys()))
+    return
+
+def do_segment_and_identify_plots( orig_subplot, treatment, condition_name):
+    subplot = {}
+    subplot.update(orig_subplot)
+
+    results_recarray, all_saccade_idxs = treatment.get_giant_arrays()
+    closest_dist = np.ma.array(results_recarray[ 'closest_dist' ],mask=results_recarray[ 'closest_dist_mask' ])
+    closest_dist_speed = np.ma.array(results_recarray[ 'closest_dist_speed' ],mask=results_recarray[ 'closest_dist_mask' ])
+    angle_of_closest_dist = np.ma.array(results_recarray[ 'angle_of_closest_dist' ],mask=results_recarray[ 'closest_dist_mask' ])
+    #approaching = abs(post_angle) < np.pi # heading with 90 degrees of post center
+
+
+    # segment each fly by saccades
+    all_flyid_hash = results_recarray['flyid_hash']
+    all_flyid_hash = np.unique1d(all_flyid_hash)
+    for flyid_hash in all_flyid_hash:
+        this_fly_cond = results_recarray['flyid_hash']==flyid_hash
+        this_fly_idxs = np.nonzero(this_fly_cond)[0]
+        print 'this_fly_idxs.shape, all_saccade_idxs.shape',this_fly_idxs.shape, all_saccade_idxs.shape
+        this_fly_saccade_idxs = np.intersect1d( this_fly_idxs, all_saccade_idxs[:,0])
+        assert np.allclose( this_fly_idxs[1:]-this_fly_idxs[:-1], 1 ) # contiguous
+        this_fly_start_idx = this_fly_idxs[0]
+        this_fly_stop_idx = this_fly_idxs[-1]+1
+
+        this_fly_rows = results_recarray[this_fly_start_idx:this_fly_stop_idx]
+        this_fly_saccade_idxs -= this_fly_start_idx
+
+        curr_start_idx = 0
+        graphical_debug = True
+        if graphical_debug:
+            #debug
+            fig = plt.figure()
+            global hashed_values
+            for key,hash_int in hashed_values.iteritems():
+                if hash_int == flyid_hash:
+                    fig.text(0,0,key)
+
+        for curr_stop_idx in this_fly_saccade_idxs:
+            this_saccade_rows = this_fly_rows[curr_start_idx:curr_stop_idx]
+            if graphical_debug:
+                # debug
+                plt.plot( this_saccade_rows['frame'],
+                          this_saccade_rows['x']
+                          )
+
+            curr_start_idx = curr_stop_idx
+        if graphical_debug:
+            #debug
+            plt.show()
+            #sys.exit(0)
+
+    key = 'x'
+    if key in subplot:
+        ax = subplot[key]
+        del subplot[key]
+        # XXX add
+
+    if len(subplot.keys()):
+        warnings.warn('unprocessed subplots: %s'%str(subplot.keys()))
+    return
 
 try:
     single_post_experiments
@@ -870,8 +1072,6 @@ if load_data:
 if __name__=='__main__':
 
     if 1:
-        # quiver plots of turning
-
         import matplotlib.pyplot as plt
 
         #comparison_name = 'post_vs_virtualpost'
@@ -879,6 +1079,13 @@ if __name__=='__main__':
         comparison = comparisons[comparison_name]
         condition_names = comparison.keys()
         condition_names.sort()
+
+        if 1:
+            fig = plt.figure()
+            subplot={}
+            subplot['x'] = fig.add_subplot(1,1,1)
+            for row, condition_name in enumerate(condition_names):
+                do_segment_and_identify_plots( subplot, comparison[condition_name], condition_name )
 
         if 0:
             n_rows = 1
@@ -928,7 +1135,8 @@ if __name__=='__main__':
             subplot['post_angle_at_dist 20 40'].legend()
             subplot['post_angle_at_dist 40 60'].legend()
 
-        if 1:
+        if 0:
+            # top view abs angular velocity
             n_rows = len(condition_names)
             n_cols = 1
 
@@ -950,7 +1158,7 @@ if __name__=='__main__':
 
             collection = ax.collections[0]
             cax = fig.add_axes( (0.85, 0.05, .05, .9))
-            cbar = fig.colorbar(collection, cax=cax, ax=ax )
+            cbar = fig.colorbar(collection, cax=cax, ax=ax, ticks=[0,250,500])#,750])
 
             import pylab
             pylab.subplots_adjust(left=0.12, right=.88)
@@ -961,7 +1169,8 @@ if __name__=='__main__':
                 fig.savefig(fname)#,dpi=55)
                 print 'saved',fname
 
-        if 1:
+        if 0:
+            # top view horiz velocity
             n_rows = len(condition_names)
             n_cols = 1
 
@@ -983,7 +1192,7 @@ if __name__=='__main__':
 
             collection = ax.collections[0]
             cax = fig.add_axes( (0.85, 0.05, .05, .9))
-            cbar = fig.colorbar(collection, cax=cax, ax=ax )
+            cbar = fig.colorbar(collection, cax=cax, ax=ax, ticks=[0,.25,.5] )
 
             import pylab
             pylab.subplots_adjust(left=0.12, right=.88)
@@ -994,7 +1203,7 @@ if __name__=='__main__':
                 fig.savefig(fname)#,dpi=55)
                 print 'saved',fname
 
-        if 0:
+        if 0: # saccade rate vs distance & horiz_vel vs distance
             # maybe nice to put posts.py static angle plot in here?
             n_rows = 2
             n_cols = 1
@@ -1081,8 +1290,10 @@ if __name__=='__main__':
 
 
         if 0:
-            PRETTY_NONINTERACTIVE=False
-            #PRETTY_NONINTERACTIVE=True # make pretty, but nice interactive features (sharex) disabled
+            # distance dependent turning functions
+
+            #PRETTY_NONINTERACTIVE=False
+            PRETTY_NONINTERACTIVE=True # make pretty, but nice interactive features (sharex) disabled
             #for delay_msec in [0,50,100,150]:
             for delay_msec in [0]:
                 plot_p_values = False
@@ -1188,9 +1399,7 @@ if __name__=='__main__':
                     for ext in ['.png']:#,'.pdf','.svg']:
                     #for ext in ['.png','.pdf','.svg']:
                         fname = 'turn_functions'+ext
-                        fig.savefig(fname)#,dpi=55)
+                        fig.savefig(fname,dpi=55)
                         print 'saved',fname
-        if len(subplot.keys()):
-            warnings.warn('unplotted keys: %s'%str(subplot.keys()))
         plt.show()
 

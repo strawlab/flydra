@@ -20,6 +20,19 @@ import flydra.geom as geom
 
 R2D = 180/numpy.pi
 
+if 1:
+    # http://jfly.iam.u-tokyo.ac.jp/color/index.html
+    post_id_label2color = {None:(0,0,0,1), # black
+
+                           0:(.8,.4,0,1), # vermillion ( very right )
+                           1:(.35,.7,.9,1), # sky blue ( left )
+                           2:(0,.6,.6,1), # bluish green (forward)
+                           3:(.95,.9,.25,1), # yellow ( hover )
+                           4:(0,.45,.7,1), # blue ( very left )
+                           5:(.8,.6,.7,1), # reddish purple (backward)
+                           6:(.9,.6,0,1), # orange (right )
+                           }
+
 def calc_circle_tangent_points(radius,xy):
     """return endpoints of circle at origin as seen from points xy
 
@@ -241,6 +254,7 @@ def read_files_and_fuse_ids(options=None):
 
 def calc_retinal_coord_array(kalman_rows,fps,stim_xml,
                              angular_velocity_method='linear_velocity', # tangent to direction of travel
+                             extra_columns=None, # list of tuples of ('name',ndarray)
                              ):
     """return recarray with a row for each row of kalman_rows, but processed to include stimulus-relative columns"""
     orig_row_length = len(kalman_rows)
@@ -249,8 +263,19 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml,
 
     frame = kalman_rows['frame']
 
+    if extra_columns is not None:
+        for (name, ndarray) in extra_columns:
+            if len(ndarray) != len(frame):
+                raise ValueError('ndarray is not length of kalman_rows')
+            result_col_arrays.append( ndarray )
+            result_col_names.append( name )
+
     result_col_arrays.append( frame )
     result_col_names.append( 'frame' )
+
+    result_col_arrays.append( kalman_rows['orig_data_present'] )
+    result_col_names.append( 'orig_data_present' )
+
     X = numpy.array( [kalman_rows['x'],
                       kalman_rows['y'],
                       kalman_rows['z']]).T
@@ -468,7 +493,7 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml,
     assert final_row_length==orig_row_length
     return result
 
-def plot_angle_dist(subplot=None,results_recarray=None,fps=None):
+def plot_angle_dist(subplot=None,results_recarray=None,fps=None,saccade_results=None):
 
     def plot_coords(arr):
         arr = numpy.array(arr,copy=True) # don't modify original
@@ -484,9 +509,12 @@ def plot_angle_dist(subplot=None,results_recarray=None,fps=None):
 
     post_num = 0
     while True: # loop over all posts, we don't know how many yet
+
         post_name = 'post%d'%post_num
         if (post_name+'_bad_cond') not in results_recarray.dtype.fields:
             break # no more posts
+        this_post_color = post_id_label2color[post_num]
+
         post_num += 1
 
         bad_cond = results_recarray[ post_name+'_bad_cond']
@@ -511,26 +539,29 @@ def plot_angle_dist(subplot=None,results_recarray=None,fps=None):
         pt_d_fly_retina_dist = results_recarray[ post_name+'_pt_d_fly_retina_dist']
         pt_d_fly_retina_dist = np.ma.masked_where( bad_cond, pt_d_fly_retina_dist )
 
-        time_seconds = numpy.arange( len(pt_a_fly_retina) )/float(fps)
+        #time_seconds = numpy.arange( len(pt_a_fly_retina) )/float(fps)
+        time_seconds = (results_recarray['frame']-results_recarray['frame'][0])/float(fps)
 
+        orig_post_kwargs = dict( marker='.',
+                                 ms=2.5,
+                                 linestyle='',
+                                 color=this_post_color)
         if 'angle' in subplot:
             # plot left and right edges of post
             ax = subplot['angle']
-            line, = ax.plot( time_seconds, plot_coords(pt_a_fly_retina), '.' )
-            ax.plot( time_seconds, plot_coords(pt_b_fly_retina), '.', color = line.get_color() )
-            ax.grid(True)
+            line, = ax.plot( time_seconds, plot_coords(pt_a_fly_retina), **orig_post_kwargs)
+            ax.plot( time_seconds, plot_coords(pt_b_fly_retina), **orig_post_kwargs)
 
         if 'dist' in subplot:
             # distance to closest point of post
             ax = subplot['dist']
             #line, = ax.plot( time_seconds, pt_c_fly_retina_dist*100.0, '.' )
-            ax.plot( time_seconds, pt_c_fly_retina_dist*100.0, '.', color = line.get_color() )
-            ax.grid(True)
+            ax.plot( time_seconds, pt_c_fly_retina_dist*100.0,**orig_post_kwargs)
 
         if 'dist_vs_angle' in subplot:
             ax = subplot['dist_vs_angle']
             # relative to closest point of post
-            line, = ax.plot( pt_c_fly_retina_dist, plot_coords(pt_c_fly_retina), '.' )
+            line, = ax.plot( pt_c_fly_retina_dist, plot_coords(pt_c_fly_retina), '.',color=this_post_color)
 
         if 'dist_vs_angle_hist' in subplot:
             # relative to closest point of post
@@ -577,16 +608,6 @@ def plot_angle_dist(subplot=None,results_recarray=None,fps=None):
         ax.set_xlabel('distance (cm)')
         ax.set_ylabel('retinal size (deg)')
 
-    if 'angle' in subplot:
-        ax = subplot['angle']
-        ax.set_xlabel('time (s)')
-        ax.set_ylabel('retinal position (deg)')
-
-    if 'dist' in subplot:
-        ax = subplot['dist']
-        ax.set_xlabel('time (s)')
-        ax.set_ylabel('distance (m)')
-
     if 'dist_vs_angle' in subplot:
         ax = subplot['dist_vs_angle']
         ax.set_xlabel('distance (m)')
@@ -619,6 +640,38 @@ def plot_angle_dist(subplot=None,results_recarray=None,fps=None):
     closest_dist = np.ma.array(results_recarray[ 'closest_dist' ],mask=results_recarray[ 'closest_dist_mask' ])
     angle_of_closest_dist = np.ma.array(results_recarray[ 'angle_of_closest_dist' ],mask=results_recarray[ 'closest_dist_mask' ])
 
+    def fill_saccades(ax):
+        for saccade_frame in saccade_results['frames']:
+            t = (saccade_frame-results_recarray['frame'][0])/float(fps)
+            t0 = t-0.01
+            t1 = t+0.01
+            ax.axvspan( t0, t1, facecolor='0.5', alpha=0.5, edgecolor='none' )
+
+    closest_kwargs = dict(marker='.',linestyle='',color='k',ms = 8,zorder=-10)
+    #closest_zorder = 10
+    if 'angle' in subplot:
+        ax = subplot['angle']
+        if 1:
+            # plot closest post
+            line, = ax.plot( time_seconds, plot_coords(angle_of_closest_dist), **closest_kwargs)
+            #line.set_zorder(closest_zorder)
+        fill_saccades(ax)
+        for fake_grid_line in [-180,-90,0,90,180]:
+            ax.axhline( fake_grid_line, linestyle='--', color='0.8', alpha=0.5, zorder=-10)
+
+        ax.set_xlabel('time (s)')
+        ax.set_ylabel('post angle (deg)')
+
+    if 'dist' in subplot:
+        ax = subplot['dist']
+        if 1:
+            # plot closest post
+            line, = ax.plot( time_seconds, closest_dist*100.0, **closest_kwargs)
+            #line.set_zorder(closest_zorder)
+        fill_saccades(ax)
+        ax.set_xlabel('time (s)')
+        ax.set_ylabel('distance (cm)')
+
     if 'closest_dist_vs_angle' in subplot:
         ax = subplot['closest_dist_vs_angle']
         ax.plot( closest_dist, plot_coords(angle_of_closest_dist), '.')
@@ -639,6 +692,49 @@ def plot_angle_dist(subplot=None,results_recarray=None,fps=None):
         ax.set_xlabel('time (s)')
         ax.set_ylabel('z (m)')
 
+    if 'angular_velocity' in subplot:
+        ax = subplot['angular_velocity']
+
+        horiz_ang_vel = results_recarray[ 'horizontal_angular_velocity' ]
+
+        time_seconds = numpy.arange( len(horiz_ang_vel) )/float(fps)
+
+        ax.plot( time_seconds, horiz_ang_vel*R2D, '-' )
+        fill_saccades(ax)
+        for fake_grid_line in [-1000,0,1000]:
+            ax.axhline( fake_grid_line, linestyle='--', color='0.8', alpha=0.5, zorder=-10)
+
+        ax.set_xlabel('time (s)')
+        ax.set_ylabel('angular velocity (deg/s)')
+
+        if 0:
+            frame = results_recarray[ 'frame' ]
+            prev_idx=0
+            prev_mid_idx = 0
+            sfs = list(saccade_results['frames']) # saccade frames
+            sfs.sort()
+            for saccde_num,saccade_frame in enumerate(sfs):
+                t = (saccade_frame-frame[0])/float(fps)
+                idx = np.nonzero(frame==saccade_frame)[0]
+
+                if 1:
+                    mid_idx = (idx+prev_idx)//2
+                    start_idx = prev_mid_idx
+                    stop_idx = mid_idx
+                    prev_mid_idx = mid_idx
+                else:
+                    start_idx = prev_idx
+                    stop_idx = idx
+
+                angle_turned = np.sum( (horiz_ang_vel*R2D/fps)[start_idx:stop_idx] )
+
+                # actually, this measures the angle of the previous
+                # saccade, not the time point printed ehre...
+
+                print 'saccade %d (time %.2f) - turned since last saccade: %.1f deg'%(
+                    saccde_num, t, angle_turned)
+                prev_idx = idx
+
 def doit(options=None):
     if options.obj_only is not None:
         raise ValueError('obj_only is not a valid option for this function')
@@ -647,23 +743,29 @@ def doit(options=None):
     results_recarray = calc_retinal_coord_array(kalman_rows, fps, stim_xml)
     #import matplotlib
     #matplotlib.use('GTKAgg')
+    import matplotlib.pyplot as plt
     import pylab
 
+    PRETTY_NOTINTERACTIVE=True
     subplot={}
     if 1:
         fig1 = pylab.figure(figsize=(8,6))
         fig1.text(0,0, options.kalman_filename )
-        ax=fig1.add_subplot(2,1,1)
+        ax=fig1.add_subplot(3,1,1)
         subplot['angle']=ax
         post_angle_axes = ax
+        if PRETTY_NOTINTERACTIVE:
+            ax = None # don't share axis -- disables plotting tick labels on all
 
-        ax=fig1.add_subplot(2,1,2,sharex=ax)
+        ax=fig1.add_subplot(3,1,2,sharex=ax)
         subplot['dist']=ax
         post_dist_axes = ax
+        if PRETTY_NOTINTERACTIVE:
+            ax = None # don't share axis -- disables plotting tick labels on all
 
-
-        ## ax=fig.add_subplot(3,1,3,sharex=ax)
-        ## subplot['z']=ax
+        ax=fig1.add_subplot(3,1,3,sharex=ax)
+        subplot['angular_velocity']=ax
+        ang_vel_axes = ax
 
     if 0:
         fig2 = pylab.figure()
@@ -686,18 +788,32 @@ def doit(options=None):
         subplot['closest_dist_vs_angle']=ax
         ax.set_title('closest post only')
 
-    plot_angle_dist(subplot=subplot,results_recarray=results_recarray,fps=fps)
+    plot_angle_dist(subplot=subplot,
+                    results_recarray=results_recarray,
+                    fps=fps,
+                    saccade_results=saccade_results)
 
     if 1:
+        this_interesting_time = (49.5,56.5) # used with DATA20080619_174254.kh5
         ax = post_angle_axes
+        ax.set_xlim(this_interesting_time)
         ax.set_yticks([-180,-90,0,90,180])
+        ax.set_xticklabels([])
+        ax.set_xlabel('')
 
         ax = post_dist_axes
-        ax.set_xlim((49.5,56.5))
+        ax.set_xlim(this_interesting_time)
         ax.set_ylim((0,80))
-        for ext in ['.png']:
+        ax.set_yticks([0,40,80])
+        ax.set_xticklabels([])
+        ax.set_xlabel('')
+
+        ax = ang_vel_axes
+        ax.set_xlim(this_interesting_time)
+        ax.set_ylim((-2500,2500))
+        for ext in ['.png','.svg']:
             fname = 'post_angle_over_time'+ext
-            fig1.savefig(fname)#,dpi=55)
+            fig1.savefig(fname,dpi=200)
             print 'saved',fname
 
 
@@ -721,6 +837,42 @@ def doit(options=None):
         plot_angle_dist(subplot=subplot,results_recarray=results_recarray, fps=fps, bad=True)
 
         subplot['dist_vs_angle'].set_title('bad')
+
+    if 1:
+        frame = results_recarray['frame']
+        time = (frame-frame[0])/fps
+        cond = (this_interesting_time[0] <= time) & (time <= this_interesting_time[1])
+
+        fig = plt.figure()
+        ax1 = fig.add_subplot(1,1,1)
+
+        orig_data_present = results_recarray['orig_data_present']
+        x = results_recarray['x']
+        y = results_recarray['y']
+        if 0:
+            ax1.plot( x[orig_data_present],y[orig_data_present],'.',color='0.5',ms=0.8)
+        else:
+            ax1.plot( x,y,'.',color='0.5',ms=0.8)
+
+        x = results_recarray['x'][cond]
+        y = results_recarray['y'][cond]
+        ax1.plot( x,y,'k.',ms=2)
+        #ax1.text( x[0],y[0], 'start')
+        stim_xml.plot_stim( ax1,
+                            projection=xml_stimulus.SimpleOrthographicXYProjection(),
+                            post_colors=post_id_label2color,
+                            draw_post_as_circle=True,
+                            #show_post_num=True,
+                            )
+        ax1.set_frame_on(False)
+        ax1.set_aspect('equal')
+        ax1.set_xticks([])
+        ax1.set_yticks([])
+
+        for ext in ['.png','.svg']:
+            fname = 'post_angle_over_time_top_view'+ext
+            fig.savefig(fname,dpi=200)
+            print 'saved',fname
 
     #print 'show() called'
     #pylab.show()
