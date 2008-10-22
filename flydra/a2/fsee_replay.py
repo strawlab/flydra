@@ -5,7 +5,7 @@ if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
     tables.flavor.restrict_flavors(keep=['numpy'])
-import sets, os, sys, math
+import sets, os, sys, math, time
 
 import numpy
 import tables as PT
@@ -70,7 +70,7 @@ def doit(options=None):
         if exclude_obj_ids is not None:
             use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
         stim_xml = fanout.get_stimulus_for_timestamp(timestamp_string=file_timestamp)
-        stim_xml = xml_stimulus_osg.StimulusWithOSG( stim_xml.get_root() )
+        stim_xml_osg = xml_stimulus_osg.StimulusWithOSG( stim_xml.get_root() )
 
     kalman_rows = flydra.a2.flypos.fuse_obj_ids(use_obj_ids, data_file,
                                               dynamic_model_name = dynamic_model,
@@ -96,7 +96,7 @@ def doit(options=None):
     path_maker = PathMaker(P=X,Q=Q,data_dt=dt,sample_dt=dt,frame=frame)
 
 
-    with stim_xml.OSG_model_path() as osg_model_path:
+    with stim_xml_osg.OSG_model_path() as osg_model_path:
         vision = fsee.Observer.Observer(model_path=osg_model_path,
                                         #scale=1000.0, # convert model from meters to mm
                                         hz=hz,
@@ -106,7 +106,12 @@ def doit(options=None):
                                         do_luminance_adaptation=False,
                                         )
         count = 0
+        tstart = time.time()
         while count < len(X):
+            tnow = time.time()
+            if count > 0 and (count%100)==0:
+                dur = tnow-tstart
+                print '%.1f fps (%d frames in %.1f seconds)'%(count/dur,count,dur)
             count += 1
             cur_pos, cur_ori = path_maker.step()
             frame = path_maker.get_frame()
@@ -125,11 +130,12 @@ def doit(options=None):
                 fname = 'receptors%07d'%frame
                 fig = fsee.plot_utils.plot_receptor_and_emd_fig(
                     R=R,G=G,B=B,
-                    figsize=(10,5),
+                    figsize=(6.40,4.80),
                     dpi=100,
                     save_fname=fname+'.png',
                     optics=vision.get_optics(),
                     proj='stere',
+                    subplot_titles_enabled=False,
                     )
                 pylab.close(fig)
 
