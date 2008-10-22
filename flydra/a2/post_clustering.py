@@ -5,12 +5,13 @@ if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
     tables.flavor.restrict_flavors(keep=['numpy'])
-import sets, os, sys, math, time, collections
+import sets, os, sys, math, time, collections, warnings
 
 import numpy
 import numpy as np
 from optparse import OptionParser
 import scipy.integrate
+import scipy.cluster.vq
 import flydra.a2.core_analysis as core_analysis
 import flydra.a2.flypos
 import flydra.a2.analysis_options as analysis_options
@@ -18,6 +19,19 @@ import flydra.a2.analysis_options as analysis_options
 import flydra.a2.posts as posts
 import flydra.a2.xml_stimulus as xml_stimulus
 import flydra.a2.utils as utils
+
+import matplotlib
+matplotlib.rcParams['ps.useafm']=True
+matplotlib.rcParams['ps.usedistiller'] = 'None'#'xpdf'
+
+def mytake(arr, ma_idx):
+    ma_idx = np.ma.masked_where( np.isnan( ma_idx ), ma_idx ).astype(int)
+    ma_idx.set_fill_value(0)
+    idx_filled = ma_idx.filled()
+
+    result = np.asarray( arr[idx_filled,...], dtype=np.float ) # cast to float so that nan works
+    result[ ma_idx.mask ] = np.nan
+    return result
 
 def angle_diff(ang1,ang2):
     return np.mod((ang1-ang2)+np.pi,2*np.pi)-np.pi
@@ -36,6 +50,7 @@ def test_angle_diff():
 
 def get_horiz_turns( vx,vy, subsample_factor=None, frames_per_second=None):
     """return angular velocity of velocity direction in rad/sec"""
+    #warnings.filterwarnings( "error" )
     N_observations = len(vx)//subsample_factor
     horiz_turns = []
     horiz_vel_angle = np.arctan2( vy, vx )
@@ -43,10 +58,14 @@ def get_horiz_turns( vx,vy, subsample_factor=None, frames_per_second=None):
     for i in range( N_observations ):
         start = i*subsample_factor
         stop = (i+1)*subsample_factor
-        total_angular_change = np.sum(  d_angles[start:stop] )
-        whole_dt = 1.0/frames_per_second * subsample_factor
-        vel_angular_rate = total_angular_change/whole_dt
-        horiz_turns.append( vel_angular_rate ) # rad/sec
+        total_angular_change = np.ma.sum(  d_angles[start:stop] )
+        n_samples = len(np.ma.array( d_angles[start:stop] ).compressed())
+        if n_samples==0:
+            horiz_turns.append( np.nan ) # rad/sec
+        else:
+            whole_dt = 1.0/frames_per_second * n_samples
+            vel_angular_rate = total_angular_change/whole_dt
+            horiz_turns.append( vel_angular_rate ) # rad/sec
     horiz_turns = np.array( horiz_turns )
     return horiz_turns
 
@@ -108,6 +127,9 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
     post_angle_x = np.cos( post_angle ) # allow treating with linear distance operators
     post_angle_y = np.sin( post_angle )
 
+    post_angular_velocity = -get_horiz_turns( post_angle_x, post_angle_y, subsample_factor=subsample_factor,
+                                              frames_per_second=frames_per_second)
+
     vel_mag = np.sqrt(rec['vel_x']**2 + rec['vel_y']**2 + rec['vel_z']**2)
 
     def downsamp(arr):
@@ -129,26 +151,38 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
         #x = np.ma.median(x,axis=1)
         return x
 
-    A = [ horizontal_angular_velocity,
+    A = [ abs(horizontal_angular_velocity),
           downsamp(rec['vel_horiz'][start_idx:stop_idx]),
           downsamp(rec['vel_z'][start_idx:stop_idx]),
           downsamp(vel_mag[start_idx:stop_idx]),
+
           downsamp(closest_dist[start_idx:stop_idx]), # NL func or binarize on this?
           downsamp(closest_dist_speed[start_idx:stop_idx]),
           downsamp(closest_dist_accel[start_idx:stop_idx]),
           downsamp(post_angle_x),
           downsamp(post_angle_y),
+          post_angular_velocity,
           ]
-    A_names = ['angular velocity about Z axis (rad/sec)',
-               'horizontal velocity (m/sec)',
-               'vertical velocity (m/sec)',
-               'speed (m/sec)',
-               'distance to closest post (m)',
-               'speed from closest post (m/sec)',
-               'accel from closest post (m/sec/sec)',
-               'angle to post (X)',
-               'angle to post (Y)',
-               ]
+    A_names = [
+        # motor-only information
+        'absolute angular velocity about Z axis (rad/sec)',
+        'horizontal velocity (m/sec)',
+        'vertical velocity (m/sec)',
+        'speed (m/sec)',
+
+        # visual parameters
+        #   closest post
+        'distance to closest post (m)',
+        'speed from closest post (m/sec)',
+        'accel from closest post (m/sec/sec)',
+        'angle to post (X)',
+        'angle to post (Y)',
+        'angular velocity to post (rad/sec)',
+
+        #   arena wall
+
+        ]
+
     A = [np.ma.array(ai,fill_value=np.nan) for ai in A]
     A = [ai.filled() for ai in A] # convert masked entries to nan
     if 1:
@@ -274,7 +308,7 @@ if PICK:
 
 class DataAssoc(object):
     def __init__(self, all_rowlabels, trace_ids, orig_data_by_trace_id, orig_row_offset_by_trace_id):
-        self._all_rowlabels = np.ma.asarray(all_rowlabels)
+        self._all_rowlabels = np.asarray(all_rowlabels)
         assert len(self._all_rowlabels.shape) == 1 # 1d array
         self._trace_ids = np.asarray(trace_ids)
         assert len(self._trace_ids.shape)==1
@@ -429,34 +463,6 @@ def load_A_matrix( options=None ):
     if options.obj_only is not None:
         raise ValueError('obj_only is not a valid option for this function')
 
-    if 0:
-        import matplotlib.pyplot as plt
-
-        accel = -0.5
-        def dX_dt(X,t=0):
-            # X[0] = velocity
-            # X[1] = position
-            return np.array( [ accel, X[0] ] )
-
-        X0 = np.array([1, 0])
-
-        t = np.linspace(0,2,200)
-        X, infodict = scipy.integrate.odeint(dX_dt, X0, t, full_output=True)
-
-        vel = X[:,0]
-        pos = X[:,1]
-
-        fig = plt.figure()
-        ax = fig.add_subplot(3,1,1)
-        ax.plot(t,vel)
-
-        ax = fig.add_subplot(3,1,2)
-        ax.plot(t,pos)
-
-        ax = fig.add_subplot(3,1,3)
-        ax.plot( pos, vel, 'o-')
-        plt.show()
-
     kalman_rows, fps, stim_xml = posts.read_files_and_fuse_ids(options=options)
     trace_id = options.kalman_filename
     results_recarray = posts.calc_retinal_coord_array(kalman_rows, fps, stim_xml)
@@ -464,24 +470,17 @@ def load_A_matrix( options=None ):
     # pretend (for now) that we have lots of data files:
     orig_data_by_trace_id = {trace_id:results_recarray} # keep organized
 
-    ## results_recarrays = [results_recarray]
-    ## unique_trace_ids = [trace_id]
-
     all_A = []
     all_rowlabels = []
     trace_ids = []
     rowlabels_inc = 0
     orig_row_offset_by_trace_id = {}
-    #for trace_id,results_recarray in zip(unique_trace_ids,results_recarrays):
     for trace_id,results_recarray in orig_data_by_trace_id.iteritems():
-        print 'trace_id',trace_id
-
         A, rowlabels, A_names = create_analysis_array( results_recarray,
                                                        frames_per_second=fps,
                                                        skip_missing=True, # temporary
                                                        )
         all_A.append(A)
-        #rowlabels = np.ma.masked_where( np.isnan(rowlabels), rowlabels )
         rowlabels += rowlabels_inc
         all_rowlabels.append(rowlabels)
         orig_row_offset_by_trace_id[trace_id] = rowlabels_inc
@@ -490,10 +489,7 @@ def load_A_matrix( options=None ):
 
     # combine all observations into one giant array
     A=np.vstack(all_A)
-    #all_rowlabels = np.ma.hstack(all_rowlabels)
     all_rowlabels = np.hstack(all_rowlabels)
-    #print 'all_rowlabels[:140]',all_rowlabels[:140]
-    del rowlabels
 
     data = DataAssoc(all_rowlabels, trace_ids, orig_data_by_trace_id, orig_row_offset_by_trace_id)
     results = dict(A=A,
@@ -512,11 +508,42 @@ def doit(options=None):
     data=my_results['data']
     A_names=my_results['A_names']
     all_rowlabels=my_results['all_rowlabels']
+    if 0:
+        # convert from ma to nan
+        all_rowlabels_data = np.ma.getdata( all_rowlabels )
+        all_rowlabels_mask = np.ma.getmask( all_rowlabels )
+        all_rowlabels_data[all_rowlabels_mask] = np.nan
+        all_rowlabels = all_rowlabels_data
+
     orig_data_by_trace_id=my_results['orig_data_by_trace_id']
     stim_xml=my_results['stim_xml']
 
+    print 'normalizing array'
     normA,norm_info = normalize_array(A)
     U,s,Vh = np.linalg.svd(normA,full_matrices=False)
+
+
+    DO_KMEANS = True
+
+    #MOTOR_CLUSTER_ONLY = True # ignore sensory inputs when computing clusters, and don't use SVD outputs for clustering
+    MOTOR_CLUSTER_ONLY = False
+
+    if DO_KMEANS:
+        if MOTOR_CLUSTER_ONLY:
+            n_vals = 2
+            cluster_mat = normA[:,:n_vals]
+        else:
+            n_vals_to_skip = 2
+            n_vals = U.shape[1]-n_vals_to_skip
+            print 'with %d of %d top SVs'%(n_vals,U.shape[1])
+            cluster_mat = U[:,:n_vals]
+
+        n_clusters = 5
+        numpy.random.seed(3)
+        print 'doing kmeans..',
+        sys.stdout.flush()
+        code_book, cluster_labels = scipy.cluster.vq.kmeans2(cluster_mat, n_clusters, iter=2000, minit='random')
+        print 'done'
 
 
     if 1:
@@ -536,12 +563,12 @@ def doit(options=None):
         print 'Vh'
         print Vh
 
-        if 0:
+        if 1:
             # show reconstruction with reduced dimensionality
-            n_vals = 6
-            n_rows = 10
+            n_vals_show = 7
+            n_rows = 5
 
-            normA_test = np.dot( U[:n_rows, :n_vals], np.dot( np.diag(s[:n_vals]), Vh[:n_vals,:] ) )
+            normA_test = np.dot( U[:n_rows, :n_vals_show], np.dot( np.diag(s[:n_vals_show]), Vh[:n_vals_show,:] ) )
 
             norm_A_actual = normA[:n_rows]
 
@@ -549,7 +576,6 @@ def doit(options=None):
             print normA_test
             print 'norm_A_actual'
             print norm_A_actual
-            sys.exit(0)
 
     if 0:
         # plot non-contiguous timeseries of all data in A matrix and original data. skips missing data
@@ -598,22 +624,13 @@ def doit(options=None):
 
         plt.show()
 
-    if 1:
+    if 0:
         # plot timeseries of all original data and corresponding A matrix (time-contiguous)
         import matplotlib.pyplot as plt
 
         orig_col_names = ['x','y','z']
-        A_col_nums = [0,1,2,3,4,7]
+        A_col_nums = [0,1,2,3,4,7,9]
         U_col_nums = []#0,1,2]
-
-        def mytake(arr, ma_idx):
-            ma_idx = np.ma.masked_where( np.isnan( ma_idx ), ma_idx ).astype(int)
-            ma_idx.set_fill_value(0)
-            idx_filled = ma_idx.filled()
-
-            result = arr[idx_filled,...]
-            result[ ma_idx.mask ] = np.nan
-            return result
 
         accum = collections.defaultdict(list)
         for trace_id,rows in orig_data_by_trace_id.iteritems():
@@ -664,7 +681,7 @@ def doit(options=None):
 #        plt.show()
 
 
-    if 1:
+    if 0:
         # top and side views colored by attributes
 
         import matplotlib.pyplot as plt
@@ -745,7 +762,7 @@ def doit(options=None):
 
 #        plt.show()
 
-    if 1:
+    if 0:
         # plot dist vs velocity for post approach
         import matplotlib.pyplot as plt
 
@@ -899,14 +916,131 @@ def doit(options=None):
             rects3 = plt.bar(ind+2*width, Vh[2,:], width, color='g')
 
             plt.ylabel('Factor')
-            locs, labels = plt.xticks(ind+width, A_names )
-            plt.setp(labels, 'rotation', 'vertical')
+            locs, barlabels = plt.xticks(ind+width, A_names )
+            plt.setp(barlabels, 'rotation', 'vertical')
             plt.legend( (rects1[0], rects2[0], rects3[0]), ('Vh0 (s %.1f)'%s[0],
                                                             'Vh1 (s %.1f)'%s[1],
                                                             'Vh2 (s %.1f)'%s[2]) )
 
-        plt.show()
-    return A, normA, U,s,Vh
+    if DO_KMEANS:
+
+        # http://jfly.iam.u-tokyo.ac.jp/color/index.html
+        NSFlabel2color = {None:(0,0,0,1), # black
+
+                          0:(.8,.4,0,1), # vermillion ( very right )
+                          1:(.35,.7,.9,1), # sky blue ( left )
+                          2:(.9,.6,0,1), # orange (right )
+                          3:(.95,.9,.25,1), # yellow ( hover )
+                          4:(0,.45,.7,1), # blue ( very left )
+                          5:(.8,.6,.7,1), # reddish purple (backward)
+                          6:(0,.6,.6,1), # bluish green (forward)
+
+                          7:(1,0,0,1), # red
+                          8:(0,1,0,1), # green
+                          9:(0,0,1,1), # blue
+                          }
+
+        if 1:
+            # plot clusters in U space
+            n_attribs = n_vals
+            import matplotlib.pyplot as plt
+            fig=plt.figure()
+
+            ax_by_ij={}
+            for i in range(n_attribs):
+                for j in range(n_attribs):
+                    if i>=j:
+                        continue
+
+                    ax = fig.add_subplot(n_attribs-1,n_attribs-1, (i*(n_attribs-1)) + j )
+                    ax_by_ij[ (i,j) ] = ax
+
+                    for this_cluster_label, centroid in enumerate(code_book):
+                        U_picker = cluster_labels==this_cluster_label
+                        line,=ax.plot( cluster_mat[U_picker,i], cluster_mat[U_picker,j], '.', color=NSFlabel2color[this_cluster_label] )
+
+                        ax.set_aspect('equal')
+                        if MOTOR_CLUSTER_ONLY:
+                            ax.set_xlabel(A_names[i])
+                            ax.set_ylabel(A_names[j])
+                        else:
+                            ax.set_xlabel('U%d'%i)
+                            ax.set_ylabel('U%d'%j)
+
+            # plot centroid
+            for i in range(n_attribs):
+                for j in range(n_attribs):
+                    if i>=j:
+                        continue
+                    ax = ax_by_ij[ (i,j) ]
+
+                    for centroid in code_book:
+                        # centroid
+                        if i>=len(centroid) or j>=len(centroid):
+                            # can't plot centroid -- does not exist on this axis
+                            continue
+                        ax.plot( [centroid[i]], [centroid[j]], 'o',
+                                 #color='k',
+                                 mec='k',
+                                 mfc='None',)
+        if 1:
+            # plot top and side views by cluster
+            for trace_id,rows in orig_data_by_trace_id.iteritems():
+                this_rowlabels = data.get_rowlabels_for_trace_id(trace_id)
+                assert len(this_rowlabels) == len(rows)
+
+                this_cluster_mat = mytake( cluster_mat, this_rowlabels )
+                this_cluster_labels = mytake( cluster_labels, this_rowlabels )
+
+                fig=plt.figure()
+                ax = fig.add_subplot(1,1,1)
+
+                for this_cluster_label in range(n_clusters):
+                    color = NSFlabel2color[this_cluster_label]
+
+                    cond = this_cluster_labels==this_cluster_label
+                    ax.plot( rows['x'][cond], rows['y'][cond], '.', color=color )
+
+                stim_xml.plot_stim(ax, projection=xml_stimulus.SimpleOrthographicXYProjection() )
+                ax.set_xlabel('X (m)')
+                ax.set_ylabel('Y (m)')
+                ax.set_aspect('equal')
+
+        if 1:
+            # plot timeseries by cluster
+            for trace_id,rows in orig_data_by_trace_id.iteritems():
+                this_rowlabels = data.get_rowlabels_for_trace_id(trace_id)
+                assert len(this_rowlabels) == len(rows)
+
+                this_cluster_mat = mytake( cluster_mat, this_rowlabels ) # becomes as long as rows
+                this_cluster_labels = mytake( cluster_labels, this_rowlabels ) # becomes as long as rows
+                assert len(this_cluster_labels) == len(this_rowlabels)
+                fig=plt.figure()
+
+                ax = fig.add_subplot(3,1,1)
+                if 1:
+                    good_cond = ~np.isnan(this_cluster_labels)
+                    good_labels = this_cluster_labels[good_cond]
+                    c = [NSFlabel2color[i] for i in good_labels]
+                    ax.scatter( rows['frame'][good_cond], this_cluster_labels[good_cond], c=c, edgecolors='none', s=3)
+                else:
+                    ax.plot( rows['frame'], this_cluster_labels, '.', color='k' )
+
+                ax = fig.add_subplot(3,1,2,sharex=ax)
+                for this_cluster_label in range(n_clusters):
+                    color = NSFlabel2color[this_cluster_label]
+                    cond = this_cluster_labels==this_cluster_label
+                    ax.plot( rows['frame'][cond], rows['x'][cond], '.', color=color )
+                ax.set_ylabel('X (m)')
+
+                ax = fig.add_subplot(3,1,3,sharex=ax)
+                for this_cluster_label in range(n_clusters):
+                    color = NSFlabel2color[this_cluster_label]
+                    cond = this_cluster_labels==this_cluster_label
+                    ax.plot( rows['frame'][cond], rows['z'][cond], '.', color=color )
+                ax.set_ylabel('Z (m)')
+
+    plt.show()
 
 def main():
     usage = '%prog [options]'
@@ -920,8 +1054,7 @@ def main():
         parser.print_help()
         return
 
-    return doit( options=options,
-                 )
+    doit( options=options )
 
 if __name__=='__main__':
     results = main()
