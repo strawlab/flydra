@@ -154,6 +154,38 @@ array([[  1.  ,   0.  ,  -1.  ],
     results = numpy.array(results)
     return results
 
+def angle_diff(ang1,ang2):
+    return np.mod((ang1-ang2)+np.pi,2*np.pi)-np.pi
+
+def test_angle_diff():
+    ang1 = np.array([np.pi-0.001, -0.001,  0.001, np.pi+0.001])
+    ang2 = np.array([np.pi+0.001,  0.001, -0.001, np.pi-0.001])
+    actual = angle_diff(ang1,ang2)
+    expected = np.array([-0.002, -0.002, 0.002, 0.002])
+    #print 'actual',actual
+    #print 'expected',expected
+
+def get_horiz_turns( vx,vy, subsample_factor=1, frames_per_second=None):
+    """return angular velocity of velocity direction in rad/sec"""
+    #warnings.filterwarnings( "error" )
+    N_observations = len(vx)//subsample_factor
+    horiz_turns = []
+    horiz_vel_angle = np.arctan2( vy, vx )
+    d_angles = angle_diff(horiz_vel_angle[1:],horiz_vel_angle[:-1])
+    for i in range( N_observations ):
+        start = i*subsample_factor
+        stop = (i+1)*subsample_factor
+        total_angular_change = np.ma.sum(  d_angles[start:stop] )
+        n_samples = len(np.ma.array( d_angles[start:stop] ).compressed())
+        if n_samples==0:
+            horiz_turns.append( np.nan ) # rad/sec
+        else:
+            whole_dt = 1.0/frames_per_second * n_samples
+            vel_angular_rate = total_angular_change/whole_dt
+            horiz_turns.append( vel_angular_rate ) # rad/sec
+    horiz_turns = np.array( horiz_turns )
+    return horiz_turns
+
 def read_files_and_fuse_ids(options=None):
     """
 
@@ -166,6 +198,8 @@ def read_files_and_fuse_ids(options=None):
 
     ca = core_analysis.get_global_CachingAnalyzer()
 
+    if options.kalman_filename is None:
+        raise ValueError('options.kalman_filename must be specified')
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(options.kalman_filename)
 
     fps = result_utils.get_fps( data_file )
@@ -178,7 +212,7 @@ def read_files_and_fuse_ids(options=None):
         print '  for smoothing, will use dynamic model "%s"'%dynamic_model
 
     if 1:
-        file_timestamp = data_file.filename[4:19]
+        file_timestamp = os.path.split(data_file.filename)[-1][4:19]
         fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
         include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp( timestamp_string=file_timestamp )
         walking_start_stops = fanout.get_walking_start_stops_for_timestamp( timestamp_string=file_timestamp )
@@ -206,8 +240,11 @@ def read_files_and_fuse_ids(options=None):
                                                      frames_per_second=fps )
     return kalman_rows,fps,stim_xml, saccade_results
 
-def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
+def calc_retinal_coord_array(kalman_rows,fps,stim_xml,
+                             angular_velocity_method='linear_velocity', # tangent to direction of travel
+                             ):
     """return recarray with a row for each row of kalman_rows, but processed to include stimulus-relative columns"""
+    orig_row_length = len(kalman_rows)
     result_col_arrays = []
     result_col_names = []
 
@@ -392,7 +429,32 @@ def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
     result_col_arrays.append( angle_of_closest_dist )
     result_col_names.append( 'angle_of_closest_dist' )
 
+    # calculate angular velocities
+    if angular_velocity_method=='linear_velocity': # tangent to direction of travel
+        horizontal_angular_velocity = get_horiz_turns( fly_velocity[:,0], fly_velocity[:,1],
+                                                       frames_per_second=fps)
+
+        result_col_arrays.append( horizontal_angular_velocity )
+        result_col_names.append( 'horizontal_angular_velocity' )
+
+        post_angle = angle_of_closest_dist
+        post_angle_x = np.cos( post_angle ) # allow treating with linear distance operators
+        post_angle_y = np.sin( post_angle )
+
+        result_col_arrays.append( post_angle_x )
+        result_col_names.append( 'closest_post_angle_x' )
+        result_col_arrays.append( post_angle_y )
+        result_col_names.append( 'closest_post_angle_y' )
+
+        post_angular_velocity = -get_horiz_turns( post_angle_x, post_angle_y,
+                                                  frames_per_second=fps)
+
+        result_col_arrays.append( post_angular_velocity )
+        result_col_names.append( 'closest_post_angular_velocity' )
+
     result = np.rec.fromarrays( result_col_arrays, names=result_col_names )
+    final_row_length = len(result)
+    assert final_row_length==orig_row_length
     return result
 
 def plot_angle_dist(subplot=None,results_recarray=None,fps=None):

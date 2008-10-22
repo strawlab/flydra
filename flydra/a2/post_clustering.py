@@ -33,41 +33,9 @@ def mytake(arr, ma_idx):
     result[ ma_idx.mask ] = np.nan
     return result
 
-def angle_diff(ang1,ang2):
-    return np.mod((ang1-ang2)+np.pi,2*np.pi)-np.pi
-
 def make_branch_cut_pi(arr):
     """shift the branch cut of angles (in radians) from 0/2pi to -pi/+pi."""
     return np.mod(arr+np.pi,2*np.pi)-np.pi
-
-def test_angle_diff():
-    ang1 = np.array([np.pi-0.001, -0.001,  0.001, np.pi+0.001])
-    ang2 = np.array([np.pi+0.001,  0.001, -0.001, np.pi-0.001])
-    actual = angle_diff(ang1,ang2)
-    expected = np.array([-0.002, -0.002, 0.002, 0.002])
-    #print 'actual',actual
-    #print 'expected',expected
-
-def get_horiz_turns( vx,vy, subsample_factor=None, frames_per_second=None):
-    """return angular velocity of velocity direction in rad/sec"""
-    #warnings.filterwarnings( "error" )
-    N_observations = len(vx)//subsample_factor
-    horiz_turns = []
-    horiz_vel_angle = np.arctan2( vy, vx )
-    d_angles = angle_diff(horiz_vel_angle[1:],horiz_vel_angle[:-1])
-    for i in range( N_observations ):
-        start = i*subsample_factor
-        stop = (i+1)*subsample_factor
-        total_angular_change = np.ma.sum(  d_angles[start:stop] )
-        n_samples = len(np.ma.array( d_angles[start:stop] ).compressed())
-        if n_samples==0:
-            horiz_turns.append( np.nan ) # rad/sec
-        else:
-            whole_dt = 1.0/frames_per_second * n_samples
-            vel_angular_rate = total_angular_change/whole_dt
-            horiz_turns.append( vel_angular_rate ) # rad/sec
-    horiz_turns = np.array( horiz_turns )
-    return horiz_turns
 
 def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip_missing=True ):
     """from densely-spaced input data, create analysis array
@@ -102,36 +70,6 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
     rowlabls = [ -1, 0, 0, 0, -1 ]
 
     """
-    rowlabels = np.nan*np.ones( (len(rec),))
-
-    rowlabels_non_nan = np.arange( len(rec) // subsample_factor )
-    rowlabels_non_nan = rowlabels_non_nan.repeat( subsample_factor )
-
-    start_idx = 1 # skip nan at start
-    stop_idx = len(rowlabels_non_nan)+1
-    if stop_idx==len(rowlabels):
-        stop_idx -= subsample_factor # skip nan at stop
-    rowlabels[start_idx:stop_idx] = rowlabels_non_nan
-
-    vx = rec['vel_x'][start_idx:stop_idx]
-    vy = rec['vel_y'][start_idx:stop_idx]
-    horizontal_angular_velocity = get_horiz_turns( vx,vy, subsample_factor=subsample_factor,
-                                                   frames_per_second=frames_per_second)
-
-    closest_dist = np.ma.array(rec[ 'closest_dist' ],mask=rec[ 'closest_dist_mask' ])
-    closest_dist_speed = np.ma.array(rec[ 'closest_dist_speed' ],mask=rec[ 'closest_dist_mask' ])
-    closest_dist_accel = np.ma.array(rec[ 'closest_dist_accel' ],mask=rec[ 'closest_dist_mask' ])
-    angle_of_closest_dist = np.ma.array(rec[ 'angle_of_closest_dist' ],mask=rec[ 'closest_dist_mask' ])
-    post_angle = angle_of_closest_dist[start_idx:stop_idx]
-
-    post_angle_x = np.cos( post_angle ) # allow treating with linear distance operators
-    post_angle_y = np.sin( post_angle )
-
-    post_angular_velocity = -get_horiz_turns( post_angle_x, post_angle_y, subsample_factor=subsample_factor,
-                                              frames_per_second=frames_per_second)
-
-    vel_mag = np.sqrt(rec['vel_x']**2 + rec['vel_y']**2 + rec['vel_z']**2)
-
     def downsamp(arr):
         N_observations = len(arr)//subsample_factor
         x = np.ma.reshape(arr, (N_observations,subsample_factor))
@@ -150,6 +88,28 @@ def create_analysis_array( rec, subsample_factor=5, frames_per_second=None, skip
             x = np.array(result)
         #x = np.ma.median(x,axis=1)
         return x
+
+    rowlabels = np.nan*np.ones( (len(rec),))
+
+    rowlabels_non_nan = np.arange( len(rec) // subsample_factor )
+    rowlabels_non_nan = rowlabels_non_nan.repeat( subsample_factor )
+
+    start_idx = 1 # skip nan at start
+    stop_idx = len(rowlabels_non_nan)+1
+    if stop_idx==len(rowlabels):
+        stop_idx -= subsample_factor # skip nan at stop
+    rowlabels[start_idx:stop_idx] = rowlabels_non_nan
+
+    horizontal_angular_velocity = downsamp(rec['horizontal_angular_velocity'][start_idx:stop_idx])
+    closest_dist = np.ma.array(rec[ 'closest_dist' ],mask=rec[ 'closest_dist_mask' ])
+    closest_dist_speed = np.ma.array(rec[ 'closest_dist_speed' ],mask=rec[ 'closest_dist_mask' ])
+    closest_dist_accel = np.ma.array(rec[ 'closest_dist_accel' ],mask=rec[ 'closest_dist_mask' ])
+    angle_of_closest_dist = np.ma.array(rec[ 'angle_of_closest_dist' ],mask=rec[ 'closest_dist_mask' ])
+
+    post_angle_x = rec[ 'closest_post_angle_x'][start_idx:stop_idx]
+    post_angle_y = rec[ 'closest_post_angle_y'][start_idx:stop_idx]
+    post_angular_velocity = downsamp(rec[ 'closest_post_angular_velocity'][start_idx:stop_idx])
+    vel_mag = np.sqrt(rec['vel_x']**2 + rec['vel_y']**2 + rec['vel_z']**2)
 
     A = [ abs(horizontal_angular_velocity),
           downsamp(rec['vel_horiz'][start_idx:stop_idx]),
