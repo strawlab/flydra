@@ -249,8 +249,8 @@ if PICK:
             for trace_id in trace_ids:
                 rows = rows_by_trace_id[trace_id]
 
-                ax_xy.plot( rows['x'], rows['y'], 'r.' )
-                ax_xz.plot( rows['x'], rows['z'], 'r.' )
+                ax_xy[trace_id].plot( rows['x'], rows['y'], 'r.' )
+                ax_xz[trace_id].plot( rows['x'], rows['z'], 'r.' )
 
             for fig in all_figs:
                 fig.canvas.draw()
@@ -407,7 +407,8 @@ def test_data_assoc_1():
     results3 = d.idxs_by_trace_id_for_Aidxs( [] )
     assert len(results3.keys())==0
 
-def doit(options=None):
+def load_A_matrix( options=None ):
+
     if options.obj_only is not None:
         raise ValueError('obj_only is not a valid option for this function')
 
@@ -478,6 +479,22 @@ def doit(options=None):
     del rowlabels
 
     data = DataAssoc(all_rowlabels, trace_ids, orig_data_by_trace_id, orig_row_offset_by_trace_id)
+    results = dict(A=A,
+                   data=data,
+                   A_names=A_names,
+                   all_rowlabels=all_rowlabels,
+                   orig_data_by_trace_id=orig_data_by_trace_id,
+                   )
+    return results
+
+def doit(options=None):
+    my_results=load_A_matrix( options )
+
+    A=my_results['A']
+    data=my_results['data']
+    A_names=my_results['A_names']
+    all_rowlabels=my_results['all_rowlabels']
+    orig_data_by_trace_id=my_results['orig_data_by_trace_id']
 
     normA,norm_info = normalize_array(A)
     U,s,Vh = np.linalg.svd(normA,full_matrices=False)
@@ -738,18 +755,23 @@ def doit(options=None):
         global ax_xy, ax_xz
         global all_figs
 
+        ax_xy = {}
+        ax_xz = {}
+
         import matplotlib.pyplot as plt
 
-        fig=plt.figure()
-        all_figs.append(fig)
+        for trace_id,kalman_rows in orig_data_by_trace_id.iteritems():
 
-        ax_xy = fig.add_subplot(2,1,1)
-        ax_xy.plot(kalman_rows['x'],kalman_rows['y'],'b.',ms=.5)
-        ax_xy.set_aspect('equal')
+            fig=plt.figure()
+            all_figs.append(fig)
 
-        ax_xz = fig.add_subplot(2,1,2)
-        ax_xz.plot(kalman_rows['x'],kalman_rows['z'],'b.',ms=.5)
-        ax_xz.set_aspect('equal')
+            ax_xy[trace_id] = fig.add_subplot(2,1,1)
+            ax_xy[trace_id].plot(kalman_rows['x'],kalman_rows['y'],'b.',ms=.5)
+            ax_xy[trace_id].set_aspect('equal')
+
+            ax_xz[trace_id] = fig.add_subplot(2,1,2)
+            ax_xz[trace_id].plot(kalman_rows['x'],kalman_rows['z'],'b.',ms=.5)
+            ax_xz[trace_id].set_aspect('equal')
 
         if 1:
             fig=plt.figure()
