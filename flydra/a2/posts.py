@@ -154,11 +154,8 @@ array([[  1.  ,   0.  ,  -1.  ],
     results = numpy.array(results)
     return results
 
-def plot_angle_dist(subplot=None,options=None,bad=False):
+def read_files_and_fuse_ids(options=None):
     """
-
-    bad - if false, show only points below max_post_z, if true, show
-          only points above
 
     Note: this assumes that posts are perfectly vertical in the world
     coordinate system and that flies only look in a level plane.
@@ -203,21 +200,28 @@ def plot_angle_dist(subplot=None,options=None,bad=False):
             valid_cond &= (frame <= options.stop)
 
         kalman_rows = kalman_rows[valid_cond]
+    return kalman_rows,fps,stim_xml
+
+def calc_retinal_coord_array(kalman_rows,fps,stim_xml):
+    """return recarray with a row for each row of kalman_rows, but processed to include stimulus-relative columns"""
+
+    result_col_arrays = []
+    result_col_names = []
+
     frame = kalman_rows['frame']
+
+    result_col_arrays.append( frame )
+    result_col_names.append( 'frame' )
     X = numpy.array( [kalman_rows['x'],
                       kalman_rows['y'],
                       kalman_rows['z']]).T
 
-    if 0:
-        tmp_frame = frame - frame[0]
-        # tmp print
-        tmp_cond = (tmp_frame > (210*fps)) & (tmp_frame < (220*fps))
-        print 'np.sum(tmp_cond)',np.sum(tmp_cond)
-        print "kalman_rows['z'][tmp_cond]"
-        print kalman_rows['z'][tmp_cond]
-        sys.exit(0)
-
-    Q = flydra.a2.flypos.pos2ori(X,force_pitch_0=True) # get orientation from velocity
+    result_col_arrays.append( X[:,0] )
+    result_col_names.append( 'x' )
+    result_col_arrays.append( X[:,1] )
+    result_col_names.append( 'y' )
+    result_col_arrays.append( X[:,2] )
+    result_col_names.append( 'z' )
 
     hz = fps
     dt = 1.0/hz
@@ -225,15 +229,23 @@ def plot_angle_dist(subplot=None,options=None,bad=False):
     # find fly horizontal velocity direction using central difference
     central_diff_2D = X[2:,:2] - X[:-2,:2]
     fly_direction_2D = numpy.angle( central_diff_2D[:,0] + central_diff_2D[:,1]*1j )
+    # pad with nan to keep same length
+    assert len(fly_direction_2D.shape)==1
+    fly_direction_2D = np.hstack( ([np.nan], fly_direction_2D, [np.nan]) )
 
-    all_pt_c_fly_retina_dist = []
-    all_pt_c_fly_retina = []
+    result_col_arrays.append( fly_direction_2D )
+    result_col_names.append( 'fly_direction_2D' )
+
+    ## all_pt_c_fly_retina_dist = []
+    ## all_pt_c_fly_retina = []
 
     closest_all_pt_c_fly_retina_dist = []
     closest_all_pt_c_fly_retina = []
     closest_all_pt_c_fly_retina_mask = []
 
-    for post in stim_xml.iterate_posts():
+    for post_num,post in enumerate(stim_xml.iterate_posts()):
+        post_name = 'post%d'%post_num
+
         intersections = intersect_line_with_iso_z_plane( post['verts'], X[:,2] )
         max_post_z = max( post['verts'][0][2], post['verts'][1][2] ) # max post height
         intersections = intersections[:,:2] # drop Z coord
@@ -263,20 +275,41 @@ def plot_angle_dist(subplot=None,options=None,bad=False):
         pt_d_fly_retina_abs = numpy.angle( pt_d_fly[:,0] + pt_d_fly[:,1]*1j )
 
         # put in fly retinal coords (angle relative to horiz. velocity direction)
-        pt_a_fly_retina = numpy.mod(pt_a_fly_retina_abs[1:-1] - fly_direction_2D, 2*numpy.pi )
-        pt_b_fly_retina = numpy.mod(pt_b_fly_retina_abs[1:-1] - fly_direction_2D, 2*numpy.pi )
-        pt_c_fly_retina = numpy.mod(pt_c_fly_retina_abs[1:-1] - fly_direction_2D, 2*numpy.pi )
-        pt_d_fly_retina = numpy.mod(pt_d_fly_retina_abs[1:-1] - fly_direction_2D, 2*numpy.pi )
+        pt_a_fly_retina = numpy.mod(pt_a_fly_retina_abs - fly_direction_2D, 2*numpy.pi )
+        pt_b_fly_retina = numpy.mod(pt_b_fly_retina_abs - fly_direction_2D, 2*numpy.pi )
+        pt_c_fly_retina = numpy.mod(pt_c_fly_retina_abs - fly_direction_2D, 2*numpy.pi )
+        pt_d_fly_retina = numpy.mod(pt_d_fly_retina_abs - fly_direction_2D, 2*numpy.pi )
 
         # put in fly retinal coords (distance)
-        pt_a_fly_retina_dist = numpy.hypot( pt_a_fly[1:-1,0], pt_a_fly[1:-1,1] )
-        pt_b_fly_retina_dist = numpy.hypot( pt_b_fly[1:-1,0], pt_b_fly[1:-1,1] )
-        pt_c_fly_retina_dist = numpy.hypot( pt_c_fly[1:-1,0], pt_c_fly[1:-1,1] )
-        pt_d_fly_retina_dist = numpy.hypot( pt_d_fly[1:-1,0], pt_d_fly[1:-1,1] )
+        pt_a_fly_retina_dist = numpy.hypot( pt_a_fly[:,0], pt_a_fly[:,1] )
+        pt_b_fly_retina_dist = numpy.hypot( pt_b_fly[:,0], pt_b_fly[:,1] )
+        pt_c_fly_retina_dist = numpy.hypot( pt_c_fly[:,0], pt_c_fly[:,1] )
+        pt_d_fly_retina_dist = numpy.hypot( pt_d_fly[:,0], pt_d_fly[:,1] )
 
-        bad_cond = (X[1:-1,2] > max_post_z)
-        if bad:
-            bad_cond = ~bad_cond
+        result_col_arrays.append( pt_a_fly_retina )
+        result_col_names.append( post_name+'_pt_a_fly_retina' )
+        result_col_arrays.append( pt_b_fly_retina )
+        result_col_names.append( post_name+'_pt_b_fly_retina' )
+        result_col_arrays.append( pt_c_fly_retina )
+        result_col_names.append( post_name+'_pt_c_fly_retina' )
+        result_col_arrays.append( pt_d_fly_retina )
+        result_col_names.append( post_name+'_pt_d_fly_retina' )
+
+        result_col_arrays.append( pt_a_fly_retina_dist )
+        result_col_names.append( post_name+'_pt_a_fly_retina_dist' )
+        result_col_arrays.append( pt_b_fly_retina_dist )
+        result_col_names.append( post_name+'_pt_b_fly_retina_dist' )
+        result_col_arrays.append( pt_c_fly_retina_dist )
+        result_col_names.append( post_name+'_pt_c_fly_retina_dist' )
+        result_col_arrays.append( pt_d_fly_retina_dist )
+        result_col_names.append( post_name+'_pt_d_fly_retina_dist' )
+
+        bad_cond = (X[:,2] > max_post_z)
+
+        result_col_arrays.append( bad_cond )
+        result_col_names.append( post_name+'_bad_cond' )
+
+        # mask for finding closest point per-post:
         pt_a_fly_retina = numpy.ma.masked_where( bad_cond, pt_a_fly_retina )
         pt_b_fly_retina = numpy.ma.masked_where( bad_cond, pt_b_fly_retina )
         pt_c_fly_retina = numpy.ma.masked_where( bad_cond, pt_c_fly_retina )
@@ -287,14 +320,75 @@ def plot_angle_dist(subplot=None,options=None,bad=False):
         pt_c_fly_retina_dist = numpy.ma.masked_where( bad_cond, pt_c_fly_retina_dist )
         pt_d_fly_retina_dist = numpy.ma.masked_where( bad_cond, pt_d_fly_retina_dist )
 
-        def plot_coords(arr):
-            arr = numpy.array(arr,copy=True) # don't modify original
-            # wrap around 0 radians, convert to degrees
-            arr += numpy.pi
-            arr = numpy.mod( arr, 2*numpy.pi )
-            arr -= numpy.pi
-            arr = arr*R2D
-            return arr
+        # accumulate per-post results:
+        closest_all_pt_c_fly_retina_dist.append( numpy.ma.getdata(pt_c_fly_retina_dist) )
+        closest_all_pt_c_fly_retina.append( numpy.ma.getdata(pt_c_fly_retina) )
+        closest_all_pt_c_fly_retina_mask.append( numpy.ma.getmask(pt_c_fly_retina_dist) )
+
+    # stack each post as a row
+    closest_all_pt_c_fly_retina_dist = np.ma.array(closest_all_pt_c_fly_retina_dist,mask=closest_all_pt_c_fly_retina_mask)
+    closest_all_pt_c_fly_retina = np.ma.array(closest_all_pt_c_fly_retina,mask=closest_all_pt_c_fly_retina_mask)
+
+    # find closest row
+    taker = np.ma.argmin( closest_all_pt_c_fly_retina_dist, axis=0 )
+    col_idx = numpy.arange(len(taker))
+
+    closest_dist = closest_all_pt_c_fly_retina_dist[ taker, col_idx ]
+    angle_of_closest_dist = closest_all_pt_c_fly_retina[ taker, col_idx ]
+    result_col_arrays.append( closest_dist )
+    result_col_names.append( 'closest_dist' )
+
+    result_col_arrays.append( np.ma.getmask(closest_dist) )
+    result_col_names.append( 'closest_dist_mask' )
+
+    result_col_arrays.append( angle_of_closest_dist )
+    result_col_names.append( 'angle_of_closest_dist' )
+
+    result = np.rec.fromarrays( result_col_arrays, names=result_col_names )
+    return result
+
+def plot_angle_dist(subplot=None,results_recarray=None,fps=None):
+
+    def plot_coords(arr):
+        arr = numpy.array(arr,copy=True) # don't modify original
+        # wrap around 0 radians, convert to degrees
+        arr += numpy.pi
+        arr = numpy.mod( arr, 2*numpy.pi )
+        arr -= numpy.pi
+        arr = arr*R2D
+        return arr
+
+    all_pt_c_fly_retina_dist = []
+    all_pt_c_fly_retina = []
+
+    post_num = 0
+    while True: # loop over all posts, we don't know how many yet
+        post_name = 'post%d'%post_num
+        if (post_name+'_bad_cond') not in results_recarray.dtype.fields:
+            break # no more posts
+        post_num += 1
+
+        bad_cond = results_recarray[ post_name+'_bad_cond']
+
+        pt_a_fly_retina = results_recarray[ post_name+'_pt_a_fly_retina']
+        pt_a_fly_retina = np.ma.masked_where( bad_cond, pt_a_fly_retina )
+        pt_a_fly_retina_dist = results_recarray[ post_name+'_pt_a_fly_retina_dist']
+        pt_a_fly_retina_dist = np.ma.masked_where( bad_cond, pt_a_fly_retina_dist )
+
+        pt_b_fly_retina = results_recarray[ post_name+'_pt_b_fly_retina']
+        pt_b_fly_retina = np.ma.masked_where( bad_cond, pt_b_fly_retina )
+        pt_b_fly_retina_dist = results_recarray[ post_name+'_pt_b_fly_retina_dist']
+        pt_b_fly_retina_dist = np.ma.masked_where( bad_cond, pt_b_fly_retina_dist )
+
+        pt_c_fly_retina = results_recarray[ post_name+'_pt_c_fly_retina']
+        pt_c_fly_retina = np.ma.masked_where( bad_cond, pt_c_fly_retina )
+        pt_c_fly_retina_dist = results_recarray[ post_name+'_pt_c_fly_retina_dist']
+        pt_c_fly_retina_dist = np.ma.masked_where( bad_cond, pt_c_fly_retina_dist )
+
+        pt_d_fly_retina = results_recarray[ post_name+'_pt_d_fly_retina']
+        pt_d_fly_retina = np.ma.masked_where( bad_cond, pt_d_fly_retina )
+        pt_d_fly_retina_dist = results_recarray[ post_name+'_pt_d_fly_retina_dist']
+        pt_d_fly_retina_dist = np.ma.masked_where( bad_cond, pt_d_fly_retina_dist )
 
         time_seconds = numpy.arange( len(pt_a_fly_retina) )/float(fps)
 
@@ -320,18 +414,12 @@ def plot_angle_dist(subplot=None,options=None,bad=False):
             all_pt_c_fly_retina_dist.append( pt_c_fly_retina_dist.compressed() )
             all_pt_c_fly_retina.append( pt_c_fly_retina.compressed() )
 
-        if ('closest_dist_vs_angle' in subplot or
-            'closest_dist_vs_angle_hist' in subplot):
-            closest_all_pt_c_fly_retina_dist.append( numpy.ma.getdata(pt_c_fly_retina_dist) )
-            closest_all_pt_c_fly_retina.append( numpy.ma.getdata(pt_c_fly_retina) )
-            closest_all_pt_c_fly_retina_mask.append( numpy.ma.getmask(pt_c_fly_retina_dist) )
-
     if 'dist_vs_angle_static' in subplot:
         x = numpy.linspace(0,1,100) # 1 meter
         y = numpy.zeros_like(x)
         xy = numpy.hstack( (x[:,numpy.newaxis], y[:,numpy.newaxis]) )
 
-        radius = post['diameter']/2.0
+        radius = post_diameter/2.0
         pt_a, pt_b = calc_circle_tangent_points(radius,xy)
 
         # fly eye coords
@@ -369,6 +457,13 @@ def plot_angle_dist(subplot=None,options=None,bad=False):
         # data is already compressed()
         all_pt_c_fly_retina_dist = numpy.hstack(all_pt_c_fly_retina_dist)
         all_pt_c_fly_retina = numpy.hstack(all_pt_c_fly_retina)
+
+        if 1:
+            # remove nans (hexbin doesn't like nans)
+            good_cond = ~np.isnan(all_pt_c_fly_retina)
+            all_pt_c_fly_retina_dist = all_pt_c_fly_retina_dist[good_cond]
+            all_pt_c_fly_retina = all_pt_c_fly_retina[good_cond]
+
         if 1:
             # limit to close range
             cond = all_pt_c_fly_retina_dist<=0.5
@@ -379,58 +474,35 @@ def plot_angle_dist(subplot=None,options=None,bad=False):
         ax.set_xlabel('distance (m)')
         ax.set_ylabel('retinal position (deg)')
 
-    if ('closest_dist_vs_angle' in subplot or
-        'closest_dist_vs_angle_hist' in subplot):
+    # done looping over individual posts
+    closest_dist = np.ma.array(results_recarray[ 'closest_dist' ],mask=results_recarray[ 'closest_dist_mask' ])
+    angle_of_closest_dist = np.ma.array(results_recarray[ 'angle_of_closest_dist' ],mask=results_recarray[ 'closest_dist_mask' ])
 
-        if 1:
-            # choose closest post
+    if 'closest_dist_vs_angle' in subplot:
+        ax = subplot['closest_dist_vs_angle']
+        ax.plot( closest_dist, plot_coords(angle_of_closest_dist), '.')
 
-            # stack each post as a row
-            closest_all_pt_c_fly_retina_dist = np.ma.array(closest_all_pt_c_fly_retina_dist,mask=closest_all_pt_c_fly_retina_mask)
-            closest_all_pt_c_fly_retina = np.ma.array(closest_all_pt_c_fly_retina,mask=closest_all_pt_c_fly_retina_mask)
-
-            # find closest row
-            taker = np.ma.argmin( closest_all_pt_c_fly_retina_dist, axis=0 )
-            col_idx = numpy.arange(len(taker))
-
-            closest_dist = closest_all_pt_c_fly_retina_dist[ taker, col_idx ]
-            angle_of_closest_dist = closest_all_pt_c_fly_retina[ taker, col_idx ]
-
-            if 'closest_dist_vs_angle' in subplot:
-                ax = subplot['closest_dist_vs_angle']
-                ax.plot( closest_dist, plot_coords(angle_of_closest_dist), '.')
-
-                if '2nd_closest_dist_vs_angle' in subplot:
-                    # make closest row the farthest row
-                    closest_all_pt_c_fly_retina_dist.mask[taker, col_idx] = True
-
-                    # find new closest row
-                    taker = numpy.ma.argmin( closest_all_pt_c_fly_retina_dist, axis=0 )
-                    col_idx = numpy.arange(len(taker))
-
-                    closest_dist = closest_all_pt_c_fly_retina_dist[ taker, col_idx ]
-                    angle_of_closest_dist = closest_all_pt_c_fly_retina[ taker, col_idx ]
-
-                    ax = subplot['2nd_closest_dist_vs_angle']
-                    ax.plot( closest_dist, plot_coords(angle_of_closest_dist), '.')
-
-            if 'closest_dist_vs_angle_hist' in subplot:
-                ax = subplot['closest_dist_vs_angle_hist']
-                ax.hexbin( closest_dist, plot_coords(angle_of_closest_dist))
+    if 'closest_dist_vs_angle_hist' in subplot:
+        ax = subplot['closest_dist_vs_angle_hist']
+        ax.hexbin( closest_dist, plot_coords(angle_of_closest_dist))
 
     if 'z' in subplot:
         ax = subplot['z']
 
-        z = X[1:-1,2]
+        z = results_recarray[ 'z' ]
+
         time_seconds = numpy.arange( len(z) )/float(fps)
 
         ax.plot( time_seconds, z, '-' )
-        ax.axhline(max_post_z)
+        #ax.axhline(max_post_z)
 
         ax.set_xlabel('time (s)')
         ax.set_ylabel('z (m)')
 
 def doit(options=None):
+    kalman_rows, fps, stim_xml = read_files_and_fuse_ids(options=options)
+    results_recarray = calc_retinal_coord_array(kalman_rows, fps, stim_xml)
+
     subplot={}
     if 1:
         fig = pylab.figure()
@@ -461,14 +533,7 @@ def doit(options=None):
         subplot['closest_dist_vs_angle']=ax
         ax.set_title('closest post only')
 
-        ax=fig4.add_subplot(2,1,2,sharex=ax,sharey=ax)
-        subplot['2nd_closest_dist_vs_angle']=ax
-        ax.set_title('2nd closest post only')
-
-    plot_angle_dist(subplot=subplot,options=options)
-    if '2nd_closest_dist_vs_angle' in subplot:
-        xlim = subplot['2nd_closest_dist_vs_angle'].get_xlim()
-        subplot['2nd_closest_dist_vs_angle'].set_xlim((0,xlim[1]))
+    plot_angle_dist(subplot=subplot,results_recarray=results_recarray,fps=fps)
 
     if 0:
         fig4 = pylab.figure()
@@ -477,7 +542,7 @@ def doit(options=None):
 
         ax=fig4.add_subplot(3,1,2,sharex=ax,sharey=ax)
         subplot['dist_vs_angle_hist']=ax
-        plot_angle_dist(subplot=subplot,options=options, bad=True)
+        plot_angle_dist(subplot=subplot,results_recarray=results_recarray, fps=fps, bad=True)
 
         subplot['dist_vs_angle'].set_title('bad')
 
