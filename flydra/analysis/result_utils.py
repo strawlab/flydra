@@ -3,6 +3,7 @@ import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy as nx
 import numpy
+import numpy as np
 import sys, os, sets, re
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 
@@ -525,6 +526,7 @@ def make_exact_movie_info2(results,movie_dir=None):
 class QuickFrameIndexer:
     """maintain a sorted cache of a particular 1D array to speed searches"""
     def __init__(self,frames):
+        frames = np.asarray(frames)
         self.sorted_frame_idxs = numpy.argsort(frames)
         self.sorted_frames = frames[self.sorted_frame_idxs]
     def get_frame_idxs(self,frameno):
@@ -532,3 +534,20 @@ class QuickFrameIndexer:
         sorted_idx_high = self.sorted_frames.searchsorted(frameno+1)
         idx = self.sorted_frame_idxs[sorted_idx_low:sorted_idx_high]
         return idx
+
+def test_qfi():
+    frames = [0,0,1,2,3,4,5,5,5,5,5,6,7,8]
+    qfi = QuickFrameIndexer(frames)
+
+    for fno in np.unique( frames ):
+        idxs = qfi.get_frame_idxs(fno)
+
+        idxs = list(idxs)
+        while len(idxs):
+            idx = idxs.pop()
+            assert frames[idx]==fno
+
+    fno = np.max(frames)+1
+    idxs=qfi.get_frame_idxs(fno)
+    assert len(idxs)==0
+
