@@ -8,6 +8,7 @@ import sets, os, sys, math
 sys.path.insert(0,os.curdir)
 from enthought.tvtk.api import tvtk
 import numpy
+import numpy as np
 import tables as PT
 from optparse import OptionParser
 import core_analysis
@@ -54,13 +55,17 @@ class AnimationPath(object):
         ori_upper = cgtypes.quat(self.data[upper_idx,4:8])
 
         pos = frac*(pos_upper-pos_lower) + pos_lower
-        ori = cgtypes.slerp(frac,ori_lower,ori_upper)
+        if ori_lower != ori_upper:
+            ori = cgtypes.slerp(frac,ori_lower,ori_upper)
+        else:
+            ori = ori_lower
 
+        if np.isnan(ori.w):
+            raise ValueError('orientation is nan')
         return pos, ori
 
 def doit(filename,
          obj_only=None,
-         radius=0.002, # in meters
          min_length=10,
          use_kalman_smoothing=True,
          data_fps=100.0,
@@ -165,20 +170,30 @@ def doit(filename,
                                                   frames_per_second=data_fps,
                                                   dynamic_model_name=dynamic_model_name,
                                                   #method='position based',
-                                                  #method_params={'downsample':1,
-                                                  #               },
+                                                  method_params={'downsample':1,
+                                                                 },
                                                   )
 
         if len(use_obj_ids)==1:
             obj_verts = results['X_kalmanized']
             speeds = results['speed_kalmanized']
+            real_frames = results['frame']
+
         else:
             obj_verts.append( results['X_kalmanized'] )
             speeds.append( results['speed_kalmanized'] )
+            real_frames.append( results['frame'] )
+
+    if options.start is not None:
+        good_cond = (real_frames >= options.start)
+        obj_verts = obj_verts[good_cond]
+        speeds = speeds[good_cond]
+        real_frames = real_frames[good_cond]
 
     if not len(use_obj_ids)==1:
         obj_verts = numpy.concatenate(obj_verts,axis=0)
         speeds = numpy.concatenate(speeds,axis=0)
+        real_frames = numpy.concatenate(real_frames,axis=0)
 
     ####################### start draw permanently on stuff ############################
 
@@ -220,7 +235,6 @@ def doit(filename,
             axes.z_axis_caption_actor2d.caption_text_property = p
             p.color = 0.0, 0.0, 0.0 # black
         #axes.camera = camera
-        print dir(axes)
         #axes.attachment_point_coordinate = (0,0,0)
         axes.origin = (-.5,1,0)
 
@@ -286,6 +300,10 @@ def doit(filename,
         data_dt = 0.0
         dur = 0.0
 
+    print 'data_fps',data_fps
+    print 'data_dt',data_dt
+    print 'save_fps',save_fps
+
     t_now = 0.0
     frame_number = 0
     while t_now <= dur:
@@ -295,7 +313,6 @@ def doit(filename,
 
         pos, ori = camera_animation_path.get_pos_ori(t_now)
         focal_point, view_up = pos_ori2fu(pos,ori)
-        #print 'focal_point, view_up',focal_point, view_up
 
         camera.position = tuple(pos)
         #camera.focal_point = (focal_point[0], focal_point[1], focal_point[2])
@@ -304,7 +321,7 @@ def doit(filename,
         camera.view_up = tuple(view_up)
 
         if data_dt != 0.0:
-            draw_n_frames = int(math.ceil(t_now / data_dt))
+            draw_n_frames = int(round(t_now / data_dt))
         else:
             draw_n_frames = len(obj_verts)
         print 'frame_number, draw_n_frames', frame_number, draw_n_frames
@@ -313,6 +330,7 @@ def doit(filename,
 
         pd = tvtk.PolyData()
         pd.points = obj_verts[:draw_n_frames]
+        real_frame_number = real_frames[:draw_n_frames][-1]
         pd.point_data.scalars = speeds
         if numpy.any(speeds>max_vel):
             print 'WARNING: maximum speed (%.3f m/s) exceeds color map max'%(speeds.max(),)
@@ -321,7 +339,7 @@ def doit(filename,
                          vector_mode = 'use_vector',
                          input=pd)
         vel_mapper.input = g.output
-        ss = tvtk.SphereSource(radius = radius)
+        ss = tvtk.SphereSource(radius = options.radius)
         g.source = ss.output
         a = tvtk.Actor(mapper=vel_mapper)
 
@@ -333,7 +351,9 @@ def doit(filename,
             imf.update()
             imf.modified()
             writer.input = imf.output
-            fname = 'movie_%s_%03d_frame%05d.png'%(filename_trimmed,obj_id,frame_number)
+            #fname = 'movie_%s_%03d_frame%05d.png'%(filename_trimmed,obj_id,frame_number)
+            fname = 'movie_%s_%03d_frame%05d.png'%(filename_trimmed,obj_id,real_frame_number)
+            print 'saving',fname
             full_fname = os.path.join(output_dir, fname)
             writer.file_name = full_fname
             writer.write()
@@ -421,6 +441,11 @@ def main():
                       help="name of XML file with stimulus info",
                       )
 
+    parser.add_option("--start",
+                      type="int",
+                      default=None,
+                      )
+
     parser.add_option("--hack-postmultiply", type='string',
                       help="multiply 3D coordinates by a 3x4 matrix")
 
@@ -457,7 +482,6 @@ def main():
          obj_only=options.obj_only,
          cam_only_move_duration=options.cam_only_move_duration,
          use_kalman_smoothing=options.use_kalman_smoothing,
-         radius = options.radius,
          min_length = options.min_length,
          vertical_scale = options.vertical_scale,
          draw_stim_func_str = options.draw_stim_func_str,
