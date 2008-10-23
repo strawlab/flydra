@@ -521,7 +521,7 @@ def make_exact_movie_info2(results,movie_dir=None):
         exact_movie_info.row.append()
         exact_movie_info.flush()
 
-class QuickFrameIndexer:
+class Quick1DIndexer:
     """maintain a sorted cache of a particular 1D array to speed searches"""
     def __init__(self,frames):
         frames = np.asarray(frames)
@@ -532,10 +532,11 @@ class QuickFrameIndexer:
         sorted_idx_high = self.sorted_frames.searchsorted(frameno+1)
         idx = self.sorted_frame_idxs[sorted_idx_low:sorted_idx_high]
         return idx
+QuickFrameIndexer = Quick1DIndexer # old name
 
 def test_qfi():
     frames = [0,0,1,2,3,4,5,5,5,5,5,6,7,8]
-    qfi = QuickFrameIndexer(frames)
+    qfi = Quick1DIndexer(frames)
 
     for fno in np.unique( frames ):
         idxs = qfi.get_frame_idxs(fno)
