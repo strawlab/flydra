@@ -527,19 +527,35 @@ class Quick1DIndexer:
         frames = np.asarray(frames)
         self.sorted_frame_idxs = np.argsort(frames)
         self.sorted_frames = frames[self.sorted_frame_idxs]
-    def get_frame_idxs(self,frameno):
+        diff = self.sorted_frames[1:]-self.sorted_frames[:-1]
+        assert np.all( diff >= 0 )
+        nzdiff = diff[ diff > 0 ]
+        self.mindiff = np.min(nzdiff)
+    def get_idxs(self,frameno):
         sorted_idx_low = self.sorted_frames.searchsorted(frameno)
-        sorted_idx_high = self.sorted_frames.searchsorted(frameno+1)
+        sorted_idx_high = self.sorted_frames.searchsorted(frameno+self.mindiff)
         idx = self.sorted_frame_idxs[sorted_idx_low:sorted_idx_high]
         return idx
-QuickFrameIndexer = Quick1DIndexer # old name
 
-def test_qfi():
-    frames = [0,0,1,2,3,4,5,5,5,5,5,6,7,8]
-    qfi = Quick1DIndexer(frames)
+class QuickFrameIndexer(Quick1DIndexer):
+    def get_frame_idxs(self,frameno):
+        return self.get_idxs(frameno)
+
+def test_qi():
+    yield check_qi, 'int'
+    yield check_qi, 'float'
+
+def check_qi(dtype):
+    frameso = [0,0,1,2,3,4,5,5,5,5,5,6,7,8]
+    if dtype=='int':
+        frames = frameso
+    elif dtype=='float':
+        frames = map(float,frameso)
+        frames.extend([0.1,3.3,3.04,3.0004])
+    qi = Quick1DIndexer(frames)
 
     for fno in np.unique( frames ):
-        idxs = qfi.get_frame_idxs(fno)
+        idxs = qi.get_idxs(fno)
 
         idxs = list(idxs)
         while len(idxs):
@@ -547,6 +563,6 @@ def test_qfi():
             assert frames[idx]==fno
 
     fno = np.max(frames)+1
-    idxs=qfi.get_frame_idxs(fno)
+    idxs=qi.get_idxs(fno)
     assert len(idxs)==0
 
