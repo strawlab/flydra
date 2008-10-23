@@ -1,8 +1,6 @@
 import tables as PT
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
-import numpy as nx
-import numpy
 import numpy as np
 import sys, os, sets, re
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
@@ -61,7 +59,7 @@ def get_frame_from_camn_and_timestamp(results, camn, remote_timestamp):
     found = False
     data2d = results.root.data2d_distorted
     if PT.__version__ <= '1.3.2':
-        #if type(remote_timestamp)==numpy.float64scalar:
+        #if type(remote_timestamp)==np.float64scalar:
         remote_timestamp=float(remote_timestamp)
     for row in data2d.where( data2d.cols.timestamp==remote_timestamp ):
         test_camn = row['camn']
@@ -202,41 +200,41 @@ def get_f_xyz_L_err( results, max_err = 10, typ = 'best', include_timestamps=Fal
                        row['p4'],row['p5']))
             err.append( row['mean_dist'] )
             timestamps.append( row['timestamp'] )
-        f = nx.array(f)
-        xyz = nx.array(xyz)
-        L = nx.array(L)
-        err = nx.array(err)
-        timestamps = nx.array(timestamps)
+        f = np.array(f)
+        xyz = np.array(xyz)
+        L = np.array(L)
+        err = np.array(err)
+        timestamps = np.array(timestamps)
     else:
         frame_col = data3d.cols.frame
         if not len(frame_col):
             print 'no 3D data'
             return
-        f = nx.array(frame_col)
-        timestamps = nx.array(timestamps)
-        x = nx.array(data3d.cols.x)
-        y = nx.array(data3d.cols.y)
-        z = nx.array(data3d.cols.z)
-        xyz = nx.concatenate( (x[:,nx.NewAxis],
-                               y[:,nx.NewAxis],
-                               z[:,nx.NewAxis]),
+        f = np.array(frame_col)
+        timestamps = np.array(timestamps)
+        x = np.array(data3d.cols.x)
+        y = np.array(data3d.cols.y)
+        z = np.array(data3d.cols.z)
+        xyz = np.concatenate( (x[:,np.newaxis],
+                               y[:,np.newaxis],
+                               z[:,np.newaxis]),
                               axis = 1)
-        p0 = nx.array(data3d.cols.p0)[:,nx.NewAxis]
-        p1 = nx.array(data3d.cols.p1)[:,nx.NewAxis]
-        p2 = nx.array(data3d.cols.p2)[:,nx.NewAxis]
-        p3 = nx.array(data3d.cols.p3)[:,nx.NewAxis]
-        p4 = nx.array(data3d.cols.p4)[:,nx.NewAxis]
-        p5 = nx.array(data3d.cols.p5)[:,nx.NewAxis]
-        L = nx.concatenate( (p0,p1,p2,p3,p4,p5), axis=1 )
-        err = nx.array(data3d.cols.mean_dist)
+        p0 = np.array(data3d.cols.p0)[:,np.newaxis]
+        p1 = np.array(data3d.cols.p1)[:,np.newaxis]
+        p2 = np.array(data3d.cols.p2)[:,np.newaxis]
+        p3 = np.array(data3d.cols.p3)[:,np.newaxis]
+        p4 = np.array(data3d.cols.p4)[:,np.newaxis]
+        p5 = np.array(data3d.cols.p5)[:,np.newaxis]
+        L = np.concatenate( (p0,p1,p2,p3,p4,p5), axis=1 )
+        err = np.array(data3d.cols.mean_dist)
 
     if hasattr(results.root,'ignore_frames'):
-        good = nx.argsort(f)
-        good_set = sets.Set( nx.argsort( f ) )
+        good = np.argsort(f)
+        good_set = sets.Set( np.argsort( f ) )
         for row in results.root.ignore_frames:
             start_frame, stop_frame = row['start_frame'], row['stop_frame']
-            head = nx.where( f < start_frame )
-            tail = nx.where( f > stop_frame )
+            head = np.where( f < start_frame )
+            tail = np.where( f > stop_frame )
             head_set = sets.Set(head[0])
             tail_set = sets.Set(tail[0])
 
@@ -244,13 +242,13 @@ def get_f_xyz_L_err( results, max_err = 10, typ = 'best', include_timestamps=Fal
         good_idx = list( good_set )
         good_idx.sort()
     else:
-        good_idx = nx.argsort(f)
+        good_idx = np.argsort(f)
 
-    f = nx.take(f,good_idx,axis=0)
-    xyz = nx.take(xyz,good_idx,axis=0)
-    L = nx.take(L,good_idx,axis=0)
-    err = nx.take(err,good_idx,axis=0)
-    timestamps = nx.take(timestamps,good_idx,axis=0)
+    f = np.take(f,good_idx,axis=0)
+    xyz = np.take(xyz,good_idx,axis=0)
+    L = np.take(L,good_idx,axis=0)
+    err = np.take(err,good_idx,axis=0)
+    timestamps = np.take(timestamps,good_idx,axis=0)
 
     rval = [f,xyz,L,err]
     if include_timestamps:
@@ -313,11 +311,11 @@ def timestamp2string(ts_float,timezone='US/Pacific'):
 
 def model_remote_to_local(remote_timestamps, local_timestamps):
     """for timestamps"""
-    a1=remote_timestamps[:,numpy.newaxis]
-    a2=numpy.ones( (len(remote_timestamps),1))
-    A = numpy.hstack(( a1,a2))
-    b = local_timestamps[:,numpy.newaxis]
-    x,resids,rank,s = numpy.linalg.lstsq(A,b)
+    a1=remote_timestamps[:,np.newaxis]
+    a2=np.ones( (len(remote_timestamps),1))
+    A = np.hstack(( a1,a2))
+    b = local_timestamps[:,np.newaxis]
+    x,resids,rank,s = np.linalg.lstsq(A,b)
     gain = x[0,0]
     offset = x[1,0]
     return gain,offset
@@ -415,7 +413,7 @@ def get_time_model_from_data(results,debug=False,full_output=False):
 def drift_estimates(results):
     """calculate clock information"""
     table = results.root.host_clock_info
-    remote_hostnames = numpy.asarray(table.read(field='remote_hostname'))
+    remote_hostnames = np.asarray(table.read(field='remote_hostname'))
     hostnames = [str(x) for x in list(sets.Set(remote_hostnames))]
     hostnames.sort()
 
@@ -426,9 +424,9 @@ def drift_estimates(results):
     for hostname in hostnames:
         row_idx = table.getWhereList('remote_hostname == hostname')
         assert len(row_idx)>0
-        start_timestamp = numpy.asarray(table.readCoordinates(row_idx,field='start_timestamp'))
-        stop_timestamp = numpy.asarray(table.readCoordinates(row_idx,field='stop_timestamp'))
-        remote_timestamp = numpy.asarray(table.readCoordinates(row_idx,field='remote_timestamp'))
+        start_timestamp = np.asarray(table.readCoordinates(row_idx,field='start_timestamp'))
+        stop_timestamp = np.asarray(table.readCoordinates(row_idx,field='stop_timestamp'))
+        remote_timestamp = np.asarray(table.readCoordinates(row_idx,field='remote_timestamp'))
 
         measurement_error = stop_timestamp-start_timestamp
         clock_diff = stop_timestamp-remote_timestamp
@@ -491,7 +489,7 @@ def make_exact_movie_info2(results,movie_dir=None):
 ##            data2d.cols.timestamp == timestamp_movie_start )]
         if len(camn_start_frame_list) == 0:
             status('WARNING: movie for %s %s : start data not found'%(cam_id,filename))
-            #ts = nx.array(data2d.cols.timestamp)
+            #ts = np.array(data2d.cols.timestamp)
             #print 'min(ts),timestamp_movie_start,max(ts)',min(ts),timestamp_movie_start,max(ts)
             continue
         else:
@@ -527,7 +525,7 @@ class QuickFrameIndexer:
     """maintain a sorted cache of a particular 1D array to speed searches"""
     def __init__(self,frames):
         frames = np.asarray(frames)
-        self.sorted_frame_idxs = numpy.argsort(frames)
+        self.sorted_frame_idxs = np.argsort(frames)
         self.sorted_frames = frames[self.sorted_frame_idxs]
     def get_frame_idxs(self,frameno):
         sorted_idx_low = self.sorted_frames.searchsorted(frameno)
