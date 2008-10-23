@@ -1,0 +1,1 @@
+flydra-data/2d-data; /usr/bin/flydra_analysis_plot_timeseries_2d_3d %s; test=test -n "$DISPLAY"; description=h5

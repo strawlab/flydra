@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="flydra-h5/2d">
+    <comment>Flydra 2D data</comment>
+    <glob pattern="*.h5" />
+  </mime-type>
+</mime-info>
