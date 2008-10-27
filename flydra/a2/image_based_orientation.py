@@ -220,14 +220,15 @@ def running_average( image_framenumbers, ims,
             ##     #print 'failed to find image %d'%fno
             ##     ims_to_average.append( nan_im )
 
-        # XXX this is not very efficient.
-        to_av = np.array(ims_to_average)
-        ## print 'fno %d: min %.1f max %.1f'%(center_fno, to_av.min(), to_av.max())
-        #av_im = np.mean( to_av, axis=0 )
-        av_im = np.min( to_av, axis=0 )
-
         n_images = len(ims_to_average)
         if n_images>=min_N:
+
+            # XXX this is not very efficient.
+            to_av = np.array(ims_to_average)
+            ## print 'fno %d: min %.1f max %.1f'%(center_fno, to_av.min(), to_av.max())
+            #av_im = np.mean( to_av, axis=0 )
+            av_im = np.min( to_av, axis=0 )
+
             coords_to_average = np.array(coords_to_average)
             mean_lowerleft = np.mean( coords_to_average[:,:2], axis=0)
             results.append( (center_fno, av_im, n_images,
@@ -273,6 +274,7 @@ def doit(h5_filename=None,
     kalman_filename.
 
     """
+    SAVE_IMAGES=False
     if view is None:
         view = [ 'orig' for f in ufmf_filenames ]
     else:
@@ -336,8 +338,9 @@ def doit(h5_filename=None,
             obj_3d_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file)
 
             this_obj_framenumbers = collections.defaultdict(list)
-            this_obj_raw_images = collections.defaultdict(list)
-            this_obj_mean_images = collections.defaultdict(list)
+            if SAVE_IMAGES:
+                this_obj_raw_images = collections.defaultdict(list)
+                this_obj_mean_images = collections.defaultdict(list)
             this_obj_absdiff_images = collections.defaultdict(list)
             this_obj_im_coords = collections.defaultdict(list)
             this_obj_camn_pt_no = collections.defaultdict(list)
@@ -416,8 +419,9 @@ def doit(h5_filename=None,
                     im_coords, raw_im, mean_im, absdiff_im = tmp
 
                     this_obj_framenumbers[camn].append( framenumber )
-                    this_obj_raw_images[camn].append((raw_im,im_coords))
-                    this_obj_mean_images[camn].append(mean_im)
+                    if SAVE_IMAGES:
+                        this_obj_raw_images[camn].append((raw_im,im_coords))
+                        this_obj_mean_images[camn].append(mean_im)
                     this_obj_absdiff_images[camn].append(absdiff_im)
                     this_obj_im_coords[camn].append(im_coords)
                     this_obj_camn_pt_no[camn].append(orig_data2d_rownum)
@@ -436,8 +440,9 @@ def doit(h5_filename=None,
             for camn in this_obj_absdiff_images:
                 cam_id = camn2cam_id[camn]
                 image_framenumbers = np.array(this_obj_framenumbers[camn])
-                raw_images = this_obj_raw_images[camn]
-                mean_images = this_obj_mean_images[camn]
+                if SAVE_IMAGES:
+                    raw_images = this_obj_raw_images[camn]
+                    mean_images = this_obj_mean_images[camn]
                 absdiff_images = this_obj_absdiff_images[camn]
                 im_coords = this_obj_im_coords[camn]
                 camn_pt_no_array = this_obj_camn_pt_no[camn]
@@ -488,7 +493,7 @@ def doit(h5_filename=None,
                             row['eccentricity']=eccentricity
                             row.update() # save data
 
-                    if 0:
+                    if SAVE_IMAGES:
                         # Display debugging images
                         fname = 'av_obj%05d_%s_frame%07d.png'%(
                             obj_id,cam_id,fno)
