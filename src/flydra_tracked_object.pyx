@@ -80,6 +80,7 @@ cdef class TrackedObject:
 
     cdef public object frames, xhats, timestamps, Ps, observations_data, observations_Lcoords
     cdef public object observations_frames, observations_2d
+    cdef int disable_image_stat_gating
 
     def __init__(self,
                  reconstructor_meters, # the Reconstructor instance
@@ -93,6 +94,7 @@ cdef class TrackedObject:
                  save_calibration_data=None,
                  save_all_data=False,
                  area_threshold=0,
+                 disable_image_stat_gating=False,
                  ):
         """
 
@@ -110,6 +112,7 @@ cdef class TrackedObject:
         self.kill_me = False
         self.reconstructor_meters = reconstructor_meters
         self.distorted_pixel_euclidian_distance_accept=kalman_model.get('distorted_pixel_euclidian_distance_accept',None)
+        self.disable_image_stat_gating = disable_image_stat_gating
 
         self.current_frameno = frame
         if scale_factor is None:
@@ -470,10 +473,10 @@ cdef class TrackedObject:
                     mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
                     sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
 
-                    if cur_val is not None:
-                        p_y_x = some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
-                    else:
+                    if cur_val is None or self.disable_image_stat_gating:
                         p_y_x = 0.0 # no penalty
+                    else:
+                        p_y_x = some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
 
                     if np.isfinite(p_y_x):
                         gated_in = True

@@ -449,13 +449,15 @@ def kalmanize(src_filename,
         # hack to deal with ipython engine being unable to serialize instances
         save_calibration_data = None
 
-    tracker = Tracker(reconstructor_meters,
-                      scale_factor=reconst_orig_units.get_scale_factor(),
-                      save_calibration_data=save_calibration_data,
-                      kalman_model=kalman_model,
-                      save_all_data=True,
-                      area_threshold=area_threshold,
-                      )
+    tracker = Tracker(
+        reconstructor_meters,
+        scale_factor=reconst_orig_units.get_scale_factor(),
+        save_calibration_data=save_calibration_data,
+        kalman_model=kalman_model,
+        save_all_data=True,
+        area_threshold=area_threshold,
+        disable_image_stat_gating=options.disable_image_stat_gating,
+        )
 
     tracker.set_killed_tracker_callback( h5saver.save_tro )
 
@@ -486,7 +488,8 @@ def kalmanize(src_filename,
         print 'done in %.1f sec'%(time2-time1)
         orig_num_rows = len(data2d_recarray)
 
-        if 'cur_val' in data2d_recarray.dtype.fields:
+        if (not options.disable_image_stat_gating and
+            'cur_val' in data2d_recarray.dtype.fields):
             if 'sumsqf_val' in data2d_recarray.dtype.fields:
                 sumsqf_val = data2d_recarray['sumsqf_val']
             else:
@@ -714,6 +717,10 @@ def main():
 
     parser.add_option("--force-minimum-eccentricity", type='float',
                       default=None)
+
+    parser.add_option("--disable-image-stat-gating", action='store_true',
+                      help="disable gating the data based on image statistics",
+                      default=False)
 
     (options, args) = parser.parse_args()
     if options.exclude_cam_ids is not None:

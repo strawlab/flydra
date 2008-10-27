@@ -270,6 +270,7 @@ class Tracker:
                  max_frames_skipped=25,
                  save_all_data=False,
                  area_threshold=0,
+                 disable_image_stat_gating=False,
                  ):
         """
 
@@ -288,6 +289,7 @@ class Tracker:
         self.live_tracked_objects = TrackedObjectKeeper( TrackedObject )
         self.dead_tracked_objects = [] # save for getting data out
         self.kill_tracker_callbacks = []
+        self.disable_image_stat_gating = disable_image_stat_gating
 
         # set values for passing to TrackedObject
         if scale_factor is None:
@@ -410,6 +412,7 @@ class Tracker:
                                            save_calibration_data=self.save_calibration_data,
                                            save_all_data=self.save_all_data,
                                            area_threshold=self.area_threshold,
+                                           disable_image_stat_gating=self.disable_image_stat_gating,
                                            )
     def kill_all_trackers(self):
         self.live_tracked_objects.get_async_applier('kill').get()
