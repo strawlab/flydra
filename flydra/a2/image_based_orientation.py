@@ -223,14 +223,15 @@ def running_average( image_framenumbers, ims,
         # XXX this is not very efficient.
         to_av = np.array(ims_to_average)
         ## print 'fno %d: min %.1f max %.1f'%(center_fno, to_av.min(), to_av.max())
-        av_im = np.mean( to_av, axis=0 )
+        #av_im = np.mean( to_av, axis=0 )
+        av_im = np.min( to_av, axis=0 )
 
         n_images = len(ims_to_average)
         if n_images>=min_N:
             coords_to_average = np.array(coords_to_average)
             mean_lowerleft = np.mean( coords_to_average[:,:2], axis=0)
             results.append( (center_fno, av_im, n_images,
-                             mean_lowerleft, camn_pt_no) )
+                             mean_lowerleft, camn_pt_no, center_idx) )
     return results
 
 def clip_and_math( raw_image, mean_image, xy, roiradius, maxsize ):
@@ -308,6 +309,7 @@ def doit(h5_filename=None,
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
 
         cam_id2fmfs = collections.defaultdict(list)
+        cam_id2view = {}
         for ufmf_filename in ufmf_filenames:
             fmf = ufmf.FlyMovieEmulator(ufmf_filename,
                                         #darken=-50,
@@ -317,6 +319,8 @@ def doit(h5_filename=None,
             cam_id = get_cam_id_from_filename(fmf.filename, cam_id2camns.keys())
             cam_id2fmfs[cam_id].append(
                 (fmf,result_utils.Quick1DIndexer(timestamps)))
+
+            cam_id2view[cam_id] = filename2view[fmf.filename]
 
         # associate framenumbers with timestamps using 2d .h5 file
         data2d = h5.root.data2d_distorted[:] # load to RAM
@@ -332,6 +336,8 @@ def doit(h5_filename=None,
             obj_3d_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file)
 
             this_obj_framenumbers = collections.defaultdict(list)
+            this_obj_raw_images = collections.defaultdict(list)
+            this_obj_mean_images = collections.defaultdict(list)
             this_obj_absdiff_images = collections.defaultdict(list)
             this_obj_im_coords = collections.defaultdict(list)
             this_obj_camn_pt_no = collections.defaultdict(list)
@@ -410,6 +416,8 @@ def doit(h5_filename=None,
                     im_coords, raw_im, mean_im, absdiff_im = tmp
 
                     this_obj_framenumbers[camn].append( framenumber )
+                    this_obj_raw_images[camn].append((raw_im,im_coords))
+                    this_obj_mean_images[camn].append(mean_im)
                     this_obj_absdiff_images[camn].append(absdiff_im)
                     this_obj_im_coords[camn].append(im_coords)
                     this_obj_camn_pt_no[camn].append(orig_data2d_rownum)
@@ -428,6 +436,8 @@ def doit(h5_filename=None,
             for camn in this_obj_absdiff_images:
                 cam_id = camn2cam_id[camn]
                 image_framenumbers = np.array(this_obj_framenumbers[camn])
+                raw_images = this_obj_raw_images[camn]
+                mean_images = this_obj_mean_images[camn]
                 absdiff_images = this_obj_absdiff_images[camn]
                 im_coords = this_obj_im_coords[camn]
                 camn_pt_no_array = this_obj_camn_pt_no[camn]
@@ -446,7 +456,7 @@ def doit(h5_filename=None,
                 # the range from the first to last frames available.
 
                 for (fno, av_im, n_images, lowerleft,
-                     orig_data2d_rownum) in results:
+                     orig_data2d_rownum, orig_idx) in results:
 
                     # Clip image to reduce moment arms.
                     thresh = 7 # arbitrary
@@ -483,36 +493,81 @@ def doit(h5_filename=None,
                         fname = 'av_obj%05d_%s_frame%07d.png'%(
                             obj_id,cam_id,fno)
 
+                        raw_im, raw_coords = raw_images[orig_idx]
+                        mean_im = mean_images[orig_idx]
+                        absdiff_im = absdiff_images[orig_idx] # not time-average
+                        raw_l, raw_b = raw_coords[:2]
+
+                        imh, imw = raw_im.shape
+                        n_ims = 4
 
                         if 1:
                             # increase contrast
-                            scale = 30.0
-                            av_im = np.clip(av_im*scale,0,255)
+                            contrast_scale = 5.0
+                            av_im_show = np.clip(av_im*contrast_scale,0,255)
 
                         margin = 10
                         scale = 5
 
                         yintercept = y0-slope*x0
                         xplt=np.array([lowerleft[0]-5,
-                                       lowerleft[0]+av_im.shape[1]+5])
+                                       lowerleft[0]+av_im_show.shape[1]+5])
                         yplt=slope*xplt+yintercept
+
+
                         canv=benu.Canvas(fname,
-                                         scale*av_im.shape[1] + 2*margin,
-                                         scale*av_im.shape[0] + 2*margin)
-                        display_rect = (margin,margin,
-                                        scale*av_im.shape[1],
-                                        scale*av_im.shape[0])
-                        user_rect = (lowerleft[0],lowerleft[1],
-                                     av_im.shape[1], av_im.shape[0])
-                        with canv.set_user_coords(display_rect, user_rect):
-                            canv.imshow(av_im,lowerleft[0],lowerleft[1])
+                                         (scale*imw*n_ims + (1+n_ims)*margin),
+                                         (scale*imh + 2*margin),
+                                         )
+
+                        # Display raw_im
+                        display_rect = (margin, margin,
+                                        scale*raw_im.shape[1],
+                                        scale*raw_im.shape[0])
+                        user_rect = (raw_l,raw_b,imw,imh)
+                        with canv.set_user_coords(display_rect, user_rect,
+                                                  transform=cam_id2view[cam_id],
+                                                  ):
+                            canv.imshow(raw_im.astype(np.uint8),raw_l,raw_b)
                             canv.plot(xplt,yplt,color_rgba=(0,1,0,.5))
-                        if 0:
-                            canv.text( 'x,y=(%.1f,%.1f) slope=%.1f'%(x0,y0,slope),
-                                       0,12)
-                            canv.text( 'xplt %s'%str(xplt),  0,24)
-                            canv.text( 'yplt %s'%str(yplt),  0,36)
-                            canv.text( 'lowerleft %s'%str(lowerleft),  0,48)
+
+                        # Display mean_im
+                        display_rect = (2*margin+(scale*imw), margin,
+                                        scale*mean_im.shape[1],
+                                        scale*mean_im.shape[0])
+                        user_rect = (raw_l,raw_b,imw,imh)
+                        with canv.set_user_coords(display_rect, user_rect,
+                                                  transform=cam_id2view[cam_id],
+                                                  ):
+                            canv.imshow(mean_im.astype(np.uint8),raw_l,raw_b)
+
+                        # Display absdiff_im
+                        display_rect = (3*margin+(scale*imw)*2, margin,
+                                        scale*absdiff_im.shape[1],
+                                        scale*absdiff_im.shape[0])
+                        user_rect = (raw_l,raw_b,imw,imh)
+                        absdiff_clip = np.clip(absdiff_im*contrast_scale,0,255)
+                        with canv.set_user_coords(display_rect, user_rect,
+                                                  transform=cam_id2view[cam_id],
+                                                  ):
+                            canv.imshow(absdiff_clip.astype(np.uint8),
+                                        raw_l,raw_b)
+
+                        # Display time-averaged absdiff_im
+                        display_rect = (4*margin+(scale*imw)*3, margin,
+                                        scale*av_im_show.shape[1],
+                                        scale*av_im_show.shape[0])
+                        user_rect = (lowerleft[0],lowerleft[1],
+                                     av_im_show.shape[1], av_im_show.shape[0])
+                        with canv.set_user_coords(display_rect, user_rect,
+                                                  transform=cam_id2view[cam_id],
+                                                  ):
+                            canv.imshow(av_im_show.astype(np.uint8),
+                                        lowerleft[0],lowerleft[1])
+                            canv.plot(xplt,yplt,color_rgba=(0,1,0,.5))
+
+                        canv.text( '%s frame % 7d: eccentricity % 5.1f'%(
+                            cam_id,fno,eccentricity), 0, 8)
                         canv.save()
 
             # Save results to new table
