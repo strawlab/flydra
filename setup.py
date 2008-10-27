@@ -69,6 +69,9 @@ setup(name='flydra',
     'flydra_textlog2csv = flydra.a2.flydra_textlog2csv:main',
     'flydra_analysis_print_kalmanize_makefile_location = flydra.a2.print_kalmanize_makefile_location:main',
 
+# analysis - image based orientation
+    'flydra_analysis_image_based_orientation = flydra.a2.image_based_orientation:main',
+
 # upload firmware to USB devices
     'flydra_LED_driver_enter_dfu_mode = flydra.LEDdriver.LEDdriver:enter_dfu_mode',
     'flydra_trigger_enter_dfu_mode = flydra.trigger:enter_dfu_mode',
