@@ -12,6 +12,7 @@ import sets, os, sys, math
 
 import pkg_resources
 import numpy
+import numpy as np
 import tables as PT
 from optparse import OptionParser
 import flydra.reconstruct as reconstruct
@@ -132,7 +133,9 @@ def doit(fmf_filename=None,
             sys.exit(1)
 
     if fmf_filename.endswith('.ufmf'):
-        fmf = ufmf.FlyMovieEmulator(fmf_filename)
+        fmf = ufmf.FlyMovieEmulator(fmf_filename,
+                                    use_conventional_named_mean_fmf=False,
+                                    )
     else:
         fmf = FMF.FlyMovie(fmf_filename)
     fmf_timestamps = fmf.get_all_timestamps()
@@ -787,15 +790,16 @@ def doit(fmf_filename=None,
 
             elif PLOT=='image':
                 assert fmf.format=='MONO8'
+                imframe = np.clip(frame,0,255).astype(np.uint8)
                 im=Image.fromstring('L',
-                                    (frame.shape[1],frame.shape[0]),
-                                    frame.tostring())
+                                    (imframe.shape[1],imframe.shape[0]),
+                                    imframe.tostring())
                 im = im.convert('RGB')
                 #draw = aggdraw.Draw(im)
                 if options.flip_y:
-                    xform = aggdraw_coord_shifter.XformFlipY(ymax=(frame.shape[0]-1))
+                    xform = aggdraw_coord_shifter.XformFlipY(ymax=(imframe.shape[0]-1))
                 elif options.rotate_180:
-                    xform = aggdraw_coord_shifter.XformRotate180(xmax=(frame.shape[1]-1),ymax=(frame.shape[0]-1))
+                    xform = aggdraw_coord_shifter.XformRotate180(xmax=(imframe.shape[1]-1),ymax=(imframe.shape[0]-1))
                 else:
                     xform = aggdraw_coord_shifter.XformIdentity()
                 draw = aggdraw_coord_shifter.CoordShiftDraw(im,xform)
