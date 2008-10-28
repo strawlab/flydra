@@ -18,10 +18,6 @@ from optparse import OptionParser
 import flydra.reconstruct as reconstruct
 import sets
 import motmot.ufmf.ufmf as ufmf
-CALC_SLOPE=False # allow re-computing slope from saved image data
-if CALC_SLOPE:
-    import motmot.FastImage.FastImage as FastImage
-    import motmot.realtime_image_analysis.realtime_image_analysis as realtime_image_analysis
 import flydra.a2.utils as utils
 import flydra.a2.aggdraw_coord_shifter as aggdraw_coord_shifter
 
@@ -44,52 +40,6 @@ def ensure_minsize_image( arr, (h,w), fill=0):
         arr_new[:arr.shape[0],:arr.shape[1]] = arr
         arr=arr_new
     return arr
-
-def calc_slope_eccentricity(zoom_fg, h5_frame):
-    # calculate slope and eccentricity of a small image region
-    if 0:
-        slopeimx_bright = -numpy.array( zoom_fg, dtype=numpy.float32) # make target white
-        slopeimx_mean = numpy.mean( slopeimx_bright )
-        slopeimx_bright = slopeimx_bright-slopeimx_mean # bring mean to zero
-        slopeimx_bright = numpy.clip(slopeimx_bright,0,255)
-    elif 0:
-        slopeimx_bright = 255-numpy.array( zoom_fg, dtype=numpy.float32) # make target white
-        slopeimx_bright = numpy.clip(slopeimx_bright,0,255)
-    elif 1:
-        # This seems to work best. Assumes slopeimx is darker than background
-        fac = 10
-        slopeimx_bright = 255-numpy.array( zoom_fg, dtype=numpy.float32) # make target white
-        slopeimx_bright = slopeimx_bright - (numpy.max( slopeimx_bright) - fac )
-        slopeimx_bright = numpy.clip(slopeimx_bright,0,255)
-        slopeimx_bright *= (255.0/fac)
-
-    slopeimx_bright = slopeimx_bright.astype(numpy.uint8)
-    if 1:
-        slope_im = slopeimx_bright
-    slopeimx_bright = FastImage.asfastimage( slopeimx_bright )
-    (slope,eccentricity) = realtime_image_analysis.fit_slope( slopeimx_bright )
-
-    if 0:
-        # save actual image used for calculating slope
-        slope_im=Image.fromstring('L',
-                                  (slope_im.shape[1],slope_im.shape[0]),
-                                  slope_im.tostring())
-        w,h = slope_im.size
-        rescale_factor = 5
-        slope_im = slope_im.resize( (rescale_factor*w, rescale_factor*h) )
-        slope_im = slope_im.convert('RGB')
-        slope_draw = aggdraw.Draw(slope_im)
-        #slope_draw = aggdraw_coord_shifter.CoordShiftDraw(slope_im)
-        #slope_im = slope_draw.get_image()
-
-        slope_draw.text( (5,5), '%3f'%slope,
-                         aggdraw.Font((230, 159, 0),
-                                      '/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf',
-                                      size=20))
-        slope_draw.flush()
-        fname = 'slope_im_%06d.bmp'%(h5_frame,)
-        slope_im = slope_im.save(fname)
-    return slope,eccentricity
 
 def doit(fmf_filename=None,
          h5_filename=None,
@@ -550,11 +500,8 @@ def doit(fmf_filename=None,
                     this_row = rows[pt_no]
                     (x2d,y2d) = this_row['x'], this_row['y']
                     area = this_row['area']
-                    if CALC_SLOPE:
-                        slope,eccentricity = None,None
-                    else:
-                        slope = this_row['slope']
-                        eccentricity = this_row['eccentricity']
+                    slope = this_row['slope']
+                    eccentricity = this_row['eccentricity']
                     try:
                         cur_val  = this_row['cur_val']
                         mean_val = this_row['mean_val']
@@ -576,8 +523,6 @@ def doit(fmf_filename=None,
 
                         zoom_fg = fg[miny:maxy, minx:maxx]
 
-                        if CALC_SLOPE:
-                            slope,eccentricity = calc_slope_eccentricity(zoom_fg, h5_frame)
                         zoom_fg =  ensure_minsize_image( zoom_fg,  (2*radius, 2*radius ))
                         zoom_fgs.append( zoom_fg )
 
