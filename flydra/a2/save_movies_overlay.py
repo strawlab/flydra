@@ -25,18 +25,9 @@ if CALC_SLOPE:
 import flydra.a2.utils as utils
 import flydra.a2.aggdraw_coord_shifter as aggdraw_coord_shifter
 
-#PLOT='mpl'
 PLOT='image'
 
-if PLOT=='mpl':
-    import warnings
-    warnings.warn('using mpl for PLOT has not been used in a long time')
-
-    import matplotlib
-    matplotlib.use('Agg')
-    import pylab
-    import matplotlib.cm as cm
-elif PLOT=='image':
+if PLOT=='image':
     import Image
     import aggdraw
 import motmot.FlyMovieFormat.FlyMovieFormat as FMF
@@ -252,8 +243,6 @@ def doit(fmf_filename=None,
     if kalman_filename is not None:
         cam_center_meters = R.get_camera_center(cam_id)
 
-    if PLOT=='mpl':
-        fig = pylab.figure()
     remote_timestamps = h5.root.data2d_distorted.read(field='timestamp')
     camns = h5.root.data2d_distorted.read(field='camn')
     # find rows for all camns for this cam_id
@@ -771,24 +760,7 @@ def doit(fmf_filename=None,
                     im.save( fname )
 
             # full image
-            if PLOT=='mpl':
-                pylab.imshow( frame,
-                              origin='lower',
-                              cmap=cm.pink,
-                              )
-
-                ylim = pylab.gca().get_ylim()
-                pylab.gca().set_ylim((ylim[1],ylim[0]))
-
-                if len(idxs):
-                    x = rows['x']
-                    y = rows['y']
-                    if not numpy.isnan(x[0]):
-                        pylab.plot(x,y,'.')
-                if len(kalman_vert_images):
-                    raise NotImplementedError('')
-
-            elif PLOT=='image':
+            if PLOT=='image':
                 assert fmf.format=='MONO8'
                 imframe = np.clip(frame,0,255).astype(np.uint8)
                 im=Image.fromstring('L',
@@ -920,14 +892,10 @@ def doit(fmf_filename=None,
                 os.makedirs(dirname)
 
             #print 'saving',fname
-            if PLOT=='mpl':
-                fig.savefig( fname )
-            elif PLOT=='image':
+            if PLOT=='image':
                 if im is not None:
                     im.save( fname )
 
-        if PLOT=='mpl':
-            fig.clear()
     pbar.finish()
 
     h5.close()
