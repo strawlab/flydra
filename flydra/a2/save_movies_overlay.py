@@ -64,7 +64,7 @@ def doit(fmf_filename=None,
     if do_zoom_diff and do_zoom:
         raise ValueError('can use do_zoom or do_zoom_diff, but not both')
 
-    styles = ['debug','pretty','blank']
+    styles = ['debug','pretty','prettier','blank']
     if style not in styles:
         raise ValueError('style ("%s") is not one of %s'%(style,str(styles)))
 
@@ -779,7 +779,7 @@ def doit(fmf_filename=None,
                                                    pen2d )
 
                 for (xy,XYZ,obj_id,Pmean_meters) in kalman_vert_images:
-                    if style in ['debug','pretty']:
+                    if style in ['debug','pretty','prettier']:
                         radius=10
                         x,y= xy
                         X,Y,Z=XYZ
