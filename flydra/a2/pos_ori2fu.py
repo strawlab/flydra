@@ -1,9 +1,9 @@
 import cgtypes # cgtypes 1.x
-import numpy
+import numpy as np
 
 # See math in kdviewer.py (annotatePick function)
 
-D2R = numpy.pi/180.0
+D2R = np.pi/180.0
 
 def rotate(q,p):
     if isinstance(p,cgtypes.vec3):
@@ -28,7 +28,7 @@ def pos_ori2fu(pos,ori):
 
 def check_close( a,b):
     print a,'?=',b
-    return numpy.allclose( numpy.asarray(a), numpy.asarray(b))
+    return np.allclose( np.asarray(a), np.asarray(b))
 
 def test():
 
@@ -44,13 +44,13 @@ def test():
         assert check_close( fp,forward)
         assert check_close( vu,up)
 
-        q = cgtypes.quat().fromAngleAxis(numpy.pi, cgtypes.vec3(1,0,0) )
+        q = cgtypes.quat().fromAngleAxis(np.pi, cgtypes.vec3(1,0,0) )
         fp = rotate(q,forward)
         vu = rotate(q,up)
         assert check_close( fp,(0,0,1))
         assert check_close( vu, (0,-1,0))
 
-        q = cgtypes.quat().fromAngleAxis(numpy.pi/2, cgtypes.vec3(0,1,0) )
+        q = cgtypes.quat().fromAngleAxis(np.pi/2, cgtypes.vec3(0,1,0) )
         q_mat = q.toMat4()
         fp = rotate(q,forward)
         vu = rotate(q,up)
@@ -90,8 +90,8 @@ def test():
         print 'ori.toAngleAxis()',ori.toAngleAxis()
         print ori
 
-        fp_good = numpy.array((0.40262157300195972, 0.12141447782035097, 0.0))
-        vu_good = numpy.array((0,1,0))
+        fp_good = np.array((0.40262157300195972, 0.12141447782035097, 0.0))
+        vu_good = np.array((0,1,0))
 
         #fp,vu = pos_ori2fu(pos,ori)
         fp,vu = pos_ori2fu(pos,ori)
@@ -116,8 +116,8 @@ def test():
             fp,vu = pos_ori2fu(position,ori)
 
             # focal point direction is important, not FP itself...
-            fpdir_good = numpy.array(fp_good)-position
-            fpdir = numpy.array(fp)-position
+            fpdir_good = np.array(fp_good)-position
+            fpdir = np.array(fp)-position
 
             print 'focal_point direction',
             assert check_close(fpdir,fpdir_good)
