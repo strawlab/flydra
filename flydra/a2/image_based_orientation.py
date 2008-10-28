@@ -190,7 +190,8 @@ def plot_image_subregion(raw_im, mean_im, absdiff_im,
         output_surface.finish()
 
 def running_average( image_framenumbers, ims,
-                     im_coords, camn_pt_no_array, N=5,
+                     im_coords, camn_pt_no_array,
+                     N=5,
                      min_N=5 ):
     assert np.all( (image_framenumbers[1:]-image_framenumbers[:-1])
                    > 0 )
@@ -264,6 +265,9 @@ def doit(h5_filename=None,
          start=None,
          stop=None,
          view=None,
+         save_images=False,
+         intermediate_thresh_frac=0.5, # arbitrary
+         final_thresh=7,# arbitrary
          ):
     """
 
@@ -274,11 +278,11 @@ def doit(h5_filename=None,
     kalman_filename.
 
     """
-    SAVE_IMAGES=False
     if view is None:
         view = [ 'orig' for f in ufmf_filenames ]
     else:
         assert len(view)==len(ufmf_filenames)
+
     filename2view = dict(zip(ufmf_filenames,view))
 
     ca = core_analysis.get_global_CachingAnalyzer()
@@ -338,7 +342,7 @@ def doit(h5_filename=None,
             obj_3d_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file)
 
             this_obj_framenumbers = collections.defaultdict(list)
-            if SAVE_IMAGES:
+            if save_images:
                 this_obj_raw_images = collections.defaultdict(list)
                 this_obj_mean_images = collections.defaultdict(list)
             this_obj_absdiff_images = collections.defaultdict(list)
@@ -418,8 +422,12 @@ def doit(h5_filename=None,
                                          maxsize )
                     im_coords, raw_im, mean_im, absdiff_im = tmp
 
+                    max_absdiff_im = absdiff_im.max()
+                    intermediate_thresh=intermediate_thresh_frac*max_absdiff_im
+                    absdiff_im[ absdiff_im <= intermediate_thresh] = 0
+
                     this_obj_framenumbers[camn].append( framenumber )
-                    if SAVE_IMAGES:
+                    if save_images:
                         this_obj_raw_images[camn].append((raw_im,im_coords))
                         this_obj_mean_images[camn].append(mean_im)
                     this_obj_absdiff_images[camn].append(absdiff_im)
@@ -440,7 +448,7 @@ def doit(h5_filename=None,
             for camn in this_obj_absdiff_images:
                 cam_id = camn2cam_id[camn]
                 image_framenumbers = np.array(this_obj_framenumbers[camn])
-                if SAVE_IMAGES:
+                if save_images:
                     raw_images = this_obj_raw_images[camn]
                     mean_images = this_obj_mean_images[camn]
                 absdiff_images = this_obj_absdiff_images[camn]
@@ -464,8 +472,7 @@ def doit(h5_filename=None,
                      orig_data2d_rownum, orig_idx) in results:
 
                     # Clip image to reduce moment arms.
-                    thresh = 7 # arbitrary
-                    av_im[av_im <= thresh] = 0
+                    av_im[av_im <= final_thresh] = 0
 
                     # XXX todo: connected components labels?
 
@@ -493,7 +500,7 @@ def doit(h5_filename=None,
                             row['eccentricity']=eccentricity
                             row.update() # save data
 
-                    if SAVE_IMAGES:
+                    if save_images:
                         # Display debugging images
                         fname = 'av_obj%05d_%s_frame%07d.png'%(
                             obj_id,cam_id,fno)
@@ -508,7 +515,7 @@ def doit(h5_filename=None,
 
                         if 1:
                             # increase contrast
-                            contrast_scale = 5.0
+                            contrast_scale = 2.0
                             av_im_show = np.clip(av_im*contrast_scale,0,255)
 
                         margin = 10
@@ -613,6 +620,9 @@ def main():
     parser.add_option("--stop", type='int', default=None,
                       help="frame number to end analysis on")
 
+    parser.add_option("--save-images", action='store_true',
+                      default=False)
+
     (options, args) = parser.parse_args()
 
     if options.ufmfs is None:
@@ -641,6 +651,7 @@ def main():
          stop=options.stop,
          view=view,
          output_h5_filename=options.output_h5,
+         save_images=options.save_images,
          )
 
 if __name__=='__main__':
