@@ -270,6 +270,7 @@ class Tracker:
                  max_frames_skipped=25,
                  save_all_data=False,
                  area_threshold=0,
+                 area_threshold_for_orientation=0.0,
                  disable_image_stat_gating=False,
                  ):
         """
@@ -283,6 +284,7 @@ class Tracker:
 
         """
         self.area_threshold = area_threshold
+        self.area_threshold_for_orientation=area_threshold_for_orientation
         self.save_all_data = save_all_data
         self.reconstructor_meters=reconstructor_meters
         #self.live_tracked_objects = TrackedObjectKeeperIPythonParallel( TrackedObject )
@@ -401,19 +403,21 @@ class Tracker:
                      first_observation_idxs,
                      debug=0):
 
-        self.live_tracked_objects.make_new(self.reconstructor_meters,
-                                           frame,
-                                           first_observation_orig_units,
-                                           first_observation_Lcoords_orig_units,
-                                           first_observation_camns,
-                                           first_observation_idxs,
-                                           scale_factor=self.scale_factor,
-                                           kalman_model=self.kalman_model,
-                                           save_calibration_data=self.save_calibration_data,
-                                           save_all_data=self.save_all_data,
-                                           area_threshold=self.area_threshold,
-                                           disable_image_stat_gating=self.disable_image_stat_gating,
-                                           )
+        self.live_tracked_objects.make_new(
+            self.reconstructor_meters,
+            frame,
+            first_observation_orig_units,
+            first_observation_Lcoords_orig_units,
+            first_observation_camns,
+            first_observation_idxs,
+            scale_factor=self.scale_factor,
+            kalman_model=self.kalman_model,
+            save_calibration_data=self.save_calibration_data,
+            save_all_data=self.save_all_data,
+            area_threshold=self.area_threshold,
+            area_threshold_for_orientation=self.area_threshold_for_orientation,
+            disable_image_stat_gating=self.disable_image_stat_gating,
+            )
     def kill_all_trackers(self):
         self.live_tracked_objects.get_async_applier('kill').get()
         self.dead_tracked_objects.extend(

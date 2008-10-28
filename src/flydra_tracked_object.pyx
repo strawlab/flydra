@@ -41,6 +41,9 @@ PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_I
 
 NO_LCOORDS = numpy.nan,numpy.nan,numpy.nan,  numpy.nan,numpy.nan,numpy.nan
 
+cdef double cnan
+cnan = np.nan
+
 def obs2d_hashable( arr ):
     assert arr.dtype == numpy.uint16
     assert len(arr.shape)==1
@@ -71,7 +74,8 @@ cdef class TrackedObject:
     cdef mybool kill_me, save_all_data
     cdef object save_calibration_data
     cdef public object saved_calibration_data
-    cdef double area_threshold
+    cdef double area_threshold, area_threshold_for_orientation
+
     cdef object reconstructor_meters, my_kalman
     cdef double scale_factor
     cdef object distorted_pixel_euclidian_distance_accept
@@ -93,7 +97,8 @@ cdef class TrackedObject:
                  kalman_model=None,
                  save_calibration_data=None,
                  save_all_data=False,
-                 area_threshold=0,
+                 double area_threshold=0.0,
+                 double area_threshold_for_orientation=0.0,
                  disable_image_stat_gating=False,
                  ):
         """
@@ -108,6 +113,7 @@ cdef class TrackedObject:
         area_threshold - minimum area to consider for tracking use
         """
         self.area_threshold = area_threshold
+        self.area_threshold_for_orientation = area_threshold_for_orientation
         self.save_all_data = save_all_data
         self.kill_me = False
         self.reconstructor_meters = reconstructor_meters
@@ -478,6 +484,11 @@ cdef class TrackedObject:
                     else:
                         p_y_x = some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
 
+                    if pt_area < self.area_threshold:
+                        # This should not fall under
+                        # "disable_image_stat_gating" -- it is a separate test.
+                        p_y_x = np.inf
+
                     if np.isfinite(p_y_x):
                         gated_in = True
 
@@ -537,16 +548,29 @@ cdef class TrackedObject:
                     # only points
                     observed_2d = pt_undistorted[PT_TUPLE_IDX_X], pt_undistorted[PT_TUPLE_IDX_Y]
                 else:
-                    # with orientation
-                    observed_2d = (pt_undistorted[PT_TUPLE_IDX_X],
-                                   pt_undistorted[PT_TUPLE_IDX_Y],
-                                   pt_undistorted[PT_TUPLE_IDX_AREA],
-                                   pt_undistorted[PT_TUPLE_IDX_SLOPE],
-                                   pt_undistorted[PT_TUPLE_IDX_ECCENTRICITY],
-                                   pt_undistorted[PT_TUPLE_IDX_P1],
-                                   pt_undistorted[PT_TUPLE_IDX_P2],
-                                   pt_undistorted[PT_TUPLE_IDX_P3],
-                                   pt_undistorted[PT_TUPLE_IDX_P4])
+                    area = pt_undistorted[PT_TUPLE_IDX_AREA]
+                    if area >= self.area_threshold_for_orientation:
+                        # with orientation
+                        observed_2d = (pt_undistorted[PT_TUPLE_IDX_X],
+                                       pt_undistorted[PT_TUPLE_IDX_Y],
+                                       pt_undistorted[PT_TUPLE_IDX_AREA],
+                                       pt_undistorted[PT_TUPLE_IDX_SLOPE],
+                                       pt_undistorted[PT_TUPLE_IDX_ECCENTRICITY],
+                                       pt_undistorted[PT_TUPLE_IDX_P1],
+                                       pt_undistorted[PT_TUPLE_IDX_P2],
+                                       pt_undistorted[PT_TUPLE_IDX_P3],
+                                       pt_undistorted[PT_TUPLE_IDX_P4])
+                    else:
+                        # with no orientation
+                        observed_2d = (pt_undistorted[PT_TUPLE_IDX_X],
+                                       pt_undistorted[PT_TUPLE_IDX_Y],
+                                       pt_undistorted[PT_TUPLE_IDX_AREA],
+                                       cnan,
+                                       cnan,
+                                       cnan,
+                                       cnan,
+                                       cnan,
+                                       cnan)
                 cam_ids_and_points2d.append( (cam_id,observed_2d) )
                 frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                 used_camns_and_idxs.append( (camn, frame_pt_idx, closest_idx) )

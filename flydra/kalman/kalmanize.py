@@ -456,6 +456,7 @@ def kalmanize(src_filename,
         kalman_model=kalman_model,
         save_all_data=True,
         area_threshold=area_threshold,
+        area_threshold_for_orientation=options.area_threshold_for_orientation,
         disable_image_stat_gating=options.disable_image_stat_gating,
         )
 
@@ -711,6 +712,10 @@ def main():
     parser.add_option("--area-threshold", type='float',
                       default=0.0,
                       help="area threshold (used to filter incoming 2d points)")
+
+    parser.add_option("--area-threshold-for-orientation", type='float',
+                      default=0.0,
+                      help="minimum area to compute orientation")
 
     parser.add_option("--min-observations-to-save", type='int', default=2,
                       help='minimum number of observations required for a kalman object to be saved')
