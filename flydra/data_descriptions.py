@@ -7,6 +7,8 @@ PT_TUPLE_IDX_Y = 1
 PT_TUPLE_IDX_AREA = 2
 PT_TUPLE_IDX_SLOPE = 3
 PT_TUPLE_IDX_ECCENTRICITY = 4
+# 3D coordinates of plane formed by camera center and slope line
+# centered on object.
 PT_TUPLE_IDX_P1 = 5
 PT_TUPLE_IDX_P2 = 6
 PT_TUPLE_IDX_P3 = 7
