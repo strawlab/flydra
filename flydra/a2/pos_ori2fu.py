@@ -16,12 +16,16 @@ def pos_ori2fu(pos,ori):
     """convert position (xyz) vector and orientation (wxyz) quat into focal_point and view_up"""
     pos = cgtypes.vec3(pos)
     ori = cgtypes.quat(ori)
+    if np.isnan(ori.w):
+        raise ValueError('ori is nan')
     forward =  cgtypes.vec3( (0,0,-1))
     up =  cgtypes.vec3( (0,1,0))
     mori = ori.toMat4().inverse()
     #view_forward_dir = rotate(ori,forward)
     view_forward_dir = mori*forward
     focal_point = pos + view_forward_dir
+    if np.isnan(focal_point[0]):
+        raise ValueError('focal point is nan')
     #view_up_dir = rotate(ori,up)
     view_up_dir = mori*up
     return focal_point, view_up_dir
