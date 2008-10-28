@@ -4,7 +4,7 @@ import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy
 import numpy as np
-import math, os, sys
+import math, os, sys, hashlib
 import scipy.io
 import pprint
 DEBUG = False
@@ -159,6 +159,23 @@ def my_decimate(x,q):
         result[:-1] = mysum[:-1]/q
         result[-1] = mysum[-1]/ (q-lendiff)
         return result
+
+def calc_quick_hash(filename):
+    """quickly calculate a hash value for an even giant file"""
+    fd = open(filename,mode='rb')
+    start_bytes = fd.read(1000)
+
+    try:
+        fd.seek(-1000,os.SEEK_END)
+    except IOError,err:
+        # it's OK, we'll just read up to another 1000 bytes
+        pass
+
+    stop_bytes = fd.read(1000)
+    bytes = start_bytes+stop_bytes
+    m = hashlib.md5()
+    m.update(bytes)
+    return m.digest()
 
 class WeakRefAbleDict(object):
     def __init__(self,val,debug=False):
@@ -602,13 +619,29 @@ class PreSmoothedDataCache(object):
 
         # get cached datafile for this data_file
         if data_file not in self.cache_h5files_by_data_file:
+            orig_hash = calc_quick_hash(data_file.filename)
+            expected_title = 'smoothcache for %s'%orig_hash
             cache_h5file_name = os.path.abspath(os.path.splitext(data_file.filename)[0]) + '.kh5-smoothcache'
+            make_new_cache = True
             if os.path.exists( cache_h5file_name ):
                 # loading cache file
                 cache_h5file = tables.openFile( cache_h5file_name, mode='r+' )
-            else:
+
+                # check if cache is up to date
+                cache_title = cache_h5file.title
+                if expected_title == cache_title:
+                    make_new_cache = False
+                else:
+                    warnings.warn(
+                        'Stale cache file %s. Deleting'%cache_h5file_name)
+                    cache_h5file.close()
+                    os.unlink( cache_h5file_name )
+
+            if make_new_cache:
                 # creating cache file
-                cache_h5file = tables.openFile( cache_h5file_name, mode='w' )
+                cache_h5file = tables.openFile( cache_h5file_name, mode='w',
+                                                title=expected_title )
+
             self.cache_h5files_by_data_file[data_file] = cache_h5file
 
         h5file = self.cache_h5files_by_data_file[data_file]
