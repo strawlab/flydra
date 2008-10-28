@@ -53,6 +53,7 @@ def doit(fmf_filename=None,
          blank=None,
          do_zoom=False,
          do_zoom_diff=False,
+         up_dir=None,
          options=None,
          ):
 
@@ -153,6 +154,7 @@ def doit(fmf_filename=None,
                                         dynamic_model_name = dynamic_model,
                                         frames_per_second=fps,
                                         return_smoothed_directions = options.smooth_orientations,
+                                        up_dir = up_dir,
                                         )
             except core_analysis.NotEnoughDataToSmoothError:
                 print 'not enough data to smooth for obj_id %d, skipping...'%obj_id
@@ -908,6 +910,8 @@ def main():
 
     parser.add_option("--obj-only", type="string")
 
+    parser.add_option("--up-dir", type="string")
+
     (options, args) = parser.parse_args()
 
     if options.obj_only is not None:
@@ -916,6 +920,11 @@ def main():
     if len(args) or (options.fmf_filename is None):
         parser.print_help()
         return
+
+    if options.up_dir is not None:
+        up_dir = core_analysis.parse_seq(options.up_dir)
+    else:
+        up_dir = None
 
     doit(fmf_filename=options.fmf_filename,
          h5_filename=options.h5_filename,
@@ -930,6 +939,7 @@ def main():
          do_zoom=options.zoom,
          do_zoom_diff=options.zoom_diff,
          options=options,
+         up_dir=up_dir,
          )
 
 if __name__=='__main__':

@@ -210,6 +210,7 @@ def doit(filename,
          draw_stim_func_str = None,
          use_kalman_smoothing=True,
          fps=None,
+         up_dir=None,
          vertical_scale=False,
          max_vel=0.25,
          show_only_track_ends = False,
@@ -225,6 +226,10 @@ def doit(filename,
          ):
 
     assert exclude_vel_data in ['kalman','observations'] # kalman means smoothed or filtered, depending on use_kalman_smoothing
+
+    if up_dir is not None:
+        up_dir = np.array(up_dir,dtype=np.float)
+        assert up_dir.shape==(3,)
 
     if link_all_simultaneous_objs:
         allsave = []
@@ -307,7 +312,9 @@ def doit(filename,
                     rows = ca.load_data( obj_id, data_file,
                                          use_kalman_smoothing=use_kalman_smoothing,
                                          dynamic_model_name = dynamic_model_name,
-                                         frames_per_second=fps)
+                                         frames_per_second=fps,
+                                         up_dir=up_dir,
+                                         )
                 except core_analysis.NotEnoughDataToSmoothError:
                     warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
                     continue
@@ -430,7 +437,9 @@ def doit(filename,
                 my_rows = ca.load_data( obj_id, data_file,
                                         use_kalman_smoothing=use_kalman_smoothing,
                                         dynamic_model_name = dynamic_model_name,
-                                        frames_per_second=fps)
+                                        frames_per_second=fps,
+                                        up_dir=up_dir,
+                                        )
             except core_analysis.ObjectIDDataError, err:
                 continue
 
@@ -494,6 +503,7 @@ def doit(filename,
                 obs_directions = core_analysis.choose_orientations(obs_rows, obs_directions,
                                                                    frames_per_second=fps,
                                                                    elevation_up_bias_degrees=0,
+                                                                   up_dir=up_dir,
                                                                    )
                 assert numpy.alltrue(PQmath.is_unit_vector(obs_directions))
 
@@ -522,7 +532,9 @@ def doit(filename,
         rows = ca.load_data( obj_id, data_file,
                              use_kalman_smoothing=use_kalman_smoothing,
                              dynamic_model_name = dynamic_model_name,
-                             frames_per_second=fps)
+                             frames_per_second=fps,
+                             up_dir=up_dir,
+                             )
 
         if len(rows):
             frames = rows['frame']
@@ -554,6 +566,7 @@ def doit(filename,
                                     frames_per_second=fps,
                                     dynamic_model_name = dynamic_model_name,
                                     return_smoothed_directions = options.smooth_orientations,
+                                    up_dir=up_dir,
                                     )
             except Exception, err:
                 if 1:
@@ -1069,6 +1082,8 @@ def main():
 
     parser.add_option("--obj-only", type="string")
 
+    parser.add_option("--up-dir", type="string")
+
     parser.add_option("--draw-stim",
                       type="string",
                       dest="draw_stim_func_str",
@@ -1205,6 +1220,11 @@ def main():
         if options.obj_start is not None or options.obj_stop is not None:
             raise ValueError("cannot specify start and stop with --obj-only option")
 
+    if options.up_dir is not None:
+        up_dir = core_analysis.parse_seq(options.up_dir)
+    else:
+        up_dir = None
+
     if options.version:
         print 'kdviewer %s'%(flydra.version.__version__,)
 
@@ -1234,6 +1254,7 @@ def main():
          link_all_simultaneous_objs=options.link_all_simultaneous_objs,
          show_kalman_P=options.show_kalman_P,
          options = options,
+         up_dir=up_dir,
          )
 
 if __name__=='__main__':

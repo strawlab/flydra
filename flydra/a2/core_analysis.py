@@ -455,11 +455,16 @@ def choose_orientations(rows, directions, frames_per_second=None,
                         #min_velocity_weight=0.0,
                         max_velocity_weight=1.0,
                         elevation_up_bias_degrees=45.0, # tip the velocity angle closer +Z by this amount (maximally)
+                        up_dir=None,
                         ):
+    if up_dir is None:
+        #up_dir = np.array([0,0,1],dtype=np.float)
+        raise ValueError("up_dir must be specified. "
+                         "(Hint: --up-dir='0,0,1')")
     D2R = np.pi/180
     if DEBUG:
         frames = rows['frame']
-        cond = (77830 < frames) & (frames < 77860 )
+        cond = (125100 < frames) & (frames < 125200 )
         idxs = np.nonzero(cond)[0]
 
     X = np.array([rows['x'], rows['y'], rows['z']]).T
@@ -477,15 +482,15 @@ def choose_orientations(rows, directions, frames_per_second=None,
 
     velocity_direction = velocity/speed[:,np.newaxis]
     if elevation_up_bias_degrees != 0:
-        rot1_axis = np.cross(velocity_direction, np.array([0,0,1.0]))
+        rot1_axis = np.cross(velocity_direction, up_dir)
 
-        dist_from_zplus = np.arccos( np.dot(velocity_direction,np.array([0,0,1.0])))
+        dist_from_zplus = np.arccos( np.dot(velocity_direction,up_dir))
         bias_radians = elevation_up_bias_degrees*D2R
         velocity_biaser = [ cgtypes.quat().fromAngleAxis(bias_radians,ax) for ax in rot1_axis ]
         biased_velocity_direction = [ rotate_vec( velocity_biaser[i],
                                                   cgtypes.vec3(*(velocity_direction[i]))) for i in range(len(velocity))]
         biased_velocity_direction = numpy.array([ [v[0], v[1], v[2]] for v in biased_velocity_direction ])
-        biased_velocity_direction[ dist_from_zplus <= bias_radians, : ] = numpy.array([0,0,1])
+        biased_velocity_direction[ dist_from_zplus <= bias_radians, : ] = up_dir
 
         if DEBUG:
             R2D = 180.0/np.pi
@@ -608,7 +613,11 @@ class PreSmoothedDataCache(object):
                       frames_per_second=None,
                       dynamic_model_name=None,
                       return_smoothed_directions=False,
+                      up_dir=None,
                       ):
+        if up_dir is None:
+            raise ValueError("up_dir must be specified. "
+                             "(Hint: --up-dir='0,0,1')")
 
         # XXX TODO fixme: save values of frames_per_second and
         # dynamic_model_name (and svn revision?) and
@@ -620,7 +629,8 @@ class PreSmoothedDataCache(object):
         # get cached datafile for this data_file
         if data_file not in self.cache_h5files_by_data_file:
             orig_hash = calc_quick_hash(data_file.filename)
-            expected_title = 'smoothcache for %s'%orig_hash
+            expected_title = 'up_dir=(%.3f, %.3f, %.3f);hash="%s"'%(
+                up_dir[0],up_dir[1],up_dir[2],orig_hash)
             cache_h5file_name = os.path.abspath(os.path.splitext(data_file.filename)[0]) + '.kh5-smoothcache'
             make_new_cache = True
             if os.path.exists( cache_h5file_name ):
@@ -693,6 +703,7 @@ class PreSmoothedDataCache(object):
                                                  #velocity_weight=1.0,
                                                  #max_velocity_weight=1.0,
                                                  elevation_up_bias_degrees=45.0, # don't tip the velocity angle
+                                                 up_dir=up_dir,
                                                  )
                 rows['rawdir_x'] = directions[:,0]
                 rows['rawdir_y'] = directions[:,1]
@@ -1083,6 +1094,7 @@ class CachingAnalyzer:
                   return_smoothed_directions=False,
                   flystate='both', # 'both', 'walking', or 'flying'
                   walking_start_stops=None, # list of (start,stop)
+                  up_dir=None,
                   ):
         """Load Kalman state estimates from data_file.
 
@@ -1101,6 +1113,9 @@ class CachingAnalyzer:
             self.keep_references.append( data_file ) # prevent from garbage collection with weakref
 
         is_mat_file = check_is_mat_file(data_file)
+
+        if up_dir is not None:
+            up_dir = np.array(up_dir,dtype=np.float)
 
         if is_mat_file:
             # We ignore use_kalman_smoothing -- always smoothed
@@ -1212,6 +1227,7 @@ class CachingAnalyzer:
                                                         frames_per_second=frames_per_second,
                                                         dynamic_model_name=dynamic_model_name,
                                                         return_smoothed_directions=return_smoothed_directions,
+                                                        up_dir=up_dir,
                                                         )
 
 
