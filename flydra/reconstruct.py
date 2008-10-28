@@ -780,8 +780,9 @@ class Reconstructor:
                 fd.close()
                 value = value.strip()
             else:
-                print 'Assuming scale_factor units are millimeters in %s: file %s does not exist'%(
-                    __file__,filename)
+                warnings.warn('Assuming scale_factor units are millimeters in '
+                              '%s: file %s does not exist'%(
+                    __file__,filename))
                 value = 'millimeters'
 
             if value in self._known_units2scale_factor:
