@@ -26,6 +26,13 @@ class Node(object):
         if self.status == 'up to date':
             return
 
+        # delete non-up-to-date file
+        if os.path.exists(self.pathname):
+            sys.stderr.write('DELETING %s\n'%self.pathname)
+            sys.stderr.write('Press enter to continue, <Ctrl>-C to abort.\n')
+            raw_input()
+            os.unlink(self.pathname)
+
         for parent in self._parents:
             parent.make(debug=0)
         cmd_args = self._make()
