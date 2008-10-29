@@ -47,6 +47,7 @@ def doit(
          fps=None,
          use_kalman_smoothing=True,
          dynamic_model = None,
+         up_dir = None,
          options = None,
          ):
 
@@ -269,6 +270,7 @@ def doit(
                                             use_kalman_smoothing=use_kalman_smoothing,
                                             dynamic_model_name = dynamic_model,
                                             frames_per_second=fps,
+                                            up_dir=up_dir,
                                             )
                     kalman_rows.append(my_rows)
                 except core_analysis.NotEnoughDataToSmoothError, err:
@@ -418,10 +420,17 @@ def main():
 
     parser.add_option("--obj-only", type="string")
 
+    parser.add_option("--up-dir", type="string")
+
     (options, args) = parser.parse_args()
 
     if options.obj_only is not None:
         options.obj_only = core_analysis.parse_seq(options.obj_only)
+
+    if options.up_dir is not None:
+        up_dir = core_analysis.parse_seq(options.up_dir)
+    else:
+        up_dir = None
 
     doit(
         filenames=args,
@@ -431,6 +440,7 @@ def main():
         fps = options.fps,
         dynamic_model = options.dynamic_model,
         use_kalman_smoothing=options.use_kalman_smoothing,
+        up_dir=up_dir,
         options = options,
         )
 
