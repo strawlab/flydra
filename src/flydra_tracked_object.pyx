@@ -84,7 +84,7 @@ cdef class TrackedObject:
 
     cdef public object frames, xhats, timestamps, Ps, observations_data, observations_Lcoords
     cdef public object observations_frames, observations_2d
-    cdef int disable_image_stat_gating
+    cdef int disable_image_stat_gating, orientation_consensus
 
     def __init__(self,
                  reconstructor_meters, # the Reconstructor instance
@@ -100,6 +100,7 @@ cdef class TrackedObject:
                  double area_threshold=0.0,
                  double area_threshold_for_orientation=0.0,
                  disable_image_stat_gating=False,
+                 orientation_consensus=0,
                  ):
         """
 
@@ -119,6 +120,7 @@ cdef class TrackedObject:
         self.reconstructor_meters = reconstructor_meters
         self.distorted_pixel_euclidian_distance_accept=kalman_model.get('distorted_pixel_euclidian_distance_accept',None)
         self.disable_image_stat_gating = disable_image_stat_gating
+        self.orientation_consensus = orientation_consensus
 
         self.current_frameno = frame
         if scale_factor is None:
@@ -544,33 +546,29 @@ cdef class TrackedObject:
 
             if closest_idx is not None:
                 pt_undistorted, projected_line_meters = candidate_point_list[closest_idx]
-                if 0:
-                    # only points
-                    observed_2d = pt_undistorted[PT_TUPLE_IDX_X], pt_undistorted[PT_TUPLE_IDX_Y]
+                area = pt_undistorted[PT_TUPLE_IDX_AREA]
+                if area >= self.area_threshold_for_orientation:
+                    # with orientation
+                    observed_2d = (pt_undistorted[PT_TUPLE_IDX_X],
+                                   pt_undistorted[PT_TUPLE_IDX_Y],
+                                   pt_undistorted[PT_TUPLE_IDX_AREA],
+                                   pt_undistorted[PT_TUPLE_IDX_SLOPE],
+                                   pt_undistorted[PT_TUPLE_IDX_ECCENTRICITY],
+                                   pt_undistorted[PT_TUPLE_IDX_P1],
+                                   pt_undistorted[PT_TUPLE_IDX_P2],
+                                   pt_undistorted[PT_TUPLE_IDX_P3],
+                                   pt_undistorted[PT_TUPLE_IDX_P4])
                 else:
-                    area = pt_undistorted[PT_TUPLE_IDX_AREA]
-                    if area >= self.area_threshold_for_orientation:
-                        # with orientation
-                        observed_2d = (pt_undistorted[PT_TUPLE_IDX_X],
-                                       pt_undistorted[PT_TUPLE_IDX_Y],
-                                       pt_undistorted[PT_TUPLE_IDX_AREA],
-                                       pt_undistorted[PT_TUPLE_IDX_SLOPE],
-                                       pt_undistorted[PT_TUPLE_IDX_ECCENTRICITY],
-                                       pt_undistorted[PT_TUPLE_IDX_P1],
-                                       pt_undistorted[PT_TUPLE_IDX_P2],
-                                       pt_undistorted[PT_TUPLE_IDX_P3],
-                                       pt_undistorted[PT_TUPLE_IDX_P4])
-                    else:
-                        # with no orientation
-                        observed_2d = (pt_undistorted[PT_TUPLE_IDX_X],
-                                       pt_undistorted[PT_TUPLE_IDX_Y],
-                                       pt_undistorted[PT_TUPLE_IDX_AREA],
-                                       cnan,
-                                       cnan,
-                                       cnan,
-                                       cnan,
-                                       cnan,
-                                       cnan)
+                    # with no orientation
+                    observed_2d = (pt_undistorted[PT_TUPLE_IDX_X],
+                                   pt_undistorted[PT_TUPLE_IDX_Y],
+                                   pt_undistorted[PT_TUPLE_IDX_AREA],
+                                   cnan,
+                                   cnan,
+                                   cnan,
+                                   cnan,
+                                   cnan,
+                                   cnan)
                 cam_ids_and_points2d.append( (cam_id,observed_2d) )
                 frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                 used_camns_and_idxs.append( (camn, frame_pt_idx, closest_idx) )
@@ -583,7 +581,10 @@ cdef class TrackedObject:
             # keep 3D "observation" because we need to save 2d observations
             observation_meters = numpy.nan*numpy.ones( (3,))
         elif len(cam_ids_and_points2d)>=2:
-            observation_meters, Lcoords = self.reconstructor_meters.find3d( cam_ids_and_points2d, return_line_coords = True)
+            observation_meters, Lcoords = self.reconstructor_meters.find3d(
+                cam_ids_and_points2d, return_line_coords = True,
+                orientation_consensus=self.orientation_consensus)
+
             if len(cam_ids_and_points2d)>=3:
                 if self.save_calibration_data is not None and self.save_calibration_data.isSet():
                     self.saved_calibration_data.append( cam_ids_and_points2d )

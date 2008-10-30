@@ -458,6 +458,7 @@ def kalmanize(src_filename,
         area_threshold=area_threshold,
         area_threshold_for_orientation=options.area_threshold_for_orientation,
         disable_image_stat_gating=options.disable_image_stat_gating,
+        orientation_consensus=options.orientation_consensus,
         )
 
     tracker.set_killed_tracker_callback( h5saver.save_tro )
@@ -719,6 +720,8 @@ def main():
 
     parser.add_option("--min-observations-to-save", type='int', default=2,
                       help='minimum number of observations required for a kalman object to be saved')
+
+    parser.add_option("--orientation-consensus", type='int', default=0)
 
     parser.add_option("--force-minimum-eccentricity", type='float',
                       default=None)

@@ -12,6 +12,7 @@ import traceback
 import flydra.pmat_jacobian
 import xml.etree.ElementTree as ET
 import StringIO, warnings
+import cgtypes
 
 WARN_CALIB_DIFF = False
 
@@ -145,6 +146,16 @@ def pts2Lmatrix(A,B):
 def pts2Lcoords(A,B):
     return Lmatrix2Lcoords(pts2Lmatrix(A,B))
 
+def line_direction_distance(Lcoords_A, Lcoords_B):
+    """find distance between 2 line directions, A and B, ignore sign"""
+    dir_vecA = cgtypes.vec3(Lcoords_A[2], -Lcoords_A[4], Lcoords_A[5])
+    dir_vecB = cgtypes.vec3(Lcoords_B[2], -Lcoords_B[4], Lcoords_B[5])
+    ## cos_angle = dir_vecA.dot( dir_vecB )
+    ## angle = np.arccos( cos_angle )
+    angle = dir_vecA.angle( dir_vecB )
+    flipped_angle = np.pi-angle
+    return min(angle,flipped_angle)
+
 def norm_vec(V):
     Va = np.asarray(V,dtype=np.float64) # force double precision floats
     if len(Va.shape)==1:
@@ -223,6 +234,36 @@ def normalize_pmat(pmat):
         pmat = pmat/K[2,2]
     assert numpy.allclose(pmat2cam_center(pmat_orig),pmat2cam_center(pmat))
     return pmat
+
+def intersect_planes_to_find_line(P):
+    # Is there a faster way when len(P)==2?
+    try:
+        u,d,vt=scipy.linalg.svd(P,full_matrices=True)
+        # "two columns of V corresponding to the two largest singular
+        # values span the best rank 2 approximation to A and may be
+        # used to define the line of intersection of the planes"
+        # (Hartley & Zisserman, p. 323)
+
+        # get planes (take row because this is transpose(V))
+        planeP = vt[0,:]
+        planeQ = vt[1,:]
+
+        # directly to Pluecker line coordinates
+        Lcoords = ( -(planeP[3]*planeQ[2]) + planeP[2]*planeQ[3],
+                      planeP[3]*planeQ[1]  - planeP[1]*planeQ[3],
+                    -(planeP[2]*planeQ[1]) + planeP[1]*planeQ[2],
+                    -(planeP[3]*planeQ[0]) + planeP[0]*planeQ[3],
+                    -(planeP[2]*planeQ[0]) + planeP[0]*planeQ[2],
+                    -(planeP[1]*planeQ[0]) + planeP[0]*planeQ[1] )
+    except Exception, exc:
+        print 'WARNING svd exception:',str(exc)
+        Lcoords = None
+    except:
+        print 'WARNING: unknown error in reconstruct.py'
+        print '(you probably have an old version of numarray'
+        print 'and SVD did not converge)'
+        Lcoords = None
+    return Lcoords
 
 def do_3d_operations_on_2d_point(helper,
                                  x0u, y0u, # undistorted coords
@@ -1030,7 +1071,8 @@ class Reconstructor:
     def get_reconstruct_helper_dict(self):
         return self._helper
 
-    def find3d(self, cam_ids_and_points2d, return_X_coords = True, return_line_coords = True ):
+    def find3d(self, cam_ids_and_points2d, return_X_coords = True,
+               return_line_coords = True, orientation_consensus = 0):
         """Find 3D coordinate using all data given
 
         Implements a linear triangulation method to find a 3D
@@ -1085,32 +1127,30 @@ class Reconstructor:
         if not return_line_coords or len(P) < 2:
             Lcoords = None
         else:
-            P = nx.asarray(P)
-            # Calculate best line
-            try:
-                u,d,vt=svd(P,full_matrices=True)
-                # "two columns of V corresponding to the two largest singular
-                # values span the best rank 2 approximation to A and may be
-                # used to define the line of intersection of the planes"
-                # (Hartley & Zisserman, p. 323)
-                P = vt[0,:] # P,Q are planes (take row because this is transpose(V))
-                Q = vt[1,:]
+            if orientation_consensus != 0 and len(P) > orientation_consensus:
+                # test for better fit with fewer orientations
+                allps = [np.array(ps) for ps in
+                         setOfSubsets(P) if len(ps)==orientation_consensus]
+                all_Lcoords = []
+                for ps in allps:
+                    all_Lcoords.append( intersect_planes_to_find_line(ps) )
+                N = len(all_Lcoords)
+                distance_matrix = np.zeros((N,N))
+                for i in range(N):
+                    for j in range(i+1,N):
+                        d = line_direction_distance(
+                            all_Lcoords[i], all_Lcoords[j] )
+                        # distances are symmetric
+                        distance_matrix[i,j] = d
+                        distance_matrix[j,i] = d
+                sum_distances = np.sum( distance_matrix, axis=0 )
+                closest_to_neighbors_idx = np.argmin( sum_distances )
+                Lcoords = all_Lcoords[closest_to_neighbors_idx]
+            else:
+                P = nx.asarray(P)
+                # Calculate best line
+                Lcoords = intersect_planes_to_find_line(P)
 
-                # directly to Pluecker line coordinates
-                Lcoords = ( -(P[3]*Q[2]) + P[2]*Q[3],
-                              P[3]*Q[1]  - P[1]*Q[3],
-                            -(P[2]*Q[1]) + P[1]*Q[2],
-                            -(P[3]*Q[0]) + P[0]*Q[3],
-                            -(P[2]*Q[0]) + P[0]*Q[2],
-                            -(P[1]*Q[0]) + P[0]*Q[1] )
-            except Exception, exc:
-                print 'WARNING svd exception:',str(exc)
-                Lcoords = None
-            except:
-                print 'WARNING: unknown error in reconstruct.py'
-                print '(you probably have an old version of numarray'
-                print 'and SVD did not converge)'
-                Lcoords = None
         if return_line_coords:
             if return_X_coords:
                 return X, Lcoords
