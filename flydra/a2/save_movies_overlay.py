@@ -664,7 +664,8 @@ def doit(fmf_filename=None,
                             xloc2 = xloc + radius_pt
                             yloc = rescale_factor*(absdiffy+y2d)
 
-                            if eccentricity<R.minimum_eccentricity:
+                            if (eccentricity<R.minimum_eccentricity or
+                                area<options.area_threshold_for_orientation):
                                 # only draw circle if not drawing slope line
                                 draw.ellipse( [xloc1,yloc-radius_pt,
                                                xloc2,yloc+radius_pt],
@@ -758,7 +759,8 @@ def doit(fmf_filename=None,
 
                         # plot slope line
                         if options.body_axis or options.smooth_orientations:
-                            if ((R is None) or (not eccentricity<R.minimum_eccentricity)):
+                            if (((R is None) or (not eccentricity<R.minimum_eccentricity)) and
+                                (area>=options.area_threshold_for_orientation)):
                                 direction = numpy.array( [1,slope] )
                                 direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
                                 if style=='debug':
@@ -911,6 +913,10 @@ def main():
     parser.add_option("--obj-only", type="string")
 
     parser.add_option("--up-dir", type="string")
+
+    parser.add_option("--area-threshold-for-orientation", type='float',
+                      default=0.0,
+                      help="minimum area to display orientation")
 
     (options, args) = parser.parse_args()
 
