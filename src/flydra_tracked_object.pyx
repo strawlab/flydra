@@ -7,7 +7,7 @@ cimport c_lib
 
 import numpy
 import numpy as np
-import time
+import time, sys
 import adskalman.adskalman as kalman
 import flydra.kalman.ekf as kalman_ekf
 #import flydra.geom as geom
@@ -195,18 +195,18 @@ cdef class TrackedObject:
 
     def debug_info(self,level=3):
         if level > 5:
-            print self
+            sys.stdout.write('%s\n'%self)
             for i in range(len(self.xhats)):
                 this_Pmean = math.sqrt(self.Ps[i][0,0]**2 + self.Ps[i][1,1]**2 + self.Ps[i][2,2]**2)
-                print '  ',i,self.frames[i],self.xhats[i][:3],this_Pmean,
+                sys.stdout.write( ' '.join(map(str,['  ',i,self.frames[i],self.xhats[i][:3],this_Pmean,])) )
                 if self.frames[i] in self.observations_frames:
                     j =  self.observations_frames.index(  self.frames[i] )
-                    print self.observations_data[j]
+                    sys.stdout.write( '%s\n'%self.observations_data[j] )
                 else:
-                    print
-            print
+                    sys.stdout.write('\n')
+            sys.stdout.write('\n')
         elif level > 2:
-            print '%d observations, %d estimates for %s'%(len(self.xhats),len(self.observations_data),self)
+            sys.stdout.write('%d observations, %d estimates for %s\n'%(len(self.xhats),len(self.observations_data),self))
 
     def distance_in_meters_and_nsigma( self, testx ):
         xhat = self.xhats[-1][:3]
@@ -365,7 +365,7 @@ cdef class TrackedObject:
         # Remove most recent information
         frame = self.frames.pop()
         if debug1>2:
-            print self,'removing previous observation (from frame %d)'%(frame,)
+            sys.stdout.write( '%s removing previous observation (from frame %d)\n'%(self,frame,))
 
         self.xhats.pop()
         self.timestamps.pop()
