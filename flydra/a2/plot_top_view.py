@@ -98,6 +98,15 @@ def plot_top_and_side_views(subplot=None,
     dynamic_model = options.dynamic_model
     use_kalman_smoothing=options.use_kalman_smoothing
 
+    if not hasattr(options,'ellipsoids'):
+        options.ellipsoids = False
+
+    if not hasattr(options,'show_observations'):
+        options.show_observations = False
+
+    if not hasattr(options,'markersize'):
+        options.markersize = 0.5
+
     if options.ellipsoids and use_kalman_smoothing:
         warnings.warn('plotting ellipsoids while using Kalman smoothing does not reveal original error estimates')
 
@@ -182,6 +191,7 @@ def plot_top_and_side_views(subplot=None,
                                         use_kalman_smoothing=use_kalman_smoothing,
                                         dynamic_model_name = dynamic_model,
                                         frames_per_second=fps,
+                                        up_dir=options.up_dir,
                                         )
         except core_analysis.ObjectIDDataError:
             continue
@@ -335,6 +345,11 @@ def doit(options = None,
     for i, name in enumerate(subplots):
         ax = fig.add_subplot(len(subplots),1,i+1)#,sharex=ax)
         subplot[name] = ax
+
+    if options.up_dir is not None:
+        options.up_dir = core_analysis.parse_seq(options.up_dir)
+    else:
+        options.up_dir = None
 
     plot_top_and_side_views(subplot=subplot,
                             options=options,

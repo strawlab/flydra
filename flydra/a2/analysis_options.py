@@ -34,3 +34,5 @@ def add_common_options( parser ):
                       default=None,
                       help="name of XML file with stimulus info",
                       )
+
+    parser.add_option("--up-dir", type="string")

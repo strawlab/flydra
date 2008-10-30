@@ -149,6 +149,7 @@ def plot_timeseries(subplot=None,options = None):
                                              use_kalman_smoothing=use_kalman_smoothing,
                                              dynamic_model_name = dynamic_model,
                                              frames_per_second=fps,
+                                             up_dir=options.up_dir,
                                              )
             except core_analysis.ObjectIDDataError:
                 continue
@@ -384,6 +385,11 @@ def plot_timeseries(subplot=None,options = None):
 def doit(
          options = None,
          ):
+
+    if options.up_dir is not None:
+        options.up_dir = core_analysis.parse_seq(options.up_dir)
+    else:
+        options.up_dir = None
 
     fig = pylab.figure()#figsize=(6,4))
     figtitle=options.kalman_filename

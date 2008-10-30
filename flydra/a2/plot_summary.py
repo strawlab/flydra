@@ -6,6 +6,7 @@ import pylab
 import plot_timeseries
 import plot_top_view
 import analysis_options
+import core_analysis
 from optparse import OptionParser
 import os
 
@@ -74,6 +75,11 @@ def main():
     if len(args):
         parser.print_help()
         return
+
+    if options.up_dir is not None:
+        options.up_dir = core_analysis.parse_seq(options.up_dir)
+    else:
+        options.up_dir = None
 
     doit( options=options,
          )
