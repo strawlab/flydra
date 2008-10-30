@@ -81,7 +81,10 @@ class TrackedObjectKeeper(object):
         instance = self._klass(*args,**kwargs)
         self._tros.append( instance )
     def get_async_applier(self,name,args=None,kwargs=None,targets=None):
-        return AsyncApplier(self._tros,name,args=None,kwargs=None,targets=None)
+        return AsyncApplier(self._tros,name,
+                            args=args,
+                            kwargs=kwargs,
+                            targets=targets)
     def rmap_async(self, name, *args, **kwargs):
         """asynchronous reverse map function
 
@@ -337,7 +340,7 @@ class Tracker:
         all_to_gobble= []
         best_by_hash = {}
         to_rewind = []
-        # I could easily parallelize this========================================
+        # I could parallelize this========================================
         # this is map:
         results = self.live_tracked_objects.rmap( 'calculate_a_posteri_estimate',
                                                   frame,
@@ -387,7 +390,9 @@ class Tracker:
             # object (which has higher error) so that 2 Kalman objects
             # don't start sharing all observations.
 
-            self.live_tracked_objects.get_async_applier('remove_previous_observation', kwargs=dict(debug1=debug2), targets=to_rewind).get()
+            self.live_tracked_objects.get_async_applier(
+                'remove_previous_observation', kwargs=dict(debug1=debug2),
+                targets=to_rewind).get()
 
         # remove tracked objects from live list (when their error grows too large)
         self.live_tracked_objects.get_async_applier('kill', targets=kill_idxs).get()
