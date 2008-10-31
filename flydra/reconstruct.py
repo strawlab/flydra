@@ -660,8 +660,8 @@ def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
 
     intrinsic_parameters, cam_rotation = my_rq(M[:,:3])
     #intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
-    if intrinsic_parameters[2,2]!=1.0:
-        print 'WARNING: expected last row/col of intrinsic parameter matrix to be unity'
+    eps = 1e-15
+    if abs(intrinsic_parameters[2,2]-1.0)>eps:
         raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
 
     # (K = intrinsic parameters)
@@ -835,9 +835,11 @@ class Reconstructor:
 
             # load non linear parameters
             for cam_id_enum, cam_id in enumerate(cam_ids):
-                filename = os.path.join(use_cal_source,'basename%d.rad'%(cam_id_enum+1,))
-                if filename is None:
-                    print 'WARNING: no non-linear data (e.g. radial distortion) in calibration for %s'%cam_id
+                filename = os.path.join(use_cal_source,
+                                        'basename%d.rad'%(cam_id_enum+1,))
+                if not os.path.exists(filename):
+                    warnings.warn('no non-linear data (e.g. radial distortion) '
+                                  'in calibration for %s'%cam_id)
                     self._helper[cam_id] = SingleCameraCalibration_from_basic_pmat(
                         self.Pmat[cam_id],
                         cam_id=cam_id,
