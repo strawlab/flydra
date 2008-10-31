@@ -428,6 +428,8 @@ class SingleCameraCalibration:
         return self.Pmat
 
     def get_aligned_copy(self, s, R, t):
+        if self.scale_factor != 1.0:
+            raise ValueError('only safe to align calibration with unity scale')
         aligned_Pmat = align.align_pmat(s,R,t,self.Pmat)
         aligned = SingleCameraCalibration(cam_id=self.cam_id,
                                           Pmat=aligned_Pmat,
@@ -791,6 +793,7 @@ class Reconstructor:
         # values for converting to meters
         self._known_units2scale_factor = {
             'millimeters':1e-3,
+            'meters':1.0,
             }
 
         self._scale_factor2known_units = {}
@@ -1421,7 +1424,7 @@ def align_calibration():
 
      src=options.reconstructor
      dst = src+'.aligned'
-     calR = Reconstructor(cal_source=options.reconstructor)
+     origR = Reconstructor(cal_source=options.reconstructor)
      if os.path.exists(dst):
          raise RuntimeError('destination %s exists'%dst)
      s = mylocals['s']
@@ -1430,7 +1433,8 @@ def align_calibration():
      print 's',s
      print 'R',R
      print 't',t
-     alignedR = calR.get_aligned_copy(s,R,t)
+     scaledR = origR.get_scaled()
+     alignedR = scaledR.get_aligned_copy(s,R,t)
      alignedR.save_to_files_in_new_directory(dst)
 
 if __name__=='__main__':
