@@ -10,9 +10,11 @@ from flydra.common_variables import MINIMUM_ECCENTRICITY as DEFAULT_MINIMUM_ECCE
 import scipy.linalg
 import traceback
 import flydra.pmat_jacobian
+import flydra.align as align
 import xml.etree.ElementTree as ET
 import StringIO, warnings
 import cgtypes
+from optparse import OptionParser
 
 WARN_CALIB_DIFF = False
 
@@ -424,6 +426,15 @@ class SingleCameraCalibration:
 
     def get_pmat(self):
         return self.Pmat
+
+    def get_aligned_copy(self, s, R, t):
+        aligned_Pmat = align.align_pmat(s,R,t,self.Pmat)
+        aligned = SingleCameraCalibration(cam_id=self.cam_id,
+                                          Pmat=aligned_Pmat,
+                                          res=self.res,
+                                          helper=self.helper,
+                                          scale_factor=self.scale_factor)
+        return aligned
 
     def get_scaled(self,scale_factor):
         """change units (e.g. from mm to meters)
@@ -908,6 +919,13 @@ class Reconstructor:
         if close_cal_source:
             use_cal_source.close()
 
+    def get_aligned_copy(self, s, R, t):
+        orig_sccs = [self.get_SingleCameraCalibration(cam_id)
+                     for cam_id in self.cam_ids]
+        aligned_sccs = [scc.get_aligned_copy(s, R, t) for scc in orig_sccs]
+        return Reconstructor(aligned_sccs,
+                             minimum_eccentricity=self.minimum_eccentricity)
+
     def set_minimum_eccentricity(self,minimum_eccentricity):
         self.minimum_eccentricity = minimum_eccentricity
 
@@ -920,6 +938,12 @@ class Reconstructor:
         eq = True
         for my_scc,other_scc in zip(orig_sccs,other_sccs):
             if my_scc != other_scc:
+                if int(os.environ.get('DEBUG_EQ','0')):
+                    for attr in ['cam_id','Pmat','res','helper']:
+                        print
+                        print 'attr',attr
+                        print 'my_scc',getattr(my_scc,attr)
+                        print 'other_scc',getattr(other_scc,attr)
                 eq = False
                 break
         return eq
@@ -1359,6 +1383,55 @@ def test():
         print 'oax HZ',oax.to_hz()
         print 'closest',oax.closest()
         print
+
+def align_calibration():
+     usage = """%prog [options]
+
+     Requires an alignment file. The alignment file should have
+     contents like::
+
+       s=0.89999324180965479
+       R=[[0.99793608705515335, 0.041419147873301365, -0.04907158385969549],
+          [-0.044244064258451607, 0.99733841974169912, -0.057952905751338504],
+          [-0.04654061592784884, -0.060004422308518594, -0.99711255150683809]]
+       t=[-0.77477404833588825, 0.32807381821090476, 5.6937474990726518]
+
+     """
+
+     parser = OptionParser(usage)
+
+     parser.add_option("-r", "--reconstructor", type='string',
+                       help="calibration/reconstructor path (required)")
+
+     parser.add_option("-a", "--align", type='string',
+                       help="alignment file path (required)")
+
+     (options, args) = parser.parse_args()
+
+     if options.reconstructor is None:
+         raise ValueError('--reconstructor must be specified')
+
+     if options.align is None:
+         raise ValueError('--align must be specified')
+
+     mylocals = {}
+     myglobals = {}
+     execfile(options.align,myglobals,mylocals)
+
+
+     src=options.reconstructor
+     dst = src+'.aligned'
+     calR = Reconstructor(cal_source=options.reconstructor)
+     if os.path.exists(dst):
+         raise RuntimeError('destination %s exists'%dst)
+     s = mylocals['s']
+     R = np.array(mylocals['R'])
+     t = np.array(mylocals['t'])
+     print 's',s
+     print 'R',R
+     print 't',t
+     alignedR = calR.get_aligned_copy(s,R,t)
+     alignedR.save_to_files_in_new_directory(dst)
 
 if __name__=='__main__':
     test()
