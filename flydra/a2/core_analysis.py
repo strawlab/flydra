@@ -616,8 +616,9 @@ class PreSmoothedDataCache(object):
                       up_dir=None,
                       ):
         if up_dir is None:
-            raise ValueError("up_dir must be specified. "
-                             "(Hint: --up-dir='0,0,1')")
+            up_dir = np.array([0.0,0.0,1.0])
+            ## raise ValueError("up_dir must be specified. "
+            ##                  "(Hint: --up-dir='0,0,1')")
 
         # XXX TODO fixme: save values of frames_per_second and
         # dynamic_model_name (and svn revision?) and
