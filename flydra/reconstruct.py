@@ -719,7 +719,10 @@ class Reconstructor:
 
         if isinstance(self.cal_source,str) or isinstance(self.cal_source,unicode):
             if not self.cal_source.endswith('h5'):
-                self.cal_source_type = 'normal files'
+                if os.path.isdir(self.cal_source):
+                    self.cal_source_type = 'normal files'
+                else:
+                    self.cal_source_type = 'xml file'
             else:
                 self.cal_source_type = 'pytables filename'
         elif hasattr(self.cal_source,'__len__'): # is sequence
@@ -747,6 +750,16 @@ class Reconstructor:
             cam_ids = fd.read().split('\n')
             fd.close()
             if cam_ids[-1] == '': del cam_ids[-1] # remove blank line
+        elif self.cal_source_type == 'xml file':
+            root = ET.parse(use_cal_source).getroot()
+            if root.tag == "multi_camera_reconstructor":
+                next_self = Reconstructor_from_xml(root)
+            else:
+                r_node = root.find("multi_camera_reconstructor")
+                if r_node is None:
+                    raise ValueError(
+                        'XML file does not contain reconstructor node')
+            cam_ids = next_self.cam_ids
         elif self.cal_source_type == 'pytables':
             import tables as PT # PyTables
             assert type(use_cal_source)==PT.File
@@ -757,6 +770,9 @@ class Reconstructor:
                 cam_ids.append( node.name )
         elif self.cal_source_type=='SingleCameraCalibration instances':
             cam_ids = [scci.cam_id for scci in use_cal_source]
+        else:
+            raise ValueError(
+                "unknown cal_source_type '%s'"%self.cal_source_type)
 
         if minimum_eccentricity is None:
             self.minimum_eccentricity = None
@@ -773,6 +789,8 @@ class Reconstructor:
                     fd = open(min_e_fname,'r')
                     self.minimum_eccentricity = float( fd.read().strip() )
                     fd.close()
+            elif self.cal_source_type == 'xml file':
+                self.minimum_eccentricity = next_self.minimum_eccentricity
             if self.minimum_eccentricity is None:
                 # use default
                 if int(os.environ.get('FORCE_MINIMUM_ECCENTRICITY','0')):
@@ -892,6 +910,11 @@ class Reconstructor:
                 self.scale_factor = unique_scale_factors[0]
             else:
                 raise NotImplementedError('cannot handle case where each camera has a different scale factor')
+        elif self.cal_source_type=='xml file':
+            self.scale_factor = next_self.scale_factor
+            self.Pmat = next_self.Pmat
+            self.Res = next_self.Res
+            self._helper =  next_self._helper
 
         self.pmat_inv = {}
         self.pinhole_model_with_jacobian = {}
