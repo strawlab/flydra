@@ -55,6 +55,14 @@ class Stimulus(object):
             self._R = reconstruct.Reconstructor_from_xml(r_node)
         return self._R
 
+    def has_reconstructor(self):
+        try:
+            R = self._get_reconstructor()
+        except:
+            return False
+        else:
+            return True
+
     def verify_reconstructor(self,other_R):
         R = self._get_reconstructor()
         assert isinstance(other_R,reconstruct.Reconstructor)

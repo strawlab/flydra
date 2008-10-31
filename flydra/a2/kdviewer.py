@@ -841,7 +841,8 @@ def doit(filename,
         ##                                                    )
         if not is_mat_file:
             R = reconstruct.Reconstructor(data_file)
-            stim_xml.verify_reconstructor(R)
+            if stim_xml.has_reconstructor():
+                stim_xml.verify_reconstructor(R)
 
         if not is_mat_file:
             assert (data_file.filename.startswith('DATA') and
