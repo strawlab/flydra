@@ -1127,6 +1127,10 @@ class Reconstructor:
         if not return_line_coords or len(P) < 2:
             Lcoords = None
         else:
+            if orientation_consensus < 0:
+                orientation_consensus = (len(cam_ids_and_points2d) +
+                                         orientation_consensus)
+
             if orientation_consensus != 0 and len(P) > orientation_consensus:
                 # test for better fit with fewer orientations
                 allps = [np.array(ps) for ps in
