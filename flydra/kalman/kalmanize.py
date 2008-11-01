@@ -520,6 +520,11 @@ def kalmanize(src_filename,
                       'probability -- more data association work is '
                       'being done than necessary')
 
+    if len(frames_array)==0:
+        # no data
+        print 'No 2D data. Nothing to do.'
+        return
+
     row_idxs = numpy.argsort(frames_array)
     print '2D data range: %d<frame<%d'%(frames_array[row_idxs[0]], frames_array[row_idxs[-1]])
 
