@@ -429,7 +429,7 @@ class SingleCameraCalibration:
 
     def get_aligned_copy(self, s, R, t):
         if self.scale_factor != 1.0:
-            raise ValueError('only safe to align calibration with unity scale')
+            warnings.warn('aligning calibration without unity scale')
         aligned_Pmat = align.align_pmat(s,R,t,self.Pmat)
         aligned = SingleCameraCalibration(cam_id=self.cam_id,
                                           Pmat=aligned_Pmat,
@@ -1415,8 +1415,12 @@ def test():
 def align_calibration():
      usage = """%prog [options]
 
-     Requires an alignment file. The alignment file should have
-     contents like::
+     Requires an alignment file. This can either be a raw file, or the
+     list of camera locations.
+
+     A raw alignment file (specified with --align-raw) should have
+     contents like the following, where s is scale, R is a 3x3
+     rotation matrix, and t is a 3 vector specifying translation::
 
        s=0.89999324180965479
        R=[[0.99793608705515335, 0.041419147873301365, -0.04907158385969549],
@@ -1424,42 +1428,85 @@ def align_calibration():
           [-0.04654061592784884, -0.060004422308518594, -0.99711255150683809]]
        t=[-0.77477404833588825, 0.32807381821090476, 5.6937474990726518]
 
+     A list of camera locations (specified with --align-cams) should
+     look like the following for 2 cameras at (1,2,3) and (4,5,6)::
+
+       1 2 3
+       4 5 6
+
      """
 
      parser = OptionParser(usage)
 
-     parser.add_option("-r", "--reconstructor", type='string',
+     parser.add_option("--orig-reconstructor", type='string',
                        help="calibration/reconstructor path (required)")
 
-     parser.add_option("-a", "--align", type='string',
-                       help="alignment file path (required)")
+     parser.add_option("--dest-dir", type='string',
+                       help="output calibration/reconstructor path")
+
+     parser.add_option("--align-raw", type='string',
+                       help="raw alignment file path")
+
+     parser.add_option("--align-cams", type='string',
+                       help="new camera locations alignment file path")
+
+     parser.add_option("--scaled", action='store_true',
+                       default=False,
+                       help=('Set if the alignment should be '
+                             'applied to the scaled calibration'),
+                       )
 
      (options, args) = parser.parse_args()
 
-     if options.reconstructor is None:
-         raise ValueError('--reconstructor must be specified')
+     if options.orig_reconstructor is None:
+         raise ValueError('--orig-reconstructor must be specified')
 
-     if options.align is None:
-         raise ValueError('--align must be specified')
+     if options.align_raw is None and options.align_cams is None:
+         raise ValueError(
+             'either --align-raw or --align-cams must be specified')
 
-     mylocals = {}
-     myglobals = {}
-     execfile(options.align,myglobals,mylocals)
+     if options.align_raw is not None and options.align_cams is not None:
+         raise ValueError(
+             'only one of --align-raw and --align-cams can be specified')
 
+     src=options.orig_reconstructor
+     origR = Reconstructor(cal_source=src)
 
-     src=options.reconstructor
-     dst = src+'.aligned'
-     origR = Reconstructor(cal_source=options.reconstructor)
+     if options.dest_dir is None:
+         dst = src+'.aligned'
+     else:
+         dst = options.dest_dir
      if os.path.exists(dst):
          raise RuntimeError('destination %s exists'%dst)
-     s = mylocals['s']
-     R = np.array(mylocals['R'])
-     t = np.array(mylocals['t'])
+
+     if options.scaled:
+         srcR = origR.get_scaled()
+     else:
+         srcR = origR
+
+     if options.align_raw is not None:
+         mylocals = {}
+         myglobals = {}
+         execfile(options.align_raw,myglobals,mylocals)
+         s = mylocals['s']
+         R = np.array(mylocals['R'])
+         t = np.array(mylocals['t'])
+     else:
+         assert options.align_cams is not None
+         cam_ids = srcR.get_cam_ids()
+         ccs = [srcR.get_camera_center(cam_id)[:,0] for cam_id in cam_ids]
+         print 'ccs',ccs
+         orig_cam_centers = np.array(ccs).T
+         print 'orig_cam_centers',orig_cam_centers.T
+         new_cam_centers = load_ascii_matrix(options.align_cams).T
+         print 'new_cam_centers',new_cam_centers.T
+         s,R,t = align.estsimt(orig_cam_centers,new_cam_centers)
+
      print 's',s
      print 'R',R
      print 't',t
-     scaledR = origR.get_scaled()
-     alignedR = scaledR.get_aligned_copy(s,R,t)
+
+     alignedR = srcR.get_aligned_copy(s,R,t)
      alignedR.save_to_files_in_new_directory(dst)
 
 if __name__=='__main__':
