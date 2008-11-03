@@ -1,4 +1,4 @@
-Flydra a2 Core analysis
+flydra.a2.core_analysis
 =======================
 
 CachingAnalyzer

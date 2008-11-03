@@ -7,14 +7,6 @@ Click the "modules" (:ref:`modindex`) link in the top right corner to
 easily access any flydra module, or use this table of contents:
 
  .. toctree::
-    :maxdepth: 2
+  :maxdepth: 2
 
-  modules
-
-Contibutions to docs
---------------------
-
-All contributions are welcome. If you'd like to improve something,
-look into the sources if they contain the information you need (if
-not, please fix them), otherwise the documentation generation needs to
-be improved (look in the ``flydra-sphinx-docs/`` directory).
+  modules/flydra.a2.core_analysis.rst
