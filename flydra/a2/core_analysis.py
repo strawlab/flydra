@@ -1327,26 +1327,28 @@ class CachingAnalyzer:
                                      hide_first_point=True, # velocity bad there
                                      dynamic_model_name=None,
                                      ):
-        """calculate trajectory metrics
+        """
+        Calculate trajectory metrics.
 
-        arguments:
+        Parameters
         ----------
-        obj_id - int, the object id
-        data_file - string of pytables filename, the pytables file object, or data dict from .mat file
-        frames_per_second - float, framerate of data
-        use_kalman_smoothing - boolean, if False, use original, causal Kalman filtered data (rather than Kalman smoothed observations)
+        obj_id : int
+            The object id to be analyzed.
+        data_file : string of pytables filename, the pytables file object, or data dict from .mat file
+            The file that contains the object id to be analyzed.
+        frames_per_second : float, optional
+            Framerate of data. (If `None`, automatically guessed.)
+        use_kalman_smoothing : boolean
+            If `False`, use original, causal Kalman filtered data
+            (rather than Kalman smoothed observations). Default is
+            `True`.
 
-        method_params for 'position based':
-        -----------------------------------
-        'downsample' - decimation factor
+        method_params for `position based` may be `downsample` - decimation factor.
 
-        returns:
-        --------
-        results - dictionary
-
-        results dictionary always contains:
-        -----------------------------------
-
+        Returns
+        -------
+        results
+            Dictionary
 
         """
 
