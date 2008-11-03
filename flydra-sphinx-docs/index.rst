@@ -9,6 +9,7 @@ Contents:
 .. toctree::
   :maxdepth: 2
 
+  getting_started.rst
   data_analysis.rst
   modules.rst
 
