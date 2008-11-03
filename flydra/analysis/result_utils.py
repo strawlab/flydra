@@ -2,7 +2,7 @@ import tables as PT
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy as np
-import sys, os, sets, re
+import sys, os, sets, re, hashlib
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 
 import datetime
@@ -10,6 +10,23 @@ import pytz # from http://pytz.sourceforge.net/
 
 # should avoid using any matplotlib here -- we want to keep this
 # module lean and mean
+
+def md5sum_headtail(filename):
+    """quickly calculate a hash value for an even giant file"""
+    fd = open(filename,mode='rb')
+    start_bytes = fd.read(1000)
+
+    try:
+        fd.seek(-1000,os.SEEK_END)
+    except IOError,err:
+        # it's OK, we'll just read up to another 1000 bytes
+        pass
+
+    stop_bytes = fd.read(1000)
+    bytes = start_bytes+stop_bytes
+    m = hashlib.md5()
+    m.update(bytes)
+    return m.digest()
 
 def status(status_string):
     print " status:",status_string

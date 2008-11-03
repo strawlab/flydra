@@ -4,7 +4,7 @@ import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy
 import numpy as np
-import math, os, sys, hashlib
+import math, os, sys
 import scipy.io
 import pprint
 DEBUG = False
@@ -159,23 +159,6 @@ def my_decimate(x,q):
         result[:-1] = mysum[:-1]/q
         result[-1] = mysum[-1]/ (q-lendiff)
         return result
-
-def calc_quick_hash(filename):
-    """quickly calculate a hash value for an even giant file"""
-    fd = open(filename,mode='rb')
-    start_bytes = fd.read(1000)
-
-    try:
-        fd.seek(-1000,os.SEEK_END)
-    except IOError,err:
-        # it's OK, we'll just read up to another 1000 bytes
-        pass
-
-    stop_bytes = fd.read(1000)
-    bytes = start_bytes+stop_bytes
-    m = hashlib.md5()
-    m.update(bytes)
-    return m.digest()
 
 class WeakRefAbleDict(object):
     def __init__(self,val,debug=False):
@@ -629,7 +612,8 @@ class PreSmoothedDataCache(object):
 
         # get cached datafile for this data_file
         if data_file not in self.cache_h5files_by_data_file:
-            orig_hash = calc_quick_hash(data_file.filename)
+            orig_hash = flydra.analysis.result_utils.md5sum_headtail(
+                data_file.filename)
             expected_title = 'up_dir=(%.3f, %.3f, %.3f);hash="%s"'%(
                 up_dir[0],up_dir[1],up_dir[2],orig_hash)
             cache_h5file_name = os.path.abspath(os.path.splitext(data_file.filename)[0]) + '.kh5-smoothcache'
