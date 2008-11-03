@@ -41,3 +41,31 @@ Python environment. To test this, type::
 
 The output should be something like "0.4.28-svn", indicating this is
 the development version after release 0.4.28.
+
+Editing the documentation
+-------------------------
+
+This documentation is built with Sphinx_. Initial development was done
+with the unreleased development version of Sphinx 0.50.
+
+.. _Sphinx: http://sphinx.pocoo.org/
+
+To download and install sphinx into your virtual environment::
+
+  sudo apt-get install mercurial
+  hg clone http://bitbucket.org/birkenfeld/sphinx/
+  cd sphinx/
+  source ~/PY_flydra/bin/activate
+  python setup.py install
+
+Now, to build the flydra documentation::
+
+  cd /path/to/flydra/flydra-sphinx-docs/
+  ./get-svn.sh 
+  make html
+
+The documentation will be built in
+/path/to/flydra/flydra-sphinx-docs/.build/html/index.html You may view
+it with::
+
+  firefox .build/html/index.html
