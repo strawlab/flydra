@@ -4,7 +4,7 @@ import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy
 import numpy as np
-import math, os, sys
+import math, os, sys, hashlib
 import scipy.io
 import pprint
 DEBUG = False
