@@ -7,9 +7,8 @@ the manuscript for algorithmic details.
 Contents:
 
 .. toctree::
-   :maxdepth: 2
 
-  modules.txt
+  modules.rst
 
 Types of data files
 ===================
@@ -71,7 +70,7 @@ concurrently execute several jobs at once.
 Source code for your own data analysis
 ======================================
 
-:mod:`flydra.a2.core_analysis` is has fast, optimized trajectory opening routines.
+:mod:`flydra.a2.core_analysis` is fast, optimized trajectory opening routines.
 
 See modules
 

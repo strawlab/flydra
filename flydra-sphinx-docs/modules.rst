@@ -9,6 +9,8 @@ easily access any flydra module, or use this table of contents:
  .. toctree::
     :maxdepth: 2
 
+  modules
+
 Contibutions to docs
 --------------------
 
