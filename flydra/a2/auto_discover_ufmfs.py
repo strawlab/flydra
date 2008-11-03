@@ -1,7 +1,7 @@
 from optparse import OptionParser
 import tables
 import numpy as np
-import glob, os, re, time
+import glob, os, re, time, warnings
 import flydra.analysis.result_utils as result_utils
 import motmot.ufmf.ufmf
 
@@ -10,7 +10,7 @@ if 1:
     import tables.flavor
     tables.flavor.restrict_flavors(keep=['numpy'])
 
-def find_ufmfs(filename,ufmf_dir=None):
+def find_ufmfs(filename,ufmf_dir=None,careful=False):
 
     ufmf_template = 'small_%(date_time)s_%(cam_id)s.ufmf$'
     date_time_re = '([0-9]{8}_[0-9]{6})'
@@ -25,12 +25,23 @@ def find_ufmfs(filename,ufmf_dir=None):
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
     cam_ids = cam_id2camns.keys()
 
-    h5_start = np.inf
-    h5_stop = -np.inf
-    for row in h5.root.data2d_distorted:
-        ts = row['timestamp']
-        h5_start = min(ts,h5_start)
-        h5_stop = max(ts,h5_stop)
+    h5_start_quick = h5.root.data2d_distorted[0]['timestamp']
+    h5_stop_quick = h5.root.data2d_distorted[-1]['timestamp']
+
+    if careful:
+        h5_start = np.inf
+        h5_stop = -np.inf
+        for row in h5.root.data2d_distorted:
+            ts = row['timestamp']
+            h5_start = min(ts,h5_start)
+            h5_stop = max(ts,h5_stop)
+        if (h5_start != h5_start_quick) or (h5_stop != h5_stop_quick):
+            warnings.warn('quickly computed timestamps are not exactly correct')
+            #print 'h5_start,h5_start_quick',repr(h5_start),repr(h5_start_quick)
+            #print 'h5_stop, h5_stop_quick',repr(h5_stop), repr(h5_stop_quick)
+    else:
+        h5_start = h5_start_quick
+        h5_stop = h5_stop_quick
     h5.close()
 
     possible_ufmfs = []
