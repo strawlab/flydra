@@ -958,7 +958,7 @@ def detect_saccades(rows,
 class CachingAnalyzer:
 
     """
-    usage:
+    Usage:
 
      1. Load a file with CachingAnalyzer.initial_file_load(). (Doing this from
      user code is optional for backwards compatibility. However, if a
@@ -973,6 +973,29 @@ class CachingAnalyzer:
     """
 
     def initial_file_load(self,filename):
+        """
+        Initial file load to get object ids.
+
+        Parameters
+        ----------
+
+        filename : string
+            The filename to load
+
+        Returns
+        -------
+
+        obj_ids : array
+             All object ids. Note, this may be extremely long.
+        unique_obj_ids : array
+             All unique object ides.
+        is_mat_file : boolean
+             Was filename a .mat file?
+        data_file : File object
+             Opened reference to original data file.
+        extra : dict
+             Dictionary with addtional information.
+        """
         if filename not in self.loaded_filename_cache:
             obj_ids, unique_obj_ids, is_mat_file, data_file, extra = _initial_file_load(filename)
 
@@ -1007,7 +1030,7 @@ class CachingAnalyzer:
         return obj_id in unique_obj_ids
 
     def load_observations(self,obj_id,data_file):
-        """Load observations used for Kalman state estimates from data_file.
+        """Deprecated name for load_dynamics_free_MLE_position.
         """
 
         warnings.warn( "using deprecated method load_observations() "
@@ -1343,6 +1366,8 @@ class CachingAnalyzer:
             (rather than Kalman smoothed observations). Default is
             `True`.
 
+        Notes
+        -----
         method_params for `position based` may be `downsample` - decimation factor.
 
         Returns
