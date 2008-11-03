@@ -1,7 +1,7 @@
 from optparse import OptionParser
 import tables
 import numpy as np
-import glob, os, re, time, warnings
+import glob, os, re, time, warnings, sys
 import flydra.analysis.result_utils as result_utils
 import motmot.ufmf.ufmf
 
@@ -61,7 +61,6 @@ def find_ufmfs(filename,ufmf_dir=None,careful=False):
             date_time = match_object.group(1)
             struct_time = time.strptime(date_time,'%Y%m%d_%H%M%S')
             ufmf_approx_start = time.mktime(struct_time)
-            #print node,time.asctime(struct_time),ufmf_approx_start
 
             approx_starts.append( ufmf_approx_start )
             this_cam_id_fnames.append( ufmf_filename )
@@ -77,13 +76,12 @@ def find_ufmfs(filename,ufmf_dir=None,careful=False):
         bad_cond |= (ufmf_approx_starts+eps) > h5_stop
         good_cond = ~bad_cond
         good_idx = np.nonzero(good_cond)[0]
-        ## for idx in good_idx:
-        ##     print this_cam_id_fnames[idx]
         possible_ufmfs.extend( [ this_cam_id_fnames[idx] for idx in good_idx] )
 
     results = []
     for ufmf_filename in possible_ufmfs:
-        ufmf = motmot.ufmf.ufmf.FlyMovieEmulator(ufmf_filename)
+        ufmf = motmot.ufmf.ufmf.FlyMovieEmulator(
+            ufmf_filename, use_conventional_named_mean_fmf=False) # go fast
         ufmf_timestamps = ufmf.get_all_timestamps()
         ufmf_start = ufmf_timestamps[0]
         ufmf_stop = ufmf_timestamps[-1]
