@@ -1,3 +1,5 @@
+"""linear and non-linear dynamic models for different animals"""
+
 import numpy
 import math
 import warnings
@@ -232,6 +234,7 @@ class EKFAllParams(dict):
         self['isEKF']=True
 
 class MamaramaMMEKFAllParams(EKFAllParams):
+    """Drosophila non-linear dynamic model in millimemter units for EKF"""
     def __init__(self,dt=None):
         super( MamaramaMMEKFAllParams, self).__init__()
         assert dt is not None
@@ -266,6 +269,7 @@ ekf_models = {'EKF mamarama, units: mm':MamaramaMMEKFAllParams,
               }
 
 def get_model_names(ekf_ok=True):
+    """get names of available Kalman models"""
     model_dict = create_dynamic_model_dict(dt=0.01,disable_warning=True)
     valid_names = model_dict.keys()
     if ekf_ok:
@@ -274,6 +278,7 @@ def get_model_names(ekf_ok=True):
     return valid_names
 
 def get_kalman_model( name=None, dt=None ):
+    """create a return a Kalman model given a name and timestamp"""
     if name is None:
         raise ValueError('cannot get Kalman model unless name is specified')
     if name.startswith('EKF'):

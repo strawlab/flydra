@@ -1,3 +1,5 @@
+"""encode and decode data into strings for sending over the network"""
+
 import struct
 
 packet_header_fmt = '<idBB' # XXX check format
@@ -10,6 +12,21 @@ super_packet_subheader = 'H'
 err_size = 1
 
 def decode_data_packet(buf):
+    """the counterpart of encode_data_packet
+
+    Parameters
+    ----------
+    buf : string
+        Contains a packet
+
+    Returns
+    -------
+
+    corrected_framenumber : int
+    timestamp : float
+    state_vecs : list of objects
+    meanP : float
+    """
     # keep in sync with flydra_tracker.py's Tracker.encode_data_packet()
     header = buf[:packet_header_fmtsize]
     rest = buf[packet_header_fmtsize:]
@@ -30,6 +47,18 @@ def decode_data_packet(buf):
     return corrected_framenumber, timestamp, state_vecs, meanP
 
 def encode_super_packet( data_packets ):
+    """encode data packets into a single super packet
+
+    Parameters
+    ----------
+    data_packets : list of data packets
+        All the data packets to be encoded.
+
+    Returns
+    -------
+    object : string
+        Contains all packets encoded for network transmission.
+    """
     # These data packets come from flydra_tracker.Tracker.encode_data_packet()
     n = len(data_packets)
     sizes = [ len(p) for p in data_packets ]
@@ -39,6 +68,17 @@ def encode_super_packet( data_packets ):
     return final_packet
 
 def decode_super_packet( super_packet ):
+    """decode a super packet into a list of data packets
+
+    Parameters
+    ----------
+    super_packet : string
+
+    Returns
+    -------
+    data_packets : list of strings
+        Each element of the list is a data_packet.
+    """
     header = super_packet[:super_packet_header_fmtsize]
     rest = super_packet[super_packet_header_fmtsize:]
 

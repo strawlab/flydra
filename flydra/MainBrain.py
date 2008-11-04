@@ -1,3 +1,4 @@
+"""core runtime code for online, realtime tracking"""
 # TODO:
 # 1. make variable eccentricity threshold dependent on area (bigger area = lower threshold)
 from __future__ import with_statement, division
@@ -221,7 +222,10 @@ def encode_data_packet( corrected_framenumber,
                         line3d_valid,
                         outgoing_data,
                         min_mean_dist):
-    # This is for the non-Kalman data. See tracker.encode_data_packet() for Kalman version.
+
+    # This is for the non-Kalman data. See
+    # kalman.flydra_tracker.Tracker.encode_data_packet and
+    # kalman.data_packets.encode_data_packet() for Kalman version.
 
     fmt = '<iBfffffffffdf' # XXX I guess this no longer works -- what's the B for? 20071011
     packable_data = list(outgoing_data)
@@ -515,6 +519,7 @@ class CoordRealReceiver(threading.Thread):
                     self.out_queue.put((cam_id, data ))
 
 class CoordinateSender(threading.Thread):
+      """a class to send realtime coordinate data from a separate thread"""
       def __init__(self,my_queue,quit_event):
           self.my_queue = my_queue
           self.quit_event = quit_event
@@ -525,7 +530,7 @@ class CoordinateSender(threading.Thread):
           out_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
           block = 1
           timeout = .1
-          encode_super_packet = flydra.kalman.flydra_tracker.encode_super_packet
+          encode_super_packet = flydra.kalman.data_packets.encode_super_packet
           while not self.quit_event.isSet():
               packets = []
               packets.append( self.my_queue.get() )
