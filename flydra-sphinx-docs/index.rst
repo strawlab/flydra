@@ -13,8 +13,8 @@ Contents:
   realtime_data.rst
   data_analysis.rst
 
-Contibutions to docs
---------------------
+Contibutions to this documentation
+----------------------------------
 
 All contributions are welcome. If you'd like to improve something,
 look into the sources if they contain the information you need (if
