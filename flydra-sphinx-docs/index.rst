@@ -12,7 +12,6 @@ Contents:
   getting_started.rst
   realtime_data.rst
   data_analysis.rst
-  modules.rst
 
 Contibutions to docs
 --------------------
