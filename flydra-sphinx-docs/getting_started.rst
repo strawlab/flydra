@@ -1,9 +1,14 @@
-Getting started
-===============
+Getting started with flydra development
+=======================================
 
 This document assumes you are using Ubuntu linux and that you have a
 basic command line knowledge such as how to change directories, list
-files, and so on.
+files, and so on. Flydra is written primarily in the Python_
+language. The `Python tutorial`_ is highly recommended when getting
+started with Python.
+
+.. _Python: http://python.org
+.. _Python tutorial: http://docs.python.org/tutorial/index.html
 
 We use virtualenv_ to create an installation environment for flydra
 that does not overwrite any system files. Get the virtualenv source
