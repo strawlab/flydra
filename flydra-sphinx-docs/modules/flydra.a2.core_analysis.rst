@@ -8,3 +8,6 @@ CachingAnalyzer
    :members:
    :undoc-members:
 
+choose_orientations
+-------------------
+.. autofunction:: choose_orientations

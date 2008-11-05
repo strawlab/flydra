@@ -434,21 +434,61 @@ class LazyRecArrayMimic2:
         return len(self.view['kalman_x'])
 
 def choose_orientations(rows, directions, frames_per_second=None,
-                        velocity_weight_gain=.2,#5.0,
+                        velocity_weight_gain=5.0,
                         #min_velocity_weight=0.0,
                         max_velocity_weight=1.0,
                         elevation_up_bias_degrees=45.0, # tip the velocity angle closer +Z by this amount (maximally)
                         up_dir=None,
                         ):
-    if up_dir is None:
+    """Take input data which is wrapped (mod pi) and unwrap it.
+
+    This uses a dynamic programming algorithm. The basic idea is that
+    there are 2 constraints: a direction we think we should be
+    oriented (with a time-varying weight of how much we believe that
+    direction) and the belief that we shouldn't flip between
+    orientations. Our belief direction comes from velocity (point in
+    the direction of travel) and, optionally, is tipped towards up_dir
+    by elevation_up_bias_degrees. The assignment of directions is
+    based on the least-cost of there two terms where on each from the
+    sign is flipped or not.
+
+    This is heavily inspired by Kristin Branson's choose orientations
+    in ctrax (formerly known as mtrax).
+
+    Parameters
+    ----------
+    rows: structured array
+        position and frame number (has columns 'x','y','z','frame') for N frames
+    directions: Nx3 array
+        direction to choose with is undetermined to a sign flip
+    frames_per_second : float like
+        framerate, used to determine velocity from position
+    velocity_weight_gain : float like
+        scale factor of importance to treat speed (units: importance per speed)
+    max_velocity_weight : float like
+        maximum weight to attribute to velocity term
+    elevation_up_bias_degrees : float like
+        number of degrees towards up_dir to bias the velocity direction
+    up_dir : 3 vector
+        direction to bias velocity direction
+
+    Returns
+    -------
+    directions : Nx3 array
+       directions above with sign chosen to minimize cost
+    """
+    if (up_dir is None) and (elevation_up_bias_degrees != 0):
         #up_dir = np.array([0,0,1],dtype=np.float)
         raise ValueError("up_dir must be specified. "
                          "(Hint: --up-dir='0,0,1')")
     D2R = np.pi/180
     if DEBUG:
         frames = rows['frame']
-        cond = (125100 < frames) & (frames < 125200 )
-        idxs = np.nonzero(cond)[0]
+        if 1:
+            cond = (619000 < frames) & (frames < 619100 )
+            idxs = np.nonzero(cond)[0]
+        else:
+            idxs = np.arange( len(frames) )
 
     X = np.array([rows['x'], rows['y'], rows['z']]).T
     #ADS print "rows['x'].shape",rows['x'].shape
@@ -465,6 +505,9 @@ def choose_orientations(rows, directions, frames_per_second=None,
 
     velocity_direction = velocity/speed[:,np.newaxis]
     if elevation_up_bias_degrees != 0:
+
+        # bias the velocity direction
+
         rot1_axis = np.cross(velocity_direction, up_dir)
 
         dist_from_zplus = np.arccos( np.dot(velocity_direction,up_dir))
@@ -479,14 +522,22 @@ def choose_orientations(rows, directions, frames_per_second=None,
             R2D = 180.0/np.pi
             for i in idxs:
                 print
-                print 'frame',frames[i]
+                print 'frame %s ====================='%frames[i]
                 print 'X[i]',X[i,:]
                 print 'X[i+1]',X[i+1,:]
                 print 'velocity',velocity[i]
-                print 'vel dir',velocity_direction[i]
-                print 'biaser',velocity_biaser[i]
-                print 'bbiased dir',biased_velocity_direction[i]
+                print
+                print 'rot1_axis',rot1_axis[i]
+                print 'up_dir',up_dir
+                print 'cross',np.cross(velocity_direction[i], up_dir)
+                print 'velocity_direction',velocity_direction[i]
+                print
+                print 'dist_from_zplus',dist_from_zplus[i]
                 print 'dist (deg)',(dist_from_zplus[i]*R2D)
+                print 'bias_radians',bias_radians
+                print
+                print 'velocity_biaser',velocity_biaser[i]
+                print 'biased_velocity_direction',biased_velocity_direction[i]
 
     else:
         biased_velocity_direction = velocity_direction
@@ -518,6 +569,7 @@ def choose_orientations(rows, directions, frames_per_second=None,
 
         for enum_current,sign_current in enumerate(signs):
             direction_current = sign_current*directions[i]
+            this_w = w[i-1]
             vel_term = np.arccos( np.dot( direction_current, biased_velocity_direction[i-1] ))
             #ADS print
             #ADS print 'sign_current',sign_current,'-'*50
@@ -541,9 +593,9 @@ def choose_orientations(rows, directions, frames_per_second=None,
 
                 cost_current = 0.0
                 if not np.isnan(vel_term):
-                    cost_current += vel_term
+                    cost_current += this_w*vel_term
                 if not np.isnan(flip_term):
-                    cost_current += flip_term
+                    cost_current += (1-this_w)*flip_term
 
                 ## if (not np.isnan(direction_current[0])) and (not np.isnan(direction_previous[0])):
                 ##     # normal case - no nans
@@ -1635,6 +1687,40 @@ class CachingAnalyzer:
 
     def __del__(self):
         self.close()
+
+def test_choose_orientations():
+    #                             8     9     10   11  12 13   14   15     16     17     18  19 20
+    x = np.array([0,1,2,3,4,5,6,7,7.01, 7.02, 7.03, 8, 9, 100, 101, 100.99,100.98,100.97,100,50,40])
+    y = np.zeros_like(x)
+    z = np.zeros_like(x)
+    frames = np.arange(len(x))
+    rows = np.rec.fromarrays([x,y,z,frames],names=['x','y','z','frame'])
+
+    true_directions = np.array([[1.0,0.0,0.0]]*len(x))
+    true_directions[18:,:] = [-1,0,0]
+
+    input_directions = np.array(true_directions,copy=True)
+    input_directions[9,:] = [-1,0,0]
+    input_directions[13,:] = [-1,0,0]
+
+    input_directions[14:,:] = [1,0,0]
+
+    print 'input_directions'
+    print input_directions
+
+    result_directions = choose_orientations( rows, input_directions,
+                                             frames_per_second=1.0,
+                                             velocity_weight_gain=1.0,
+                                             max_velocity_weight=1.0,
+                                             elevation_up_bias_degrees=0.0,
+                                             )
+    print 'true_directions'
+    print true_directions
+    print
+    print 'result_directions'
+    print result_directions
+
+    assert np.allclose( result_directions, true_directions )
 
 global _global_ca_instance
 _global_ca_instance = None
