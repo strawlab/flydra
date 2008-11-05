@@ -143,101 +143,14 @@ def generate_KalmanizedH5(source, target, env, for_signature):
     return ('flydra_kalmanize %(h5_source)s --reconstructor=%(cal_source)s '
             '--dest-file=%(kh5_target)s %(args)s'%locals())
 
-ImageBasedData2DH5_Builder = Builder(
+ImageBasedData2DH5_Builder = SCons.Builder.Builder(
     generator = generate_ImageBasedData2DH5,
     target_factory = data2d_distorted_target_factory,
     source_factory = flydra_source_factory,
     )
 
-KalmanizedH5_Builder = Builder(
+KalmanizedH5_Builder = SCons.Builder.Builder(
     generator = generate_KalmanizedH5,
     target_factory = kalmanizedH5_target_factory,
     source_factory = flydra_source_factory,
     )
-
-# run it -----------------------------------
-
-env = Environment()
-env.Append(BUILDERS = {
-    'KalmanizedH5' : KalmanizedH5_Builder,
-    'ImageBasedData2DH5' : ImageBasedData2DH5_Builder,
-    })
-env.Append(ENV = {'PATH' : os.environ['PATH']})
-
-if 0:
-    cal = flydra_source_factory('cal20080909b.aligned.xml')
-    orig_data2d = flydra_source_factory('../DATA20080910_141251.h5')
-    ufmf_fnames = ['../small_20080910_141251_cam1_0.ufmf',
-                   '../small_20080910_141251_cam2_0.ufmf',
-                   '../small_20080910_141251_cam3_0.ufmf',
-                   '../small_20080910_141251_cam4_0.ufmf']
-    ufmfs = [flydra_source_factory(fname) for fname in ufmf_fnames]
-
-    orig_data3d = env.KalmanizedH5(
-        target='DATA20080910_141251.kalmanized.h5',
-        source=[orig_data2d,
-                cal],
-        )
-
-    image_data2d = env.ImageBasedData2DH5(
-        target='DATA20080910_141251.image-based-re2d.h5',
-        source=[orig_data2d,orig_data3d]+ufmfs,
-        ImageBasedData2DH5_args=[
-        "--view=\"'rot -90','rot 180','rot 180','rot -90'\"",
-        ],
-        )
-
-    #image_data2d='DATA20080910_141251.image-based-re2d.h5'
-
-    image_data3d = env.KalmanizedH5(
-        target='DATA20080910_141251.image-based-re2d.kalmanized.h5',
-        source=[image_data2d,
-                cal],
-        KalmanizedH5_args=['--disable-image-stat-gating',
-                           '--area-threshold-for-orientation=500',
-                           '--orientation-consensus=2',
-                           ],
-        )
-else:
-    cal = flydra_source_factory('cal20080909b.aligned.xml')
-    source_data2d_fnames = glob.glob('../DATA*.h5')
-    source_data2d_fnames.sort()
-    for source_data2d_fname in source_data2d_fnames:
-        orig_data2d = flydra_source_factory(source_data2d_fname)
-        if not isinstance(orig_data2d,Flydra2DDistortedDataNodeMixin):
-            continue
-
-        # kalmanize original .h5 file with new calibration
-        target_name = os.path.splitext(source_data2d_fname)[0]
-        target_name = os.path.split(target_name)[1] # put in this dir
-        target_name += '.kalmanized.h5'
-        print
-        print '%s -> %s'%(source_data2d_fname, target_name)
-        target_node_list = env.KalmanizedH5(
-            target=target_name,
-            source=[orig_data2d,
-                    cal],
-            )
-        orig_data3d= target_node_list[0]
-
-        # do image-based orientation
-        target_name = os.path.splitext(source_data2d_fname)[0]
-        target_name = os.path.split(target_name)[1] # put in this dir
-        target_name += '.image-based-re2d.h5'
-        ufmf_fnames = flydra.a2.auto_discover_ufmfs.find_ufmfs(
-            source_data2d_fname)
-        ufmf_fnames.sort() # put in camera order
-        if len(ufmf_fnames)!=4:
-            print 'did not find 4 .ufmfs for %s'%source_data2d_fname
-            continue
-        ufmfs = [flydra_source_factory(fname) for fname in ufmf_fnames]
-
-        print '%s -> %s'%(source_data2d_fname, target_name)
-
-        env.ImageBasedData2DH5(
-            target=target_name,
-            source=[orig_data2d,orig_data3d]+ufmfs,
-            ImageBasedData2DH5_args=[
-            "--view=\"'rot -90','rot 180','rot 180','rot -90'\"",
-            ],
-            )
