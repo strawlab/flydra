@@ -1,6 +1,9 @@
 import math
 import numpy
+import numpy as np
 import scipy.optimize
+import numpy.dual
+import warnings
 
 __all__=['ThreeTuple',
          'PlueckerLine',
@@ -85,7 +88,7 @@ class PlueckerLine:
                 return rel_line.dist2()
 
         # XXX TODO. The implementation could be improved (i.e. sped up).
-        import warnings
+        # should do something like is done for mahalanobis case.
         warnings.warn('slow/lazy way to find closest point to line')
         initial_mu = 0.0
         efm = ErrFMaker(self,other)
@@ -133,7 +136,7 @@ def line_from_points(p,q):
     >>> p2 = ThreeTuple((2,1,0))
     >>> L = line_from_points(p1,p2)
     >>> print L
-    PlueckerLine(ThreeTuple(0,2,7),ThreeTuple(-7,14,-4))
+    PlueckerLine(ThreeTuple((0,2,7)),ThreeTuple((-7,14,-4)))
 
     >>> q1 = ThreeTuple((0,2,7))
     >>> q2 = ThreeTuple((0,2,0))
@@ -141,7 +144,7 @@ def line_from_points(p,q):
     >>> print L2.dist2()
     4
     >>> print L2.closest()
-    ThreeTuple(0,2,0)
+    ThreeTuple((0,2,0))
     """
 
     if not isinstance(p,ThreeTuple):
@@ -218,6 +221,163 @@ class Plane:
             raise ValueError('must be ThreeTuple')
         self.N = normal_vec
         self.n = float(dist_from_origin)
+
+        if self.n < 0:
+            # make distance always positive
+            self.n = -self.n
+            self.N = -self.N
+
+    def __repr__(self):
+        return 'Plane(%s,%s)'%(repr(self.N),repr(self.n))
+
+    def is_close(self,other,eps=1e-15):
+        assert isinstance(other,Plane)
+
+        # compare distance from origin
+        if abs(self.n-other.n) > eps:
+            return False
+
+        near_origin = False
+        if abs(self.n) < eps:
+            near_origin = True
+
+        v1 = self.N.vals
+        v2 = other.N.vals
+
+        # normalize
+        n1 = v1/np.sqrt(np.sum(v1**2))
+        n2 = v2/np.sqrt(np.sum(v2**2))
+
+        costheta = np.dot(n1,n2)
+        if near_origin:
+            costheta = abs(costheta)
+
+        return abs(costheta-1.0) < eps
+
+class GeometryException(Exception): pass
+class NotCoplanarError(GeometryException): pass
+class ColinearError(GeometryException): pass
+
+def points_to_plane(*args,**kwds):
+    if len(args)<3:
+        raise ValueError('must input at least 3 points')
+
+    eps=kwds.get('eps',1e-16)
+
+    X = []
+    for A in args:
+
+        assert isinstance(A,ThreeTuple)
+        A = np.asarray(A.vals)
+
+        # make homogeneous
+        A = np.concatenate((A,[1]))
+        X.append(A)
+
+    # eqn 3.3 of Hartley Zisserman
+    X = np.array(X)
+
+    u,d,vt=numpy.dual.svd(X)#,full_matrices=True)
+
+    if np.any( d[:3] < eps ):
+        raise ColinearError('points not in general position')
+
+    if not np.all( d[3:] < eps ):
+        raise NotCoplanarError('points not co-planar')
+
+    if 0:
+        print 'X'
+        print X
+        print 'u',u.shape
+        print 'u'
+        print u
+        print 'd',d.shape
+        print 'd',d
+        print 'vt',vt.shape
+        print 'vt'
+        print vt
+        print
+
+    n = vt[3,:3]
+    mag = np.sqrt(np.sum(n**2))
+    norm = n/mag
+    dist = vt[3,3]/mag
+    p = Plane( ThreeTuple(norm), dist )
+    return p
+
+def test_plane():
+    p = Plane(ThreeTuple((1,0,0)),1)
+    p2 = Plane(ThreeTuple((-1,0,0)),-1)
+    assert p.is_close(p2)
+
+    eps=1e-16
+    # ensure that distance is always positive
+    assert abs(p2.n-1) < eps
+
+def test_points_to_plane():
+
+    A = ThreeTuple((1,0,0))
+    B = ThreeTuple((0,1,0))
+    C = ThreeTuple((0,0,0))
+    p = points_to_plane(A,B,C)
+
+    assert Plane(ThreeTuple((0,0,1)),0).is_close(p)
+
+    A = ThreeTuple((1,0,1))
+    B = ThreeTuple((0,1,1))
+    C = ThreeTuple((0,0,1))
+    p = points_to_plane(A,B,C)
+    assert Plane(ThreeTuple((0,0,1)),-1).is_close(p)
+
+    A = ThreeTuple((1,0,-1))
+    B = ThreeTuple((0,1,-1))
+    C = ThreeTuple((0,0,-1))
+    p = points_to_plane(A,B,C)
+    assert Plane(ThreeTuple((0,0,1)),1).is_close(p)
+
+    A = ThreeTuple((1,-1,0))
+    B = ThreeTuple((0,-1,1))
+    C = ThreeTuple((0,-1,0))
+    p = points_to_plane(A,B,C)
+    assert Plane(ThreeTuple((0,1,0)),1).is_close(p)
+
+    A = ThreeTuple((1,-2,0))
+    B = ThreeTuple((0,-2,1))
+    C = ThreeTuple((0,-2,0))
+    p = points_to_plane(A,B,C)
+    assert Plane(ThreeTuple((0,1,0)),2).is_close(p)
+
+    # test ability to do 4 points
+    A = ThreeTuple((1,0,0))
+    B = ThreeTuple((0,1,0))
+    C = ThreeTuple((0,0,0))
+    D = ThreeTuple((1,1,0))
+    p = points_to_plane(A,B,C,D)
+
+    assert Plane(ThreeTuple((0,0,1)),0).is_close(p)
+
+    # test ability to detect 4 non-coplanar points
+    A = ThreeTuple((1,0,0))
+    B = ThreeTuple((0,1,0))
+    C = ThreeTuple((0,0,0))
+    D = ThreeTuple((1,1,1))
+    try:
+        p = points_to_plane(A,B,C,D)
+    except NotCoplanarError:
+        pass
+    else:
+        raise RuntimeError('failed to detect NotCoplanarError')
+
+    # test ability to detect 3 co-linear points
+    A = ThreeTuple((1,0,0))
+    C = ThreeTuple((2,0,0))
+    B = ThreeTuple((3,0,0))
+    try:
+        p = points_to_plane(A,B,C)
+    except ColinearError:
+        pass
+    else:
+        raise RuntimeError('failed to detect ColinearError')
 
 def _test():
     import doctest
