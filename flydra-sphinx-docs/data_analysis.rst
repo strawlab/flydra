@@ -4,13 +4,14 @@ Data analysis
 Types of data files
 -------------------
 
+.. _data_analysis-file_types-calibration_files:
+
 Calibration files
 .................
 
-Flydra calibration data consists of: parameters for a *linear pinhole
-camera model* (including intrinsic and extrinsic calibration),
-parameters for *non-linear distortion*, and *units*
-(e.g. millimeters). Calibrations may be saved as:
+(See :ref:`calibration` for an overview on calibration.)
+
+Calibrations may be saved as:
 
  * A calibration directory
 
