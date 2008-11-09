@@ -78,7 +78,7 @@ def get_rc_params():
     defaultParams = {
         'frames_per_second'  : 100.0,
         'hypothesis_test_max_acceptable_error' : 50.0,
-        'kalman_model' :'fly dynamics, high precision calibration, units: mm',
+        'kalman_model' :'EKF mamarama, units: mm',
         'max_reconstruction_latency_sec':0.06, # 60 msec
         'max_N_hypothesis_test':3,
         }
