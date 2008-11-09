@@ -82,7 +82,7 @@ multiple roles within a single file type. The roles include
 
 Because the format is extensible, adding further support can be done
 in a backwards-compatible way. These XML files are handled primarily
-through :module:`flydra.a2.xml_stimulus`.
+through :mod:`flydra.a2.xml_stimulus`.
 
 Predefined analysis programs
 ============================

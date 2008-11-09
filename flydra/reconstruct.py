@@ -333,6 +333,23 @@ def do_3d_operations_on_2d_point(helper,
             ray0, ray1, ray2, ray3, ray4, ray5)
 
 class SingleCameraCalibration:
+    """Complete per-camera calibration information.
+
+    Parameters
+    ----------
+    cam_id : string
+      identifying camera
+    Pmat : ndarray (3x4)
+      camera calibration matrix
+    res : sequence of length 2
+      resolution (width,height)
+    pp : sequence of length 2
+      pricipal point (point on image plane on optical axis) (x,y)
+    helper : :class:`CamParamsHelper` instance
+      (optional) specifies camera distortion parameters
+    scale_factor : None or float
+      specifies how to convert your units to meters
+    """
     def __init__(self,
                  cam_id=None, # non-optional
                  Pmat=None,   # non-optional
@@ -341,19 +358,6 @@ class SingleCameraCalibration:
                  helper=None,
                  scale_factor=None # scale_factor is for conversion to meters (e.g. should be 1e-3 if your units are mm)
                  ):
-        """
-
-        Required arguments
-        ------------------
-        cam_id - string identifying camera
-        Pmat - camera calibration matrix (3 x 4)
-        res - resolution (width,height)
-        pp - pricipal point (point on image plane on optical axis) (x,y)
-
-        Optional arguments
-        ------------------
-        helper - has camera distortion parameters
-        """
         if type(cam_id) != str:
             raise TypeError('cam_id must be string')
         pm = numpy.asarray(Pmat)
@@ -731,18 +735,32 @@ def Reconstructor_from_xml(elem):
     return Reconstructor(sccs,minimum_eccentricity=minimum_eccentricity)
 
 class Reconstructor:
+    """A complete calibration for all cameras in a flydra setup
+
+    Parameters
+    ==========
+    cal_source : string, list, or pytables file instance
+
+      The source of the calibration. Can be a string specifying the
+      path of a directory output by MultiCamSelfCal, a string
+      specifying an .xml calibration file path, a string specifying a
+      pytables file, a list of :class:`SingleCameraCalibration`
+      instances, or an open pytables file object.
+
+    do_normalize_pmat : boolean
+      Whether the pmat is normalized such that the intrinsic parameters
+      are in the expected form
+    minimum_eccentricity : None or float
+      Minimum eccentricity (ratio of long to short axis of an
+      ellipse) of 2D detected object required to use detected
+      orientation for performing 3D body orientation estimation.
+
+    """
     def __init__(self,
                  cal_source = None,
                  do_normalize_pmat=True,
                  minimum_eccentricity=None,
                  ):
-        """
-        inputs
-        ======
-        cal_source - the source of the calibration. can be the output of MultiCamSelfCal, a pytables file, etc.
-        do_normalize_pmat - whether the pmat is normalized such that the intrinsic parameters are in the expected form
-
-        """
         self.cal_source = cal_source
 
         if isinstance(self.cal_source,str) or isinstance(self.cal_source,unicode):

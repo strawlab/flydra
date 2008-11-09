@@ -6,7 +6,7 @@ Calibration
 Flydra calibration data consists of:
 
  * parameters for a *linear pinhole camera model* (including intrinsic
-and extrinsic calibration).
+   and extrinsic calibration).
 
  * parameters for *non-linear distortion*.
 

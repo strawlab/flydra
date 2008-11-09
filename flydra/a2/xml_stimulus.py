@@ -11,12 +11,19 @@ class WrongXMLTypeError(Exception):
     pass
 
 class StimProjection(object):
+    """Project 3D world coordinates to 2D coordinates for plotting.
+
+    This is an abstract base class that should be subclassed."""
     def __call__(self,*args,**kwargs):
         return self.project(*args,**kwargs)
     def project(self,X):
         raise NotImplementedError('abstract base class method called')
 
 class FlydraReconstructProjection(StimProjection):
+    """Project coordinates using flydra camera calibration.
+
+    Subclass of :class:`StimProjection`.
+    """
     def __init__(self,R,cam_id):
         self.R = R
         self.w,self.h = R.get_resolution(cam_id)
@@ -30,14 +37,32 @@ class FlydraReconstructProjection(StimProjection):
         return x,y
 
 class SimpleOrthographicXYProjection(StimProjection):
+    """Project coordinates to an XY (top) view.
+
+    Subclass of :class:`StimProjection`.
+    """
     def project(self,X):
         return X[0], X[1]
 
 class SimpleOrthographicXZProjection(StimProjection):
+    """Project coordinates to an XZ (side) view.
+
+    Subclass of :class:`StimProjection`.
+    """
     def project(self,X):
         return X[0], X[2]
 
 class Stimulus(object):
+    """Stimulus information saved in an XML node
+
+    Parameters
+    ----------
+    root : :mod:`xml.etree.ElementTree` node
+        An XML node specifying the root of the stimulus tree.
+        Must have tag ``stimxml``.
+    hack_postmultiply : (optional) ndarray
+        Used to transform coordinates when a non aligned calibration was used.
+    """
 
     def __init__(self,root,hack_postmultiply=None):
         assert root.tag == 'stimxml'
@@ -47,6 +72,13 @@ class Stimulus(object):
         self.hack_postmultiply = check_hack_postmultiply(hack_postmultiply)
 
     def get_root(self):
+        """get the root XML node
+
+        Returns
+        -------
+        node
+            Root XML node
+        """
         return self.root
 
     def _get_reconstructor(self):
@@ -56,6 +88,14 @@ class Stimulus(object):
         return self._R
 
     def has_reconstructor(self):
+        """Check for presence of reconstructor
+
+        Returns
+        -------
+        boolean
+            Whether a reconstructor exists
+        """
+
         try:
             R = self._get_reconstructor()
         except:
@@ -64,11 +104,23 @@ class Stimulus(object):
             return True
 
     def verify_reconstructor(self,other_R):
+        """verify that the reconstructor in the XML node is equal to other_R
+
+        Parameters
+        ----------
+        other_R : :class:`flydra.reconstruct.Reconstructor` instance.
+            The reconstructor to compare against.
+
+        This function raises an exception if the reconstructors are not equal.
+
+        Check for presence of reconstructor with :method:`has_reconstructor`.
+        """
         R = self._get_reconstructor()
         assert isinstance(other_R,reconstruct.Reconstructor)
         assert R == other_R
 
     def verify_timestamp(self,timestamp):
+        """deprecated function"""
         if 1:
             import warnings
             warnings.warn("This function does not do anything anymore.",DeprecationWarning,stacklevel=2)
@@ -127,11 +179,27 @@ class Stimulus(object):
         return {'verts':verts, 'diameter':diameter}
 
     def iterate_posts(self):
+        """A generator to iterate over all ``cylindrical_post`` tags
+
+        Returns
+        -------
+        results : iterator of dictionaries
+            Each dictionary has 'verts' and 'diameter' keys whose values specify
+            the post.
+        """
         for child in self.root:
             if child.tag == 'cylindrical_post':
                 yield self._get_info_for_cylindrical_post(child)
 
     def get_tvtk_actors(self):
+        """Get a list of actors to use in TVTK scene
+
+        Returns
+        -------
+        actors : list of tvtk actors
+            A list of actors to insert into tvtk scene.
+
+        """
         actors = []
         for child in self.root:
             if child.tag in ['multi_camera_reconstructor','valid_h5_times']:
@@ -151,6 +219,7 @@ class Stimulus(object):
         return actors
 
     def draw_in_mayavi_scene(self,engine):
+        """draw a representation of the stimulus in a Mayavi2 scene"""
         for child in self.root:
             if child.tag in ['multi_camera_reconstructor','valid_h5_times']:
                 continue
@@ -163,6 +232,7 @@ class Stimulus(object):
                 warnings.warn("Unknown node: %s"%child.tag)
 
     def get_distorted_linesegs( self, cam_id ):
+        """Return line segments for the stimulus distorted by the camera model"""
         # mainly copied from self.plot_stim_over_distorted_image()
         R = self._get_reconstructor()
         R = R.get_scaled()
@@ -245,6 +315,15 @@ class Stimulus(object):
         return linesegs, lineseg_colors
 
     def plot_stim_over_distorted_image( self, ax, cam_id ):
+        """use matplotlib to plot stimulus in image coordinates
+
+        Parameters
+        ----------
+        ax : matplotlib Axes instance
+            The axes into which the stimulus is drawn
+        cam_id : string-like
+            Specifies the name of the camera to draw the stimulus for
+        """
         # we want to work with scaled coordinates
         R = self._get_reconstructor()
         R = R.get_scaled()
@@ -256,6 +335,24 @@ class Stimulus(object):
                    show_post_num=False,
                    draw_post_as_circle=False,
                    ):
+        """use matplotlib to plot stimulus with arbitrary projection
+
+        Parameters
+        ----------
+        ax : matplotlib Axes instance
+            The axes into which the stimulus is drawn
+        projection : :class:`StimProjection` instance
+            Specifies the projection to plot the stimulus with
+        post_colors : (optional)
+            Post colors when drawing ``cylindrical_post`` tags.
+        show_post_num : boolean
+            Whether to show post number when drawing
+            ``cylindrical_post`` tags. Defaults to False.
+        draw_post_as_circle : boolean
+            Whether to draw post as circle when drawing
+            ``cylindrical_post`` tags. Defaults to False.
+
+        """
         if not isinstance(projection,StimProjection):
             print 'projection',projection
             raise ValueError('projection must be instance of xml_stimulus.StimProjection class')
