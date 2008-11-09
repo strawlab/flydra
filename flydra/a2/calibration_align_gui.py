@@ -72,24 +72,32 @@ class CalibrationAlignment(traits.HasTraits):
     ty = traits.Float(0)
     tz = traits.Float(0)
 
-    r_az = traits.Range(0.0,360.0, 0.0,mode='slider')
-    r_el = traits.Range(-90.0,90.0, 0.0, mode='slider')
-    r_amount = traits.Range(0.0,360.0, 0.0, mode='slider')
+    r_x = traits.Range(-180.0,180.0, 0.0,mode='slider',set_enter=True)
+    r_y = traits.Range(-180.0,180.0, 0.0,mode='slider',set_enter=True)
+    r_z = traits.Range(-180.0,180.0, 0.0,mode='slider',set_enter=True)
+
+    new_cal_filename = traits.File(extension='.xml')
+    save_new_cal = traits.Button(label='Save new calibration as .xml file')
+    save_new_cal_dir = traits.Button(label='Save new calibration as directory')
 
     traits_view = View( Group( ( Item('s'),
                                  Item('tx'),
                                  Item('ty'),
                                  Item('tz'),
-                                 Item('r_az',style='custom'),
-                                 Item('r_el',style='custom'),
-                                 Item('r_amount',style='custom'),
+                                 Item('r_x',style='custom'),
+                                 Item('r_y',style='custom'),
+                                 Item('r_z',style='custom'),
+                                 Item('new_cal_filename'),
+                                 Item( 'save_new_cal', show_label = False ),
+                                 Item( 'save_new_cal_dir', show_label = False ),
                                  )),
                         title = 'Calibration Alignment Parameters',
                         )
 
-    def __init__(self,orig_data_verts,orig_data_speeds):
+    def __init__(self,orig_data_verts,orig_data_speeds,reconstructor):
         self.orig_data_verts = orig_data_verts
         self.orig_data_speeds = orig_data_speeds
+        self.reconstructor = reconstructor
 
         assert orig_data_verts.ndim == 2
         assert orig_data_speeds.ndim == 1
@@ -106,19 +114,22 @@ class CalibrationAlignment(traits.HasTraits):
         pd.point_data.scalars.name = 'speed'
         self.viewed_data = VTKDataSource(data=pd)
 
-    def get_xform(self):
-        r_vec = cgtypes.vec3( np.cos(self.r_az*D2R)*np.cos(self.r_el*D2R),
-                              np.sin(self.r_az*D2R)*np.cos(self.r_el*D2R),
-                              np.sin(self.r_el*D2R) )
-        q = cgtypes.quat().fromAngleAxis( self.r_amount*D2R, r_vec )
-        R = cgmat2np(q.toMat3())
+    def get_sRt(self):
+        qx = cgtypes.quat().fromAngleAxis( self.r_x*D2R, cgtypes.vec3(1,0,0))
+        qy = cgtypes.quat().fromAngleAxis( self.r_y*D2R, cgtypes.vec3(0,1,0))
+        qz = cgtypes.quat().fromAngleAxis( self.r_z*D2R, cgtypes.vec3(0,0,1))
+        Rx = cgmat2np(qx.toMat3())
+        Ry = cgmat2np(qy.toMat3())
+        Rz = cgmat2np(qz.toMat3())
+        R = np.dot(Rx, np.dot(Ry,Rz))
 
         t = np.array([self.tx, self.ty, self.tz],np.float)
 
-        return flydra.align.build_xform( self.s, R, t)
+        return self.s, R, t
 
     def _anytrait_changed(self):
-        M = self.get_xform()
+        s,R,t = self.get_sRt()
+        M = flydra.align.build_xform( s, R, t)
 
         verts = np.dot(M,self.orig_data_verts)
 
@@ -126,6 +137,22 @@ class CalibrationAlignment(traits.HasTraits):
 
         self.viewed_data.data.modified()
         self.viewed_data.update()
+
+    def get_aligned_scaled_R(self):
+        s,R,t = self.get_sRt()
+        scaled = self.reconstructor
+        alignedR = scaled.get_aligned_copy(s,R,t)
+        return alignedR
+
+    def _save_new_cal_fired(self):
+        alignedR = self.get_aligned_scaled_R()
+        alignedR.save_to_xml_filename(self.new_cal_filename)
+        print 'saved calibration to XML file...',self.new_cal_filename
+
+    def _save_new_cal_dir_fired(self):
+        alignedR = self.get_aligned_scaled_R()
+        alignedR.save_to_files_in_new_directory(self.new_cal_filename)
+        print 'saved calibration to directory',self.new_cal_filename
 
 def main():
     usage = '%prog FILE [options]'
@@ -162,7 +189,7 @@ def main():
 
     ca = core_analysis.get_global_CachingAnalyzer()
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(h5_filename)
-    R = reconstruct.Reconstructor(data_file)
+    R = reconstruct.Reconstructor(data_file).get_scaled()
     fps = result_utils.get_fps( data_file, fail_on_error=False )
 
     if fps is None:
@@ -235,7 +262,7 @@ def main():
     # your engine.
     e.start()
 
-    cal_align = CalibrationAlignment(verts,speed)
+    cal_align = CalibrationAlignment(verts,speed,R)
 
     cal_align.edit_traits()
 
@@ -245,7 +272,7 @@ def main():
         actors = stim_xml.get_tvtk_actors()
         scene.scene.add_actors(actors)
 
-    if 1:
+    if 0:
         # Do this if you need to see the MayaVi tree view UI.
         ev = EngineView(engine=e)
         ui = ev.edit_traits()
