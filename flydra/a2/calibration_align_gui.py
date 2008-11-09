@@ -70,7 +70,7 @@ def test_cgmat2mp():
     np_out = np.dot( m_np, point1 )
     assert np.allclose( np_out, point1_out)
 
-class CalibrationAlignment(traits.HasTraits):
+class Alignment(traits.HasTraits):
     s = traits.Float(1.0)
     tx = traits.Float(0)
     ty = traits.Float(0)
@@ -80,9 +80,6 @@ class CalibrationAlignment(traits.HasTraits):
     r_y = traits.Range(-180.0,180.0, 0.0,mode='slider',set_enter=True)
     r_z = traits.Range(-180.0,180.0, 0.0,mode='slider',set_enter=True)
 
-    save_new_cal = traits.Button(label='Save new calibration as .xml file')
-    save_new_cal_dir = traits.Button(label='Save new calibration as directory')
-
     traits_view = View( Group( ( Item('s'),
                                  Item('tx'),
                                  Item('ty'),
@@ -90,36 +87,9 @@ class CalibrationAlignment(traits.HasTraits):
                                  Item('r_x',style='custom'),
                                  Item('r_y',style='custom'),
                                  Item('r_z',style='custom'),
-                                 Item( 'save_new_cal', show_label = False ),
-                                 Item( 'save_new_cal_dir', show_label = False ),
                                  )),
-                        title = 'Calibration Alignment Parameters',
+                        title = 'Alignment Parameters',
                         )
-    orig_data_verts = traits.Instance(object)
-    orig_data_speeds = traits.Instance(object)
-    reconstructor = traits.Instance(object)
-    viewed_data = traits.Instance(object) # should be a source
-
-    def set_data(self,orig_data_verts,orig_data_speeds,reconstructor):
-        self.orig_data_verts = orig_data_verts
-        self.orig_data_speeds = orig_data_speeds
-        self.reconstructor = reconstructor
-
-        assert orig_data_verts.ndim == 2
-        assert orig_data_speeds.ndim == 1
-        assert orig_data_verts.shape[0] == 4
-        assert orig_data_verts.shape[1] == orig_data_speeds.shape[0]
-
-
-        # from mayavi2-2.0.2a1/enthought.tvtk/enthought/tvtk/tools/mlab.py Glyphs.__init__:
-        points = hom2vtk(orig_data_verts)
-        polys = numpy.arange(0, len(points), 1, 'l')
-        polys = numpy.reshape(polys, (len(points), 1))
-        pd = tvtk.PolyData(points=points, polys=polys)
-        pd.point_data.scalars = orig_data_speeds
-        pd.point_data.scalars.name = 'speed'
-        self.viewed_data = VTKDataSource(data=pd,
-                                         name='aligned data')
 
     def get_sRt(self):
         qx = cgtypes.quat().fromAngleAxis( self.r_x*D2R, cgtypes.vec3(1,0,0))
@@ -134,12 +104,67 @@ class CalibrationAlignment(traits.HasTraits):
 
         return self.s, R, t
 
-    def _anytrait_changed(self):
+class CalibrationAlignmentWindow(Widget):
+    params = traits.Instance( Alignment )
+    save_new_cal = traits.Button(label='Save new calibration as .xml file')
+    save_new_cal_dir = traits.Button(label='Save new calibration as directory')
+
+    traits_view = View( Group( ( Item( 's', object='h1'), # how automatic?
+                                 Item( 'tx', object='h1'),
+                                 Item( 'ty', object='h1'),
+                                 Item( 'tz', object='h1'),
+                                 Item( 'r_x', object='h1',style='custom'),
+                                 Item( 'r_y', object='h1',style='custom'),
+                                 Item( 'r_z', object='h1',style='custom'),
+
+                                 Item( 'save_new_cal', show_label = False ),
+                                 Item( 'save_new_cal_dir', show_label = False ),
+                                 )),
+                        title = 'Calibration Alignment',
+                        )
+    orig_data_verts = traits.Instance(object)
+    orig_data_speeds = traits.Instance(object)
+    reconstructor = traits.Instance(object)
+    viewed_data = traits.Instance(object) # should be a source
+
+    def __init__(self, parent, **traits):
+        super(CalibrationAlignmentWindow, self).__init__(**traits)
+        self.params = Alignment()
+        self.control = self.edit_traits(parent=parent,
+                                        kind='subpanel',
+                                        context={'h1':self.params,
+                                                 'object':self},
+                                        ).control
+        self.params.on_trait_change( self._params_changed )
+
+    def set_data(self,orig_data_verts,orig_data_speeds,reconstructor):
+        self.orig_data_verts = orig_data_verts
+        self.orig_data_speeds = orig_data_speeds
+        self.reconstructor = reconstructor
+
+        assert orig_data_verts.ndim == 2
+        assert orig_data_speeds.ndim == 1
+        assert orig_data_verts.shape[0] == 4
+        assert orig_data_verts.shape[1] == orig_data_speeds.shape[0]
+
+
+        # from mayavi2-2.0.2a1/enthought.tvtk/enthought/tvtk/tools/mlab.py
+        #   Glyphs.__init__
+        points = hom2vtk(orig_data_verts)
+        polys = numpy.arange(0, len(points), 1, 'l')
+        polys = numpy.reshape(polys, (len(points), 1))
+        pd = tvtk.PolyData(points=points, polys=polys)
+        pd.point_data.scalars = orig_data_speeds
+        pd.point_data.scalars.name = 'speed'
+        self.viewed_data = VTKDataSource(data=pd,
+                                         name='aligned data')
+
+    def _params_changed(self):
         if self.orig_data_verts is None or self.viewed_data is None:
             # no data set yet
 
             return
-        s,R,t = self.get_sRt()
+        s,R,t = self.params.get_sRt()
         M = flydra.align.build_xform( s, R, t)
         verts = np.dot(M,self.orig_data_verts)
         self.viewed_data.data.points = hom2vtk(verts)
@@ -148,7 +173,7 @@ class CalibrationAlignment(traits.HasTraits):
         self.viewed_data.update()
 
     def get_aligned_scaled_R(self):
-        s,R,t = self.get_sRt()
+        s,R,t = self.params.get_sRt()
         scaled = self.reconstructor
         alignedR = scaled.get_aligned_copy(s,R,t)
         return alignedR
@@ -184,7 +209,7 @@ class IVTKWithCalGUI(SplitApplicationWindow):
     # The `Scene` instance into which VTK renders.
     scene = traits.Instance(Scene)
 
-    cal_align = traits.Instance(CalibrationAlignment)#parent)
+    cal_align = traits.Instance(CalibrationAlignmentWindow)
 
     ###########################################################################
     # 'object' interface.
@@ -210,10 +235,8 @@ class IVTKWithCalGUI(SplitApplicationWindow):
         """ Creates the right hand side or bottom depending on the
         style.  's' and 'scene' are bound to the Scene instance."""
 
-        self.cal_align = CalibrationAlignment()
-        control = self.cal_align.edit_traits(parent=parent,
-                                             kind='subpanel').control
-        return control
+        self.cal_align = CalibrationAlignmentWindow(parent)
+        return self.cal_align.control
 
 def main():
     usage = '%prog FILE [options]'
@@ -235,7 +258,7 @@ def main():
 
     (options, args) = parser.parse_args()
     if len(args)>1:
-        print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
+        print >> sys.stderr, "FILE argument supplied more than once"
         parser.print_help()
         return
     h5_filename=args[0]
@@ -246,7 +269,8 @@ def main():
         obj_only = None
 
     ca = core_analysis.get_global_CachingAnalyzer()
-    obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(h5_filename)
+    obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(
+        h5_filename)
     R = reconstruct.Reconstructor(data_file).get_scaled()
     fps = result_utils.get_fps( data_file, fail_on_error=False )
 
@@ -260,19 +284,22 @@ def main():
 
     if options.stim_xml is not None:
         file_timestamp = data_file.filename[4:19]
-        stim_xml = xml_stimulus.xml_stimulus_from_filename(options.stim_xml,
-                                                           timestamp_string=file_timestamp,
-                                                           )
+        stim_xml = xml_stimulus.xml_stimulus_from_filename(
+            options.stim_xml,
+            timestamp_string=file_timestamp,
+            )
         try:
             fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
         except xml_stimulus.WrongXMLTypeError:
             pass
         else:
-            include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp( timestamp_string=file_timestamp )
+            include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp(
+                timestamp_string=file_timestamp )
             if include_obj_ids is not None:
                 use_obj_ids = include_obj_ids
             if exclude_obj_ids is not None:
-                use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
+                use_obj_ids = list( set(use_obj_ids).difference(
+                    exclude_obj_ids ) )
             print 'using object ids specified in fanout .xml file'
         if stim_xml.has_reconstructor():
             stim_xml.verify_reconstructor(R)
@@ -299,7 +326,8 @@ def main():
             dt = 1.0/fps
             vels = verts_central_diff/(2*dt)
             speeds = numpy.sqrt(numpy.sum(vels**2,axis=1))
-            speeds = numpy.array([speeds[0]] + list(speeds) + [speeds[-1]]) # pad end points
+            # pad end points
+            speeds = numpy.array([speeds[0]] + list(speeds) + [speeds[-1]])
         else:
             speeds = numpy.zeros( (verts.shape[1],) )
 
@@ -331,9 +359,7 @@ def main():
     viewer.open()
     e.new_scene(viewer)
 
-    #cal_align = CalibrationAlignment()#verts,speed,R)
     viewer.cal_align.set_data(verts,speed,R)
-    #viewer.cal_align.edit_traits()
 
     if 0:
         # Do this if you need to see the MayaVi tree view UI.
