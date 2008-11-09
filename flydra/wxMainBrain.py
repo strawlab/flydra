@@ -999,7 +999,6 @@ class wxMainBrainApp(wx.App):
         doit=False
         dlg = wx.DirDialog( self.frame, "Select directory with calibration data",
                            style = wx.DD_DEFAULT_STYLE,
-                           defaultPath = os.environ.get('HOME','')
                            )
         try:
             self.pass_all_keystrokes = True
@@ -1070,7 +1069,6 @@ class wxMainBrainApp(wx.App):
     def OnChangeSaveDataDir(self, event):
         dlg = wx.DirDialog( self.frame, "Change save data directory",
                            style = wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON,
-                           defaultPath = self.save_data_dir,
                            )
         try:
             self.pass_all_keystrokes = True
