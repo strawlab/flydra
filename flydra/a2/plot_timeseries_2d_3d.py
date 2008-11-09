@@ -261,17 +261,20 @@ def doit(
                     cam_id, mean_error, worst_frame, worst_obj_id, worst_error)
             print
 
-        for use_kalman_smoothing in [True,False]:
+        for kalman_smoothing in [True,False]:
+            if use_kalman_smoothing==False and kalman_smoothing==True:
+                continue
             print 'loading frame numbers for kalman objects (estimates)'
             kalman_rows = []
             for obj_id in use_obj_ids:
                 try:
-                    my_rows = ca.load_data( obj_id, data_file,
-                                            use_kalman_smoothing=use_kalman_smoothing,
-                                            dynamic_model_name = dynamic_model,
-                                            frames_per_second=fps,
-                                            up_dir=up_dir,
-                                            )
+                    my_rows = ca.load_data(
+                        obj_id, data_file,
+                        use_kalman_smoothing=kalman_smoothing,
+                        dynamic_model_name = dynamic_model,
+                        frames_per_second=fps,
+                        up_dir=up_dir,
+                        )
                     kalman_rows.append(my_rows)
                 except core_analysis.NotEnoughDataToSmoothError, err:
                     # OK, we don't have data from this obj_id
@@ -302,7 +305,7 @@ def doit(
                 frame = kalman_rows['frame'][cond]
                 #print '%d %d %d'%(frame[0],obj_id, len(frame))
 
-                if use_kalman_smoothing:
+                if kalman_smoothing:
                     kwprops = dict(lw=0.5)
                 else:
                     kwprops = dict(lw=1)
@@ -318,7 +321,7 @@ def doit(
                     all_kalman_lines[thisline] = obj_id
                     ax.set_ylim([-100,800])
                     ax.set_xlim( (start_frame, stop_frame) )
-                if not use_kalman_smoothing:
+                if not kalman_smoothing:
                     ax = ax_by_cam['kalman pmean']
                     P00 = kalman_rows['P00'][cond]
                     P11 = kalman_rows['P11'][cond]
@@ -327,7 +330,7 @@ def doit(
                     std = numpy.sqrt(Pmean) # standard deviation (in meters)
                     ax.plot( frame, std, 'k-')
 
-            if not use_kalman_smoothing:
+            if not kalman_smoothing:
                 # plot 2D data contributing to 3D object
                 # this is forked from flydra_analysis_plot_kalman_2d.py
 
