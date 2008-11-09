@@ -150,6 +150,18 @@ class Stimulus(object):
                 warnings.warn("Unknown node: %s"%child.tag)
         return actors
 
+    def draw_in_mayavi_scene(self,engine):
+        for child in self.root:
+            if child.tag in ['multi_camera_reconstructor','valid_h5_times']:
+                continue
+            elif child.tag == 'cubic_arena':
+                info = self._get_info_for_cubic_arena(child)
+                experiment_layout.get_mayavi_cubic_arena_source(engine,
+                                                                info=info)
+            else:
+                import warnings
+                warnings.warn("Unknown node: %s"%child.tag)
+
     def get_distorted_linesegs( self, cam_id ):
         # mainly copied from self.plot_stim_over_distorted_image()
         R = self._get_reconstructor()

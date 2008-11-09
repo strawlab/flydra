@@ -120,3 +120,38 @@ def cubic_arena(info=None,hack_postmultiply=None):
     actors.append( make_2_vert_tube( v[3], v[7] ))
 
     return actors
+
+def get_mayavi_cubic_arena_source(engine,info=None):
+    from enthought.mayavi.sources.api import VTKDataSource
+    from enthought.mayavi.modules.surface import Surface
+
+    v=info['verts4x4'] # arranged in 2 rectangles of 4 verts
+
+    points = v
+    lines = [ [0,1], [1,2], [2,3], [3,0],
+              [4,5], [5,6], [6,7], [7,4],
+              [0,4], [1,5], [2,6], [3,7] ]
+    #polys = numpy.arange(0, len(points), 1, 'l')
+    #polys = numpy.reshape(polys, (len(points), 1))
+    pd = tvtk.PolyData(points=points, #polys=polys,
+                       lines=lines)
+
+    e=engine
+    e.add_source( VTKDataSource(data=pd,name='cubic arena') )
+
+    if 0:
+        filter = tvtk.TubeFilter(number_of_sides=6)
+        filter.radius = radius
+        f = FilterBase(filter=filter, name='TubeFilter')
+        mayavi.add_filter(f)
+    if 1:
+        s = Surface()
+        e.add_module(s)
+    if 0:
+        v = Vectors()
+        v.glyph.scale_mode = 'data_scaling_off'
+        #v.glyph.color_mode = 'color_by_scalar'
+        #v.glyph.color = 'black'
+        v.glyph.glyph_source = tvtk.SphereSource(radius=options.radius*5.0)
+        #v.glyph.glyph_source = tvtk.GlyphSource2D()
+        e.add_module(v)

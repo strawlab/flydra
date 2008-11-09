@@ -16,7 +16,6 @@ import numpy as np
 
 import enthought.mayavi.tools.sources as sources
 from enthought.mayavi.sources.array_source import ArraySource
-from enthought.mayavi.modules.surface import Surface
 from enthought.mayavi.modules.vectors import Vectors
 
 import enthought.traits.api as traits
@@ -112,7 +111,8 @@ class CalibrationAlignment(traits.HasTraits):
         pd = tvtk.PolyData(points=points, polys=polys)
         pd.point_data.scalars = orig_data_speeds
         pd.point_data.scalars.name = 'speed'
-        self.viewed_data = VTKDataSource(data=pd)
+        self.viewed_data = VTKDataSource(data=pd,
+                                         name='aligned data')
 
     def get_sRt(self):
         qx = cgtypes.quat().fromAngleAxis( self.r_x*D2R, cgtypes.vec3(1,0,0))
@@ -196,6 +196,10 @@ def main():
         fps = 100.0
         warnings.warn('Setting fps to default value of %f'%fps)
 
+    if options.stim_xml is None:
+        raise ValueError(
+            'stim_xml must be specified (how else will you align the data?')
+
     if options.stim_xml is not None:
         file_timestamp = data_file.filename[4:19]
         stim_xml = xml_stimulus.xml_stimulus_from_filename(options.stim_xml,
@@ -268,15 +272,13 @@ def main():
 
     # Create a new scene.
     scene = e.new_scene()
-    if stim_xml is not None:
-        actors = stim_xml.get_tvtk_actors()
-        scene.scene.add_actors(actors)
 
     if 0:
         # Do this if you need to see the MayaVi tree view UI.
         ev = EngineView(engine=e)
         ui = ev.edit_traits()
 
+    # view aligned data
     e.add_source(cal_align.viewed_data)
 
     v = Vectors()
@@ -284,6 +286,9 @@ def main():
     v.glyph.color_mode = 'color_by_scalar'
     v.glyph.glyph_source = tvtk.SphereSource(radius=options.radius)
     e.add_module(v)
+
+    if stim_xml is not None:
+        stim_xml.draw_in_mayavi_scene(e)
 
     gui = GUI()
     gui.start_event_loop()
