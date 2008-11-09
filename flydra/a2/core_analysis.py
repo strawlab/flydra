@@ -1214,7 +1214,8 @@ class CachingAnalyzer:
                     # obj_id is an integer, normal case
                     obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
                 else:
-                    # may specify sequence of obj_id -- concatenate data, treat as one object
+                    # may specify sequence of obj_id -- concatenate
+                    # data, treat as one object
                     obs_idxs = []
                     for oi in obj_id:
                         obs_idxs.append( numpy.nonzero(obs_obj_ids == oi)[0] )
@@ -1224,8 +1225,11 @@ class CachingAnalyzer:
                         ## print
                     obs_idxs = numpy.concatenate( obs_idxs )
 
-                # Kalman observations are already always in meters, no scale factor needed
-                orig_rows = kresults.root.kalman_observations.readCoordinates(obs_idxs)
+                # Kalman observations are already always in meters, no
+                # scale factor needed
+
+                orig_rows = kresults.root.kalman_observations.readCoordinates(
+                    obs_idxs)
 
                 if 1 :
                     warnings.warn('Due to Kalman smoothing, all '
@@ -1249,18 +1253,28 @@ class CachingAnalyzer:
                             print
 
                 elif 0:
-                    warnings.warn('using EKF estimates of position as observations to Kalman smoother where only 1 camera data present')
-                    # replace observations with only one camera by Extended Kalman Filter estimates
+                    warnings.warn('using EKF estimates of position as '
+                                  'observations to Kalman smoother where only '
+                                  '1 camera data present')
+
+                    # replace observations with only one camera by
+                    # Extended Kalman Filter estimates
+
                     cond = numpy.isnan(orig_rows['x'])
                     take_idx = numpy.nonzero( cond )[0]
                     take_frames = orig_rows['frame']
                     take_obj_ids = orig_rows['obj_id']
 
                     kest_table = kresults.root.kalman_estimates[:]
-                    for frame,obj_id,idx in zip(take_frames,take_obj_ids,take_idx):
-                        kest_row_idxs = numpy.nonzero(kest_table['frame'] == frame)[0]
+                    for frame,obj_id,idx in zip(
+                        take_frames,take_obj_ids,take_idx):
+
+                        kest_row_idxs = np.nonzero(
+                            kest_table['frame'] == frame)[0]
                         kest_rows = kest_table[kest_row_idxs]
-                        kest_row_idxs = numpy.nonzero( kest_rows['obj_id'] == obj_id )[0]
+                        kest_row_idxs = np.nonzero(
+                            kest_rows['obj_id'] == obj_id )[0]
+
                         if 0:
                             print "frame, obj_id",frame, obj_id
                             print 'orig_rows[idx]'
@@ -1277,18 +1291,24 @@ class CachingAnalyzer:
                         orig_rows[idx]['y'] = kest_rows[kest_row_idx]['y']
                         orig_rows[idx]['z'] = kest_rows[kest_row_idx]['z']
                 else:
-                    warnings.warn('abondoning all observations where only 1 camera data present, and estimating past end of last observation')
-                    # another idea would be to implement crazy EKF-based smoothing...
+                    warnings.warn('abondoning all observations where only 1 '
+                                  'camera data present, and estimating past '
+                                  'end of last observation')
+
+                    # another idea would be to implement crazy
+                    # EKF-based smoothing...
 
                 if len(orig_rows)==1:
-                    raise NotEnoughDataToSmoothError('not enough data from obj_id %d was found'%obj_id)
+                    raise NotEnoughDataToSmoothError(
+                        'not enough data from obj_id %d was found'%obj_id)
 
-                rows = self._smooth_cache.query_results(obj_id,data_file,orig_rows,
-                                                        frames_per_second=frames_per_second,
-                                                        dynamic_model_name=dynamic_model_name,
-                                                        return_smoothed_directions=return_smoothed_directions,
-                                                        up_dir=up_dir,
-                                                        )
+                rows = self._smooth_cache.query_results(
+                    obj_id,data_file,orig_rows,
+                    frames_per_second=frames_per_second,
+                    dynamic_model_name=dynamic_model_name,
+                    return_smoothed_directions=return_smoothed_directions,
+                    up_dir=up_dir,
+                    )
 
 
         if not len(rows):
