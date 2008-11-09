@@ -32,6 +32,11 @@ import flydra.analysis.result_utils as result_utils
 
 import cgtypes # import cgkit 1.x
 
+from enthought.pyface.api import Widget, Window
+from enthought.pyface.tvtk.api import Scene, DecoratedScene
+from enthought.pyface.api import SplitApplicationWindow
+from enthought.pyface.api import FileDialog, OK
+
 D2R = np.pi/180.0
 
 def hom2vtk(arr):
@@ -75,7 +80,6 @@ class CalibrationAlignment(traits.HasTraits):
     r_y = traits.Range(-180.0,180.0, 0.0,mode='slider',set_enter=True)
     r_z = traits.Range(-180.0,180.0, 0.0,mode='slider',set_enter=True)
 
-    new_cal_filename = traits.File(extension='.xml')
     save_new_cal = traits.Button(label='Save new calibration as .xml file')
     save_new_cal_dir = traits.Button(label='Save new calibration as directory')
 
@@ -86,14 +90,17 @@ class CalibrationAlignment(traits.HasTraits):
                                  Item('r_x',style='custom'),
                                  Item('r_y',style='custom'),
                                  Item('r_z',style='custom'),
-                                 Item('new_cal_filename'),
                                  Item( 'save_new_cal', show_label = False ),
                                  Item( 'save_new_cal_dir', show_label = False ),
                                  )),
                         title = 'Calibration Alignment Parameters',
                         )
+    orig_data_verts = traits.Instance(object)
+    orig_data_speeds = traits.Instance(object)
+    reconstructor = traits.Instance(object)
+    viewed_data = traits.Instance(object) # should be a source
 
-    def __init__(self,orig_data_verts,orig_data_speeds,reconstructor):
+    def set_data(self,orig_data_verts,orig_data_speeds,reconstructor):
         self.orig_data_verts = orig_data_verts
         self.orig_data_speeds = orig_data_speeds
         self.reconstructor = reconstructor
@@ -128,11 +135,13 @@ class CalibrationAlignment(traits.HasTraits):
         return self.s, R, t
 
     def _anytrait_changed(self):
+        if self.orig_data_verts is None or self.viewed_data is None:
+            # no data set yet
+
+            return
         s,R,t = self.get_sRt()
         M = flydra.align.build_xform( s, R, t)
-
         verts = np.dot(M,self.orig_data_verts)
-
         self.viewed_data.data.points = hom2vtk(verts)
 
         self.viewed_data.data.modified()
@@ -145,20 +154,69 @@ class CalibrationAlignment(traits.HasTraits):
         return alignedR
 
     def _save_new_cal_fired(self):
-        alignedR = self.get_aligned_scaled_R()
-        alignedR.save_to_xml_filename(self.new_cal_filename)
-        print 'saved calibration to XML file...',self.new_cal_filename
+        wildcard = 'XML files (*.xml)|*.xml|' + FileDialog.WILDCARD_ALL
+        dialog = FileDialog(#parent=self.window.control,
+                            title='Save calibration .xml file',
+                            action='save as', wildcard=wildcard
+                            )
+        if dialog.open() == OK:
+            alignedR = self.get_aligned_scaled_R()
+            alignedR.save_to_xml_filename(dialog.path)
+            #print 'saved calibration to XML file...',dialog.path
 
     def _save_new_cal_dir_fired(self):
-        alignedR = self.get_aligned_scaled_R()
-        alignedR.save_to_files_in_new_directory(self.new_cal_filename)
-        print 'saved calibration to directory',self.new_cal_filename
+        dialog = FileDialog(#parent=self.window.control,
+                            title='Save calibration directory',
+                            action='save as',
+                            )
+        if dialog.open() == OK:
+            alignedR = self.get_aligned_scaled_R()
+            alignedR.save_to_files_in_new_directory(dialog.path)
+            #print 'saved calibration to directory...',dialog.path
+
+class IVTKWithCalGUI(SplitApplicationWindow):
+    # The ratio of the size of the left/top pane to the right/bottom pane.
+    ratio = traits.Float(0.7)
+
+    # The direction in which the panel is split.
+    direction = traits.Str('vertical')
+
+    # The `Scene` instance into which VTK renders.
+    scene = traits.Instance(Scene)
+
+    cal_align = traits.Instance(CalibrationAlignment)#parent)
+
+    ###########################################################################
+    # 'object' interface.
+    ###########################################################################
+    def __init__(self, **traits):
+        """ Creates a new window. """
+
+        # Base class constructor.
+        super(IVTKWithCalGUI, self).__init__(**traits)
+        self.title = 'Calibration Alignment GUI'
+        # Create the window's menu bar.
+        #self.menu_bar_manager = create_ivtk_menu(self)
+
+    ###########################################################################
+    # Protected 'SplitApplicationWindow' interface.
+    ###########################################################################
+    def _create_lhs(self, parent):
+        """ Creates the left hand side or top depending on the style. """
+        self.scene = DecoratedScene(parent)
+        return self.scene.control
+
+    def _create_rhs(self, parent):
+        """ Creates the right hand side or bottom depending on the
+        style.  's' and 'scene' are bound to the Scene instance."""
+
+        self.cal_align = CalibrationAlignment()
+        control = self.cal_align.edit_traits(parent=parent,
+                                             kind='subpanel').control
+        return control
 
 def main():
     usage = '%prog FILE [options]'
-
-    # A man page can be generated with:
-    # 'help2man -N -n kdviewer kdviewer > kdviewer.1'
 
     parser = OptionParser(usage)
 
@@ -266,12 +324,16 @@ def main():
     # your engine.
     e.start()
 
-    cal_align = CalibrationAlignment(verts,speed,R)
-
-    cal_align.edit_traits()
-
     # Create a new scene.
-    scene = e.new_scene()
+    from enthought.tvtk.tools import ivtk
+    #viewer = ivtk.IVTK(size=(600,600))
+    viewer = IVTKWithCalGUI(size=(800,600))
+    viewer.open()
+    e.new_scene(viewer)
+
+    #cal_align = CalibrationAlignment()#verts,speed,R)
+    viewer.cal_align.set_data(verts,speed,R)
+    #viewer.cal_align.edit_traits()
 
     if 0:
         # Do this if you need to see the MayaVi tree view UI.
@@ -279,7 +341,7 @@ def main():
         ui = ev.edit_traits()
 
     # view aligned data
-    e.add_source(cal_align.viewed_data)
+    e.add_source(viewer.cal_align.viewed_data)
 
     v = Vectors()
     v.glyph.scale_mode = 'data_scaling_off'
