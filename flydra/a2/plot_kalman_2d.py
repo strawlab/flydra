@@ -214,7 +214,8 @@ class ShowIt(object):
         print 'reading cameras'
         frames = frames[use_idxs]#data2d.readCoordinates( use_idxs, field='frame')
         if len(frames):
-            print 'frame range: %d - %d'%( frames[0], frames[-1] )
+            print 'frame range: %d - %d (%d frames total)'%(
+                frames[0], frames[-1],len(frames) )
         camns = data2d.read(field='camn')
         camns = camns[use_idxs]
         #camns = data2d.readCoordinates( use_idxs, field='camn')
@@ -286,7 +287,8 @@ class ShowIt(object):
             ax.plot([xs[idx_first_valid]],[ys[idx_first_valid]],
                     'ro',label='first point')
 
-            ax.plot(xs,ys,'g.',label='all points')
+            ax.plot(xs[valid_idx],ys[valid_idx],
+                    'g.',label='all points')
 
             ax.plot([xs[idx_last_valid]],[ys[idx_last_valid]],
                     'bo',label='first point')
