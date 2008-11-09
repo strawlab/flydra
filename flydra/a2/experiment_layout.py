@@ -120,37 +120,3 @@ def cubic_arena(info=None,hack_postmultiply=None):
     actors.append( make_2_vert_tube( v[3], v[7] ))
 
     return actors
-
-## def get_tvtk_actors_for_file(filename=None,force_stimulus=False):
-
-##     # XXX TODO Implement some kind of reconstructor hash to ensure
-##     # these values are matched to the reconstructor used to create
-##     # them.
-
-##     actors = []
-##     if filename=='DATA20080525_194631.kalmanized.h5':
-##         import warnings
-##         warnings.warn('using mama20080501, even though setup/calibration has changed')
-##         instance = conditions_draw.mama20080501()
-##         actors.extend( instance.get_tvtk_actors() )
-##         actors.extend(get_posts([[array([ 0.15307339,  0.52554792,  0.05171393]),
-##                                   array([ 0.16880691,  0.53390287,  0.30010557])]]))
-##     elif filename=='DATA20080528_201023.kalmanized.h5':
-##         import warnings
-##         warnings.warn('using mama20080501, even though setup/calibration has changed')
-##         instance = conditions_draw.mama20080501()
-##         actors.extend( instance.get_tvtk_actors() )
-##         actors.extend(get_posts([[array([ 0.10265471,  0.47653907,  0.28677366]),
-##                                   array([ 0.10198015,  0.4799127 ,  0.02159713])]]))
-##     elif filename=='DATA20080528_204034.kalmanized.h5':
-##         import warnings
-##         warnings.warn('using mama20080501, even though setup/calibration has changed')
-##         instance = conditions_draw.mama20080501()
-##         actors.extend( instance.get_tvtk_actors() )
-##         actors.extend(get_posts([[array([ 0.10087657,  0.4751555 ,  0.28746428]),
-##                                   array([ 0.09823772,  0.47664041,  0.0220485 ])]]))
-
-##     else:
-##         if force_stimulus:
-##             raise KeyError('no stimulus defined for file filename')
-##     return actors
