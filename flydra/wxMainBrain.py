@@ -116,12 +116,6 @@ class wxMainBrainApp(wx.App):
 
         filemenu.AppendItem(wx.MenuItem(kind=wx.ITEM_SEPARATOR))
 
-        ID_start_calibration = wx.NewId()
-        filemenu.Append(ID_start_calibration, "Start calibration...", "Start saving calibration points")
-        wx.EVT_MENU(self, ID_start_calibration, self.OnStartCalibration)
-
-        filemenu.AppendItem(wx.MenuItem(kind=wx.ITEM_SEPARATOR))
-
         ID_about = wx.NewId()
         filemenu.Append(ID_about, "About", "About wx.MainBrain")
         wx.EVT_MENU(self, ID_about, self.OnAboutMainBrain)
@@ -969,16 +963,6 @@ class wxMainBrainApp(wx.App):
                       self.OnKalmanParametersChange)
 
         ctrl = xrc.XRCCTRL(self.status_panel,
-                           "ACCUMULATE_KALMAN_DATA_FOR_CALIBRATION")
-        wx.EVT_CHECKBOX(ctrl, ctrl.GetId(),
-                        self.OnAccumulateKalmanCalibrationData)
-
-        ctrl = xrc.XRCCTRL(self.status_panel,
-                           "SAVE_KALMAN_CAL_DATA_TO_FILE")
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnSaveKalmanCalibrationData)
-
-        ctrl = xrc.XRCCTRL(self.status_panel,
                            "MANUAL_TRIGGER_DEVICE_STATUS1") # EXT TRIG1
         wx.EVT_BUTTON(ctrl, ctrl.GetId(),
                       self.OnManualTriggerDevice1)
@@ -1010,29 +994,6 @@ class wxMainBrainApp(wx.App):
     def OnManualTriggerDevice3(self,event):
         sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sender.sendto('3',(MainBrain.hostname,common_variables.trigger_network_socket_port))
-
-    def OnSaveKalmanCalibrationData(self,event):
-        doit = False
-        dlg = wx.DirDialog( self.frame, "Calibration save directory",
-                           style = wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON,
-                           defaultPath = os.environ.get('HOME',''),
-                           )
-        try:
-            self.pass_all_keystrokes = True
-            if dlg.ShowModal() == wx.ID_OK:
-                calib_dir = dlg.GetPath()
-                doit = True
-        finally:
-            dlg.Destroy()
-            self.pass_all_keystrokes = False
-        if doit:
-            self.main_brain.save_kalman_calibration_data(calib_dir)
-
-    def OnAccumulateKalmanCalibrationData(self,event):
-        ctrl = xrc.XRCCTRL(self.status_panel,
-                       "ACCUMULATE_KALMAN_DATA_FOR_CALIBRATION")
-        value = ctrl.GetValue()
-        self.main_brain.set_accumulate_kalman_calibration_data(value)
 
     def OnLoadCal(self,event):
         doit=False
@@ -1351,33 +1312,6 @@ class wxMainBrainApp(wx.App):
             fd.write(pprint.pformat(all_params))
             fd.close()
 
-    def OnStartCalibration(self, event):
-        doit = False
-        dlg = wx.DirDialog( self.frame, "Calibration save directory",
-                           style = wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON,
-                           defaultPath = os.environ.get('HOME',''),
-                           )
-        try:
-            self.pass_all_keystrokes = True
-            if dlg.ShowModal() == wx.ID_OK:
-                calib_dir = dlg.GetPath()
-                doit = True
-        finally:
-            dlg.Destroy()
-            self.pass_all_keystrokes = False
-        if doit:
-            self.main_brain.start_calibrating(calib_dir)
-            dlg = wx.MessageDialog( self.frame, 'Acquiring calibration points',
-                                   'calibration', wx.OK | wx.ICON_INFORMATION )
-            try:
-                self.pass_all_keystrokes = True
-                dlg.ShowModal()
-            finally:
-                self.main_brain.stop_calibrating()
-                dlg.Destroy()
-                self.pass_all_keystrokes = False
-
-
     def _on_common_quit(self):
         self.timer.Stop()
         self.timer2.Stop()
@@ -1421,12 +1355,6 @@ class wxMainBrainApp(wx.App):
                     self.main_brain.request_image_async(cam_id)
                 except KeyError: # no big deal, camera probably just disconnected
                     pass
-
-        # also update a couple other things...
-
-        ctrl = xrc.XRCCTRL(self.status_panel,"KALMAN_CALIBRATION_N_POINTS")
-        n_pts = len(self.main_brain.all_kalman_calibration_data)
-        ctrl.SetValue(str(n_pts))
 
     def OnTimer(self, event):
         if not hasattr( self, 'last_timer'):

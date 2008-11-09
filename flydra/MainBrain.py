@@ -23,7 +23,6 @@ import motmot.utils.config
 import flydra.version
 import flydra.kalman.flydra_kalman_utils as flydra_kalman_utils
 import flydra.kalman.flydra_tracker
-import flydra.save_calibration_data as save_calibration_data
 import flydra.fastgeom as geom
 #import flydra.geom as geom
 
@@ -72,11 +71,6 @@ PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
 PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
 PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_IDX
-
-# these calibration data are global, but that's a hack...
-calib_data_lock = threading.Lock()
-calib_IdMat = []
-calib_points = []
 
 ########
 # persistent configuration data ( implementation in motmot.utils.config )
@@ -657,12 +651,10 @@ class CoordinateProcessor(threading.Thread):
 
     def set_new_tracker(self,kalman_model=None):
         # called from main thread, must lock to send to realtime coord thread
-        evt = self.main_brain.accumulate_kalman_calibration_data
         scale_factor = self.reconstructor.get_scale_factor()
         tracker = flydra.kalman.flydra_tracker.Tracker(self.reconstructor_meters,
                                                        scale_factor=scale_factor,
-                                                       kalman_model=kalman_model,
-                                                       save_calibration_data=evt)
+                                                       kalman_model=kalman_model)
         tracker.set_killed_tracker_callback( self.enqueue_finished_tracked_object )
         with self.tracker_lock:
             if self.tracker is not None:
@@ -670,7 +662,6 @@ class CoordinateProcessor(threading.Thread):
             self.tracker = tracker # bind to name, replacing old tracker
             if self.save_profiling_data:
                 tracker = copy.copy(self.tracker)
-                tracker.save_calibration_data = None
                 tracker.kill_tracker_callbacks = []
                 if 1:
                     raise NotImplementedError('')
@@ -691,9 +682,6 @@ class CoordinateProcessor(threading.Thread):
                  tracked_object.observations_frames, tracked_object.observations_data,
                  tracked_object.observations_2d, tracked_object.observations_Lcoords,
                  ) )
-
-        if len(tracked_object.saved_calibration_data):
-            self.main_brain.queue_kalman_calibration_data.put( tracked_object.saved_calibration_data )
 
     def connect(self,cam_id):
 
@@ -806,8 +794,8 @@ class CoordinateProcessor(threading.Thread):
     def run(self):
         """main loop of CoordinateProcessor"""
         global downstream_hosts, best_realtime_data
-        global outgoing_UDP_socket, calib_data_lock, calib_IdMat, calib_points
-        global calib_data_lock, XXX_framenumber
+        global outgoing_UDP_socket
+        global XXX_framenumber
 
         if os.name == 'posix':
             try:
@@ -1316,33 +1304,6 @@ class CoordinateProcessor(threading.Thread):
                                 dur_3d_proc_msec_b,
                                 dur_3d_proc_msec_c)
 
-                # save calibration data -=-=-=-=-=-=-=-=
-                if self.main_brain.currently_calibrating.isSet():
-                    for corrected_framenumber in new_data_framenumbers:
-                        data_dict = realtime_coord_dict[corrected_framenumber]
-                        if len(data_dict) == len(self.cam_ids):
-                            k = data_dict.keys()
-                            k.sort()
-                            ids = []
-                            save_points = []
-                            cam_timestamps_sync_check = []
-                            for cam_id in k:
-                                pt = data_dict[cam_id]
-                                cam_timestamps_sync_check.append( pt[0] )
-                                if numpy.isnan(pt[0]): # found_anything
-                                    save_pt = nan, nan, nan
-                                    id = 0
-                                else:
-                                    save_pt = pt[0], pt[1], 1.0
-                                    id = 1
-                                ids.append( id )
-                                save_points.extend( save_pt )
-                            # we now have data from all cameras
-                            with calib_data_lock:
-                                calib_IdMat.append( ids )
-                                calib_points.append( save_points )
-                                #print 'saving points for calibration:',ids,save_points
-
                 for finished in finished_corrected_framenumbers:
                     if 1:
                         #check that timestamps are in reasonable agreement (low priority)
@@ -1811,7 +1772,6 @@ class MainBrain(object):
         self.set_new_camera_callback(self.SendExpectedFPS)
         self.set_new_camera_callback(self.SendCalibration)
         self.set_old_camera_callback(self.DecreaseCamCounter)
-        self.currently_calibrating = threading.Event()
 
         self.last_saved_data_time = 0.0
         self.last_trigger_framecount_check_time = 0.0
@@ -1840,12 +1800,9 @@ class MainBrain(object):
         self.queue_cam_info        = Queue.Queue()
         self.queue_host_clock_info = Queue.Queue()
         self.queue_trigger_clock_info = Queue.Queue()
-        self.queue_kalman_calibration_data = Queue.Queue()
         self.queue_data3d_best     = Queue.Queue()
 
         self.queue_data3d_kalman_estimates = Queue.Queue()
-        self.accumulate_kalman_calibration_data = threading.Event()
-        self.all_kalman_calibration_data = []
 
         self.hypothesis_test_max_error = LockedValue(
             rc_params['hypothesis_test_max_acceptable_error']) # maximum reprojection error
@@ -1916,12 +1873,6 @@ class MainBrain(object):
         rc_params['hypothesis_test_max_acceptable_error'] = val
         save_rc_params()
 
-    def set_accumulate_kalman_calibration_data(self, value):
-        if value:
-            self.accumulate_kalman_calibration_data.set()
-        else:
-            self.accumulate_kalman_calibration_data.clear()
-
     def IncreaseCamCounter(self,cam_id,scalar_control_info,fqdn_and_port):
         self.num_cams += 1
         self.MainBrain_cam_ids_copy.append( cam_id )
@@ -1982,78 +1933,6 @@ class MainBrain(object):
 
     def set_old_camera_callback(self,handler):
         self._old_camera_functions.append(handler)
-
-    def start_calibrating(self, calib_dir):
-        self.calibration_cam_ids = self.remote_api.external_get_cam_ids()
-        self.calib_dir = calib_dir
-        self.currently_calibrating.set()
-
-    def stop_calibrating(self):
-        global calib_IdMat, calib_points, calib_data_lock
-        self.currently_calibrating.clear()
-
-        cam_ids = self.remote_api.external_get_cam_ids()
-        if len(cam_ids) != len(self.calibration_cam_ids):
-            raise RuntimeError("Number of cameras changed during calibration")
-
-        for cam_id in cam_ids:
-            if cam_id not in self.calibration_cam_ids:
-                raise RuntimeError("Cameras changed during calibration")
-
-        with calib_data_lock:
-            IdMat = calib_IdMat
-            calib_IdMat = []
-
-            points = calib_points
-            calib_points = []
-
-        IdMat = nx.transpose(nx.array(IdMat))
-        points = nx.transpose(nx.array(points))
-
-        if 0:
-            num_found_points = numpy.sum(IdMat, axis=1)
-            valid_idx = num_found_points >= 3
-
-            IdMat = IdMat[:,valid_idx]
-            points = points[:,valid_idx]
-
-        if len(points.shape)>1:
-            print 'saving %d points to %s'%(points.shape[1],self.calib_dir)
-            save_ascii_matrix(os.path.join(self.calib_dir,'IdMat.dat'),IdMat)
-            save_ascii_matrix(os.path.join(self.calib_dir,'points.dat'),points)
-            cam_ids = self.remote_api.external_get_cam_ids()
-            Res = []
-            for cam_id in cam_ids:
-                width, height = self.get_widthheight(cam_id)
-                Res.append( [width,height] )
-            Res = nx.array( Res )
-            save_ascii_matrix(os.path.join(self.calib_dir,'Res.dat'),Res)
-
-            fd = open(os.path.join(self.calib_dir,'camera_order.txt'),'w')
-            for cam_id in cam_ids:
-                fd.write('%s\n'%cam_id)
-            fd.close()
-        else:
-            raise RuntimeError('No points collected!')
-
-    def save_kalman_calibration_data(self,calib_dir):
-
-        n_pts = len(self.all_kalman_calibration_data)
-
-        if n_pts>1:
-            print 'saving %s points from Kalman filtered data'%n_pts
-
-            data_to_save = self.all_kalman_calibration_data
-            self.all_kalman_calibration_data=[]
-            cam_ids = self.remote_api.external_get_cam_ids()
-            Res = []
-            for cam_id in cam_ids:
-                width, height = self.get_widthheight(cam_id)
-                Res.append( [width,height] )
-            save_calibration_data.do_save_calibration_data(
-                calib_dir,cam_ids,data_to_save,Res)
-        else:
-            raise RuntimeError('No points collected!')
 
     def service_pending(self):
         """the MainBrain application calls this fairly frequently (e.g. every 100 msec)"""
@@ -2402,15 +2281,6 @@ class MainBrain(object):
                 self.remote_api.external_request_missing_data(cam_id,camn,framenumber_offset,list_of_missing_framenumbers)
 
     def _service_save_data(self):
-        list_of_kalman_calibration_data = []
-        try:
-            while True:
-                tmp = self.queue_kalman_calibration_data.get(0)
-                list_of_kalman_calibration_data.extend( tmp )
-        except Queue.Empty:
-            pass
-        self.all_kalman_calibration_data.extend( list_of_kalman_calibration_data )
-
         # ** 2d data **
         #   clear queue
         list_of_rows_of_data2d = []

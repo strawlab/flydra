@@ -269,7 +269,6 @@ class Tracker:
                  reconstructor_meters,
                  scale_factor=None,
                  kalman_model=None,
-                 save_calibration_data=None,
                  max_frames_skipped=25,
                  save_all_data=False,
                  area_threshold=0,
@@ -309,7 +308,6 @@ class Tracker:
         if kalman_model is None:
             raise ValueError('must specify kalman_model')
         self.kalman_model = kalman_model
-        self.save_calibration_data=save_calibration_data
 
     def is_believably_new( self, Xmm, debug=0 ):
 
@@ -419,7 +417,6 @@ class Tracker:
             first_observation_idxs,
             scale_factor=self.scale_factor,
             kalman_model=self.kalman_model,
-            save_calibration_data=self.save_calibration_data,
             save_all_data=self.save_all_data,
             area_threshold=self.area_threshold,
             area_threshold_for_orientation=self.area_threshold_for_orientation,

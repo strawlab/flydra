@@ -72,8 +72,6 @@ cdef class TrackedObject:
     """
     cdef long current_frameno, max_frames_skipped
     cdef mybool kill_me, save_all_data
-    cdef object save_calibration_data
-    cdef public object saved_calibration_data
     cdef double area_threshold, area_threshold_for_orientation
 
     cdef object reconstructor_meters, my_kalman
@@ -95,7 +93,6 @@ cdef class TrackedObject:
                  first_observation_idxs,
                  scale_factor=None,
                  kalman_model=None,
-                 save_calibration_data=None,
                  save_all_data=False,
                  double area_threshold=0.0,
                  double area_threshold_for_orientation=0.0,
@@ -186,9 +183,6 @@ cdef class TrackedObject:
         first_observations_2d = numpy.array(first_observations_2d,dtype=numpy.uint16) # if saved as VLArray, should match with atom type
 
         self.observations_2d = [first_observations_2d]
-
-        self.save_calibration_data = save_calibration_data
-        self.saved_calibration_data = []
 
         self.max_frames_skipped=kalman_model['max_frames_skipped']
 
@@ -584,10 +578,6 @@ cdef class TrackedObject:
             observation_meters, Lcoords = self.reconstructor_meters.find3d(
                 cam_ids_and_points2d, return_line_coords = True,
                 orientation_consensus=self.orientation_consensus)
-
-            if len(cam_ids_and_points2d)>=3:
-                if self.save_calibration_data is not None and self.save_calibration_data.isSet():
-                    self.saved_calibration_data.append( cam_ids_and_points2d )
         else:
             observation_meters = None
         return observation_meters, Lcoords, used_camns_and_idxs, cam_ids_and_points2d
