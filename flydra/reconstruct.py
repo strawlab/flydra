@@ -687,6 +687,34 @@ def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
                                    helper=helper,
                                    **kw)
 
+def pretty_dump(e, ind=''):
+    # from http://www.devx.com/opensource/Article/33153/0/page/4
+
+    # start with indentation
+    s = ind
+    # put tag (don't close it just yet)
+    s += '<' + e.tag
+    # add all attributes
+    for (name, value) in e.items():
+        s += ' ' + name + '=' + "'%s'" % value
+    # if there is text close start tag, add the text and add an end tag
+    if e.text and e.text.strip():
+        s += '>' + e.text + '</' + e.tag + '>'
+    else:
+        # if there are children...
+        if len(e) > 0:
+            # close start tag
+            s += '>'
+            # add every child in its own line indented
+            for child in e:
+                s += '\n' + pretty_dump(child, ind + '  ')
+            # add closing tag in a new line
+            s += '\n' + ind + '</' + e.tag + '>'
+        else:
+            # no text and no children, just close the starting tag
+            s += ' />'
+    return s
+
 def Reconstructor_from_xml(elem):
     assert ET.iselement(elem)
     assert elem.tag == "multi_camera_reconstructor"
@@ -1028,6 +1056,15 @@ class Reconstructor:
 
         fd = open(os.path.join(new_dirname,'calibration_units.txt'),mode='w')
         fd.write(self.get_calibration_unit()+'\n')
+        fd.close()
+
+    def save_to_xml_filename(self, xml_filename):
+        root = ET.Element("root")
+        self.add_element(root)
+        child = root[0]
+        result = pretty_dump(child,ind='  ')
+        fd = open(xml_filename,mode='w')
+        fd.write(result)
         fd.close()
 
     def save_to_h5file(self, h5file, OK_to_delete_old_calibration=False):
