@@ -305,6 +305,7 @@ class ShowIt(object):
         fig.canvas.mpl_connect('key_press_event', self.on_key_press)
 
         if kalman_filename is None:
+            results.close()
             return
 
         # Do same as above for Kalman-filtered data
@@ -450,6 +451,11 @@ def main():
                       help="name of XML file with stimulus info",
                       )
 
+    parser.add_option("--save-fig",
+                      type="string",
+                      help="save output to filename (disables gui)",
+                      )
+
     (options, args) = parser.parse_args()
 
     if options.filename is not None:
@@ -477,7 +483,11 @@ def main():
                    reconstructor_filename=options.reconstructor_path,
                    options=options,
                    )
-    pylab.show()
+    if options.save_fig is not None:
+        print 'saving to %s'%options.save_fig
+        pylab.savefig( options.save_fig )
+    else:
+        pylab.show()
 
 if __name__=='__main__':
     main()
