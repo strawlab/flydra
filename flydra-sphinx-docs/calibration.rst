@@ -47,9 +47,10 @@ To be written.
 Aligning a calibration
 ----------------------
 
-Often, even if a calibration from MultiCamSelfCal reprojects with
-minimal error, it is not resulting in world coordinates corresponding
-with desired world coordinates. To align the calibration the
+Often, even if a calibration from MultiCamSelfCal creates
+reprojections with minimal error and the relative camera positions
+look OK, reconstructed world coordinates do not correspond with
+desired world coordinates. To align the calibration the
 :command:`flydra_analysis_calibration_align_gui` program may be used::
 
   flydra_analysis_calibration_align_gui DATAFILE3D.h5 --stim-xml=STIMULUS.xml
