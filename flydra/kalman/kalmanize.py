@@ -16,7 +16,6 @@ from flydra_tracker import Tracker
 import flydra_kalman_utils
 from optparse import OptionParser
 import dynamic_models
-import flydra.save_calibration_data as save_calibration_data
 import collections
 from flydra.MainBrain import TextLogDescription
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
@@ -162,7 +161,6 @@ class KalmanSaver:
     def __init__(self,
                  dest_filename,
                  reconst_orig_units,
-                 save_cal_dir=None,
                  cam_id2camns=None,
                  min_observations_to_save=0,
                  textlog_save_lines = None,
@@ -172,16 +170,6 @@ class KalmanSaver:
         self.cam_id2camns = cam_id2camns
         self.min_observations_to_save = min_observations_to_save
         self.debug = 0
-
-        if save_cal_dir is not None:
-            if 0:
-                raise NotImplementedError("this code path is not known to work!")
-
-            assert cam_id2camns is not None
-            if os.path.exists(save_cal_dir):
-                raise RuntimeError('save_cal_dir exists')
-            os.mkdir(save_cal_dir)
-        self.save_cal_dir = save_cal_dir
 
         self.kalman_saver_info_instance = flydra_kalman_utils.KalmanSaveInfo(name=dynamic_model_name)
         kalman_estimates_description = self.kalman_saver_info_instance.get_description()
@@ -254,8 +242,6 @@ class KalmanSaver:
         self.all_kalman_calibration_data = []
 
     def close(self):
-        if self.save_cal_dir is not None:
-            self._save_kalman_calibration_data()
         self.h5file.close()
 
     def save_tro(self,tro):
@@ -341,25 +327,6 @@ class KalmanSaver:
         self.h5_xhat.append(xhats_recarray)
         self.h5_xhat.flush()
 
-        # calibration data
-        self.all_kalman_calibration_data.extend( tro.saved_calibration_data )
-        if self.save_cal_dir is not None:
-
-            # re-save calibration data after every increment...
-            self._save_kalman_calibration_data()
-
-    def _save_kalman_calibration_data(self):
-        data_to_save = self.all_kalman_calibration_data
-        cam_ids = self.cam_id2camns.keys()
-        cam_ids.sort()
-
-        Res = []
-        for cam_id in cam_ids:
-            width,height = get_resolution(self.h5file, cam_id)
-            Res.append( [width,height] )
-        save_calibration_data.do_save_calibration_data(
-            self.save_cal_dir, cam_ids, data_to_save, Res)
-
 def kalmanize(src_filename,
               dest_filename=None,
               reconstructor_filename=None,
@@ -368,7 +335,6 @@ def kalmanize(src_filename,
               exclude_cam_ids=None,
               exclude_camns=None,
               dynamic_model_name=None,
-              save_cal_dir=None,
               debug=False,
               frames_per_second=None,
               max_err=None,
@@ -434,7 +400,6 @@ def kalmanize(src_filename,
 
     h5saver = KalmanSaver(dest_filename,
                           reconst_orig_units,
-                          save_cal_dir=save_cal_dir,
                           cam_id2camns=cam_id2camns,
                           min_observations_to_save=min_observations_to_save,
                           textlog_save_lines=textlog_save_lines,
@@ -442,17 +407,9 @@ def kalmanize(src_filename,
                           dynamic_model=kalman_model,
                           debug=debug)
 
-    save_calibration_data = FakeThreadingEvent()
-    if save_cal_dir is not None:
-        save_calibration_data.set()
-    else:
-        # hack to deal with ipython engine being unable to serialize instances
-        save_calibration_data = None
-
     tracker = Tracker(
         reconstructor_meters,
         scale_factor=reconst_orig_units.get_scale_factor(),
-        save_calibration_data=save_calibration_data,
         kalman_model=kalman_model,
         save_all_data=True,
         area_threshold=area_threshold,
@@ -763,7 +720,6 @@ def main():
               exclude_cam_ids=options.exclude_cam_ids,
               exclude_camns=options.exclude_camns,
               dynamic_model_name = options.dynamic_model,
-              save_cal_dir = options.save_cal_dir,
               debug = options.debug,
               frames_per_second = options.fps,
               max_err = options.max_err,
