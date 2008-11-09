@@ -86,7 +86,10 @@ def do_filter(filename,
     kresults.close()
 
 def main():
-    usage = '%prog FILE [options]'
+    usage = """%prog DATAFILE3D.h5 [options]
+
+    Filter DATAFILE3D.h5 to include only ceratin trajectories.
+    """
 
     parser = OptionParser(usage)
 
