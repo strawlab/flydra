@@ -388,11 +388,14 @@
         <object class="wxBoxSizer">
           <orient>wxHORIZONTAL</orient>
           <object class="sizeritem">
-            <object class="wxButton" name="LOAD_CAL">
-              <label>Load calibration...</label>
+            <object class="wxButton" name="LOAD_CAL_DIR">
+              <label>Load calibration directory...</label>
             </object>
-            <option>1</option>
-            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="LOAD_CAL_FILE">
+              <label>Load calibration file...</label>
+            </object>
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="CLEAR_CAL">

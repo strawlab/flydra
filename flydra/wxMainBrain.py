@@ -402,8 +402,12 @@ class wxMainBrainApp(wx.App):
     def InitPreviewPanel(self):
         # init "load calibration..." button
         load_cal = xrc.XRCCTRL(self.cam_preview_panel,
-                           "LOAD_CAL")
-        wx.EVT_BUTTON(load_cal, load_cal.GetId(), self.OnLoadCal)
+                           "LOAD_CAL_DIR")
+        wx.EVT_BUTTON(load_cal, load_cal.GetId(), self.OnLoadCalDir)
+
+        load_cal = xrc.XRCCTRL(self.cam_preview_panel,
+                           "LOAD_CAL_FILE")
+        wx.EVT_BUTTON(load_cal, load_cal.GetId(), self.OnLoadCalFile)
 
         clear_cal = xrc.XRCCTRL(self.cam_preview_panel,
                            "CLEAR_CAL")
@@ -995,11 +999,17 @@ class wxMainBrainApp(wx.App):
         sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sender.sendto('3',(MainBrain.hostname,common_variables.trigger_network_socket_port))
 
-    def OnLoadCal(self,event):
+    def OnLoadCalFile(self,event):
+        self.OnLoadCalCore(event,wx.FileDialog,
+                       "Select file with calibration data")
+    def OnLoadCalDir(self,event):
+        self.OnLoadCalCore(event,wx.DirDialog,
+                       "Select directory with calibration data")
+    def OnLoadCalCore(self,event,klass,msg):
         doit=False
-        dlg = wx.DirDialog( self.frame, "Select directory with calibration data",
-                           style = wx.DD_DEFAULT_STYLE,
-                           )
+        dlg = klass( self.frame,msg,
+                     style = wx.DD_DEFAULT_STYLE,
+                     )
         try:
             self.pass_all_keystrokes = True
             if dlg.ShowModal() == wx.ID_OK:
