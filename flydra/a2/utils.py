@@ -2,9 +2,12 @@ import numpy
 import numpy as np
 
 class FastFinder(object):
-    """allows fast searching by use of a cached, sorted copy of the original data
+    """fast search by use of a cached, sorted copy of the original data
 
-    See tests.TestUtils.test_fast_finder() for an example.
+    Parameters
+    ----------
+    values1d : 1D array
+      The input data which is sorted and stored for indexing
     """
     def __init__(self,values1d):
         values1d = numpy.atleast_1d( values1d )
@@ -12,7 +15,18 @@ class FastFinder(object):
         self.idxs = numpy.argsort( values1d )
         self.sorted = values1d[ self.idxs ]
     def get_idxs_of_equal(self,testval):
-        """performs fast search on sorted data"""
+        """performs fast search on sorted data
+
+        Paramters
+        ---------
+        testval : scalar
+          The value to find the indices of
+
+        Returns
+        -------
+        result : array
+          The indices into the original values1d array
+        """
         testval = numpy.asarray(testval)
         assert len( testval.shape)==0, 'can only find equality of a scalar'
 
@@ -22,7 +36,18 @@ class FastFinder(object):
         this_idxs = self.idxs[left_idxs:right_idxs]
         return this_idxs
     def get_first_idx_of_assumed_equal(self,testval):
-        """performs fast search on sorted data"""
+        """performs fast search on sorted data
+
+        Paramters
+        ---------
+        testval : scalar
+          The value to find the indices of
+
+        Returns
+        -------
+        result : array
+          The indices into the original values1d array
+        """
         testval = numpy.asarray(testval)
         assert len( testval.shape)==0, 'can only find equality of a scalar'
 
@@ -31,8 +56,18 @@ class FastFinder(object):
         this_idx = self.idxs[left_idx]
         return this_idx
 
-
 def get_contig_chunk_idxs( arr ):
+    """get indices of contiguous chunks
+
+    Parameters
+    ----------
+    arr : 1D array
+
+    Results
+    -------
+    list_of_startstops : list of 2-tuples
+        A list of tuples, where each tuple is (start_idx,stop_idx) of arr
+    """
     #ADS print 'arr',arr
     diff = arr[1:]-arr[:-1]
     #ADS print 'diff',diff
@@ -86,3 +121,19 @@ def test_get_contig_chunk_idxs_2():
     for i in range(len(expected)):
         start, stop = expected[i]
         assert (start,stop)== actual[i]
+
+def test_fast_finder(self):
+    a = numpy.array([1,2,3,3,2,1,2.3])
+    bs = [0, 1, 2, 1.1]
+    af = FastFinder(a)
+    for b in bs:
+        idxs1 = af.get_idxs_of_equal(b)
+        idxs2 = numpy.nonzero(a==b)[0]
+        assert idxs1.shape == idxs2.shape
+        assert numpy.allclose( idxs1, idxs2 )
+    for b in bs:
+        idx1 = af.get_first_idx_of_assumed_equal(b)
+        aval = a[idx1]
+        if aval != b:
+            if b in a:
+                raise ValueError('b in a, but not found')
