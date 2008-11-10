@@ -1,6 +1,6 @@
 """test flydra installed system commands"""
 import pkg_resources
-import os, subprocess, tempfile, shutil
+import os, subprocess, tempfile, shutil, sys
 import numpy as np
 import scipy.misc
 from optparse import OptionParser
@@ -24,6 +24,25 @@ def _get_names_dict(data2d,data3d,calib):
                  CALIB=calib,
                  )
     return names
+
+def _my_call(cmd):
+    """grab stdout and stderr, only show them if error"
+    tmp_stdout = tempfile.TemporaryFile()
+    tmp_stderr = tempfile.TemporaryFile()
+    try:
+        subprocess.check_call(cmd, shell=True,
+                              stdout=tmp_stdout,
+                              stderr=tmp_stderr,
+                              )
+    except:
+        tmp_stdout.seek(0)
+        buf=tmp_stdout.read()
+        sys.stdout.write(buf)
+
+        tmp_stderr.seek(0)
+        buf=tmp_stderr.read()
+        sys.stderr.write(buf)
+        raise
 
 CANNONICAL_FILENAMES = {'DATAFILE2D':'DATAFILE2D.h5',
                         'DATAFILE3D':'DATAFILE3D.h5',
@@ -194,7 +213,7 @@ def check_command_with_image(mode,info):
     names['target']=target
 
     cmd = info['cmd']%names
-    subprocess.check_call(cmd, shell=True)
+    _my_call(cmd)
     if mode=='check':
         are_close = are_images_close( target, result_fullpath )
         if are_close:
@@ -231,8 +250,7 @@ def check_command(mode,info):
     names['target']=target
 
     cmd = info['cmd']%names
-
-    subprocess.check_call(cmd, shell=True)
+    _my_call(cmd)
 
     if mode=='check':
         if info.get('compare_results',True):
