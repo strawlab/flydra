@@ -9,7 +9,7 @@ if sys.platform=='darwin':
     import matplotlib
     matplotlib.use('TkAgg')
 
-if 1:
+if __name__=='__main__':
     filename='DATA20070214_192124.h5'
     print 'filename',filename
     n_cams = 4
@@ -35,7 +35,7 @@ if 1:
             uframes = numpy.unique(allframes)
             sortidx = numpy.argsort(allframes)
             sortedframes = allframes[sortidx]
-        
+
         print 'n frames %d (%d-%d)'%(len(uframes),uframes[0],uframes[-1])
         doframes = ( #list(range(3047,10000)) +
                      #list(range(1000000,1001000)) +
@@ -62,7 +62,7 @@ if 1:
             if len(test_ucamns) < n_cams:
                 continue
             ucamns = test_ucamns
-            
+
             ucamns.sort()
             cond2_idxs = numpy.zeros( (n_cams,), dtype=numpy.int32)
             for i,camn in enumerate(ucamns):
@@ -72,7 +72,7 @@ if 1:
             timestamp_vector = framedata.field('timestamp')[cond2_idxs]
             timestamp_vectors.append( timestamp_vector )
             framenumbers.append( frame )
-        
+
     elif 0:
         # This is a fast but incorrect method in that it doesn't try to
         # get ALL saved data for a given frame, but rather loads saved
@@ -109,13 +109,13 @@ if 1:
                     continue
                 ucamns = test_ucamns
                 framecount += 1
-                
+
                 ucamns.sort()
                 cond2_idxs = numpy.zeros( (n_cams,), dtype=numpy.int32)
                 for i,camn in enumerate(ucamns):
                     first_idx = numpy.nonzero(camns==camn)[0][0]
                     cond2_idxs[i] = first_idx
-                    
+
                 timestamps_unordered = chunk.field('timestamp')[cond1]
                 timestamp_vector = timestamps_unordered[cond2_idxs]
                 timestamp_vectors.append( timestamp_vector )
@@ -125,7 +125,7 @@ if 1:
 
     if len(timestamp_vectors)==0:
         raise ValueError('no frames found')
-    
+
     dtype=timestamp_vectors[0].dtype
     timestamp_vectors = numpy.array(timestamp_vectors,
                                     dtype=dtype)
@@ -143,7 +143,7 @@ if 1:
             pylab.figure()
             pylab.figtext(0.5,0.99,
                           'ref: %s'%( cam_ids[ref_idx], ),
-                          
+
                           )
             ax = None
             maxrange = 0
@@ -162,9 +162,9 @@ if 1:
                 pylab.ylabel('msec')
                 pylab.xlabel('frame')
                 pylab.legend(loc='upper left')
-            
-            
-        
+
+
+
     elif 0:
         # make all timestamps relative to first camn
         reference_cam_id = 'cam2_0'

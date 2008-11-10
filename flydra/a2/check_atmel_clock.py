@@ -7,7 +7,7 @@ import pylab
 import flydra.analysis.result_utils
 import sys
 
-if 1:
+if __name__=='__main__':
     # load the file
 
     #filename='DATA20070319_172634.h5'

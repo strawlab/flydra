@@ -2,11 +2,11 @@ import tables
 import numpy
 import pylab
 
-if 1:
+if __name__=='__main__':
     filename='DATA20070214_192124.h5'
     kresults = tables.openFile(filename,mode="r")
 
-    
+
     hci = kresults.root.host_clock_info
     tbl = hci.read(flavor='numpy')
     kresults.close()
@@ -22,7 +22,7 @@ if 1:
         remote = tbl.field('remote_timestamp')[cond]
         max_measurement_error = stop-start
         max_clock_diff = remote-start
-        
+
         pylab.figure()
         ax = pylab.subplot(3,1,1)
         pylab.plot((start-start[0])/60.0,max_clock_diff*1e3)
@@ -30,13 +30,13 @@ if 1:
         pylab.title(hostname)
         pylab.xlabel('time (min)')
         pylab.ylabel('max clock diff (ms)')
-        
+
         ax = pylab.subplot(3,1,2)
         pylab.plot(max_measurement_error*1e3,max_clock_diff*1e3,'.')
         pylab.setp(pylab.gca(),'ylim',(-10,10))
         pylab.xlabel('max measurement error (ms)')
         pylab.ylabel('max clock diff (ms)')
-        
+
         ax = pylab.subplot(3,1,3)
         bins = numpy.linspace(-11,11,50)
         pylab.hist(max_clock_diff*1e3,bins=bins)
@@ -54,9 +54,9 @@ if 1:
         else:
             worst = latest
             idx = sortedidxs[-1]
-            
+
         meas_err_at_worst = max_measurement_error[idx]
-        
+
         pylab.text(0.5,0.95,'mean = %.3f +/- %.1f ms (N=%d), worst=%.3f ms (err %.3f ms)'%(
             numpy.mean(max_clock_diff)*1e3,
             numpy.std(max_clock_diff)*1e3,
@@ -68,5 +68,5 @@ if 1:
                    verticalalignment='top',
                    transform = ax.transAxes,
                    )
-        
+
     pylab.show()
