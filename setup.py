@@ -83,7 +83,7 @@ setup(name='flydra',
     'flydra_trigger_check_device = flydra.trigger:check_device',
     'flydra_trigger_set_frequency = flydra.trigger:set_frequency',
     'flydra_trigger_trigger_once = flydra.trigger:trigger_once',
-    'flydra_trigger_latency_test = flydra.trigger.latency_test:main',
+    'flydra_trigger_latency_measure = flydra.trigger.latency_measure:main',
 
 # camera calibration
     'flydra_analysis_calibration_export = flydra.analysis.export_calibration:main',
