@@ -1,7 +1,8 @@
 import pkg_resources
 
 import numpy as np
-from PQmath import ObjectiveFunctionQuats, QuatSeq, orientation_to_quat, quat_to_orient, CachingObjectiveFunctionQuats, QuatSmoother
+from PQmath import ObjectiveFunctionQuats, QuatSeq, orientation_to_quat, \
+     quat_to_orient, CachingObjectiveFunctionQuats, QuatSmoother
 import time
 import nose
 
@@ -36,12 +37,14 @@ class TestPQmath:
         self.fps = fps
 
     def test_Qsmooth_slow(self):
-        Qsmooth = QuatSmoother(frames_per_second=self.fps).smooth_quats(self.Q,
-                                                                        objective_func_name='ObjectiveFunctionQuats')
+        Qsmooth = QuatSmoother(frames_per_second=self.fps).smooth_quats(
+            self.Q,
+            objective_func_name='ObjectiveFunctionQuats')
 
     def test_Qsmooth_caching(self):
-        Qsmooth = QuatSmoother(frames_per_second=self.fps).smooth_quats(self.Q,
-                                                                        objective_func_name='CachingObjectiveFunctionQuats')
+        Qsmooth = QuatSmoother(frames_per_second=self.fps).smooth_quats(
+            self.Q,
+            objective_func_name='CachingObjectiveFunctionQuats')
 
     def test_Qsmooth_side_effects(self):
         for of in ['CachingObjectiveFunctionQuats','ObjectiveFunctionQuats']:
@@ -54,11 +57,13 @@ class TestPQmath:
         for i in no_distance_penalty_idxs:
             Qtest[i] = orientation_to_quat( (1,0,0) )
         Qtest_orig = Qtest.copy()
-        Qsmooth_v1 = QuatSmoother(frames_per_second=self.fps).smooth_quats(Qtest,
-                                                                           objective_func_name=objective_func_name,
-                                                                           no_distance_penalty_idxs=no_distance_penalty_idxs,
-                                                                           )
-        for i,(qtest, qexpected) in enumerate(zip(Qtest, Qtest_orig)): # check for side-effects
+        Qsmooth_v1 = QuatSmoother(frames_per_second=self.fps).smooth_quats(
+            Qtest,
+            objective_func_name=objective_func_name,
+            no_distance_penalty_idxs=no_distance_penalty_idxs,
+            )
+        # check for side-effects
+        for i,(qtest, qexpected) in enumerate(zip(Qtest, Qtest_orig)):
             assert qtest == qexpected
 
     def test_Qsmooth_missing(self):
@@ -76,18 +81,20 @@ class TestPQmath:
         Qtest = self.Q[:]
         for i in no_distance_penalty_idxs:
             Qtest[i] = orientation_to_quat( (1,0,0) )
-        Qsmooth_v1 = QuatSmoother(frames_per_second=self.fps).smooth_quats(Qtest,
-                                                                           objective_func_name=objective_func_name,
-                                                                           no_distance_penalty_idxs=no_distance_penalty_idxs,
-                                                                           )
+        Qsmooth_v1 = QuatSmoother(frames_per_second=self.fps).smooth_quats(
+            Qtest,
+            objective_func_name=objective_func_name,
+            no_distance_penalty_idxs=no_distance_penalty_idxs,
+            )
 
         Qtest = self.Q[:]
         for i in no_distance_penalty_idxs:
             Qtest[i] = orientation_to_quat( (0,0,1) )
-        Qsmooth_v2 = QuatSmoother(frames_per_second=self.fps).smooth_quats(Qtest,
-                                                                           objective_func_name=objective_func_name,
-                                                                           no_distance_penalty_idxs=no_distance_penalty_idxs,
-                                                                           )
+        Qsmooth_v2 = QuatSmoother(frames_per_second=self.fps).smooth_quats(
+            Qtest,
+            objective_func_name=objective_func_name,
+            no_distance_penalty_idxs=no_distance_penalty_idxs,
+            )
         D2R = np.pi/180.0
         for i,(q1, q2) in enumerate(zip(Qsmooth_v1,Qsmooth_v2)):
 
@@ -102,12 +109,14 @@ class TestPQmath:
             assert angle < (60*D2R)
 
     def test_Qsmooth_both(self):
-        Qsmooth_slow = QuatSmoother(frames_per_second=self.fps).smooth_quats(self.Q,
-                                                                             objective_func_name='ObjectiveFunctionQuats',
-                                                                             )
-        Qsmooth_cache = QuatSmoother(frames_per_second=self.fps).smooth_quats(self.Q,
-                                                                              objective_func_name='CachingObjectiveFunctionQuats',
-                                                                              )
+        Qsmooth_slow = QuatSmoother(frames_per_second=self.fps).smooth_quats(
+            self.Q,
+            objective_func_name='ObjectiveFunctionQuats',
+            )
+        Qsmooth_cache = QuatSmoother(frames_per_second=self.fps).smooth_quats(
+            self.Q,
+            objective_func_name='CachingObjectiveFunctionQuats',
+            )
 
         for i,(qs, qc) in enumerate(zip(Qsmooth_slow,Qsmooth_cache)):
             assert qs==qc
