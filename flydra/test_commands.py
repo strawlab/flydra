@@ -26,7 +26,7 @@ def _get_names_dict(data2d,data3d,calib):
     return names
 
 def _my_call(cmd):
-    """grab stdout and stderr, only show them if error"
+    """grab stdout and stderr, only show them if error"""
     tmp_stdout = tempfile.TemporaryFile()
     tmp_stderr = tempfile.TemporaryFile()
     try:
