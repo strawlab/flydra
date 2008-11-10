@@ -63,10 +63,14 @@ def doit(
 
     for filename in filenames:
 
-        figtitle = filename
+        if options.show_source_name:
+            figtitle = filename
+        else:
+            figtitle = ''
         if options.obj_only is not None:
             figtitle += ' only showing objects: ' + ' '.join(map(str,options.obj_only))
-        pylab.figtext(0,0,figtitle)
+        if figtitle != '':
+            pylab.figtext(0,0,figtitle)
 
         h5 = PT.openFile( filename, mode='r' )
 
@@ -407,6 +411,12 @@ def main():
     parser.add_option("--reproj-error", action='store_true',
                       default=False,
                       help="calculate and print to console the mean reprojection error for each camera")
+
+    parser.add_option("--hide-source-name",
+                      action='store_false',
+                      dest='show_source_name',
+                      default=True,
+                      help="show the source filename?")
 
     parser.add_option("--fps", dest='fps', type='float',
                       help="frames per second (used for Kalman filtering/smoothing)")
