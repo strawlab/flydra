@@ -2,7 +2,6 @@ from flydra.trigger import Device
 
 # may need to do this: mount -t none /proc/bus/usb /dap386chrt/proc/bus/usb -o bind
 
-import cam_iface_choose
 global cam_iface
 cam_iface = None
 
@@ -13,44 +12,45 @@ from optparse import OptionParser
 import threading
 
 def main():
+    import cam_iface_choose
     global cam_iface
     usage_lines = ['%prog [options]',
                    '',
                    '  available wrappers and backends:']
-    
+
     for wrapper,backends in cam_iface_choose.wrappers_and_backends.iteritems():
         for backend in backends:
             usage_lines.append('    --wrapper %s --backend %s'%(wrapper,backend))
     del wrapper, backend # delete temporary variables
     usage = '\n'.join(usage_lines)
-    
+
     parser = OptionParser(usage)
-    
+
     parser.add_option("--wrapper", dest="wrapper", type='string',
                       help="cam_iface WRAPPER to use",
                       metavar="WRAPPER")
-    
+
     parser.add_option("--backend", dest="backend", type='string',
                       help="cam_iface BACKEND to use",
                       metavar="BACKEND")
-    
+
     parser.add_option("--mode-num", type="int",
                       help="mode number")
-    
+
     (options, args) = parser.parse_args()
-    
+
     if not options.wrapper:
         print 'WRAPPER must be set'
         parser.print_help()
         return
-    
+
     if not options.backend:
         print 'BACKEND must be set'
         parser.print_help()
         return
-    
+
     cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
-    
+
     print 'options.mode_num',options.mode_num
 
     if options.mode_num is not None:
@@ -78,10 +78,10 @@ class Grabber:
         # called from main thread
         self.last_pytimestamp = None
         self.last_pytimestamp_lock = threading.Lock()
-        
+
         self.framecount = 0
         self.framecount_lock = threading.Lock()
-    
+
     def run(self,device_num=0,mode_num=0,num_buffers=30):
         # runs in own thread
         global cam_iface
@@ -105,22 +105,22 @@ class Grabber:
                 buf = nx.asarray(cam.grab_next_frame_blocking())
             except cam_iface.FrameDataMissing:
                 sys.stdout.write('M')
-                sys.stdout.flush()            
+                sys.stdout.flush()
                 continue
             now = time.time()
-            
+
             timestamp = cam.get_last_timestamp()
 
             fno = cam.get_last_framenumber()
-            
+
             self.framecount_lock.acquire()
             self.framecount += 1
             self.framecount_lock.release()
-            
+
             self.last_pytimestamp_lock.acquire()
             # switch between "now" and "timestamp" to get time.time or
             # backend's timestamp
-            self.last_pytimestamp = now 
+            self.last_pytimestamp = now
             self.last_pytimestamp_lock.release()
 
             if last_fno is not None:
@@ -151,13 +151,13 @@ class Grabber:
         ts = self.last_pytimestamp
         self.last_pytimestamp_lock.release()
         return ts
-    
+
     def get_framecount(self):
         self.framecount_lock.acquire()
         fc = self.framecount
         self.framecount_lock.release()
         return fc
-    
+
 def doit(device_num=0,mode_num=0,num_buffers=30):
 
     start_fps = 80.0

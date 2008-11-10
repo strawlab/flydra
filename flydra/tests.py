@@ -13,24 +13,7 @@ import xml.etree.ElementTree as ET
 import StringIO
 import pickle
 
-try:
-    import numpy.testing.parametric as parametric
-except ImportError,err:
-    # old numpy (without module), use local copy
-    import numpy_testing_parametric as parametric
-
-##class TestGeom(parametric.ParametricTestCase):
-##    _indepParTestPrefix = 'test_geom'
-##    def test_geom(self):
-##        for mod in [flydra.geom,
-##                    flydra.fastgeom]:
-##                yield (test,mod)
-
-class TestGeomParametric(parametric.ParametricTestCase):
-    #: Prefix for tests with independent state.  These methods will be run with
-    #: a separate setUp/tearDown call for each test in the group.
-    _indepParTestPrefix = 'test_geom'
-
+class TestGeomParametric:
     def test_geom(self):
         for mod in [flydra.geom,
                     flydra.fastgeom]:
@@ -85,6 +68,7 @@ class TestGeomParametric(parametric.ParametricTestCase):
                                     geom.ThreeTuple((.5,0,1)))
         result = xaxis.get_my_point_closest_to_line( zline )
         eps = 1e-10
+        print 'result',result
         assert result.dist_from( geom.ThreeTuple( (0.5, 0, 0) )) < eps
 
     def tst_init(self,geom):
@@ -159,8 +143,7 @@ class TestReconstructor(unittest.TestCase):
         y = reconstruct.Reconstructor_from_xml(root[0])
         assert x==y
 
-class TestNonlinearDistortion(parametric.ParametricTestCase):
-    _indepParTestPrefix = 'test_coord_undistort'
+class TestNonlinearDistortion:
 
     def test_coord_undistort(self):
         xys = [ ( 10, 20 ),
@@ -280,18 +263,3 @@ class TestMahalanobis(unittest.TestCase):
         sigma_inv = np.linalg.inv( sigma )
         four = flydra.mahalanobis.dist2( x, y, sigma_inv )
         assert four==4.0
-
-def get_test_suite():
-    ts=unittest.TestSuite([unittest.makeSuite(TestGeomParametric),
-                           unittest.makeSuite(TestReconstructor),
-                           unittest.makeSuite(TestNonlinearDistortion),
-                           unittest.makeSuite(TestMahalanobis),
-                           ])
-    return ts
-
-if __name__=='__main__':
-    if 0:
-        ts = get_test_suite()
-        ts.debug()
-    else:
-        unittest.main()

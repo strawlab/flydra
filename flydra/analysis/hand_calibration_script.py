@@ -7,11 +7,12 @@ import os
 # http://www.miba.auc.dk/~lasse/publications/HTML/pilot/cam_cal/camcal.html
 # see also the pages at http://kwon3d.com/theory/calib.html
 # see also http://users.rsise.anu.edu.au/~hartley/Papers/algebraic/ICCV/final/algebraic.pdf
-print '*'*80
-print '*'*80
-print 'Need to implement normalization, a la Hartley & Zisserman, Algorithm 4.2'
-print '*'*80
-print '*'*80
+if 0:
+    print '*'*80
+    print '*'*80
+    print 'Need to implement normalization, a la Hartley & Zisserman, Algorithm 4.2'
+    print '*'*80
+    print '*'*80
 def save_ascii_matrix(filename,m):
     fd=open(filename,mode='wb')
     for row in m:
@@ -54,7 +55,7 @@ def center(P):
     C_ = numpy.array( [[ X/T, Y/T, Z/T ]] ).T
     return C_
 
-if 1:
+if __name__=='__main__':
     a = 0 # arbitrary number
     b = a+1
     c = a+2
@@ -198,16 +199,13 @@ if 1:
             import flydra.reconstruct
 
             res = 640,480
-            pp = res[0]/2., res[1]/2.
             print 'cam_id',cam_id
             print 'assuming res',res
-            print 'assuming pp',pp
             print
             scc = flydra.reconstruct.SingleCameraCalibration(
                 cam_id=cam_id,
                 Pmat = Mhat,
                 res = res,
-                pp = pp,
                 helper = None, ## XXX should extract focal length?
                 scale_factor = 1e-3, # convert these units to meters
                 )

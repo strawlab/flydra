@@ -19,6 +19,13 @@ def cross(vec1,vec2):
              vec1[0]*vec2[1] - vec1[1]*vec2[0] )
 
 class ThreeTuple:
+    """A tuple of 3 points.
+
+    Parameters
+    ----------
+    vals : {sequence, ThreeTuple instance}
+      The tuple of 3 points
+    """
     def __init__(self,vals):
         if isinstance(vals,ThreeTuple):
             self.vals = numpy.array(vals.vals,copy=True)
@@ -43,12 +50,73 @@ class ThreeTuple:
     def __neg__(self):
         return ThreeTuple(-self.vals)
     def cross(self,other):
+        """cross product
+
+        Parameters
+        ----------
+        other : ThreeTuple instance
+          The other point to do the cross product with.
+
+        Returns
+        -------
+        result : ThreeTuple instance
+          The cross product result
+
+        Examples
+        --------
+        >>> x = ThreeTuple((1,0,0))
+        >>> y = ThreeTuple((0,1,0))
+        >>> x.cross(y)
+        ThreeTuple((0,0,1))
+        """
         return ThreeTuple(cross(self.vals,other.vals))
+
     def dot(self,other):
+        """dot product
+
+        Parameters
+        ----------
+        other : ThreeTuple instance
+          The other point to do the dot product with.
+
+        Returns
+        -------
+        result : scalar
+          The dot product result
+
+        Examples
+        --------
+        >>> x = ThreeTuple((1,0,0))
+        >>> y = ThreeTuple((0,1,0))
+        >>> x.dot(y)
+        0
+        """
         return numpy.dot(self.vals,other.vals)
+
     def __getitem__(self,i):
         return self.vals[i]
+
     def dist_from(self,other):
+        """get distance from other point
+
+        Parameters
+        ----------
+        other : ThreeTuple instance
+          The other point to find the distance from
+
+        Returns
+        -------
+        result : scalar
+          The distance to the other point
+
+        Examples
+        --------
+        >>> x = ThreeTuple((1,0,0))
+        >>> y = ThreeTuple((0,1,0))
+        >>> x.dist_from(y) == np.sqrt(2)
+        True
+
+        """
         return math.sqrt(numpy.sum((other.vals-self.vals)**2)) # L2 norm
 
 class Homogeneous3D:
@@ -58,6 +126,16 @@ class Homogeneous3D:
         return ThreeTuple( self.vals[:3]/self.vals[3] )
 
 class PlueckerLine:
+    """a line in 3D space
+
+    Parameters
+    ----------
+    u : ThreeTuple instance
+       direction of line
+    v : ThreeTuple instance
+       cross product of 2 points on line
+
+    """
     def __init__(self, u, v):
         if not isinstance(u,ThreeTuple):
             raise TypeError('u must be ThreeTuple')
@@ -72,7 +150,36 @@ class PlueckerLine:
     def __repr__(self):
         return 'PlueckerLine(%s,%s)'%(repr(self.u),repr(self.v))
     def get_my_point_closest_to_line(self,other):
-        """find point on line closest to other line"""
+        """find point on line closest to other line
+
+        Parameters
+        ----------
+        other : PlueckerLine instance
+          The line to find closest point relative to
+
+        Returns
+        -------
+        pt : ThreeTuple instance
+          The point closest to other line
+
+        Examples
+        --------
+
+        >>> # A line along +y going through (1,0,0)
+        >>> a = ThreeTuple((1,0,0))
+        >>> b = ThreeTuple((1,1,0))
+        >>> line = line_from_points(a,b)
+
+        >>> # A line along +z going through (0,0,0)
+        >>> O = ThreeTuple((0,0,0))
+        >>> z = ThreeTuple((0,0,1))
+        >>> zaxis = line_from_points(z,O)
+
+        >>> # The closest point between them:
+        >>> line.get_my_point_closest_to_line( zaxis )
+        ThreeTuple((1.0,0.0,0.0))
+
+        """
 
         class ErrFMaker:
             def __init__(self, line, other):
@@ -100,7 +207,15 @@ class PlueckerLine:
         """return minimum squared distance from origin"""
         return self.v.dot(self.v) / self.u.dot(self.u)
     def closest(self):
-        """return point on line closest to origin"""
+        """return point on line closest to origin
+        Examples
+        --------
+        >>> a = ThreeTuple((1,0,0))
+        >>> b = ThreeTuple((1,1,0))
+        >>> line = line_from_points(a,b)
+        >>> line.closest()
+        ThreeTuple((1,0,0))
+        """
         VxU = self.v.cross(self.u)
         UdotU = self.u.dot(self.u)
         h = Homogeneous3D(VxU,UdotU)

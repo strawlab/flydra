@@ -105,30 +105,31 @@ def make_quat(angle_radians, axis_of_rotation):
     return cgtypes.quat(a,b,c,d)
 
 def euler_to_orientation( yaw=0.0, pitch = 0.0 ):
-    """
->>> euler_to_orientation(0,0)
-(1.0, 0.0, 0.0)
-
->>> euler_to_orientation(math.pi,0)
-(-1.0, 1.2246063538223773e-16, 0.0)
-
->>> euler_to_orientation(math.pi,math.pi/2)
-(-6.1230317691118863e-17, 7.4983036091106872e-33, 1.0)
-
->>> euler_to_orientation(math.pi,-math.pi/2)
-(-6.1230317691118863e-17, 7.4983036091106872e-33, -1.0)
-
->>> euler_to_orientation(math.pi,-math.pi/4)
-(-0.70710678118654757, 8.6592745707193554e-17, -0.70710678118654746)
-
->>> euler_to_orientation(math.pi/2,-math.pi/4)
-(4.3296372853596777e-17, 0.70710678118654757, -0.70710678118654746)
-"""
+    """convert euler angles into orientation vector"""
     z = math.sin( pitch )
     xyr = math.cos( pitch )
     y = xyr*math.sin( yaw )
     x = xyr*math.cos( yaw )
     return x, y, z
+
+def test_euler_to_orientation():
+    xyz = euler_to_orientation(0,0)
+    assert np.allclose( xyz, (1.0, 0.0, 0.0))
+
+    xyz = euler_to_orientation(math.pi,0)
+    assert np.allclose( xyz, (-1.0, 1.2246063538223773e-16, 0.0))
+
+    xyz = euler_to_orientation(math.pi,math.pi/2)
+    assert np.allclose( xyz, (-6.1230317691118863e-17, 7.4983036091106872e-33, 1.0))
+
+    xyz = euler_to_orientation(math.pi,-math.pi/2)
+    assert np.allclose( xyz, (-6.1230317691118863e-17, 7.4983036091106872e-33, -1.0))
+
+    xyz = euler_to_orientation(math.pi,-math.pi/4)
+    assert np.allclose( xyz, (-0.70710678118654757, 8.6592745707193554e-17, -0.70710678118654746))
+
+    xyz = euler_to_orientation(math.pi/2,-math.pi/4)
+    assert np.allclose( xyz, (4.3296372853596777e-17, 0.70710678118654757, -0.70710678118654746))
 
 def euler_to_quat(roll=0.0,pitch=0.0,yaw=0.0):
     # see http://www.euclideanspace.com/maths/geometry/rotations/conversions/eulerToQuaternion/index.htm
