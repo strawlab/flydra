@@ -1,4 +1,3 @@
-import numpy
 import numpy as np
 
 class FastFinder(object):
@@ -10,9 +9,9 @@ class FastFinder(object):
       The input data which is sorted and stored for indexing
     """
     def __init__(self,values1d):
-        values1d = numpy.atleast_1d( values1d )
+        values1d = np.atleast_1d( values1d )
         assert len(values1d.shape)==1, 'only 1D arrays supported'
-        self.idxs = numpy.argsort( values1d )
+        self.idxs = np.argsort( values1d )
         self.sorted = values1d[ self.idxs ]
     def get_idxs_of_equal(self,testval):
         """performs fast search on sorted data
@@ -27,7 +26,7 @@ class FastFinder(object):
         result : array
           The indices into the original values1d array
         """
-        testval = numpy.asarray(testval)
+        testval = np.asarray(testval)
         assert len( testval.shape)==0, 'can only find equality of a scalar'
 
         left_idxs = self.sorted.searchsorted( testval, side='left' )
@@ -48,7 +47,7 @@ class FastFinder(object):
         result : array
           The indices into the original values1d array
         """
-        testval = numpy.asarray(testval)
+        testval = np.asarray(testval)
         assert len( testval.shape)==0, 'can only find equality of a scalar'
 
         left_idx = self.sorted.searchsorted( testval, side='left' )
@@ -122,15 +121,15 @@ def test_get_contig_chunk_idxs_2():
         start, stop = expected[i]
         assert (start,stop)== actual[i]
 
-def test_fast_finder(self):
-    a = numpy.array([1,2,3,3,2,1,2.3])
+def test_fast_finder():
+    a = np.array([1,2,3,3,2,1,2.3])
     bs = [0, 1, 2, 1.1]
     af = FastFinder(a)
     for b in bs:
         idxs1 = af.get_idxs_of_equal(b)
-        idxs2 = numpy.nonzero(a==b)[0]
+        idxs2 = np.nonzero(a==b)[0]
         assert idxs1.shape == idxs2.shape
-        assert numpy.allclose( idxs1, idxs2 )
+        assert np.allclose( idxs1, idxs2 )
     for b in bs:
         idx1 = af.get_first_idx_of_assumed_equal(b)
         aval = a[idx1]
