@@ -29,9 +29,9 @@ class FastFinder(object):
         Examples
         --------
 
-        >>> a = np.array([1,2,3,3,2,1,2.3])
+        >>> a = np.array([ 1, 2, 3, 3, 2, 1, 2.3 ])
         >>> af = FastFinder(a)
-        >>> bs = [0, 1, 2, 1.1]
+        >>> bs = [ 0, 1, 2, 1.1 ]
         >>> for b in bs:
         ...     af.get_idxs_of_equal(b).tolist()
         ...
@@ -49,41 +49,6 @@ class FastFinder(object):
 
         this_idxs = self.idxs[left_idxs:right_idxs]
         return this_idxs
-    def get_first_idx_of_assumed_equal(self,testval):
-        """performs fast search on sorted data
-
-        Parameters
-        ----------
-        testval : scalar
-          The value to find the indices of
-
-        Returns
-        -------
-        result : array
-          The indices into the original values1d array
-
-        Examples
-        --------
-
-        >>> a = np.array([1,2,3,3,2,1,2.3])
-        >>> af = FastFinder(a)
-        >>> bs = [0, 1, 2, 1.1]
-        >>> for b in bs:
-        ...     af.get_first_idx_of_assumed_equal(b)
-        ...
-        0
-        0
-        1
-        1
-
-        """
-        testval = np.asarray(testval)
-        assert len( testval.shape)==0, 'can only find equality of a scalar'
-
-        left_idx = self.sorted.searchsorted( testval, side='left' )
-
-        this_idx = self.idxs[left_idx]
-        return this_idx
 
 def get_contig_chunk_idxs( arr ):
     """get indices of contiguous chunks
@@ -92,10 +57,27 @@ def get_contig_chunk_idxs( arr ):
     ----------
     arr : 1D array
 
-    Results
+    Returns
     -------
     list_of_startstops : list of 2-tuples
         A list of tuples, where each tuple is (start_idx,stop_idx) of arr
+
+    Examples
+    --------
+
+    >>> a = np.array([ 1, 2, 3, 4, 10, 11, 12, -1, -2, -3, -2, -1, 0, 1])
+    >>> list_of_start_stops = get_contig_chunk_idxs(a)
+    >>> list_of_start_stops
+    [(0, 4), (4, 7), (7, 8), (8, 9), (9, 14)]
+    >>> for start,stop in list_of_start_stops:
+    ...     print a[start:stop]
+    ...
+    [1 2 3 4]
+    [10 11 12]
+    [-1]
+    [-2]
+    [-3 -2 -1  0  1]
+
     """
     #ADS print 'arr',arr
     diff = arr[1:]-arr[:-1]
@@ -160,9 +142,3 @@ def test_fast_finder():
         idxs2 = np.nonzero(a==b)[0]
         assert idxs1.shape == idxs2.shape
         assert np.allclose( idxs1, idxs2 )
-    for b in bs:
-        idx1 = af.get_first_idx_of_assumed_equal(b)
-        aval = a[idx1]
-        if aval != b:
-            if b in a:
-                raise ValueError('b in a, but not found')

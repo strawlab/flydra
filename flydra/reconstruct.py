@@ -739,7 +739,7 @@ class Reconstructor:
 
     Parameters
     ==========
-    cal_source : string, list, or pytables file instance
+    cal_source : {string, list, open pytables file instance}
 
       The source of the calibration. Can be a string specifying the
       path of a directory output by MultiCamSelfCal, a string
@@ -750,7 +750,7 @@ class Reconstructor:
     do_normalize_pmat : boolean
       Whether the pmat is normalized such that the intrinsic parameters
       are in the expected form
-    minimum_eccentricity : None or float
+    minimum_eccentricity : float, optional
       Minimum eccentricity (ratio of long to short axis of an
       ellipse) of 2D detected object required to use detected
       orientation for performing 3D body orientation estimation.
