@@ -13,6 +13,7 @@ Contents:
   calibration.rst
   realtime_data.rst
   data_analysis.rst
+  gallery.rst
 
 Contibutions to this documentation
 ----------------------------------

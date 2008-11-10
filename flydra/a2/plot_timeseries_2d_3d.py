@@ -378,8 +378,11 @@ def doit(
         data_file.close()
 
     if len(filenames):
-        fig.canvas.mpl_connect('pick_event', onpick_callback)
-        pylab.show()
+        if options.save_fig is not None:
+            pylab.savefig(options.save_fig)
+        else:
+            fig.canvas.mpl_connect('pick_event', onpick_callback)
+            pylab.show()
     else:
         print 'No filename(s) given -- nothing to do!'
 
@@ -414,6 +417,10 @@ def main():
 
     parser.add_option("--likely-only", action='store_true', default=False,
                       help='plot only points that are deemed likely to be true positives')
+
+    parser.add_option("--save-fig", type='string', default=None,
+                      help='path name of figure to save (exits script '
+                      'immediately after save)')
 
     parser.add_option("--dynamic-model",
                       type="string",
