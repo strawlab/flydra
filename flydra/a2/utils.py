@@ -16,8 +16,8 @@ class FastFinder(object):
     def get_idxs_of_equal(self,testval):
         """performs fast search on sorted data
 
-        Paramters
-        ---------
+        Parameters
+        ----------
         testval : scalar
           The value to find the indices of
 
@@ -25,6 +25,21 @@ class FastFinder(object):
         -------
         result : array
           The indices into the original values1d array
+
+        Examples
+        --------
+
+        >>> a = np.array([1,2,3,3,2,1,2.3])
+        >>> af = FastFinder(a)
+        >>> bs = [0, 1, 2, 1.1]
+        >>> for b in bs:
+        ...     af.get_idxs_of_equal(b).tolist()
+        ...
+        []
+        [0, 5]
+        [1, 4]
+        []
+
         """
         testval = np.asarray(testval)
         assert len( testval.shape)==0, 'can only find equality of a scalar'
@@ -37,8 +52,8 @@ class FastFinder(object):
     def get_first_idx_of_assumed_equal(self,testval):
         """performs fast search on sorted data
 
-        Paramters
-        ---------
+        Parameters
+        ----------
         testval : scalar
           The value to find the indices of
 
@@ -46,6 +61,21 @@ class FastFinder(object):
         -------
         result : array
           The indices into the original values1d array
+
+        Examples
+        --------
+
+        >>> a = np.array([1,2,3,3,2,1,2.3])
+        >>> af = FastFinder(a)
+        >>> bs = [0, 1, 2, 1.1]
+        >>> for b in bs:
+        ...     af.get_first_idx_of_assumed_equal(b)
+        ...
+        0
+        0
+        1
+        1
+
         """
         testval = np.asarray(testval)
         assert len( testval.shape)==0, 'can only find equality of a scalar'
