@@ -108,10 +108,12 @@ def convert(infilename,
             try:
                 # this just gets first index -- we're only trying to find camn here
                 #frame_idx = table_data2d_frames_find.index( framenumber )
-                frame_idx = table_data2d_frames_find.get_idxs_of_equal(
-                    framenumber )[0]
-                this_camn = table_data2d_camns[frame_idx]
-                remote_timestamp = table_data2d_timestamps[frame_idx]
+                frame_idxs = table_data2d_frames_find.get_idxs_of_equal(
+                    framenumber )
+                if len(frame_idxs):
+                    frame_idx = frame_idxs[0]
+                    this_camn = table_data2d_camns[frame_idx]
+                    remote_timestamp = table_data2d_timestamps[frame_idx]
             except KeyError:
                 this_camn=None
 
@@ -142,7 +144,7 @@ def convert(infilename,
     else:
         extra_vars = None
 
-    ca = core_analysis.CachingAnalyzer()
+    ca = core_analysis.get_global_CachingAnalyzer()
     all_obj_ids, obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(infilename)
     if dynamic_model_name is None:
         dynamic_model_name = extra.get('dynamic_model_name',None)
