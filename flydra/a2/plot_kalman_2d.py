@@ -304,6 +304,12 @@ class ShowIt(object):
 
         fig.canvas.mpl_connect('key_press_event', self.on_key_press)
 
+        if options.save_fig:
+            for cam_id in self.subplot_by_cam_id.keys():
+                ax = self.subplot_by_cam_id[cam_id]
+                ax.set_xticks([])
+                ax.set_yticks([])
+
         if kalman_filename is None:
             results.close()
             return

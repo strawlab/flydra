@@ -96,6 +96,9 @@ setup(name='flydra',
 # camera calibration - radial distortion stuff
     'flydra_visualize_distortions = flydra.radial_distortion.visualize_distortions:main',
     'flydra_checkerboard = flydra.radial_distortion.checkerboard:main',
+
+# testing
+    'flydra_test_commands = flydra.test_commands:main',
     ],
 
     'gui_scripts': [
