@@ -1,4 +1,21 @@
-import SCons, os, glob, time, sys
+import os, glob, time, sys, warnings, glob
+try:
+    import SCons
+except ImportError, err:
+    # Maybe this is related to
+    # http://scons.tigris.org/issues/show_bug.cgi?id=1488
+    maybe_scons = glob.glob(os.path.join(sys.prefix,'lib/scons*'))
+    maybe_scons.sort()
+    if len(maybe_scons):
+        toadd = maybe_scons[-1]
+        sys.path.append(toadd)
+        warnings.warn('hack to import SCons: adding %s to path'%toadd)
+        import SCons
+        import SCons.Node
+        import SCons.Builder
+    else:
+        raise
+
 import flydra.a2.auto_discover_ufmfs
 
 _my_normcase = SCons.Node.FS._my_normcase
