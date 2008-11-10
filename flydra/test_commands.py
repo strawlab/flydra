@@ -197,7 +197,11 @@ def check_command_with_image(mode,info):
     subprocess.check_call(cmd, shell=True)
     if mode=='check':
         are_close = are_images_close( target, result_fullpath )
-        os.unlink(target)
+        if are_close:
+            os.unlink(target)
+        else:
+            # don't delete -- allow comparison
+            print 'images are not close:\n  %s\n  %s'%(target,result_fullpath)
         assert are_close == True
     elif mode=='generate':
         if os.path.exists(result_fullpath):
