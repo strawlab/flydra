@@ -48,6 +48,14 @@ Python environment. To test this, type::
 The output should be something like "0.4.28-svn", indicating this is
 the development version after release 0.4.28.
 
+Finally, the full test suite may be run with nose_::
+
+  source ~/PY_flydra/bin/activate
+  easy_install nose
+  nosetests flydra
+
+.. _nose: http://somethingaboutorange.com/mrl/projects/nose/
+
 Editing the documentation
 -------------------------
 
@@ -67,7 +75,7 @@ To download and install sphinx into your virtual environment::
 Now, to build the flydra documentation::
 
   cd /path/to/flydra/flydra-sphinx-docs/
-  ./get-svn.sh 
+  ./get-svn.sh
   make html
 
 The documentation will be built in
