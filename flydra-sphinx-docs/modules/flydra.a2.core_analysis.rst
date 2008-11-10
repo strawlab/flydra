@@ -3,11 +3,14 @@ flydra.a2.core_analysis
 
 .. module:: flydra.a2.core_analysis
 
+get_global_CachingAnalyzer
+--------------------------
+.. autofunction:: get_global_CachingAnalyzer
+
 CachingAnalyzer
 ---------------
 .. autoclass:: CachingAnalyzer
    :members:
-   :undoc-members:
 
 choose_orientations
 -------------------

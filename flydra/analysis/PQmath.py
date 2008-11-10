@@ -1,3 +1,5 @@
+"""Position and Quaternion orientation math"""
+
 import math
 import cgtypes # cgkit 1.x
 import numpy as nx
@@ -242,7 +244,23 @@ def orientation_to_quat( U, roll_angle=0, force_pitch_0=False ):
         return euler_to_quat(yaw=yaw, pitch=pitch, roll=roll_angle)
 
 def quat_to_orient(S3):
-    """returns x, y, z for unit quaternions"""
+    """returns x, y, z for unit quaternions
+
+    Parameters
+    ----------
+    S3 : {quaternion, QuatSeq instance}
+      The quaternion or sequence of quaternions to transform into an
+      orientation vector.
+
+    Returns
+    -------
+    orient : {tuple, ndarray}
+
+      If the input was a single quaternion, the output is (x,y,z). If
+      the input was a QuatSeq instance of length N, the output is an
+      ndarray of shape (N,3).
+
+    """
     u = cgtypes.quat(0,1,0,0)
     if type(S3)()==QuatSeq(): # XXX isinstance(S3,QuatSeq)
         V = [q*u*q.inverse() for q in S3]

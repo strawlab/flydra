@@ -1,3 +1,5 @@
+"""core analysis functions for Flydra tracked data files"""
+
 from __future__ import division
 import tables
 import tables.flavor
@@ -454,8 +456,8 @@ def choose_orientations(rows, directions, frames_per_second=None,
     based on the least-cost of there two terms where on each from the
     sign is flipped or not.
 
-    This is heavily inspired by Kristin Branson's choose orientations
-    in ctrax (formerly known as mtrax).
+    This is heavily inspired by (i.e. some code stolen from) Kristin
+    Branson's choose orientations in ctrax (formerly known as mtrax).
 
     Parameters
     ----------
@@ -1084,9 +1086,7 @@ class CachingAnalyzer:
         return obj_id in unique_obj_ids
 
     def load_observations(self,obj_id,data_file):
-        """Deprecated name for load_dynamics_free_MLE_position.
-        """
-
+        # Deprecated name for load_dynamics_free_MLE_position.
         warnings.warn( "using deprecated method load_observations() "
                        "- use load_dynamics_free_MLE_position() instead.",
                        DeprecationWarning, stacklevel=2 )
@@ -1431,23 +1431,28 @@ class CachingAnalyzer:
         ----------
         obj_id : int
             The object id to be analyzed.
-        data_file : string of pytables filename, the pytables file object, or data dict from .mat file
-            The file that contains the object id to be analyzed.
+        data_file : {string, open pytables file object, dict}
+            The file that contains the object id to be analyzed. If
+            string, the pytables filename. If dict, the data dict from
+            a .mat file.
         frames_per_second : float, optional
             Framerate of data. (If `None`, automatically guessed.)
         use_kalman_smoothing : boolean
             If `False`, use original, causal Kalman filtered data
             (rather than Kalman smoothed observations). Default is
             `True`.
-
-        Notes
-        -----
-        method_params for `position based` may be `downsample` - decimation factor.
+        method_params : dict
+            for `position based` may be { 'downsample' :
+            decimation_factor } where decimation_factor is the amount
+            to downsample.
 
         Returns
         -------
-        results
-            Dictionary
+        results : dict
+            Dictionary of results with keys ['time_kalmanized', 'X_kalmanized',
+            'frame', 'time_t', 'X_t', 'vels_t', 'speed_t', 'h_speed_t',
+            'v_speed_t', 'coarse_heading_t', 'time_dt', 'h_ang_vel_dt',
+            'ang_vel_dt']
 
         """
 
@@ -1748,6 +1753,27 @@ global _global_ca_instance
 _global_ca_instance = None
 
 def get_global_CachingAnalyzer(**kwargs):
+    """get the global CachingAnalyzer instance
+
+    If a single, global instance of :class:`CachingAnalyzer` has not
+    already been constructed, construct it. Regardless, return the the
+    global instance.
+
+    Parameters
+    ----------
+    **kwargs : keyword arguments
+       These are passed to the constructor of CachingAnalyzer
+       is the global instance has not yet been created.
+
+    Returns
+    -------
+    ca_instance : CachingAnalyzer instance
+
+    Examples
+    --------
+    >>> ca = get_global_CachingAnalyzer()
+
+    """
     global _global_ca_instance
     if _global_ca_instance is None:
         _global_ca_instance = CachingAnalyzer(is_global=True,**kwargs)
