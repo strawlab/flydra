@@ -13,8 +13,6 @@ import flydra.analysis.result_utils as result_utils
 import flydra.a2.utils as utils
 import warnings
 
-import fastsearch.binarysearch
-
 def cam_id2hostname(cam_id):
     hostname = '_'.join(   cam_id.split('_')[:-1] )
     return hostname
@@ -55,7 +53,8 @@ def convert(infilename,
         print 'caching raw 2D data...',
         sys.stdout.flush()
         table_data2d_frames = table_data2d.read(field='frame').astype(numpy.uint64) # cast to uint64 for fast searching
-        table_data2d_frames_find = fastsearch.binarysearch.BinarySearcher( table_data2d_frames )
+        #table_data2d_frames_find = fastsearch.binarysearch.BinarySearcher( table_data2d_frames )
+        table_data2d_frames_find = utils.FastFinder( table_data2d_frames )
         table_data2d_camns = table_data2d.read(field='camn')
         table_data2d_timestamps = table_data2d.read(field='timestamp')
         print 'done'
@@ -108,7 +107,9 @@ def convert(infilename,
             this_camn = None
             try:
                 # this just gets first index -- we're only trying to find camn here
-                frame_idx = table_data2d_frames_find.index( framenumber )
+                #frame_idx = table_data2d_frames_find.index( framenumber )
+                frame_idx = table_data2d_frames_find.get_idxs_of_equal(
+                    framenumber )[0]
                 this_camn = table_data2d_camns[frame_idx]
                 remote_timestamp = table_data2d_timestamps[frame_idx]
             except KeyError:
