@@ -75,6 +75,7 @@ named ``%(outfile)s``.
     {'cmd':('flydra_analysis_data2smoothed %(DATAFILE3D)s '
             '--time-data=%(DATAFILE2D)s --dest-file=%(target)s'),
      'outfile':'%(DATAFILE3D_NOEXT)s_smoothed.mat',
+     'suffix':'.mat',
      'result':'data2smoothed.mat',
      'rst_comments':"""This produces a .mat file named
 ``%(outfile)s``. This file contains smoothed tracking data in addition
@@ -188,10 +189,7 @@ def check_command_with_image(mode,info):
     assert mode in ['check','generate']
     result_fullpath = os.path.join( AUTOGEN_DIR, info['result'] )
     handle, target = tempfile.mkstemp('.png')
-    ## if mode=='check':
-    ##     handle, target = tempfile.mkstemp('.png')
-    ## elif mode=='generate':
-    ##     target = result_fullpath
+    os.unlink(target) # erase first temporary file (HDF5 fails if file exists)
     names = _get_names_dict(DATAFILE2D,DATAFILE3D,CALIB)
     names['target']=target
 
@@ -222,17 +220,10 @@ def check_command(mode,info):
     result_fullpath = os.path.join( AUTOGEN_DIR, info['result'] )
     names = _get_names_dict(DATAFILE2D,DATAFILE3D,CALIB)
 
-    # 'outfile' key indicates that we don't have control of location
-    # of output file -- we must accept where command will put it.
-
-    if 'outfile' in info:
-        target = info['outfile']%names
-        if os.path.exists(target):
-            raise RuntimeError('target %s already exists'%target)
-    elif 0:
-        # not yet needed
+    if 1:
         suffix = info.get('suffix','')
         handle, target = tempfile.mkstemp(suffix)
+        os.unlink(target) # erase first temporary file
     names['target']=target
 
     cmd = info['cmd']%names
