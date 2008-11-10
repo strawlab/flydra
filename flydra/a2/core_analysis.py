@@ -20,7 +20,7 @@ import flydra.analysis.PQmath as PQmath
 import cgtypes # cgkit 1.x
 
 import weakref
-import warnings
+import warnings, tempfile
 import unittest
 import pkg_resources
 
