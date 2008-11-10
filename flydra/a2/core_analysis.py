@@ -690,9 +690,15 @@ class PreSmoothedDataCache(object):
 
             if make_new_cache:
                 # creating cache file
-                cache_h5file = tables.openFile( cache_h5file_name, mode='w',
-                                                title=expected_title )
-
+                try:
+                    cache_h5file = tables.openFile( cache_h5file_name, mode='w',
+                                                    title=expected_title )
+                except IOError, err:
+                    tmp_trash, cache_h5file_name = tempfile.mkstemp('.h5')
+                    # HDF5 doesn't like pre-existing non-HDF5 file
+                    os.unlink(cache_h5file_name)
+                    cache_h5file = tables.openFile( cache_h5file_name, mode='w',
+                                                    title=expected_title )
             self.cache_h5files_by_data_file[data_file] = cache_h5file
 
         h5file = self.cache_h5files_by_data_file[data_file]
