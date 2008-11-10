@@ -105,17 +105,11 @@ def convert(infilename,
             remote_timestamp = numpy.nan
 
             this_camn = None
-            try:
-                # this just gets first index -- we're only trying to find camn here
-                #frame_idx = table_data2d_frames_find.index( framenumber )
-                frame_idxs = table_data2d_frames_find.get_idxs_of_equal(
-                    framenumber )
-                if len(frame_idxs):
-                    frame_idx = frame_idxs[0]
-                    this_camn = table_data2d_camns[frame_idx]
-                    remote_timestamp = table_data2d_timestamps[frame_idx]
-            except KeyError:
-                this_camn=None
+            frame_idxs = table_data2d_frames_find.get_idxs_of_equal(framenumber)
+            if len(frame_idxs):
+                frame_idx = frame_idxs[0]
+                this_camn = table_data2d_camns[frame_idx]
+                remote_timestamp = table_data2d_timestamps[frame_idx]
 
             if this_camn is None:
                 print 'skipping frame %d (obj %d): no data2d_distorted data'%(framenumber,obj_id)
