@@ -3,7 +3,6 @@ import pkg_resources
 import numpy as np
 from PQmath import ObjectiveFunctionQuats, QuatSeq, orientation_to_quat, \
      quat_to_orient, CachingObjectiveFunctionQuats, QuatSmoother
-import time
 import nose
 
 class TestPQmath:
@@ -105,7 +104,9 @@ class TestPQmath:
 
             vec_v1 = quat_to_orient(q1)
             vec_v2 = quat_to_orient(q2)
-            angle = np.arccos(np.dot( vec_v1, vec_v2))
+            dot = np.dot( vec_v1, vec_v2)
+            dot = min(1.0,dot) # clip to prevent arccos returning nan
+            angle = np.arccos(dot)
             assert angle < (60*D2R)
 
     def test_Qsmooth_both(self):
