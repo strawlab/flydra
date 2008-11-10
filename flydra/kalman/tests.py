@@ -9,19 +9,6 @@ class TestTracker(unittest.TestCase):
         self.reconst_orig_units = flydra.reconstruct.Reconstructor(caldir)
         self.reconstructor_meters = self.reconst_orig_units.get_scaled(self.reconst_orig_units.get_scale_factor())
 
-    def test_pickle(self):
-        models = dynamic_models.create_dynamic_model_dict(dt= 0.01)
-        kalman_model = models[ models.keys()[0] ]
-
-        x = flydra_tracker.Tracker(self.reconstructor_meters,
-                                   scale_factor=self.reconst_orig_units.get_scale_factor(),
-                                   kalman_model=kalman_model,
-                                   )
-
-        import pickle
-        pickle.dumps(x)
-        # XXX TODO should check equality with loaded version
-
     def test_encode_decode_roundtrip(self):
         if 1:
             # not completed. TODO - implement
@@ -43,7 +30,7 @@ class TestTracker(unittest.TestCase):
                 for j in range(n_3d_objs):
                     state_vecs = numpy.random.randn( ss )
                     meanP = 1e-4
-                
+
             data_packet1 = x.encode_data_packet(fno1,timestamp1)
             data_packet2 = x.encode_data_packet(fno2,timestamp2)
 
@@ -51,9 +38,9 @@ class TestTracker(unittest.TestCase):
             super_packet = encode_super_packet( in_packets )
             for i,decoded_packet in enumerate(decode_super_packet(super_packet)):
                 orig_packet = in_packets[i]
-                
+
                 corrected_framenumber, timestamp, state_vecs, meanP = decode_data_packet( decoded_packet )
-        
+
 
 def get_test_suite():
     ts=unittest.TestSuite([unittest.makeSuite(TestTracker),
