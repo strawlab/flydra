@@ -183,6 +183,8 @@ def convert(infilename,
 def main():
     usage = '%prog FILE [options]'
     parser = OptionParser(usage)
+    parser.add_option("--dest-file", type='string', default=None,
+                      help="save to mat file")
     parser.add_option("--time-data", dest="file2d", type='string',
                       help="hdf5 file with 2d data FILE2D used to calculate timestamp information",
                       metavar="FILE2D")
@@ -206,7 +208,10 @@ def main():
         return
 
     infilename = args[0]
-    outfilename = os.path.splitext(infilename)[0] + '_smoothed.mat'
+    if options.dest_file is None:
+        outfilename = os.path.splitext(infilename)[0] + '_smoothed.mat'
+    else:
+        outfilename = options.dest_file
     cmd_str = """convert(infilename,outfilename,
                        file_time_data=options.file2d,
                        save_timestamps = not options.no_timestamps,

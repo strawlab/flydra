@@ -60,7 +60,7 @@ flydra_kalmanize
 
 ::
 
-  flydra_kalmanize DATAFILE2D.h5 --reconstructor=CALIBRATION.xml --max-err=10.0 --min-observations-to-save=10
+  flydra_kalmanize DATAFILE2D.h5 --reconstructor=CALIBRATION.xml --max-err=10.0 --min-observations-to-save=10 --dest-file=DATAFILE2D.kalmanized.h5
 
 This re-runs the data association algorithm. It
 is useful to do this because the original realtime run may have
@@ -69,12 +69,12 @@ better calibration is known. The new data are saved to an .h5 file
 named ``DATAFILE2D.kalmanized.h5``.
 
 
-data2smoothed
-.............
+flydra_analysis_data2smoothed
+.............................
 
 ::
 
-  data2smoothed DATAFILE3D.h5 --time-data=DATAFILE2D.h5
+  flydra_analysis_data2smoothed DATAFILE3D.h5 --time-data=DATAFILE2D.h5 --dest-file=DATAFILE3D_smoothed.mat
 
 This produces a .mat file named
 ``DATAFILE3D_smoothed.mat``. This file contains smoothed tracking data in addition
