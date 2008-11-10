@@ -358,7 +358,7 @@ def kalmanize(src_filename,
     else:
         print 'using dynamic model "%s"'%dynamic_model_name
 
-    results = get_results(src_filename)
+    results = get_results(src_filename,mode='r')
 
     if reconstructor_filename is None:
         reconstructor_filename = src_filename
