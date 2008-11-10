@@ -12,19 +12,22 @@ GALLERY_PATH = os.path.join(os.path.split(__file__)[0],'..',
 
 DATAFILE2D = pkg_resources.resource_filename('flydra.a2','sample_datafile.h5')
 DATAFILE3D = pkg_resources.resource_filename('flydra.a2','sample_datafile.h5')
+CALIB = pkg_resources.resource_filename('flydra.a2','sample_calibration.xml')
 
-def _get_names_dict(data2d,data3d):
+def _get_names_dict(data2d,data3d,calib):
     DATAFILE2D_NOEXT = os.path.splitext(data2d)[0]
     DATAFILE3D_NOEXT = os.path.splitext(data3d)[0]
     names = dict(DATAFILE2D=data2d,
                  DATAFILE3D=data3d,
                  DATAFILE2D_NOEXT=DATAFILE2D_NOEXT,
                  DATAFILE3D_NOEXT=DATAFILE3D_NOEXT,
+                 CALIB=calib,
                  )
     return names
 
 CANNONICAL_FILENAMES = {'DATAFILE2D':'DATAFILE2D.h5',
                         'DATAFILE3D':'DATAFILE3D.h5',
+                        'CALIB':'CALIBRATION.xml',
                         'target':'image.png'}
 
 # image based commands
@@ -43,22 +46,39 @@ image_info = [
 
     {'cmd':('flydra_analysis_plot_timeseries_2d_3d %(DATAFILE2D)s '
             '--kalman-file=%(DATAFILE3D)s --disable-kalman-smoothing '
-            '--save-fig=%(target)s'),
+            '--save-fig=%(target)s --likely-only'),
      'result':'plot_timeseries_2d_3d.png',
-     'title':'Timeseries of 2D data with overlaid 3D tracking data',
+     'title':'Timeseries of 2D and 3D data',
+     'rst_comments':"""The ``--likely-only`` argument limits
+the 2D data plotted."""
+
      },
 
     ]
 
 # non-image based commands
 command_info =  [
+    {'cmd':('flydra_kalmanize %(DATAFILE2D)s --reconstructor=%(CALIB)s '
+            '--max-err=10.0 --min-observations-to-save=10'),
+     'outfile':'%(DATAFILE2D_NOEXT)s.kalmanized.h5',
+     'result':'kalmanized.h5',
+     'compare_results':False,
+
+     'rst_comments':"""This re-runs the data association algorithm. It
+is useful to do this because the original realtime run may have
+skipped some processing to meet realtime constraints or because a
+better calibration is known. The new data are saved to an .h5 file
+named ``%(outfile)s``.
+"""
+     },
     {'cmd':'data2smoothed %(DATAFILE3D)s --time-data=%(DATAFILE2D)s',
      'outfile':'%(DATAFILE3D_NOEXT)s_smoothed.mat',
      'result':'data2smoothed.mat',
      'rst_comments':"""This produces a .mat file named
 ``%(outfile)s``. This file contains smoothed tracking data in addition
 to (unsmoothed) maximum likelihood position estimates."""
-     }, ]
+     },
+    ]
 
 
 gallery_rst_src = """
@@ -101,7 +121,9 @@ def generate_images():
         check_command_with_image( 'generate', info)
         cmd_show = info['cmd']%CANNONICAL_FILENAMES
         names = _get_names_dict(CANNONICAL_FILENAMES['DATAFILE2D'],
-                                CANNONICAL_FILENAMES['DATAFILE3D'])
+                                CANNONICAL_FILENAMES['DATAFILE3D'],
+                                CANNONICAL_FILENAMES['CALIB'],
+                                )
         if 'title' in info:
             title = info['title']
         else:
@@ -125,11 +147,16 @@ def generate_commands():
     command_gallery = ''
     for info in command_info:
         check_command( 'generate', info )
-        cmd_show = info['cmd']%CANNONICAL_FILENAMES
+        #cmd_show = info['cmd']%CANNONICAL_FILENAMES
         names = _get_names_dict(CANNONICAL_FILENAMES['DATAFILE2D'],
-                                CANNONICAL_FILENAMES['DATAFILE3D'])
+                                CANNONICAL_FILENAMES['DATAFILE3D'],
+                                CANNONICAL_FILENAMES['CALIB'],
+                                )
         if 'outfile' in info:
             names['outfile'] = info['outfile']%names
+            names['target'] = names['outfile']
+
+        cmd_show = info['cmd']%names
 
         if 'title' in info:
             title = info['title']
@@ -162,7 +189,7 @@ def check_command_with_image(mode,info):
         handle, target = tempfile.mkstemp('.png')
     elif mode=='generate':
         target = result_fullpath
-    names = _get_names_dict(DATAFILE2D,DATAFILE3D)
+    names = _get_names_dict(DATAFILE2D,DATAFILE3D,CALIB)
     names['target']=target
 
     cmd = info['cmd']%names
@@ -175,9 +202,7 @@ def check_command_with_image(mode,info):
 def check_command(mode,info):
     assert mode in ['check','generate']
     result_fullpath = os.path.join( AUTOGEN_DIR, info['result'] )
-    names = _get_names_dict(DATAFILE2D,DATAFILE3D)
-
-    cmd = info['cmd']%names
+    names = _get_names_dict(DATAFILE2D,DATAFILE3D,CALIB)
 
     # 'outfile' key indicates that we don't have control of location
     # of output file -- we must accept where command will put it.
@@ -190,15 +215,23 @@ def check_command(mode,info):
         # not yet needed
         suffix = info.get('suffix','')
         handle, target = tempfile.mkstemp(suffix)
+    names['target']=target
+
+    cmd = info['cmd']%names
 
     subprocess.check_call(cmd, shell=True)
 
     if mode=='check':
-        are_close = are_files_close( target, result_fullpath )
+        if info.get('compare_results',True):
+            are_close = are_files_close( target, result_fullpath )
         os.unlink(target)
-        assert are_close == True
+        if info.get('compare_results',True):
+            assert are_close == True
     elif mode=='generate':
-        shutil.move( target, result_fullpath )
+        if info.get('compare_results',True):
+            shutil.move( target, result_fullpath )
+        else:
+            os.unlink(target)
 
 def are_files_close(filename1, filename2):
     fd1 = open(filename1)
