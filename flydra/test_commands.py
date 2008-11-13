@@ -244,26 +244,30 @@ def check_command(mode,info):
 
     suffix = info.get('suffix','')
     handle, target = tempfile.mkstemp(suffix)
-    try:
-        os.unlink(target) # erase first temporary file
-        names['target']=target
-        cmd = info['cmd']%names
-        cmd += info.get('noshow_cmd','')
-        _my_call(cmd)
 
-        checker_function = checker_function_dict.get(suffix,are_files_close)
+    # Erase first temporary file (some tests don't like pre-existing
+    # file).
+    os.unlink(target)
 
-        if mode=='check':
-            if info.get('compare_results',True):
-                are_close = checker_function( target, result_fullpath )
-                assert are_close == True, '%s returned False'%checker_function
-        elif mode=='generate':
-            if info.get('compare_results',True):
-                shutil.move( target, result_fullpath )
-    finally:
-        # cleanup after ourselves
-        if os.path.exists(target):
-            os.unlink(target)
+    names['target']=target
+    cmd = info['cmd']%names
+    cmd += info.get('noshow_cmd','')
+    _my_call(cmd)
+
+    checker_function = checker_function_dict.get(suffix,are_files_close)
+
+    if mode=='check':
+        if info.get('compare_results',True):
+            are_close = checker_function( target, result_fullpath )
+            assert are_close == True, '%s not equal to %s'%(
+                target,result_fullpath)
+    elif mode=='generate':
+        if info.get('compare_results',True):
+            shutil.move( target, result_fullpath )
+
+    # cleanup after ourselves
+    if os.path.exists(target):
+        os.unlink(target)
 
 def are_files_close(filename1, filename2):
     fd1 = open(filename1)
@@ -322,6 +326,8 @@ def are_pytables_close(filename1, filename2):
             elif (isinstance(f1_node,tables.Table) or
                   isinstance(f1_node,tables.VLArray)):
                 if len(f1_node) != len(f2_node):
+                    print ('not close because row lengths differ (%d vs %d)'%(
+                        len(f1_node),len(f2_node)))
                     is_close = False
                 else:
                     for row1,row2 in zip(f1_node,f2_node):
@@ -334,20 +340,31 @@ def are_pytables_close(filename1, filename2):
                             # assume numpy
                             is_close=np.allclose(r1,r2)
                         if not is_close:
+                            print 'not close because r1!=r2'
+                            print 'r1'
+                            print r1
+                            print 'r2'
+                            print r2
+                            print
                             break
             elif isinstance(f1_node,tables.Array):
                 a1=np.array(f1_node)
                 a2=np.array(f2_node)
                 if a1.ndim != a2.ndim:
+                    print 'not close because a1.ndim!=a2.ndim'
                     is_close = False
                 elif a1.shape != a2.shape:
+                    print 'not close because a1.shape!=a2.shape'
                     is_close = False
                 else:
                     is_close = np.allclose(a1,a2)
+                    if not is_close:
+                        print 'not close becuase a1 != a2'
             else:
                 warnings.warn('not checking leaf %s'%f1_node)
                 continue
             if not is_close:
+                print 'difference in node %s'%f1_node
                 result = False
                 break
         return result
