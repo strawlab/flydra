@@ -77,7 +77,6 @@ the 2D data plotted."""
 command_info =  [
     {'cmd':('flydra_kalmanize %(DATAFILE2D)s --reconstructor=%(CALIB)s '
             '--max-err=10.0 --min-observations-to-save=10 '
-            '--stop=5000 '
             '--dest-file=%(target)s'),
      'noshow_cmd':' --fake-timestamp=123456.7',
      'outfile':'%(DATAFILE2D_NOEXT)s.kalmanized.h5',
