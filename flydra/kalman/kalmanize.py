@@ -498,7 +498,13 @@ def kalmanize(src_filename,
     accum_time = 0.0
     last_frame = None
     frame_data = {}
-    RAM_HEAVY_BUT_FAST=True
+
+    RAM_HEAVY_BUT_FAST=False
+
+    # If RAM_HEAVY_BUT_FAST is True, load all data2d to ram at
+    # once. This slightly affects results. I think this is because the
+    # Kalman birth model is not treated equivalently in both cases.
+
     if RAM_HEAVY_BUT_FAST:
         time1 = time.time()
         print 'loading all 2D data...'
@@ -534,9 +540,11 @@ def kalmanize(src_filename,
         time2 = time.time()
         print 'done in %.1f sec'%(time2-time1)
 
-        warnings.warn('No pre-filtering of data based on zero '
-                      'probability -- more data association work is '
-                      'being done than necessary')
+        if (not options.disable_image_stat_gating and
+            'cur_val' in data2d.colnames):
+            warnings.warn('No pre-filtering of data based on zero '
+                          'probability -- more data association work is '
+                          'being done than necessary')
 
     if len(frames_array)==0:
         # no data
