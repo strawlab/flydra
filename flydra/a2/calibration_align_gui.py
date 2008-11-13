@@ -169,9 +169,6 @@ class CalibrationAlignmentWindow(Widget):
         verts = np.dot(M,self.orig_data_verts)
         self.viewed_data.data.points = hom2vtk(verts)
 
-        self.viewed_data.data.modified()
-        self.viewed_data.update()
-
     def get_aligned_scaled_R(self):
         s,R,t = self.params.get_sRt()
         scaled = self.reconstructor
@@ -335,6 +332,7 @@ def main():
         y.append( rows['y'] )
         z.append( rows['z'] )
         speed.append(speeds)
+    data_file.close()
     x = np.concatenate(x)
     y = np.concatenate(y)
     z = np.concatenate(z)
