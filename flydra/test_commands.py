@@ -137,11 +137,32 @@ def test_commands():
     for info in command_info:
         yield check_command, 'check', info
 
+def break_long_lines(cmd):
+    components = cmd.split()
+    outputs = [components.pop(0)]
+    for component in components:
+        test_line = outputs[-1] + ' ' + component
+        if len(test_line) < 79:
+            # Test line is short. Take it.
+            outputs[-1] = test_line
+        else:
+            # Break line
+            outputs[-1] = outputs[-1]+' \\'
+            outputs.append('       '+component)
+    result = '\n'.join(outputs)
+    return result
+
+def test_break_long_lines():
+    assert break_long_lines('short')=='short'
+    assert (break_long_lines('short but multiple words') ==
+            'short but multiple words')
+
 def generate_images():
     image_gallery = ''
     for info in image_info:
         check_command_with_image( 'generate', info)
         cmd_show = info['cmd']%CANNONICAL_FILENAMES
+        cmd_show = break_long_lines(cmd_show)
         names = _get_names_dict(CANNONICAL_FILENAMES['DATAFILE2D'],
                                 CANNONICAL_FILENAMES['DATAFILE3D'],
                                 CANNONICAL_FILENAMES['CALIB'],
@@ -169,7 +190,6 @@ def generate_commands():
     command_gallery = ''
     for info in command_info:
         check_command( 'generate', info )
-        #cmd_show = info['cmd']%CANNONICAL_FILENAMES
         names = _get_names_dict(CANNONICAL_FILENAMES['DATAFILE2D'],
                                 CANNONICAL_FILENAMES['DATAFILE3D'],
                                 CANNONICAL_FILENAMES['CALIB'],
@@ -179,6 +199,7 @@ def generate_commands():
             names['target'] = names['outfile']
 
         cmd_show = info['cmd']%names
+        cmd_show = break_long_lines(cmd_show)
 
         if 'title' in info:
             title = info['title']
