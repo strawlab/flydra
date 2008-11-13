@@ -53,7 +53,7 @@ class SimpleOrthographicXZProjection(StimProjection):
         return X[0], X[2]
 
 class Stimulus(object):
-    """Stimulus information saved in an XML node
+    '''Stimulus information saved in an XML node
 
     Parameters
     ----------
@@ -62,7 +62,39 @@ class Stimulus(object):
         Must have tag ``stimxml``.
     hack_postmultiply : (optional) ndarray
         Used to transform coordinates when a non aligned calibration was used.
-    """
+
+
+    Examples
+    --------
+
+    The following example specifies a stimulus-only .xml file. It
+    defines a rectilinear arena aligned with the X, Y and Z axes of
+    the world coordinate systems. The floor of the area is at z=0, the
+    ceiling is at z=0.3 and so on.
+
+    >>> stimulus_file_contents = """<stimxml version="1">
+    ...   <cubic_arena>
+    ...     <verts4x4>
+    ...       <vert>.5,  .15,  .3</vert>
+    ...       <vert>.5,  -.15, .3</vert>
+    ...       <vert>-.5, -.15, .3</vert>
+    ...       <vert>-.5,  .15, .3</vert>
+    ...
+    ...       <vert>.5,  .15,  0</vert>
+    ...       <vert>.5,  -.15, 0</vert>
+    ...       <vert>-.5, -.15, 0</vert>
+    ...       <vert>-.5,  .15, 0</vert>
+    ...     </verts4x4>
+    ...     <tube_diameter>0.002</tube_diameter>
+    ...   </cubic_arena>
+    ... </stimxml>"""
+    >>> root=ET.fromstring(stimulus_file_contents)
+    >>> stim=Stimulus(root)
+    >>> import matplotlib.pyplot as pyplot
+    >>> ax=pyplot.subplot(1,1,1)
+    >>> stim.plot_stim(ax,SimpleOrthographicXYProjection())
+    >>> #pyplot.show()
+    '''
 
     def __init__(self,root,hack_postmultiply=None):
         assert root.tag == 'stimxml'
@@ -385,6 +417,20 @@ class Stimulus(object):
                         else:
                             x2d, y2d = result
                         plotx.append(x2d); ploty.append(y2d)
+                    ax.plot( plotx, ploty, 'k-' )
+            elif child.tag == 'cubic_arena':
+                plotted_anything = True
+                info = self._get_info_for_cubic_arena(child)
+                v=info['verts4x4'] # arranged in 2 rectangles of 4 verts
+                points = [projection(v[i]) for i in range(len(v))]
+                lines = [ [0,1], [1,2], [2,3], [3,0],
+                          [4,5], [5,6], [6,7], [7,4],
+                          [0,4], [1,5], [2,6], [3,7] ]
+                for line in lines:
+                    v0 = points[line[0]]
+                    v1 = points[line[1]]
+                    plotx = [v0[0], v1[0]]
+                    ploty = [v0[1], v1[1]]
                     ax.plot( plotx, ploty, 'k-' )
             elif child.tag == 'cylindrical_post':
                 plotted_anything = True
