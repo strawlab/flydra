@@ -491,7 +491,6 @@ def kalmanize(src_filename,
     accum_time = 0.0
     last_frame = None
     frame_data = {}
-    time1 = time.time()
     RAM_HEAVY_BUT_FAST=True
     if RAM_HEAVY_BUT_FAST:
         time1 = time.time()

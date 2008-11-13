@@ -1,6 +1,5 @@
 import numpy
 import numpy as np
-import time
 import flydra.kalman.ekf as kalman_ekf
 #import flydra.geom as geom
 import flydra.fastgeom as geom
