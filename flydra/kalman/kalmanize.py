@@ -176,6 +176,7 @@ class KalmanSaver:
                  textlog_save_lines = None,
                  dynamic_model_name=None,
                  dynamic_model=None,
+                 fake_timestamp=None,
                  debug=0):
         self.cam_id2camns = cam_id2camns
         self.min_observations_to_save = min_observations_to_save
@@ -246,7 +247,10 @@ class KalmanSaver:
         if 1:
             textlog_row = self.h5textlog.row
             cam_id = 'mainbrain'
-            timestamp = time.time()
+            if fake_timestamp is None:
+                timestamp = time.time()
+            else:
+                timestamp = fake_timestamp
 
             list_of_textlog_data = [
                 (timestamp,cam_id,timestamp,text)
@@ -458,7 +462,9 @@ def kalmanize(src_filename,
                           textlog_save_lines=textlog_save_lines,
                           dynamic_model_name=dynamic_model_name,
                           dynamic_model=kalman_model,
-                          debug=debug)
+                          debug=debug,
+                          fake_timestamp = options.fake_timestamp,
+                          )
 
     tracker = Tracker(
         reconstructor_meters,
@@ -469,6 +475,7 @@ def kalmanize(src_filename,
         area_threshold_for_orientation=options.area_threshold_for_orientation,
         disable_image_stat_gating=options.disable_image_stat_gating,
         orientation_consensus=options.orientation_consensus,
+        fake_timestamp=options.fake_timestamp,
         )
 
     tracker.set_killed_tracker_callback( h5saver.save_tro )
@@ -712,6 +719,12 @@ def main():
     parser.add_option(
         "--save-cal-dir", type='string',
         help="directory name in which to save new calibration data",
+        default=None,
+        )
+
+    parser.add_option(
+        "--fake-timestamp", type='float',
+        help="value of timestamp to use when saving logfile",
         default=None,
         )
 

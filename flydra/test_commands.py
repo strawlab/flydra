@@ -77,11 +77,11 @@ the 2D data plotted."""
 command_info =  [
     {'cmd':('flydra_kalmanize %(DATAFILE2D)s --reconstructor=%(CALIB)s '
             '--max-err=10.0 --min-observations-to-save=10 '
-            '--dest-file=%(target)s'),
+            '--stop=5000 '
+            '--dest-file=%(target)s --fake-timestamp=123456.7'),
      'outfile':'%(DATAFILE2D_NOEXT)s.kalmanized.h5',
      'result':'kalmanized.h5',
-     'compare_results':False,
-
+     'suffix':'.h5',
      'rst_comments':"""This re-runs the data association algorithm. It
 is useful to do this because the original realtime run may have
 skipped some processing to meet realtime constraints or because a

@@ -83,6 +83,7 @@ cdef class TrackedObject:
     cdef public object frames, xhats, timestamps, Ps, observations_data, observations_Lcoords
     cdef public object observations_frames, observations_2d
     cdef int disable_image_stat_gating, orientation_consensus
+    cdef object fake_timestamp
 
     def __init__(self,
                  reconstructor_meters, # the Reconstructor instance
@@ -98,6 +99,7 @@ cdef class TrackedObject:
                  double area_threshold_for_orientation=0.0,
                  disable_image_stat_gating=False,
                  orientation_consensus=0,
+                 fake_timestamp=None
                  ):
         """
 
@@ -118,6 +120,7 @@ cdef class TrackedObject:
         self.distorted_pixel_euclidian_distance_accept=kalman_model.get('distorted_pixel_euclidian_distance_accept',None)
         self.disable_image_stat_gating = disable_image_stat_gating
         self.orientation_consensus = orientation_consensus
+        self.fake_timestamp = fake_timestamp
 
         self.current_frameno = frame
         if scale_factor is None:
@@ -169,7 +172,10 @@ cdef class TrackedObject:
                                                  P_k1)
         self.frames = [frame]
         self.xhats = [initial_x]
-        self.timestamps = [time.time()]
+        if self.fake_timestamp is None:
+            self.timestamps = [time.time()]
+        else:
+            self.timestamps = [self.fake_timestamp]
         self.Ps = [P_k1]
 
         self.observations_frames = [frame]
@@ -329,7 +335,10 @@ cdef class TrackedObject:
             ############ save outputs ###############
             self.frames.append( frame )
             self.xhats.append( xhat )
-            self.timestamps.append(time.time())
+            if self.fake_timestamp is None:
+                self.timestamps.append(time.time())
+            else:
+                self.timestamps.append(self.fake_timestamp)
             self.Ps.append( P )
 
             if observation_meters is not None:

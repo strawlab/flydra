@@ -274,6 +274,7 @@ class Tracker:
                  area_threshold_for_orientation=0.0,
                  disable_image_stat_gating=False,
                  orientation_consensus=0,
+                 fake_timestamp=None,
                  ):
         """
 
@@ -295,6 +296,7 @@ class Tracker:
         self.kill_tracker_callbacks = []
         self.disable_image_stat_gating = disable_image_stat_gating
         self.orientation_consensus = orientation_consensus
+        self.fake_timestamp = fake_timestamp
 
         # set values for passing to TrackedObject
         if scale_factor is None:
@@ -421,6 +423,7 @@ class Tracker:
             area_threshold_for_orientation=self.area_threshold_for_orientation,
             disable_image_stat_gating=self.disable_image_stat_gating,
             orientation_consensus = self.orientation_consensus,
+            fake_timestamp = self.fake_timestamp,
             )
     def kill_all_trackers(self):
         self.live_tracked_objects.get_async_applier('kill').get()
