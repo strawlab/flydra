@@ -11,7 +11,7 @@ import tables
 import tables as PT
 import warnings
 warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
-import os, sys, pprint
+import os, sys, pprint, tempfile, shutil
 from flydra_tracker import Tracker
 import flydra_kalman_utils
 from optparse import OptionParser
@@ -497,7 +497,8 @@ def kalmanize(src_filename,
     frame_count = 0
     accum_time = 0.0
     last_frame = None
-    frame_data = {}
+    frame_data = collections.defaultdict(list)
+    time_frame_all_cam_timestamps = []
 
     RAM_HEAVY_BUT_FAST=False
 
@@ -555,6 +556,8 @@ def kalmanize(src_filename,
     print '2D data range: %d<frame<%d'%(
         frames_array[row_idxs[0]], frames_array[row_idxs[-1]])
 
+    max_all_check_times = -np.inf
+
     for row_idx in row_idxs:
         new_frame = frames_array[row_idx]
         if start_frame is not None:
@@ -581,6 +584,11 @@ def kalmanize(src_filename,
             # Data for this frame is complete
             if last_frame is not None:
 
+                if len(time_frame_all_cam_timestamps) > 1:
+                    check_times = np.array(time_frame_all_cam_timestamps)
+                    check_times -= check_times.min()
+                    max_all_check_times = max( check_times.max(),
+                                               max_all_check_times)
                 if debug > 5:
                     print
                     print 'frame_data for frame %d'%(last_frame,)
@@ -601,6 +609,7 @@ def kalmanize(src_filename,
 
             ########################################
             frame_data = collections.defaultdict(list)
+            time_frame_all_cam_timestamps = [] # clear values
             last_frame = new_frame
 
         camn = row['camn']
@@ -702,11 +711,28 @@ def kalmanize(src_filename,
         projected_line_meters=geom.line_from_HZline(pluecker_hz_meters)
 
         frame_data[camn].append((pt_undistorted,projected_line_meters))
+        time_frame_all_cam_timestamps.append( row['timestamp'] )
+
 
     tracker.kill_all_trackers() # done tracking
 
     h5saver.close()
     results.close()
+
+    if max_all_check_times > (0.5*dt):
+        print 'max_all_check_times %.2f msec'%(max_all_check_times*1000.0)
+        if options.ignore_synchonization_errors:
+            warnings.warn('There are synchonization errors, but'
+                          'they will be ignored, as you request.')
+        else:
+            handle, target = tempfile.mkstemp(os.path.split(dest_filename)[1])
+            os.unlink(target) # remove original file there
+            shutil.move( dest_filename, target)
+
+            raise ValueError(
+                'Synchonization errors exist in the data. Moved result file to '
+                'ensure it is not confused with valid data. The new location '
+                'is: %s'%(target,))
 
 def main():
     usage = '%prog FILE [options]'
@@ -787,6 +813,10 @@ def main():
 
     parser.add_option("--disable-image-stat-gating", action='store_true',
                       help="disable gating the data based on image statistics",
+                      default=False)
+
+    parser.add_option("--ignore-synchonization-errors", action='store_true',
+                      help="ignore synchronization errors",
                       default=False)
 
     (options, args) = parser.parse_args()
