@@ -78,7 +78,8 @@ command_info =  [
     {'cmd':('flydra_kalmanize %(DATAFILE2D)s --reconstructor=%(CALIB)s '
             '--max-err=10.0 --min-observations-to-save=10 '
             '--stop=5000 '
-            '--dest-file=%(target)s --fake-timestamp=123456.7'),
+            '--dest-file=%(target)s'),
+     'noshow_cmd':' --fake-timestamp=123456.7',
      'outfile':'%(DATAFILE2D_NOEXT)s.kalmanized.h5',
      'result':'kalmanized.h5',
      'suffix':'.h5',
@@ -234,7 +235,9 @@ def generate():
     fd.close()
 
 def check_command(mode,info):
-    checker_function_dict = {'.png':are_images_close}
+    checker_function_dict = {'.png':are_images_close,
+                             '.h5':are_pytables_close,
+                             }
 
     assert mode in ['check','generate']
     result_fullpath = os.path.join( AUTOGEN_DIR, info['result'] )
@@ -242,24 +245,25 @@ def check_command(mode,info):
 
     suffix = info.get('suffix','')
     handle, target = tempfile.mkstemp(suffix)
-    os.unlink(target) # erase first temporary file
-    names['target']=target
+    try:
+        os.unlink(target) # erase first temporary file
+        names['target']=target
+        cmd = info['cmd']%names
+        cmd += info.get('noshow_cmd','')
+        _my_call(cmd)
 
-    cmd = info['cmd']%names
-    _my_call(cmd)
+        checker_function = checker_function_dict.get(suffix,are_files_close)
 
-    checker_function = checker_function_dict.get(suffix,are_files_close)
-
-    if mode=='check':
-        if info.get('compare_results',True):
-            are_close = checker_function( target, result_fullpath )
-        os.unlink(target)
-        if info.get('compare_results',True):
-            assert are_close == True
-    elif mode=='generate':
-        if info.get('compare_results',True):
-            shutil.move( target, result_fullpath )
-        else:
+        if mode=='check':
+            if info.get('compare_results',True):
+                are_close = checker_function( target, result_fullpath )
+                assert are_close == True, '%s returned False'%checker_function
+        elif mode=='generate':
+            if info.get('compare_results',True):
+                shutil.move( target, result_fullpath )
+    finally:
+        # cleanup after ourselves
+        if os.path.exists(target):
             os.unlink(target)
 
 def are_files_close(filename1, filename2):
@@ -303,6 +307,57 @@ def are_images_close( im1_filename, im2_filename,
     result = fraction_same>=ok_fraction_threshold
     if result == False:
         print 'fraction_same=%s'%fraction_same
+    return result
+
+def are_pytables_close(filename1, filename2):
+    import tables
+
+    def are_pytables_groups_close(g1,g2):
+        result = True
+
+        for f1_node in g1._f_iterNodes():
+            f2_node = g2._f_getChild(f1_node._v_name)
+
+            if isinstance(f1_node,tables.Group):
+                is_close = are_pytables_groups_close(f1_node,f2_node)
+            elif (isinstance(f1_node,tables.Table) or
+                  isinstance(f1_node,tables.VLArray)):
+                if len(f1_node) != len(f2_node):
+                    is_close = False
+                else:
+                    for row1,row2 in zip(f1_node,f2_node):
+                        # read rows
+                        r1 = row1[:]
+                        r2 = row2[:]
+                        if isinstance(r1,tuple):
+                            is_close=r1==r2
+                        else:
+                            # assume numpy
+                            is_close=np.allclose(r1,r2)
+                        if not is_close:
+                            break
+            elif isinstance(f1_node,tables.Array):
+                a1=np.array(f1_node)
+                a2=np.array(f2_node)
+                if a1.ndim != a2.ndim:
+                    is_close = False
+                elif a1.shape != a2.shape:
+                    is_close = False
+                else:
+                    is_close = np.allclose(a1,a2)
+            else:
+                warnings.warn('not checking leaf %s'%f1_node)
+                continue
+            if not is_close:
+                result = False
+                break
+        return result
+
+    f1 = tables.openFile(filename1,mode='r')
+    f2 = tables.openFile(filename2,mode='r')
+    result = are_pytables_groups_close( f1.root, f2.root )
+    f1.close()
+    f2.close()
     return result
 
 def main():
