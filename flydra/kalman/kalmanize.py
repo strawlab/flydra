@@ -454,290 +454,293 @@ def kalmanize(src_filename,
     else:
         sync_error_threshold=options.sync_error_threshold_msec/1000.0
 
-    if do_full_kalmanization:
-        textlog_save_lines = [
-            'kalmanize running at %s fps, (hypothesis_test_max_error %s)'%(
-            str(frames_per_second),str(max_err)),
-            'original file: %s'%(src_filename,),
-            'dynamic model: %s'%(dynamic_model_name,),
-            'reconstructor file: %s'%(reconstructor_filename,),
-            ]
-
-        kalman_model = dynamic_models.get_kalman_model(
-            name=dynamic_model_name, dt=dt )
-
-        h5saver = KalmanSaver(dest_filename,
-                              reconst_orig_units,
-                              cam_id2camns=cam_id2camns,
-                              min_observations_to_save=min_observations_to_save,
-                              textlog_save_lines=textlog_save_lines,
-                              dynamic_model_name=dynamic_model_name,
-                              dynamic_model=kalman_model,
-                              debug=debug,
-                              fake_timestamp = options.fake_timestamp,
-                              )
-
-        tracker = Tracker(
-            reconstructor_meters,
-            scale_factor=reconst_orig_units.get_scale_factor(),
-            kalman_model=kalman_model,
-            save_all_data=True,
-            area_threshold=area_threshold,
-            area_threshold_for_orientation=options.area_threshold_for_orientation,
-            disable_image_stat_gating=options.disable_image_stat_gating,
-            orientation_consensus=options.orientation_consensus,
-            fake_timestamp=options.fake_timestamp,
-            )
-
-        tracker.set_killed_tracker_callback( h5saver.save_tro )
-
-        print ('max reprojection error to accept new 3D point '
-               'with hypothesis testing: %.1f (pixels)'%(max_err,))
-
-    data2d = results.root.data2d_distorted
-
-    done_frames = []
-
-    if 0:
-        print '-='*40
-        print '-='*40
-        print 'using only first 2000 rows'
-        row_idxs = row_idxs[:2000]
-        print '-='*40
-        print '-='*40
-
-    frame_count = 0
-    accum_time = 0.0
-    last_frame = None
-    frame_data = collections.defaultdict(list)
-    time_frame_all_cam_timestamps = []
-
-    RAM_HEAVY_BUT_FAST=False
-
-    # If RAM_HEAVY_BUT_FAST is True, load all data2d to ram at
-    # once. This slightly affects results. I think this is because the
-    # Kalman birth model is not treated equivalently in both cases.
-
-    if RAM_HEAVY_BUT_FAST:
-        time1 = time.time()
+    try:
         if do_full_kalmanization:
-            print 'loading all 2D data...'
-        data2d_recarray = data2d[:] # needs lots of RAM for big data files
-        time2 = time.time()
-        if do_full_kalmanization:
-            print 'done in %.1f sec'%(time2-time1)
-        orig_num_rows = len(data2d_recarray)
+            textlog_save_lines = [
+                'kalmanize running at %s fps, (hypothesis_test_max_error %s)'%(
+                str(frames_per_second),str(max_err)),
+                'original file: %s'%(src_filename,),
+                'dynamic model: %s'%(dynamic_model_name,),
+                'reconstructor file: %s'%(reconstructor_filename,),
+                ]
 
-        if (not options.disable_image_stat_gating and
-            'cur_val' in data2d_recarray.dtype.fields):
-            if 'sumsqf_val' in data2d_recarray.dtype.fields:
-                sumsqf_val = data2d_recarray['sumsqf_val']
-            else:
-                sumsqf_val = None
+            kalman_model = dynamic_models.get_kalman_model(
+                name=dynamic_model_name, dt=dt )
 
-            nll = some_rough_negative_log_likelihood(
-                pt_area=None,
-                cur_val=data2d_recarray['cur_val'],
-                mean_val=data2d_recarray['mean_val'],
-                sumsqf_val=sumsqf_val)
-            nonzero_prob = numpy.isfinite(nll)
-            data2d_recarray = data2d_recarray[nonzero_prob]
+            h5saver = KalmanSaver(dest_filename,
+                                  reconst_orig_units,
+                                  cam_id2camns=cam_id2camns,
+                                  min_observations_to_save=min_observations_to_save,
+                                  textlog_save_lines=textlog_save_lines,
+                                  dynamic_model_name=dynamic_model_name,
+                                  dynamic_model=kalman_model,
+                                  debug=debug,
+                                  fake_timestamp = options.fake_timestamp,
+                                  )
 
-        filtered_num_rows = len(data2d_recarray)
-        print ('%d of %d rows have non-zero probability and will be '
-               'considered'%(filtered_num_rows,orig_num_rows))
+            tracker = Tracker(
+                reconstructor_meters,
+                scale_factor=reconst_orig_units.get_scale_factor(),
+                kalman_model=kalman_model,
+                save_all_data=True,
+                area_threshold=area_threshold,
+                area_threshold_for_orientation=options.area_threshold_for_orientation,
+                disable_image_stat_gating=options.disable_image_stat_gating,
+                orientation_consensus=options.orientation_consensus,
+                fake_timestamp=options.fake_timestamp,
+                )
 
-        frames_array = data2d_recarray['frame']
-    else:
-        time1 = time.time()
-        if do_full_kalmanization:
-            print 'loading all frame numbers...'
-        frames_array = numpy.asarray(data2d.read(field='frame'))
-        time2 = time.time()
-        if do_full_kalmanization:
-            print 'done in %.1f sec'%(time2-time1)
-            if (not options.disable_image_stat_gating and
-                'cur_val' in data2d.colnames):
-                warnings.warn('No pre-filtering of data based on zero '
-                              'probability -- more data association work is '
-                              'being done than necessary')
+            tracker.set_killed_tracker_callback( h5saver.save_tro )
 
-    if len(frames_array)==0:
-        # no data
-        print 'No 2D data. Nothing to do.'
-        return
+            print ('max reprojection error to accept new 3D point '
+                   'with hypothesis testing: %.1f (pixels)'%(max_err,))
 
-    row_idxs = numpy.argsort(frames_array)
-    if do_full_kalmanization:
-        print '2D data range: %d<frame<%d'%(
-            frames_array[row_idxs[0]], frames_array[row_idxs[-1]])
+        data2d = results.root.data2d_distorted
 
-    max_all_check_times = -np.inf
+        done_frames = []
 
-    for row_idx in row_idxs:
-        new_frame = frames_array[row_idx]
-        if start_frame is not None:
-            if new_frame < start_frame:
-                continue
-        if stop_frame is not None:
-            if new_frame > stop_frame:
-                continue
+        if 0:
+            print '-='*40
+            print '-='*40
+            print 'using only first 2000 rows'
+            row_idxs = row_idxs[:2000]
+            print '-='*40
+            print '-='*40
+
+        frame_count = 0
+        accum_time = 0.0
+        last_frame = None
+        frame_data = collections.defaultdict(list)
+        time_frame_all_cam_timestamps = []
+
+        RAM_HEAVY_BUT_FAST=False
+
+        # If RAM_HEAVY_BUT_FAST is True, load all data2d to ram at
+        # once. This slightly affects results. I think this is because the
+        # Kalman birth model is not treated equivalently in both cases.
+
         if RAM_HEAVY_BUT_FAST:
-            row = data2d_recarray[row_idx]
+            time1 = time.time()
+            if do_full_kalmanization:
+                print 'loading all 2D data...'
+            data2d_recarray = data2d[:] # needs lots of RAM for big data files
+            time2 = time.time()
+            if do_full_kalmanization:
+                print 'done in %.1f sec'%(time2-time1)
+            orig_num_rows = len(data2d_recarray)
+
+            if (not options.disable_image_stat_gating and
+                'cur_val' in data2d_recarray.dtype.fields):
+                if 'sumsqf_val' in data2d_recarray.dtype.fields:
+                    sumsqf_val = data2d_recarray['sumsqf_val']
+                else:
+                    sumsqf_val = None
+
+                nll = some_rough_negative_log_likelihood(
+                    pt_area=None,
+                    cur_val=data2d_recarray['cur_val'],
+                    mean_val=data2d_recarray['mean_val'],
+                    sumsqf_val=sumsqf_val)
+                nonzero_prob = numpy.isfinite(nll)
+                data2d_recarray = data2d_recarray[nonzero_prob]
+
+            filtered_num_rows = len(data2d_recarray)
+            print ('%d of %d rows have non-zero probability and will be '
+                   'considered'%(filtered_num_rows,orig_num_rows))
+
+            frames_array = data2d_recarray['frame']
         else:
-            row = data2d[row_idx]
-        new_frame_test_cmp = row['frame']
-        assert new_frame_test_cmp==new_frame
+            time1 = time.time()
+            if do_full_kalmanization:
+                print 'loading all frame numbers...'
+            frames_array = numpy.asarray(data2d.read(field='frame'))
+            time2 = time.time()
+            if do_full_kalmanization:
+                print 'done in %.1f sec'%(time2-time1)
+                if (not options.disable_image_stat_gating and
+                    'cur_val' in data2d.colnames):
+                    warnings.warn('No pre-filtering of data based on zero '
+                                  'probability -- more data association work is '
+                                  'being done than necessary')
 
-        if last_frame != new_frame:
-            if new_frame < last_frame:
-                print 'new_frame',new_frame
-                print 'last_frame',last_frame
-                raise RuntimeError("expected continuously increasing "
-                                   "frame numbers")
-            # new frame
-            ########################################
-            # Data for this frame is complete
-            if last_frame is not None:
+        if len(frames_array)==0:
+            # no data
+            print 'No 2D data. Nothing to do.'
+            return
 
-                if len(time_frame_all_cam_timestamps) > 1:
-                    check_times = np.array(time_frame_all_cam_timestamps)
-                    check_times -= check_times.min()
-                    this_max_check_time = check_times.max()
-                    max_all_check_times = max( this_max_check_time,
-                                               max_all_check_times)
-                    if this_max_check_time > sync_error_threshold:
-                        if do_full_kalmanization:
-                            warnings.warn('Synchronization error detected, '
-                                          'but continuing analysis.')
-                        else:
-                            if this_max_check_time==max_all_check_times:
-                                print '%s frame %d: sync difference: %.1f msec'%(
-                                    os.path.split(results.filename)[-1],
-                                    last_frame,
-                                    this_max_check_time*1000.0)
+        row_idxs = numpy.argsort(frames_array)
+        if do_full_kalmanization:
+            print '2D data range: %d<frame<%d'%(
+                frames_array[row_idxs[0]], frames_array[row_idxs[-1]])
 
-                if debug > 5:
-                    print
-                    print 'frame_data for frame %d'%(last_frame,)
-                    pprint.pprint(dict(frame_data))
-                    print
-                if do_full_kalmanization:
-                    process_frame(reconst_orig_units,tracker,
-                                  last_frame,frame_data,camn2cam_id,
-                                  max_err=max_err,debug=debug,
-                                  kalman_model=kalman_model,
-                                  area_threshold=area_threshold)
-                frame_count += 1
-                if do_full_kalmanization and frame_count%1000==0:
-                    time2 = time.time()
-                    dur = time2-time1
-                    fps = frame_count/dur
-                    print 'frame % 10d, mean speed so far: %.1f fps'%(
-                        last_frame,fps)
+        max_all_check_times = -np.inf
 
-            ########################################
-            frame_data = collections.defaultdict(list)
-            time_frame_all_cam_timestamps = [] # clear values
-            last_frame = new_frame
+        for row_idx in row_idxs:
+            new_frame = frames_array[row_idx]
+            if start_frame is not None:
+                if new_frame < start_frame:
+                    continue
+            if stop_frame is not None:
+                if new_frame > stop_frame:
+                    continue
+            if RAM_HEAVY_BUT_FAST:
+                row = data2d_recarray[row_idx]
+            else:
+                row = data2d[row_idx]
+            new_frame_test_cmp = row['frame']
+            assert new_frame_test_cmp==new_frame
 
-        camn = row['camn']
-        try:
-            cam_id = camn2cam_id[camn]
-        except KeyError, err:
-            # This will happen if cameras were re-synchronized (and
-            # thus gain new cam_ids) immediately before saving was
-            # turned on in MainBrain. The reason is that the network
-            # buffers are still full of old data coming in from the
-            # cameras.
-            print ('WARNING: no cam_id for camn '
-                   '%d, skipping this row of data'%camn)
-            continue
+            if last_frame != new_frame:
+                if new_frame < last_frame:
+                    print 'new_frame',new_frame
+                    print 'last_frame',last_frame
+                    raise RuntimeError("expected continuously increasing "
+                                       "frame numbers")
+                # new frame
+                ########################################
+                # Data for this frame is complete
+                if last_frame is not None:
 
-        if cam_id in exclude_cam_ids:
-            # exclude this camera
-            continue
+                    if len(time_frame_all_cam_timestamps) > 1:
+                        check_times = np.array(time_frame_all_cam_timestamps)
+                        check_times -= check_times.min()
+                        this_max_check_time = check_times.max()
+                        max_all_check_times = max( this_max_check_time,
+                                                   max_all_check_times)
+                        if this_max_check_time > sync_error_threshold:
+                            if do_full_kalmanization:
+                                warnings.warn('Synchronization error detected, '
+                                              'but continuing analysis.')
+                            else:
+                                if this_max_check_time==max_all_check_times:
+                                    print '%s frame %d: sync difference: %.1f msec'%(
+                                        os.path.split(results.filename)[-1],
+                                        last_frame,
+                                        this_max_check_time*1000.0)
 
-        if camn in exclude_camns:
-            # exclude this camera
-            continue
+                    if debug > 5:
+                        print
+                        print 'frame_data for frame %d'%(last_frame,)
+                        pprint.pprint(dict(frame_data))
+                        print
+                    if do_full_kalmanization:
+                        process_frame(reconst_orig_units,tracker,
+                                      last_frame,frame_data,camn2cam_id,
+                                      max_err=max_err,debug=debug,
+                                      kalman_model=kalman_model,
+                                      area_threshold=area_threshold)
+                    frame_count += 1
+                    if do_full_kalmanization and frame_count%1000==0:
+                        time2 = time.time()
+                        dur = time2-time1
+                        fps = frame_count/dur
+                        print 'frame % 10d, mean speed so far: %.1f fps'%(
+                            last_frame,fps)
 
-        time_frame_all_cam_timestamps.append( row['timestamp'] )
+                ########################################
+                frame_data = collections.defaultdict(list)
+                time_frame_all_cam_timestamps = [] # clear values
+                last_frame = new_frame
+
+            camn = row['camn']
+            try:
+                cam_id = camn2cam_id[camn]
+            except KeyError, err:
+                # This will happen if cameras were re-synchronized (and
+                # thus gain new cam_ids) immediately before saving was
+                # turned on in MainBrain. The reason is that the network
+                # buffers are still full of old data coming in from the
+                # cameras.
+                print ('WARNING: no cam_id for camn '
+                       '%d, skipping this row of data'%camn)
+                continue
+
+            if cam_id in exclude_cam_ids:
+                # exclude this camera
+                continue
+
+            if camn in exclude_camns:
+                # exclude this camera
+                continue
+
+            time_frame_all_cam_timestamps.append( row['timestamp'] )
+
+            if do_full_kalmanization:
+
+                x_distorted = row['x']
+                if numpy.isnan(x_distorted):
+                    # drop point -- not found
+                    continue
+                y_distorted = row['y']
+
+                (x_undistorted,y_undistorted) = reconst_orig_units.undistort(
+                    cam_id,(x_distorted,y_distorted))
+                if 0:
+                    (x_undistorted_m,y_undistorted_m) = reconstructor_meters.undistort(
+                        cam_id,(x_distorted,y_distorted))
+                    if x_undistorted != x_undistorted_m:
+                        raise ValueError('scaled reconstructors have different '
+                                         'distortion!?')
+                    if y_undistorted != y_undistorted_m:
+                        raise ValueError('scaled reconstructors have different '
+                                         'distortion!?')
+
+                (area,slope,eccentricity,frame_pt_idx) = (row['area'],
+                                                          row['slope'],
+                                                          row['eccentricity'],
+                                                          row['frame_pt_idx'])
+
+                if 'cur_val' in row.dtype.fields: cur_val = row['cur_val']
+                else: cur_val = None
+                if 'mean_val' in row.dtype.fields: mean_val = row['mean_val']
+                else: mean_val = None
+                if 'sumsqf_val' in row.dtype.fields: sumsqf_val = row['sumsqf_val']
+                else: sumsqf_val = None
+
+                pmat_inv = reconst_orig_units.get_pmat_inv(cam_id)
+                pmat_meters_inv = reconstructor_meters.get_pmat_inv(cam_id)
+                camera_center = reconst_orig_units.get_camera_center(cam_id)
+                camera_center = numpy.hstack((camera_center[:,0],[1]))
+                camera_center_meters = reconstructor_meters.get_camera_center(
+                    cam_id)
+                camera_center_meters = numpy.hstack((camera_center_meters[:,0],[1]))
+                helper = reconstructor_meters.get_reconstruct_helper_dict()[cam_id]
+                rise=slope
+                run=1.0
+                if np.isinf(rise):
+                    if rise > 0:
+                        rise=1.0
+                        run=0.0
+                    else:
+                        rise=-1.0
+                        run=0.0
+
+                (p1, p2, p3, p4,
+                 ray0, ray1, ray2, ray3, ray4, ray5) = do_3d_operations_on_2d_point(
+                    helper, x_undistorted,y_undistorted,
+                    pmat_inv, pmat_meters_inv,
+                    camera_center, camera_center_meters,
+                    x_distorted,y_distorted,
+                    rise, run)
+                line_found = not numpy.isnan(p1)
+                pluecker_hz_meters = (ray0, ray1, ray2, ray3, ray4, ray5)
+
+                # Keep in sync with kalmanize.py and data_descriptions.py
+                pt_undistorted = (x_undistorted,y_undistorted,
+                                  area,slope,eccentricity,
+                                  p1,p2,p3,p4, line_found,
+                                  frame_pt_idx, cur_val, mean_val, sumsqf_val)
+
+                projected_line_meters=geom.line_from_HZline(pluecker_hz_meters)
+
+                frame_data[camn].append((pt_undistorted,projected_line_meters))
 
         if do_full_kalmanization:
-
-            x_distorted = row['x']
-            if numpy.isnan(x_distorted):
-                # drop point -- not found
-                continue
-            y_distorted = row['y']
-
-            (x_undistorted,y_undistorted) = reconst_orig_units.undistort(
-                cam_id,(x_distorted,y_distorted))
-            if 0:
-                (x_undistorted_m,y_undistorted_m) = reconstructor_meters.undistort(
-                    cam_id,(x_distorted,y_distorted))
-                if x_undistorted != x_undistorted_m:
-                    raise ValueError('scaled reconstructors have different '
-                                     'distortion!?')
-                if y_undistorted != y_undistorted_m:
-                    raise ValueError('scaled reconstructors have different '
-                                     'distortion!?')
-
-            (area,slope,eccentricity,frame_pt_idx) = (row['area'],
-                                                      row['slope'],
-                                                      row['eccentricity'],
-                                                      row['frame_pt_idx'])
-
-            if 'cur_val' in row.dtype.fields: cur_val = row['cur_val']
-            else: cur_val = None
-            if 'mean_val' in row.dtype.fields: mean_val = row['mean_val']
-            else: mean_val = None
-            if 'sumsqf_val' in row.dtype.fields: sumsqf_val = row['sumsqf_val']
-            else: sumsqf_val = None
-
-            pmat_inv = reconst_orig_units.get_pmat_inv(cam_id)
-            pmat_meters_inv = reconstructor_meters.get_pmat_inv(cam_id)
-            camera_center = reconst_orig_units.get_camera_center(cam_id)
-            camera_center = numpy.hstack((camera_center[:,0],[1]))
-            camera_center_meters = reconstructor_meters.get_camera_center(
-                cam_id)
-            camera_center_meters = numpy.hstack((camera_center_meters[:,0],[1]))
-            helper = reconstructor_meters.get_reconstruct_helper_dict()[cam_id]
-            rise=slope
-            run=1.0
-            if np.isinf(rise):
-                if rise > 0:
-                    rise=1.0
-                    run=0.0
-                else:
-                    rise=-1.0
-                    run=0.0
-
-            (p1, p2, p3, p4,
-             ray0, ray1, ray2, ray3, ray4, ray5) = do_3d_operations_on_2d_point(
-                helper, x_undistorted,y_undistorted,
-                pmat_inv, pmat_meters_inv,
-                camera_center, camera_center_meters,
-                x_distorted,y_distorted,
-                rise, run)
-            line_found = not numpy.isnan(p1)
-            pluecker_hz_meters = (ray0, ray1, ray2, ray3, ray4, ray5)
-
-            # Keep in sync with kalmanize.py and data_descriptions.py
-            pt_undistorted = (x_undistorted,y_undistorted,
-                              area,slope,eccentricity,
-                              p1,p2,p3,p4, line_found,
-                              frame_pt_idx, cur_val, mean_val, sumsqf_val)
-
-            projected_line_meters=geom.line_from_HZline(pluecker_hz_meters)
-
-            frame_data[camn].append((pt_undistorted,projected_line_meters))
-
-    if do_full_kalmanization:
-        tracker.kill_all_trackers() # done tracking
-        h5saver.close()
-    results.close()
+            tracker.kill_all_trackers() # done tracking
+    finally:
+        if do_full_kalmanization:
+            h5saver.close()
+        results.close()
 
     if max_all_check_times > sync_error_threshold:
         if do_full_kalmanization:
