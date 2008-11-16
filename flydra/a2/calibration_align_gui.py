@@ -109,14 +109,8 @@ class CalibrationAlignmentWindow(Widget):
     save_new_cal = traits.Button(label='Save new calibration as .xml file')
     save_new_cal_dir = traits.Button(label='Save new calibration as directory')
 
-    traits_view = View( Group( ( Item( 's', object='h1'), # how automatic?
-                                 Item( 'tx', object='h1'),
-                                 Item( 'ty', object='h1'),
-                                 Item( 'tz', object='h1'),
-                                 Item( 'r_x', object='h1',style='custom'),
-                                 Item( 'r_y', object='h1',style='custom'),
-                                 Item( 'r_z', object='h1',style='custom'),
-
+    traits_view = View( Group( ( Item( 'params', style='custom',
+                                       show_label=False),
                                  Item( 'save_new_cal', show_label = False ),
                                  Item( 'save_new_cal_dir', show_label = False ),
                                  )),
