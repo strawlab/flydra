@@ -1,0 +1,16 @@
+<stimxml version="1">
+  <cubic_arena>
+    <verts4x4>
+      <vert>.5,  .15,  .3</vert>
+      <vert>.5,  -.15, .3</vert>
+      <vert>-.5, -.15, .3</vert>
+      <vert>-.5,  .15, .3</vert>
+
+      <vert>.5,  .15,  0</vert>
+      <vert>.5,  -.15, 0</vert>
+      <vert>-.5, -.15, 0</vert>
+      <vert>-.5,  .15, 0</vert>
+    </verts4x4>
+    <tube_diameter>0.002</tube_diameter>
+  </cubic_arena>
+</stimxml>
