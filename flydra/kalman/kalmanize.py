@@ -512,6 +512,7 @@ def kalmanize(src_filename,
         last_frame = None
         frame_data = collections.defaultdict(list)
         time_frame_all_cam_timestamps = []
+        time_frame_all_camns = []
 
         RAM_HEAVY_BUT_FAST=False
 
@@ -573,6 +574,15 @@ def kalmanize(src_filename,
             print '2D data range: %d<frame<%d'%(
                 frames_array[row_idxs[0]], frames_array[row_idxs[-1]])
 
+
+        if do_full_kalmanization:
+            accum_frame_spread = None
+        else:
+            accum_frame_spread = []
+            accum_frame_spread_fno = []
+            accum_frame_all_timestamps = []
+            accum_frame_all_camns = []
+
         max_all_check_times = -np.inf
 
         for row_idx in row_idxs:
@@ -601,22 +611,28 @@ def kalmanize(src_filename,
                 # Data for this frame is complete
                 if last_frame is not None:
 
+                    this_frame_spread = 0.0
                     if len(time_frame_all_cam_timestamps) > 1:
                         check_times = np.array(time_frame_all_cam_timestamps)
                         check_times -= check_times.min()
-                        this_max_check_time = check_times.max()
-                        max_all_check_times = max( this_max_check_time,
+                        this_frame_spread = check_times.max()
+                        if accum_frame_spread is not None:
+                            accum_frame_spread.append( this_frame_spread )
+                            accum_frame_spread_fno.append( last_frame )
+
+                            accum_frame_all_timestamps.append(
+                                time_frame_all_cam_timestamps )
+                            accum_frame_all_camns.append(
+                                time_frame_all_camns )
+
+                        max_all_check_times = max( this_frame_spread,
                                                    max_all_check_times)
-                        if this_max_check_time > sync_error_threshold:
-                            if do_full_kalmanization:
-                                warnings.warn('Synchronization error detected, '
-                                              'but continuing analysis.')
-                            else:
-                                if this_max_check_time==max_all_check_times:
-                                    print '%s frame %d: sync difference: %.1f msec'%(
-                                        os.path.split(results.filename)[-1],
-                                        last_frame,
-                                        this_max_check_time*1000.0)
+                        if this_frame_spread > sync_error_threshold:
+                            if this_frame_spread==max_all_check_times:
+                                print '%s frame %d: sync diff: %.1f msec'%(
+                                    os.path.split(results.filename)[-1],
+                                    last_frame,
+                                    this_frame_spread*1000.0)
 
                     if debug > 5:
                         print
@@ -624,11 +640,16 @@ def kalmanize(src_filename,
                         pprint.pprint(dict(frame_data))
                         print
                     if do_full_kalmanization:
-                        process_frame(reconst_orig_units,tracker,
-                                      last_frame,frame_data,camn2cam_id,
-                                      max_err=max_err,debug=debug,
-                                      kalman_model=kalman_model,
-                                      area_threshold=area_threshold)
+                        if this_frame_spread > sync_error_threshold:
+                            warnings.warn('Synchronization error detected, '
+                                          'but continuing analysis without '
+                                          'potentially bad data.')
+                        else:
+                            process_frame(reconst_orig_units,tracker,
+                                          last_frame,frame_data,camn2cam_id,
+                                          max_err=max_err,debug=debug,
+                                          kalman_model=kalman_model,
+                                          area_threshold=area_threshold)
                     frame_count += 1
                     if do_full_kalmanization and frame_count%1000==0:
                         time2 = time.time()
@@ -640,6 +661,7 @@ def kalmanize(src_filename,
                 ########################################
                 frame_data = collections.defaultdict(list)
                 time_frame_all_cam_timestamps = [] # clear values
+                time_frame_all_camns = [] # clear values
                 last_frame = new_frame
 
             camn = row['camn']
@@ -664,6 +686,7 @@ def kalmanize(src_filename,
                 continue
 
             time_frame_all_cam_timestamps.append( row['timestamp'] )
+            time_frame_all_camns.append( row['camn'] )
 
             if do_full_kalmanization:
 
@@ -741,6 +764,53 @@ def kalmanize(src_filename,
         if do_full_kalmanization:
             h5saver.close()
         results.close()
+
+    if accum_frame_spread is not None:
+        # save spread data to file for analysis
+        accum_frame_spread = np.array(accum_frame_spread)
+        accum_frame_spread_fno = np.array(accum_frame_spread_fno)
+        accum_frame_spread_filename = src_filename + '.spreadh5'
+
+        cam_ids = cam_id2camns.keys()
+        cam_ids.sort()
+        camn_order = []
+        for cam_id in cam_ids:
+            camn_order.extend( cam_id2camns[cam_id] )
+
+        camn_order = np.array(camn_order)
+        cam_id_array = np.array(cam_ids)
+
+        N_cams = len(camn_order)
+        N_frames = len(accum_frame_spread_fno)
+
+        all_timestamps=np.empty( ( N_frames, N_cams ), dtype=np.float)
+        all_timestamps.fill(np.nan)
+        for i,(fno,timestamps,camns) in enumerate(zip(
+            accum_frame_spread_fno,
+            accum_frame_all_timestamps,
+            accum_frame_all_camns)):
+
+            for j,camn in enumerate(camn_order):
+                try:
+                    idx = camns.index(camn)
+                except ValueError:
+                    continue # not found, skip
+                timestamp = timestamps[idx]
+                all_timestamps[i,j]=timestamp
+
+        h5 = tables.openFile( accum_frame_spread_filename, mode='w')
+        h5.createArray( h5.root, 'spread', accum_frame_spread,
+                        'frame timestamp spreads (sec)')
+        h5.createArray( h5.root, 'framenumber', accum_frame_spread_fno,
+                        'frame number')
+        h5.createArray( h5.root, 'all_timestamps', all_timestamps,
+                        'all timestamps')
+        h5.createArray( h5.root, 'camn_order', camn_order,
+                        'camn_order')
+        h5.createArray( h5.root, 'cam_id_array', cam_id_array,
+                        'cam_id_array')
+        h5.close()
+        print 'saved %s'%accum_frame_spread_filename
 
     if max_all_check_times > sync_error_threshold:
         if do_full_kalmanization:
