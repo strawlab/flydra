@@ -398,7 +398,7 @@ def points_to_plane(*args,**kwds):
         raise ColinearError('points not in general position')
 
     if not np.all( d[3:] < eps ):
-        raise NotCoplanarError('points not co-planar')
+        raise NotCoplanarError('points not co-planar (errors=%s)'%(d[3:],))
 
     if 0:
         print 'X'
