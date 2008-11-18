@@ -813,18 +813,22 @@ def kalmanize(src_filename,
         print 'saved %s'%accum_frame_spread_filename
 
     if max_all_check_times > sync_error_threshold:
-        if do_full_kalmanization:
-            print 'max_all_check_times %.2f msec'%(max_all_check_times*1000.0)
-            handle, target = tempfile.mkstemp(os.path.split(dest_filename)[1])
-            os.unlink(target) # remove original file there
-            shutil.move( dest_filename, target)
+        if 0:
+            if do_full_kalmanization:
+                print 'max_all_check_times %.2f msec'%(
+                    max_all_check_times*1000.0)
+                handle, target = tempfile.mkstemp(
+                    os.path.split(dest_filename)[1])
+                os.unlink(target) # remove original file there
+                shutil.move( dest_filename, target)
 
-            raise ValueError(
-                'Synchonization errors exist in the data. Moved result file to '
-                'ensure it is not confused with valid data. The new location '
-                'is: %s'%(target,))
-        else:
-            sys.exit(1) # sync error
+                raise ValueError(
+                    'Synchonization errors exist in the data. Moved result file'
+                    ' to ensure it is not confused with valid data. The new '
+                    'location is: %s'%(target,))
+
+            else:
+                sys.exit(1) # sync error
     else:
         if not do_full_kalmanization:
             print '%s no sync differences greater than %.1f msec'%(
