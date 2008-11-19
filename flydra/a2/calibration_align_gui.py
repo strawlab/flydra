@@ -320,8 +320,10 @@ def main():
             # pad end points
             speeds = numpy.array([speeds[0]] + list(speeds) + [speeds[-1]])
         else:
-            speeds = numpy.zeros( (verts.shape[1],) )
+            speeds = numpy.zeros( (verts.shape[0],) )
 
+        if len(rows['x']) != len(speeds):
+            raise ValueError('mismatch length of x data and speeds')
         x.append( rows['x'] )
         y.append( rows['y'] )
         z.append( rows['z'] )
