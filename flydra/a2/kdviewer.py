@@ -247,7 +247,12 @@ def doit(filename,
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(filename)
 
     if options.stim_xml is not None:
-        file_timestamp = data_file.filename[4:19]
+        if (data_file.filename.startswith('DATA') and
+            (data_file.filename.endswith('.h5')
+             or data_file.filename.endswith('.kh5'))):
+            file_timestamp = data_file.filename[4:19]
+        else:
+            file_timestamp = None
         stim_xml = xml_stimulus.xml_stimulus_from_filename(options.stim_xml,
                                                            timestamp_string=file_timestamp,
                                                            hack_postmultiply=options.hack_postmultiply,
@@ -834,21 +839,11 @@ def doit(filename,
     ##         actors.extend( stim_actors )
 
     if options.stim_xml is not None:
-        ## file_timestamp = data_file.filename[4:19]
-        ## stim_xml = xml_stimulus.xml_stimulus_from_filename(options.stim_xml,
-        ##                                                    timestamp_string=file_timestamp,
-        ##                                                    hack_postmultiply=options.hack_postmultiply,
-        ##                                                    )
         if not is_mat_file:
             R = reconstruct.Reconstructor(data_file)
             if stim_xml.has_reconstructor():
                 stim_xml.verify_reconstructor(R)
 
-        if not is_mat_file:
-            assert (data_file.filename.startswith('DATA') and
-                    (data_file.filename.endswith('.h5')
-                     or data_file.filename.endswith('.kh5')))
-            file_timestamp = data_file.filename[4:19]
         actors.extend(stim_xml.get_tvtk_actors())
 
     if draw_stim_func_str:
@@ -1011,7 +1006,8 @@ def doit(filename,
                     dists3d = verts-picker.pick_position
                     dists = numpy.sum(dists3d**2,axis=1)
                     idx = numpy.argmin(dists)
-                    print 'obj_id %d, frame %d'%(objid,this_obj_frames[idx])
+                    print 'obj_id %d, frame %d, closest vert: %s'%(
+                        objid,this_obj_frames[idx],verts[idx])
 
             if 1:
                 imf = tvtk.WindowToImageFilter(input=rw, input_buffer_type='rgba', read_front_buffer='off')
