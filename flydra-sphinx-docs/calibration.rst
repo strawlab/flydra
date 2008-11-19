@@ -35,9 +35,13 @@ Exporting the data for MultiCamSelfCal
 Now, you have saved an .h5 file. To export the data from it for
 calibration, run::
 
-  flydra_analysis_calibration_export DATAFILE2D.h5
+  flydra_analysis_generate_recalibration --2d-data DATAFILE2D.h5 \
+    --disable-kalman-objs DATAFILE2D.h5
 
-You should now have a new directory named ``DATAFILE2D.h5.recal``.
+You should now have a new directory named
+``DATAFILE2D.h5.recal``. This contains the calibration in a format
+that the MATLAB MultiCamSelfCal can understand, the calibration
+directory.
 
 Running MultiCamSelfCal
 .......................
