@@ -49,6 +49,8 @@ class ThreeTuple:
         return ThreeTuple(self.vals*other)
     def __neg__(self):
         return ThreeTuple(-self.vals)
+    def __abs__(self):
+        return np.sqrt(np.sum(self.vals**2))
     def cross(self,other):
         """cross product
 
