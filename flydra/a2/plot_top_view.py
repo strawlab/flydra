@@ -126,19 +126,6 @@ def plot_top_and_side_views(subplot=None,
     if kalman_filename is not None:
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
 
-    if options.stim_xml:
-        file_timestamp = data_file.filename[4:19]
-        fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
-        include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp( timestamp_string=file_timestamp )
-        walking_start_stops = fanout.get_walking_start_stops_for_timestamp( timestamp_string=file_timestamp )
-        if include_obj_ids is not None:
-            use_obj_ids = include_obj_ids
-        if exclude_obj_ids is not None:
-            use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
-        stim_xml = fanout.get_stimulus_for_timestamp(timestamp_string=file_timestamp)
-    else:
-        walking_start_stops = []
-
     if not is_mat_file:
         mat_data = None
 
@@ -151,6 +138,31 @@ def plot_top_and_side_views(subplot=None,
         reconstructor = reconstruct.Reconstructor(data_file)
     else:
         reconstructor = None
+
+    if options.stim_xml:
+        file_timestamp = data_file.filename[4:19]
+        stim_xml = xml_stimulus.xml_stimulus_from_filename(
+            options.stim_xml,
+            timestamp_string=file_timestamp,
+            )
+        try:
+            fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
+        except xml_stimulus.WrongXMLTypeError:
+            walking_start_stops = []
+        else:
+            include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp(
+                timestamp_string=file_timestamp )
+            walking_start_stops = fanout.get_walking_start_stops_for_timestamp(
+                timestamp_string=file_timestamp )
+            if include_obj_ids is not None:
+                use_obj_ids = include_obj_ids
+            if exclude_obj_ids is not None:
+                use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
+            stim_xml = fanout.get_stimulus_for_timestamp(timestamp_string=file_timestamp)
+        if stim_xml.has_reconstructor():
+            stim_xml.verify_reconstructor(reconstructor)
+    else:
+        walking_start_stops = []
 
     if dynamic_model is None:
         dynamic_model = extra['dynamic_model_name']
@@ -178,8 +190,6 @@ def plot_top_and_side_views(subplot=None,
     subplot['xz'].set_ylabel('z (%s)'%units)
 
     if options.stim_xml:
-        if reconstructor is not None:
-            stim_xml.verify_reconstructor(reconstructor)
         stim_xml.plot_stim( subplot['xy'], projection=xml_stimulus.SimpleOrthographicXYProjection() )
         stim_xml.plot_stim( subplot['xz'], projection=xml_stimulus.SimpleOrthographicXZProjection() )
 
