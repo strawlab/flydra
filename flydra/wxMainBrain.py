@@ -21,6 +21,11 @@ import pkg_resources
 from optparse import OptionParser
 import pprint
 
+import enthought.traits.api as traits
+from enthought.traits.ui.api import View, Item, Group, Handler, HGroup, \
+     VGroup, RangeEditor
+
+
 SCROLLED=True
 if SCROLLED:
     from wx.lib.scrolledpanel import ScrolledPanel
@@ -35,6 +40,22 @@ pkg_resources.resource_filename(__name__,"detect.wav")
 RESDIR = os.path.split(RESFILE)[0]
 RES = xrc.EmptyXmlResource()
 RES.LoadFromString(open(RESFILE).read())
+
+class AudioNotification(traits.HasTraits):
+    enabled = traits.Bool(False)
+    traits_view = View( Group( ( Item('enabled'),
+                                 )),
+                        title = 'Audio notification',
+                        )
+
+class StatusTraits(traits.HasTraits):
+    audio_notification = traits.Instance( AudioNotification, args=() )
+
+    traits_view = View( Group( ( Item( 'audio_notification', style='custom',
+                                       show_label=False),
+                                 )),
+                        title = 'Status',
+                        )
 
 def my_loadpanel(parent,panel_name):
     orig_dir = os.path.abspath(os.curdir)
@@ -227,16 +248,11 @@ class wxMainBrainApp(wx.App):
         # finish menubar -----------------------------
         frame.SetMenuBar(menuBar)
 
-
-        if 1:
+        try:
+            self.detect_sound = wx.Sound(os.path.join(RESDIR,'detect.wav'))
+            self.detect_sound.Play()
+        except NameError: #wx.Sound not in some versions of wx
             self.detect_sound = None
-        else:
-            try:
-                self.detect_sound = wx.Sound(os.path.join(RESDIR,'detect.wav'))
-                self.detect_sound.Play()
-            except NameError: #wx.Sound not in some versions of wx
-                self.detect_sound = None
-
 
         # main panel ----------------------------------
         self.main_panel = my_loadpanel(frame,"APP_PANEL") # make frame main panel
@@ -271,6 +287,7 @@ class wxMainBrainApp(wx.App):
         nb.AddPage(self.record_raw_panel,"Record raw video")
         self.InitRecordRawPanel()
 
+        self.status_traits = StatusTraits()
         self.status_panel = my_loadpanel(nb,"STATUS_PANEL")
         nb.AddPage(self.status_panel,"Status")
         self.InitStatusPanel()
@@ -981,6 +998,16 @@ class wxMainBrainApp(wx.App):
         wx.EVT_BUTTON(ctrl, ctrl.GetId(),
                       self.OnManualTriggerDevice3)
 
+        panel = xrc.XRCCTRL(self.status_panel,'TRAITED_STATUS_PANEL')
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        control = self.status_traits.edit_traits( parent=panel,
+                                                  kind='subpanel',
+                                                  ).control
+        #control.GetParent().SetMinSize(control.GetMinSize())
+        sizer.Add(control, 1, wx.EXPAND)
+        panel.SetSizer( sizer )
+
     def OnHypothesisTestMaxError(self,event):
         ctrl = xrc.XRCCTRL(self.status_panel,
                        "HYPOTHESIS_TEST_MAX_ERR")
@@ -1393,7 +1420,7 @@ class wxMainBrainApp(wx.App):
             xrc.XRCCTRL(self.status_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
             xrc.XRCCTRL(self.status_panel,'err').SetValue('% 8.1f'%min_mean_dist)
             if min_mean_dist <= 10.0:
-                if self.detect_sound is not None:
+                if self.detect_sound is not None and self.status_traits.audio_notification.enabled:
                     now = time.time()
                     if (now - self.last_sound_time) > 1.0:
                         self.detect_sound.Play()
