@@ -144,14 +144,40 @@ def get_mayavi_cubic_arena_source(engine,info=None):
         filter.radius = radius
         f = FilterBase(filter=filter, name='TubeFilter')
         mayavi.add_filter(f)
-    if 1:
+    if 0:
         s = Surface()
         e.add_module(s)
     if 0:
+        from enthought.mayavi.filters.filter_base import FilterBase
+        ## myfilter = tvtk.TubeFilter(number_of_sides=6,
+        ##                            vary_radius='vary_radius_off')
+        ## myfilter.radius = .05
+        ## f = FilterBase(filter=myfilter, name='TubeFilter')
+        ## e.add_filter(f)
+
+
+        extract_filter = tvtk.ExtractEdges(input=pd)
+        tube_filter = tvtk.TubeFilter(number_of_sides=6,
+                                      vary_radius='vary_radius_off',
+                                      input=extract_filter.output,
+                                      radius=.05)
+        ## f = FilterBase(filter=tube_filter, name='TubeFilter')
+        ## e.add_filter(f)
+
+        edge_mapper = tvtk.PolyDataMapper(input=tube_filter.output)
+                                          #lookup_table=self.lut,
+                                          #scalar_visibility=scalar_vis)
+        edge_actor = tvtk.Actor(mapper=edge_mapper)
+        ## edge_actor.property.color = self.color
+        #rw = e.renwin
+        scene.add_actor(edge_actor)
+
+    if 1:
+        from enthought.mayavi.modules.vectors import Vectors
         v = Vectors()
         v.glyph.scale_mode = 'data_scaling_off'
         #v.glyph.color_mode = 'color_by_scalar'
         #v.glyph.color = 'black'
-        v.glyph.glyph_source = tvtk.SphereSource(radius=options.radius*5.0)
+        v.glyph.glyph_source = tvtk.SphereSource(radius=.02)
         #v.glyph.glyph_source = tvtk.GlyphSource2D()
         e.add_module(v)

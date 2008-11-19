@@ -328,6 +328,23 @@ def main():
         y.append( rows['y'] )
         z.append( rows['z'] )
         speed.append(speeds)
+
+    if 0:
+        # debug
+        if stim_xml is not None:
+            v = None
+            for child in stim_xml.root:
+                if child.tag == 'cubic_arena':
+                    info = stim_xml._get_info_for_cubic_arena(child)
+                    v=info['verts4x4']
+            if v is not None:
+                for vi in v:
+                    print 'adding',vi
+                    x.append( [vi[0]] )
+                    y.append( [vi[1]] )
+                    z.append( [vi[2]] )
+                    speed.append( [100.0] )
+
     data_file.close()
     x = np.concatenate(x)
     y = np.concatenate(y)
@@ -370,7 +387,11 @@ def main():
     e.add_module(v)
 
     if stim_xml is not None:
-        stim_xml.draw_in_mayavi_scene(e)
+        if 1:
+            stim_xml.draw_in_mayavi_scene(e)
+        else:
+            actors = stim_xml.get_tvtk_actors()
+            viewer.scene.add_actors(actors)
 
     gui = GUI()
     gui.start_event_loop()
