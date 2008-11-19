@@ -1,3 +1,4 @@
 build
 dist
 *.so
+*.kh5-smoothcache
