@@ -24,7 +24,7 @@ from enthought.traits.ui.api import View, Item, Group, Handler, HGroup, \
 
 from optparse import OptionParser
 
-import flydra.align
+import flydra.talign as talign
 import flydra.reconstruct as reconstruct
 import flydra.a2.core_analysis as core_analysis
 import flydra.a2.xml_stimulus as xml_stimulus
@@ -37,75 +37,12 @@ from enthought.pyface.tvtk.api import Scene, DecoratedScene
 from enthought.pyface.api import SplitApplicationWindow
 from enthought.pyface.api import FileDialog, OK
 
-D2R = np.pi/180.0
-
 def hom2vtk(arr):
     """convert 3D homogeneous coords to VTK"""
     return (arr[:3,:]/arr[3,:]).T
 
-def cgmat2np(cgkit_mat):
-    """convert cgkit matrix to numpy matrix"""
-    arr = np.array(cgkit_mat.toList())
-    if len(arr)==9:
-        arr.shape = 3,3
-    elif len(arr)==16:
-        arr.shape = 4,4
-    else:
-        raise ValueError('unknown shape')
-    return arr.T
-
-def test_cgmat2mp():
-    point1 = (1,0,0)
-    point1_out = (0,1,0)
-
-    cg_quat = cgtypes.quat().fromAngleAxis( 90.0*D2R, (0,0,1))
-    cg_in = cgtypes.vec3(point1)
-
-    m_cg = cg_quat.toMat3()
-    cg_out = m_cg*cg_in
-    cg_out_tup = (cg_out[0],cg_out[1],cg_out[2])
-    assert np.allclose( cg_out_tup, point1_out)
-
-    m_np = cgmat2np(m_cg)
-    np_out = np.dot( m_np, point1 )
-    assert np.allclose( np_out, point1_out)
-
-class Alignment(traits.HasTraits):
-    s = traits.Float(1.0)
-    tx = traits.Float(0)
-    ty = traits.Float(0)
-    tz = traits.Float(0)
-
-    r_x = traits.Range(-180.0,180.0, 0.0,mode='slider',set_enter=True)
-    r_y = traits.Range(-180.0,180.0, 0.0,mode='slider',set_enter=True)
-    r_z = traits.Range(-180.0,180.0, 0.0,mode='slider',set_enter=True)
-
-    traits_view = View( Group( ( Item('s'),
-                                 Item('tx'),
-                                 Item('ty'),
-                                 Item('tz'),
-                                 Item('r_x',style='custom'),
-                                 Item('r_y',style='custom'),
-                                 Item('r_z',style='custom'),
-                                 )),
-                        title = 'Alignment Parameters',
-                        )
-
-    def get_sRt(self):
-        qx = cgtypes.quat().fromAngleAxis( self.r_x*D2R, cgtypes.vec3(1,0,0))
-        qy = cgtypes.quat().fromAngleAxis( self.r_y*D2R, cgtypes.vec3(0,1,0))
-        qz = cgtypes.quat().fromAngleAxis( self.r_z*D2R, cgtypes.vec3(0,0,1))
-        Rx = cgmat2np(qx.toMat3())
-        Ry = cgmat2np(qy.toMat3())
-        Rz = cgmat2np(qz.toMat3())
-        R = np.dot(Rx, np.dot(Ry,Rz))
-
-        t = np.array([self.tx, self.ty, self.tz],np.float)
-
-        return self.s, R, t
-
 class CalibrationAlignmentWindow(Widget):
-    params = traits.Instance( Alignment )
+    params = traits.Instance( talign.Alignment )
     save_new_cal = traits.Button(label='Save new calibration as .xml file')
     save_new_cal_dir = traits.Button(label='Save new calibration as directory')
 
@@ -123,7 +60,7 @@ class CalibrationAlignmentWindow(Widget):
 
     def __init__(self, parent, **traits):
         super(CalibrationAlignmentWindow, self).__init__(**traits)
-        self.params = Alignment()
+        self.params = talign.Alignment()
         self.control = self.edit_traits(parent=parent,
                                         kind='subpanel',
                                         context={'h1':self.params,
@@ -158,15 +95,14 @@ class CalibrationAlignmentWindow(Widget):
             # no data set yet
 
             return
-        s,R,t = self.params.get_sRt()
-        M = flydra.align.build_xform( s, R, t)
+        M = self.params.get_matrix()
         verts = np.dot(M,self.orig_data_verts)
         self.viewed_data.data.points = hom2vtk(verts)
 
     def get_aligned_scaled_R(self):
-        s,R,t = self.params.get_sRt()
+        M = self.params.get_matrix()
         scaled = self.reconstructor
-        alignedR = scaled.get_aligned_copy(s,R,t)
+        alignedR = scaled.get_aligned_copy(M)
         return alignedR
 
     def _save_new_cal_fired(self):

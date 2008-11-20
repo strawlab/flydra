@@ -10,7 +10,7 @@ from flydra.common_variables import MINIMUM_ECCENTRICITY as DEFAULT_MINIMUM_ECCE
 import scipy.linalg
 import traceback
 import flydra.pmat_jacobian
-import flydra.align as align
+import flydra.talign
 import xml.etree.ElementTree as ET
 import StringIO, warnings
 import cgtypes
@@ -431,10 +431,10 @@ class SingleCameraCalibration:
     def get_pmat(self):
         return self.Pmat
 
-    def get_aligned_copy(self, s, R, t):
+    def get_aligned_copy(self, M):
         if self.scale_factor != 1.0:
             warnings.warn('aligning calibration without unity scale')
-        aligned_Pmat = align.align_pmat(s,R,t,self.Pmat)
+        aligned_Pmat = flydra.talign.align_pmat(M,self.Pmat)
         aligned = SingleCameraCalibration(cam_id=self.cam_id,
                                           Pmat=aligned_Pmat,
                                           res=self.res,
@@ -993,10 +993,10 @@ class Reconstructor:
         if close_cal_source:
             use_cal_source.close()
 
-    def get_aligned_copy(self, s, R, t):
+    def get_aligned_copy(self, M):
         orig_sccs = [self.get_SingleCameraCalibration(cam_id)
                      for cam_id in self.cam_ids]
-        aligned_sccs = [scc.get_aligned_copy(s, R, t) for scc in orig_sccs]
+        aligned_sccs = [scc.get_aligned_copy(M) for scc in orig_sccs]
         return Reconstructor(aligned_sccs,
                              minimum_eccentricity=self.minimum_eccentricity)
 
@@ -1539,6 +1539,7 @@ def align_calibration():
      else:
          srcR = origR
 
+     import flydra.align as align
      if options.align_raw is not None:
          mylocals = {}
          myglobals = {}
@@ -1561,7 +1562,9 @@ def align_calibration():
      print 'R',R
      print 't',t
 
-     alignedR = srcR.get_aligned_copy(s,R,t)
+     M = align.build_xfrom(s,R,t)
+
+     alignedR = srcR.get_aligned_copy(M)
      alignedR.save_to_files_in_new_directory(dst)
 
 if __name__=='__main__':
