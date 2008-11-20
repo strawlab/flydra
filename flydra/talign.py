@@ -47,6 +47,10 @@ class Alignment(traits.HasTraits):
     r_y = traits.Range(-180.0,180.0, 0.0,mode='slider',set_enter=True)
     r_z = traits.Range(-180.0,180.0, 0.0,mode='slider',set_enter=True)
 
+    flip_x = traits.Bool(False)
+    flip_y = traits.Bool(False)
+    flip_z = traits.Bool(False)
+
     traits_view = View( Group( ( Item('s'),
                                  Item('tx'),
                                  Item('ty'),
@@ -54,6 +58,9 @@ class Alignment(traits.HasTraits):
                                  Item('r_x',style='custom'),
                                  Item('r_y',style='custom'),
                                  Item('r_z',style='custom'),
+                                 Item('flip_x'),
+                                 Item('flip_y'),
+                                 Item('flip_z'),
                                  )),
                         title = 'Alignment Parameters',
                         )
@@ -75,4 +82,16 @@ class Alignment(traits.HasTraits):
         T[:3,3] = t
         T[3,3]=1.0
 
+        # convert bool to -1 or 1
+        fx = fy = fz = 1
+        if self.flip_x: fx = -1
+        if self.flip_y: fy = -1
+        if self.flip_z: fz = -1
+
+        flip = np.array([[fx, 0, 0, 0],
+                         [ 0,fy, 0, 0],
+                         [ 0, 0,fz, 0],
+                         [ 0, 0, 0, 1]], dtype=np.float)
+        T = np.dot(flip,T)
+        #T = np.dot(T,flip)
         return T
