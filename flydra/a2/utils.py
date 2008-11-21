@@ -44,11 +44,82 @@ class FastFinder(object):
         testval = np.asarray(testval)
         assert len( testval.shape)==0, 'can only find equality of a scalar'
 
-        left_idxs = self.sorted.searchsorted( testval, side='left' )
-        right_idxs = self.sorted.searchsorted( testval, side='right' )
+        left_idx = self.sorted.searchsorted( testval, side='left' )
+        right_idx = self.sorted.searchsorted( testval, side='right' )
 
-        this_idxs = self.idxs[left_idxs:right_idxs]
+        this_idxs = self.idxs[left_idx:right_idx]
         return this_idxs
+
+    def get_idxs_in_range(self,low,high):
+        """performs fast search on sorted data
+
+        Parameters
+        ----------
+        low : scalar
+          The low value to find the indices of
+        high : scalar
+          This high value to find the indices of
+
+        Returns
+        -------
+        result : array
+          The indices into the original values1d array. May not be sorted.
+
+        Examples
+        --------
+
+        >>> a = np.array([ 1, 2, 3, 3, 2, 1, 2.3 ])
+        >>> af = FastFinder(a)
+        >>> bs = [ (0,1.1), (0,1), (0,2), (1.1,5), (2,2.1), (2,3) ]
+        >>> for low,high in bs:
+        ...     list = af.get_idxs_in_range(low,high).tolist()
+        ...     list.sort()
+        ...     list
+        [0, 5]
+        [0, 5]
+        [0, 1, 4, 5]
+        [1, 2, 3, 4, 6]
+        [1, 4]
+        [1, 2, 3, 4, 6]
+
+        """
+        low = np.asarray(low)
+        assert len( low.shape)==0, 'can only find equality of a scalar'
+
+        high = np.asarray(high)
+        assert len( high.shape)==0, 'can only find equality of a scalar'
+
+        low_idx = self.sorted.searchsorted( low, side='left' )
+        high_idx = self.sorted.searchsorted( high, side='right' )
+
+        this_idxs = self.idxs[low_idx:high_idx]
+        return this_idxs
+
+def iter_contig_chunk_idxs( arr ):
+    #ADS print 'arr',arr
+    diff = arr[1:]-arr[:-1]
+    #ADS print 'diff',diff
+    non_one = diff != 1
+    #ADS print 'non_one',non_one
+
+    non_one = np.ma.array(non_one).filled()
+    #ADS print 'non_one',non_one
+
+    idxs = np.nonzero(non_one)[0]
+    #ADS print 'idxs',idxs
+    prev_idx = 0
+    for idx in idxs:
+        next_idx = idx+1
+        #ADS print 'idx, prev_idx, next_idx',idx, prev_idx, next_idx
+        data_chunk = np.ma.array(arr[prev_idx:next_idx])
+        #ADS print 'data_chunk',data_chunk
+        if not np.any(data_chunk.mask):
+            yield (prev_idx, next_idx)
+        else:
+            #ADS print 'skipped!'
+            pass
+        prev_idx = next_idx
+    yield (prev_idx, len(arr))
 
 def get_contig_chunk_idxs( arr ):
     """get indices of contiguous chunks
@@ -79,32 +150,7 @@ def get_contig_chunk_idxs( arr ):
     [-3 -2 -1  0  1]
 
     """
-    #ADS print 'arr',arr
-    diff = arr[1:]-arr[:-1]
-    #ADS print 'diff',diff
-    non_one = diff != 1
-    #ADS print 'non_one',non_one
-
-    non_one = np.ma.array(non_one).filled()
-    #ADS print 'non_one',non_one
-
-    idxs = np.nonzero(non_one)[0]
-    #ADS print 'idxs',idxs
-    chunk_idxs = []
-    prev_idx = 0
-    for idx in idxs:
-        next_idx = idx+1
-        #ADS print 'idx, prev_idx, next_idx',idx, prev_idx, next_idx
-        data_chunk = np.ma.array(arr[prev_idx:next_idx])
-        #ADS print 'data_chunk',data_chunk
-        if not np.any(data_chunk.mask):
-            chunk_idxs.append( (prev_idx, next_idx) )
-        else:
-            #ADS print 'skipped!'
-            pass
-        prev_idx = next_idx
-    chunk_idxs.append( (prev_idx,len(arr)) )
-    return chunk_idxs
+    return [start_stop for start_stop in iter_contig_chunk_idxs(arr)]
 
 def test_get_contig_chunk_idxs_1():
     input = np.array( [1,2,3,4,5,  11,12,13,14,15,16, 0, 5, -1], dtype=float)
