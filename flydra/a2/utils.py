@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 class FastFinder(object):
     """fast search by use of a cached, sorted copy of the original data
@@ -188,3 +189,55 @@ def test_fast_finder():
         idxs2 = np.nonzero(a==b)[0]
         assert idxs1.shape == idxs2.shape
         assert np.allclose( idxs1, idxs2 )
+
+def iter_non_overlapping_chunk_start_stops(arr,
+                                           min_chunk_size=10000,
+                                           size_increment=10,
+                                           status_fd=None):
+
+    # This is a relatively dumb implementation that I think could be
+    # massively sped up.
+
+    #print 'len(arr)',len(arr)
+    start = 0
+    cur_stop = start+min_chunk_size
+    while 1:
+        #print 'outer loop'
+        if status_fd is not None:
+            tstart = time.time()
+
+            status_fd.write('Computing non-overlapping chunks...')
+            status_fd.flush()
+        while 1:
+            #print 'inner loop',start,cur_stop
+            arr_pre = arr[start:cur_stop]
+            arr_post = arr[cur_stop:]
+            if arr_pre.max() < arr_post.min():
+                break
+            cur_stop += size_increment
+            if cur_stop>=len(arr):
+                cur_stop=len(arr)
+                break
+        status_fd.write('did %d rows in %.1f sec.\n'%(
+            cur_stop-start,(time.time()-tstart)))
+        status_fd.flush()
+        yield (start, cur_stop)
+        if cur_stop>=len(arr):
+            break
+        start = cur_stop
+        cur_stop = start+min_chunk_size
+
+def test_iter_non_overlapping_chunk_start_stops():
+
+    a = np.array([ 1,1,1,2,1, 2,2,2, 3,3,3,3, 4,4,4,4,4,4, 5,
+                   4,4,6,6,4,6])
+
+    b = [ (0,8), (8, 12), (12,25) ]
+
+    for i,bi in enumerate(
+        iter_non_overlapping_chunk_start_stops(
+        a,min_chunk_size=3)):
+        assert b[i] == bi
+
+
+

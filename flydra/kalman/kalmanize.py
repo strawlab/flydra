@@ -20,6 +20,7 @@ import collections
 from flydra.MainBrain import TextLogDescription
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 from flydra.reconstruct import do_3d_operations_on_2d_point
+import flydra.a2.utils as utils
 
 # Not really "observations" but ML estimates
 FilteredObservations = flydra_kalman_utils.FilteredObservations
@@ -514,43 +515,7 @@ def kalmanize(src_filename,
         time_frame_all_cam_timestamps = []
         time_frame_all_camns = []
 
-        RAM_HEAVY_BUT_FAST=False
-
-        # If RAM_HEAVY_BUT_FAST is True, load all data2d to ram at
-        # once. This slightly affects results. I think this is because the
-        # Kalman birth model is not treated equivalently in both cases.
-
-        if RAM_HEAVY_BUT_FAST:
-            time1 = time.time()
-            if do_full_kalmanization:
-                print 'loading all 2D data...'
-            data2d_recarray = data2d[:] # needs lots of RAM for big data files
-            time2 = time.time()
-            if do_full_kalmanization:
-                print 'done in %.1f sec'%(time2-time1)
-            orig_num_rows = len(data2d_recarray)
-
-            if (not options.disable_image_stat_gating and
-                'cur_val' in data2d_recarray.dtype.fields):
-                if 'sumsqf_val' in data2d_recarray.dtype.fields:
-                    sumsqf_val = data2d_recarray['sumsqf_val']
-                else:
-                    sumsqf_val = None
-
-                nll = some_rough_negative_log_likelihood(
-                    pt_area=None,
-                    cur_val=data2d_recarray['cur_val'],
-                    mean_val=data2d_recarray['mean_val'],
-                    sumsqf_val=sumsqf_val)
-                nonzero_prob = numpy.isfinite(nll)
-                data2d_recarray = data2d_recarray[nonzero_prob]
-
-            filtered_num_rows = len(data2d_recarray)
-            print ('%d of %d rows have non-zero probability and will be '
-                   'considered'%(filtered_num_rows,orig_num_rows))
-
-            frames_array = data2d_recarray['frame']
-        else:
+        if 1:
             time1 = time.time()
             if do_full_kalmanization:
                 print 'loading all frame numbers...'
@@ -569,11 +534,10 @@ def kalmanize(src_filename,
             print 'No 2D data. Nothing to do.'
             return
 
-        row_idxs = numpy.argsort(frames_array)
+        ## row_idxs = numpy.argsort(frames_array)
         if do_full_kalmanization:
-            print '2D data range: %d<frame<%d'%(
-                frames_array[row_idxs[0]], frames_array[row_idxs[-1]])
-
+            print '2D data range: approximately %d<frame<%d'%(
+                frames_array[0], frames_array[-1])
 
         if do_full_kalmanization:
             accum_frame_spread = None
@@ -585,178 +549,195 @@ def kalmanize(src_filename,
 
         max_all_check_times = -np.inf
 
-        for row_idx in row_idxs:
-            new_frame = frames_array[row_idx]
+        for row_start, row_stop in utils.iter_non_overlapping_chunk_start_stops(
+            frames_array, min_chunk_size=2000000, size_increment=1000, status_fd=sys.stdout):
+
+            print 'Doing initial scan of approx frame range %d-%d.'%(
+                frames_array[row_start],frames_array[row_stop-1])
+
+            this_frames_array = frames_array[row_start:row_stop]
             if start_frame is not None:
-                if new_frame < start_frame:
+                if this_frames_array.max() < start_frame:
                     continue
             if stop_frame is not None:
-                if new_frame > stop_frame:
+                if this_frames_array.min() > stop_frame:
                     continue
-            if RAM_HEAVY_BUT_FAST:
-                row = data2d_recarray[row_idx]
-            else:
-                row = data2d[row_idx]
-            new_frame_test_cmp = row['frame']
-            assert new_frame_test_cmp==new_frame
 
-            if last_frame != new_frame:
-                if new_frame < last_frame:
-                    print 'new_frame',new_frame
-                    print 'last_frame',last_frame
-                    raise RuntimeError("expected continuously increasing "
-                                       "frame numbers")
-                # new frame
-                ########################################
-                # Data for this frame is complete
-                if last_frame is not None:
+            data2d_recarray = data2d.read(start=row_start, stop=row_stop)
+            this_frames = data2d_recarray['frame']
+            print 'Examining frames %d-%d in detail.'%(this_frames[0],this_frames[-1])
+            this_row_idxs = np.argsort( this_frames )
+            for this_row_idx in this_row_idxs:
+                row = data2d_recarray[this_row_idx]
 
-                    this_frame_spread = 0.0
-                    if len(time_frame_all_cam_timestamps) > 1:
-                        check_times = np.array(time_frame_all_cam_timestamps)
-                        check_times -= check_times.min()
-                        this_frame_spread = check_times.max()
-                        if accum_frame_spread is not None:
-                            accum_frame_spread.append( this_frame_spread )
-                            accum_frame_spread_fno.append( last_frame )
+                new_frame = row['frame']
 
-                            accum_frame_all_timestamps.append(
-                                time_frame_all_cam_timestamps )
-                            accum_frame_all_camns.append(
-                                time_frame_all_camns )
+                if start_frame is not None:
+                    if new_frame < start_frame:
+                        continue
+                if stop_frame is not None:
+                    if new_frame > stop_frame:
+                        continue
 
-                        max_all_check_times = max( this_frame_spread,
-                                                   max_all_check_times)
-                        if this_frame_spread > sync_error_threshold:
-                            if this_frame_spread==max_all_check_times:
-                                print '%s frame %d: sync diff: %.1f msec'%(
-                                    os.path.split(results.filename)[-1],
-                                    last_frame,
-                                    this_frame_spread*1000.0)
+                if last_frame != new_frame:
+                    if new_frame < last_frame:
+                        print 'new_frame',new_frame
+                        print 'last_frame',last_frame
+                        raise RuntimeError("expected continuously increasing "
+                                           "frame numbers")
+                    # new frame
+                    ########################################
+                    # Data for this frame is complete
+                    if last_frame is not None:
 
-                    if debug > 5:
-                        print
-                        print 'frame_data for frame %d'%(last_frame,)
-                        pprint.pprint(dict(frame_data))
-                        print
-                    if do_full_kalmanization:
-                        if this_frame_spread > sync_error_threshold:
-                            warnings.warn('Synchronization error detected, '
-                                          'but continuing analysis without '
-                                          'potentially bad data.')
-                        else:
-                            process_frame(reconst_orig_units,tracker,
-                                          last_frame,frame_data,camn2cam_id,
-                                          max_err=max_err,debug=debug,
-                                          kalman_model=kalman_model,
-                                          area_threshold=area_threshold)
-                    frame_count += 1
-                    if do_full_kalmanization and frame_count%1000==0:
-                        time2 = time.time()
-                        dur = time2-time1
-                        fps = frame_count/dur
-                        print 'frame % 10d, mean speed so far: %.1f fps'%(
-                            last_frame,fps)
+                        this_frame_spread = 0.0
+                        if len(time_frame_all_cam_timestamps) > 1:
+                            check_times = np.array(time_frame_all_cam_timestamps)
+                            check_times -= check_times.min()
+                            this_frame_spread = check_times.max()
+                            if accum_frame_spread is not None:
+                                accum_frame_spread.append( this_frame_spread )
+                                accum_frame_spread_fno.append( last_frame )
 
-                ########################################
-                frame_data = collections.defaultdict(list)
-                time_frame_all_cam_timestamps = [] # clear values
-                time_frame_all_camns = [] # clear values
-                last_frame = new_frame
+                                accum_frame_all_timestamps.append(
+                                    time_frame_all_cam_timestamps )
+                                accum_frame_all_camns.append(
+                                    time_frame_all_camns )
 
-            camn = row['camn']
-            try:
-                cam_id = camn2cam_id[camn]
-            except KeyError, err:
-                # This will happen if cameras were re-synchronized (and
-                # thus gain new cam_ids) immediately before saving was
-                # turned on in MainBrain. The reason is that the network
-                # buffers are still full of old data coming in from the
-                # cameras.
-                print ('WARNING: no cam_id for camn '
-                       '%d, skipping this row of data'%camn)
-                continue
+                            max_all_check_times = max( this_frame_spread,
+                                                       max_all_check_times)
+                            if this_frame_spread > sync_error_threshold:
+                                if this_frame_spread==max_all_check_times:
+                                    print '%s frame %d: sync diff: %.1f msec'%(
+                                        os.path.split(results.filename)[-1],
+                                        last_frame,
+                                        this_frame_spread*1000.0)
 
-            if cam_id in exclude_cam_ids:
-                # exclude this camera
-                continue
+                        if debug > 5:
+                            print
+                            print 'frame_data for frame %d'%(last_frame,)
+                            pprint.pprint(dict(frame_data))
+                            print
+                        if do_full_kalmanization:
+                            if this_frame_spread > sync_error_threshold:
+                                warnings.warn('Synchronization error detected, '
+                                              'but continuing analysis without '
+                                              'potentially bad data.')
+                            else:
+                                process_frame(reconst_orig_units,tracker,
+                                              last_frame,frame_data,camn2cam_id,
+                                              max_err=max_err,debug=debug,
+                                              kalman_model=kalman_model,
+                                              area_threshold=area_threshold)
+                        frame_count += 1
+                        if do_full_kalmanization and frame_count%1000==0:
+                            time2 = time.time()
+                            dur = time2-time1
+                            fps = frame_count/dur
+                            print 'frame % 10d, kalmanization/data association speed: % 8.1f fps'%(
+                                last_frame,fps)
+                            time1 = time2
+                            frame_count = 0
 
-            if camn in exclude_camns:
-                # exclude this camera
-                continue
+                    ########################################
+                    frame_data = collections.defaultdict(list)
+                    time_frame_all_cam_timestamps = [] # clear values
+                    time_frame_all_camns = [] # clear values
+                    last_frame = new_frame
 
-            time_frame_all_cam_timestamps.append( row['timestamp'] )
-            time_frame_all_camns.append( row['camn'] )
-
-            if do_full_kalmanization:
-
-                x_distorted = row['x']
-                if numpy.isnan(x_distorted):
-                    # drop point -- not found
+                camn = row['camn']
+                try:
+                    cam_id = camn2cam_id[camn]
+                except KeyError, err:
+                    # This will happen if cameras were re-synchronized (and
+                    # thus gain new cam_ids) immediately before saving was
+                    # turned on in MainBrain. The reason is that the network
+                    # buffers are still full of old data coming in from the
+                    # cameras.
+                    print ('WARNING: no cam_id for camn '
+                           '%d, skipping this row of data'%camn)
                     continue
-                y_distorted = row['y']
 
-                (x_undistorted,y_undistorted) = reconst_orig_units.undistort(
-                    cam_id,(x_distorted,y_distorted))
-                if 0:
-                    (x_undistorted_m,y_undistorted_m) = reconstructor_meters.undistort(
+                if cam_id in exclude_cam_ids:
+                    # exclude this camera
+                    continue
+
+                if camn in exclude_camns:
+                    # exclude this camera
+                    continue
+
+                time_frame_all_cam_timestamps.append( row['timestamp'] )
+                time_frame_all_camns.append( row['camn'] )
+
+                if do_full_kalmanization:
+
+                    x_distorted = row['x']
+                    if numpy.isnan(x_distorted):
+                        # drop point -- not found
+                        continue
+                    y_distorted = row['y']
+
+                    (x_undistorted,y_undistorted) = reconst_orig_units.undistort(
                         cam_id,(x_distorted,y_distorted))
-                    if x_undistorted != x_undistorted_m:
-                        raise ValueError('scaled reconstructors have different '
-                                         'distortion!?')
-                    if y_undistorted != y_undistorted_m:
-                        raise ValueError('scaled reconstructors have different '
-                                         'distortion!?')
+                    if 0:
+                        (x_undistorted_m,y_undistorted_m) = reconstructor_meters.undistort(
+                            cam_id,(x_distorted,y_distorted))
+                        if x_undistorted != x_undistorted_m:
+                            raise ValueError('scaled reconstructors have different '
+                                             'distortion!?')
+                        if y_undistorted != y_undistorted_m:
+                            raise ValueError('scaled reconstructors have different '
+                                             'distortion!?')
 
-                (area,slope,eccentricity,frame_pt_idx) = (row['area'],
-                                                          row['slope'],
-                                                          row['eccentricity'],
-                                                          row['frame_pt_idx'])
+                    (area,slope,eccentricity,frame_pt_idx) = (row['area'],
+                                                              row['slope'],
+                                                              row['eccentricity'],
+                                                              row['frame_pt_idx'])
 
-                if 'cur_val' in row.dtype.fields: cur_val = row['cur_val']
-                else: cur_val = None
-                if 'mean_val' in row.dtype.fields: mean_val = row['mean_val']
-                else: mean_val = None
-                if 'sumsqf_val' in row.dtype.fields: sumsqf_val = row['sumsqf_val']
-                else: sumsqf_val = None
+                    if 'cur_val' in row.dtype.fields: cur_val = row['cur_val']
+                    else: cur_val = None
+                    if 'mean_val' in row.dtype.fields: mean_val = row['mean_val']
+                    else: mean_val = None
+                    if 'sumsqf_val' in row.dtype.fields: sumsqf_val = row['sumsqf_val']
+                    else: sumsqf_val = None
 
-                pmat_inv = reconst_orig_units.get_pmat_inv(cam_id)
-                pmat_meters_inv = reconstructor_meters.get_pmat_inv(cam_id)
-                camera_center = reconst_orig_units.get_camera_center(cam_id)
-                camera_center = numpy.hstack((camera_center[:,0],[1]))
-                camera_center_meters = reconstructor_meters.get_camera_center(
-                    cam_id)
-                camera_center_meters = numpy.hstack((camera_center_meters[:,0],[1]))
-                helper = reconstructor_meters.get_reconstruct_helper_dict()[cam_id]
-                rise=slope
-                run=1.0
-                if np.isinf(rise):
-                    if rise > 0:
-                        rise=1.0
-                        run=0.0
-                    else:
-                        rise=-1.0
-                        run=0.0
+                    pmat_inv = reconst_orig_units.get_pmat_inv(cam_id)
+                    pmat_meters_inv = reconstructor_meters.get_pmat_inv(cam_id)
+                    camera_center = reconst_orig_units.get_camera_center(cam_id)
+                    camera_center = numpy.hstack((camera_center[:,0],[1]))
+                    camera_center_meters = reconstructor_meters.get_camera_center(
+                        cam_id)
+                    camera_center_meters = numpy.hstack((camera_center_meters[:,0],[1]))
+                    helper = reconstructor_meters.get_reconstruct_helper_dict()[cam_id]
+                    rise=slope
+                    run=1.0
+                    if np.isinf(rise):
+                        if rise > 0:
+                            rise=1.0
+                            run=0.0
+                        else:
+                            rise=-1.0
+                            run=0.0
 
-                (p1, p2, p3, p4,
-                 ray0, ray1, ray2, ray3, ray4, ray5) = do_3d_operations_on_2d_point(
-                    helper, x_undistorted,y_undistorted,
-                    pmat_inv, pmat_meters_inv,
-                    camera_center, camera_center_meters,
-                    x_distorted,y_distorted,
-                    rise, run)
-                line_found = not numpy.isnan(p1)
-                pluecker_hz_meters = (ray0, ray1, ray2, ray3, ray4, ray5)
+                    (p1, p2, p3, p4,
+                     ray0, ray1, ray2, ray3, ray4, ray5) = do_3d_operations_on_2d_point(
+                        helper, x_undistorted,y_undistorted,
+                        pmat_inv, pmat_meters_inv,
+                        camera_center, camera_center_meters,
+                        x_distorted,y_distorted,
+                        rise, run)
+                    line_found = not numpy.isnan(p1)
+                    pluecker_hz_meters = (ray0, ray1, ray2, ray3, ray4, ray5)
 
-                # Keep in sync with kalmanize.py and data_descriptions.py
-                pt_undistorted = (x_undistorted,y_undistorted,
-                                  area,slope,eccentricity,
-                                  p1,p2,p3,p4, line_found,
-                                  frame_pt_idx, cur_val, mean_val, sumsqf_val)
+                    # Keep in sync with kalmanize.py and data_descriptions.py
+                    pt_undistorted = (x_undistorted,y_undistorted,
+                                      area,slope,eccentricity,
+                                      p1,p2,p3,p4, line_found,
+                                      frame_pt_idx, cur_val, mean_val, sumsqf_val)
 
-                projected_line_meters=geom.line_from_HZline(pluecker_hz_meters)
+                    projected_line_meters=geom.line_from_HZline(pluecker_hz_meters)
 
-                frame_data[camn].append((pt_undistorted,projected_line_meters))
+                    frame_data[camn].append((pt_undistorted,projected_line_meters))
 
         if do_full_kalmanization:
             tracker.kill_all_trackers() # done tracking
@@ -1008,6 +989,7 @@ def main():
         import cProfile
         import lsprofcalltree
         p = cProfile.Profile()
+        print 'running kalmanize in profile mode'
         p.runctx('kalmanize(*args, **kwargs)',globals(),locals())
         k = lsprofcalltree.KCacheGrind(p)
         data = open(os.path.expanduser('~/kalmanize.kgrind'), 'w+')
