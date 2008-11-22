@@ -201,6 +201,10 @@ def iter_non_overlapping_chunk_start_stops(arr,
     #print 'len(arr)',len(arr)
     start = 0
     cur_stop = start+min_chunk_size
+    if cur_stop>=len(arr):
+        cur_stop=len(arr)
+        yield (start, cur_stop)
+        return
     while 1:
         #print 'outer loop'
         if status_fd is not None:
@@ -212,7 +216,9 @@ def iter_non_overlapping_chunk_start_stops(arr,
             #print 'inner loop',start,cur_stop
             arr_pre = arr[start:cur_stop]
             arr_post = arr[cur_stop:]
-            if arr_pre.max() < arr_post.min():
+            premax = arr_pre.max()
+            postmin = arr_post.min()
+            if premax < postmin:
                 break
             cur_stop += size_increment
             if cur_stop>=len(arr):
