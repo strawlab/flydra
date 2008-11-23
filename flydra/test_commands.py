@@ -284,7 +284,8 @@ def are_files_close(filename1, filename2):
     return are_close
 
 def are_images_close( im1_filename, im2_filename,
-                      ok_fraction_threshold=0.99):
+                      ok_fraction_threshold=0.99,
+                      pix_diff_threshold=0.1):
     """return True if two image files are very similar"""
     im1 = scipy.misc.pilutil.imread(im1_filename)
     im2 = scipy.misc.pilutil.imread(im2_filename)
@@ -303,7 +304,7 @@ def are_images_close( im1_filename, im2_filename,
         di2d = np.mean(di,axis=2)
     else:
         di2d = di
-    n_diff = np.sum(di2d > 0.1)
+    n_diff = np.sum(di2d > pix_diff_threshold)
     n_total = di2d.shape[0]* di2d.shape[1]
     fraction_different = n_diff/float(n_total)
     fraction_same = 1.0-fraction_different
