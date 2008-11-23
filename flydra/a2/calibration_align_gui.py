@@ -3,6 +3,7 @@
 # Starting point: mayavi2-2.0.2a1/enthought.mayavi/examples/standalone.py
 
 from os.path import join, dirname
+import warnings
 from enthought.tvtk.api import tvtk
 from enthought.pyface.api import GUI
 # The core Engine.
