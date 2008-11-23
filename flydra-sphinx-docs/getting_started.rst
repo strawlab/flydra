@@ -10,6 +10,9 @@ started with Python.
 .. _Python: http://python.org
 .. _Python tutorial: http://docs.python.org/tutorial/index.html
 
+Using a Python virtual environment
+----------------------------------
+
 We use virtualenv_ to create an installation environment for flydra
 that does not overwrite any system files. Get the virtualenv source
 code, upack it and create a "virtual Python installation" in your home
@@ -20,13 +23,17 @@ directory called "PY_flydra"::
   cd virtualenv-1.3
   python virtualenv.py ~/PY_flydra
 
-.. _subversion: http://subversion.tigris.org/
 .. _virtualenv: http://pypi.python.org/pypi/virtualenv
+
+Getting and installing flydra from the source code repository
+-------------------------------------------------------------
 
 To download the development version of flydra, you need
 subversion_. To install it, run::
 
   sudo apt-get install subversion
+
+.. _subversion: http://subversion.tigris.org/
 
 Now to download ("checkout") flydra into your current directory, type::
 
@@ -48,6 +55,9 @@ Python environment. To test this, type::
 The output should be something like "0.4.28-svn", indicating this is
 the development version after release 0.4.28.
 
+Testing your installation
+-------------------------
+
 Finally, the full test suite may be run with nose_::
 
   source ~/PY_flydra/bin/activate
@@ -59,18 +69,13 @@ Finally, the full test suite may be run with nose_::
 Editing the documentation
 -------------------------
 
-This documentation is built with Sphinx_. Initial development was done
-with the unreleased development version of Sphinx 0.50.
+This documentation is built with Sphinx_ 0.5.
 
 .. _Sphinx: http://sphinx.pocoo.org/
 
 To download and install sphinx into your virtual environment::
 
-  sudo apt-get install mercurial
-  hg clone http://bitbucket.org/birkenfeld/sphinx/
-  cd sphinx/
-  source ~/PY_flydra/bin/activate
-  python setup.py install
+  easy_install sphinx
 
 Now, to build the flydra documentation::
 
