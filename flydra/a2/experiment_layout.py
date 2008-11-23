@@ -1,11 +1,17 @@
 import conditions_draw
 import numpy
+import numpy as np
 from numpy import array
 from enthought.tvtk.api import tvtk
 import warnings
 
+from enthought.mayavi.sources.api import VTKDataSource
+from enthought.mayavi.modules.surface import Surface
+from enthought.mayavi.modules.vectors import Vectors
+
 def cylindrical_arena(info=None):
-    assert numpy.allclose(info['axis'],numpy.array([0,0,1])), "only vertical areas supported at the moment"
+    assert numpy.allclose(info['axis'],numpy.array([0,0,1])), (
+        "only vertical areas supported at the moment")
 
     N = 128
     theta = numpy.linspace(0,2*numpy.pi,N)
@@ -13,7 +19,9 @@ def cylindrical_arena(info=None):
     xs = r*numpy.cos( theta ) + info['origin'][0]
     ys = r*numpy.sin( theta ) + info['origin'][1]
 
-    z_levels = numpy.linspace(info['origin'][2],info['origin'][2]+info['height'],5)
+    z_levels = numpy.linspace(info['origin'][2],
+                              info['origin'][2]+info['height'],
+                              5)
 
     verts = []
     vi = 0 # vert idx
@@ -122,8 +130,6 @@ def cubic_arena(info=None,hack_postmultiply=None):
     return actors
 
 def get_mayavi_cubic_arena_source(engine,info=None):
-    from enthought.mayavi.sources.api import VTKDataSource
-    from enthought.mayavi.modules.surface import Surface
 
     v=info['verts4x4'] # arranged in 2 rectangles of 4 verts
 
@@ -131,6 +137,17 @@ def get_mayavi_cubic_arena_source(engine,info=None):
     lines = [ [0,1], [1,2], [2,3], [3,0],
               [4,5], [5,6], [6,7], [7,4],
               [0,4], [1,5], [2,6], [3,7] ]
+
+    if 0:
+        import enthought.mayavi.tools.mlab as mlab
+        for lineseg in lines:
+            p0 = points[lineseg[0]]
+            p1 = points[lineseg[1]]
+            x = np.array([p0[0],p1[0]])
+            y = np.array([p0[1],p1[1]])
+            z = np.array([p0[2],p1[2]])
+            mlab.plot3d(x,y,z)
+
     #polys = numpy.arange(0, len(points), 1, 'l')
     #polys = numpy.reshape(polys, (len(points), 1))
     pd = tvtk.PolyData(points=points, #polys=polys,
@@ -144,9 +161,11 @@ def get_mayavi_cubic_arena_source(engine,info=None):
         filter.radius = radius
         f = FilterBase(filter=filter, name='TubeFilter')
         mayavi.add_filter(f)
+
     if 0:
         s = Surface()
         e.add_module(s)
+
     if 0:
         from enthought.mayavi.filters.filter_base import FilterBase
         ## myfilter = tvtk.TubeFilter(number_of_sides=6,
@@ -156,28 +175,28 @@ def get_mayavi_cubic_arena_source(engine,info=None):
         ## e.add_filter(f)
 
 
-        extract_filter = tvtk.ExtractEdges(input=pd)
+        #extract_filter = tvtk.ExtractEdges(input=pd)
         tube_filter = tvtk.TubeFilter(number_of_sides=6,
                                       vary_radius='vary_radius_off',
-                                      input=extract_filter.output,
+                                      #input=extract_filter.output,
+                                      input=pd,
                                       radius=.05)
-        ## f = FilterBase(filter=tube_filter, name='TubeFilter')
-        ## e.add_filter(f)
+        f = FilterBase(filter=tube_filter, name='TubeFilter')
+        e.add_filter(f)
 
-        edge_mapper = tvtk.PolyDataMapper(input=tube_filter.output)
-                                          #lookup_table=self.lut,
-                                          #scalar_visibility=scalar_vis)
-        edge_actor = tvtk.Actor(mapper=edge_mapper)
-        ## edge_actor.property.color = self.color
-        #rw = e.renwin
-        scene.add_actor(edge_actor)
+        s = Surface()
+        e.add_module(s)
+
+        ## edge_mapper = tvtk.PolyDataMapper(input=tube_filter.output)
+        ##                                   #lookup_table=self.lut,
+        ##                                   #scalar_visibility=scalar_vis)
+        ## edge_actor = tvtk.Actor(mapper=edge_mapper)
+        ## ## edge_actor.property.color = self.color
+        ## #rw = e.renwin
+        ## e.add_actors([edge_actor])
 
     if 1:
-        from enthought.mayavi.modules.vectors import Vectors
         v = Vectors()
         v.glyph.scale_mode = 'data_scaling_off'
-        #v.glyph.color_mode = 'color_by_scalar'
-        #v.glyph.color = 'black'
         v.glyph.glyph_source = tvtk.SphereSource(radius=.02)
-        #v.glyph.glyph_source = tvtk.GlyphSource2D()
         e.add_module(v)
