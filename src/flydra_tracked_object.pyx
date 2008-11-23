@@ -61,6 +61,9 @@ def obs2d_hashable( arr ):
     val = newarr.tostring()
     return val
 
+cdef extern from "sys/types.h":
+    ctypedef int u_int32_t
+
 ctypedef int mybool
 
 cdef class TrackedObject:
@@ -84,9 +87,11 @@ cdef class TrackedObject:
     cdef public object observations_frames, observations_2d
     cdef int disable_image_stat_gating, orientation_consensus
     cdef object fake_timestamp
+    cdef public u_int32_t obj_id
 
     def __init__(self,
                  reconstructor_meters, # the Reconstructor instance
+                 obj_id,
                  long frame, # frame number of first data
                  first_observation_orig_units, # first data
                  first_observation_Lcoords_orig_units, # first data
@@ -106,12 +111,14 @@ cdef class TrackedObject:
         arguments
         =========
         reconstructor_meters - reconstructor instance with internal units of meters
+        obj_id - unique identifier for each object
         frame - frame number of first observation data
         first_observation_orig_units - first observation (in arbitrary units)
         scale_factor - how to convert from arbitrary units (of observations) into meters (e.g. 1e-3 for mm)
         kalman_model - Kalman parameters
         area_threshold - minimum area to consider for tracking use
         """
+        self.obj_id = obj_id
         self.area_threshold = area_threshold
         self.area_threshold_for_orientation = area_threshold_for_orientation
         self.save_all_data = save_all_data
@@ -596,4 +603,4 @@ cdef class TrackedObject:
             return
         xhat = self.xhats[-1]
         P = self.Ps[-1]
-        return xhat,P
+        return self.obj_id, xhat,P

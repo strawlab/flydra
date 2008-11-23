@@ -297,6 +297,7 @@ class Tracker:
         self.disable_image_stat_gating = disable_image_stat_gating
         self.orientation_consensus = orientation_consensus
         self.fake_timestamp = fake_timestamp
+        self.cur_obj_id = 0
 
         # set values for passing to TrackedObject
         if scale_factor is None:
@@ -408,9 +409,12 @@ class Tracker:
                      first_observation_camns,
                      first_observation_idxs,
                      debug=0):
+        obj_id = self.cur_obj_id
+        self.cur_obj_id+=1
 
         self.live_tracked_objects.make_new(
             self.reconstructor_meters,
+            obj_id,
             frame,
             first_observation_orig_units,
             first_observation_Lcoords_orig_units,
@@ -441,18 +445,18 @@ class Tracker:
                 callback(tro)
 
     def encode_data_packet(self,corrected_framenumber,timestamp):
-        # keep in sync data_packets.py's decode_data_packet()
+        # keep in sync: data_packets.py's decode_data_packet()
         state_size = self.kalman_model['ss']
         results = self.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
 
         data_packets_more = []
-        per_tracked_object_fmt = 'f'*(state_size+err_size)
+        per_tracked_object_fmt = '<I'+'f'*(state_size+err_size)
         for result in results:
             if result is None:
                 continue
-            xhat,P = result
+            obj_id,xhat,P = result
             meanP = math.sqrt(numpy.sum(numpy.array([P[i,i]**2 for i in range(3)])))
-            data_values = [xhat[i] for i in range(state_size)]+[meanP]
+            data_values = [obj_id]+[xhat[i] for i in range(state_size)]+[meanP]
             data_packets_more.append( struct.pack(per_tracked_object_fmt,*data_values) )
 
         N = len(data_packets_more)

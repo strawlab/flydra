@@ -677,7 +677,8 @@ class CoordinateProcessor(threading.Thread):
             if self.debug_level.isSet():
                 print 'saving finished kalman object with %d frames'%(len(tracked_object.frames),)
             self.main_brain.queue_data3d_kalman_estimates.put(
-                (tracked_object.frames, tracked_object.xhats, tracked_object.Ps,
+                (tracked_object.obj_id,
+                 tracked_object.frames, tracked_object.xhats, tracked_object.Ps,
                  tracked_object.timestamps,
                  tracked_object.observations_frames, tracked_object.observations_data,
                  tracked_object.observations_2d, tracked_object.observations_Lcoords,
@@ -1114,7 +1115,7 @@ class CoordinateProcessor(threading.Thread):
                                     for result in results:
                                         if result is None:
                                             continue
-                                        last_xhat,P = result
+                                        obj_id,last_xhat,P = result
                                         print last_xhat[:3]
                                     print
 
@@ -1158,7 +1159,7 @@ class CoordinateProcessor(threading.Thread):
                                     for result in results:
                                         if result is None:
                                             continue
-                                        last_xhat,P = result
+                                        obj_id,last_xhat,P = result
                                         X = last_xhat[0]/scale_factor, last_xhat[1]/scale_factor, last_xhat[2]/scale_factor
                                         Xs.append(X)
                                     if len(Xs):
@@ -1824,7 +1825,6 @@ class MainBrain(object):
         #self.timestamp_echo_receiver.setDaemon(True)
         self.timestamp_echo_receiver.start()
 
-        self.current_kalman_obj_id = 0
         main_brain_keeper.register( self )
 
     def get_fps(self):
@@ -2360,19 +2360,16 @@ class MainBrain(object):
             if self.h5data3d_kalman_estimates is not None:
 ##                print 'saving kalman data (%d objects)'%(
 ##                    len(list_of_3d_data),)
-                for (tro_frames, tro_xhats, tro_Ps, tro_timestamps,
+                for (obj_id, tro_frames, tro_xhats, tro_Ps, tro_timestamps,
                      obs_frames, obs_data,
                      observations_2d, obs_Lcoords) in list_of_3d_data:
+
 
                     if len(obs_frames)<MIN_KALMAN_OBSERVATIONS_TO_SAVE:
                         # only save data with at least 10 observations
                         if self.debug_level.isSet():
                             print 'not saving kalman object -- too few observations to save'
                         continue
-
-                    # get object ID
-                    obj_id = self.current_kalman_obj_id
-                    self.current_kalman_obj_id += 1
 
                     if self.debug_level.isSet():
                         print 'saving kalman object %d'%(obj_id,)

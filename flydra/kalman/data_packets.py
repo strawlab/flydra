@@ -33,18 +33,26 @@ def decode_data_packet(buf):
 
     (corrected_framenumber,timestamp,N,state_size) = struct.unpack(
         packet_header_fmt,header)
-    per_tracked_object_fmt = 'f'*(state_size+err_size)
+    per_tracked_object_fmt = '<I'+'f'*(state_size+err_size)
     per_tracked_object_fmtsize = struct.calcsize(per_tracked_object_fmt)
+    obj_ids = []
     state_vecs = []
+    meanPs = []
     for i in range(N):
         this_tro = rest[:per_tracked_object_fmtsize]
         rest = rest[per_tracked_object_fmtsize:]
 
         results = struct.unpack(per_tracked_object_fmt,this_tro)
-        state_vec = results[:state_size]
-        meanP = results[state_size]
+
+        obj_id = results[0]
+        state_vec = results[1:(state_size+1)]
+        meanP = results[state_size+1]
+
+        obj_ids.append( obj_id )
         state_vecs.append( state_vec )
-    return corrected_framenumber, timestamp, state_vecs, meanP
+        meanPs.append( meanP )
+
+    return corrected_framenumber, timestamp, obj_ids, state_vecs, meanPs
 
 def encode_super_packet( data_packets ):
     """encode data packets into a single super packet
