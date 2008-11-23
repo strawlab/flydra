@@ -654,8 +654,8 @@ def kalmanize(src_filename,
                     # turned on in MainBrain. The reason is that the network
                     # buffers are still full of old data coming in from the
                     # cameras.
-                    print ('WARNING: no cam_id for camn '
-                           '%d, skipping this row of data'%camn)
+                    warnings.warn('WARNING: no cam_id for camn '
+                                  '%d, skipping this row of data'%camn)
                     continue
 
                 if cam_id in exclude_cam_ids:
