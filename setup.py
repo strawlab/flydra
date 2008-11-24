@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 from distutils.core import Extension # actually monkey-patched by setuptools
 import flydra.version
 
@@ -26,14 +26,8 @@ setup(name='flydra',
       author='Andrew Straw',
       author_email='strawman@astraw.com',
       description='multi-headed fly-tracking beast',
-      packages = ['flydra',
-                  'flydra.kalman',
-                  'flydra.analysis',
-                  'flydra.a2', # new analysis
-                  'flydra.trigger',
-                  'flydra.LEDdriver',
-                  'flydra.radial_distortion',
-                  ],
+      packages = find_packages(),
+      test_suite = 'nose.collector',
       ext_modules= ext_modules,
       entry_points = {
     'console_scripts': [
