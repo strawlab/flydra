@@ -1,3 +1,10 @@
+Major changes for 0.4.37
+------------------------
+
+  * Enable automatic running of most unit tests
+
+  * flydra_kalmanize: bugfix to fix exception when iterating file chunks
+
 Major changes for 0.4.36
 ------------------------
 
