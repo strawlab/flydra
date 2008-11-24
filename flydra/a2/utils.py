@@ -200,30 +200,35 @@ def iter_non_overlapping_chunk_start_stops(arr,
 
     start = 0
     cur_stop = start+min_chunk_size
-    if cur_stop>=len(arr):
-        cur_stop=len(arr)
-        yield (start, cur_stop)
-        return
+
     while 1:
         if status_fd is not None:
             tstart = time.time()
 
             status_fd.write('Computing non-overlapping chunks...')
             status_fd.flush()
+
+        if cur_stop>=len(arr):
+            cur_stop=len(arr)
+            yield (start, cur_stop)
+            return
+
         while 1:
+            # inner loop - keep incrementing cur_stop until condition passes
             arr_pre = arr[start:cur_stop]
             arr_post = arr[cur_stop:]
             premax = arr_pre.max()
-            if len(arr_post)==0:
-                # hmm, this is fishy that we get here...
-                break
             postmin = arr_post.min()
             if premax < postmin:
+                # condition passed
                 break
             cur_stop += size_increment
             if cur_stop>=len(arr):
+                # end of array reached - pass by definition
                 cur_stop=len(arr)
                 break
+
+        # If we are here, the condition passed by definition.
         if status_fd is not None:
             status_fd.write('did %d rows in %.1f sec.\n'%(
                 cur_stop-start,(time.time()-tstart)))
