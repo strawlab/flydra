@@ -198,7 +198,6 @@ def iter_non_overlapping_chunk_start_stops(arr,
     # This is a relatively dumb implementation that I think could be
     # massively sped up.
 
-    print 'len(arr)',len(arr)
     start = 0
     cur_stop = start+min_chunk_size
     if cur_stop>=len(arr):
@@ -206,20 +205,18 @@ def iter_non_overlapping_chunk_start_stops(arr,
         yield (start, cur_stop)
         return
     while 1:
-        print 'outer loop'
         if status_fd is not None:
             tstart = time.time()
 
             status_fd.write('Computing non-overlapping chunks...')
             status_fd.flush()
         while 1:
-            print 'inner loop',start,cur_stop,len(arr)
             arr_pre = arr[start:cur_stop]
             arr_post = arr[cur_stop:]
             premax = arr_pre.max()
-            ## if len(arr_post)==0:
-            ##     # hmm, this is fishy that we get here...
-            ##     break
+            if len(arr_post)==0:
+                # hmm, this is fishy that we get here...
+                break
             postmin = arr_post.min()
             if premax < postmin:
                 break
@@ -248,9 +245,9 @@ def test_iter_non_overlapping_chunk_start_stops():
     thislen=0
     for i,bi in enumerate(
         iter_non_overlapping_chunk_start_stops(
-        a,min_chunk_size=3)):
+        a,min_chunk_size=3,size_increment=1)):
         this_chunk = a[bi[0]:bi[1]]
-        print '%d this_chunk: %s'%(i,this_chunk)
+        #print '%d this_chunk: %s'%(i,this_chunk)
         assert b[i] == bi
         thismax = np.max( this_chunk )
         assert thismax > curmax
