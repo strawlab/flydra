@@ -14,7 +14,7 @@ from optparse import OptionParser
 import flydra.reconstruct as reconstruct
 
 import matplotlib
-import matplotlib.ticker
+import matplotlib.ticker as ticker
 import pylab
 
 import flydra.analysis.result_utils as result_utils
@@ -73,6 +73,11 @@ def doit(
             pylab.figtext(0,0,figtitle)
 
         h5 = PT.openFile( filename, mode='r' )
+        accum_frame_spread_filename = filename + '.spreadh5'
+        if os.path.exists(accum_frame_spread_filename):
+            h5spread = PT.openFile(accum_frame_spread_filename, mode='r')
+        else:
+            h5spread = None
 
         if fps is None:
             fps = result_utils.get_fps( h5 )
@@ -102,6 +107,8 @@ def doit(
             else:
                 n_subplots = len(cam_ids)
                 if kalman_filename is not None:
+                    n_subplots += 1
+                if h5spread is not None:
                     n_subplots += 1
                 ax = pylab.subplot( n_subplots, 1, cam_id_enum+1, sharex=ax)
                 ax_by_cam[cam_id] = ax
@@ -150,6 +157,35 @@ def doit(
             ax.set_ylabel('%s\npixels'%cam_id)
             ax.set_xlim( (start_frame, stop_frame) )
         ax.set_xlabel('frame')
+        ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
+        ax.yaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
+        if h5spread is not None:
+
+            ax_by_cam['h5spread'] = ax
+            if kalman_filename is not None:
+                # this is 2nd to last
+                ax = pylab.subplot( n_subplots, 1, n_subplots-1, sharex=ax)
+            else:
+                # this is last
+                ax = pylab.subplot( n_subplots, 1, n_subplots, sharex=ax)
+
+            frames = h5spread.root.framenumber[:]
+            spread = h5spread.root.spread[:]
+
+            valid_cond = numpy.ones( frames.shape, dtype=numpy.bool)
+            if start is not None:
+                valid_cond = valid_cond & (frames >= start)
+            if stop is not None:
+                valid_cond = valid_cond & (frames <= stop)
+
+            ax.plot( frames[valid_cond],
+                     spread[valid_cond] * 1000.0,
+                     '.' )
+            ax.set_xlabel('frame')
+            ax.set_ylabel('timestamp spread (msec)')
+            ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
+            ax.yaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
+            h5spread.close()
         h5.close()
 
     if kalman_filename is not None:
@@ -333,6 +369,12 @@ def doit(
                     Pmean = numpy.sqrt( P00**2 + P11**2 + P22**2 ) # variance
                     std = numpy.sqrt(Pmean) # standard deviation (in meters)
                     ax.plot( frame, std, 'k-')
+
+                    ax.set_xlabel('frame')
+                    ax.xaxis.set_major_formatter(
+                        ticker.FormatStrFormatter("%d"))
+                    ax.yaxis.set_major_formatter(
+                        ticker.FormatStrFormatter("%d"))
 
             if not kalman_smoothing:
                 # plot 2D data contributing to 3D object
