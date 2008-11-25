@@ -620,6 +620,11 @@ def kalmanize(src_filename,
                             print
                         if do_full_kalmanization:
                             if this_frame_spread > sync_error_threshold:
+                                if debug > 5:
+                                    print (
+                                        'frame sync error (spread %.1f msec), '
+                                        'skipping'%(this_frame_spread*1e3,))
+                                    print
                                 warnings.warn('Synchronization error detected, '
                                               'but continuing analysis without '
                                               'potentially bad data.')
