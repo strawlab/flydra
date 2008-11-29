@@ -49,7 +49,8 @@ def doit(options=None):
 
     ca = core_analysis.get_global_CachingAnalyzer()
 
-    obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(options.kalman_filename)
+    (obj_ids, use_obj_ids, is_mat_file, data_file, extra
+     ) = ca.initial_file_load(options.kalman_filename)
 
     fps = result_utils.get_fps( data_file )
 
@@ -63,18 +64,23 @@ def doit(options=None):
     if 1:
         file_timestamp = data_file.filename[4:19]
         fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
-        include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp( timestamp_string=file_timestamp )
-        walking_start_stops = fanout.get_walking_start_stops_for_timestamp( timestamp_string=file_timestamp )
+        include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp(
+            timestamp_string=file_timestamp )
+        walking_start_stops = fanout.get_walking_start_stops_for_timestamp(
+            timestamp_string=file_timestamp )
+
         if include_obj_ids is not None:
             use_obj_ids = include_obj_ids
         if exclude_obj_ids is not None:
             use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
-        stim_xml = fanout.get_stimulus_for_timestamp(timestamp_string=file_timestamp)
+        stim_xml = fanout.get_stimulus_for_timestamp(
+            timestamp_string=file_timestamp)
         stim_xml_osg = xml_stimulus_osg.StimulusWithOSG( stim_xml.get_root() )
 
-    kalman_rows = flydra.a2.flypos.fuse_obj_ids(use_obj_ids, data_file,
-                                              dynamic_model_name = dynamic_model,
-                                              frames_per_second=fps)
+    kalman_rows = flydra.a2.flypos.fuse_obj_ids(
+        use_obj_ids, data_file,
+        dynamic_model_name = dynamic_model,
+        frames_per_second=fps)
     frame = kalman_rows['frame']
     if (options.start is not None) or (options.stop is not None):
         valid_cond = numpy.ones( frame.shape, dtype=numpy.bool )
@@ -98,7 +104,7 @@ def doit(options=None):
 
     with stim_xml_osg.OSG_model_path() as osg_model_path:
         vision = fsee.Observer.Observer(model_path=osg_model_path,
-                                        #scale=1000.0, # convert model from meters to mm
+                                        #scale=1000.0, # from meters to mm
                                         hz=hz,
                                         skybox_basename=None,
                                         full_spectrum=True,
@@ -111,7 +117,8 @@ def doit(options=None):
             tnow = time.time()
             if count > 0 and (count%100)==0:
                 dur = tnow-tstart
-                print '%.1f fps (%d frames in %.1f seconds)'%(count/dur,count,dur)
+                print '%.1f fps (%d frames in %.1f seconds)'%(
+                    count/dur,count,dur)
             count += 1
             cur_pos, cur_ori = path_maker.step()
             frame = path_maker.get_frame()
