@@ -147,6 +147,7 @@ class StimulusWithOSG(xml_stimulus.Stimulus):
     @contextlib.contextmanager
     def OSG_model_path(self):
 
+        real_osg_fnames = []
         geode = osgwriter.Geode(states=['GL_LIGHTING OFF'])
         all_assets = []
         for child in self.root:
@@ -162,11 +163,21 @@ class StimulusWithOSG(xml_stimulus.Stimulus):
                 geom_elements, this_assets = cylindrical_post( info=info )
                 for el in geom_elements:
                     geode.append( el )
+            elif child.tag == 'osg_model':
+                real_osg_fnames.append(child.text)
+                this_assets = []
+                #raise NotImplementedError('')
             else:
                 import warnings
                 warnings.warn("Unknown node: %s"%child.tag)
                 this_assets = []
             all_assets.extend( this_assets )
+
+        if len(real_osg_fnames):
+            assert len(all_assets)==0 #can only have real .osg file or generated
+            for real_osg_fname in real_osg_fnames:
+                yield real_osg_fname
+            return
 
         all_assets = sets.Set(all_assets) # remove redundant copies
         m = osgwriter.MatrixTransform(numpy.eye(4))
