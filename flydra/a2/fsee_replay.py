@@ -156,11 +156,12 @@ def doit(options=None):
                 fig = fsee.plot_utils.plot_receptor_and_emd_fig(
                     R=R,G=G,B=B,
                     figsize=(6.40,4.80),
-                    dpi=100,
+                    dpi=200,
                     save_fname=fname+'.png',
                     optics=vision.get_optics(),
                     proj='stere',
                     subplot_titles_enabled=False,
+                    basemap_lw=0.5,
                     )
                 pylab.close(fig)
 
