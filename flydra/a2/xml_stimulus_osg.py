@@ -165,6 +165,7 @@ class StimulusWithOSG(xml_stimulus.Stimulus):
             else:
                 import warnings
                 warnings.warn("Unknown node: %s"%child.tag)
+                this_assets = []
             all_assets.extend( this_assets )
 
         all_assets = sets.Set(all_assets) # remove redundant copies
