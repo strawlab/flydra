@@ -63,19 +63,37 @@ def doit(options=None):
 
     if 1:
         file_timestamp = data_file.filename[4:19]
-        fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
-        include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp(
-            timestamp_string=file_timestamp )
-        walking_start_stops = fanout.get_walking_start_stops_for_timestamp(
-            timestamp_string=file_timestamp )
+        stim_xml = xml_stimulus.xml_stimulus_from_filename(
+            options.stim_xml,
+            timestamp_string=file_timestamp,
+            )
+        try:
+            fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
+        except xml_stimulus.WrongXMLTypeError:
+            walking_start_stops = []
+            include_obj_ids = exclude_obj_ids = None
+        else:
+            include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp(
+                timestamp_string=file_timestamp )
+            walking_start_stops = fanout.get_walking_start_stops_for_timestamp(
+                timestamp_string=file_timestamp )
+            if include_obj_ids is not None:
+                use_obj_ids = include_obj_ids
+            if exclude_obj_ids is not None:
+                use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
+            stim_xml = fanout.get_stimulus_for_timestamp(timestamp_string=file_timestamp)
 
         if include_obj_ids is not None:
             use_obj_ids = include_obj_ids
         if exclude_obj_ids is not None:
             use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
-        stim_xml = fanout.get_stimulus_for_timestamp(
-            timestamp_string=file_timestamp)
         stim_xml_osg = xml_stimulus_osg.StimulusWithOSG( stim_xml.get_root() )
+
+    if len(options.obj_only) != 0:
+        if (include_obj_ids is not None or
+            exclude_obj_ids is not None):
+            raise ValueError('')
+        use_obj_ids = options.obj_only
 
     kalman_rows = flydra.a2.flypos.fuse_obj_ids(
         use_obj_ids, data_file,
