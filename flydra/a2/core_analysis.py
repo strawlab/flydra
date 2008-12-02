@@ -1235,7 +1235,14 @@ class CachingAnalyzer:
                     # data, treat as one object
                     obs_idxs = []
                     for oi in obj_id:
-                        obs_idxs.append( numpy.nonzero(obs_obj_ids == oi)[0] )
+                        tmp_idxes = numpy.nonzero(obs_obj_ids == oi)
+                        try:
+                            tmp_idx = tmp_idxes[0]
+                        except IndexError:
+                            raise ValueError('obj_id %s does not exist in '
+                                             'observations'%oi)
+                        obs_idxs.append( tmp_idx )
+                        del tmp_idxes, tmp_idx
                         ## print 'oi',oi
                         ## print 'oi',type(oi)
                         ## print 'len(obs_idxs[-1])',len(obs_idxs[-1])
