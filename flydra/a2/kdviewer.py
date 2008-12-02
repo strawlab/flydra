@@ -401,6 +401,14 @@ def doit(filename,
         camera.parallel_scale =  0.294595461395
     if 1:
         camera.view_angle =  30.0
+    if 0:
+        camera.parallel_projection =  0
+        camera.focal_point =  [ 0.01268098 , 0.07489683,  0.21150847]
+        camera.position =  [-0.22551933, -0.73470702 , 1.59260368]
+        camera.view_angle =  30.0
+        camera.view_up =  [ 0.21022155,  0.82717069,  0.5211483 ]
+        camera.clipping_range =  [ 1.03936226 , 2.36410673]
+        camera.parallel_scale =  1.0
 
     rw.add_renderer(ren)
     rwi = tvtk.RenderWindowInteractor(render_window=rw,
@@ -557,8 +565,6 @@ def doit(filename,
                 use_obj_ids, data_file,
                 dynamic_model_name = dynamic_model_name,
                 frames_per_second=fps)
-            print rows['frame'].min(),rows['frame'].max()
-            print 'hmm'
             breakout = True # exit main loop after this run -- we're fusing all
         else:
             rows = ca.load_data(
@@ -925,7 +931,7 @@ def doit(filename,
     for a in actors:
         ren.add_actor(a)
 
-    if 1:
+    if options.show_axes:
         # Inspired by pyface.tvtk.decorated_scene
         marker = tvtk.OrientationMarkerWidget()
 
@@ -946,8 +952,9 @@ def doit(filename,
         marker.interactor = rwi
         marker.enabled = True
 
-    if not show_only_track_ends and not obj_color and had_any_obj_id_data:
-
+    if (not show_only_track_ends and not obj_color and had_any_obj_id_data and
+        options.highlight_start is None and
+        options.highlight_stop is None):
         # Create a scalar bar
         if vertical_scale:
             scalar_bar = tvtk.ScalarBarActor(orientation='vertical',
@@ -1159,6 +1166,9 @@ def main():
 
     parser.add_option("--show-obj-ids", action='store_true',dest='show_obj_ids',
                       help="show object ID numbers at start of trajectory")
+
+    parser.add_option("--disable-axes", action='store_false',dest='show_axes',
+                      default=True, help="disable showing axies")
 
     parser.add_option("--show-frames", type='int', default=0,
                       help="show frame number interval (0=no frame numbers)")
