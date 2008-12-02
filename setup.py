@@ -95,6 +95,7 @@ setup(name='flydra',
 
 # testing
     'flydra_test_commands = flydra.test_commands:main',
+    'flydra_test_mpl_markersize = flydra.test.mpl_markersize:main',
     ],
 
     'gui_scripts': [

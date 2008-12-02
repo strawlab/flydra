@@ -71,6 +71,15 @@ the 2D data plotted."""
 
      },
 
+    # Matplotlib tests
+
+    {'cmd':('flydra_test_mpl_markersize --save-fig=%(target)s'),
+     'suffix':'.png',
+     'result':'mpl_markersize.png',
+     'title':'Matplotlib test',
+     'show in gallery':False,
+     },
+
     ]
 
 # non-image based commands
@@ -198,9 +207,13 @@ def generate_commands(info):
         command_gallery.append(generate_inner_loop(this_info))
     return command_gallery
 
-def filter_image_gallery( image_gallery_list, result_names, widths ):
+def filter_image_gallery( image_gallery_list, result_names, widths, show_list ):
+    """return a list of strings for inclusion into gallery.rst"""
     result = []
-    for ig,result_name,width in zip(image_gallery_list,result_names,widths):
+    for ig,result_name,width,show in zip(
+        image_gallery_list,result_names,widths,show_list):
+        if not show:
+            continue
         igs = ig.split('\n')
         new_igs = []
         for igi in igs:
@@ -218,10 +231,12 @@ def filter_image_gallery( image_gallery_list, result_names, widths ):
 
 def generate():
     image_gallery = generate_commands(image_info)
-    image_gallery=filter_image_gallery( image_gallery,
-                                        [i['result'] for i in image_info],
-                                        [600]*len(image_gallery),
-                                        )
+    image_gallery=filter_image_gallery(
+        image_gallery,
+        [i['result'] for i in image_info],
+        [600]*len(image_gallery),
+        [i.get('show in gallery',True) for i in image_info],
+        )
     image_gallery = '\n'.join(image_gallery)
 
     command_gallery = generate_commands(command_info)
