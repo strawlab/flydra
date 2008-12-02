@@ -488,7 +488,7 @@ class StimulusFanout(object):
         for single_episode in self.root.findall("single_episode"):
             for kh5_file in single_episode.findall("kh5_file"):
                 fname = kh5_file.attrib['name']
-                fname_timestamp_string = os.path.splitext(os.path.split(fname)[-1])[0][4:]
+                fname_timestamp_string = os.path.splitext(os.path.split(fname)[-1])[0][4:19]
                 if fname_timestamp_string == timestamp_string:
                     if 1:
                         # check that the file has not changed
