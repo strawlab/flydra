@@ -1,7 +1,6 @@
 from __future__ import division
 import numpy as np
 import matplotlib
-import pylab
 
 import plot_timeseries
 import plot_top_view
@@ -11,6 +10,7 @@ from optparse import OptionParser
 import os
 
 def doit(options=None):
+    import pylab # do after matplotlib.use() call
     fig=pylab.figure(figsize=(10,7.5))
     figtitle = options.kalman_filename.split('.')[0]
     pylab.figtext(0,0,figtitle)

@@ -24,7 +24,6 @@ import matplotlib
 rcParams = matplotlib.rcParams
 rcParams['xtick.major.pad'] = 10
 rcParams['ytick.major.pad'] = 10
-import pylab
 
 import flydra.analysis.result_utils as result_utils
 
@@ -51,6 +50,7 @@ class Frames2Time:
         return f2
 
 def plot_timeseries(subplot=None,options = None):
+    import pylab # do after matplotlib.use() call
     kalman_filename=options.kalman_filename
 
     if not hasattr(options,'frames'):
@@ -354,7 +354,7 @@ def plot_timeseries(subplot=None,options = None):
         ax.hist(Xz_all, bins=bins,orientation='horizontal')
         ax.set_xticks([])
         ax.set_yticks([])
-        xlim = ax.get_xlim().copy()
+        xlim = tuple(ax.get_xlim()) # matplotlib 0.98.3 returned np.array view
         ax.set_xlim((xlim[1],xlim[0]))
         ax.axhline(max_z,color='m')
 

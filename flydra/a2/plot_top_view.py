@@ -21,7 +21,6 @@ import matplotlib
 rcParams = matplotlib.rcParams
 rcParams['xtick.major.pad'] = 10
 rcParams['ytick.major.pad'] = 10
-import pylab
 
 import core_analysis
 import flydra.a2.xml_stimulus as xml_stimulus
@@ -49,8 +48,9 @@ class keep_axes_dimensions_if(object):
         self.mybool = mybool
     def __enter__(self):
         if self.mybool:
-            self.xlim = self.ax.get_xlim().copy()
-            self.ylim = self.ax.get_ylim().copy()
+            # matplotlib 0.98.3 returned np.array view
+            self.xlim = tuple(self.ax.get_xlim())
+            self.ylim = tuple(self.ax.get_ylim())
     def __exit__(self,etype,eval,etb):
         if self.mybool:
             self.ax.set_xlim(self.xlim)
@@ -344,6 +344,7 @@ def plot_top_and_side_views(subplot=None,
 def doit(options = None,
          ):
     kalman_filename=options.kalman_filename
+    import pylab # do after matplotlib.use() call
 
     fig = pylab.figure(figsize=(5,8))
     figtitle = kalman_filename.split('.')[0]
