@@ -7,8 +7,8 @@ import warnings
 from enthought.tvtk.api import tvtk
 from enthought.pyface.api import GUI
 # The core Engine.
-from enthought.mayavi.engine import Engine
-from enthought.mayavi.view.engine_view import EngineView
+from enthought.mayavi.core.engine import Engine
+from enthought.mayavi.core.ui.engine_view import EngineView
 # Usual MayaVi imports
 from enthought.mayavi.sources.api import VTKXMLFileReader, VTKDataSource
 from enthought.mayavi.modules.api import Outline, ScalarCutPlane, Streamline
@@ -34,7 +34,7 @@ import flydra.analysis.result_utils as result_utils
 import cgtypes # import cgkit 1.x
 
 from enthought.pyface.api import Widget, Window
-from enthought.pyface.tvtk.api import Scene, DecoratedScene
+from enthought.tvtk.pyface.api import Scene, DecoratedScene
 from enthought.pyface.api import SplitApplicationWindow
 from enthought.pyface.api import FileDialog, OK
 
@@ -320,7 +320,10 @@ def main():
     v = Vectors()
     v.glyph.scale_mode = 'data_scaling_off'
     v.glyph.color_mode = 'color_by_scalar'
-    v.glyph.glyph_source = tvtk.SphereSource(radius=options.radius)
+    v.glyph.glyph_source.glyph_position='center'
+    v.glyph.glyph_source.glyph_source = tvtk.SphereSource(
+        radius=options.radius,
+        )
     e.add_module(v)
 
     if stim_xml is not None:
