@@ -20,6 +20,7 @@ import pkg_resources
 import flydra.reconstruct as reconstruct
 import flydra.analysis.result_utils as result_utils
 import flydra.a2.xml_stimulus as xml_stimulus
+import flydra.a2.flypos
 import flydra.analysis.PQmath as PQmath
 
 pacific = pytz.timezone('US/Pacific')
@@ -398,6 +399,8 @@ def doit(filename,
         camera.view_up =  (0.025460553314687551, 0.37610935779812088, 0.92622541057865326)
         camera.clipping_range =  (0.38425211041324286, 1.3299558503823485)
         camera.parallel_scale =  0.294595461395
+    if 1:
+        camera.view_angle =  30.0
 
     rw.add_renderer(ren)
     rwi = tvtk.RenderWindowInteractor(render_window=rw,
@@ -424,7 +427,11 @@ def doit(filename,
 
     had_any_obj_id_data = False
     obj_id2verts_frames = {}
+
+    breakout = False
     for obj_id_enum,obj_id in enumerate(use_obj_ids):
+        if breakout:
+            break
         if (obj_id_enum%100)==0 and len(use_obj_ids) > 5:
             print 'obj_id %d of %d'%(obj_id_enum,len(use_obj_ids))
             if 0:
@@ -438,35 +445,43 @@ def doit(filename,
         if not is_mat_file:
             # h5 file has timestamps for each frame
             #my_rows = ca.get_recarray(data_file,obj_id,which_data='kalman')
-            try:
-                my_rows = ca.load_data( obj_id, data_file,
-                                        use_kalman_smoothing=use_kalman_smoothing,
-                                        dynamic_model_name = dynamic_model_name,
-                                        frames_per_second=fps,
-                                        up_dir=up_dir,
-                                        )
-            except core_analysis.ObjectIDDataError, err:
-                continue
+            if not options.fuse:
+                # this is only useful for printing information
+                try:
+                    my_rows = ca.load_data(
+                        obj_id, data_file,
+                        use_kalman_smoothing=use_kalman_smoothing,
+                        dynamic_model_name = dynamic_model_name,
+                        frames_per_second=fps,
+                        up_dir=up_dir,
+                        )
+                except core_analysis.ObjectIDDataError, err:
+                    continue
 
-            my_timestamp = my_rows['timestamp'][0]
-            dur = my_rows['timestamp'][-1] - my_timestamp
-            print '%d 3D triangulation started at %s (took %.2f seconds)'%(obj_id,datetime.datetime.fromtimestamp(my_timestamp,pacific),dur)
-            print '  estimate frames: %d - %d (%d frames)'%(
-                my_rows['frame'][0],
-                my_rows['frame'][-1],
-                int(my_rows['frame'][-1])-(my_rows['frame'][0])),
-            if fps is None:
-                fpses = [60.0, 100.0, 200.0]
-            else:
-                fpses = [fps]
-            for my_fps in fpses:
-                    print '(%.1f sec at %.1f fps)'%(
-                        (my_rows['frame'][-1]-my_rows['frame'][0])/my_fps,
-                        my_fps),
-            print
+            if 0:
+                my_timestamp = my_rows['timestamp'][0]
+                dur = my_rows['timestamp'][-1] - my_timestamp
+                print '%d 3D triangulation started at %s (took %.2f seconds)'%(
+                    obj_id,
+                    datetime.datetime.fromtimestamp(my_timestamp,pacific),
+                    dur)
+                print '  estimate frames: %d - %d (%d frames)'%(
+                    my_rows['frame'][0],
+                    my_rows['frame'][-1],
+                    int(my_rows['frame'][-1])-(my_rows['frame'][0])),
+                if fps is None:
+                    fpses = [60.0, 100.0, 200.0]
+                else:
+                    fpses = [fps]
+                for my_fps in fpses:
+                        print '(%.1f sec at %.1f fps)'%(
+                            (my_rows['frame'][-1]-my_rows['frame'][0])/my_fps,
+                            my_fps),
+                print
 
         if show_observations:
-            obs_rows, obs_directions = ca.load_dynamics_free_MLE_position(obj_id, data_file, with_directions=True)
+            obs_rows, obs_directions = ca.load_dynamics_free_MLE_position(
+                obj_id, data_file, with_directions=True)
 
             if start is not None or stop is not None:
                 obs_frames = obs_rows['frame']
@@ -481,7 +496,8 @@ def doit(filename,
             obs_z = obs_rows['z']
             obs_frames = obs_rows['frame']
             if len(obs_frames):
-                print '  observation frames: %d - %d'%(obs_frames[0], obs_frames[-1])
+                print '  observation frames: %d - %d'%(
+                    obs_frames[0], obs_frames[-1])
             obs_X = numpy.vstack((obs_x,obs_y,obs_z)).T
 
             pd = tvtk.PolyData()
@@ -505,11 +521,12 @@ def doit(filename,
             direction_length = 0.06 # 3 cm
             if options.show_observations_orientation and len(obs_directions):
                 assert numpy.alltrue(PQmath.is_unit_vector(obs_directions))
-                obs_directions = core_analysis.choose_orientations(obs_rows, obs_directions,
-                                                                   frames_per_second=fps,
-                                                                   elevation_up_bias_degrees=0,
-                                                                   up_dir=up_dir,
-                                                                   )
+                obs_directions = core_analysis.choose_orientations(
+                    obs_rows, obs_directions,
+                    frames_per_second=fps,
+                    elevation_up_bias_degrees=0,
+                    up_dir=up_dir,
+                    )
                 assert numpy.alltrue(PQmath.is_unit_vector(obs_directions))
 
                 heads = obs_X+obs_directions*direction_length
@@ -534,12 +551,25 @@ def doit(filename,
 
                 del verts # make sure it's not used below
 
-        rows = ca.load_data( obj_id, data_file,
-                             use_kalman_smoothing=use_kalman_smoothing,
-                             dynamic_model_name = dynamic_model_name,
-                             frames_per_second=fps,
-                             up_dir=up_dir,
-                             )
+        if options.fuse:
+            print 'fusing %s'%use_obj_ids
+            rows = flydra.a2.flypos.fuse_obj_ids(
+                use_obj_ids, data_file,
+                dynamic_model_name = dynamic_model_name,
+                frames_per_second=fps)
+            print rows['frame'].min(),rows['frame'].max()
+            print 'hmm'
+            breakout = True # exit main loop after this run -- we're fusing all
+        else:
+            rows = ca.load_data(
+                obj_id,
+                data_file,
+                use_kalman_smoothing=use_kalman_smoothing,
+                frames_per_second=fps,
+                dynamic_model_name = dynamic_model_name,
+                return_smoothed_directions = options.smooth_orientations,
+                up_dir=up_dir,
+                )
 
         if len(rows):
             frames = rows['frame']
@@ -564,23 +594,6 @@ def doit(filename,
         had_any_obj_id_data = True
 
         if not show_only_track_ends:
-            try:
-                rows = ca.load_data(obj_id,
-                                    data_file,
-                                    use_kalman_smoothing=use_kalman_smoothing,
-                                    frames_per_second=fps,
-                                    dynamic_model_name = dynamic_model_name,
-                                    return_smoothed_directions = options.smooth_orientations,
-                                    up_dir=up_dir,
-                                    )
-            except Exception, err:
-                if 1:
-                    raise
-                else:
-                    print 'ERROR: while processing obj_id %d, skipping this obj_id'%obj_id
-                    print err
-                    continue
-
             frames = rows['frame']
             if start is not None or stop is not None:
                 ok1 = frames >= start
@@ -605,20 +618,17 @@ def doit(filename,
                 Ps_position = numpy.sqrt( Ps_position) # put in distance units, not variance units
             if link_all_simultaneous_objs:
                 allsave.append( rows )
-            if not obj_color:
-                if 0:
-                    # trust kalman
-                    vels = numpy.array( [rows['xvel'], rows['yvel'], rows['zvel']] )#. T
-                    speeds = numpy.sqrt(numpy.sum(vels**2,axis=0))
+            if (not obj_color and
+                options.highlight_start is not None and
+                options.highlight_stop is not None):
+                if len(verts)>=3:
+                    verts_central_diff = verts[2:,:] - verts[:-2,:]
+                    dt = 1.0/fps
+                    vels = verts_central_diff/(2*dt)
+                    speeds = numpy.sqrt(numpy.sum(vels**2,axis=1))
+                    speeds = numpy.array([speeds[0]] + list(speeds) + [speeds[-1]]) # pad end points
                 else:
-                    if len(verts)>=3:
-                        verts_central_diff = verts[2:,:] - verts[:-2,:]
-                        dt = 1.0/fps
-                        vels = verts_central_diff/(2*dt)
-                        speeds = numpy.sqrt(numpy.sum(vels**2,axis=1))
-                        speeds = numpy.array([speeds[0]] + list(speeds) + [speeds[-1]]) # pad end points
-                    else:
-                        speeds = numpy.zeros( (verts.shape[1],) )
+                    speeds = numpy.zeros( (verts.shape[1],) )
                 max_speed_this_obj = numpy.max(speeds)
                 if max_speed_this_obj > max_vel:
                     print 'WARNING: max_vel = %s, but max speed is %.2f'%(max_vel,max_speed_this_obj)
@@ -677,7 +687,9 @@ def doit(filename,
         if not show_only_track_ends:
             pd = tvtk.PolyData()
             pd.points = verts
-            if not obj_color:
+            if (not obj_color and
+                options.highlight_start is not None and
+                options.highlight_stop is not None):
                 pd.point_data.scalars = speeds
 #            if numpy.any(speeds>max_vel):
 #                print 'WARNING: maximum speed (%.3f m/s) exceeds color map max'%(speeds.max(),)
@@ -702,7 +714,11 @@ def doit(filename,
             vel_mapper = tvtk.PolyDataMapper(input=g.output)
             if not obj_color:
                 vel_mapper.lookup_table = lut
-                vel_mapper.scalar_range = 0.0, float(max_vel)
+                if (options.highlight_start is not None and
+                    options.highlight_stop is not None):
+                    vel_mapper.scalar_range = 0.0, float(max_vel)
+                else:
+                    vel_mapper.scalar_range = 0.0, 1.0
             a = tvtk.Actor(mapper=vel_mapper)
             if show_observations:
                 a.property.opacity = 0.3 # sets transparency/alpha
@@ -715,6 +731,14 @@ def doit(filename,
                     a.property.color = .3, .65, .10
                 if obj_id%4==3:
                     a.property.color = 0, 1, 0
+            elif (options.highlight_start is not None or
+                  options.highlight_stop is not None):
+                highlight = np.ones( rows['frame'].shape, dtype=np.bool )
+                if options.highlight_start is not None:
+                    highlight &= rows['frame'] >= options.highlight_start
+                if options.highlight_stop is not None:
+                    highlight &= rows['frame'] <= options.highlight_stop
+                pd.point_data.scalars = highlight.astype(np.float)
             actors.append(a)
             actor2obj_id[a] = obj_id
 
@@ -1057,15 +1081,17 @@ def main():
 ##                      help="debug level",
 ##                      metavar="DEBUG")
 
-    parser.add_option("--start", dest='start',
-                      type="int",
+    parser.add_option("--start", type="int",
                       help="first frame to plot",
                       metavar="START")
 
-    parser.add_option("--stop", dest='stop',
-                      type="int",
+    parser.add_option("--stop", type="int",
                       help="last frame to plot",
                       metavar="STOP")
+
+    parser.add_option("--highlight-start", type="int")
+
+    parser.add_option("--highlight-stop", type="int")
 
     parser.add_option("--obj-start", dest='obj_start',
                       type="int",
@@ -1085,7 +1111,9 @@ def main():
                       type="string",
                       dest="draw_stim_func_str",
                       default=None,
-                      help="name of drawing plugin. use a non-existant name to print list of availabe names",
+                      help=("DEPRECATED. name of drawing plugin. use a "
+                            "non-existant name to print list of "
+                            "availabe names"),
                       )
 
     parser.add_option("--stim-xml",
@@ -1109,7 +1137,8 @@ def main():
                       help="show N longest traces")
 
     parser.add_option("--min-length", dest="min_length", type="int",
-                      help="minimum number of tracked points (not observations!) required to plot",
+                      help=("minimum number of tracked points "
+                            "(not observations!) required to plot"),
                       default=10,)
 
     parser.add_option("--radius", type="float",
@@ -1123,7 +1152,8 @@ def main():
                       default=0.25)
 
     parser.add_option("--exclude-vel", type="float",
-                      help="exclude traces with median velocity less than this value",
+                      help=("exclude traces with median velocity less than "
+                            "this value"),
                       dest='exclude_vel_mps',
                       default=None)
 
@@ -1133,10 +1163,12 @@ def main():
     parser.add_option("--show-frames", type='int', default=0,
                       help="show frame number interval (0=no frame numbers)")
 
-    parser.add_option("--show-saccades", action='store_true',dest='show_saccades',
+    parser.add_option("--show-saccades", action='store_true',
+                      dest='show_saccades',
                       help="show saccades")
 
-    parser.add_option("--show-only-track-ends", action='store_true',dest='show_only_track_ends')
+    parser.add_option("--show-only-track-ends", action='store_true',
+                      dest='show_only_track_ends')
 
     parser.add_option("--show-observations", action='store_true',
                       help="show observations")
@@ -1154,26 +1186,32 @@ def main():
 
     parser.add_option("--fps", dest='fps', type='float',
                       default = None,
-                      help="frames per second (used for Kalman filtering/smoothing)")
+                      help=("frames per second (used for Kalman "
+                            "filtering/smoothing)"))
 
     parser.add_option("--disable-kalman-smoothing", action='store_false',
                       dest='use_kalman_smoothing',
                       default=True,
-                      help="show original, causal Kalman filtered data (rather than Kalman smoothed observations)")
+                      help=("show original, causal Kalman filtered data "
+                            "(rather than Kalman smoothed observations)"))
 
-    parser.add_option("--show-kalman-P", action='store_true',dest='show_kalman_P',
+    parser.add_option("--show-kalman-P", action='store_true',
+                      dest='show_kalman_P',
                       default=False,
                       help="show Kalman P"),
 
-    parser.add_option("--vertical-scale", action='store_true',dest='vertical_scale',
+    parser.add_option("--vertical-scale", action='store_true',
+                      dest='vertical_scale',
                       help="scale bar has vertical orientation")
 
     parser.add_option("--save-still", action='store_true',dest='save_still',
                       help="save still image as kdviewer_output.png")
 
-    parser.add_option("--obj-color", action='store_true',default=False,dest='obj_color')
+    parser.add_option("--obj-color", action='store_true',default=False,
+                      dest='obj_color')
 
-    parser.add_option("--link-all-simultaneous-objs", action='store_true', default=False,
+    parser.add_option("--link-all-simultaneous-objs", action='store_true',
+                      default=False,
                       dest='link_all_simultaneous_objs')
 
     parser.add_option("--force-stimulus", action='store_true',
@@ -1191,9 +1229,10 @@ def main():
     parser.add_option("--hack-postmultiply", type='string',
                       help="multiply 3D coordinates by a 3x4 matrix")
 
-    ## parser.add_option("--fuse", action='store_true',
-    ##                   help='fuse obj_ids specified in fanout .xml file into one contiguous trace',
-    ##                   default=False)
+    parser.add_option("--fuse", action='store_true',
+                      help=('fuse obj_ids specified in fanout .xml file into '
+                            'one contiguous trace'),
+                      default=False)
 
     (options, args) = parser.parse_args()
 
