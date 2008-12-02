@@ -18,6 +18,7 @@ import matplotlib.ticker as ticker
 import pylab
 
 import flydra.analysis.result_utils as result_utils
+import flydra.a2.utils as utils
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 import core_analysis
 
@@ -86,17 +87,26 @@ def doit(
         cam_ids = cam_id2camns.keys()
         cam_ids.sort()
 
-        all_data = h5.root.data2d_distorted[:]
         if start is not None or stop is not None:
-            frames = all_data['frame']
+            frames = h5.root.data2d_distorted.read(field='frame')
             valid_cond = numpy.ones( frames.shape, dtype=numpy.bool)
             if start is not None:
                 valid_cond = valid_cond & (frames >= start)
             if stop is not None:
                 valid_cond = valid_cond & (frames <= stop)
-            all_data = all_data[valid_cond]
-            del valid_cond
-            del frames
+            read_idxs = np.nonzero(valid_cond)[0]
+            all_data = []
+            for start_stop in utils.iter_contig_chunk_idxs( read_idxs ):
+                (read_idx_start_idx, read_idx_stop_idx) = start_stop
+                start_idx = read_idxs[read_idx_start_idx]
+                stop_idx = read_idxs[read_idx_stop_idx-1]
+                these_rows = h5.root.data2d_distorted.read(start=start_idx,
+                                                           stop=stop_idx+1)
+                all_data.append(these_rows)
+            all_data = np.concatenate( all_data )
+            del valid_cond, frames, start_idx, stop_idx, these_rows, read_idxs
+        else:
+            all_data = h5.root.data2d_distorted[:]
 
         start_frame = all_data['frame'].min()
         stop_frame = all_data['frame'].max()
@@ -186,6 +196,8 @@ def doit(
             ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
             ax.yaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
             h5spread.close()
+            del frames
+            del spread
         h5.close()
 
     if kalman_filename is not None:
@@ -201,7 +213,18 @@ def doit(
 
         # copied from save_movies_overlay.py
         ca = core_analysis.get_global_CachingAnalyzer()
-        obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
+        (obj_ids, use_obj_ids, is_mat_file, data_file,
+         extra) = ca.initial_file_load(kalman_filename)
+        if 'frames' in extra:
+            frames = extra['frames']
+            valid_cond = np.ones((len(extra['frames'],)),dtype=np.bool)
+            if start is not None:
+                valid_cond &= frames >= start
+            if stop is not None:
+                valid_cond &= frames <= stop
+            obj_ids = obj_ids[valid_cond]
+            use_obj_ids = np.unique(obj_ids)
+            print 'quick found use_obj_ids',use_obj_ids
         if is_mat_file:
             raise ValueError('cannot use .mat file for kalman_filename '
                              'because it is missing the reconstructor '
@@ -315,10 +338,14 @@ def doit(
                         frames_per_second=fps,
                         up_dir=up_dir,
                         )
-                    kalman_rows.append(my_rows)
                 except core_analysis.NotEnoughDataToSmoothError, err:
                     # OK, we don't have data from this obj_id
-                    pass
+                    continue
+                else:
+                    kalman_rows.append(my_rows)
+            if not len(kalman_rows):
+                # no data
+                continue
             kalman_rows = numpy.concatenate( kalman_rows )
             kalman_3d_frame = kalman_rows['frame']
 
