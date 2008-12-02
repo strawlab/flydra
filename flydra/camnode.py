@@ -445,7 +445,7 @@ class ProcessCamClass(object):
         self._camera_center_meters = nx.array( [ X/T, Y/T, Z/T, 1.0 ] )
 
     def make_reconstruct_helper(self, intlin, intnonlin):
-        if intlin is None and innonlin is None:
+        if intlin is None and intnonlin is None:
             self._hlper = None
             return
 
