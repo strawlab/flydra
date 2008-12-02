@@ -1059,16 +1059,21 @@ class CachingAnalyzer:
              Dictionary with addtional information.
         """
         if filename not in self.loaded_filename_cache:
-            obj_ids, unique_obj_ids, is_mat_file, data_file, extra = _initial_file_load(filename)
+            (obj_ids, unique_obj_ids, is_mat_file, data_file,
+             extra) = _initial_file_load(filename)
 
             diff = numpy.int64(obj_ids[1:])-numpy.int64(obj_ids[:-1])
-            assert numpy.all(diff >= 0) # make sure obj_ids in ascending order for fast search
+            # for fast search:
+            assert numpy.all(diff >= 0) # make sure obj_ids in ascending order
 
-            self.loaded_filename_cache[filename] = (obj_ids, unique_obj_ids, is_mat_file, extra)
-            self.loaded_filename_cache2[filename] = data_file # maintain only a weak ref to data file
+            self.loaded_filename_cache[filename] = (obj_ids, unique_obj_ids,
+                                                    is_mat_file, extra)
+            # maintain only a weak ref to data file:
+            self.loaded_filename_cache2[filename] = data_file
 
-        (obj_ids, unique_obj_ids, is_mat_file, extra) = self.loaded_filename_cache[filename]
-        data_file                                  = self.loaded_filename_cache2[filename]
+        (obj_ids, unique_obj_ids, is_mat_file,
+         extra)   = self.loaded_filename_cache[filename]
+        data_file = self.loaded_filename_cache2[filename]
 
         self.loaded_datafile_cache[data_file] = True
         return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
