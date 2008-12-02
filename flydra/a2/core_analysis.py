@@ -204,20 +204,24 @@ def _initial_file_load(filename):
     else:
         kresults = tables.openFile(filename,mode='r')
         obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
+        extra['frames'] = kresults.root.kalman_estimates.read(field='frame')
         unique_obj_ids = numpy.unique(obj_ids)
         is_mat_file = False
         data_file = kresults
         extra['kresults'] = kresults
         if hasattr(kresults.root,'textlog'):
             try:
-                time_model = flydra.analysis.result_utils.get_time_model_from_data(kresults)
+                time_model = (
+                    flydra.analysis.result_utils.get_time_model_from_data(
+                    kresults))
             except flydra.analysis.result_utils.TextlogParseError, err:
                 pass
             else:
                 if time_model is not None:
                     extra['time_model'] = time_model
         if hasattr(kresults.root.kalman_estimates.attrs,'dynamic_model_name'):
-            extra['dynamic_model_name'] = kresults.root.kalman_estimates.attrs.dynamic_model_name
+            extra['dynamic_model_name'] = (
+                kresults.root.kalman_estimates.attrs.dynamic_model_name)
     return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
 
 def kalman_smooth(orig_rows,
@@ -1062,9 +1066,11 @@ class CachingAnalyzer:
             (obj_ids, unique_obj_ids, is_mat_file, data_file,
              extra) = _initial_file_load(filename)
 
-            diff = numpy.int64(obj_ids[1:])-numpy.int64(obj_ids[:-1])
-            # for fast search:
-            assert numpy.all(diff >= 0) # make sure obj_ids in ascending order
+            if 0:
+                # Why did I used to have this assertion check?
+                diff = numpy.int64(obj_ids[1:])-numpy.int64(obj_ids[:-1])
+                # for fast search:
+                assert numpy.all(diff >= 0) # make sure obj_ids ascending
 
             self.loaded_filename_cache[filename] = (obj_ids, unique_obj_ids,
                                                     is_mat_file, extra)
