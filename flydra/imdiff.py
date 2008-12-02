@@ -22,7 +22,7 @@ def main():
     fraction_same = 1.0-fraction_different
 
     print 'fraction_same=%s'%fraction_same
-    plt.imshow(di2d,origin='lower',interpolation='nearest')
+    plt.imshow(di2d,origin='upper',interpolation='nearest')
     plt.colorbar()
     plt.show()
 
