@@ -42,7 +42,9 @@ def fuse_obj_ids(use_obj_ids, data_file,
             tmp = kalman_rows['frame']
             #print tmp
 
-            assert tmp[0] > frames[-1][-1] # ensure new frames follow last (hmm, why do we care? this seems wrong, anyway...)
+            #(hmm, why do we care? this seems wrong, anyway...)
+            #assert tmp[0] > frames[-1][-1] # ensure new frames follow last
+
             assert numpy.all((tmp[1:]-tmp[:-1]) > 0) # ensure new frames are ordered
 
         this_x = kalman_rows['x']
