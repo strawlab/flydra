@@ -50,7 +50,6 @@ class Frames2Time:
         return f2
 
 def plot_timeseries(subplot=None,options = None):
-    import pylab # do after matplotlib.use() call
     kalman_filename=options.kalman_filename
 
     if not hasattr(options,'frames'):
@@ -94,6 +93,8 @@ def plot_timeseries(subplot=None,options = None):
         print 'opening kalman file %s %s'%(kalman_filename,actual_md5)
         obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
 
+    include_obj_ids = None
+    exclude_obj_ids = None
     do_fuse = False
     if options.stim_xml:
         file_timestamp = data_file.filename[4:19]
@@ -142,6 +143,18 @@ def plot_timeseries(subplot=None,options = None):
     Xz_all = []
 
     fuse_did_once = False
+    if 'frames' in extra:
+        if (start is not None) or (stop is not None):
+
+            print 'filtering objects on start/stop'
+            valid_frames = np.ones( (len(extra['frames']),), dtype=np.bool)
+            if start is not None:
+                valid_frames &= extra['frames'] >= start
+            if stop is not None:
+                valid_frames &= extra['frames'] <= stop
+            this_use_obj_ids = np.unique(obj_ids[valid_frames])
+            use_obj_ids = list( set(use_obj_ids).intersection(this_use_obj_ids))
+
     for obj_id in use_obj_ids:
         if not do_fuse:
             try:
@@ -385,6 +398,7 @@ def plot_timeseries(subplot=None,options = None):
 def doit(
          options = None,
          ):
+    import pylab # do after matplotlib.use() call
 
     if options.up_dir is not None:
         options.up_dir = core_analysis.parse_seq(options.up_dir)
