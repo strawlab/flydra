@@ -1,7 +1,3 @@
-# I think this script is similar to
-# flydra/analysis/flydra_analysis_plot_kalman_2d.py but better. I
-# wrote that one a long time ago. - ADS 20080112
-
 from __future__ import division
 if 1:
     # deal with old files, forcing to numpy
@@ -21,6 +17,7 @@ import flydra.a2.xml_stimulus as xml_stimulus
 import flydra.a2.flypos
 
 import matplotlib
+import matplotlib.ticker as ticker
 rcParams = matplotlib.rcParams
 rcParams['xtick.major.pad'] = 10
 rcParams['ytick.major.pad'] = 10
@@ -145,8 +142,6 @@ def plot_timeseries(subplot=None,options = None):
     fuse_did_once = False
     if 'frames' in extra:
         if (start is not None) or (stop is not None):
-
-            print 'filtering objects on start/stop'
             valid_frames = np.ones( (len(extra['frames']),), dtype=np.bool)
             if start is not None:
                 valid_frames &= extra['frames'] >= start
@@ -393,6 +388,12 @@ def plot_timeseries(subplot=None,options = None):
         ax.set_xlim(0,2)
         ax.set_ylabel('probability density')
         ax.set_xlabel('velocity (m/s)')
+
+    for ax in subplot.itervalues():
+        ax.xaxis.set_major_formatter(
+            ticker.FormatStrFormatter("%d"))
+        ax.yaxis.set_major_formatter(
+            ticker.FormatStrFormatter("%s"))
     return line2obj_id
 
 def doit(
