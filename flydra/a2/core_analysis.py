@@ -306,11 +306,8 @@ def observations2smoothed(obj_id,
     field_names = tables.Description(KalmanEstimates().columns)._v_names
 
     if not len(orig_rows):
-        # if no input data, return empty output data
-        list_of_cols = [[]]*len(field_names)
-        rows = numpy.rec.fromarrays(list_of_cols,
-                                    names = field_names)
-        return rows
+        raise NotEnoughDataToSmoothError('observations2smoothed() called with '
+                                         'no input data')
 
     #print "orig_rows['frame'][-1]",orig_rows['frame'][-1]
 
@@ -728,11 +725,12 @@ class PreSmoothedDataCache(object):
             # pre-existing table NOT found
             h5table = None
             have_body_axis_information = 'hz_line0' in orig_rows.dtype.fields
-            rows, fanout_idx = observations2smoothed(obj_id,orig_rows,
-                                                     frames_per_second=frames_per_second,
-                                                     dynamic_model_name=dynamic_model_name,
-                                                     allocate_space_for_direction=have_body_axis_information,
-                                                     )
+            rows, fanout_idx = observations2smoothed(
+                obj_id,orig_rows,
+                frames_per_second=frames_per_second,
+                dynamic_model_name=dynamic_model_name,
+                allocate_space_for_direction=have_body_axis_information,
+                )
 
             if have_body_axis_information:
                 orig_hzlines = numpy.array([orig_rows['hz_line0'],
@@ -1317,7 +1315,7 @@ class CachingAnalyzer:
                     # another idea would be to implement crazy
                     # EKF-based smoothing...
 
-                if len(orig_rows)==1:
+                if len(orig_rows)<=1:
                     raise NotEnoughDataToSmoothError(
                         'not enough data from obj_id %d was found'%obj_id)
 
