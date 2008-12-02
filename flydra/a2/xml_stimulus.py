@@ -155,7 +155,8 @@ class Stimulus(object):
         """deprecated function"""
         if 1:
             import warnings
-            warnings.warn("This function does not do anything anymore.",DeprecationWarning,stacklevel=2)
+            warnings.warn("This function does not do anything anymore.",
+                          DeprecationWarning,stacklevel=2)
             return
 
     def _get_info_for_cylindrical_arena(self,child):
@@ -181,7 +182,8 @@ class Stimulus(object):
         for child1 in child:
             if child1.tag == 'verts4x4':
                 if did_it:
-                    raise ValueError('already parsed a verts4x4 attribute for this cubic_arena')
+                    raise ValueError('already parsed a verts4x4 attribute '
+                                     'for this cubic_arena')
                 did_it = True
                 verts = []
                 for v in child1:
@@ -241,7 +243,8 @@ class Stimulus(object):
                 actors.extend( experiment_layout.cylindrical_arena(info=info))
             elif child.tag == 'cubic_arena':
                 info = self._get_info_for_cubic_arena(child)
-                actors.extend( experiment_layout.cubic_arena(info=info,hack_postmultiply=self.hack_postmultiply))
+                actors.extend( experiment_layout.cubic_arena(
+                    info=info,hack_postmultiply=self.hack_postmultiply))
             elif child.tag == 'cylindrical_post':
                 info = self._get_info_for_cylindrical_post(child)
                 actors.extend( experiment_layout.cylindrical_post(info=info))
@@ -264,7 +267,7 @@ class Stimulus(object):
                 warnings.warn("Unknown node: %s"%child.tag)
 
     def get_distorted_linesegs( self, cam_id ):
-        """Return line segments for the stimulus distorted by the camera model"""
+        """Return line segments for the stimulus distorted by camera model"""
         # mainly copied from self.plot_stim_over_distorted_image()
         R = self._get_reconstructor()
         R = R.get_scaled()
@@ -274,7 +277,8 @@ class Stimulus(object):
     def _get_linesegs( self, projection=None ):
         """good for OpenGL type stuff"""
         if not isinstance(projection,StimProjection):
-            raise ValueError('projection must be instance of xml_stimulus.StimProjection class')
+            raise ValueError('projection must be instance of '
+                             'xml_stimulus.StimProjection class')
         plotted_anything = False
 
         linesegs = []
@@ -286,7 +290,8 @@ class Stimulus(object):
             elif child.tag == 'cylindrical_arena':
                 plotted_anything = True
                 info = self._get_info_for_cylindrical_arena(child)
-                assert numpy.allclose(info['axis'],numpy.array([0,0,1])), "only vertical areas supported at the moment"
+                assert numpy.allclose(info['axis'],numpy.array([0,0,1])), (
+                    "only vertical areas supported at the moment")
 
                 N = 128
                 theta = numpy.linspace(0,2*numpy.pi,N)
@@ -387,7 +392,8 @@ class Stimulus(object):
         """
         if not isinstance(projection,StimProjection):
             print 'projection',projection
-            raise ValueError('projection must be instance of xml_stimulus.StimProjection class')
+            raise ValueError('projection must be instance of '
+                             'xml_stimulus.StimProjection class')
 
         plotted_anything = False
 
@@ -488,7 +494,8 @@ class StimulusFanout(object):
         for single_episode in self.root.findall("single_episode"):
             for kh5_file in single_episode.findall("kh5_file"):
                 fname = kh5_file.attrib['name']
-                fname_timestamp_string = os.path.splitext(os.path.split(fname)[-1])[0][4:19]
+                fname_timestamp_string = os.path.splitext(
+                    os.path.split(fname)[-1])[0][4:19]
                 if fname_timestamp_string == timestamp_string:
                     if 1:
                         # check that the file has not changed
@@ -500,16 +507,22 @@ class StimulusFanout(object):
                         actual_md5 = m.hexdigest()
                         if not expected_md5==actual_md5:
                             bad_md5_found = True
-                    stim_fname = single_episode.find("stimxml_file").attrib['name']
+                    stim_fname = single_episode.find(
+                        "stimxml_file").attrib['name']
                     if self._my_directory is not None:
-                        stim_fname = os.path.join( self._my_directory, stim_fname )
+                        stim_fname = os.path.join(
+                            self._my_directory, stim_fname )
                     if bad_md5_found:
-                        raise ValueError("could not find timestamp_string '%s' with valid md5sum. (Bad md5sum found.)"%timestamp_string)
-                    # return first found episode -- XXX TODO should return them all!
+                        raise ValueError("could not find timestamp_string '%s' "
+                                         "with valid md5sum. (Bad md5sum "
+                                         "found.)"%timestamp_string)
+                    # return first found episode -- XXX TODO return them all!
                     return single_episode, kh5_file, stim_fname
-        raise ValueError("could not find timestamp_string '%s'"%timestamp_string)
+        raise ValueError("could not find timestamp_string '%s'"%(
+            timestamp_string,))
     def get_walking_start_stops_for_timestamp( self, timestamp_string=None ):
-        single_episode, kh5_file, stim_fname = self._get_episode_for_timestamp(timestamp_string=timestamp_string)
+        (single_episode, kh5_file, stim_fname
+         ) = self._get_episode_for_timestamp(timestamp_string=timestamp_string)
         start_stops = []
         for walking in single_episode.findall("walking"):
             start = walking.attrib.get('start',None) # frame number
@@ -519,7 +532,8 @@ class StimulusFanout(object):
             start_stops.append( (start,stop) )
         return start_stops
     def get_obj_ids_for_timestamp( self, timestamp_string=None ):
-        single_episode, kh5_file, stim_fname = self._get_episode_for_timestamp(timestamp_string=timestamp_string)
+        (single_episode, kh5_file, stim_fname
+         ) = self._get_episode_for_timestamp(timestamp_string=timestamp_string)
         for include in single_episode.findall('include'):
             raise ValueError('<single_episode> has <include> tag')
         for exclude in single_episode.findall('exclude'):
@@ -543,8 +557,11 @@ class StimulusFanout(object):
             else:
                 obj_ids = None
         return include_ids, exclude_ids
-    def get_stimulus_for_timestamp( self, timestamp_string=None,hack_postmultiply=None ):
-        single_episode, kh5_file, stim_fname = self._get_episode_for_timestamp(timestamp_string=timestamp_string)
+    def get_stimulus_for_timestamp( self,
+                                    timestamp_string=None,
+                                    hack_postmultiply=None ):
+        (single_episode, kh5_file, stim_fname
+         ) = self._get_episode_for_timestamp(timestamp_string=timestamp_string)
         root = ET.parse(stim_fname).getroot()
         stim = Stimulus(root,hack_postmultiply=hack_postmultiply)
         #stim.verify_timestamp( fname_timestamp_string )
@@ -560,14 +577,18 @@ def xml_fanout_from_filename( filename ):
     sf = StimulusFanout(root,my_directory=my_directory)
     return sf
 
-def xml_stimulus_from_filename( filename, timestamp_string=None, hack_postmultiply=None ):
+def xml_stimulus_from_filename( filename,
+                                timestamp_string=None,
+                                hack_postmultiply=None ):
     root = ET.parse(filename).getroot()
     if root.tag == 'stimxml':
         return Stimulus(root,hack_postmultiply=hack_postmultiply)
     elif root.tag == 'stimulus_fanout_xml':
         assert timestamp_string is not None
         sf = xml_fanout_from_filename( filename )
-        stim = sf.get_stimulus_for_timestamp( timestamp_string=timestamp_string,hack_postmultiply=hack_postmultiply )
+        stim = sf.get_stimulus_for_timestamp(
+            timestamp_string=timestamp_string,
+            hack_postmultiply=hack_postmultiply )
         return stim
     else:
         raise ValueError('unknown XML file')
