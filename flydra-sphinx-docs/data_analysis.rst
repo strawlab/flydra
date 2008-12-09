@@ -13,7 +13,7 @@ Calibration files
 
 Calibrations may be saved as:
 
- * A calibration directory
+ * A calibration directory (see below)
 
  * An .xml file with just the calibration.
 
@@ -22,6 +22,30 @@ Additionally, calibrations may be saved in:
  * .h5 files
 
  * .xml files with stimulus or trajectory information.
+
+Calibration directories
+.......................
+
+To provide compatibility with the `Multi Camera Self Calibration
+Toolbox`_ by Svoboda, et al, the calibration directory includes the
+following files:
+
+ * calibration_units.txt - a string describing the units of the calibration
+ * camera_order.txt - a list of the flydra cam_ids
+ * !IdMat.dat - booleans indicating the valid data
+ * original_cam_centers.dat - TODO
+ * points.dat - the 2D image coordinates of the calibration object
+ * Res.dat - the resolution of the cameras, in pixels
+
+The `Multi Camera Self Calibration Toolbox`_ (written in MATLAB) adds
+several more files. These files contain the extrinsic and intrinsic
+parameters of a pinhole model as well as non-linear terms for a radial
+distortion. flydra_mainbrain loads these files and sends some of this
+information to the camera nodes. Specifically the files are:
+
+ * TODO - (Need to add here.)
+
+.. _Multi Camera Self Calibration Toolbox: http://cmp.felk.cvut.cz/%7Esvoboda/SelfCal/index.html
 
 Image files
 -----------

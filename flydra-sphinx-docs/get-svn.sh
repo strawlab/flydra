@@ -1,1 +1,1 @@
-svn co http://sphinx.googlecode.com/svn/contrib/trunk/numpyext ext
+svn co http://svn.scipy.org/svn/numpy/trunk/doc/sphinxext ext
