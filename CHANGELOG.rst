@@ -1,3 +1,25 @@
+Major changes for 0.4.39
+------------------------
+
+  * Fix debian/control to depend on python-traitsgui
+
+Major changes for 0.4.38
+------------------------
+
+  * Further fixes to data analysis and plotting code to deal with
+    un-synchronized cameras
+
+  * flydra_analysis_calibration_align_gui: show stimulus in correct
+    location with outline in (bugfix)
+
+  * flydra_analysis_plot_timeseries_2d_3d: speedups when plotting 3D
+    data and --start and --stop are given
+
+  * flydra_analysis_plot_timeseries_3d: speedups when --start and
+    --stop are given
+
+  * Documenation improvements, particularly calibration section.
+
 Major changes for 0.4.37
 ------------------------
 
