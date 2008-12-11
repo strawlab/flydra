@@ -38,7 +38,7 @@ def onpick_callback(event):
         xdata = thisline.get_xdata()
         ydata = thisline.get_ydata()
         ind = event.ind
-        print 'picked line:', zip(numpy.take(xdata, ind), numpy.take(ydata, ind))
+        print 'picked line:',zip(numpy.take(xdata, ind), numpy.take(ydata, ind))
 
 def doit(
          filenames=None,
@@ -54,7 +54,11 @@ def doit(
 
     if not use_kalman_smoothing:
         if (fps is not None) or (dynamic_model is not None):
-            print >> sys.stderr, 'WARNING: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting fps and dynamic model options (--fps and --dynamic-model)'
+            print >> sys.stderr, ('WARNING: disabling Kalman smoothing '
+                                  '(--disable-kalman-smoothing) is '
+                                  'incompatable with setting fps and '
+                                  'dynamic model options (--fps and '
+                                  '--dynamic-model)')
 
     ax = None
     ax_by_cam = {}
@@ -69,14 +73,14 @@ def doit(
         else:
             figtitle = ''
         if options.obj_only is not None:
-            figtitle += ' only showing objects: ' + ' '.join(map(str,options.obj_only))
+            figtitle += ' only showing objects: ' + ' '.join(
+                map(str,options.obj_only))
         if figtitle != '':
             pylab.figtext(0,0,figtitle)
 
         h5 = PT.openFile( filename, mode='r' )
-        accum_frame_spread_filename = filename + '.spreadh5'
-        if os.path.exists(accum_frame_spread_filename):
-            h5spread = PT.openFile(accum_frame_spread_filename, mode='r')
+        if options.spreadh5 is not None:
+            h5spread = PT.openFile(options.spreadh5, mode='r')
         else:
             h5spread = None
 
@@ -150,7 +154,8 @@ def doit(
                     mean_val = data['mean_val']
                     sumsqf_val = data['sumsqf_val']
 
-                    p_y_x = some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val )
+                    p_y_x = some_rough_negative_log_likelihood(
+                        pt_area, cur_val, mean_val, sumsqf_val )
                     valid3 = np.isfinite(p_y_x)
                     data = data[valid3]
 
@@ -257,7 +262,8 @@ def doit(
                     start = -numpy.inf
                 if stop is None:
                     stop = numpy.inf
-                valid_cond = (kalman_3d_frame >= start) & (kalman_3d_frame <= stop)
+                valid_cond = ((kalman_3d_frame >= start) &
+                              (kalman_3d_frame <= stop))
 
                 kalman_rows = kalman_rows[valid_cond]
                 kalman_3d_frame = kalman_3d_frame[valid_cond]
@@ -265,21 +271,26 @@ def doit(
             # modified from save_movies_overlay
             for this_3d_row_enum,this_3d_row in enumerate(kalman_rows):
                 if this_3d_row_enum%100 == 0:
-                    print 'doing reprojection error for MLE 3d estimate for row %d of %d'%(this_3d_row_enum, len(kalman_rows))
-                vert = numpy.array([this_3d_row['x'],this_3d_row['y'],this_3d_row['z']])
+                    print ('doing reprojection error for MLE 3d estimate for '
+                           'row %d of %d'%(this_3d_row_enum, len(kalman_rows)))
+                vert = numpy.array([this_3d_row['x'],
+                                    this_3d_row['y'],
+                                    this_3d_row['z']])
                 obj_id = this_3d_row['obj_id']
                 if numpy.isnan( vert[0] ):
                     # no observation this frame
                     continue
                 obs_2d_idx = this_3d_row['obs_2d_idx']
-                kobs_2d_data = data_file.root.kalman_observations_2d_idxs[int(obs_2d_idx)]
+                kobs_2d_data = data_file.root.kalman_observations_2d_idxs[
+                    int(obs_2d_idx)]
 
                 # parse VLArray
                 this_camns = kobs_2d_data[0::2]
                 this_camn_idxs = kobs_2d_data[1::2]
 
                 # find original 2d data
-                obs2d = all_data[ all_data['frame'] == this_3d_row['frame'] ] # narrow down search
+                #   narrow down search
+                obs2d = all_data[ all_data['frame'] == this_3d_row['frame'] ]
 
                 for camn,this_camn_idx in zip(this_camns,this_camn_idxs):
                     cam_id = camn2cam_id[camn]
@@ -287,30 +298,37 @@ def doit(
                     # do projection to camera image plane
                     vert_image = R.find2d(cam_id,vert,distorted=True)
 
-                    new_cond = (obs2d['camn']==camn) & (obs2d['frame_pt_idx']==this_camn_idx)
+                    new_cond = ((obs2d['camn']==camn) &
+                                (obs2d['frame_pt_idx']==this_camn_idx))
                     assert numpy.sum(new_cond)==1
 
                     x=obs2d[new_cond]['x'][0]
                     y=obs2d[new_cond]['y'][0]
 
-                    this_reproj_error = numpy.sqrt((vert_image[0]-x)**2 + (vert_image[1]-y)**2)
+                    this_reproj_error = numpy.sqrt(
+                        (vert_image[0]-x)**2 + (vert_image[1]-y)**2)
                     if this_reproj_error > 100:
-                        print '  reprojection error > 100 (%.1f) at frame %d for camera %s, obj_id %d'%(
-                            this_reproj_error, this_3d_row['frame'],  cam_id, obj_id)
+                        print ('  reprojection error > 100 (%.1f) at frame %d '
+                               'for camera %s, obj_id %d'%(this_reproj_error,
+                                                           this_3d_row['frame'],
+                                                           cam_id, obj_id))
                     if numpy.isnan(this_reproj_error):
                         print 'error:'
                         print this_camns, this_camn_idxs
                         print cam_id
                         print vert_image
                         print vert
-                        raise ValueError('nan at frame %d'%(this_3d_row['frame']))
+                        raise ValueError('nan at frame %d'%this_3d_row['frame'])
                     reproj_error[cam_id].append( this_reproj_error )
                     if cam_id in max_reproj_error:
-                        cur_max_frame, cur_max_reproj_error, cur_obj_id = max_reproj_error[cam_id]
+                        (cur_max_frame, cur_max_reproj_error,
+                         cur_obj_id) = max_reproj_error[cam_id]
                         if this_reproj_error > cur_max_reproj_error:
-                            max_reproj_error[cam_id] = (this_3d_row['frame'], this_reproj_error, obj_id)
+                            max_reproj_error[cam_id]=(this_3d_row['frame'],
+                                                      this_reproj_error, obj_id)
                     else:
-                        max_reproj_error[cam_id] = (this_3d_row['frame'], this_reproj_error, obj_id)
+                        max_reproj_error[cam_id] = (this_3d_row['frame'],
+                                                    this_reproj_error, obj_id)
 
             del kalman_rows, kalman_3d_frame, obj_ids
             print 'mean reprojection errors:'
@@ -319,7 +337,7 @@ def doit(
             for cam_id in cam_ids:
                 errors = reproj_error[cam_id]
                 mean_error = numpy.mean(errors)
-                worst_frame, worst_error, worst_obj_id = max_reproj_error[cam_id]
+                worst_frame,worst_error,worst_obj_id = max_reproj_error[cam_id]
                 print ' %s: %.1f (worst: frame %d, obj_id %d, error %.1f)'%(
                     cam_id, mean_error, worst_frame, worst_obj_id, worst_error)
             print
@@ -354,7 +372,8 @@ def doit(
                     start = -numpy.inf
                 if stop is None:
                     stop = numpy.inf
-                valid_cond = (kalman_3d_frame >= start) & (kalman_3d_frame <= stop)
+                valid_cond = ((kalman_3d_frame >= start) &
+                              (kalman_3d_frame <= stop))
 
                 kalman_rows = kalman_rows[valid_cond]
                 kalman_3d_frame = kalman_3d_frame[valid_cond]
@@ -380,11 +399,14 @@ def doit(
                 for cam_id in cam_ids:
                     ax = ax_by_cam[cam_id]
                     x2d = R.find2d(cam_id,X,distorted=True)
-                    #print '%d %d %s (%f,%f)'%(obj_id,frame[0],cam_id,x2d[0,0],x2d[1,0])
+                    ## print '%d %d %s (%f,%f)'%(
+                    ##     obj_id,frame[0],cam_id,x2d[0,0],x2d[1,0])
                     ax.text( frame[0], x2d[0,0], '%d'%obj_id )
-                    thisline,=ax.plot( frame, x2d[0,:], 'b-', picker=5, **kwprops) # 5 points tolerance
+                    thisline,=ax.plot(
+                        frame, x2d[0,:], 'b-', picker=5,**kwprops)#5pt tolerance
                     all_kalman_lines[thisline] = obj_id
-                    thisline,=ax.plot( frame, x2d[1,:], 'y-', picker=5, **kwprops) # 5 points tolerance
+                    thisline,=ax.plot(
+                        frame, x2d[1,:], 'y-', picker=5,**kwprops)#5pt tolerance
                     all_kalman_lines[thisline] = obj_id
                     ax.set_ylim([-100,800])
                     ax.set_xlim( (start_frame, stop_frame) )
@@ -464,8 +486,12 @@ def main():
 
     parser = OptionParser(usage)
 
-    parser.add_option('-k', "--kalman-file", dest="kalman_filename", type='string',
+    parser.add_option('-k', "--kalman-file", dest="kalman_filename",
+                      type='string',
                       help=".h5 file with kalman data and 3D reconstructor")
+
+    parser.add_option("--spreadh5", type='string',
+                      help=".spreadh5 file with frame synchronization info")
 
     parser.add_option("--start", dest="start", type='int',
                       help="start frame (.h5 frame number reference)")
@@ -473,13 +499,16 @@ def main():
     parser.add_option("--stop", dest="stop", type='int',
                       help="stop frame (.h5 frame number reference)")
 
-    parser.add_option("--disable-kalman-smoothing", action='store_false',dest='use_kalman_smoothing',
+    parser.add_option("--disable-kalman-smoothing", action='store_false',
+                      dest='use_kalman_smoothing',
                       default=True,
-                      help="show original, causal Kalman filtered data (rather than Kalman smoothed observations)")
+                      help=("show original, causal Kalman filtered data "
+                            "(rather than Kalman smoothed observations)"))
 
     parser.add_option("--reproj-error", action='store_true',
                       default=False,
-                      help="calculate and print to console the mean reprojection error for each camera")
+                      help=("calculate and print to console the mean "
+                            "reprojection error for each camera"))
 
     parser.add_option("--hide-source-name",
                       action='store_false',
@@ -488,14 +517,18 @@ def main():
                       help="show the source filename?")
 
     parser.add_option("--fps", dest='fps', type='float',
-                      help="frames per second (used for Kalman filtering/smoothing)")
+                      help=("frames per second (used for Kalman "
+                            "filtering/smoothing)"))
 
     parser.add_option("--area-threshold", type='float',
                       default = 0.0,
-                      help="area of 2D point required for plotting (NOTE: this is not related to the threshold used for Kalmanization)")
+                      help=("area of 2D point required for plotting (NOTE: "
+                            "this is not related to the threshold used for "
+                            "Kalmanization)"))
 
     parser.add_option("--likely-only", action='store_true', default=False,
-                      help='plot only points that are deemed likely to be true positives')
+                      help=('plot only points that are deemed likely to '
+                            'be true positives'))
 
     parser.add_option("--save-fig", type='string', default=None,
                       help='path name of figure to save (exits script '
