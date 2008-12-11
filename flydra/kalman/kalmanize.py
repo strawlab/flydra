@@ -755,7 +755,10 @@ def kalmanize(src_filename,
         # save spread data to file for analysis
         accum_frame_spread = np.array(accum_frame_spread)
         accum_frame_spread_fno = np.array(accum_frame_spread_fno)
-        accum_frame_spread_filename = src_filename + '.spreadh5'
+        if options.dest_file is not None:
+            accum_frame_spread_filename = options.dest_file
+        else:
+            accum_frame_spread_filename = src_filename + '.spreadh5'
 
         cam_ids = cam_id2camns.keys()
         cam_ids.sort()
@@ -823,7 +826,10 @@ def kalmanize(src_filename,
                 )
 
 def check_sync():
-    usage = '%prog FILE [options]'
+    usage = """%prog FILE [options]
+
+This command will exit with a non-zero exit code if there are sync errors.
+"""
 
     parser = OptionParser(usage)
     parser.add_option("--start", type="int",
@@ -833,6 +839,10 @@ def check_sync():
     parser.add_option("--stop", type="int",
                       help="last frame",
                       metavar="STOP")
+
+    parser.add_option("--dest-file", type="string",
+                      help=("filename of .spreadh5 file (otherwise defaults "
+                            "to FILE.spreadh5)"))
 
     parser.add_option("--sync-error-threshold-msec", type="float", default=None)
 

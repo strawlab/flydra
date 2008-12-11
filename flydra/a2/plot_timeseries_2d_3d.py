@@ -193,9 +193,14 @@ def doit(
             if stop is not None:
                 valid_cond = valid_cond & (frames <= stop)
 
+            spread_msec = spread[valid_cond] * 1000.0
             ax.plot( frames[valid_cond],
-                     spread[valid_cond] * 1000.0,
+                     spread_msec,
                      '.' )
+
+            if spread_msec.max() < 1.0:
+                ax.set_ylim((0,1))
+                ax.set_yticks([0,1])
             ax.set_xlabel('frame')
             ax.set_ylabel('timestamp spread (msec)')
             ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
@@ -491,7 +496,8 @@ def main():
                       help=".h5 file with kalman data and 3D reconstructor")
 
     parser.add_option("--spreadh5", type='string',
-                      help=".spreadh5 file with frame synchronization info")
+                      help=(".spreadh5 file with frame synchronization info "
+                            "(make with flydra_analysis_check_sync)"))
 
     parser.add_option("--start", dest="start", type='int',
                       help="start frame (.h5 frame number reference)")
