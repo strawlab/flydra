@@ -71,9 +71,9 @@ Tracking data (position over time) is stored using the `HDF5 file
 format`_ using the pytables_ library. At a high level, there are two
 types of such files:
 
- * raw 2D data files. These contain a ``/data2d_distorted``
-   table. Throughout the documentation, such files will be represented
-   as :file:`DATAFILE2D.h5`.
+ * raw 2D data files. These contain ``/data2d_distorted`` and
+   ``/cam_info`` tables. Throughout the documentation, such files will
+   be represented as :file:`DATAFILE2D.h5`.
 
  * "Kalmanized" 3D data files. These contain ``/kalman_estimates`` and
    ``/kalman_observations`` tables in addition to a ``/calibration``
