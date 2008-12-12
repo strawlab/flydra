@@ -435,16 +435,27 @@ def get_time_model_from_data(results,debug=False,full_output=False):
 
     # fit linear model of relationship mainbrain timestamp and usb trigger_device framestamp
     gain, offset = model_remote_to_local( framestamp, mb_timestamp, debug=debug )
-    result = TimeModel(gain, offset)
+    time_model = TimeModel(gain, offset)
+
+    dt = time_model.framestamp2timestamp(1)-time_model.framestamp2timestamp(0)
+    fps_estimated = 1.0/dt
+
+    # Check that fps seems reasonable
+    fps_saved = get_fps(results,fail_on_error=False)
+    if fps_saved is not None:
+        assert np.allclose(fps_estimated,fps_saved,rtol=1e-4)
+        if debug:
+            print 'fps estimated from time model agrees with fps saved'
+
     if full_output:
         full_results = {'framestamp':framestamp, # frame stamp on USB device
                         'mb_timestamp':mb_timestamp, # timestamp on main brain
                         'gain':gain,
                         'offset':offset,
                         }
-        return result, full_results
+        return time_model, full_results
     else:
-        return result
+        return time_model
 
 def drift_estimates(results):
     """calculate clock information"""
