@@ -4,6 +4,7 @@ tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy as np
 import sys, os, sets, re, hashlib
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
+import warnings
 
 import datetime
 import pytz # from http://pytz.sourceforge.net/
@@ -446,7 +447,9 @@ def get_time_model_from_data(results,debug=False,full_output=False):
         if debug:
             print 'fps_estimated,fps_saved',fps_estimated,fps_saved
             print 'fps estimated from time model agrees with fps saved'
-        assert np.allclose(fps_estimated,fps_saved,rtol=1e-3)
+        if not np.allclose(fps_estimated,fps_saved,rtol=1e-3):
+            warnings.warn('fps estimated and saved are different: %s vs %s'%(
+                fps_estimated, fps_saved))
 
     if full_output:
         full_results = {'framestamp':framestamp, # frame stamp on USB device
