@@ -46,6 +46,7 @@ setup(name='flydra',
     'flydra_analysis_filter_kalman_data = flydra.analysis.flydra_analysis_filter_kalman_data:main',
     'flydra_analysis_h5_shorten = flydra.a2.h5_shorten:main',
     'flydra_analysis_check_sync = flydra.kalman.kalmanize:check_sync',
+    'flydra_analysis_get_clock_sync = flydra.a2.get_clock_sync:main',
 
 # analysis - re-kalmanize
     'flydra_kalmanize = flydra.kalman.kalmanize:main',
