@@ -22,7 +22,7 @@ import flydra.a2.utils as utils
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 import core_analysis
 
-import pytz, datetime
+import pytz, datetime, time
 import collections
 
 pacific = pytz.timezone('US/Pacific')
@@ -39,6 +39,11 @@ def onpick_callback(event):
         ydata = thisline.get_ydata()
         ind = event.ind
         print 'picked line:',zip(numpy.take(xdata, ind), numpy.take(ydata, ind))
+
+def format_date(x, pos=None):
+    return str(datetime.datetime.fromtimestamp(x,pacific))
+    ## return datetime.datetime.fromtimestamp(x,pacific).strftime(
+    ##     '%Y-%m-%d %H:%M:%S.%f')
 
 def doit(
          filenames=None,
@@ -161,21 +166,32 @@ def doit(
 
                 n_valid = len( data )
                 cam_id_n_valid += n_valid
+                if options.timestamps:
+                    xdata = data['timestamp']
+                else:
+                    xdata = data['frame']
                 if n_valid >= 1:
-                    ax.plot( data['frame'], data['x'], 'r.' )
-                    ax.plot( data['frame'], data['y'], 'g.' )
+                    ax.plot( xdata, data['x'], 'r.' )
+                    ax.plot( xdata, data['y'], 'g.' )
             ax.text(0.1,0,'%s: %d pts'%(cam_id,cam_id_n_valid),
                     horizontalalignment='left',
                     verticalalignment='bottom',
                     transform = ax.transAxes,
                     )
             ax.set_ylabel('%s\npixels'%cam_id)
-            ax.set_xlim( (start_frame, stop_frame) )
+            if not options.timestamps:
+                ax.set_xlim( (start_frame, stop_frame) )
         ax.set_xlabel('frame')
-        ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
+        if options.timestamps:
+            ax.xaxis.set_major_formatter(
+                ticker.FuncFormatter(format_date))
+        else:
+            ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
         ax.yaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
         if h5spread is not None:
-
+            if options.timestamps:
+                raise NotImplementedError(
+                    '--timestamps is currently incompatible with --spreadh5')
             ax_by_cam['h5spread'] = ax
             if kalman_filename is not None:
                 # this is 2nd to last
@@ -209,8 +225,13 @@ def doit(
             del frames
             del spread
         h5.close()
+    if options.timestamps:
+        fig.autofmt_xdate()
 
     if kalman_filename is not None:
+        if options.timestamps:
+            raise NotImplementedError(
+                '--timestamps is currently incompatible with --kalman-filename')
         if 1:
             ax = pylab.subplot( n_subplots, 1, n_subplots, sharex=ax)
             ax_by_cam['kalman pmean'] = ax
@@ -510,6 +531,9 @@ def main():
                       default=True,
                       help=("show original, causal Kalman filtered data "
                             "(rather than Kalman smoothed observations)"))
+
+    parser.add_option("--timestamps", action='store_true',
+                      default=False)
 
     parser.add_option("--reproj-error", action='store_true',
                       default=False,
