@@ -1836,45 +1836,9 @@ class MainBrain(object):
         return self.fps
 
     def set_fps(self,fps):
-        if self.is_saving_data():
-            raise RuntimeError('will not change framerate while saving data')
+        self.do_synchronization(new_fps=fps)
 
-        with self.trigger_device_lock:
-
-            # Doing this allows setting a larger range of framerates
-            # due to behavior of trigger.py:
-            self.trigger_device.set_carrier_frequency( 0.0 )
-
-            # Don't reset the device framecount, because then
-            # framenumber_offsets would also have to be adjusted.  (No
-            # call to "self.trigger_device.reset_framecount_A()".)
-
-            # clear queue of old trigger timestamp information...
-            try:
-                while True:
-                    self.queue_trigger_clock_info.get(0)
-            except Queue.Empty:
-                pass
-
-             # wait 10 msec to give most cameras a chance to get on same frame
-            time.sleep(0.02)
-
-            self.trigger_device.set_carrier_frequency( fps )
-            self.trigger_timer_max = self.trigger_device.get_timer_max()
-            self.trigger_timer_CS = self.trigger_device.get_timer_CS()
-        self.fps = fps
-        self.remote_api.log_message('<mainbrain>',time.time(),'set fps to %f'%(self.fps,))
-        print 'set fps to', fps
-        cam_ids = self.remote_api.external_get_cam_ids()
-        for cam_id in cam_ids:
-            try:
-                self.send_set_camera_property( cam_id, 'expected_trigger_framerate', fps )
-            except Exception,err:
-                print 'ERROR:',err
-        rc_params['frames_per_second'] = fps
-        save_rc_params()
-
-    def do_synchronization(self):
+    def do_synchronization(self,new_fps=None):
         if self.is_saving_data():
             raise RuntimeError('will not (re)synchronize while saving data')
 
@@ -1891,8 +1855,24 @@ class MainBrain(object):
             pass
 
         time.sleep( RESET_FRAMENUMBER_DURATION+0.01 )
-        with self.trigger_device_lock:
-            self.trigger_device.set_carrier_frequency( self.fps )
+        if new_fps is None:
+            with self.trigger_device_lock:
+                self.trigger_device.set_carrier_frequency( self.fps )
+        else:
+            with self.trigger_device_lock:
+                self.trigger_device.set_carrier_frequency( new_fps )
+                self.trigger_timer_max = self.trigger_device.get_timer_max()
+                self.trigger_timer_CS = self.trigger_device.get_timer_CS()
+            self.fps = new_fps
+            cam_ids = self.remote_api.external_get_cam_ids()
+            for cam_id in cam_ids:
+                try:
+                    self.send_set_camera_property(
+                        cam_id, 'expected_trigger_framerate', new_fps )
+                except Exception,err:
+                    print 'ERROR:',err
+            rc_params['frames_per_second'] = new_fps
+            save_rc_params()
 
     def get_hypothesis_test_max_error(self):
         return self.hypothesis_test_max_error.get()
