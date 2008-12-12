@@ -1740,6 +1740,7 @@ class MainBrain(object):
             self.trigger_device.set_carrier_frequency( rc_params['frames_per_second'] )
             self.fps = self.trigger_device.get_carrier_frequency()
             self.trigger_timer_max = self.trigger_device.get_timer_max()
+            self.trigger_timer_CS = self.trigger_device.get_timer_CS()
 
         Pyro.core.initServer(banner=0)
 
@@ -1837,6 +1838,7 @@ class MainBrain(object):
         with self.trigger_device_lock:
             self.trigger_device.set_carrier_frequency( fps )
             self.trigger_timer_max = self.trigger_device.get_timer_max()
+            self.trigger_timer_CS = self.trigger_device.get_timer_CS()
         self.fps = fps
         self.remote_api.log_message('<mainbrain>',time.time(),'set fps to %f'%(self.fps,))
         print 'set fps to', fps
@@ -2260,9 +2262,14 @@ class MainBrain(object):
         # read by flydra.a2.check_atmel_clock.
 
         list_of_textlog_data = [
-            (timestamp,cam_id,timestamp, 'MainBrain running at %s fps, (top %s, hypothesis_test_max_error %s)'%(
-            str(self.fps),str(self.trigger_timer_max),str(self.get_hypothesis_test_max_error())
-            )),
+            (timestamp,cam_id,timestamp,
+             ('MainBrain running at %s fps, (top %s, '
+              'hypothesis_test_max_error %s, trigger_CS3 %s)'%(
+            str(self.fps),
+            str(self.trigger_timer_max),
+            str(self.get_hypothesis_test_max_error()),
+            str(self.trigger_timer_CS),
+            ))),
             (timestamp,cam_id,timestamp, 'using flydra version %s'%(
              flydra.version.__version__,)),
             ]

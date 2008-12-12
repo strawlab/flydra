@@ -54,8 +54,10 @@ class FakeDevice:
         self._freq = freq
     def get_carrier_frequency(self,*args,**kw):
         return self._freq
-    def get_timer_max(self,*args,**kw):
+    def get_timer_max(self):
         return 0xFFFF
+    def get_timer_CS(self):
+        return 1
     def get_framecount_stamp(self,*args,**kw):
         return 0, 0x0001
 
@@ -167,6 +169,9 @@ class Device:
 
     def get_timer_max( self ):
         return self.timer3_TOP
+
+    def get_timer_CS( self ):
+        return self.timer3_CS
 
     def _set_timer3_metadata(self, carrier_freq):
         if carrier_freq <= 0:

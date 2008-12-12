@@ -387,7 +387,23 @@ def get_time_model_from_data(results,debug=False,full_output=False):
 
     timer_max = int( parsed['top'] )
     if debug:
-        print 'I found the timer maximum ("top") to be %d.)'%(timer_max,)
+        print 'I found the timer max ("top") to be %d.'%timer_max
+        FOSC = 8000000 # 8 MHz
+        CS_all = [1,8,64,256,1024]
+        CS_known=False
+        if 'trigger_CS3' in parsed:
+            CS = int(parsed['trigger_CS3'])
+            CS_all = [CS]
+            CS_known=True
+        for CS in CS_all:
+            F_CLK = FOSC/float(CS) # clock frequency, Hz
+            clock_tick_duration = 1.0/F_CLK
+            carrier_duration = timer_max*clock_tick_duration
+            carrier_freq = 1.0/carrier_duration
+            if CS_known:
+                print '  (%.1f Hz, CS=%s)'%(float(carrier_freq),CS)
+            else:
+                print '  (%.1f Hz if CS=%s)'%(float(carrier_freq),CS)
 
     # open the log of at90usb clock info
 
