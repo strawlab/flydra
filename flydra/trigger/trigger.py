@@ -351,12 +351,15 @@ def check_device():
     dev = Device()
 
 def set_frequency():
-    usage = '%prog FILE [options]'
+    usage = '%prog [options]'
     parser = OptionParser(usage)
 
     parser.add_option("--freq", type="float",
                       metavar="FREQ")
     (options, args) = parser.parse_args()
+    if len(args):
+        print >> sys.stderr, "unexpected arguments:",args
+        sys.exit(1)
     dev = Device()
 
     dev.set_carrier_frequency( 0.0 )
