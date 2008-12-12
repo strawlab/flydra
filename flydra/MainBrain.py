@@ -1831,8 +1831,12 @@ class MainBrain(object):
         return self.fps
 
     def set_fps(self,fps):
+        if self.is_saving_data():
+            raise RuntimeError('will not change framerate while saving data')
+
         with self.trigger_device_lock:
             self.trigger_device.set_carrier_frequency( fps )
+            self.trigger_timer_max = self.trigger_device.get_timer_max()
         self.fps = fps
         self.remote_api.log_message('<mainbrain>',time.time(),'set fps to %f'%(self.fps,))
         print 'set fps to', fps
