@@ -1737,6 +1737,10 @@ class MainBrain(object):
         self.trigger_device_lock = threading.Lock()
         with self.trigger_device_lock:
             self.trigger_device = flydra.trigger.get_trigger_device()
+            # Reset the device framecount
+            self.trigger_device.set_carrier_frequency( 0.0 )
+            self.trigger_device.reset_framecount_A()
+            time.sleep(0.02)
             self.trigger_device.set_carrier_frequency( rc_params['frames_per_second'] )
             self.fps = self.trigger_device.get_carrier_frequency()
             self.trigger_timer_max = self.trigger_device.get_timer_max()
@@ -1836,6 +1840,24 @@ class MainBrain(object):
             raise RuntimeError('will not change framerate while saving data')
 
         with self.trigger_device_lock:
+
+            # Doing this allows setting a larger range of framerates
+            # due to behavior of trigger.py:
+            self.trigger_device.set_carrier_frequency( 0.0 )
+
+            # Reset the device framecount
+            self.trigger_device.reset_framecount_A()
+
+            # clear queue of old trigger timestamp information...
+            try:
+                while True:
+                    self.queue_trigger_clock_info.get(0)
+            except Queue.Empty:
+                pass
+
+             # wait 10 msec to give most cameras a chance to get on same frame
+            time.sleep(0.02)
+
             self.trigger_device.set_carrier_frequency( fps )
             self.trigger_timer_max = self.trigger_device.get_timer_max()
             self.trigger_timer_CS = self.trigger_device.get_timer_CS()
