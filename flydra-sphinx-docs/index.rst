@@ -16,6 +16,7 @@ Contents:
   realtime_data.rst
   data_analysis.rst
   gallery.rst
+  trigger_device.rst
 
 Contibutions to this documentation
 ----------------------------------
