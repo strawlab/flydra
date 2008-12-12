@@ -47,6 +47,7 @@ setup(name='flydra',
     'flydra_analysis_h5_shorten = flydra.a2.h5_shorten:main',
     'flydra_analysis_check_sync = flydra.kalman.kalmanize:check_sync',
     'flydra_analysis_get_clock_sync = flydra.a2.get_clock_sync:main',
+    'flydra_analysis_get_2D_image_latency = flydra.a2.get_2D_image_latency:main',
 
 # analysis - re-kalmanize
     'flydra_kalmanize = flydra.kalman.kalmanize:main',

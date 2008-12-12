@@ -443,9 +443,10 @@ def get_time_model_from_data(results,debug=False,full_output=False):
     # Check that fps seems reasonable
     fps_saved = get_fps(results,fail_on_error=False)
     if fps_saved is not None:
-        assert np.allclose(fps_estimated,fps_saved,rtol=1e-4)
         if debug:
+            print 'fps_estimated,fps_saved',fps_estimated,fps_saved
             print 'fps estimated from time model agrees with fps saved'
+        assert np.allclose(fps_estimated,fps_saved,rtol=1e-3)
 
     if full_output:
         full_results = {'framestamp':framestamp, # frame stamp on USB device
