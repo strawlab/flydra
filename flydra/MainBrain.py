@@ -1845,8 +1845,9 @@ class MainBrain(object):
             # due to behavior of trigger.py:
             self.trigger_device.set_carrier_frequency( 0.0 )
 
-            # Reset the device framecount
-            self.trigger_device.reset_framecount_A()
+            # Don't reset the device framecount, because then
+            # framenumber_offsets would also have to be adjusted.  (No
+            # call to "self.trigger_device.reset_framecount_A()".)
 
             # clear queue of old trigger timestamp information...
             try:
