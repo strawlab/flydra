@@ -142,6 +142,9 @@ class Device:
             #print 'setting frequency to default (200 Hz)'
             freq = 200.0
         #print 'setting freq to',freq
+
+        # What's going on here? Why do we only change timer3_CS if it starts at 0?
+
         if freq != 0:
             if self.timer3_CS == 0:
                 success = False
@@ -358,7 +361,7 @@ def set_frequency():
                       metavar="FREQ")
     (options, args) = parser.parse_args()
     if len(args):
-        print >> sys.stderr, "unexpected arguments:",args
+        parser.print_help()
         sys.exit(1)
     dev = Device()
 
