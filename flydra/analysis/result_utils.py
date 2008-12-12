@@ -326,13 +326,16 @@ def timestamp2string(ts_float,timezone='US/Pacific'):
     # dt_ts.ctime()
     return dt_ts.isoformat()
 
-def model_remote_to_local(remote_timestamps, local_timestamps):
+def model_remote_to_local(remote_timestamps, local_timestamps, debug=False):
     """for timestamps"""
     a1=remote_timestamps[:,np.newaxis]
     a2=np.ones( (len(remote_timestamps),1))
     A = np.hstack(( a1,a2))
     b = local_timestamps[:,np.newaxis]
     x,resids,rank,s = np.linalg.lstsq(A,b)
+    if debug:
+        print 'in model_remote_to_local: N=%d, resids=%s'%(
+            len(remote_timestamps),resids)
     gain = x[0,0]
     offset = x[1,0]
     return gain,offset
@@ -431,7 +434,7 @@ def get_time_model_from_data(results,debug=False,full_output=False):
     framestamp = framenumber + frac
 
     # fit linear model of relationship mainbrain timestamp and usb trigger_device framestamp
-    gain, offset = model_remote_to_local( framestamp, mb_timestamp )
+    gain, offset = model_remote_to_local( framestamp, mb_timestamp, debug=debug )
     result = TimeModel(gain, offset)
     if full_output:
         full_results = {'framestamp':framestamp, # frame stamp on USB device
