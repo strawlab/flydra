@@ -1,3 +1,20 @@
+Major changes for 0.4.40
+------------------------
+
+  * Framecounts saved from trigger device correspond exactly with live
+    framecounts. This should allow for automatic synchronization
+    detection (which is not yet implemented).
+
+  * Added :command:`flydra_analysis_get_clock_sync` to check the
+    synchronization of the mainbrain and camera computer clocks in
+    DATAFILE2D.h5 files.
+
+  * Make generation and use of timestamp synchronization files
+    (extension .spreadh5) more explicit.
+
+  * :command:`flydra_analysis_plot_kalman_2d`: add --show-orientation
+    and --autozoom command line options
+
 Major changes for 0.4.39
 ------------------------
 
