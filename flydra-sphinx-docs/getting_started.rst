@@ -69,7 +69,9 @@ Finally, the full test suite may be run with nose_::
 Editing the documentation
 -------------------------
 
-This documentation is built with Sphinx_ 0.5.
+This documentation is built with Sphinx_ 0.5. (Although there is a bug
+that prevents a valid LaTeX file being generated that is fixed in
+Sphinx 0.6.)
 
 .. _Sphinx: http://sphinx.pocoo.org/
 
