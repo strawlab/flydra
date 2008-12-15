@@ -1,6 +1,9 @@
 from __future__ import division
 from __future__ import with_statement
 
+# Things TODO, or at least to try:
+#  * implement a connected components analysis
+
 if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
@@ -189,10 +192,13 @@ def plot_image_subregion(raw_im, mean_im, absdiff_im,
         ctx.show_page()
         output_surface.finish()
 
-def running_average( image_framenumbers, ims,
-                     im_coords, camn_pt_no_array,
-                     N=5,
-                     min_N=5 ):
+def flatten_image_stack( image_framenumbers, ims,
+                         im_coords, camn_pt_no_array,
+                         N=None,
+                         min_N=None ):
+    """take a stack of several images and flatten by finding min pixel"""
+    if N is None or min_N is None:
+        raise ValueError('N and min_N must be specified')
     assert np.all( (image_framenumbers[1:]-image_framenumbers[:-1])
                    > 0 )
     all_framenumbers = np.arange(image_framenumbers[0],
@@ -266,8 +272,10 @@ def doit(h5_filename=None,
          stop=None,
          view=None,
          save_images=False,
-         intermediate_thresh_frac=0.5, # arbitrary
-         final_thresh=7,# arbitrary
+         intermediate_thresh_frac=None,
+         final_thresh=None,
+         stack_N_images=None,
+         stack_N_images_min=None,
          ):
     """
 
@@ -282,6 +290,10 @@ def doit(h5_filename=None,
         view = [ 'orig' for f in ufmf_filenames ]
     else:
         assert len(view)==len(ufmf_filenames)
+
+    if intermediate_thresh_frac is None or final_thresh is None:
+        raise ValueError('intermediate_thresh_frac and final_thresh must be '
+                         'set')
 
     filename2view = dict(zip(ufmf_filenames,view))
 
@@ -458,11 +470,13 @@ def doit(h5_filename=None,
                 all_framenumbers = np.arange(image_framenumbers[0],
                                              image_framenumbers[-1]+1)
 
-                results = running_average( image_framenumbers,
-                                           absdiff_images,
-                                           im_coords,
-                                           camn_pt_no_array,
-                                           )
+                results = flatten_image_stack( image_framenumbers,
+                                               absdiff_images,
+                                               im_coords,
+                                               camn_pt_no_array,
+                                               N=stack_N_images,
+                                               min_N=stack_N_images_min,
+                                               )
 
                 # The variable fno (the first element of the results
                 # tuple) is guaranteed to be contiguous and to span
@@ -620,6 +634,22 @@ def main():
     parser.add_option("--stop", type='int', default=None,
                       help="frame number to end analysis on")
 
+    parser.add_option("--intermediate-thresh-frac", type='float', default=0.5,
+                      help=("accumublate pixels greater than this fraction "
+                            "times brightest absdiff pixel"))
+
+    parser.add_option("--final-thresh", type='int', default=7,
+                      help=("clip final image to reduce moment arms before "
+                            "extracting orientation"))
+
+    parser.add_option("--stack-N-images", type='int', default=5,
+                      help=("preferred number of images to accumulate "
+                            "before reducing"))
+
+    parser.add_option("--stack-N-images-min", type='int', default=5,
+                      help=("minimum number of images to accumulate "
+                            "before reducing"))
+
     parser.add_option("--save-images", action='store_true',
                       default=False)
 
@@ -652,6 +682,10 @@ def main():
          view=view,
          output_h5_filename=options.output_h5,
          save_images=options.save_images,
+         intermediate_thresh_frac=options.intermediate_thresh_frac,
+         final_thresh=options.final_thresh,
+         stack_N_images=options.stack_N_images,
+         stack_N_images_min=options.stack_N_images_min,
          )
 
 if __name__=='__main__':

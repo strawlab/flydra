@@ -90,6 +90,17 @@ the 2D data plotted."""
      },
 
     ]
+if 0:
+    # test image_based_orientation (This test not done yet.)
+    image_info = [
+        {'cmd':('flydra_analysis_image_based_orientation '
+                '--h5=%(DATAFILE2D)s --kalman=%(DATAFILE3D)s '
+                '--ufmfs=%(ufmf_names)s --output-h5=%(target_h5)s'),
+         'suffix':'.png',
+         'result':'image_based_orientation.png',
+         'title':'Offline image based orientation extraction',
+         },
+        ]
 
 # non-image based commands
 command_info =  [
@@ -131,9 +142,10 @@ flydra_analysis_plot_timeseries_2d_3d. Additionally, this command exits with a
 non-zero exit code if there are synchronization errors.""",
      'known fail':True,
      },
-
     ]
-
+if 0:
+    command_info =  [
+        ]
 
 gallery_rst_src = """
 Gallery
