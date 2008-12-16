@@ -673,6 +673,8 @@ def main():
 
     if options.view is not None:
         view = eval(options.view)
+    else:
+        view = ['orig']*len(ufmf_filenames)
 
     doit(ufmf_filenames=ufmf_filenames,
          h5_filename=options.h5,
