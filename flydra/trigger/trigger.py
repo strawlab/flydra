@@ -133,6 +133,7 @@ class Device:
         self.FOSC = 8000000 # 8 MHz
         trigger_carrier_freq = 0.0 # stopped
 
+        self.timer3_TOP = None # unknown
         self.timer3_CS = 8
         #print 'set A self.timer3_CS to',self.timer3_CS
         self._set_timer3_metadata(trigger_carrier_freq)
