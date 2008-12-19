@@ -2307,8 +2307,7 @@ class MainBrain(object):
             pass
         #   save
         if self.h5data2d is not None and len(list_of_rows_of_data2d):
-            # it's much faster to convert to numarray first:
-            # XXX (converted to numpy without double checking - ADS 20070921)
+            # it's much faster to convert to numpy first:
             recarray = numpy.rec.array(
                 list_of_rows_of_data2d,
                 dtype=Info2DCol_description)
