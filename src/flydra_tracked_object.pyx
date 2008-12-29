@@ -487,14 +487,23 @@ cdef class TrackedObject:
                     # Second, a quick gating based on image attributes.
 
                     pt_area = pt_undistorted[PT_TUPLE_IDX_AREA]
-                    cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
-                    mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
-                    sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
+                    tmp = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
+                    if tmp is None:
+                        if not self.disable_image_stat_gating:
+                            raise ValueError(
+                                '--disable-image-stat-gating not specified and '
+                                'no image statistics were saved.')
+                    else:
+                        cur_val = tmp
+                        mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
+                        sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
 
                     if cur_val is None or self.disable_image_stat_gating:
                         p_y_x = 0.0 # no penalty
                     else:
-                        p_y_x = some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
+                        # this could even depend on 3d geometry
+                        p_y_x = some_rough_negative_log_likelihood(
+                            pt_area, cur_val, mean_val, sumsqf_val )
 
                     if pt_area < self.area_threshold:
                         # This should not fall under
@@ -529,13 +538,14 @@ cdef class TrackedObject:
 
                 if debug>2:
                     frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
-                    cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
-                    mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
-                    sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
                     extra_print = []
-                    if pixel_dist_criterion_passed:
-                        extra_print.append('(pt_area %f, cur %d, mean %.1f, sumsqf %.1f)'%(
-                            pt_area,cur_val,mean_val,sumsqf_val))
+                    if not self.disable_image_stat_gating:
+                        cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
+                        mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
+                        sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
+                        if pixel_dist_criterion_passed:
+                            extra_print.append('(pt_area %f, cur %d, mean %.1f, sumsqf %.1f)'%(
+                                pt_area,cur_val,mean_val,sumsqf_val))
 
                     if gated_in:
                         extra_print.append('distorted %.1f %.1f (pixel_dist = %.1f, mahal dist = %.1f, criterion passed=%s)'%(
