@@ -201,7 +201,7 @@ def doit(filename,
          start=None,
          stop=None,
          obj_start=None,
-         obj_end=None,
+         obj_stop=None,
          obj_only=None,
          show_n_longest=None,
          radius=0.002, # in meters
@@ -294,15 +294,19 @@ def doit(filename,
         if obj_only is not None:
             raise ValueError("show_n_longest incompatible with --obj-only limiter")
 
+        if len(use_obj_ids):
+            print '%d obj_ids total. Range is %d - %d'%(
+                len(use_obj_ids), use_obj_ids[0],use_obj_ids[-1])
+
         obj_ids_by_n_frames = {}
         for i,obj_id in enumerate(use_obj_ids):
             if (obj_start is not None) and (obj_id < obj_start):
                 continue
-            if (obj_end is not None) and (obj_id > obj_end):
+            if (obj_stop is not None) and (obj_id > obj_stop):
                 continue
 
             if i%100==0:
-                print 'doing %d of %d'%(i,len(use_obj_ids))
+                print 'doing %d of %d (obj_id %d)'%(i,len(use_obj_ids),obj_id)
 
             if not ca.has_obj_id(obj_id, data_file):
                 continue
@@ -351,8 +355,8 @@ def doit(filename,
 
     if obj_start is not None:
         use_obj_ids = use_obj_ids[use_obj_ids >= obj_start]
-    if obj_end is not None:
-        use_obj_ids = use_obj_ids[use_obj_ids <= obj_end]
+    if obj_stop is not None:
+        use_obj_ids = use_obj_ids[use_obj_ids <= obj_stop]
     if obj_only is not None:
         use_obj_ids = numpy.array(obj_only)
 
@@ -1278,7 +1282,7 @@ def main():
          start=options.start,
          stop=options.stop,
          obj_start=options.obj_start,
-         obj_end=options.obj_stop,
+         obj_stop=options.obj_stop,
          obj_only=options.obj_only,
          use_kalman_smoothing=options.use_kalman_smoothing,
          show_n_longest=options.n_top_traces,
