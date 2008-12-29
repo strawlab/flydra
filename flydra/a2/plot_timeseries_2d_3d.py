@@ -266,7 +266,7 @@ def doit(
         if options.obj_only is not None:
             use_obj_ids = options.obj_only
 
-        if dynamic_model is None:
+        if dynamic_model is None and use_kalman_smoothing:
             dynamic_model = extra['dynamic_model_name']
             print 'detected file loaded with dynamic model "%s"'%dynamic_model
             if dynamic_model.startswith('EKF '):
