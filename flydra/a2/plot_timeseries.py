@@ -380,6 +380,8 @@ def plot_timeseries(subplot=None,options = None):
     if 'frame' in subplot:
         if time0 != 0.0:
             fixup_ax(subplot['frame'])
+        else:
+            subplot['frame'].set_xlabel(xlabel)
 
     if 'x' in subplot:
         subplot['x'].set_ylim([-1,1])
