@@ -248,7 +248,7 @@ def doit(
          extra) = ca.initial_file_load(kalman_filename)
         if 'frames' in extra:
             frames = extra['frames']
-            valid_cond = np.ones((len(extra['frames'],)),dtype=np.bool)
+            valid_cond = np.ones((len(frames,)),dtype=np.bool)
             if start is not None:
                 valid_cond &= frames >= start
             if stop is not None:
