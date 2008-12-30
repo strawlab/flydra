@@ -165,6 +165,7 @@ def plot_timeseries(subplot=None,options = None):
         use_obj_ids = [i for i in use_obj_ids if i in obj_only]
 
     allX = {}
+    frame0 = None
 
     line2obj_id = {}
     Xz_all = []
@@ -181,7 +182,6 @@ def plot_timeseries(subplot=None,options = None):
         table_data2d_frames_find = utils.FastFinder( table_data2d_frames )
 
     for obj_id in use_obj_ids:
-        print 'loading data for obj %d'%obj_id
         if not do_fuse:
             try:
                 kalman_rows =  ca.load_data( obj_id, data_file,
@@ -245,7 +245,8 @@ def plot_timeseries(subplot=None,options = None):
                 kalman_rows = numpy.ma.masked_where( ~state_cond, walking_and_flying_kalman_rows )
                 frame = kalman_rows['frame']
 
-            frame0 = int(frame[0])
+            if frame0 is None:
+                frame0 = int(frame[0])
 
             time0 = 0.0
             if options.timestamp_file is not None:
@@ -273,6 +274,9 @@ def plot_timeseries(subplot=None,options = None):
                 kws['color'] = 'k'
 
             line = None
+
+            if 'frame' in subplot:
+                subplot['frame'].plot( f2t(frame), frame )
 
             if 'x' in subplot:
                 line,=subplot['x'].plot( f2t(frame), Xx, label='obj %d (%s)'%(obj_id,flystate),**kws )
@@ -372,6 +376,10 @@ def plot_timeseries(subplot=None,options = None):
             ticker.FormatStrFormatter("%d"))
         ax.yaxis.set_major_formatter(
             ticker.FormatStrFormatter("%s"))
+
+    if 'frame' in subplot:
+        if time0 != 0.0:
+            fixup_ax(subplot['frame'])
 
     if 'x' in subplot:
         subplot['x'].set_ylim([-1,1])
@@ -473,8 +481,7 @@ def doit(
 
     ax = None
     subplot ={}
-    subplots = ['x','y','z','xy_vel','vel','accel']
-    print subplots
+    subplots = ['x','y','z','xy_vel','vel','accel','frame']
     #subplots = ['x','y','z','vel','accel']
     for i, name in enumerate(subplots):
         ax = fig.add_subplot(len(subplots),1,i+1,sharex=ax)
@@ -523,11 +530,13 @@ def doit(
             #print 'all:'
             #print self.obj_ids
 
-    pick_receiver = MyPickObj(line2obj_id)
-    fig.canvas.mpl_connect('pick_event', pick_receiver.onpick)
-    fig.canvas.mpl_connect('key_press_event', pick_receiver.on_key_press)
-
-    pylab.show()
+    if options.save_fig is not None:
+        pylab.savefig(options.save_fig)
+    else:
+        pick_receiver = MyPickObj(line2obj_id)
+        fig.canvas.mpl_connect('pick_event', pick_receiver.onpick)
+        fig.canvas.mpl_connect('key_press_event', pick_receiver.on_key_press)
+        pylab.show()
 
 def main():
     usage = '%prog [options]'
@@ -546,6 +555,10 @@ def main():
 
     parser.add_option("--timestamp-file", type='string',
                       help="file with data2d_distorted table to get timestamps")
+
+    parser.add_option("--save-fig", type='string', default=None,
+                      help='path name of figure to save (exits script '
+                      'immediately after save)')
 
     (options, args) = parser.parse_args()
 
