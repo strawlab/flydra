@@ -47,7 +47,7 @@ dynamic_checkerboard_size = (screen.size[0]//scale,screen.size[1]//scale) # widt
 # allocate temporary texture in grayscale mode for dynamic texture
 temp_grayscale_image = Image.new("L",dynamic_checkerboard_size,0)
 temp_texture = Texture(temp_grayscale_image)
-    
+
 # create TextureStimulus for dynamic stimulus
 scaled_dynamic_size = (scale*dynamic_checkerboard_size[0],scale*dynamic_checkerboard_size[1])
 
@@ -86,14 +86,13 @@ for row in range(dynamic_checkerboard_size[1]):
             if not col%2:
                 checkerboard[row,col] = 1
 
-lums = numpy.logspace(numpy.log10(0.05),numpy.log10(.5),6)
-lums = lums[::-1] # reverse
+lums = numpy.logspace(numpy.log10(0.01),numpy.log10(1),6)
 lum_dur = 5*60 # 5 minutes
 #lum_dur = 1
 print 'lums',lums
 
 tstart = time.time()
-last_lum = None
+last_contrast = None
 
 while not quit_now:
     for event in pygame.event.get():
@@ -108,11 +107,12 @@ while not quit_now:
     #print 'lum_idx_unwrapped',lum_idx_unwrapped
     lum_idx = lum_idx_unwrapped%len(lums)
     lum_idx = int(lum_idx)
-    normalized_mean_luminance = lums[lum_idx]
-    if normalized_mean_luminance != last_lum:
+    normalized_mean_luminance = 0.5
+    contrast = lums[lum_idx]
+    if contrast != last_contrast:
         msg = 'luminance %f, contrast %f'%(normalized_mean_luminance,contrast)
         print msg
-        last_lum = normalized_mean_luminance
+        last_contrast = contrast
         main_brain.log_message('stimulus', time.time(), msg )
 
         #sender.sendto('luminace %')
