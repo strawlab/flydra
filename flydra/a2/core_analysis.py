@@ -671,7 +671,7 @@ class PreSmoothedDataCache(object):
         if data_file not in self.cache_h5files_by_data_file:
             orig_hash = flydra.analysis.result_utils.md5sum_headtail(
                 data_file.filename)
-            expected_title = 'up_dir=(%.3f, %.3f, %.3f);hash="%s"'%(
+            expected_title = 'v=2;up_dir=(%.3f, %.3f, %.3f);hash="%s"'%(
                 up_dir[0],up_dir[1],up_dir[2],orig_hash)
             cache_h5file_name = os.path.abspath(os.path.splitext(data_file.filename)[0]) + '.kh5-smoothcache'
             make_new_cache = True
@@ -707,6 +707,15 @@ class PreSmoothedDataCache(object):
         # load or create cached rows for this obj_id
         unsmoothed_tablename = 'obj_id%d'%obj_id
         smoothed_tablename = 'smoothed_'+unsmoothed_tablename
+
+        def _get_group_for_obj(obj_id):
+            groupnum = obj_id//2000
+            groupname = 'group%d'%groupnum
+            if not hasattr(h5file.root,groupname):
+                h5file.createGroup(h5file.root,groupname,'cache data')
+            return getattr(h5file.root,groupname)
+
+        h5group = _get_group_for_obj(obj_id)
 
         if hasattr(h5file.root,smoothed_tablename):
             # pre-existing table is found
