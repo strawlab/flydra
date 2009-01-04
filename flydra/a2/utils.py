@@ -97,6 +97,8 @@ class FastFinder(object):
         return this_idxs
 
 def iter_contig_chunk_idxs( arr ):
+    if len(arr)==0:
+        return
     #ADS print 'arr',arr
     diff = arr[1:]-arr[:-1]
     #ADS print 'diff',diff
@@ -162,6 +164,7 @@ def test_get_contig_chunk_idxs_1():
                  (13,14),
                  ]
     actual = get_contig_chunk_idxs(input)
+    assert len(expected)==len(actual)
     for i in range(len(expected)):
         start, stop = expected[i]
         assert (start,stop)== actual[i]
@@ -176,6 +179,16 @@ def test_get_contig_chunk_idxs_2():
                  (13,14),
                  ]
     actual = get_contig_chunk_idxs(input)
+    assert len(expected)==len(actual)
+    for i in range(len(expected)):
+        start, stop = expected[i]
+        assert (start,stop)== actual[i]
+
+def test_get_contig_chunk_idxs_empty():
+    input = np.array( [] )
+    expected = []
+    actual = get_contig_chunk_idxs(input)
+    assert len(expected)==len(actual)
     for i in range(len(expected)):
         start, stop = expected[i]
         assert (start,stop)== actual[i]
