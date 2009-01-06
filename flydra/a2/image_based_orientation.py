@@ -33,37 +33,6 @@ def openFileSafe(*args,**kwargs):
     finally:
         result.close()
 
-def do_com_shift(np_im):
-    """shift center-of-mass to middle of image"""
-    if 1:
-    ## com_im = scipy.ndimage.grey_erosion(np_im,
-    ##                                     size=3)
-    ## y0,x0=scipy.ndimage.center_of_mass(com_im)
-    ## if np.isnan(y0):
-    ##     # erosion didn't work
-    ##     print 'erosion failed'
-        y0,x0=scipy.ndimage.center_of_mass(np_im)
-
-    xcenter=(np_im.shape[1]-1)/2.0
-    ycenter=(np_im.shape[0]-1)/2.0
-    xshift = x0-xcenter
-    yshift = y0-ycenter
-    print 'x0,xcenter,xshift',x0,xcenter,xshift
-    print 'y0,ycenter,yshift',y0,ycenter,yshift
-
-    ## xshift = int(round(xshift))
-    ## yshift = int(round(yshift))
-
-    if abs(xshift)<=0.5 and abs(yshift)<=0.5:
-    ## if xshift==0 and yshift==0:
-        return 0,0,np_im
-    else:
-        def mapping(x):
-            return (x[0]+yshift,x[1]+xshift)
-        result = scipy.ndimage.geometric_transform(np_im, mapping,
-                                                   np_im.shape, order=0)
-        return xshift,yshift,result
-
 def get_cam_id_from_filename(filename, all_cam_ids):
     # guess cam_id
     n = 0
@@ -304,7 +273,6 @@ def doit(h5_filename=None,
          stop=None,
          view=None,
          erode=0,
-         com_shift=True,
          save_images=False,
          save_image_dir=None,
          intermediate_thresh_frac=None,
@@ -400,7 +368,6 @@ def doit(h5_filename=None,
                 this_obj_mean_images = collections.defaultdict(list)
             this_obj_absdiff_images = collections.defaultdict(list)
             this_obj_morphed_images = collections.defaultdict(list)
-            this_obj_com_shifts = collections.defaultdict(list)
             this_obj_im_coords = collections.defaultdict(list)
             this_obj_camn_pt_no = collections.defaultdict(list)
 
@@ -501,18 +468,12 @@ def doit(h5_filename=None,
                                 # for mean flattening
                                 morphed_im = np.zeros_like( morphed_im )
 
-                    if com_shift:
-                        comx,comy,morphed_im = do_com_shift(morphed_im)
-                    else:
-                        comx,comy=0,0
-
                     this_obj_framenumbers[camn].append( framenumber )
                     if save_images:
                         this_obj_raw_images[camn].append((raw_im,im_coords))
                         this_obj_mean_images[camn].append(mean_im)
                     this_obj_absdiff_images[camn].append(absdiff_im)
                     this_obj_morphed_images[camn].append(morphed_im)
-                    this_obj_com_shifts[camn].append( (comx,comy) )
                     this_obj_im_coords[camn].append(im_coords)
                     this_obj_camn_pt_no[camn].append(orig_data2d_rownum)
                     if 0:
@@ -598,8 +559,6 @@ def doit(h5_filename=None,
                             row.update() # save data
 
                     if save_images:
-                        com_shifts = this_obj_com_shifts[camn]
-
                         # Display debugging images
                         fname = 'av_obj%05d_%s_frame%07d.png'%(
                             obj_id,cam_id,fno)
@@ -694,10 +653,9 @@ def doit(h5_filename=None,
                                             canv.plot(boxx,boxy,
                                                       color_rgba=(0,1,0,.5))
                                     if show=='morphed':
-                                        comx,comy=com_shifts[s_orig_idx]
                                         canv.text(
-                                            'morphed %d, COM shift: %.1f %.1f'%(
-                                            s_orig_idx-orig_idx,comx,comy),
+                                            'morphed %d, shift: %.1f %.1f'%(
+                                            s_orig_idx-orig_idx,0,0),
                                             display_rect[0],
                                             (display_rect[1]+display_rect[3]),
                                             color_rgba=(1,1,1,1))
