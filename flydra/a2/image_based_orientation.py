@@ -24,6 +24,7 @@ import motmot.realtime_image_analysis.realtime_image_analysis \
 
 import cairo
 import benu
+import adskalman.adskalman
 
 @contextlib.contextmanager
 def openFileSafe(*args,**kwargs):
@@ -32,6 +33,13 @@ def openFileSafe(*args,**kwargs):
         yield result
     finally:
         result.close()
+
+def shift_image(im,xy):
+    def mapping(x):
+        return (x[0]+xy[1],x[1]+xy[0])
+    result = scipy.ndimage.geometric_transform(im, mapping,
+                                               im.shape, order=0)
+    return result
 
 def get_cam_id_from_filename(filename, all_cam_ids):
     # guess cam_id
@@ -318,6 +326,8 @@ def doit(h5_filename=None,
 
     with openFileSafe( h5_filename, mode='r' ) as h5:
 
+        fps = result_utils.get_fps( h5, fail_on_error=True )
+
         for input_node in h5.root._f_iterNodes():
             # copy everything from source to dest
             input_node._f_copy(output_h5.root,recursive=True)
@@ -369,6 +379,7 @@ def doit(h5_filename=None,
             this_obj_absdiff_images = collections.defaultdict(list)
             this_obj_morphed_images = collections.defaultdict(list)
             this_obj_im_coords = collections.defaultdict(list)
+            this_obj_com_coords = collections.defaultdict(list)
             this_obj_camn_pt_no = collections.defaultdict(list)
 
             for this_3d_row in obj_3d_rows:
@@ -455,10 +466,15 @@ def doit(h5_filename=None,
                     else:
                         morphed_im = absdiff_im
 
+                    y0_roi,x0_roi = scipy.ndimage.center_of_mass(morphed_im)
+                    x0=im_coords[0]+x0_roi
+                    y0=im_coords[1]+y0_roi
+
                     if 1:
                         morphed_im_binary = morphed_im > 0
                         labels,n_labels = scipy.ndimage.label(morphed_im_binary)
                         if n_labels > 1:
+                            x0,y0 = np.nan, np.nan
                             # More than one blob -- don't allow image.
                             if 1:
                                 # for min flattening
@@ -475,6 +491,7 @@ def doit(h5_filename=None,
                     this_obj_absdiff_images[camn].append(absdiff_im)
                     this_obj_morphed_images[camn].append(morphed_im)
                     this_obj_im_coords[camn].append(im_coords)
+                    this_obj_com_coords[camn].append( (x0,y0) )
                     this_obj_camn_pt_no[camn].append(orig_data2d_rownum)
                     if 0:
                         fname = 'obj%05d_%s_frame%07d_pt%02d.png'%(
@@ -496,13 +513,59 @@ def doit(h5_filename=None,
                 absdiff_images = this_obj_absdiff_images[camn]
                 morphed_images = this_obj_morphed_images[camn]
                 im_coords = this_obj_im_coords[camn]
+                com_coords = this_obj_com_coords[camn]
                 camn_pt_no_array = this_obj_camn_pt_no[camn]
 
                 all_framenumbers = np.arange(image_framenumbers[0],
                                              image_framenumbers[-1]+1)
 
+                com_coords = np.array(com_coords)
+                if 1:
+                    # Perform RTS smoothing on center-of-mass coordinates.
+
+                    # Find first good datum.
+                    first_good = np.nonzero(~np.isnan(com_coords[:,0]))[0][0]
+                    RTS_com_coords = com_coords[first_good:,:]
+
+                    # Setup parameters for Kalman filter.
+                    dt = 1.0/fps
+                    A = np.array([[1,0,dt,0], # process update
+                                  [0,1,0,dt],
+                                  [0,0,1,0],
+                                  [0,0,0,1]],
+                                 dtype=np.float)
+                    C = np.array([[1,0,0,0], # observation matrix
+                                  [0,1,0,0]],
+                                 dtype=np.float)
+                    Q = 0.1*np.eye(4) # process noise
+                    R = 1.0*np.eye(2) # observation noise
+                    initx = np.array([RTS_com_coords[0,0],RTS_com_coords[0,1],0,0],
+                                     dtype=np.float)
+                    initV = 2*np.eye(4)
+                    y=RTS_com_coords
+                    print 'y.shape',y.shape
+                    xsmooth,Vsmooth = adskalman.adskalman.kalman_smoother(
+                        y,A,C,Q,R,initx,initV)
+                    print 'xsmooth.shape',xsmooth.shape
+                    com_coords_smooth = np.empty( com_coords.shape,
+                                                  dtype=np.float)
+                    com_coords_smooth.fill(np.nan)
+                    com_coords_smooth[first_good:]=xsmooth[:,:2]
+
+                if 1:
+                    # Now shift images
+
+                    image_shift = com_coords_smooth-com_coords
+                    bad_cond = np.isnan(image_shift[:,0])
+                    # broadcast zeros to places where no good tracking
+                    image_shift[ bad_cond, 0] = 0
+                    image_shift[ bad_cond, 1] = 0
+
+                    shifted_morphed_images = [shift_image( im, xy ) for im,xy in
+                                              zip(morphed_images,image_shift)]
+
                 results = flatten_image_stack( image_framenumbers,
-                                               morphed_images,
+                                               shifted_morphed_images,
                                                im_coords,
                                                camn_pt_no_array,
                                                N=stack_N_images,
@@ -638,6 +701,17 @@ def doit(h5_filename=None,
                                             s_im = tmp.astype(np.uint8)
 
                                         canv.imshow(s_im,s_raw_l,s_raw_b)
+                                        sx0,sy0=com_coords[s_orig_idx]
+                                        X = [sx0-1,sx0+1]
+                                        Y = [sy0-1,sy0+1]
+                                        canv.plot(X,Y,
+                                                  color_rgba=(1,.5,.5,1))
+
+                                        sx0,sy0=com_coords_smooth[s_orig_idx]
+                                        X = [sx0-1,sx0+1]
+                                        Y = [sy0-1,sy0+1]
+                                        canv.plot(X,Y,
+                                                  color_rgba=(.5,1,.5,1))
 
                                         if s_orig_idx==orig_idx:
                                             boxx = np.array([s_raw_l,
@@ -651,7 +725,7 @@ def doit(h5_filename=None,
                                                              s_raw_b,
                                                              s_raw_b])
                                             canv.plot(boxx,boxy,
-                                                      color_rgba=(0,1,0,.5))
+                                                      color_rgba=(.5,1,.5,1))
                                     if show=='morphed':
                                         canv.text(
                                             'morphed %d, shift: %.1f %.1f'%(
