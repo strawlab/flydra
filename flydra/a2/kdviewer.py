@@ -629,8 +629,8 @@ def doit(filename,
             if link_all_simultaneous_objs:
                 allsave.append( rows )
             if (not obj_color and
-                options.highlight_start is not None and
-                options.highlight_stop is not None):
+                options.highlight_start is None and
+                options.highlight_stop is None):
                 if len(verts)>=3:
                     verts_central_diff = verts[2:,:] - verts[:-2,:]
                     dt = 1.0/fps
@@ -698,8 +698,8 @@ def doit(filename,
             pd = tvtk.PolyData()
             pd.points = verts
             if (not obj_color and
-                options.highlight_start is not None and
-                options.highlight_stop is not None):
+                options.highlight_start is None and
+                options.highlight_stop is None):
                 pd.point_data.scalars = speeds
 #            if numpy.any(speeds>max_vel):
 #                print 'WARNING: maximum speed (%.3f m/s) exceeds color map max'%(speeds.max(),)
