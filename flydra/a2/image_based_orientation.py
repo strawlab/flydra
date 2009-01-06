@@ -1,9 +1,6 @@
 from __future__ import division
 from __future__ import with_statement
 
-# Things TODO, or at least to try:
-#  * implement a connected components analysis
-
 if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
@@ -20,6 +17,7 @@ import flydra.a2.utils as utils
 import flydra.analysis.result_utils as result_utils
 import core_analysis
 import scipy.misc.pilutil
+import scipy.ndimage
 import motmot.FastImage.FastImage as FastImage
 import motmot.realtime_image_analysis.realtime_image_analysis \
        as realtime_image_analysis
@@ -34,6 +32,36 @@ def openFileSafe(*args,**kwargs):
         yield result
     finally:
         result.close()
+
+def do_com_shift(fpc,np_im):
+    """shift center-of-mass to middle of image"""
+    com_im = scipy.ndimage.grey_erosion(np_im,
+                                        size=3)
+    fi = FastImage.asfastimage( com_im.astype(np.uint8) )
+    try:
+        (x0, y0, area, slope, eccentricity) = fpc.fit(fi)
+    except realtime_image_analysis.FitParamsError, err:
+        # no-op
+        return 0,0,np_im
+    xcenter=(np_im.shape[0]-1)/2.0
+    ycenter=(np_im.shape[1]-1)/2.0
+    xshift = x0-xcenter
+    yshift = y0-ycenter
+    ## print 'x0,xcenter,xshift',x0,xcenter,xshift
+    ## print 'y0,ycenter,yshift',y0,ycenter,yshift
+
+    ## xshift = int(round(xshift))
+    ## yshift = int(round(yshift))
+
+    if abs(xshift)<=0.5 and abs(yshift)<=0.5:
+    ## if xshift==0 and yshift==0:
+        return 0,0,np_im
+    else:
+        def mapping(x):
+            return (x[0]+xshift,x[1]+yshift)
+        result = scipy.ndimage.geometric_transform(np_im, mapping,
+                                                   np_im.shape, order=0)
+        return xshift,yshift,result
 
 def get_cam_id_from_filename(filename, all_cam_ids):
     # guess cam_id
@@ -274,7 +302,10 @@ def doit(h5_filename=None,
          start=None,
          stop=None,
          view=None,
+         erode=0,
+         com_shift=True,
          save_images=False,
+         save_image_dir=None,
          intermediate_thresh_frac=None,
          final_thresh=None,
          stack_N_images=None,
@@ -311,6 +342,10 @@ def doit(h5_filename=None,
             "will not overwrite old file '%s'"%output_h5_filename)
     output_h5 = tables.openFile( output_h5_filename, mode='w' )
     #with openFileSafe( output_h5_filename, mode='w') as output_h5:
+
+    if save_image_dir is not None:
+        if not os.path.exists( save_image_dir ):
+            os.mkdir( save_image_dir )
 
     with openFileSafe( h5_filename, mode='r' ) as h5:
 
@@ -349,6 +384,8 @@ def doit(h5_filename=None,
         h5_framenumbers = data2d['frame']
         h5_frame_qfi = result_utils.QuickFrameIndexer(h5_framenumbers)
 
+        fpc = realtime_image_analysis.FitParamsClass() # allocate FitParamsClass
+
         for obj_id_enum,obj_id in enumerate(use_obj_ids):
             print 'object %d of %d'%(obj_id_enum,len(use_obj_ids))
 
@@ -361,6 +398,8 @@ def doit(h5_filename=None,
                 this_obj_raw_images = collections.defaultdict(list)
                 this_obj_mean_images = collections.defaultdict(list)
             this_obj_absdiff_images = collections.defaultdict(list)
+            this_obj_morphed_images = collections.defaultdict(list)
+            this_obj_com_shifts = collections.defaultdict(list)
             this_obj_im_coords = collections.defaultdict(list)
             this_obj_camn_pt_no = collections.defaultdict(list)
 
@@ -441,11 +480,25 @@ def doit(h5_filename=None,
                     intermediate_thresh=intermediate_thresh_frac*max_absdiff_im
                     absdiff_im[ absdiff_im <= intermediate_thresh] = 0
 
+                    if erode>0:
+                        morphed_im = scipy.ndimage.grey_erosion(absdiff_im,
+                                                                size=erode)
+                        ## morphed_im = scipy.ndimage.binary_erosion(absdiff_im>1).astype(np.float32)*255.0
+                    else:
+                        morphed_im = absdiff_im
+
+                    if com_shift:
+                        comx,comy,morphed_im = do_com_shift(fpc,morphed_im)
+                    else:
+                        comx,comy=0,0
+
                     this_obj_framenumbers[camn].append( framenumber )
                     if save_images:
                         this_obj_raw_images[camn].append((raw_im,im_coords))
                         this_obj_mean_images[camn].append(mean_im)
                     this_obj_absdiff_images[camn].append(absdiff_im)
+                    this_obj_morphed_images[camn].append(morphed_im)
+                    this_obj_com_shifts[camn].append( (comx,comy) )
                     this_obj_im_coords[camn].append(im_coords)
                     this_obj_camn_pt_no[camn].append(orig_data2d_rownum)
                     if 0:
@@ -458,7 +511,6 @@ def doit(h5_filename=None,
 
             # Now, all the frames from all cameras for this obj_id
             # have been gathered. Do a camera-by-camera analysis.
-            fpc = realtime_image_analysis.FitParamsClass()
 
             for camn in this_obj_absdiff_images:
                 cam_id = camn2cam_id[camn]
@@ -467,6 +519,7 @@ def doit(h5_filename=None,
                     raw_images = this_obj_raw_images[camn]
                     mean_images = this_obj_mean_images[camn]
                 absdiff_images = this_obj_absdiff_images[camn]
+                morphed_images = this_obj_morphed_images[camn]
                 im_coords = this_obj_im_coords[camn]
                 camn_pt_no_array = this_obj_camn_pt_no[camn]
 
@@ -474,7 +527,7 @@ def doit(h5_filename=None,
                                              image_framenumbers[-1]+1)
 
                 results = flatten_image_stack( image_framenumbers,
-                                               absdiff_images,
+                                               morphed_images,
                                                im_coords,
                                                camn_pt_no_array,
                                                N=stack_N_images,
@@ -519,17 +572,22 @@ def doit(h5_filename=None,
                             row.update() # save data
 
                     if save_images:
+                        com_shifts = this_obj_com_shifts[camn]
+
                         # Display debugging images
                         fname = 'av_obj%05d_%s_frame%07d.png'%(
                             obj_id,cam_id,fno)
+                        if save_image_dir is not None:
+                            fname = os.path.join(save_image_dir,fname)
 
                         raw_im, raw_coords = raw_images[orig_idx]
                         mean_im = mean_images[orig_idx]
-                        absdiff_im = absdiff_images[orig_idx] # not time-average
+                        absdiff_im = absdiff_images[orig_idx]
+                        morphed_im = morphed_images[orig_idx]
                         raw_l, raw_b = raw_coords[:2]
 
                         imh, imw = raw_im.shape
-                        n_ims = 4
+                        n_ims = 5
 
                         if 1:
                             # increase contrast
@@ -547,9 +605,11 @@ def doit(h5_filename=None,
                         top_row_width = scale*imw*n_ims + (1+n_ims)*margin
                         SHOW_STACK=True
                         if SHOW_STACK:
+                            n_stack_rows = 4
                             rw = scale*imw*n_images_in_stack + (1+n_ims)*margin
                             row_width = max(top_row_width,rw)
-                            col_height = 3*scale*imh + 4*margin
+                            col_height = (n_stack_rows*scale*imh +
+                                          (n_stack_rows+1)*margin)
                         else:
                             row_width = top_row_width
                             col_height = scale*imh + 2*margin
@@ -566,11 +626,13 @@ def doit(h5_filename=None,
                                 user_rect = (s_raw_l,s_raw_b,s_imw,s_imh)
 
                                 x_display = (stacki+1)*margin+(scale*imw)*stacki
-                                for show in ['raw','av']:
+                                for show in ['raw','absdiff','morphed']:
                                     if show=='raw':
                                         y_display = scale*imh + 2*margin
-                                    elif show=='av':
+                                    elif show=='absdiff':
                                         y_display = 2*scale*imh + 3*margin
+                                    elif show=='morphed':
+                                        y_display = 3*scale*imh + 4*margin
                                     display_rect = (
                                         x_display,
                                         y_display,
@@ -583,8 +645,11 @@ def doit(h5_filename=None,
 
                                         if show=='raw':
                                             s_im = s_raw_im.astype(np.uint8)
-                                        elif show=='av':
+                                        elif show=='absdiff':
                                             tmp = absdiff_images[s_orig_idx]
+                                            s_im = tmp.astype(np.uint8)
+                                        elif show=='morphed':
+                                            tmp = morphed_images[s_orig_idx]
                                             s_im = tmp.astype(np.uint8)
 
                                         canv.imshow(s_im,s_raw_l,s_raw_b)
@@ -602,6 +667,15 @@ def doit(h5_filename=None,
                                                              s_raw_b])
                                             canv.plot(boxx,boxy,
                                                       color_rgba=(0,1,0,.5))
+                                    if show=='morphed':
+                                        comx,comy=com_shifts[s_orig_idx]
+                                        canv.text(
+                                            'morphed %d, COM shift: %.1f %.1f'%(
+                                            s_orig_idx-orig_idx,comx,comy),
+                                            display_rect[0],
+                                            (display_rect[1]+display_rect[3]),
+                                            color_rgba=(1,1,1,1))
+
                         # Display raw_im
                         display_rect = (margin, margin,
                                         scale*raw_im.shape[1],
@@ -647,8 +721,24 @@ def doit(h5_filename=None,
                                    display_rect[1]+display_rect[3],
                                    color_rgba=(.2,.2,.8,0.8))
 
-                        # Display time-averaged absdiff_im
+                        # Display morphed_im
                         display_rect = (4*margin+(scale*imw)*3, margin,
+                                        scale*morphed_im.shape[1],
+                                        scale*morphed_im.shape[0])
+                        user_rect = (raw_l,raw_b,imw,imh)
+                        morphed_clip = np.clip(morphed_im*contrast_scale,0,255)
+                        with canv.set_user_coords(display_rect, user_rect,
+                                                  transform=cam_id2view[cam_id],
+                                                  ):
+                            canv.imshow(morphed_clip.astype(np.uint8),
+                                        raw_l,raw_b)
+                        canv.text( 'morphed',
+                                   display_rect[0],
+                                   display_rect[1]+display_rect[3],
+                                   color_rgba=(.2,.2,.8,0.8))
+
+                        # Display time-averaged absdiff_im
+                        display_rect = (5*margin+(scale*imw)*4, margin,
                                         scale*av_im_show.shape[1],
                                         scale*av_im_show.shape[0])
                         user_rect = (lowerleft[0],lowerleft[1],
@@ -706,6 +796,9 @@ def main():
     parser.add_option("--stop", type='int', default=None,
                       help="frame number to end analysis on")
 
+    parser.add_option("--erode", type='int', default=0,
+                      help="amount of erosion to perform")
+
     parser.add_option("--intermediate-thresh-frac", type='float', default=0.5,
                       help=("accumublate pixels greater than this fraction "
                             "times brightest absdiff pixel"))
@@ -724,6 +817,8 @@ def main():
 
     parser.add_option("--save-images", action='store_true',
                       default=False)
+
+    parser.add_option("--save-image-dir", type='string', default=None)
 
     (options, args) = parser.parse_args()
 
@@ -755,7 +850,9 @@ def main():
          stop=options.stop,
          view=view,
          output_h5_filename=options.output_h5,
+         erode=options.erode,
          save_images=options.save_images,
+         save_image_dir=options.save_image_dir,
          intermediate_thresh_frac=options.intermediate_thresh_frac,
          final_thresh=options.final_thresh,
          stack_N_images=options.stack_N_images,
