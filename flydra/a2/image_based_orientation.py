@@ -216,11 +216,13 @@ def flatten_image_stack( image_framenumbers, ims,
         center_fno += all_framenumbers[0]
         center_idx=np.searchsorted(image_framenumbers,center_fno,side='right')-1
         camn_pt_no = camn_pt_no_array[center_idx]
+        orig_idxs_in_average = []
         ims_to_average = []
         coords_to_average = []
         for fno in range( center_fno-offset, center_fno+offset+1 ):
             idx = np.searchsorted(image_framenumbers,fno,side='right')-1
             if image_framenumbers[idx] == fno:
+                orig_idxs_in_average.append(idx)
                 ims_to_average.append( ims[idx] )
                 coords_to_average.append( im_coords[idx] )
             ## else:
@@ -239,7 +241,8 @@ def flatten_image_stack( image_framenumbers, ims,
             coords_to_average = np.array(coords_to_average)
             mean_lowerleft = np.mean( coords_to_average[:,:2], axis=0)
             results.append( (center_fno, av_im, n_images,
-                             mean_lowerleft, camn_pt_no, center_idx) )
+                             mean_lowerleft, camn_pt_no, center_idx,
+                             orig_idxs_in_average) )
     return results
 
 def clip_and_math( raw_image, mean_image, xy, roiradius, maxsize ):
@@ -482,8 +485,9 @@ def doit(h5_filename=None,
                 # tuple) is guaranteed to be contiguous and to span
                 # the range from the first to last frames available.
 
-                for (fno, av_im, n_images, lowerleft,
-                     orig_data2d_rownum, orig_idx) in results:
+                for (fno, av_im, n_images_in_stack, lowerleft,
+                     orig_data2d_rownum, orig_idx,
+                     orig_idxs_in_average) in results:
 
                     # Clip image to reduce moment arms.
                     av_im[av_im <= final_thresh] = 0
@@ -540,12 +544,64 @@ def doit(h5_filename=None,
                                        lowerleft[0]+av_im_show.shape[1]+5])
                         yplt=slope*xplt+yintercept
 
+                        top_row_width = scale*imw*n_ims + (1+n_ims)*margin
+                        SHOW_STACK=True
+                        if SHOW_STACK:
+                            rw = scale*imw*n_images_in_stack + (1+n_ims)*margin
+                            row_width = max(top_row_width,rw)
+                            col_height = 3*scale*imh + 4*margin
+                        else:
+                            row_width = top_row_width
+                            col_height = scale*imh + 2*margin
 
-                        canv=benu.Canvas(fname,
-                                         (scale*imw*n_ims + (1+n_ims)*margin),
-                                         (scale*imh + 2*margin),
-                                         )
+                        canv=benu.Canvas(fname,row_width,col_height)
 
+                        if SHOW_STACK:
+                            for (stacki,s_orig_idx) in enumerate(
+                                orig_idxs_in_average):
+
+                                (s_raw_im, s_raw_coords)=raw_images[s_orig_idx]
+                                s_raw_l, s_raw_b = s_raw_coords[:2]
+                                s_imh, s_imw = s_raw_im.shape
+                                user_rect = (s_raw_l,s_raw_b,s_imw,s_imh)
+
+                                x_display = (stacki+1)*margin+(scale*imw)*stacki
+                                for show in ['raw','av']:
+                                    if show=='raw':
+                                        y_display = scale*imh + 2*margin
+                                    elif show=='av':
+                                        y_display = 2*scale*imh + 3*margin
+                                    display_rect = (
+                                        x_display,
+                                        y_display,
+                                        scale*raw_im.shape[1],
+                                        scale*raw_im.shape[0])
+
+                                    with canv.set_user_coords(
+                                        display_rect,user_rect,
+                                        transform=cam_id2view[cam_id]):
+
+                                        if show=='raw':
+                                            s_im = s_raw_im.astype(np.uint8)
+                                        elif show=='av':
+                                            tmp = absdiff_images[s_orig_idx]
+                                            s_im = tmp.astype(np.uint8)
+
+                                        canv.imshow(s_im,s_raw_l,s_raw_b)
+
+                                        if s_orig_idx==orig_idx:
+                                            boxx = np.array([s_raw_l,
+                                                             s_raw_l,
+                                                             s_raw_l+s_imw,
+                                                             s_raw_l+s_imw,
+                                                             s_raw_l])
+                                            boxy = np.array([s_raw_b,
+                                                             s_raw_b+s_imh,
+                                                             s_raw_b+s_imh,
+                                                             s_raw_b,
+                                                             s_raw_b])
+                                            canv.plot(boxx,boxy,
+                                                      color_rgba=(0,1,0,.5))
                         # Display raw_im
                         display_rect = (margin, margin,
                                         scale*raw_im.shape[1],
