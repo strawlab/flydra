@@ -33,22 +33,23 @@ def openFileSafe(*args,**kwargs):
     finally:
         result.close()
 
-def do_com_shift(fpc,np_im):
+def do_com_shift(np_im):
     """shift center-of-mass to middle of image"""
-    com_im = scipy.ndimage.grey_erosion(np_im,
-                                        size=3)
-    fi = FastImage.asfastimage( com_im.astype(np.uint8) )
-    try:
-        (x0, y0, area, slope, eccentricity) = fpc.fit(fi)
-    except realtime_image_analysis.FitParamsError, err:
-        # no-op
-        return 0,0,np_im
-    xcenter=(np_im.shape[0]-1)/2.0
-    ycenter=(np_im.shape[1]-1)/2.0
+    if 1:
+    ## com_im = scipy.ndimage.grey_erosion(np_im,
+    ##                                     size=3)
+    ## y0,x0=scipy.ndimage.center_of_mass(com_im)
+    ## if np.isnan(y0):
+    ##     # erosion didn't work
+    ##     print 'erosion failed'
+        y0,x0=scipy.ndimage.center_of_mass(np_im)
+
+    xcenter=(np_im.shape[1]-1)/2.0
+    ycenter=(np_im.shape[0]-1)/2.0
     xshift = x0-xcenter
     yshift = y0-ycenter
-    ## print 'x0,xcenter,xshift',x0,xcenter,xshift
-    ## print 'y0,ycenter,yshift',y0,ycenter,yshift
+    print 'x0,xcenter,xshift',x0,xcenter,xshift
+    print 'y0,ycenter,yshift',y0,ycenter,yshift
 
     ## xshift = int(round(xshift))
     ## yshift = int(round(yshift))
@@ -58,7 +59,7 @@ def do_com_shift(fpc,np_im):
         return 0,0,np_im
     else:
         def mapping(x):
-            return (x[0]+xshift,x[1]+yshift)
+            return (x[0]+yshift,x[1]+xshift)
         result = scipy.ndimage.geometric_transform(np_im, mapping,
                                                    np_im.shape, order=0)
         return xshift,yshift,result
@@ -487,8 +488,21 @@ def doit(h5_filename=None,
                     else:
                         morphed_im = absdiff_im
 
+                    if 1:
+                        morphed_im_binary = morphed_im > 0
+                        labels,n_labels = scipy.ndimage.label(morphed_im_binary)
+                        if n_labels > 1:
+                            # More than one blob -- don't allow image.
+                            if 1:
+                                # for min flattening
+                                morphed_im = np.empty( morphed_im.shape, dtype=np.uint8 )
+                                morphed_im.fill(255)
+                            else:
+                                # for mean flattening
+                                morphed_im = np.zeros_like( morphed_im )
+
                     if com_shift:
-                        comx,comy,morphed_im = do_com_shift(fpc,morphed_im)
+                        comx,comy,morphed_im = do_com_shift(morphed_im)
                     else:
                         comx,comy=0,0
 
@@ -545,13 +559,25 @@ def doit(h5_filename=None,
                     # Clip image to reduce moment arms.
                     av_im[av_im <= final_thresh] = 0
 
-                    # XXX todo: connected components labels?
+                    fail_fit = False
+                    if 0:
+
+                        # Connected components labels -- allow slope
+                        # fit if only one blob in image.
+
+                        av_im_binary = av_im > 0
+                        labels,n_labels = scipy.ndimage.label(av_im_binary)
+                        if n_labels != 1:
+                            fail_fit = True
 
                     fast_av_im = FastImage.asfastimage( av_im.astype(np.uint8) )
                     try:
                         (x0_roi, y0_roi, area, slope, eccentricity) = fpc.fit(
                             fast_av_im )
                     except realtime_image_analysis.FitParamsError, err:
+                        fail_fit = True
+
+                    if fail_fit:
                         x0_roi = np.nan
                         y0_roi = np.nan
                         area, slope, eccentricity = np.nan, np.nan, np.nan
