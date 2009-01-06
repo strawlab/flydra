@@ -556,6 +556,10 @@ def doit(h5_filename=None,
                                                   ):
                             canv.imshow(raw_im.astype(np.uint8),raw_l,raw_b)
                             canv.plot(xplt,yplt,color_rgba=(0,1,0,.5))
+                        canv.text( 'raw',
+                                   display_rect[0],
+                                   display_rect[1]+display_rect[3],
+                                   color_rgba=(.2,.2,.8,0.8))
 
                         # Display mean_im
                         display_rect = (2*margin+(scale*imw), margin,
@@ -566,6 +570,10 @@ def doit(h5_filename=None,
                                                   transform=cam_id2view[cam_id],
                                                   ):
                             canv.imshow(mean_im.astype(np.uint8),raw_l,raw_b)
+                        canv.text( 'mean',
+                                   display_rect[0],
+                                   display_rect[1]+display_rect[3],
+                                   color_rgba=(.2,.2,.8,0.8))
 
                         # Display absdiff_im
                         display_rect = (3*margin+(scale*imw)*2, margin,
@@ -578,6 +586,10 @@ def doit(h5_filename=None,
                                                   ):
                             canv.imshow(absdiff_clip.astype(np.uint8),
                                         raw_l,raw_b)
+                        canv.text( 'absdiff',
+                                   display_rect[0],
+                                   display_rect[1]+display_rect[3],
+                                   color_rgba=(.2,.2,.8,0.8))
 
                         # Display time-averaged absdiff_im
                         display_rect = (4*margin+(scale*imw)*3, margin,
@@ -591,6 +603,10 @@ def doit(h5_filename=None,
                             canv.imshow(av_im_show.astype(np.uint8),
                                         lowerleft[0],lowerleft[1])
                             canv.plot(xplt,yplt,color_rgba=(0,1,0,.5))
+                        canv.text( 'stacked/flattened',
+                                   display_rect[0],
+                                   display_rect[1]+display_rect[3],
+                                   color_rgba=(.2,.2,.8,0.8))
 
                         canv.text( '%s frame % 7d: eccentricity % 5.1f'%(
                             cam_id,fno,eccentricity), 0, 8)
