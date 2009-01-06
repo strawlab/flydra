@@ -524,33 +524,35 @@ def doit(h5_filename=None,
                     # Perform RTS smoothing on center-of-mass coordinates.
 
                     # Find first good datum.
-                    first_good = np.nonzero(~np.isnan(com_coords[:,0]))[0][0]
-                    RTS_com_coords = com_coords[first_good:,:]
-
-                    # Setup parameters for Kalman filter.
-                    dt = 1.0/fps
-                    A = np.array([[1,0,dt,0], # process update
-                                  [0,1,0,dt],
-                                  [0,0,1,0],
-                                  [0,0,0,1]],
-                                 dtype=np.float)
-                    C = np.array([[1,0,0,0], # observation matrix
-                                  [0,1,0,0]],
-                                 dtype=np.float)
-                    Q = 0.1*np.eye(4) # process noise
-                    R = 1.0*np.eye(2) # observation noise
-                    initx = np.array([RTS_com_coords[0,0],RTS_com_coords[0,1],0,0],
-                                     dtype=np.float)
-                    initV = 2*np.eye(4)
-                    y=RTS_com_coords
-                    print 'y.shape',y.shape
-                    xsmooth,Vsmooth = adskalman.adskalman.kalman_smoother(
-                        y,A,C,Q,R,initx,initV)
-                    print 'xsmooth.shape',xsmooth.shape
+                    fgnz = np.nonzero(~np.isnan(com_coords[:,0]))
                     com_coords_smooth = np.empty( com_coords.shape,
                                                   dtype=np.float)
                     com_coords_smooth.fill(np.nan)
-                    com_coords_smooth[first_good:]=xsmooth[:,:2]
+
+                    if len(fgnz[0]):
+                        first_good = fgnz[0][0]
+
+                        RTS_com_coords = com_coords[first_good:,:]
+
+                        # Setup parameters for Kalman filter.
+                        dt = 1.0/fps
+                        A = np.array([[1,0,dt,0], # process update
+                                      [0,1,0,dt],
+                                      [0,0,1,0],
+                                      [0,0,0,1]],
+                                     dtype=np.float)
+                        C = np.array([[1,0,0,0], # observation matrix
+                                      [0,1,0,0]],
+                                     dtype=np.float)
+                        Q = 0.1*np.eye(4) # process noise
+                        R = 1.0*np.eye(2) # observation noise
+                        initx = np.array([RTS_com_coords[0,0],RTS_com_coords[0,1],0,0],
+                                         dtype=np.float)
+                        initV = 2*np.eye(4)
+                        y=RTS_com_coords
+                        xsmooth,Vsmooth = adskalman.adskalman.kalman_smoother(
+                            y,A,C,Q,R,initx,initV)
+                        com_coords_smooth[first_good:]=xsmooth[:,:2]
 
                 if 1:
                     # Now shift images
