@@ -43,7 +43,7 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
                   max_err=None, debug=0, kalman_model=None, area_threshold=0):
     if debug is None:
         debug=0
-    frame_data = tracker.calculate_a_posteri_estimates(
+    frame_data = tracker.calculate_a_posteriori_estimates(
         frame,frame_data,camn2cam_id,debug2=debug)
 
     # Now, tracked objects have been updated (and their 2D data points
@@ -221,7 +221,8 @@ class KalmanSaver:
             self.h5_xhat = self.h5file.createTable(
                 self.h5file.root,'kalman_estimates',
                 kalman_estimates_description,
-                "Kalman a posteri estimates of tracked object",filters=filters)
+                "Kalman a posteriori estimates of tracked object",
+                filters=filters)
             self.h5_xhat.attrs.dynamic_model_name = dynamic_model_name
             self.h5_xhat.attrs.dynamic_model = dynamic_model
 

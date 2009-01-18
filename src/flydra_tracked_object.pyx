@@ -302,15 +302,15 @@ cdef class TrackedObject:
             else:
                 break
 
-    def calculate_a_posteri_estimate(self,
-                                     long frame,
-                                     object data_dict,
-                                     object camn2cam_id,
-                                     int debug1=0):
+    def calculate_a_posteriori_estimate(self,
+                                        long frame,
+                                        object data_dict,
+                                        object camn2cam_id,
+                                        int debug1=0):
         # Step 1. Update Kalman state to a priori estimates for this frame.
         # Step 1.A. Update Kalman state for each skipped frame.
 
-        # Make sure we have xhat_k1 (previous frames' a posteri)
+        # Make sure we have xhat_k1 (previous frames' a posteriori)
 
         # For each frame that was skipped, step the Kalman filter.
         # Since we have no observation, the estimated error will
@@ -361,7 +361,7 @@ cdef class TrackedObject:
                 print 'position MLE, used_camns_and_idxs',observation_meters,used_camns_and_idxs
                 print 'Lcoords (3D body orientation) : %s'%str(Lcoords)
 
-            # Step 3. Incorporate observation to estimate a posteri
+            # Step 3. Incorporate observation to estimate a posteriori
             if isinstance(self.my_kalman, kalman_ekf.EKF):
                 prediction_3d = xhatminus[:3]
                 pmats_and_points_cov = [ (self.reconstructor_meters.get_pmat(cam_id),
@@ -371,11 +371,11 @@ cdef class TrackedObject:
                                          for (cam_id,value_tuple) in cam_ids_and_points2d]
                 C,R,missing_data = evaluate_pmat_jacobian(
                     pmats_and_points_cov,xhatminus)
-                xhat, P = self.my_kalman.step2__calculate_a_posteri(
+                xhat, P = self.my_kalman.step2__calculate_a_posteriori(
                     xhatminus, Pminus,
                     C,R,missing_data=missing_data)
             else:
-                xhat, P = self.my_kalman.step2__calculate_a_posteri(
+                xhat, P = self.my_kalman.step2__calculate_a_posteriori(
                     xhatminus, Pminus,
                     y=observation_meters)
 

@@ -1103,7 +1103,7 @@ class CoordinateProcessor(threading.Thread):
                                     self.data_dict_queue.append(('gob',(corrected_framenumber,
                                                                         dumps,
                                                                         self.camn2cam_id)))
-                                pluecker_coords_by_camn = self.tracker.calculate_a_posteri_estimates(
+                                pluecker_coords_by_camn = self.tracker.calculate_a_posteriori_estimates(
                                     corrected_framenumber,
                                     pluecker_coords_by_camn,
                                     self.camn2cam_id)

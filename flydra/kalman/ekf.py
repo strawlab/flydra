@@ -15,8 +15,8 @@ class EKF(object):
 
         # These 2 attributes are the only state that changes during
         # filtering:
-        self.xhat_k1 = initial_x # a posteri state estimate from step (k-1)
-        self.P_k1 = initial_P    # a posteri error estimate from step (k-1)
+        self.xhat_k1 = initial_x # a posteriori state estimate from step (k-1)
+        self.P_k1 = initial_P    # a posteriori error estimate from step (k-1)
 
         self.ss = self.A.shape[0] # ndim in state space
         self.AT = self.A.T
@@ -40,7 +40,7 @@ class EKF(object):
 
         return xhatminus, Pminus
 
-    def step2__calculate_a_posteri(self,
+    def step2__calculate_a_posteriori(self,
                                       xhatminus, Pminus,
                                       C,R,missing_data=False):
 
@@ -56,7 +56,7 @@ class EKF(object):
             ############################################
             #          incorporate observation
 
-            # calculate a posteri state estimate
+            # calculate a posteriori state estimate
 
             # calculate Kalman gain
             Knumerator = dot(Pminus,CT)
@@ -67,7 +67,7 @@ class EKF(object):
             xhat = xhatminus+dot(K, residuals)
             one_minus_KC = numpy.eye(ss)-dot(K,C)
 
-            # compute a posteri estimate of errors
+            # compute a posteriori estimate of errors
             P = dot(one_minus_KC,Pminus)
         else:
             # no observation
@@ -86,4 +86,4 @@ class EKF(object):
     def step(self):
         xhatminus, Pminus = self.step1__calculate_a_priori(isinitial=False)
         pmats_and_points_cov = []
-        return self.step2__calculate_a_posteri(xhatminus, Pminus, pmats_and_points_cov)
+        return self.step2__calculate_a_posteriori(xhatminus, Pminus, pmats_and_points_cov)
