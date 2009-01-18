@@ -98,7 +98,7 @@ def do_it(filename=None,
         data.update(extra)
 
     if 0:
-        print "converting int32 to float64 to avoid scipy.io.mio.savemat bug"
+        print "converting int32 to float64 to avoid scipy.io.savemat bug"
         for key in data:
             #print 'converting field',key, data[key].dtype, data[key].dtype.char
             if data[key].dtype.char == 'l':
@@ -110,7 +110,7 @@ def do_it(filename=None,
             continue
         data[key] = value
 
-    scipy.io.mio.savemat(newfilename,data)
+    scipy.io.savemat(newfilename,data,appendmat=False)
 
 if __name__=='__main__':
     print "WARNING: are you sure you want to run this program and not 'data2smoothed'?"
