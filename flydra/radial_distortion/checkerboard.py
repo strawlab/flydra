@@ -13,6 +13,7 @@ import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 from matplotlib import delaunay
 import flydra.reconstruct_utils as reconstruct_utils # in pyrex/C for speed
 import flydra.undistort
+from flydra.reconstruct import angles_near
 import scipy.cluster.vq
 #import networkx as NX
 import simplenx as NX
@@ -36,21 +37,6 @@ def get_singly_connected_nodes(graph):
     for node in graph.nodes():
         if len(graph.neighbors(node)) == 1:
             result.append( node )
-    return result
-
-def angles_near(a,b, eps, mod_pi=False):
-    """compare if angles a and b are within eps of each other. assumes radians"""
-
-    diff = abs(a-b)
-
-    diff = diff%(2*numpy.pi) # 0 <= diff <= 2pi
-
-    result = abs(diff) < eps
-    if mod_pi:
-        if abs(diff-numpy.pi) < eps:
-            result = result or True
-    if abs(diff-2*numpy.pi) < eps:
-        result = result or True
     return result
 
 def find_subgraph_similar_direction(G,
