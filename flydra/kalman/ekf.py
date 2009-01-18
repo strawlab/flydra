@@ -1,4 +1,5 @@
 import numpy
+import numpy as np
 
 class EKF(object):
     """Extendend Kalman Filter
@@ -38,10 +39,21 @@ class EKF(object):
                                       C=None,R=None,missing_data=False):
 
         ss = len(xhatminus) # state space size
+        assert Pminus.shape==(ss,ss)
 
         if not missing_data:
 
             CT = C.T
+
+            y = np.asanyarray(y)
+            hx = np.asanyarray(hx)
+
+            os = len(y)
+            assert y.ndim == 1, 'observations must be vector'
+            assert hx.ndim == 1, 'expected values must be vector'
+            assert CT.shape==(ss,os)
+            assert len(hx)==os
+            assert R.shape==(os,os)
 
             dot= numpy.dot
             inv = numpy.linalg.inv
