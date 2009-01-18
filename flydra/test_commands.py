@@ -174,12 +174,18 @@ Command gallery
 """
 
 def test_image_generating_commands():
+    suffix=''
+    prefix='flydra-test-'
+    tmpdir = tempfile.mkdtemp(suffix,prefix)
     for info in image_info:
-        yield check_command, 'check', info
+        yield check_command, 'check', info, tmpdir
 
 def test_commands():
+    suffix=''
+    prefix='flydra-test-'
+    tmpdir = tempfile.mkdtemp(suffix,prefix)
     for info in command_info:
-        yield check_command, 'check', info
+        yield check_command, 'check', info, tmpdir
 
 def break_long_lines(cmd):
     components = cmd.split()
@@ -285,7 +291,7 @@ def generate():
     fd.write(gallery_rst)
     fd.close()
 
-def check_command(mode,info):
+def check_command(mode,info,tmpdir=None):
     checker_function_dict = {'.png':image_compare.are_images_close,
                              '.h5':are_pytables_close,
                              }
@@ -295,7 +301,8 @@ def check_command(mode,info):
     names = _get_names_dict(DATAFILE2D,DATAFILE3D,CALIB)
 
     suffix = info.get('suffix','')
-    handle, target = tempfile.mkstemp(suffix)
+    prefix='tmp'
+    handle, target = tempfile.mkstemp(suffix,prefix,tmpdir)
 
     # Erase first temporary file (some tests don't like pre-existing
     # file).
@@ -314,7 +321,7 @@ def check_command(mode,info):
             if info.get('known fail',False):
                 warnings.warn('skipping known failing test')
             else:
-                assert are_close == True, '%s not equal to %s'%(
+                assert are_close == True, 'not equal: %s %s'%(
                     target,result_fullpath)
     elif mode=='generate':
         if info.get('compare_results',True):
