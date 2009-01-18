@@ -97,7 +97,7 @@ cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, object xhatminus):
     ##     print hx
     ##     print 'R'
     ##     print R
-    return C, R, missing_data
+    return y, C, R, missing_data
 
 def obs2d_hashable( arr ):
     assert arr.dtype == numpy.uint16
@@ -378,11 +378,11 @@ cdef class TrackedObject:
                                           value_tuple[:2],#just first 2 components (x,y) become xy2d_observed
                                           self.ekf_observation_covariance_pixels)
                                          for (cam_id,value_tuple) in cam_ids_and_points2d]
-                C,R,missing_data = evaluate_pmat_jacobian(
+                y,C,R,missing_data = evaluate_pmat_jacobian(
                     pmats_and_points_cov,xhatminus)
                 xhat, P = self.my_kalman.step2__calculate_a_posteriori(
-                    xhatminus, Pminus,
-                    C,R,missing_data=missing_data)
+                    xhatminus, Pminus, y=y,
+                    C=C,R=R,missing_data=missing_data)
             else:
                 xhat, P = self.my_kalman.step2__calculate_a_posteriori(
                     xhatminus, Pminus,

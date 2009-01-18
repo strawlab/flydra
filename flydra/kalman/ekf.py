@@ -34,7 +34,7 @@ class EKF(object):
         return xhatminus, Pminus
 
     def step2__calculate_a_posteriori(self,
-                                      xhatminus, Pminus,
+                                      xhatminus, Pminus,y=None,
                                       C=None,R=None,missing_data=False):
 
         ss = len(xhatminus) # state space size
@@ -80,3 +80,4 @@ class EKF(object):
         xhatminus, Pminus = self.step1__calculate_a_priori(A,Q,isinitial=False)
         return self.step2__calculate_a_posteriori(xhatminus, Pminus,
                                                   missing_data=True)
+
