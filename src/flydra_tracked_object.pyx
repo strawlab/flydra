@@ -143,6 +143,7 @@ cdef class TrackedObject:
     cdef int disable_image_stat_gating, orientation_consensus
     cdef object fake_timestamp
     cdef public u_int32_t obj_id
+    cdef object ekf_kalman_A, ekf_kalman_Q
 
     def __init__(self,
                  reconstructor_meters, # the Reconstructor instance
@@ -216,10 +217,10 @@ cdef class TrackedObject:
         self.max_frames_skipped = kalman_model['max_frames_skipped']
 
         if kalman_model.get( 'isEKF', False):
+            self.ekf_kalman_A = kalman_model['A']
+            self.ekf_kalman_Q = kalman_model['Q']
             # EKF
             self.my_kalman = kalman_ekf.EKF(
-                A=kalman_model['A'],
-                Q=kalman_model['Q'],
                 initial_x=initial_x,
                 initial_P=P_k1,
                 )
@@ -330,7 +331,11 @@ cdef class TrackedObject:
             if debug1>2:
                 print 'updating for %d frames skipped'%(frames_skipped,)
             for i in range(frames_skipped):
-                xhat, P = self.my_kalman.step()
+                if isinstance(self.my_kalman, kalman_ekf.EKF):
+                    xhat, P = self.my_kalman.step(self.ekf_kalman_A,
+                                                  self.ekf_kalman_Q)
+                else:
+                    xhat, P = self.my_kalman.step()
                 ############ save outputs ###############
                 self.frames.append( self.current_frameno + i + 1 )
                 self.xhats.append( xhat )
@@ -343,7 +348,11 @@ cdef class TrackedObject:
         if not self.kill_me:
             self.current_frameno = frame
             # Step 1.B. Update Kalman to provide a priori estimates for this frame
-            xhatminus, Pminus = self.my_kalman.step1__calculate_a_priori()
+            if isinstance(self.my_kalman, kalman_ekf.EKF):
+                xhatminus, Pminus = self.my_kalman.step1__calculate_a_priori(
+                    self.ekf_kalman_A, self.ekf_kalman_Q)
+            else:
+                xhatminus, Pminus = self.my_kalman.step1__calculate_a_priori()
             if debug1>2:
                 print 'xhatminus'
                 print xhatminus
