@@ -17,6 +17,7 @@ Contents:
   data_analysis.rst
   gallery.rst
   trigger_device.rst
+  orientation_noncausal_finder
 
 Contibutions to this documentation
 ----------------------------------
