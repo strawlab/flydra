@@ -44,9 +44,11 @@ NO_LCOORDS = numpy.nan,numpy.nan,numpy.nan,  numpy.nan,numpy.nan,numpy.nan
 cdef double cnan
 cnan = np.nan
 
+ctypedef int mybool
+
 cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, object xhatminus):
     cdef int N
-    cdef bool missing_data
+    cdef mybool missing_data
     cdef int i
     cdef int ss
 
@@ -118,8 +120,6 @@ def obs2d_hashable( arr ):
 
 cdef extern from "sys/types.h":
     ctypedef int u_int32_t
-
-ctypedef int mybool
 
 cdef class TrackedObject:
     """
