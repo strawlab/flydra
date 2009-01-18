@@ -332,20 +332,33 @@ def do_3d_operations_on_2d_point(helper,
     return (p1, p2, p3, p4,
             ray0, ray1, ray2, ray3, ray4, ray5)
 
-def angles_near(a,b, eps, mod_pi=False):
+def angles_near(a,b, eps=None, mod_pi=False):
     """compare if angles a and b are within eps of each other. assumes radians"""
+
+    if mod_pi:
+        a = 2*a
+        b = 2*b
 
     diff = abs(a-b)
 
     diff = diff%(2*numpy.pi) # 0 <= diff <= 2pi
 
     result = abs(diff) < eps
-    if mod_pi:
-        if abs(diff-numpy.pi) < eps:
-            result = result or True
+    if abs(diff-numpy.pi) < eps:
+        result = result or True
     if abs(diff-2*numpy.pi) < eps:
         result = result or True
     return result
+
+def test_angles_near():
+    pi = np.pi
+    for A in [-2*pi, -1*pi, -pi/2, 0, pi/2, pi, 2*pi]:
+        assert angles_near(A,A,eps=1e-15)==True
+        assert angles_near(A,A+np.pi/8,eps=np.pi/4)==True
+        assert angles_near(A,A-np.pi/8,eps=np.pi/4)==True
+
+        assert angles_near(A,A+1.1*np.pi/2,eps=np.pi/4)==False
+        assert angles_near(A,A+1.1*np.pi/2,eps=np.pi/4,mod_pi=True)==True
 
 class SingleCameraCalibration:
     """Complete per-camera calibration information.
