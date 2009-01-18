@@ -41,57 +41,12 @@ class EKF(object):
         return xhatminus, Pminus
 
     def step2__calculate_a_posteri(self,
-                                   xhatminus, Pminus,
-                                   pmats_and_points_cov):
+                                      xhatminus, Pminus,
+                                      C,R,missing_data=False):
 
         ss = len(xhatminus) # state space size
 
-        N = len(pmats_and_points_cov) # number of observations
-        if N > 0:
-            missing_data = False
-        else:
-            missing_data = True
-
         if not missing_data:
-            # Create 2N vector of N observations.
-            y = numpy.empty((2*N,), dtype=numpy.float64)
-
-            # Create 2N x 4 observation model matrix (jacobian of h() at xhatminus).
-            C = numpy.zeros((2*N,ss), dtype=numpy.float64)
-
-            # Create 2N vector h(xhatminus) where xhatminus is the a
-            # priori estimate and h() is the observation model.
-            hx = numpy.empty((2*N,), dtype=numpy.float64)
-
-            # Create 2N x 2N observation covariance matrix
-            R = numpy.zeros((2*N,2*N), dtype=numpy.float64)
-
-            # evaluate jacobian for each participating camera
-            for i,(pmat,nonlin_model,xy2d_obs,cov) in enumerate(pmats_and_points_cov):
-
-                # fill prediction vector [ h(xhatminus) ]
-                hx_i = nonlin_model(xhatminus)
-                hx[2*i:2*i+2] = hx_i
-
-                # fill observation  vector
-                y[2*i:2*i+2] = xy2d_obs
-
-                # fill observation model
-                C_i = nonlin_model.evaluate_jacobian_at(xhatminus)
-                C[2*i:2*i+2,:3] = C_i
-
-                # fill observation covariance
-                R[2*i:2*i+2,2*i:2*i+2]=cov
-
-    ##         if 1:
-    ##             print 'C'
-    ##             print C
-    ##             print 'y'
-    ##             print y
-    ##             print 'hx'
-    ##             print hx
-    ##             print 'R'
-    ##             print R
 
             CT = C.T
 
