@@ -69,6 +69,13 @@ def doit(fmf_filename=None,
     if style not in styles:
         raise ValueError('style ("%s") is not one of %s'%(style,str(styles)))
 
+    if options.debug_ori_pickle is not None:
+        print 'options.debug_ori_pickle',options.debug_ori_pickle
+        import pickle
+        fd = open(options.debug_ori_pickle,mode='rb')
+        used_camn_dict = pickle.load(fd)
+        fd.close()
+
     if not use_kalman_smoothing:
         if (fps is not None) or (dynamic_model is not None):
             print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting fps and dynamic model options (--fps and --dynamic-model)'
@@ -270,7 +277,8 @@ def doit(fmf_filename=None,
         cb_white = (255,255,255)
 
         font2d = aggdraw.Font(cb_blue,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf',size=20)
-        pen2d = aggdraw.Pen(cb_blue, width=2 )
+        pen2d = aggdraw.Pen(cb_blue, width=1 )
+        pen2d_bold = aggdraw.Pen(cb_blue, width=3 )
 
         pen3d = aggdraw.Pen(cb_orange, width=2 )
 
@@ -743,10 +751,14 @@ def doit(fmf_filename=None,
 
                 # plot extracted data for full image
                 if len(idxs):
-                    for pt_no,(x,y,area,slope,eccentricity) in enumerate(zip(rows['x'],
-                                                                             rows['y'],
-                                                                             rows['area'],rows['slope'],
-                                                                             rows['eccentricity'])):
+                    for pt_no,(camn,frame_pt_idx,x,y,area,slope,
+                               eccentricity) in enumerate(zip(rows['camn'],
+                                                              rows['frame_pt_idx'],
+                                                              rows['x'],
+                                                              rows['y'],
+                                                              rows['area'],
+                                                              rows['slope'],
+                                                              rows['eccentricity'])):
 
                         if style=='debug':
                             radius = numpy.sqrt(area/(2*numpy.pi))
@@ -764,7 +776,7 @@ def doit(fmf_filename=None,
                                           pen2d )
 
                         # plot slope line
-                        if options.body_axis or options.smooth_orientations:
+                        if options.body_axis or options.smooth_orientations or options.show_slope_2d:
                             if (((R is None) or (not eccentricity<R.minimum_eccentricity)) and
                                 (area>=options.area_threshold_for_orientation)):
                                 direction = numpy.array( [1,slope] )
@@ -777,8 +789,22 @@ def doit(fmf_filename=None,
                                             p2 = pos+sign*(                   1.0*10*direction)
                                         else:
                                             p2 = pos+sign*(R.minimum_eccentricity*10*direction)
+
+                                        use_pen = pen2d
+                                        if options.debug_ori_pickle is not None:
+                                            try:
+                                                tmplist = used_camn_dict[h5_frame]
+                                            except KeyError:
+                                                pass
+                                            else:
+                                                for (used_camn,ufpi) in tmplist:
+                                                    if (camn==used_camn and
+                                                        frame_pt_idx==ufpi):
+                                                        use_pen = pen2d_bold
+                                                        break
+
                                         draw.line( [p1[0],p1[1], p2[0],p2[1]],
-                                                   pen2d )
+                                                   use_pen )
                                 elif style=='pretty':
                                     vec = direction*radius
                                     pos = numpy.array( [x,y] )
@@ -903,7 +929,11 @@ def main():
                       default=False)
 
     parser.add_option("--body-axis", action='store_true',
-                      help="use body axis data is available",
+                      help="use body axis data if available",
+                      default=False)
+
+    parser.add_option("--show-slope-2d", action='store_true',
+                      help="show 2D body axis data if available",
                       default=False)
 
     parser.add_option("--zoom-diff", action='store_true',
@@ -919,6 +949,8 @@ def main():
     parser.add_option("--obj-only", type="string")
 
     parser.add_option("--up-dir", type="string")
+
+    parser.add_option("--debug-ori-pickle", type="string")
 
     parser.add_option("--area-threshold-for-orientation", type='float',
                       default=0.0,
