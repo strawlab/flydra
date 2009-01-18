@@ -264,18 +264,24 @@ def doit(fmf_filename=None,
         cb_orange = (230, 159, 0)
         cb_blue = (0, 114, 178)
         cb_vermillion = (213, 94, 0)
+        cb_blue_green = (0, 158, 115)
+
+        # Not from that pallette:
+        cb_white = (255,255,255)
 
         font2d = aggdraw.Font(cb_blue,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf',size=20)
         pen2d = aggdraw.Pen(cb_blue, width=2 )
 
         pen3d = aggdraw.Pen(cb_orange, width=2 )
+
+        pen3d_raw = aggdraw.Pen(cb_orange, width=1 )
         font3d = aggdraw.Font(cb_orange,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf')
 
         pen_zoomed = pen3d
         font_zoomed = aggdraw.Font(cb_orange,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf', size=20)
 
-        pen_obs = aggdraw.Pen(cb_vermillion, width=2 )
-        font_obs = aggdraw.Font(cb_vermillion,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf')
+        pen_obs = aggdraw.Pen(cb_blue_green, width=2 )
+        font_obs = aggdraw.Font(cb_blue_green,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf')
 
     print 'loading frame information...'
     # step through .fmf file to get map of h5frame <-> fmfframe
@@ -397,7 +403,7 @@ def doit(fmf_filename=None,
                             u = v2-v1
 
                             # plot several verts to deal with camera distortion
-                            ori_verts = [v1+inc*u  for inc in numpy.linspace(0,1.0,3)]
+                            ori_verts = [v1+inc*u  for inc in numpy.linspace(0,1.0,5)]
 
                             ori_verts_images = [ R.find2d(cam_id,ori_vert,distorted=True) for ori_vert in ori_verts ]
                             target.append( ori_verts_images )
@@ -793,9 +799,9 @@ def doit(fmf_filename=None,
                             ori_verts_images = numpy.array( ori_verts_images )
                             draw.line( ori_verts_images.flatten(), pen3d )
                         if style=='debug':
-                            for ori_verts_images in kalman_raw_ori_verts_images:
-                                ori_verts_images = numpy.array( ori_verts_images )
-                                draw.line( ori_verts_images.flatten(), pen3d )
+                            for raw_ori_verts_images in kalman_raw_ori_verts_images:
+                                raw_ori_verts_images = numpy.array( raw_ori_verts_images )
+                                draw.line( raw_ori_verts_images.flatten(), pen3d_raw )
 
                     if style=='debug':
                         pt_dist_meters = numpy.sqrt( (X-cam_center_meters[0])**2 +
