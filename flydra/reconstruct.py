@@ -16,6 +16,8 @@ import StringIO, warnings
 import cgtypes
 from optparse import OptionParser
 
+R2D = 180.0/np.pi
+
 WARN_CALIB_DIFF = False
 
 L_i = nx.array([0,0,0,1,3,2])
@@ -332,18 +334,23 @@ def do_3d_operations_on_2d_point(helper,
     return (p1, p2, p3, p4,
             ray0, ray1, ray2, ray3, ray4, ray5)
 
-def angles_near(a,b, eps=None, mod_pi=False):
+def angles_near(a,b, eps=None, mod_pi=False,debug=False):
     """compare if angles a and b are within eps of each other. assumes radians"""
 
     if mod_pi:
         a = 2*a
         b = 2*b
+        eps = 2*eps
 
     diff = abs(a-b)
 
     diff = diff%(2*numpy.pi) # 0 <= diff <= 2pi
 
     result = abs(diff) < eps
+    if debug:
+        print 'a',a*R2D
+        print 'b',b*R2D
+        print 'diff',diff*R2D
     if abs(diff-numpy.pi) < eps:
         result = result or True
     if abs(diff-2*numpy.pi) < eps:
