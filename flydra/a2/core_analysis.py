@@ -677,17 +677,22 @@ class PreSmoothedDataCache(object):
             make_new_cache = True
             if os.path.exists( cache_h5file_name ):
                 # loading cache file
-                cache_h5file = tables.openFile( cache_h5file_name, mode='r+' )
-
-                # check if cache is up to date
-                cache_title = cache_h5file.title
-                if expected_title == cache_title:
-                    make_new_cache = False
-                else:
+                try:
+                    cache_h5file = tables.openFile( cache_h5file_name, mode='r+' )
+                except IOError:
                     warnings.warn(
-                        'Stale cache file %s. Deleting'%cache_h5file_name)
-                    cache_h5file.close()
+                        'Broken cache file %s. Deleting'%cache_h5file_name)
                     os.unlink( cache_h5file_name )
+                else:
+                    # check if cache is up to date
+                    cache_title = cache_h5file.title
+                    if expected_title == cache_title:
+                        make_new_cache = False
+                    else:
+                        warnings.warn(
+                            'Stale cache file %s. Deleting'%cache_h5file_name)
+                        cache_h5file.close()
+                        os.unlink( cache_h5file_name )
 
             if make_new_cache:
                 # creating cache file
