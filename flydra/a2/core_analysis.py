@@ -192,7 +192,7 @@ def get_data(filename):
 def _initial_file_load(filename):
     extra = {}
     if os.path.splitext(filename)[1] == '.mat':
-        mat_data = scipy.io.mio.loadmat(filename)
+        mat_data = scipy.io.loadmat(filename,squeeze_me=True)
         mat_data = WeakRefAbleDict(mat_data)
         obj_ids = mat_data['kalman_obj_id']
         obj_ids = obj_ids.astype( numpy.uint32 )
