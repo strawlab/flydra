@@ -23,7 +23,21 @@ slope2modpi = np.arctan # assign function name
 D2R = 180.0/np.pi
 gate_angle_threshold_radians = 20.0*D2R
 
-if 1:
+
+## from pymc import stochastic, uniform_like ,normal_like
+
+## @stochastic
+## def state(value=array([0., 0., 0., 1., 0., 0., 0.])):
+##     """the likelihood is the prior on the parameters"""
+##     p,q,r,a,b,c,d=value
+##     return normal_like(value,0,1.0) # zero mean, std=1.0
+
+## @deterministic
+## def modelled_observation(state=state):
+##     1
+
+
+if 0:
     a,b,c,d=sympy.symbols('abcd')
     R = sympy.Matrix([[d**2+a**2-b**2-c**2, 2*(a*b-c*d), 2*(a*c+b*d)],
                       [2*(a*b+c*d), d**2+b**2-a**2-c**2, 2*(b*c-a*d)],
@@ -69,6 +83,7 @@ if 1:
     dy = vec[1]
     dx = vec[0]
 
+    # prefer atan over atan2 because observations are mod pi.
     theta = sympy.atan(dy/dx)
 
     sympy.pprint(hB)
@@ -301,6 +316,24 @@ if 1:
 
                 ## plt.legend()
                 ## plt.savefig('fig_ori.png')
+
+
+
+
+
+
+
+
+
+
+
+
+
+                # EKF method here
+
+
+
+
 
                 if 1:
                     # guesstimate initial orientation (XXX not done)
