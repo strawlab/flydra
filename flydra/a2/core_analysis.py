@@ -1264,6 +1264,9 @@ class CachingAnalyzer:
                 orig_rows = kresults.root.kalman_observations.readCoordinates(
                     obs_idxs)
 
+                if len(orig_rows)==0:
+                    raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
+
                 if 1 :
                     warnings.warn('Due to Kalman smoothing, all '
                                   'observations using only 1 camera '
