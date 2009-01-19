@@ -31,7 +31,7 @@ Q_scalar_rate = 0.1
 Q_scalar_quat = 0.1
 R_scalar = 10
 
-gate_angle_threshold_radians = 20.0*D2R
+gate_angle_threshold_radians = 100.0*D2R # everything?
 area_threshold_for_orientation = 500
 
 # everything else
@@ -190,8 +190,8 @@ arg_tuple = (P00, P01, P02, P03,
              P20, P21, P22, P23,
              Ax, Ay, Az,
              x)
-obs_model = lambdify(arg_tuple, theta, 'numpy')
-linearize_obs_model=lambdify(arg_tuple, theta_linearized, 'numpy')
+eval_G = lambdify(arg_tuple, theta, 'numpy')
+eval_linG=lambdify(arg_tuple, theta_linearized, 'numpy')
 
 if 1:
     if 0:
@@ -244,10 +244,11 @@ if 1:
             print 'done clearing columns'
 
             fig1=plt.figure()
-            ax1=fig1.add_subplot(411)
-            ax2=fig1.add_subplot(412,sharex=ax1)
-            ax3=fig1.add_subplot(413,sharex=ax1)
-            ax4=fig1.add_subplot(414,sharex=ax1)
+            ax1=fig1.add_subplot(511)
+            ax2=fig1.add_subplot(512,sharex=ax1)
+            ax3=fig1.add_subplot(513,sharex=ax1)
+            ax4=fig1.add_subplot(514,sharex=ax1)
+            ax5=fig1.add_subplot(515,sharex=ax1)
             ax1.xaxis.set_major_formatter(mticker.FormatStrFormatter("%d"))
 
             reconst = reconstruct.Reconstructor(kh5)
@@ -427,6 +428,7 @@ if 1:
 
                 ekf = kalman_ekf.EKF( init_x, Pminus )
                 previous_posterior_x = init_x
+                _save_plot_rows = []
                 for frame_idx, absolute_frame_number in enumerate(frame_range):
                     # Evaluate the Jacobian of the process update
                     # using previous frame's posterior estimate. (This
@@ -434,6 +436,8 @@ if 1:
                     # estimate. The difference this frame's prior
                     # estimate is _after_ the process update
                     # model. Which we need to get doing this.)
+
+                    _save_plot_rows.append( np.nan*np.ones( (n_cams,) ))
 
                     this_dx = eval_deriv( previous_posterior_x )
                     A = preA + this_dx*dt
@@ -444,6 +448,7 @@ if 1:
                         if debug_level > 6:
                             print 'A'
                             print A
+
                     xhatminus, Pminus=ekf.step1__calculate_a_priori(A,Q)
                     if debug_level >= 1:
                         print 'new prior',xhatminus
@@ -541,8 +546,10 @@ if 1:
                                          center_position[1],
                                          center_position[2],
                                          xhatminus)
-                                hx.append(obs_model(*args))
-                                C.append(linearize_obs_model(*args))
+                                hx.append(eval_G(*args))
+                                _save_plot_rows[-1][camn_idx] = (y[-1] - hx[-1])
+
+                                C.append(eval_linG(*args))
                                 N_obs_this_frame += 1
                                 # save which orientations were used
                                 if absolute_frame_number not in used_camn_dict:
@@ -598,6 +605,8 @@ if 1:
 
                 all_xhats = np.array( all_xhats )
                 all_ori = np.array( all_ori )
+                _save_plot_rows = np.array( _save_plot_rows )
+
                 ax2.plot(frame_range,all_xhats[:,0],'.',label='p')
                 ax2.plot(frame_range,all_xhats[:,1],'.',label='q')
                 ax2.plot(frame_range,all_xhats[:,2],'.',label='r')
@@ -614,6 +623,10 @@ if 1:
                 ax4.plot(frame_range,all_ori[:,2],'.',label='z')
                 ax4.legend()
 
+                for i in range(n_cams):
+                    ax5.plot(frame_range,_save_plot_rows[:,i], '.',
+                             label=cam_id_list[i])
+                ax5.legend()
         print 'saving results'
         result = xhat_results
         for obj_id in result.keys():
