@@ -401,6 +401,8 @@ class SingleCameraCalibration:
         if len(res) != 2:
             raise ValueError('len(res) must be 2 (res = %s)'%repr(res))
 
+        self._scaled_cache = {}
+
         self.cam_id=cam_id
         self.Pmat=Pmat
         self.res=res
@@ -482,6 +484,9 @@ class SingleCameraCalibration:
 
         Note: some of the data structures are shared with the unscaled original
         """
+        if scale_factor in self._scaled_cache:
+            return self._scaled_cache[scale_factor]
+
         scale_array = numpy.ones((3,4))
         scale_array[:,3] = scale_factor # mulitply last column by scale_factor
         scaled_Pmat = scale_array*self.Pmat # element-wise multiplication
@@ -497,6 +502,7 @@ class SingleCameraCalibration:
 #                                         self.pp,
                                          helper=self.helper,
                                          scale_factor=new_scale_factor)
+        self._scaled_cache[scale_factor] = scaled
         return scaled
 
     def get_cam_center(self):
@@ -622,6 +628,33 @@ class SingleCameraCalibration:
                   '%(qw)s %(qx)s %(qy)s %(qz)s '
                   '%(t0)s %(t1)s %(t2)s'%locals())
         return result
+
+    def get_3D_plane_and_ray(self, x0d, y0d, slope):
+        """(x0d,y0d) are the x,y distorted image coords"""
+        # undistort
+        x0u,y0u = self.helper.undistort(x0d,y0d)
+        rise=slope
+        run=1.0
+        meter_me=self.get_scaled(self.scale_factor)
+        pmat_meters_inv = meter_me.pmat_inv
+        # homogeneous coords for camera centers
+        camera_center = np.ones((4,))
+        camera_center[:3] = self.get_cam_center()[:,0]
+        camera_center_meters = np.ones((4,))
+        camera_center_meters[:3] = meter_me.get_cam_center()[:,0]
+        try:
+            tmp = do_3d_operations_on_2d_point(self.helper, x0u, y0u,
+                                               self.pmat_inv, pmat_meters_inv,
+                                               camera_center, camera_center_meters,
+                                               x0d, y0d, rise, run)
+        except:
+            print 'camera_center',camera_center
+            print 'camera_center_meters',camera_center_meters
+            raise
+        (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4, ray5) = tmp
+        plane = (p1, p2, p3, p4)
+        ray = (ray0, ray1, ray2, ray3, ray4, ray5)
+        return plane,ray
 
     def add_element(self,parent):
         """add self as XML element to parent"""
@@ -1056,6 +1089,10 @@ class Reconstructor:
                 eq = False
                 break
         return eq
+
+    def get_3D_plane_and_ray(self, cam_id, *args, **kwargs):
+        s = self.get_SingleCameraCalibration(cam_id)
+        return s.get_3D_plane_and_ray(*args,**kwargs)
 
     def get_extrinsic_parameter_matrix(self,cam_id):
         scc = self.get_SingleCameraCalibration(cam_id)
