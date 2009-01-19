@@ -699,7 +699,7 @@ class PreSmoothedDataCache(object):
                 try:
                     cache_h5file = tables.openFile( cache_h5file_name, mode='w',
                                                     title=expected_title )
-                except IOError, err:
+                except (IOError, TypeError):
                     tmp_trash, cache_h5file_name = tempfile.mkstemp('.h5')
                     # HDF5 doesn't like pre-existing non-HDF5 file
                     os.unlink(cache_h5file_name)
