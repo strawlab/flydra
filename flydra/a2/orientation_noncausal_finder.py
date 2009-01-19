@@ -85,8 +85,8 @@ class drop_dims(object):
             return arr1d
         return arr2d
 
-if 1:
-    x = sympy.DeferredVector('x')
+
+def get_theta_symbolic(x):
 
     # This formulation partly from Marins, Yun, Bachmann, McGhee, and
     # Zyda (2001). An Extended Kalman Filter for Quaternion-Based
@@ -168,32 +168,14 @@ if 1:
     # prefer atan over atan2 because observations are mod pi.
     theta = sympy.atan(dy/dx)
 
-    ## sympy.pprint(hB)
-    ## #sympy.pprint(R)
-    ## #sympy.pprint(u)
-    ## sympy.pprint(U)
-    ## sympy.pprint(a)
-    ## sympy.pprint(b)
-    if 1:
-        print 'theta'
-        sympy.pprint(theta)
-        print
+    arg_tuple = (P00, P01, P02, P03,
+                 P10, P11, P12, P13,
+                 P20, P21, P22, P23,
+                 Ax, Ay, Az,
+                 x)
 
-    theta_linearized = [ theta.diff(xi) for xi in (x1,x2,x3,x4,x5,x6,x7)]
-    if 0:
-        print 'theta_linearized'
-        for i in range(len(theta_linearized)):
-            sympy.pprint(theta_linearized[i])
-        print
-arg_tuple = (P00, P01, P02, P03,
-             P10, P11, P12, P13,
-             P20, P21, P22, P23,
-             Ax, Ay, Az,
-             x)
-eval_G = lambdify(arg_tuple, theta, 'numpy')
-eval_linG=lambdify(arg_tuple, theta_linearized, 'numpy')
+    # Process model
 
-if 1:
     if 0:
         tau_rx = Symbol('tau_rx')
         tau_ry = Symbol('tau_ry')
@@ -217,12 +199,41 @@ if 1:
     derivative_x = Matrix(derivative_x).T
 
     dx_symbolic = derivative_x.jacobian((x1,x2,x3,x4,x5,x6,x7))
+
+    return theta, dx_symbolic, arg_tuple
+
+if 1:
+    x = sympy.DeferredVector('x')
+    theta, dx_symbolic, arg_tuple_x = get_theta_symbolic(x)
+
+    ## sympy.pprint(hB)
+    ## #sympy.pprint(R)
+    ## #sympy.pprint(u)
+    ## sympy.pprint(U)
+    ## sympy.pprint(a)
+    ## sympy.pprint(b)
+    if 1:
+        print 'theta'
+        sympy.pprint(theta)
+        print
+
+    theta_linearized = [ theta.diff(x[i]) for i in range(7)]
+    if 0:
+        print 'theta_linearized'
+        for i in range(len(theta_linearized)):
+            sympy.pprint(theta_linearized[i])
+        print
+
+eval_G = lambdify(arg_tuple_x, theta, 'numpy')
+eval_linG=lambdify(arg_tuple_x, theta_linearized, 'numpy')
+
+if 1:
     if 0:
         print 'dx_symbolic'
         sympy.pprint(dx_symbolic)
         print
 
-eval_deriv = drop_dims( lambdify( x,dx_symbolic,'numpy'))
+eval_dAdt = drop_dims( lambdify( x,dx_symbolic,'numpy'))
 
 if 1:
     start = stop = None
@@ -439,7 +450,7 @@ if 1:
 
                     _save_plot_rows.append( np.nan*np.ones( (n_cams,) ))
 
-                    this_dx = eval_deriv( previous_posterior_x )
+                    this_dx = eval_dAdt( previous_posterior_x )
                     A = preA + this_dx*dt
                     if debug_level >= 1:
                         print
