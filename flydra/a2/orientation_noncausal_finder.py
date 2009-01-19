@@ -27,6 +27,7 @@ R2D = 180.0/np.pi
 
 # configuration and constants (important stuff)
 expected_orientation_method = 'trust_prior'
+#expected_orientation_method = 'SVD_line_fits'
 
 Q_scalar_rate = 0.1
 Q_scalar_quat = 0.1
@@ -43,6 +44,9 @@ slope2modpi = np.arctan # assign function name
 def statespace2cgtypes_quat( x ):
     return cgtypes.quat( x[6], x[3], x[4], x[5] )
 
+def cgtypes_quat2statespace( q,Rp=0,Rq=0,Rr=0 ):
+    return (Rp,Rq,Rr, q.x, q.y, q.z, q.w)
+
 def state_to_ori(x):
     q = statespace2cgtypes_quat( x )
     return PQmath.quat_to_orient(q)
@@ -54,11 +58,6 @@ def state_to_hzline(x,A):
                                   geom.ThreeTuple((Ax+Ux,Ay+Uy,Az+Uz)) )
     return line.to_hz()
 
-## state = (0,0,0, 0,1,0,0)
-## A = (0,0,0)
-## hz = state_to_hzline(state,A)
-## print hz
-## 1/0
 def get_point_on_line( x, A, mu=1.0 ):
     """get a point on a line through A specified by state space vector x
     """
@@ -248,6 +247,8 @@ if 1:
 
     # H = G - phi
     H_symbolic = G_symbolic-phi_symbolic
+
+    # We still take derivative wrt x (not xm).
     H_linearized = [ H_symbolic.diff(x[i]) for i in range(7)]
 
 eval_phi = lambdify( arg_tuple_x_xm, phi_symbolic, 'numpy')
@@ -323,6 +324,8 @@ if 1:
                     smoothed_3d_rows['frame'])
 
                 slopes_by_camn_by_frame = collections.defaultdict(dict)
+                x0d_by_camn_by_frame = collections.defaultdict(dict)
+                y0d_by_camn_by_frame = collections.defaultdict(dict)
                 pt_idx_by_camn_by_frame = collections.defaultdict(dict)
                 min_frame = np.inf
                 max_frame = -np.inf
@@ -369,14 +372,16 @@ if 1:
 
                         row = frame2d[idx]
                         assert framenumber==row['frame']
-                        ## if ((row['eccentricity']<reconst.minimum_eccentricity)or
-                        ##     (row['area'] < area_threshold_for_orientation)):
-                        ##     slopes_by_camn_by_frame[camn][framenumber]=np.nan
-                        ##     pt_idx_by_camn_by_frame[camn][framenumber]=camn_pt_no
-                        ## else:
-                        if 1:
-                            warnings.warn('ignoring eccentricity and area')
+                        if ((row['eccentricity']<reconst.minimum_eccentricity)or
+                            (row['area'] < area_threshold_for_orientation)):
+                            slopes_by_camn_by_frame[camn][framenumber]=np.nan
+                            x0d_by_camn_by_frame[camn][framenumber]=np.nan
+                            y0d_by_camn_by_frame[camn][framenumber]=np.nan
+                            pt_idx_by_camn_by_frame[camn][framenumber]=camn_pt_no
+                        else:
                             slopes_by_camn_by_frame[camn][framenumber]=row['slope']
+                            x0d_by_camn_by_frame[camn][framenumber]=row['x']
+                            y0d_by_camn_by_frame[camn][framenumber]=row['y']
                             pt_idx_by_camn_by_frame[camn][framenumber]=camn_pt_no
 
                 # now collect in a numpy array for all cam
@@ -394,15 +399,21 @@ if 1:
 
                 # NxM array with rows being frames and cols being cameras
                 slopes = np.ones( (n_frames,n_cams), dtype=np.float)
+                x0ds = np.ones( (n_frames,n_cams), dtype=np.float)
+                y0ds = np.ones( (n_frames,n_cams), dtype=np.float)
                 for j,camn in enumerate(camn_list):
 
                     slopes_by_frame = slopes_by_camn_by_frame[camn]
+                    x0d_by_frame = x0d_by_camn_by_frame[camn]
+                    y0d_by_frame = y0d_by_camn_by_frame[camn]
 
                     for frame_idx,absolute_frame_number in enumerate(
                         frame_range):
 
                         slopes[frame_idx,j] = slopes_by_frame.get(
                             absolute_frame_number,np.nan)
+                        x0ds[frame_idx,j] = x0d_by_frame.get(absolute_frame_number,np.nan)
+                        y0ds[frame_idx,j] = y0d_by_frame.get(absolute_frame_number,np.nan)
 
                     ax1.plot(frame_range,slope2modpi(slopes[:,j]),'.',
                              label=camn2cam_id[camn])
@@ -496,6 +507,8 @@ if 1:
                     # 1. Gate per-camera orientations.
 
                     this_frame_slopes = slopes[frame_idx,:]
+                    this_frame_x0d = x0ds[frame_idx,:]
+                    this_frame_y0d = y0ds[frame_idx,:]
                     if debug_level >= 5:
                         print 'this_frame_slopes',this_frame_slopes
 
@@ -524,13 +537,26 @@ if 1:
 
                     if not all_data_this_frame_missing:
                         if expected_orientation_method == 'trust_prior':
-                            other_position = get_point_on_line(xhatminus,
-                                                               center_position)
-                            if debug_level >= 6:
-                                print 'other_position',other_position
-                        else:
-                            # e.g. based on SVD fit of camera plances
-                            raise NotImplementedError('')
+                            state_for_phi = xhatminus # use a priori
+                        elif expected_orientation_method == 'SVD_line_fits':
+                            # construct matrix of planes
+                            P = []
+                            for camn_idx in range(n_cams):
+                                this_x0d = this_frame_x0d[camn_idx]
+                                this_y0d = this_frame_y0d[camn_idx]
+                                slope = this_frame_slopes[camn_idx]
+                                plane,ray = reconst.get_3D_plane_and_ray(
+                                    cam_id,this_x0d, this_y0d, slope)
+                                if np.isnan(plane[0]):
+                                    continue
+                                P.append( plane )
+                            if len(P) < 2:
+                                # not enough data to do SVD... fallback to prior
+                                state_for_phi = xhatminus # use a priori
+                            else:
+                                Lco=reconstruct.intersect_planes_to_find_line(P)
+                                q = PQmath.pluecker_to_quat(Lco)
+                                state_for_phi = cgtypes_quat2statespace( q )
 
                         cams_with_data = ~cams_without_data
                         possible_cam_idxs = np.nonzero(cams_with_data)[0]
@@ -550,29 +576,20 @@ if 1:
                             # track head and tail separately and not
                             # use this whole quaternion mess.
 
-                            a = reconst.find2d( cam_id, center_position)
-                            b = reconst.find2d( cam_id, other_position)
 
-                            if debug_level >= 6:
-                                print 'cam_id',cam_id
-                            theta_expected=find_theta_mod_pi_between_points(a,b)
                             theta_measured=slope2modpi(
                                 this_frame_slopes[camn_idx])
+                            if debug_level >= 6:
+                                print 'cam_id',cam_id
                             if debug_level >= 3:
+                                a = reconst.find2d( cam_id, center_position)
+                                other_position = get_point_on_line(xhatminus,
+                                                                   center_position)
+                                b = reconst.find2d( cam_id, other_position)
+                                theta_expected=find_theta_mod_pi_between_points(a,b)
                                 print '  theta_expected,theta_measured',theta_expected*R2D,theta_measured*R2D
-
-                            ## if reconstruct.angles_near(
-                            ##     theta_expected,theta_measured,
-                            ##     gate_angle_threshold_radians,
-                            ##     mod_pi=True):
-
-                            ## if not reconstruct.angles_near(
-                            ##     theta_expected,theta_measured+np.pi,
-                            ##     gate_angle_threshold_radians,
-                            ##     mod_pi=False):
-                            ##     flip_vector[camn_idx]=1
-                            ##     if debug_level >= 6:
-                            ##         print '      flipped'
+                                if debug_level >= 6:
+                                    print 'other_position',other_position
 
                             P = reconst.get_pmat( cam_id )
                             if 0:
@@ -593,7 +610,7 @@ if 1:
                                              center_position[0],
                                              center_position[1],
                                              center_position[2],
-                                             xhatminus, xhatminus)
+                                             xhatminus, state_for_phi)
                                 this_phi = eval_phi(*args_x_xm)
                                 this_y = np.mod((theta_measured - this_phi)+np.pi,2*np.pi)-np.pi
                                 this_hx = eval_H(*args_x_xm)
@@ -639,7 +656,7 @@ if 1:
                         C = np.array(C)
                         R=R_scalar*np.eye(N_obs_this_frame)
                         hx = np.array(hx)
-                        if 1:
+                        if 0:
                             # crazy observation error scaling
                             for i in range(N_obs_this_frame):
                                 beyond = abs(y[i]) - 10*D2R
