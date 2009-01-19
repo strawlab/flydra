@@ -690,7 +690,7 @@ class PreSmoothedDataCache(object):
                         make_new_cache = False
                     else:
                         warnings.warn(
-                            'Stale cache file %s. Deleting'%cache_h5file_name)
+                            'Deleting stale cache file %s.'%cache_h5file_name)
                         cache_h5file.close()
                         os.unlink( cache_h5file_name )
 
@@ -699,12 +699,16 @@ class PreSmoothedDataCache(object):
                 try:
                     cache_h5file = tables.openFile( cache_h5file_name, mode='w',
                                                     title=expected_title )
-                except (IOError, TypeError):
+                except IOError, err:
                     tmp_trash, cache_h5file_name = tempfile.mkstemp('.h5')
                     # HDF5 doesn't like pre-existing non-HDF5 file
                     os.unlink(cache_h5file_name)
                     cache_h5file = tables.openFile( cache_h5file_name, mode='w',
                                                     title=expected_title )
+                except:
+                    warnings.warn('error creating cache_h5file %s'%(
+                        cache_h5file_name,))
+                    raise
             self.cache_h5files_by_data_file[data_file] = cache_h5file
 
         h5file = self.cache_h5files_by_data_file[data_file]
@@ -761,13 +765,22 @@ class PreSmoothedDataCache(object):
                 directions = flydra.reconstruct.line_direction(hzlines)
                 # make consistent
 
-                # send kalman-smoothed position estimates (the velocity will be determined from this)
-                directions = choose_orientations(rows, directions, frames_per_second=frames_per_second,
-                                                 #velocity_weight=1.0,
-                                                 #max_velocity_weight=1.0,
-                                                 elevation_up_bias_degrees=45.0, # don't tip the velocity angle
-                                                 up_dir=up_dir,
-                                                 )
+                if 0:
+
+                    # Don't call choose_orientations, because our data
+                    # should already have good orientation.
+
+                    # send kalman-smoothed position estimates (the
+                    # velocity will be determined from this)
+                    directions = choose_orientations(
+                        rows, directions,
+                        frames_per_second=frames_per_second,
+                        #velocity_weight=1.0,
+                        #max_velocity_weight=1.0,
+                        # don't tip the velocity angle
+                        elevation_up_bias_degrees=45.0,
+                        up_dir=up_dir,
+                        )
                 rows['rawdir_x'] = directions[:,0]
                 rows['rawdir_y'] = directions[:,1]
                 rows['rawdir_z'] = directions[:,2]
