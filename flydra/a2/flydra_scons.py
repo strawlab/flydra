@@ -17,6 +17,7 @@ except ImportError, err:
         raise
 
 import flydra.a2.auto_discover_ufmfs
+from flydra.a2.orientation_ekf_fitter import is_orientation_fit
 
 _my_normcase = SCons.Node.FS._my_normcase
 
@@ -39,6 +40,9 @@ class Flydra2DDistortedDataNodeMixin:
 class Flydra3DKalmanizedDataNodeMixin:
     pass
 
+class FlydraFitOriMixin:
+    pass
+
 class H5File(  SCons.Node.FS.File ):
     pass
 
@@ -46,6 +50,9 @@ class Flydra2DDistortedDataH5File( H5File, Flydra2DDistortedDataNodeMixin ):
     pass
 
 class Flydra3DKalmanizedDataH5File( H5File, Flydra3DKalmanizedDataNodeMixin ):
+    pass
+
+class Flydra3DKalmanizedDataFitOriH5File(Flydra3DKalmanizedDataH5File, FlydraFitOriMixin ):
     pass
 
 class Flydra2D3DH5File( H5File,
@@ -88,14 +95,20 @@ def flydra_source_factory(source_string):
         h5 = tables.openFile(abspath,mode='r')
         if (hasattr(h5.root,'data2d_distorted') and
             hasattr(h5.root,'kalman_estimates')):
+            if is_orientation_fit(abspath):
+                raise NotImplementedError('cannot deal with this file type yet')
             result=Flydra2D3DH5File(fname,directory,
                                     fs=SCons.Node.FS.default_fs)
         elif hasattr(h5.root,'data2d_distorted'):
             result=Flydra2DDistortedDataH5File(fname,directory,
                                                fs=SCons.Node.FS.default_fs)
         elif hasattr(h5.root,'kalman_estimates'):
-            result=Flydra3DKalmanizedDataH5File(fname,directory,
-                                                fs=SCons.Node.FS.default_fs)
+            if is_orientation_fit(abspath):
+                result=Flydra3DKalmanizedDataFitOriH5File(fname,directory,
+                                                          fs=SCons.Node.FS.default_fs)
+            else:
+                result=Flydra3DKalmanizedDataH5File(fname,directory,
+                                                    fs=SCons.Node.FS.default_fs)
         else:
             result=H5File(fname,directory,fs=SCons.Node.FS.default_fs)
         h5.close()
@@ -132,6 +145,15 @@ def kalmanizedH5_target_factory(target_string):
     create_node(fname,directory,result)
     return result
 
+def kalmanizedFixedOriH5_target_factory(target_string):
+    """convert filename to Node instance, add to directory"""
+    dirname,fname = os.path.split(os.path.abspath(target_string))
+    directory = SCons.Node.FS.default_fs.Dir(dirname)
+    result=Flydra3DKalmanizedDataFitOriH5File(fname,directory,
+                                              fs=SCons.Node.FS.default_fs)
+    create_node(fname,directory,result)
+    return result
+
 # create Builders
 
 def generate_ImageBasedData2DH5(source, target, env, for_signature):
@@ -160,6 +182,17 @@ def generate_KalmanizedH5(source, target, env, for_signature):
     return ('flydra_kalmanize %(h5_source)s --reconstructor=%(cal_source)s '
             '--dest-file=%(kh5_target)s %(args)s'%locals())
 
+def generate_kalmanizedFixedOriH5(source, target, env, for_signature):
+    kh5_source = get_single_instance(source,Flydra3DKalmanizedDataNodeMixin)
+    h5_source = get_single_instance(source,Flydra2DDistortedDataNodeMixin)
+    assert len(source)==2 # only the 3d and 2d data files
+
+    assert len(target)==1
+    kh5_target = target[0]
+    args = ' '.join(env.get('KalmanizedOriFitH5_args',[]))
+    return ('flydra_analysis_orientation_ekf_fitter --h5 %(h5_source)s -k %(kh5_source)s '
+            '--output-h5 %(kh5_target)s %(args)s'%locals())
+
 ImageBasedData2DH5_Builder = SCons.Builder.Builder(
     generator = generate_ImageBasedData2DH5,
     target_factory = data2d_distorted_target_factory,
@@ -169,5 +202,11 @@ ImageBasedData2DH5_Builder = SCons.Builder.Builder(
 KalmanizedH5_Builder = SCons.Builder.Builder(
     generator = generate_KalmanizedH5,
     target_factory = kalmanizedH5_target_factory,
+    source_factory = flydra_source_factory,
+    )
+
+KalmanizedFixedOriH5_Builder = SCons.Builder.Builder(
+    generator = generate_kalmanizedFixedOriH5,
+    target_factory = kalmanizedFixedOriH5_target_factory,
     source_factory = flydra_source_factory,
     )

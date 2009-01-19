@@ -72,6 +72,8 @@ setup(name='flydra',
 
 # analysis - image based orientation
     'flydra_analysis_image_based_orientation = flydra.a2.image_based_orientation:main',
+    'flydra_analysis_orientation_ekf_fitter = flydra.a2.orientation_ekf_fitter:main',
+    'flydra_analysis_orientation_is_fit = flydra.a2.orientation_ekf_fitter:is_orientation_fit_sysexit',
 
 # upload firmware to USB devices
     'flydra_LED_driver_enter_dfu_mode = flydra.LEDdriver.LEDdriver:enter_dfu_mode',
