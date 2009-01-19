@@ -34,12 +34,28 @@ Q_scalar_quat = 0.1
 R_scalar = 10
 
 gate_angle_threshold_radians = 40.0*D2R
-area_threshold_for_orientation = 500
+area_threshold_for_orientation = 0
 
 # everything else
 np.set_printoptions(linewidth=130,suppress=True)
 
 slope2modpi = np.arctan # assign function name
+
+def angle_diff(a,b,mod_pi = False):
+    """return difference between two angles in range [-pi,pi]"""
+    if mod_pi:
+        a=2*a
+        b=2*b
+    return np.mod( (a-b)+np.pi, 2*np.pi ) - np.pi
+
+def test_angle_diff():
+    for a in [-5,-1,0,1,2,5,45,89,89.9,90,90.1,179,180,181,359]:
+        ar = a*D2R
+        assert abs(angle_diff(ar,ar+2*np.pi)) < .0001
+        assert abs(angle_diff(ar,ar+np.pi,mod_pi=True)) < .0001
+        assert abs(angle_diff(ar,ar+np.pi)) > (np.pi-.0001)
+
+test_angle_diff()
 
 def statespace2cgtypes_quat( x ):
     return cgtypes.quat( x[6], x[3], x[4], x[5] )
@@ -588,8 +604,6 @@ if 1:
                                 b = reconst.find2d( cam_id, other_position)
                                 theta_expected=find_theta_mod_pi_between_points(a,b)
                                 print '  theta_expected,theta_measured',theta_expected*R2D,theta_measured*R2D
-                                if debug_level >= 6:
-                                    print 'other_position',other_position
 
                             P = reconst.get_pmat( cam_id )
                             if 0:
@@ -612,7 +626,7 @@ if 1:
                                              center_position[2],
                                              xhatminus, state_for_phi)
                                 this_phi = eval_phi(*args_x_xm)
-                                this_y = np.mod((theta_measured - this_phi)+np.pi,2*np.pi)-np.pi
+                                this_y = angle_diff(theta_measured,this_phi,mod_pi=True)
                                 this_hx = eval_H(*args_x_xm)
                                 this_C = eval_linH(*args_x_xm)
                                 if debug_level >= 3:
