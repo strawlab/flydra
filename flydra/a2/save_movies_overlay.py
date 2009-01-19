@@ -776,8 +776,11 @@ def doit(fmf_filename=None,
                                           pen2d )
 
                         # plot slope line
-                        if options.body_axis or options.smooth_orientations or options.show_slope_2d:
-                            if (((R is None) or (not eccentricity<R.minimum_eccentricity)) and
+                        if (options.body_axis or
+                            options.smooth_orientations or
+                            options.show_slope_2d):
+                            if (((R is None) or
+                                 (not eccentricity<R.minimum_eccentricity)) and
                                 (area>=options.area_threshold_for_orientation)):
                                 direction = numpy.array( [1,slope] )
                                 direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
@@ -859,7 +862,8 @@ def doit(fmf_filename=None,
                             draw.text_smartshift( (x+15,y+(i+1)*10), (x,y),
                                        '%s pt %d'%(obs_cam_id,pt_no), font_obs )
 
-                    for kobs_ori_verts_images in [kobs_ori_verts_images_a,kobs_ori_verts_images_b]:
+                    for kobs_ori_verts_images in [#kobs_ori_verts_images_a,
+                                                  kobs_ori_verts_images_b]:
                         for ori_verts_images in kobs_ori_verts_images:
                             ori_verts_images = numpy.array( ori_verts_images )
                             draw.line( ori_verts_images.flatten(), pen_obs )
