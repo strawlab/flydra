@@ -20,6 +20,7 @@ import sympy
 import sys
 from sympy import Symbol, Matrix, sqrt, latex, lambdify
 import pickle
+import warnings
 
 D2R = np.pi/180.0
 R2D = 180.0/np.pi
@@ -31,13 +32,12 @@ Q_scalar_rate = 0.1
 Q_scalar_quat = 0.1
 R_scalar = 10
 
-gate_angle_threshold_radians = 100.0*D2R # everything?
+gate_angle_threshold_radians = 40.0*D2R
 area_threshold_for_orientation = 500
 
 # everything else
 np.set_printoptions(linewidth=130,suppress=True)
 
-ca = core_analysis.get_global_CachingAnalyzer()
 slope2modpi = np.arctan # assign function name
 
 def statespace2cgtypes_quat( x ):
@@ -85,147 +85,174 @@ class drop_dims(object):
             return arr1d
         return arr2d
 
+class SymobolicModels:
+    def __init__(self):
+        # camera matrix
+        self.P00 = sympy.Symbol('P00')
+        self.P01 = sympy.Symbol('P01')
+        self.P02 = sympy.Symbol('P02')
+        self.P03 = sympy.Symbol('P03')
 
-def get_theta_symbolic(x):
+        self.P10 = sympy.Symbol('P10')
+        self.P11 = sympy.Symbol('P11')
+        self.P12 = sympy.Symbol('P12')
+        self.P13 = sympy.Symbol('P13')
 
-    # This formulation partly from Marins, Yun, Bachmann, McGhee, and
-    # Zyda (2001). An Extended Kalman Filter for Quaternion-Based
-    # Orientation Estimation Using MARG Sensors. Proceedings of the
-    # 2001 IEEE/RSJ International Conference on Intelligent Robots and
-    # Systems.
+        self.P20 = sympy.Symbol('P20')
+        self.P21 = sympy.Symbol('P21')
+        self.P22 = sympy.Symbol('P22')
+        self.P23 = sympy.Symbol('P23')
 
-    # nomenclature match
-    x1 = x[0]
-    x2 = x[1]
-    x3 = x[2]
-    x4 = x[3]
-    x5 = x[4]
-    x6 = x[5]
-    x7 = x[6]
+        # center about point
+        self.Ax = sympy.Symbol('Ax')
+        self.Ay = sympy.Symbol('Ay')
+        self.Az = sympy.Symbol('Az')
 
-    # Observation model per camera
+    def get_process_model(self,x):
 
-    a = x4
-    b = x5
-    c = x6
-    d = x7
+        # This formulation partly from Marins, Yun, Bachmann, McGhee, and
+        # Zyda (2001). An Extended Kalman Filter for Quaternion-Based
+        # Orientation Estimation Using MARG Sensors. Proceedings of the
+        # 2001 IEEE/RSJ International Conference on Intelligent Robots and
+        # Systems.
 
-    # rotation matrix (eqn 6)
-    R = Matrix([[d**2+a**2-b**2-c**2, 2*(a*b-c*d), 2*(a*c+b*d)],
-                [2*(a*b+c*d), d**2+b**2-a**2-c**2, 2*(b*c-a*d)],
-                [2*(a*c-b*d), 2*(b*c+a*d), d**2+c**2-b**2-a**2]])
-    # default orientation with no rotation
-    u = Matrix([[1],[0],[0]])
+        x1 = x[0]
+        x2 = x[1]
+        x3 = x[2]
+        x4 = x[3]
+        x5 = x[4]
+        x6 = x[5]
+        x7 = x[6]
 
-    # rotated orientation
-    U=R*u
+        if 0:
+            tau_rx = Symbol('tau_rx')
+            tau_ry = Symbol('tau_ry')
+            tau_rz = Symbol('tau_rz')
+        else:
+            tau_rx = 0.1
+            tau_ry = 0.1
+            tau_rz = 0.1
 
-    # point in space
-    Ax = sympy.Symbol('Ax')
-    Ay = sympy.Symbol('Ay')
-    Az = sympy.Symbol('Az')
-    A = sympy.Matrix([[Ax],[Ay],[Az]]) # make vector
-    hA = sympy.Matrix([[Ax],[Ay],[Az],[1]]) # homogenous
+        # eqns 9-15
+        f1 = -1/tau_rx*x1
+        f2 = -1/tau_ry*x2
+        f3 = -1/tau_rz*x3
+        scale = 2*sqrt(x4**2 + x5**2 + x6**2 + x7**2)
+        f4 = 1/scale * ( x3*x5 - x2*x6 + x1*x7 )
+        f5 = 1/scale * (-x3*x4 + x1*x6 + x2*x7 )
+        f6 = 1/scale * ( x2*x4 - x1*x5 + x3*x7 )
+        f7 = 1/scale * (-x1*x4 - x2*x5 + x3*x6 )
 
-    # second point in space, the two of which define line
-    B = A+U
-    hB = sympy.Matrix([[B[0]],[B[1]],[B[2]],[1]]) # homogenous
+        derivative_x = (f1,f2,f3,f4,f5,f6,f7)
+        derivative_x = Matrix(derivative_x).T
 
-    # camera matrix
-    P00 = sympy.Symbol('P00')
-    P01 = sympy.Symbol('P01')
-    P02 = sympy.Symbol('P02')
-    P03 = sympy.Symbol('P03')
+        dx_symbolic = derivative_x.jacobian((x1,x2,x3,x4,x5,x6,x7))
+        return dx_symbolic
 
-    P10 = sympy.Symbol('P10')
-    P11 = sympy.Symbol('P11')
-    P12 = sympy.Symbol('P12')
-    P13 = sympy.Symbol('P13')
+    def get_observation_model(self,x):
 
-    P20 = sympy.Symbol('P20')
-    P21 = sympy.Symbol('P21')
-    P22 = sympy.Symbol('P22')
-    P23 = sympy.Symbol('P23')
-    P = sympy.Matrix([[P00,P01,P02,P03],
-                      [P10,P11,P12,P13],
-                      [P20,P21,P22,P23]])
+        # Make Nomenclature match with Marins, Yun, Bachmann, McGhee,
+        # and Zyda (2001).
 
-    # the image projection of points on line
-    ha = P*hA
-    hb = P*hB
+        x1 = x[0]
+        x2 = x[1]
+        x3 = x[2]
+        x4 = x[3]
+        x5 = x[4]
+        x6 = x[5]
+        x7 = x[6]
 
-    # de homogenize
-    a2 = sympy.Matrix([[ha[0]/ha[2]],[ha[1]/ha[2]]])
-    b2 = sympy.Matrix([[hb[0]/hb[2]],[hb[1]/hb[2]]])
+        a = x4
+        b = x5
+        c = x6
+        d = x7
 
-    # direction in image
-    vec = b2-a2
+        # rotation matrix (eqn 6)
+        R = Matrix([[d**2+a**2-b**2-c**2, 2*(a*b-c*d), 2*(a*c+b*d)],
+                    [2*(a*b+c*d), d**2+b**2-a**2-c**2, 2*(b*c-a*d)],
+                    [2*(a*c-b*d), 2*(b*c+a*d), d**2+c**2-b**2-a**2]])
+        # default orientation with no rotation
+        u = Matrix([[1],[0],[0]])
 
-    # rise and run
-    dy = vec[1]
-    dx = vec[0]
+        # rotated orientation
+        U=R*u
 
-    # prefer atan over atan2 because observations are mod pi.
-    theta = sympy.atan(dy/dx)
+        # point in space
+        A = sympy.Matrix([[self.Ax],[self.Ay],[self.Az]]) # make vector
+        hA = sympy.Matrix([[self.Ax],[self.Ay],[self.Az],[1]]) # homogenous
 
-    arg_tuple = (P00, P01, P02, P03,
-                 P10, P11, P12, P13,
-                 P20, P21, P22, P23,
-                 Ax, Ay, Az,
-                 x)
+        # second point in space, the two of which define line
+        B = A+U
+        hB = sympy.Matrix([[B[0]],[B[1]],[B[2]],[1]]) # homogenous
 
-    # Process model
+        P = sympy.Matrix([[self.P00,self.P01,self.P02,self.P03],
+                          [self.P10,self.P11,self.P12,self.P13],
+                          [self.P20,self.P21,self.P22,self.P23]])
 
+        # the image projection of points on line
+        ha = P*hA
+        hb = P*hB
+
+        # de homogenize
+        a2 = sympy.Matrix([[ha[0]/ha[2]],[ha[1]/ha[2]]])
+        b2 = sympy.Matrix([[hb[0]/hb[2]],[hb[1]/hb[2]]])
+
+        # direction in image
+        vec = b2-a2
+
+        # rise and run
+        dy = vec[1]
+        dx = vec[0]
+
+        # prefer atan over atan2 because observations are mod pi.
+        theta = sympy.atan(dy/dx)
+        return theta
+
+
+M = SymobolicModels()
+x = sympy.DeferredVector('x')
+G_symbolic = M.get_observation_model(x)
+dx_symbolic = M.get_process_model(x)
+if 1:
     if 0:
-        tau_rx = Symbol('tau_rx')
-        tau_ry = Symbol('tau_ry')
-        tau_rz = Symbol('tau_rz')
-    else:
-        tau_rx = 0.01
-        tau_ry = 0.01
-        tau_rz = 0.01
+        print 'G_symbolic'
+        sympy.pprint(G_symbolic)
+        print
 
-    # eqns 9-15
-    f1 = -1/tau_rx*x1
-    f2 = -1/tau_ry*x2
-    f3 = -1/tau_rz*x3
-    scale = 2*sqrt(x4**2 + x5**2 + x6**2 + x7**2)
-    f4 = 1/scale * ( x3*x5 - x2*x6 + x1*x7 )
-    f5 = 1/scale * (-x3*x4 + x1*x6 + x2*x7 )
-    f6 = 1/scale * ( x2*x4 - x1*x5 + x3*x7 )
-    f7 = 1/scale * (-x1*x4 - x2*x5 + x3*x6 )
+    G_linearized = [ G_symbolic.diff(x[i]) for i in range(7)]
+    if 0:
+        print 'G_linearized'
+        for i in range(len(G_linearized)):
+            sympy.pprint(G_linearized[i])
+        print
 
-    derivative_x = (f1,f2,f3,f4,f5,f6,f7)
-    derivative_x = Matrix(derivative_x).T
+arg_tuple_x = (M.P00, M.P01, M.P02, M.P03,
+               M.P10, M.P11, M.P12, M.P13,
+               M.P20, M.P21, M.P22, M.P23,
+               M.Ax, M.Ay, M.Az,
+               x)
 
-    dx_symbolic = derivative_x.jacobian((x1,x2,x3,x4,x5,x6,x7))
+xm = sympy.DeferredVector('xm')
+arg_tuple_x_xm = (M.P00, M.P01, M.P02, M.P03,
+                  M.P10, M.P11, M.P12, M.P13,
+                  M.P20, M.P21, M.P22, M.P23,
+                  M.Ax, M.Ay, M.Az,
+                  x, xm)
 
-    return theta, dx_symbolic, arg_tuple
+eval_G = lambdify(arg_tuple_x, G_symbolic, 'numpy')
+eval_linG=lambdify(arg_tuple_x, G_linearized, 'numpy')
 
 if 1:
-    x = sympy.DeferredVector('x')
-    theta, dx_symbolic, arg_tuple_x = get_theta_symbolic(x)
+    # coord shift of observation model
+    phi_symbolic = M.get_observation_model(xm)
 
-    ## sympy.pprint(hB)
-    ## #sympy.pprint(R)
-    ## #sympy.pprint(u)
-    ## sympy.pprint(U)
-    ## sympy.pprint(a)
-    ## sympy.pprint(b)
-    if 1:
-        print 'theta'
-        sympy.pprint(theta)
-        print
+    # H = G - phi
+    H_symbolic = G_symbolic-phi_symbolic
+    H_linearized = [ H_symbolic.diff(x[i]) for i in range(7)]
 
-    theta_linearized = [ theta.diff(x[i]) for i in range(7)]
-    if 0:
-        print 'theta_linearized'
-        for i in range(len(theta_linearized)):
-            sympy.pprint(theta_linearized[i])
-        print
-
-eval_G = lambdify(arg_tuple_x, theta, 'numpy')
-eval_linG=lambdify(arg_tuple_x, theta_linearized, 'numpy')
+eval_phi = lambdify( arg_tuple_x_xm, phi_symbolic, 'numpy')
+eval_H = lambdify(arg_tuple_x_xm, H_symbolic, 'numpy')
+eval_linH=lambdify(arg_tuple_x_xm, H_linearized, 'numpy')
 
 if 1:
     if 0:
@@ -239,7 +266,7 @@ if 1:
     start = stop = None
     use_obj_ids = [19]
     debug_level = 0
-
+    ca = core_analysis.get_global_CachingAnalyzer()
     with openFileSafe( 'DATA20080915_153202.image-based-re2d.kalmanized.h5',
                        mode='r+') as kh5:
         with openFileSafe( 'DATA20080915_153202.image-based-re2d.h5',
@@ -342,11 +369,13 @@ if 1:
 
                         row = frame2d[idx]
                         assert framenumber==row['frame']
-                        if ((row['eccentricity']<reconst.minimum_eccentricity)or
-                            (row['area'] < area_threshold_for_orientation)):
-                            slopes_by_camn_by_frame[camn][framenumber]=np.nan
-                            pt_idx_by_camn_by_frame[camn][framenumber]=camn_pt_no
-                        else:
+                        ## if ((row['eccentricity']<reconst.minimum_eccentricity)or
+                        ##     (row['area'] < area_threshold_for_orientation)):
+                        ##     slopes_by_camn_by_frame[camn][framenumber]=np.nan
+                        ##     pt_idx_by_camn_by_frame[camn][framenumber]=camn_pt_no
+                        ## else:
+                        if 1:
+                            warnings.warn('ignoring eccentricity and area')
                             slopes_by_camn_by_frame[camn][framenumber]=row['slope']
                             pt_idx_by_camn_by_frame[camn][framenumber]=camn_pt_no
 
@@ -372,8 +401,6 @@ if 1:
                     for frame_idx,absolute_frame_number in enumerate(
                         frame_range):
 
-                        ## if absolute_frame_number==329236:
-                        ##     print '**camn',camn
                         slopes[frame_idx,j] = slopes_by_frame.get(
                             absolute_frame_number,np.nan)
 
@@ -440,6 +467,7 @@ if 1:
                 ekf = kalman_ekf.EKF( init_x, Pminus )
                 previous_posterior_x = init_x
                 _save_plot_rows = []
+                _save_plot_rows_used = []
                 for frame_idx, absolute_frame_number in enumerate(frame_range):
                     # Evaluate the Jacobian of the process update
                     # using previous frame's posterior estimate. (This
@@ -449,6 +477,7 @@ if 1:
                     # model. Which we need to get doing this.)
 
                     _save_plot_rows.append( np.nan*np.ones( (n_cams,) ))
+                    _save_plot_rows_used.append( np.nan*np.ones( (n_cams,) ))
 
                     this_dx = eval_dAdt( previous_posterior_x )
                     A = preA + this_dx*dt
@@ -470,7 +499,7 @@ if 1:
                     if debug_level >= 5:
                         print 'this_frame_slopes',this_frame_slopes
 
-                    missing_data = False
+                    all_data_this_frame_missing = False
                     gate_vector=None
 
                     y=[] # observation (per camera)
@@ -479,7 +508,7 @@ if 1:
                     N_obs_this_frame = 0
                     cams_without_data = np.isnan( this_frame_slopes )
                     if np.all(cams_without_data):
-                        missing_data = True
+                        all_data_this_frame_missing = True
 
                     smoothed_pos_idxs = smoothed_frame_qfi.get_frame_idxs(
                         absolute_frame_number)
@@ -493,7 +522,7 @@ if 1:
                     if debug_level >= 2:
                         print 'center_position',center_position
 
-                    if not missing_data:
+                    if not all_data_this_frame_missing:
                         if expected_orientation_method == 'trust_prior':
                             other_position = get_point_on_line(xhatminus,
                                                                center_position)
@@ -508,7 +537,7 @@ if 1:
                         if debug_level >= 6:
                             print 'possible_cam_idxs',possible_cam_idxs
                         gate_vector = np.zeros( (n_cams,), dtype=np.bool)
-                        flip_vector = np.zeros( (n_cams,), dtype=np.bool)
+                        ## flip_vector = np.zeros( (n_cams,), dtype=np.bool)
                         for camn_idx in possible_cam_idxs:
                             cam_id = cam_id_list[camn_idx]
                             camn = camn_list[camn_idx]
@@ -529,66 +558,80 @@ if 1:
                             theta_expected=find_theta_mod_pi_between_points(a,b)
                             theta_measured=slope2modpi(
                                 this_frame_slopes[camn_idx])
-                            if debug_level >= 6:
+                            if debug_level >= 3:
                                 print '  theta_expected,theta_measured',theta_expected*R2D,theta_measured*R2D
-                            if reconstruct.angles_near(
-                                theta_expected,theta_measured,
-                                gate_angle_threshold_radians,
-                                mod_pi=True):
+
+                            ## if reconstruct.angles_near(
+                            ##     theta_expected,theta_measured,
+                            ##     gate_angle_threshold_radians,
+                            ##     mod_pi=True):
+
+                            ## if not reconstruct.angles_near(
+                            ##     theta_expected,theta_measured+np.pi,
+                            ##     gate_angle_threshold_radians,
+                            ##     mod_pi=False):
+                            ##     flip_vector[camn_idx]=1
+                            ##     if debug_level >= 6:
+                            ##         print '      flipped'
+
+                            P = reconst.get_pmat( cam_id )
+                            if 0:
+                                args_x = (P[0,0], P[0,1], P[0,2], P[0,3],
+                                          P[1,0], P[1,1], P[1,2], P[1,3],
+                                          P[2,0], P[2,1], P[2,2], P[2,3],
+                                          center_position[0],
+                                          center_position[1],
+                                          center_position[2],
+                                          xhatminus)
+                                this_y = theta_measured
+                                this_hx = eval_G(*args_x)
+                                this_C = eval_linG(*args_x)
+                            else:
+                                args_x_xm = (P[0,0], P[0,1], P[0,2], P[0,3],
+                                             P[1,0], P[1,1], P[1,2], P[1,3],
+                                             P[2,0], P[2,1], P[2,2], P[2,3],
+                                             center_position[0],
+                                             center_position[1],
+                                             center_position[2],
+                                             xhatminus, xhatminus)
+                                this_phi = eval_phi(*args_x_xm)
+                                this_y = np.mod((theta_measured - this_phi)+np.pi,2*np.pi)-np.pi
+                                this_hx = eval_H(*args_x_xm)
+                                this_C = eval_linH(*args_x_xm)
+                                if debug_level >= 3:
+                                    print '  this_phi,this_y',this_phi*R2D,this_y*R2D
+                            # gate
+                            if abs(this_y) < gate_angle_threshold_radians:
                                 gate_vector[camn_idx]=1
-                                if debug_level >= 6:
+                                if debug_level >= 3:
                                     print '    good'
-
-                                if not reconstruct.angles_near(
-                                    theta_expected,theta_measured+np.pi,
-                                    gate_angle_threshold_radians,
-                                    mod_pi=False):
-                                    flip_vector[camn_idx]=1
-                                    if debug_level >= 6:
-                                        print '      flipped'
-
-                                y.append(theta_measured)
-
-                                P = reconst.get_pmat( cam_id )
-                                args =  (P[0,0], P[0,1], P[0,2], P[0,3],
-                                         P[1,0], P[1,1], P[1,2], P[1,3],
-                                         P[2,0], P[2,1], P[2,2], P[2,3],
-                                         center_position[0],
-                                         center_position[1],
-                                         center_position[2],
-                                         xhatminus)
-                                hx.append(eval_G(*args))
-                                _save_plot_rows[-1][camn_idx] = (y[-1] - hx[-1])
-
-                                C.append(eval_linG(*args))
+                                _save_plot_rows_used[-1][camn_idx] = this_y
+                                y.append(this_y)
+                                hx.append(this_hx)
+                                C.append(this_C)
                                 N_obs_this_frame += 1
-                                # save which orientations were used
+
+                                # Save which camn and camn_pt_no was used.
                                 if absolute_frame_number not in used_camn_dict:
                                     used_camn_dict[absolute_frame_number]=[]
-
-                                ## if absolute_frame_number>=329235:
-                                ##     print 'cam_id',cam_id
-                                ##     print 'camn',camn
-                                ##     if absolute_frame_number>=329238:
-                                ##         1/0
                                 camn_pt_no = (
                                     pt_idx_by_camn_by_frame[camn][
                                     absolute_frame_number])
                                 used_camn_dict[absolute_frame_number].append(
                                     (camn,camn_pt_no))
                             else:
+                                _save_plot_rows[-1][camn_idx] = this_y
                                 if debug_level >= 6:
                                     print '    bad'
-
                         if debug_level >= 1:
                             print 'gate_vector',gate_vector
-                            print 'flip_vector',flip_vector
-                        missing_data = not bool(np.sum(gate_vector))
+                            #print 'flip_vector',flip_vector
+                        all_data_this_frame_missing = not bool(np.sum(gate_vector))
 
                     # 3. Construct observations model using all
                     # gated-in camera orientations.
 
-                    if missing_data:
+                    if all_data_this_frame_missing:
                         C = None
                         R = None
                         hx = None
@@ -596,17 +639,25 @@ if 1:
                         C = np.array(C)
                         R=R_scalar*np.eye(N_obs_this_frame)
                         hx = np.array(hx)
+                        if 1:
+                            # crazy observation error scaling
+                            for i in range(N_obs_this_frame):
+                                beyond = abs(y[i]) - 10*D2R
+                                beyond = max(0,beyond) # clip at zero
+                                R[i:i] = R_scalar * (1+10*beyond)
                         if debug_level >= 6:
                             print 'full values'
                             print 'C',C
                             print 'hx',hx
+                            print 'y',y
                             print 'R',R
 
                     if debug_level >= 1:
-                        print 'missing_data',missing_data
-                    xhat,P = ekf.step2__calculate_a_posteriori(xhatminus, Pminus, y=y, hx=hx,
-                                                               C=C,R=R,
-                                                               missing_data=missing_data)
+                        print 'all_data_this_frame_missing',all_data_this_frame_missing
+                    xhat,P = ekf.step2__calculate_a_posteriori(
+                        xhatminus, Pminus, y=y, hx=hx,
+                        C=C,R=R,
+                        missing_data=all_data_this_frame_missing)
                     if debug_level >= 1:
                         print 'xhat',xhat
                     previous_posterior_x = xhat
@@ -617,6 +668,7 @@ if 1:
                 all_xhats = np.array( all_xhats )
                 all_ori = np.array( all_ori )
                 _save_plot_rows = np.array( _save_plot_rows )
+                _save_plot_rows_used = np.array( _save_plot_rows_used )
 
                 ax2.plot(frame_range,all_xhats[:,0],'.',label='p')
                 ax2.plot(frame_range,all_xhats[:,1],'.',label='q')
@@ -634,9 +686,18 @@ if 1:
                 ax4.plot(frame_range,all_ori[:,2],'.',label='z')
                 ax4.legend()
 
+                colors = []
                 for i in range(n_cams):
-                    ax5.plot(frame_range,_save_plot_rows[:,i], '.',
-                             label=cam_id_list[i])
+                    line,=ax5.plot(frame_range,_save_plot_rows_used[:,i]*R2D,
+                                   '.',
+                                   label=cam_id_list[i])
+                    colors.append(line.get_color())
+                for i in range(n_cams):
+                    # loop again to get normal MPL color cycling
+                    ax5.plot(frame_range,_save_plot_rows[:,i]*R2D, '.',
+                             color=colors[i],
+                             ms=1.0)
+                ax5.set_ylabel('observation (deg)')
                 ax5.legend()
         print 'saving results'
         result = xhat_results
@@ -660,7 +721,7 @@ if 1:
                             row['hz_line%d'%i] = hz[i]
                         row.update()
 
-    if debug_level >= 1:
+    if 1:
         debug_fname = 'temp_results.pkl'
         print 'saving debug results to file',
         fd = open(debug_fname,mode='w')
