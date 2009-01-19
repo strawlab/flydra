@@ -6,10 +6,8 @@ import flydra.a2.core_analysis as core_analysis
 import tables
 import numpy as np
 import flydra.reconstruct as reconstruct
-import collections
-
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
+import collections, time, sys, os
+from optparse import OptionParser
 
 from image_based_orientation import openFileSafe,clear_col
 import flydra.kalman.ekf as kalman_ekf
@@ -17,7 +15,6 @@ import flydra.analysis.PQmath as PQmath
 import flydra.geom as geom
 import cgtypes # cgkit 1.x
 import sympy
-import sys
 from sympy import Symbol, Matrix, sqrt, latex, lambdify
 import pickle
 import warnings
@@ -222,7 +219,13 @@ class SymobolicModels:
         theta = sympy.atan(dy/dx)
         return theta
 
-def doit(kalman_filename=None, data2d_filename=None, start = None, stop = None):
+def doit(output_h5_filename=None,
+         kalman_filename=None, data2d_filename=None, start = None, stop = None,
+         options=None):
+    if options.show:
+        import matplotlib.pyplot as plt
+        import matplotlib.ticker as mticker
+
     M = SymobolicModels()
     x = sympy.DeferredVector('x')
     G_symbolic = M.get_observation_model(x)
@@ -280,26 +283,33 @@ def doit(kalman_filename=None, data2d_filename=None, start = None, stop = None):
     if debug_level:
         np.set_printoptions(linewidth=130,suppress=True)
 
+    if os.path.exists( output_h5_filename ):
+        raise RuntimeError(
+            "will not overwrite old file '%s'"%output_h5_filename)
+    output_h5 = tables.openFile( output_h5_filename, mode='w' )
+
     ca = core_analysis.get_global_CachingAnalyzer()
     with openFileSafe( kalman_filename,
-                       mode='r+') as kh5:
+                       mode='r') as kh5:
         with openFileSafe( data2d_filename,
                            mode='r') as h5:
-            xhat_results = {}
-            clear_col( kh5.root.kalman_observations,'hz_line0')
-            clear_col( kh5.root.kalman_observations,'hz_line1')
-            clear_col( kh5.root.kalman_observations,'hz_line2')
-            clear_col( kh5.root.kalman_observations,'hz_line3')
-            clear_col( kh5.root.kalman_observations,'hz_line4')
-            clear_col( kh5.root.kalman_observations,'hz_line5')
+            for input_node in kh5.root._f_iterNodes():
+                # copy everything from source to dest
+                input_node._f_copy(output_h5.root,recursive=True)
 
-            fig1=plt.figure()
-            ax1=fig1.add_subplot(511)
-            ax2=fig1.add_subplot(512,sharex=ax1)
-            ax3=fig1.add_subplot(513,sharex=ax1)
-            ax4=fig1.add_subplot(514,sharex=ax1)
-            ax5=fig1.add_subplot(515,sharex=ax1)
-            ax1.xaxis.set_major_formatter(mticker.FormatStrFormatter("%d"))
+            dest_table = output_h5.root.kalman_observations
+            for colname in ['hz_line%d'%i for i in range(6)]:
+                clear_col(dest_table,colname)
+            dest_table.flush()
+
+            if options.show:
+                fig1=plt.figure()
+                ax1=fig1.add_subplot(511)
+                ax2=fig1.add_subplot(512,sharex=ax1)
+                ax3=fig1.add_subplot(513,sharex=ax1)
+                ax4=fig1.add_subplot(514,sharex=ax1)
+                ax5=fig1.add_subplot(515,sharex=ax1)
+                ax1.xaxis.set_major_formatter(mticker.FormatStrFormatter("%d"))
 
             reconst = reconstruct.Reconstructor(kh5)
 
@@ -318,21 +328,40 @@ def doit(kalman_filename=None, data2d_filename=None, start = None, stop = None):
             kalman_observations_2d_idxs = (
                 kh5.root.kalman_observations_2d_idxs[:])
 
-            use_obj_ids = np.unique(kalman_observations_2d_idxs['obj_id'])
+            all_kobs_obj_ids = dest_table.read(field='obj_id')
+            all_kobs_frames = dest_table.read(field='frame')
+            use_obj_ids = np.unique(all_kobs_obj_ids)
+
+            if hasattr(kh5.root.kalman_estimates.attrs,'dynamic_model_name'):
+                dynamic_model = kh5.root.kalman_estimates.attrs.dynamic_model_name
+                if dynamic_model.startswith('EKF '):
+                    dynamic_model = dynamic_model[4:]
+            else:
+                dynamic_model = 'mamarama, units: mm'
 
             for obj_id_enum,obj_id in enumerate(use_obj_ids):
             # Use data association step from kalmanization to load potentially
             # relevant 2D orientations, but discard previous 3D orientation.
-                all_xhats = []
-                all_ori = []
-                xhat_results[ obj_id ] = collections.defaultdict(dict)
+                if obj_id_enum%100==0:
+                    print 'obj_id %d (%d of %d)'%(
+                        obj_id,obj_id_enum,len(use_obj_ids))
+                if options.show:
+                    all_xhats = []
+                    all_ori = []
+
+                output_row_obj_id_cond = all_kobs_obj_ids==obj_id
 
                 obj_3d_rows = ca.load_dynamics_free_MLE_position( obj_id, kh5)
 
-                smoothed_3d_rows = ca.load_data(
-                    obj_id, kh5,
-                    frames_per_second=fps,
-                    dynamic_model_name='mamarama, units: mm')
+                try:
+                    smoothed_3d_rows = ca.load_data(
+                        obj_id, kh5,
+                        use_kalman_smoothing=True,
+                        frames_per_second=fps,
+                        dynamic_model_name=dynamic_model)
+                except core_analysis.NotEnoughDataToSmoothError:
+                    continue
+
                 smoothed_frame_qfi = result_utils.QuickFrameIndexer(
                     smoothed_3d_rows['frame'])
 
@@ -430,9 +459,12 @@ def doit(kalman_filename=None, data2d_filename=None, start = None, stop = None):
                         y0ds[frame_idx,j] = y0d_by_frame.get(
                             absolute_frame_number,np.nan)
 
-                    ax1.plot(frame_range,slope2modpi(slopes[:,j]),'.',
-                             label=camn2cam_id[camn])
-                ax1.legend()
+                    if options.show:
+                        ax1.plot(frame_range,slope2modpi(slopes[:,j]),'.',
+                                 label=camn2cam_id[camn])
+
+                if options.show:
+                    ax1.legend()
 
                 if 1:
                     # guesstimate initial orientation (XXX not done)
@@ -440,8 +472,7 @@ def doit(kalman_filename=None, data2d_filename=None, start = None, stop = None):
                     q0 = PQmath.orientation_to_quat( up_vec )
                     w0 = 0,0,0 # no angular rate
                     init_x = np.array([w0[0],w0[1],w0[2],
-                                          q0.x, q0.y, q0.z, q0.w])
-                    print 'init_x',init_x
+                                       q0.x, q0.y, q0.z, q0.w])
 
                     Pminus = np.zeros((7,7))
 
@@ -469,8 +500,9 @@ def doit(kalman_filename=None, data2d_filename=None, start = None, stop = None):
 
                 ekf = kalman_ekf.EKF( init_x, Pminus )
                 previous_posterior_x = init_x
-                _save_plot_rows = []
-                _save_plot_rows_used = []
+                if options.show:
+                    _save_plot_rows = []
+                    _save_plot_rows_used = []
                 for frame_idx, absolute_frame_number in enumerate(frame_range):
                     # Evaluate the Jacobian of the process update
                     # using previous frame's posterior estimate. (This
@@ -479,8 +511,9 @@ def doit(kalman_filename=None, data2d_filename=None, start = None, stop = None):
                     # estimate is _after_ the process update
                     # model. Which we need to get doing this.)
 
-                    _save_plot_rows.append( np.nan*np.ones( (n_cams,) ))
-                    _save_plot_rows_used.append( np.nan*np.ones( (n_cams,) ))
+                    if options.show:
+                        _save_plot_rows.append( np.nan*np.ones( (n_cams,) ))
+                        _save_plot_rows_used.append( np.nan*np.ones( (n_cams,) ))
 
                     this_dx = eval_dAdt( previous_posterior_x )
                     A = preA + this_dx*dt
@@ -517,15 +550,31 @@ def doit(kalman_filename=None, data2d_filename=None, start = None, stop = None):
 
                     smoothed_pos_idxs = smoothed_frame_qfi.get_frame_idxs(
                         absolute_frame_number)
-                    assert len(smoothed_pos_idxs)==1
-                    smoothed_pos_idx = smoothed_pos_idxs[0]
-                    smooth_row = smoothed_3d_rows[smoothed_pos_idx]
-                    assert smooth_row['frame'] == absolute_frame_number
-                    center_position = np.array((smooth_row['x'],
-                                                smooth_row['y'],
-                                                smooth_row['z']))
-                    if debug_level >= 2:
-                        print 'center_position',center_position
+                    if len(smoothed_pos_idxs)==0:
+                        all_data_this_frame_missing = True
+                        smoothed_pos_idx = None
+                        smooth_row = None
+                        center_position = None
+                    else:
+                        try:
+                            assert len(smoothed_pos_idxs)==1
+                        except:
+                            print 'obj_id',obj_id
+                            print 'absolute_frame_number',absolute_frame_number
+                            if len(frame_range):
+                                print 'frame_range[0],frame_rang[-1]',frame_range[0],frame_range[-1]
+                            else:
+                                print 'no frame range'
+                            print 'len(smoothed_pos_idxs)',len(smoothed_pos_idxs)
+                            raise
+                        smoothed_pos_idx = smoothed_pos_idxs[0]
+                        smooth_row = smoothed_3d_rows[smoothed_pos_idx]
+                        assert smooth_row['frame'] == absolute_frame_number
+                        center_position = np.array((smooth_row['x'],
+                                                    smooth_row['y'],
+                                                    smooth_row['z']))
+                        if debug_level >= 2:
+                            print 'center_position',center_position
 
                     if not all_data_this_frame_missing:
                         if expected_orientation_method == 'trust_prior':
@@ -615,7 +664,8 @@ def doit(kalman_filename=None, data2d_filename=None, start = None, stop = None):
                                 gate_vector[camn_idx]=1
                                 if debug_level >= 3:
                                     print '    good'
-                                _save_plot_rows_used[-1][camn_idx] = this_y
+                                if options.show:
+                                    _save_plot_rows_used[-1][camn_idx] = this_y
                                 y.append(this_y)
                                 hx.append(this_hx)
                                 C.append(this_C)
@@ -630,7 +680,8 @@ def doit(kalman_filename=None, data2d_filename=None, start = None, stop = None):
                                 used_camn_dict[absolute_frame_number].append(
                                     (camn,camn_pt_no))
                             else:
-                                _save_plot_rows[-1][camn_idx] = this_y
+                                if options.show:
+                                    _save_plot_rows[-1][camn_idx] = this_y
                                 if debug_level >= 6:
                                     print '    bad'
                         if debug_level >= 1:
@@ -671,73 +722,97 @@ def doit(kalman_filename=None, data2d_filename=None, start = None, stop = None):
                     if debug_level >= 1:
                         print 'xhat',xhat
                     previous_posterior_x = xhat
-                    xhat_results[ obj_id ][absolute_frame_number ] = (xhat,center_position)
-                    all_xhats.append(xhat)
-                    all_ori.append( state_to_ori(xhat) )
+                    if center_position is not None:
+                        # save
+                        output_row_frame_cond = all_kobs_frames==absolute_frame_number
+                        output_row_cond = output_row_frame_cond & output_row_obj_id_cond
+                        output_idxs = np.nonzero(output_row_cond)[0]
+                        if len(output_idxs)==0:
+                            pass
+                        else:
+                            assert len(output_idxs)==1
+                            idx = output_idxs[0]
+                            hz = state_to_hzline(xhat,center_position)
+                            for row in dest_table.iterrows(start=idx,stop=(idx+1)):
+                                for i in range(6):
+                                    row['hz_line%d'%i] = hz[i]
+                                row.update()
+                    ## xhat_results[ obj_id ][absolute_frame_number ] = (
+                    ##     xhat,center_position)
+                    if options.show:
+                        all_xhats.append(xhat)
+                        all_ori.append( state_to_ori(xhat) )
 
-                all_xhats = np.array( all_xhats )
-                all_ori = np.array( all_ori )
-                _save_plot_rows = np.array( _save_plot_rows )
-                _save_plot_rows_used = np.array( _save_plot_rows_used )
+                if options.show:
+                    all_xhats = np.array( all_xhats )
+                    all_ori = np.array( all_ori )
+                    _save_plot_rows = np.array( _save_plot_rows )
+                    _save_plot_rows_used = np.array( _save_plot_rows_used )
 
-                ax2.plot(frame_range,all_xhats[:,0],'.',label='p')
-                ax2.plot(frame_range,all_xhats[:,1],'.',label='q')
-                ax2.plot(frame_range,all_xhats[:,2],'.',label='r')
-                ax2.legend()
+                    ax2.plot(frame_range,all_xhats[:,0],'.',label='p')
+                    ax2.plot(frame_range,all_xhats[:,1],'.',label='q')
+                    ax2.plot(frame_range,all_xhats[:,2],'.',label='r')
+                    ax2.legend()
 
-                ax3.plot(frame_range,all_xhats[:,3],'.',label='a')
-                ax3.plot(frame_range,all_xhats[:,4],'.',label='b')
-                ax3.plot(frame_range,all_xhats[:,5],'.',label='c')
-                ax3.plot(frame_range,all_xhats[:,6],'.',label='d')
-                ax3.legend()
+                    ax3.plot(frame_range,all_xhats[:,3],'.',label='a')
+                    ax3.plot(frame_range,all_xhats[:,4],'.',label='b')
+                    ax3.plot(frame_range,all_xhats[:,5],'.',label='c')
+                    ax3.plot(frame_range,all_xhats[:,6],'.',label='d')
+                    ax3.legend()
 
-                ax4.plot(frame_range,all_ori[:,0],'.',label='x')
-                ax4.plot(frame_range,all_ori[:,1],'.',label='y')
-                ax4.plot(frame_range,all_ori[:,2],'.',label='z')
-                ax4.legend()
+                    ax4.plot(frame_range,all_ori[:,0],'.',label='x')
+                    ax4.plot(frame_range,all_ori[:,1],'.',label='y')
+                    ax4.plot(frame_range,all_ori[:,2],'.',label='z')
+                    ax4.legend()
 
-                colors = []
-                for i in range(n_cams):
-                    line,=ax5.plot(frame_range,_save_plot_rows_used[:,i]*R2D,
-                                   '.',
-                                   label=cam_id_list[i])
-                    colors.append(line.get_color())
-                for i in range(n_cams):
-                    # loop again to get normal MPL color cycling
-                    ax5.plot(frame_range,_save_plot_rows[:,i]*R2D, '.',
-                             color=colors[i],
-                             ms=1.0)
-                ax5.set_ylabel('observation (deg)')
-                ax5.legend()
-        print 'saving results'
-        result = xhat_results
-        for obj_id in result.keys():
-            table = kh5.root.kalman_observations
-            rows = table[:]
-            cond1 = (rows['obj_id']==obj_id)
-            for absolute_frame_number in result[obj_id].keys():
-                cond2 = rows['frame']==absolute_frame_number
-                cond3 = cond1 & cond2
-                idxs = np.nonzero(cond3)[0]
-                if len(idxs):
-                    xhat,pos = result[obj_id][absolute_frame_number]
-                    hz = state_to_hzline(xhat,pos)
-                    assert len(idxs)==1
-                    idx = idxs[0]
-                    for row in table.iterrows(start=idx,stop=(idx+1)):
-                        assert row['obj_id']==obj_id
-                        assert row['frame']==absolute_frame_number
-                        for i in range(6):
-                            row['hz_line%d'%i] = hz[i]
-                        row.update()
+                    colors = []
+                    for i in range(n_cams):
+                        line,=ax5.plot(frame_range,_save_plot_rows_used[:,i]*R2D,
+                                       '.',
+                                       label=cam_id_list[i])
+                        colors.append(line.get_color())
+                    for i in range(n_cams):
+                        # loop again to get normal MPL color cycling
+                        ax5.plot(frame_range,_save_plot_rows[:,i]*R2D, '.',
+                                 color=colors[i],
+                                 ms=1.0)
+                    ax5.set_ylabel('observation (deg)')
+                    ax5.legend()
 
-    if 1:
+    # record that we did this...
+    output_h5.root.kalman_observations.attrs.ori_ekf_time = time.time()
+    output_h5.close()
+    ca.close()
+
+    if 0:
         debug_fname = 'temp_results.pkl'
         print 'saving debug results to file',
         fd = open(debug_fname,mode='w')
         pickle.dump(used_camn_dict,fd)
         fd.close()
-    plt.show()
+
+    if options.show:
+        plt.show()
+
+def is_orientation_fit(filename):
+    with openFileSafe( filename, mode='r') as h5:
+        if hasattr(h5.root.kalman_observations.attrs,'ori_ekf_time'):
+            ori_ekf_time = h5.root.kalman_observations.attrs.ori_ekf_time
+            return True
+        else:
+            return False
+
+def is_orientation_fit_sysexit():
+    usage = '%prog FILE'
+
+    parser = OptionParser(usage)
+    (options, args) = parser.parse_args()
+
+    filename = args[0]
+    if is_orientation_fit(filename):
+        sys.exit(0)
+    else:
+        sys.exit(1)
 
 def main():
     usage = '%prog [options]'
@@ -751,16 +826,26 @@ def main():
                       type='string',
                       help=".h5 file with kalman data and 3D reconstructor")
 
+    parser.add_option("--output-h5", type='string',
+                      help="filename for output .h5 file with data2d_distorted")
+
+    parser.add_option("--show", action='store_true', default=False)
+
     (options, args) = parser.parse_args()
 
     if options.h5 is None:
         raise ValueError('--h5 option must be specified')
 
+    if options.output_h5 is None:
+        raise ValueError('--output-h5 option must be specified')
+
     if options.kalman_filename is None:
         raise ValueError('--kalman-file option must be specified')
 
     doit(kalman_filename=options.kalman_filename,
-         data2d_filename=options.h5)
+         data2d_filename=options.h5,
+         output_h5_filename=options.output_h5,
+         options=options)
 
 if __name__=='__main__':
     main()
