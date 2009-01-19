@@ -27,7 +27,7 @@ def md5sum_headtail(filename):
     bytes = start_bytes+stop_bytes
     m = hashlib.md5()
     m.update(bytes)
-    return m.digest()
+    return m.hexdigest()
 
 def status(status_string):
     print " status:",status_string
