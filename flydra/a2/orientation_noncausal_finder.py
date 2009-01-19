@@ -37,7 +37,6 @@ gate_angle_threshold_radians = 40.0*D2R
 area_threshold_for_orientation = 0
 
 # everything else
-np.set_printoptions(linewidth=130,suppress=True)
 
 slope2modpi = np.arctan # assign function name
 
@@ -223,12 +222,12 @@ class SymobolicModels:
         theta = sympy.atan(dy/dx)
         return theta
 
+def doit(kalman_filename=None, data2d_filename=None, start = None, stop = None):
+    M = SymobolicModels()
+    x = sympy.DeferredVector('x')
+    G_symbolic = M.get_observation_model(x)
+    dx_symbolic = M.get_process_model(x)
 
-M = SymobolicModels()
-x = sympy.DeferredVector('x')
-G_symbolic = M.get_observation_model(x)
-dx_symbolic = M.get_process_model(x)
-if 1:
     if 0:
         print 'G_symbolic'
         sympy.pprint(G_symbolic)
@@ -241,23 +240,22 @@ if 1:
             sympy.pprint(G_linearized[i])
         print
 
-arg_tuple_x = (M.P00, M.P01, M.P02, M.P03,
-               M.P10, M.P11, M.P12, M.P13,
-               M.P20, M.P21, M.P22, M.P23,
-               M.Ax, M.Ay, M.Az,
-               x)
+    arg_tuple_x = (M.P00, M.P01, M.P02, M.P03,
+                   M.P10, M.P11, M.P12, M.P13,
+                   M.P20, M.P21, M.P22, M.P23,
+                   M.Ax, M.Ay, M.Az,
+                   x)
 
-xm = sympy.DeferredVector('xm')
-arg_tuple_x_xm = (M.P00, M.P01, M.P02, M.P03,
-                  M.P10, M.P11, M.P12, M.P13,
-                  M.P20, M.P21, M.P22, M.P23,
-                  M.Ax, M.Ay, M.Az,
-                  x, xm)
+    xm = sympy.DeferredVector('xm')
+    arg_tuple_x_xm = (M.P00, M.P01, M.P02, M.P03,
+                      M.P10, M.P11, M.P12, M.P13,
+                      M.P20, M.P21, M.P22, M.P23,
+                      M.Ax, M.Ay, M.Az,
+                      x, xm)
 
-eval_G = lambdify(arg_tuple_x, G_symbolic, 'numpy')
-eval_linG=lambdify(arg_tuple_x, G_linearized, 'numpy')
+    eval_G = lambdify(arg_tuple_x, G_symbolic, 'numpy')
+    eval_linG=lambdify(arg_tuple_x, G_linearized, 'numpy')
 
-if 1:
     # coord shift of observation model
     phi_symbolic = M.get_observation_model(xm)
 
@@ -267,36 +265,33 @@ if 1:
     # We still take derivative wrt x (not xm).
     H_linearized = [ H_symbolic.diff(x[i]) for i in range(7)]
 
-eval_phi = lambdify( arg_tuple_x_xm, phi_symbolic, 'numpy')
-eval_H = lambdify(arg_tuple_x_xm, H_symbolic, 'numpy')
-eval_linH=lambdify(arg_tuple_x_xm, H_linearized, 'numpy')
+    eval_phi = lambdify( arg_tuple_x_xm, phi_symbolic, 'numpy')
+    eval_H = lambdify(arg_tuple_x_xm, H_symbolic, 'numpy')
+    eval_linH=lambdify(arg_tuple_x_xm, H_linearized, 'numpy')
 
-if 1:
     if 0:
         print 'dx_symbolic'
         sympy.pprint(dx_symbolic)
         print
 
-eval_dAdt = drop_dims( lambdify( x,dx_symbolic,'numpy'))
+    eval_dAdt = drop_dims( lambdify( x,dx_symbolic,'numpy'))
 
-if 1:
-    start = stop = None
-    use_obj_ids = [19]
     debug_level = 0
+    if debug_level:
+        np.set_printoptions(linewidth=130,suppress=True)
+
     ca = core_analysis.get_global_CachingAnalyzer()
-    with openFileSafe( 'DATA20080915_153202.image-based-re2d.kalmanized.h5',
+    with openFileSafe( kalman_filename,
                        mode='r+') as kh5:
-        with openFileSafe( 'DATA20080915_153202.image-based-re2d.h5',
+        with openFileSafe( data2d_filename,
                            mode='r') as h5:
             xhat_results = {}
-            print 'clearing columns'
             clear_col( kh5.root.kalman_observations,'hz_line0')
             clear_col( kh5.root.kalman_observations,'hz_line1')
             clear_col( kh5.root.kalman_observations,'hz_line2')
             clear_col( kh5.root.kalman_observations,'hz_line3')
             clear_col( kh5.root.kalman_observations,'hz_line4')
             clear_col( kh5.root.kalman_observations,'hz_line5')
-            print 'done clearing columns'
 
             fig1=plt.figure()
             ax1=fig1.add_subplot(511)
@@ -322,6 +317,8 @@ if 1:
 
             kalman_observations_2d_idxs = (
                 kh5.root.kalman_observations_2d_idxs[:])
+
+            use_obj_ids = np.unique(kalman_observations_2d_idxs['obj_id'])
 
             for obj_id_enum,obj_id in enumerate(use_obj_ids):
             # Use data association step from kalmanization to load potentially
@@ -428,35 +425,14 @@ if 1:
 
                         slopes[frame_idx,j] = slopes_by_frame.get(
                             absolute_frame_number,np.nan)
-                        x0ds[frame_idx,j] = x0d_by_frame.get(absolute_frame_number,np.nan)
-                        y0ds[frame_idx,j] = y0d_by_frame.get(absolute_frame_number,np.nan)
+                        x0ds[frame_idx,j] = x0d_by_frame.get(
+                            absolute_frame_number,np.nan)
+                        y0ds[frame_idx,j] = y0d_by_frame.get(
+                            absolute_frame_number,np.nan)
 
                     ax1.plot(frame_range,slope2modpi(slopes[:,j]),'.',
                              label=camn2cam_id[camn])
-                ## print 'found all points','*'*80
-
                 ax1.legend()
-                ## plt.savefig('fig_ori.png')
-
-                ## # find all possible hypotheses on any given frame
-                ## all_hypotheses = [h for h in reconstruct.setOfSubsets(
-                ##     range(len(camn_list))) if len(h) >= 2]
-                ## for i,h in enumerate(all_hypotheses):
-                ##     print i,h
-
-
-
-
-################################################################################
-################################################################################
-################################################################################
-################################################################################
-
-                # EKF method here
-
-
-
-
 
                 if 1:
                     # guesstimate initial orientation (XXX not done)
@@ -603,7 +579,8 @@ if 1:
                                                                    center_position)
                                 b = reconst.find2d( cam_id, other_position)
                                 theta_expected=find_theta_mod_pi_between_points(a,b)
-                                print '  theta_expected,theta_measured',theta_expected*R2D,theta_measured*R2D
+                                print ('  theta_expected,theta_measured',
+                                       theta_expected*R2D,theta_measured*R2D)
 
                             P = reconst.get_pmat( cam_id )
                             if 0:
@@ -626,11 +603,13 @@ if 1:
                                              center_position[2],
                                              xhatminus, state_for_phi)
                                 this_phi = eval_phi(*args_x_xm)
-                                this_y = angle_diff(theta_measured,this_phi,mod_pi=True)
+                                this_y = angle_diff(theta_measured,
+                                                    this_phi,mod_pi=True)
                                 this_hx = eval_H(*args_x_xm)
                                 this_C = eval_linH(*args_x_xm)
                                 if debug_level >= 3:
-                                    print '  this_phi,this_y',this_phi*R2D,this_y*R2D
+                                    print ('  this_phi,this_y',
+                                           this_phi*R2D,this_y*R2D)
                             # gate
                             if abs(this_y) < gate_angle_threshold_radians:
                                 gate_vector[camn_idx]=1
@@ -759,3 +738,29 @@ if 1:
         pickle.dump(used_camn_dict,fd)
         fd.close()
     plt.show()
+
+def main():
+    usage = '%prog [options]'
+
+    parser = OptionParser(usage)
+
+    parser.add_option("--h5", type='string',
+                      help=".h5 file with data2d_distorted (REQUIRED)")
+
+    parser.add_option('-k', "--kalman-file", dest="kalman_filename",
+                      type='string',
+                      help=".h5 file with kalman data and 3D reconstructor")
+
+    (options, args) = parser.parse_args()
+
+    if options.h5 is None:
+        raise ValueError('--h5 option must be specified')
+
+    if options.kalman_filename is None:
+        raise ValueError('--kalman-file option must be specified')
+
+    doit(kalman_filename=options.kalman_filename,
+         data2d_filename=options.h5)
+
+if __name__=='__main__':
+    main()
