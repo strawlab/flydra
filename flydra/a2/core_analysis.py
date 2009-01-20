@@ -893,10 +893,14 @@ class PreSmoothedDataCache(object):
                 else:
                     filters = tables.Filters(0)
 
-                h5file.createTable(h5group,
-                                   save_tablename,
-                                   rows,
-                                   filters=filters)
+                try:
+                    h5file.createTable(h5group,
+                                       save_tablename,
+                                       rows,
+                                       filters=filters)
+                except:
+                    sys.stderr.write('ERROR when using file %s\n'%cache_h5file_name)
+                    raise
             else:
                 raise NotImplementedError('apprending to existing table not supported')
         return rows
