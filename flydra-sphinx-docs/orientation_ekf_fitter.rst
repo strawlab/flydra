@@ -101,8 +101,9 @@ observation :math:`z` must also be placed in this coordinate system.
   
   z_t = y_t - \theta^\ast
 
-The expected orientation quaternion :math:`\theta^\ast` is taken to be
-the prior expectation of orientation.
+The EKF prior estimate of orientation is used as the expected
+orientation :math:`q^\ast`, although is possible to use other values
+for expected orientation.
 
 Data association
 ----------------

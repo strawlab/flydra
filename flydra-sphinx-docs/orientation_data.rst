@@ -22,10 +22,17 @@ Estimating orientations with flydra
     imageOri2D [label="image based 2D orientation"];
     Ori3D [label="3D orientation"];
     calib [label="calibration"];
-    ekfPos3D [label="EKF-based 3D position tracking"];
+    ekfPos3D [label="EKF based 3D position"];
     onlineOri3D [label="online 3D orientation"];
     onlinePosOri2D [label="online 2D position and orientation",style=filled];
   } 
 
+Contents:
+
+.. toctree::
+  :maxdepth: 2
+
+  orientation_ekf_fitter.rst
+
 * Estimating 2D orientations from images (no description yet)
-* :ref:`orientation_ekf_fitter-fusing-2d-orientations-to-3d`
+
