@@ -659,7 +659,7 @@ def doit(output_h5_filename=None,
                             ##     this_frame_slopes[camn_idx])
                             theta_measured = this_frame_theta_measured[camn_idx]
                             if debug_level >= 6:
-                                print 'cam_id',cam_id
+                                print 'cam_id %s, camn %d'%(cam_id,camn)
                             if debug_level >= 3:
                                 a = reconst.find2d( cam_id, center_position)
                                 other_position = get_point_on_line(xhatminus,
@@ -881,10 +881,17 @@ def is_orientation_fit_sysexit():
         sys.exit(1)
 
 def plot_ori(kalman_filename=None,
+             h5=None,
              obj_only=None):
     import matplotlib.pyplot as plt
     import matplotlib.ticker as mticker
 
+    if h5 is not None:
+        h5f = tables.openFile(h5,mode='r')
+        camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5f)
+        h5f.close()
+    else:
+        camn2cam_id = {}
     ca = core_analysis.get_global_CachingAnalyzer()
     with openFileSafe( kalman_filename,
                        mode='r') as kh5:
@@ -927,7 +934,7 @@ def plot_ori(kalman_filename=None,
                     camn = int(colname[4:])
                     camns.append(camn)
             for camn in camns:
-                label = 'camn%d'%camn
+                label = camn2cam_id.get( camn, 'camn%d'%camn )
                 theta = rows['theta%d'%camn]
                 used = rows['used%d'%camn]
                 dist = rows['dist%d'%camn]
@@ -966,6 +973,8 @@ def plot_ori_command_line():
     parser.add_option('-k', "--kalman-file", dest="kalman_filename",
                       type='string',
                       help=".h5 file with kalman data and 3D reconstructor")
+    parser.add_option("--h5", type='string',
+                      help=".h5 file with data2d_distorted (REQUIRED)")
     parser.add_option("--obj-only", type="string")
     (options, args) = parser.parse_args()
     if options.kalman_filename is None:
@@ -973,6 +982,7 @@ def plot_ori_command_line():
     if options.obj_only is not None:
         options.obj_only = core_analysis.parse_seq(options.obj_only)
     plot_ori(kalman_filename=options.kalman_filename,
+             h5=options.h5,
              obj_only=options.obj_only)
 
 def main():
