@@ -164,11 +164,9 @@ def my_decimate(x,q):
         result[-1] = mysum[-1]/ (q-lendiff)
         return result
 
-def compute_ori_quality(data_file,orig_rows,obj_id):
+def compute_ori_quality(*args,**kwargs):
     import orientation_ekf_fitter
-    return orientation_ekf_fitter.compute_ori_quality(data_file,
-                                                      orig_rows,
-                                                      obj_id)
+    return orientation_ekf_fitter.compute_ori_quality(*args,**kwargs)
 
 class WeakRefAbleDict(object):
     def __init__(self,val,debug=False):
@@ -661,6 +659,7 @@ class PreSmoothedDataCache(object):
                       return_smoothed_directions=False,
                       up_dir=None,
                       min_ori_quality_required=None,
+                      ori_quality_smooth_len=10,
                       ):
         """query results
 
@@ -678,6 +677,14 @@ class PreSmoothedDataCache(object):
         if dynamic_model_name is None: raise ValueError('dynamic_model_name must be specified')
 
         pdictname = 'params'
+        # these values are double checked to ensure they're the same
+        param_dict = {'frames_per_second':frames_per_second,
+                      'dynamic_model_name':dynamic_model_name,
+                      'return_smoothed_directions':return_smoothed_directions,
+                      'up_dir':up_dir,
+                      'min_ori_quality_required': min_ori_quality_required,
+                      'ori_quality_smooth_len':ori_quality_smooth_len,
+                      }
 
         # get cached datafile for this data_file
         if data_file not in self.cache_h5files_by_data_file:
@@ -690,7 +697,7 @@ class PreSmoothedDataCache(object):
             if os.path.exists( cache_h5file_name ):
                 # loading cache file
                 try:
-                    cache_h5file = tables.openFile( cache_h5file_name, mode='r+' )
+                    cache_h5file = tables.openFile(cache_h5file_name, mode='r+')
                 except IOError:
                     warnings.warn(
                         'Broken cache file %s. Deleting'%cache_h5file_name)
@@ -702,18 +709,22 @@ class PreSmoothedDataCache(object):
                         if hasattr(cache_h5file.root._v_attrs,pdictname):
                             p = getattr(cache_h5file.root._v_attrs,pdictname)
                             same = True
-                            for varname in p:
+                            for varname in param_dict:
+                                if varname not in p:
+                                    same=False
+                                    break
                                 value = p[varname]
-                                testvalue = locals()[varname]
+                                testvalue = param_dict[varname]
                                 try:
                                     if not testvalue == value:
-                                        print 'cache value of %s changed'%varname
                                         same=False
+                                        break
                                 except ValueError:
                                     if isinstance(value,np.ndarray):
-                                        if not (value.shape == testvalue.shape and
+                                        if not (value.shape==testvalue.shape and
                                                 np.allclose(value,testvalue)):
                                             same=False
+                                            break
                                     else:
                                         raise
                             if same:
@@ -739,13 +750,6 @@ class PreSmoothedDataCache(object):
                     warnings.warn('error creating cache_h5file %s'%(
                         cache_h5file_name,))
                     raise
-                # these values are double checked to ensure they're the same
-                param_dict = {'frames_per_second':frames_per_second,
-                              'dynamic_model_name':dynamic_model_name,
-                              'return_smoothed_directions':return_smoothed_directions,
-                              'up_dir':up_dir,
-                              'min_ori_quality_required': min_ori_quality_required,
-                              }
                 setattr(cache_h5file.root._v_attrs,pdictname,param_dict)
 
             self.cache_h5files_by_data_file[data_file] = cache_h5file
@@ -805,9 +809,9 @@ class PreSmoothedDataCache(object):
                 # make consistent
 
                 if min_ori_quality_required is not None:
-                    quality_array = compute_ori_quality( data_file,
-                                                         orig_rows,
-                                                         obj_id )
+                    quality_array = compute_ori_quality(
+                        data_file, orig_rows['frame'],
+                        obj_id, smooth_len=ori_quality_smooth_len)
                     good_cond = quality_array >= min_ori_quality_required
                     bad_cond = ~good_cond
                     directions[bad_cond,:]=np.nan # ignore bad quality data
@@ -1239,9 +1243,9 @@ class CachingAnalyzer:
             directions = flydra.reconstruct.line_direction(hzlines)
             assert numpy.alltrue(PQmath.is_unit_vector(directions))
             if min_ori_quality_required is not None:
-                quality_array = compute_ori_quality( data_file,
-                                                     rows,
-                                                     obj_id )
+                quality_array = compute_ori_quality(
+                    data_file, rows['frame'],
+                    obj_id)
                 good_cond = quality_array >= min_ori_quality_required
                 bad_cond = ~good_cond
                 directions[bad_cond,:]=np.nan # ignore bad quality data

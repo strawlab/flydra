@@ -945,9 +945,8 @@ def smooth(x,window_len=10,window='hanning'):
     return y[window_len-1:-window_len+1]
 
 
-def compute_ori_quality(kh5, orig_rows, obj_id, do_smooth=True):
+def compute_ori_quality(kh5, orig_frames, obj_id, smooth_len=10):
     #h5.root.kalman_observations
-    orig_frames = orig_rows['frame']
     ca = core_analysis.get_global_CachingAnalyzer()
     group = get_group_for_obj(obj_id,kh5)
     table = getattr(group,'obj%d'%obj_id)
@@ -963,7 +962,7 @@ def compute_ori_quality(kh5, orig_rows, obj_id, do_smooth=True):
     ncams = len(camns)
 
     # start at zero quality
-    results = np.zeros( (len(orig_rows),) )
+    results = np.zeros( (len(orig_frames),) )
     for origi,frame in enumerate(orig_frames):
         cond = frames==frame
         idxs = np.nonzero(cond)[0]
@@ -987,9 +986,8 @@ def compute_ori_quality(kh5, orig_rows, obj_id, do_smooth=True):
                     results[origi] = ncams
             else:
                 results[origi] = n_used/n_rejected
-    if do_smooth:
-        results = smooth(results,window_len=50)
-    print '*'*400
+    if smooth_len:
+        results = smooth(results,window_len=smooth_len)
     return results
 
 def plot_ori(kalman_filename=None,
@@ -1069,7 +1067,7 @@ def plot_ori(kalman_filename=None,
             ax3.plot(frame,orient[:,1],'go',mew=0,ms=2.0,label='y')
             ax3.plot(frame,orient[:,2],'bo',mew=0,ms=2.0,label='z')
 
-            qual = compute_ori_quality(kh5,rows_this_obj,obj_id)
+            qual = compute_ori_quality(kh5,rows_this_obj['frame'],obj_id)
             ax4.plot(frame, qual, 'b-')#, mew=0, ms=3 )
     ax1.xaxis.set_major_formatter(mticker.FormatStrFormatter("%d"))
     ax1.set_ylabel('theta (deg)')

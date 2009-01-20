@@ -41,6 +41,24 @@ def ensure_minsize_image( arr, (h,w), fill=0):
         arr=arr_new
     return arr
 
+class KObsRowCacher:
+    def __init__(self,h5):
+        self.h5 = h5
+        self.all_rows_obj_ids = h5.root.kalman_observations.read(field='obj_id')
+        self.all_rows_frames = h5.root.kalman_observations.read(field='frame')
+        self.cache = {}
+    def get(self,obj_id):
+        if obj_id in self.cache:
+            return self.cache[obj_id]
+        else:
+            cond = self.all_rows_obj_ids == obj_id
+            frames = self.all_rows_frames[cond]
+            qualities = core_analysis.compute_ori_quality(
+                self.h5,frames,obj_id)
+            results = (frames,qualities)
+            self.cache[obj_id]=results
+        return results
+
 def doit(fmf_filename=None,
          h5_filename=None,
          kalman_filename=None,
@@ -314,6 +332,8 @@ def doit(fmf_filename=None,
     pbar.finish()
     print 'done loading frame information.'
 
+    kobs_row_cacher = KObsRowCacher(data_file)
+
     print 'start, stop',start, stop
     widgets[0]='stage 2 of 2: '
     pbar=progressbar.ProgressBar(widgets=widgets,maxval=(stop-start+1)).start()
@@ -364,6 +384,14 @@ def doit(fmf_filename=None,
                 these_3d_rows = kalman_rows[data_3d_idxs]
                 line_length = 0.30 # 20 cm total
                 for this_3d_row in these_3d_rows:
+                    ori_qual_sufficient = True
+                    if options.ori_qual is not None:
+                        obj_id = this_3d_row['obj_id']
+                        this_obj_frames, qualities = kobs_row_cacher.get(obj_id)
+                        tmp_cond = this_obj_frames==this_3d_row['frame']
+                        this_ori_qual = qualities[tmp_cond]
+                        if this_ori_qual < options.ori_qual:
+                            ori_qual_sufficient = False
                     vert = numpy.array([this_3d_row['x'],this_3d_row['y'],this_3d_row['z']])
                     vert_image = R.find2d(cam_id,vert,distorted=True)
                     P = numpy.array([this_3d_row['P00'],this_3d_row['P11'],this_3d_row['P22']])
@@ -371,7 +399,7 @@ def doit(fmf_filename=None,
                     Pmean_meters = numpy.sqrt(Pmean)
                     kalman_vert_images.append( (vert_image, vert, this_3d_row['obj_id'], Pmean_meters) )
 
-                    if options.body_axis or options.smooth_orientations:
+                    if ori_qual_sufficient and options.body_axis or options.smooth_orientations:
 
                         for target, dir_x_name, dir_y_name, dir_z_name in [ (kalman_ori_verts_images,'dir_x','dir_y','dir_z'),
                                                                             (kalman_raw_ori_verts_images,'rawdir_x','rawdir_y','rawdir_z')]:
@@ -394,8 +422,16 @@ def doit(fmf_filename=None,
                 data_3d_idxs = numpy.nonzero(h5_frame == kobs_3d_frame)[0]
                 these_3d_rows = kobs_rows[data_3d_idxs]
                 for this_3d_row in these_3d_rows:
+                    ori_qual_sufficient = True
+                    if options.ori_qual is not None:
+                        obj_id = this_3d_row['obj_id']
+                        this_obj_frames, qualities = kobs_row_cacher.get(obj_id)
+                        tmp_cond = this_obj_frames==this_3d_row['frame']
+                        this_ori_qual = qualities[tmp_cond]
+                        if this_ori_qual < options.ori_qual:
+                            ori_qual_sufficient = False
                     vert = numpy.array([this_3d_row['x'],this_3d_row['y'],this_3d_row['z']])
-                    if 1:
+                    if ori_qual_sufficient:
                         line_length = 0.16 # 16 cm total
                         hzline = numpy.array([this_3d_row['hz_line0'],
                                               this_3d_row['hz_line1'],
@@ -960,6 +996,9 @@ def main():
     parser.add_option("--area-threshold-for-orientation", type='float',
                       default=0.0,
                       help="minimum area to display orientation")
+
+    parser.add_option("--ori-qual", type='float', default=None,
+                      help=('minimum orientation quality to use'))
 
     (options, args) = parser.parse_args()
 
