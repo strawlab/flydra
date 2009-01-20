@@ -221,6 +221,7 @@ class SymobolicModels:
 
 def doit(output_h5_filename=None,
          kalman_filename=None, data2d_filename=None, start = None, stop = None,
+         obj_only=None,
          options=None):
     if options.show:
         import matplotlib.pyplot as plt
@@ -288,6 +289,17 @@ def doit(output_h5_filename=None,
             "will not overwrite old file '%s'"%output_h5_filename)
     output_h5 = tables.openFile( output_h5_filename, mode='w' )
 
+    def _get_group_for_obj(obj_id):
+        parent_name = 'ori_ekf_qual'
+        if not hasattr(output_h5.root,parent_name):
+            output_h5.createGroup(output_h5.root,parent_name,'ori EKF quality')
+        parent = getattr(output_h5.root,parent_name)
+        groupnum = obj_id//2000
+        groupname = 'group%d'%groupnum
+        if not hasattr(parent,groupname):
+            output_h5.createGroup(parent,groupname,'ori EKF data')
+        return getattr(parent,groupname)
+
     ca = core_analysis.get_global_CachingAnalyzer()
     with openFileSafe( kalman_filename,
                        mode='r') as kh5:
@@ -331,6 +343,8 @@ def doit(output_h5_filename=None,
             all_kobs_obj_ids = dest_table.read(field='obj_id')
             all_kobs_frames = dest_table.read(field='frame')
             use_obj_ids = np.unique(all_kobs_obj_ids)
+            if obj_only is not None:
+                use_obj_ids = obj_only
 
             if hasattr(kh5.root.kalman_estimates.attrs,'dynamic_model_name'):
                 dynamic_model = kh5.root.kalman_estimates.attrs.dynamic_model_name
@@ -439,6 +453,13 @@ def doit(output_h5_filename=None,
                 n_cams = len(camn_list)
                 n_frames = len(frame_range)
 
+                save_cols = {}
+                save_cols['frame'] = []
+                for camn in camn_list:
+                    save_cols['dist%d'%camn] = []
+                    save_cols['used%d'%camn] = []
+                    save_cols['theta%d'%camn] = []
+
                 # NxM array with rows being frames and cols being cameras
                 slopes = np.ones( (n_frames,n_cams), dtype=np.float)
                 x0ds = np.ones( (n_frames,n_cams), dtype=np.float)
@@ -532,10 +553,19 @@ def doit(output_h5_filename=None,
                     # 1. Gate per-camera orientations.
 
                     this_frame_slopes = slopes[frame_idx,:]
+                    this_frame_theta_measured=slope2modpi(this_frame_slopes)
                     this_frame_x0d = x0ds[frame_idx,:]
                     this_frame_y0d = y0ds[frame_idx,:]
                     if debug_level >= 5:
                         print 'this_frame_slopes',this_frame_slopes
+
+                    save_cols['frame'].append( absolute_frame_number )
+                    for j,camn in enumerate(camn_list):
+                        # default to no detection, change below
+                        save_cols['dist%d'%camn].append( np.nan )
+                        save_cols['used%d'%camn].append( 0 )
+                        save_cols['theta%d'%camn].append(
+                            this_frame_theta_measured[j] )
 
                     all_data_this_frame_missing = False
                     gate_vector=None
@@ -618,8 +648,9 @@ def doit(output_h5_filename=None,
                             # use this whole quaternion mess.
 
 
-                            theta_measured=slope2modpi(
-                                this_frame_slopes[camn_idx])
+                            ## theta_measured=slope2modpi(
+                            ##     this_frame_slopes[camn_idx])
+                            theta_measured = this_frame_theta_measured[camn_idx]
                             if debug_level >= 6:
                                 print 'cam_id',cam_id
                             if debug_level >= 3:
@@ -659,8 +690,12 @@ def doit(output_h5_filename=None,
                                 if debug_level >= 3:
                                     print ('  this_phi,this_y',
                                            this_phi*R2D,this_y*R2D)
+
+                            save_cols['dist%d'%camn][-1] = this_y # save
+
                             # gate
                             if abs(this_y) < gate_angle_threshold_radians:
+                                save_cols['used%d'%camn][-1] = 1
                                 gate_vector[camn_idx]=1
                                 if debug_level >= 3:
                                     print '    good'
@@ -743,6 +778,30 @@ def doit(output_h5_filename=None,
                         all_xhats.append(xhat)
                         all_ori.append( state_to_ori(xhat) )
 
+                # save to H5 file
+                names = [colname for colname in save_cols]
+                names.sort()
+                arrays = []
+                for name in names:
+                    if name == 'frame':
+                        dtype = np.int64
+                    elif name.startswith('dist'):
+                        dtype = np.float32
+                    elif name.startswith('used'):
+                        dtype = np.bool
+                    elif name.startswith('theta'):
+                        dtype = np.float32
+                    else:
+                        raise NameError('unknown name %s'%name)
+                    arr = np.array( save_cols[name], dtype=dtype )
+                    arrays.append(arr)
+                save_recarray = np.rec.fromarrays(arrays,names=names)
+                h5group = _get_group_for_obj(obj_id)
+                output_h5.createTable(h5group,
+                                      'obj%d'%obj_id,
+                                      save_recarray,
+                                      filters=tables.Filters(1, complib='lzo'))
+
                 if options.show:
                     all_xhats = np.array( all_xhats )
                     all_ori = np.array( all_ori )
@@ -768,13 +827,13 @@ def doit(output_h5_filename=None,
                     colors = []
                     for i in range(n_cams):
                         line,=ax5.plot(frame_range,_save_plot_rows_used[:,i]*R2D,
-                                       '.',
+                                       'o',
                                        label=cam_id_list[i])
                         colors.append(line.get_color())
                     for i in range(n_cams):
                         # loop again to get normal MPL color cycling
-                        ax5.plot(frame_range,_save_plot_rows[:,i]*R2D, '.',
-                                 color=colors[i],
+                        ax5.plot(frame_range,_save_plot_rows[:,i]*R2D, 'o',
+                                 mec=colors[i],
                                  ms=1.0)
                     ax5.set_ylabel('observation (deg)')
                     ax5.legend()
@@ -814,6 +873,101 @@ def is_orientation_fit_sysexit():
     else:
         sys.exit(1)
 
+def plot_ori(kalman_filename=None,
+             obj_only=None):
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as mticker
+
+    ca = core_analysis.get_global_CachingAnalyzer()
+    with openFileSafe( kalman_filename,
+                       mode='r') as kh5:
+        kmle = kh5.root.kalman_observations[:] # load into RAM
+        all_mle_obj_ids = kmle['obj_id']
+
+        # walk all tables to get all obj_ids
+        all_obj_ids = {}
+        parent = kh5.root.ori_ekf_qual
+        for group in parent._f_iterNodes():
+            for table in group._f_iterNodes():
+                assert table.name.startswith('obj')
+                obj_id = int(table.name[3:])
+                all_obj_ids[obj_id] = table
+
+        if obj_only is None:
+            use_obj_ids = all_obj_ids.keys()
+            mle_use_obj_ids = list(np.unique(all_mle_obj_ids))
+            missing_objs = list(set(mle_use_obj_ids) - set(use_obj_ids))
+            if len(missing_objs):
+                warnings.warn(
+                    'orientation not fit for %d obj_ids'%(len(missing_objs),))
+            use_obj_ids.sort()
+        else:
+            use_obj_ids = obj_only
+
+        # now, generate plots
+        fig = plt.figure()
+        ax1 = fig.add_subplot(311)
+        ax2 = fig.add_subplot(312,sharex=ax1)
+        ax3 = fig.add_subplot(313,sharex=ax1)
+        for obj_id in use_obj_ids:
+            table = all_obj_ids[obj_id]
+            rows = table[:]
+            frame=rows['frame']
+            # get camns
+            camns = []
+            for colname in table.colnames:
+                if colname.startswith('dist'):
+                    camn = int(colname[4:])
+                    camns.append(camn)
+            for camn in camns:
+                label = 'camn%d'%camn
+                theta = rows['theta%d'%camn]
+                used = rows['used%d'%camn]
+                dist = rows['dist%d'%camn]
+                line,=ax1.plot(frame,theta*R2D,'o',mew=0,ms=2.0,label=label)
+                c = line.get_color()
+                ax2.plot(frame[used],dist[used]*R2D,'o',color=c,
+                         mew=0,label=label)
+                ax2.plot(frame[~used],dist[~used]*R2D,'o',color=c,
+                         mew=0,ms=2.0)
+            # plot 3D orientation
+            mle_row_cond = all_mle_obj_ids==obj_id
+            frame = kmle[mle_row_cond]['frame']
+            hz = [kmle[mle_row_cond]['hz_line%d'%i] for i in range(6)]
+            #hz = np.rec.fromarrays(hz,names=['hz%d'%for i in range(6)])
+            hz = np.vstack(hz).T
+            orient = reconstruct.line_direction(hz)
+            ax3.plot(frame,orient[:,0],'ro',mew=0,ms=2.0,label='x')
+            ax3.plot(frame,orient[:,1],'go',mew=0,ms=2.0,label='y')
+            ax3.plot(frame,orient[:,2],'bo',mew=0,ms=2.0,label='z')
+    ax1.xaxis.set_major_formatter(mticker.FormatStrFormatter("%d"))
+    ax1.set_ylabel('theta (deg)')
+    ax1.legend()
+
+    ax2.set_ylabel('z (deg)')
+    ax2.legend()
+
+    ax3.set_ylabel('ori')
+    ax3.set_xlabel('frame')
+    ax3.legend()
+    plt.show()
+
+def plot_ori_command_line():
+    usage = '%prog [options]'
+
+    parser = OptionParser(usage)
+    parser.add_option('-k', "--kalman-file", dest="kalman_filename",
+                      type='string',
+                      help=".h5 file with kalman data and 3D reconstructor")
+    parser.add_option("--obj-only", type="string")
+    (options, args) = parser.parse_args()
+    if options.kalman_filename is None:
+        raise ValueError('--kalman-file option must be specified')
+    if options.obj_only is not None:
+        options.obj_only = core_analysis.parse_seq(options.obj_only)
+    plot_ori(kalman_filename=options.kalman_filename,
+             obj_only=options.obj_only)
+
 def main():
     usage = '%prog [options]'
 
@@ -831,6 +985,8 @@ def main():
 
     parser.add_option("--show", action='store_true', default=False)
 
+    parser.add_option("--obj-only", type="string")
+
     (options, args) = parser.parse_args()
 
     if options.h5 is None:
@@ -842,9 +998,13 @@ def main():
     if options.kalman_filename is None:
         raise ValueError('--kalman-file option must be specified')
 
+    if options.obj_only is not None:
+        options.obj_only = core_analysis.parse_seq(options.obj_only)
+
     doit(kalman_filename=options.kalman_filename,
          data2d_filename=options.h5,
          output_h5_filename=options.output_h5,
+         obj_only=options.obj_only,
          options=options)
 
 if __name__=='__main__':
