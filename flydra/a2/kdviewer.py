@@ -324,6 +324,7 @@ def doit(filename,
                                          dynamic_model_name = dynamic_model_name,
                                          frames_per_second=fps,
                                          up_dir=up_dir,
+                                         min_ori_quality_required=options.ori_qual,
                                          )
                 except core_analysis.NotEnoughDataToSmoothError:
                     warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
@@ -466,6 +467,7 @@ def doit(filename,
                         dynamic_model_name = dynamic_model_name,
                         frames_per_second=fps,
                         up_dir=up_dir,
+                        min_ori_quality_required=options.ori_qual,
                         )
                 except core_analysis.ObjectIDDataError, err:
                     continue
@@ -493,7 +495,9 @@ def doit(filename,
 
         if show_observations:
             obs_rows, obs_directions = ca.load_dynamics_free_MLE_position(
-                obj_id, data_file, with_directions=True)
+                obj_id, data_file, with_directions=True,
+                min_ori_quality_required=options.ori_qual,
+                )
 
             if start is not None or stop is not None:
                 obs_frames = obs_rows['frame']
@@ -579,6 +583,7 @@ def doit(filename,
                 dynamic_model_name = dynamic_model_name,
                 return_smoothed_directions = options.smooth_orientations,
                 up_dir=up_dir,
+                min_ori_quality_required=options.ori_qual,
                 )
 
         if len(rows):
@@ -1247,6 +1252,9 @@ def main():
                       help=('fuse obj_ids specified in fanout .xml file into '
                             'one contiguous trace'),
                       default=False)
+
+    parser.add_option("--ori-qual", type='float', default=None,
+                      help=('minimum orientation quality to use'))
 
     (options, args) = parser.parse_args()
 

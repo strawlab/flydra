@@ -164,6 +164,12 @@ def my_decimate(x,q):
         result[-1] = mysum[-1]/ (q-lendiff)
         return result
 
+def compute_ori_quality(data_file,orig_rows,obj_id):
+    import orientation_ekf_fitter
+    return orientation_ekf_fitter.compute_ori_quality(data_file,
+                                                      orig_rows,
+                                                      obj_id)
+
 class WeakRefAbleDict(object):
     def __init__(self,val,debug=False):
         self.val = val
@@ -654,7 +660,15 @@ class PreSmoothedDataCache(object):
                       dynamic_model_name=None,
                       return_smoothed_directions=False,
                       up_dir=None,
+                      min_ori_quality_required=None,
                       ):
+        """query results
+
+        Arguments
+        ---------
+        min_ori_quality_required - None or float
+          None for no requirement, higher for required quality
+        """
         if up_dir is None:
             up_dir = np.array([0.0,0.0,1.0])
             ## raise ValueError("up_dir must be specified. "
@@ -662,6 +676,7 @@ class PreSmoothedDataCache(object):
 
         # XXX TODO fixme: save values of frames_per_second and
         # dynamic_model_name (and svn revision?) and
+        # min_ori_quality_required and
         # return_smoothed_directions to check against cache
 
         if frames_per_second is None: raise ValueError('frames_per_second must be specified')
@@ -764,6 +779,14 @@ class PreSmoothedDataCache(object):
                 # compute 3 vecs
                 directions = flydra.reconstruct.line_direction(hzlines)
                 # make consistent
+
+                if min_ori_quality_required is not None:
+                    quality_array = compute_ori_quality( data_file,
+                                                         orig_rows,
+                                                         obj_id )
+                    good_cond = quality_array >= min_ori_quality_required
+                    bad_cond = ~good_cond
+                    directions[bad_cond,:]=np.nan # ignore bad quality data
 
                 if 1:
 
@@ -1135,7 +1158,9 @@ class CachingAnalyzer:
 
         return self.load_dynamics_free_MLE_position(obj_id,data_file)
 
-    def load_dynamics_free_MLE_position(self,obj_id,data_file,with_directions=False):
+    def load_dynamics_free_MLE_position(self,obj_id,data_file,
+                                        min_ori_quality_required=None,
+                                        with_directions=False):
         """Load maximum likelihood estimate of object position from data_file.
 
         This estimate is independent of any Kalman-filter dynamics,
@@ -1189,6 +1214,13 @@ class CachingAnalyzer:
                                    rows['hz_line5']]).T
             directions = flydra.reconstruct.line_direction(hzlines)
             assert numpy.alltrue(PQmath.is_unit_vector(directions))
+            if min_ori_quality_required is not None:
+                quality_array = compute_ori_quality( data_file,
+                                                     rows,
+                                                     obj_id )
+                good_cond = quality_array >= min_ori_quality_required
+                bad_cond = ~good_cond
+                directions[bad_cond,:]=np.nan # ignore bad quality data
             return rows, directions
         else:
             return rows
@@ -1199,6 +1231,7 @@ class CachingAnalyzer:
                   flystate='both', # 'both', 'walking', or 'flying'
                   walking_start_stops=None, # list of (start,stop)
                   up_dir=None,
+                  min_ori_quality_required = None,
                   ):
         """Load Kalman state estimates from data_file.
 
@@ -1208,6 +1241,12 @@ class CachingAnalyzer:
         forward-filtered data saved in realtime are returned. However,
         if the data file has already been smoothed, this will also
         result in smoothing.
+
+
+        Arguments
+        ---------
+        min_ori_quality_required : None or float
+          None for no requirement, float for required quality
 
         """
         # for backwards compatibility, allow user to pass in string identifying filename
@@ -1362,8 +1401,8 @@ class CachingAnalyzer:
                     dynamic_model_name=dynamic_model_name,
                     return_smoothed_directions=return_smoothed_directions,
                     up_dir=up_dir,
+                    min_ori_quality_required=min_ori_quality_required,
                     )
-
 
         if not len(rows):
             raise NoObjectIDError('no data from obj_id %d was found'%obj_id)

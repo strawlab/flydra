@@ -226,6 +226,23 @@ class SymobolicModels:
         theta = sympy.atan(dy/dx)
         return theta
 
+def get_group_for_obj(obj_id,h5,writeable=False):
+    parent_name = 'ori_ekf_qual'
+    if not hasattr(h5.root,parent_name):
+        if writeable:
+            h5.createGroup(h5.root,parent_name,'ori EKF quality')
+        else:
+            raise ValueError('no group %s, and cannot create'%parent_name)
+    parent = getattr(h5.root,parent_name)
+    groupnum = obj_id//2000
+    groupname = 'group%d'%groupnum
+    if not hasattr(parent,groupname):
+        if writeable:
+            h5.createGroup(parent,groupname,'ori EKF data')
+        else:
+            raise ValueError('no group %s, and cannot create'%groupname)
+    return getattr(parent,groupname)
+
 def doit(output_h5_filename=None,
          kalman_filename=None, data2d_filename=None, start = None, stop = None,
          obj_only=None,
@@ -295,17 +312,6 @@ def doit(output_h5_filename=None,
         raise RuntimeError(
             "will not overwrite old file '%s'"%output_h5_filename)
     output_h5 = tables.openFile( output_h5_filename, mode='w' )
-
-    def _get_group_for_obj(obj_id):
-        parent_name = 'ori_ekf_qual'
-        if not hasattr(output_h5.root,parent_name):
-            output_h5.createGroup(output_h5.root,parent_name,'ori EKF quality')
-        parent = getattr(output_h5.root,parent_name)
-        groupnum = obj_id//2000
-        groupname = 'group%d'%groupnum
-        if not hasattr(parent,groupname):
-            output_h5.createGroup(parent,groupname,'ori EKF data')
-        return getattr(parent,groupname)
 
     ca = core_analysis.get_global_CachingAnalyzer()
     with openFileSafe( kalman_filename,
@@ -803,7 +809,7 @@ def doit(output_h5_filename=None,
                     arr = np.array( save_cols[name], dtype=dtype )
                     arrays.append(arr)
                 save_recarray = np.rec.fromarrays(arrays,names=names)
-                h5group = _get_group_for_obj(obj_id)
+                h5group = get_group_for_obj(obj_id,output_h5,writeable=True)
                 output_h5.createTable(h5group,
                                       'obj%d'%obj_id,
                                       save_recarray,
@@ -880,6 +886,112 @@ def is_orientation_fit_sysexit():
     else:
         sys.exit(1)
 
+def smooth(x,window_len=10,window='hanning'):
+    """smooth the data using a window with requested size.
+
+    This method is based on the convolution of a scaled window with the signal.
+    The signal is prepared by introducing reflected copies of the signal
+    (with the window size) in both ends so that transient parts are minimized
+    in the begining and end part of the output signal.
+
+    input:
+        x: the input signal
+        window_len: the dimension of the smoothing window
+        window: the type of window from 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'
+            flat window will produce a moving average smoothing.
+
+    output:
+        the smoothed signal
+
+    example:
+
+    t=linspace(-2,2,0.1)
+    x=sin(t)+randn(len(t))*0.1
+    y=smooth(x)
+
+    see also:
+
+    numpy.hanning, numpy.hamming, numpy.bartlett, numpy.blackman, numpy.convolve
+    scipy.signal.lfilter
+
+    TODO: the window parameter could be the window itself if an array instead of a string
+    """
+
+    # copied from http://www.scipy.org/Cookbook/SignalSmooth
+
+    if x.ndim != 1:
+        raise ValueError, "smooth only accepts 1 dimension arrays."
+
+    if x.size < window_len:
+        raise ValueError, "Input vector needs to be bigger than window size."
+
+
+    if window_len<3:
+        return x
+
+
+    if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
+        raise ValueError, "Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'"
+
+
+    s=np.r_[2*x[0]-x[window_len:1:-1],x,2*x[-1]-x[-1:-window_len:-1]]
+    #print(len(s))
+    if window == 'flat': #moving average
+        w=ones(window_len,'d')
+    else:
+        w=eval('np.'+window+'(window_len)')
+
+    y=np.convolve(w/w.sum(),s,mode='same')
+    return y[window_len-1:-window_len+1]
+
+
+def compute_ori_quality(kh5, orig_rows, obj_id, do_smooth=True):
+    #h5.root.kalman_observations
+    orig_frames = orig_rows['frame']
+    ca = core_analysis.get_global_CachingAnalyzer()
+    group = get_group_for_obj(obj_id,kh5)
+    table = getattr(group,'obj%d'%obj_id)
+    table_ram = table[:]
+    frames = table_ram['frame']
+
+    camns = []
+    for colname in table.colnames:
+        if colname.startswith('dist'):
+            camn = int(colname[4:])
+            camns.append(camn)
+    camns.sort()
+    ncams = len(camns)
+
+    # start at zero quality
+    results = np.zeros( (len(orig_rows),) )
+    for origi,frame in enumerate(orig_frames):
+        cond = frames==frame
+        idxs = np.nonzero(cond)[0]
+        assert len(idxs)==1
+        idx = idxs[0]
+        this_row = table_ram[idx]
+        used_this_row = np.array([this_row['used%d'%camn] for camn in camns])
+        n_used = np.sum(used_this_row)
+        if 0:
+            results[origi] = n_used
+        else:
+            theta_this_row=np.array(
+                [this_row['theta%d'%camn] for camn in camns])
+            data_this_row = ~np.isnan(theta_this_row)
+            n_data = np.sum(data_this_row)
+            n_rejected = n_data-n_used
+            if n_rejected==0:
+                if n_used==0:
+                    results[origi] = 0.0
+                else:
+                    results[origi] = ncams
+            else:
+                results[origi] = n_used/n_rejected
+    if do_smooth:
+        results = smooth(results,window_len=50)
+    print '*'*400
+    return results
+
 def plot_ori(kalman_filename=None,
              h5=None,
              obj_only=None):
@@ -920,9 +1032,10 @@ def plot_ori(kalman_filename=None,
 
         # now, generate plots
         fig = plt.figure()
-        ax1 = fig.add_subplot(311)
-        ax2 = fig.add_subplot(312,sharex=ax1)
-        ax3 = fig.add_subplot(313,sharex=ax1)
+        ax1 = fig.add_subplot(411)
+        ax2 = fig.add_subplot(412,sharex=ax1)
+        ax3 = fig.add_subplot(413,sharex=ax1)
+        ax4 = fig.add_subplot(414,sharex=ax1)
         for obj_id in use_obj_ids:
             table = all_obj_ids[obj_id]
             rows = table[:]
@@ -946,14 +1059,18 @@ def plot_ori(kalman_filename=None,
                          mew=0,ms=2.0)
             # plot 3D orientation
             mle_row_cond = all_mle_obj_ids==obj_id
-            frame = kmle[mle_row_cond]['frame']
-            hz = [kmle[mle_row_cond]['hz_line%d'%i] for i in range(6)]
+            rows_this_obj = kmle[mle_row_cond]
+            frame = rows_this_obj['frame']
+            hz = [rows_this_obj['hz_line%d'%i] for i in range(6)]
             #hz = np.rec.fromarrays(hz,names=['hz%d'%for i in range(6)])
             hz = np.vstack(hz).T
             orient = reconstruct.line_direction(hz)
             ax3.plot(frame,orient[:,0],'ro',mew=0,ms=2.0,label='x')
             ax3.plot(frame,orient[:,1],'go',mew=0,ms=2.0,label='y')
             ax3.plot(frame,orient[:,2],'bo',mew=0,ms=2.0,label='z')
+
+            qual = compute_ori_quality(kh5,rows_this_obj,obj_id)
+            ax4.plot(frame, qual, 'b-')#, mew=0, ms=3 )
     ax1.xaxis.set_major_formatter(mticker.FormatStrFormatter("%d"))
     ax1.set_ylabel('theta (deg)')
     ax1.legend()
@@ -964,6 +1081,8 @@ def plot_ori(kalman_filename=None,
     ax3.set_ylabel('ori')
     ax3.set_xlabel('frame')
     ax3.legend()
+
+    ax4.set_ylabel('quality')
     plt.show()
 
 def plot_ori_command_line():
