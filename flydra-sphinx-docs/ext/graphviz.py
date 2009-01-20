@@ -48,7 +48,7 @@ def process_graphviz_nodes(app, doctree, docname):
                 graphviz_process.stdin.write(content)
                 graphviz_process.stdin.close()
                 graphviz_process.wait()
-                relfn = '_images/graphviz/%s' % (filename,)
+                relfn = 'graphviz/%s' % (filename,)
             newnode = nodes.image()
             newnode['candidates'] = dict( [ (format_mime, '%s/%s.%s' % (app.builder.imgpath, relfn, format_ext)) for (format_mime, format_ext) in _output_formats.iteritems() ] )
             # build PDF output from the previously generated postscript
