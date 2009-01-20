@@ -1358,7 +1358,14 @@ class CachingAnalyzer:
 
                 if isinstance(obj_id,int) or isinstance(obj_id,numpy.integer):
                     # obj_id is an integer, normal case
-                    obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
+                    tmp_cond = obs_obj_ids == obj_id
+                    tmp_nz = numpy.nonzero(tmp_cond)
+                    del tmp_cond
+                    if len(tmp_nz):
+                        obs_idxs = tmp_nz[0]
+                    else:
+                        obs_idxs = []
+                    del tmp_nz
                 else:
                     # may specify sequence of obj_id -- concatenate
                     # data, treat as one object
