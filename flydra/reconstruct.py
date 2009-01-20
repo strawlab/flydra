@@ -173,11 +173,13 @@ def norm_vec(V):
 
 def line_direction(Lcoords):
     """convert from Pluecker coordinates to a direction"""
-    L = nx.asarray(Lcoords)
-    if len(L.shape)==1:
+    # should maybe be PQmath.pluecker_to_orient
+    L = nx.asanyarray(Lcoords)
+    if L.ndim==1:
         # single line coord
         U = nx.array((-L[2], L[4], -L[5]))
     else:
+        assert L.ndim==2
         assert L.shape[1] == 6
         # XXX could speed up with concatenate:
         U = nx.transpose(nx.array((-L[:,2], L[:,4], -L[:,5])))
