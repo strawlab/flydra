@@ -726,18 +726,18 @@ class PreSmoothedDataCache(object):
 
         h5group = _get_group_for_obj(obj_id)
 
-        if hasattr(h5file.root,smoothed_tablename):
+        if hasattr(h5group,smoothed_tablename):
             # pre-existing table is found
-            h5table = getattr(h5file.root,smoothed_tablename)
+            h5table = getattr(h5group,smoothed_tablename)
             rows = h5table[:]
             if not return_smoothed_directions:
                 # force users to ask for smoothed directions if they are wanted.
                 rows['dir_x'] = np.nan
                 rows['dir_y'] = np.nan
                 rows['dir_z'] = np.nan
-        elif hasattr(h5file.root,unsmoothed_tablename) and (not return_smoothed_directions):
+        elif hasattr(h5group,unsmoothed_tablename) and (not return_smoothed_directions):
             # pre-existing table is found
-            h5table = getattr(h5file.root,unsmoothed_tablename)
+            h5table = getattr(h5group,unsmoothed_tablename)
             rows = h5table[:]
         else:
             # pre-existing table NOT found
@@ -765,7 +765,7 @@ class PreSmoothedDataCache(object):
                 directions = flydra.reconstruct.line_direction(hzlines)
                 # make consistent
 
-                if 0:
+                if 1:
 
                     # Don't call choose_orientations, because our data
                     # should already have good orientation.
@@ -799,7 +799,7 @@ class PreSmoothedDataCache(object):
                 rows['dir_y'] = smooth_directions[:,1]
                 rows['dir_z'] = smooth_directions[:,2]
 
-                if hasattr(h5file.root,unsmoothed_tablename):
+                if hasattr(h5group,unsmoothed_tablename):
                     # XXX todo: delete un-smoothed table once smoothed version is
                     # made.
                     warnings.warn('implementation detail: should drop unsmoothed table')
@@ -812,7 +812,7 @@ class PreSmoothedDataCache(object):
                 else:
                     filters = tables.Filters(0)
 
-                h5file.createTable(h5file.root,
+                h5file.createTable(h5group,
                                    save_tablename,
                                    rows,
                                    filters=filters)
