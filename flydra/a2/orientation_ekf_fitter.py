@@ -42,7 +42,10 @@ def angle_diff(a,b,mod_pi = False):
     if mod_pi:
         a=2*a
         b=2*b
-    return np.mod( (a-b)+np.pi, 2*np.pi ) - np.pi
+    result = np.mod( (a-b)+np.pi, 2*np.pi ) - np.pi
+    if mod_pi:
+        result = 0.5*result
+    return result
 
 def test_angle_diff():
     for a in [-5,-1,0,1,2,5,45,89,89.9,90,90.1,179,180,181,359]:
@@ -51,7 +54,11 @@ def test_angle_diff():
         assert abs(angle_diff(ar,ar+np.pi,mod_pi=True)) < .0001
         assert abs(angle_diff(ar,ar+np.pi)) > (np.pi-.0001)
 
-test_angle_diff()
+    for (a,b,expected) in [ (82*D2R,-37*D2R, -61*D2R),
+                            ]:
+        actual = angle_diff(a,b,mod_pi=True)
+        assert actual < (expected+1e-5)
+        assert actual > (expected-1e-5)
 
 def statespace2cgtypes_quat( x ):
     return cgtypes.quat( x[6], x[3], x[4], x[5] )
