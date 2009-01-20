@@ -674,13 +674,10 @@ class PreSmoothedDataCache(object):
             ## raise ValueError("up_dir must be specified. "
             ##                  "(Hint: --up-dir='0,0,1')")
 
-        # XXX TODO fixme: save values of frames_per_second and
-        # dynamic_model_name (and svn revision?) and
-        # min_ori_quality_required and
-        # return_smoothed_directions to check against cache
-
         if frames_per_second is None: raise ValueError('frames_per_second must be specified')
         if dynamic_model_name is None: raise ValueError('dynamic_model_name must be specified')
+
+        pdictname = 'params'
 
         # get cached datafile for this data_file
         if data_file not in self.cache_h5files_by_data_file:
@@ -702,8 +699,26 @@ class PreSmoothedDataCache(object):
                     # check if cache is up to date
                     cache_title = cache_h5file.title
                     if expected_title == cache_title:
-                        make_new_cache = False
-                    else:
+                        if hasattr(cache_h5file.root._v_attrs,pdictname):
+                            p = getattr(cache_h5file.root._v_attrs,pdictname)
+                            same = True
+                            for varname in p:
+                                value = p[varname]
+                                testvalue = locals()[varname]
+                                try:
+                                    if not testvalue == value:
+                                        print 'cache value of %s changed'%varname
+                                        same=False
+                                except ValueError:
+                                    if isinstance(value,np.ndarray):
+                                        if not (value.shape == testvalue.shape and
+                                                np.allclose(value,testvalue)):
+                                            same=False
+                                    else:
+                                        raise
+                            if same:
+                                make_new_cache = False
+                    if make_new_cache:
                         warnings.warn(
                             'Deleting stale cache file %s.'%cache_h5file_name)
                         cache_h5file.close()
@@ -724,6 +739,15 @@ class PreSmoothedDataCache(object):
                     warnings.warn('error creating cache_h5file %s'%(
                         cache_h5file_name,))
                     raise
+                # these values are double checked to ensure they're the same
+                param_dict = {'frames_per_second':frames_per_second,
+                              'dynamic_model_name':dynamic_model_name,
+                              'return_smoothed_directions':return_smoothed_directions,
+                              'up_dir':up_dir,
+                              'min_ori_quality_required': min_ori_quality_required,
+                              }
+                setattr(cache_h5file.root._v_attrs,pdictname,param_dict)
+
             self.cache_h5files_by_data_file[data_file] = cache_h5file
 
         h5file = self.cache_h5files_by_data_file[data_file]
