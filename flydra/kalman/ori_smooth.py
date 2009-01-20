@@ -55,6 +55,7 @@ def ori_smooth(directions,frames_per_second=None):
     init_V = 2*Q
     y=directions
     dirsmooth,V = adskalman.kalman_smoother(y,A,C,Q,R,init_x,init_V)
+    dirsmooth = dirsmooth[:,:3] # take only position information
 
     # remove results too distant from observations
     avlen=5

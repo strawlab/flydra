@@ -444,9 +444,9 @@ class LazyRecArrayMimic2:
         return len(self.view['kalman_x'])
 
 def choose_orientations(rows, directions, frames_per_second=None,
-                        velocity_weight_gain=5.0,
+                        velocity_weight_gain=0.5,
                         #min_velocity_weight=0.0,
-                        max_velocity_weight=1.0,
+                        max_velocity_weight=0.9,
                         elevation_up_bias_degrees=45.0, # tip the velocity angle closer +Z by this amount (maximally)
                         up_dir=None,
                         ):
@@ -465,8 +465,8 @@ def choose_orientations(rows, directions, frames_per_second=None,
     This is heavily inspired by (i.e. some code stolen from) Kristin
     Branson's choose orientations in ctrax (formerly known as mtrax).
 
-    Parameters
-    ----------
+    Arguments
+    ---------
     rows: structured array
         position and frame number (has columns 'x','y','z','frame') for N frames
     directions: Nx3 array
@@ -492,13 +492,18 @@ def choose_orientations(rows, directions, frames_per_second=None,
         raise ValueError("up_dir must be specified. "
                          "(Hint: --up-dir='0,0,1')")
     D2R = np.pi/180
+
     if DEBUG:
         frames = rows['frame']
         if 1:
-            cond = (619000 < frames) & (frames < 619100 )
+            cond1 = (128125 < frames) & (frames < 128140 )
+            cond2 = (128460 < frames) & (frames < 128490 )
+            cond = cond1 | cond2
             idxs = np.nonzero(cond)[0]
         else:
             idxs = np.arange( len(frames) )
+
+    directions = np.array(directions,copy=True) # don't modify input data
 
     X = np.array([rows['x'], rows['y'], rows['z']]).T
     #ADS print "rows['x'].shape",rows['x'].shape
@@ -581,6 +586,7 @@ def choose_orientations(rows, directions, frames_per_second=None,
             direction_current = sign_current*directions[i]
             this_w = w[i-1]
             vel_term = np.arccos( np.dot( direction_current, biased_velocity_direction[i-1] ))
+            up_term  = np.arccos( np.dot( direction_current, up_dir))
             #ADS print
             #ADS print 'sign_current',sign_current,'-'*50
             for enum_previous,sign_previous in enumerate(signs):
@@ -602,10 +608,13 @@ def choose_orientations(rows, directions, frames_per_second=None,
                 #ADS print 'vel_term',vel_term,'*',w[i-1]
 
                 cost_current = 0.0
+                # old way
                 if not np.isnan(vel_term):
                     cost_current += this_w*vel_term
                 if not np.isnan(flip_term):
                     cost_current += (1-this_w)*flip_term
+                if not np.isnan(up_term):
+                    cost_current += (1-this_w)*up_term
 
                 ## if (not np.isnan(direction_current[0])) and (not np.isnan(direction_previous[0])):
                 ##     # normal case - no nans
@@ -619,14 +628,18 @@ def choose_orientations(rows, directions, frames_per_second=None,
                     print '  (sign_previous %d)'%sign_previous
                     print '  flip_term',flip_term
                     print '  vel_term',vel_term
+                    print '  up_term',up_term
+                    print '  cost_current',cost_current
 
-            #ADS print 'tmpcost',tmpcost
             best_enum_previous = np.argmin( tmpcost )
-            #ADS print 'enum_current',enum_current
-            #ADS print 'best_enum_previous',best_enum_previous
+            ## if DEBUG and i in idxs:
+            ##     print 'tmpcost',tmpcost
+            ##     print 'enum_current',enum_current
+            ##     print 'best_enum_previous',best_enum_previous
             stateprev[i-1,enum_current] = best_enum_previous
             costprevnew[enum_current] = tmpcost[best_enum_previous]
-        #ADS print 'costprevnew',costprevnew
+        ## if DEBUG and i in idxs:
+        ##     print 'costprevnew',costprevnew
         costprev[:] = costprevnew[:]
     #ADS print '='*100
     #ADS print 'costprev',costprev
@@ -818,13 +831,9 @@ class PreSmoothedDataCache(object):
                     directions[bad_cond,:]=np.nan # ignore bad quality data
 
                 if 1:
-
-                    # Don't call choose_orientations, because our data
-                    # should already have good orientation.
-
                     # send kalman-smoothed position estimates (the
                     # velocity will be determined from this)
-                    directions = choose_orientations(
+                    chosen_directions = choose_orientations(
                         rows, directions,
                         frames_per_second=frames_per_second,
                         #velocity_weight=1.0,
@@ -833,9 +842,9 @@ class PreSmoothedDataCache(object):
                         elevation_up_bias_degrees=45.0,
                         up_dir=up_dir,
                         )
-                rows['rawdir_x'] = directions[:,0]
-                rows['rawdir_y'] = directions[:,1]
-                rows['rawdir_z'] = directions[:,2]
+                rows['rawdir_x'] = chosen_directions[:,0]
+                rows['rawdir_y'] = chosen_directions[:,1]
+                rows['rawdir_z'] = chosen_directions[:,2]
 
             if return_smoothed_directions:
                 save_tablename = smoothed_tablename
@@ -852,9 +861,20 @@ class PreSmoothedDataCache(object):
                     smooth_directions = ori_smooth(
                         directions, frames_per_second=frames_per_second)
 
-                rows['dir_x'] = smooth_directions[:,0]
-                rows['dir_y'] = smooth_directions[:,1]
-                rows['dir_z'] = smooth_directions[:,2]
+                if 1:
+                    chosen_smooth_directions = choose_orientations(
+                        rows, smooth_directions,
+                        frames_per_second=frames_per_second,
+                        #velocity_weight=1.0,
+                        #max_velocity_weight=1.0,
+                        # don't tip the velocity angle
+                        elevation_up_bias_degrees=45.0,
+                        up_dir=up_dir,
+                        )
+
+                rows['dir_x'] = chosen_smooth_directions[:,0]
+                rows['dir_y'] = chosen_smooth_directions[:,1]
+                rows['dir_z'] = chosen_smooth_directions[:,2]
 
                 if hasattr(h5group,unsmoothed_tablename):
                     # XXX todo: delete un-smoothed table once smoothed version is
