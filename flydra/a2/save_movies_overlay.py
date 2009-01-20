@@ -65,7 +65,7 @@ def doit(fmf_filename=None,
     if do_zoom_diff and do_zoom:
         raise ValueError('can use do_zoom or do_zoom_diff, but not both')
 
-    styles = ['debug','pretty','prettier','blank']
+    styles = ['debug','pretty','prettier','blank','prettier-slope']
     if style not in styles:
         raise ValueError('style ("%s") is not one of %s'%(style,str(styles)))
 
@@ -862,7 +862,8 @@ def doit(fmf_filename=None,
                             draw.text_smartshift( (x+15,y+(i+1)*10), (x,y),
                                        '%s pt %d'%(obs_cam_id,pt_no), font_obs )
 
-                    for kobs_ori_verts_images in [#kobs_ori_verts_images_a,
+                if style in ['debug','prettier-slope']:
+                    for kobs_ori_verts_images in [kobs_ori_verts_images_a,
                                                   kobs_ori_verts_images_b]:
                         for ori_verts_images in kobs_ori_verts_images:
                             ori_verts_images = numpy.array( ori_verts_images )
