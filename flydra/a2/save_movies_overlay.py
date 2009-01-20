@@ -3,6 +3,7 @@
 # wrote that one a long time ago. - ADS 20070112
 
 from __future__ import division
+import pkg_resources
 if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
@@ -10,7 +11,6 @@ if 1:
 
 import sets, os, sys, math
 
-import pkg_resources
 import numpy
 import numpy as np
 import tables as PT
@@ -31,6 +31,7 @@ import flydra.analysis.result_utils as result_utils
 import progressbar
 import core_analysis
 
+import warnings
 import pytz, datetime
 pacific = pytz.timezone('US/Pacific')
 
@@ -53,8 +54,15 @@ class KObsRowCacher:
         else:
             cond = self.all_rows_obj_ids == obj_id
             frames = self.all_rows_frames[cond]
-            qualities = core_analysis.compute_ori_quality(
-                self.h5,frames,obj_id)
+            try:
+                qualities = core_analysis.compute_ori_quality(
+                    self.h5,frames,obj_id)
+            except Exception, err:
+                print
+                print 'len(frames)',len(frames)
+                # this is probably missing data. no time to debug now.
+                warnings.warn('ignoring pytables error %s'%err)
+                qualities = np.zeros( frames.shape )
             results = (frames,qualities)
             self.cache[obj_id]=results
         return results
