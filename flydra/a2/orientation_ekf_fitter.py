@@ -18,6 +18,7 @@ import sympy
 from sympy import Symbol, Matrix, sqrt, latex, lambdify
 import pickle
 import warnings
+from flydra.kalman.ori_smooth import ori_smooth
 
 D2R = np.pi/180.0
 R2D = 180.0/np.pi
@@ -987,7 +988,8 @@ def compute_ori_quality(kh5, orig_frames, obj_id, smooth_len=10):
             else:
                 results[origi] = n_used/n_rejected
     if smooth_len:
-        results = smooth(results,window_len=smooth_len)
+        if len(results)>smooth_len:
+            results = smooth(results,window_len=smooth_len)
     return results
 
 def plot_ori(kalman_filename=None,
@@ -996,12 +998,15 @@ def plot_ori(kalman_filename=None,
     import matplotlib.pyplot as plt
     import matplotlib.ticker as mticker
 
+    fps = None
     if h5 is not None:
         h5f = tables.openFile(h5,mode='r')
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5f)
+        fps = result_utils.get_fps( h5f )
         h5f.close()
     else:
         camn2cam_id = {}
+
     ca = core_analysis.get_global_CachingAnalyzer()
     with openFileSafe( kalman_filename,
                        mode='r') as kh5:
@@ -1068,6 +1073,17 @@ def plot_ori(kalman_filename=None,
             ax3.plot(frame,orient[:,2],'bo',mew=0,ms=2.0,label='z')
 
             qual = compute_ori_quality(kh5,rows_this_obj['frame'],obj_id)
+            if 1:
+                if fps is None:
+                    fps = 1.0/200.0
+
+                orinan = np.array(orient,copy=True)
+                orinan[ qual < 3.0 ] = np.nan
+                sori = ori_smooth(orinan,frames_per_second=fps)
+                ax3.plot(frame,sori[:,0],'r-',mew=0,ms=2.0)#,label='x')
+                ax3.plot(frame,sori[:,1],'g-',mew=0,ms=2.0)#,label='y')
+                ax3.plot(frame,sori[:,2],'b-',mew=0,ms=2.0)#,label='z')
+
             ax4.plot(frame, qual, 'b-')#, mew=0, ms=3 )
     ax1.xaxis.set_major_formatter(mticker.FormatStrFormatter("%d"))
     ax1.set_ylabel('theta (deg)')

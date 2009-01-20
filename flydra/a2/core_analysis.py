@@ -14,6 +14,7 @@ DEBUG = False
 import adskalman.adskalman as adskalman
 import flydra.kalman.dynamic_models
 import flydra.kalman.flydra_kalman_utils
+from flydra.kalman.ori_smooth import ori_smooth
 import flydra.analysis.result_utils
 import flydra.reconstruct
 import flydra.analysis.PQmath as PQmath
@@ -838,14 +839,19 @@ class PreSmoothedDataCache(object):
 
             if return_smoothed_directions:
                 save_tablename = smoothed_tablename
-                smoother = PQmath.QuatSmoother(frames_per_second=frames_per_second,
-                                               beta=1.0,
-                                               percent_error_eps_quats=1,
-                                               )
-                bad_idxs = np.nonzero(np.isnan(directions[:,0]))[0]
-                smooth_directions = smoother.smooth_directions(directions,
-                                                               display_progress=True,
-                                                               no_distance_penalty_idxs=bad_idxs)
+                if 0:
+                    smoother = PQmath.QuatSmoother(frames_per_second=frames_per_second,
+                                                   beta=1.0,
+                                                   percent_error_eps_quats=1,
+                                                   )
+                    bad_idxs = np.nonzero(np.isnan(directions[:,0]))[0]
+                    smooth_directions = smoother.smooth_directions(directions,
+                                                                   display_progress=True,
+                                                                   no_distance_penalty_idxs=bad_idxs)
+                else:
+                    smooth_directions = ori_smooth(
+                        directions, frames_per_second=frames_per_second)
+
                 rows['dir_x'] = smooth_directions[:,0]
                 rows['dir_y'] = smooth_directions[:,1]
                 rows['dir_z'] = smooth_directions[:,2]
@@ -1282,6 +1288,7 @@ class CachingAnalyzer:
             filename = data_file
             obj_ids, unique_obj_ids, is_mat_file, data_file, extra = self.initial_file_load(filename)
             self.keep_references.append( data_file ) # prevent from garbage collection with weakref
+
 
         is_mat_file = check_is_mat_file(data_file)
 

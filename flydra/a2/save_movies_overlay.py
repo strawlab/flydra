@@ -83,7 +83,7 @@ def doit(fmf_filename=None,
     if do_zoom_diff and do_zoom:
         raise ValueError('can use do_zoom or do_zoom_diff, but not both')
 
-    styles = ['debug','pretty','prettier','blank','prettier-slope']
+    styles = ['debug','pretty','prettier','blank','prettier-MLE-slope']
     if style not in styles:
         raise ValueError('style ("%s") is not one of %s'%(style,str(styles)))
 
@@ -180,6 +180,7 @@ def doit(fmf_filename=None,
                                         frames_per_second=fps,
                                         return_smoothed_directions = options.smooth_orientations,
                                         up_dir = up_dir,
+                                        min_ori_quality_required=options.ori_qual,
                                         )
             except core_analysis.NotEnoughDataToSmoothError:
                 print 'not enough data to smooth for obj_id %d, skipping...'%obj_id
@@ -193,8 +194,10 @@ def doit(fmf_filename=None,
             print 'loading frame numbers for kalman objects (observations)'
             kobs_rows = []
             for obj_id in use_obj_ids:
-                my_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file,
-                                                              )
+                my_rows = ca.load_dynamics_free_MLE_position(
+                    obj_id, data_file,
+                    min_ori_quality_required=options.ori_qual,
+                    )
                 kobs_rows.append(my_rows)
             kobs_rows = numpy.concatenate( kobs_rows )
             kobs_3d_frame = kobs_rows['frame']
@@ -898,7 +901,7 @@ def doit(fmf_filename=None,
                             draw.text_smartshift( (x+15,y+(i+1)*10), (x,y),
                                        '%s pt %d'%(obs_cam_id,pt_no), font_obs )
 
-                if style in ['debug','prettier-slope']:
+                if style in ['debug','prettier-MLE-slope']:
                     for kobs_ori_verts_images in [kobs_ori_verts_images_a,
                                                   kobs_ori_verts_images_b]:
                         for ori_verts_images in kobs_ori_verts_images:
