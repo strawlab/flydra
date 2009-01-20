@@ -31,7 +31,7 @@ def test_running_average():
         raise ValueError('failed to abort on short input')
 
 
-def ori_smooth(directions,frames_per_second=None):
+def ori_smooth(directions,frames_per_second=None,return_missing=False):
     """smooth orientations using an RTS smoother
 
     This treats orientations as XYZ positions
@@ -56,6 +56,7 @@ def ori_smooth(directions,frames_per_second=None):
     y=directions
     dirsmooth,V = adskalman.kalman_smoother(y,A,C,Q,R,init_x,init_V)
     dirsmooth = dirsmooth[:,:3] # take only position information
+    dirsmooth_missing = np.array(dirsmooth,copy=True)
 
     # remove results too distant from observations
     avlen=5
@@ -78,7 +79,11 @@ def ori_smooth(directions,frames_per_second=None):
     # normalize lengths to unit vectors
     np.sum(dirsmooth**2,axis=1)
     dirsmooth = (dirsmooth.T/np.sqrt(np.sum(dirsmooth**2,axis=1))).T
-    return dirsmooth
+
+    if return_missing:
+        return dirsmooth, dirsmooth_missing
+    else:
+        return dirsmooth
 
 def test_ori_smooth():
     directions = np.zeros([300,3])

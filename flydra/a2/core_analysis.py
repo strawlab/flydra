@@ -857,13 +857,14 @@ class PreSmoothedDataCache(object):
                     smooth_directions = smoother.smooth_directions(directions,
                                                                    display_progress=True,
                                                                    no_distance_penalty_idxs=bad_idxs)
-                else:
-                    smooth_directions = ori_smooth(
-                        directions, frames_per_second=frames_per_second)
+                else: # smooth on non-flipped data
+                    smooth_directions, smooth_directions_missing = ori_smooth(
+                        directions, frames_per_second=frames_per_second,
+                        return_missing=True)
 
-                if 1:
-                    chosen_smooth_directions = choose_orientations(
-                        rows, smooth_directions,
+                if 1: # (potentially) flip smoothed data as one chunk
+                    chosen_smooth_directions_missing = choose_orientations(
+                        rows, smooth_directions_missing,
                         frames_per_second=frames_per_second,
                         #velocity_weight=1.0,
                         #max_velocity_weight=1.0,
@@ -871,6 +872,9 @@ class PreSmoothedDataCache(object):
                         elevation_up_bias_degrees=45.0,
                         up_dir=up_dir,
                         )
+                    chosen_smooth_directions = np.array(
+                        chosen_smooth_directions_missing,copy=True)
+                    chosen_smooth_directions[np.isnan(smooth_directions)]=np.nan
 
                 rows['dir_x'] = chosen_smooth_directions[:,0]
                 rows['dir_y'] = chosen_smooth_directions[:,1]
