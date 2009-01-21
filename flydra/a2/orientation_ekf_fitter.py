@@ -947,10 +947,21 @@ def smooth(x,window_len=10,window='hanning'):
 
 
 def compute_ori_quality(kh5, orig_frames, obj_id, smooth_len=10):
+    """compute quality of orientation estimate
+
+    arguments
+    ---------
+    kh5: pytables file
+        an open pytables file
+    """
     #h5.root.kalman_observations
     ca = core_analysis.get_global_CachingAnalyzer()
     group = get_group_for_obj(obj_id,kh5)
-    table = getattr(group,'obj%d'%obj_id)
+    try:
+        table = getattr(group,'obj%d'%obj_id)
+    except:
+        sys.stderr.write('ERROR while opening %s\n'%kh5.filename)
+        raise
     table_ram = table[:]
     frames = table_ram['frame']
 
