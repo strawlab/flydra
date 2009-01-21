@@ -189,6 +189,7 @@ def plot_timeseries(subplot=None,options = None):
                                              dynamic_model_name = dynamic_model,
                                              frames_per_second=fps,
                                              up_dir=options.up_dir,
+                                             min_ori_quality_required=options.ori_qual,
                                              )
             except core_analysis.ObjectIDDataError:
                 continue
@@ -561,6 +562,9 @@ def main():
     parser.add_option("--save-fig", type='string', default=None,
                       help='path name of figure to save (exits script '
                       'immediately after save)')
+
+    parser.add_option("--ori-qual", type='float', default=None,
+                      help=('minimum orientation quality to use'))
 
     (options, args) = parser.parse_args()
 
