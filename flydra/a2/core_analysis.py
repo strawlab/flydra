@@ -527,6 +527,7 @@ def choose_orientations(rows, directions, frames_per_second=None,
 
         dist_from_zplus = np.arccos( np.dot(velocity_direction,up_dir))
         bias_radians = elevation_up_bias_degrees*D2R
+        rot1_axis[abs(dist_from_zplus)>(np.pi-1e-14)]=up_dir # pathological case
         velocity_biaser = [ cgtypes.quat().fromAngleAxis(bias_radians,ax) for ax in rot1_axis ]
         biased_velocity_direction = [ rotate_vec( velocity_biaser[i],
                                                   cgtypes.vec3(*(velocity_direction[i]))) for i in range(len(velocity))]
