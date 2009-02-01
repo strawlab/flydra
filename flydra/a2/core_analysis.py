@@ -712,7 +712,11 @@ class PreSmoothedDataCache(object):
             if os.path.exists( cache_h5file_name ):
                 # loading cache file
                 try:
-                    cache_h5file = tables.openFile(cache_h5file_name, mode='r+')
+                    if int(os.environ.get('CACHE_SAFE','0')):
+                        mode='r'
+                    else:
+                        mode='r+'
+                    cache_h5file = tables.openFile(cache_h5file_name, mode=mode)
                 except IOError:
                     warnings.warn(
                         'Broken cache file %s. Deleting'%cache_h5file_name)
@@ -737,20 +741,39 @@ class PreSmoothedDataCache(object):
                                             varname))
                                     same=False
                                     break
-                                value = p[varname]
-                                testvalue = param_dict[varname]
+                                savedval = p[varname]
+                                localval = param_dict[varname]
                                 try:
-                                    if not testvalue == value:
-                                        if int(os.environ.get('CACHE_DEBUG','0')):
-                                            sys.stderr.write(
-                                                'cached variable %s changed\n'%(
-                                                varname))
-                                        same=False
-                                        break
+                                    if not localval == savedval:
+                                        if (varname == 'return_smoothed_directions'):
+                                            if int(os.environ.get('CACHE_DEBUG','0')):
+                                                sys.stderr.write(
+                                                    'return_smoothed_directions: %s (saved: %s)\n'%(
+                                                    return_smoothed_directions,savedval))
+
+                                            if localval == False:
+                                                if int(os.environ.get('CACHE_DEBUG','0')):
+                                                    sys.stderr.write(
+                                                        'cached variable %s changed, but ignoring\n'%(
+                                                        varname))
+                                            else:
+                                                if int(os.environ.get('CACHE_DEBUG','0')):
+                                                    sys.stderr.write(
+                                                        'cached variable %s changed, but cannot ignore\n'%(
+                                                        varname))
+                                                    same=False
+                                                    break
+                                        else:
+                                            if int(os.environ.get('CACHE_DEBUG','0')):
+                                                sys.stderr.write(
+                                                    'cached variable %s changed\n'%(
+                                                    varname))
+                                                same=False
+                                                break
                                 except ValueError:
-                                    if isinstance(value,np.ndarray):
-                                        if not (value.shape==testvalue.shape and
-                                                np.allclose(value,testvalue)):
+                                    if isinstance(savedval,np.ndarray):
+                                        if not (savedval.shape==localval.shape and
+                                                np.allclose(savedval,localval)):
                                             if int(os.environ.get('CACHE_DEBUG','0')):
                                                 sys.stderr.write(
                                                     'cached variable ndarray %s changed\n'%(
@@ -762,10 +785,15 @@ class PreSmoothedDataCache(object):
                             if same:
                                 make_new_cache = False
                     if make_new_cache:
-                        warnings.warn(
-                            'Deleting stale cache file %s.'%cache_h5file_name)
-                        cache_h5file.close()
-                        os.unlink( cache_h5file_name )
+                        if int(os.environ.get('CACHE_SAFE','0')):
+                            raise RuntimeError(
+                                'cache file %s is stale, but not deleting'%(
+                                cache_h5file_name,))
+                        else:
+                            warnings.warn(
+                                'Deleting stale cache file %s.'%cache_h5file_name)
+                            cache_h5file.close()
+                            os.unlink( cache_h5file_name )
 
             if make_new_cache:
                 # creating cache file
@@ -892,7 +920,10 @@ class PreSmoothedDataCache(object):
                         )
                     chosen_smooth_directions = np.array(
                         chosen_smooth_directions_missing,copy=True)
-                    chosen_smooth_directions[np.isnan(smooth_directions)]=np.nan
+
+                    if not min_ori_quality_required==0:
+                        # don't take bad orientations
+                        chosen_smooth_directions[np.isnan(smooth_directions)]=np.nan
 
                 rows['dir_x'] = chosen_smooth_directions[:,0]
                 rows['dir_y'] = chosen_smooth_directions[:,1]
