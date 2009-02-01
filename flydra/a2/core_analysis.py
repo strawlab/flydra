@@ -720,24 +720,41 @@ class PreSmoothedDataCache(object):
                 else:
                     # check if cache is up to date
                     cache_title = cache_h5file.title
-                    if expected_title == cache_title:
+                    if not expected_title == cache_title:
+                        if int(os.environ.get('CACHE_DEBUG','0')):
+                            sys.stderr.write(
+                                'cached file title expected "%s", got "%s"\n'%(
+                                expected_title,cache_title))
+                    else:
                         if hasattr(cache_h5file.root._v_attrs,pdictname):
                             p = getattr(cache_h5file.root._v_attrs,pdictname)
                             same = True
                             for varname in param_dict:
                                 if varname not in p:
+                                    if int(os.environ.get('CACHE_DEBUG','0')):
+                                        sys.stderr.write(
+                                            'cached missing variable %s\n'%(
+                                            varname))
                                     same=False
                                     break
                                 value = p[varname]
                                 testvalue = param_dict[varname]
                                 try:
                                     if not testvalue == value:
+                                        if int(os.environ.get('CACHE_DEBUG','0')):
+                                            sys.stderr.write(
+                                                'cached variable %s changed\n'%(
+                                                varname))
                                         same=False
                                         break
                                 except ValueError:
                                     if isinstance(value,np.ndarray):
                                         if not (value.shape==testvalue.shape and
                                                 np.allclose(value,testvalue)):
+                                            if int(os.environ.get('CACHE_DEBUG','0')):
+                                                sys.stderr.write(
+                                                    'cached variable ndarray %s changed\n'%(
+                                                    varname))
                                             same=False
                                             break
                                     else:
