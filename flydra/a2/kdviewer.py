@@ -777,14 +777,14 @@ def doit(filename,
 
             if verts_directions is not None and (options.smooth_orientations or options.body_axis):
                 smoothed_ori_verts = numpy.vstack(
-                    (verts-(0.05*verts_directions),verts+(0.05*verts_directions)))
+                    (verts-(5*radius*verts_directions),verts))
                 tubes = [ [i,i+len(verts)] for i in range(len(verts)) ]
 
                 pd = tvtk.PolyData()
                 pd.points = smoothed_ori_verts
                 pd.lines = tubes
 
-                pt = tvtk.TubeFilter(radius=0.008,input=pd,
+                pt = tvtk.TubeFilter(radius=radius*0.4,input=pd,
                                      number_of_sides=10,
                                      vary_radius='vary_radius_off',
                                      )
@@ -815,12 +815,12 @@ def doit(filename,
 
         if options.show_frames != 0:
             if len(frames):
-
                 docond = ((frames-options.show_frames_start)%options.show_frames)==0
                 doframes = frames[docond]-options.show_frames_start
                 doverts = verts[docond]
 
                 for thisframe,thisvert in zip(doframes,doverts):
+                    print 'thisframe',thisframe
 
                     obj_id_ta = tvtk.TextActor(input='%d'%(
                         thisframe*options.show_frames_gain,))
