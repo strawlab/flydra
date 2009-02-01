@@ -328,7 +328,9 @@ class ProcessCamClass(object):
                  globals = None,
                  options = None,
                  initial_image_dict = None,
+                 benchmark = False,
                  ):
+        self.benchmark = benchmark
         self.options = options
         self.globals = globals
         self.main_brain_hostname = main_brain_hostname
@@ -572,7 +574,7 @@ class ProcessCamClass(object):
 #        hw_roi_frame = fi8ufactory( cur_fisize )
 #        self._hw_roi_frame = hw_roi_frame # make accessible to other code
 
-        if BENCHMARK:
+        if self.benchmark:
             coord_socket = DummySocket()
         else:
             if NETWORK_PROTOCOL == 'udp':
@@ -1711,7 +1713,7 @@ class ConsoleApp(object):
 class AppState(object):
     """This class handles all camera states, properties, etc."""
     def __init__(self,
-                 use_dummy_mainbrain = False,
+                 benchmark = False,
                  options = None,
                  ):
         global cam_iface
@@ -1869,7 +1871,7 @@ class AppState(object):
         #
         ##################################################################
 
-        if use_dummy_mainbrain:
+        if benchmark:
             self.main_brain = DummyMainBrain()
         else:
             Pyro.core.initClient(banner=0)
@@ -1889,7 +1891,7 @@ class AppState(object):
         #
         ##################################################################
 
-        if (not use_dummy_mainbrain) and ((not BENCHMARK) or (not FLYDRA_BT)):
+        if (not benchmark) or (not FLYDRA_BT):
             # run in single-thread for benchmark
             timestamp_echo_thread=threading.Thread(target=TimestampEcho,
                                                    name='TimestampEcho')
@@ -2054,6 +2056,7 @@ class AppState(object):
                         globals=globals,
                         options=options,
                         initial_image_dict = initial_image_dict,
+                        benchmark=benchmark,
                         )
                 self.all_cam_processors[cam_no]= cam_processor
 
@@ -2489,6 +2492,12 @@ def get_app_defaults():
     return defaults
 
 def main():
+    parse_args_and_run()
+
+def benchmark():
+    parse_args_and_run(benchmark=True)
+
+def parse_args_and_run(benchmark=False):
     usage_lines = ['%prog [options]',
                    '',
                    '  available wrappers and backends:']
@@ -2591,13 +2600,8 @@ def main():
         parser.print_help()
         return
 
-    if BENCHMARK:
-        use_dummy_mainbrain = True
-    else:
-        use_dummy_mainbrain = False
-
     app_state=AppState(options = options,
-                       use_dummy_mainbrain = use_dummy_mainbrain,
+                       benchmark=benchmark,
                        )
 
     if options.wx or options.wx_full:

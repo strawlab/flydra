@@ -38,7 +38,7 @@ setup(name='flydra',
 # running experiments
     'flydra_camera_node = flydra.camnode:main',
 # benchmarking/testing
-    'flydra_bench = flydra.flydra_bench:main',
+    'flydra_bench = flydra.camnode:benchmark',
     'flydra_LED_test_latency = flydra.LEDdriver.LED_test_latency:main',
     'flydra_simulator = flydra.flydra_simulator:main',
 
