@@ -866,7 +866,7 @@ def doit(fmf_filename=None,
 
                 for (xy,XYZ,obj_id,Pmean_meters) in kalman_vert_images:
                     if style in ['debug','pretty','prettier']:
-                        radius=10
+                        radius=20
                         x,y= xy
                         X,Y,Z=XYZ
                         draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
