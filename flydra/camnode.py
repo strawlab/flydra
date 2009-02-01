@@ -1584,6 +1584,38 @@ class FakeCameraFromNetwork(FakeCamera):
         self._ensure_remote()
         return self.remote.get_last_framenumber(self.id) # this will block...
 
+class FakeCameraFromRNG(FakeCamera):
+    def __init__(self,id,frame_size):
+        self.id = id
+        self.frame_size = frame_size
+        self.remote = None
+        self.last_timestamp = 0.0
+        self.last_count = -1
+
+    def get_frame_size(self):
+        return self.frame_size
+
+    def grab_next_frame_into_buf_blocking(self,buf, quit_event):
+        # XXX TODO: implement quit_event checking
+
+        w,h = self.frame_size
+        new_raw = np.asarray( buf )
+        assert new_raw.shape == (h,w)
+        self.last_timestamp = time.time()
+        self.last_count += 1
+        for pt_num in range( np.random.randint(5) ):
+            x,y = np.random.uniform(0.0,1.0,size=(2,))
+            xi = int(round(x*w))
+            yi = int(round(y*h))
+            new_raw[yi,xi] = 10
+        return new_raw
+
+    def get_last_timestamp(self):
+        return self.last_timestamp
+
+    def get_last_framenumber(self):
+        return self.last_count
+
 class FakeCameraFromFMF(FakeCamera):
     def __init__(self,filename):
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
@@ -1687,6 +1719,19 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
         initial_image_dict = {'mean':mean,
                               'sumsqf':sumsqf,
                               'raw':raw}
+    elif fname == '<rng>':
+        width, height = 640, 480
+        cam = FakeCameraFromRNG('fakecam1',(width,height))
+        ImageSourceModel = ImageSourceFakeCamera
+        w,h = cam.get_frame_size()
+
+        mean = np.ones( (h,w), dtype=np.uint8 )
+        sumsqf = np.ones( (h,w), dtype=np.uint8 )
+        raw = np.ones( (h,w), dtype=np.uint8 )
+
+        initial_image_dict = {'mean':mean,
+                              'sumsqf':sumsqf,
+                              'raw':raw}
     else:
         raise ValueError('could not create emulation image source')
     return cam, ImageSourceModel, initial_image_dict
@@ -1739,6 +1784,8 @@ class AppState(object):
         elif options.simulate_point_extraction is not None:
             image_sources = options.simulate_point_extraction.split( os.pathsep )
             num_cams = len( image_sources )
+        elif benchmark:
+            num_cams = 1
         else:
             ##################################################################
             #
@@ -1829,6 +1876,10 @@ class AppState(object):
                 # call factory function
                 (cam, ImageSourceModel,
                  initial_image_dict)  = create_cam_for_emulation_image_source( image_sources[cam_no] )
+            elif benchmark: # emulate full images with random number generator
+                # call factory function
+                (cam, ImageSourceModel, initial_image_dict) = \
+                      create_cam_for_emulation_image_source( '<rng>' )
             else: # emulate full images
                 # call factory function
                 (cam, ImageSourceModel,
