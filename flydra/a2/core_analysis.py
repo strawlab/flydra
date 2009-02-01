@@ -766,8 +766,8 @@ class PreSmoothedDataCache(object):
                                         else:
                                             if int(os.environ.get('CACHE_DEBUG','0')):
                                                 sys.stderr.write(
-                                                    'cached variable %s changed\n'%(
-                                                    varname))
+                                                    'cached variable %s changed (current value: %s, cached value: %s)\n'%(
+                                                    varname,localval,savedval))
                                                 same=False
                                                 break
                                 except ValueError:
