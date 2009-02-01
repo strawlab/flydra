@@ -1465,6 +1465,9 @@ class ImageSourceFakeCamera(ImageSource):
         super( ImageSourceFakeCamera, self).__init__(*args,**kw)
 
     def _block_until_ready(self):
+        if isinstance(self._fake_cam,FakeCameraFromRNG):
+            return
+
         while 1:
             if self.quit_event.isSet():
                 return
@@ -1478,6 +1481,11 @@ class ImageSourceFakeCamera(ImageSource):
                 return
 
     def spawn_controller(self):
+        if isinstance(self._fake_cam,FakeCameraFromRNG):
+            # no control necessary for random number generator
+            controller = ImageSourceBaseController()
+            return controller
+
         class ImageSourceFakeCameraController(ImageSourceBaseController):
             def __init__(self, do_step=None, fake_cam=None, quit_event=None):
                 self._do_step = do_step
@@ -1597,7 +1605,6 @@ class FakeCameraFromRNG(FakeCamera):
 
     def grab_next_frame_into_buf_blocking(self,buf, quit_event):
         # XXX TODO: implement quit_event checking
-
         w,h = self.frame_size
         new_raw = np.asarray( buf )
         assert new_raw.shape == (h,w)
@@ -1605,8 +1612,8 @@ class FakeCameraFromRNG(FakeCamera):
         self.last_count += 1
         for pt_num in range( np.random.randint(5) ):
             x,y = np.random.uniform(0.0,1.0,size=(2,))
-            xi = int(round(x*w))
-            yi = int(round(y*h))
+            xi = int(round(x*(w-1)))
+            yi = int(round(y*(h-1)))
             new_raw[yi,xi] = 10
         return new_raw
 
