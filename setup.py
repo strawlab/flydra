@@ -21,6 +21,9 @@ ext_modules.append(Extension(name='flydra.mahalanobis',
 ext_modules.append(Extension(name='flydra.fastgeom',
                              sources=['src/fastgeom.pyx']))
 
+ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
+                             sources=['flydra/a2/fastfinder_help.c'])) # auto-generate with cython
+
 setup(name='flydra',
       version=version,
       author='Andrew Straw',
