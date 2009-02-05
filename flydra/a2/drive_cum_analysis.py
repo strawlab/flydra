@@ -1087,8 +1087,7 @@ def do_saccade_clusters( orig_subplot, treatment, condition_name):
 
         #ax.plot( A[:,0], A[:,1], '.' )
         ax.hexbin( np.clip(A[:,0],0,1), A[:,1], gridsize=(30,20),
-                   xmin = 0, xmax = 1,
-                   ymin = -1, ymax = 1,
+                   extent = (0,1,-1,1),
                    )
         ax.set_xlabel( A_names[0])
         ax.set_ylabel( A_names[1])
