@@ -1271,6 +1271,8 @@ class CachingAnalyzer:
 
     def load_dynamics_free_MLE_position(self,obj_id,data_file,
                                         min_ori_quality_required=None,
+                                        flystate='both', # 'both', 'walking', or 'flying'
+                                        walking_start_stops=None, # list of (start,stop)
                                         with_directions=False):
         """Load maximum likelihood estimate of object position from data_file.
 
@@ -1313,6 +1315,8 @@ class CachingAnalyzer:
             rows['x']=output[0,:]
             rows['y']=output[1,:]
             rows['z']=output[2,:]
+
+        rows = self._filter_rows_on_flystate(rows,flystate,walking_start_stops)
 
         if with_directions:
             # Fixme: This method should return directions=None if
@@ -1560,6 +1564,10 @@ class CachingAnalyzer:
         if walking_start_stops is None:
             walking_start_stops = []
 
+        rows = self._filter_rows_on_flystate(rows,flystate,walking_start_stops)
+        return rows
+
+    def _filter_rows_on_flystate(self,rows,flystate,walking_start_stops):
         ############################
         # filter based on flystate
         ############################
