@@ -174,6 +174,10 @@ if define_classes:
         def get_overriden(self,stim_xml):
             return OverriddenFlyId(self._kalman_filename,stim_xml)
         def get_list_of_kalman_rows(self,flystate='flying'):
+            return get_list_of_kalman_rows_by_source(source='kalman',
+                                                     flystate=flystate)
+        def get_list_of_kalman_rows_by_source(self,source=None,
+                                              flystate='flying'):
             """return a list, with one entry per obj_id, of arrays of data"""
             ca = core_analysis.get_global_CachingAnalyzer()
             obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(self._kalman_filename)
@@ -195,20 +199,26 @@ if define_classes:
             result = []
             dropped_obj_ids=[]
             for obj_id in use_obj_ids:
-                try:
-                    kalman_rows = ca.load_data( obj_id, data_file,
-                                                dynamic_model_name = dynamic_model,
-                                                frames_per_second=self._fps,
-                                                flystate='flying',
-                                                walking_start_stops=walking_start_stops,
-                                                )
-                except core_analysis.NotEnoughDataToSmoothError:
-                    dropped_obj_ids.append(obj_id)
-                    continue
-                except:
-                    print >> sys.stderr, "error (below) while processing %s %d"%(data_file.filename, obj_id)
-                    raise
-                else:
+                if source=='kalman':
+                    try:
+                        kalman_rows = ca.load_data( obj_id, data_file,
+                                                    dynamic_model_name = dynamic_model,
+                                                    frames_per_second=self._fps,
+                                                    flystate='flying',
+                                                    walking_start_stops=walking_start_stops,
+                                                    )
+                    except core_analysis.NotEnoughDataToSmoothError:
+                        dropped_obj_ids.append(obj_id)
+                        continue
+                    except:
+                        print >> sys.stderr, "error (below) while processing %s %d"%(data_file.filename, obj_id)
+                        raise
+                elif source=='MLE_position':
+                    kalman_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file,
+                                                                      flystate='flying',
+                                                                      walking_start_stops=walking_start_stops,
+                                                                      )
+                if 1:
                     if len(kalman_rows) < 3:
                         dropped_obj_ids.append(obj_id)
                         continue

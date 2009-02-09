@@ -3,6 +3,10 @@ import drive_cum_analysis
 import numpy as np
 import scipy.io
 
+
+source='MLE_position'
+#source='kalman'
+
 if 1:
 
     bad_col_names = ['xvel', 'yvel', 'zvel', 'P00', 'P01', 'P02',
@@ -15,8 +19,10 @@ if 1:
     csv = []
     for flyid_enum,flyid in enumerate(flyids):
         flyid_matlab = flyid_enum+1
-        csv.append( (str(flyid_matlab),os.path.splitext(flyid._kalman_filename)[0]) )
-        list_of_rows = flyid.get_list_of_kalman_rows()
+        csv.append( (str(flyid_matlab),
+                     os.path.splitext(flyid._kalman_filename)[0]) )
+        list_of_rows=flyid.get_list_of_kalman_rows_by_source(source=source,
+                                                             flystate='flying')
         for kalman_rows in list_of_rows:
             flyid_arr = np.empty( (len(kalman_rows),), dtype=np.float )
             flyid_arr.fill(flyid_matlab)
@@ -36,8 +42,8 @@ if 1:
                [all_arrs[n] for n in all_arrs.dtype.names]))
 
     cond_name = 'nopost'
-    scipy.io.savemat('%s.mat'%cond_name,s)
-    fd = open('%s.csv'%cond_name,mode='wb')
+    scipy.io.savemat('%s-%s.mat'%(cond_name,source),s)
+    fd = open('%s-%s.csv'%(cond_name,source),mode='wb')
     for row in csv:
         fd.write( ','.join(row) + '\n' )
     fd.close()
