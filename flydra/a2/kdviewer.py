@@ -815,12 +815,12 @@ def doit(filename,
 
         if options.show_frames != 0:
             if len(frames):
+
                 docond = ((frames-options.show_frames_start)%options.show_frames)==0
                 doframes = frames[docond]-options.show_frames_start
                 doverts = verts[docond]
 
                 for thisframe,thisvert in zip(doframes,doverts):
-                    print 'thisframe',thisframe
 
                     obj_id_ta = tvtk.TextActor(input='%d'%(
                         thisframe*options.show_frames_gain,))
