@@ -23,7 +23,25 @@ if 1:
                      os.path.splitext(flyid._kalman_filename)[0]) )
         list_of_rows=flyid.get_list_of_kalman_rows_by_source(source=source,
                                                              flystate='flying')
+        if source=='MLE_position':
+            # filter bad obj_ids
+            good_obj_ids = []
+            list_of_good_obj_id_rows=flyid.get_list_of_kalman_rows_by_source(
+                source='kalman',flystate='flying')
+            for good_kalman_rows in list_of_good_obj_id_rows:
+                good_obj_id = np.unique(good_kalman_rows['obj_id'])
+                assert len(good_obj_id)==1
+                good_obj_ids.append( good_obj_id[0] )
+
         for kalman_rows in list_of_rows:
+            if source=='MLE_position':
+                # filter bad obj_ids
+                obj_id = np.unique(kalman_rows['obj_id'])
+                assert len(obj_id)==1
+                obj_id = obj_id[0]
+                if obj_id not in good_obj_ids:
+                    continue
+
             flyid_arr = np.empty( (len(kalman_rows),), dtype=np.float )
             flyid_arr.fill(flyid_matlab)
             orig_cols = kalman_rows.dtype.names
