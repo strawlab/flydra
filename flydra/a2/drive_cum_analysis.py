@@ -177,16 +177,18 @@ if define_classes:
             return get_list_of_kalman_rows_by_source(source='kalman',
                                                      flystate=flystate)
         def get_list_of_kalman_rows_by_source(self,source=None,
-                                              flystate='flying'):
+                                              flystate='flying',
+                                              dynamic_model_name=None,
+                                              ):
             """return a list, with one entry per obj_id, of arrays of data"""
             ca = core_analysis.get_global_CachingAnalyzer()
             obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(self._kalman_filename)
 
-            if 1:
-                dynamic_model = extra['dynamic_model_name']
-                if dynamic_model.startswith('EKF '):
-                    dynamic_model = dynamic_model[4:]
-            self._dynamic_model = dynamic_model
+            if dynamic_model_name is None:
+                dynamic_model_name = extra['dynamic_model_name']
+                if dynamic_model_name.startswith('EKF '):
+                    dynamic_model_name = dynamic_model_name[4:]
+            self._dynamic_model_name = dynamic_model_name
 
             file_timestamp = data_file.filename[4:19]
             include_obj_ids, exclude_obj_ids = self._fanout.get_obj_ids_for_timestamp( timestamp_string=file_timestamp )
@@ -201,12 +203,13 @@ if define_classes:
             for obj_id in use_obj_ids:
                 if source=='kalman':
                     try:
-                        kalman_rows = ca.load_data( obj_id, data_file,
-                                                    dynamic_model_name = dynamic_model,
-                                                    frames_per_second=self._fps,
-                                                    flystate='flying',
-                                                    walking_start_stops=walking_start_stops,
-                                                    )
+                        kalman_rows = ca.load_data(
+                            obj_id, data_file,
+                            dynamic_model_name = dynamic_model_name,
+                            frames_per_second=self._fps,
+                            flystate='flying',
+                            walking_start_stops=walking_start_stops,
+                            )
                     except core_analysis.NotEnoughDataToSmoothError:
                         dropped_obj_ids.append(obj_id)
                         continue
