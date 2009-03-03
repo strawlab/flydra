@@ -32,7 +32,7 @@ following files:
 
  * calibration_units.txt - a string describing the units of the calibration
  * camera_order.txt - a list of the flydra cam_ids
- * !IdMat.dat - booleans indicating the valid data
+ * IdMat.dat - booleans indicating the valid data
  * original_cam_centers.dat - TODO
  * points.dat - the 2D image coordinates of the calibration object
  * Res.dat - the resolution of the cameras, in pixels
