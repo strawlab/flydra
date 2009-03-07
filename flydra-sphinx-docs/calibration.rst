@@ -42,6 +42,11 @@ even if available. If a calibration has already been used to generate
 Kalman state estimates, the results of this data association will be
 ignored.)
 
+Typically, about 500 points distributed throughout the tracking volume
+will be needed for the MATLAB MultiCamSelfCal toolbox to complete
+successfully. Usually, however, this will mean that you save many more
+points and then sub-sample them later. See the
+``config.cal.USE_NTH_FRAME`` parameter below.
 
 Saving the calibration data in flydra_mainbrain
 ...............................................
@@ -65,9 +70,9 @@ calibration, run::
     --disable-kalman-objs DATAFILE2D.h5
 
 You should now have a new directory named
-``DATAFILE2D.h5.recal``. This contains the calibration in a format
-that the MATLAB MultiCamSelfCal can understand, the calibration
-directory.
+``DATAFILE2D.h5.recal``. This contains the raw calibration data
+(synchronized 2D points for each camera) in a format that the MATLAB
+MultiCamSelfCal can understand, the calibration directory.
 
 .. _3d-recal:
 
