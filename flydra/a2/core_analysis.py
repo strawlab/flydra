@@ -1363,6 +1363,11 @@ class CachingAnalyzer:
         min_ori_quality_required : None or float
           None for no requirement, float for required quality
 
+        Returns
+        -------
+        rows : recarray
+          A recarray containing rows of data.
+
         """
         # for backwards compatibility, allow user to pass in string identifying filename
         if isinstance(data_file,str):
