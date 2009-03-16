@@ -12,10 +12,11 @@ verified. (See the source of the
 example.) Furthermore, additional experimental components can be
 triggered by the device by use of the External Device Trigger.
 
-This device is an AT90USBKEY__ placed in a custom enclosure with some
-minimal additional circuitry and custom firmware.
+Fundamentally, the device is a `Motmot CamTrig device`__ placed in a
+custom enclosure with some minimal additional circuitry and custom
+firmware.
 
-__ http://www.atmel.com/dyn/products/tools_card.asp?tool_id=3879
+__ http://code.astraw.com/projects/motmot/camtrig/OVERVIEW.html
 
 The primary connections are A) the USB interface, which connects to
 the Main Brain computer, and B) the Camera Sync Triggers, which
