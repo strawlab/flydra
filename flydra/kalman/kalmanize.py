@@ -551,7 +551,7 @@ def kalmanize(src_filename,
         max_all_check_times = -np.inf
 
         for row_start, row_stop in utils.iter_non_overlapping_chunk_start_stops(
-            frames_array, min_chunk_size=2000000, size_increment=1000, status_fd=sys.stdout):
+            frames_array, min_chunk_size=500000, size_increment=1000, status_fd=sys.stdout):
 
             print 'Doing initial scan of approx frame range %d-%d.'%(
                 frames_array[row_start],frames_array[row_stop-1])
