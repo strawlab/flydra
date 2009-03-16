@@ -13,6 +13,9 @@ ALLSPHINXOPTS   = -d .build/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 
 .PHONY: help clean html web pickle htmlhelp latex changes linkcheck
 
+dataflow.png: dataflow.dot
+	cat $< | dot -Tpng -o$@
+
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
 	@echo "  html      to make standalone HTML files"
