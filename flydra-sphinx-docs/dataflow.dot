@@ -1,17 +1,17 @@
 digraph G {
-  ImageBasedData2DH5_Builder -> UFMF;
-  ImageBasedData2DH5_Builder -> Flydra2DDistortedDataNodeMixin;
-  ImageBasedData2DH5_Builder -> Flydra3DKalmanizedDataNodeMixin;
+  UFMF -> ImageBasedData2DH5_Builder;
+  Flydra2DDistortedDataNodeMixin -> ImageBasedData2DH5_Builder;
+  Flydra3DKalmanizedDataNodeMixin -> ImageBasedData2DH5_Builder;
   ImageBasedData2DH5_Builder [shape=box];
-  Flydra2DDistortedDataH5File -> ImageBasedData2DH5_Builder;
+  ImageBasedData2DH5_Builder -> Flydra2DDistortedDataH5File;
 
-  KalmanizedH5_Builder -> CalibrationNodeMixin;
-  KalmanizedH5_Builder -> Flydra2DDistortedDataNodeMixin;
+  CalibrationNodeMixin -> KalmanizedH5_Builder;
+  Flydra2DDistortedDataNodeMixin -> KalmanizedH5_Builder;
   KalmanizedH5_Builder [shape=box];
-  Flydra3DKalmanizedDataH5File -> KalmanizedH5_Builder;
+  KalmanizedH5_Builder -> Flydra3DKalmanizedDataH5File;
 
-  KalmanizedFixedOriH5_Builder -> Flydra3DKalmanizedDataNodeMixin;
-  KalmanizedFixedOriH5_Builder -> Flydra2DDistortedDataNodeMixin;
+  Flydra3DKalmanizedDataNodeMixin -> KalmanizedFixedOriH5_Builder;
+  Flydra2DDistortedDataNodeMixin -> KalmanizedFixedOriH5_Builder;
   KalmanizedFixedOriH5_Builder [shape=box];
-  Flydra3DKalmanizedDataFitOriH5File -> KalmanizedFixedOriH5_Builder;
+  KalmanizedFixedOriH5_Builder -> Flydra3DKalmanizedDataFitOriH5File;
   }
