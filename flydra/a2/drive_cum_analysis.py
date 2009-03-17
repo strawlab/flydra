@@ -174,8 +174,8 @@ if define_classes:
         def get_overriden(self,stim_xml):
             return OverriddenFlyId(self._kalman_filename,stim_xml)
         def get_list_of_kalman_rows(self,flystate='flying'):
-            return get_list_of_kalman_rows_by_source(source='kalman',
-                                                     flystate=flystate)
+            return self.get_list_of_kalman_rows_by_source(source='kalman',
+                                                          flystate=flystate)
         def get_list_of_kalman_rows_by_source(self,source=None,
                                               flystate='flying',
                                               dynamic_model_name=None,
