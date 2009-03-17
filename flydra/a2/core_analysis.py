@@ -806,7 +806,7 @@ class PreSmoothedDataCache(object):
                             raise RuntimeError(
                                 'cache file %s is stale, but not deleting'%(
                                 cache_h5file_name,))
-                        else:#if cache_h5file is not None:
+                        elif cache_h5file is not None:
                             warnings.warn(
                                 'Deleting stale cache file %s.'%cache_h5file_name)
                             cache_h5file.close()
