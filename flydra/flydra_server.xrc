@@ -453,7 +453,7 @@
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="MANUAL_RECORD_RAW_TOGGLE">
-              <label>Toggle recording large .fmfs</label>
+              <label>Toggle recording .fmf files</label>
             </object>
             <option>1</option>
             <flag>wxLEFT|wxRIGHT</flag>
@@ -461,7 +461,7 @@
           </object>
           <object class="sizeritem">
             <object class="wxButton" name="MANUAL_RECORD_SMALL_TOGGLE">
-              <label>Toggle recording small .fmfs</label>
+              <label>Toggle recording .ufmf files</label>
             </object>
             <option>1</option>
             <flag>wxLEFT|wxRIGHT</flag>
