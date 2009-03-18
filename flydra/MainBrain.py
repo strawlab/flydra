@@ -1050,7 +1050,7 @@ class CoordinateProcessor(threading.Thread):
                 for corrected_framenumber in new_data_framenumbers:
                     oldest_camera_timestamp, n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
                     if oldest_camera_timestamp is None:
-                        print 'no latency estimate available -- skipping 3D reconstruction'
+                        ## print 'no latency estimate available -- skipping 3D reconstruction'
                         continue
                     if (time.time() - oldest_camera_timestamp) > max_reconstruction_latency_sec:
                         print 'maximum reconstruction latency exceeded -- skipping 3D reconstruction'
@@ -2077,17 +2077,21 @@ class MainBrain(object):
     def load_calibration(self,dirname):
         if self.is_saving_data():
             raise RuntimeError("Cannot (re)load calibration while saving data")
-        cam_ids = self.remote_api.external_get_cam_ids()
+        connected_cam_ids = self.remote_api.external_get_cam_ids()
         self.reconstructor = flydra.reconstruct.Reconstructor(dirname)
+        calib_cam_ids = self.reconstructor.get_cam_ids()
+
+        calib_cam_ids = calib_cam_ids
 
         self.coord_processor.set_reconstructor(self.reconstructor)
 
-        for cam_id in cam_ids:
+        for cam_id in calib_cam_ids:
             pmat = self.reconstructor.get_pmat(cam_id)
             intlin = self.reconstructor.get_intrinsic_linear(cam_id)
             intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
             scale_factor = self.reconstructor.get_scale_factor()
-            self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin, scale_factor )
+            if cam_id in connected_cam_ids:
+                self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin, scale_factor )
 
     def clear_calibration(self):
         if self.is_saving_data():
