@@ -9,7 +9,7 @@ tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import pytz # from http://pytz.sourceforge.net/
 import datetime
 import sets
-import sys
+import sys, os
 from optparse import OptionParser
 import matplotlib
 import pylab
@@ -143,26 +143,38 @@ class ShowIt(object):
             show_nth_frame = None
 
         results = result_utils.get_results(filename,mode='r')
+        opened_kresults = False
+        kresults = None
+        if kalman_filename is not None:
+            if os.path.abspath(kalman_filename) == os.path.abspath(filename):
+                kresults = results
+            else:
+                kresults = PT.openFile(kalman_filename,mode='r')
+                opened_kresults = True
+
         if hasattr(results.root,'images'):
             img_table = results.root.images
         else:
             img_table = None
 
-        if 0:
-            if hasattr(results.root,'calibration'):
-                self.reconstructor = flydra.reconstruct.Reconstructor(results)
+        reconstructor_source = None
+        if reconstructor_filename is None:
+            if kresults is not None:
+                reconstructor_source = kresults
+            elif hasattr(results.root,'calibration'):
+                reconstructor_source = results
+            else:
+                raise ValueError('no source given for reconstructor')
         else:
-            reconstructor_source = None
-            if reconstructor_filename is None:
-                if kalman_filename is not None:
-                    reconstructor_source = kalman_filename
-                elif hasattr(results.root,'calibration'):
-                    reconstructor_source = results
+            if os.path.abspath(reconstructor_filename) == os.path.abspath(filename):
+                reconstructor_source = results
+            elif os.path.abspath(reconstructor_filename) == os.path.abspath(kalman_filename):
+                reconstructor_source = kresults
             else:
                 reconstructor_source = reconstructor_filename
 
-            if reconstructor_source is not None:
-                self.reconstructor = flydra.reconstruct.Reconstructor(reconstructor_source)
+        if reconstructor_source is not None:
+            self.reconstructor = flydra.reconstruct.Reconstructor(reconstructor_source)
 
         if options.stim_xml:
             file_timestamp = results.filename[4:19]
@@ -350,12 +362,10 @@ class ShowIt(object):
                 ax.set_yticks([])
 
         if kalman_filename is None:
-            results.close()
             return
 
         # Do same as above for Kalman-filtered data
 
-        kresults = PT.openFile(kalman_filename,mode='r')
         kobs = kresults.root.kalman_observations
         kframes = kobs.read(field='frame')
         if frame_start is not None:
@@ -459,7 +469,8 @@ class ShowIt(object):
         print 'note: could/should also plot re-projection of Kalman filtered/smoothed data'
 
         results.close()
-        kresults.close()
+        if opened_kresults:
+            kresults.close()
 
 def main():
     usage = '%prog FILE [options]'
