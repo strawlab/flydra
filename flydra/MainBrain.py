@@ -1847,7 +1847,7 @@ class MainBrain(object):
         self.send_set_camera_property( cam_id, 'expected_trigger_framerate', self.trigger_device.frames_per_second_actual )
 
     def SendCalibration(self,cam_id,scalar_control_info,fqdn_and_port):
-        if self.reconstructor is not None:
+        if self.reconstructor is not None and cam_id in self.reconstructor.get_cam_ids():
             pmat = self.reconstructor.get_pmat(cam_id)
             intlin = self.reconstructor.get_intrinsic_linear(cam_id)
             intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
