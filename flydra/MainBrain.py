@@ -895,8 +895,7 @@ class CoordinateProcessor(threading.Thread):
                                     with self.request_data_lock:
                                         tmp_queue = self.request_data.setdefault(absolute_cam_no,Queue.Queue())
 
-                                    tmp_framenumber_offset = self.timestamp_modeler.get_frame_offset(cam_idx)
-                                    #print 'putting', (cam_id,  tmp_framenumber_offset, missing_frame_numbers)
+                                    tmp_framenumber_offset = self.main_brain.timestamp_modeler.get_frame_offset(cam_id)
                                     tmp_queue.put( (cam_id,  tmp_framenumber_offset, missing_frame_numbers) )
                                     del tmp_framenumber_offset
                                     del tmp_queue # drop reference to queue
