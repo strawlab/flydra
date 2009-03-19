@@ -268,10 +268,10 @@ class ShowIt(object):
                 ax.set_autoscale_on(False)
 
             if self.reconstructor is not None:
-                res = self.reconstructor.get_resolution(cam_id)
-                ax.set_xlim([0,res[0]])
-                #ax.set_ylim([0,res[1]])
-                ax.set_ylim([res[1],0])
+                if cam_id in self.reconstructor.get_cam_ids():
+                    res = self.reconstructor.get_resolution(cam_id)
+                    ax.set_xlim([0,res[0]])
+                    ax.set_ylim([res[1],0])
 
             if options.stim_xml is not None:
                 stim_xml.plot_stim_over_distorted_image( ax, cam_id )

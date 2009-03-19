@@ -423,6 +423,9 @@ def doit(
                     kwprops = dict(lw=1)
 
                 for cam_id in cam_ids:
+                    if cam_id not in R.get_cam_ids():
+                        print 'no calibration for %s: not showing 3D projections'%(cam_id,)
+                        continue
                     ax = ax_by_cam[cam_id]
                     x2d = R.find2d(cam_id,X,distorted=True)
                     ## print '%d %d %s (%f,%f)'%(
