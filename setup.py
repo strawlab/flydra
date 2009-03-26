@@ -42,8 +42,9 @@ setup(name='flydra',
     'flydra_LED_test_latency = flydra.LEDdriver.LED_test_latency:main',
     'flydra_simulator = flydra.flydra_simulator:main',
 
-# analysis - file diagnosis and auto-discovery
+# analysis - ufmf care and feeding
     'flydra_analysis_auto_discover_ufmfs = flydra.a2.auto_discover_ufmfs:main',
+    'flydra_analysis_montage_ufmfs = flydra.a2.montage_ufmfs:main',
 
 # analysis - .h5 file care and feeding
     'flydra_analysis_filter_kalman_data = flydra.analysis.flydra_analysis_filter_kalman_data:main',
