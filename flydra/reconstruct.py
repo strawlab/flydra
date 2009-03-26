@@ -3,7 +3,6 @@ opj=os.path.join
 import numpy as np
 import numpy as nx
 import numpy
-import sets
 import flydra.reconstruct_utils as reconstruct_utils # in pyrex/C for speed
 import time
 from flydra.common_variables import MINIMUM_ECCENTRICITY as DEFAULT_MINIMUM_ECCENTRICITY
@@ -998,7 +997,7 @@ class Reconstructor:
                     K[0,0], K[1,1], K[0,2], K[1,2],
                     nlparams[0], nlparams[1], nlparams[2], nlparams[3])
 
-            unique_scale_factors = list(sets.Set(scale_factors))
+            unique_scale_factors = list(set(scale_factors))
             if len(unique_scale_factors)==0:
                 print 'Assuming scale_factor units are millimeters in pytables',__file__
                 self.scale_factor = self._known_units2scale_factor['millimeters']
@@ -1019,7 +1018,7 @@ class Reconstructor:
                 self._helper[cam_id] = scci.helper
                 if scci.scale_factor is not None:
                     scale_factors.append( scci.scale_factor )
-            unique_scale_factors = list(sets.Set(scale_factors))
+            unique_scale_factors = list(set(scale_factors))
             if len(unique_scale_factors)==0:
                 print 'Assuming scale_factor units are millimeters in SingleCameraCalibration instances (%s)'%(
                     __file__,)
