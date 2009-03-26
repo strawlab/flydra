@@ -33,7 +33,7 @@ class XformFlipY(Xform):
     def __init__(self,ymax=None):
         assert ymax is not None
         self.ymax = ymax
-        super(XformFlipY,self).__init__(self)
+        super(XformFlipY,self).__init__()
 
     def _transform_image_dowork(self,arr):
         h = arr.shape[0]
