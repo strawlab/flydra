@@ -18,6 +18,7 @@ def find_ufmfs(filename,ufmf_dir=None,careful=False):
 
     if ufmf_dir is None:
         ufmf_dir = os.path.split( os.path.abspath( filename ))[0]
+    print 'searching for .ufmfs in',ufmf_dir
     all_ufmfs = glob.glob(os.path.join(ufmf_dir,'*.ufmf'))
     all_ufmfs.sort()
 
@@ -64,6 +65,9 @@ def find_ufmfs(filename,ufmf_dir=None,careful=False):
 
             approx_starts.append( ufmf_approx_start )
             this_cam_id_fnames.append( ufmf_filename )
+
+        if len(this_cam_id_fnames)==0:
+            continue
 
         approx_stops = approx_starts[1:]
         approx_stops.append(np.inf)
