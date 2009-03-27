@@ -1,5 +1,6 @@
+from __future__ import with_statement
 import motmot.ufmf.ufmf as ufmf_mod
-import sys, os, tempfile, re, contextlib
+import sys, os, tempfile, re, contextlib, warnings
 from optparse import OptionParser
 import flydra.a2.auto_discover_ufmfs as auto_discover_ufmfs
 import numpy as np
@@ -54,7 +55,8 @@ def make_montage( h5_filename,
     for ufmf_fname in ufmf_fnames:
         cam_id = get_cam_id_from_ufmf_fname(ufmf_fname)
         ufmf = ufmf_mod.FlyMovieEmulator(ufmf_fname,
-                                         white_background=white_background)
+                                         white_background=white_background,
+                                         )
         tss = ufmf.get_all_timestamps()
         ufmfs[ufmf_fname] = (ufmf, cam_id, tss)
         min_ts = np.min(tss)
@@ -101,6 +103,7 @@ def make_montage( h5_filename,
             # trim data under consideration to just this frame
             this_camns = h5_camns[idxs]
             this_tss = h5_timestamps[idxs]
+
             this_frames = h5_frames[idxs]
 
             saved_fnames = []
@@ -116,6 +119,10 @@ def make_montage( h5_filename,
                     assert len(this_camn_ts)==1
                     this_camn_ts = this_camn_ts[0]
                     ufmf_frame_idxs = np.nonzero(tss == this_camn_ts)[0]
+                    if len(ufmf_frame_idxs)==0:
+                        warnings.warn('low-precision timestamp comparison in use due to outdated .ufmf file timestamp saving')
+                        # 2.5 msec precision required
+                        ufmf_frame_idxs = np.nonzero(abs( tss - this_camn_ts ) < 0.0025)[0]
                     assert len(ufmf_frame_idxs)==1
                     ufmf_frame_no = ufmf_frame_idxs[0]
                     image, image_ts = ufmf.get_frame(ufmf_frame_no)
