@@ -1081,7 +1081,7 @@ class SaveCamData(object):
                     # Always keep the current bg and std images so
                     # that we can save them when starting a new .fmf
                     # movie save sequence.
-                    last_bgcmp_image_timestamp = chainbuf.timestamp
+                    last_bgcmp_image_timestamp = chainbuf.cam_received_time
                     # Keeping references to these images should be OK,
                     # not need to copy - the Process thread already
                     # made a copy of the realtime analyzer's internal
@@ -1091,13 +1091,13 @@ class SaveCamData(object):
 
                 if state == 'saving':
                     raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
-                                 chainbuf.timestamp) )
+                                 chainbuf.cam_received_time) )
                     if chainbuf.updated_bg_image is not None:
                         meancmp.append( (chainbuf.updated_bg_image,
                                          chainbuf.updated_cmp_image,
                                          chainbuf.updated_running_mean_image,
                                          chainbuf.updated_running_sumsqf_image,
-                                         chainbuf.timestamp)) # these were copied in process thread
+                                         chainbuf.cam_received_time)) # these were copied in process thread
 
             # 3: grab any more that are here
             try:
@@ -1107,13 +1107,13 @@ class SaveCamData(object):
 
                     if state == 'saving':
                         raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
-                                     chainbuf.timestamp) )
+                                     chainbuf.cam_received_time) )
                         if chainbuf.updated_bg_image is not None:
                             meancmp.append( (chainbuf.updated_bg_image,
                                              chainbuf.updated_cmp_image,
                                              chainbuf.updated_running_mean_image,
                                              chainbuf.updated_running_sumsqf_image,
-                                             chainbuf.timestamp)) # these were copied in process thread
+                                             chainbuf.cam_received_time)) # these were copied in process thread
             except Queue.Empty:
                 pass
 
@@ -1216,7 +1216,7 @@ class SaveSmallData(object):
                     # Always keep the current bg and std images so
                     # that we can save them when starting a new .fmf
                     # movie save sequence.
-                    last_bgcmp_image_timestamp = chainbuf.timestamp
+                    last_bgcmp_image_timestamp = chainbuf.cam_received_time
                     # Keeping references to these images should be OK,
                     # not need to copy - the Process thread already
                     # made a copy of the realtime analyzer's internal
@@ -1230,10 +1230,10 @@ class SaveSmallData(object):
                                          chainbuf.updated_cmp_image,
                                          chainbuf.updated_running_mean_image,
                                          chainbuf.updated_running_sumsqf_image,
-                                         chainbuf.timestamp)) # these were copied in process thread
+                                         chainbuf.cam_received_time)) # these were copied in process thread
                     if self._ufmf is None:
                         frame1 = numpy.asarray(chainbuf.get_buf())
-                        timestamp1 = chainbuf.timestamp
+                        timestamp1 = chainbuf.cam_received_time
                         filename_base = os.path.expanduser(filename_base)
                         dirname = os.path.split(filename_base)[0]
 
@@ -1265,7 +1265,7 @@ class SaveSmallData(object):
                                              chainbuf.updated_cmp_image,
                                              chainbuf.updated_running_mean_image,
                                              chainbuf.updated_running_sumsqf_image,
-                                             chainbuf.timestamp)) # these were copied in process thread
+                                             chainbuf.cam_received_time)) # these were copied in process thread
             except Queue.Empty:
                 pass
 
@@ -1281,7 +1281,7 @@ class SaveSmallData(object):
         frame = chainbuf.get_buf()
         if 0:
             print 'saving %d points'%(len(chainbuf.processed_points ),)
-        self._ufmf.add_frame( frame, chainbuf.timestamp, chainbuf.processed_points )
+        self._ufmf.add_frame( frame, chainbuf.cam_received_time, chainbuf.processed_points )
 
 class ImageSource(threading.Thread):
     """One instance of this class for each camera. Do nothing but get
