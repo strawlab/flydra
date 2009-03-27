@@ -38,6 +38,8 @@ def make_montage( h5_filename,
                   save_ogv_movie = False,
                   no_remove = False,
                   max_n_frames = None,
+                  start = None,
+                  stop = None,
                   ):
     ufmf_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename, ufmf_dir=ufmf_dir, careful=True )
 
@@ -91,6 +93,12 @@ def make_montage( h5_filename,
         ff = utils.FastFinder(h5_frames)
         unique_frames = list(np.unique1d(use_frames))
         unique_frames.sort()
+        unique_frames = np.array( unique_frames )
+        if start is not None:
+            unique_frames = unique_frames[ unique_frames >= start ]
+        if stop is not None:
+            unique_frames = unique_frames[ unique_frames <= stop ]
+
         if max_n_frames is not None:
             unique_frames = unique_frames[:max_n_frames]
         all_frame_montages = []
@@ -177,6 +185,12 @@ def main():
     parser.add_option("--max-n-frames", type='int', default=None,
                       help="maximum number of frames to save")
 
+    parser.add_option("--start", type='int', default=None,
+                      help="start frame")
+
+    parser.add_option("--stop", type='int', default=None,
+                      help="stop frame")
+
     parser.add_option("--ogv", action='store_true', default=False,
                       help="export .ogv video")
 
@@ -200,4 +214,6 @@ def main():
                   no_remove = options.no_remove,
                   white_background = options.white_background,
                   max_n_frames = options.max_n_frames,
+                  start = options.start,
+                  stop = options.stop,
                   )
