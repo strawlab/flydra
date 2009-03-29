@@ -41,7 +41,9 @@ def make_montage( h5_filename,
                   start = None,
                   stop = None,
                   ):
-    ufmf_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename, ufmf_dir=ufmf_dir, careful=True )
+    ufmf_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
+                                                  ufmf_dir=ufmf_dir,
+                                                  careful=True )
 
     if dest_dir is None:
         dest_dir = os.curdir
@@ -88,7 +90,8 @@ def make_montage( h5_filename,
         h5_camns = h5_data['camn']
 
     if 1:
-        cond = (first_ufmf_ts <= h5_timestamps) & (h5_timestamps <= last_ufmf_ts)
+        cond = ((first_ufmf_ts <= h5_timestamps) &
+                (h5_timestamps <= last_ufmf_ts))
         use_frames = h5_frames[cond]
         ff = utils.FastFinder(h5_frames)
         unique_frames = list(np.unique1d(use_frames))
@@ -128,9 +131,12 @@ def make_montage( h5_filename,
                     this_camn_ts = this_camn_ts[0]
                     ufmf_frame_idxs = np.nonzero(tss == this_camn_ts)[0]
                     if len(ufmf_frame_idxs)==0:
-                        warnings.warn('low-precision timestamp comparison in use due to outdated .ufmf file timestamp saving')
+                        warnings.warn('low-precision timestamp comparison in '
+                                      'use due to outdated .ufmf file '
+                                      'timestamp saving')
                         # 2.5 msec precision required
-                        ufmf_frame_idxs = np.nonzero(abs( tss - this_camn_ts ) < 0.0025)[0]
+                        ufmf_frame_idxs = np.nonzero(
+                            abs( tss - this_camn_ts ) < 0.0025)[0]
                     assert len(ufmf_frame_idxs)==1
                     ufmf_frame_no = ufmf_frame_idxs[0]
                     image, image_ts = ufmf.get_frame(ufmf_frame_no)
