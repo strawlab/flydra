@@ -1370,6 +1370,9 @@ class MainBrain(object):
         #
         # ================================================================
 
+        def get_version(self):
+            return flydra.version.__version__
+
         def post_init(self, main_brain):
             """call after __init__"""
             # let Pyro handle __init__

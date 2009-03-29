@@ -1941,6 +1941,9 @@ class AppState(object):
                 raise
             self.main_brain._setOneway(['set_image','set_fps','close','log_message','receive_missing_data'])
 
+            main_brain_version = self.main_brain.get_version()
+            assert main_brain_version == flydra.version.__version__
+
         ##################################################################
         #
         # Initialize more stuff
