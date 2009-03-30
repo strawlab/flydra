@@ -149,4 +149,5 @@ def iterate_frames(h5_filename,
                 per_frame_dict[ufmf_fname] = {'image':image,
                                               'cam_id':cam_id,
                                               }
+                per_frame_dict[ufmf_fname].update(more)
             yield (per_frame_dict,frame)
