@@ -72,6 +72,8 @@ def make_montage( h5_filename,
         blank_images[ufmf_fname] = 255*np.ones(
             (ufmf.get_height(),ufmf.get_width()), dtype=np.uint8)
 
+    # get name of data
+
     datetime_str = os.path.splitext(os.path.split(h5_filename)[-1])[0]
     datetime_str = datetime_str[4:19]
 
@@ -84,8 +86,25 @@ def make_montage( h5_filename,
 
     with openFileSafe( h5_filename, mode='r' ) as h5:
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
+        parsed = result_utils.read_textlog_header(h5)
+        flydra_version = parsed.get('flydra_version',None)
+        if flydra_version is not None and flydra_version >= '0.4.45':
+            # camnode.py saved timestamps into .ufmf file given by
+            # time.time() (camn_receive_timestamp). Compare with
+            # mainbrain's data2d_distorted column
+            # 'cam_received_timestamp'.
+            old_camera_timestamp_source = False
+        else:
+            # camnode.py saved timestamps into .ufmf file given by
+            # camera driver. Compare with mainbrain's data2d_distorted
+            # column 'timestamp'.
+            old_camera_timestamp_source = True
         h5_data = h5.root.data2d_distorted[:]
-        h5_timestamps = h5_data['timestamp']
+        if old_camera_timestamp_source:
+            h5_timestamps = h5_data['timestamp']
+        else:
+            h5_timestamps = h5_data['cam_received_timestamp']
+
         h5_frames = h5_data['frame']
         h5_camns = h5_data['camn']
 
@@ -130,7 +149,7 @@ def make_montage( h5_filename,
                     assert len(this_camn_ts)==1
                     this_camn_ts = this_camn_ts[0]
                     ufmf_frame_idxs = np.nonzero(tss == this_camn_ts)[0]
-                    if len(ufmf_frame_idxs)==0:
+                    if len(ufmf_frame_idxs)==0 and old_camera_timestamp_source:
                         warnings.warn('low-precision timestamp comparison in '
                                       'use due to outdated .ufmf file '
                                       'timestamp saving')
