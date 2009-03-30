@@ -39,7 +39,6 @@ def iterate_frames(h5_filename,
     first_ufmf_ts = -np.inf
     last_ufmf_ts = np.inf
     ufmfs = {}
-    blank_images = {}
     cam_ids = []
     for ufmf_fname in ufmf_fnames:
         cam_id = get_cam_id_from_ufmf_fname(ufmf_fname)
@@ -55,8 +54,6 @@ def iterate_frames(h5_filename,
             first_ufmf_ts = min_ts
         if max_ts < last_ufmf_ts:
             last_ufmf_ts = max_ts
-        blank_images[ufmf_fname] = 255*np.ones(
-            (ufmf.get_height(),ufmf.get_width()), dtype=np.uint8)
 
     assert first_ufmf_ts < last_ufmf_ts, ".ufmf files don't all overlap in time"
 
@@ -117,37 +114,39 @@ def iterate_frames(h5_filename,
 
             this_frames = h5_frames[idxs]
 
-            full_frame_images = {}
+            per_frame_dict = {}
             for ufmf_fname in ufmf_fnames:
                 ufmf, cam_id, tss = ufmfs[ufmf_fname]
                 camn = cam_id2camn[cam_id]
                 this_camn_cond = this_camns == camn
                 this_camn_tss = this_tss[this_camn_cond]
-                if len(this_camn_tss):
-                    this_camn_ts=np.unique1d(this_camn_tss)
-                    assert len(this_camn_ts)==1
-                    this_camn_ts = this_camn_ts[0]
+                if not len(this_camn_tss):
+                    # no data for this cam_id at this frame
+                    continue
+                this_camn_ts=np.unique1d(this_camn_tss)
+                assert len(this_camn_ts)==1
+                this_camn_ts = this_camn_ts[0]
 
-                    # optimistic: get next frame. it's probably the one we want
-                    image, image_ts = ufmf.get_next_frame()
-                    if this_camn_ts != image_ts:
-                        # It was not the frame we wanted. Find it.
-                        ufmf_frame_idxs = np.nonzero(tss == this_camn_ts)[0]
-                        if (len(ufmf_frame_idxs)==0 and
-                            old_camera_timestamp_source):
-                            warnings.warn(
-                                'low-precision timestamp comparison in '
-                                'use due to outdated .ufmf timestamp '
-                                'saving.')
-                            # 2.5 msec precision required
-                            ufmf_frame_idxs = np.nonzero(
-                                abs( tss - this_camn_ts ) < 0.0025)[0]
-                        assert len(ufmf_frame_idxs)==1
-                        ufmf_frame_no = ufmf_frame_idxs[0]
-                        image, image_ts = ufmf.get_frame(ufmf_frame_no)
-                        del ufmf_frame_no, ufmf_frame_idxs
-                else:
-                    # no image data this frame
-                    image = blank_images[ufmf_fname]
-                full_frame_images[cam_id] = {'image':image}
-            yield (full_frame_images,frame)
+                # optimistic: get next frame. it's probably the one we want
+                image,image_ts,more = ufmf.get_next_frame(_return_more=True)
+                if this_camn_ts != image_ts:
+                    # It was not the frame we wanted. Find it.
+                    ufmf_frame_idxs = np.nonzero(tss == this_camn_ts)[0]
+                    if (len(ufmf_frame_idxs)==0 and
+                        old_camera_timestamp_source):
+                        warnings.warn(
+                            'low-precision timestamp comparison in '
+                            'use due to outdated .ufmf timestamp '
+                            'saving.')
+                        # 2.5 msec precision required
+                        ufmf_frame_idxs = np.nonzero(
+                            abs( tss - this_camn_ts ) < 0.0025)[0]
+                    assert len(ufmf_frame_idxs)==1
+                    ufmf_frame_no = ufmf_frame_idxs[0]
+                    image,image_ts,more = ufmf.get_frame(ufmf_frame_no,
+                                                         _return_more=True)
+                    del ufmf_frame_no, ufmf_frame_idxs
+                per_frame_dict[ufmf_fname] = {'image':image,
+                                              'cam_id':cam_id,
+                                              }
+            yield (per_frame_dict,frame)

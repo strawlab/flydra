@@ -54,10 +54,17 @@ def make_montage( h5_filename,
             print '%s: frame %d'%(datetime_str,frame)
 
         saved_fnames = []
-        for cam_id, frame_data in frame_dict.iteritems():
+        for ufmf_fname in ufmf_fnames:
+            try:
+                frame_data = frame_dict[ufmf_fname]
+                cam_id = frame_data['cam_id']
+                image = frame_data['image']
+            except KeyError:
+                # no data saved (frame skip on Prosilica camera?)
+                cam_id = ufmf_tools.get_cam_id_from_ufmf_fname(ufmf_fname)
+                image = np.empty((1,1),dtype=np.uint8); image.fill(255)
             save_fname = 'tmp_frame%07d_%s.bmp'%(frame,cam_id)
             save_fname_path = os.path.join(dest_dir, save_fname)
-            image = frame_data['image']
             scipy.misc.pilutil.imsave(save_fname_path, image)
             saved_fnames.append( save_fname_path )
 
