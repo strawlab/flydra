@@ -56,8 +56,10 @@ def make_montage( h5_filename,
     last_ufmf_ts = np.inf
     ufmfs = {}
     blank_images = {}
+    cam_ids = []
     for ufmf_fname in ufmf_fnames:
         cam_id = get_cam_id_from_ufmf_fname(ufmf_fname)
+        cam_ids.append( cam_id )
         ufmf = ufmf_mod.FlyMovieEmulator(ufmf_fname,
                                          white_background=white_background,
                                          )
@@ -83,6 +85,7 @@ def make_montage( h5_filename,
     assert first_ufmf_ts < last_ufmf_ts, ".ufmf files don't all overlap in time"
 
     ufmf_fnames.sort()
+    cam_ids.sort()
 
     with openFileSafe( h5_filename, mode='r' ) as h5:
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
@@ -107,6 +110,12 @@ def make_montage( h5_filename,
 
         h5_frames = h5_data['frame']
         h5_camns = h5_data['camn']
+
+    cam_id2camn = {}
+    for cam_id in cam_ids:
+        camns = cam_id2camns[cam_id]
+        assert len(camns)==1, "can't handle multiple camns per cam_id"
+        cam_id2camn[cam_id] = camns[0]
 
     if 1:
         cond = ((first_ufmf_ts <= h5_timestamps) &
@@ -139,26 +148,33 @@ def make_montage( h5_filename,
             saved_fnames = []
             for ufmf_fname in ufmf_fnames:
                 ufmf, cam_id, tss = ufmfs[ufmf_fname]
-                camns = cam_id2camns[cam_id]
-                assert len(camns)==1, "can't handle multiple camns per cam_id"
-                camn = camns[0]
+                camn = cam_id2camn[cam_id]
                 this_camn_cond = this_camns == camn
                 this_camn_tss = this_tss[this_camn_cond]
                 if len(this_camn_tss):
                     this_camn_ts=np.unique1d(this_camn_tss)
                     assert len(this_camn_ts)==1
                     this_camn_ts = this_camn_ts[0]
-                    ufmf_frame_idxs = np.nonzero(tss == this_camn_ts)[0]
-                    if len(ufmf_frame_idxs)==0 and old_camera_timestamp_source:
-                        warnings.warn('low-precision timestamp comparison in '
-                                      'use due to outdated .ufmf file '
-                                      'timestamp saving')
-                        # 2.5 msec precision required
-                        ufmf_frame_idxs = np.nonzero(
-                            abs( tss - this_camn_ts ) < 0.0025)[0]
-                    assert len(ufmf_frame_idxs)==1
-                    ufmf_frame_no = ufmf_frame_idxs[0]
-                    image, image_ts = ufmf.get_frame(ufmf_frame_no)
+
+                    # optimistic: get next frame. it's probably the one we want
+                    image, image_ts = ufmf.get_next_frame()
+                    if this_camn_ts != image_ts:
+                        print 'fail',frame_enum,cam_id
+                        # It was not the frame we wanted. Find it.
+                        ufmf_frame_idxs = np.nonzero(tss == this_camn_ts)[0]
+                        if (len(ufmf_frame_idxs)==0 and
+                            old_camera_timestamp_source):
+                            warnings.warn(
+                                'low-precision timestamp comparison in '
+                                'use due to outdated .ufmf timestamp '
+                                'saving.')
+                            # 2.5 msec precision required
+                            ufmf_frame_idxs = np.nonzero(
+                                abs( tss - this_camn_ts ) < 0.0025)[0]
+                        assert len(ufmf_frame_idxs)==1
+                        ufmf_frame_no = ufmf_frame_idxs[0]
+                        image, image_ts = ufmf.get_frame(ufmf_frame_no)
+                        del ufmf_frame_no, ufmf_frame_idxs
                 else:
                     # no image data this frame
                     image = blank_images[ufmf_fname]
