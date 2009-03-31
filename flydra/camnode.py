@@ -84,6 +84,7 @@ else:
     ConnectionClosedError = NonExistantError
 import flydra.reconstruct_utils as reconstruct_utils
 import flydra.reconstruct
+import flydra.version
 from flydra.reconstruct import do_3d_operations_on_2d_point
 
 import camnode_utils
