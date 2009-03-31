@@ -922,7 +922,11 @@ def doit(fmf_filename=None,
             dirname = 'full_%s_movies'%os.path.splitext(h5_filename)[0]
             fname = os.path.join(dirname,'smo_%(cam_id)s_%(h5_frame)07d.png'%locals())
             if not os.path.exists(dirname):
-                os.makedirs(dirname)
+                try:
+                    os.makedirs(dirname)
+                except OSError:
+                    print ('could not make directory %s: race condition '
+                           'or permission problem?'%(dirname,))
 
             #print 'saving',fname
             if PLOT=='image':
