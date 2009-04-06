@@ -146,10 +146,14 @@ def iterate_frames(h5_filename,
                     image,image_ts,more = ufmf.get_frame(ufmf_frame_no,
                                                          _return_more=True)
                     del ufmf_frame_no, ufmf_frame_idxs
-                per_frame_dict[ufmf_fname] = {'image':image,
-                                              'cam_id':cam_id,
-                                              'camn':camn,
-                                              }
+                per_frame_dict[ufmf_fname] = {
+                    'image':image,
+                    'cam_id':cam_id,
+                    'camn':camn,
+                    'timestamp':this_cam_h5_data['timestamp'][0],
+                    'cam_received_timestamp':
+                    this_cam_h5_data['cam_received_timestamp'][0],
+                    }
                 per_frame_dict[ufmf_fname].update(more)
             per_frame_dict['tracker_data']=this_h5_data
             yield (per_frame_dict,frame)
