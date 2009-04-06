@@ -15,15 +15,35 @@ def numpy2cairo(raw):
     raw=np.asarray(raw)
     if raw.dtype!=np.uint8:
         raise ValueError('only uint8 dtype is supported')
-    if raw.ndim!=2:
-        raise ValueError('only only 2d arrays are supported')
-    brga = np.ndarray(
-        shape=(raw.shape[0],raw.shape[1],4),
-        dtype=np.uint8)
-    brga[:,:,0]=raw
-    brga[:,:,1]=raw
-    brga[:,:,2]=raw
-    brga[:,:,3].fill(255)
+    if raw.ndim==2:
+        brga = np.ndarray(
+            shape=(raw.shape[0],raw.shape[1],4),
+            dtype=np.uint8)
+        brga[:,:,0]=raw
+        brga[:,:,1]=raw
+        brga[:,:,2]=raw
+        brga[:,:,3].fill(255)
+    elif raw.ndim==3:
+        if raw.shape[2]==3:
+            brga = np.ndarray(
+                shape=(raw.shape[0],raw.shape[1],4),
+                dtype=np.uint8)
+            brga[:,:,0]=raw[:,:,2]
+            brga[:,:,1]=raw[:,:,0]
+            brga[:,:,2]=raw[:,:,1]
+            brga[:,:,3].fill(255)
+        elif raw.shape[2]==4:
+            brga = np.ndarray(
+                shape=(raw.shape[0],raw.shape[1],4),
+                dtype=np.uint8)
+            brga[:,:,0]=raw[:,:,2]
+            brga[:,:,1]=raw[:,:,0]
+            brga[:,:,2]=raw[:,:,1]
+            brga[:,:,3]=raw[:,:,3]
+        else:
+            raise ValueError('if 3d array is given, it must be RGB or RGBA')
+    else:
+        raise ValueError('only only 2d and 3d arrays are supported')
     in_surface = cairo.ImageSurface.create_for_data(
         brga, cairo.FORMAT_ARGB32,
         raw.shape[1], raw.shape[0],
