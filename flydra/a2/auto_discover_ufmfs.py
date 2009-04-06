@@ -18,7 +18,6 @@ def find_ufmfs(filename,ufmf_dir=None,careful=False):
 
     if ufmf_dir is None:
         ufmf_dir = os.path.split( os.path.abspath( filename ))[0]
-    print 'searching for .ufmfs in',ufmf_dir
     all_ufmfs = glob.glob(os.path.join(ufmf_dir,'*.ufmf'))
     all_ufmfs.sort()
 
