@@ -153,6 +153,7 @@ def iterate_frames(h5_filename,
                     'timestamp':this_cam_h5_data['timestamp'][0],
                     'cam_received_timestamp':
                     this_cam_h5_data['cam_received_timestamp'][0],
+                    'ufmf_frame_timestamp':this_cam_h5_data[timestamp_name][0],
                     }
                 per_frame_dict[ufmf_fname].update(more)
             per_frame_dict['tracker_data']=this_h5_data
