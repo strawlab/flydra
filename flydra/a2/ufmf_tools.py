@@ -10,6 +10,8 @@ import flydra.analysis.result_utils as result_utils
 import scipy.misc
 import subprocess
 
+from tables_tools import openFileSafe
+
 ufmf_fname_regex = re.compile(r'small_([0-9]+)_([0-9]+)_(.*)')
 def get_cam_id_from_ufmf_fname(ufmf_fname):
     a = os.path.split( ufmf_fname )[-1]
@@ -17,14 +19,6 @@ def get_cam_id_from_ufmf_fname(ufmf_fname):
     matchobj = ufmf_fname_regex.search(b)
     date, time, cam_id= matchobj.groups()
     return cam_id
-
-@contextlib.contextmanager
-def openFileSafe(*args,**kwargs):
-    result = tables.openFile(*args,**kwargs)
-    try:
-        yield result
-    finally:
-        result.close()
 
 def iterate_frames(h5_filename,
                    ufmf_fnames,

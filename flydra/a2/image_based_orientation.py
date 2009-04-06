@@ -26,13 +26,7 @@ import cairo
 import benu
 import adskalman.adskalman
 
-@contextlib.contextmanager
-def openFileSafe(*args,**kwargs):
-    result = PT.openFile(*args,**kwargs)
-    try:
-        yield result
-    finally:
-        result.close()
+from tables_tools import clear_col, openFileSafe
 
 def shift_image(im,xy):
     def mapping(x):
@@ -52,23 +46,6 @@ def get_cam_id_from_filename(filename, all_cam_ids):
                 raise ValueError('cam_id found more than once in filename')
             found_cam_id = cam_id
     return found_cam_id
-
-def clear_col(dest_table, colname):
-    if 0:
-        objcol = dest_table._getColumnInstance(colname)
-        descr = [objcol._v_parent._v_nestedDescr[objcol._v_pos]]
-        dtype = descr[0][1]
-
-        nancol = np.ones( (dest_table.nrows,), dtype=dtype)
-        #recarray = np.rec.array( nancol, dtype=descr)
-
-        dest_table.modifyColumn(column=nancol, colname='x')
-        dest_table.flush()
-    else:
-        warnings.warn('slow implementation of column clearing')
-        for row in dest_table:
-            row[colname] = np.nan
-            row.update()
 
 def plot_image_subregion(raw_im, mean_im, absdiff_im,
                          roiradius, fname, user_coords,
@@ -337,7 +314,11 @@ def doit(h5_filename=None,
         dest_table = output_h5.root.data2d_distorted
         for colname in ['x','y','area','slope','eccentricity','cur_val',
                         'mean_val','sumsqf_val']:
-            clear_col(dest_table,colname)
+            if colname=='cur_val':
+                fill_value = 0
+            else:
+                fill_value = np.nan
+            clear_col(dest_table,colname,fill_value=fill_value)
         dest_table.flush()
         print 'done clearing'
 
