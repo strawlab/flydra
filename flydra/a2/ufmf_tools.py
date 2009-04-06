@@ -73,19 +73,15 @@ def iterate_frames(h5_filename,
             # mainbrain's data2d_distorted column
             # 'cam_received_timestamp'.
             old_camera_timestamp_source = False
+            timestamp_name = 'cam_received_timestamp'
         else:
             # camnode.py saved timestamps into .ufmf file given by
             # camera driver. Compare with mainbrain's data2d_distorted
             # column 'timestamp'.
             old_camera_timestamp_source = True
-        h5_data = h5.root.data2d_distorted[:]
-        if old_camera_timestamp_source:
-            h5_timestamps = h5_data['timestamp']
-        else:
-            h5_timestamps = h5_data['cam_received_timestamp']
+            timestamp_name = 'timestamp'
 
-        h5_frames = h5_data['frame']
-        h5_camns = h5_data['camn']
+        h5_data = h5.root.data2d_distorted[:]
 
     cam_id2camn = {}
     for cam_id in cam_ids:
@@ -95,11 +91,11 @@ def iterate_frames(h5_filename,
 
     if 1:
         # narrow search to local region of .h5
-        cond = ((first_ufmf_ts <= h5_timestamps) &
-                (h5_timestamps <= last_ufmf_ts))
-        use_frames = h5_frames[cond]
-        ff = utils.FastFinder(h5_frames)
-        unique_frames = list(np.unique1d(use_frames))
+        cond = ((first_ufmf_ts <= h5_data[timestamp_name]) &
+                (h5_data[timestamp_name] <= last_ufmf_ts))
+        narrow_h5_data = h5_data[cond]
+        ff = utils.FastFinder(narrow_h5_data['frame'])
+        unique_frames = list(np.unique1d(narrow_h5_data['frame']))
         unique_frames.sort()
         unique_frames = np.array( unique_frames )
         if start is not None:
@@ -110,11 +106,12 @@ def iterate_frames(h5_filename,
         if max_n_frames is not None:
             unique_frames = unique_frames[:max_n_frames]
         for frame_enum,frame in enumerate(unique_frames):
-            idxs = ff.get_idxs_of_equal(frame)
+            narrow_idxs = ff.get_idxs_of_equal(frame)
 
             # trim data under consideration to just this frame
-            this_camns = h5_camns[idxs]
-            this_tss = h5_timestamps[idxs]
+            this_h5_data = narrow_h5_data[narrow_idxs]
+            this_camns = this_h5_data['camn']
+            this_tss = this_h5_data[timestamp_name]
 
             # a couple more checks
             if np.any( this_tss < first_ufmf_ts):
@@ -122,14 +119,13 @@ def iterate_frames(h5_filename,
             if np.any( this_tss >= last_ufmf_ts):
                 break
 
-            this_frames = h5_frames[idxs]
-
             per_frame_dict = {}
             for ufmf_fname in ufmf_fnames:
                 ufmf, cam_id, tss = ufmfs[ufmf_fname]
                 camn = cam_id2camn[cam_id]
                 this_camn_cond = this_camns == camn
-                this_camn_tss = this_tss[this_camn_cond]
+                this_cam_h5_data = this_h5_data[this_camn_cond]
+                this_camn_tss = this_cam_h5_data[timestamp_name]
                 if not len(this_camn_tss):
                     # no data for this cam_id at this frame
                     continue
@@ -158,6 +154,8 @@ def iterate_frames(h5_filename,
                     del ufmf_frame_no, ufmf_frame_idxs
                 per_frame_dict[ufmf_fname] = {'image':image,
                                               'cam_id':cam_id,
+                                              'camn':camn,
                                               }
                 per_frame_dict[ufmf_fname].update(more)
+            per_frame_dict['tracker_data']=this_h5_data
             yield (per_frame_dict,frame)
