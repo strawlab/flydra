@@ -7,16 +7,22 @@ import numpy as np
 import tables
 import flydra.a2.utils as utils
 import flydra.analysis.result_utils as result_utils
-import scipy.misc
 import subprocess
 import flydra.a2.ufmf_tools as ufmf_tools
+import cherrypy  # ubuntu: install python-cherrypy3
+import benu
 
 def get_tile(N):
     rows = int(np.ceil(np.sqrt(float(N))))
     cols = rows
     return '%dx%d'%(rows,cols)
 
+def get_config_defaults():
+    default = {'what to show': {'show_2d_position': False}}
+    return default
+
 def make_montage( h5_filename,
+                  cfg_filename=None,
                   ufmf_dir=None,
                   dest_dir = None,
                   white_background=False,
@@ -26,6 +32,12 @@ def make_montage( h5_filename,
                   start = None,
                   stop = None,
                   ):
+    config = get_config_defaults()
+    if cfg_filename is not None:
+        loaded_cfg = cherrypy._cpconfig.as_dict( cfg_filename )
+        print loaded_cfg
+        config.update( loaded_cfg )
+
     ufmf_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
                                                   ufmf_dir=ufmf_dir,
                                                   careful=True )
@@ -49,6 +61,7 @@ def make_montage( h5_filename,
         start = start,
         stop = stop,
         )):
+        tracker_data = frame_dict['tracker_data']
 
         if (frame_enum%100)==0:
             print '%s: frame %d'%(datetime_str,frame)
@@ -58,14 +71,26 @@ def make_montage( h5_filename,
             try:
                 frame_data = frame_dict[ufmf_fname]
                 cam_id = frame_data['cam_id']
+                camn = frame_data['camn']
                 image = frame_data['image']
             except KeyError:
                 # no data saved (frame skip on Prosilica camera?)
                 cam_id = ufmf_tools.get_cam_id_from_ufmf_fname(ufmf_fname)
+                camn = None
                 image = np.empty((1,1),dtype=np.uint8); image.fill(255)
-            save_fname = 'tmp_frame%07d_%s.bmp'%(frame,cam_id)
+            save_fname = 'tmp_frame%07d_%s.png'%(frame,cam_id)
             save_fname_path = os.path.join(dest_dir, save_fname)
-            scipy.misc.pilutil.imsave(save_fname_path, image)
+            canv=benu.Canvas(save_fname_path,image.shape[1],image.shape[0])
+            canv.imshow(image,0,0)
+            if config['what to show']['show_2d_position']:
+                cond = tracker_data['camn']==camn
+                this_cam_data = tracker_data[cond]
+                canv.scatter(this_cam_data['x'],
+                             this_cam_data['y'],
+                             color_rgba=(0,1,0,1),
+                             radius=10,
+                             )
+            canv.save()
             saved_fnames.append( save_fname_path )
 
         target = os.path.join(dest_dir, 'movie%s_frame%07d.jpg'%(
@@ -108,6 +133,9 @@ def main():
     parser.add_option("--ufmf-dir", type='string',
                       help="directory with .ufmf files")
 
+    parser.add_option("--config", type='string',
+                      help="configuration file name")
+
     parser.add_option("--max-n-frames", type='int', default=None,
                       help="maximum number of frames to save")
 
@@ -134,6 +162,7 @@ def main():
 
     h5_filename = args[0]
     make_montage( h5_filename,
+                  cfg_filename = options.config,
                   ufmf_dir = options.ufmf_dir,
                   dest_dir = options.dest_dir,
                   save_ogv_movie = options.ogv,
