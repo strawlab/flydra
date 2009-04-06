@@ -39,6 +39,7 @@ def retrack_movies( h5_filename,
                     cfg_filename=None,
                     ):
 
+    save_classifier_images = True
     save_debug_images = False
 
     # 2D data format for PyTables:
@@ -118,6 +119,9 @@ def retrack_movies( h5_filename,
                     input_node._f_copy(output_h5.root,recursive=True)
 
             fpc = realtime_image_analysis.FitParamsClass() # allocate FitParamsClass
+
+            if save_classifier_images:
+                classifier_images = []
 
             iterate_frames = ufmf_tools.iterate_frames # shorten notation
             for frame_enum,(frame_dict,frame) in enumerate(iterate_frames(
@@ -243,6 +247,14 @@ def retrack_movies( h5_filename,
                                 yarr.append(ymean)
                             detection.append()
                             detected_points = True
+                            if save_classifier_images:
+                                classifier_images.append( (frame, ufmf_fname,
+                                                           y_slice, x_slice,
+                                                           frame_data['ufmf_frame_timestamp'],
+                                                           image[y_slice,x_slice], # raw
+                                                           this_absdiff_im, # absdiff
+                                                           this_label_im, # label
+                                                           ) )
 
                         if save_debug_images:
                             save_fname_path = 'debug/debug_%s_%d.png'%(cam_id,
@@ -269,6 +281,14 @@ def retrack_movies( h5_filename,
                         detection['x']=np.nan
                         detection['y']=np.nan
                         detection.append()
+
+    if save_classifier_images:
+        fname = 'classifier_images.pkl'
+        print 'saving',fname
+        fd = open(fname,mode='w')
+        pickle.dump(classifier_images,fd)
+        fd.close()
+        print 'done'
 
 def main():
     usage = '%prog DATAFILE2D.h5 [options]'
