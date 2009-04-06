@@ -108,9 +108,16 @@ def doit(fmf_filename=None,
             sys.exit(1)
 
     if fmf_filename.endswith('.ufmf'):
-        fmf = ufmf.FlyMovieEmulator(fmf_filename,
-                                    use_conventional_named_mean_fmf=False,
-                                    )
+        if options.ufmf_white_background:
+            kwargs = dict(white_background=True,
+                          use_conventional_named_mean_fmf=False,
+                          )
+            assert options.ufmf_abs_diff==False
+        else:
+            kwargs = dict(use_conventional_named_mean_fmf=True)
+            if options.ufmf_abs_diff:
+                kwargs['abs_diff']=True
+        fmf = ufmf.FlyMovieEmulator(fmf_filename,**kwargs)
     else:
         fmf = FMF.FlyMovie(fmf_filename)
     fmf_timestamps = fmf.get_all_timestamps()
@@ -1009,6 +1016,12 @@ def main():
                       default=False)
 
     parser.add_option("--no-progress", action='store_true',
+                      default=False)
+
+    parser.add_option("--ufmf-white-background", action='store_true',
+                      default=False)
+
+    parser.add_option("--ufmf-abs-diff", action='store_true',
                       default=False)
 
     parser.add_option("--obj-only", type="string")
