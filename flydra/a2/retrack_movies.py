@@ -16,11 +16,19 @@ from tables_tools import clear_col, openFileSafe
 import motmot.FastImage.FastImage as FastImage
 import motmot.realtime_image_analysis.realtime_image_analysis \
        as realtime_image_analysis
+import cherrypy  # ubuntu: install python-cherrypy3
+import pickle, collections
 
-def get_tile(N):
-    rows = int(np.ceil(np.sqrt(float(N))))
-    cols = rows
-    return '%dx%d'%(rows,cols)
+def get_config_defaults():
+    default = {'pixel_aspect': 1,
+               # In order of operations:
+               'absdiff_max_frac_thresh': 0.8,
+               'min_absdiff': 5,
+               'area_minimum_threshold': 10,
+               }
+    result = collections.defaultdict(dict)
+    result['default']=default
+    return result
 
 def retrack_movies( h5_filename,
                     output_h5_filename=None,
@@ -28,12 +36,10 @@ def retrack_movies( h5_filename,
                     start = None,
                     stop = None,
                     ufmf_dir = None,
+                    cfg_filename=None,
                     ):
 
     save_debug_images = False
-    area_minimum_threshold = 10
-    min_absdiff = 5
-    absdiff_max_frac_thresh = 0.5
 
     # 2D data format for PyTables:
     Info2D = flydra.data_descriptions.Info2D
@@ -49,6 +55,19 @@ def retrack_movies( h5_filename,
             "will not overwrite old file '%s'"%output_h5_filename)
 
     # get name of data
+    config = get_config_defaults()
+    if cfg_filename is not None:
+        loaded_cfg = cherrypy._cpconfig.as_dict( cfg_filename )
+        for section in loaded_cfg:
+            config[section].update( loaded_cfg.get(section,{}) )
+    default_camcfg = config['default']
+    for cam_id in config.keys():
+        if cam_id == 'default':
+            continue
+        # ensure default key/value pairs in each cam_id
+        for key,value in default_camcfg.iteritems():
+            if key not in config[cam_id]:
+                config[cam_id][key] = value
 
     datetime_str = os.path.splitext(os.path.split(h5_filename)[-1])[0]
     datetime_str = datetime_str[4:19]
@@ -60,6 +79,7 @@ def retrack_movies( h5_filename,
 
         # Find camns in original data
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
+
         retrack_camns = []
         for cam_id in retrack_cam_ids:
             retrack_camns.extend( cam_id2camns[cam_id] )
@@ -118,9 +138,11 @@ def retrack_movies( h5_filename,
                         continue
                     camn = frame_data['camn']
                     cam_id = frame_data['cam_id']
+                    camcfg = config.get(cam_id,default_camcfg)
                     image = frame_data['image']
                     cam_received_timestamp=frame_data['cam_received_timestamp']
                     timestamp=frame_data['timestamp']
+
                     detected_points = True
                     obj_slices = None
                     if len(frame_data['regions'])==0:
@@ -130,8 +152,8 @@ def retrack_movies( h5_filename,
                         #print frame,cam_id,len(frame_data['regions'])
                         absdiff_im = abs(frame_data['mean'].astype(np.float32) -
                                          image)
-                        thresh_val = np.max(absdiff_im)*absdiff_max_frac_thresh
-                        thresh_val = max(min_absdiff,thresh_val)
+                        thresh_val = np.max(absdiff_im)*camcfg['absdiff_max_frac_thresh']
+                        thresh_val = max(camcfg['min_absdiff'],thresh_val)
                         thresh_im = absdiff_im > thresh_val
                         labeled_im,n_labels = scipy.ndimage.label(thresh_im)
                         if not n_labels:
@@ -156,7 +178,7 @@ def retrack_movies( h5_filename,
                             # calculate area (number of binarized pixels)
                             xsum = np.sum(this_label_im,axis=0)
                             pixel_area = np.sum(xsum)
-                            if pixel_area < area_minimum_threshold:
+                            if pixel_area < camcfg['area_minimum_threshold']:
                                 continue
 
                             # calculate center
@@ -170,10 +192,18 @@ def retrack_movies( h5_filename,
                             ymean = np.sum((ysum*ypos))/np.sum(ysum)
 
                             if 1:
-                                # This is not yet finished
                                 this_absdiff_im = absdiff_im[y_slice,x_slice]
+
+                                if camcfg['pixel_aspect']==1:
+                                    this_fit_im = this_label_im
+                                elif camcfg['pixel_aspect']==2:
+                                    this_fit_im = np.repeat(this_label_im,2,axis=0)
+                                else:
+                                    raise ValueError('unknown pixel_aspect')
+
                                 fast_foreground = FastImage.asfastimage(
-                                    this_absdiff_im.astype(np.uint8) )
+                                    this_fit_im.astype(np.uint8) )
+
                                 fail_fit = False
                                 try:
                                     (x0_roi, y0_roi, weighted_area, slope,
@@ -184,6 +214,11 @@ def retrack_movies( h5_filename,
                                     print "frame %d, ufmf %s: fit failed"%(frame,
                                                                            ufmf_fname)
                                     print err
+                                else:
+                                    if camcfg['pixel_aspect']==2:
+                                        y0_roi *= 0.5
+                                    xmean = x_slice.start + x0_roi
+                                    ymean = y_slice.start + y0_roi
                             else:
                                 fail_fit = True
 
@@ -255,6 +290,9 @@ def main():
     parser.add_option("--output-h5", type='string',
                       help="filename for output .h5 file with data2d_distorted")
 
+    parser.add_option("--config", type='string',
+                      help="configuration file name")
+
     (options, args) = parser.parse_args()
 
     if len(args)<1:
@@ -266,6 +304,7 @@ def main():
 
     h5_filename = args[0]
     retrack_movies( h5_filename,
+                    cfg_filename = options.config,
                     ufmf_dir = options.ufmf_dir,
                     max_n_frames = options.max_n_frames,
                     start = options.start,
