@@ -79,6 +79,18 @@ class Canvas(object):
             ctx.line_to(xarr[i],yarr[i])
         ctx.stroke()
 
+    def scatter(self,xarr,yarr,color_rgba=None,radius=1.0):
+        if color_rgba is None:
+            color_rgba = (1,1,1,1)
+        ctx = self._ctx # shorthand
+
+        ctx.set_source_rgba(*color_rgba)
+        for x,y in zip(xarr,yarr):
+            #cairo_new_sub_path()
+            ctx.new_sub_path()
+            ctx.arc(x,y,radius,0,2*np.pi)
+        ctx.stroke()
+
     def save(self):
         if self._output_ext == '.png':
             self._surf.write_to_png(self._fname)
