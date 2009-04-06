@@ -18,14 +18,17 @@ def get_tile(N):
     return '%dx%d'%(rows,cols)
 
 def get_config_defaults():
-    default = {'what to show': {'show_2d_position': False}}
+    what = {'show_2d_position': False,
+            'show_2d_orientation': False,
+            'white_background': False,
+            }
+    default = {'what to show': what}
     return default
 
 def make_montage( h5_filename,
                   cfg_filename=None,
                   ufmf_dir=None,
                   dest_dir = None,
-                  white_background=False,
                   save_ogv_movie = False,
                   no_remove = False,
                   max_n_frames = None,
@@ -35,12 +38,13 @@ def make_montage( h5_filename,
     config = get_config_defaults()
     if cfg_filename is not None:
         loaded_cfg = cherrypy._cpconfig.as_dict( cfg_filename )
-        print loaded_cfg
-        config.update( loaded_cfg )
+        for section in config:
+            config[section].update( loaded_cfg.get(section,{}) )
 
     ufmf_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
                                                   ufmf_dir=ufmf_dir,
                                                   careful=True )
+
 
     if dest_dir is None:
         dest_dir = os.curdir
@@ -53,10 +57,12 @@ def make_montage( h5_filename,
     datetime_str = os.path.splitext(os.path.split(h5_filename)[-1])[0]
     datetime_str = datetime_str[4:19]
 
+    workaround_ffmpeg2theora_bug = True
+
     all_frame_montages = []
     for frame_enum,(frame_dict,frame) in enumerate(ufmf_tools.iterate_frames(
         h5_filename, ufmf_fnames,
-        white_background=white_background,
+        white_background=config['what to show']['white_background'],
         max_n_frames = max_n_frames,
         start = start,
         stop = stop,
@@ -85,11 +91,34 @@ def make_montage( h5_filename,
             if config['what to show']['show_2d_position']:
                 cond = tracker_data['camn']==camn
                 this_cam_data = tracker_data[cond]
-                canv.scatter(this_cam_data['x'],
-                             this_cam_data['y'],
+                xarr = np.atleast_1d(this_cam_data['x'])
+                yarr = np.atleast_1d(this_cam_data['y'])
+                canv.scatter(xarr, yarr,
                              color_rgba=(0,1,0,1),
                              radius=10,
                              )
+            if config['what to show']['show_2d_orientation']:
+                cond = tracker_data['camn']==camn
+                this_cam_data = tracker_data[cond]
+                xarr = np.atleast_1d(this_cam_data['x'])
+                yarr = np.atleast_1d(this_cam_data['y'])
+                slope = np.atleast_1d(this_cam_data['slope'])
+                thetaarr = np.arctan(slope)
+                line_len = 30.0
+                xinc = np.cos(thetaarr)*line_len
+                yinc = np.sin(thetaarr)*line_len
+                for x,y,xi,yi in zip(xarr,yarr,xinc,yinc):
+                    canv.plot([x-xi,x+xi],[y-yi,y+yi],
+                              color_rgba=(0,1,0,0.4),
+                              )
+            if workaround_ffmpeg2theora_bug:
+                # first frame should get a colored pixel so that
+                # ffmpeg doesn't interpret the whole move as grayscale
+                canv.plot([0,1],[0,1],
+                          color_rgba=(1,0,0,0.1),
+                          )
+                workaround_ffmpeg2theora_bug = False # Now we already did it.
+
             canv.save()
             saved_fnames.append( save_fname_path )
 
@@ -107,6 +136,7 @@ def make_montage( h5_filename,
         if not no_remove:
             for fname in saved_fnames:
                 os.unlink(fname)
+    print '%s: %d frames montaged'%(datetime_str,len(all_frame_montages),)
 
     if save_ogv_movie:
         orig_dir = os.path.abspath(os.curdir)
@@ -151,9 +181,6 @@ def main():
     parser.add_option('-n', "--no-remove", action='store_true', default=False,
                       help="don't remove intermediate images")
 
-    parser.add_option("--white-background", action='store_true', default=False,
-                      help="don't display background information")
-
     (options, args) = parser.parse_args()
 
     if len(args)<1:
@@ -167,7 +194,6 @@ def main():
                   dest_dir = options.dest_dir,
                   save_ogv_movie = options.ogv,
                   no_remove = options.no_remove,
-                  white_background = options.white_background,
                   max_n_frames = options.max_n_frames,
                   start = options.start,
                   stop = options.stop,
