@@ -7,7 +7,7 @@ import numpy as np
 import tables
 import flydra.a2.utils as utils
 import flydra.analysis.result_utils as result_utils
-import subprocess
+import subprocess, collections
 import flydra.a2.ufmf_tools as ufmf_tools
 import cherrypy  # ubuntu: install python-cherrypy3
 import benu
@@ -21,8 +21,10 @@ def get_config_defaults():
     what = {'show_2d_position': False,
             'show_2d_orientation': False,
             'white_background': False,
+            'max_resolution': None,
             }
-    default = {'what to show': what}
+    default = collections.defaultdict(dict)
+    default['what to show']=what
     return default
 
 def make_montage( h5_filename,
@@ -38,7 +40,7 @@ def make_montage( h5_filename,
     config = get_config_defaults()
     if cfg_filename is not None:
         loaded_cfg = cherrypy._cpconfig.as_dict( cfg_filename )
-        for section in config:
+        for section in loaded_cfg:
             config[section].update( loaded_cfg.get(section,{}) )
 
     ufmf_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
@@ -86,38 +88,70 @@ def make_montage( h5_filename,
                 image = np.empty((1,1),dtype=np.uint8); image.fill(255)
             save_fname = 'tmp_frame%07d_%s.png'%(frame,cam_id)
             save_fname_path = os.path.join(dest_dir, save_fname)
-            canv=benu.Canvas(save_fname_path,image.shape[1],image.shape[0])
-            canv.imshow(image,0,0)
-            if config['what to show']['show_2d_position']:
-                cond = tracker_data['camn']==camn
-                this_cam_data = tracker_data[cond]
-                xarr = np.atleast_1d(this_cam_data['x'])
-                yarr = np.atleast_1d(this_cam_data['y'])
-                canv.scatter(xarr, yarr,
-                             color_rgba=(0,1,0,1),
-                             radius=10,
-                             )
-            if config['what to show']['show_2d_orientation']:
-                cond = tracker_data['camn']==camn
-                this_cam_data = tracker_data[cond]
-                xarr = np.atleast_1d(this_cam_data['x'])
-                yarr = np.atleast_1d(this_cam_data['y'])
-                slope = np.atleast_1d(this_cam_data['slope'])
-                thetaarr = np.arctan(slope)
-                line_len = 30.0
-                xinc = np.cos(thetaarr)*line_len
-                yinc = np.sin(thetaarr)*line_len
-                for x,y,xi,yi in zip(xarr,yarr,xinc,yinc):
-                    canv.plot([x-xi,x+xi],[y-yi,y+yi],
-                              color_rgba=(0,1,0,0.4),
+
+            pixel_aspect = config[cam_id].get('pixel_aspect',1)
+            transform = config[cam_id].get('transform','orig')
+
+            if config['what to show']['max_resolution'] is not None:
+                fix_w, fix_h = config['what to show']['max_resolution']
+                fix_aspect = fix_w/float(fix_h)
+                desire_aspect = image.shape[1]/float(image.shape[0]*pixel_aspect)
+                if desire_aspect >= fix_aspect:
+                    # image is wider than resolution given
+                    device_w = fix_w
+                    device_h = fix_w/desire_aspect
+                    device_x = 0
+                    device_y = (fix_h-device_h)/2.0
+                else:
+                    # image is taller than resolution given
+                    device_h = fix_h
+                    device_w = fix_h*desire_aspect
+                    device_y = 0
+                    device_x = (fix_w-device_w)/2.0
+            else:
+                device_x = 0
+                device_y = 0
+                device_w = image.shape[1]
+                device_h = int(image.shape[0]*pixel_aspect) # compensate for pixel_aspect
+                fix_w = device_w
+                fix_h = device_h
+
+            canv=benu.Canvas(save_fname_path,fix_w,fix_h)
+            device_rect = (device_x,device_y,device_w,device_h)
+            user_rect = (0,0,image.shape[1],image.shape[0])
+            with canv.set_user_coords(device_rect, user_rect,
+                                      transform=transform):
+                canv.imshow(image,0,0)
+                if config['what to show']['show_2d_position']:
+                    cond = tracker_data['camn']==camn
+                    this_cam_data = tracker_data[cond]
+                    xarr = np.atleast_1d(this_cam_data['x'])
+                    yarr = np.atleast_1d(this_cam_data['y'])
+                    canv.scatter(xarr, yarr,
+                                 color_rgba=(0,1,0,1),
+                                 radius=10,
+                                 )
+                if config['what to show']['show_2d_orientation']:
+                    cond = tracker_data['camn']==camn
+                    this_cam_data = tracker_data[cond]
+                    xarr = np.atleast_1d(this_cam_data['x'])
+                    yarr = np.atleast_1d(this_cam_data['y'])
+                    slope = np.atleast_1d(this_cam_data['slope'])
+                    thetaarr = np.arctan(slope)
+                    line_len = 30.0
+                    xinc = np.cos(thetaarr)*line_len
+                    yinc = np.sin(thetaarr)*line_len
+                    for x,y,xi,yi in zip(xarr,yarr,xinc,yinc):
+                        canv.plot([x-xi,x+xi],[y-yi,y+yi],
+                                  color_rgba=(0,1,0,0.4),
+                                  )
+                if workaround_ffmpeg2theora_bug:
+                    # first frame should get a colored pixel so that
+                    # ffmpeg doesn't interpret the whole move as grayscale
+                    canv.plot([0,1],[0,1],
+                              color_rgba=(1,0,0,0.1),
                               )
-            if workaround_ffmpeg2theora_bug:
-                # first frame should get a colored pixel so that
-                # ffmpeg doesn't interpret the whole move as grayscale
-                canv.plot([0,1],[0,1],
-                          color_rgba=(1,0,0,0.1),
-                          )
-                workaround_ffmpeg2theora_bug = False # Now we already did it.
+                    workaround_ffmpeg2theora_bug = False # Now we already did it.
 
             canv.save()
             saved_fnames.append( save_fname_path )
