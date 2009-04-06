@@ -456,6 +456,7 @@ def kalmanize(src_filename,
     else:
         sync_error_threshold=options.sync_error_threshold_msec/1000.0
 
+    h5saver = None
     try:
         if do_full_kalmanization:
             textlog_save_lines = [
@@ -749,7 +750,8 @@ def kalmanize(src_filename,
             tracker.kill_all_trackers() # done tracking
     finally:
         if do_full_kalmanization:
-            h5saver.close()
+            if h5saver is not None:
+                h5saver.close()
         results.close()
 
     if accum_frame_spread is not None:
