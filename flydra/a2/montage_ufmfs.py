@@ -140,7 +140,7 @@ def make_montage( h5_filename,
                     thetaarr = np.arctan(slope)
                     line_len = 30.0
                     xinc = np.cos(thetaarr)*line_len
-                    yinc = np.sin(thetaarr)*line_len
+                    yinc = np.sin(thetaarr)*line_len/float(pixel_aspect)
                     for x,y,xi,yi in zip(xarr,yarr,xinc,yinc):
                         canv.plot([x-xi,x+xi],[y-yi,y+yi],
                                   color_rgba=(0,1,0,0.4),
