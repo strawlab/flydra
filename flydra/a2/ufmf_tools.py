@@ -43,9 +43,12 @@ def iterate_frames(h5_filename,
     for ufmf_fname in ufmf_fnames:
         cam_id = get_cam_id_from_ufmf_fname(ufmf_fname)
         cam_ids.append( cam_id )
+        kwargs = {}
+        if white_background:
+            kwargs['use_conventional_named_mean_fmf']=False
         ufmf = ufmf_mod.FlyMovieEmulator(ufmf_fname,
                                          white_background=white_background,
-                                         )
+                                         **kwargs)
         tss = ufmf.get_all_timestamps()
         ufmfs[ufmf_fname] = (ufmf, cam_id, tss)
         min_ts = np.min(tss)
@@ -91,6 +94,7 @@ def iterate_frames(h5_filename,
         cam_id2camn[cam_id] = camns[0]
 
     if 1:
+        # narrow search to local region of .h5
         cond = ((first_ufmf_ts <= h5_timestamps) &
                 (h5_timestamps <= last_ufmf_ts))
         use_frames = h5_frames[cond]
@@ -111,6 +115,12 @@ def iterate_frames(h5_filename,
             # trim data under consideration to just this frame
             this_camns = h5_camns[idxs]
             this_tss = h5_timestamps[idxs]
+
+            # a couple more checks
+            if np.any( this_tss < first_ufmf_ts):
+                continue
+            if np.any( this_tss >= last_ufmf_ts):
+                break
 
             this_frames = h5_frames[idxs]
 
