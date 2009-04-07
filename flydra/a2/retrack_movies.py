@@ -119,6 +119,7 @@ def retrack_movies( h5_filename,
 
             fpc = realtime_image_analysis.FitParamsClass() # allocate FitParamsClass
 
+            count = 0
             iterate_frames = ufmf_tools.iterate_frames # shorten notation
             for frame_enum,(frame_dict,frame) in enumerate(iterate_frames(
                 h5_filename, ufmf_fnames,
@@ -136,6 +137,7 @@ def retrack_movies( h5_filename,
                     except KeyError:
                         # no data saved (frame skip on Prosilica camera?)
                         continue
+                    count += 1
                     camn = frame_data['camn']
                     cam_id = frame_data['cam_id']
                     camcfg = config.get(cam_id,default_camcfg)
@@ -269,6 +271,8 @@ def retrack_movies( h5_filename,
                         detection['x']=np.nan
                         detection['y']=np.nan
                         detection.append()
+            if count == 0:
+                raise RuntimeError('no frames processed')
 
 def main():
     usage = '%prog DATAFILE2D.h5 [options]'

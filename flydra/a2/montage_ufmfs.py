@@ -61,6 +61,8 @@ def make_montage( h5_filename,
 
     workaround_ffmpeg2theora_bug = True
 
+    blank_images = {}
+
     all_frame_montages = []
     for frame_enum,(frame_dict,frame) in enumerate(ufmf_tools.iterate_frames(
         h5_filename, ufmf_fnames,
@@ -81,11 +83,16 @@ def make_montage( h5_filename,
                 cam_id = frame_data['cam_id']
                 camn = frame_data['camn']
                 image = frame_data['image']
+                del frame_data
             except KeyError:
                 # no data saved (frame skip on Prosilica camera?)
                 cam_id = ufmf_tools.get_cam_id_from_ufmf_fname(ufmf_fname)
                 camn = None
-                image = np.empty((1,1),dtype=np.uint8); image.fill(255)
+                if cam_id not in blank_images:
+                    # XXX should get known image size of .ufmf
+                    image = np.empty((480,640),dtype=np.uint8); image.fill(255)
+                    blank_images[cam_id] = image
+                image = blank_images[cam_id]
             save_fname = 'tmp_frame%07d_%s.png'%(frame,cam_id)
             save_fname_path = os.path.join(dest_dir, save_fname)
 
@@ -122,7 +129,7 @@ def make_montage( h5_filename,
             with canv.set_user_coords(device_rect, user_rect,
                                       transform=transform):
                 canv.imshow(image,0,0)
-                if config['what to show']['show_2d_position']:
+                if config['what to show']['show_2d_position'] and camn is not None:
                     cond = tracker_data['camn']==camn
                     this_cam_data = tracker_data[cond]
                     xarr = np.atleast_1d(this_cam_data['x'])
@@ -131,7 +138,7 @@ def make_montage( h5_filename,
                                  color_rgba=(0,1,0,1),
                                  radius=10,
                                  )
-                if config['what to show']['show_2d_orientation']:
+                if config['what to show']['show_2d_orientation'] and camn is not None:
                     cond = tracker_data['camn']==camn
                     this_cam_data = tracker_data[cond]
                     xarr = np.atleast_1d(this_cam_data['x'])
