@@ -22,9 +22,9 @@ import pickle, collections
 def get_config_defaults():
     default = {'pixel_aspect': 1,
                # In order of operations:
-               'absdiff_max_frac_thresh': 0.8,
-               'min_absdiff': 5,
-               'area_minimum_threshold': 10,
+               'absdiff_max_frac_thresh': 0.6,
+               'min_absdiff': 2,
+               'area_minimum_threshold': 0,
                }
     result = collections.defaultdict(dict)
     result['default']=default
@@ -221,13 +221,13 @@ def retrack_movies( h5_filename,
                                         y0_roi *= 0.5
                                     xmean = x_slice.start + x0_roi
                                     ymean = y_slice.start + y0_roi
+                                    del weighted_area # don't leave room for confusion
                             else:
                                 fail_fit = True
 
                             if fail_fit:
                                 slope = np.nan
                                 eccentricity = np.nan
-                                weighted_area = pixel_area
 
                             detection['camn']=camn
                             detection['frame']=frame
@@ -235,10 +235,14 @@ def retrack_movies( h5_filename,
                             detection['cam_received_timestamp']=cam_received_timestamp
                             detection['x']=xmean
                             detection['y']=ymean
-                            detection['area']=weighted_area
+                            detection['area']=pixel_area
                             detection['slope']=slope
                             detection['eccentricity']=eccentricity
                             detection['frame_pt_idx']=frame_pt_idx
+                            # XXX These are not yet implemented:
+                            detection['cur_val']=0
+                            detection['mean_val']=np.nan
+                            detection['sumsqf_val']=np.nan
                             frame_pt_idx += 1
                             if save_debug_images:
                                 xarr.append(xmean)
@@ -270,6 +274,13 @@ def retrack_movies( h5_filename,
                         detection['cam_received_timestamp']=cam_received_timestamp
                         detection['x']=np.nan
                         detection['y']=np.nan
+                        detection['area']=np.nan
+                        detection['slope']=np.nan
+                        detection['eccentricity']=np.nan
+                        detection['frame_pt_idx']=0
+                        detection['cur_val']=0
+                        detection['mean_val']=np.nan
+                        detection['sumsqf_val']=np.nan
                         detection.append()
             if count == 0:
                 raise RuntimeError('no frames processed')
