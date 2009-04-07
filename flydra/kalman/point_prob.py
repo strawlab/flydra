@@ -1,4 +1,5 @@
 import numpy
+import numpy as np
 
 def some_rough_negative_log_likelihood( pt_area=None, cur_val=None, mean_val=None, sumsqf_val=None ):
     # pt_area and sumsqf_val can be None
@@ -7,6 +8,12 @@ def some_rough_negative_log_likelihood( pt_area=None, cur_val=None, mean_val=Non
 
     cur_val = numpy.atleast_1d(cur_val)
     mean_val = numpy.atleast_1d(mean_val)
+
+    if np.all(cur_val==0) and np.all(np.isnan(mean_val)) and np.all(np.isnan(sumsqf_val)):
+        # This happens when using retracked images.
+        raise RuntimeError('should not gate data on appearance. '
+                           'Hint: use --disable-image-stat-gating')
+
     if sumsqf_val is not None:
         sumsqf_val = numpy.atleast_1d(sumsqf_val)
 
