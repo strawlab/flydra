@@ -6,6 +6,8 @@ Estimating orientations with flydra
     animals -> onlinePosOri2D;
     animals -> ufmfs;
     onlinePosOri2D -> ufmfs -> imageOri2D -> Ori3D;
+    onlinePosOri2D -> retrackedPos2D;
+    ufmfs -> retrackedPos2D;
     onlinePosOri2D -> ekfPos3D;
     calib -> onlineOri3D;
     calib -> Ori3D;
