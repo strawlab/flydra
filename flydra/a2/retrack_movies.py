@@ -37,6 +37,7 @@ def retrack_movies( h5_filename,
                     stop = None,
                     ufmf_dir = None,
                     cfg_filename=None,
+                    ufmf_filenames=None,
                     ):
 
     save_debug_images = False
@@ -46,9 +47,10 @@ def retrack_movies( h5_filename,
     # allow rapid building of numpy.rec.array:
     Info2DCol_description = tables.Description(Info2D().columns)._v_nestedDescr
 
-    ufmf_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
-                                                  ufmf_dir=ufmf_dir,
-                                                  careful=True )
+    if ufmf_filenames is None:
+        ufmf_filenames = auto_discover_ufmfs.find_ufmfs( h5_filename,
+                                                      ufmf_dir=ufmf_dir,
+                                                      careful=True )
 
     if os.path.exists( output_h5_filename ):
         raise RuntimeError(
@@ -73,7 +75,7 @@ def retrack_movies( h5_filename,
     datetime_str = datetime_str[4:19]
 
     retrack_cam_ids = [ufmf_tools.get_cam_id_from_ufmf_fname(f)
-                       for f in ufmf_fnames]
+                       for f in ufmf_filenames]
 
     with openFileSafe( h5_filename, mode='r' ) as h5:
 
@@ -122,7 +124,7 @@ def retrack_movies( h5_filename,
             count = 0
             iterate_frames = ufmf_tools.iterate_frames # shorten notation
             for frame_enum,(frame_dict,frame) in enumerate(iterate_frames(
-                h5_filename, ufmf_fnames,
+                h5_filename, ufmf_filenames,
                 max_n_frames = max_n_frames,
                 start = start,
                 stop = stop,
@@ -131,7 +133,7 @@ def retrack_movies( h5_filename,
                 if (frame_enum%100)==0:
                     print '%s: frame %d'%(datetime_str,frame)
 
-                for ufmf_fname in ufmf_fnames:
+                for ufmf_fname in ufmf_filenames:
                     try:
                         frame_data = frame_dict[ufmf_fname]
                     except KeyError:
@@ -302,27 +304,42 @@ def main():
     parser.add_option("--stop", type='int', default=None,
                       help="stop frame")
 
+    parser.add_option("--h5", type='string',
+                      help="filename for input .h5 file with data2d_distorted")
+
     parser.add_option("--output-h5", type='string',
                       help="filename for output .h5 file with data2d_distorted")
 
     parser.add_option("--config", type='string',
                       help="configuration file name")
 
+    parser.add_option("--ufmfs", type='string',
+                      help=("sequence of .ufmf filenames "
+                            "(e.g. 'cam1.ufmf:cam2.ufmf')"))
+
     (options, args) = parser.parse_args()
 
-    if len(args)<1:
+    if len(args)!=0:
         parser.print_help()
         return
+
+    if options.h5 is None:
+        raise ValueError('--h5 option must be specified')
 
     if options.output_h5 is None:
         raise ValueError('--output-h5 option must be specified')
 
-    h5_filename = args[0]
-    retrack_movies( h5_filename,
+    if options.ufmfs is None:
+        ufmf_filenames = None
+    else:
+        ufmf_filenames = options.ufmfs.split(os.pathsep)
+
+    retrack_movies( options.h5,
                     cfg_filename = options.config,
                     ufmf_dir = options.ufmf_dir,
                     max_n_frames = options.max_n_frames,
                     start = options.start,
                     stop = options.stop,
                     output_h5_filename=options.output_h5,
+                    ufmf_filenames=ufmf_filenames,
                     )
