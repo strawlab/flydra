@@ -115,9 +115,9 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
 
     Q = numpy.zeros((ss,ss))
     for i in range(0,3):
-        Q[i,i] = (0.05)**2
+        Q[i,i] = (0.04)**2
     for i in range(3,6):
-        Q[i,i] = (0.8)**2
+        Q[i,i] = (0.4)**2
 
     # measurement noise covariance matrix
     R = 1e-2*numpy.eye(os)
@@ -130,7 +130,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
         min_dist_to_believe_new_meters=0.2, # 20 cm
         min_dist_to_believe_new_sigma=3.0,
 
-        initial_position_covariance_estimate=1e-4,
+        initial_position_covariance_estimate=1e-2,
         initial_velocity_covariance_estimate=10,
 
         # support existint object
@@ -285,11 +285,11 @@ class HbirdEKFAllParams(EKFAllParams):
                     ]:
             self[key] = linear_dict[key]
         self['ekf_observation_covariance_pixels'] = numpy.array(
-            [[3.0, 0.0],
-             [0.0, 3.0]],
+            [[15.0, 0.0],
+             [0.0, 15.0]],
             dtype=numpy.float64 )
         # distance in the raw image plane (i.e. before radial undistortion)
-        self['distorted_pixel_euclidian_distance_accept']=30.0
+        self['distorted_pixel_euclidian_distance_accept']=15.0
 
 ekf_models = {'EKF mamarama, units: mm':MamaramaMMEKFAllParams,
               'EKF hbird, units: mm':HbirdEKFAllParams,
