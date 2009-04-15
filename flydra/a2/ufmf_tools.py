@@ -77,17 +77,39 @@ def iterate_frames(h5_filename,
 
         h5_data = h5.root.data2d_distorted[:]
 
-    cam_id2camn = {}
-    for cam_id in cam_ids:
-        camns = cam_id2camns[cam_id]
-        assert len(camns)==1, "can't handle multiple camns per cam_id"
-        cam_id2camn[cam_id] = camns[0]
-
     if 1:
         # narrow search to local region of .h5
         cond = ((first_ufmf_ts <= h5_data[timestamp_name]) &
                 (h5_data[timestamp_name] <= last_ufmf_ts))
         narrow_h5_data = h5_data[cond]
+
+        narrow_camns = narrow_h5_data['camn']
+        narrow_timestamps = narrow_h5_data[timestamp_name]
+
+        # Find the camn for each .ufmf file
+        cam_id2camn = {}
+        for cam_id in cam_ids:
+            cam_id_camn_already_found = False
+            for ufmf_fname in ufmfs.keys():
+                (ufmf, test_cam_id, tss) = ufmfs[ufmf_fname]
+                if cam_id != test_cam_id:
+                    continue
+                assert not cam_id_camn_already_found
+                cam_id_camn_already_found = True
+
+                umin=np.min(tss)
+                umax=np.max(tss)
+                cond = (umin<=narrow_timestamps) & (narrow_timestamps<=umax)
+                ucamns = narrow_camns[cond]
+                ucamns = np.unique1d(ucamns)
+                camns = []
+                for camn in ucamns:
+                    if camn2cam_id[camn]==cam_id:
+                        camns.append(camn)
+
+                assert len(camns)==1, "can't handle multiple camns per cam_id"
+                cam_id2camn[cam_id] = camns[0]
+
         ff = utils.FastFinder(narrow_h5_data['frame'])
         unique_frames = list(np.unique1d(narrow_h5_data['frame']))
         unique_frames.sort()
