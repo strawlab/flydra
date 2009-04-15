@@ -27,8 +27,6 @@ import flydra.fastgeom as geom
 #import flydra.geom as geom
 
 import flydra.data_descriptions
-import motmot.fview_ext_trig.ttrigger
-import motmot.fview_ext_trig.live_timestamp_modeler
 
 import warnings, errno
 warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
@@ -1706,6 +1704,9 @@ class MainBrain(object):
     def __init__(self,server=None,save_profiling_data=False, show_sync_errors=True):
         global main_brain_keeper, hostname
 
+        import motmot.fview_ext_trig.ttrigger
+        import motmot.fview_ext_trig.live_timestamp_modeler
+
         if server is not None:
             hostname = server
         print 'running mainbrain at hostname "%s"'%hostname
@@ -1934,6 +1935,7 @@ class MainBrain(object):
         self._check_latencies()
 
     def _trigger_framecount_check(self):
+        import motmot.fview_ext_trig.live_timestamp_modeler
         try:
             tmp = self.timestamp_modeler.update(return_last_measurement_info=True)
             start_timestamp, stop_timestamp, framecount, tcnt = tmp
