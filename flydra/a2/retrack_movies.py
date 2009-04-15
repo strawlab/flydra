@@ -17,7 +17,7 @@ import motmot.FastImage.FastImage as FastImage
 import motmot.realtime_image_analysis.realtime_image_analysis \
        as realtime_image_analysis
 import cherrypy  # ubuntu: install python-cherrypy3
-import pickle, collections
+import pickle, collections, tempfile, shutil
 
 def get_config_defaults():
     default = {'pixel_aspect': 1,
@@ -87,7 +87,12 @@ def retrack_movies( h5_filename,
             retrack_camns.extend( cam_id2camns[cam_id] )
         all_camns = camn2cam_id.keys()
 
-        with openFileSafe( output_h5_filename, mode='w') as output_h5:
+        # Save results to temporary file. Copy to real location on success.
+        tmp_fd,tmp_output_h5_filename = tempfile.mkstemp(suffix='.h5',
+                                                         prefix='retrack')
+        os.fdopen(tmp_fd).close()
+
+        with openFileSafe( tmp_output_h5_filename, mode='w') as output_h5:
 
             out_data2d = output_h5.createTable(
                 output_h5.root,
@@ -287,6 +292,9 @@ def retrack_movies( h5_filename,
             if count == 0:
                 raise RuntimeError('no frames processed')
 
+    tmp_output_h5_filename = tempfile.mkstemp(suffix='.h5',prefix='retrack')
+    shutil.copyfile(tmp_output_h5_filename, output_h5_filename)
+
 def main():
     usage = '%prog DATAFILE2D.h5 [options]'
 
@@ -334,12 +342,19 @@ def main():
     else:
         ufmf_filenames = options.ufmfs.split(os.pathsep)
 
-    retrack_movies( options.h5,
-                    cfg_filename = options.config,
-                    ufmf_dir = options.ufmf_dir,
-                    max_n_frames = options.max_n_frames,
-                    start = options.start,
-                    stop = options.stop,
-                    output_h5_filename=options.output_h5,
-                    ufmf_filenames=ufmf_filenames,
-                    )
+    try:
+        retrack_movies( options.h5,
+                        cfg_filename = options.config,
+                        ufmf_dir = options.ufmf_dir,
+                        max_n_frames = options.max_n_frames,
+                        start = options.start,
+                        stop = options.stop,
+                        output_h5_filename=options.output_h5,
+                        ufmf_filenames=ufmf_filenames,
+                        )
+    except:
+        # remove output file if there was an error
+        if os.path.exists(options.output_h5):
+            os.unlink(options.output_h5)
+        # raise the exception
+        raise
