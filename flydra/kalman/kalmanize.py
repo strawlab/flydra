@@ -1,3 +1,4 @@
+from __future__ import with_statement
 import numpy
 import numpy as np
 import flydra.reconstruct
@@ -21,6 +22,7 @@ from flydra.MainBrain import TextLogDescription
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 from flydra.reconstruct import do_3d_operations_on_2d_point
 import flydra.a2.utils as utils
+from flydra.a2.tables_tools import openFileSafe
 
 # Not really "observations" but ML estimates
 FilteredObservations = flydra_kalman_utils.FilteredObservations
@@ -172,7 +174,7 @@ option to this program.
 
 class KalmanSaver:
     def __init__(self,
-                 dest_filename,
+                 h5file,
                  reconst_orig_units,
                  cam_id2camns=None,
                  min_observations_to_save=0,
@@ -190,14 +192,9 @@ class KalmanSaver:
         kalman_estimates_description = (
             self.kalman_saver_info_instance.get_description())
 
-        if os.path.exists(dest_filename):
-            raise ValueError('%s already exists. Will not '
-                             'overwrite.'%dest_filename)
-
         filters = tables.Filters(1, complib='lzo') # compress
 
-        self.h5file = PT.openFile(
-            dest_filename, mode="w", title="tracked Flydra data file")
+        self.h5file = h5file
         reconst_orig_units.save_to_h5file(self.h5file)
         self.h5_xhat = self.h5file.createTable(
             self.h5file.root,'kalman_estimates',
@@ -256,7 +253,7 @@ class KalmanSaver:
         self.all_kalman_calibration_data = []
 
     def close(self):
-        self.h5file.close()
+        pass
 
     def save_tro(self,tro):
         if len(tro.observations_frames) < self.min_observations_to_save:
@@ -433,8 +430,13 @@ def kalmanize(src_filename,
     else:
         sync_error_threshold=options.sync_error_threshold_msec/1000.0
 
-    h5saver = None
-    try:
+    if os.path.exists(dest_filename):
+        raise ValueError('%s already exists. Will not '
+                         'overwrite.'%dest_filename)
+
+    with openFileSafe(dest_filename, mode="w", title="tracked Flydra data file",
+                      delete_on_error=True) as h5file:
+
         if do_full_kalmanization:
             textlog_save_lines = [
                 'kalmanize running at %s fps, (hypothesis_test_max_error %s)'%(
@@ -447,7 +449,7 @@ def kalmanize(src_filename,
             kalman_model = dynamic_models.get_kalman_model(
                 name=dynamic_model_name, dt=dt )
 
-            h5saver = KalmanSaver(dest_filename,
+            h5saver = KalmanSaver(h5file,
                                   reconst_orig_units,
                                   cam_id2camns=cam_id2camns,
                                   min_observations_to_save=min_observations_to_save,
@@ -725,11 +727,7 @@ def kalmanize(src_filename,
 
         if do_full_kalmanization:
             tracker.kill_all_trackers() # done tracking
-    finally:
-        if do_full_kalmanization:
-            if h5saver is not None:
-                h5saver.close()
-        results.close()
+    results.close()
 
     if accum_frame_spread is not None:
         # save spread data to file for analysis
