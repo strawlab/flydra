@@ -22,8 +22,8 @@ import pickle, collections
 def get_config_defaults():
     default = {'pixel_aspect': 1,
                # In order of operations:
-               'absdiff_max_frac_thresh': 0.6,
-               'min_absdiff': 2,
+               'absdiff_max_frac_thresh': 0.4,
+               'min_absdiff': 5,
                'area_minimum_threshold': 0,
                }
     result = collections.defaultdict(dict)
