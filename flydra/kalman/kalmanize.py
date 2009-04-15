@@ -980,11 +980,11 @@ def main():
         print >> sys.stderr, ("arguments interpreted as FILE supplied more "
                               "than once")
         parser.print_help()
-        return
+        sys.exit(1)
 
     if len(args)<1:
         parser.print_help()
-        return
+        sys.exit(1)
 
     src_filename = args[0]
 
