@@ -194,42 +194,38 @@ class KalmanSaver:
             raise ValueError('%s already exists. Will not '
                              'overwrite.'%dest_filename)
 
-        if 1:
-            if 1:
-                filters = tables.Filters(1, complib='lzo') # compress
-            else:
-                filters = tables.Filters(0)
+        filters = tables.Filters(1, complib='lzo') # compress
 
-            self.h5file = PT.openFile(
-                dest_filename, mode="w", title="tracked Flydra data file")
-            reconst_orig_units.save_to_h5file(self.h5file)
-            self.h5_xhat = self.h5file.createTable(
-                self.h5file.root,'kalman_estimates',
-                kalman_estimates_description,
-                "Kalman a posteriori estimates of tracked object",
-                filters=filters)
-            self.h5_xhat.attrs.dynamic_model_name = dynamic_model_name
-            self.h5_xhat.attrs.dynamic_model = dynamic_model
+        self.h5file = PT.openFile(
+            dest_filename, mode="w", title="tracked Flydra data file")
+        reconst_orig_units.save_to_h5file(self.h5file)
+        self.h5_xhat = self.h5file.createTable(
+            self.h5file.root,'kalman_estimates',
+            kalman_estimates_description,
+            "Kalman a posteriori estimates of tracked object",
+            filters=filters)
+        self.h5_xhat.attrs.dynamic_model_name = dynamic_model_name
+        self.h5_xhat.attrs.dynamic_model = dynamic_model
 
-            self.h5_obs = self.h5file.createTable(
-                self.h5file.root,'kalman_observations', FilteredObservations,
-                "observations of tracked object",filters=filters)
+        self.h5_obs = self.h5file.createTable(
+            self.h5file.root,'kalman_observations', FilteredObservations,
+            "observations of tracked object",filters=filters)
 
-            self.h5_2d_obs_next_idx = 0
+        self.h5_2d_obs_next_idx = 0
 
-            # Note that kalman_observations_2d_idxs_type() should
-            # match dtype with tro.observations_2d.
+        # Note that kalman_observations_2d_idxs_type() should
+        # match dtype with tro.observations_2d.
 
-            self.h5_2d_obs = self.h5file.createVLArray(
-                self.h5file.root,
-                'kalman_observations_2d_idxs',
-                kalman_observations_2d_idxs_type(),
-                "camns and idxs")
+        self.h5_2d_obs = self.h5file.createVLArray(
+            self.h5file.root,
+            'kalman_observations_2d_idxs',
+            kalman_observations_2d_idxs_type(),
+            "camns and idxs")
 
-            self.obj_id = -1
+        self.obj_id = -1
 
-            self.h5textlog = self.h5file.createTable(
-                self.h5file.root,'textlog',TextLogDescription,'text log')
+        self.h5textlog = self.h5file.createTable(
+            self.h5file.root,'textlog',TextLogDescription,'text log')
 
         if 1:
             textlog_row = self.h5textlog.row
