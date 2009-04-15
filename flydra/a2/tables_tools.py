@@ -2,6 +2,7 @@ from __future__ import with_statement
 import contextlib, warnings
 import tables
 import numpy as np
+import os
 
 def clear_col(dest_table, colname, fill_value=np.nan):
     if 0:
@@ -21,9 +22,14 @@ def clear_col(dest_table, colname, fill_value=np.nan):
             row.update()
 
 @contextlib.contextmanager
-def openFileSafe(*args,**kwargs):
-    result = tables.openFile(*args,**kwargs)
+def openFileSafe(filename,delete_on_error=False,**kwargs):
+    result = tables.openFile(filename,**kwargs)
     try:
         yield result
+    except:
+        result.close()
+        if delete_on_error:
+            os.unlink(filename)
+        raise
     finally:
         result.close()

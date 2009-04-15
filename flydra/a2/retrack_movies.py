@@ -92,7 +92,8 @@ def retrack_movies( h5_filename,
                                                          prefix='retrack')
         os.fdopen(tmp_fd).close()
 
-        with openFileSafe( tmp_output_h5_filename, mode='w') as output_h5:
+        with openFileSafe( tmp_output_h5_filename, mode='w',
+                           delete_on_error=True) as output_h5:
 
             out_data2d = output_h5.createTable(
                 output_h5.root,
@@ -292,8 +293,8 @@ def retrack_movies( h5_filename,
             if count == 0:
                 raise RuntimeError('no frames processed')
 
-    tmp_output_h5_filename = tempfile.mkstemp(suffix='.h5',prefix='retrack')
-    shutil.copyfile(tmp_output_h5_filename, output_h5_filename)
+    # move to correct location
+    shutil.move(tmp_output_h5_filename, output_h5_filename)
 
 def main():
     usage = '%prog DATAFILE2D.h5 [options]'
@@ -342,19 +343,12 @@ def main():
     else:
         ufmf_filenames = options.ufmfs.split(os.pathsep)
 
-    try:
-        retrack_movies( options.h5,
-                        cfg_filename = options.config,
-                        ufmf_dir = options.ufmf_dir,
-                        max_n_frames = options.max_n_frames,
-                        start = options.start,
-                        stop = options.stop,
-                        output_h5_filename=options.output_h5,
-                        ufmf_filenames=ufmf_filenames,
-                        )
-    except:
-        # remove output file if there was an error
-        if os.path.exists(options.output_h5):
-            os.unlink(options.output_h5)
-        # raise the exception
-        raise
+    retrack_movies( options.h5,
+                    cfg_filename = options.config,
+                    ufmf_dir = options.ufmf_dir,
+                    max_n_frames = options.max_n_frames,
+                    start = options.start,
+                    stop = options.stop,
+                    output_h5_filename=options.output_h5,
+                    ufmf_filenames=ufmf_filenames,
+                    )
