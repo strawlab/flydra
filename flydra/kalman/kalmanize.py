@@ -46,6 +46,8 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
     frame_data = tracker.calculate_a_posteriori_estimates(
         frame,frame_data,camn2cam_id,debug2=debug)
 
+    frame_data = tracker.remove_duplicate_detections(frame,frame_data)
+
     # Now, tracked objects have been updated (and their 2D data points
     # removed from consideration), so we can use old flydra
     # "hypothesis testing" algorithm on remaining data to see if there

@@ -5,8 +5,9 @@ import flydra.kalman.ekf as kalman_ekf
 import flydra.fastgeom as geom
 import flydra.geom
 import os, math, struct
-import flydra.data_descriptions
+import flydra.data_descriptions as data_descriptions
 import warnings, collections
+from pprint import pprint
 
 import flydra_tracked_object
 from flydra_tracked_object import TrackedObject
@@ -331,6 +332,29 @@ class Tracker:
                 break
         return believably_new
 
+    def remove_duplicate_detections(self,frame,input_data_dict):
+        """remove points that are close to current objects being tracked"""
+
+        PT_TUPLE_IDX_FRAME_PT_IDX = data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
+
+        (test_frame, bad_camn_pts) = self.last_close_camn_pt_idxs
+        assert test_frame==frame
+
+        all_bad_pts = collections.defaultdict(set)
+        for camn, ptnum in bad_camn_pts:
+            all_bad_pts[camn].add(ptnum)
+
+        output_data_dict = collections.defaultdict(list)
+        for camn,camn_list in input_data_dict.iteritems():
+            bad_pts = all_bad_pts[camn]
+            for element in camn_list:
+                pt = element[0]
+                ptnum = pt[PT_TUPLE_IDX_FRAME_PT_IDX]
+                if ptnum not in bad_pts:
+                    output_data_dict[camn].append( element )
+
+        return output_data_dict
+
     def calculate_a_posteriori_estimates(self,frame,data_dict,camn2cam_id,debug2=0):
         # Allow earlier tracked objects to take all the data they
         # want.
@@ -351,10 +375,24 @@ class Tracker:
             camn2cam_id,
             debug1=debug2,
             )
-        for idx,result in enumerate(results):
-            used_camns_and_idxs, kill_me, obs2d_hash, Pmean = result
-            all_to_gobble.extend( used_camns_and_idxs )
+
         # this is reduce:
+        all_close_camn_pt_idxs = []
+        for idx,result in enumerate(results):
+            (used_camns_and_idxs, kill_me, obs2d_hash,
+             Pmean, close_camn_pt_idxs) = result
+
+            # Two similar lists -- lists of points that will be
+            # removed from further consideration. "Gobbling" prevents
+            # another object from using it if all the data were in
+            # common. Removal of "close", probable duplicate
+            # detections, does not remove consideration from
+            # pre-existing objects, but will prevent birth of new
+            # targets.
+
+            all_to_gobble.extend( used_camns_and_idxs )
+            all_close_camn_pt_idxs.extend( close_camn_pt_idxs )
+
             if kill_me:
                 kill_idxs.append( idx )
             if obs2d_hash is not None:
@@ -369,6 +407,7 @@ class Tracker:
                         to_rewind.append( idx )
                 else:
                     best_by_hash[obs2d_hash] = ( idx, Pmean )
+        self.last_close_camn_pt_idxs = (frame, all_close_camn_pt_idxs)
 
         # End  ================================================================
 
