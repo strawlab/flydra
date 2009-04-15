@@ -103,10 +103,12 @@ def find_ufmfs(filename,ufmf_dir=None,careful=False):
 def main():
     usage = """%prog [options] FILENAME"""
     parser = OptionParser(usage)
+    parser.add_option("--ufmf-dir", type='string',
+                      help="directory with .ufmf files")
     (options, args) = parser.parse_args()
     if len(args)!=1:
         raise ValueError('a (single) filename must be given')
     filename = args[0]
-    ufmfs = find_ufmfs(filename)
+    ufmfs = find_ufmfs(filename,ufmf_dir=options.ufmf_dir)
     for ufmf in ufmfs:
         print ufmf
