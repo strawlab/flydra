@@ -345,6 +345,7 @@ cdef class TrackedObject:
 
         this_observations_2d_hash = None
         used_camns_and_idxs = []
+        all_close_camn_pt_idxs = []
         Pmean = c_inf
         if not self.kill_me:
             self.current_frameno = frame
