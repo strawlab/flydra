@@ -191,27 +191,10 @@ class KalmanSaver:
             self.kalman_saver_info_instance.get_description())
 
         if os.path.exists(dest_filename):
-            self.h5file = PT.openFile(dest_filename, mode="r+")
-            test_reconst = flydra.reconstruct.Reconstructor(self.h5file)
-            assert test_reconst == reconst_orig_units
+            raise ValueError('%s already exists. Will not '
+                             'overwrite.'%dest_filename)
 
-            self.h5_xhat = self.h5file.root.kalman_estimates
-            self.h5_obs = self.h5file.root.kalman_observations
-
-            obj_ids = self.h5_xhat.read(field='obj_id')
-            if len(obj_ids):
-                self.obj_id = obj_ids.max()+1
-            else:
-                self.obj_id = 1
-            del obj_ids
-
-
-            self.h5_2d_obs = self.h5file.root.kalman_observations_2d_idxs
-            self.h5_2d_obs_next_idx = len(self.h5_2d_obs)
-
-            self.h5textlog = self.h5file.root.textlog
-
-        else:
+        if 1:
             if 1:
                 filters = tables.Filters(1, complib='lzo') # compress
             else:
@@ -440,10 +423,6 @@ def kalmanize(src_filename,
         if dest_filename is None:
             dest_filename = os.path.splitext(
                 results.filename)[0]+'.kalmanized.h5'
-            if os.path.exists(dest_filename):
-                raise ValueError('%s already exists and not '
-                                 'explicitly requesting append with '
-                                 '"--dest-file" option, quitting'%dest_filename)
 
     if frames_per_second is None:
         frames_per_second = get_fps(results)
