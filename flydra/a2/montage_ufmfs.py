@@ -57,7 +57,8 @@ def make_montage( h5_filename,
     # get name of data
 
     datetime_str = os.path.splitext(os.path.split(h5_filename)[-1])[0]
-    datetime_str = datetime_str[4:19]
+    if datetime_str.startswith('DATA'):
+        datetime_str = datetime_str[4:19]
 
     workaround_ffmpeg2theora_bug = True
 
