@@ -1,0 +1,82 @@
+
+Existing tables:
+----------------
+
+DATAYYYYMMDD_HHMMSS  each file named after timestamp
+ 
+    data2d_distorted        raw data from cameras
+    
+        camn                     ID camera (156 to 166, 11 in total)
+        frame                    camera frame
+        timestamp                camera computer timestamp ???
+        cam_received_timestamp   global timestamp ???
+        x                        pixel coordinates
+        y
+        area                     ???
+        slope                    ???
+        eccentricity             ???
+        frame_pt_idx             ???
+        cur_val                  ???
+        mean_val                 ???
+        mean2_val                ???
+        
+    kalman_observations    results of data association and transformation 2d->3d
+        
+        obj_id                   
+        frame                    
+        x                        coordinates
+        y
+        z 
+        obs_2d_idx               ??? 
+
+
+    kalman_estimates       data after the operation of kalman smoothing
+    
+        obj_id                   track id 
+        frame
+        timestamp          
+        x                        coordinates (m)
+        y
+        z
+        xvel                     velocities  (m/s)
+        yvel
+        zvel
+        P00 ... P55              covariances
+
+
+Tables to be added:
+-------------------
+
+    visual_sim           simulated visual data
+
+       frame            
+       timestamp
+
+       visual_data               1500 floats       "y"
+       visual_data_dot           1500 floats       "y_dot"
+       mu                        1500 floats
+       optic_flow                1500 x 2 floats
+       emds                      4000 (roughly)    
+
+       lptc                      50   floats       simulated LPTC activity
+
+       visual_data_filt          1500 floats       y filtered according to the eye
+       visual_data_dot_filt      1500 floats       ....
+       lptc_filt                 50   floats       ....
+
+
+	debug_images        images visualizing quantities in the flyscope 
+	
+       visual_data_vis           image             
+       mu_vis                    image             
+       optic_flow_vis            image             
+
+
+
+Fields to add somewhere
+-----------------------
+
+    - estimate of omega
+    - indication of which geometry for the arena
+    - add label segmentation of the trajectories	
+
