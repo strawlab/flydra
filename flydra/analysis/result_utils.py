@@ -4,6 +4,7 @@ tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy as np
 import sys, os, sets, re, hashlib
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
+import warnings
 
 import datetime
 import pytz # from http://pytz.sourceforge.net/
@@ -26,7 +27,7 @@ def md5sum_headtail(filename):
     bytes = start_bytes+stop_bytes
     m = hashlib.md5()
     m.update(bytes)
-    return m.digest()
+    return m.hexdigest()
 
 def status(status_string):
     print " status:",status_string
@@ -326,13 +327,16 @@ def timestamp2string(ts_float,timezone='US/Pacific'):
     # dt_ts.ctime()
     return dt_ts.isoformat()
 
-def model_remote_to_local(remote_timestamps, local_timestamps):
+def model_remote_to_local(remote_timestamps, local_timestamps, debug=False):
     """for timestamps"""
     a1=remote_timestamps[:,np.newaxis]
     a2=np.ones( (len(remote_timestamps),1))
     A = np.hstack(( a1,a2))
     b = local_timestamps[:,np.newaxis]
     x,resids,rank,s = np.linalg.lstsq(A,b)
+    if debug:
+        print 'in model_remote_to_local: N=%d, resids=%s'%(
+            len(remote_timestamps),resids)
     gain = x[0,0]
     offset = x[1,0]
     return gain,offset
@@ -387,7 +391,23 @@ def get_time_model_from_data(results,debug=False,full_output=False):
 
     timer_max = int( parsed['top'] )
     if debug:
-        print 'I found the timer maximum ("top") to be %d.)'%(timer_max,)
+        print 'I found the timer max ("top") to be %d.'%timer_max
+        FOSC = 8000000 # 8 MHz
+        CS_all = [1,8,64,256,1024]
+        CS_known=False
+        if 'trigger_CS3' in parsed:
+            CS = int(parsed['trigger_CS3'])
+            CS_all = [CS]
+            CS_known=True
+        for CS in CS_all:
+            F_CLK = FOSC/float(CS) # clock frequency, Hz
+            clock_tick_duration = 1.0/F_CLK
+            carrier_duration = timer_max*clock_tick_duration
+            carrier_freq = 1.0/carrier_duration
+            if CS_known:
+                print '  (%.1f Hz, CS=%s)'%(float(carrier_freq),CS)
+            else:
+                print '  (%.1f Hz if CS=%s)'%(float(carrier_freq),CS)
 
     # open the log of at90usb clock info
 
@@ -415,17 +435,31 @@ def get_time_model_from_data(results,debug=False,full_output=False):
     framestamp = framenumber + frac
 
     # fit linear model of relationship mainbrain timestamp and usb trigger_device framestamp
-    gain, offset = model_remote_to_local( framestamp, mb_timestamp )
-    result = TimeModel(gain, offset)
+    gain, offset = model_remote_to_local( framestamp, mb_timestamp, debug=debug )
+    time_model = TimeModel(gain, offset)
+
+    dt = time_model.framestamp2timestamp(1)-time_model.framestamp2timestamp(0)
+    fps_estimated = 1.0/dt
+
+    # Check that fps seems reasonable
+    fps_saved = get_fps(results,fail_on_error=False)
+    if fps_saved is not None:
+        if debug:
+            print 'fps_estimated,fps_saved',fps_estimated,fps_saved
+            print 'fps estimated from time model agrees with fps saved'
+        if not np.allclose(fps_estimated,fps_saved,rtol=1e-3):
+            warnings.warn('fps estimated and saved are different: %s vs %s'%(
+                fps_estimated, fps_saved))
+
     if full_output:
         full_results = {'framestamp':framestamp, # frame stamp on USB device
                         'mb_timestamp':mb_timestamp, # timestamp on main brain
                         'gain':gain,
                         'offset':offset,
                         }
-        return result, full_results
+        return time_model, full_results
     else:
-        return result
+        return time_model
 
 def drift_estimates(results):
     """calculate clock information"""

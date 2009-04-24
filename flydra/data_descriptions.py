@@ -24,7 +24,7 @@ class Info2D(PT.IsDescription):
     camn         = PT.UInt16Col(pos=0)
     frame        = PT.UInt64Col(pos=1)
     timestamp    = PT.FloatCol(pos=2) # when the image trigger happened (returned by low-level camera driver)
-    cam_received_timestamp  = PT.FloatCol(pos=3) # when the image was acquired by flydra software
+    cam_received_timestamp  = PT.FloatCol(pos=3) # when the image was acquired by flydra software (on camera computer)
     x            = PT.Float32Col(pos=4)
     y            = PT.Float32Col(pos=5)
     area         = PT.Float32Col(pos=6)

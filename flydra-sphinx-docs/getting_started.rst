@@ -69,7 +69,7 @@ Finally, the full test suite may be run with nose_::
 Editing the documentation
 -------------------------
 
-This documentation is built with Sphinx_ 0.5.
+This documentation is built with Sphinx_ 0.5.1.
 
 .. _Sphinx: http://sphinx.pocoo.org/
 

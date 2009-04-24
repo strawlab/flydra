@@ -331,7 +331,7 @@ class Tracker:
                 break
         return believably_new
 
-    def calculate_a_posteri_estimates(self,frame,data_dict,camn2cam_id,debug2=0):
+    def calculate_a_posteriori_estimates(self,frame,data_dict,camn2cam_id,debug2=0):
         # Allow earlier tracked objects to take all the data they
         # want.
 
@@ -344,12 +344,13 @@ class Tracker:
         to_rewind = []
         # I could parallelize this========================================
         # this is map:
-        results = self.live_tracked_objects.rmap( 'calculate_a_posteri_estimate',
-                                                  frame,
-                                                  data_dict,
-                                                  camn2cam_id,
-                                                  debug1=debug2,
-                                                  )
+        results = self.live_tracked_objects.rmap(
+            'calculate_a_posteriori_estimate',
+            frame,
+            data_dict,
+            camn2cam_id,
+            debug1=debug2,
+            )
         for idx,result in enumerate(results):
             used_camns_and_idxs, kill_me, obs2d_hash, Pmean = result
             all_to_gobble.extend( used_camns_and_idxs )

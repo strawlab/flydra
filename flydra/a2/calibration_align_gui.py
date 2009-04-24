@@ -64,7 +64,7 @@ class CalibrationAlignmentWindow(Widget):
         self.params = talign.Alignment()
         self.control = self.edit_traits(parent=parent,
                                         kind='subpanel',
-                                        context={'h1':self.params,
+                                        context={'h1':self.params, # XXX ???
                                                  'object':self},
                                         ).control
         self.params.on_trait_change( self._params_changed )

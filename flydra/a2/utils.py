@@ -1,5 +1,9 @@
 import numpy as np
-import time
+import time, warnings
+import scipy.weave
+
+#import pyximport; pyximport.install() # requires recent Cython
+import fastfinder_help
 
 class FastFinder(object):
     """fast search by use of a cached, sorted copy of the original data
@@ -11,11 +15,13 @@ class FastFinder(object):
     """
     def __init__(self,values1d):
         values1d = np.atleast_1d( values1d )
-        assert len(values1d.shape)==1, 'only 1D arrays supported'
+        assert values1d.ndim==1, 'only 1D arrays supported'
         self.idxs = np.argsort( values1d )
         self.sorted = values1d[ self.idxs ]
+        self.values = values1d
+
     def get_idxs_of_equal(self,testval):
-        """performs fast search on sorted data
+        """performs fast search for scalar
 
         Parameters
         ----------
@@ -50,6 +56,76 @@ class FastFinder(object):
 
         this_idxs = self.idxs[left_idx:right_idx]
         return this_idxs
+
+    def get_idx_of_equal(self,testvals):
+        return fastfinder_help.get_first_idx(
+            self.values.astype(np.float),
+            np.asanyarray(testvals).astype(np.float))
+
+    def get_idx_of_equal_weave(self,testvals):
+        haystack = self.values
+        needles = np.asanyarray(testvals)
+        found = np.empty( needles.shape, dtype=np.int )
+        if needles.ndim!=1:
+            raise NotImplementedError('only 1D testvals currently supported')
+        # TODO: speedup with binary search on pre-sorted values
+        code = r"""
+        int needle_found;
+        int i,j;
+        int nn=Nneedles[0];
+        int nh=Nhaystack[0];
+        for (i=0; i<nn; i++) {
+            needle_found = 0;
+            for (j=0; j<nh; j++) {
+                if (HAYSTACK1(j)==NEEDLES1(i)) {
+                    needle_found = 1;
+                    break;
+                 }
+            }
+            if (needle_found) {
+                FOUND1(i) = j;
+            } else {
+                FOUND1(i) = -1;
+            }
+        }
+        """
+        scipy.weave.inline(code,['needles','haystack','found'])
+        if np.any(found==-1):
+            raise ValueError('some of your needles were not found')
+        return found
+
+    def get_idx_of_equal_slow(self,testvals):
+        """performs fast search for vector
+
+        Fails unless there is one and only one equal value in the
+        searched data.
+
+        Parameters
+        ----------
+        testval : scalar
+          The value to find the indices of
+
+        Returns
+        -------
+        result : array
+          The indices into the original values1d array
+
+        Examples
+        --------
+
+        >>> a = np.array([ 10, 0, 2, 3, 3, 2.1, 1, 2.3 ])
+        >>> af = FastFinder(a)
+        >>> bs = [ 0, 1, 2 ]
+        >>> af.get_idx_of_equal(bs).tolist()
+        [1, 6, 2]
+
+        """
+        warnings.warn('slow implementation of get_idx_of_equal()')
+        tmp_result = [self.get_idxs_of_equal(t) for t in testvals]
+        for i,t in enumerate(tmp_result):
+            assert len(t)==1
+        result = [t[0] for t in tmp_result]
+        return np.array(result)
 
     def get_idxs_in_range(self,low,high):
         """performs fast search on sorted data
@@ -97,6 +173,8 @@ class FastFinder(object):
         return this_idxs
 
 def iter_contig_chunk_idxs( arr ):
+    if len(arr)==0:
+        return
     #ADS print 'arr',arr
     diff = arr[1:]-arr[:-1]
     #ADS print 'diff',diff
@@ -162,6 +240,7 @@ def test_get_contig_chunk_idxs_1():
                  (13,14),
                  ]
     actual = get_contig_chunk_idxs(input)
+    assert len(expected)==len(actual)
     for i in range(len(expected)):
         start, stop = expected[i]
         assert (start,stop)== actual[i]
@@ -176,6 +255,16 @@ def test_get_contig_chunk_idxs_2():
                  (13,14),
                  ]
     actual = get_contig_chunk_idxs(input)
+    assert len(expected)==len(actual)
+    for i in range(len(expected)):
+        start, stop = expected[i]
+        assert (start,stop)== actual[i]
+
+def test_get_contig_chunk_idxs_empty():
+    input = np.array( [] )
+    expected = []
+    actual = get_contig_chunk_idxs(input)
+    assert len(expected)==len(actual)
     for i in range(len(expected)):
         start, stop = expected[i]
         assert (start,stop)== actual[i]
@@ -268,5 +357,10 @@ def test_iter_non_overlapping_chunk_start_stops2():
         #print 'start,stop',start,stop
         assert stop > start
 
-
-
+def test_get_idx_of_equal():
+    a = np.array([ 10, 0, 2, 3, 3, 2.1, 1, 2.3 ])
+    af = FastFinder(a)
+    bs = [ 0, 1, 2 ]
+    actual = af.get_idx_of_equal(bs)
+    expected = np.array([1,6,2])
+    assert np.allclose(actual,expected)

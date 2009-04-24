@@ -44,6 +44,63 @@ NO_LCOORDS = numpy.nan,numpy.nan,numpy.nan,  numpy.nan,numpy.nan,numpy.nan
 cdef double cnan
 cnan = np.nan
 
+ctypedef int mybool
+
+cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, object xhatminus):
+    cdef int N
+    cdef mybool missing_data
+    cdef int i
+    cdef int ss
+
+    ss = len(xhatminus)
+
+    N = len(pmats_and_points_cov) # number of observations
+    if N > 0:
+        missing_data = False
+    else:
+        missing_data = True
+
+    # Create 2N vector of N observations.
+    y = numpy.empty((2*N,), dtype=numpy.float64)
+
+    # Create 2N x 4 observation model matrix (jacobian of h() at xhatminus).
+    C = numpy.zeros((2*N,ss), dtype=numpy.float64)
+
+    # Create 2N vector h(xhatminus) where xhatminus is the a
+    # priori estimate and h() is the observation model.
+    hx = numpy.empty((2*N,), dtype=numpy.float64)
+
+    # Create 2N x 2N observation covariance matrix
+    R = numpy.zeros((2*N,2*N), dtype=numpy.float64)
+
+    # evaluate jacobian for each participating camera
+    for i,(pmat,nonlin_model,xy2d_obs,cov) in enumerate(pmats_and_points_cov):
+
+        # fill prediction vector [ h(xhatminus) ]
+        hx_i = nonlin_model(xhatminus)
+        hx[2*i:2*i+2] = hx_i
+
+        # fill observation  vector
+        y[2*i:2*i+2] = xy2d_obs
+
+        # fill observation model
+        C_i = nonlin_model.evaluate_jacobian_at(xhatminus)
+        C[2*i:2*i+2,:3] = C_i
+
+        # fill observation covariance
+        R[2*i:2*i+2,2*i:2*i+2]=cov
+
+    ## if 1:
+    ##     print 'C'
+    ##     print C
+    ##     print 'y'
+    ##     print y
+    ##     print 'hx'
+    ##     print hx
+    ##     print 'R'
+    ##     print R
+    return y, hx, C, R, missing_data
+
 def obs2d_hashable( arr ):
     assert arr.dtype == numpy.uint16
     assert len(arr.shape)==1
@@ -63,8 +120,6 @@ def obs2d_hashable( arr ):
 
 cdef extern from "sys/types.h":
     ctypedef int u_int32_t
-
-ctypedef int mybool
 
 cdef class TrackedObject:
     """
@@ -88,6 +143,7 @@ cdef class TrackedObject:
     cdef int disable_image_stat_gating, orientation_consensus
     cdef object fake_timestamp
     cdef public u_int32_t obj_id
+    cdef object ekf_kalman_A, ekf_kalman_Q
 
     def __init__(self,
                  reconstructor_meters, # the Reconstructor instance
@@ -161,10 +217,10 @@ cdef class TrackedObject:
         self.max_frames_skipped = kalman_model['max_frames_skipped']
 
         if kalman_model.get( 'isEKF', False):
+            self.ekf_kalman_A = kalman_model['A']
+            self.ekf_kalman_Q = kalman_model['Q']
             # EKF
             self.my_kalman = kalman_ekf.EKF(
-                A=kalman_model['A'],
-                Q=kalman_model['Q'],
                 initial_x=initial_x,
                 initial_P=P_k1,
                 )
@@ -247,15 +303,15 @@ cdef class TrackedObject:
             else:
                 break
 
-    def calculate_a_posteri_estimate(self,
-                                     long frame,
-                                     object data_dict,
-                                     object camn2cam_id,
-                                     int debug1=0):
+    def calculate_a_posteriori_estimate(self,
+                                        long frame,
+                                        object data_dict,
+                                        object camn2cam_id,
+                                        int debug1=0):
         # Step 1. Update Kalman state to a priori estimates for this frame.
         # Step 1.A. Update Kalman state for each skipped frame.
 
-        # Make sure we have xhat_k1 (previous frames' a posteri)
+        # Make sure we have xhat_k1 (previous frames' a posteriori)
 
         # For each frame that was skipped, step the Kalman filter.
         # Since we have no observation, the estimated error will
@@ -275,7 +331,11 @@ cdef class TrackedObject:
             if debug1>2:
                 print 'updating for %d frames skipped'%(frames_skipped,)
             for i in range(frames_skipped):
-                xhat, P = self.my_kalman.step()
+                if isinstance(self.my_kalman, kalman_ekf.EKF):
+                    xhat, P = self.my_kalman.step(self.ekf_kalman_A,
+                                                  self.ekf_kalman_Q)
+                else:
+                    xhat, P = self.my_kalman.step()
                 ############ save outputs ###############
                 self.frames.append( self.current_frameno + i + 1 )
                 self.xhats.append( xhat )
@@ -288,7 +348,11 @@ cdef class TrackedObject:
         if not self.kill_me:
             self.current_frameno = frame
             # Step 1.B. Update Kalman to provide a priori estimates for this frame
-            xhatminus, Pminus = self.my_kalman.step1__calculate_a_priori()
+            if isinstance(self.my_kalman, kalman_ekf.EKF):
+                xhatminus, Pminus = self.my_kalman.step1__calculate_a_priori(
+                    self.ekf_kalman_A, self.ekf_kalman_Q)
+            else:
+                xhatminus, Pminus = self.my_kalman.step1__calculate_a_priori()
             if debug1>2:
                 print 'xhatminus'
                 print xhatminus
@@ -306,7 +370,7 @@ cdef class TrackedObject:
                 print 'position MLE, used_camns_and_idxs',observation_meters,used_camns_and_idxs
                 print 'Lcoords (3D body orientation) : %s'%str(Lcoords)
 
-            # Step 3. Incorporate observation to estimate a posteri
+            # Step 3. Incorporate observation to estimate a posteriori
             if isinstance(self.my_kalman, kalman_ekf.EKF):
                 prediction_3d = xhatminus[:3]
                 pmats_and_points_cov = [ (self.reconstructor_meters.get_pmat(cam_id),
@@ -314,11 +378,15 @@ cdef class TrackedObject:
                                           value_tuple[:2],#just first 2 components (x,y) become xy2d_observed
                                           self.ekf_observation_covariance_pixels)
                                          for (cam_id,value_tuple) in cam_ids_and_points2d]
-                xhat, P = self.my_kalman.step2__calculate_a_posteri(xhatminus, Pminus,
-                                                                    pmats_and_points_cov)
+                y,hx,C,R,missing_data = evaluate_pmat_jacobian(
+                    pmats_and_points_cov,xhatminus)
+                xhat, P = self.my_kalman.step2__calculate_a_posteriori(
+                    xhatminus, Pminus, y=y,hx=hx,
+                    C=C,R=R,missing_data=missing_data)
             else:
-                xhat, P = self.my_kalman.step2__calculate_a_posteri(xhatminus, Pminus,
-                                                                    y=observation_meters)
+                xhat, P = self.my_kalman.step2__calculate_a_posteriori(
+                    xhatminus, Pminus,
+                    y=observation_meters)
 
             # calculate mean variance of x y z position (assumes first three components of state vector are position)
 
@@ -487,14 +555,23 @@ cdef class TrackedObject:
                     # Second, a quick gating based on image attributes.
 
                     pt_area = pt_undistorted[PT_TUPLE_IDX_AREA]
-                    cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
-                    mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
-                    sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
+                    tmp = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
+                    if tmp is None:
+                        if not self.disable_image_stat_gating:
+                            raise ValueError(
+                                '--disable-image-stat-gating not specified and '
+                                'no image statistics were saved.')
+                    else:
+                        cur_val = tmp
+                        mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
+                        sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
 
                     if cur_val is None or self.disable_image_stat_gating:
                         p_y_x = 0.0 # no penalty
                     else:
-                        p_y_x = some_rough_negative_log_likelihood( pt_area, cur_val, mean_val, sumsqf_val ) # this could even depend on 3d geometry
+                        # this could even depend on 3d geometry
+                        p_y_x = some_rough_negative_log_likelihood(
+                            pt_area, cur_val, mean_val, sumsqf_val )
 
                     if pt_area < self.area_threshold:
                         # This should not fall under
@@ -529,13 +606,14 @@ cdef class TrackedObject:
 
                 if debug>2:
                     frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
-                    cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
-                    mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
-                    sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
                     extra_print = []
-                    if pixel_dist_criterion_passed:
-                        extra_print.append('(pt_area %f, cur %d, mean %.1f, sumsqf %.1f)'%(
-                            pt_area,cur_val,mean_val,sumsqf_val))
+                    if not self.disable_image_stat_gating:
+                        cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
+                        mean_val = pt_undistorted[PT_TUPLE_IDX_MEAN_VAL_IDX]
+                        sumsqf_val = pt_undistorted[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
+                        if pixel_dist_criterion_passed:
+                            extra_print.append('(pt_area %f, cur %d, mean %.1f, sumsqf %.1f)'%(
+                                pt_area,cur_val,mean_val,sumsqf_val))
 
                     if gated_in:
                         extra_print.append('distorted %.1f %.1f (pixel_dist = %.1f, mahal dist = %.1f, criterion passed=%s)'%(

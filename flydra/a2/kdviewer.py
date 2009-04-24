@@ -196,12 +196,29 @@ def do_show_cameras(results, renderers, frustums=True, axes=True, labels=True, c
             actors.append(ta)
     return actors
 
+def set_color_for_obj_id(obj_id,a):
+    if 1:
+        warnings.warn('HACK to set obj_id color')
+        if obj_id==178:
+            a.property.color = 0, .45, .70
+        else:
+            a.property.color = .3, .65, .10
+    else:
+        if obj_id%4==0:
+            a.property.color = .9, .8, 0
+        if obj_id%4==1:
+            a.property.color = 0, .45, .70
+        if obj_id%4==2:
+            a.property.color = .3, .65, .10
+        if obj_id%4==3:
+            a.property.color = 0, 1, 0
+
 def doit(filename,
          show_obj_ids=False,
          start=None,
          stop=None,
          obj_start=None,
-         obj_end=None,
+         obj_stop=None,
          obj_only=None,
          show_n_longest=None,
          radius=0.002, # in meters
@@ -294,15 +311,19 @@ def doit(filename,
         if obj_only is not None:
             raise ValueError("show_n_longest incompatible with --obj-only limiter")
 
+        if len(use_obj_ids):
+            print '%d obj_ids total. Range is %d - %d'%(
+                len(use_obj_ids), use_obj_ids[0],use_obj_ids[-1])
+
         obj_ids_by_n_frames = {}
         for i,obj_id in enumerate(use_obj_ids):
             if (obj_start is not None) and (obj_id < obj_start):
                 continue
-            if (obj_end is not None) and (obj_id > obj_end):
+            if (obj_stop is not None) and (obj_id > obj_stop):
                 continue
 
             if i%100==0:
-                print 'doing %d of %d'%(i,len(use_obj_ids))
+                print 'doing %d of %d (obj_id %d)'%(i,len(use_obj_ids),obj_id)
 
             if not ca.has_obj_id(obj_id, data_file):
                 continue
@@ -320,6 +341,7 @@ def doit(filename,
                                          dynamic_model_name = dynamic_model_name,
                                          frames_per_second=fps,
                                          up_dir=up_dir,
+                                         min_ori_quality_required=options.ori_qual,
                                          )
                 except core_analysis.NotEnoughDataToSmoothError:
                     warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
@@ -351,8 +373,8 @@ def doit(filename,
 
     if obj_start is not None:
         use_obj_ids = use_obj_ids[use_obj_ids >= obj_start]
-    if obj_end is not None:
-        use_obj_ids = use_obj_ids[use_obj_ids <= obj_end]
+    if obj_stop is not None:
+        use_obj_ids = use_obj_ids[use_obj_ids <= obj_stop]
     if obj_only is not None:
         use_obj_ids = numpy.array(obj_only)
 
@@ -367,11 +389,12 @@ def doit(filename,
         rw.set(stereo_type='red_blue',
                stereo_render=stereo)
 
-    if show_obj_ids or (options.show_frames!=0):
-        # Because I can't get black text right now (despite trying),
-        # make background blue to see white text. - ADS
-        ren = tvtk.Renderer(background=(0.6,0.6,1.0)) # blue
-    else:
+    ## if show_obj_ids or (options.show_frames!=0):
+    ##     # Because I can't get black text right now (despite trying),
+    ##     # make background blue to see white text. - ADS
+    ##     ren = tvtk.Renderer(background=(0.6,0.6,1.0)) # blue
+    ## else:
+    if 1:
         ren = tvtk.Renderer(background=(1.0,1.0,1.0)) # white
 
     camera = ren.active_camera
@@ -456,12 +479,15 @@ def doit(filename,
             if not options.fuse:
                 # this is only useful for printing information
                 try:
+                    return_smoothed_directions = options.smooth_orientations
                     my_rows = ca.load_data(
                         obj_id, data_file,
                         use_kalman_smoothing=use_kalman_smoothing,
                         dynamic_model_name = dynamic_model_name,
                         frames_per_second=fps,
                         up_dir=up_dir,
+                        return_smoothed_directions=return_smoothed_directions,
+                        min_ori_quality_required=options.ori_qual,
                         )
                 except core_analysis.ObjectIDDataError, err:
                     continue
@@ -489,7 +515,9 @@ def doit(filename,
 
         if show_observations:
             obs_rows, obs_directions = ca.load_dynamics_free_MLE_position(
-                obj_id, data_file, with_directions=True)
+                obj_id, data_file, with_directions=True,
+                min_ori_quality_required=options.ori_qual,
+                )
 
             if start is not None or stop is not None:
                 obs_frames = obs_rows['frame']
@@ -567,15 +595,21 @@ def doit(filename,
                 frames_per_second=fps)
             breakout = True # exit main loop after this run -- we're fusing all
         else:
+            return_smoothed_directions = options.smooth_orientations
             rows = ca.load_data(
                 obj_id,
                 data_file,
                 use_kalman_smoothing=use_kalman_smoothing,
                 frames_per_second=fps,
                 dynamic_model_name = dynamic_model_name,
-                return_smoothed_directions = options.smooth_orientations,
+                return_smoothed_directions = return_smoothed_directions,
                 up_dir=up_dir,
+                min_ori_quality_required=options.ori_qual,
                 )
+
+        if options.nth_frame!=1:
+            cond = rows['frame']%options.nth_frame==0
+            rows = rows[cond]
 
         if len(rows):
             frames = rows['frame']
@@ -625,8 +659,8 @@ def doit(filename,
             if link_all_simultaneous_objs:
                 allsave.append( rows )
             if (not obj_color and
-                options.highlight_start is not None and
-                options.highlight_stop is not None):
+                options.highlight_start is None and
+                options.highlight_stop is None):
                 if len(verts)>=3:
                     verts_central_diff = verts[2:,:] - verts[:-2,:]
                     dt = 1.0/fps
@@ -694,8 +728,8 @@ def doit(filename,
             pd = tvtk.PolyData()
             pd.points = verts
             if (not obj_color and
-                options.highlight_start is not None and
-                options.highlight_stop is not None):
+                options.highlight_start is None and
+                options.highlight_stop is None):
                 pd.point_data.scalars = speeds
 #            if numpy.any(speeds>max_vel):
 #                print 'WARNING: maximum speed (%.3f m/s) exceeds color map max'%(speeds.max(),)
@@ -729,14 +763,7 @@ def doit(filename,
             if show_observations:
                 a.property.opacity = 0.3 # sets transparency/alpha
             if obj_color:
-                if obj_id%4==0:
-                    a.property.color = .9, .8, 0
-                if obj_id%4==1:
-                    a.property.color = 0, .45, .70
-                if obj_id%4==2:
-                    a.property.color = .3, .65, .10
-                if obj_id%4==3:
-                    a.property.color = 0, 1, 0
+                set_color_for_obj_id(obj_id,a)
             elif (options.highlight_start is not None or
                   options.highlight_stop is not None):
                 highlight = np.ones( rows['frame'].shape, dtype=np.bool )
@@ -749,20 +776,24 @@ def doit(filename,
             actor2obj_id[a] = obj_id
 
             if verts_directions is not None and (options.smooth_orientations or options.body_axis):
-                smoothed_ori_verts = numpy.vstack((verts,verts+(0.06*verts_directions)))
+                smoothed_ori_verts = numpy.vstack(
+                    (verts-(5*radius*verts_directions),verts))
                 tubes = [ [i,i+len(verts)] for i in range(len(verts)) ]
 
                 pd = tvtk.PolyData()
                 pd.points = smoothed_ori_verts
                 pd.lines = tubes
 
-                pt = tvtk.TubeFilter(radius=0.001,input=pd,
-                                     number_of_sides=4,
+                pt = tvtk.TubeFilter(radius=radius*0.4,input=pd,
+                                     number_of_sides=10,
                                      vary_radius='vary_radius_off',
                                      )
                 m = tvtk.PolyDataMapper(input=pt.output)
                 a = tvtk.Actor(mapper=m)
-                a.property.color = (1,0,0) # red
+                if obj_color:
+                    set_color_for_obj_id(obj_id,a)
+                else:
+                    a.property.color = (1,0,0) # red
                 a.property.specular = 0.3
                 actors.append(a)
                 actor2obj_id[a] = obj_id
@@ -772,12 +803,9 @@ def doit(filename,
             if len(verts):
                 print 'showing obj_id %d at %s'%(obj_id,str(verts[0]))
                 obj_id_ta = tvtk.TextActor(input=str( obj_id )+' start')
-                obj_id_ta.property = tvtk.Property2D(color = (0.0, 0.0, 0.0), # black
-                                                     )
-    #            obj_id_ta.property = tvtk.TextProperty(color = (0.0, 0.0, 0.0), # black
-    #                                                   )
-                #obj_id_ta.property.color = 0.0, 0.0, 0.0 # black
-                #obj_id_ta.set(color = (0.0, 0.0, 0.0)) # black
+                obj_id_ta.text_property = tvtk.TextProperty(
+                    color = (0.0, 0.0, 0.0), # black
+                    )
                 obj_id_ta.position_coordinate.coordinate_system = 'world'
                 obj_id_ta.position_coordinate.value = tuple(verts[0])
                 actors.append(obj_id_ta)
@@ -787,15 +815,20 @@ def doit(filename,
 
         if options.show_frames != 0:
             if len(frames):
-
-                docond = (frames%options.show_frames)==0
-                doframes = frames[docond]
+                docond = ((frames-options.show_frames_start)%options.show_frames)==0
+                doframes = frames[docond]-options.show_frames_start
                 doverts = verts[docond]
 
                 for thisframe,thisvert in zip(doframes,doverts):
-                    obj_id_ta = tvtk.TextActor(input='%d'%thisframe)
-                    obj_id_ta.property = tvtk.Property2D(color = (0.0, 0.0, 0.0), # black
-                                                         )
+                    print 'thisframe',thisframe
+
+                    obj_id_ta = tvtk.TextActor(input='%d'%(
+                        thisframe*options.show_frames_gain,))
+                    obj_id_ta.text_property = tvtk.TextProperty(
+                        color = (0.0, 0.0, 0.0), # black
+                        shadow=True,
+                        font_size=20,
+                        )
                     obj_id_ta.position_coordinate.coordinate_system = 'world'
                     obj_id_ta.position_coordinate.value = tuple(thisvert)
                     actors.append(obj_id_ta)
@@ -942,11 +975,13 @@ def doit(filename,
             shaft_type='cylinder'
             )
 
-        p = axes.x_axis_caption_actor2d.caption_text_property
-        axes.y_axis_caption_actor2d.caption_text_property = p
-        axes.z_axis_caption_actor2d.caption_text_property = p
+        if 1:
+            p = axes.x_axis_caption_actor2d.caption_text_property
+            axes.y_axis_caption_actor2d.caption_text_property = p
+            axes.z_axis_caption_actor2d.caption_text_property = p
 
-        p.color = 0.0, 0.0, 0.0 # black
+            p.color = 0.0, 0.0, 0.0 # black
+            p.font_size=40
 
         marker.orientation_marker = axes
         marker.interactor = rwi
@@ -1170,8 +1205,17 @@ def main():
     parser.add_option("--disable-axes", action='store_false',dest='show_axes',
                       default=True, help="disable showing axies")
 
+    parser.add_option("--nth-frame", type='int', default=1,
+                      help="show every nth frame (0=no frame numbers)")
+
     parser.add_option("--show-frames", type='int', default=0,
                       help="show frame number interval (0=no frame numbers)")
+
+    parser.add_option("--show-frames-gain", type='float', default=1.0,
+                      help="show frame number interval (0=no frame numbers)")
+
+    parser.add_option("--show-frames-start", type='int', default=0,
+                      help="show frame number start")
 
     parser.add_option("--show-saccades", action='store_true',
                       dest='show_saccades',
@@ -1229,7 +1273,7 @@ def main():
                       default=False)
 
     parser.add_option("--smooth-orientations", action='store_true',
-                      help="use slow quaternion-based smoother",
+                      help="smoothe orientations",
                       default=False)
 
     parser.add_option("--body-axis", action='store_true',
@@ -1243,6 +1287,9 @@ def main():
                       help=('fuse obj_ids specified in fanout .xml file into '
                             'one contiguous trace'),
                       default=False)
+
+    parser.add_option("--ori-qual", type='float', default=None,
+                      help=('minimum orientation quality to use'))
 
     (options, args) = parser.parse_args()
 
@@ -1278,7 +1325,7 @@ def main():
          start=options.start,
          stop=options.stop,
          obj_start=options.obj_start,
-         obj_end=options.obj_stop,
+         obj_stop=options.obj_stop,
          obj_only=options.obj_only,
          use_kalman_smoothing=options.use_kalman_smoothing,
          show_n_longest=options.n_top_traces,

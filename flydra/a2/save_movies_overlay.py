@@ -3,6 +3,7 @@
 # wrote that one a long time ago. - ADS 20070112
 
 from __future__ import division
+import pkg_resources
 if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
@@ -10,7 +11,6 @@ if 1:
 
 import sets, os, sys, math
 
-import pkg_resources
 import numpy
 import numpy as np
 import tables as PT
@@ -31,6 +31,7 @@ import flydra.analysis.result_utils as result_utils
 import progressbar
 import core_analysis
 
+import warnings
 import pytz, datetime
 pacific = pytz.timezone('US/Pacific')
 
@@ -40,6 +41,31 @@ def ensure_minsize_image( arr, (h,w), fill=0):
         arr_new[:arr.shape[0],:arr.shape[1]] = arr
         arr=arr_new
     return arr
+
+class KObsRowCacher:
+    def __init__(self,h5):
+        self.h5 = h5
+        self.all_rows_obj_ids = h5.root.kalman_observations.read(field='obj_id')
+        self.all_rows_frames = h5.root.kalman_observations.read(field='frame')
+        self.cache = {}
+    def get(self,obj_id):
+        if obj_id in self.cache:
+            return self.cache[obj_id]
+        else:
+            cond = self.all_rows_obj_ids == obj_id
+            frames = self.all_rows_frames[cond]
+            try:
+                qualities = core_analysis.compute_ori_quality(
+                    self.h5,frames,obj_id)
+            except Exception, err:
+                print
+                print 'len(frames)',len(frames)
+                # this is probably missing data. no time to debug now.
+                warnings.warn('ignoring pytables error %s'%err)
+                qualities = np.zeros( frames.shape )
+            results = (frames,qualities)
+            self.cache[obj_id]=results
+        return results
 
 def doit(fmf_filename=None,
          h5_filename=None,
@@ -65,9 +91,16 @@ def doit(fmf_filename=None,
     if do_zoom_diff and do_zoom:
         raise ValueError('can use do_zoom or do_zoom_diff, but not both')
 
-    styles = ['debug','pretty','prettier','blank']
+    styles = ['debug','pretty','prettier','blank','prettier-MLE-slope']
     if style not in styles:
         raise ValueError('style ("%s") is not one of %s'%(style,str(styles)))
+
+    if options.debug_ori_pickle is not None:
+        print 'options.debug_ori_pickle',options.debug_ori_pickle
+        import pickle
+        fd = open(options.debug_ori_pickle,mode='rb')
+        used_camn_dict = pickle.load(fd)
+        fd.close()
 
     if not use_kalman_smoothing:
         if (fps is not None) or (dynamic_model is not None):
@@ -155,6 +188,7 @@ def doit(fmf_filename=None,
                                         frames_per_second=fps,
                                         return_smoothed_directions = options.smooth_orientations,
                                         up_dir = up_dir,
+                                        min_ori_quality_required=options.ori_qual,
                                         )
             except core_analysis.NotEnoughDataToSmoothError:
                 print 'not enough data to smooth for obj_id %d, skipping...'%obj_id
@@ -168,8 +202,10 @@ def doit(fmf_filename=None,
             print 'loading frame numbers for kalman objects (observations)'
             kobs_rows = []
             for obj_id in use_obj_ids:
-                my_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file,
-                                                              )
+                my_rows = ca.load_dynamics_free_MLE_position(
+                    obj_id, data_file,
+                    min_ori_quality_required=options.ori_qual,
+                    )
                 kobs_rows.append(my_rows)
             kobs_rows = numpy.concatenate( kobs_rows )
             kobs_3d_frame = kobs_rows['frame']
@@ -264,18 +300,25 @@ def doit(fmf_filename=None,
         cb_orange = (230, 159, 0)
         cb_blue = (0, 114, 178)
         cb_vermillion = (213, 94, 0)
+        cb_blue_green = (0, 158, 115)
+
+        # Not from that pallette:
+        cb_white = (255,255,255)
 
         font2d = aggdraw.Font(cb_blue,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf',size=20)
-        pen2d = aggdraw.Pen(cb_blue, width=2 )
+        pen2d = aggdraw.Pen(cb_blue, width=1 )
+        pen2d_bold = aggdraw.Pen(cb_blue, width=3 )
 
         pen3d = aggdraw.Pen(cb_orange, width=2 )
+
+        pen3d_raw = aggdraw.Pen(cb_orange, width=1 )
         font3d = aggdraw.Font(cb_orange,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf')
 
         pen_zoomed = pen3d
         font_zoomed = aggdraw.Font(cb_orange,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf', size=20)
 
-        pen_obs = aggdraw.Pen(cb_vermillion, width=2 )
-        font_obs = aggdraw.Font(cb_vermillion,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf')
+        pen_obs = aggdraw.Pen(cb_blue_green, width=2 )
+        font_obs = aggdraw.Font(cb_blue_green,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf')
 
     print 'loading frame information...'
     # step through .fmf file to get map of h5frame <-> fmfframe
@@ -299,6 +342,8 @@ def doit(fmf_filename=None,
             mymap[real_h5_frame]= fmf_fno
     pbar.finish()
     print 'done loading frame information.'
+
+    kobs_row_cacher = KObsRowCacher(data_file)
 
     print 'start, stop',start, stop
     widgets[0]='stage 2 of 2: '
@@ -350,6 +395,14 @@ def doit(fmf_filename=None,
                 these_3d_rows = kalman_rows[data_3d_idxs]
                 line_length = 0.30 # 20 cm total
                 for this_3d_row in these_3d_rows:
+                    ori_qual_sufficient = True
+                    if options.ori_qual is not None:
+                        obj_id = this_3d_row['obj_id']
+                        this_obj_frames, qualities = kobs_row_cacher.get(obj_id)
+                        tmp_cond = this_obj_frames==this_3d_row['frame']
+                        this_ori_qual = qualities[tmp_cond]
+                        if this_ori_qual < options.ori_qual:
+                            ori_qual_sufficient = False
                     vert = numpy.array([this_3d_row['x'],this_3d_row['y'],this_3d_row['z']])
                     vert_image = R.find2d(cam_id,vert,distorted=True)
                     P = numpy.array([this_3d_row['P00'],this_3d_row['P11'],this_3d_row['P22']])
@@ -357,7 +410,7 @@ def doit(fmf_filename=None,
                     Pmean_meters = numpy.sqrt(Pmean)
                     kalman_vert_images.append( (vert_image, vert, this_3d_row['obj_id'], Pmean_meters) )
 
-                    if options.body_axis or options.smooth_orientations:
+                    if ori_qual_sufficient and options.body_axis or options.smooth_orientations:
 
                         for target, dir_x_name, dir_y_name, dir_z_name in [ (kalman_ori_verts_images,'dir_x','dir_y','dir_z'),
                                                                             (kalman_raw_ori_verts_images,'rawdir_x','rawdir_y','rawdir_z')]:
@@ -380,8 +433,16 @@ def doit(fmf_filename=None,
                 data_3d_idxs = numpy.nonzero(h5_frame == kobs_3d_frame)[0]
                 these_3d_rows = kobs_rows[data_3d_idxs]
                 for this_3d_row in these_3d_rows:
+                    ori_qual_sufficient = True
+                    if options.ori_qual is not None:
+                        obj_id = this_3d_row['obj_id']
+                        this_obj_frames, qualities = kobs_row_cacher.get(obj_id)
+                        tmp_cond = this_obj_frames==this_3d_row['frame']
+                        this_ori_qual = qualities[tmp_cond]
+                        if this_ori_qual < options.ori_qual:
+                            ori_qual_sufficient = False
                     vert = numpy.array([this_3d_row['x'],this_3d_row['y'],this_3d_row['z']])
-                    if 1:
+                    if ori_qual_sufficient:
                         line_length = 0.16 # 16 cm total
                         hzline = numpy.array([this_3d_row['hz_line0'],
                                               this_3d_row['hz_line1'],
@@ -397,7 +458,7 @@ def doit(fmf_filename=None,
                             u = v2-v1
 
                             # plot several verts to deal with camera distortion
-                            ori_verts = [v1+inc*u  for inc in numpy.linspace(0,1.0,3)]
+                            ori_verts = [v1+inc*u  for inc in numpy.linspace(0,1.0,5)]
 
                             ori_verts_images = [ R.find2d(cam_id,ori_vert,distorted=True) for ori_vert in ori_verts ]
                             target.append( ori_verts_images )
@@ -737,10 +798,14 @@ def doit(fmf_filename=None,
 
                 # plot extracted data for full image
                 if len(idxs):
-                    for pt_no,(x,y,area,slope,eccentricity) in enumerate(zip(rows['x'],
-                                                                             rows['y'],
-                                                                             rows['area'],rows['slope'],
-                                                                             rows['eccentricity'])):
+                    for pt_no,(camn,frame_pt_idx,x,y,area,slope,
+                               eccentricity) in enumerate(zip(rows['camn'],
+                                                              rows['frame_pt_idx'],
+                                                              rows['x'],
+                                                              rows['y'],
+                                                              rows['area'],
+                                                              rows['slope'],
+                                                              rows['eccentricity'])):
 
                         if style=='debug':
                             radius = numpy.sqrt(area/(2*numpy.pi))
@@ -758,8 +823,11 @@ def doit(fmf_filename=None,
                                           pen2d )
 
                         # plot slope line
-                        if options.body_axis or options.smooth_orientations:
-                            if (((R is None) or (not eccentricity<R.minimum_eccentricity)) and
+                        if (options.body_axis or
+                            options.smooth_orientations or
+                            options.show_slope_2d):
+                            if (((R is None) or
+                                 (not eccentricity<R.minimum_eccentricity)) and
                                 (area>=options.area_threshold_for_orientation)):
                                 direction = numpy.array( [1,slope] )
                                 direction = direction/numpy.sqrt(numpy.sum(direction**2)) # normalize
@@ -771,8 +839,22 @@ def doit(fmf_filename=None,
                                             p2 = pos+sign*(                   1.0*10*direction)
                                         else:
                                             p2 = pos+sign*(R.minimum_eccentricity*10*direction)
+
+                                        use_pen = pen2d
+                                        if options.debug_ori_pickle is not None:
+                                            try:
+                                                tmplist = used_camn_dict[h5_frame]
+                                            except KeyError:
+                                                pass
+                                            else:
+                                                for (used_camn,ufpi) in tmplist:
+                                                    if (camn==used_camn and
+                                                        frame_pt_idx==ufpi):
+                                                        use_pen = pen2d_bold
+                                                        break
+
                                         draw.line( [p1[0],p1[1], p2[0],p2[1]],
-                                                   pen2d )
+                                                   use_pen )
                                 elif style=='pretty':
                                     vec = direction*radius
                                     pos = numpy.array( [x,y] )
@@ -784,7 +866,7 @@ def doit(fmf_filename=None,
 
                 for (xy,XYZ,obj_id,Pmean_meters) in kalman_vert_images:
                     if style in ['debug','pretty','prettier']:
-                        radius=10
+                        radius=20
                         x,y= xy
                         X,Y,Z=XYZ
                         draw.ellipse( [x-radius,y-radius,x+radius,y+radius],
@@ -793,9 +875,9 @@ def doit(fmf_filename=None,
                             ori_verts_images = numpy.array( ori_verts_images )
                             draw.line( ori_verts_images.flatten(), pen3d )
                         if style=='debug':
-                            for ori_verts_images in kalman_raw_ori_verts_images:
-                                ori_verts_images = numpy.array( ori_verts_images )
-                                draw.line( ori_verts_images.flatten(), pen3d )
+                            for raw_ori_verts_images in kalman_raw_ori_verts_images:
+                                raw_ori_verts_images = numpy.array( raw_ori_verts_images )
+                                draw.line( raw_ori_verts_images.flatten(), pen3d_raw )
 
                     if style=='debug':
                         pt_dist_meters = numpy.sqrt( (X-cam_center_meters[0])**2 +
@@ -827,7 +909,9 @@ def doit(fmf_filename=None,
                             draw.text_smartshift( (x+15,y+(i+1)*10), (x,y),
                                        '%s pt %d'%(obs_cam_id,pt_no), font_obs )
 
-                    for kobs_ori_verts_images in [kobs_ori_verts_images_a,kobs_ori_verts_images_b]:
+                if style in ['debug','prettier-MLE-slope']:
+                    for kobs_ori_verts_images in [kobs_ori_verts_images_a,
+                                                  kobs_ori_verts_images_b]:
                         for ori_verts_images in kobs_ori_verts_images:
                             ori_verts_images = numpy.array( ori_verts_images )
                             draw.line( ori_verts_images.flatten(), pen_obs )
@@ -897,7 +981,11 @@ def main():
                       default=False)
 
     parser.add_option("--body-axis", action='store_true',
-                      help="use body axis data is available",
+                      help="use body axis data if available",
+                      default=False)
+
+    parser.add_option("--show-slope-2d", action='store_true',
+                      help="show 2D body axis data if available",
                       default=False)
 
     parser.add_option("--zoom-diff", action='store_true',
@@ -914,9 +1002,14 @@ def main():
 
     parser.add_option("--up-dir", type="string")
 
+    parser.add_option("--debug-ori-pickle", type="string")
+
     parser.add_option("--area-threshold-for-orientation", type='float',
                       default=0.0,
                       help="minimum area to display orientation")
+
+    parser.add_option("--ori-qual", type='float', default=None,
+                      help=('minimum orientation quality to use'))
 
     (options, args) = parser.parse_args()
 

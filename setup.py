@@ -21,6 +21,9 @@ ext_modules.append(Extension(name='flydra.mahalanobis',
 ext_modules.append(Extension(name='flydra.fastgeom',
                              sources=['src/fastgeom.pyx']))
 
+ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
+                             sources=['flydra/a2/fastfinder_help.c'])) # auto-generate with cython
+
 setup(name='flydra',
       version=version,
       author='Andrew Straw',
@@ -35,7 +38,7 @@ setup(name='flydra',
 # running experiments
     'flydra_camera_node = flydra.camnode:main',
 # benchmarking/testing
-    'flydra_bench = flydra.flydra_bench:main',
+    'flydra_bench = flydra.camnode:benchmark',
     'flydra_LED_test_latency = flydra.LEDdriver.LED_test_latency:main',
     'flydra_simulator = flydra.flydra_simulator:main',
 
@@ -46,6 +49,8 @@ setup(name='flydra',
     'flydra_analysis_filter_kalman_data = flydra.analysis.flydra_analysis_filter_kalman_data:main',
     'flydra_analysis_h5_shorten = flydra.a2.h5_shorten:main',
     'flydra_analysis_check_sync = flydra.kalman.kalmanize:check_sync',
+    'flydra_analysis_get_clock_sync = flydra.a2.get_clock_sync:main',
+    'flydra_analysis_get_2D_image_latency = flydra.a2.get_2D_image_latency:main',
 
 # analysis - re-kalmanize
     'flydra_kalmanize = flydra.kalman.kalmanize:main',
@@ -71,6 +76,9 @@ setup(name='flydra',
 
 # analysis - image based orientation
     'flydra_analysis_image_based_orientation = flydra.a2.image_based_orientation:main',
+    'flydra_analysis_orientation_ekf_fitter = flydra.a2.orientation_ekf_fitter:main',
+    'flydra_analysis_orientation_ekf_plot = flydra.a2.orientation_ekf_fitter:plot_ori_command_line',
+    'flydra_analysis_orientation_is_fit = flydra.a2.orientation_ekf_fitter:is_orientation_fit_sysexit',
 
 # upload firmware to USB devices
     'flydra_LED_driver_enter_dfu_mode = flydra.LEDdriver.LEDdriver:enter_dfu_mode',

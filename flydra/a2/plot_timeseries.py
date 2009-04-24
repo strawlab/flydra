@@ -15,6 +15,7 @@ import flydra.analysis.result_utils as result_utils
 import analysis_options
 import flydra.a2.xml_stimulus as xml_stimulus
 import flydra.a2.flypos
+import flydra.a2.utils as utils
 
 import matplotlib
 import matplotlib.ticker as ticker
@@ -26,25 +27,44 @@ import flydra.analysis.result_utils as result_utils
 
 import core_analysis
 
-import pytz, datetime
+import pytz, datetime, time
 pacific = pytz.timezone('US/Pacific')
+
+def format_date(x, pos=None):
+    return str(datetime.datetime.fromtimestamp(x,pacific))
+    ## return datetime.datetime.fromtimestamp(x,pacific).strftime(
+    ##     '%Y-%m-%d %H:%M:%S.%f')
+
 
 def plot_err( ax, x, mean, err, color=None ):
     ax.plot( x, mean+err, color=color)
     ax.plot( x, mean-err, color=color)
 
 class Frames2Time:
-    def __init__(self,frame0,fps):
+    def __init__(self,frame0,fps,time0=0.0):
         if not isinstance(frame0,numpy.ma.MaskedArray):
             self.f0 = int(frame0)
         else:
             self.f0 = int(frame0.data)
         self.fps = fps
+        self.time0 = time0
     def __call__(self,farr):
         farr = numpy.array(farr,dtype=numpy.int64)
         f = farr-self.f0
-        f2  = f/self.fps
+        f2  = f/self.fps + self.time0
         return f2
+
+def fixup_ax(ax,ha='right',rotation=30):
+
+    ax.xaxis.set_major_formatter(
+        ticker.FuncFormatter(format_date))
+
+    # inspired by matplotlib/figure.py autofmt_xdate()
+    for label in ax.get_xticklabels():
+        label.set_ha(ha)
+        label.set_rotation(rotation)
+
+    ax.set_xlabel('time')
 
 def plot_timeseries(subplot=None,options = None):
     kalman_filename=options.kalman_filename
@@ -88,7 +108,19 @@ def plot_timeseries(subplot=None,options = None):
         m.update(open(kalman_filename,mode='rb').read())
         actual_md5 = m.hexdigest()
         print 'opening kalman file %s %s'%(kalman_filename,actual_md5)
-        obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(kalman_filename)
+        (obj_ids, use_obj_ids, is_mat_file, data_file,
+         extra) = ca.initial_file_load(kalman_filename)
+
+        if 'frames' in extra:
+            if (start is not None) or (stop is not None):
+                valid_frames = np.ones( (len(extra['frames']),), dtype=np.bool)
+                if start is not None:
+                    valid_frames &= extra['frames'] >= start
+                if stop is not None:
+                    valid_frames &= extra['frames'] <= stop
+                this_use_obj_ids = np.unique(obj_ids[valid_frames])
+                use_obj_ids = list(
+                    set(use_obj_ids).intersection(this_use_obj_ids))
 
     include_obj_ids = None
     exclude_obj_ids = None
@@ -106,7 +138,6 @@ def plot_timeseries(subplot=None,options = None):
             do_fuse = True
     else:
         walking_start_stops = []
-
 
     if dynamic_model is None:
         dynamic_model = extra['dynamic_model_name']
@@ -140,15 +171,15 @@ def plot_timeseries(subplot=None,options = None):
     Xz_all = []
 
     fuse_did_once = False
-    if 'frames' in extra:
-        if (start is not None) or (stop is not None):
-            valid_frames = np.ones( (len(extra['frames']),), dtype=np.bool)
-            if start is not None:
-                valid_frames &= extra['frames'] >= start
-            if stop is not None:
-                valid_frames &= extra['frames'] <= stop
-            this_use_obj_ids = np.unique(obj_ids[valid_frames])
-            use_obj_ids = list( set(use_obj_ids).intersection(this_use_obj_ids))
+
+    if options.timestamp_file is not None:
+        h5 = tables.openFile(options.timestamp_file,mode='r')
+        print 'reading timestamps and frames'
+        table_data2d_frames=h5.root.data2d_distorted.read(field='frame')
+        table_data2d_timestamps=h5.root.data2d_distorted.read(field='timestamp')
+        print 'done'
+        h5.close()
+        table_data2d_frames_find = utils.FastFinder( table_data2d_frames )
 
     for obj_id in use_obj_ids:
         if not do_fuse:
@@ -158,6 +189,7 @@ def plot_timeseries(subplot=None,options = None):
                                              dynamic_model_name = dynamic_model,
                                              frames_per_second=fps,
                                              up_dir=options.up_dir,
+                                             min_ori_quality_required=options.ori_qual,
                                              )
             except core_analysis.ObjectIDDataError:
                 continue
@@ -214,15 +246,24 @@ def plot_timeseries(subplot=None,options = None):
                 kalman_rows = numpy.ma.masked_where( ~state_cond, walking_and_flying_kalman_rows )
                 frame = kalman_rows['frame']
 
+            if frame0 is None:
+                frame0 = int(frame[0])
+
+            time0 = 0.0
+            if options.timestamp_file is not None:
+                frame_idxs = table_data2d_frames_find.get_idxs_of_equal(frame0)
+                if len(frame_idxs):
+                    time0 = table_data2d_timestamps[ frame_idxs[0] ]
+                else:
+                    raise ValueError(
+                        'could not fine frame %d in timestamp file'%frame0)
+
             Xx = kalman_rows['x']
             Xy = kalman_rows['y']
             Xz = kalman_rows['z']
 
-            if frame0 is None:
-                frame0 = frame[0]
-
             if not options.frames:
-                f2t = Frames2Time(frame0,fps)
+                f2t = Frames2Time(frame0,fps,time0)
             else:
                 def identity(x): return x
                 f2t = identity
@@ -234,6 +275,9 @@ def plot_timeseries(subplot=None,options = None):
                 kws['color'] = 'k'
 
             line = None
+
+            if 'frame' in subplot:
+                subplot['frame'].plot( f2t(frame), frame )
 
             if 'x' in subplot:
                 line,=subplot['x'].plot( f2t(frame), Xx, label='obj %d (%s)'%(obj_id,flystate),**kws )
@@ -328,15 +372,33 @@ def plot_timeseries(subplot=None,options = None):
     else:
         xlabel = 'frame'
 
+    for ax in subplot.itervalues():
+        ax.xaxis.set_major_formatter(
+            ticker.FormatStrFormatter("%d"))
+        ax.yaxis.set_major_formatter(
+            ticker.FormatStrFormatter("%s"))
+
+    if 'frame' in subplot:
+        if time0 != 0.0:
+            fixup_ax(subplot['frame'])
+        else:
+            subplot['frame'].set_xlabel(xlabel)
+
     if 'x' in subplot:
         subplot['x'].set_ylim([-1,1])
         subplot['x'].set_ylabel(r'x (m)')
-        subplot['x'].set_xlabel(xlabel)
+        if time0 != 0.0:
+            fixup_ax(subplot['x'])
+        else:
+            subplot['x'].set_xlabel(xlabel)
 
     if 'y' in subplot:
         subplot['y'].set_ylim([-0.5,1.5])
         subplot['y'].set_ylabel(r'y (m)')
-        subplot['y'].set_xlabel(xlabel)
+        if time0 != 0.0:
+            fixup_ax(subplot['y'])
+        else:
+            subplot['y'].set_xlabel(xlabel)
 
     max_z = None
     if options.stim_xml:
@@ -351,9 +413,12 @@ def plot_timeseries(subplot=None,options = None):
     if 'z' in subplot:
         subplot['z'].set_ylim([0,1])
         subplot['z'].set_ylabel(r'z (m)')
-        subplot['z'].set_xlabel(xlabel)
         if max_z is not None:
             subplot['z'].axhline(max_z,color='m')
+        if time0 != 0.0:
+            fixup_ax(subplot['z'])
+        else:
+            subplot['z'].set_xlabel(xlabel)
 
     if 'z_hist' in subplot:# and flystate=='flying':
         Xz_all = np.hstack(Xz_all)
@@ -370,15 +435,27 @@ def plot_timeseries(subplot=None,options = None):
         subplot['vel'].set_ylim([0,2])
         subplot['vel'].set_ylabel(r'vel (m/s)')
         subplot['vel'].set_xlabel(xlabel)
+        if time0 != 0.0:
+            fixup_ax(subplot['vel'])
+        else:
+            subplot['vel'].set_xlabel(xlabel)
 
     if 'xy_vel' in subplot:
         #subplot['xy_vel'].set_ylim([0,2])
         subplot['xy_vel'].set_ylabel(r'horiz vel (m/s)')
         subplot['xy_vel'].set_xlabel(xlabel)
+        if time0 != 0.0:
+            fixup_ax(subplot['xy_vel'])
+        else:
+            subplot['xy_vel'].set_xlabel(xlabel)
 
     if 'accel' in subplot:
         subplot['accel'].set_ylabel(r'acceleration (m/(s^2))')
         subplot['accel'].set_xlabel(xlabel)
+        if time0 != 0.0:
+            fixup_ax(subplot['accel'])
+        else:
+            subplot['accel'].set_xlabel(xlabel)
 
     if 'vel_hist' in subplot:
         ax = subplot['vel_hist']
@@ -389,11 +466,6 @@ def plot_timeseries(subplot=None,options = None):
         ax.set_ylabel('probability density')
         ax.set_xlabel('velocity (m/s)')
 
-    for ax in subplot.itervalues():
-        ax.xaxis.set_major_formatter(
-            ticker.FormatStrFormatter("%d"))
-        ax.yaxis.set_major_formatter(
-            ticker.FormatStrFormatter("%s"))
     return line2obj_id
 
 def doit(
@@ -412,12 +484,14 @@ def doit(
 
     ax = None
     subplot ={}
-    subplots = ['x','y','z','xy_vel','vel','accel']
+    subplots = ['x','y','z','xy_vel','vel','accel','frame']
     #subplots = ['x','y','z','vel','accel']
     for i, name in enumerate(subplots):
         ax = fig.add_subplot(len(subplots),1,i+1,sharex=ax)
         ax.grid(True)
         subplot[name] = ax
+
+    fig.subplots_adjust(bottom=0.15)
 
     if 0:
         fig = pylab.figure()
@@ -431,6 +505,7 @@ def doit(
     line2obj_id = plot_timeseries(subplot=subplot,
                                   options = options,
                                   )
+
     class  MyPickObj(object):
         def __init__(self,line2obj_id):
             self.line2obj_id = line2obj_id
@@ -458,11 +533,13 @@ def doit(
             #print 'all:'
             #print self.obj_ids
 
-    pick_receiver = MyPickObj(line2obj_id)
-    fig.canvas.mpl_connect('pick_event', pick_receiver.onpick)
-    fig.canvas.mpl_connect('key_press_event', pick_receiver.on_key_press)
-
-    pylab.show()
+    if options.save_fig is not None:
+        pylab.savefig(options.save_fig)
+    else:
+        pick_receiver = MyPickObj(line2obj_id)
+        fig.canvas.mpl_connect('pick_event', pick_receiver.onpick)
+        fig.canvas.mpl_connect('key_press_event', pick_receiver.on_key_press)
+        pylab.show()
 
 def main():
     usage = '%prog [options]'
@@ -478,6 +555,16 @@ def main():
     parser.add_option("--fuse", action='store_true',
                       help="fuse object ids corresponding to a single fly (requires stim-xml fanout)",
                       default=False)
+
+    parser.add_option("--timestamp-file", type='string',
+                      help="file with data2d_distorted table to get timestamps")
+
+    parser.add_option("--save-fig", type='string', default=None,
+                      help='path name of figure to save (exits script '
+                      'immediately after save)')
+
+    parser.add_option("--ori-qual", type='float', default=None,
+                      help=('minimum orientation quality to use'))
 
     (options, args) = parser.parse_args()
 

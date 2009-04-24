@@ -54,8 +54,10 @@ class FakeDevice:
         self._freq = freq
     def get_carrier_frequency(self,*args,**kw):
         return self._freq
-    def get_timer_max(self,*args,**kw):
+    def get_timer_max(self):
         return 0xFFFF
+    def get_timer_CS(self):
+        return 1
     def get_framecount_stamp(self,*args,**kw):
         return 0, 0x0001
 
@@ -131,6 +133,7 @@ class Device:
         self.FOSC = 8000000 # 8 MHz
         trigger_carrier_freq = 0.0 # stopped
 
+        self.timer3_TOP = None # unknown
         self.timer3_CS = 8
         #print 'set A self.timer3_CS to',self.timer3_CS
         self._set_timer3_metadata(trigger_carrier_freq)
@@ -140,6 +143,9 @@ class Device:
             #print 'setting frequency to default (200 Hz)'
             freq = 200.0
         #print 'setting freq to',freq
+
+        # What's going on here? Why do we only change timer3_CS if it starts at 0?
+
         if freq != 0:
             if self.timer3_CS == 0:
                 success = False
@@ -167,6 +173,9 @@ class Device:
 
     def get_timer_max( self ):
         return self.timer3_TOP
+
+    def get_timer_CS( self ):
+        return self.timer3_CS
 
     def _set_timer3_metadata(self, carrier_freq):
         if carrier_freq <= 0:
@@ -346,12 +355,15 @@ def check_device():
     dev = Device()
 
 def set_frequency():
-    usage = '%prog FILE [options]'
+    usage = '%prog [options]'
     parser = OptionParser(usage)
 
     parser.add_option("--freq", type="float",
                       metavar="FREQ")
     (options, args) = parser.parse_args()
+    if len(args):
+        parser.print_help()
+        sys.exit(1)
     dev = Device()
 
     dev.set_carrier_frequency( 0.0 )

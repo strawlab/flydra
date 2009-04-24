@@ -1103,7 +1103,7 @@ class CoordinateProcessor(threading.Thread):
                                     self.data_dict_queue.append(('gob',(corrected_framenumber,
                                                                         dumps,
                                                                         self.camn2cam_id)))
-                                pluecker_coords_by_camn = self.tracker.calculate_a_posteri_estimates(
+                                pluecker_coords_by_camn = self.tracker.calculate_a_posteriori_estimates(
                                     corrected_framenumber,
                                     pluecker_coords_by_camn,
                                     self.camn2cam_id)
@@ -1737,9 +1737,14 @@ class MainBrain(object):
         self.trigger_device_lock = threading.Lock()
         with self.trigger_device_lock:
             self.trigger_device = flydra.trigger.get_trigger_device()
+            # Reset the device framecount
+            self.trigger_device.set_carrier_frequency( 0.0 )
+            self.trigger_device.reset_framecount_A()
+            time.sleep(0.02)
             self.trigger_device.set_carrier_frequency( rc_params['frames_per_second'] )
             self.fps = self.trigger_device.get_carrier_frequency()
             self.trigger_timer_max = self.trigger_device.get_timer_max()
+            self.trigger_timer_CS = self.trigger_device.get_timer_CS()
 
         Pyro.core.initServer(banner=0)
 
@@ -1831,21 +1836,9 @@ class MainBrain(object):
         return self.fps
 
     def set_fps(self,fps):
-        with self.trigger_device_lock:
-            self.trigger_device.set_carrier_frequency( fps )
-        self.fps = fps
-        self.remote_api.log_message('<mainbrain>',time.time(),'set fps to %f'%(self.fps,))
-        print 'set fps to', fps
-        cam_ids = self.remote_api.external_get_cam_ids()
-        for cam_id in cam_ids:
-            try:
-                self.send_set_camera_property( cam_id, 'expected_trigger_framerate', fps )
-            except Exception,err:
-                print 'ERROR:',err
-        rc_params['frames_per_second'] = fps
-        save_rc_params()
+        self.do_synchronization(new_fps=fps)
 
-    def do_synchronization(self):
+    def do_synchronization(self,new_fps=None):
         if self.is_saving_data():
             raise RuntimeError('will not (re)synchronize while saving data')
 
@@ -1862,8 +1855,24 @@ class MainBrain(object):
             pass
 
         time.sleep( RESET_FRAMENUMBER_DURATION+0.01 )
-        with self.trigger_device_lock:
-            self.trigger_device.set_carrier_frequency( self.fps )
+        if new_fps is None:
+            with self.trigger_device_lock:
+                self.trigger_device.set_carrier_frequency( self.fps )
+        else:
+            with self.trigger_device_lock:
+                self.trigger_device.set_carrier_frequency( new_fps )
+                self.trigger_timer_max = self.trigger_device.get_timer_max()
+                self.trigger_timer_CS = self.trigger_device.get_timer_CS()
+            self.fps = new_fps
+            cam_ids = self.remote_api.external_get_cam_ids()
+            for cam_id in cam_ids:
+                try:
+                    self.send_set_camera_property(
+                        cam_id, 'expected_trigger_framerate', new_fps )
+                except Exception,err:
+                    print 'ERROR:',err
+            rc_params['frames_per_second'] = new_fps
+            save_rc_params()
 
     def get_hypothesis_test_max_error(self):
         return self.hypothesis_test_max_error.get()
@@ -2256,9 +2265,15 @@ class MainBrain(object):
         # read by flydra.a2.check_atmel_clock.
 
         list_of_textlog_data = [
-            (timestamp,cam_id,timestamp, 'MainBrain running at %s fps, (top %s, hypothesis_test_max_error %s)'%(
-            str(self.fps),str(self.trigger_timer_max),str(self.get_hypothesis_test_max_error())
-            )),
+            (timestamp,cam_id,timestamp,
+             ('MainBrain running at %s fps, (top %s, '
+              'hypothesis_test_max_error %s, trigger_CS3 %s, flydra_version %s)'%(
+            str(self.fps),
+            str(self.trigger_timer_max),
+            str(self.get_hypothesis_test_max_error()),
+            str(self.trigger_timer_CS),
+            flydra.version.__version__,
+            ))),
             (timestamp,cam_id,timestamp, 'using flydra version %s'%(
              flydra.version.__version__,)),
             ]
@@ -2292,8 +2307,7 @@ class MainBrain(object):
             pass
         #   save
         if self.h5data2d is not None and len(list_of_rows_of_data2d):
-            # it's much faster to convert to numarray first:
-            # XXX (converted to numpy without double checking - ADS 20070921)
+            # it's much faster to convert to numpy first:
             recarray = numpy.rec.array(
                 list_of_rows_of_data2d,
                 dtype=Info2DCol_description)

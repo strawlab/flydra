@@ -190,12 +190,10 @@ class wxMainBrainApp(wx.App):
         #cammenu.Append(ID_stop_all_collecting_bg, "Stop all running background collection")
         #wx.EVT_MENU(self, ID_stop_all_collecting_bg, self.OnStopAllCollectingBg)
 
-
-
         ID_set_fps = wx.NewId()
         cammenu.Append(ID_set_fps, "Set framerate...")
-        wx.EVT_MENU(self, ID_set_fps, self.OnSetFps)
-
+        wx.EVT_MENU(self, ID_set_fps,
+                    wrap_loud(frame,self.OnSetFps))
 
         menuBar.Append(cammenu, "&Cameras")
 
@@ -454,7 +452,8 @@ class wxMainBrainApp(wx.App):
         wx.EVT_BUTTON(ctrl, ctrl.GetId(),self.OnRecordSmallButton)
 
         ctrl = xrc.XRCCTRL(self.cam_preview_panel,'SYNCHRONIZE_BUTTON')
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(), self.OnSynchronizeButton)
+        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
+                      wrap_loud(self.cam_preview_panel,self.OnSynchronizeButton))
 
         # setup dynamic image (OpenGL) panel
         dynamic_image_panel = xrc.XRCCTRL(self.cam_preview_panel,"PreviewDynamicImagePanel") # get container

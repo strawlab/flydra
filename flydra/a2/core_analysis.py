@@ -14,6 +14,7 @@ DEBUG = False
 import adskalman.adskalman as adskalman
 import flydra.kalman.dynamic_models
 import flydra.kalman.flydra_kalman_utils
+from flydra.kalman.ori_smooth import ori_smooth
 import flydra.analysis.result_utils
 import flydra.reconstruct
 import flydra.analysis.PQmath as PQmath
@@ -164,6 +165,10 @@ def my_decimate(x,q):
         result[-1] = mysum[-1]/ (q-lendiff)
         return result
 
+def compute_ori_quality(*args,**kwargs):
+    import orientation_ekf_fitter
+    return orientation_ekf_fitter.compute_ori_quality(*args,**kwargs)
+
 class WeakRefAbleDict(object):
     def __init__(self,val,debug=False):
         self.val = val
@@ -192,7 +197,7 @@ def get_data(filename):
 def _initial_file_load(filename):
     extra = {}
     if os.path.splitext(filename)[1] == '.mat':
-        mat_data = scipy.io.mio.loadmat(filename)
+        mat_data = scipy.io.loadmat(filename,squeeze_me=True)
         mat_data = WeakRefAbleDict(mat_data)
         obj_ids = mat_data['kalman_obj_id']
         obj_ids = obj_ids.astype( numpy.uint32 )
@@ -439,9 +444,9 @@ class LazyRecArrayMimic2:
         return len(self.view['kalman_x'])
 
 def choose_orientations(rows, directions, frames_per_second=None,
-                        velocity_weight_gain=5.0,
+                        velocity_weight_gain=0.5,
                         #min_velocity_weight=0.0,
-                        max_velocity_weight=1.0,
+                        max_velocity_weight=0.9,
                         elevation_up_bias_degrees=45.0, # tip the velocity angle closer +Z by this amount (maximally)
                         up_dir=None,
                         ):
@@ -460,8 +465,8 @@ def choose_orientations(rows, directions, frames_per_second=None,
     This is heavily inspired by (i.e. some code stolen from) Kristin
     Branson's choose orientations in ctrax (formerly known as mtrax).
 
-    Parameters
-    ----------
+    Arguments
+    ---------
     rows: structured array
         position and frame number (has columns 'x','y','z','frame') for N frames
     directions: Nx3 array
@@ -487,13 +492,18 @@ def choose_orientations(rows, directions, frames_per_second=None,
         raise ValueError("up_dir must be specified. "
                          "(Hint: --up-dir='0,0,1')")
     D2R = np.pi/180
+
     if DEBUG:
         frames = rows['frame']
         if 1:
-            cond = (619000 < frames) & (frames < 619100 )
+            cond1 = (128125 < frames) & (frames < 128140 )
+            cond2 = (128460 < frames) & (frames < 128490 )
+            cond = cond1 | cond2
             idxs = np.nonzero(cond)[0]
         else:
             idxs = np.arange( len(frames) )
+
+    directions = np.array(directions,copy=True) # don't modify input data
 
     X = np.array([rows['x'], rows['y'], rows['z']]).T
     #ADS print "rows['x'].shape",rows['x'].shape
@@ -517,6 +527,7 @@ def choose_orientations(rows, directions, frames_per_second=None,
 
         dist_from_zplus = np.arccos( np.dot(velocity_direction,up_dir))
         bias_radians = elevation_up_bias_degrees*D2R
+        rot1_axis[abs(dist_from_zplus)>(np.pi-1e-14)]=up_dir # pathological case
         velocity_biaser = [ cgtypes.quat().fromAngleAxis(bias_radians,ax) for ax in rot1_axis ]
         biased_velocity_direction = [ rotate_vec( velocity_biaser[i],
                                                   cgtypes.vec3(*(velocity_direction[i]))) for i in range(len(velocity))]
@@ -576,6 +587,7 @@ def choose_orientations(rows, directions, frames_per_second=None,
             direction_current = sign_current*directions[i]
             this_w = w[i-1]
             vel_term = np.arccos( np.dot( direction_current, biased_velocity_direction[i-1] ))
+            up_term  = np.arccos( np.dot( direction_current, up_dir))
             #ADS print
             #ADS print 'sign_current',sign_current,'-'*50
             for enum_previous,sign_previous in enumerate(signs):
@@ -597,10 +609,13 @@ def choose_orientations(rows, directions, frames_per_second=None,
                 #ADS print 'vel_term',vel_term,'*',w[i-1]
 
                 cost_current = 0.0
+                # old way
                 if not np.isnan(vel_term):
                     cost_current += this_w*vel_term
                 if not np.isnan(flip_term):
                     cost_current += (1-this_w)*flip_term
+                if not np.isnan(up_term):
+                    cost_current += (1-this_w)*up_term
 
                 ## if (not np.isnan(direction_current[0])) and (not np.isnan(direction_previous[0])):
                 ##     # normal case - no nans
@@ -614,14 +629,18 @@ def choose_orientations(rows, directions, frames_per_second=None,
                     print '  (sign_previous %d)'%sign_previous
                     print '  flip_term',flip_term
                     print '  vel_term',vel_term
+                    print '  up_term',up_term
+                    print '  cost_current',cost_current
 
-            #ADS print 'tmpcost',tmpcost
             best_enum_previous = np.argmin( tmpcost )
-            #ADS print 'enum_current',enum_current
-            #ADS print 'best_enum_previous',best_enum_previous
+            ## if DEBUG and i in idxs:
+            ##     print 'tmpcost',tmpcost
+            ##     print 'enum_current',enum_current
+            ##     print 'best_enum_previous',best_enum_previous
             stateprev[i-1,enum_current] = best_enum_previous
             costprevnew[enum_current] = tmpcost[best_enum_previous]
-        #ADS print 'costprevnew',costprevnew
+        ## if DEBUG and i in idxs:
+        ##     print 'costprevnew',costprevnew
         costprev[:] = costprevnew[:]
     #ADS print '='*100
     #ADS print 'costprev',costprev
@@ -654,40 +673,127 @@ class PreSmoothedDataCache(object):
                       dynamic_model_name=None,
                       return_smoothed_directions=False,
                       up_dir=None,
+                      min_ori_quality_required=None,
+                      ori_quality_smooth_len=10,
                       ):
+        """query results
+
+        Arguments
+        ---------
+        min_ori_quality_required - None or float
+          None for no requirement, higher for required quality
+        """
         if up_dir is None:
             up_dir = np.array([0.0,0.0,1.0])
             ## raise ValueError("up_dir must be specified. "
             ##                  "(Hint: --up-dir='0,0,1')")
 
-        # XXX TODO fixme: save values of frames_per_second and
-        # dynamic_model_name (and svn revision?) and
-        # return_smoothed_directions to check against cache
-
         if frames_per_second is None: raise ValueError('frames_per_second must be specified')
         if dynamic_model_name is None: raise ValueError('dynamic_model_name must be specified')
+
+        pdictname = 'params'
+        # these values are double checked to ensure they're the same
+        param_dict = {'frames_per_second':frames_per_second,
+                      'dynamic_model_name':dynamic_model_name,
+                      'return_smoothed_directions':return_smoothed_directions,
+                      'up_dir':up_dir,
+                      'min_ori_quality_required': min_ori_quality_required,
+                      'ori_quality_smooth_len':ori_quality_smooth_len,
+                      }
 
         # get cached datafile for this data_file
         if data_file not in self.cache_h5files_by_data_file:
             orig_hash = flydra.analysis.result_utils.md5sum_headtail(
                 data_file.filename)
-            expected_title = 'up_dir=(%.3f, %.3f, %.3f);hash="%s"'%(
+            expected_title = 'v=2;up_dir=(%.3f, %.3f, %.3f);hash="%s"'%(
                 up_dir[0],up_dir[1],up_dir[2],orig_hash)
             cache_h5file_name = os.path.abspath(os.path.splitext(data_file.filename)[0]) + '.kh5-smoothcache'
             make_new_cache = True
             if os.path.exists( cache_h5file_name ):
                 # loading cache file
-                cache_h5file = tables.openFile( cache_h5file_name, mode='r+' )
-
-                # check if cache is up to date
-                cache_title = cache_h5file.title
-                if expected_title == cache_title:
-                    make_new_cache = False
-                else:
+                try:
+                    if int(os.environ.get('CACHE_SAFE','0')):
+                        mode='r'
+                    else:
+                        mode='r+'
+                    cache_h5file = tables.openFile(cache_h5file_name, mode=mode)
+                except IOError:
                     warnings.warn(
-                        'Stale cache file %s. Deleting'%cache_h5file_name)
-                    cache_h5file.close()
+                        'Broken cache file %s. Deleting'%cache_h5file_name)
                     os.unlink( cache_h5file_name )
+                else:
+                    # check if cache is up to date
+                    cache_title = cache_h5file.title
+                    if not expected_title == cache_title:
+                        if int(os.environ.get('CACHE_DEBUG','0')):
+                            sys.stderr.write(
+                                'cached file title expected "%s", got "%s"\n'%(
+                                expected_title,cache_title))
+                    else:
+                        if hasattr(cache_h5file.root._v_attrs,pdictname):
+                            p = getattr(cache_h5file.root._v_attrs,pdictname)
+                            same = True
+                            for varname in param_dict:
+                                if varname not in p:
+                                    if int(os.environ.get('CACHE_DEBUG','0')):
+                                        sys.stderr.write(
+                                            'cached missing variable %s\n'%(
+                                            varname))
+                                    same=False
+                                    break
+                                savedval = p[varname]
+                                localval = param_dict[varname]
+                                try:
+                                    if not localval == savedval:
+                                        if (varname == 'return_smoothed_directions'):
+                                            if int(os.environ.get('CACHE_DEBUG','0')):
+                                                sys.stderr.write(
+                                                    'return_smoothed_directions: %s (saved: %s)\n'%(
+                                                    return_smoothed_directions,savedval))
+
+                                            if localval == False:
+                                                if int(os.environ.get('CACHE_DEBUG','0')):
+                                                    sys.stderr.write(
+                                                        'cached variable %s changed, but ignoring\n'%(
+                                                        varname))
+                                            else:
+                                                if int(os.environ.get('CACHE_DEBUG','0')):
+                                                    sys.stderr.write(
+                                                        'cached variable %s changed, but cannot ignore\n'%(
+                                                        varname))
+                                                    same=False
+                                                    break
+                                        else:
+                                            if int(os.environ.get('CACHE_DEBUG','0')):
+                                                sys.stderr.write(
+                                                    'cached variable %s changed (current value: %s, cached value: %s)\n'%(
+                                                    varname,localval,savedval))
+                                                same=False
+                                                break
+                                except ValueError:
+                                    if isinstance(savedval,np.ndarray):
+                                        if not (savedval.shape==localval.shape and
+                                                np.allclose(savedval,localval)):
+                                            if int(os.environ.get('CACHE_DEBUG','0')):
+                                                sys.stderr.write(
+                                                    'cached variable ndarray %s changed\n'%(
+                                                    varname))
+                                            same=False
+                                            break
+                                    else:
+                                        raise
+                            if same:
+                                make_new_cache = False
+                    if make_new_cache:
+                        if int(os.environ.get('CACHE_SAFE','0')):
+                            raise RuntimeError(
+                                'cache file %s is stale, but not deleting'%(
+                                cache_h5file_name,))
+                        else:
+                            warnings.warn(
+                                'Deleting stale cache file %s.'%cache_h5file_name)
+                            cache_h5file.close()
+                            os.unlink( cache_h5file_name )
 
             if make_new_cache:
                 # creating cache file
@@ -700,6 +806,12 @@ class PreSmoothedDataCache(object):
                     os.unlink(cache_h5file_name)
                     cache_h5file = tables.openFile( cache_h5file_name, mode='w',
                                                     title=expected_title )
+                except:
+                    warnings.warn('error creating cache_h5file %s'%(
+                        cache_h5file_name,))
+                    raise
+                setattr(cache_h5file.root._v_attrs,pdictname,param_dict)
+
             self.cache_h5files_by_data_file[data_file] = cache_h5file
 
         h5file = self.cache_h5files_by_data_file[data_file]
@@ -708,18 +820,27 @@ class PreSmoothedDataCache(object):
         unsmoothed_tablename = 'obj_id%d'%obj_id
         smoothed_tablename = 'smoothed_'+unsmoothed_tablename
 
-        if hasattr(h5file.root,smoothed_tablename):
+        def _get_group_for_obj(obj_id):
+            groupnum = obj_id//2000
+            groupname = 'group%d'%groupnum
+            if not hasattr(h5file.root,groupname):
+                h5file.createGroup(h5file.root,groupname,'cache data')
+            return getattr(h5file.root,groupname)
+
+        h5group = _get_group_for_obj(obj_id)
+
+        if hasattr(h5group,smoothed_tablename):
             # pre-existing table is found
-            h5table = getattr(h5file.root,smoothed_tablename)
+            h5table = getattr(h5group,smoothed_tablename)
             rows = h5table[:]
             if not return_smoothed_directions:
                 # force users to ask for smoothed directions if they are wanted.
                 rows['dir_x'] = np.nan
                 rows['dir_y'] = np.nan
                 rows['dir_z'] = np.nan
-        elif hasattr(h5file.root,unsmoothed_tablename) and (not return_smoothed_directions):
+        elif hasattr(h5group,unsmoothed_tablename) and (not return_smoothed_directions):
             # pre-existing table is found
-            h5table = getattr(h5file.root,unsmoothed_tablename)
+            h5table = getattr(h5group,unsmoothed_tablename)
             rows = h5table[:]
         else:
             # pre-existing table NOT found
@@ -747,32 +868,68 @@ class PreSmoothedDataCache(object):
                 directions = flydra.reconstruct.line_direction(hzlines)
                 # make consistent
 
-                # send kalman-smoothed position estimates (the velocity will be determined from this)
-                directions = choose_orientations(rows, directions, frames_per_second=frames_per_second,
-                                                 #velocity_weight=1.0,
-                                                 #max_velocity_weight=1.0,
-                                                 elevation_up_bias_degrees=45.0, # don't tip the velocity angle
-                                                 up_dir=up_dir,
-                                                 )
-                rows['rawdir_x'] = directions[:,0]
-                rows['rawdir_y'] = directions[:,1]
-                rows['rawdir_z'] = directions[:,2]
+                if min_ori_quality_required is not None:
+                    quality_array = compute_ori_quality(
+                        data_file, orig_rows['frame'],
+                        obj_id, smooth_len=ori_quality_smooth_len)
+                    good_cond = quality_array >= min_ori_quality_required
+                    bad_cond = ~good_cond
+                    directions[bad_cond,:]=np.nan # ignore bad quality data
+
+                if 1:
+                    # send kalman-smoothed position estimates (the
+                    # velocity will be determined from this)
+                    chosen_directions = choose_orientations(
+                        rows, directions,
+                        frames_per_second=frames_per_second,
+                        #velocity_weight=1.0,
+                        #max_velocity_weight=1.0,
+                        # don't tip the velocity angle
+                        elevation_up_bias_degrees=45.0,
+                        up_dir=up_dir,
+                        )
+                rows['rawdir_x'] = chosen_directions[:,0]
+                rows['rawdir_y'] = chosen_directions[:,1]
+                rows['rawdir_z'] = chosen_directions[:,2]
 
             if return_smoothed_directions:
                 save_tablename = smoothed_tablename
-                smoother = PQmath.QuatSmoother(frames_per_second=frames_per_second,
-                                               beta=1.0,
-                                               percent_error_eps_quats=1,
-                                               )
-                bad_idxs = np.nonzero(np.isnan(directions[:,0]))[0]
-                smooth_directions = smoother.smooth_directions(directions,
-                                                               display_progress=True,
-                                                               no_distance_penalty_idxs=bad_idxs)
-                rows['dir_x'] = smooth_directions[:,0]
-                rows['dir_y'] = smooth_directions[:,1]
-                rows['dir_z'] = smooth_directions[:,2]
+                if 0:
+                    smoother = PQmath.QuatSmoother(frames_per_second=frames_per_second,
+                                                   beta=1.0,
+                                                   percent_error_eps_quats=1,
+                                                   )
+                    bad_idxs = np.nonzero(np.isnan(directions[:,0]))[0]
+                    smooth_directions = smoother.smooth_directions(directions,
+                                                                   display_progress=True,
+                                                                   no_distance_penalty_idxs=bad_idxs)
+                else: # smooth on non-flipped data
+                    smooth_directions, smooth_directions_missing = ori_smooth(
+                        directions, frames_per_second=frames_per_second,
+                        return_missing=True)
 
-                if hasattr(h5file.root,unsmoothed_tablename):
+                if 1: # (potentially) flip smoothed data as one chunk
+                    chosen_smooth_directions_missing = choose_orientations(
+                        rows, smooth_directions_missing,
+                        frames_per_second=frames_per_second,
+                        #velocity_weight=1.0,
+                        #max_velocity_weight=1.0,
+                        # don't tip the velocity angle
+                        elevation_up_bias_degrees=45.0,
+                        up_dir=up_dir,
+                        )
+                    chosen_smooth_directions = np.array(
+                        chosen_smooth_directions_missing,copy=True)
+
+                    if not min_ori_quality_required==0:
+                        # don't take bad orientations
+                        chosen_smooth_directions[np.isnan(smooth_directions)]=np.nan
+
+                rows['dir_x'] = chosen_smooth_directions[:,0]
+                rows['dir_y'] = chosen_smooth_directions[:,1]
+                rows['dir_z'] = chosen_smooth_directions[:,2]
+
+                if hasattr(h5group,unsmoothed_tablename):
                     # XXX todo: delete un-smoothed table once smoothed version is
                     # made.
                     warnings.warn('implementation detail: should drop unsmoothed table')
@@ -785,10 +942,14 @@ class PreSmoothedDataCache(object):
                 else:
                     filters = tables.Filters(0)
 
-                h5file.createTable(h5file.root,
-                                   save_tablename,
-                                   rows,
-                                   filters=filters)
+                try:
+                    h5file.createTable(h5group,
+                                       save_tablename,
+                                       rows,
+                                       filters=filters)
+                except:
+                    sys.stderr.write('ERROR when using file %s\n'%cache_h5file_name)
+                    raise
             else:
                 raise NotImplementedError('apprending to existing table not supported')
         return rows
@@ -1108,7 +1269,9 @@ class CachingAnalyzer:
 
         return self.load_dynamics_free_MLE_position(obj_id,data_file)
 
-    def load_dynamics_free_MLE_position(self,obj_id,data_file,with_directions=False):
+    def load_dynamics_free_MLE_position(self,obj_id,data_file,
+                                        min_ori_quality_required=None,
+                                        with_directions=False):
         """Load maximum likelihood estimate of object position from data_file.
 
         This estimate is independent of any Kalman-filter dynamics,
@@ -1162,6 +1325,13 @@ class CachingAnalyzer:
                                    rows['hz_line5']]).T
             directions = flydra.reconstruct.line_direction(hzlines)
             assert numpy.alltrue(PQmath.is_unit_vector(directions))
+            if min_ori_quality_required is not None:
+                quality_array = compute_ori_quality(
+                    data_file, rows['frame'],
+                    obj_id)
+                good_cond = quality_array >= min_ori_quality_required
+                bad_cond = ~good_cond
+                directions[bad_cond,:]=np.nan # ignore bad quality data
             return rows, directions
         else:
             return rows
@@ -1172,6 +1342,7 @@ class CachingAnalyzer:
                   flystate='both', # 'both', 'walking', or 'flying'
                   walking_start_stops=None, # list of (start,stop)
                   up_dir=None,
+                  min_ori_quality_required = None,
                   ):
         """Load Kalman state estimates from data_file.
 
@@ -1182,12 +1353,19 @@ class CachingAnalyzer:
         if the data file has already been smoothed, this will also
         result in smoothing.
 
+
+        Arguments
+        ---------
+        min_ori_quality_required : None or float
+          None for no requirement, float for required quality
+
         """
         # for backwards compatibility, allow user to pass in string identifying filename
         if isinstance(data_file,str):
             filename = data_file
             obj_ids, unique_obj_ids, is_mat_file, data_file, extra = self.initial_file_load(filename)
             self.keep_references.append( data_file ) # prevent from garbage collection with weakref
+
 
         is_mat_file = check_is_mat_file(data_file)
 
@@ -1229,7 +1407,14 @@ class CachingAnalyzer:
 
                 if isinstance(obj_id,int) or isinstance(obj_id,numpy.integer):
                     # obj_id is an integer, normal case
-                    obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
+                    tmp_cond = obs_obj_ids == obj_id
+                    tmp_nz = numpy.nonzero(tmp_cond)
+                    del tmp_cond
+                    if len(tmp_nz):
+                        obs_idxs = tmp_nz[0]
+                    else:
+                        obs_idxs = []
+                    del tmp_nz
                 else:
                     # may specify sequence of obj_id -- concatenate
                     # data, treat as one object
@@ -1254,6 +1439,9 @@ class CachingAnalyzer:
 
                 orig_rows = kresults.root.kalman_observations.readCoordinates(
                     obs_idxs)
+
+                if len(orig_rows)==0:
+                    raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
 
                 if 1 :
                     warnings.warn('Due to Kalman smoothing, all '
@@ -1332,8 +1520,8 @@ class CachingAnalyzer:
                     dynamic_model_name=dynamic_model_name,
                     return_smoothed_directions=return_smoothed_directions,
                     up_dir=up_dir,
+                    min_ori_quality_required=min_ori_quality_required,
                     )
-
 
         if not len(rows):
             raise NoObjectIDError('no data from obj_id %d was found'%obj_id)

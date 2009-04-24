@@ -8,18 +8,18 @@ if __name__=='__main__':
 
 
     hci = kresults.root.host_clock_info
-    tbl = hci.read(flavor='numpy')
+    tbl = hci[:]
     kresults.close()
 
-    hostnames = tbl.field('remote_hostname')
+    hostnames = tbl['remote_hostname']
     uhostnames = numpy.unique(hostnames)
     uhostnames.sort()
 
     for hostname in uhostnames:
         cond = hostnames == hostname
-        start = tbl.field('start_timestamp')[cond]
-        stop = tbl.field('stop_timestamp')[cond]
-        remote = tbl.field('remote_timestamp')[cond]
+        start = tbl['start_timestamp'][cond]
+        stop = tbl['stop_timestamp'][cond]
+        remote = tbl['remote_timestamp'][cond]
         max_measurement_error = stop-start
         max_clock_diff = remote-start
 

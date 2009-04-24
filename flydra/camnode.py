@@ -328,7 +328,9 @@ class ProcessCamClass(object):
                  globals = None,
                  options = None,
                  initial_image_dict = None,
+                 benchmark = False,
                  ):
+        self.benchmark = benchmark
         self.options = options
         self.globals = globals
         self.main_brain_hostname = main_brain_hostname
@@ -572,7 +574,7 @@ class ProcessCamClass(object):
 #        hw_roi_frame = fi8ufactory( cur_fisize )
 #        self._hw_roi_frame = hw_roi_frame # make accessible to other code
 
-        if BENCHMARK:
+        if self.benchmark:
             coord_socket = DummySocket()
         else:
             if NETWORK_PROTOCOL == 'udp':
@@ -1463,6 +1465,9 @@ class ImageSourceFakeCamera(ImageSource):
         super( ImageSourceFakeCamera, self).__init__(*args,**kw)
 
     def _block_until_ready(self):
+        if isinstance(self._fake_cam,FakeCameraFromRNG):
+            return
+
         while 1:
             if self.quit_event.isSet():
                 return
@@ -1476,6 +1481,11 @@ class ImageSourceFakeCamera(ImageSource):
                 return
 
     def spawn_controller(self):
+        if isinstance(self._fake_cam,FakeCameraFromRNG):
+            # no control necessary for random number generator
+            controller = ImageSourceBaseController()
+            return controller
+
         class ImageSourceFakeCameraController(ImageSourceBaseController):
             def __init__(self, do_step=None, fake_cam=None, quit_event=None):
                 self._do_step = do_step
@@ -1582,6 +1592,37 @@ class FakeCameraFromNetwork(FakeCamera):
         self._ensure_remote()
         return self.remote.get_last_framenumber(self.id) # this will block...
 
+class FakeCameraFromRNG(FakeCamera):
+    def __init__(self,id,frame_size):
+        self.id = id
+        self.frame_size = frame_size
+        self.remote = None
+        self.last_timestamp = 0.0
+        self.last_count = -1
+
+    def get_frame_size(self):
+        return self.frame_size
+
+    def grab_next_frame_into_buf_blocking(self,buf, quit_event):
+        # XXX TODO: implement quit_event checking
+        w,h = self.frame_size
+        new_raw = np.asarray( buf )
+        assert new_raw.shape == (h,w)
+        self.last_timestamp = time.time()
+        self.last_count += 1
+        for pt_num in range( np.random.randint(5) ):
+            x,y = np.random.uniform(0.0,1.0,size=(2,))
+            xi = int(round(x*(w-1)))
+            yi = int(round(y*(h-1)))
+            new_raw[yi,xi] = 10
+        return new_raw
+
+    def get_last_timestamp(self):
+        return self.last_timestamp
+
+    def get_last_framenumber(self):
+        return self.last_count
+
 class FakeCameraFromFMF(FakeCamera):
     def __init__(self,filename):
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
@@ -1685,6 +1726,19 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
         initial_image_dict = {'mean':mean,
                               'sumsqf':sumsqf,
                               'raw':raw}
+    elif fname == '<rng>':
+        width, height = 640, 480
+        cam = FakeCameraFromRNG('fakecam1',(width,height))
+        ImageSourceModel = ImageSourceFakeCamera
+        w,h = cam.get_frame_size()
+
+        mean = np.ones( (h,w), dtype=np.uint8 )
+        sumsqf = np.ones( (h,w), dtype=np.uint8 )
+        raw = np.ones( (h,w), dtype=np.uint8 )
+
+        initial_image_dict = {'mean':mean,
+                              'sumsqf':sumsqf,
+                              'raw':raw}
     else:
         raise ValueError('could not create emulation image source')
     return cam, ImageSourceModel, initial_image_dict
@@ -1711,7 +1765,7 @@ class ConsoleApp(object):
 class AppState(object):
     """This class handles all camera states, properties, etc."""
     def __init__(self,
-                 use_dummy_mainbrain = False,
+                 benchmark = False,
                  options = None,
                  ):
         global cam_iface
@@ -1737,6 +1791,8 @@ class AppState(object):
         elif options.simulate_point_extraction is not None:
             image_sources = options.simulate_point_extraction.split( os.pathsep )
             num_cams = len( image_sources )
+        elif benchmark:
+            num_cams = 1
         else:
             ##################################################################
             #
@@ -1827,6 +1883,10 @@ class AppState(object):
                 # call factory function
                 (cam, ImageSourceModel,
                  initial_image_dict)  = create_cam_for_emulation_image_source( image_sources[cam_no] )
+            elif benchmark: # emulate full images with random number generator
+                # call factory function
+                (cam, ImageSourceModel, initial_image_dict) = \
+                      create_cam_for_emulation_image_source( '<rng>' )
             else: # emulate full images
                 # call factory function
                 (cam, ImageSourceModel,
@@ -1869,7 +1929,7 @@ class AppState(object):
         #
         ##################################################################
 
-        if use_dummy_mainbrain:
+        if benchmark:
             self.main_brain = DummyMainBrain()
         else:
             Pyro.core.initClient(banner=0)
@@ -1889,7 +1949,7 @@ class AppState(object):
         #
         ##################################################################
 
-        if (not use_dummy_mainbrain) and ((not BENCHMARK) or (not FLYDRA_BT)):
+        if (not benchmark) or (not FLYDRA_BT):
             # run in single-thread for benchmark
             timestamp_echo_thread=threading.Thread(target=TimestampEcho,
                                                    name='TimestampEcho')
@@ -2054,6 +2114,7 @@ class AppState(object):
                         globals=globals,
                         options=options,
                         initial_image_dict = initial_image_dict,
+                        benchmark=benchmark,
                         )
                 self.all_cam_processors[cam_no]= cam_processor
 
@@ -2489,6 +2550,12 @@ def get_app_defaults():
     return defaults
 
 def main():
+    parse_args_and_run()
+
+def benchmark():
+    parse_args_and_run(benchmark=True)
+
+def parse_args_and_run(benchmark=False):
     usage_lines = ['%prog [options]',
                    '',
                    '  available wrappers and backends:']
@@ -2591,13 +2658,8 @@ def main():
         parser.print_help()
         return
 
-    if BENCHMARK:
-        use_dummy_mainbrain = True
-    else:
-        use_dummy_mainbrain = False
-
     app_state=AppState(options = options,
-                       use_dummy_mainbrain = use_dummy_mainbrain,
+                       benchmark=benchmark,
                        )
 
     if options.wx or options.wx_full:

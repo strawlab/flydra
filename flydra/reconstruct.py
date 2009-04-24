@@ -16,6 +16,8 @@ import StringIO, warnings
 import cgtypes
 from optparse import OptionParser
 
+R2D = 180.0/np.pi
+
 WARN_CALIB_DIFF = False
 
 L_i = nx.array([0,0,0,1,3,2])
@@ -171,11 +173,13 @@ def norm_vec(V):
 
 def line_direction(Lcoords):
     """convert from Pluecker coordinates to a direction"""
-    L = nx.asarray(Lcoords)
-    if len(L.shape)==1:
+    # should maybe be PQmath.pluecker_to_orient
+    L = nx.asanyarray(Lcoords)
+    if L.ndim==1:
         # single line coord
         U = nx.array((-L[2], L[4], -L[5]))
     else:
+        assert L.ndim==2
         assert L.shape[1] == 6
         # XXX could speed up with concatenate:
         U = nx.transpose(nx.array((-L[:,2], L[:,4], -L[:,5])))
@@ -332,6 +336,39 @@ def do_3d_operations_on_2d_point(helper,
     return (p1, p2, p3, p4,
             ray0, ray1, ray2, ray3, ray4, ray5)
 
+def angles_near(a,b, eps=None, mod_pi=False,debug=False):
+    """compare if angles a and b are within eps of each other. assumes radians"""
+
+    if mod_pi:
+        a = 2*a
+        b = 2*b
+        eps = 2*eps
+
+    diff = abs(a-b)
+
+    diff = diff%(2*numpy.pi) # 0 <= diff <= 2pi
+
+    result = abs(diff) < eps
+    if debug:
+        print 'a',a*R2D
+        print 'b',b*R2D
+        print 'diff',diff*R2D
+    if abs(diff-numpy.pi) < eps:
+        result = result or True
+    if abs(diff-2*numpy.pi) < eps:
+        result = result or True
+    return result
+
+def test_angles_near():
+    pi = np.pi
+    for A in [-2*pi, -1*pi, -pi/2, 0, pi/2, pi, 2*pi]:
+        assert angles_near(A,A,eps=1e-15)==True
+        assert angles_near(A,A+np.pi/8,eps=np.pi/4)==True
+        assert angles_near(A,A-np.pi/8,eps=np.pi/4)==True
+
+        assert angles_near(A,A+1.1*np.pi/2,eps=np.pi/4)==False
+        assert angles_near(A,A+1.1*np.pi/2,eps=np.pi/4,mod_pi=True)==True
+
 class SingleCameraCalibration:
     """Complete per-camera calibration information.
 
@@ -365,6 +402,8 @@ class SingleCameraCalibration:
             raise ValueError('Pmat must have shape (3,4)')
         if len(res) != 2:
             raise ValueError('len(res) must be 2 (res = %s)'%repr(res))
+
+        self._scaled_cache = {}
 
         self.cam_id=cam_id
         self.Pmat=Pmat
@@ -447,6 +486,9 @@ class SingleCameraCalibration:
 
         Note: some of the data structures are shared with the unscaled original
         """
+        if scale_factor in self._scaled_cache:
+            return self._scaled_cache[scale_factor]
+
         scale_array = numpy.ones((3,4))
         scale_array[:,3] = scale_factor # mulitply last column by scale_factor
         scaled_Pmat = scale_array*self.Pmat # element-wise multiplication
@@ -462,6 +504,7 @@ class SingleCameraCalibration:
 #                                         self.pp,
                                          helper=self.helper,
                                          scale_factor=new_scale_factor)
+        self._scaled_cache[scale_factor] = scaled
         return scaled
 
     def get_cam_center(self):
@@ -587,6 +630,33 @@ class SingleCameraCalibration:
                   '%(qw)s %(qx)s %(qy)s %(qz)s '
                   '%(t0)s %(t1)s %(t2)s'%locals())
         return result
+
+    def get_3D_plane_and_ray(self, x0d, y0d, slope):
+        """(x0d,y0d) are the x,y distorted image coords"""
+        # undistort
+        x0u,y0u = self.helper.undistort(x0d,y0d)
+        rise=slope
+        run=1.0
+        meter_me=self.get_scaled(self.scale_factor)
+        pmat_meters_inv = meter_me.pmat_inv
+        # homogeneous coords for camera centers
+        camera_center = np.ones((4,))
+        camera_center[:3] = self.get_cam_center()[:,0]
+        camera_center_meters = np.ones((4,))
+        camera_center_meters[:3] = meter_me.get_cam_center()[:,0]
+        try:
+            tmp = do_3d_operations_on_2d_point(self.helper, x0u, y0u,
+                                               self.pmat_inv, pmat_meters_inv,
+                                               camera_center, camera_center_meters,
+                                               x0d, y0d, rise, run)
+        except:
+            print 'camera_center',camera_center
+            print 'camera_center_meters',camera_center_meters
+            raise
+        (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4, ray5) = tmp
+        plane = (p1, p2, p3, p4)
+        ray = (ray0, ray1, ray2, ray3, ray4, ray5)
+        return plane,ray
 
     def add_element(self,parent):
         """add self as XML element to parent"""
@@ -1021,6 +1091,10 @@ class Reconstructor:
                 eq = False
                 break
         return eq
+
+    def get_3D_plane_and_ray(self, cam_id, *args, **kwargs):
+        s = self.get_SingleCameraCalibration(cam_id)
+        return s.get_3D_plane_and_ray(*args,**kwargs)
 
     def get_extrinsic_parameter_matrix(self,cam_id):
         scc = self.get_SingleCameraCalibration(cam_id)

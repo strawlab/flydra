@@ -1,6 +1,7 @@
 # see a2/save_movies_overlay.py
 from __future__ import division
 import numpy
+import numpy as np
 from numpy import nan, pi
 import tables as PT
 import tables.flavor
@@ -16,6 +17,7 @@ import flydra.reconstruct
 import flydra.analysis.result_utils as result_utils
 import matplotlib.cm as cm
 import flydra.a2.xml_stimulus as xml_stimulus
+import matplotlib.collections as collections
 
 def auto_subplot(fig,n,n_rows=2,n_cols=3):
     # 2 rows and n_cols
@@ -248,6 +250,10 @@ class ShowIt(object):
             ax.set_title( '%s: %s'%(cam_id,str(cam_id2camns[cam_id])) )
     ##        ax.set_xticks([])
     ##        ax.set_yticks([])
+            ax.this_minx = np.inf
+            ax.this_maxx = -np.inf
+            ax.this_miny = np.inf
+            ax.this_maxy = -np.inf
             self.subplot_by_cam_id[cam_id] = ax
 
         for cam_id in unique_cam_ids:
@@ -275,11 +281,14 @@ class ShowIt(object):
             this_camn_idxs = use_idxs[camns == camn]
 
             xs = data2d.readCoordinates( this_camn_idxs, field='x')
-            ys = data2d.readCoordinates( this_camn_idxs, field='y')
 
             valid_idx = numpy.nonzero( ~numpy.isnan(xs) )[0]
             if not len(valid_idx):
                 continue
+            ys = data2d.readCoordinates( this_camn_idxs, field='y')
+            if options.show_orientation:
+                slope = data2d.readCoordinates( this_camn_idxs, field='slope')
+
             idx_first_valid = valid_idx[0]
             idx_last_valid = valid_idx[-1]
             tmp_frames = data2d.readCoordinates( this_camn_idxs, field='frame')
@@ -287,8 +296,32 @@ class ShowIt(object):
             ax.plot([xs[idx_first_valid]],[ys[idx_first_valid]],
                     'ro',label='first point')
 
+            ax.this_minx = min(np.min(xs[valid_idx]),ax.this_minx)
+            ax.this_maxx = max(np.max(xs[valid_idx]),ax.this_maxx)
+
+            ax.this_miny = min(np.min(ys[valid_idx]),ax.this_miny)
+            ax.this_maxy = max(np.max(ys[valid_idx]),ax.this_maxy)
+
             ax.plot(xs[valid_idx],ys[valid_idx],
                     'g.',label='all points')
+
+            if options.show_orientation:
+                angle = np.arctan(slope)
+                r = 20.0
+                dx = r*np.cos(angle)
+                dy = r*np.sin(angle)
+                x0 = xs-dx
+                x1 = xs+dx
+                y0 = ys-dy
+                y1 = ys+dy
+                segs = []
+                for i in valid_idx:
+                    segs.append(( (x0[i],y0[i]), (x1[i], y1[i]) ))
+                line_segments = collections.LineCollection(segs,
+                                                           linewidths=[1],
+                                                           colors=[(0,1,0)],
+                                                           )
+                ax.add_collection(line_segments)
 
             ax.plot([xs[idx_last_valid]],[ys[idx_last_valid]],
                     'bo',label='first point')
@@ -303,6 +336,12 @@ class ShowIt(object):
                     ax.text(x,y,'%d'%(frame,))
 
         fig.canvas.mpl_connect('key_press_event', self.on_key_press)
+
+        if options.autozoom:
+            for cam_id in self.subplot_by_cam_id.keys():
+                ax = self.subplot_by_cam_id[cam_id]
+                ax.set_xlim( (ax.this_minx-10, ax.this_maxx+10))
+                ax.set_ylim( (ax.this_miny-10, ax.this_maxy+10))
 
         if options.save_fig:
             for cam_id in self.subplot_by_cam_id.keys():
@@ -461,6 +500,12 @@ def main():
                       type="string",
                       help="save output to filename (disables gui)",
                       )
+
+    parser.add_option("--show-orientation", action='store_true',
+                      default=False)
+
+    parser.add_option("--autozoom", action='store_true',
+                      default=False)
 
     (options, args) = parser.parse_args()
 

@@ -19,6 +19,8 @@ L_j = nx.array([1,2,3,2,1,3])
 def Lmatrix2Lcoords(Lmatrix):
     return Lmatrix[L_i,L_j]
 
+#pluecker_to_orient is flydra.reconstruct.line_direction
+
 def pluecker_to_quat(line3d):
     '''cannot set roll angle'''
     import flydra.reconstruct
