@@ -1,3 +1,0 @@
-# Strawman Flydra Trigger Control
-SUBSYSTEM=="usb_device", ACTION=="add", SYSFS{idVendor}=="1781",
-SYSFS{idProduct}=="0baf", GROUP="flydratrigger", MODE="0660"
