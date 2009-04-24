@@ -27,8 +27,6 @@ import flydra.fastgeom as geom
 #import flydra.geom as geom
 
 import flydra.data_descriptions
-import motmot.fview_ext_trig.ttrigger
-import motmot.fview_ext_trig.live_timestamp_modeler
 
 import warnings, errno
 warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
@@ -895,8 +893,7 @@ class CoordinateProcessor(threading.Thread):
                                     with self.request_data_lock:
                                         tmp_queue = self.request_data.setdefault(absolute_cam_no,Queue.Queue())
 
-                                    tmp_framenumber_offset = self.timestamp_modeler.get_frame_offset(cam_idx)
-                                    #print 'putting', (cam_id,  tmp_framenumber_offset, missing_frame_numbers)
+                                    tmp_framenumber_offset = self.main_brain.timestamp_modeler.get_frame_offset(cam_id)
                                     tmp_queue.put( (cam_id,  tmp_framenumber_offset, missing_frame_numbers) )
                                     del tmp_framenumber_offset
                                     del tmp_queue # drop reference to queue
@@ -1050,7 +1047,7 @@ class CoordinateProcessor(threading.Thread):
                 for corrected_framenumber in new_data_framenumbers:
                     oldest_camera_timestamp, n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
                     if oldest_camera_timestamp is None:
-                        print 'no latency estimate available -- skipping 3D reconstruction'
+                        ## print 'no latency estimate available -- skipping 3D reconstruction'
                         continue
                     if (time.time() - oldest_camera_timestamp) > max_reconstruction_latency_sec:
                         print 'maximum reconstruction latency exceeded -- skipping 3D reconstruction'
@@ -1370,6 +1367,9 @@ class MainBrain(object):
         # Methods called locally
         #
         # ================================================================
+
+        def get_version(self):
+            return flydra.version.__version__
 
         def post_init(self, main_brain):
             """call after __init__"""
@@ -1704,6 +1704,9 @@ class MainBrain(object):
     def __init__(self,server=None,save_profiling_data=False, show_sync_errors=True):
         global main_brain_keeper, hostname
 
+        import motmot.fview_ext_trig.ttrigger
+        import motmot.fview_ext_trig.live_timestamp_modeler
+
         if server is not None:
             hostname = server
         print 'running mainbrain at hostname "%s"'%hostname
@@ -1848,7 +1851,7 @@ class MainBrain(object):
         self.send_set_camera_property( cam_id, 'expected_trigger_framerate', self.trigger_device.frames_per_second_actual )
 
     def SendCalibration(self,cam_id,scalar_control_info,fqdn_and_port):
-        if self.reconstructor is not None:
+        if self.reconstructor is not None and cam_id in self.reconstructor.get_cam_ids():
             pmat = self.reconstructor.get_pmat(cam_id)
             intlin = self.reconstructor.get_intrinsic_linear(cam_id)
             intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
@@ -1932,6 +1935,7 @@ class MainBrain(object):
         self._check_latencies()
 
     def _trigger_framecount_check(self):
+        import motmot.fview_ext_trig.live_timestamp_modeler
         try:
             tmp = self.timestamp_modeler.update(return_last_measurement_info=True)
             start_timestamp, stop_timestamp, framecount, tcnt = tmp
@@ -2077,17 +2081,21 @@ class MainBrain(object):
     def load_calibration(self,dirname):
         if self.is_saving_data():
             raise RuntimeError("Cannot (re)load calibration while saving data")
-        cam_ids = self.remote_api.external_get_cam_ids()
+        connected_cam_ids = self.remote_api.external_get_cam_ids()
         self.reconstructor = flydra.reconstruct.Reconstructor(dirname)
+        calib_cam_ids = self.reconstructor.get_cam_ids()
+
+        calib_cam_ids = calib_cam_ids
 
         self.coord_processor.set_reconstructor(self.reconstructor)
 
-        for cam_id in cam_ids:
+        for cam_id in calib_cam_ids:
             pmat = self.reconstructor.get_pmat(cam_id)
             intlin = self.reconstructor.get_intrinsic_linear(cam_id)
             intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
             scale_factor = self.reconstructor.get_scale_factor()
-            self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin, scale_factor )
+            if cam_id in connected_cam_ids:
+                self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin, scale_factor )
 
     def clear_calibration(self):
         if self.is_saving_data():

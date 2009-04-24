@@ -1,6 +1,5 @@
 import xml.etree.ElementTree as ET
 import flydra.reconstruct as reconstruct
-import flydra.a2.experiment_layout as experiment_layout
 import numpy
 import numpy as np
 import os
@@ -235,6 +234,7 @@ class Stimulus(object):
 
         """
         actors = []
+        import flydra.a2.experiment_layout as experiment_layout
         for child in self.root:
             if child.tag in ['multi_camera_reconstructor','valid_h5_times']:
                 continue
@@ -255,6 +255,7 @@ class Stimulus(object):
 
     def draw_in_mayavi_scene(self,engine):
         """draw a representation of the stimulus in a Mayavi2 scene"""
+        import flydra.a2.experiment_layout as experiment_layout
         for child in self.root:
             if child.tag in ['multi_camera_reconstructor','valid_h5_times']:
                 continue

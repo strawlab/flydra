@@ -4,6 +4,8 @@ cimport numpy as np
 import cython
 import utils # flydra.a2.utils
 
+# see also FastFinder class in flydra.a2.utils
+
 @cython.boundscheck(False) # turn of bounds-checking for entire function
 def get_first_idx_long(np.ndarray[long, ndim=1] haystack, np.ndarray[long, ndim=1] needles, int missing_ok=0):
 

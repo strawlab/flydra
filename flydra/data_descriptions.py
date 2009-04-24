@@ -23,7 +23,7 @@ PT_TUPLE_IDX_SUMSQF_VAL_IDX = 13
 class Info2D(PT.IsDescription):
     camn         = PT.UInt16Col(pos=0)
     frame        = PT.UInt64Col(pos=1)
-    timestamp    = PT.FloatCol(pos=2) # when the image trigger happened (returned by low-level camera driver)
+    timestamp    = PT.FloatCol(pos=2) # when the image trigger happened (returned by timestamp modeler on MainBrain)
     cam_received_timestamp  = PT.FloatCol(pos=3) # when the image was acquired by flydra software (on camera computer)
     x            = PT.Float32Col(pos=4)
     y            = PT.Float32Col(pos=5)

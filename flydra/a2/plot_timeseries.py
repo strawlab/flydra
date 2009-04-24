@@ -107,9 +107,10 @@ def plot_timeseries(subplot=None,options = None):
         m = hashlib.md5()
         m.update(open(kalman_filename,mode='rb').read())
         actual_md5 = m.hexdigest()
-        print 'opening kalman file %s %s'%(kalman_filename,actual_md5)
         (obj_ids, use_obj_ids, is_mat_file, data_file,
          extra) = ca.initial_file_load(kalman_filename)
+        print 'opened kalman file %s %s, %d obj_ids'%(
+            kalman_filename,actual_md5,len(use_obj_ids))
 
         if 'frames' in extra:
             if (start is not None) or (stop is not None):

@@ -236,7 +236,6 @@ def doit(
             ax = pylab.subplot( n_subplots, 1, n_subplots, sharex=ax)
             ax_by_cam['kalman pmean'] = ax
             ax.fmt_xdata = str
-            ax.fmt_ydata = str
             ax.set_ylabel('3d error\nmeters')
 
         frame_start = start
@@ -423,6 +422,9 @@ def doit(
                     kwprops = dict(lw=1)
 
                 for cam_id in cam_ids:
+                    if cam_id not in R.get_cam_ids():
+                        print 'no calibration for %s: not showing 3D projections'%(cam_id,)
+                        continue
                     ax = ax_by_cam[cam_id]
                     x2d = R.find2d(cam_id,X,distorted=True)
                     ## print '%d %d %s (%f,%f)'%(
@@ -449,7 +451,7 @@ def doit(
                     ax.xaxis.set_major_formatter(
                         ticker.FormatStrFormatter("%d"))
                     ax.yaxis.set_major_formatter(
-                        ticker.FormatStrFormatter("%d"))
+                        ticker.FormatStrFormatter("%s"))
 
             if not kalman_smoothing:
                 # plot 2D data contributing to 3D object

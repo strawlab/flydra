@@ -106,48 +106,46 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
     dynamic_models = {}
 
     ######################################
-    # 'hbird3, units: mm':
+    # 'hbird, units: mm':
     # process covariance
-    base_model_dict = _get_decreasing_accel_model(dt)
+
+    base_model_dict = _get_fixed_vel_model(dt)
     ss = base_model_dict['ss']
     os = base_model_dict['os']
 
     Q = numpy.zeros((ss,ss))
     for i in range(0,3):
-        #Q[i,i] = (0.005)**2
-        Q[i,i] = (0.010)**2
-
+        Q[i,i] = (0.04)**2
     for i in range(3,6):
-        Q[i,i] = (.5)**2 # velocity noise
-
-    for i in range(6,9):
-        Q[i,i] = 10.0 # acceleration noise (near (3.16m*sec**-2)**2)
-        #Q[i,i] = 50.0
+        Q[i,i] = (0.4)**2
 
     # measurement noise covariance matrix
-    #R = 1e-6*numpy.eye(os) # (1mm)**2 = (0.001m)**2
-    #R = 1e-4*numpy.eye(os) # (10mm)**2 = (0.01m)**2
-    #R = 2e-4*numpy.eye(os)
-    R = 2.5e-3*numpy.eye(os) # (50mm)**2 = (0.05m)**2
-    #R = 2.5e-2*numpy.eye(os)
+    R = 1e-2*numpy.eye(os)
 
     newdict = dict(
-        # these 2 values are old and could probably be improved:
-        min_dist_to_believe_new_meters=0.0,
-        min_dist_to_believe_new_sigma=9.0,
 
-        n_sigma_accept=math.sqrt(2.8),
-        #n_sigma_accept=2.4,
-        max_variance_dist_meters=math.sqrt(0.06),
-        initial_position_covariance_estimate=(0.1)**2, # 30mm2
-        #initial_acceleration_covariance_estimate=15,
-        initial_velocity_covariance_estimate=50,
-        initial_acceleration_covariance_estimate=150,
-        max_frames_skipped=25,
+        # data association parameters
+
+        # birth model
+        min_dist_to_believe_new_meters=0.2, # 20 cm
+        min_dist_to_believe_new_sigma=3.0,
+
+        initial_position_covariance_estimate=1e-2,
+        initial_velocity_covariance_estimate=10,
+
+        # support existint object
+        n_sigma_accept=20.0, # geometric euclidian distance
+
+        # death model
+        max_variance_dist_meters=0.08,
+        max_frames_skipped=10,
+
+        # kalman filter parameters
         Q=Q,
         R=R)
     newdict.update(base_model_dict)
-    dynamic_models['hummingbird dynamics, units: mm'] = newdict
+    dynamic_models['hbird, units: mm'] = newdict
+
     ######################################
 
     # 'fly dynamics, high precision calibration, units: mm':
@@ -266,7 +264,35 @@ class MamaramaMMEKFAllParams(EKFAllParams):
             # loosy-goosy
             self['max_variance_dist_meters']=2 # let grow huge
 
+class HbirdEKFAllParams(EKFAllParams):
+    """Drosophila non-linear dynamic model in millimemter units for EKF"""
+    def __init__(self,dt=None):
+        super( HbirdEKFAllParams, self).__init__()
+        assert dt is not None
+        linear_dict = get_kalman_model( name='mamarama, units: mm',
+                                        dt=dt )
+
+        # update some parameters from linear model
+        for key in [
+                    'initial_position_covariance_estimate',
+                    'max_frames_skipped',
+                    'A',
+                    'Q',
+                    'dt',
+                    'min_dist_to_believe_new_meters',
+                    'min_dist_to_believe_new_sigma',
+                    'max_variance_dist_meters'
+                    ]:
+            self[key] = linear_dict[key]
+        self['ekf_observation_covariance_pixels'] = numpy.array(
+            [[15.0, 0.0],
+             [0.0, 15.0]],
+            dtype=numpy.float64 )
+        # distance in the raw image plane (i.e. before radial undistortion)
+        self['distorted_pixel_euclidian_distance_accept']=15.0
+
 ekf_models = {'EKF mamarama, units: mm':MamaramaMMEKFAllParams,
+              'EKF hbird, units: mm':HbirdEKFAllParams,
               }
 
 def get_model_names(ekf_ok=True):

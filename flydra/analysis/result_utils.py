@@ -2,7 +2,7 @@ import tables as PT
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import numpy as np
-import sys, os, sets, re, hashlib
+import sys, os, re, hashlib
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 import warnings
 
@@ -124,7 +124,7 @@ def get_camn_and_remote_timestamp(results, cam, frame):
 
 def get_cam_ids(results):
     cam_info = results.root.cam_info
-    cam_ids=list(sets.Set(cam_info.cols.cam_id))
+    cam_ids=list(set(cam_info.cols.cam_id))
     cam_ids.sort()
     return cam_ids
 
@@ -248,13 +248,13 @@ def get_f_xyz_L_err( results, max_err = 10, typ = 'best', include_timestamps=Fal
 
     if hasattr(results.root,'ignore_frames'):
         good = np.argsort(f)
-        good_set = sets.Set( np.argsort( f ) )
+        good_set = set( np.argsort( f ) )
         for row in results.root.ignore_frames:
             start_frame, stop_frame = row['start_frame'], row['stop_frame']
             head = np.where( f < start_frame )
             tail = np.where( f > stop_frame )
-            head_set = sets.Set(head[0])
-            tail_set = sets.Set(tail[0])
+            head_set = set(head[0])
+            tail_set = set(tail[0])
 
             good_set = (good_set & head_set) | (good_set & tail_set)
         good_idx = list( good_set )
@@ -465,7 +465,7 @@ def drift_estimates(results):
     """calculate clock information"""
     table = results.root.host_clock_info
     remote_hostnames = np.asarray(table.read(field='remote_hostname'))
-    hostnames = [str(x) for x in list(sets.Set(remote_hostnames))]
+    hostnames = [str(x) for x in list(set(remote_hostnames))]
     hostnames.sort()
 
     del remote_hostnames

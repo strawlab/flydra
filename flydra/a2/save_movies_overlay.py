@@ -108,9 +108,16 @@ def doit(fmf_filename=None,
             sys.exit(1)
 
     if fmf_filename.endswith('.ufmf'):
-        fmf = ufmf.FlyMovieEmulator(fmf_filename,
-                                    use_conventional_named_mean_fmf=False,
-                                    )
+        if options.ufmf_white_background:
+            kwargs = dict(white_background=True,
+                          use_conventional_named_mean_fmf=False,
+                          )
+            assert options.ufmf_abs_diff==False
+        else:
+            kwargs = dict(use_conventional_named_mean_fmf=True)
+            if options.ufmf_abs_diff:
+                kwargs['abs_diff']=True
+        fmf = ufmf.FlyMovieEmulator(fmf_filename,**kwargs)
     else:
         fmf = FMF.FlyMovie(fmf_filename)
     fmf_timestamps = fmf.get_all_timestamps()
@@ -326,12 +333,14 @@ def doit(fmf_filename=None,
     all_frame = h5.root.data2d_distorted.read(field='frame')
     cam_all_frame = all_frame[ camn_idx ]
 
-    widgets=['stage 1 of 2: ',cam_id, ' ', progressbar.Percentage(), ' ',
-             progressbar.Bar(), ' ', progressbar.ETA()]
+    if not options.no_progress:
+        widgets=['stage 1 of 2: ',cam_id, ' ', progressbar.Percentage(), ' ',
+                 progressbar.Bar(), ' ', progressbar.ETA()]
 
-    pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(fmf_timestamps)).start()
+        pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(fmf_timestamps)).start()
     for fmf_fno, fmf_timestamp in enumerate( fmf_timestamps ):
-        pbar.update(fmf_fno)
+        if not options.no_progress:
+            pbar.update(fmf_fno)
         # idxs = numpy.nonzero(cam_remote_timestamps==fmf_timestamp)[0]
         idxs = cam_remote_timestamps_find.get_idxs_of_equal(fmf_timestamp)
         if len(idxs):
@@ -340,16 +349,19 @@ def doit(fmf_filename=None,
             # we only should have one frame here
             assert numpy.all( real_h5_frame== this_frame )
             mymap[real_h5_frame]= fmf_fno
-    pbar.finish()
-    print 'done loading frame information.'
+    if not options.no_progress:
+        pbar.finish()
+        print 'done loading frame information.'
 
     kobs_row_cacher = KObsRowCacher(data_file)
 
     print 'start, stop',start, stop
-    widgets[0]='stage 2 of 2: '
-    pbar=progressbar.ProgressBar(widgets=widgets,maxval=(stop-start+1)).start()
+    if not options.no_progress:
+        widgets[0]='stage 2 of 2: '
+        pbar=progressbar.ProgressBar(widgets=widgets,maxval=(stop-start+1)).start()
     for h5_frame in range(start,stop+1):
-        pbar.update(h5_frame-start)
+        if not options.no_progress:
+            pbar.update(h5_frame-start)
         mainbrain_timestamp = numpy.nan
         idxs = []
         try:
@@ -922,14 +934,19 @@ def doit(fmf_filename=None,
             dirname = 'full_%s_movies'%os.path.splitext(h5_filename)[0]
             fname = os.path.join(dirname,'smo_%(cam_id)s_%(h5_frame)07d.png'%locals())
             if not os.path.exists(dirname):
-                os.makedirs(dirname)
+                try:
+                    os.makedirs(dirname)
+                except OSError:
+                    print ('could not make directory %s: race condition '
+                           'or permission problem?'%(dirname,))
 
             #print 'saving',fname
             if PLOT=='image':
                 if im is not None:
                     im.save( fname )
 
-    pbar.finish()
+    if not options.no_progress:
+        pbar.finish()
 
     h5.close()
 
@@ -996,6 +1013,15 @@ def main():
                       default=False)
 
     parser.add_option("--rotate-180", action='store_true',
+                      default=False)
+
+    parser.add_option("--no-progress", action='store_true',
+                      default=False)
+
+    parser.add_option("--ufmf-white-background", action='store_true',
+                      default=False)
+
+    parser.add_option("--ufmf-abs-diff", action='store_true',
                       default=False)
 
     parser.add_option("--obj-only", type="string")

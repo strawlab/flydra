@@ -18,6 +18,7 @@ import math, struct
 import flydra.data_descriptions
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 import collections
+from pprint import pprint
 
 cdef double c_inf
 c_inf = np.inf
@@ -344,6 +345,7 @@ cdef class TrackedObject:
 
         this_observations_2d_hash = None
         used_camns_and_idxs = []
+        all_close_camn_pt_idxs = []
         Pmean = c_inf
         if not self.kill_me:
             self.current_frameno = frame
@@ -362,10 +364,11 @@ cdef class TrackedObject:
 
             # Step 2. Filter incoming 2D data to use informative points (data association)
             (observation_meters, Lcoords, used_camns_and_idxs,
-             cam_ids_and_points2d) = self._filter_data(xhatminus, Pminus,
-                                                       data_dict,
-                                                       camn2cam_id,
-                                                       debug=debug1)
+             cam_ids_and_points2d,
+             all_close_camn_pt_idxs) = self._filter_data(xhatminus, Pminus,
+                                                         data_dict,
+                                                         camn2cam_id,
+                                                         debug=debug1)
             if debug1>2:
                 print 'position MLE, used_camns_and_idxs',observation_meters,used_camns_and_idxs
                 print 'Lcoords (3D body orientation) : %s'%str(Lcoords)
@@ -431,7 +434,8 @@ cdef class TrackedObject:
                 this_observations_2d_hash = obs2d_hashable( this_observations_2d )
             if debug1>2:
                 print
-        return used_camns_and_idxs, self.kill_me, this_observations_2d_hash, Pmean
+        return (used_camns_and_idxs, self.kill_me, this_observations_2d_hash,
+                Pmean, all_close_camn_pt_idxs)
 
     def remove_previous_observation(self, debug1=0):
 
@@ -484,6 +488,9 @@ cdef class TrackedObject:
 
         cdef double pt_area, mean_val, sumsqf_val
         cdef int cur_val
+        cdef int camn, frame_pt_idx
+
+        all_close_camn_pt_idxs = [] # store all "maybes"
 
         prediction_3d = xhatminus[:3]
         pixel_dist_cmp = self.distorted_pixel_euclidian_distance_accept
@@ -604,8 +611,8 @@ cdef class TrackedObject:
                         dist = c_lib.sqrt(dist2)
                         nll_this_point = p_y_x + dist # negative log likelihood of this point
 
+                frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                 if debug>2:
-                    frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                     extra_print = []
                     if not self.disable_image_stat_gating:
                         cur_val = pt_undistorted[PT_TUPLE_IDX_CUR_VAL_IDX]
@@ -629,6 +636,7 @@ cdef class TrackedObject:
                             print '       (so far the best -- taking)'
                         least_nll = nll_this_point
                         closest_idx = idx
+                    all_close_camn_pt_idxs.append( (camn, frame_pt_idx) )
                 elif debug>2:
                     print '       (not acceptable)'
 
@@ -674,7 +682,8 @@ cdef class TrackedObject:
                 orientation_consensus=self.orientation_consensus)
         else:
             observation_meters = None
-        return observation_meters, Lcoords, used_camns_and_idxs, cam_ids_and_points2d
+        return (observation_meters, Lcoords, used_camns_and_idxs,
+                cam_ids_and_points2d, all_close_camn_pt_idxs)
 
     def get_most_recent_data(self):
         if not len(self.xhats):

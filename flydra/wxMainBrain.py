@@ -1419,7 +1419,11 @@ class wxMainBrainApp(wx.App):
                 if self.current_page == 'preview':
                     r=self.main_brain.reconstructor
                     if r is not None:
+                        recon_cam_ids = r.get_cam_ids()
                         for cam_id in self.cameras.keys():
+                            if cam_id not in recon_cam_ids:
+                                # no reconstructor data for this cam_id -- skip
+                                continue
                             pts = []
                             for X in Xs:
                                 pt=r.find2d(cam_id,X,

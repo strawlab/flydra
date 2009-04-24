@@ -84,6 +84,7 @@ else:
     ConnectionClosedError = NonExistantError
 import flydra.reconstruct_utils as reconstruct_utils
 import flydra.reconstruct
+import flydra.version
 from flydra.reconstruct import do_3d_operations_on_2d_point
 
 import camnode_utils
@@ -562,8 +563,7 @@ class ProcessCamClass(object):
         hw_roi_h = t-b+1
         cur_roi_l = l
         cur_roi_b = b
-        #hw_roi_w, hw_roi_h = self.cam.get_frame_size()
-        #cur_roi_l, cur_roi_b = self.cam.get_frame_offset()
+        #cur_roi_l, cur_roi_b,hw_roi_w, hw_roi_h  = self.cam.get_frame_roi()
         cur_fisize = FastImage.Size(hw_roi_w, hw_roi_h)
 
         bg_changed = True
@@ -961,15 +961,12 @@ class ProcessCamClass(object):
                     self.realtime_analyzer.roi = lbrt
                     print 'desired l,b,w,h',l,b,w,h
 
-                    w2,h2 = self.cam.get_frame_size()
-                    l2,b2= self.cam.get_frame_offset()
+                    l2,b2,w2,h2 = self.cam.get_frame_roi()
                     if ((l==l2) and (b==b2) and (w==w2) and (h==h2)):
                         print 'current ROI matches desired ROI - not changing'
                     else:
-                        self.cam.set_frame_size(w,h)
-                        self.cam.set_frame_offset(l,b)
-                        w,h = self.cam.get_frame_size()
-                        l,b= self.cam.get_frame_offset()
+                        self.cam.set_frame_roi(l,b,w,h)
+                        l,b,w,h = self.cam.get_frame_roi()
                         print 'actual l,b,w,h',l,b,w,h
                     r = l+w-1
                     t = b+h-1
@@ -1085,7 +1082,7 @@ class SaveCamData(object):
                     # Always keep the current bg and std images so
                     # that we can save them when starting a new .fmf
                     # movie save sequence.
-                    last_bgcmp_image_timestamp = chainbuf.timestamp
+                    last_bgcmp_image_timestamp = chainbuf.cam_received_time
                     # Keeping references to these images should be OK,
                     # not need to copy - the Process thread already
                     # made a copy of the realtime analyzer's internal
@@ -1095,13 +1092,13 @@ class SaveCamData(object):
 
                 if state == 'saving':
                     raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
-                                 chainbuf.timestamp) )
+                                 chainbuf.cam_received_time) )
                     if chainbuf.updated_bg_image is not None:
                         meancmp.append( (chainbuf.updated_bg_image,
                                          chainbuf.updated_cmp_image,
                                          chainbuf.updated_running_mean_image,
                                          chainbuf.updated_running_sumsqf_image,
-                                         chainbuf.timestamp)) # these were copied in process thread
+                                         chainbuf.cam_received_time)) # these were copied in process thread
 
             # 3: grab any more that are here
             try:
@@ -1111,13 +1108,13 @@ class SaveCamData(object):
 
                     if state == 'saving':
                         raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
-                                     chainbuf.timestamp) )
+                                     chainbuf.cam_received_time) )
                         if chainbuf.updated_bg_image is not None:
                             meancmp.append( (chainbuf.updated_bg_image,
                                              chainbuf.updated_cmp_image,
                                              chainbuf.updated_running_mean_image,
                                              chainbuf.updated_running_sumsqf_image,
-                                             chainbuf.timestamp)) # these were copied in process thread
+                                             chainbuf.cam_received_time)) # these were copied in process thread
             except Queue.Empty:
                 pass
 
@@ -1220,7 +1217,7 @@ class SaveSmallData(object):
                     # Always keep the current bg and std images so
                     # that we can save them when starting a new .fmf
                     # movie save sequence.
-                    last_bgcmp_image_timestamp = chainbuf.timestamp
+                    last_bgcmp_image_timestamp = chainbuf.cam_received_time
                     # Keeping references to these images should be OK,
                     # not need to copy - the Process thread already
                     # made a copy of the realtime analyzer's internal
@@ -1234,10 +1231,10 @@ class SaveSmallData(object):
                                          chainbuf.updated_cmp_image,
                                          chainbuf.updated_running_mean_image,
                                          chainbuf.updated_running_sumsqf_image,
-                                         chainbuf.timestamp)) # these were copied in process thread
+                                         chainbuf.cam_received_time)) # these were copied in process thread
                     if self._ufmf is None:
                         frame1 = numpy.asarray(chainbuf.get_buf())
-                        timestamp1 = chainbuf.timestamp
+                        timestamp1 = chainbuf.cam_received_time
                         filename_base = os.path.expanduser(filename_base)
                         dirname = os.path.split(filename_base)[0]
 
@@ -1269,7 +1266,7 @@ class SaveSmallData(object):
                                              chainbuf.updated_cmp_image,
                                              chainbuf.updated_running_mean_image,
                                              chainbuf.updated_running_sumsqf_image,
-                                             chainbuf.timestamp)) # these were copied in process thread
+                                             chainbuf.cam_received_time)) # these were copied in process thread
             except Queue.Empty:
                 pass
 
@@ -1285,7 +1282,7 @@ class SaveSmallData(object):
         frame = chainbuf.get_buf()
         if 0:
             print 'saving %d points'%(len(chainbuf.processed_points ),)
-        self._ufmf.add_frame( frame, chainbuf.timestamp, chainbuf.processed_points )
+        self._ufmf.add_frame( frame, chainbuf.cam_received_time, chainbuf.processed_points )
 
 class ImageSource(threading.Thread):
     """One instance of this class for each camera. Do nothing but get
@@ -1533,15 +1530,12 @@ class FakeCamera(object):
         return 0
 
     def get_max_height(self):
-        w,h = self.get_frame_size()
+        l,b,w,h = self.get_frame_roi()
         return h
 
     def get_max_width(self):
-        w,h = self.get_frame_size()
+        l,b,w,h = self.get_frame_roi()
         return w
-
-    def get_frame_offset(self):
-        return 0,0
 
     def close(self):
         return
@@ -1558,8 +1552,9 @@ class FakeCameraFromNetwork(FakeCamera):
         self.frame_size = frame_size
         self.remote = None
 
-    def get_frame_size(self):
-        return self.frame_size
+    def get_frame_roi(self):
+        w,h = self.frame_size
+        return 0,0,w,h
 
     def _ensure_remote(self):
         if self.remote is None:
@@ -1600,8 +1595,9 @@ class FakeCameraFromRNG(FakeCamera):
         self.last_timestamp = 0.0
         self.last_count = -1
 
-    def get_frame_size(self):
-        return self.frame_size
+    def get_frame_roi(self):
+        w,h=self.frame_size
+        return 0,0,w,h
 
     def grab_next_frame_into_buf_blocking(self,buf, quit_event):
         # XXX TODO: implement quit_event checking
@@ -1637,9 +1633,9 @@ class FakeCameraFromFMF(FakeCamera):
     def get_n_frames(self):
         return self._n_frames
 
-    def get_frame_size(self):
+    def get_frame_roi(self):
         h,w = self.fmf_recarray['frame'][0].shape
-        return w,h
+        return 0,0,w,h
 
     def grab_next_frame_into_buf_blocking(self, buf, quit_event):
         buf = numpy.asarray( buf )
@@ -1717,7 +1713,8 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
         port, width, height = map(int, args)
         cam = FakeCameraFromNetwork(port,(width,height))
         ImageSourceModel = ImageSourceFakeCamera
-        w,h = cam.get_frame_size()
+        l,b,w,h = cam.get_frame_roi()
+        del l,b
 
         mean = np.ones( (h,w), dtype=np.uint8 )
         sumsqf = np.ones( (h,w), dtype=np.uint8 )
@@ -1730,7 +1727,7 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
         width, height = 640, 480
         cam = FakeCameraFromRNG('fakecam1',(width,height))
         ImageSourceModel = ImageSourceFakeCamera
-        w,h = cam.get_frame_size()
+        l,b,w,h = cam.get_frame_roi()
 
         mean = np.ones( (h,w), dtype=np.uint8 )
         sumsqf = np.ones( (h,w), dtype=np.uint8 )
@@ -1904,7 +1901,9 @@ class AppState(object):
                 cam.start_camera()  # start camera
             self.cam_status[cam_no]= 'started'
             if ImageSourceModel is not None:
-                buffer_pool = PreallocatedBufferPool(FastImage.Size(*cam.get_frame_size()))
+                l,b,w,h = cam.get_frame_roi()
+                buffer_pool = PreallocatedBufferPool(FastImage.Size(w,h))
+                del l,b,w,h
                 image_source = ImageSourceModel(chain = None,
                                                 cam = cam,
                                                 buffer_pool = buffer_pool,
@@ -1943,6 +1942,9 @@ class AppState(object):
                 raise
             self.main_brain._setOneway(['set_image','set_fps','close','log_message','receive_missing_data'])
 
+            main_brain_version = self.main_brain.get_version()
+            assert main_brain_version == flydra.version.__version__
+
         ##################################################################
         #
         # Initialize more stuff
@@ -1964,7 +1966,8 @@ class AppState(object):
 
         for cam_no in range(num_cams):
             cam = self.all_cams[cam_no]
-            width,height = cam.get_frame_size()
+            left,top,width,height = cam.get_frame_roi()
+            del left,top
             globals = self.globals[cam_no] # shorthand
 
             if mask_images is not None:
@@ -2088,8 +2091,7 @@ class AppState(object):
                     initial_image_dict = initial_images[cam_no]
 
                     cam.get_max_height()
-                    l,b = cam.get_frame_offset()
-                    w,h = cam.get_frame_size()
+                    l,b,w,h = cam.get_frame_roi()
                     r = l+w-1
                     t = b+h-1
                     lbrt = l,b,r,t

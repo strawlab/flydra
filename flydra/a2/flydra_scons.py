@@ -171,6 +171,20 @@ def generate_ImageBasedData2DH5(source, target, env, for_signature):
             '--ufmfs=%(ufmf_names)s --output-h5=%(target_name)s '
             '%(args)s'%locals())
 
+def generate_RetrackedData2DH5(source, target, env, for_signature):
+    ufmfs = get_all_instances(source,UFMF)
+    orig_data2d = get_single_instance(source,Flydra2DDistortedDataNodeMixin)
+    assert len(source)==len(ufmfs)+1
+
+    assert len(target)==1
+    target_name = target[0]
+    ufmf_names = os.pathsep.join([str(ufmf) for ufmf in ufmfs]) # get Scons path
+    args = ' '.join(env.get('RetrackedData2DH5_args',[]))
+    return ('flydra_analysis_retrack_movies '
+            '--h5=%(orig_data2d)s '
+            '--ufmfs=%(ufmf_names)s --output-h5=%(target_name)s '
+            '%(args)s'%locals())
+
 def generate_KalmanizedH5(source, target, env, for_signature):
     cal_source = get_single_instance(source,CalibrationNodeMixin)
     h5_source = get_single_instance(source,Flydra2DDistortedDataNodeMixin)
@@ -195,6 +209,12 @@ def generate_kalmanizedFixedOriH5(source, target, env, for_signature):
 
 ImageBasedData2DH5_Builder = SCons.Builder.Builder(
     generator = generate_ImageBasedData2DH5,
+    target_factory = data2d_distorted_target_factory,
+    source_factory = flydra_source_factory,
+    )
+
+RetrackedData2DH5_Builder = SCons.Builder.Builder(
+    generator = generate_RetrackedData2DH5,
     target_factory = data2d_distorted_target_factory,
     source_factory = flydra_source_factory,
     )
