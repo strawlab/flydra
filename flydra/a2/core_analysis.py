@@ -1363,9 +1363,16 @@ class CachingAnalyzer:
         min_ori_quality_required : None or float
           None for no requirement, float for required quality
 
+        Returns
+        -------
+        rows : recarray
+          A recarray containing rows of data.
+
         """
         # for backwards compatibility, allow user to pass in string identifying filename
         if isinstance(data_file,str):
+            warnings.warn('passing data_file as string to '
+                          'core_analysis.CachingAnalyzer.load_data()')
             filename = data_file
             obj_ids, unique_obj_ids, is_mat_file, data_file, extra = self.initial_file_load(filename)
             self.keep_references.append( data_file ) # prevent from garbage collection with weakref

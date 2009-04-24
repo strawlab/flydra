@@ -1,0 +1,17 @@
+digraph G {
+  UFMF -> ImageBasedData2DH5_Builder;
+  Flydra2DDistortedDataNodeMixin -> ImageBasedData2DH5_Builder;
+  Flydra3DKalmanizedDataNodeMixin -> ImageBasedData2DH5_Builder;
+  ImageBasedData2DH5_Builder [shape=box];
+  ImageBasedData2DH5_Builder -> Flydra2DDistortedDataH5File;
+
+  CalibrationNodeMixin -> KalmanizedH5_Builder;
+  Flydra2DDistortedDataNodeMixin -> KalmanizedH5_Builder;
+  KalmanizedH5_Builder [shape=box];
+  KalmanizedH5_Builder -> Flydra3DKalmanizedDataH5File;
+
+  Flydra3DKalmanizedDataNodeMixin -> KalmanizedFixedOriH5_Builder;
+  Flydra2DDistortedDataNodeMixin -> KalmanizedFixedOriH5_Builder;
+  KalmanizedFixedOriH5_Builder [shape=box];
+  KalmanizedFixedOriH5_Builder -> Flydra3DKalmanizedDataFitOriH5File;
+  }

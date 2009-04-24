@@ -23,6 +23,9 @@ help:
 	@echo "  changes   to make an overview over all changed/added/deprecated items"
 	@echo "  linkcheck to check all external links for integrity"
 
+%.png: %.dot
+	cat $< | dot -Tpng -o$@
+
 clean:
 	-rm -rf .build/*
 

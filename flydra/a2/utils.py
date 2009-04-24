@@ -5,6 +5,9 @@ import scipy.weave
 #import pyximport; pyximport.install() # requires recent Cython
 import fastfinder_help
 
+class MissingValueError(Exception):
+    pass
+
 class FastFinder(object):
     """fast search by use of a cached, sorted copy of the original data
 
@@ -57,10 +60,15 @@ class FastFinder(object):
         this_idxs = self.idxs[left_idx:right_idx]
         return this_idxs
 
-    def get_idx_of_equal(self,testvals):
-        return fastfinder_help.get_first_idx(
+    def get_idx_of_equal(self,testvals,missing_ok=False):
+
+        # XXX should test dtype of testvals and self.values and call
+        # appropriate helper function.
+
+        return fastfinder_help.get_first_idx_double(
             self.values.astype(np.float),
-            np.asanyarray(testvals).astype(np.float))
+            np.asanyarray(testvals).astype(np.float),
+            missing_ok=missing_ok)
 
     def get_idx_of_equal_weave(self,testvals):
         haystack = self.values
@@ -363,4 +371,19 @@ def test_get_idx_of_equal():
     bs = [ 0, 1, 2 ]
     actual = af.get_idx_of_equal(bs)
     expected = np.array([1,6,2])
+    assert np.allclose(actual,expected)
+
+def test_get_idx_of_equal_missing():
+    a = np.array([ 10, 0, 2, 3, 3, 2.1, 1, 2.3 ])
+    af = FastFinder(a)
+    bs = [ 0, 1, 2, 3.4 ]
+    try:
+        af.get_idx_of_equal(bs)
+    except MissingValueError:
+        # expected error
+        pass
+    else:
+        raise
+    actual = af.get_idx_of_equal(bs,missing_ok=True)
+    expected = np.array([1,6,2,-1])
     assert np.allclose(actual,expected)
