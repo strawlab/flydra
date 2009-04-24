@@ -666,7 +666,7 @@ def choose_orientations(rows, directions, frames_per_second=None,
 
 class PreSmoothedDataCache(object):
     def __init__(self):
-        self.cache_h5files_by_data_file = {}
+        self.open_cache_h5files = {}
 
     def query_results(self,obj_id,data_file,orig_rows,
                       frames_per_second=None,
@@ -701,8 +701,7 @@ class PreSmoothedDataCache(object):
                       'ori_quality_smooth_len':ori_quality_smooth_len,
                       }
 
-        # get cached datafile for this data_file
-        if data_file not in self.cache_h5files_by_data_file:
+        if 1:
             orig_hash = flydra.analysis.result_utils.md5sum_headtail(
                 data_file.filename)
             expected_title = 'v=2;up_dir=(%.3f, %.3f, %.3f);hash="%s";dynamic_model="%s"'%(
@@ -710,20 +709,38 @@ class PreSmoothedDataCache(object):
             cache_h5file_name = os.path.abspath(os.path.splitext(data_file.filename)[0]) + '.kh5-smoothcache'
             make_new_cache = True
             if os.path.exists( cache_h5file_name ):
-                # loading cache file
-                try:
-                    if int(os.environ.get('CACHE_SAFE','0')):
-                        mode='r'
-                    else:
-                        mode='r+'
-                    cache_h5file = tables.openFile(cache_h5file_name, mode=mode)
-                except IOError:
-                    warnings.warn(
-                        'Broken cache file %s. Deleting'%cache_h5file_name)
-                    os.unlink( cache_h5file_name )
+                if int(os.environ.get('CACHE_DEBUG','0')):
+                    sys.stderr.write(
+                        'examining old cache file at %s\n'%cache_h5file_name)
+                if cache_h5file_name in self.open_cache_h5files:
+                    # already loaded cache file
+                    cache_h5file = self.open_cache_h5files[cache_h5file_name]
                 else:
+                    # load cache file
+                    try:
+                        if int(os.environ.get('CACHE_SAFE','0')):
+                            mode='r'
+                        else:
+                            mode='r+'
+                        cache_h5file = tables.openFile(cache_h5file_name, mode=mode)
+                    except IOError:
+                        warnings.warn(
+                            'Broken cache file %s. Deleting'%cache_h5file_name)
+                        if int(os.environ.get('CACHE_DEBUG','0')):
+                            sys.stderr.write('Broken cache file %s. Deleting\n'%cache_h5file_name)
+                        # not in self.open_cache_h5files, no need to remove it
+                        os.unlink( cache_h5file_name )
+                        cache_h5file = None
+                    else:
+                        #no error, keep reference to opened file
+                        self.open_cache_h5files[cache_h5file_name] = cache_h5file
+                if 1:
+                    if cache_h5file is not None:
+                        cache_title = cache_h5file.title
+                    else:
+                        cache_title = None
+
                     # check if cache is up to date
-                    cache_title = cache_h5file.title
                     if not expected_title == cache_title:
                         if int(os.environ.get('CACHE_DEBUG','0')):
                             sys.stderr.write(
@@ -789,13 +806,18 @@ class PreSmoothedDataCache(object):
                             raise RuntimeError(
                                 'cache file %s is stale, but not deleting'%(
                                 cache_h5file_name,))
-                        else:
+                        else:#if cache_h5file is not None:
                             warnings.warn(
                                 'Deleting stale cache file %s.'%cache_h5file_name)
                             cache_h5file.close()
+                            del self.open_cache_h5files[cache_h5file_name]
                             os.unlink( cache_h5file_name )
 
             if make_new_cache:
+                if int(os.environ.get('CACHE_DEBUG','0')):
+                    sys.stderr.write(
+                        'making new cache (title="%s")\n'%expected_title)
+
                 # creating cache file
                 try:
                     cache_h5file = tables.openFile( cache_h5file_name, mode='w',
@@ -810,11 +832,10 @@ class PreSmoothedDataCache(object):
                     warnings.warn('error creating cache_h5file %s'%(
                         cache_h5file_name,))
                     raise
+                self.open_cache_h5files[cache_h5file_name] = cache_h5file
                 setattr(cache_h5file.root._v_attrs,pdictname,param_dict)
 
-            self.cache_h5files_by_data_file[data_file] = cache_h5file
-
-        h5file = self.cache_h5files_by_data_file[data_file]
+        h5file = cache_h5file
 
         # load or create cached rows for this obj_id
         unsmoothed_tablename = 'obj_id%d'%obj_id
@@ -1352,11 +1373,8 @@ class CachingAnalyzer:
 
         If use_kalman_smoothing is True, the data are passed through a
         Kalman smoother. If not, the data are directly loaded from the
-        Kalman estimates in the file. Typically, this means that the
-        forward-filtered data saved in realtime are returned. However,
-        if the data file has already been smoothed, this will also
-        result in smoothing.
-
+        Kalman estimates in the file. This means that the forward
+        filtered data are returned.
 
         Arguments
         ---------
@@ -1934,7 +1952,7 @@ class CachingAnalyzer:
             if preloaded_dict['self_should_close']:
                 preloaded_dict['kresults'].close()
                 preloaded_dict['self_should_close'] = False
-        for h5file in self._smooth_cache.cache_h5files_by_data_file.itervalues():
+        for fname, h5file in self._smooth_cache.open_cache_h5files.iteritems():
             h5file.close()
 
     def __del__(self):
