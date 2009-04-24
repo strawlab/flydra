@@ -3,6 +3,7 @@
 import numpy
 import math
 import warnings
+import re
 
 def _get_decreasing_accel_model(dt=None):
     """get linear dynamical system matrices A and C
@@ -288,6 +289,36 @@ def get_kalman_model( name=None, dt=None ):
         else:
             raise KeyError('unknown EKF model: %s'%str(name))
     else:
+        if name.startswith('fixed_vel_model'):
+            # specify fixed_vel_model parameters as string
+
+            # This is modified from Python Library ref 4.2.5:
+            floatre = '([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)'
+
+            rexp = r'fixed_vel_model\(posQ=%s,velQ=%s,scalarR=%s,init_posV=%s,init_velV=%s\)'%(
+                floatre,floatre,floatre,floatre,floatre)
+            matchobj = re.match( rexp, name )
+            posQ, velQ, scalarR, init_posV, init_velV = map(float, matchobj.groups())
+
+            base_model_dict = _get_fixed_vel_model(dt)
+            ss = base_model_dict['ss']
+            os = base_model_dict['os']
+
+            Q = numpy.zeros((ss,ss))
+            for i in range(0,3):
+                Q[i,i] = posQ
+            for i in range(3,6):
+                Q[i,i] = velQ
+
+            # measurement noise covariance matrix
+            R = scalarR*numpy.eye(os)
+
+            kalman_model = dict(Q=Q, R=R,
+                                initial_position_covariance_estimate=init_posV,
+                                initial_velocity_covariance_estimate=init_velV,
+                                )
+            kalman_model.update(base_model_dict)
+            return kalman_model
         model_dict = create_dynamic_model_dict(dt=dt,disable_warning=True)
         try:
             kalman_model = model_dict[name]
