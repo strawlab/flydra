@@ -705,8 +705,8 @@ class PreSmoothedDataCache(object):
         if data_file not in self.cache_h5files_by_data_file:
             orig_hash = flydra.analysis.result_utils.md5sum_headtail(
                 data_file.filename)
-            expected_title = 'v=2;up_dir=(%.3f, %.3f, %.3f);hash="%s"'%(
-                up_dir[0],up_dir[1],up_dir[2],orig_hash)
+            expected_title = 'v=2;up_dir=(%.3f, %.3f, %.3f);hash="%s";dynamic_model="%s"'%(
+                up_dir[0],up_dir[1],up_dir[2],orig_hash,dynamic_model_name)
             cache_h5file_name = os.path.abspath(os.path.splitext(data_file.filename)[0]) + '.kh5-smoothcache'
             make_new_cache = True
             if os.path.exists( cache_h5file_name ):

@@ -181,10 +181,6 @@ class wxMainBrainApp(wx.App):
         #   Cameras
         cammenu = wx.Menu()
 
-        ID_fake_sync = wx.NewId()
-        cammenu.Append(ID_fake_sync, "Fake synchronization")
-        wx.EVT_MENU(self, ID_fake_sync, self.OnFakeSync)
-
         # XXX not finished
         #ID_stop_all_collecting_bg = wx.NewId()
         #cammenu.Append(ID_stop_all_collecting_bg, "Stop all running background collection")
@@ -1094,10 +1090,6 @@ class wxMainBrainApp(wx.App):
         finally:
             dlg.Destroy()
             self.pass_all_keystrokes = False
-
-    def OnFakeSync(self, event):
-        print 'sending fake sync command...'
-        self.main_brain.fake_synchronize()
 
     def OnToggleDebugCameras(self, event):
         self.main_brain.set_all_cameras_debug_mode( event.IsChecked() )

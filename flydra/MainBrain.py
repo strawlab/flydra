@@ -27,7 +27,8 @@ import flydra.fastgeom as geom
 #import flydra.geom as geom
 
 import flydra.data_descriptions
-import flydra.trigger
+import motmot.fview_ext_trig.ttrigger
+import motmot.fview_ext_trig.live_timestamp_modeler
 
 import warnings, errno
 warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
@@ -42,7 +43,6 @@ DebugLock = flydra.debuglock.DebugLock
 DO_KALMAN= True # Enables/disables Kalman filter based tracking
 MIN_KALMAN_OBSERVATIONS_TO_SAVE = 10 # how many data points are required before saving trajectory?
 
-RESET_FRAMENUMBER_DURATION=2.0 # seconds
 SHOW_3D_PROCESSING_LATENCY = False
 
 import flydra.common_variables
@@ -564,7 +564,6 @@ class CoordinateProcessor(threading.Thread):
             #self.request_data_lock = DebugLock('request_data_lock',True) # protect request_data
             self.request_data_lock = threading.Lock() # protect request_data
             self.request_data = {}
-        self.framenumber_offsets = []
         self.cam_id2cam_no = {}
         self.camn2cam_id = {}
         self.reconstructor = None
@@ -584,8 +583,6 @@ class CoordinateProcessor(threading.Thread):
         self.max_absolute_cam_nos = -1
 
         self.general_save_info = {}
-
-        self._fake_sync_event = threading.Event()
 
         self.realreceiver = CoordRealReceiver(self.quit_event)
         #self.realreceiver.setDaemon(True)
@@ -715,7 +712,6 @@ class CoordinateProcessor(threading.Thread):
             self.last_timestamps.append(IMPOSSIBLE_TIMESTAMP) # arbitrary impossible number
             self.last_framenumbers_delay.append(-1) # arbitrary impossible number
             self.last_framenumbers_skip.append(-1) # arbitrary impossible number
-            self.framenumber_offsets.append(0)
             self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no,
                                               'frame0':IMPOSSIBLE_TIMESTAMP}
             self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, IMPOSSIBLE_TIMESTAMP) )
@@ -731,7 +727,6 @@ class CoordinateProcessor(threading.Thread):
             del self.last_timestamps[cam_idx]
             del self.last_framenumbers_delay[cam_idx]
             del self.last_framenumbers_skip[cam_idx]
-            del self.framenumber_offsets[cam_idx]
             del self.general_save_info[cam_id]
 
     def quit(self):
@@ -748,21 +743,16 @@ class CoordinateProcessor(threading.Thread):
         self.quit_event.set()
         self.join() # wait until CoordReveiver thread quits
 
-    def fake_synchronize(self):
-        self._fake_sync_event.set()
-
     def OnSynchronize(self, cam_idx, cam_id, framenumber, timestamp,
                       realtime_coord_dict, timestamp_check_dict,
-                      timestamp_fix_dict,
                       realtime_kalman_coord_dict,
                       oldest_timestamp_by_corrected_framenumber,
                       new_data_framenumbers):
 
         if self.main_brain.is_saving_data():
-            print 'WARNING: will not re-synchronize while saving data!'
+            print 'ERROR: re-synchronized while saving data!'
             return
 
-        self.framenumber_offsets[cam_idx] = framenumber
         if self.last_timestamps[cam_idx] != IMPOSSIBLE_TIMESTAMP:
             print cam_id,'(re)synchronized'
             # discard all previous data
@@ -774,7 +764,6 @@ class CoordinateProcessor(threading.Thread):
             for k in oldest_timestamp_by_corrected_framenumber.keys():
                 del oldest_timestamp_by_corrected_framenumber[k]
             new_data_framenumbers.clear()
-            timestamp_fix_dict[cam_id] = timestamp
 
         #else:
         #    print cam_id,'first 2D coordinates received'
@@ -814,7 +803,6 @@ class CoordinateProcessor(threading.Thread):
 
         realtime_coord_dict = {}
         timestamp_check_dict = {}
-        timestamp_fix_dict = {} # for bizarre constant timestamp offsets
         realtime_kalman_coord_dict = collections.defaultdict(dict)
         oldest_timestamp_by_corrected_framenumber = {}
 
@@ -837,18 +825,6 @@ class CoordinateProcessor(threading.Thread):
                 continue
 
             new_data_framenumbers.clear()
-            if self._fake_sync_event.isSet():
-                for cam_idx, cam_id in enumerate(self.cam_ids):
-                    timestamp = self.last_timestamps[cam_idx]
-                    framenumber = self.last_framenumbers_delay[cam_idx]
-                    self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
-                                        realtime_coord_dict,
-                                        timestamp_check_dict,
-                                        timestamp_fix_dict,
-                                        realtime_kalman_coord_dict,
-                                        oldest_timestamp_by_corrected_framenumber,
-                                        new_data_framenumbers )
-                self._fake_sync_event.clear()
 
             BENCHMARK_GATHER=False
             if BENCHMARK_GATHER:
@@ -878,8 +854,8 @@ class CoordinateProcessor(threading.Thread):
                         if len(header) != header_size:
                             # incomplete header buffer
                             break
-                        # this timestamp is the remote camera's timestamp
-                        (timestamp, camn_received_time, framenumber,
+                        # this raw_timestamp is the remote camera's timestamp (?? from the driver, not the host clock??)
+                        (raw_timestamp, camn_received_time, raw_framenumber,
                          n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
                         if BENCHMARK_GATHER:
                             incoming_remote_received_timestamps.append( camn_received_time )
@@ -888,7 +864,7 @@ class CoordinateProcessor(threading.Thread):
                         if DEBUG_DROP:
                             if debug_drop_fd is None:
                                 debug_drop_fd = open('debug_framedrop.txt',mode='w')
-                            debug_drop_fd.write('%d,%d\n'%(framenumber,n_pts))
+                            debug_drop_fd.write('%d,%d\n'%(raw_framenumber,n_pts))
                         points_in_pluecker_coords_meters = []
                         points_undistorted = []
                         points_distorted = []
@@ -896,13 +872,13 @@ class CoordinateProcessor(threading.Thread):
                             # incomplete point info
                             break
                         predicted_framenumber = n_frames_skipped + self.last_framenumbers_skip[cam_idx] + 1
-                        if framenumber<predicted_framenumber:
-                            print 'framenumber',framenumber
+                        if raw_framenumber<predicted_framenumber:
+                            print 'raw_framenumber',raw_framenumber
                             print 'n_frames_skipped',n_frames_skipped
                             print 'predicted_framenumber',predicted_framenumber
                             print 'self.last_framenumbers_skip[cam_idx]',self.last_framenumbers_skip[cam_idx]
                             raise RuntimeError('got framenumber already received or skipped!')
-                        elif framenumber>predicted_framenumber:
+                        elif raw_framenumber>predicted_framenumber:
                             if not self.last_framenumbers_skip[cam_idx]==-1:
                                 # this is not the first frame
 
@@ -914,19 +890,19 @@ class CoordinateProcessor(threading.Thread):
                                     # this is not the first frame
                                     missing_frame_numbers = range(
                                         self.last_framenumbers_skip[cam_idx]+1,
-                                        framenumber)
+                                        raw_framenumber)
 
                                     with self.request_data_lock:
                                         tmp_queue = self.request_data.setdefault(absolute_cam_no,Queue.Queue())
 
-                                    tmp_framenumber_offset = self.framenumber_offsets[cam_idx]
+                                    tmp_framenumber_offset = self.timestamp_modeler.get_frame_offset(cam_idx)
                                     #print 'putting', (cam_id,  tmp_framenumber_offset, missing_frame_numbers)
                                     tmp_queue.put( (cam_id,  tmp_framenumber_offset, missing_frame_numbers) )
                                     del tmp_framenumber_offset
                                     del tmp_queue # drop reference to queue
                                     del missing_frame_numbers
 
-                        self.last_framenumbers_skip[cam_idx]=framenumber
+                        self.last_framenumbers_skip[cam_idx]=raw_framenumber
                         start=header_size
                         if n_pts:
                             # valid points
@@ -983,18 +959,19 @@ class CoordinateProcessor(threading.Thread):
                         with cam_dict['lock']:
                             cam_dict['points_distorted']=points_distorted
 
-                        if timestamp-self.last_timestamps[cam_idx] > RESET_FRAMENUMBER_DURATION:
-                            self.OnSynchronize( cam_idx, cam_id, framenumber, timestamp,
+                        tmp = self.main_brain.timestamp_modeler.register_frame(
+                            cam_id,raw_framenumber,raw_timestamp,full_output=True)
+                        trigger_timestamp, corrected_framenumber, did_frame_offset_change = tmp
+                        if did_frame_offset_change:
+                            self.OnSynchronize( cam_idx, cam_id, raw_framenumber, trigger_timestamp,
                                                 realtime_coord_dict,
                                                 timestamp_check_dict,
-                                                timestamp_fix_dict,
                                                 realtime_kalman_coord_dict,
                                                 oldest_timestamp_by_corrected_framenumber,
                                                 new_data_framenumbers )
 
-                        self.last_timestamps[cam_idx]=timestamp
-                        self.last_framenumbers_delay[cam_idx]=framenumber
-                        corrected_framenumber = framenumber-self.framenumber_offsets[cam_idx]
+                        self.last_timestamps[cam_idx]=trigger_timestamp
+                        self.last_framenumbers_delay[cam_idx]=raw_framenumber
                         XXX_framenumber = corrected_framenumber
 
                         if self.main_brain.is_saving_data():
@@ -1007,7 +984,7 @@ class CoordinateProcessor(threading.Thread):
                                 sumsqf_val = point_tuple[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
                                 deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                                          corrected_framenumber,
-                                                         timestamp,camn_received_time)
+                                                         trigger_timestamp,camn_received_time)
                                                         +point_tuple[:5]
                                                         +(frame_pt_idx,cur_val,mean_val,sumsqf_val))
                         # save new frame data
@@ -1019,7 +996,7 @@ class CoordinateProcessor(threading.Thread):
                         # For hypothesis testing: attempt 3D reconstruction of 1st point from each 2D view
                         realtime_coord_dict[corrected_framenumber][cam_id]= points_undistorted[0]
                         #timestamp_check_dict[corrected_framenumber][cam_id]= camn_received_time
-                        timestamp_check_dict[corrected_framenumber][cam_id]= timestamp
+                        timestamp_check_dict[corrected_framenumber][cam_id]= trigger_timestamp
 
                         if len( points_in_pluecker_coords_meters):
                             # save all 3D Pluecker coordinates for Kalman filtering
@@ -1033,11 +1010,14 @@ class CoordinateProcessor(threading.Thread):
 
                         if corrected_framenumber in oldest_timestamp_by_corrected_framenumber:
                             orig_timestamp,n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
-                            oldest = min(timestamp, orig_timestamp)
+                            if orig_timestamp is None:
+                                oldest = trigger_timestamp # this may also be None, but eventually won't be
+                            else:
+                                oldest = min(trigger_timestamp, orig_timestamp)
                             oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ] = (oldest,n+inc_val)
                             del oldest, n, orig_timestamp
                         else:
-                            oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ] = timestamp, inc_val
+                            oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ] = trigger_timestamp, inc_val
 
                         new_data_framenumbers.add( corrected_framenumber ) # insert into set
 
@@ -1069,6 +1049,9 @@ class CoordinateProcessor(threading.Thread):
 
                 for corrected_framenumber in new_data_framenumbers:
                     oldest_camera_timestamp, n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
+                    if oldest_camera_timestamp is None:
+                        print 'no latency estimate available -- skipping 3D reconstruction'
+                        continue
                     if (time.time() - oldest_camera_timestamp) > max_reconstruction_latency_sec:
                         print 'maximum reconstruction latency exceeded -- skipping 3D reconstruction'
                         continue
@@ -1315,12 +1298,8 @@ class CoordinateProcessor(threading.Thread):
 
                         if 1:
                             diff_from_start = []
-                            for cam_id, tmp_finished_timestamp in timestamp_check_dict[finished].iteritems():
-                                try:
-                                    timestamp_fix = timestamp_fix_dict[cam_id]
-                                except KeyError:
-                                    break
-                                diff_from_start.append( tmp_finished_timestamp - timestamp_fix )
+                            for cam_id, tmp_trigger_timestamp in timestamp_check_dict[finished].iteritems():
+                                diff_from_start.append( tmp_trigger_timestamp )
                             timestamps_by_cam_id = numpy.array( diff_from_start )
 
                         if self.show_sync_errors:
@@ -1736,15 +1715,10 @@ class MainBrain(object):
 
         self.trigger_device_lock = threading.Lock()
         with self.trigger_device_lock:
-            self.trigger_device = flydra.trigger.get_trigger_device()
-            # Reset the device framecount
-            self.trigger_device.set_carrier_frequency( 0.0 )
-            self.trigger_device.reset_framecount_A()
-            time.sleep(0.02)
-            self.trigger_device.set_carrier_frequency( rc_params['frames_per_second'] )
-            self.fps = self.trigger_device.get_carrier_frequency()
-            self.trigger_timer_max = self.trigger_device.get_timer_max()
-            self.trigger_timer_CS = self.trigger_device.get_timer_CS()
+            self.trigger_device = motmot.fview_ext_trig.ttrigger.DeviceModel()
+            self.trigger_device.frames_per_second = rc_params['frames_per_second']
+            self.timestamp_modeler = motmot.fview_ext_trig.live_timestamp_modeler.LiveTimestampModeler()
+            self.timestamp_modeler.set_trigger_device( self.trigger_device )
 
         Pyro.core.initServer(banner=0)
 
@@ -1833,7 +1807,7 @@ class MainBrain(object):
         main_brain_keeper.register( self )
 
     def get_fps(self):
-        return self.fps
+        return self.trigger_device.frames_per_second_actual
 
     def set_fps(self,fps):
         self.do_synchronization(new_fps=fps)
@@ -1842,36 +1816,20 @@ class MainBrain(object):
         if self.is_saving_data():
             raise RuntimeError('will not (re)synchronize while saving data')
 
-        # called from wxPython event handler
-        with self.trigger_device_lock:
-            self.trigger_device.set_carrier_frequency( 0.0 )
-            self.trigger_device.reset_framecount_A()
+        if new_fps is not None:
+            self.trigger_device.frames_per_second = new_fps
+            actual_new_fps = self.trigger_device.frames_per_second_actual
 
-        # clear queue of old trigger timestamp information...
-        try:
-            while True:
-                self.queue_trigger_clock_info.get(0)
-        except Queue.Empty:
-            pass
-
-        time.sleep( RESET_FRAMENUMBER_DURATION+0.01 )
-        if new_fps is None:
-            with self.trigger_device_lock:
-                self.trigger_device.set_carrier_frequency( self.fps )
-        else:
-            with self.trigger_device_lock:
-                self.trigger_device.set_carrier_frequency( new_fps )
-                self.trigger_timer_max = self.trigger_device.get_timer_max()
-                self.trigger_timer_CS = self.trigger_device.get_timer_CS()
-            self.fps = new_fps
+        self.timestamp_modeler.synchronize = True # fire event handler
+        if new_fps is not None:
             cam_ids = self.remote_api.external_get_cam_ids()
             for cam_id in cam_ids:
                 try:
                     self.send_set_camera_property(
-                        cam_id, 'expected_trigger_framerate', new_fps )
+                        cam_id, 'expected_trigger_framerate', actual_new_fps )
                 except Exception,err:
                     print 'ERROR:',err
-            rc_params['frames_per_second'] = new_fps
+            rc_params['frames_per_second'] = actual_new_fps
             save_rc_params()
 
     def get_hypothesis_test_max_error(self):
@@ -1887,7 +1845,7 @@ class MainBrain(object):
         self.MainBrain_cam_ids_copy.append( cam_id )
 
     def SendExpectedFPS(self,cam_id,scalar_control_info,fqdn_and_port):
-        self.send_set_camera_property( cam_id, 'expected_trigger_framerate', self.fps )
+        self.send_set_camera_property( cam_id, 'expected_trigger_framerate', self.trigger_device.frames_per_second_actual )
 
     def SendCalibration(self,cam_id,scalar_control_info,fqdn_and_port):
         if self.reconstructor is not None:
@@ -1974,14 +1932,12 @@ class MainBrain(object):
         self._check_latencies()
 
     def _trigger_framecount_check(self):
-        while 1:
-            start_timestamp = time.time()
-            with self.trigger_device_lock:
-                framecount, tcnt = self.trigger_device.get_framecount_stamp()
-            stop_timestamp = time.time()
-            if (stop_timestamp - start_timestamp) < 3e-3:
-                break # 3 msec or better - accept data, else query again
-        self.queue_trigger_clock_info.put((start_timestamp, framecount, tcnt, stop_timestamp))
+        try:
+            tmp = self.timestamp_modeler.update(return_last_measurement_info=True)
+            start_timestamp, stop_timestamp, framecount, tcnt = tmp
+            self.queue_trigger_clock_info.put((start_timestamp, framecount, tcnt, stop_timestamp))
+        except motmot.fview_ext_trig.live_timestamp_modeler.ImpreciseMeasurementError, err:
+            pass
 
     def _check_latencies(self):
         timestamp_echo_fmt1 = flydra.common_variables.timestamp_echo_fmt1
@@ -2005,9 +1961,6 @@ class MainBrain(object):
          image_coords) = self.remote_api.external_get_image_fps_points(cam_id)
 
         return image, fps, points_distorted, image_coords
-
-    def fake_synchronize(self):
-        self.coord_processor.fake_synchronize()
 
     def close_camera(self,cam_id):
         sys.stdout.flush()
@@ -2180,6 +2133,7 @@ class MainBrain(object):
         if os.path.exists(filename):
             raise RuntimeError("will not overwrite data file")
 
+        self.timestamp_modeler.block_activity = True
         self.h5file = PT.openFile(filename, mode="w", title="Flydra data file")
         expected_rows = int(1e6)
         ct = self.h5file.createTable # shorthand
@@ -2241,6 +2195,7 @@ class MainBrain(object):
         if self.is_saving_data():
             self.h5file.close()
             self.h5file = None
+            self.timestamp_modeler.block_activity = False
         else:
             DEBUG('saving already stopped, cannot stop again')
         self.h5data2d = None
@@ -2268,10 +2223,10 @@ class MainBrain(object):
             (timestamp,cam_id,timestamp,
              ('MainBrain running at %s fps, (top %s, '
               'hypothesis_test_max_error %s, trigger_CS3 %s, flydra_version %s)'%(
-            str(self.fps),
-            str(self.trigger_timer_max),
+            str(self.trigger_device.frames_per_second_actual),
+            str(self.trigger_device._t3_state.timer3_top),
             str(self.get_hypothesis_test_max_error()),
-            str(self.trigger_timer_CS),
+            str(self.trigger_device._t3_state.timer3_CS),
             flydra.version.__version__,
             ))),
             (timestamp,cam_id,timestamp, 'using flydra version %s'%(
