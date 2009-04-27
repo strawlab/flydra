@@ -7,7 +7,7 @@ thought to be the phoenix.
 from __future__ import division, with_statement
 
 import cairo
-import os
+import os, warnings
 import numpy as np
 import contextlib
 
@@ -88,15 +88,19 @@ class Canvas(object):
         ctx.paint()
         ctx.restore()
 
-    def plot(self,xarr,yarr,color_rgba=None):
+    def plot(self,xarr,yarr,color_rgba=None,close_path=False):
         if color_rgba is None:
             color_rgba = (1,1,1,1)
+        if len(xarr)==1:
+            warnings.warn('benu plot() currently only plots line segments')
         ctx = self._ctx # shorthand
 
         ctx.set_source_rgba(*color_rgba)
         ctx.move_to(xarr[0],yarr[0])
         for i in range(1,len(xarr)):
             ctx.line_to(xarr[i],yarr[i])
+        if close_path:
+            ctx.close_path()
         ctx.stroke()
 
     def scatter(self,xarr,yarr,color_rgba=None,radius=1.0):
