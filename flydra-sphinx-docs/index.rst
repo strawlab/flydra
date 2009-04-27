@@ -18,7 +18,6 @@ Contents:
   gallery.rst
   trigger_device.rst
   orientation_data.rst
-  formats.rst
 
 Contibutions to this documentation
 ----------------------------------
