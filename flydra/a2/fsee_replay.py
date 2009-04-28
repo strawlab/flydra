@@ -62,7 +62,8 @@ def doit(options=None):
         print '  for smoothing, will use dynamic model "%s"'%dynamic_model
 
     if 1:
-        file_timestamp = data_file.filename[4:19]
+        data_file_path, data_file_base = os.path.split(data_file.filename)
+        file_timestamp = data_file_base[4:19]
         stim_xml = xml_stimulus.xml_stimulus_from_filename(
             options.stim_xml,
             timestamp_string=file_timestamp,
@@ -90,9 +91,7 @@ def doit(options=None):
         stim_xml_osg = xml_stimulus_osg.StimulusWithOSG( stim_xml.get_root() )
 
     if len(options.obj_only) != 0:
-        if (include_obj_ids is not None or
-            exclude_obj_ids is not None):
-            raise ValueError('')
+        # XXX Should maybe check that obj_only is not excluded and is included
         use_obj_ids = options.obj_only
 
     kalman_rows = flydra.a2.flypos.fuse_obj_ids(
