@@ -1177,7 +1177,7 @@ class SaveSmallData(object):
                 cmd = self.cmd.get()
                 if cmd[0] == 'save':
                     filename_base = cmd[1]
-                    raw_file_basename = os.path.expanduser(os.path.splitext(filename_base)[0])
+                    raw_file_basename = os.path.expanduser(filename_base)
 
                     full_bg = raw_file_basename + '_mean.fmf'
                     full_std = raw_file_basename + '_sumsqf.fmf'
