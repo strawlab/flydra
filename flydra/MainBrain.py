@@ -4,7 +4,7 @@
 from __future__ import with_statement, division
 import threading, time, socket, select, sys, os, copy, struct, math
 import collections
-import sets, traceback
+import traceback
 import Pyro.core
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
@@ -804,7 +804,7 @@ class CoordinateProcessor(threading.Thread):
         realtime_kalman_coord_dict = collections.defaultdict(dict)
         oldest_timestamp_by_corrected_framenumber = {}
 
-        new_data_framenumbers = sets.Set()
+        new_data_framenumbers = set()
 
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)
 
@@ -1330,7 +1330,7 @@ class CoordinateProcessor(threading.Thread):
                         corrected_framenumber = k[0]
                         data_dict = realtime_coord_dict[corrected_framenumber]
                         this_cam_ids = data_dict.keys()
-                        print ' a guess at missing cam_id(s):',list(sets.Set(self.cam_ids) - sets.Set( this_cam_ids ))
+                        print ' a guess at missing cam_id(s):',list(set(self.cam_ids) - set( this_cam_ids ))
 
                     for ki in k[:-50]:
                         del realtime_coord_dict[ki]
