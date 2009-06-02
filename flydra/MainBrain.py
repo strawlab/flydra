@@ -956,8 +956,15 @@ class CoordinateProcessor(threading.Thread):
                         with cam_dict['lock']:
                             cam_dict['points_distorted']=points_distorted
 
+                        # Use camn_received_time to determine sync
+                        # info. This avoids 2 potential problems:
+                        #  * using raw_timestamp can fail if the
+                        #    camera drivers don't provide useful data
+                        #  * using time.time() can fail if the network
+                        #    latency jitter is on the order of the
+                        #    inter frame interval.
                         tmp = self.main_brain.timestamp_modeler.register_frame(
-                            cam_id,raw_framenumber,raw_timestamp,full_output=True)
+                            cam_id,raw_framenumber,camn_received_time,full_output=True)
                         trigger_timestamp, corrected_framenumber, did_frame_offset_change = tmp
                         if did_frame_offset_change:
                             self.OnSynchronize( cam_idx, cam_id, raw_framenumber, trigger_timestamp,
