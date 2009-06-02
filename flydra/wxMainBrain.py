@@ -195,10 +195,6 @@ class wxMainBrainApp(wx.App):
 
         #   View
         viewmenu = wx.Menu()
-        ID_debug_cameras = wx.NewId()
-        viewmenu.Append(ID_debug_cameras, "Camera debug mode",
-                        "Enter camera debug mode", wx.ITEM_CHECK)
-        wx.EVT_MENU(self, ID_debug_cameras, self.OnToggleDebugCameras)
 
         ID_toggle_image_tinting = wx.NewId()
         viewmenu.Append(ID_toggle_image_tinting, "Tint clipped data",
@@ -1090,9 +1086,6 @@ class wxMainBrainApp(wx.App):
         finally:
             dlg.Destroy()
             self.pass_all_keystrokes = False
-
-    def OnToggleDebugCameras(self, event):
-        self.main_brain.set_all_cameras_debug_mode( event.IsChecked() )
 
     def OnChangeSaveDataDir(self, event):
         dlg = wx.DirDialog( self.frame, "Change save data directory",

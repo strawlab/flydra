@@ -1514,13 +1514,6 @@ class MainBrain(object):
                 with cam_lock:
                     cam['commands']['clear_bg']=None
 
-        def external_set_debug( self, cam_id, value):
-            with self.cam_info_lock:
-                cam = self.cam_info[cam_id]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['debug']=value
-
         def external_set_cal( self, cam_id, pmat, intlin, intnonlin, scale_factor):
             with self.cam_info_lock:
                 cam = self.cam_info[cam_id]
@@ -1971,9 +1964,6 @@ class MainBrain(object):
         self.remote_api.external_quit( cam_id )
         sys.stdout.flush()
 
-    def set_debug_mode(self, cam_id, value):
-        self.remote_api.external_set_debug( cam_id, value)
-
     def set_collecting_background(self, cam_id, value):
         self.remote_api.external_send_set_camera_property( cam_id, 'collecting_background', value)
 
@@ -2128,11 +2118,6 @@ class MainBrain(object):
 
     def __del__(self):
         self.quit()
-
-    def set_all_cameras_debug_mode( self, value ):
-        cam_ids = self.remote_api.external_get_cam_ids()
-        for cam_id in cam_ids:
-            self.remote_api.external_set_debug( cam_id, value)
 
     def is_saving_data(self):
         return self.h5file is not None
