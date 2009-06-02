@@ -1299,6 +1299,7 @@ class ImageSource(threading.Thread):
         threading.Thread.__init__(self,name='ImageSource')
         self._chain = chain
         self.cam = cam
+        self.image_coding = self.cam.get_pixel_coding()
         self.buffer_pool = buffer_pool
         self.debug_acquire = debug_acquire
         self.cam_no_str = str(cam_no)
@@ -1347,6 +1348,7 @@ class ImageSource(threading.Thread):
                 chainbuf.cam_received_time = cam_received_time
                 chainbuf.timestamp = timestamp
                 chainbuf.framenumber = framenumber
+                chainbuf.image_coding = self.image_coding
 
                 # Now we get rid of the frame from this thread by passing
                 # it to processing threads. The last one of these will

@@ -294,6 +294,7 @@ class DisplayCamData(object):
                         absdiff = numpy.array( chainbuf.absdiff8u_im_full, copy=True )
                         mean = numpy.array( chainbuf.mean8u_im_full, copy=True )
                         cmp = numpy.array( chainbuf.compareframe8u_full, copy=True )
+                image_coding = chainbuf.image_coding
 
             kwargs = {}
             if self._full_debug_images:
@@ -306,5 +307,6 @@ class DisplayCamData(object):
             wx.PostEvent(self._wxapp, DisplayImageEvent(buf=buf_copy,
                                                         pts=pts,
                                                         cam_id=self._cam_id,
+                                                        image_coding = image_coding,
                                                         **kwargs
                                                         ))
