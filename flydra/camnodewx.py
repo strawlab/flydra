@@ -7,13 +7,8 @@ import wx.lib.newevent
 import camnode
 import camnode_utils
 import numpy
-from motmot.wxglvideo.simple_overlay import PointDisplayCanvas as orig_PointDisplayCanvas
+from motmot.wxglvideo.simple_overlay import PointDisplayCanvas
 from pygarrayimage.arrayimage import ArrayInterfaceImage
-
-class PointDisplayCanvas(orig_PointDisplayCanvas):
-    def __init__(self,*args,**kwargs):
-        kwargs['attribList']=0
-        orig_PointDisplayCanvas.__init__(self,*args,**kwargs)
 
 DisplayImageEvent, EVT_DISPLAYIMAGE = wx.lib.newevent.NewEvent()
 
