@@ -96,6 +96,8 @@ class WxApp(wx.App):
 
     def OnQuit(self, dummy_event=None):
         self.frame.Close() # results in call to OnWindowClose()
+        self.timer.Stop()
+        self.timer2.Stop()
 
     def OnTimer2(self,event):
         if self.call_often is not None:
