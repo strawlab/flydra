@@ -986,6 +986,9 @@ class CoordinateProcessor(threading.Thread):
                                 cur_val = point_tuple[PT_TUPLE_IDX_CUR_VAL_IDX]
                                 mean_val = point_tuple[PT_TUPLE_IDX_MEAN_VAL_IDX]
                                 sumsqf_val = point_tuple[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
+                                if corrected_framenumber is None:
+                                    # don't bother saving if we don't know when it was from
+                                    continue
                                 deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                                          corrected_framenumber,
                                                          trigger_timestamp,camn_received_time)
@@ -1653,6 +1656,9 @@ class MainBrain(object):
                     except:
                         print >> sys.stderr, 'error while appending point_tuple',point_tuple
                         raise
+                    if corrected_framenumber is None:
+                        # don't bother saving if we don't know when it was from
+                        continue
                     deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                              corrected_framenumber,
                                              remote_timestamp, camn_received_time)
