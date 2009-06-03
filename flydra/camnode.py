@@ -1424,7 +1424,7 @@ class ImageSourceFromCamera(ImageSource):
             #self.log_message_queue.put((self.cam_no_str,now,msg))
             print >> sys.stderr, msg
             try_again_condition = True
-        except cam_iface.FrameSystemCallInterruption:
+        except (cam_iface.FrameSystemCallInterruption, cam_iface.NoFrameReturned):
             if self.debug_acquire:
                 stdout_write('(S%s)'%self.cam_no_str)
             try_again_condition = True
