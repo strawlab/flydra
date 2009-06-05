@@ -1944,8 +1944,9 @@ class AppState(object):
                 raise
             self.main_brain._setOneway(['set_image','set_fps','close','log_message','receive_missing_data'])
 
-            main_brain_version = self.main_brain.get_version()
-            assert main_brain_version == flydra.version.__version__
+            if not options.ignore_version:
+                main_brain_version = self.main_brain.get_version()
+                assert main_brain_version == flydra.version.__version__
 
         ##################################################################
         #
@@ -2613,6 +2614,9 @@ def parse_args_and_run(benchmark=False):
     parser.add_option("--disable-ifi-warning", action='store_true',
                       help=("do not print a warning if the inter-frame-interval "
                             "(IFI) is longer than expected"))
+
+    parser.add_option("--ignore-version", action='store_true',
+                      help=("do not care if version is mismatched with mainbrain"))
 
     parser.add_option("--num-points", type="int",
                       help="number of points to track per cameras [default: %default]")
