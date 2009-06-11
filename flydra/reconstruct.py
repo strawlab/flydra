@@ -379,8 +379,6 @@ class SingleCameraCalibration:
       camera calibration matrix
     res : sequence of length 2
       resolution (width,height)
-    pp : sequence of length 2
-      pricipal point (point on image plane on optical axis) (x,y)
     helper : :class:`CamParamsHelper` instance
       (optional) specifies camera distortion parameters
     scale_factor : None or float
@@ -390,7 +388,6 @@ class SingleCameraCalibration:
                  cam_id=None, # non-optional
                  Pmat=None,   # non-optional
                  res=None,    # non-optional
-#                 pp=None,
                  helper=None,
                  scale_factor=None # scale_factor is for conversion to meters (e.g. should be 1e-3 if your units are mm)
                  ):
@@ -407,26 +404,6 @@ class SingleCameraCalibration:
         self.cam_id=cam_id
         self.Pmat=Pmat
         self.res=res
-
-##         pp_guess = False
-##         if pp is None:
-##             pp = self.res[0]/2.0,self.res[1]/2.0
-##             pp_guess = True
-##         if len(pp) != 2:
-##             raise ValueError('len(pp) must be 2')
-## #        self.pp = pp
-
-        if 0:
-            center = self.get_image_center()
-            if ((pp[0]-center[0])**2 + (pp[1]-center[1])**2 ) > 5:
-                if WARN_CALIB_DIFF:
-                    print 'WARNING: principal point and image center seriously misaligned'
-                    print '  pp: %s, center: %s'%(str(pp),str(center))
-                    if pp_guess:
-
-                        print '  (note: one of these parameters was guessed ' \
-                              'as the midpoint of the specified image resolution, ' \
-                              'and could be wrong)'
 
         if helper is None:
             M = numpy.asarray(Pmat)
@@ -460,8 +437,7 @@ class SingleCameraCalibration:
         return not (self==other)
 
     def __eq__(self,other):
-        return (#numpy.allclose(self.pp,other.pp) and
-                (self.cam_id == other.cam_id) and
+        return ((self.cam_id == other.cam_id) and
                 numpy.allclose(self.Pmat,other.Pmat) and
                 numpy.allclose(self.res,other.res) and
                 self.helper == other.helper)
@@ -500,7 +476,6 @@ class SingleCameraCalibration:
         scaled = SingleCameraCalibration(cam_id=self.cam_id,
                                          Pmat=scaled_Pmat,
                                          res=self.res,
-#                                         self.pp,
                                          helper=self.helper,
                                          scale_factor=new_scale_factor)
         self._scaled_cache[scale_factor] = scaled
@@ -589,7 +564,6 @@ class SingleCameraCalibration:
         fd.write(    '       ]\n')
 
         fd.write(    'res = (%d,%d)\n'%(self.res[0],self.res[1]))
-#        fd.write(    'pp = (%s,%s)\n'%(repr(self.pp[0]),repr(self.pp[1])))
 
         fd.write(    'K = [\n')
         for row in self.helper.get_K():
@@ -677,9 +651,6 @@ class SingleCameraCalibration:
         res = ET.SubElement(elem, "resolution")
         res.text = ' '.join(map(str,self.res))
 
-#        pp = ET.SubElement(elem, "principal_point")
-#        pp.text = ' '.join(map(str,self.pp))
-
         scale_factor = ET.SubElement(elem, "scale_factor")
         scale_factor.text = str(self.scale_factor)
 
@@ -708,7 +679,6 @@ def SingleCameraCalibration_fromfile(filename):
     return SingleCameraCalibration(cam_id=cam_id,
                                    Pmat=pmat,
                                    res=res,
-                                   pp=pp,
                                    helper=helper)
 
 def SingleCameraCalibration_from_xml(elem):
