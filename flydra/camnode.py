@@ -161,7 +161,7 @@ class DummySocket:
     def __init__(self,*args,**kw):
         self.connect = self.noop
         self.send = self.noop
-        #sself.sendto = self.noop
+        self.sendto = self.noop
     def noop(self,*args,**kw):
         return
 
@@ -1461,15 +1461,27 @@ class ImageSourceFakeCamera(ImageSource):
     def __init__(self,*args,**kw):
         self._do_step = threading.Event()
         self._fake_cam = kw['cam']
+        self._buffer_pool = None
+        self._count = 0
         super( ImageSourceFakeCamera, self).__init__(*args,**kw)
 
     def _block_until_ready(self):
-        if isinstance(self._fake_cam,FakeCameraFromRNG):
-            return
-
         while 1:
             if self.quit_event.isSet():
                 return
+
+            if self._count==0:
+                self._tstart = time.time()
+            elif self._count>=1000:
+                tstop = time.time()
+                dur = tstop-self._tstart
+                fps = self._count/dur
+                print 'fps: %.1f'%(fps,)
+
+                # prepare for next
+                self._tstart = tstop
+                self._count = 0
+            self._count += 1
 
             # This lock ping-pongs execution back and forth between
             # "acquire" and process.
@@ -1478,13 +1490,15 @@ class ImageSourceFakeCamera(ImageSource):
             if self._do_step.isSet():
                 self._do_step.clear()
                 return
+            if self._buffer_pool is not None:
+                r=self._buffer_pool.get_num_outstanding_buffers()
+                self._do_step.set()
+
+    def register_buffer_pool( self, buffer_pool ):
+        assert self._buffer_pool is None,'buffer pool may only be set once'
+        self._buffer_pool = buffer_pool
 
     def spawn_controller(self):
-        if isinstance(self._fake_cam,FakeCameraFromRNG):
-            # no control necessary for random number generator
-            controller = ImageSourceBaseController()
-            return controller
-
         class ImageSourceFakeCameraController(ImageSourceBaseController):
             def __init__(self, do_step=None, fake_cam=None, quit_event=None):
                 self._do_step = do_step
@@ -1596,6 +1610,9 @@ class FakeCameraFromRNG(FakeCamera):
         self.remote = None
         self.last_timestamp = 0.0
         self.last_count = -1
+
+    def get_pixel_coding(self):
+        return 'MONO8'
 
     def get_frame_roi(self):
         w,h=self.frame_size
@@ -1759,7 +1776,8 @@ class ConsoleApp(object):
 
     def generate_view(self, model, controller ):
         if hasattr(controller, 'trigger_single_frame_start' ):
-            raise NotImplementedError('no control in ConsoleApp for %s'%controller)
+            warnings.warn('no control in ConsoleApp for %s'%controller)
+            controller.trigger_single_frame_start()
 
 class AppState(object):
     """This class handles all camera states, properties, etc."""
@@ -1913,6 +1931,8 @@ class AppState(object):
                                                 cam_no = cam_no,
                                                 quit_event = globals['cam_quit_event'],
                                                 )
+                if benchmark: # should maybe be for any simulated camera in non-GUI mode?
+                    image_source.register_buffer_pool( buffer_pool )
 
                 controller = image_source.spawn_controller()
 
