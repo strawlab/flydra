@@ -614,9 +614,6 @@ class ProcessCamClass(object):
 
         # allocate images and initialize if necessary
 
-        bg_image_full = FastImage.FastImage8u(max_frame_size)
-        std_image_full = FastImage.FastImage8u(max_frame_size)
-
         running_mean_im_full = FastImage.FastImage32f(max_frame_size)
         self._running_mean_im_full = running_mean_im_full # make accessible to other code
 
@@ -641,8 +638,6 @@ class ProcessCamClass(object):
         mean_duration_bg = 0.020 # starting value
 
         # set ROI views of full-frame images
-        bg_image = bg_image_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
-        std_image = std_image_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
         running_mean8u_im = running_mean8u_im_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
         running_mean_im = running_mean_im_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
         fastframef32_tmp = fastframef32_tmp_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
@@ -681,8 +676,6 @@ class ProcessCamClass(object):
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
                 if chainbuf.quit_now:
                     break
-                chainbuf.updated_bg_image = None
-                chainbuf.updated_cmp_image = None
                 chainbuf.updated_running_mean_image = None
                 chainbuf.updated_running_sumsqf_image = None
 
@@ -889,28 +882,8 @@ class ProcessCamClass(object):
                     clear_background_clear()
 
                 if bg_changed:
-                    if 1:
-##                        bg_image = running_mean8u_im.get_8u_copy(running_mean8u_im.size)
-##                        std_image = compareframe8u.get_8u_copy(compareframe8u.size)
-                        running_mean8u_im.get_8u_copy_put(bg_image, running_mean8u_im.size)
-                        compareframe8u.get_8u_copy_put(std_image, compareframe8u.size)
-                    elif 0:
-                        bg_image = nx.array(running_mean8u_im) # make copy (we don't want to send live versions of image
-                        std_image = nx.array(compareframe8u) # make copy (we don't want to send live versions of image
-                    else:
-                        bg_image = running_mean8u_im
-                        std_image = compareframe8u
-
-                    chainbuf.updated_bg_image = numpy.array( bg_image, copy=True )
-                    chainbuf.updated_cmp_image = numpy.array( std_image, copy=True )
-
                     chainbuf.updated_running_mean_image = numpy.array( running_mean_im, copy=True )
                     chainbuf.updated_running_sumsqf_image = numpy.array( running_sumsqf, copy=True )
-
-#                    globals['current_bg_frame_and_timestamp']=bg_image,std_image,timestamp # only used when starting to save
-##                     if not BENCHMARK:
-##                         globals['incoming_bg_frames'].put(
-##                             (bg_image,std_image,timestamp,framenumber) ) # save it
                     bg_changed = False
 
                 if self.diff_threshold_shared.is_new_value_waiting():
@@ -975,8 +948,6 @@ class ProcessCamClass(object):
                     self.realtime_analyzer.roi = (l,b,r,t)
 
                     # set ROI views of full-frame images
-                    bg_image = bg_image_full.roi(l, b, cur_fisize) # set ROI view
-                    std_image = std_image_full.roi(l, b, cur_fisize) # set ROI view
                     running_mean8u_im = running_mean8u_im_full.roi(l, b, cur_fisize) # set ROI view
                     running_mean_im = running_mean_im_full.roi(l, b, cur_fisize)  # set ROI view
                     fastframef32_tmp = fastframef32_tmp_full.roi(l, b, cur_fisize)  # set ROI view
@@ -1078,7 +1049,7 @@ class SaveCamData(object):
                 if chainbuf.quit_now:
                     break
 
-                if chainbuf.updated_bg_image is not None:
+                if chainbuf.updated_running_mean_image is not None:
                     # Always keep the current bg and std images so
                     # that we can save them when starting a new .fmf
                     # movie save sequence.
@@ -1093,10 +1064,8 @@ class SaveCamData(object):
                 if state == 'saving':
                     raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
                                  chainbuf.cam_received_time) )
-                    if chainbuf.updated_bg_image is not None:
-                        meancmp.append( (chainbuf.updated_bg_image,
-                                         chainbuf.updated_cmp_image,
-                                         chainbuf.updated_running_mean_image,
+                    if chainbuf.updated_running_mean_image is not None:
+                        meancmp.append( (chainbuf.updated_running_mean_image,
                                          chainbuf.updated_running_sumsqf_image,
                                          chainbuf.cam_received_time)) # these were copied in process thread
 
@@ -1109,10 +1078,8 @@ class SaveCamData(object):
                     if state == 'saving':
                         raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
                                      chainbuf.cam_received_time) )
-                        if chainbuf.updated_bg_image is not None:
-                            meancmp.append( (chainbuf.updated_bg_image,
-                                             chainbuf.updated_cmp_image,
-                                             chainbuf.updated_running_mean_image,
+                        if chainbuf.updated_running_mean_image is not None:
+                            meancmp.append( (chainbuf.updated_running_mean_image,
                                              chainbuf.updated_running_sumsqf_image,
                                              chainbuf.cam_received_time)) # these were copied in process thread
             except Queue.Empty:
@@ -1213,7 +1180,7 @@ class SaveSmallData(object):
                 if chainbuf.quit_now:
                     break
 
-                if chainbuf.updated_bg_image is not None:
+                if chainbuf.updated_running_mean_image is not None:
                     # Always keep the current bg and std images so
                     # that we can save them when starting a new .fmf
                     # movie save sequence.
@@ -1226,10 +1193,8 @@ class SaveSmallData(object):
                     last_running_sumsqf_image = chainbuf.updated_running_sumsqf_image
 
                 if state == 'saving':
-                    if chainbuf.updated_bg_image is not None:
-                        meancmp.append( (chainbuf.updated_bg_image,
-                                         chainbuf.updated_cmp_image,
-                                         chainbuf.updated_running_mean_image,
+                    if chainbuf.updated_running_mean_image is not None:
+                        meancmp.append( (chainbuf.updated_running_mean_image,
                                          chainbuf.updated_running_sumsqf_image,
                                          chainbuf.cam_received_time)) # these were copied in process thread
                     if self._ufmf is None:
@@ -1261,10 +1226,8 @@ class SaveSmallData(object):
 
                     if state == 'saving':
                         self._tobuf( chainbuf ) # actually save the .ufmf data
-                        if chainbuf.updated_bg_image is not None:
-                            meancmp.append( (chainbuf.updated_bg_image,
-                                             chainbuf.updated_cmp_image,
-                                             chainbuf.updated_running_mean_image,
+                        if chainbuf.updated_running_mean_image is not None:
+                            meancmp.append( (chainbuf.updated_running_mean_image,
                                              chainbuf.updated_running_sumsqf_image,
                                              chainbuf.cam_received_time)) # these were copied in process thread
             except Queue.Empty:
