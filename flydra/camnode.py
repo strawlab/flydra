@@ -1145,34 +1145,11 @@ class SaveSmallData(object):
                 if cmd[0] == 'save':
                     filename_base = cmd[1]
                     raw_file_basename = os.path.expanduser(filename_base)
-
-                    full_bg = raw_file_basename + '_mean.fmf'
-                    full_std = raw_file_basename + '_sumsqf.fmf'
-                    bg_movie = FlyMovieFormat.FlyMovieSaver(full_bg,
-                                                            format='MONO32f',
-                                                            bits_per_pixel=32,
-                                                            version=3)
-                    std_movie = FlyMovieFormat.FlyMovieSaver(full_std,
-                                                             format='MONO32f',
-                                                             bits_per_pixel=32,
-                                                             version=3)
                     state = 'saving'
-                    if last_bgcmp_image_timestamp is not None:
-                        bg_movie.add_frame(FastImage.asfastimage(last_running_mean_image),
-                                           last_bgcmp_image_timestamp,
-                                           error_if_not_fast=True)
-                        std_movie.add_frame(FastImage.asfastimage(last_running_sumsqf_image),
-                                            last_bgcmp_image_timestamp,
-                                            error_if_not_fast=True)
-                    else:
-                        print 'WARNING: could not save initial bg and std frames'
-
                 elif cmd[0] == 'stop':
                     if self._ufmf is not None:
                         self._ufmf.close()
                         self._ufmf = None
-                    bg_movie.close()
-                    std_movie.close()
                     state = 'pass'
 
             # block for images
@@ -1198,8 +1175,6 @@ class SaveSmallData(object):
                                          chainbuf.updated_running_sumsqf_image,
                                          chainbuf.cam_received_time)) # these were copied in process thread
                     if self._ufmf is None:
-                        frame1 = numpy.asarray(chainbuf.get_buf())
-                        timestamp1 = chainbuf.cam_received_time
                         filename_base = os.path.expanduser(filename_base)
                         dirname = os.path.split(filename_base)[0]
 
@@ -1210,12 +1185,29 @@ class SaveSmallData(object):
                             if not os.path.exists(dirname):
                                 os.makedirs(dirname)
                         filename = filename_base + '.ufmf'
-                        if 1:
-                            print 'saving to',filename
-                        self._ufmf = ufmf.UfmfSaver( filename,
-                                                     frame1,
-                                                     timestamp1,
-                                                     image_radius=self.options.small_save_radius )
+                        print 'saving to',filename
+                        if chainbuf.image_coding.startswith('MONO8'):
+                            h,w=numpy.array(chainbuf.get_buf(), copy=False).shape
+                        else:
+                            raise NotImplementedError(
+                                'unable to determine shape from image with '
+                                'coding %s'%(chainbuf.image_coding,))
+                        self._ufmf = ufmf.UfmfSaverV2( filename,
+                                                       coding = chainbuf.image_coding,
+                                                       max_width=w,
+                                                       max_height=h,
+                                                       )
+                        del h,w
+
+
+                        if last_running_mean_image is not None:
+                            self._ufmf.add_keyframe('mean',
+                                                    last_running_mean_image,
+                                                    last_bgcmp_image_timestamp)
+                            self._ufmf.add_keyframe('sumsq',
+                                                    last_running_sumsqf_image,
+                                                    last_bgcmp_image_timestamp)
+
                     self._tobuf( chainbuf )
 
             # grab any more that are here
@@ -1236,16 +1228,20 @@ class SaveSmallData(object):
             # actually save the data
             #   TODO: switch to add_frames() method which doesn't acquire GIL after each frame.
             if state == 'saving':
-                for bg,cmp,running_mean,running_sumsqf,timestamp in meancmp:
-                    bg_movie.add_frame(FastImage.asfastimage(running_mean),timestamp,error_if_not_fast=True)
-                    std_movie.add_frame(FastImage.asfastimage(running_sumsqf),timestamp,error_if_not_fast=True)
+                for running_mean,running_sumsqf,timestamp in meancmp:
+                    self._ufmf.add_keyframe('mean',running_mean,timestamp)
+                    self._ufmf.add_keyframe('sumsq',running_sumsqf,timestamp)
             del meancmp[:]
 
     def _tobuf( self, chainbuf ):
         frame = chainbuf.get_buf()
         if 0:
             print 'saving %d points'%(len(chainbuf.processed_points ),)
-        self._ufmf.add_frame( frame, chainbuf.cam_received_time, chainbuf.processed_points )
+        pts = []
+        wh = self.options.small_save_radius*2
+        for pt in chainbuf.processed_points:
+            pts.append( (pt[0],pt[1],wh,wh) )
+        self._ufmf.add_frame( frame, chainbuf.cam_received_time, pts )
 
 class ImageSource(threading.Thread):
     """One instance of this class for each camera. Do nothing but get
