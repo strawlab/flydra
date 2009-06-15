@@ -457,7 +457,13 @@ class wxMainBrainApp(wx.App):
             child_kwargs['attribList']=0
         else:
             child_kwargs=None
-        self.cam_image_canvas = wxglvideo.DynamicImageCanvas(dynamic_image_panel,-1,child_kwargs=child_kwargs)
+        if child_kwargs is not None:
+            extra_kwargs = dict(child_kwargs=child_kwargs)
+        else:
+            extra_kwargs = {}
+        self.cam_image_canvas =wxglvideo.DynamicImageCanvas(dynamic_image_panel,
+                                                            -1,
+                                                            **extra_kwargs)
         box.Add(self.cam_image_canvas,1,wx.EXPAND)
         dynamic_image_panel.Layout()
 
@@ -1488,11 +1494,16 @@ class wxMainBrainApp(wx.App):
                             else:
                                 linesegs = None
                                 lineseg_colors = None
+                            global use_opengl
+                            if use_opengl:
+                                extra_kwargs = dict(sort_add=True)
+                            else:
+                                extra_kwargs = {}
                             self.cam_image_canvas.update_image_and_drawings(cam_id,image,
                                                                             points=points,
                                                                             linesegs=linesegs,
                                                                             lineseg_colors=lineseg_colors,
-                                                                            sort_add=True)
+                                                                            **extra_kwargs)
                     if show_fps is not None:
                         show_fps_label = xrc.XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
                         show_fps_label.SetLabel('fps: %.1f'%show_fps)
