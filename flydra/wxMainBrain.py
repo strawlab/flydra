@@ -5,7 +5,6 @@ import MainBrain
 from MainBrain import DEBUG
 import wx
 from wx import xrc
-import pyglet.gl.lib
 import numpy
 import flydra.a2.xml_stimulus
 
