@@ -1000,6 +1000,8 @@ class SaveCamData(object):
         last_running_mean_image = None
         last_running_sumsqf_image = None
 
+        image_coding = None
+
         while 1:
 
             # 1: process commands
@@ -1014,17 +1016,26 @@ class SaveCamData(object):
                     full_std = raw_file_basename + '_sumsqf.fmf'
                     print 'saving movies','-'*50
                     raw_movie = FlyMovieFormat.FlyMovieSaver(full_raw,
-                                                             format='MONO8',
+                                                             format=image_coding,
                                                              bits_per_pixel=8,
                                                              version=3)
+                    if image_coding.startswith('MONO8:'):
+                        tmp_coding = 'MONO32f:' + image_coding[6:]
+                    else:
+                        if image_coding != 'MONO8':
+                            print >> sys.stderr, ('WARNING: unknown image '
+                                                  'coding %s for .fmf files'%(
+                                image_coding,))
+                        tmp_coding = 'MONO32f'
                     bg_movie = FlyMovieFormat.FlyMovieSaver(full_bg,
-                                                            format='MONO32f',
+                                                            format=tmp_coding,
                                                             bits_per_pixel=32,
                                                             version=3)
                     std_movie = FlyMovieFormat.FlyMovieSaver(full_std,
-                                                             format='MONO32f',
+                                                             format='MONO32f', # std is monochrome
                                                              bits_per_pixel=32,
                                                              version=3)
+                    del tmp_coding
                     state = 'saving'
 
                     if last_bgcmp_image_timestamp is not None:
@@ -1048,6 +1059,9 @@ class SaveCamData(object):
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf: # must do on every frame
                 if chainbuf.quit_now:
                     break
+
+                if image_coding is None:
+                    image_coding = chainbuf.image_coding
 
                 if chainbuf.updated_running_mean_image is not None:
                     # Always keep the current bg and std images so
