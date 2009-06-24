@@ -2366,7 +2366,13 @@ class AppState(object):
                         else: globals['use_cmp'].clear()
                     elif property_name == 'expected_trigger_framerate':
                         #print 'expecting trigger fps',value
-                        cam_processor.shortest_IFI = 1.0/value # XXX TODO: FIXME: thread crossing bug
+                        if value==0.0:
+                            print ('WARNING: expected_trigger_framerate is set '
+                                   'to 0, but setting shortest IFI to 10 msec '
+                                   'anyway')
+                            cam_processor.shortest_IFI = 0.01 # XXX TODO: FIXME: thread crossing bug
+                        else:
+                            cam_processor.shortest_IFI = 1.0/value # XXX TODO: FIXME: thread crossing bug
                     elif property_name == 'max_framerate':
                         if 0:
                             #print 'ignoring request to set max_framerate'
