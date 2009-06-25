@@ -353,21 +353,21 @@ class TrigReceiver(threading.Thread):
             if trig_buf=='1':
                 with self.main_brain.trigger_device_lock:
                     pre_timestamp = time.time()
-                    self.main_brain.trigger_device.ext_trig1()
+                    self.main_brain.trigger_device.ext_trig1 = True
                     # hmm, calling log_message is normally what the cameras do..
                     self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG1')
 
             elif trig_buf=='2':
                 with self.main_brain.trigger_device_lock:
                     pre_timestamp = time.time()
-                    self.main_brain.trigger_device.ext_trig2()
+                    self.main_brain.trigger_device.ext_trig2 = True
                     # hmm, calling log_message is normally what the cameras do..
                     self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG2')
 
             elif trig_buf=='3':
                 with self.main_brain.trigger_device_lock:
                     pre_timestamp = time.time()
-                    self.main_brain.trigger_device.ext_trig3()
+                    self.main_brain.trigger_device.ext_trig3 = True
                     # hmm, calling log_message is normally what the cameras do..
                     self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG3')
 
