@@ -44,6 +44,7 @@ bright_non_gaussian_cutoff = 255
 bright_non_gaussian_replacement = 5
 
 import threading, time, socket, sys, struct, select, math, warnings
+import traceback
 import Queue
 import numpy
 import numpy as nx
@@ -911,7 +912,6 @@ class ProcessCamClass(object):
                         coord_socket.sendto(data,
                                             (self.main_brain_hostname,self.cam2mainbrain_port))
                     except socket.error, err:
-                        import traceback
                         print >> sys.stderr, 'WARNING: ignoring error:'
                         traceback.print_exc()
 
@@ -2307,7 +2307,6 @@ class AppState(object):
                         pass
 
         except:
-            import traceback
             traceback.print_exc()
             self.quit_function(1)
 
@@ -2358,7 +2357,11 @@ class AppState(object):
                         assert cam.get_max_height() == value
                     elif property_name == 'trigger_mode':
                         print 'cam.set_trigger_mode_number( value )',value
-                        cam.set_trigger_mode_number( value )
+                        try:
+                            cam.set_trigger_mode_number( value ) # XXX don't crash on exception here
+                        except Exception,err:
+                            print 'ERROR setting trigger mode'
+                            traceback.print_exc()
                     elif property_name == 'cmp':
                         if value:
                             # print 'ignoring request to use_cmp'
