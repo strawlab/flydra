@@ -580,7 +580,7 @@ class wxMainBrainApp(wx.App):
                      0,wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL )
 
             txtctrl = wx.TextCtrl( per_cam_controls_panel, wx.NewId(),
-                                  size=(40,20))
+                                  size=(50,20))
             txtctrl.SetValue(str(current_value))
             grid.Add( txtctrl,0,wx.ALIGN_LEFT )
 
