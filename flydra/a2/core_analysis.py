@@ -1936,7 +1936,10 @@ class CachingAnalyzer:
             self_should_close = False
             # XXX I should make my reference a weakref
         obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
-        obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id')
+        if hasattr(kresults.root,'kalman_observations'):
+            obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id')
+        else:
+            obs_obj_ids = []
         unique_obj_ids = numpy.unique(obs_obj_ids)
         preloaded_dict = {'kresults':kresults,
                           'self_should_close':self_should_close,
