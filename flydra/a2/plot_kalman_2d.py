@@ -164,7 +164,7 @@ class ShowIt(object):
             elif hasattr(results.root,'calibration'):
                 reconstructor_source = results
             else:
-                raise ValueError('no source given for reconstructor')
+                reconstructor_source = None
         else:
             if os.path.abspath(reconstructor_filename) == os.path.abspath(filename):
                 reconstructor_source = results
