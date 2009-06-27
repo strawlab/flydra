@@ -6,6 +6,8 @@ from numpy import nan, pi
 import tables as PT
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
+import tables
+import contextlib
 import pytz # from http://pytz.sourceforge.net/
 import datetime
 import sets
@@ -18,6 +20,9 @@ import flydra.analysis.result_utils as result_utils
 import matplotlib.cm as cm
 import flydra.a2.xml_stimulus as xml_stimulus
 import matplotlib.collections as collections
+import flydra.kalman.flydra_kalman_utils
+
+KalmanEstimatesVelOnly =flydra.kalman.flydra_kalman_utils.KalmanEstimatesVelOnly
 
 def auto_subplot(fig,n,n_rows=2,n_cols=3):
     # 2 rows and n_cols
@@ -139,6 +144,7 @@ p - pick a new point and add it to the list
 i - intersect picked points in list
 c - clear list
 a - all intersected 3D points are printed to console
+h - save all intersected 3D points to 'points.h5'
 
 current list of 2D points
 -------------------------
@@ -155,7 +161,30 @@ current list of 2D points
             fd.write(',\n  '.join([arrstr(pt) for pt in self.points3d]))
             fd.write('\n]\n')
             sys.stdout.write('---------- \n')
+        elif event.key=='h':
+            fname = os.path.abspath('points.h5')
+            if os.path.exists(fname):
+                raise RuntimeError('will not overwrite file %s'%fname)
+            if self.reconstructor is None:
+                raise RuntimeError('will not save .h5 file without 3D data')
 
+            with contextlib.closing(tables.openFile(fname,mode='w')) as h5file:
+                self.reconstructor.save_to_h5file(h5file)
+                ct = h5file.createTable # shorthand
+                root = h5file.root # shorthand
+                h5data3d = ct(root,'kalman_estimates',
+                              KalmanEstimatesVelOnly,"3d data")
+
+                row = h5data3d.row
+                for i,pt in enumerate(self.points3d):
+                    row['obj_id']=0
+                    row['frame']=i
+                    row['timestamp']=i
+                    row['x'], row['y'], row['z'] = pt
+                    row['xvel'], row['yvel'], row['zvel'] = 0,0,0
+                    row.append()
+            sys.stdout.write('saved %d points to file %s\n'%(len(self.points3d),
+                                                           fname))
     def show_it(self,
                 fig,
                 filename,
