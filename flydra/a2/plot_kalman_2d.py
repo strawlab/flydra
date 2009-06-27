@@ -43,6 +43,7 @@ class ShowIt(object):
         self.subplot_by_cam_id = {}
         self.reconstructor = None
         self.cam_ids_and_points2d = []
+        self.points3d = []
 
     def find_cam_id(self,ax):
         found = False
@@ -65,6 +66,8 @@ class ShowIt(object):
                 return
 
             X = self.reconstructor.find3d(self.cam_ids_and_points2d,return_X_coords = True, return_line_coords=False)
+            self.points3d.append(X)
+
             print 'maximum liklihood intersection:'
             print repr(X)
             if 1:
@@ -127,6 +130,31 @@ class ShowIt(object):
                 ax.set_xlim(xlim)
                 ax.set_ylim(ylim)
             pylab.draw()
+        elif event.key=='?':
+            sys.stdout.write("""
+hotkeys
+-------
+? - help (you're reading it)
+p - pick a new point and add it to the list
+i - intersect picked points in list
+c - clear list
+a - all intersected 3D points are printed to console
+
+current list of 2D points
+-------------------------
+""")
+            for cam_id,(x,y) in self.cam_ids_and_points2d:
+                sys.stdout.write('%s: %s %s\n'%(cam_id,x,y))
+            sys.stdout.write('\n')
+        elif event.key=='a':
+            def arrstr(arr):
+                return '[ '+', '.join( [repr(elem) for elem in arr] ) + ' ]'
+            sys.stdout.write('---------- 3D points so far\n')
+            fd = sys.stdout
+            fd.write('[\n  ')
+            fd.write(',\n  '.join([arrstr(pt) for pt in self.points3d]))
+            fd.write('\n]\n')
+            sys.stdout.write('---------- \n')
 
     def show_it(self,
                 fig,
@@ -535,6 +563,10 @@ def main():
     h5_filename=args[0]
 
     fig = pylab.figure()
+    fig.text(0.5,1.0,"Press '?' over this window to print help to console",
+             verticalalignment='top',
+             horizontalalignment='center',
+             )
     showit = ShowIt()
     showit.show_it(fig,
                    h5_filename,
