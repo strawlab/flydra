@@ -47,6 +47,7 @@ class ShowIt(object):
     def __init__(self):
         self.subplot_by_cam_id = {}
         self.reconstructor = None
+        self.to_del = []
         self.cam_ids_and_points2d = []
         self.points3d = []
 
@@ -65,6 +66,10 @@ class ShowIt(object):
 
         if event.key=='c':
             del self.cam_ids_and_points2d[:]
+            for ax,line in self.to_del:
+                ax.lines.remove(line)
+            self.to_del = []
+            pylab.draw()
 
         elif event.key=='i':
             if self.reconstructor is None:
@@ -107,7 +112,8 @@ class ShowIt(object):
 
             xlim = ax.get_xlim()
             ylim = ax.get_ylim()
-            ax.plot([event.xdata],[event.ydata],'bx')
+            line,=ax.plot([event.xdata],[event.ydata],'bx')
+            self.to_del.append((ax,line))
             ax.set_xlim(xlim)
             ax.set_ylim(ylim)
 
@@ -131,7 +137,8 @@ class ShowIt(object):
                 #print ys
                 xlim = ax.get_xlim()
                 ylim = ax.get_ylim()
-                ax.plot(xs,ys,'b-')
+                line,=ax.plot(xs,ys,'b-')
+                self.to_del.append((ax,line))
                 ax.set_xlim(xlim)
                 ax.set_ylim(ylim)
             pylab.draw()
