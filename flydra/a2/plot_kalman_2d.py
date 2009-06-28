@@ -251,7 +251,9 @@ current list of 2D points
         else:
             if os.path.abspath(reconstructor_filename) == os.path.abspath(filename):
                 reconstructor_source = results
-            elif os.path.abspath(reconstructor_filename) == os.path.abspath(kalman_filename):
+            elif ((kalman_filename is not None) and
+                  (os.path.abspath(reconstructor_filename) ==
+                   os.path.abspath(kalman_filename))):
                 reconstructor_source = kresults
             else:
                 reconstructor_source = reconstructor_filename
