@@ -44,6 +44,21 @@ def auto_subplot(fig,n,n_rows=2,n_cols=3):
 
 
 class ShowIt(object):
+    """
+    handle interaction with the user
+
+    It allows the user to indicate 2D points from multiple cameras
+    that are gathered into a 2D point list. Once satisfied with the
+    contents of this 2D point list, the best 3D intersection of the
+    rays from each camera center to the 2D point may be
+    calculated. Once such as 3D point is calculated, it is appended to
+    the 3D point list, which may be displayed to the screen or saved
+    to an .h5 file.
+
+    The implementation is done as a set of key-bindings on top of the
+    standard Matplotlib GUI.
+
+    """
     def __init__(self):
         self.subplot_by_cam_id = {}
         self.reconstructor = None
@@ -62,6 +77,18 @@ class ShowIt(object):
         return cam_id
 
     def on_key_press(self,event):
+        """Process a key press
+
+        hotkeys::
+
+          ? - print help
+          x - pick a new point and add it to the 2D point list
+          i - intersect picked points in the 2D point list
+          c - clear the 2D point list
+          a - all intersected 3D points are printed to console
+          h - save all intersected 3D points to 'points.h5'
+        """
+
         print 'received key',repr(event.key)
 
         if event.key=='c':
@@ -99,7 +126,7 @@ class ShowIt(object):
                 ax.set_ylim(ylim)
             pylab.draw()
 
-        elif event.key=='p':
+        elif event.key=='x':
             # new point -- project onto other images
 
             if not event.inaxes:
@@ -144,18 +171,10 @@ class ShowIt(object):
             pylab.draw()
         elif event.key=='?':
             sys.stdout.write("""
-hotkeys
--------
-? - help (you're reading it)
-p - pick a new point and add it to the list
-i - intersect picked points in list
-c - clear list
-a - all intersected 3D points are printed to console
-h - save all intersected 3D points to 'points.h5'
-
+%s
 current list of 2D points
 -------------------------
-""")
+"""%self.do_key_press.__doc__)
             for cam_id,(x,y) in self.cam_ids_and_points2d:
                 sys.stdout.write('%s: %s %s\n'%(cam_id,x,y))
             sys.stdout.write('\n')

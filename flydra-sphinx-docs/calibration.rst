@@ -202,3 +202,18 @@ Using the controls on the right, align your data such that it
 corresponds with the 3D model loaded by STIMULUS.xml. When you are
 satisfied, click either of the save buttons to save your newly-aligned
 calibration.
+
+Manually generating 3D points from images to use for alignment
+..............................................................
+
+You may want to precisely align some known 3D points. In this case the
+procedure is:
+
+1. Use :command:`flydra_analysis_plot_kalman_2d` to save a `points.h5`
+   file with the 3D positions resulting from the original
+   calibration. In particular, use the hotkeys as defined in
+   :meth:`~flydra.a2.plot_kalman_2d.ShowIt.on_key_press`.
+
+2. Load `points.h5` and a STIMULUS.xml file into
+   :command:`flydra_analysis_calibration_align_gui` and adjust the
+   homography parameters until the 3D locations are correct.
