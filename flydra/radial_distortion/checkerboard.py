@@ -381,7 +381,8 @@ class Objective:
         fc1=fc0*self._aspect_ratio
         tangential1 = tangential2 = 0.0
 
-        helper = reconstruct_utils.ReconstructHelper( fc0, fc1, x0, y0, r1, r2, tangential1, tangential2)
+        helper = reconstruct_utils.ReconstructHelper( fc0, fc1, x0, y0, r1, r2,
+                                                      tangential1, tangential2)
         if 0:
             class ReverseHelper:
                 def __init__(self,h):
@@ -627,22 +628,30 @@ def get_similar_direction_graphs(fmf,frame,
     if return_early:
         print 'returning early with entire super-graph'
         similar_direction_graphs = [graph]
-        return similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary, imnx_use, inmx_rawbinary
+        return (similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary,
+                imnx_use, inmx_rawbinary)
 
     similar_direction_graphs = [] # collection of all the graphs of similar directions
     for node in nodes:
 
-        subgraph = find_subgraph_similar_direction(graph, source=node, already_done=similar_direction_graphs)
+        subgraph = find_subgraph_similar_direction(
+            graph,
+            source=node,
+            already_done=similar_direction_graphs)
         if subgraph is not None:
             similar_direction_graphs.append( subgraph )
 
         # do again to get other direction
-        subgraph = find_subgraph_similar_direction(graph, source=node, already_done=similar_direction_graphs)
+        subgraph = find_subgraph_similar_direction(
+            graph,
+            source=node,
+            already_done=similar_direction_graphs)
         if subgraph is not None:
             similar_direction_graphs.append( subgraph )
 
     # filter to force 2 or more edges in graph
-    similar_direction_graphs = [ graph for graph in similar_direction_graphs if len(graph.edges()) >= 2 ]
+    similar_direction_graphs = [ graph for graph in similar_direction_graphs if
+                                 len(graph.edges()) >= 2 ]
 
     if debug_line_finding:
         print 'edges in each subgraph (frame %d)'%frame,'-'*40
@@ -655,14 +664,16 @@ def get_similar_direction_graphs(fmf,frame,
         for graph in similar_direction_graphs:
             periphery = get_singly_connected_nodes( graph )
             if len(periphery)>2:
-                print 'WARNING: graph has > 2 nodes in periphery; image analysis suspect; discarding bad graph'
+                print ('WARNING: graph has > 2 nodes in periphery; '
+                       'image analysis suspect; discarding bad graph')
                 print ' periphery',periphery
                 print ' graph',graph.edges()
             else:
                 filtered.append( graph )
         similar_direction_graphs = filtered
 
-    return similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary, imnx_use, imnx_rawbinary
+    return (similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary,
+            imnx_use, imnx_rawbinary)
 
 def main():
     parser = OptionParser(usage='%prog CONFIG_FILE',
@@ -693,7 +704,8 @@ def main():
 
     (cli_options, args) = parser.parse_args()
     if not len(args)==1:
-        raise RuntimeError('one command-line argument is needed - the configFile')
+        raise RuntimeError('one command-line argument is needed - '
+                           'the configFile')
     configFile = args[0]
 
     defaults = dict(
@@ -741,7 +753,8 @@ def main():
         options.do_plot = True
 
     if cli_options.view_results_quick:
-        helper = reconstruct_utils.make_ReconstructHelper_from_rad_file(options.rad_fname)
+        helper = reconstruct_utils.make_ReconstructHelper_from_rad_file(
+            options.rad_fname)
         pylab.figure()
         ax = pylab.subplot(1,1,1)
         visualize_distortions( ax, helper)
