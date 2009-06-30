@@ -556,6 +556,7 @@ def get_similar_direction_graphs(fmf,frame,
                                  use='raw',return_early=False,
                                  debug_line_finding=False,
                                  aspect_ratio = 1.0,
+                                 chess_preview=False,
                                  ):
     bg_im = fmf['frame'][0]
     imnx_orig = fmf['frame'][frame]
@@ -580,6 +581,11 @@ def get_similar_direction_graphs(fmf,frame,
     ctypes.memmove( im_ptr.contents.imageData,
                     imnx_use.ctypes.data,
                     imnx_use.shape[0]*imnx_use.shape[1] )
+
+    if chess_preview:
+        pylab.imshow(imnx_use)
+        pylab.title('preview of chessboard finding image - close to continue')
+        pylab.show()
 
     ncorn = 30,30
     ncorn_tot = ncorn[0]* ncorn[1]
@@ -668,6 +674,12 @@ def main():
     parser.add_option("--view-results-quick", action='store_true',
                       default=False)
 
+    parser.add_option("--show-chessboard-finder-preview",
+                      help=("show the image being fed to chessboard corner "
+                            "finder"),
+                      action='store_true',
+                      default=False)
+
     parser.add_option("--find-and-show",
                       help=("find checkerboard intersections and "
                             "display them (don't compute distortion)"),
@@ -745,12 +757,14 @@ def main():
 
     for frame in options.frames:
         (similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary,
-         imnx_use, imnx_rawbinary) = get_similar_direction_graphs(fmf,frame,
-                                                                  use=options.use,
-                                                                  return_early=options.return_early,
-                                                                  debug_line_finding = options.debug_line_finding,
-                                                                  aspect_ratio = options.aspect_ratio,
-                                                                  )
+         imnx_use, imnx_rawbinary) = get_similar_direction_graphs(
+            fmf,frame,
+            use=options.use,
+            return_early=options.return_early,
+            debug_line_finding = options.debug_line_finding,
+            aspect_ratio = options.aspect_ratio,
+            chess_preview=cli_options.show_chessboard_finder_preview,
+            )
         start_idx = len(all_graphs)
         all_graphs.extend( similar_direction_graphs )
         stop_idx = len(all_graphs)
