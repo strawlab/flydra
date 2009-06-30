@@ -1,6 +1,7 @@
 from setuptools import setup, find_packages
 from distutils.core import Extension # actually monkey-patched by setuptools
 import flydra.version
+import numpy as np
 
 version = flydra.version.__version__
 
@@ -22,7 +23,9 @@ ext_modules.append(Extension(name='flydra.fastgeom',
                              sources=['src/fastgeom.pyx']))
 
 ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
-                             sources=['flydra/a2/fastfinder_help.c'])) # auto-generate with cython
+                             sources=['flydra/a2/fastfinder_help.c'],
+                             include_dirs=[np.get_numpy_include()],
+                             )) # auto-generate with cython
 
 setup(name='flydra',
       version=version,
