@@ -2025,7 +2025,7 @@ def get_global_CachingAnalyzer(**kwargs):
         _global_ca_instance = CachingAnalyzer(is_global=True,**kwargs)
     return _global_ca_instance
 
-class TestCoreAnalysis(unittest.TestCase):
+class TestCoreAnalysis:
     def setUp(self):
         self.ca = CachingAnalyzer()
 
@@ -2059,6 +2059,9 @@ class TestCoreAnalysis(unittest.TestCase):
         for data_file,is_mat_file in zip(self.data_files,self.is_mat_files):
             if not is_mat_file:
                 data_file.close()
+
+    def failUnless(self, value):
+        assert not value, "test failed"
 
     def test_fast_startstopidx_on_sorted_array_scalar(self):
         sorted_array = numpy.arange(10)
@@ -2114,13 +2117,22 @@ class TestCoreAnalysis(unittest.TestCase):
                                        'NoObjectIDError should be raised')
 
     def test_smooth(self):
-        for data_file,test_obj_ids,is_mat_file,fps,model in zip(
+        if not hasattr(self,'data_files'):
+            # XXX why do I have to do this? Shouldn't nose do this?
+            self.setUp()
+        for i in range(len(self.data_files)):
+            yield self.check_smooth, i
+
+    def check_smooth(self,itest):
+        for i,(data_file,test_obj_ids,is_mat_file,fps,model) in enumerate(zip(
             self.data_files,
             self.test_obj_ids_list,
             self.is_mat_files,
             self.fps,
             self.dynamic_model,
-            ):
+            )):
+            if i!=itest:
+                continue
             if is_mat_file:
                 # all data is kalman smoothed in matfile
                 continue
@@ -2167,14 +2179,23 @@ class TestCoreAnalysis(unittest.TestCase):
                 #print 'mean_dist',mean_dist
                 assert mean_dist < 1.0 # should certainly be less than 1 meter!
 
-    def test_CachingAnalyzer_load_data(self):
-        for data_file,test_obj_ids,is_mat_file,fps,model in zip(
+    def test_CachingAnalyzer_load_data1(self):
+        if not hasattr(self,'data_files'):
+            # XXX why do I have to do this? Shouldn't nose do this?
+            self.setUp()
+        for i in range(len(self.data_files)):
+            yield self.check_load_data1, i
+
+    def check_load_data1(self,itest):
+        for i,(data_file,test_obj_ids,is_mat_file,fps,model) in enumerate(zip(
             self.data_files,
             self.test_obj_ids_list,
             self.is_mat_files,
             self.fps,
             self.dynamic_model,
-            ):
+            )):
+            if i!=itest:
+                continue
             for obj_id in test_obj_ids:
 
             # Test that load_data() loads similar values for (presumably)
@@ -2244,28 +2265,34 @@ class TestCoreAnalysis(unittest.TestCase):
                     assert len(results['X_kalmanized']) == len(rows)
 
 
-    def test_CachingAnalyzer_load_data(self):
-        for data_file,test_obj_ids,is_mat_file,fps,model in zip(
-            self.data_files,
-            self.test_obj_ids_list,
-            self.is_mat_files,
-            self.fps,
-            self.dynamic_model,
-            ):
+    def test_CachingAnalyzer_load_data2(self):
+        if not hasattr(self,'data_files'):
+            # XXX why do I have to do this? Shouldn't nose do this?
+            self.setUp()
+        for i in range(len(self.data_files)):
             #for smooth in [True,False]:
             for smooth in [False,True]:
                 for obj_id in test_obj_ids:
-                    rows = self.ca.load_data( obj_id, data_file,
-                                              use_kalman_smoothing=smooth,
-                                              frames_per_second=fps,
-                                              dynamic_model_name=model,
-                                              ) # load kalman data
-                    #print 'use_kalman_smoothing',smooth
-                    test_obj_ids = obj_id*numpy.ones_like(rows['obj_id'])
-                    ## print ("rows['obj_id'], test_obj_ids",
-                    ##        rows['obj_id'], test_obj_ids)
-                    assert numpy.allclose( rows['obj_id'], test_obj_ids )
-                    #print
+                    yield self.check_load_data2, (i,smooth, obj_id)
+
+    def check_load_data2(self, i, smooth, obj_id):
+        data_file = self.data_files[i]
+        test_obj_ids = self.test_obj_ids_list[i]
+        is_mat_file = self.is_mat_files[i]
+        fps = self.fps[i]
+        model = self.dynamic_model[i]
+
+        rows = self.ca.load_data( obj_id, data_file,
+                                  use_kalman_smoothing=smooth,
+                                  frames_per_second=fps,
+                                  dynamic_model_name=model,
+                                  ) # load kalman data
+        #print 'use_kalman_smoothing',smooth
+        test_obj_ids = obj_id*numpy.ones_like(rows['obj_id'])
+        ## print ("rows['obj_id'], test_obj_ids",
+        ##        rows['obj_id'], test_obj_ids)
+        assert numpy.allclose( rows['obj_id'], test_obj_ids )
+        #print
 
 class TestChooseOrientations(unittest.TestCase):
     def test_choose_orientations(self):
