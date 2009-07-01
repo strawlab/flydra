@@ -134,6 +134,29 @@ class CornerNode:
         mag = math.sqrt(xd**2 + yd**2)
         return mag
 
+def get_direction_stats(g,mod_pi=True):
+    vecs = []
+    for n0,n1 in g.edges():
+        theta = n0.get_direction_from(n1)
+        x = np.cos(theta)
+        y = np.sin(theta)
+        if mod_pi and y<0:
+            y = -y
+            x = -x
+        vecs.append( (x,y) )
+    vecs = np.array(vecs)
+    #print vecs
+    mx,my = np.mean(vecs,axis=0)
+    theta_r = np.sqrt(mx**2+my**2)
+    theta_mean = np.arctan2(my,mx)
+    thetas = np.arctan2(vecs[:,1],vecs[:,0])
+    theta_median = np.median(thetas)
+    stats = {'mean':theta_mean,
+             'median':theta_median,
+             'r':theta_r,
+             'thetas':thetas}
+    return stats
+
 def points2graph(x,y,
                  distance_thresh=1.5,
                  angle_thresh=30*D2R,
