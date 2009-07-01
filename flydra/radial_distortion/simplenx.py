@@ -18,6 +18,10 @@ class Graph:
                 for v in vs:
                     self.add_edge(u,v)
 
+    def __repr__(self):
+        # XXX could return a more sparse representation
+        return "Graph(%s)"%repr(dict(self._adjacency))
+
     def add_edge(self,u,v=None):
 
         if v is None:
@@ -48,6 +52,21 @@ class Graph:
 
     def nodes(self):
         return [u for u in sorted_keys(self._adjacency)]
+
+    def __eq__(self,other):
+        return (self.edges() == other.edges() and
+                self.nodes() == other.nodes())
+
+def test_graph_repr():
+    g = Graph()
+    g.add_edge(1,2)
+    g.add_edge(1,4)
+    g.add_edge(2,8)
+    g.add_edge(2,1)
+    g.add_edge('x','y')
+    gs = repr(g)
+    g2 = eval(gs)
+    assert g == g2
 
 class Search:
     def dfs_preorder(self, G, source=None, reverse_graph=False):
