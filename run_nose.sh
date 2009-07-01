@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # abort on error
-set -e
+set -o errexit
 
 VIRTUALENVDIR=PYtest
 
@@ -24,11 +24,14 @@ XVFBPID=$!
 echo "Xvfb running in process $XVFBPID"
 
 # Run tests, capture exit code, don't quit on error.
-(DISPLAY=":2" python -c "import nose; nose.main('flydra')";
-RESULT=$?)
+set +o errexit
+DISPLAY=":2" python -c "import nose; nose.main('flydra')"
+RESULT=$?
+set -o errexit
 
 # Kill the X server
 kill $XVFBPID
+wait $XVFBPID
 
 # exit with test results
 exit $RESULT
