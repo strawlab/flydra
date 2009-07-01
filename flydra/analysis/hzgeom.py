@@ -10,7 +10,7 @@ class Point:
     def __repr__(self):
         return "Point"+repr( tuple(self.data) )
     def is_on_plane(self, plane, eps=1e-14 ):
-        return abs(nx.dot( plane.data, self.data )) < eps        
+        return abs(nx.dot( plane.data, self.data )) < eps
 def PointFromIntersectingPlanes(*planes):
     return planes2point(*planes)
 def PointFromIntersectingPlaneAndLine(plane,line):
@@ -18,7 +18,7 @@ def PointFromIntersectingPlaneAndLine(plane,line):
     X = nx.matrixmultiply( line.data, nx.reshape(plane.data,(4,1)) )
     X.shape = (4,)
     return Point(*X)
-    
+
 class Plane:
     def __init__(self,p0,p1,p2,p3):
         self.data = nx.array( [p0,p1,p2,p3], nx.Float )
@@ -59,7 +59,7 @@ class LinePlueckerMatrix(Line):
                 raise TypeError("expected one argument")
             L_i = nx.array([0,0,0,1,3,2])
             L_j = nx.array([1,2,3,2,1,3])
-            
+
             Lcoords = args[0].data
             Lmatrix = nx.zeros((4,4),nx.Float)
             for c,(i,j) in enumerate(zip(L_i,L_j)):
@@ -76,9 +76,9 @@ class LinePlueckerMatrix(Line):
         else:
             raise TypeError('cannot convert arguments to LinePlueckerMatrix')
     def __repr__(self):
-        return "LinePlueckerMatrix(*%s)"%( repr( self.data), )  
+        return "LinePlueckerMatrix(*%s)"%( repr( self.data), )
 ### hidden
-    
+
 def planes2line( *planes ):
     """find line formed by intersection of planes"""
     P = nx.array( [plane.data for plane in planes] )
@@ -89,7 +89,7 @@ def planes2line( *planes ):
     # (Hartley & Zisserman, p. 323)
     P = vt[0,:] # P,Q are planes (take row because this is transpose(V))
     Q = vt[1,:]
-    
+
     # directly to Pluecker line coordinates
     Lcoords = ( -(P[3]*Q[2]) + P[2]*Q[3],
                 P[3]*Q[1]  - P[1]*Q[3],
@@ -123,16 +123,16 @@ def _test():
 
     print pt1,'in',X1,'?=',pt1.is_on_plane(X1)
     print line1
-    
+
     pt2 = PointFromIntersectingPlaneAndLine( X3, line1)
     print pt2
-    
+
     print pt2,'in',X1,'?=',pt1.is_on_plane(X1)
     print pt2,'in',X2,'?=',pt1.is_on_plane(X2)
     print pt2,'in',X3,'?=',pt1.is_on_plane(X3)
 
     print
-    
+
     # example 3.4
     lmat = nx.zeros( (4,4), nx.Float )
     lmat[0,3]=-1
@@ -142,6 +142,6 @@ def _test():
     planex1 = Plane(1,0,0,-1)
     print planex1
     print PointFromIntersectingPlaneAndLine( planex1, xaxis)
-    
+
 if __name__=='__main__':
     _test()
