@@ -10,7 +10,6 @@ import tables
 import contextlib
 import pytz # from http://pytz.sourceforge.net/
 import datetime
-import sets
 import sys, os
 from optparse import OptionParser
 import matplotlib
@@ -319,7 +318,7 @@ current list of 2D points
         camns = camns[use_idxs]
         #camns = data2d.readCoordinates( use_idxs, field='camn')
         unique_camns = numpy.unique1d(camns)
-        unique_cam_ids = list(sets.Set([camn2cam_id[camn] for camn in unique_camns]))
+        unique_cam_ids = list(set([camn2cam_id[camn] for camn in unique_camns]))
         unique_cam_ids.sort()
         print '%d cameras with data'%(len(unique_cam_ids),)
 
