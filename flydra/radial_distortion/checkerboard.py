@@ -107,12 +107,20 @@ class CornerNode:
     def __init__(self,x,y,name,aspect_ratio=1.0):
         self._x=x
         self._y=y
+        self._r = {}
         self._name=name
         self._aspect_radio=aspect_ratio
     def __repr__(self):
         return self._name
     def get_pos(self):
         return (self._x, self._y)
+    def get_rand_pos(self,g):
+        """return a slightly shifted point position for unique key g"""
+        if g not in self._r:
+            rx = self._x + 2*np.random.normal(size=(1,))
+            ry = self._y + 2*np.random.normal(size=(1,))
+            self._r[g] = (rx,ry)
+        return self._r[g]
     def get_direction_from( self, v ):
         """return direction of self from v in radians"""
         x1, y1 = v.get_pos()
@@ -955,6 +963,7 @@ def main():
         # plot original, distorted image
         for j, frame_no in enumerate(options.frames):
             color_count = 0
+            plot_nodes = []
             frame_mpl_figures[frame_no] = pylab.figure()
             if (options.return_early or cli_options.find_and_show):
                 im_ax = pylab.subplot(1,1,1)
@@ -979,8 +988,15 @@ def main():
                         color = get_color(color_count)
                         color_count += 1
                         for edge in subgraph.edges():
-                            xys = numpy.array([ edge[i].get_pos() for i in [0,1] ])
-                            im_ax.plot( xys[:,0], xys[:,1], '%so-'%color)
+                            xys = numpy.array([ edge[i].get_rand_pos(repr(subgraph)) for i in [0,1] ])
+                            im_ax.plot( xys[:,0], xys[:,1], '%so-'%color, mew=0)
+                            plot_nodes.append( edge[0] )
+                            plot_nodes.append( edge[1] )
+                plot_nodes = list(set(plot_nodes)) # unique
+                for node in plot_nodes:
+                    x,y=node.get_pos()
+                    im_ax.text(x,y,'%s'%node)
+
                 im_ax.set_title('frame %d - original (distorted)'%options.frames[j])
 
                 if options.show_lines:
