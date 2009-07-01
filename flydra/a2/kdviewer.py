@@ -4,7 +4,7 @@ if 1:
     import tables.flavor
     tables.flavor.restrict_flavors(keep=['numpy'])
 
-import sets, os, sys, math
+import os, sys, math
 import warnings
 
 import pkg_resources
@@ -1059,7 +1059,7 @@ def doit(filename,
             print
 
             if not picker.cell_id < 0:
-                found = sets.Set([])
+                found = set([])
                 for actor in picker.actors:
                     objid = actor2obj_id[actor]
                     found.add(objid)
