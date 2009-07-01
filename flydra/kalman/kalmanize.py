@@ -381,6 +381,8 @@ def kalmanize(src_filename,
     if exclude_camns is None:
         exclude_camns = []
 
+    dest_file_os_fd = None
+
     with openFileSafe(src_filename,mode='r') as results:
         camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
 
@@ -417,7 +419,7 @@ def kalmanize(src_filename,
                 dest_filename = os.path.splitext(
                     results.filename)[0]+'.kalmanized.h5'
         else:
-            os_fd,dest_filename = tempfile.mkstemp(suffix='.h5')
+            dest_file_os_fd, dest_filename = tempfile.mkstemp(suffix='.h5')
 
         if frames_per_second is None:
             frames_per_second = get_fps(results)
@@ -432,7 +434,7 @@ def kalmanize(src_filename,
         else:
             sync_error_threshold=options.sync_error_threshold_msec/1000.0
 
-        if os.path.exists(dest_filename):
+        if dest_file_os_fd is None and os.path.exists(dest_filename):
             raise ValueError('%s already exists. Will not '
                              'overwrite.'%dest_filename)
 
