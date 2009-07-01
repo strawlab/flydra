@@ -1,6 +1,5 @@
-import Numeric as nx
-import LinearAlgebra
-svd = LinearAlgebra.singular_value_decomposition
+import numpy as nx
+svd = nx.linalg.svd
 
 class Point:
     def __init__(self,x0,x1,x2,x3=None):
