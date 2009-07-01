@@ -430,7 +430,7 @@ def kalmanize(src_filename,
         else:
             sync_error_threshold=options.sync_error_threshold_msec/1000.0
 
-        if os.path.exists(dest_filename):
+        if dest_filename is not None and os.path.exists(dest_filename):
             raise ValueError('%s already exists. Will not '
                              'overwrite.'%dest_filename)
 
