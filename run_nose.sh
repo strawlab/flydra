@@ -27,7 +27,8 @@ echo "Xvfb running in process $XVFBPID"
 
 # Run tests, capture exit code, don't quit on error.
 set +o errexit
-DISPLAY=":2" nosetests
+#DISPLAY=":2" nosetests --verbosity=3 -A "not slow_command"
+DISPLAY=":2" nosetests --verbosity=3
 RESULT=$?
 set -o errexit
 
