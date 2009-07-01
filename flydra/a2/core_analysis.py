@@ -2029,14 +2029,16 @@ class TestCoreAnalysis(unittest.TestCase):
     def setUp(self):
         self.ca = CachingAnalyzer()
 
-        filename1=pkg_resources.resource_filename(__name__,'sample_kalman_trajectories.h5')
-        filename2=pkg_resources.resource_filename(__name__,'sample_kalman_trajectory.mat')
+        fname1=pkg_resources.resource_filename(__name__,
+                                               'sample_kalman_trajectories.h5')
+        fname2=pkg_resources.resource_filename(__name__,
+                                               'sample_kalman_trajectory.mat')
 
-        filenames = [filename1,
-                     filename2,
+        filenames = [fname1,
+                     fname2,
                      ]
-        self.test_obj_ids_list = [[497,1369], #filename1
-                                  [1606], #filename2
+        self.test_obj_ids_list = [[497,1369], #fname1
+                                  [1606], #fname2
                                   ]
 
         self.data_files = []
@@ -2044,7 +2046,8 @@ class TestCoreAnalysis(unittest.TestCase):
         self.fps = []
         self.dynamic_model = []
         for filename in filenames:
-            obj_ids, use_obj_ids, is_mat_file, data_file, extra = self.ca.initial_file_load(filename)
+            obj_ids, use_obj_ids, is_mat_file, data_file, extra = \
+                     self.ca.initial_file_load(filename)
             self.data_files.append( data_file )
             self.is_mat_files.append( is_mat_file )
             fps = 100.0
@@ -2060,7 +2063,8 @@ class TestCoreAnalysis(unittest.TestCase):
     def test_fast_startstopidx_on_sorted_array_scalar(self):
         sorted_array = numpy.arange(10)
         for value in [-1,0,2,5,6,11]:
-            idx_fast_start, idx_fast_stop = fast_startstopidx_on_sorted_array( sorted_array, value )
+            idx_fast_start, idx_fast_stop = fast_startstopidx_on_sorted_array(
+                sorted_array, value )
             idx_slow = numpy.nonzero(sorted_array==value)[0]
             idx_fast = numpy.arange( idx_fast_start, idx_fast_stop )
             self.failUnless( idx_fast.shape == idx_slow.shape )
@@ -2070,7 +2074,8 @@ class TestCoreAnalysis(unittest.TestCase):
         sorted_array = numpy.arange(10)
         values = [-1,0,2,5,6,11]
 
-        idx_fast_start, idx_fast_stop = fast_startstopidx_on_sorted_array( sorted_array, values )
+        idx_fast_start, idx_fast_stop = fast_startstopidx_on_sorted_array(
+            sorted_array, values )
 
         for i,value in enumerate(values):
             idx_slow = numpy.nonzero(sorted_array==value)[0]
@@ -2091,43 +2096,50 @@ class TestCoreAnalysis(unittest.TestCase):
 
                 obj_id = 123456789 # does not exist in file
                 try:
-                    results = self.ca.calculate_trajectory_metrics(obj_id,
-                                                                   data_file,
-                                                                   use_kalman_smoothing=use_kalman_smoothing,
-                                                                   frames_per_second=100.0,
-                                                                   method='position based',
-                                                                   method_params={'downsample':1,
-                                                                                  },
-                                                                   dynamic_model_name='fly dynamics, high precision calibration, units: mm',
-                                                                   )
+                    results = self.ca.calculate_trajectory_metrics(
+                        obj_id,
+                        data_file,
+                        use_kalman_smoothing=use_kalman_smoothing,
+                        frames_per_second=100.0,
+                        method='position based',
+                        method_params={'downsample':1,
+                                       },
+                        dynamic_model_name=
+                        'fly dynamics, high precision calibration, units: mm',
+                        )
                 except NoObjectIDError:
                     pass
                 else:
-                    raise RuntimeError('We should not get here - a NoObjectIDError should be raised')
+                    raise RuntimeError('We should not get here - a '
+                                       'NoObjectIDError should be raised')
 
     def test_smooth(self):
-        for data_file,test_obj_ids,is_mat_file,fps,model in zip(self.data_files,
-                                                                self.test_obj_ids_list,
-                                                                self.is_mat_files,
-                                                                self.fps,
-                                                                self.dynamic_model,
-                                                                ):
+        for data_file,test_obj_ids,is_mat_file,fps,model in zip(
+            self.data_files,
+            self.test_obj_ids_list,
+            self.is_mat_files,
+            self.fps,
+            self.dynamic_model,
+            ):
             if is_mat_file:
                 # all data is kalman smoothed in matfile
                 continue
             for obj_id in test_obj_ids:
                 ######## 1. load observations
-                obs_obj_ids = data_file.root.kalman_observations.read(field='obj_id')
+                obs_obj_ids = data_file.root.kalman_observations.read(
+                    field='obj_id')
                 obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
 
-                # Kalman observations are already always in meters, no scale factor needed
-                orig_rows = data_file.root.kalman_observations.readCoordinates(obs_idxs)
+                # Kalman observations are already always in meters, no
+                # scale factor needed
+                orig_rows = data_file.root.kalman_observations.readCoordinates(
+                    obs_idxs)
 
                 ######## 2. perform Kalman smoothing
                 rows = observations2smoothed(obj_id,orig_rows,
-                                                           frames_per_second=fps,
-                                                           dynamic_model_name=model,
-                                                           )  # do Kalman smoothing
+                                             frames_per_second=fps,
+                                             dynamic_model_name=model,
+                                             )  # do Kalman smoothing
 
                 ######## 3. compare observations with smoothed
                 orig = []
@@ -2141,8 +2153,12 @@ class TestCoreAnalysis(unittest.TestCase):
                         assert len(idxs)==1
                         idx = idxs[0]
                         #print '<-',orig_rows[idx]
-                        orig.append( (orig_rows[idx]['x'], orig_rows[idx]['y'], orig_rows[idx]['z']) )
-                        smooth.append( (rows[i]['x'], rows[i]['y'], rows[i]['z']) )
+                        orig.append( (orig_rows[idx]['x'],
+                                      orig_rows[idx]['y'],
+                                      orig_rows[idx]['z']) )
+                        smooth.append( (rows[i]['x'],
+                                        rows[i]['y'],
+                                        rows[i]['z']) )
                     #print
                 orig = numpy.array(orig)
                 smooth = numpy.array(smooth)
@@ -2152,12 +2168,13 @@ class TestCoreAnalysis(unittest.TestCase):
                 assert mean_dist < 1.0 # should certainly be less than 1 meter!
 
     def test_CachingAnalyzer_load_data(self):
-        for data_file,test_obj_ids,is_mat_file,fps,model in zip(self.data_files,
-                                                                self.test_obj_ids_list,
-                                                                self.is_mat_files,
-                                                                self.fps,
-                                                                self.dynamic_model,
-                                                                ):
+        for data_file,test_obj_ids,is_mat_file,fps,model in zip(
+            self.data_files,
+            self.test_obj_ids_list,
+            self.is_mat_files,
+            self.fps,
+            self.dynamic_model,
+            ):
             for obj_id in test_obj_ids:
 
             # Test that load_data() loads similar values for (presumably)
@@ -2181,8 +2198,12 @@ class TestCoreAnalysis(unittest.TestCase):
                 filt = []
                 smooth = []
                 for i in range(len(rows_smooth)):
-                    smooth.append( (rows_smooth['x'][i], rows_smooth['y'][i], rows_smooth['z'][i]) )
-                    filt.append( (rows_filt['x'][i], rows_filt['y'][i], rows_filt['z'][i]) )
+                    smooth.append( (rows_smooth['x'][i],
+                                    rows_smooth['y'][i],
+                                    rows_smooth['z'][i]) )
+                    filt.append( (rows_filt['x'][i],
+                                  rows_filt['y'][i],
+                                  rows_filt['z'][i]) )
                 filt = numpy.array(filt)
                 smooth = numpy.array(smooth)
                 dist = numpy.sqrt(numpy.sum((filt-smooth)**2,axis=1))
@@ -2190,54 +2211,59 @@ class TestCoreAnalysis(unittest.TestCase):
                 assert mean_dist < 0.1
 
     def test_CachingAnalyzer_calculate_trajectory_metrics(self):
-        for data_file,test_obj_ids,is_mat_file,fps,model in zip(self.data_files,
-                                                                self.test_obj_ids_list,
-                                                                self.is_mat_files,
-                                                                self.fps,
-                                                                self.dynamic_model,
-                                                                ):
-            for use_kalman_smoothing in [True,False]:
+        for data_file,test_obj_ids,is_mat_file,fps,model in zip(
+            self.data_files,
+            self.test_obj_ids_list,
+            self.is_mat_files,
+            self.fps,
+            self.dynamic_model,
+            ):
+            for smooth in [True,False]:
                 for obj_id in test_obj_ids:
-                    results = self.ca.calculate_trajectory_metrics(obj_id,
-                                                                   data_file,
-                                                                   use_kalman_smoothing=use_kalman_smoothing,
-                                                                   frames_per_second=fps,
-                                                                   dynamic_model_name=model,
-                                                                   hide_first_point=False,
-                                                                   method='position based',
-                                                                   method_params={'downsample':1,
-                                                                                  })
-
+                    results = self.ca.calculate_trajectory_metrics(
+                        obj_id,
+                        data_file,
+                        use_kalman_smoothing=smooth,
+                        frames_per_second=fps,
+                        dynamic_model_name=model,
+                        hide_first_point=False,
+                        method='position based',
+                        method_params={'downsample':1,
+                                       })
                     rows = self.ca.load_data( obj_id, data_file,
-                                              use_kalman_smoothing=use_kalman_smoothing,
+                                              use_kalman_smoothing=smooth,
                                               frames_per_second=fps,
                                               dynamic_model_name=model,
                                               ) # load kalman data
 
-                    # if rows are missing in original kalman data, we can interpolate here:
+                    # if rows are missing in original kalman data, we
+                    # can interpolate here:
 
-                    #print "len(results['X_kalmanized']),len(rows),obj_id",len(results['X_kalmanized']),len(rows),obj_id
+                    ## print ("len(results['X_kalmanized']),len(rows),obj_id",
+                    ##        len(results['X_kalmanized']),len(rows),obj_id)
                     assert len(results['X_kalmanized']) == len(rows)
 
 
     def test_CachingAnalyzer_load_data(self):
-        for data_file,test_obj_ids,is_mat_file,fps,model in zip(self.data_files,
-                                                                self.test_obj_ids_list,
-                                                                self.is_mat_files,
-                                                                self.fps,
-                                                                self.dynamic_model,
-                                                                ):
-            #for use_kalman_smoothing in [True,False]:
-            for use_kalman_smoothing in [False,True]:
+        for data_file,test_obj_ids,is_mat_file,fps,model in zip(
+            self.data_files,
+            self.test_obj_ids_list,
+            self.is_mat_files,
+            self.fps,
+            self.dynamic_model,
+            ):
+            #for smooth in [True,False]:
+            for smooth in [False,True]:
                 for obj_id in test_obj_ids:
                     rows = self.ca.load_data( obj_id, data_file,
-                                              use_kalman_smoothing=use_kalman_smoothing,
+                                              use_kalman_smoothing=smooth,
                                               frames_per_second=fps,
                                               dynamic_model_name=model,
                                               ) # load kalman data
-                    #print 'use_kalman_smoothing',use_kalman_smoothing
+                    #print 'use_kalman_smoothing',smooth
                     test_obj_ids = obj_id*numpy.ones_like(rows['obj_id'])
-                    #print "rows['obj_id'], test_obj_ids",rows['obj_id'], test_obj_ids
+                    ## print ("rows['obj_id'], test_obj_ids",
+                    ##        rows['obj_id'], test_obj_ids)
                     assert numpy.allclose( rows['obj_id'], test_obj_ids )
                     #print
 
