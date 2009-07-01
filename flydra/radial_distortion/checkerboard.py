@@ -770,14 +770,16 @@ def get_similar_direction_graphs(fmf,frame,
         if subgraph is not None:
             similar_direction_graphs.append( subgraph )
 
-        # do again to get other direction
-        subgraph = find_subgraph_similar_direction(
-            graph,
-            source=node,
-            direction_eps_radians=direction_eps_radians,
-            already_done=similar_direction_graphs)
-        if subgraph is not None:
-            similar_direction_graphs.append( subgraph )
+        if 0:
+            print 'backwards search?!'
+            # do again to get other direction
+            subgraph = find_subgraph_similar_direction(
+                graph,
+                source=node,
+                direction_eps_radians=direction_eps_radians,
+                already_done=similar_direction_graphs)
+            if subgraph is not None:
+                similar_direction_graphs.append( subgraph )
 
     # filter to force 2 or more edges in graph
     similar_direction_graphs = [ graph for graph in similar_direction_graphs if
