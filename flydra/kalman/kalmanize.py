@@ -416,6 +416,8 @@ def kalmanize(src_filename,
             if dest_filename is None:
                 dest_filename = os.path.splitext(
                     results.filename)[0]+'.kalmanized.h5'
+        else:
+            dest_filename = tempfile.mkstemp(suffix='.h5')
 
         if frames_per_second is None:
             frames_per_second = get_fps(results)
@@ -430,7 +432,7 @@ def kalmanize(src_filename,
         else:
             sync_error_threshold=options.sync_error_threshold_msec/1000.0
 
-        if dest_filename is not None and os.path.exists(dest_filename):
+        if os.path.exists(dest_filename):
             raise ValueError('%s already exists. Will not '
                              'overwrite.'%dest_filename)
 
@@ -727,6 +729,9 @@ def kalmanize(src_filename,
 
             if do_full_kalmanization:
                 tracker.kill_all_trackers() # done tracking
+
+        if not do_full_kalmanization:
+            os.unlink(dest_filename)
 
     if accum_frame_spread is not None:
         # save spread data to file for analysis
