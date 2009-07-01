@@ -1,5 +1,4 @@
 from __future__ import division
-__test__ = True # tell nose this module contains tests
 import sys,time,os,pprint
 import matplotlib
 matplotlib.use('TkAgg')
