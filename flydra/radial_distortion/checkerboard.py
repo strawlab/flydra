@@ -1,11 +1,14 @@
 from __future__ import division
 import sys,time,os,pprint
+import matplotlib
+matplotlib.use('TkAgg')
 
 # import the necessary things for OpenCV
 import CVtypes
 from CVtypes import cv
 import ctypes, math
 import numpy
+import numpy as np
 import pylab
 import scipy.optimize
 import scipy.misc.pilutil
@@ -553,42 +556,14 @@ def binarize( im ):
     newim = numpy.where( im > median, numpy.uint8(255), numpy.uint8(0) )
     return newim
 
-def get_similar_direction_graphs(fmf,frame,
-                                 use='raw',return_early=False,
-                                 debug_line_finding=False,
-                                 aspect_ratio = 1.0,
-                                 chess_preview=False,
-                                 ):
-    bg_im = fmf['frame'][0]
-    imnx_orig = fmf['frame'][frame]
-
-    imnx_no_bg = get_non_background( imnx_orig, bg_im )
-    imnx_binary = binarize(imnx_no_bg)
-    imnx_rawbinary = binarize(imnx_orig)
-
-    if use == 'no_bg':
-        imnx_use = imnx_no_bg
-    elif use == 'binary':
-        imnx_use = imnx_binary
-    elif use == 'rawbinary':
-        imnx_use = imnx_rawbinary
-    elif use == 'raw':
-        imnx_use = imnx_orig
-    else:
-        raise ValueError('unknown use image')
-
+def extract_corners(imnx_use,max_ncorn_per_side=30):
     im_ptr = cv.CreateImage( cv.Size( imnx_use.shape[1], imnx_use.shape[0] ),
                              CVtypes.IPL_DEPTH_8U, 1 )
     ctypes.memmove( im_ptr.contents.imageData,
                     imnx_use.ctypes.data,
                     imnx_use.shape[0]*imnx_use.shape[1] )
 
-    if chess_preview:
-        pylab.imshow(imnx_use)
-        pylab.title('preview of chessboard finding image - close to continue')
-        pylab.show()
-
-    ncorn = 30,30
+    ncorn = max_ncorn_per_side,max_ncorn_per_side
     ncorn_tot = ncorn[0]* ncorn[1]
     corners = (cv.Point2D32f * ncorn_tot)()
     corner_count = ctypes.c_int(ncorn_tot)
@@ -618,6 +593,109 @@ def get_similar_direction_graphs(fmf,frame,
     for i in range( corner_count.value ):
         x.append( corners[i].x )
         y.append( corners[i].y )
+    x = np.array(x)
+    y = np.array(y)
+    return x,y
+
+def test_extract_corners():
+    dirname = os.path.split(__file__)[0]
+    fname = 'distorted.fmf'
+    fullpath = os.path.join(dirname,fname)
+    fmf = FlyMovieFormat.FlyMovie(fullpath)
+    im,timestamp = fmf.get_frame(0)
+    imnx_rawbinary = binarize(im)
+    imnx_use = imnx_rawbinary
+    actual_x,actual_y=extract_corners(imnx_use)
+
+    if 0:
+        pylab.imshow(imnx_use)
+        pylab.plot(actual_x,actual_y,'o')
+        pylab.title('found corners')
+        pylab.show()
+
+    actual = np.array( np.hstack( (actual_x[:,np.newaxis],
+                                   actual_y[:,np.newaxis])))
+
+    expected_x= np.array([
+        305.5,  261.5,  351.5,  348.5,  302. ,  256.5,  214. ,  218.5,
+        298.5,  253. ,  209.5,  169. ,  173.5,  250. ,  207.5,  132. ,
+        167. ,  130.5,  135.5,  141. ,  206.5,  167. ,  130. ,  166.5,
+        129. ,  206. ,  206. ,  167. ,  130.5,  248.5,  248. ,  247. ,
+        292.5,  291. ,  293.5,  340.5,  338.5,  336.5,  386.5,  383.5,
+        389. ,  438. ,  434.5,  431.5,  483. ,  479.5,  486. ,  534. ,
+        530.5,  525.5,  576. ,  569.5,  579.5,  623. ,  618. ,  613. ,
+        659. ,  652.5,  663.5,  701. ,  625. ,  665.5,  703. ,  737. ,
+        735.5,  666. ,  703. ,  626. ,  666. ,  625.5,  703.5,  736.5,
+        665.5,  703. ,  737. ,  735.5,  664. ,  626. ,  583.5,  583.5,
+        539.5,  538.5,  582.5,  537.5,  493.5,  492. ,  581.5,  490.5,
+        536. ,  489. ,  444.5,  442.5,  440.5,  394. ,  391.5,  396.5,
+        346.5,  343. ,  295.5,  398.5,  446. ])
+
+    expected_y = np.array([
+        19. ,   20. ,   19.5,   42. ,   41.5,   42. ,   42. ,   20.5,
+         64.5,   64. ,   64.5,   64. ,   42.5,   87.5,   86.5,   64.5,
+         86.5,   86.5,   42.5,   22.5,  109.5,  108.5,  107.5,  130.5,
+        129. ,  132. ,  154.5,  152. ,  150.5,  111. ,  134. ,  157. ,
+        135.5,  158.5,  112.5,  113.5,  137.5,  161. ,  139. ,  162.5,
+        114.5,  116.5,  140.5,  164. ,  142. ,  165.5,  117.5,  119. ,
+        143. ,  167. ,  145.5,  167. ,  119.5,  122. ,  145.5,  168.5,
+        146. ,  168. ,  123.5,  125. ,   98. ,  100.5,  102.5,  103.5,
+        125.5,   77.5,   80. ,   53. ,   55. ,   75.5,   58. ,   61. ,
+         34. ,   37. ,   40. ,   20. ,   13. ,   30.5,   27.5,   50. ,
+         25. ,   48. ,   73. ,   71. ,   23. ,   45.5,   96.5,   69. ,
+         95. ,   93.5,   44. ,   67.5,   91.5,   67. ,   90.5,   42.5,
+         65.5,   88. ,   88.5,   20. ,   21.5])
+    expected = np.array( np.hstack( (expected_x[:,np.newaxis],
+                                   expected_y[:,np.newaxis])))
+    N_close = 0
+    N_total_detected = len(actual_x)
+    N_total_possible = len(expected_x)
+
+    dist_threshold = 5 # should be within 5 pixels
+    fraction_same_threshold = 0.9
+
+    fraction_different_threshold = 1.0 - fraction_same_threshold
+    for i in range(len(actual)):
+        this_pt = actual[i]
+        dists = np.sum((this_pt - expected)**2,axis=1)
+        closest_dist = np.min(dists)
+
+        if closest_dist < dist_threshold:
+            N_close +=1
+
+    frac=N_close/float(N_total_possible)
+    assert abs(frac-1.0) < fraction_different_threshold
+
+def get_similar_direction_graphs(fmf,frame,
+                                 use='raw',return_early=False,
+                                 debug_line_finding=False,
+                                 aspect_ratio = 1.0,
+                                 chess_preview=False,
+                                 ):
+    bg_im = fmf['frame'][0]
+    imnx_orig = fmf['frame'][frame]
+
+    imnx_no_bg = get_non_background( imnx_orig, bg_im )
+    imnx_binary = binarize(imnx_no_bg)
+    imnx_rawbinary = binarize(imnx_orig)
+
+    if use == 'no_bg':
+        imnx_use = imnx_no_bg
+    elif use == 'binary':
+        imnx_use = imnx_binary
+    elif use == 'rawbinary':
+        imnx_use = imnx_rawbinary
+    elif use == 'raw':
+        imnx_use = imnx_orig
+    else:
+        raise ValueError('unknown use image')
+
+    if chess_preview:
+        pylab.imshow(imnx_use)
+        pylab.title('preview of chessboard finding image - close to continue')
+        pylab.show()
+
+    x,y=extract_corners(imnx_use)
 
     if chess_preview:
         pylab.imshow(imnx_use)
