@@ -16,6 +16,7 @@ import cgtypes
 from optparse import OptionParser
 
 R2D = 180.0/np.pi
+D2R = np.pi/180.0
 
 WARN_CALIB_DIFF = False
 
@@ -339,9 +340,9 @@ def angles_near(a,b, eps=None, mod_pi=False,debug=False):
     """compare if angles a and b are within eps of each other. assumes radians"""
 
     if mod_pi:
-        a = 2*a
-        b = 2*b
-        eps = 2*eps
+        r1 = angles_near(a, b, eps=eps, mod_pi=False,debug=debug)
+        r2 = angles_near(a+np.pi, b, eps=eps, mod_pi=False,debug=debug)
+        return r1 or r2
 
     diff = abs(a-b)
 
@@ -352,8 +353,6 @@ def angles_near(a,b, eps=None, mod_pi=False,debug=False):
         print 'a',a*R2D
         print 'b',b*R2D
         print 'diff',diff*R2D
-    if abs(diff-numpy.pi) < eps:
-        result = result or True
     if abs(diff-2*numpy.pi) < eps:
         result = result or True
     return result
@@ -365,8 +364,13 @@ def test_angles_near():
         assert angles_near(A,A+np.pi/8,eps=np.pi/4)==True
         assert angles_near(A,A-np.pi/8,eps=np.pi/4)==True
 
-        assert angles_near(A,A+1.1*np.pi/2,eps=np.pi/4)==False
-        assert angles_near(A,A+1.1*np.pi/2,eps=np.pi/4,mod_pi=True)==True
+        assert angles_near(A,A+1.1*np.pi,eps=np.pi/4)==False
+        assert angles_near(A,A+1.1*np.pi,eps=np.pi/4,mod_pi=True)==True
+
+def test_angles_near2():
+    a = 1.51026430701
+    b = 2.92753197003
+    assert angles_near(a,b,eps=10.0*D2R,mod_pi=True) == False
 
 class SingleCameraCalibration:
     """Complete per-camera calibration information.
