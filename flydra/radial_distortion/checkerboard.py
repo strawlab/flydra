@@ -1,7 +1,5 @@
 from __future__ import division
 import sys,time,os,pprint
-import matplotlib
-matplotlib.use('TkAgg')
 
 # import the necessary things for OpenCV
 import CVtypes
@@ -25,6 +23,7 @@ from optparse import OptionParser
 from visualize_distortions import visualize_distortions
 
 D2R = math.pi/180.0
+R2D = 180.0/math.pi
 
 def info(msg):
     if 0:
@@ -44,7 +43,7 @@ def get_singly_connected_nodes(graph):
 
 def find_subgraph_similar_direction(G,
                                     source=None,
-                                    direction_eps_radians=20.0*D2R,
+                                    direction_eps_radians=None,
                                     already_done=None,
                                     ):
     """
@@ -285,7 +284,7 @@ def points2graph(x,y,
                 pylab.plot([cartesian_clusters_center[i][0]],[cartesian_clusters_center[i][1]],'ko')
             ax.set_aspect('equal')
             pylab.show()
-            sys.exit()
+            #sys.exit()
 
         cluster_distances = clusters[:,1]
         if show_clusters:
@@ -665,10 +664,34 @@ def test_extract_corners():
     frac=N_close/float(N_total_possible)
     assert abs(frac-1.0) < fraction_different_threshold
 
+def prune_non_simply_connected(similar_direction_graphs):
+    filtered = []
+    for graph in similar_direction_graphs:
+        periphery = get_singly_connected_nodes( graph )
+        if len(periphery)>2:
+            print ('WARNING: graph has > 2 nodes in periphery; '
+                   'image analysis suspect; discarding bad graph. Hint: '
+                   'try decreasing "angle_precision_degrees" in .cfg file.')
+            #print ' periphery',periphery
+            #print ' graph',graph.edges()
+            if 0 and debug_line_finding:
+                pylab.figure()
+                bad_graph_edges = graph.edges()
+                import networkx
+                import networkx.drawing.nx_pylab as nx_pylab
+                g = networkx.Graph()
+                for e in bad_graph_edges:
+                    g.add_edge(*e)
+                networkx.drawing.nx_pylab.draw(g)
+        else:
+            filtered.append( graph )
+    return filtered
+
 def get_similar_direction_graphs(fmf,frame,
                                  use='raw',return_early=False,
                                  debug_line_finding=False,
                                  aspect_ratio = 1.0,
+                                 direction_eps_radians=None,
                                  chess_preview=False,
                                  ):
     bg_im = fmf['frame'][0]
@@ -719,6 +742,7 @@ def get_similar_direction_graphs(fmf,frame,
         subgraph = find_subgraph_similar_direction(
             graph,
             source=node,
+            direction_eps_radians=direction_eps_radians,
             already_done=similar_direction_graphs)
         if subgraph is not None:
             similar_direction_graphs.append( subgraph )
@@ -727,6 +751,7 @@ def get_similar_direction_graphs(fmf,frame,
         subgraph = find_subgraph_similar_direction(
             graph,
             source=node,
+            direction_eps_radians=direction_eps_radians,
             already_done=similar_direction_graphs)
         if subgraph is not None:
             similar_direction_graphs.append( subgraph )
@@ -741,18 +766,6 @@ def get_similar_direction_graphs(fmf,frame,
             print graph.edges()
         print '-'*40
         print
-    if 1:
-        filtered = []
-        for graph in similar_direction_graphs:
-            periphery = get_singly_connected_nodes( graph )
-            if len(periphery)>2:
-                print ('WARNING: graph has > 2 nodes in periphery; '
-                       'image analysis suspect; discarding bad graph')
-                print ' periphery',periphery
-                print ' graph',graph.edges()
-            else:
-                filtered.append( graph )
-        similar_direction_graphs = filtered
 
     return (similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary,
             imnx_use, imnx_rawbinary)
@@ -809,6 +822,8 @@ def main():
         use = 'raw',
         print_debug_info = False,
         save_debug_images = False,
+
+        angle_precision_degrees=10.0,
 
         aspect_ratio = 1.0,
         tol=0,
@@ -879,8 +894,17 @@ def main():
             return_early=options.return_early,
             debug_line_finding = options.debug_line_finding,
             aspect_ratio = options.aspect_ratio,
+            direction_eps_radians=options.angle_precision_degrees*D2R,
             chess_preview=cli_options.show_chessboard_finder_preview,
             )
+
+        if 1:
+            filtered = prune_non_simply_connected(similar_direction_graphs)
+            print '%d of %d original graphs survived'%(
+                len(filtered),len(similar_direction_graphs))
+            similar_direction_graphs = filtered
+            print 'mean N nodes: %f'%np.mean([len(g.nodes()) for g in similar_direction_graphs])
+
         start_idx = len(all_graphs)
         all_graphs.extend( similar_direction_graphs )
         stop_idx = len(all_graphs)
@@ -895,6 +919,9 @@ def main():
 
         # XXX uses last image
     similar_direction_graphs = all_graphs
+    if len(all_graphs)==0:
+        raise ValueError(
+            'no valid graphs were found. Cannot continue')
 
     did_plot = False
     if options.do_plot:
@@ -902,6 +929,7 @@ def main():
         frame_mpl_figures = {}
         # plot original, distorted image
         for j, frame_no in enumerate(options.frames):
+            color_count = 0
             frame_mpl_figures[frame_no] = pylab.figure()
             if (options.return_early or cli_options.find_and_show):
                 im_ax = pylab.subplot(1,1,1)
@@ -923,9 +951,11 @@ def main():
                         xys = numpy.array([ node.get_pos() for node in subgraph.nodes() ])
                         im_ax.plot( xys[:,0], xys[:,1], 'bo' )
                     else:
+                        color = get_color(color_count)
+                        color_count += 1
                         for edge in subgraph.edges():
                             xys = numpy.array([ edge[i].get_pos() for i in [0,1] ])
-                            im_ax.plot( xys[:,0], xys[:,1], 'bo-')
+                            im_ax.plot( xys[:,0], xys[:,1], '%so-'%color)
                 im_ax.set_title('frame %d - original (distorted)'%options.frames[j])
 
                 if options.show_lines:
