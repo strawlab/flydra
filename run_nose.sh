@@ -11,11 +11,11 @@ rm -rf $VIRTUALENVDIR
 # build new virutal environment
 virtualenv $VIRTUALENVDIR
 
-# compile extentions
-$VIRTUALENVDIR/bin/python setup.py build_ext --inplace
+# activate new virutal environment
+source $VIRTUALENVDIR/bin/activate
 
-# install into virtual environment
-$VIRTUALENVDIR/bin/python setup.py develop
+# Compile and then install into virtual environment
+python setup.py develop
 
 # run X server
 Xvfb :2 &
@@ -24,7 +24,7 @@ XVFBPID=$!
 echo "Xvfb running in process $XVFBPID"
 
 # Run tests, capture exit code, don't quit on error.
-(DISPLAY=":2" PATH=$VIRTUALENVDIR/bin $VIRTUALENVDIR/bin/python -c "import nose; nose.main('flydra')"; \
+(DISPLAY=":2" python -c "import nose; nose.main('flydra')";
 RESULT=$?)
 
 # Kill the X server
