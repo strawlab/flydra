@@ -5,20 +5,11 @@ set -o errexit
 
 VIRTUALENVDIR=PYtest
 
-# clean old virtual environment
-rm -rf $VIRTUALENVDIR
-
-# build new virutal environment
-virtualenv $VIRTUALENVDIR
-
 # activate new virutal environment
 source $VIRTUALENVDIR/bin/activate
 
+# install nose tests
 easy_install nose-0.11.1.tar.gz
-
-# Compile and then install into virtual environment
-python setup.py develop
-
 
 #----- Now, run tests -----
 
