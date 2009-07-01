@@ -417,7 +417,7 @@ def kalmanize(src_filename,
                 dest_filename = os.path.splitext(
                     results.filename)[0]+'.kalmanized.h5'
         else:
-            dest_filename = tempfile.mkstemp(suffix='.h5')
+            os_fd,dest_filename = tempfile.mkstemp(suffix='.h5')
 
         if frames_per_second is None:
             frames_per_second = get_fps(results)
