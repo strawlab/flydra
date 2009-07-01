@@ -14,6 +14,8 @@ virtualenv $VIRTUALENVDIR
 # activate new virutal environment
 source $VIRTUALENVDIR/bin/activate
 
+easy_install nose-0.11.1.tar.gz
+
 # Compile and then install into virtual environment
 python setup.py develop
 
@@ -25,7 +27,7 @@ echo "Xvfb running in process $XVFBPID"
 
 # Run tests, capture exit code, don't quit on error.
 set +o errexit
-DISPLAY=":2" python -c "import nose; nose.main('flydra')"
+DISPLAY=":2" nosetests
 RESULT=$?
 set -o errexit
 
