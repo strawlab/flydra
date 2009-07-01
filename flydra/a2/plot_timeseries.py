@@ -5,7 +5,7 @@ if 1:
     tables.flavor.restrict_flavors(keep=['numpy'])
 
 from optparse import OptionParser
-import sets, os, sys, math, hashlib
+import os, sys, math, hashlib
 import numpy as np
 import pkg_resources
 import numpy
