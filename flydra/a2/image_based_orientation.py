@@ -5,7 +5,7 @@ if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
     tables.flavor.restrict_flavors(keep=['numpy'])
-import sets, os, sys, math, contextlib, collections, warnings
+import os, sys, math, contextlib, collections, warnings
 
 import pkg_resources
 import numpy as np
