@@ -136,7 +136,6 @@ class CornerNode:
         return mag
 
 def points2graph(x,y,
-                 cluster_cut=True,
                  distance_thresh=1.5,
                  angle_thresh=30*D2R,
                  show_clusters=False,
@@ -190,7 +189,7 @@ def points2graph(x,y,
         graph.add_edge( nodes[i], nodes[j] )
         # The graph is not directed, so we don't need to add (j,i).
 
-    if cluster_cut:
+    if 1:
         # remove edges not belonging to 2 shortest distance clusters
         edges = graph.edges()
 
@@ -285,8 +284,8 @@ def points2graph(x,y,
                 #print i,[cartesian_clusters_center[i][0]],[cartesian_clusters_center[i][1]]
                 pylab.plot([cartesian_clusters_center[i][0]],[cartesian_clusters_center[i][1]],'ko')
             ax.set_aspect('equal')
-            #pylab.show()
-            #sys.exit()
+            pylab.show()
+            sys.exit()
 
         cluster_distances = clusters[:,1]
         if show_clusters:
@@ -678,7 +677,6 @@ def get_similar_direction_graphs(fmf,frame,
     imnx_no_bg = get_non_background( imnx_orig, bg_im )
     imnx_binary = binarize(imnx_no_bg)
     imnx_rawbinary = binarize(imnx_orig)
-
     if use == 'no_bg':
         imnx_use = imnx_no_bg
     elif use == 'binary':
@@ -713,7 +711,7 @@ def get_similar_direction_graphs(fmf,frame,
         print 'returning early with entire super-graph'
         similar_direction_graphs = [graph]
         return (similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary,
-                imnx_use, inmx_rawbinary)
+                imnx_use, imnx_rawbinary)
 
     similar_direction_graphs = [] # collection of all the graphs of similar directions
     for node in nodes:
@@ -775,14 +773,25 @@ def main():
                       action='store_true',
                       default=False)
 
-    parser.add_option("--find-and-show",
+    parser.add_option("--find-and-show1",
                       help=("find checkerboard intersections and "
                             "display them (don't compute distortion)"),
                       action='store_true',
                       default=False)
 
+    parser.add_option("--find-and-show2",
+                      help=("find checkerboard intersections and "
+                            "display them (don't compute distortion)"),
+                      action='store_true',
+                      default=False)
+
+    parser.add_option("--debug-line-finding",
+                      help=("show the line finding clustering data"),
+                      action='store_true',
+                      default=False)
+
     parser.add_option("--debug-nodes",
-                      help="display node numbers and print edges",
+                      help="print to console the node numbers and edges",
                       action='store_true',
                       default=False)
 
@@ -812,8 +821,18 @@ def main():
 	kc2 = 0.0, # initial guess of radial distortion
         )
 
-    if cli_options.find_and_show:
-        #defaults['return_early'] = True
+    if cli_options.find_and_show1:
+        defaults['return_early'] = True
+        defaults['do_plot'] = True
+
+    if cli_options.find_and_show2:
+        defaults['do_plot'] = True
+
+    cli_options.find_and_show = (cli_options.find_and_show1 or
+                                 cli_options.find_and_show2)
+
+    if cli_options.debug_line_finding:
+        defaults['debug_line_finding'] = True
         defaults['do_plot'] = True
 
     configFile = os.path.abspath( configFile)
@@ -992,7 +1011,7 @@ def main():
 
         if 1:
             # call optimizer
-            pfinal, cov_x, infodict, mesg, ier = scipy.optimize.minpack.leastsq(
+            results = scipy.optimize.minpack.leastsq(
                 obj.lm_err_func,
                 numpy.array(p0,copy=True), # workaround bug (scipy ticket 637)
                 epsfcn=options.epsfcn,
@@ -1001,6 +1020,7 @@ def main():
                 maxfev=int(1e6),
                 full_output=True,
                 )
+            pfinal, cov_x, infodict, mesg, ier = results
             print
             print '%d function calls'%(infodict['nfev'],)
             print 'covariance of parameters:'
