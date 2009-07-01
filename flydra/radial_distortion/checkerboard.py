@@ -619,6 +619,12 @@ def get_similar_direction_graphs(fmf,frame,
         x.append( corners[i].x )
         y.append( corners[i].y )
 
+    if chess_preview:
+        pylab.imshow(imnx_use)
+        pylab.plot(x,y,'o')
+        pylab.title('found corners')
+        pylab.show()
+
     show_clusters_frame = frame
     graph, nodes = points2graph(x, y,
                                 show_clusters=debug_line_finding,
