@@ -45,7 +45,7 @@ class Graph:
     def edges(self):
         edges = []
         for u in sorted_keys(self._adjacency):
-            for v in self._adjacency[u]:
+            for v in sorted_keys(self._adjacency[u]):
                 if (v,u) not in edges:
                     edges.append( (u,v) )
         return edges
@@ -58,15 +58,13 @@ class Graph:
             return False
         if len(self.nodes()) != len(other.nodes()):
             return False
-        ses = [repr(e) for e in self.edges()]
-        oes = [repr(e) for e in other.edges()]
+        ses = [e for e in self.edges()]
+        oes = [e for e in other.edges()]
         for se in ses:
-            found = False
-            for oe in oes:
-                if se==oe:
-                    found = True
-                    break
-            if not found:
+            if se not in oes:
+                return False
+        for oe in ses:
+            if oe not in ses:
                 return False
         return True
 
