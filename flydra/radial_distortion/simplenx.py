@@ -54,8 +54,37 @@ class Graph:
         return [u for u in sorted_keys(self._adjacency)]
 
     def __eq__(self,other):
-        return (self.edges() == other.edges() and
-                self.nodes() == other.nodes())
+        if len(self.edges()) != len(other.edges()):
+            return False
+        if len(self.nodes()) != len(other.nodes()):
+            return False
+        ses = [repr(e) for e in self.edges()]
+        oes = [repr(e) for e in other.edges()]
+        for se in ses:
+            found = False
+            for oe in oes:
+                if se==oe:
+                    found = True
+                    break
+            if not found:
+                return False
+        return True
+
+def test_graph_eq():
+    g = Graph()
+    g.add_edge(1,2)
+    g.add_edge(1,3)
+    g.add_edge(1,4)
+    g.add_edge(1,5)
+    g.add_edge(1,6)
+
+    g2 = Graph()
+    g2.add_edge(3,1)
+    g2.add_edge(2,1)
+    g2.add_edge(1,6)
+    g2.add_edge(1,5)
+    g2.add_edge(1,4)
+    assert g==g2
 
 def test_graph_repr():
     g = Graph()
