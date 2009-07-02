@@ -859,7 +859,8 @@ def main():
         angle_precision_degrees=10.0,
 
         aspect_ratio = 1.0,
-        tol=0,
+        ftol=0.001,
+        xtol=0,
         do_plot = False,
 
 	K13 = None, # center guess X
@@ -1089,8 +1090,8 @@ def main():
                 obj.lm_err_func,
                 numpy.array(p0,copy=True), # workaround bug (scipy ticket 637)
                 epsfcn=options.epsfcn,
-                ftol=options.tol,
-                xtol=options.tol,
+                ftol=options.ftol,
+                xtol=options.xtol,
                 maxfev=int(1e6),
                 full_output=True,
                 )
@@ -1112,7 +1113,7 @@ def main():
         helper.save_to_rad_file( options.rad_fname, comments = 'final err %.1f, leastsq result %d: %s'%(final_err, ier, mesg) )
         print 'final_err',final_err
         if numpy.allclose(final_err,initial_err):
-            print 'WARNING: no improvement after fitting. Reduce tolerance ("tol") and try again.'
+            print 'WARNING: no improvement after fitting. Reduce tolerance ("ftol","xtol") and try again.'
 
     else:
         # cli_options.view_results == True
