@@ -105,13 +105,26 @@ def find_subgraph_similar_direction(G,
 
 class CornerNode:
     def __init__(self,x,y,name,aspect_ratio=1.0):
-        self._x=x
-        self._y=y
+        self._x=float(x)
+        self._y=float(y)
         self._r = {}
-        self._name=name
-        self._aspect_radio=aspect_ratio
+        self._name=int(name)
+        self._aspect_ratio=float(aspect_ratio)
     def __repr__(self):
+        return 'CornerNode(%s,%s,%s,aspect_ratio=%s)'%(repr(self._x),
+                                                       repr(self._y),
+                                                       repr(self._name),
+                                                       repr(self._aspect_ratio))
+    def __hash__(self):
         return self._name
+    def __cmp__(self,other):
+        if isinstance(other,CornerNode):
+            return self._name.__cmp__(other._name)
+        else:
+            raise ValueError('cannot compare CornerNode against anything but '
+                             'a CornerNode')
+    def __str__(self):
+        return str(self._name)
     def get_pos(self):
         return (self._x, self._y)
     def get_rand_pos(self,g):
@@ -128,7 +141,7 @@ class CornerNode:
 
         yd = y2-y1
         xd = x2-x1
-        xd *= self._aspect_radio
+        xd *= self._aspect_ratio
         mag = math.sqrt(xd**2 + yd**2)
         return math.atan2(yd/mag, xd/mag)
     def get_distance_from( self, v ):
@@ -138,7 +151,7 @@ class CornerNode:
 
         yd = y2-y1
         xd = x2-x1
-        xd *= self._aspect_radio
+        xd *= self._aspect_ratio
         mag = math.sqrt(xd**2 + yd**2)
         return mag
 
@@ -175,7 +188,7 @@ def points2graph(x,y,
     x = numpy.array(x)
     y = numpy.array(y)
     tri = delaunay.Triangulation(x, y)
-    nodes = [ CornerNode(xi,yi,str(i),aspect_ratio=aspect_ratio) for i,(xi,yi) in enumerate(zip(x,y)) ]
+    nodes = [ CornerNode(xi,yi,i,aspect_ratio=aspect_ratio) for i,(xi,yi) in enumerate(zip(x,y)) ]
 
     segx = []
     segy = []
