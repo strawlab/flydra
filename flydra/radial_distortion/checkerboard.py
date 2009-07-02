@@ -377,6 +377,7 @@ class Objective:
         self._width = width
         self._height = height
         self._save_debug_images = save_debug_images
+        self._last_err_time = time.time()
         for graph in self._graphs:
             periphery = get_singly_connected_nodes( graph )
             start_node = min(periphery) # ensure this is deteriministic
@@ -433,10 +434,11 @@ class Objective:
 
     def lm_err_func(self, params):
         results = self.lm_err4(params)
-        if self._debug:
-            print repr(params[:4])
-            print numpy.sum( results**2 )
-            print
+        now = time.time()
+        if self._debug or (now-self._last_err_time) >= 5.0:
+            print 'With these parameters:',repr(params[:4])
+            print '  current error is:',numpy.sum( results**2 )
+            self._last_err_time = now
 
         if self._save_debug_images:
             if not hasattr(self,'_save_count'):
