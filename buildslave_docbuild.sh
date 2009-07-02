@@ -30,6 +30,9 @@ make all-pdf
 cd ../..
 make html
 
+chmod -R a+r build
+find build -type d | xargs chmod -R a+x build
+
 if [ "$ARG1" == "upload" ]; then
     echo "uploading"
     ./rsync-it.sh
