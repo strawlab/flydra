@@ -32,5 +32,5 @@ make html
 
 if [ "$ARG1" == "upload" ]; then
     echo "uploading"
-    rsync-it.sh
+    ./rsync-it.sh
 fi
