@@ -1,5 +1,7 @@
 #!/bin/bash
 
+ARG1=$1
+
 # abort on error
 set -o errexit
 
@@ -27,3 +29,8 @@ cd build/latex
 make all-pdf
 cd ../..
 make html
+
+if [ "$ARG1" == "upload" ]; then
+    echo "uploading"
+    rsync-it.sh
+fi
