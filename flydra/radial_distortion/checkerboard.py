@@ -988,10 +988,13 @@ def main():
                         color = get_color(color_count)
                         color_count += 1
                         for edge in subgraph.edges():
-                            xys = numpy.array([ edge[i].get_rand_pos(repr(subgraph)) for i in [0,1] ])
+                            ## xys = numpy.array(
+                            ##     [ edge[i].get_rand_pos(repr(subgraph)) for i in [0,1] ])
+                            xys = numpy.array([ edge[i].get_pos() for i in [0,1] ])
                             im_ax.plot( xys[:,0], xys[:,1], '%so-'%color, mew=0)
                             plot_nodes.append( edge[0] )
                             plot_nodes.append( edge[1] )
+            if 1:
                 plot_nodes = list(set(plot_nodes)) # unique
                 for node in plot_nodes:
                     x,y=node.get_pos()
