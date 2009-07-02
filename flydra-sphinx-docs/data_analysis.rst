@@ -6,8 +6,8 @@ Types of data files
 
 .. _data_analysis-file_types-calibration_files:
 
-Calibration files
------------------
+Calibration files and directories - overview
+--------------------------------------------
 
 (See :ref:`calibration` for an overview on calibration.)
 
@@ -21,7 +21,12 @@ Additionally, calibrations may be saved in:
 
  * .h5 files
 
- * .xml files with stimulus or trajectory information.
+ * .xml files that also include stimulus or trajectory information.
+
+All calibration sources can save the camera matrix for the linear
+pinhole camera model for each camera, the scale factor and units of
+the overall calibration, and the non-linear distortion parameters for
+each camera.
 
 Calibration directories
 .......................
@@ -36,6 +41,7 @@ following files:
  * original_cam_centers.dat - TODO
  * points.dat - the 2D image coordinates of the calibration object
  * Res.dat - the resolution of the cameras, in pixels
+ * camN.rad - the non-linear distortion terms for camera N
 
 The `Multi Camera Self Calibration Toolbox`_ (written in MATLAB) adds
 several more files. These files contain the extrinsic and intrinsic
@@ -43,7 +49,8 @@ parameters of a pinhole model as well as non-linear terms for a radial
 distortion. flydra_mainbrain loads these files and sends some of this
 information to the camera nodes. Specifically the files are:
 
- * TODO - (Need to add here.)
+ * TODO - (Need to write about the files that the MultiCamSelfCal
+   toolbox adds here.)
 
 .. _Multi Camera Self Calibration Toolbox: http://cmp.felk.cvut.cz/%7Esvoboda/SelfCal/index.html
 

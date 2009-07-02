@@ -766,7 +766,7 @@ def get_similar_direction_graphs(fmf,frame,
 
     if chess_preview:
         pylab.imshow(imnx_use)
-        pylab.plot(x,y,'o')
+        pylab.plot(x,y,'wo')
         pylab.title('found corners')
         pylab.show()
 
@@ -863,17 +863,18 @@ def main():
     configFile = args[0]
 
     defaults = dict(
+        # keep flydra-sphinx-docs/calibration.rst up to date
+        use = 'raw',
+        angle_precision_degrees=10.0,
+        aspect_ratio = 1.0,
+
         show_lines = False,
         return_early=False,
         debug_line_finding = False,
         epsfcn = 1e-9,
-        use = 'raw',
         print_debug_info = False,
         save_debug_images = False,
 
-        angle_precision_degrees=10.0,
-
-        aspect_ratio = 1.0,
         ftol=0.001,
         xtol=0,
         do_plot = False,
