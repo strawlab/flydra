@@ -11,6 +11,7 @@ import pylab
 import scipy.optimize
 import scipy.misc.pilutil
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
+import motmot.imops.imops as imops
 from matplotlib import delaunay
 import flydra.reconstruct_utils as reconstruct_utils # in pyrex/C for speed
 import flydra.undistort
@@ -740,8 +741,10 @@ def get_similar_direction_graphs(fmf,frame,
                                  direction_eps_radians=None,
                                  chess_preview=False,
                                  ):
-    bg_im = fmf['frame'][0]
-    imnx_orig = fmf['frame'][frame]
+    bg_im,tmp = fmf.get_frame(0)
+    bg_im = imops.to_mono8(fmf.get_format(),bg_im)
+    imnx_orig,tmp = fmf.get_frame(frame)
+    imnx_orig = imops.to_mono8(fmf.get_format(),imnx_orig)
 
     imnx_no_bg = get_non_background( imnx_orig, bg_im )
     imnx_binary = binarize(imnx_no_bg)
@@ -934,7 +937,7 @@ def main():
     graph_idxs_by_frames = []
     all_imnx_use = []
 
-    fmf = FlyMovieFormat.mmap_flymovie(options.fname)
+    fmf = FlyMovieFormat.FlyMovie(options.fname)
 
     for frame in options.frames:
         (similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary,
