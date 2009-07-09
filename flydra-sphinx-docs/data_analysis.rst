@@ -135,3 +135,70 @@ Source code for your own data analysis
 
 The module :mod:`flydra.a2.core_analysis` has fast, optimized
 trajectory opening routines.
+
+Data flow
+=========
+
+.. graphviz::
+
+  digraph G {
+    size ="6,4";
+    TwoDee -> da;
+    cal -> da;
+    motion_model -> da;
+    da -> kalman_observations;
+    da -> kalman_estimates;
+    kalman_observations -> smoothed_kalman_estimates;
+    motion_model -> smoothed_kalman_estimates;
+
+    da [label="data association & tracking (flydra_kalmanize or flydra_mainbrain)"];
+    TwoDee [label="2D observations"];
+    cal [label="calibration"];
+    motion_model [label="dynamic model"];
+    kalman_estimates [label="kalman_estimates (in .h5 file)"];
+    kalman_observations [label="kalman_observations (in .h5 file)"];
+    smoothed_kalman_estimates [label="smoothed kalman estimates [output of load_data(use_kalman_smoothing=True)]"];
+  }
+
+
+Extracting longitudinal body orientation
+========================================
+
+Estimating longitudinal body orientation happens in several steps:
+
+* Acquire data with good 2D tracking, a good calibration, and .ufmf
+  movies in good lighting.
+
+* Perform tracking and data assocation on the 2D data to get 3D data
+  using :command:`flydra_kalmanize`.
+
+* Run :command:`flydra_analysis_image_based_orientation` to estimate
+  2D longitudinal body axis.
+
+* Check the 2D body axis estimates using :command:`flydra_analysis_montage_ufmfs` 
+  to generate images or movies of the tracking.
+
+* Finally, another rounte through the tracker and data association now
+  using the 2D orientation data.
+
+An example of a call to :command:`flydra_analysis_image_based_orientation` is::
+
+  flydra_analysis_image_based_orientation --h5=DATA20080915_164551.h5 --kalman=DATA20080915_164551.kalmanized.h5 \
+    --ufmfs=small_20080915_164551_cam1_0.ufmf:small_20080915_164551_cam2_0.ufmf:small_20080915_164551_cam3_0.ufmf:small_20080915_164551_cam4_0.ufmf \
+    --output-h5=DATA20080915_164551.image-based-re2d.h5
+
+When calling :command:`flydra_analysis_montage_ufmfs`, you'll need to
+use at least the following elements in a configuration file::
+
+  [what to show]
+  show_2d_orientation = True
+
+An example output from from doing something like this is shown here:
+
+.. image:: screenshots/image_based_angles.jpg
+  :width: 538
+  :height: 418
+
+The **critical issue** is that the body orientations are well tracked
+in 2D. There's nothing that can be done in later processing stages if
+the 2D body angle extraction is not good.

@@ -25,7 +25,7 @@ sys.path.append(os.path.abspath('ext'))
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ['sphinx.ext.autodoc','sphinx.ext.pngmath',
               'sphinx.ext.doctest',
-              'numpydoc','graphviz']
+              'numpydoc','sphinx.ext.graphviz','sphinx.ext.autosummary']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
