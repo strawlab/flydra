@@ -418,7 +418,7 @@ def doit(h5_filename=None,
                         continue
                     fmf, fmf_fno = found
                     image, fmf_timestamp = fmf.get_frame( fmf_fno )
-                    mean_image = fmf._ufmf.get_mean_for_timestamp(fmf_timestamp)
+                    mean_image = fmf.get_mean_for_timestamp(fmf_timestamp)
 
                     xy = (int(round(frame2d[idx]['x'])),
                           int(round(frame2d[idx]['y'])))
@@ -431,7 +431,9 @@ def doit(h5_filename=None,
                     # images is not the same as simply averaging the
                     # full frame.
 
-                    roiradius = fmf._ufmf._image_radius # Naughty
+                    roiradius = 25
+                    warnings.warn('roiradius hard-coded to %d: could be set '
+                                  'from 3D tracking'%roiradius)
                     tmp = clip_and_math( image, mean_image, xy, roiradius,
                                          maxsize )
                     im_coords, raw_im, mean_im, absdiff_im = tmp
