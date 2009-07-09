@@ -18,6 +18,7 @@ Contents:
   gallery.rst
   trigger_device.rst
   orientation_data.rst
+  modules.rst
 
 Contibutions to this documentation
 ----------------------------------
@@ -27,6 +28,7 @@ look into the sources if they contain the information you need (if
 not, please fix them), otherwise the documentation generation needs to
 be improved (look in the ``flydra-sphinx-docs/`` directory). For more
 information, see :ref:`editing-the-docs`.
+
 
 Indices and tables
 ==================

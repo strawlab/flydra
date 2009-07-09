@@ -18,6 +18,7 @@ def get_tile(N):
     return '%dx%d'%(rows,cols)
 
 def get_config_defaults():
+    # keep in sync with usage in main() below
     what = {'show_2d_position': False,
             'show_2d_orientation': False,
             'white_background': False,
@@ -195,7 +196,27 @@ def make_montage( h5_filename,
                 os.unlink(fname)
 
 def main():
-    usage = '%prog DATAFILE2D.h5 [options]'
+    # keep default config file in sync with get_config_defaults() above
+    usage = """%prog DATAFILE2D.h5 [options]
+
+The default configuration correspondes to a config file:
+
+[what to show]
+show_2d_position = False
+show_2d_orientation = False
+white_background =  False
+max_resolution = None
+
+Config files may also have sections such as:
+
+[cam7_1]
+pixel_aspect=2 # each pixel is twice as wide as tall
+transform='rot 180' # rotate the image 180 degrees (See transform
+                    # keyword argument of
+                    # :meth:`flydra.a2.benu.Canvas.set_user_coords`
+                    # for all possible transforms.)
+
+"""
 
     parser = OptionParser(usage)
 

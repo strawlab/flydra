@@ -51,6 +51,7 @@ def numpy2cairo(raw):
     return in_surface
 
 class Canvas(object):
+    """A drawing surface which handles coordinate transforms"""
     def __init__(self,fname,width,height):
         self._output_ext = os.path.splitext(fname)[1].lower()
         if self._output_ext == '.pdf':
@@ -68,7 +69,7 @@ class Canvas(object):
         self._ctx = cairo.Context(self._surf)
         self._fname = fname
     def imshow(self,im,l,b,filter='nearest'):
-        """
+        """show image im at location (l,b)
 
         filter can be one of ['best', 'bilinear', 'fast', 'gaussian',
         'good', 'nearest'].
@@ -89,6 +90,7 @@ class Canvas(object):
         ctx.restore()
 
     def plot(self,xarr,yarr,color_rgba=None,close_path=False):
+        """line plot of xarr vs. yarr"""
         if color_rgba is None:
             color_rgba = (1,1,1,1)
         if len(xarr)==1:
@@ -104,6 +106,7 @@ class Canvas(object):
         ctx.stroke()
 
     def scatter(self,xarr,yarr,color_rgba=None,radius=1.0):
+        """scatter plot of xarr vs. yarr"""
         if color_rgba is None:
             color_rgba = (1,1,1,1)
         ctx = self._ctx # shorthand
@@ -116,6 +119,7 @@ class Canvas(object):
         ctx.stroke()
 
     def save(self):
+        """save output to file"""
         if self._output_ext == '.png':
             self._surf.write_to_png(self._fname)
         else:
@@ -123,6 +127,7 @@ class Canvas(object):
             self._surf.finish()
 
     def text(self,text,x,y,color_rgba=None,font_size=10):
+        """draw text"""
         if color_rgba is None:
             color_rgba = (0,0,0,1)
 
@@ -140,6 +145,24 @@ class Canvas(object):
     def set_user_coords(self, device_rect, user_rect,
                         clip=True,
                         transform='orig' ):
+        """enter a benu context with a user-defined coordinate system
+
+        **Arguments**
+
+        device_rect : 4 element tuple
+            Specifies the coordinates in device space to draw into (l,b,w,h)
+        user_rect : 4 element tuple
+            Specifies the coordinates in arbitrary user defined space
+            mapping into device space (l,b,w,h)
+
+        **Optional keyword arguments**
+
+        clip : boolean
+            Whether to limit drawing within the device_rect
+        transform : string
+            how user_rect is transformed into device_rect. One of 'orig',
+            'rot -90', 'rot 180'.
+        """
         user_l, user_b, user_w, user_h = user_rect
         user_r = user_l+user_w
         user_t = user_b+user_h
