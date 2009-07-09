@@ -138,7 +138,11 @@ def make_montage( h5_filename,
                     xarr = np.atleast_1d(this_cam_data['x'])
                     yarr = np.atleast_1d(this_cam_data['y'])
                     canv.scatter(xarr, yarr,
-                                 color_rgba=(0,1,0,1),
+                                 color_rgba=(0,0,0,1),
+                                 radius=10,
+                                 )
+                    canv.scatter(xarr+1, yarr+1,
+                                 color_rgba=(1,1,1,1),
                                  radius=10,
                                  )
                 if config['what to show']['show_2d_orientation'] and camn is not None:
