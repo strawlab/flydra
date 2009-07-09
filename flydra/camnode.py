@@ -1206,11 +1206,11 @@ class SaveSmallData(object):
                             raise NotImplementedError(
                                 'unable to determine shape from image with '
                                 'coding %s'%(chainbuf.image_coding,))
-                        self._ufmf = ufmf.UfmfSaverV3( filename,
-                                                       coding = chainbuf.image_coding,
-                                                       max_width=w,
-                                                       max_height=h,
-                                                       )
+                        self._ufmf = ufmf.AutoShrinkUfmfSaverV3( filename,
+                                                                 coding = chainbuf.image_coding,
+                                                                 max_width=w,
+                                                                 max_height=h,
+                                                                 )
                         del h,w
 
 
