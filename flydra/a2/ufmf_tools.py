@@ -9,6 +9,7 @@ import flydra.a2.utils as utils
 import flydra.analysis.result_utils as result_utils
 import scipy.misc
 import subprocess
+import motmot.imops.imops as imops
 
 from tables_tools import openFileSafe
 
@@ -26,6 +27,7 @@ def iterate_frames(h5_filename,
                    max_n_frames = None,
                    start = None,
                    stop = None,
+                   rgb8_if_color=False,
                    ):
     """yield frame-by-frame data"""
 
@@ -168,6 +170,14 @@ def iterate_frames(h5_filename,
                     image,image_ts,more = ufmf.get_frame(ufmf_frame_no,
                                                          _return_more=True)
                     del ufmf_frame_no, ufmf_frame_idxs
+                coding = ufmf.get_format()
+                if (coding.startswith('MONO8:') or
+                    coding.startswith('YUV') or
+                    coding.startswith('RGB')):
+                    if rgb8_if_color:
+                        image = imops.to_rgb8(coding,image)
+                    else:
+                        warnings.warn('color image not converted to color')
                 per_frame_dict[ufmf_fname] = {
                     'image':image,
                     'cam_id':cam_id,

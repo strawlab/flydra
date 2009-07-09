@@ -72,6 +72,7 @@ def make_montage( h5_filename,
         max_n_frames = max_n_frames,
         start = start,
         stop = stop,
+        rgb8_if_color = True,
         )):
         tracker_data = frame_dict['tracker_data']
 
