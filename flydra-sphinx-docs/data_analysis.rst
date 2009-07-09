@@ -164,6 +164,43 @@ Data flow
 Extracting longitudinal body orientation
 ========================================
 
+Theoretical overview
+--------------------
+
+Our high-throughput automated pitch angle estimation algorithm
+consists of two main steps: first, the body angle is estimated in (2D)
+image coordinates for each camera view, and second, the data from
+multiple cameras are fused to establish a 3D estimate of longitudinal
+body orientation. We take as input the body position, the raw camera
+images, and an estimate of background appearance (without the
+fly). These are calculated in a previous step according to the EKF
+based algorithm described in the flydra manuscript.
+
+For the first step (2D body angle estimation), we do a background
+subtraction and thresholding operation to extract a binary image
+containing the silhouette of the fly. A potential difficulty is
+distinguishing the portion of the silhouette caused by the wings from
+the portion caused by the head, thorax, and abdomen. We found
+empirically that performing a connected components analysis on the
+binary image thresholded using an appropriately chosen threshold value
+discriminates the wings from the body with high success. Once the body
+pixels are estimated in this way, a covariance matrix of these pixels
+is formed and its eigenvalues and eigenvectors are used to determine
+the 2D orientation of luminance within this binary image of the fly
+body. **To add:** a description of the image blending technique used
+with high-framerate images for ignoring flapping wings.
+
+From the N estimates of body angle from N camera views, an estimate of
+the 3D body axis direction is made. For each camera, a line from the
+2D body angle estimate on the image plane and the 3D camera center
+(from the known camera calibration) are used to find a plane in 3D
+space.  Then, the best-fit line of intersection of the N planes is
+then found using an algorithm based on singular value decomposition.
+
+
+Practical steps
+---------------
+
 Estimating longitudinal body orientation happens in several steps:
 
 * Acquire data with good 2D tracking, a good calibration, and .ufmf
@@ -181,7 +218,12 @@ Estimating longitudinal body orientation happens in several steps:
 * Finally, another rounte through the tracker and data association now
   using the 2D orientation data.
 
-An example of a call to :command:`flydra_analysis_image_based_orientation` is::
+An example of a call to
+:command:`flydra_analysis_image_based_orientation` is: (This was
+automatically called via an SConstruct script using
+:mod:`flydra.a2.flydra_scons`.)
+
+::
 
   flydra_analysis_image_based_orientation --h5=DATA20080915_164551.h5 --kalman=DATA20080915_164551.kalmanized.h5 \
     --ufmfs=small_20080915_164551_cam1_0.ufmf:small_20080915_164551_cam2_0.ufmf:small_20080915_164551_cam3_0.ufmf:small_20080915_164551_cam4_0.ufmf \
