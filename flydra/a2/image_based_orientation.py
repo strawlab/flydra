@@ -264,6 +264,7 @@ def doit(h5_filename=None,
          final_thresh=None,
          stack_N_images=None,
          stack_N_images_min=None,
+         old_sync_timestamp_source=False,
          ):
     """
 
@@ -398,7 +399,15 @@ def doit(h5_filename=None,
                         idx = idxs[0]
 
                         orig_data2d_rownum = frame2d_idxs[idx]
-                        frame_timestamp = frame2d[idx]['timestamp']
+
+                        if not old_sync_timestamp_source:
+                            # Change the next line to 'timestamp' for old
+                            # data (before May/June 2009 -- the switch to
+                            # fview_ext_trig)
+                            frame_timestamp = frame2d[idx]['cam_received_timestamp']
+                        else:
+                            # previous version
+                            frame_timestamp = frame2d[idx]['timestamp']
                         found = None
                         for fmf, fmf_timestamp_qi in movie_tups_for_this_camn:
                             fmf_fnos = fmf_timestamp_qi.get_idxs(frame_timestamp)
@@ -861,6 +870,10 @@ def main():
 
     parser.add_option("--save-image-dir", type='string', default=None)
 
+    parser.add_option("--old-sync-timestamp-source", action='store_true',
+                      default=False,
+                      help="use data2d['timestamp'] to find matching ufmf frame")
+
     (options, args) = parser.parse_args()
 
     if options.ufmfs is None:
@@ -898,6 +911,7 @@ def main():
          final_thresh=options.final_thresh,
          stack_N_images=options.stack_N_images,
          stack_N_images_min=options.stack_N_images_min,
+         old_sync_timestamp_source=options.old_sync_timestamp_source,
          )
 
 if __name__=='__main__':
