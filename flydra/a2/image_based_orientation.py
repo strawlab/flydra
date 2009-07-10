@@ -13,6 +13,7 @@ import tables as PT
 from optparse import OptionParser
 import flydra.reconstruct as reconstruct
 import motmot.ufmf.ufmf as ufmf
+import motmot.imops.imops as imops
 import flydra.a2.utils as utils
 import flydra.analysis.result_utils as result_utils
 import core_analysis
@@ -136,7 +137,7 @@ def plot_image_subregion(raw_im, mean_im, absdiff_im,
         ## #ctx.scale( roisize/square_edge, square_edge/roisize)
 
         if 1:
-            in_surface = benu.numpy2cairo(display_im)
+            in_surface = benu.numpy2cairo(display_im.astype(np.uint8))
             ctx.rectangle(user_l,user_b,display_im.shape[1],display_im.shape[0])
             if 1:
                 ctx.save()
@@ -245,7 +246,10 @@ def clip_and_math( raw_image, mean_image, xy, roiradius, maxsize ):
 
     raw_im = raw_image[b:t,l:r]
     mean_im = mean_image[b:t,l:r]
-    absdiff_im = abs( mean_im - raw_im )
+    absdiff_im = abs( mean_im.astype(np.float32) - raw_im )
+    if absdiff_im.ndim==3:
+        # convert to grayscale
+        absdiff_im = np.mean(absdiff_im,axis=2)
 
     return (l,b,r,t), raw_im, mean_im, absdiff_im
 
@@ -421,12 +425,19 @@ def doit(h5_filename=None,
                             fmf_fno = fmf_fnos[0]
                             found = (fmf, fmf_fno )
                         if found is None:
-                            ## print 'no image data for frame timestamp %s cam_id %s'%(
-                            ##     repr(frame_timestamp),cam_id)
+                            print 'no image data for frame timestamp %s cam_id %s'%(
+                                repr(frame_timestamp),cam_id)
                             continue
                         fmf, fmf_fno = found
                         image, fmf_timestamp = fmf.get_frame( fmf_fno )
                         mean_image = fmf.get_mean_for_timestamp(fmf_timestamp)
+                        coding = fmf.get_format()
+                        if imops.is_coding_color(coding):
+                            image = imops.to_rgb8(coding,image)
+                            mean_image = imops.to_rgb8(coding,mean_image)
+                        else:
+                            image = imops.to_mono8(coding,image)
+                            mean_image = imops.to_mono8(coding,mean_image)
 
                         xy = (int(round(frame2d[idx]['x'])),
                               int(round(frame2d[idx]['y'])))
@@ -627,7 +638,7 @@ def doit(h5_filename=None,
                             morphed_im = morphed_images[orig_idx]
                             raw_l, raw_b = raw_coords[:2]
 
-                            imh, imw = raw_im.shape
+                            imh, imw = raw_im.shape[:2]
                             n_ims = 5
 
                             if 1:
@@ -663,7 +674,7 @@ def doit(h5_filename=None,
 
                                     (s_raw_im, s_raw_coords)=raw_images[s_orig_idx]
                                     s_raw_l, s_raw_b = s_raw_coords[:2]
-                                    s_imh, s_imw = s_raw_im.shape
+                                    s_imh, s_imw = s_raw_im.shape[:2]
                                     user_rect = (s_raw_l,s_raw_b,s_imw,s_imh)
 
                                     x_display = (stacki+1)*margin+(scale*imw)*stacki

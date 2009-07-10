@@ -171,9 +171,7 @@ def iterate_frames(h5_filename,
                                                          _return_more=True)
                     del ufmf_frame_no, ufmf_frame_idxs
                 coding = ufmf.get_format()
-                if (coding.startswith('MONO8:') or
-                    coding.startswith('YUV') or
-                    coding.startswith('RGB')):
+                if imops.is_coding_color(coding):
                     if rgb8_if_color:
                         image = imops.to_rgb8(coding,image)
                     else:
