@@ -393,7 +393,8 @@ class SingleCameraCalibration:
                  Pmat=None,   # non-optional
                  res=None,    # non-optional
                  helper=None,
-                 scale_factor=None # scale_factor is for conversion to meters (e.g. should be 1e-3 if your units are mm)
+                 scale_factor=None, # scale_factor is for conversion to meters (e.g. should be 1e-3 if your units are mm)
+                 no_error_on_intrinsic_parameter_problem = False,
                  ):
         if type(cam_id) != str:
             raise TypeError('cam_id must be string')
@@ -417,9 +418,21 @@ class SingleCameraCalibration:
             #intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
             eps = 1e-6
             if abs(intrinsic_parameters[2,2]-1.0)>eps:
-                print 'WARNING: expected last row/col of intrinsic parameter matrix to be unity'
-                print 'intrinsic_parameters[2,2]',intrinsic_parameters[2,2]
-                raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
+                if no_error_on_intrinsic_parameter_problem:
+                    print 'intrinsic_parameters'
+                    print intrinsic_parameters
+                    warnings.warn('expected last row/col of intrinsic '
+                                  'parameter matrix to be unity. It is %s'%
+                                  intrinsic_parameters[2,2])
+                    intrinsic_parameters = \
+                                 intrinsic_parameters/intrinsic_parameters[2,2]
+                    print intrinsic_parameters
+                else:
+                    print ('WARNING: expected last row/col of intrinsic '
+                           'parameter matrix to be unity')
+                    print 'intrinsic_parameters[2,2]',intrinsic_parameters[2,2]
+                    raise ValueError('expected last row/col of intrinsic '
+                                     'parameter matrix to be unity')
 
             fc1 = intrinsic_parameters[0,0]
             cc1 = intrinsic_parameters[0,2]
