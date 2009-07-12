@@ -209,6 +209,8 @@ def _initial_file_load(filename):
         # XXX probably need to add time_model computation here
     else:
         kresults = tables.openFile(filename,mode='r')
+        extra['frames_per_second'] = flydra.analysis.result_utils.get_fps(
+            kresults)
         obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
         extra['frames'] = kresults.root.kalman_estimates.read(field='frame')
         unique_obj_ids = numpy.unique(obj_ids)
