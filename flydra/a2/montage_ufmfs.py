@@ -47,7 +47,8 @@ def make_montage( h5_filename,
     ufmf_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
                                                   ufmf_dir=ufmf_dir,
                                                   careful=True )
-
+    if len(ufmf_fnames)==0:
+        raise ValueError('no input movies -- nothing to do')
 
     if dest_dir is None:
         dest_dir = os.curdir
