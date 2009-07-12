@@ -141,32 +141,13 @@ class Canvas(object):
         ctx.move_to(x,y)
         ctx.show_text(text)
 
-    @contextlib.contextmanager
-    def set_user_coords(self, device_rect, user_rect,
-                        clip=True,
-                        transform='orig' ):
-        """enter a benu context with a user-defined coordinate system
-
-        **Arguments**
-
-        device_rect : 4 element tuple
-            Specifies the coordinates in device space to draw into (l,b,w,h)
-        user_rect : 4 element tuple
-            Specifies the coordinates in arbitrary user defined space
-            mapping into device space (l,b,w,h)
-
-        **Optional keyword arguments**
-
-        clip : boolean
-            Whether to limit drawing within the device_rect
-        transform : string
-            how user_rect is transformed into device_rect. One of 'orig',
-            'rot -90', 'rot 180'.
-        """
+    def _get_matrix_for_transform(self,device_rect, user_rect, transform=None):
         user_l, user_b, user_w, user_h = user_rect
         user_r = user_l+user_w
         user_t = user_b+user_h
         device_l, device_b, device_w, device_h = device_rect
+        if transform is None:
+            transform='orig'
 
         if transform=='orig':
             xscale = device_w/user_w
@@ -179,10 +160,23 @@ class Canvas(object):
                                   y0=(device_b-yscale*user_b),
                                   )
         elif transform=='rot -90':
-            xscale = device_w/user_w
-            yscale = device_h/user_h
+            if 1:
+                raise NotImplementedError('"rot -90" transform is screwed up')
+            xscale = device_h/user_w
+            yscale = device_w/user_h
             matrix = cairo.Matrix(xx=0,
-                                  yx=xscale, # XXX these could be flipped
+                                  yx=-xscale,
+                                  xy=-yscale,
+                                  yy=0,
+                                  x0=(device_l+xscale*user_b),
+                                  y0=(device_b+yscale*user_l),
+                                  )
+        elif transform=='rot 90':
+            # newer than above, tested more, seems to work
+            xscale = device_h/user_w
+            yscale = device_w/user_h
+            matrix = cairo.Matrix(xx=0,
+                                  yx=xscale,
                                   xy=yscale,
                                   yy=0,
                                   x0=(device_l-xscale*user_b),
@@ -200,8 +194,34 @@ class Canvas(object):
                                   )
         else:
             raise ValueError("unknown transform '%s'"%transform)
-        orig_matrix = self._ctx.get_matrix()
+        return matrix
 
+    @contextlib.contextmanager
+    def set_user_coords(self, device_rect, user_rect,
+                        clip=True,
+                        transform=None ):
+        """enter a benu context with a user-defined coordinate system
+
+        **Arguments**
+
+        device_rect : 4 element tuple
+            Specifies the coordinates in device space to draw into (l,b,w,h)
+        user_rect : 4 element tuple
+            Specifies the coordinates in arbitrary user defined space
+            mapping into device space (l,b,w,h)
+
+        **Optional keyword arguments**
+
+        clip : boolean
+            Whether to limit drawing within the device_rect
+        transform : string
+            how user_rect is transformed into device_rect. One of 'orig',
+            'rot -90', 'rot 180', 'rot 90'.
+        """
+        user_l, user_b, user_w, user_h = user_rect
+        orig_matrix = self._ctx.get_matrix()
+        matrix = self._get_matrix_for_transform(device_rect,user_rect,
+                                                transform=transform)
         self._ctx.set_matrix(matrix)
         if clip:
             self._ctx.save()
@@ -215,6 +235,12 @@ class Canvas(object):
             if clip:
                 self._ctx.restore()
             self._ctx.set_matrix(orig_matrix)
+
+    def get_transformed_point(self,x,y,device_rect,user_rect,
+                              transform=None):
+        matrix = self._get_matrix_for_transform(device_rect,user_rect,
+                                                transform=transform)
+        return matrix.transform_point(x,y)
 
 def test_benu():
     c = Canvas('x.png',10,10)

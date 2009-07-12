@@ -49,6 +49,7 @@ setup(name='flydra',
     'flydra_analysis_auto_discover_ufmfs = flydra.a2.auto_discover_ufmfs:main',
     'flydra_analysis_montage_ufmfs = flydra.a2.montage_ufmfs:main',
     'flydra_analysis_retrack_movies = flydra.a2.retrack_movies:main',
+    'flydra_analysis_overlay_kalman_movie = flydra.a2.overlay_kalman_movie:main',
 
 # analysis - .h5 file care and feeding
     'flydra_analysis_filter_kalman_data = flydra.analysis.flydra_analysis_filter_kalman_data:main',
