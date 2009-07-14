@@ -32,8 +32,7 @@ import os
 BENCHMARK = int(os.environ.get('FLYDRA_BENCHMARK',0))
 FLYDRA_BT = int(os.environ.get('FLYDRA_BT',0)) # threaded benchmark
 
-#NAUGHTY_BUT_FAST = False
-NAUGHTY_BUT_FAST = True
+NAUGHTY_BUT_FAST = False
 
 #DISABLE_ALL_PROCESSING = True
 DISABLE_ALL_PROCESSING = False
