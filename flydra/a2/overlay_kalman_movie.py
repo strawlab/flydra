@@ -58,9 +58,10 @@ def doit(movie_fname=None,
         reconstructor = flydra.reconstruct.Reconstructor(
             reconstructor_fname)
 
+    reconstructor = reconstructor.get_scaled( reconstructor.get_scale_factor() )
+
     fix_w = movie.get_width()
     fix_h = movie.get_height()
-    print 'movie.get_format()',movie.get_format()
     is_color = imops.is_coding_color(movie.get_format())
 
     for movie_fno in range(start,stop+1):
