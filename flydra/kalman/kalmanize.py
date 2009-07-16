@@ -7,7 +7,7 @@ import flydra.reconstruct_utils as ru
 import flydra.fastgeom as geom
 import time, math
 from flydra.analysis.result_utils import get_results, get_caminfo_dicts, \
-     get_resolution, get_fps
+     get_resolution, get_fps, read_textlog_header
 import tables
 import tables as PT
 import warnings
@@ -18,6 +18,7 @@ import flydra_kalman_utils
 from optparse import OptionParser
 import dynamic_models
 import collections
+import flydra.version
 from flydra.MainBrain import TextLogDescription
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 from flydra.reconstruct import do_3d_operations_on_2d_point
@@ -442,9 +443,11 @@ def kalmanize(src_filename,
                           delete_on_error=True) as h5file:
 
             if do_full_kalmanization:
+                parsed = read_textlog_header(results)
                 textlog_save_lines = [
-                    'kalmanize running at %s fps, (hypothesis_test_max_error %s)'%(
-                    str(frames_per_second),str(max_err)),
+                    'kalmanize running at %s fps, (hypothesis_test_max_error %s, top %s, trigger_CS3 %s, flydra_version %s)'%(
+                    str(frames_per_second),str(max_err),str(parsed['top']),
+                    str(parsed['trigger_CS3']),flydra.version.__version__),
                     'original file: %s'%(src_filename,),
                     'dynamic model: %s'%(dynamic_model_name,),
                     'reconstructor file: %s'%(reconstructor_filename,),
@@ -480,6 +483,10 @@ def kalmanize(src_filename,
 
                 print ('max reprojection error to accept new 3D point '
                        'with hypothesis testing: %.1f (pixels)'%(max_err,))
+
+                # copy timestamp data into newly created kalmanized file
+                if hasattr(results.root,'trigger_clock_info'):
+                    results.root.trigger_clock_info._f_copy(h5file.root)
 
             data2d = results.root.data2d_distorted
 
