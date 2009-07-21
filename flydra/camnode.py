@@ -1088,6 +1088,18 @@ class SaveCamData(object):
                     if chainbuf.quit_now:
                         break
 
+                    if chainbuf.updated_running_mean_image is not None:
+                        # Always keep the current bg and std images so
+                        # that we can save them when starting a new .fmf
+                        # movie save sequence.
+                        last_bgcmp_image_timestamp = chainbuf.cam_received_time
+                        # Keeping references to these images should be OK,
+                        # not need to copy - the Process thread already
+                        # made a copy of the realtime analyzer's internal
+                        # copy.
+                        last_running_mean_image = chainbuf.updated_running_mean_image
+                        last_running_sumsqf_image = chainbuf.updated_running_sumsqf_image
+
                     if state == 'saving':
                         raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
                                      chainbuf.cam_received_time) )
@@ -1228,6 +1240,18 @@ class SaveSmallData(object):
                 with camnode_utils.use_buffer_from_chain(self._chain,blocking=False) as chainbuf:
                     if chainbuf.quit_now:
                         break
+
+                    if chainbuf.updated_running_mean_image is not None:
+                        # Always keep the current bg and std images so
+                        # that we can save them when starting a new .fmf
+                        # movie save sequence.
+                        last_bgcmp_image_timestamp = chainbuf.cam_received_time
+                        # Keeping references to these images should be OK,
+                        # not need to copy - the Process thread already
+                        # made a copy of the realtime analyzer's internal
+                        # copy.
+                        last_running_mean_image = chainbuf.updated_running_mean_image
+                        last_running_sumsqf_image = chainbuf.updated_running_sumsqf_image
 
                     if state == 'saving':
                         self._tobuf( chainbuf ) # actually save the .ufmf data
