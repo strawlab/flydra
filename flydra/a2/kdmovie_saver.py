@@ -4,7 +4,7 @@ if 1:
     import tables.flavor
     tables.flavor.restrict_flavors(keep=['numpy'])
 
-import sets, os, sys, math
+import os, sys, math
 sys.path.insert(0,os.curdir)
 from enthought.tvtk.api import tvtk
 import numpy

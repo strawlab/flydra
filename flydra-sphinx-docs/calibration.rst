@@ -21,8 +21,8 @@ Flydra calibration data (also, in the flydra source code, a
 See :ref:`data_analysis-file_types-calibration_files` for a discussion
 of the calibration file formats.
 
-Generating a calibration
-------------------------
+Generating a calibration using MultiCamSelfCal
+==============================================
 
 .. This was the old method numbered "2b".
 
@@ -110,6 +110,9 @@ to examine:
  * ``config.files.idxcams`` should be set to ``[1:X]`` where ``X`` is
    the number of cameras you are using.
 
+ * ``config.cal.UNDO_RADIAL`` should be set to 1 if you are providing
+   a .rad file with non-linear distortion parameters.
+
 The other files to consider are
 ``MultiCamSelfCal/CommonCfgAndIO/expname.m`` and
 ``kookaburra/MultiCamSelfCal/MultiCamSelfCal/BlueCLocal/SETUP_NAME.m``. The
@@ -184,7 +187,7 @@ points. This is a precise calibration, it might take as many as 30
 iterations and 15 minutes.
 
 Aligning a calibration
-----------------------
+======================
 
 Often, even if a calibration from MultiCamSelfCal creates
 reprojections with minimal error and the relative camera positions
@@ -202,3 +205,178 @@ Using the controls on the right, align your data such that it
 corresponds with the 3D model loaded by STIMULUS.xml. When you are
 satisfied, click either of the save buttons to save your newly-aligned
 calibration.
+
+Manually generating 3D points from images to use for alignment
+..............................................................
+
+You may want to precisely align some known 3D points. In this case the
+procedure is:
+
+1. Use :command:`flydra_analysis_plot_kalman_2d` to save a `points.h5`
+   file with the 3D positions resulting from the original
+   calibration. In particular, use the hotkeys as defined in
+   :meth:`~flydra.a2.plot_kalman_2d.ShowIt.on_key_press`.
+
+2. Load `points.h5` and a STIMULUS.xml file into
+   :command:`flydra_analysis_calibration_align_gui` and adjust the
+   homography parameters until the 3D locations are correct.
+
+Estimating non-linear distortion parameters
+===========================================
+
+**The goal of estimating non-linear distortions is to find the image
+warping such that images of real straight lines are straight in the
+images.** There are two supported ways of estimating non-linear
+distortion parameters.:
+
+1. Using the `pinpoint GUI`_ to manually adjust the warping
+   parameters.
+
+2. Using :command:`flydra_checkerboard` to automatically estimate the
+   parameters.
+
+.. _pinpoint GUI: https://launchpad.net/pinpoint
+
+Use of flydra_checkerboard
+..........................
+
+:command:`flydra_checkerboard` is a command-line program that
+generates a .rad file suitable for use by MultiCamSelfCal and the
+flydra tools (when included in a calibration directory).
+
+The program is run with the name of a config file and possibly some
+optional command-line arguments.
+
+If everything goes well, it will::
+
+1. Detect the checkerboard corners
+
+2. Cluster these corners into nearly orthogonal multi-segment pieces.
+
+3. Estimate the best non-linear distortion that fits this
+   multi-segments paths as closely as possible to straight lines.
+
+**The most important aspect of automatic corner detection is that
+long, multi-segment paths are detected near the edges of the image.**
+
+A minimal, but often sufficient, config file is given here. In this
+case, this file is named `distorted2.cfg`::
+
+  fname='distorted2.fmf' # The name of an .fmf movie with frames of a checkerboard
+  frames= 0,1,2,3 # The frames to extract checkerboard corners from
+  rad_fname = 'distorted2.rad' # The filename to save the results in.
+
+
+.. keep flydra/radial_distortion/checkerboard up to date
+
+A variety of other options exist::
+
+  use = 'raw' # The image pre-processing algorithm to use before
+              # extracting checkerboard corners. In order of preference, the options are:
+              # 'raw'       - the raw image, exactly as-is
+              # 'rawbinary' - a thresholded image
+              # 'binary'    - a background-subtracted and thresholded image
+              # 'no_bg'     - a background-subtracted image
+  angle_precision_degrees=10.0 # Threshold angular difference between adjacent edges.
+  aspect_ratio = 1.0           # Aspect ratio of pixel spacing (1.0 is normal, 
+                                                                0.5 is vertically downsampled)
+
+  show_lines = False
+  return_early = False
+  debug_line_finding = False
+  epsfcn = 1e09
+  print_debug_info = False
+  save_debug_images = False  
+
+  ftol=0.001
+  xtol=0
+  do_plot = False
+
+  K13 = 320 # center guess X
+  K23 = 240 # center guess Y
+
+  kc1 = 0.0 # initial guess of radial distortion
+  kc2 = 0.0 # initial guess of radial distortion
+
+After adjusting these parameters, call
+:command:`flydra_checkerboard`. 
+
+Critical to :command:`flydra_checkerboard` is the ability to extract
+numerous checkerboard corners with few false positives. To ensure that
+this is happens, here are a few command line options that help debug
+the process::
+
+  flydra_checkerboard distorted2.cfg --show-chessboard-finder-preview
+
+The first image is a screenshot of the
+`--show-chessboard-finder-preview` output when using the 'raw'
+image. The detection of corners is good throughout most of the image,
+but lacking particularly in the lower left corner. The second image
+used the 'rawbinary' preprocessing mode. It appears to have detected
+more points, which is good.
+
+.. image:: images/chessboard_raw_found_corners.jpg
+  :width: 650
+  :height: 546
+
+.. image:: images/chessboard_rawbinary_found_corners.jpg  
+  :width: 650
+  :height: 546
+
+**Finding the horizontal and vertical edges**
+
+The next step is for :command:`flydra_checkerboard` to find the grid
+of the chessboard. Run the folllowing command to see how well it does::
+
+  flydra_checkerboard distorted2.cfg --find-and-show1
+
+Here are two sample images this was performed on. In the first image,
+we can see that the grid detection was very good, with no obvious
+mistakes. In the second example, the grid detection had a couple
+mistakes -- one in the lower right corner and one in the upper right
+corner.
+
+.. image:: images/chessboard_grid_no_mistakes.jpg  
+  :width: 650
+  :height: 546
+
+.. image:: images/chessboard_grid_with_mistakes.jpg
+  :width: 650
+  :height: 546
+
+If everything looks good to this point, you may be interested in a
+final check with the `--find-and-show2`, which identifies individual
+paths. It is these paths that will be attempted to straighted in the
+optimization procedure to follow.
+
+To actually estimate the radial distortion, call the command with no
+options::
+
+  flydra_checkerboard distorted2.cfg
+
+This will begin a gradient descent type optimization and will
+hopefully return a set of good values. Note that you can seed the
+starting values for the parameters with the K13, K23, kc1, and kc2
+parameters described above. Over time you should see the error
+decreasing, rapidly at first, and then more slowly.
+
+Once the optimization is done, you may visualize the results. This
+command reads the non-linear distortion terms from the .rad files::
+
+  flydra_checkerboard distorted2.cfg  --view-results
+
+This command reads all the files, re-finds the corners, and plots
+several summary plots. **The most importart thing is that straight
+lines look straight.** In the example images below, the distortion
+estimation appears to have done a reasonably good job -- the
+undistorted image has rather straight lines, and the "grid corrected"
+panel appears to show mostly straight (although not perfect)
+checkerboards.
+
+.. image:: images/chessboard_geometry.png
+  :width: 728
+  :height: 911
+
+.. image:: images/chessboard_undistorted_image.jpg
+  :width: 491
+  :height: 770 

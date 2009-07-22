@@ -1,5 +1,6 @@
 from __future__ import with_statement
 import motmot.ufmf.ufmf as ufmf_mod
+import motmot.FlyMovieFormat.FlyMovieFormat as fmf_mod
 import sys, os, tempfile, re, contextlib, warnings
 from optparse import OptionParser
 import flydra.a2.auto_discover_ufmfs as auto_discover_ufmfs
@@ -9,6 +10,7 @@ import flydra.a2.utils as utils
 import flydra.analysis.result_utils as result_utils
 import scipy.misc
 import subprocess
+import motmot.imops.imops as imops
 
 from tables_tools import openFileSafe
 
@@ -17,15 +19,21 @@ def get_cam_id_from_ufmf_fname(ufmf_fname):
     a = os.path.split( ufmf_fname )[-1]
     b = os.path.splitext(a)[0]
     matchobj = ufmf_fname_regex.search(b)
+    if matchobj is None:
+        raise ValueError('could not guess cam_id from filename %s'%(
+            ufmf_fname,))
     date, time, cam_id= matchobj.groups()
     return cam_id
 
 def iterate_frames(h5_filename,
-                   ufmf_fnames,
+                   ufmf_fnames, # or fmfs
+                   reconstructor=None,
                    white_background=False,
                    max_n_frames = None,
                    start = None,
                    stop = None,
+                   rgb8_if_color=False,
+                   movie_cam_ids=None,
                    ):
     """yield frame-by-frame data"""
 
@@ -34,15 +42,21 @@ def iterate_frames(h5_filename,
     last_ufmf_ts = np.inf
     ufmfs = {}
     cam_ids = []
-    for ufmf_fname in ufmf_fnames:
-        cam_id = get_cam_id_from_ufmf_fname(ufmf_fname)
+    for movie_idx,ufmf_fname in enumerate(ufmf_fnames):
+        if movie_cam_ids is not None:
+            cam_id = movie_cam_ids[movie_idx]
+        else:
+            cam_id = get_cam_id_from_ufmf_fname(ufmf_fname)
         cam_ids.append( cam_id )
         kwargs = {}
         if white_background:
             kwargs['use_conventional_named_mean_fmf']=False
-        ufmf = ufmf_mod.FlyMovieEmulator(ufmf_fname,
-                                         white_background=white_background,
-                                         **kwargs)
+        if ufmf_fname.lower().endswith('.fmf'):
+            ufmf = fmf_mod.FlyMovie(ufmf_fname)
+        else:
+            ufmf = ufmf_mod.FlyMovieEmulator(ufmf_fname,
+                                             white_background=white_background,
+                                             **kwargs)
         tss = ufmf.get_all_timestamps()
         ufmfs[ufmf_fname] = (ufmf, cam_id, tss)
         min_ts = np.min(tss)
@@ -107,8 +121,9 @@ def iterate_frames(h5_filename,
                     if camn2cam_id[camn]==cam_id:
                         camns.append(camn)
 
-                assert len(camns)==1, "can't handle multiple camns per cam_id"
-                cam_id2camn[cam_id] = camns[0]
+                assert len(camns)<2, "can't handle multiple camns per cam_id"
+                if len(camns):
+                    cam_id2camn[cam_id] = camns[0]
 
         ff = utils.FastFinder(narrow_h5_data['frame'])
         unique_frames = list(np.unique1d(narrow_h5_data['frame']))
@@ -138,12 +153,14 @@ def iterate_frames(h5_filename,
             per_frame_dict = {}
             for ufmf_fname in ufmf_fnames:
                 ufmf, cam_id, tss = ufmfs[ufmf_fname]
+                if cam_id not in cam_id2camn:
+                    continue
                 camn = cam_id2camn[cam_id]
                 this_camn_cond = this_camns == camn
                 this_cam_h5_data = this_h5_data[this_camn_cond]
                 this_camn_tss = this_cam_h5_data[timestamp_name]
                 if not len(this_camn_tss):
-                    # no data for this cam_id at this frame
+                    # no h5 data for this cam_id at this frame
                     continue
                 this_camn_ts=np.unique1d(this_camn_tss)
                 assert len(this_camn_ts)==1
@@ -168,6 +185,12 @@ def iterate_frames(h5_filename,
                     image,image_ts,more = ufmf.get_frame(ufmf_frame_no,
                                                          _return_more=True)
                     del ufmf_frame_no, ufmf_frame_idxs
+                coding = ufmf.get_format()
+                if imops.is_coding_color(coding):
+                    if rgb8_if_color:
+                        image = imops.to_rgb8(coding,image)
+                    else:
+                        warnings.warn('color image not converted to color')
                 per_frame_dict[ufmf_fname] = {
                     'image':image,
                     'cam_id':cam_id,

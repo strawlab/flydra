@@ -1,6 +1,14 @@
 import tables as PT
+
+# pytables files stored using Numeric would by default return Numeric-based results. 
+# We want to force those results to be returned as numpy recarrays.
+# Note that we need to keep "python" in the flavors list, otherwise
+# pytables breaks.
 import tables.flavor
-tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
+tables.flavor.restrict_flavors(keep=['python','numpy']) # ensure pytables 2.x
+
+
+
 import numpy as np
 import sys, os, re, hashlib
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat

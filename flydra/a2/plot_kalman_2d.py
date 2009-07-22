@@ -1,14 +1,15 @@
 # see a2/save_movies_overlay.py
-from __future__ import division
+from __future__ import division, with_statement
 import numpy
 import numpy as np
 from numpy import nan, pi
 import tables as PT
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
+import tables
+import contextlib
 import pytz # from http://pytz.sourceforge.net/
 import datetime
-import sets
 import sys, os
 from optparse import OptionParser
 import matplotlib
@@ -18,6 +19,9 @@ import flydra.analysis.result_utils as result_utils
 import matplotlib.cm as cm
 import flydra.a2.xml_stimulus as xml_stimulus
 import matplotlib.collections as collections
+import flydra.kalman.flydra_kalman_utils
+
+KalmanEstimatesVelOnly =flydra.kalman.flydra_kalman_utils.KalmanEstimatesVelOnly
 
 def auto_subplot(fig,n,n_rows=2,n_cols=3):
     # 2 rows and n_cols
@@ -39,10 +43,27 @@ def auto_subplot(fig,n,n_rows=2,n_cols=3):
 
 
 class ShowIt(object):
+    """
+    handle interaction with the user
+
+    It allows the user to indicate 2D points from multiple cameras
+    that are gathered into a 2D point list. Once satisfied with the
+    contents of this 2D point list, the best 3D intersection of the
+    rays from each camera center to the 2D point may be
+    calculated. Once such as 3D point is calculated, it is appended to
+    the 3D point list, which may be displayed to the screen or saved
+    to an .h5 file.
+
+    The implementation is done as a set of key-bindings on top of the
+    standard Matplotlib GUI.
+
+    """
     def __init__(self):
         self.subplot_by_cam_id = {}
         self.reconstructor = None
+        self.to_del = []
         self.cam_ids_and_points2d = []
+        self.points3d = []
 
     def find_cam_id(self,ax):
         found = False
@@ -55,16 +76,34 @@ class ShowIt(object):
         return cam_id
 
     def on_key_press(self,event):
+        """Process a key press
+
+        hotkeys::
+
+          ? - print help
+          x - pick a new point and add it to the 2D point list
+          i - intersect picked points in the 2D point list
+          c - clear the 2D point list
+          a - all intersected 3D points are printed to console
+          h - save all intersected 3D points to 'points.h5'
+        """
+
         print 'received key',repr(event.key)
 
         if event.key=='c':
             del self.cam_ids_and_points2d[:]
+            for ax,line in self.to_del:
+                ax.lines.remove(line)
+            self.to_del = []
+            pylab.draw()
 
         elif event.key=='i':
             if self.reconstructor is None:
                 return
 
             X = self.reconstructor.find3d(self.cam_ids_and_points2d,return_X_coords = True, return_line_coords=False)
+            self.points3d.append(X)
+
             print 'maximum liklihood intersection:'
             print repr(X)
             if 1:
@@ -86,7 +125,7 @@ class ShowIt(object):
                 ax.set_ylim(ylim)
             pylab.draw()
 
-        elif event.key=='p':
+        elif event.key=='x':
             # new point -- project onto other images
 
             if not event.inaxes:
@@ -99,7 +138,8 @@ class ShowIt(object):
 
             xlim = ax.get_xlim()
             ylim = ax.get_ylim()
-            ax.plot([event.xdata],[event.ydata],'bx')
+            line,=ax.plot([event.xdata],[event.ydata],'bx')
+            self.to_del.append((ax,line))
             ax.set_xlim(xlim)
             ax.set_ylim(ylim)
 
@@ -123,11 +163,53 @@ class ShowIt(object):
                 #print ys
                 xlim = ax.get_xlim()
                 ylim = ax.get_ylim()
-                ax.plot(xs,ys,'b-')
+                line,=ax.plot(xs,ys,'b-')
+                self.to_del.append((ax,line))
                 ax.set_xlim(xlim)
                 ax.set_ylim(ylim)
             pylab.draw()
+        elif event.key=='?':
+            sys.stdout.write("""
+%s
+current list of 2D points
+-------------------------
+"""%self.do_key_press.__doc__)
+            for cam_id,(x,y) in self.cam_ids_and_points2d:
+                sys.stdout.write('%s: %s %s\n'%(cam_id,x,y))
+            sys.stdout.write('\n')
+        elif event.key=='a':
+            def arrstr(arr):
+                return '[ '+', '.join( [repr(elem) for elem in arr] ) + ' ]'
+            sys.stdout.write('---------- 3D points so far\n')
+            fd = sys.stdout
+            fd.write('[\n  ')
+            fd.write(',\n  '.join([arrstr(pt) for pt in self.points3d]))
+            fd.write('\n]\n')
+            sys.stdout.write('---------- \n')
+        elif event.key=='h':
+            fname = os.path.abspath('points.h5')
+            if os.path.exists(fname):
+                raise RuntimeError('will not overwrite file %s'%fname)
+            if self.reconstructor is None:
+                raise RuntimeError('will not save .h5 file without 3D data')
 
+            with contextlib.closing(tables.openFile(fname,mode='w')) as h5file:
+                self.reconstructor.save_to_h5file(h5file)
+                ct = h5file.createTable # shorthand
+                root = h5file.root # shorthand
+                h5data3d = ct(root,'kalman_estimates',
+                              KalmanEstimatesVelOnly,"3d data")
+
+                row = h5data3d.row
+                for i,pt in enumerate(self.points3d):
+                    row['obj_id']=0
+                    row['frame']=i
+                    row['timestamp']=i
+                    row['x'], row['y'], row['z'] = pt
+                    row['xvel'], row['yvel'], row['zvel'] = 0,0,0
+                    row.append()
+            sys.stdout.write('saved %d points to file %s\n'%(len(self.points3d),
+                                                           fname))
     def show_it(self,
                 fig,
                 filename,
@@ -164,11 +246,13 @@ class ShowIt(object):
             elif hasattr(results.root,'calibration'):
                 reconstructor_source = results
             else:
-                raise ValueError('no source given for reconstructor')
+                reconstructor_source = None
         else:
             if os.path.abspath(reconstructor_filename) == os.path.abspath(filename):
                 reconstructor_source = results
-            elif os.path.abspath(reconstructor_filename) == os.path.abspath(kalman_filename):
+            elif ((kalman_filename is not None) and
+                  (os.path.abspath(reconstructor_filename) ==
+                   os.path.abspath(kalman_filename))):
                 reconstructor_source = kresults
             else:
                 reconstructor_source = reconstructor_filename
@@ -234,7 +318,7 @@ class ShowIt(object):
         camns = camns[use_idxs]
         #camns = data2d.readCoordinates( use_idxs, field='camn')
         unique_camns = numpy.unique1d(camns)
-        unique_cam_ids = list(sets.Set([camn2cam_id[camn] for camn in unique_camns]))
+        unique_cam_ids = list(set([camn2cam_id[camn] for camn in unique_camns]))
         unique_cam_ids.sort()
         print '%d cameras with data'%(len(unique_cam_ids),)
 
@@ -535,6 +619,10 @@ def main():
     h5_filename=args[0]
 
     fig = pylab.figure()
+    fig.text(0.5,1.0,"Press '?' over this window to print help to console",
+             verticalalignment='top',
+             horizontalalignment='center',
+             )
     showit = ShowIt()
     showit.show_it(fig,
                    h5_filename,

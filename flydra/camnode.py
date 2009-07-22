@@ -32,8 +32,7 @@ import os
 BENCHMARK = int(os.environ.get('FLYDRA_BENCHMARK',0))
 FLYDRA_BT = int(os.environ.get('FLYDRA_BT',0)) # threaded benchmark
 
-#NAUGHTY_BUT_FAST = False
-NAUGHTY_BUT_FAST = True
+NAUGHTY_BUT_FAST = False
 
 #DISABLE_ALL_PROCESSING = True
 DISABLE_ALL_PROCESSING = False
@@ -44,6 +43,7 @@ bright_non_gaussian_cutoff = 255
 bright_non_gaussian_replacement = 5
 
 import threading, time, socket, sys, struct, select, math, warnings
+import traceback
 import Queue
 import numpy
 import numpy as nx
@@ -161,7 +161,7 @@ class DummySocket:
     def __init__(self,*args,**kw):
         self.connect = self.noop
         self.send = self.noop
-        #sself.sendto = self.noop
+        self.sendto = self.noop
     def noop(self,*args,**kw):
         return
 
@@ -614,9 +614,6 @@ class ProcessCamClass(object):
 
         # allocate images and initialize if necessary
 
-        bg_image_full = FastImage.FastImage8u(max_frame_size)
-        std_image_full = FastImage.FastImage8u(max_frame_size)
-
         running_mean_im_full = FastImage.FastImage32f(max_frame_size)
         self._running_mean_im_full = running_mean_im_full # make accessible to other code
 
@@ -641,8 +638,6 @@ class ProcessCamClass(object):
         mean_duration_bg = 0.020 # starting value
 
         # set ROI views of full-frame images
-        bg_image = bg_image_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
-        std_image = std_image_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
         running_mean8u_im = running_mean8u_im_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
         running_mean_im = running_mean_im_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
         fastframef32_tmp = fastframef32_tmp_full.roi(cur_roi_l, cur_roi_b, cur_fisize)  # set ROI view
@@ -681,8 +676,6 @@ class ProcessCamClass(object):
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
                 if chainbuf.quit_now:
                     break
-                chainbuf.updated_bg_image = None
-                chainbuf.updated_cmp_image = None
                 chainbuf.updated_running_mean_image = None
                 chainbuf.updated_running_sumsqf_image = None
 
@@ -889,28 +882,8 @@ class ProcessCamClass(object):
                     clear_background_clear()
 
                 if bg_changed:
-                    if 1:
-##                        bg_image = running_mean8u_im.get_8u_copy(running_mean8u_im.size)
-##                        std_image = compareframe8u.get_8u_copy(compareframe8u.size)
-                        running_mean8u_im.get_8u_copy_put(bg_image, running_mean8u_im.size)
-                        compareframe8u.get_8u_copy_put(std_image, compareframe8u.size)
-                    elif 0:
-                        bg_image = nx.array(running_mean8u_im) # make copy (we don't want to send live versions of image
-                        std_image = nx.array(compareframe8u) # make copy (we don't want to send live versions of image
-                    else:
-                        bg_image = running_mean8u_im
-                        std_image = compareframe8u
-
-                    chainbuf.updated_bg_image = numpy.array( bg_image, copy=True )
-                    chainbuf.updated_cmp_image = numpy.array( std_image, copy=True )
-
                     chainbuf.updated_running_mean_image = numpy.array( running_mean_im, copy=True )
                     chainbuf.updated_running_sumsqf_image = numpy.array( running_sumsqf, copy=True )
-
-#                    globals['current_bg_frame_and_timestamp']=bg_image,std_image,timestamp # only used when starting to save
-##                     if not BENCHMARK:
-##                         globals['incoming_bg_frames'].put(
-##                             (bg_image,std_image,timestamp,framenumber) ) # save it
                     bg_changed = False
 
                 if self.diff_threshold_shared.is_new_value_waiting():
@@ -938,7 +911,6 @@ class ProcessCamClass(object):
                         coord_socket.sendto(data,
                                             (self.main_brain_hostname,self.cam2mainbrain_port))
                     except socket.error, err:
-                        import traceback
                         print >> sys.stderr, 'WARNING: ignoring error:'
                         traceback.print_exc()
 
@@ -975,8 +947,6 @@ class ProcessCamClass(object):
                     self.realtime_analyzer.roi = (l,b,r,t)
 
                     # set ROI views of full-frame images
-                    bg_image = bg_image_full.roi(l, b, cur_fisize) # set ROI view
-                    std_image = std_image_full.roi(l, b, cur_fisize) # set ROI view
                     running_mean8u_im = running_mean8u_im_full.roi(l, b, cur_fisize) # set ROI view
                     running_mean_im = running_mean_im_full.roi(l, b, cur_fisize)  # set ROI view
                     fastframef32_tmp = fastframef32_tmp_full.roi(l, b, cur_fisize)  # set ROI view
@@ -1029,6 +999,8 @@ class SaveCamData(object):
         last_running_mean_image = None
         last_running_sumsqf_image = None
 
+        image_coding = None
+
         while 1:
 
             # 1: process commands
@@ -1043,17 +1015,26 @@ class SaveCamData(object):
                     full_std = raw_file_basename + '_sumsqf.fmf'
                     print 'saving movies','-'*50
                     raw_movie = FlyMovieFormat.FlyMovieSaver(full_raw,
-                                                             format='MONO8',
+                                                             format=image_coding,
                                                              bits_per_pixel=8,
                                                              version=3)
+                    if image_coding.startswith('MONO8:'):
+                        tmp_coding = 'MONO32f:' + image_coding[6:]
+                    else:
+                        if image_coding != 'MONO8':
+                            print >> sys.stderr, ('WARNING: unknown image '
+                                                  'coding %s for .fmf files'%(
+                                image_coding,))
+                        tmp_coding = 'MONO32f'
                     bg_movie = FlyMovieFormat.FlyMovieSaver(full_bg,
-                                                            format='MONO32f',
+                                                            format=tmp_coding,
                                                             bits_per_pixel=32,
                                                             version=3)
                     std_movie = FlyMovieFormat.FlyMovieSaver(full_std,
-                                                             format='MONO32f',
+                                                             format='MONO32f', # std is monochrome
                                                              bits_per_pixel=32,
                                                              version=3)
+                    del tmp_coding
                     state = 'saving'
 
                     if last_bgcmp_image_timestamp is not None:
@@ -1078,7 +1059,10 @@ class SaveCamData(object):
                 if chainbuf.quit_now:
                     break
 
-                if chainbuf.updated_bg_image is not None:
+                if image_coding is None:
+                    image_coding = chainbuf.image_coding
+
+                if chainbuf.updated_running_mean_image is not None:
                     # Always keep the current bg and std images so
                     # that we can save them when starting a new .fmf
                     # movie save sequence.
@@ -1093,10 +1077,8 @@ class SaveCamData(object):
                 if state == 'saving':
                     raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
                                  chainbuf.cam_received_time) )
-                    if chainbuf.updated_bg_image is not None:
-                        meancmp.append( (chainbuf.updated_bg_image,
-                                         chainbuf.updated_cmp_image,
-                                         chainbuf.updated_running_mean_image,
+                    if chainbuf.updated_running_mean_image is not None:
+                        meancmp.append( (chainbuf.updated_running_mean_image,
                                          chainbuf.updated_running_sumsqf_image,
                                          chainbuf.cam_received_time)) # these were copied in process thread
 
@@ -1106,13 +1088,23 @@ class SaveCamData(object):
                     if chainbuf.quit_now:
                         break
 
+                    if chainbuf.updated_running_mean_image is not None:
+                        # Always keep the current bg and std images so
+                        # that we can save them when starting a new .fmf
+                        # movie save sequence.
+                        last_bgcmp_image_timestamp = chainbuf.cam_received_time
+                        # Keeping references to these images should be OK,
+                        # not need to copy - the Process thread already
+                        # made a copy of the realtime analyzer's internal
+                        # copy.
+                        last_running_mean_image = chainbuf.updated_running_mean_image
+                        last_running_sumsqf_image = chainbuf.updated_running_sumsqf_image
+
                     if state == 'saving':
                         raw.append( (numpy.array(chainbuf.get_buf(), copy=True),
                                      chainbuf.cam_received_time) )
-                        if chainbuf.updated_bg_image is not None:
-                            meancmp.append( (chainbuf.updated_bg_image,
-                                             chainbuf.updated_cmp_image,
-                                             chainbuf.updated_running_mean_image,
+                        if chainbuf.updated_running_mean_image is not None:
+                            meancmp.append( (chainbuf.updated_running_mean_image,
                                              chainbuf.updated_running_sumsqf_image,
                                              chainbuf.cam_received_time)) # these were copied in process thread
             except Queue.Empty:
@@ -1123,7 +1115,7 @@ class SaveCamData(object):
             if state == 'saving':
                 for frame,timestamp in raw:
                     raw_movie.add_frame(FastImage.asfastimage(frame),timestamp,error_if_not_fast=True)
-                for bg,cmp,running_mean,running_sumsqf,timestamp in meancmp:
+                for running_mean,running_sumsqf,timestamp in meancmp:
                     bg_movie.add_frame(FastImage.asfastimage(running_mean),timestamp,error_if_not_fast=True)
                     std_movie.add_frame(FastImage.asfastimage(running_sumsqf),timestamp,error_if_not_fast=True)
             del raw[:]
@@ -1177,35 +1169,12 @@ class SaveSmallData(object):
                 cmd = self.cmd.get()
                 if cmd[0] == 'save':
                     filename_base = cmd[1]
-                    raw_file_basename = os.path.expanduser(os.path.splitext(filename_base)[0])
-
-                    full_bg = raw_file_basename + '_mean.fmf'
-                    full_std = raw_file_basename + '_sumsqf.fmf'
-                    bg_movie = FlyMovieFormat.FlyMovieSaver(full_bg,
-                                                            format='MONO32f',
-                                                            bits_per_pixel=32,
-                                                            version=3)
-                    std_movie = FlyMovieFormat.FlyMovieSaver(full_std,
-                                                             format='MONO32f',
-                                                             bits_per_pixel=32,
-                                                             version=3)
+                    raw_file_basename = os.path.expanduser(filename_base)
                     state = 'saving'
-                    if last_bgcmp_image_timestamp is not None:
-                        bg_movie.add_frame(FastImage.asfastimage(last_running_mean_image),
-                                           last_bgcmp_image_timestamp,
-                                           error_if_not_fast=True)
-                        std_movie.add_frame(FastImage.asfastimage(last_running_sumsqf_image),
-                                            last_bgcmp_image_timestamp,
-                                            error_if_not_fast=True)
-                    else:
-                        print 'WARNING: could not save initial bg and std frames'
-
                 elif cmd[0] == 'stop':
                     if self._ufmf is not None:
                         self._ufmf.close()
                         self._ufmf = None
-                    bg_movie.close()
-                    std_movie.close()
                     state = 'pass'
 
             # block for images
@@ -1213,7 +1182,7 @@ class SaveSmallData(object):
                 if chainbuf.quit_now:
                     break
 
-                if chainbuf.updated_bg_image is not None:
+                if chainbuf.updated_running_mean_image is not None:
                     # Always keep the current bg and std images so
                     # that we can save them when starting a new .fmf
                     # movie save sequence.
@@ -1226,15 +1195,11 @@ class SaveSmallData(object):
                     last_running_sumsqf_image = chainbuf.updated_running_sumsqf_image
 
                 if state == 'saving':
-                    if chainbuf.updated_bg_image is not None:
-                        meancmp.append( (chainbuf.updated_bg_image,
-                                         chainbuf.updated_cmp_image,
-                                         chainbuf.updated_running_mean_image,
+                    if chainbuf.updated_running_mean_image is not None:
+                        meancmp.append( (chainbuf.updated_running_mean_image,
                                          chainbuf.updated_running_sumsqf_image,
                                          chainbuf.cam_received_time)) # these were copied in process thread
                     if self._ufmf is None:
-                        frame1 = numpy.asarray(chainbuf.get_buf())
-                        timestamp1 = chainbuf.cam_received_time
                         filename_base = os.path.expanduser(filename_base)
                         dirname = os.path.split(filename_base)[0]
 
@@ -1245,12 +1210,29 @@ class SaveSmallData(object):
                             if not os.path.exists(dirname):
                                 os.makedirs(dirname)
                         filename = filename_base + '.ufmf'
-                        if 1:
-                            print 'saving to',filename
-                        self._ufmf = ufmf.UfmfSaver( filename,
-                                                     frame1,
-                                                     timestamp1,
-                                                     image_radius=self.options.small_save_radius )
+                        print 'saving to',filename
+                        if chainbuf.image_coding.startswith('MONO8'):
+                            h,w=numpy.array(chainbuf.get_buf(), copy=False).shape
+                        else:
+                            raise NotImplementedError(
+                                'unable to determine shape from image with '
+                                'coding %s'%(chainbuf.image_coding,))
+                        self._ufmf = ufmf.AutoShrinkUfmfSaverV3( filename,
+                                                                 coding = chainbuf.image_coding,
+                                                                 max_width=w,
+                                                                 max_height=h,
+                                                                 )
+                        del h,w
+
+
+                        if last_running_mean_image is not None:
+                            self._ufmf.add_keyframe('mean',
+                                                    last_running_mean_image,
+                                                    last_bgcmp_image_timestamp)
+                            self._ufmf.add_keyframe('sumsq',
+                                                    last_running_sumsqf_image,
+                                                    last_bgcmp_image_timestamp)
+
                     self._tobuf( chainbuf )
 
             # grab any more that are here
@@ -1259,12 +1241,22 @@ class SaveSmallData(object):
                     if chainbuf.quit_now:
                         break
 
+                    if chainbuf.updated_running_mean_image is not None:
+                        # Always keep the current bg and std images so
+                        # that we can save them when starting a new .fmf
+                        # movie save sequence.
+                        last_bgcmp_image_timestamp = chainbuf.cam_received_time
+                        # Keeping references to these images should be OK,
+                        # not need to copy - the Process thread already
+                        # made a copy of the realtime analyzer's internal
+                        # copy.
+                        last_running_mean_image = chainbuf.updated_running_mean_image
+                        last_running_sumsqf_image = chainbuf.updated_running_sumsqf_image
+
                     if state == 'saving':
                         self._tobuf( chainbuf ) # actually save the .ufmf data
-                        if chainbuf.updated_bg_image is not None:
-                            meancmp.append( (chainbuf.updated_bg_image,
-                                             chainbuf.updated_cmp_image,
-                                             chainbuf.updated_running_mean_image,
+                        if chainbuf.updated_running_mean_image is not None:
+                            meancmp.append( (chainbuf.updated_running_mean_image,
                                              chainbuf.updated_running_sumsqf_image,
                                              chainbuf.cam_received_time)) # these were copied in process thread
             except Queue.Empty:
@@ -1273,16 +1265,20 @@ class SaveSmallData(object):
             # actually save the data
             #   TODO: switch to add_frames() method which doesn't acquire GIL after each frame.
             if state == 'saving':
-                for bg,cmp,running_mean,running_sumsqf,timestamp in meancmp:
-                    bg_movie.add_frame(FastImage.asfastimage(running_mean),timestamp,error_if_not_fast=True)
-                    std_movie.add_frame(FastImage.asfastimage(running_sumsqf),timestamp,error_if_not_fast=True)
+                for running_mean,running_sumsqf,timestamp in meancmp:
+                    self._ufmf.add_keyframe('mean',running_mean,timestamp)
+                    self._ufmf.add_keyframe('sumsq',running_sumsqf,timestamp)
             del meancmp[:]
 
     def _tobuf( self, chainbuf ):
         frame = chainbuf.get_buf()
         if 0:
             print 'saving %d points'%(len(chainbuf.processed_points ),)
-        self._ufmf.add_frame( frame, chainbuf.cam_received_time, chainbuf.processed_points )
+        pts = []
+        wh = self.options.small_save_radius*2
+        for pt in chainbuf.processed_points:
+            pts.append( (pt[0],pt[1],wh,wh) )
+        self._ufmf.add_frame( frame, chainbuf.cam_received_time, pts )
 
 class ImageSource(threading.Thread):
     """One instance of this class for each camera. Do nothing but get
@@ -1299,6 +1295,7 @@ class ImageSource(threading.Thread):
         threading.Thread.__init__(self,name='ImageSource')
         self._chain = chain
         self.cam = cam
+        self.image_coding = self.cam.get_pixel_coding()
         self.buffer_pool = buffer_pool
         self.debug_acquire = debug_acquire
         self.cam_no_str = str(cam_no)
@@ -1347,6 +1344,7 @@ class ImageSource(threading.Thread):
                 chainbuf.cam_received_time = cam_received_time
                 chainbuf.timestamp = timestamp
                 chainbuf.framenumber = framenumber
+                chainbuf.image_coding = self.image_coding
 
                 # Now we get rid of the frame from this thread by passing
                 # it to processing threads. The last one of these will
@@ -1422,7 +1420,7 @@ class ImageSourceFromCamera(ImageSource):
             #self.log_message_queue.put((self.cam_no_str,now,msg))
             print >> sys.stderr, msg
             try_again_condition = True
-        except cam_iface.FrameSystemCallInterruption:
+        except (cam_iface.FrameSystemCallInterruption, cam_iface.NoFrameReturned):
             if self.debug_acquire:
                 stdout_write('(S%s)'%self.cam_no_str)
             try_again_condition = True
@@ -1459,15 +1457,27 @@ class ImageSourceFakeCamera(ImageSource):
     def __init__(self,*args,**kw):
         self._do_step = threading.Event()
         self._fake_cam = kw['cam']
+        self._buffer_pool = None
+        self._count = 0
         super( ImageSourceFakeCamera, self).__init__(*args,**kw)
 
     def _block_until_ready(self):
-        if isinstance(self._fake_cam,FakeCameraFromRNG):
-            return
-
         while 1:
             if self.quit_event.isSet():
                 return
+
+            if self._count==0:
+                self._tstart = time.time()
+            elif self._count>=1000:
+                tstop = time.time()
+                dur = tstop-self._tstart
+                fps = self._count/dur
+                print 'fps: %.1f'%(fps,)
+
+                # prepare for next
+                self._tstart = tstop
+                self._count = 0
+            self._count += 1
 
             # This lock ping-pongs execution back and forth between
             # "acquire" and process.
@@ -1476,13 +1486,15 @@ class ImageSourceFakeCamera(ImageSource):
             if self._do_step.isSet():
                 self._do_step.clear()
                 return
+            if self._buffer_pool is not None:
+                r=self._buffer_pool.get_num_outstanding_buffers()
+                self._do_step.set()
+
+    def register_buffer_pool( self, buffer_pool ):
+        assert self._buffer_pool is None,'buffer pool may only be set once'
+        self._buffer_pool = buffer_pool
 
     def spawn_controller(self):
-        if isinstance(self._fake_cam,FakeCameraFromRNG):
-            # no control necessary for random number generator
-            controller = ImageSourceBaseController()
-            return controller
-
         class ImageSourceFakeCameraController(ImageSourceBaseController):
             def __init__(self, do_step=None, fake_cam=None, quit_event=None):
                 self._do_step = do_step
@@ -1594,6 +1606,9 @@ class FakeCameraFromRNG(FakeCamera):
         self.remote = None
         self.last_timestamp = 0.0
         self.last_count = -1
+
+    def get_pixel_coding(self):
+        return 'MONO8'
 
     def get_frame_roi(self):
         w,h=self.frame_size
@@ -1757,7 +1772,8 @@ class ConsoleApp(object):
 
     def generate_view(self, model, controller ):
         if hasattr(controller, 'trigger_single_frame_start' ):
-            raise NotImplementedError('no control in ConsoleApp for %s'%controller)
+            warnings.warn('no control in ConsoleApp for %s'%controller)
+            controller.trigger_single_frame_start()
 
 class AppState(object):
     """This class handles all camera states, properties, etc."""
@@ -1911,6 +1927,8 @@ class AppState(object):
                                                 cam_no = cam_no,
                                                 quit_event = globals['cam_quit_event'],
                                                 )
+                if benchmark: # should maybe be for any simulated camera in non-GUI mode?
+                    image_source.register_buffer_pool( buffer_pool )
 
                 controller = image_source.spawn_controller()
 
@@ -1942,8 +1960,9 @@ class AppState(object):
                 raise
             self.main_brain._setOneway(['set_image','set_fps','close','log_message','receive_missing_data'])
 
-            main_brain_version = self.main_brain.get_version()
-            assert main_brain_version == flydra.version.__version__
+            if not options.ignore_version:
+                main_brain_version = self.main_brain.get_version()
+                assert main_brain_version == flydra.version.__version__
 
         ##################################################################
         #
@@ -2311,7 +2330,6 @@ class AppState(object):
                         pass
 
         except:
-            import traceback
             traceback.print_exc()
             self.quit_function(1)
 
@@ -2362,7 +2380,11 @@ class AppState(object):
                         assert cam.get_max_height() == value
                     elif property_name == 'trigger_mode':
                         print 'cam.set_trigger_mode_number( value )',value
-                        cam.set_trigger_mode_number( value )
+                        try:
+                            cam.set_trigger_mode_number( value ) # XXX don't crash on exception here
+                        except Exception,err:
+                            print 'ERROR setting trigger mode'
+                            traceback.print_exc()
                     elif property_name == 'cmp':
                         if value:
                             # print 'ignoring request to use_cmp'
@@ -2370,7 +2392,13 @@ class AppState(object):
                         else: globals['use_cmp'].clear()
                     elif property_name == 'expected_trigger_framerate':
                         #print 'expecting trigger fps',value
-                        cam_processor.shortest_IFI = 1.0/value # XXX TODO: FIXME: thread crossing bug
+                        if value==0.0:
+                            print ('WARNING: expected_trigger_framerate is set '
+                                   'to 0, but setting shortest IFI to 10 msec '
+                                   'anyway')
+                            cam_processor.shortest_IFI = 0.01 # XXX TODO: FIXME: thread crossing bug
+                        else:
+                            cam_processor.shortest_IFI = 1.0/value # XXX TODO: FIXME: thread crossing bug
                     elif property_name == 'max_framerate':
                         if 0:
                             #print 'ignoring request to set max_framerate'
@@ -2611,6 +2639,9 @@ def parse_args_and_run(benchmark=False):
     parser.add_option("--disable-ifi-warning", action='store_true',
                       help=("do not print a warning if the inter-frame-interval "
                             "(IFI) is longer than expected"))
+
+    parser.add_option("--ignore-version", action='store_true',
+                      help=("do not care if version is mismatched with mainbrain"))
 
     parser.add_option("--num-points", type="int",
                       help="number of points to track per cameras [default: %default]")

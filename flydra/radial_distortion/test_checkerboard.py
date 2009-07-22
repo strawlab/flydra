@@ -1,0 +1,814 @@
+import numpy as np
+from simplenx import Graph
+import checkerboard
+from checkerboard import CornerNode
+
+class TestCheckerboard:
+    """test the checkerboard module with non-trivial amounts of data
+
+    These tests are (obviously) a hack, but at least it will fail if
+    things change."""
+
+    def test_clustering(self):
+        actual,nodes = checkerboard.points2graph(self.x,self.y,
+                                                 aspect_ratio=self.aspect_ratio)
+        assert actual==self.expected_graph
+
+    def test_find_subgraph_similar_direction(self):
+        graph,nodes = checkerboard.points2graph(self.x,self.y,
+                                                aspect_ratio=self.aspect_ratio)
+        #reduce number of comparisons -- some should be enough
+        nodes = nodes[:3]
+        similar_direction_graphs = []
+        D2R = np.pi/180.0
+        for node in nodes:
+            subgraph = checkerboard.find_subgraph_similar_direction(
+                graph,
+                source=node,
+                direction_eps_radians=10.0*D2R,
+                already_done=similar_direction_graphs)
+            if subgraph is not None:
+                similar_direction_graphs.append( subgraph )
+
+        assert len(self.expected_subgraphs)==len(similar_direction_graphs)
+        if 0:
+            for expected,actual in zip(self.expected_subgraphs,
+                                       similar_direction_graphs):
+                print '%s,'%repr(actual)
+
+        # compare graphs
+        for expected,actual in zip(self.expected_subgraphs,
+                                   similar_direction_graphs):
+            assert expected==actual
+
+    def setUp(self):
+        self.x = np.array([
+        34.5,   51.5,   71. ,   45. ,   99. ,   92.5,   64. ,   38. ,
+         57. ,   31. ,   85.5,   78.5,   51.5,   26.5,   46.5,   22.5,
+         75. ,   72.5,   45.5,   20.5,   43.5,   18. ,   71. ,   69.5,
+         42.5,   17. ,  102.5,  100.5,   99.5,  133. ,  131.5,  135. ,
+        171. ,  169.5,  167. ,  208. ,  205.5,  210. ,  251.5,  249.5,
+        247.5,  294. ,  292.5,  296.5,  343.5,  340.5,  339.5,  389. ,
+        387. ,  391.5,  440.5,  438.5,  436. ,  487.5,  485. ,  489.5,
+        537.5,  535.5,  532.5,  581.5,  579. ,  583.5,  627.5,  626. ,
+        622.5,  666.5,  663.5,  669. ,  707. ,  627.5,  668.5,  707. ,
+        741.5,  743. ,  665.5,  703.5,  739.5,  700. ,  734. ,  659. ,
+        662.5,  616.5,  655. ,  620. ,  622.5,  625.5,  578. ,  580.5,
+        582. ,  583.5,  536. ,  537. ,  538. ,  490.5,  490. ,  444. ,
+        490. ,  443.5,  442. ,  396. ,  394. ,  351.5,  398. ,  348.5,
+        346. ,  304. ,  300. ,  264.5,  307. ,  260.5,  255. ,  213.5,
+        219. ,  174. ,  224.5,  180. ,  185.5,  228. ,  268.5,  138. ,
+        143.5,  150. ,  155.5,  190.5,  109.5,  116.5,  161.5,  122.5,
+        128.5,  233. ,  195.5,  272.5,  310.5,  355. ,  400.5,  399. ,
+        445. ,  444.5,  489. ,  490. ,  533. ,  534.5,  575.5,  106. ,
+        104.5])
+        self.y = np.array([
+        5.5,   10.5,   24. ,   26.5,   21.5,   38.5,   41. ,   42.5,
+         58.5,   59.5,   57. ,   76. ,   76.5,   77. ,   96. ,   95. ,
+         95. ,  115.5,  114.5,  114.5,  134.5,  133.5,  135. ,  155. ,
+        153.5,  152. ,  115.5,  136.5,  156.5,  137.5,  158.5,  115.5,
+        116.5,  138.5,  160.5,  139.5,  163. ,  116.5,  117.5,  141. ,
+        164. ,  142. ,  165.5,  118. ,  119. ,  144. ,  167.5,  144.5,
+        168.5,  119. ,  120.5,  145. ,  169.5,  146.5,  170.5,  120. ,
+        122.5,  146.5,  171.5,  147.5,  171.5,  123.5,  124. ,  148. ,
+        171.5,  148.5,  171.5,  125. ,  126. ,  100.5,  101.5,  103. ,
+        104. ,  126.5,   79.5,   81.5,   82.5,   60. ,   62.5,   37. ,
+         58. ,   15. ,   17.5,   35. ,   56. ,   78. ,   33. ,   54.5,
+         76.5,   99.5,   53. ,   75.5,   97.5,   74. ,   97. ,   51.5,
+         52. ,   73. ,   96.5,   72.5,   96. ,   51. ,   50.5,   72. ,
+         95.5,   72. ,   95. ,   51.5,   50. ,   73. ,   95.5,   93.5,
+         73. ,   95. ,   52.5,   73. ,   53. ,   32.5,   30.5,   94. ,
+         74. ,   54. ,   35.5,   33.5,   74.5,   55.5,   17. ,   37. ,
+         19.5,   12.5,   14.5,   11. ,   30. ,   30. ,    9. ,   29.5,
+          9. ,   29.5,   10. ,   30.5,   11. ,   31.5,   12.5,    3.5,
+         94.5])
+        self.aspect_ratio = 0.5
+
+        self.expected_graph = Graph({CornerNode(34.5,5.5,0,aspect_ratio=0.5):
+        {CornerNode(51.5,10.5,1,aspect_ratio=0.5): None,
+        CornerNode(45.0,26.5,3,aspect_ratio=0.5): None},
+        CornerNode(51.5,10.5,1,aspect_ratio=0.5):
+        {CornerNode(34.5,5.5,0,aspect_ratio=0.5): None,
+        CornerNode(45.0,26.5,3,aspect_ratio=0.5): None,
+        CornerNode(106.0,3.5,143,aspect_ratio=0.5): None},
+        CornerNode(71.0,24.0,2,aspect_ratio=0.5):
+        {CornerNode(45.0,26.5,3,aspect_ratio=0.5): None,
+        CornerNode(99.0,21.5,4,aspect_ratio=0.5): None,
+        CornerNode(64.0,41.0,6,aspect_ratio=0.5): None},
+        CornerNode(45.0,26.5,3,aspect_ratio=0.5):
+        {CornerNode(34.5,5.5,0,aspect_ratio=0.5): None,
+        CornerNode(51.5,10.5,1,aspect_ratio=0.5): None,
+        CornerNode(71.0,24.0,2,aspect_ratio=0.5): None,
+        CornerNode(38.0,42.5,7,aspect_ratio=0.5): None},
+        CornerNode(99.0,21.5,4,aspect_ratio=0.5):
+        {CornerNode(128.5,19.5,128,aspect_ratio=0.5): None,
+        CornerNode(71.0,24.0,2,aspect_ratio=0.5): None,
+        CornerNode(92.5,38.5,5,aspect_ratio=0.5): None,
+        CornerNode(106.0,3.5,143,aspect_ratio=0.5): None},
+        CornerNode(92.5,38.5,5,aspect_ratio=0.5):
+        {CornerNode(85.5,57.0,10,aspect_ratio=0.5): None,
+        CornerNode(99.0,21.5,4,aspect_ratio=0.5): None,
+        CornerNode(64.0,41.0,6,aspect_ratio=0.5): None,
+        CornerNode(122.5,37.0,127,aspect_ratio=0.5): None},
+        CornerNode(64.0,41.0,6,aspect_ratio=0.5):
+        {CornerNode(57.0,58.5,8,aspect_ratio=0.5): None,
+        CornerNode(71.0,24.0,2,aspect_ratio=0.5): None,
+        CornerNode(92.5,38.5,5,aspect_ratio=0.5): None,
+        CornerNode(38.0,42.5,7,aspect_ratio=0.5): None},
+        CornerNode(38.0,42.5,7,aspect_ratio=0.5):
+        {CornerNode(31.0,59.5,9,aspect_ratio=0.5): None,
+        CornerNode(45.0,26.5,3,aspect_ratio=0.5): None,
+        CornerNode(64.0,41.0,6,aspect_ratio=0.5): None},
+        CornerNode(57.0,58.5,8,aspect_ratio=0.5):
+        {CornerNode(31.0,59.5,9,aspect_ratio=0.5): None,
+        CornerNode(85.5,57.0,10,aspect_ratio=0.5): None,
+        CornerNode(51.5,76.5,12,aspect_ratio=0.5): None,
+        CornerNode(64.0,41.0,6,aspect_ratio=0.5): None},
+        CornerNode(31.0,59.5,9,aspect_ratio=0.5):
+        {CornerNode(57.0,58.5,8,aspect_ratio=0.5): None,
+        CornerNode(26.5,77.0,13,aspect_ratio=0.5): None,
+        CornerNode(38.0,42.5,7,aspect_ratio=0.5): None},
+        CornerNode(85.5,57.0,10,aspect_ratio=0.5):
+        {CornerNode(57.0,58.5,8,aspect_ratio=0.5): None,
+        CornerNode(78.5,76.0,11,aspect_ratio=0.5): None,
+        CornerNode(116.5,55.5,125,aspect_ratio=0.5): None,
+        CornerNode(92.5,38.5,5,aspect_ratio=0.5): None},
+        CornerNode(78.5,76.0,11,aspect_ratio=0.5):
+        {CornerNode(75.0,95.0,16,aspect_ratio=0.5): None,
+        CornerNode(109.5,74.5,124,aspect_ratio=0.5): None,
+        CornerNode(85.5,57.0,10,aspect_ratio=0.5): None,
+        CornerNode(51.5,76.5,12,aspect_ratio=0.5): None},
+        CornerNode(51.5,76.5,12,aspect_ratio=0.5):
+        {CornerNode(57.0,58.5,8,aspect_ratio=0.5): None,
+        CornerNode(78.5,76.0,11,aspect_ratio=0.5): None,
+        CornerNode(26.5,77.0,13,aspect_ratio=0.5): None,
+        CornerNode(46.5,96.0,14,aspect_ratio=0.5): None},
+        CornerNode(26.5,77.0,13,aspect_ratio=0.5):
+        {CornerNode(31.0,59.5,9,aspect_ratio=0.5): None,
+        CornerNode(51.5,76.5,12,aspect_ratio=0.5): None,
+        CornerNode(22.5,95.0,15,aspect_ratio=0.5): None},
+        CornerNode(46.5,96.0,14,aspect_ratio=0.5):
+        {CornerNode(75.0,95.0,16,aspect_ratio=0.5): None,
+        CornerNode(45.5,114.5,18,aspect_ratio=0.5): None,
+        CornerNode(51.5,76.5,12,aspect_ratio=0.5): None,
+        CornerNode(22.5,95.0,15,aspect_ratio=0.5): None},
+        CornerNode(22.5,95.0,15,aspect_ratio=0.5):
+        {CornerNode(20.5,114.5,19,aspect_ratio=0.5): None,
+        CornerNode(26.5,77.0,13,aspect_ratio=0.5): None,
+        CornerNode(46.5,96.0,14,aspect_ratio=0.5): None},
+        CornerNode(75.0,95.0,16,aspect_ratio=0.5):
+        {CornerNode(104.5,94.5,144,aspect_ratio=0.5): None,
+        CornerNode(72.5,115.5,17,aspect_ratio=0.5): None,
+        CornerNode(78.5,76.0,11,aspect_ratio=0.5): None,
+        CornerNode(46.5,96.0,14,aspect_ratio=0.5): None},
+        CornerNode(72.5,115.5,17,aspect_ratio=0.5):
+        {CornerNode(75.0,95.0,16,aspect_ratio=0.5): None,
+        CornerNode(45.5,114.5,18,aspect_ratio=0.5): None,
+        CornerNode(102.5,115.5,26,aspect_ratio=0.5): None,
+        CornerNode(71.0,135.0,22,aspect_ratio=0.5): None},
+        CornerNode(45.5,114.5,18,aspect_ratio=0.5):
+        {CornerNode(72.5,115.5,17,aspect_ratio=0.5): None,
+        CornerNode(20.5,114.5,19,aspect_ratio=0.5): None,
+        CornerNode(43.5,134.5,20,aspect_ratio=0.5): None,
+        CornerNode(46.5,96.0,14,aspect_ratio=0.5): None},
+        CornerNode(20.5,114.5,19,aspect_ratio=0.5):
+        {CornerNode(45.5,114.5,18,aspect_ratio=0.5): None,
+        CornerNode(18.0,133.5,21,aspect_ratio=0.5): None,
+        CornerNode(22.5,95.0,15,aspect_ratio=0.5): None},
+        CornerNode(43.5,134.5,20,aspect_ratio=0.5):
+        {CornerNode(42.5,153.5,24,aspect_ratio=0.5): None,
+        CornerNode(45.5,114.5,18,aspect_ratio=0.5): None,
+        CornerNode(18.0,133.5,21,aspect_ratio=0.5): None,
+        CornerNode(71.0,135.0,22,aspect_ratio=0.5): None},
+        CornerNode(18.0,133.5,21,aspect_ratio=0.5):
+        {CornerNode(17.0,152.0,25,aspect_ratio=0.5): None,
+        CornerNode(20.5,114.5,19,aspect_ratio=0.5): None,
+        CornerNode(43.5,134.5,20,aspect_ratio=0.5): None},
+        CornerNode(71.0,135.0,22,aspect_ratio=0.5):
+        {CornerNode(72.5,115.5,17,aspect_ratio=0.5): None,
+        CornerNode(100.5,136.5,27,aspect_ratio=0.5): None,
+        CornerNode(43.5,134.5,20,aspect_ratio=0.5): None,
+        CornerNode(69.5,155.0,23,aspect_ratio=0.5): None},
+        CornerNode(69.5,155.0,23,aspect_ratio=0.5):
+        {CornerNode(42.5,153.5,24,aspect_ratio=0.5): None,
+        CornerNode(99.5,156.5,28,aspect_ratio=0.5): None,
+        CornerNode(71.0,135.0,22,aspect_ratio=0.5): None},
+        CornerNode(42.5,153.5,24,aspect_ratio=0.5):
+        {CornerNode(17.0,152.0,25,aspect_ratio=0.5): None,
+        CornerNode(43.5,134.5,20,aspect_ratio=0.5): None,
+        CornerNode(69.5,155.0,23,aspect_ratio=0.5): None},
+        CornerNode(17.0,152.0,25,aspect_ratio=0.5):
+        {CornerNode(42.5,153.5,24,aspect_ratio=0.5): None,
+        CornerNode(18.0,133.5,21,aspect_ratio=0.5): None},
+        CornerNode(102.5,115.5,26,aspect_ratio=0.5):
+        {CornerNode(104.5,94.5,144,aspect_ratio=0.5): None,
+        CornerNode(72.5,115.5,17,aspect_ratio=0.5): None,
+        CornerNode(100.5,136.5,27,aspect_ratio=0.5): None,
+        CornerNode(135.0,115.5,31,aspect_ratio=0.5): None},
+        CornerNode(100.5,136.5,27,aspect_ratio=0.5):
+        {CornerNode(102.5,115.5,26,aspect_ratio=0.5): None,
+        CornerNode(99.5,156.5,28,aspect_ratio=0.5): None,
+        CornerNode(133.0,137.5,29,aspect_ratio=0.5): None,
+        CornerNode(71.0,135.0,22,aspect_ratio=0.5): None},
+        CornerNode(99.5,156.5,28,aspect_ratio=0.5):
+        {CornerNode(100.5,136.5,27,aspect_ratio=0.5): None,
+        CornerNode(131.5,158.5,30,aspect_ratio=0.5): None,
+        CornerNode(69.5,155.0,23,aspect_ratio=0.5): None},
+        CornerNode(133.0,137.5,29,aspect_ratio=0.5):
+        {CornerNode(169.5,138.5,33,aspect_ratio=0.5): None,
+        CornerNode(100.5,136.5,27,aspect_ratio=0.5): None,
+        CornerNode(131.5,158.5,30,aspect_ratio=0.5): None,
+        CornerNode(135.0,115.5,31,aspect_ratio=0.5): None},
+        CornerNode(131.5,158.5,30,aspect_ratio=0.5):
+        {CornerNode(167.0,160.5,34,aspect_ratio=0.5): None,
+        CornerNode(99.5,156.5,28,aspect_ratio=0.5): None,
+        CornerNode(133.0,137.5,29,aspect_ratio=0.5): None},
+        CornerNode(135.0,115.5,31,aspect_ratio=0.5):
+        {CornerNode(171.0,116.5,32,aspect_ratio=0.5): None,
+        CornerNode(102.5,115.5,26,aspect_ratio=0.5): None,
+        CornerNode(133.0,137.5,29,aspect_ratio=0.5): None,
+        CornerNode(138.0,94.0,119,aspect_ratio=0.5): None},
+        CornerNode(171.0,116.5,32,aspect_ratio=0.5):
+        {CornerNode(169.5,138.5,33,aspect_ratio=0.5): None,
+        CornerNode(174.0,95.0,113,aspect_ratio=0.5): None,
+        CornerNode(210.0,116.5,37,aspect_ratio=0.5): None,
+        CornerNode(135.0,115.5,31,aspect_ratio=0.5): None},
+        CornerNode(169.5,138.5,33,aspect_ratio=0.5):
+        {CornerNode(171.0,116.5,32,aspect_ratio=0.5): None,
+        CornerNode(167.0,160.5,34,aspect_ratio=0.5): None,
+        CornerNode(208.0,139.5,35,aspect_ratio=0.5): None,
+        CornerNode(133.0,137.5,29,aspect_ratio=0.5): None},
+        CornerNode(167.0,160.5,34,aspect_ratio=0.5):
+        {CornerNode(169.5,138.5,33,aspect_ratio=0.5): None,
+        CornerNode(205.5,163.0,36,aspect_ratio=0.5): None,
+        CornerNode(131.5,158.5,30,aspect_ratio=0.5): None},
+        CornerNode(208.0,139.5,35,aspect_ratio=0.5):
+        {CornerNode(169.5,138.5,33,aspect_ratio=0.5): None,
+        CornerNode(205.5,163.0,36,aspect_ratio=0.5): None,
+        CornerNode(210.0,116.5,37,aspect_ratio=0.5): None,
+        CornerNode(249.5,141.0,39,aspect_ratio=0.5): None},
+        CornerNode(205.5,163.0,36,aspect_ratio=0.5):
+        {CornerNode(247.5,164.0,40,aspect_ratio=0.5): None,
+        CornerNode(167.0,160.5,34,aspect_ratio=0.5): None,
+        CornerNode(208.0,139.5,35,aspect_ratio=0.5): None},
+        CornerNode(210.0,116.5,37,aspect_ratio=0.5):
+        {CornerNode(171.0,116.5,32,aspect_ratio=0.5): None,
+        CornerNode(208.0,139.5,35,aspect_ratio=0.5): None,
+        CornerNode(251.5,117.5,38,aspect_ratio=0.5): None,
+        CornerNode(213.5,93.5,111,aspect_ratio=0.5): None},
+        CornerNode(251.5,117.5,38,aspect_ratio=0.5):
+        {CornerNode(296.5,118.0,43,aspect_ratio=0.5): None,
+        CornerNode(210.0,116.5,37,aspect_ratio=0.5): None,
+        CornerNode(255.0,95.5,110,aspect_ratio=0.5): None,
+        CornerNode(249.5,141.0,39,aspect_ratio=0.5): None},
+        CornerNode(249.5,141.0,39,aspect_ratio=0.5):
+        {CornerNode(247.5,164.0,40,aspect_ratio=0.5): None,
+        CornerNode(294.0,142.0,41,aspect_ratio=0.5): None,
+        CornerNode(208.0,139.5,35,aspect_ratio=0.5): None,
+        CornerNode(251.5,117.5,38,aspect_ratio=0.5): None},
+        CornerNode(247.5,164.0,40,aspect_ratio=0.5):
+        {CornerNode(292.5,165.5,42,aspect_ratio=0.5): None,
+        CornerNode(205.5,163.0,36,aspect_ratio=0.5): None,
+        CornerNode(249.5,141.0,39,aspect_ratio=0.5): None},
+        CornerNode(294.0,142.0,41,aspect_ratio=0.5):
+        {CornerNode(292.5,165.5,42,aspect_ratio=0.5): None,
+        CornerNode(296.5,118.0,43,aspect_ratio=0.5): None,
+        CornerNode(340.5,144.0,45,aspect_ratio=0.5): None,
+        CornerNode(249.5,141.0,39,aspect_ratio=0.5): None},
+        CornerNode(292.5,165.5,42,aspect_ratio=0.5):
+        {CornerNode(247.5,164.0,40,aspect_ratio=0.5): None,
+        CornerNode(294.0,142.0,41,aspect_ratio=0.5): None,
+        CornerNode(339.5,167.5,46,aspect_ratio=0.5): None},
+        CornerNode(296.5,118.0,43,aspect_ratio=0.5):
+        {CornerNode(294.0,142.0,41,aspect_ratio=0.5): None,
+        CornerNode(300.0,95.0,106,aspect_ratio=0.5): None,
+        CornerNode(343.5,119.0,44,aspect_ratio=0.5): None,
+        CornerNode(251.5,117.5,38,aspect_ratio=0.5): None},
+        CornerNode(343.5,119.0,44,aspect_ratio=0.5):
+        {CornerNode(346.0,95.5,104,aspect_ratio=0.5): None,
+        CornerNode(391.5,119.0,49,aspect_ratio=0.5): None,
+        CornerNode(296.5,118.0,43,aspect_ratio=0.5): None,
+        CornerNode(340.5,144.0,45,aspect_ratio=0.5): None},
+        CornerNode(340.5,144.0,45,aspect_ratio=0.5):
+        {CornerNode(294.0,142.0,41,aspect_ratio=0.5): None,
+        CornerNode(343.5,119.0,44,aspect_ratio=0.5): None,
+        CornerNode(339.5,167.5,46,aspect_ratio=0.5): None,
+        CornerNode(389.0,144.5,47,aspect_ratio=0.5): None},
+        CornerNode(339.5,167.5,46,aspect_ratio=0.5):
+        {CornerNode(387.0,168.5,48,aspect_ratio=0.5): None,
+        CornerNode(292.5,165.5,42,aspect_ratio=0.5): None,
+        CornerNode(340.5,144.0,45,aspect_ratio=0.5): None},
+        CornerNode(389.0,144.5,47,aspect_ratio=0.5):
+        {CornerNode(387.0,168.5,48,aspect_ratio=0.5): None,
+        CornerNode(391.5,119.0,49,aspect_ratio=0.5): None,
+        CornerNode(438.5,145.0,51,aspect_ratio=0.5): None,
+        CornerNode(340.5,144.0,45,aspect_ratio=0.5): None},
+        CornerNode(387.0,168.5,48,aspect_ratio=0.5):
+        {CornerNode(436.0,169.5,52,aspect_ratio=0.5): None,
+        CornerNode(339.5,167.5,46,aspect_ratio=0.5): None,
+        CornerNode(389.0,144.5,47,aspect_ratio=0.5): None},
+        CornerNode(391.5,119.0,49,aspect_ratio=0.5):
+        {CornerNode(394.0,96.0,100,aspect_ratio=0.5): None,
+        CornerNode(440.5,120.5,50,aspect_ratio=0.5): None,
+        CornerNode(343.5,119.0,44,aspect_ratio=0.5): None,
+        CornerNode(389.0,144.5,47,aspect_ratio=0.5): None},
+        CornerNode(440.5,120.5,50,aspect_ratio=0.5):
+        {CornerNode(391.5,119.0,49,aspect_ratio=0.5): None,
+        CornerNode(442.0,96.5,98,aspect_ratio=0.5): None,
+        CornerNode(438.5,145.0,51,aspect_ratio=0.5): None,
+        CornerNode(489.5,120.0,55,aspect_ratio=0.5): None},
+        CornerNode(438.5,145.0,51,aspect_ratio=0.5):
+        {CornerNode(440.5,120.5,50,aspect_ratio=0.5): None,
+        CornerNode(436.0,169.5,52,aspect_ratio=0.5): None,
+        CornerNode(487.5,146.5,53,aspect_ratio=0.5): None,
+        CornerNode(389.0,144.5,47,aspect_ratio=0.5): None},
+        CornerNode(436.0,169.5,52,aspect_ratio=0.5):
+        {CornerNode(387.0,168.5,48,aspect_ratio=0.5): None,
+        CornerNode(438.5,145.0,51,aspect_ratio=0.5): None,
+        CornerNode(485.0,170.5,54,aspect_ratio=0.5): None},
+        CornerNode(487.5,146.5,53,aspect_ratio=0.5):
+        {CornerNode(535.5,146.5,57,aspect_ratio=0.5): None,
+        CornerNode(438.5,145.0,51,aspect_ratio=0.5): None,
+        CornerNode(485.0,170.5,54,aspect_ratio=0.5): None,
+        CornerNode(489.5,120.0,55,aspect_ratio=0.5): None},
+        CornerNode(485.0,170.5,54,aspect_ratio=0.5):
+        {CornerNode(532.5,171.5,58,aspect_ratio=0.5): None,
+        CornerNode(436.0,169.5,52,aspect_ratio=0.5): None,
+        CornerNode(487.5,146.5,53,aspect_ratio=0.5): None},
+        CornerNode(489.5,120.0,55,aspect_ratio=0.5):
+        {CornerNode(537.5,122.5,56,aspect_ratio=0.5): None,
+        CornerNode(440.5,120.5,50,aspect_ratio=0.5): None,
+        CornerNode(487.5,146.5,53,aspect_ratio=0.5): None,
+        CornerNode(490.0,97.0,94,aspect_ratio=0.5): None},
+        CornerNode(537.5,122.5,56,aspect_ratio=0.5):
+        {CornerNode(535.5,146.5,57,aspect_ratio=0.5): None,
+        CornerNode(538.0,97.5,92,aspect_ratio=0.5): None,
+        CornerNode(583.5,123.5,61,aspect_ratio=0.5): None,
+        CornerNode(489.5,120.0,55,aspect_ratio=0.5): None},
+        CornerNode(535.5,146.5,57,aspect_ratio=0.5):
+        {CornerNode(537.5,122.5,56,aspect_ratio=0.5): None,
+        CornerNode(532.5,171.5,58,aspect_ratio=0.5): None,
+        CornerNode(581.5,147.5,59,aspect_ratio=0.5): None,
+        CornerNode(487.5,146.5,53,aspect_ratio=0.5): None},
+        CornerNode(532.5,171.5,58,aspect_ratio=0.5):
+        {CornerNode(535.5,146.5,57,aspect_ratio=0.5): None,
+        CornerNode(579.0,171.5,60,aspect_ratio=0.5): None,
+        CornerNode(485.0,170.5,54,aspect_ratio=0.5): None},
+        CornerNode(581.5,147.5,59,aspect_ratio=0.5):
+        {CornerNode(535.5,146.5,57,aspect_ratio=0.5): None,
+        CornerNode(579.0,171.5,60,aspect_ratio=0.5): None,
+        CornerNode(583.5,123.5,61,aspect_ratio=0.5): None,
+        CornerNode(626.0,148.0,63,aspect_ratio=0.5): None},
+        CornerNode(579.0,171.5,60,aspect_ratio=0.5):
+        {CornerNode(622.5,171.5,64,aspect_ratio=0.5): None,
+        CornerNode(532.5,171.5,58,aspect_ratio=0.5): None,
+        CornerNode(581.5,147.5,59,aspect_ratio=0.5): None},
+        CornerNode(583.5,123.5,61,aspect_ratio=0.5):
+        {CornerNode(537.5,122.5,56,aspect_ratio=0.5): None,
+        CornerNode(583.5,99.5,89,aspect_ratio=0.5): None,
+        CornerNode(581.5,147.5,59,aspect_ratio=0.5): None,
+        CornerNode(627.5,124.0,62,aspect_ratio=0.5): None},
+        CornerNode(627.5,124.0,62,aspect_ratio=0.5):
+        {CornerNode(669.0,125.0,67,aspect_ratio=0.5): None,
+        CornerNode(583.5,123.5,61,aspect_ratio=0.5): None,
+        CornerNode(627.5,100.5,69,aspect_ratio=0.5): None,
+        CornerNode(626.0,148.0,63,aspect_ratio=0.5): None},
+        CornerNode(626.0,148.0,63,aspect_ratio=0.5):
+        {CornerNode(622.5,171.5,64,aspect_ratio=0.5): None,
+        CornerNode(666.5,148.5,65,aspect_ratio=0.5): None,
+        CornerNode(581.5,147.5,59,aspect_ratio=0.5): None,
+        CornerNode(627.5,124.0,62,aspect_ratio=0.5): None},
+        CornerNode(622.5,171.5,64,aspect_ratio=0.5):
+        {CornerNode(663.5,171.5,66,aspect_ratio=0.5): None,
+        CornerNode(579.0,171.5,60,aspect_ratio=0.5): None,
+        CornerNode(626.0,148.0,63,aspect_ratio=0.5): None},
+        CornerNode(666.5,148.5,65,aspect_ratio=0.5):
+        {CornerNode(663.5,171.5,66,aspect_ratio=0.5): None,
+        CornerNode(669.0,125.0,67,aspect_ratio=0.5): None,
+        CornerNode(626.0,148.0,63,aspect_ratio=0.5): None},
+        CornerNode(663.5,171.5,66,aspect_ratio=0.5):
+        {CornerNode(622.5,171.5,64,aspect_ratio=0.5): None,
+        CornerNode(666.5,148.5,65,aspect_ratio=0.5): None},
+        CornerNode(669.0,125.0,67,aspect_ratio=0.5):
+        {CornerNode(666.5,148.5,65,aspect_ratio=0.5): None,
+        CornerNode(707.0,126.0,68,aspect_ratio=0.5): None,
+        CornerNode(668.5,101.5,70,aspect_ratio=0.5): None,
+        CornerNode(627.5,124.0,62,aspect_ratio=0.5): None},
+        CornerNode(707.0,126.0,68,aspect_ratio=0.5):
+        {CornerNode(743.0,126.5,73,aspect_ratio=0.5): None,
+        CornerNode(669.0,125.0,67,aspect_ratio=0.5): None,
+        CornerNode(707.0,103.0,71,aspect_ratio=0.5): None},
+        CornerNode(627.5,100.5,69,aspect_ratio=0.5):
+        {CornerNode(583.5,99.5,89,aspect_ratio=0.5): None,
+        CornerNode(627.5,124.0,62,aspect_ratio=0.5): None,
+        CornerNode(668.5,101.5,70,aspect_ratio=0.5): None,
+        CornerNode(625.5,78.0,85,aspect_ratio=0.5): None},
+        CornerNode(668.5,101.5,70,aspect_ratio=0.5):
+        {CornerNode(665.5,79.5,74,aspect_ratio=0.5): None,
+        CornerNode(669.0,125.0,67,aspect_ratio=0.5): None,
+        CornerNode(627.5,100.5,69,aspect_ratio=0.5): None,
+        CornerNode(707.0,103.0,71,aspect_ratio=0.5): None},
+        CornerNode(707.0,103.0,71,aspect_ratio=0.5):
+        {CornerNode(741.5,104.0,72,aspect_ratio=0.5): None,
+        CornerNode(703.5,81.5,75,aspect_ratio=0.5): None,
+        CornerNode(707.0,126.0,68,aspect_ratio=0.5): None,
+        CornerNode(668.5,101.5,70,aspect_ratio=0.5): None},
+        CornerNode(741.5,104.0,72,aspect_ratio=0.5):
+        {CornerNode(743.0,126.5,73,aspect_ratio=0.5): None,
+        CornerNode(739.5,82.5,76,aspect_ratio=0.5): None,
+        CornerNode(707.0,103.0,71,aspect_ratio=0.5): None},
+        CornerNode(743.0,126.5,73,aspect_ratio=0.5):
+        {CornerNode(741.5,104.0,72,aspect_ratio=0.5): None,
+        CornerNode(707.0,126.0,68,aspect_ratio=0.5): None},
+        CornerNode(665.5,79.5,74,aspect_ratio=0.5):
+        {CornerNode(662.5,58.0,80,aspect_ratio=0.5): None,
+        CornerNode(703.5,81.5,75,aspect_ratio=0.5): None,
+        CornerNode(625.5,78.0,85,aspect_ratio=0.5): None,
+        CornerNode(668.5,101.5,70,aspect_ratio=0.5): None},
+        CornerNode(703.5,81.5,75,aspect_ratio=0.5):
+        {CornerNode(665.5,79.5,74,aspect_ratio=0.5): None,
+        CornerNode(739.5,82.5,76,aspect_ratio=0.5): None,
+        CornerNode(700.0,60.0,77,aspect_ratio=0.5): None,
+        CornerNode(707.0,103.0,71,aspect_ratio=0.5): None},
+        CornerNode(739.5,82.5,76,aspect_ratio=0.5):
+        {CornerNode(741.5,104.0,72,aspect_ratio=0.5): None,
+        CornerNode(703.5,81.5,75,aspect_ratio=0.5): None,
+        CornerNode(734.0,62.5,78,aspect_ratio=0.5): None},
+        CornerNode(700.0,60.0,77,aspect_ratio=0.5):
+        {CornerNode(662.5,58.0,80,aspect_ratio=0.5): None,
+        CornerNode(703.5,81.5,75,aspect_ratio=0.5): None,
+        CornerNode(734.0,62.5,78,aspect_ratio=0.5): None},
+        CornerNode(734.0,62.5,78,aspect_ratio=0.5):
+        {CornerNode(739.5,82.5,76,aspect_ratio=0.5): None,
+        CornerNode(700.0,60.0,77,aspect_ratio=0.5): None},
+        CornerNode(659.0,37.0,79,aspect_ratio=0.5):
+        {CornerNode(662.5,58.0,80,aspect_ratio=0.5): None,
+        CornerNode(655.0,17.5,82,aspect_ratio=0.5): None,
+        CornerNode(620.0,35.0,83,aspect_ratio=0.5): None},
+        CornerNode(662.5,58.0,80,aspect_ratio=0.5):
+        {CornerNode(665.5,79.5,74,aspect_ratio=0.5): None,
+        CornerNode(622.5,56.0,84,aspect_ratio=0.5): None,
+        CornerNode(700.0,60.0,77,aspect_ratio=0.5): None,
+        CornerNode(659.0,37.0,79,aspect_ratio=0.5): None},
+        CornerNode(616.5,15.0,81,aspect_ratio=0.5):
+        {CornerNode(655.0,17.5,82,aspect_ratio=0.5): None,
+        CornerNode(620.0,35.0,83,aspect_ratio=0.5): None,
+        CornerNode(575.5,12.5,142,aspect_ratio=0.5): None},
+        CornerNode(655.0,17.5,82,aspect_ratio=0.5):
+        {CornerNode(616.5,15.0,81,aspect_ratio=0.5): None,
+        CornerNode(659.0,37.0,79,aspect_ratio=0.5): None},
+        CornerNode(620.0,35.0,83,aspect_ratio=0.5):
+        {CornerNode(616.5,15.0,81,aspect_ratio=0.5): None,
+        CornerNode(622.5,56.0,84,aspect_ratio=0.5): None,
+        CornerNode(578.0,33.0,86,aspect_ratio=0.5): None,
+        CornerNode(659.0,37.0,79,aspect_ratio=0.5): None},
+        CornerNode(622.5,56.0,84,aspect_ratio=0.5):
+        {CornerNode(662.5,58.0,80,aspect_ratio=0.5): None,
+        CornerNode(620.0,35.0,83,aspect_ratio=0.5): None,
+        CornerNode(625.5,78.0,85,aspect_ratio=0.5): None,
+        CornerNode(580.5,54.5,87,aspect_ratio=0.5): None},
+        CornerNode(625.5,78.0,85,aspect_ratio=0.5):
+        {CornerNode(582.0,76.5,88,aspect_ratio=0.5): None,
+        CornerNode(665.5,79.5,74,aspect_ratio=0.5): None,
+        CornerNode(622.5,56.0,84,aspect_ratio=0.5): None,
+        CornerNode(627.5,100.5,69,aspect_ratio=0.5): None},
+        CornerNode(578.0,33.0,86,aspect_ratio=0.5):
+        {CornerNode(620.0,35.0,83,aspect_ratio=0.5): None,
+        CornerNode(534.5,31.5,141,aspect_ratio=0.5): None,
+        CornerNode(575.5,12.5,142,aspect_ratio=0.5): None,
+        CornerNode(580.5,54.5,87,aspect_ratio=0.5): None},
+        CornerNode(580.5,54.5,87,aspect_ratio=0.5):
+        {CornerNode(582.0,76.5,88,aspect_ratio=0.5): None,
+        CornerNode(536.0,53.0,90,aspect_ratio=0.5): None,
+        CornerNode(622.5,56.0,84,aspect_ratio=0.5): None,
+        CornerNode(578.0,33.0,86,aspect_ratio=0.5): None},
+        CornerNode(582.0,76.5,88,aspect_ratio=0.5):
+        {CornerNode(583.5,99.5,89,aspect_ratio=0.5): None,
+        CornerNode(537.0,75.5,91,aspect_ratio=0.5): None,
+        CornerNode(625.5,78.0,85,aspect_ratio=0.5): None,
+        CornerNode(580.5,54.5,87,aspect_ratio=0.5): None},
+        CornerNode(583.5,99.5,89,aspect_ratio=0.5):
+        {CornerNode(582.0,76.5,88,aspect_ratio=0.5): None,
+        CornerNode(538.0,97.5,92,aspect_ratio=0.5): None,
+        CornerNode(627.5,100.5,69,aspect_ratio=0.5): None,
+        CornerNode(583.5,123.5,61,aspect_ratio=0.5): None},
+        CornerNode(536.0,53.0,90,aspect_ratio=0.5):
+        {CornerNode(490.0,52.0,96,aspect_ratio=0.5): None,
+        CornerNode(537.0,75.5,91,aspect_ratio=0.5): None,
+        CornerNode(534.5,31.5,141,aspect_ratio=0.5): None,
+        CornerNode(580.5,54.5,87,aspect_ratio=0.5): None},
+        CornerNode(537.0,75.5,91,aspect_ratio=0.5):
+        {CornerNode(582.0,76.5,88,aspect_ratio=0.5): None,
+        CornerNode(536.0,53.0,90,aspect_ratio=0.5): None,
+        CornerNode(538.0,97.5,92,aspect_ratio=0.5): None,
+        CornerNode(490.5,74.0,93,aspect_ratio=0.5): None},
+        CornerNode(538.0,97.5,92,aspect_ratio=0.5):
+        {CornerNode(537.5,122.5,56,aspect_ratio=0.5): None,
+        CornerNode(583.5,99.5,89,aspect_ratio=0.5): None,
+        CornerNode(537.0,75.5,91,aspect_ratio=0.5): None,
+        CornerNode(490.0,97.0,94,aspect_ratio=0.5): None},
+        CornerNode(490.5,74.0,93,aspect_ratio=0.5):
+        {CornerNode(490.0,52.0,96,aspect_ratio=0.5): None,
+        CornerNode(443.5,73.0,97,aspect_ratio=0.5): None,
+        CornerNode(537.0,75.5,91,aspect_ratio=0.5): None,
+        CornerNode(490.0,97.0,94,aspect_ratio=0.5): None},
+        CornerNode(490.0,97.0,94,aspect_ratio=0.5):
+        {CornerNode(442.0,96.5,98,aspect_ratio=0.5): None,
+        CornerNode(538.0,97.5,92,aspect_ratio=0.5): None,
+        CornerNode(490.5,74.0,93,aspect_ratio=0.5): None,
+        CornerNode(489.5,120.0,55,aspect_ratio=0.5): None},
+        CornerNode(444.0,51.5,95,aspect_ratio=0.5):
+        {CornerNode(490.0,52.0,96,aspect_ratio=0.5): None,
+        CornerNode(443.5,73.0,97,aspect_ratio=0.5): None,
+        CornerNode(398.0,50.5,102,aspect_ratio=0.5): None,
+        CornerNode(444.5,29.5,137,aspect_ratio=0.5): None},
+        CornerNode(490.0,52.0,96,aspect_ratio=0.5):
+        {CornerNode(536.0,53.0,90,aspect_ratio=0.5): None,
+        CornerNode(490.0,30.5,139,aspect_ratio=0.5): None,
+        CornerNode(490.5,74.0,93,aspect_ratio=0.5): None,
+        CornerNode(444.0,51.5,95,aspect_ratio=0.5): None},
+        CornerNode(443.5,73.0,97,aspect_ratio=0.5):
+        {CornerNode(442.0,96.5,98,aspect_ratio=0.5): None,
+        CornerNode(396.0,72.5,99,aspect_ratio=0.5): None,
+        CornerNode(490.5,74.0,93,aspect_ratio=0.5): None,
+        CornerNode(444.0,51.5,95,aspect_ratio=0.5): None},
+        CornerNode(442.0,96.5,98,aspect_ratio=0.5):
+        {CornerNode(443.5,73.0,97,aspect_ratio=0.5): None,
+        CornerNode(440.5,120.5,50,aspect_ratio=0.5): None,
+        CornerNode(394.0,96.0,100,aspect_ratio=0.5): None,
+        CornerNode(490.0,97.0,94,aspect_ratio=0.5): None},
+        CornerNode(396.0,72.5,99,aspect_ratio=0.5):
+        {CornerNode(443.5,73.0,97,aspect_ratio=0.5): None,
+        CornerNode(394.0,96.0,100,aspect_ratio=0.5): None,
+        CornerNode(398.0,50.5,102,aspect_ratio=0.5): None,
+        CornerNode(348.5,72.0,103,aspect_ratio=0.5): None},
+        CornerNode(394.0,96.0,100,aspect_ratio=0.5):
+        {CornerNode(346.0,95.5,104,aspect_ratio=0.5): None,
+        CornerNode(391.5,119.0,49,aspect_ratio=0.5): None,
+        CornerNode(442.0,96.5,98,aspect_ratio=0.5): None,
+        CornerNode(396.0,72.5,99,aspect_ratio=0.5): None},
+        CornerNode(351.5,51.0,101,aspect_ratio=0.5):
+        {CornerNode(307.0,50.0,108,aspect_ratio=0.5): None,
+        CornerNode(355.0,30.0,133,aspect_ratio=0.5): None,
+        CornerNode(398.0,50.5,102,aspect_ratio=0.5): None,
+        CornerNode(348.5,72.0,103,aspect_ratio=0.5): None},
+        CornerNode(398.0,50.5,102,aspect_ratio=0.5):
+        {CornerNode(396.0,72.5,99,aspect_ratio=0.5): None,
+        CornerNode(399.0,29.5,135,aspect_ratio=0.5): None,
+        CornerNode(351.5,51.0,101,aspect_ratio=0.5): None,
+        CornerNode(444.0,51.5,95,aspect_ratio=0.5): None},
+        CornerNode(348.5,72.0,103,aspect_ratio=0.5):
+        {CornerNode(346.0,95.5,104,aspect_ratio=0.5): None,
+        CornerNode(304.0,72.0,105,aspect_ratio=0.5): None,
+        CornerNode(396.0,72.5,99,aspect_ratio=0.5): None,
+        CornerNode(351.5,51.0,101,aspect_ratio=0.5): None},
+        CornerNode(346.0,95.5,104,aspect_ratio=0.5):
+        {CornerNode(343.5,119.0,44,aspect_ratio=0.5): None,
+        CornerNode(300.0,95.0,106,aspect_ratio=0.5): None,
+        CornerNode(394.0,96.0,100,aspect_ratio=0.5): None,
+        CornerNode(348.5,72.0,103,aspect_ratio=0.5): None},
+        CornerNode(304.0,72.0,105,aspect_ratio=0.5):
+        {CornerNode(300.0,95.0,106,aspect_ratio=0.5): None,
+        CornerNode(307.0,50.0,108,aspect_ratio=0.5): None,
+        CornerNode(260.5,73.0,109,aspect_ratio=0.5): None,
+        CornerNode(348.5,72.0,103,aspect_ratio=0.5): None},
+        CornerNode(300.0,95.0,106,aspect_ratio=0.5):
+        {CornerNode(346.0,95.5,104,aspect_ratio=0.5): None,
+        CornerNode(304.0,72.0,105,aspect_ratio=0.5): None,
+        CornerNode(296.5,118.0,43,aspect_ratio=0.5): None,
+        CornerNode(255.0,95.5,110,aspect_ratio=0.5): None},
+        CornerNode(264.5,51.5,107,aspect_ratio=0.5):
+        {CornerNode(224.5,52.5,114,aspect_ratio=0.5): None,
+        CornerNode(307.0,50.0,108,aspect_ratio=0.5): None,
+        CornerNode(260.5,73.0,109,aspect_ratio=0.5): None,
+        CornerNode(268.5,30.5,118,aspect_ratio=0.5): None},
+        CornerNode(307.0,50.0,108,aspect_ratio=0.5):
+        {CornerNode(304.0,72.0,105,aspect_ratio=0.5): None,
+        CornerNode(264.5,51.5,107,aspect_ratio=0.5): None,
+        CornerNode(310.5,30.0,132,aspect_ratio=0.5): None,
+        CornerNode(351.5,51.0,101,aspect_ratio=0.5): None},
+        CornerNode(260.5,73.0,109,aspect_ratio=0.5):
+        {CornerNode(219.0,73.0,112,aspect_ratio=0.5): None,
+        CornerNode(304.0,72.0,105,aspect_ratio=0.5): None,
+        CornerNode(264.5,51.5,107,aspect_ratio=0.5): None,
+        CornerNode(255.0,95.5,110,aspect_ratio=0.5): None},
+        CornerNode(255.0,95.5,110,aspect_ratio=0.5):
+        {CornerNode(300.0,95.0,106,aspect_ratio=0.5): None,
+        CornerNode(260.5,73.0,109,aspect_ratio=0.5): None,
+        CornerNode(251.5,117.5,38,aspect_ratio=0.5): None,
+        CornerNode(213.5,93.5,111,aspect_ratio=0.5): None},
+        CornerNode(213.5,93.5,111,aspect_ratio=0.5):
+        {CornerNode(219.0,73.0,112,aspect_ratio=0.5): None,
+        CornerNode(174.0,95.0,113,aspect_ratio=0.5): None,
+        CornerNode(210.0,116.5,37,aspect_ratio=0.5): None,
+        CornerNode(255.0,95.5,110,aspect_ratio=0.5): None},
+        CornerNode(219.0,73.0,112,aspect_ratio=0.5):
+        {CornerNode(224.5,52.5,114,aspect_ratio=0.5): None,
+        CornerNode(180.0,73.0,115,aspect_ratio=0.5): None,
+        CornerNode(260.5,73.0,109,aspect_ratio=0.5): None,
+        CornerNode(213.5,93.5,111,aspect_ratio=0.5): None},
+        CornerNode(174.0,95.0,113,aspect_ratio=0.5):
+        {CornerNode(171.0,116.5,32,aspect_ratio=0.5): None,
+        CornerNode(180.0,73.0,115,aspect_ratio=0.5): None,
+        CornerNode(138.0,94.0,119,aspect_ratio=0.5): None,
+        CornerNode(213.5,93.5,111,aspect_ratio=0.5): None},
+        CornerNode(224.5,52.5,114,aspect_ratio=0.5):
+        {CornerNode(219.0,73.0,112,aspect_ratio=0.5): None,
+        CornerNode(264.5,51.5,107,aspect_ratio=0.5): None,
+        CornerNode(185.5,53.0,116,aspect_ratio=0.5): None,
+        CornerNode(228.0,32.5,117,aspect_ratio=0.5): None},
+        CornerNode(180.0,73.0,115,aspect_ratio=0.5):
+        {CornerNode(219.0,73.0,112,aspect_ratio=0.5): None,
+        CornerNode(143.5,74.0,120,aspect_ratio=0.5): None,
+        CornerNode(185.5,53.0,116,aspect_ratio=0.5): None,
+        CornerNode(174.0,95.0,113,aspect_ratio=0.5): None},
+        CornerNode(185.5,53.0,116,aspect_ratio=0.5):
+        {CornerNode(190.5,33.5,123,aspect_ratio=0.5): None,
+        CornerNode(150.0,54.0,121,aspect_ratio=0.5): None,
+        CornerNode(224.5,52.5,114,aspect_ratio=0.5): None,
+        CornerNode(180.0,73.0,115,aspect_ratio=0.5): None},
+        CornerNode(228.0,32.5,117,aspect_ratio=0.5):
+        {CornerNode(233.0,12.5,129,aspect_ratio=0.5): None,
+        CornerNode(224.5,52.5,114,aspect_ratio=0.5): None,
+        CornerNode(190.5,33.5,123,aspect_ratio=0.5): None,
+        CornerNode(268.5,30.5,118,aspect_ratio=0.5): None},
+        CornerNode(268.5,30.5,118,aspect_ratio=0.5):
+        {CornerNode(272.5,11.0,131,aspect_ratio=0.5): None,
+        CornerNode(264.5,51.5,107,aspect_ratio=0.5): None,
+        CornerNode(310.5,30.0,132,aspect_ratio=0.5): None,
+        CornerNode(228.0,32.5,117,aspect_ratio=0.5): None},
+        CornerNode(138.0,94.0,119,aspect_ratio=0.5):
+        {CornerNode(104.5,94.5,144,aspect_ratio=0.5): None,
+        CornerNode(174.0,95.0,113,aspect_ratio=0.5): None,
+        CornerNode(143.5,74.0,120,aspect_ratio=0.5): None,
+        CornerNode(135.0,115.5,31,aspect_ratio=0.5): None},
+        CornerNode(143.5,74.0,120,aspect_ratio=0.5):
+        {CornerNode(150.0,54.0,121,aspect_ratio=0.5): None,
+        CornerNode(180.0,73.0,115,aspect_ratio=0.5): None,
+        CornerNode(109.5,74.5,124,aspect_ratio=0.5): None,
+        CornerNode(138.0,94.0,119,aspect_ratio=0.5): None},
+        CornerNode(150.0,54.0,121,aspect_ratio=0.5):
+        {CornerNode(143.5,74.0,120,aspect_ratio=0.5): None,
+        CornerNode(155.5,35.5,122,aspect_ratio=0.5): None,
+        CornerNode(185.5,53.0,116,aspect_ratio=0.5): None,
+        CornerNode(116.5,55.5,125,aspect_ratio=0.5): None},
+        CornerNode(155.5,35.5,122,aspect_ratio=0.5):
+        {CornerNode(150.0,54.0,121,aspect_ratio=0.5): None,
+        CornerNode(190.5,33.5,123,aspect_ratio=0.5): None,
+        CornerNode(161.5,17.0,126,aspect_ratio=0.5): None,
+        CornerNode(122.5,37.0,127,aspect_ratio=0.5): None},
+        CornerNode(190.5,33.5,123,aspect_ratio=0.5):
+        {CornerNode(155.5,35.5,122,aspect_ratio=0.5): None,
+        CornerNode(185.5,53.0,116,aspect_ratio=0.5): None,
+        CornerNode(228.0,32.5,117,aspect_ratio=0.5): None,
+        CornerNode(195.5,14.5,130,aspect_ratio=0.5): None},
+        CornerNode(109.5,74.5,124,aspect_ratio=0.5):
+        {CornerNode(143.5,74.0,120,aspect_ratio=0.5): None,
+        CornerNode(104.5,94.5,144,aspect_ratio=0.5): None,
+        CornerNode(78.5,76.0,11,aspect_ratio=0.5): None,
+        CornerNode(116.5,55.5,125,aspect_ratio=0.5): None},
+        CornerNode(116.5,55.5,125,aspect_ratio=0.5):
+        {CornerNode(150.0,54.0,121,aspect_ratio=0.5): None,
+        CornerNode(85.5,57.0,10,aspect_ratio=0.5): None,
+        CornerNode(109.5,74.5,124,aspect_ratio=0.5): None,
+        CornerNode(122.5,37.0,127,aspect_ratio=0.5): None},
+        CornerNode(161.5,17.0,126,aspect_ratio=0.5):
+        {CornerNode(128.5,19.5,128,aspect_ratio=0.5): None,
+        CornerNode(195.5,14.5,130,aspect_ratio=0.5): None,
+        CornerNode(155.5,35.5,122,aspect_ratio=0.5): None,
+        CornerNode(106.0,3.5,143,aspect_ratio=0.5): None},
+        CornerNode(122.5,37.0,127,aspect_ratio=0.5):
+        {CornerNode(128.5,19.5,128,aspect_ratio=0.5): None,
+        CornerNode(155.5,35.5,122,aspect_ratio=0.5): None,
+        CornerNode(92.5,38.5,5,aspect_ratio=0.5): None,
+        CornerNode(116.5,55.5,125,aspect_ratio=0.5): None},
+        CornerNode(128.5,19.5,128,aspect_ratio=0.5):
+        {CornerNode(99.0,21.5,4,aspect_ratio=0.5): None,
+        CornerNode(161.5,17.0,126,aspect_ratio=0.5): None,
+        CornerNode(122.5,37.0,127,aspect_ratio=0.5): None},
+        CornerNode(233.0,12.5,129,aspect_ratio=0.5):
+        {CornerNode(195.5,14.5,130,aspect_ratio=0.5): None,
+        CornerNode(272.5,11.0,131,aspect_ratio=0.5): None,
+        CornerNode(228.0,32.5,117,aspect_ratio=0.5): None},
+        CornerNode(195.5,14.5,130,aspect_ratio=0.5):
+        {CornerNode(233.0,12.5,129,aspect_ratio=0.5): None,
+        CornerNode(190.5,33.5,123,aspect_ratio=0.5): None,
+        CornerNode(161.5,17.0,126,aspect_ratio=0.5): None},
+        CornerNode(272.5,11.0,131,aspect_ratio=0.5):
+        {CornerNode(233.0,12.5,129,aspect_ratio=0.5): None,
+        CornerNode(268.5,30.5,118,aspect_ratio=0.5): None},
+        CornerNode(310.5,30.0,132,aspect_ratio=0.5):
+        {CornerNode(307.0,50.0,108,aspect_ratio=0.5): None,
+        CornerNode(355.0,30.0,133,aspect_ratio=0.5): None,
+        CornerNode(268.5,30.5,118,aspect_ratio=0.5): None},
+        CornerNode(355.0,30.0,133,aspect_ratio=0.5):
+        {CornerNode(310.5,30.0,132,aspect_ratio=0.5): None,
+        CornerNode(351.5,51.0,101,aspect_ratio=0.5): None,
+        CornerNode(399.0,29.5,135,aspect_ratio=0.5): None},
+        CornerNode(400.5,9.0,134,aspect_ratio=0.5):
+        {CornerNode(445.0,9.0,136,aspect_ratio=0.5): None,
+        CornerNode(399.0,29.5,135,aspect_ratio=0.5): None},
+        CornerNode(399.0,29.5,135,aspect_ratio=0.5):
+        {CornerNode(444.5,29.5,137,aspect_ratio=0.5): None,
+        CornerNode(355.0,30.0,133,aspect_ratio=0.5): None,
+        CornerNode(398.0,50.5,102,aspect_ratio=0.5): None,
+        CornerNode(400.5,9.0,134,aspect_ratio=0.5): None},
+        CornerNode(445.0,9.0,136,aspect_ratio=0.5):
+        {CornerNode(444.5,29.5,137,aspect_ratio=0.5): None,
+        CornerNode(489.0,10.0,138,aspect_ratio=0.5): None,
+        CornerNode(400.5,9.0,134,aspect_ratio=0.5): None},
+        CornerNode(444.5,29.5,137,aspect_ratio=0.5):
+        {CornerNode(445.0,9.0,136,aspect_ratio=0.5): None,
+        CornerNode(444.0,51.5,95,aspect_ratio=0.5): None,
+        CornerNode(490.0,30.5,139,aspect_ratio=0.5): None,
+        CornerNode(399.0,29.5,135,aspect_ratio=0.5): None},
+        CornerNode(489.0,10.0,138,aspect_ratio=0.5):
+        {CornerNode(445.0,9.0,136,aspect_ratio=0.5): None,
+        CornerNode(490.0,30.5,139,aspect_ratio=0.5): None,
+        CornerNode(533.0,11.0,140,aspect_ratio=0.5): None},
+        CornerNode(490.0,30.5,139,aspect_ratio=0.5):
+        {CornerNode(490.0,52.0,96,aspect_ratio=0.5): None,
+        CornerNode(444.5,29.5,137,aspect_ratio=0.5): None,
+        CornerNode(489.0,10.0,138,aspect_ratio=0.5): None,
+        CornerNode(534.5,31.5,141,aspect_ratio=0.5): None},
+        CornerNode(533.0,11.0,140,aspect_ratio=0.5):
+        {CornerNode(489.0,10.0,138,aspect_ratio=0.5): None,
+        CornerNode(534.5,31.5,141,aspect_ratio=0.5): None,
+        CornerNode(575.5,12.5,142,aspect_ratio=0.5): None},
+        CornerNode(534.5,31.5,141,aspect_ratio=0.5):
+        {CornerNode(536.0,53.0,90,aspect_ratio=0.5): None,
+        CornerNode(490.0,30.5,139,aspect_ratio=0.5): None,
+        CornerNode(533.0,11.0,140,aspect_ratio=0.5): None,
+        CornerNode(578.0,33.0,86,aspect_ratio=0.5): None},
+        CornerNode(575.5,12.5,142,aspect_ratio=0.5):
+        {CornerNode(616.5,15.0,81,aspect_ratio=0.5): None,
+        CornerNode(533.0,11.0,140,aspect_ratio=0.5): None,
+        CornerNode(578.0,33.0,86,aspect_ratio=0.5): None},
+        CornerNode(106.0,3.5,143,aspect_ratio=0.5):
+        {CornerNode(51.5,10.5,1,aspect_ratio=0.5): None,
+        CornerNode(99.0,21.5,4,aspect_ratio=0.5): None,
+        CornerNode(161.5,17.0,126,aspect_ratio=0.5): None},
+        CornerNode(104.5,94.5,144,aspect_ratio=0.5):
+        {CornerNode(75.0,95.0,16,aspect_ratio=0.5): None,
+        CornerNode(102.5,115.5,26,aspect_ratio=0.5): None,
+        CornerNode(109.5,74.5,124,aspect_ratio=0.5): None,
+        CornerNode(138.0,94.0,119,aspect_ratio=0.5): None}})
+
+        self.expected_subgraphs=[
+
+            Graph({CornerNode(34.5,5.5,0,aspect_ratio=0.5):
+            {CornerNode(51.5,10.5,1,aspect_ratio=0.5): None},
+            CornerNode(51.5,10.5,1,aspect_ratio=0.5):
+            {CornerNode(34.5,5.5,0,aspect_ratio=0.5): None}}),
+
+            Graph({CornerNode(51.5,10.5,1,aspect_ratio=0.5):
+            {CornerNode(45.0,26.5,3,aspect_ratio=0.5): None},
+            CornerNode(45.0,26.5,3,aspect_ratio=0.5):
+            {CornerNode(51.5,10.5,1,aspect_ratio=0.5): None,
+            CornerNode(38.0,42.5,7,aspect_ratio=0.5): None},
+            CornerNode(38.0,42.5,7,aspect_ratio=0.5):
+            {CornerNode(31.0,59.5,9,aspect_ratio=0.5): None,
+            CornerNode(45.0,26.5,3,aspect_ratio=0.5): None},
+            CornerNode(31.0,59.5,9,aspect_ratio=0.5):
+            {CornerNode(26.5,77.0,13,aspect_ratio=0.5): None,
+            CornerNode(38.0,42.5,7,aspect_ratio=0.5): None},
+            CornerNode(26.5,77.0,13,aspect_ratio=0.5):
+            {CornerNode(31.0,59.5,9,aspect_ratio=0.5): None,
+            CornerNode(22.5,95.0,15,aspect_ratio=0.5): None},
+            CornerNode(22.5,95.0,15,aspect_ratio=0.5):
+            {CornerNode(20.5,114.5,19,aspect_ratio=0.5): None,
+            CornerNode(26.5,77.0,13,aspect_ratio=0.5): None},
+            CornerNode(20.5,114.5,19,aspect_ratio=0.5):
+            {CornerNode(18.0,133.5,21,aspect_ratio=0.5): None,
+            CornerNode(22.5,95.0,15,aspect_ratio=0.5): None},
+            CornerNode(18.0,133.5,21,aspect_ratio=0.5):
+            {CornerNode(17.0,152.0,25,aspect_ratio=0.5): None,
+            CornerNode(20.5,114.5,19,aspect_ratio=0.5): None},
+            CornerNode(17.0,152.0,25,aspect_ratio=0.5):
+            {CornerNode(18.0,133.5,21,aspect_ratio=0.5): None}}),
+
+            Graph({CornerNode(128.5,19.5,128,aspect_ratio=0.5):
+                   {CornerNode(99.0,21.5,4,aspect_ratio=0.5): None,
+                   CornerNode(161.5,17.0,126,aspect_ratio=0.5): None},
+                   CornerNode(233.0,12.5,129,aspect_ratio=0.5):
+                   {CornerNode(195.5,14.5,130,aspect_ratio=0.5): None,
+                   CornerNode(272.5,11.0,131,aspect_ratio=0.5): None},
+                   CornerNode(71.0,24.0,2,aspect_ratio=0.5):
+                   {CornerNode(45.0,26.5,3,aspect_ratio=0.5): None,
+                   CornerNode(99.0,21.5,4,aspect_ratio=0.5): None},
+                   CornerNode(272.5,11.0,131,aspect_ratio=0.5):
+                   {CornerNode(233.0,12.5,129,aspect_ratio=0.5):
+                   None}, CornerNode(99.0,21.5,4,aspect_ratio=0.5):
+                   {CornerNode(128.5,19.5,128,aspect_ratio=0.5): None,
+                   CornerNode(71.0,24.0,2,aspect_ratio=0.5): None},
+                   CornerNode(195.5,14.5,130,aspect_ratio=0.5):
+                   {CornerNode(233.0,12.5,129,aspect_ratio=0.5): None,
+                   CornerNode(161.5,17.0,126,aspect_ratio=0.5): None},
+                   CornerNode(45.0,26.5,3,aspect_ratio=0.5):
+                   {CornerNode(71.0,24.0,2,aspect_ratio=0.5): None},
+                   CornerNode(161.5,17.0,126,aspect_ratio=0.5):
+                   {CornerNode(128.5,19.5,128,aspect_ratio=0.5): None,
+                   CornerNode(195.5,14.5,130,aspect_ratio=0.5):
+                   None}}),
+            ]
+

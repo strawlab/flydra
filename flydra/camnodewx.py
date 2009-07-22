@@ -7,13 +7,8 @@ import wx.lib.newevent
 import camnode
 import camnode_utils
 import numpy
-from motmot.wxglvideo.simple_overlay import PointDisplayCanvas as orig_PointDisplayCanvas
+from motmot.wxglvideo.simple_overlay import PointDisplayCanvas
 from pygarrayimage.arrayimage import ArrayInterfaceImage
-
-class PointDisplayCanvas(orig_PointDisplayCanvas):
-    def __init__(self,*args,**kwargs):
-        kwargs['attribList']=0
-        orig_PointDisplayCanvas.__init__(self,*args,**kwargs)
 
 DisplayImageEvent, EVT_DISPLAYIMAGE = wx.lib.newevent.NewEvent()
 
@@ -96,6 +91,8 @@ class WxApp(wx.App):
 
     def OnQuit(self, dummy_event=None):
         self.frame.Close() # results in call to OnWindowClose()
+        self.timer.Stop()
+        self.timer2.Stop()
 
     def OnTimer2(self,event):
         if self.call_often is not None:
@@ -297,6 +294,7 @@ class DisplayCamData(object):
                         absdiff = numpy.array( chainbuf.absdiff8u_im_full, copy=True )
                         mean = numpy.array( chainbuf.mean8u_im_full, copy=True )
                         cmp = numpy.array( chainbuf.compareframe8u_full, copy=True )
+                image_coding = chainbuf.image_coding
 
             kwargs = {}
             if self._full_debug_images:
@@ -309,5 +307,6 @@ class DisplayCamData(object):
             wx.PostEvent(self._wxapp, DisplayImageEvent(buf=buf_copy,
                                                         pts=pts,
                                                         cam_id=self._cam_id,
+                                                        image_coding = image_coding,
                                                         **kwargs
                                                         ))

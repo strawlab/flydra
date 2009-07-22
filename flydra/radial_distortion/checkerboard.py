@@ -6,10 +6,12 @@ import CVtypes
 from CVtypes import cv
 import ctypes, math
 import numpy
+import numpy as np
 import pylab
 import scipy.optimize
 import scipy.misc.pilutil
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
+import motmot.imops.imops as imops
 from matplotlib import delaunay
 import flydra.reconstruct_utils as reconstruct_utils # in pyrex/C for speed
 import flydra.undistort
@@ -22,6 +24,7 @@ from optparse import OptionParser
 from visualize_distortions import visualize_distortions
 
 D2R = math.pi/180.0
+R2D = 180.0/math.pi
 
 def info(msg):
     if 0:
@@ -41,7 +44,7 @@ def get_singly_connected_nodes(graph):
 
 def find_subgraph_similar_direction(G,
                                     source=None,
-                                    direction_eps_radians=20.0*D2R,
+                                    direction_eps_radians=None,
                                     already_done=None,
                                     ):
     """
@@ -103,14 +106,35 @@ def find_subgraph_similar_direction(G,
 
 class CornerNode:
     def __init__(self,x,y,name,aspect_ratio=1.0):
-        self._x=x
-        self._y=y
-        self._name=name
-        self._aspect_radio=aspect_ratio
+        self._x=float(x)
+        self._y=float(y)
+        self._r = {}
+        self._name=int(name)
+        self._aspect_ratio=float(aspect_ratio)
     def __repr__(self):
+        return 'CornerNode(%s,%s,%s,aspect_ratio=%s)'%(repr(self._x),
+                                                       repr(self._y),
+                                                       repr(self._name),
+                                                       repr(self._aspect_ratio))
+    def __hash__(self):
         return self._name
+    def __cmp__(self,other):
+        if isinstance(other,CornerNode):
+            return self._name.__cmp__(other._name)
+        else:
+            raise ValueError('cannot compare CornerNode against anything but '
+                             'a CornerNode')
+    def __str__(self):
+        return str(self._name)
     def get_pos(self):
         return (self._x, self._y)
+    def get_rand_pos(self,g):
+        """return a slightly shifted point position for unique key g"""
+        if g not in self._r:
+            rx = self._x + 2*np.random.normal(size=(1,))
+            ry = self._y + 2*np.random.normal(size=(1,))
+            self._r[g] = (rx,ry)
+        return self._r[g]
     def get_direction_from( self, v ):
         """return direction of self from v in radians"""
         x1, y1 = v.get_pos()
@@ -118,7 +142,7 @@ class CornerNode:
 
         yd = y2-y1
         xd = x2-x1
-        xd *= self._aspect_radio
+        xd *= self._aspect_ratio
         mag = math.sqrt(xd**2 + yd**2)
         return math.atan2(yd/mag, xd/mag)
     def get_distance_from( self, v ):
@@ -128,12 +152,34 @@ class CornerNode:
 
         yd = y2-y1
         xd = x2-x1
-        xd *= self._aspect_radio
+        xd *= self._aspect_ratio
         mag = math.sqrt(xd**2 + yd**2)
         return mag
 
+def get_direction_stats(g,mod_pi=True):
+    vecs = []
+    for n0,n1 in g.edges():
+        theta = n0.get_direction_from(n1)
+        x = np.cos(theta)
+        y = np.sin(theta)
+        if mod_pi and y<0:
+            y = -y
+            x = -x
+        vecs.append( (x,y) )
+    vecs = np.array(vecs)
+    #print vecs
+    mx,my = np.mean(vecs,axis=0)
+    theta_r = np.sqrt(mx**2+my**2)
+    theta_mean = np.arctan2(my,mx)
+    thetas = np.arctan2(vecs[:,1],vecs[:,0])
+    theta_median = np.median(thetas)
+    stats = {'mean':theta_mean,
+             'median':theta_median,
+             'r':theta_r,
+             'thetas':thetas}
+    return stats
+
 def points2graph(x,y,
-                 cluster_cut=True,
                  distance_thresh=1.5,
                  angle_thresh=30*D2R,
                  show_clusters=False,
@@ -143,7 +189,7 @@ def points2graph(x,y,
     x = numpy.array(x)
     y = numpy.array(y)
     tri = delaunay.Triangulation(x, y)
-    nodes = [ CornerNode(xi,yi,str(i),aspect_ratio=aspect_ratio) for i,(xi,yi) in enumerate(zip(x,y)) ]
+    nodes = [ CornerNode(xi,yi,i,aspect_ratio=aspect_ratio) for i,(xi,yi) in enumerate(zip(x,y)) ]
 
     segx = []
     segy = []
@@ -187,7 +233,7 @@ def points2graph(x,y,
         graph.add_edge( nodes[i], nodes[j] )
         # The graph is not directed, so we don't need to add (j,i).
 
-    if cluster_cut:
+    if 1:
         # remove edges not belonging to 2 shortest distance clusters
         edges = graph.edges()
 
@@ -282,7 +328,7 @@ def points2graph(x,y,
                 #print i,[cartesian_clusters_center[i][0]],[cartesian_clusters_center[i][1]]
                 pylab.plot([cartesian_clusters_center[i][0]],[cartesian_clusters_center[i][1]],'ko')
             ax.set_aspect('equal')
-            #pylab.show()
+            pylab.show()
             #sys.exit()
 
         cluster_distances = clusters[:,1]
@@ -345,6 +391,7 @@ class Objective:
         self._width = width
         self._height = height
         self._save_debug_images = save_debug_images
+        self._last_err_time = time.time()
         for graph in self._graphs:
             periphery = get_singly_connected_nodes( graph )
             start_node = min(periphery) # ensure this is deteriministic
@@ -381,7 +428,8 @@ class Objective:
         fc1=fc0*self._aspect_ratio
         tangential1 = tangential2 = 0.0
 
-        helper = reconstruct_utils.ReconstructHelper( fc0, fc1, x0, y0, r1, r2, tangential1, tangential2)
+        helper = reconstruct_utils.ReconstructHelper( fc0, fc1, x0, y0, r1, r2,
+                                                      tangential1, tangential2)
         if 0:
             class ReverseHelper:
                 def __init__(self,h):
@@ -400,10 +448,11 @@ class Objective:
 
     def lm_err_func(self, params):
         results = self.lm_err4(params)
-        if self._debug:
-            print repr(params[:4])
-            print numpy.sum( results**2 )
-            print
+        now = time.time()
+        if self._debug or (now-self._last_err_time) >= 5.0:
+            print 'With these parameters:',repr(params[:4])
+            print '  current error is:',numpy.sum( results**2 )
+            self._last_err_time = now
 
         if self._save_debug_images:
             if not hasattr(self,'_save_count'):
@@ -552,36 +601,14 @@ def binarize( im ):
     newim = numpy.where( im > median, numpy.uint8(255), numpy.uint8(0) )
     return newim
 
-def get_similar_direction_graphs(fmf,frame,
-                                 use='raw',return_early=False,
-                                 debug_line_finding=False,
-                                 aspect_ratio = 1.0,
-                                 ):
-    bg_im = fmf['frame'][0]
-    imnx_orig = fmf['frame'][frame]
-
-    imnx_no_bg = get_non_background( imnx_orig, bg_im )
-    imnx_binary = binarize(imnx_no_bg)
-    imnx_rawbinary = binarize(imnx_orig)
-
-    if use == 'no_bg':
-        imnx_use = imnx_no_bg
-    elif use == 'binary':
-        imnx_use = imnx_binary
-    elif use == 'rawbinary':
-        imnx_use = imnx_rawbinary
-    elif use == 'raw':
-        imnx_use = imnx_orig
-    else:
-        raise ValueError('unknown use image')
-
+def extract_corners(imnx_use,max_ncorn_per_side=30):
     im_ptr = cv.CreateImage( cv.Size( imnx_use.shape[1], imnx_use.shape[0] ),
                              CVtypes.IPL_DEPTH_8U, 1 )
     ctypes.memmove( im_ptr.contents.imageData,
                     imnx_use.ctypes.data,
                     imnx_use.shape[0]*imnx_use.shape[1] )
 
-    ncorn = 30,30
+    ncorn = max_ncorn_per_side,max_ncorn_per_side
     ncorn_tot = ncorn[0]* ncorn[1]
     corners = (cv.Point2D32f * ncorn_tot)()
     corner_count = ctypes.c_int(ncorn_tot)
@@ -611,6 +638,140 @@ def get_similar_direction_graphs(fmf,frame,
     for i in range( corner_count.value ):
         x.append( corners[i].x )
         y.append( corners[i].y )
+    x = np.array(x)
+    y = np.array(y)
+    return x,y
+
+def test_extract_corners():
+    dirname = os.path.split(__file__)[0]
+    fname = 'distorted.fmf'
+    fullpath = os.path.join(dirname,fname)
+    fmf = FlyMovieFormat.FlyMovie(fullpath)
+    im,timestamp = fmf.get_frame(0)
+    imnx_rawbinary = binarize(im)
+    imnx_use = imnx_rawbinary
+    actual_x,actual_y=extract_corners(imnx_use)
+
+    if 0:
+        pylab.imshow(imnx_use)
+        pylab.plot(actual_x,actual_y,'o')
+        pylab.title('found corners')
+        pylab.show()
+
+    actual = np.array( np.hstack( (actual_x[:,np.newaxis],
+                                   actual_y[:,np.newaxis])))
+
+    expected_x= np.array([
+        305.5,  261.5,  351.5,  348.5,  302. ,  256.5,  214. ,  218.5,
+        298.5,  253. ,  209.5,  169. ,  173.5,  250. ,  207.5,  132. ,
+        167. ,  130.5,  135.5,  141. ,  206.5,  167. ,  130. ,  166.5,
+        129. ,  206. ,  206. ,  167. ,  130.5,  248.5,  248. ,  247. ,
+        292.5,  291. ,  293.5,  340.5,  338.5,  336.5,  386.5,  383.5,
+        389. ,  438. ,  434.5,  431.5,  483. ,  479.5,  486. ,  534. ,
+        530.5,  525.5,  576. ,  569.5,  579.5,  623. ,  618. ,  613. ,
+        659. ,  652.5,  663.5,  701. ,  625. ,  665.5,  703. ,  737. ,
+        735.5,  666. ,  703. ,  626. ,  666. ,  625.5,  703.5,  736.5,
+        665.5,  703. ,  737. ,  735.5,  664. ,  626. ,  583.5,  583.5,
+        539.5,  538.5,  582.5,  537.5,  493.5,  492. ,  581.5,  490.5,
+        536. ,  489. ,  444.5,  442.5,  440.5,  394. ,  391.5,  396.5,
+        346.5,  343. ,  295.5,  398.5,  446. ])
+
+    expected_y = np.array([
+        19. ,   20. ,   19.5,   42. ,   41.5,   42. ,   42. ,   20.5,
+         64.5,   64. ,   64.5,   64. ,   42.5,   87.5,   86.5,   64.5,
+         86.5,   86.5,   42.5,   22.5,  109.5,  108.5,  107.5,  130.5,
+        129. ,  132. ,  154.5,  152. ,  150.5,  111. ,  134. ,  157. ,
+        135.5,  158.5,  112.5,  113.5,  137.5,  161. ,  139. ,  162.5,
+        114.5,  116.5,  140.5,  164. ,  142. ,  165.5,  117.5,  119. ,
+        143. ,  167. ,  145.5,  167. ,  119.5,  122. ,  145.5,  168.5,
+        146. ,  168. ,  123.5,  125. ,   98. ,  100.5,  102.5,  103.5,
+        125.5,   77.5,   80. ,   53. ,   55. ,   75.5,   58. ,   61. ,
+         34. ,   37. ,   40. ,   20. ,   13. ,   30.5,   27.5,   50. ,
+         25. ,   48. ,   73. ,   71. ,   23. ,   45.5,   96.5,   69. ,
+         95. ,   93.5,   44. ,   67.5,   91.5,   67. ,   90.5,   42.5,
+         65.5,   88. ,   88.5,   20. ,   21.5])
+    expected = np.array( np.hstack( (expected_x[:,np.newaxis],
+                                   expected_y[:,np.newaxis])))
+    N_close = 0
+    N_total_detected = len(actual_x)
+    N_total_possible = len(expected_x)
+
+    dist_threshold = 5 # should be within 5 pixels
+    fraction_same_threshold = 0.9
+
+    fraction_different_threshold = 1.0 - fraction_same_threshold
+    for i in range(len(actual)):
+        this_pt = actual[i]
+        dists = np.sum((this_pt - expected)**2,axis=1)
+        closest_dist = np.min(dists)
+
+        if closest_dist < dist_threshold:
+            N_close +=1
+
+    frac=N_close/float(N_total_possible)
+    assert abs(frac-1.0) < fraction_different_threshold
+
+def prune_non_simply_connected(similar_direction_graphs):
+    filtered = []
+    for graph in similar_direction_graphs:
+        periphery = get_singly_connected_nodes( graph )
+        if len(periphery)>2:
+            print ('WARNING: graph has > 2 nodes in periphery; '
+                   'image analysis suspect; discarding bad graph. Hint: '
+                   'try decreasing "angle_precision_degrees" in .cfg file.')
+            #print ' periphery',periphery
+            #print ' graph',graph.edges()
+            if 0 and debug_line_finding:
+                pylab.figure()
+                bad_graph_edges = graph.edges()
+                import networkx
+                import networkx.drawing.nx_pylab as nx_pylab
+                g = networkx.Graph()
+                for e in bad_graph_edges:
+                    g.add_edge(*e)
+                networkx.drawing.nx_pylab.draw(g)
+        else:
+            filtered.append( graph )
+    return filtered
+
+def get_similar_direction_graphs(fmf,frame,
+                                 use='raw',return_early=False,
+                                 debug_line_finding=False,
+                                 aspect_ratio = 1.0,
+                                 direction_eps_radians=None,
+                                 chess_preview=False,
+                                 ):
+    bg_im,tmp = fmf.get_frame(0)
+    bg_im = imops.to_mono8(fmf.get_format(),bg_im)
+    imnx_orig,tmp = fmf.get_frame(frame)
+    imnx_orig = imops.to_mono8(fmf.get_format(),imnx_orig)
+
+    imnx_no_bg = get_non_background( imnx_orig, bg_im )
+    imnx_binary = binarize(imnx_no_bg)
+    imnx_rawbinary = binarize(imnx_orig)
+    if use == 'no_bg':
+        imnx_use = imnx_no_bg
+    elif use == 'binary':
+        imnx_use = imnx_binary
+    elif use == 'rawbinary':
+        imnx_use = imnx_rawbinary
+    elif use == 'raw':
+        imnx_use = imnx_orig
+    else:
+        raise ValueError('unknown use image')
+
+    if chess_preview:
+        pylab.imshow(imnx_use)
+        pylab.title('preview of chessboard finding image - close to continue')
+        pylab.show()
+
+    x,y=extract_corners(imnx_use)
+
+    if chess_preview:
+        pylab.imshow(imnx_use)
+        pylab.plot(x,y,'wo')
+        pylab.title('found corners')
+        pylab.show()
 
     show_clusters_frame = frame
     graph, nodes = points2graph(x, y,
@@ -621,22 +782,34 @@ def get_similar_direction_graphs(fmf,frame,
     if return_early:
         print 'returning early with entire super-graph'
         similar_direction_graphs = [graph]
-        return similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary, imnx_use, inmx_rawbinary
+        return (similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary,
+                imnx_use, imnx_rawbinary)
 
     similar_direction_graphs = [] # collection of all the graphs of similar directions
     for node in nodes:
 
-        subgraph = find_subgraph_similar_direction(graph, source=node, already_done=similar_direction_graphs)
+        subgraph = find_subgraph_similar_direction(
+            graph,
+            source=node,
+            direction_eps_radians=direction_eps_radians,
+            already_done=similar_direction_graphs)
         if subgraph is not None:
             similar_direction_graphs.append( subgraph )
 
-        # do again to get other direction
-        subgraph = find_subgraph_similar_direction(graph, source=node, already_done=similar_direction_graphs)
-        if subgraph is not None:
-            similar_direction_graphs.append( subgraph )
+        if 0:
+            print 'backwards search?!'
+            # do again to get other direction
+            subgraph = find_subgraph_similar_direction(
+                graph,
+                source=node,
+                direction_eps_radians=direction_eps_radians,
+                already_done=similar_direction_graphs)
+            if subgraph is not None:
+                similar_direction_graphs.append( subgraph )
 
     # filter to force 2 or more edges in graph
-    similar_direction_graphs = [ graph for graph in similar_direction_graphs if len(graph.edges()) >= 2 ]
+    similar_direction_graphs = [ graph for graph in similar_direction_graphs if
+                                 len(graph.edges()) >= 2 ]
 
     if debug_line_finding:
         print 'edges in each subgraph (frame %d)'%frame,'-'*40
@@ -644,19 +817,9 @@ def get_similar_direction_graphs(fmf,frame,
             print graph.edges()
         print '-'*40
         print
-    if 1:
-        filtered = []
-        for graph in similar_direction_graphs:
-            periphery = get_singly_connected_nodes( graph )
-            if len(periphery)>2:
-                print 'WARNING: graph has > 2 nodes in periphery; image analysis suspect; discarding bad graph'
-                print ' periphery',periphery
-                print ' graph',graph.edges()
-            else:
-                filtered.append( graph )
-        similar_direction_graphs = filtered
 
-    return similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary, imnx_use, imnx_rawbinary
+    return (similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary,
+            imnx_use, imnx_rawbinary)
 
 def main():
     parser = OptionParser(usage='%prog CONFIG_FILE',
@@ -668,33 +831,55 @@ def main():
     parser.add_option("--view-results-quick", action='store_true',
                       default=False)
 
-    parser.add_option("--find-and-show",
+    parser.add_option("--show-chessboard-finder-preview",
+                      help=("show the image being fed to chessboard corner "
+                            "finder"),
+                      action='store_true',
+                      default=False)
+
+    parser.add_option("--find-and-show1",
                       help=("find checkerboard intersections and "
                             "display them (don't compute distortion)"),
                       action='store_true',
                       default=False)
 
+    parser.add_option("--find-and-show2",
+                      help=("find checkerboard intersections and "
+                            "display them (don't compute distortion)"),
+                      action='store_true',
+                      default=False)
+
+    parser.add_option("--debug-line-finding",
+                      help=("show the line finding clustering data"),
+                      action='store_true',
+                      default=False)
+
     parser.add_option("--debug-nodes",
-                      help="display node numbers and print edges",
+                      help="print to console the node numbers and edges",
                       action='store_true',
                       default=False)
 
     (cli_options, args) = parser.parse_args()
     if not len(args)==1:
-        raise RuntimeError('one command-line argument is needed - the configFile')
+        raise RuntimeError('one command-line argument is needed - '
+                           'the configFile')
     configFile = args[0]
 
     defaults = dict(
+        # keep flydra-sphinx-docs/calibration.rst up to date
+        use = 'raw',
+        angle_precision_degrees=10.0,
+        aspect_ratio = 1.0,
+
         show_lines = False,
         return_early=False,
         debug_line_finding = False,
         epsfcn = 1e-9,
-        use = 'raw',
         print_debug_info = False,
         save_debug_images = False,
 
-        aspect_ratio = 1.0,
-        tol=0,
+        ftol=0.001,
+        xtol=0,
         do_plot = False,
 
 	K13 = None, # center guess X
@@ -704,8 +889,18 @@ def main():
 	kc2 = 0.0, # initial guess of radial distortion
         )
 
-    if cli_options.find_and_show:
-        #defaults['return_early'] = True
+    if cli_options.find_and_show1:
+        defaults['return_early'] = True
+        defaults['do_plot'] = True
+
+    if cli_options.find_and_show2:
+        defaults['do_plot'] = True
+
+    cli_options.find_and_show = (cli_options.find_and_show1 or
+                                 cli_options.find_and_show2)
+
+    if cli_options.debug_line_finding:
+        defaults['debug_line_finding'] = True
         defaults['do_plot'] = True
 
     configFile = os.path.abspath( configFile)
@@ -729,7 +924,8 @@ def main():
         options.do_plot = True
 
     if cli_options.view_results_quick:
-        helper = reconstruct_utils.make_ReconstructHelper_from_rad_file(options.rad_fname)
+        helper = reconstruct_utils.make_ReconstructHelper_from_rad_file(
+            options.rad_fname)
         pylab.figure()
         ax = pylab.subplot(1,1,1)
         visualize_distortions( ax, helper)
@@ -741,16 +937,27 @@ def main():
     graph_idxs_by_frames = []
     all_imnx_use = []
 
-    fmf = FlyMovieFormat.mmap_flymovie(options.fname)
+    fmf = FlyMovieFormat.FlyMovie(options.fname)
 
     for frame in options.frames:
         (similar_direction_graphs, imnx_orig, imnx_no_bg, imnx_binary,
-         imnx_use, imnx_rawbinary) = get_similar_direction_graphs(fmf,frame,
-                                                                  use=options.use,
-                                                                  return_early=options.return_early,
-                                                                  debug_line_finding = options.debug_line_finding,
-                                                                  aspect_ratio = options.aspect_ratio,
-                                                                  )
+         imnx_use, imnx_rawbinary) = get_similar_direction_graphs(
+            fmf,frame,
+            use=options.use,
+            return_early=options.return_early,
+            debug_line_finding = options.debug_line_finding,
+            aspect_ratio = options.aspect_ratio,
+            direction_eps_radians=options.angle_precision_degrees*D2R,
+            chess_preview=cli_options.show_chessboard_finder_preview,
+            )
+
+        if 1:
+            filtered = prune_non_simply_connected(similar_direction_graphs)
+            print '%d of %d original graphs survived'%(
+                len(filtered),len(similar_direction_graphs))
+            similar_direction_graphs = filtered
+            print 'mean N nodes: %f'%np.mean([len(g.nodes()) for g in similar_direction_graphs])
+
         start_idx = len(all_graphs)
         all_graphs.extend( similar_direction_graphs )
         stop_idx = len(all_graphs)
@@ -765,6 +972,9 @@ def main():
 
         # XXX uses last image
     similar_direction_graphs = all_graphs
+    if len(all_graphs)==0:
+        raise ValueError(
+            'no valid graphs were found. Cannot continue')
 
     did_plot = False
     if options.do_plot:
@@ -772,6 +982,8 @@ def main():
         frame_mpl_figures = {}
         # plot original, distorted image
         for j, frame_no in enumerate(options.frames):
+            color_count = 0
+            plot_nodes = []
             frame_mpl_figures[frame_no] = pylab.figure()
             if (options.return_early or cli_options.find_and_show):
                 im_ax = pylab.subplot(1,1,1)
@@ -793,9 +1005,21 @@ def main():
                         xys = numpy.array([ node.get_pos() for node in subgraph.nodes() ])
                         im_ax.plot( xys[:,0], xys[:,1], 'bo' )
                     else:
+                        color = get_color(color_count)
+                        color_count += 1
                         for edge in subgraph.edges():
+                            ## xys = numpy.array(
+                            ##     [ edge[i].get_rand_pos(repr(subgraph)) for i in [0,1] ])
                             xys = numpy.array([ edge[i].get_pos() for i in [0,1] ])
-                            im_ax.plot( xys[:,0], xys[:,1], 'bo-')
+                            im_ax.plot( xys[:,0], xys[:,1], '%so-'%color, mew=0)
+                            plot_nodes.append( edge[0] )
+                            plot_nodes.append( edge[1] )
+            if 1:
+                plot_nodes = list(set(plot_nodes)) # unique
+                for node in plot_nodes:
+                    x,y=node.get_pos()
+                    im_ax.text(x,y,'%s'%node)
+
                 im_ax.set_title('frame %d - original (distorted)'%options.frames[j])
 
                 if options.show_lines:
@@ -881,15 +1105,16 @@ def main():
 
         if 1:
             # call optimizer
-            pfinal, cov_x, infodict, mesg, ier = scipy.optimize.minpack.leastsq(
+            results = scipy.optimize.minpack.leastsq(
                 obj.lm_err_func,
                 numpy.array(p0,copy=True), # workaround bug (scipy ticket 637)
                 epsfcn=options.epsfcn,
-                ftol=options.tol,
-                xtol=options.tol,
+                ftol=options.ftol,
+                xtol=options.xtol,
                 maxfev=int(1e6),
                 full_output=True,
                 )
+            pfinal, cov_x, infodict, mesg, ier = results
             print
             print '%d function calls'%(infodict['nfev'],)
             print 'covariance of parameters:'
@@ -907,7 +1132,7 @@ def main():
         helper.save_to_rad_file( options.rad_fname, comments = 'final err %.1f, leastsq result %d: %s'%(final_err, ier, mesg) )
         print 'final_err',final_err
         if numpy.allclose(final_err,initial_err):
-            print 'WARNING: no improvement after fitting. Reduce tolerance ("tol") and try again.'
+            print 'WARNING: no improvement after fitting. Reduce tolerance ("ftol","xtol") and try again.'
 
     else:
         # cli_options.view_results == True

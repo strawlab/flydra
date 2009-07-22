@@ -3,8 +3,8 @@ ENABLED = True
 if ENABLED:
     import matplotlib
     matplotlib.use('WXAgg')
-    import matplotlib.numerix as nx
-    import matplotlib.numerix.mlab as mlab
+    import numpy as np
+    import matplotlib.mlab as mlab
     import pylab
     import matplotlib.cm
     import matplotlib.figure
@@ -47,7 +47,7 @@ class PlotPanel(wx.Panel):
             pylab.setp(a,'xticks',range(0,start_size[0],100))
             pylab.setp(a,'ylim',[0,start_size[1]])
             pylab.setp(a,'yticks',range(0,start_size[1],100))
-            z = nx.zeros((start_size[1],start_size[0]))
+            z = np.zeros((start_size[1],start_size[0]))
             frame = z
             extent = 0, frame.shape[1]-1, frame.shape[0]-1, 0
             self.im = a.imshow( z,
@@ -92,7 +92,7 @@ class PlotPanel(wx.Panel):
                 print "main_brain WARNING: size changed to %s, don't know how to re-adjust"%str(image.shape)
                 return
             if not self.cmap_is_fixed:
-                rval = nx.ravel(image)
+                rval = np.ravel(image)
                 vmin = mlab.amin(rval)
                 vmax = mlab.amax(rval)
                 if vmin==vmax:

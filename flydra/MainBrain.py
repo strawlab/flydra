@@ -4,7 +4,7 @@
 from __future__ import with_statement, division
 import threading, time, socket, select, sys, os, copy, struct, math
 import collections
-import sets, traceback
+import traceback
 import Pyro.core
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
@@ -353,21 +353,21 @@ class TrigReceiver(threading.Thread):
             if trig_buf=='1':
                 with self.main_brain.trigger_device_lock:
                     pre_timestamp = time.time()
-                    self.main_brain.trigger_device.ext_trig1()
+                    self.main_brain.trigger_device.ext_trig1 = True
                     # hmm, calling log_message is normally what the cameras do..
                     self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG1')
 
             elif trig_buf=='2':
                 with self.main_brain.trigger_device_lock:
                     pre_timestamp = time.time()
-                    self.main_brain.trigger_device.ext_trig2()
+                    self.main_brain.trigger_device.ext_trig2 = True
                     # hmm, calling log_message is normally what the cameras do..
                     self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG2')
 
             elif trig_buf=='3':
                 with self.main_brain.trigger_device_lock:
                     pre_timestamp = time.time()
-                    self.main_brain.trigger_device.ext_trig3()
+                    self.main_brain.trigger_device.ext_trig3 = True
                     # hmm, calling log_message is normally what the cameras do..
                     self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG3')
 
@@ -804,7 +804,7 @@ class CoordinateProcessor(threading.Thread):
         realtime_kalman_coord_dict = collections.defaultdict(dict)
         oldest_timestamp_by_corrected_framenumber = {}
 
-        new_data_framenumbers = sets.Set()
+        new_data_framenumbers = set()
 
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)
 
@@ -956,8 +956,15 @@ class CoordinateProcessor(threading.Thread):
                         with cam_dict['lock']:
                             cam_dict['points_distorted']=points_distorted
 
+                        # Use camn_received_time to determine sync
+                        # info. This avoids 2 potential problems:
+                        #  * using raw_timestamp can fail if the
+                        #    camera drivers don't provide useful data
+                        #  * using time.time() can fail if the network
+                        #    latency jitter is on the order of the
+                        #    inter frame interval.
                         tmp = self.main_brain.timestamp_modeler.register_frame(
-                            cam_id,raw_framenumber,raw_timestamp,full_output=True)
+                            cam_id,raw_framenumber,camn_received_time,full_output=True)
                         trigger_timestamp, corrected_framenumber, did_frame_offset_change = tmp
                         if did_frame_offset_change:
                             self.OnSynchronize( cam_idx, cam_id, raw_framenumber, trigger_timestamp,
@@ -979,6 +986,9 @@ class CoordinateProcessor(threading.Thread):
                                 cur_val = point_tuple[PT_TUPLE_IDX_CUR_VAL_IDX]
                                 mean_val = point_tuple[PT_TUPLE_IDX_MEAN_VAL_IDX]
                                 sumsqf_val = point_tuple[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
+                                if corrected_framenumber is None:
+                                    # don't bother saving if we don't know when it was from
+                                    continue
                                 deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                                          corrected_framenumber,
                                                          trigger_timestamp,camn_received_time)
@@ -1330,7 +1340,7 @@ class CoordinateProcessor(threading.Thread):
                         corrected_framenumber = k[0]
                         data_dict = realtime_coord_dict[corrected_framenumber]
                         this_cam_ids = data_dict.keys()
-                        print ' a guess at missing cam_id(s):',list(sets.Set(self.cam_ids) - sets.Set( this_cam_ids ))
+                        print ' a guess at missing cam_id(s):',list(set(self.cam_ids) - set( this_cam_ids ))
 
                     for ki in k[:-50]:
                         del realtime_coord_dict[ki]
@@ -1514,13 +1524,6 @@ class MainBrain(object):
                 with cam_lock:
                     cam['commands']['clear_bg']=None
 
-        def external_set_debug( self, cam_id, value):
-            with self.cam_info_lock:
-                cam = self.cam_info[cam_id]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['debug']=value
-
         def external_set_cal( self, cam_id, pmat, intlin, intnonlin, scale_factor):
             with self.cam_info_lock:
                 cam = self.cam_info[cam_id]
@@ -1653,6 +1656,9 @@ class MainBrain(object):
                     except:
                         print >> sys.stderr, 'error while appending point_tuple',point_tuple
                         raise
+                    if corrected_framenumber is None:
+                        # don't bother saving if we don't know when it was from
+                        continue
                     deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                              corrected_framenumber,
                                              remote_timestamp, camn_received_time)
@@ -1971,9 +1977,6 @@ class MainBrain(object):
         self.remote_api.external_quit( cam_id )
         sys.stdout.flush()
 
-    def set_debug_mode(self, cam_id, value):
-        self.remote_api.external_set_debug( cam_id, value)
-
     def set_collecting_background(self, cam_id, value):
         self.remote_api.external_send_set_camera_property( cam_id, 'collecting_background', value)
 
@@ -2128,11 +2131,6 @@ class MainBrain(object):
 
     def __del__(self):
         self.quit()
-
-    def set_all_cameras_debug_mode( self, value ):
-        cam_ids = self.remote_api.external_get_cam_ids()
-        for cam_id in cam_ids:
-            self.remote_api.external_set_debug( cam_id, value)
 
     def is_saving_data(self):
         return self.h5file is not None

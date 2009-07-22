@@ -9,6 +9,7 @@ import flydra.a2.utils as utils
 import flydra.analysis.result_utils as result_utils
 import subprocess, collections
 import flydra.a2.ufmf_tools as ufmf_tools
+import flydra.reconstruct
 import cherrypy  # ubuntu: install python-cherrypy3
 import benu
 
@@ -18,6 +19,7 @@ def get_tile(N):
     return '%dx%d'%(rows,cols)
 
 def get_config_defaults():
+    # keep in sync with usage in main() below
     what = {'show_2d_position': False,
             'show_2d_orientation': False,
             'white_background': False,
@@ -36,6 +38,9 @@ def make_montage( h5_filename,
                   max_n_frames = None,
                   start = None,
                   stop = None,
+                  reconstructor_source = None,
+                  movie_fnames = None,
+                  movie_cam_ids = None,
                   ):
     config = get_config_defaults()
     if cfg_filename is not None:
@@ -43,10 +48,14 @@ def make_montage( h5_filename,
         for section in loaded_cfg:
             config[section].update( loaded_cfg.get(section,{}) )
 
-    ufmf_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
-                                                  ufmf_dir=ufmf_dir,
-                                                  careful=True )
 
+    if movie_fnames is None:
+        movie_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
+                                                       ufmf_dir=ufmf_dir,
+                                                       careful=True )
+
+    if len(movie_fnames)==0:
+        raise ValueError('no input movies -- nothing to do')
 
     if dest_dir is None:
         dest_dir = os.curdir
@@ -62,15 +71,24 @@ def make_montage( h5_filename,
 
     workaround_ffmpeg2theora_bug = True
 
+    if reconstructor_source is None:
+        reconstructor_source = h5_filename
+
+    reconstructor = flydra.reconstruct.Reconstructor(
+                    reconstructor_source)
+
     blank_images = {}
 
     all_frame_montages = []
     for frame_enum,(frame_dict,frame) in enumerate(ufmf_tools.iterate_frames(
-        h5_filename, ufmf_fnames,
+        h5_filename, movie_fnames,
+        reconstructor = reconstructor,
+        movie_cam_ids = movie_cam_ids,
         white_background=config['what to show']['white_background'],
         max_n_frames = max_n_frames,
         start = start,
         stop = stop,
+        rgb8_if_color = True,
         )):
         tracker_data = frame_dict['tracker_data']
 
@@ -78,7 +96,7 @@ def make_montage( h5_filename,
             print '%s: frame %d'%(datetime_str,frame)
 
         saved_fnames = []
-        for ufmf_fname in ufmf_fnames:
+        for movie_idx,ufmf_fname in enumerate(movie_fnames):
             try:
                 frame_data = frame_dict[ufmf_fname]
                 cam_id = frame_data['cam_id']
@@ -87,7 +105,10 @@ def make_montage( h5_filename,
                 del frame_data
             except KeyError:
                 # no data saved (frame skip on Prosilica camera?)
-                cam_id = ufmf_tools.get_cam_id_from_ufmf_fname(ufmf_fname)
+                if movie_cam_ids is not None:
+                    cam_id = movie_cam_ids[movie_idx]
+                else:
+                    cam_id = ufmf_tools.get_cam_id_from_ufmf_fname(ufmf_fname)
                 camn = None
                 if cam_id not in blank_images:
                     # XXX should get known image size of .ufmf
@@ -136,7 +157,11 @@ def make_montage( h5_filename,
                     xarr = np.atleast_1d(this_cam_data['x'])
                     yarr = np.atleast_1d(this_cam_data['y'])
                     canv.scatter(xarr, yarr,
-                                 color_rgba=(0,1,0,1),
+                                 color_rgba=(0,0,0,1),
+                                 radius=10,
+                                 )
+                    canv.scatter(xarr+1, yarr+1,
+                                 color_rgba=(1,1,1,1),
                                  radius=10,
                                  )
                 if config['what to show']['show_2d_orientation'] and camn is not None:
@@ -195,7 +220,27 @@ def make_montage( h5_filename,
                 os.unlink(fname)
 
 def main():
-    usage = '%prog DATAFILE2D.h5 [options]'
+    # keep default config file in sync with get_config_defaults() above
+    usage = """%prog DATAFILE2D.h5 [options]
+
+The default configuration correspondes to a config file:
+
+[what to show]
+show_2d_position = False
+show_2d_orientation = False
+white_background =  False
+max_resolution = None
+
+Config files may also have sections such as:
+
+[cam7_1]
+pixel_aspect=2 # each pixel is twice as wide as tall
+transform='rot 180' # rotate the image 180 degrees (See transform
+                    # keyword argument of
+                    # :meth:`flydra.a2.benu.Canvas.set_user_coords`
+                    # for all possible transforms.)
+
+"""
 
     parser = OptionParser(usage)
 
@@ -223,11 +268,29 @@ def main():
     parser.add_option('-n', "--no-remove", action='store_true', default=False,
                       help="don't remove intermediate images")
 
+    parser.add_option('--movie-fnames', type='string', default=None,
+                      help="names of movie files (don't autodiscover from .h5)")
+
+    parser.add_option('--movie-cam-ids', type='string', default=None,
+                      help="cam_ids of movie files (don't autodiscover from .h5)")
+
+    parser.add_option(
+        "-r", "--reconstructor",type='string',
+        help="calibration/reconstructor path")
+
     (options, args) = parser.parse_args()
 
     if len(args)<1:
         parser.print_help()
         return
+
+    movie_fnames = options.movie_fnames
+    if movie_fnames is not None:
+        movie_fnames = movie_fnames.split( os.pathsep )
+
+    movie_cam_ids = options.movie_cam_ids
+    if movie_cam_ids is not None:
+        movie_cam_ids = movie_cam_ids.split( os.pathsep )
 
     h5_filename = args[0]
     make_montage( h5_filename,
@@ -239,4 +302,7 @@ def main():
                   max_n_frames = options.max_n_frames,
                   start = options.start,
                   stop = options.stop,
+                  reconstructor_source = options.reconstructor,
+                  movie_fnames = movie_fnames,
+                  movie_cam_ids = movie_cam_ids,
                   )

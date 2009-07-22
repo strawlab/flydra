@@ -25,10 +25,10 @@ sys.path.append(os.path.abspath('ext'))
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ['sphinx.ext.autodoc','sphinx.ext.pngmath',
               'sphinx.ext.doctest',
-              'numpydoc','graphviz']
+              'numpydoc','sphinx.ext.graphviz','sphinx.ext.autosummary']
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['.templates']
+templates_path = ['_templates']
 
 # The suffix of source filenames.
 source_suffix = '.rst'
@@ -68,7 +68,7 @@ release = flydra.version.__version__
 
 # List of directories, relative to source directory, that shouldn't be searched
 # for source files.
-exclude_trees = ['.build']
+exclude_trees = ['build']
 
 # The reST default role (used for this markup: `text`) to use for all documents.
 #default_role = None

@@ -5,7 +5,6 @@ import MainBrain
 from MainBrain import DEBUG
 import wx
 from wx import xrc
-import pyglet.gl.lib
 import numpy
 import flydra.a2.xml_stimulus
 
@@ -195,10 +194,6 @@ class wxMainBrainApp(wx.App):
 
         #   View
         viewmenu = wx.Menu()
-        ID_debug_cameras = wx.NewId()
-        viewmenu.Append(ID_debug_cameras, "Camera debug mode",
-                        "Enter camera debug mode", wx.ITEM_CHECK)
-        wx.EVT_MENU(self, ID_debug_cameras, self.OnToggleDebugCameras)
 
         ID_toggle_image_tinting = wx.NewId()
         viewmenu.Append(ID_toggle_image_tinting, "Tint clipped data",
@@ -461,7 +456,13 @@ class wxMainBrainApp(wx.App):
             child_kwargs['attribList']=0
         else:
             child_kwargs=None
-        self.cam_image_canvas = wxglvideo.DynamicImageCanvas(dynamic_image_panel,-1,child_kwargs=child_kwargs)
+        if child_kwargs is not None:
+            extra_kwargs = dict(child_kwargs=child_kwargs)
+        else:
+            extra_kwargs = {}
+        self.cam_image_canvas =wxglvideo.DynamicImageCanvas(dynamic_image_panel,
+                                                            -1,
+                                                            **extra_kwargs)
         box.Add(self.cam_image_canvas,1,wx.EXPAND)
         dynamic_image_panel.Layout()
 
@@ -579,7 +580,7 @@ class wxMainBrainApp(wx.App):
                      0,wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL )
 
             txtctrl = wx.TextCtrl( per_cam_controls_panel, wx.NewId(),
-                                  size=(40,20))
+                                  size=(50,20))
             txtctrl.SetValue(str(current_value))
             grid.Add( txtctrl,0,wx.ALIGN_LEFT )
 
@@ -1091,9 +1092,6 @@ class wxMainBrainApp(wx.App):
             dlg.Destroy()
             self.pass_all_keystrokes = False
 
-    def OnToggleDebugCameras(self, event):
-        self.main_brain.set_all_cameras_debug_mode( event.IsChecked() )
-
     def OnChangeSaveDataDir(self, event):
         dlg = wx.DirDialog( self.frame, "Change save data directory",
                            style = wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON,
@@ -1495,11 +1493,16 @@ class wxMainBrainApp(wx.App):
                             else:
                                 linesegs = None
                                 lineseg_colors = None
+                            global use_opengl
+                            if use_opengl:
+                                extra_kwargs = dict(sort_add=True)
+                            else:
+                                extra_kwargs = {}
                             self.cam_image_canvas.update_image_and_drawings(cam_id,image,
                                                                             points=points,
                                                                             linesegs=linesegs,
                                                                             lineseg_colors=lineseg_colors,
-                                                                            sort_add=True)
+                                                                            **extra_kwargs)
                     if show_fps is not None:
                         show_fps_label = xrc.XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
                         show_fps_label.SetLabel('fps: %.1f'%show_fps)

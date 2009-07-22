@@ -1,6 +1,7 @@
 from setuptools import setup, find_packages
 from distutils.core import Extension # actually monkey-patched by setuptools
 import flydra.version
+import numpy as np
 
 version = flydra.version.__version__
 
@@ -22,7 +23,9 @@ ext_modules.append(Extension(name='flydra.fastgeom',
                              sources=['src/fastgeom.pyx']))
 
 ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
-                             sources=['flydra/a2/fastfinder_help.c'])) # auto-generate with cython
+                             sources=['flydra/a2/fastfinder_help.c'],
+                             include_dirs=[np.get_numpy_include()],
+                             )) # auto-generate with cython
 
 setup(name='flydra',
       version=version,
@@ -46,6 +49,7 @@ setup(name='flydra',
     'flydra_analysis_auto_discover_ufmfs = flydra.a2.auto_discover_ufmfs:main',
     'flydra_analysis_montage_ufmfs = flydra.a2.montage_ufmfs:main',
     'flydra_analysis_retrack_movies = flydra.a2.retrack_movies:main',
+    'flydra_analysis_overlay_kalman_movie = flydra.a2.overlay_kalman_movie:main',
 
 # analysis - .h5 file care and feeding
     'flydra_analysis_filter_kalman_data = flydra.analysis.flydra_analysis_filter_kalman_data:main',
@@ -106,7 +110,7 @@ setup(name='flydra',
 
 # testing
     'flydra_test_commands = flydra.test_commands:main',
-    'flydra_test_mpl_markersize = flydra.test.mpl_markersize:main',
+    'flydra_test_mpl_markersize = flydra.mpl_markersize:main',
     ],
 
     'gui_scripts': [
