@@ -215,7 +215,7 @@ Estimating longitudinal body orientation happens in several steps:
 * Check the 2D body axis estimates using :command:`flydra_analysis_montage_ufmfs` 
   to generate images or movies of the tracking.
 
-* Finally, another rounte through the tracker and data association now
+* Finally, another run through the tracker and data association now
   using the 2D orientation data.
 
 An example of a call to
