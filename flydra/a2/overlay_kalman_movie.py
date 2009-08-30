@@ -140,15 +140,15 @@ def main():
     parser.add_option("--dest-dir", type='string',
                       help="destination directory to save resulting files")
     parser.add_option('--movie-fname', type='string', default=None,
-                      help="names of movie file (don't autodiscover from .h5)")
+                      help="name of .ufmf of .fmf movie file (don't autodiscover from .h5)")
     parser.add_option("-r", "--reconstructor",type='string',
                       help="calibration/reconstructor path")
     parser.add_option('--cam-id', type='string', default=None,
                       help="cam_id of movie file (don't autodiscover from .h5)")
     parser.add_option('--start', type='int', default=None,
-                      help="first frame of the movie file to export")
+                      help="first frame of the movie (not .h5) file to export")
     parser.add_option('--stop', type='int', default=None,
-                      help="last frame of the movie file to export")
+                      help="last frame of the movie (not .h5) file to export")
     parser.add_option('--transform', type='string', default=None,
                       help="how to orient the movie file")
     parser.add_option('--show-obj-ids', action='store_true', default=False,
