@@ -89,13 +89,17 @@ class Canvas(object):
         ctx.paint()
         ctx.restore()
 
-    def plot(self,xarr,yarr,color_rgba=None,close_path=False):
+    def plot(self,xarr,yarr,color_rgba=None,close_path=False,linewidth=None):
         """line plot of xarr vs. yarr"""
         if color_rgba is None:
             color_rgba = (1,1,1,1)
         if len(xarr)==1:
             warnings.warn('benu plot() currently only plots line segments')
         ctx = self._ctx # shorthand
+
+        if linewidth is not None:
+            orig_linewidth = ctx.get_line_width()
+            ctx.set_line_width(linewidth)
 
         ctx.set_source_rgba(*color_rgba)
         ctx.move_to(xarr[0],yarr[0])
@@ -105,11 +109,19 @@ class Canvas(object):
             ctx.close_path()
         ctx.stroke()
 
-    def scatter(self,xarr,yarr,color_rgba=None,radius=1.0):
+        if linewidth is not None:
+            ctx.set_line_width(orig_linewidth)
+
+    def scatter(self,xarr,yarr,color_rgba=None,
+                radius=1.0, markeredgewidth=None):
         """scatter plot of xarr vs. yarr"""
         if color_rgba is None:
             color_rgba = (1,1,1,1)
         ctx = self._ctx # shorthand
+
+        if markeredgewidth is not None:
+            orig_linewidth = ctx.get_line_width()
+            ctx.set_line_width(markeredgewidth)
 
         ctx.set_source_rgba(*color_rgba)
         for x,y in zip(xarr,yarr):
@@ -117,6 +129,9 @@ class Canvas(object):
             ctx.new_sub_path()
             ctx.arc(x,y,radius,0,2*np.pi)
         ctx.stroke()
+
+        if markeredgewidth is not None:
+            ctx.set_line_width(orig_linewidth)
 
     def save(self):
         """save output to file"""
