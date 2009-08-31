@@ -1,4 +1,5 @@
 from __future__ import with_statement
+from __future__ import division
 import pkg_resources
 import motmot.imops.imops as imops
 from optparse import OptionParser
@@ -10,6 +11,12 @@ import warnings, os
 import numpy as np
 import benu
 
+green = (0,1,0,1)
+
+# from http://jfly.iam.u-tokyo.ac.jp/color/index.html
+orange = (.9,.6,0,1)
+sky_blue = (.35, .70, .90, 1)
+
 def doit(movie_fname=None,
          reconstructor_fname=None,
          h5_fname=None,
@@ -20,6 +27,7 @@ def doit(movie_fname=None,
          stop=None,
          show_obj_ids=False,
          obj_only=None,
+         image_format=None,
          ):
 
     if dest_dir is None:
@@ -27,6 +35,9 @@ def doit(movie_fname=None,
 
     if movie_fname is None:
         raise NotImplementedError('')
+
+    if image_format is None:
+        image_format='png'
 
     if cam_id is None:
         raise NotImplementedError('')
@@ -75,8 +86,8 @@ def doit(movie_fname=None,
         h5_frame = extra['time_model'].timestamp2framestamp(timestamp)
         warnings.warn('not implemented: interpolating data')
         h5_frame = int(round(h5_frame))
-        save_fname_path=os.path.splitext(movie_fname)[0]+'_frame%06d.png'%(
-            movie_fno,)
+        save_fname_path=os.path.splitext(movie_fname)[0]+'_frame%06d.%s'%(
+            movie_fno,image_format)
         save_fname_path=os.path.join(dest_dir,save_fname_path)
         if transform in ['rot 90','rot -90']:
             device_rect = (0,0,fix_h,fix_w)
@@ -110,7 +121,8 @@ def doit(movie_fname=None,
                 x2d,y2d=reconstructor.find2d(cam_id,xyz,distorted=True)
                 radius = 10
                 canv.scatter( [ x2d], [y2d],
-                              color_rgba=(0,1,0,1),
+                              color_rgba=green,
+                              markeredgewidth=3,
                               radius = radius )
 
                 if 1:
@@ -119,8 +131,21 @@ def doit(movie_fname=None,
                     x2d_z0,y2d_z0=reconstructor.find2d(cam_id,xyz0,
                                                        distorted=True)
                     warnings.warn('not distorting Z line')
-                    canv.plot( [ x2d, x2d_z0], [y2d, y2d_z0],
-                                  color_rgba=(0,1,0,1) )
+                    if 1:
+                        xdist = x2d-x2d_z0
+                        ydist = y2d-y2d_z0
+                        dist = np.sqrt( xdist**2 + ydist**2)
+                        start_frac = radius/dist
+                        if radius > dist:
+                            start_frac = 0
+                        x2d_r = x2d - xdist*start_frac
+                        y2d_r = y2d - ydist*start_frac
+                    else:
+                        x2d_r = x2d
+                        y2d_r = y2d
+                    canv.plot( [ x2d_r, x2d_z0], [y2d_r, y2d_z0],
+                               color_rgba=green,
+                               linewidth=3 )
                 if show_obj_ids:
                     show_points.append( ( obj_id, x2d, y2d) )
         for show_point in show_points:
@@ -154,6 +179,7 @@ def main():
     parser.add_option('--show-obj-ids', action='store_true', default=False,
                       help="show object ids")
     parser.add_option("--obj-only", type="string")
+    parser.add_option("--image-format", type="string", default='png')
     (options, args) = parser.parse_args()
 
     if len(args)<1:
@@ -175,6 +201,7 @@ def main():
          stop=options.stop,
          show_obj_ids=options.show_obj_ids,
          obj_only = options.obj_only,
+         image_format=options.image_format,
          )
 
 if __name__=='__main__':
