@@ -173,6 +173,12 @@ def plot_timeseries(subplot=None,options = None):
 
     fuse_did_once = False
 
+    if not hasattr(options,'timestamp_file'):
+        options.timestamp_file = None
+
+    if not hasattr(options,'ori_qual'):
+        options.ori_qual = None
+
     if options.timestamp_file is not None:
         h5 = tables.openFile(options.timestamp_file,mode='r')
         print 'reading timestamps and frames'
