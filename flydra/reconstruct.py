@@ -419,8 +419,6 @@ class SingleCameraCalibration:
             eps = 1e-6
             if abs(intrinsic_parameters[2,2]-1.0)>eps:
                 if no_error_on_intrinsic_parameter_problem:
-                    print 'intrinsic_parameters'
-                    print intrinsic_parameters
                     warnings.warn('expected last row/col of intrinsic '
                                   'parameter matrix to be unity. It is %s'%
                                   intrinsic_parameters[2,2])
