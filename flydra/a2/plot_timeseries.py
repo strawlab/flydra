@@ -248,10 +248,27 @@ def plot_timeseries(subplot=None,options = None):
                         state_cond &= ~walking_bout
                     else:
                         state_cond |= walking_bout
+                    ##ads## print 'np.min(frame),np.max(frame),walkstart,walkstop',np.min(frame),np.max(frame),walkstart,walkstop
+                    ##ads## print '  flystate',flystate
+                    ##ads## print '  np.sum(walking_bout)',np.sum(walking_bout)
+                    ##ads## print '  np.sum(state_cond)',np.sum(state_cond)
 
                 masked_cond = ~state_cond
-                kalman_rows = numpy.ma.masked_where( ~state_cond, walking_and_flying_kalman_rows )
-                frame = kalman_rows['frame']
+                ##ads## print 'walking_and_flying_kalman_rows.shape',walking_and_flying_kalman_rows.shape
+                ##ads## print repr(walking_and_flying_kalman_rows[:3])
+                kalman_rows = numpy.ma.masked_where( masked_cond, walking_and_flying_kalman_rows )
+                ##ads## print 'kalman_rows.shape',kalman_rows.shape
+                ##ads## print 'kalman_rows.dtype',kalman_rows.dtype
+                ##ads## print 'np.sum(masked_cond)',np.sum(masked_cond)
+                ##ads## print 'len(kalman_rows)',len(kalman_rows)
+                ##ads## print 'kalman_rows.shape',kalman_rows.shape
+                if np.sum(state_cond)==0:
+                    # This is a workaround for a bug in numpy 1.2.1 on
+                    # Ubuntu Jaunty (1:1.2.1-1ubuntu1)
+                    print 'no data'
+                    frame = numpy.ma.masked_where( masked_cond, np.zeros(masked_cond.shape,dtype=np.int8))
+                else:
+                    frame = kalman_rows['frame']
 
             if frame0 is None:
                 frame0 = int(frame[0])
