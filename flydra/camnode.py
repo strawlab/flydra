@@ -1816,11 +1816,14 @@ class AppState(object):
             cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
 
             all_cam_info_list = [
-                (cam_iface.get_camera_info(i),i) for i in range(cam_iface.get_num_cameras()) ]
+                ('\0'.join(cam_iface.get_camera_info(i)),i) for i in range(cam_iface.get_num_cameras()) ]
             all_cam_info_list.sort() # make sure list is always in same order for given cameras
             all_cam_info_list.reverse() # any ordering will do, but reverse for historical reasons
             cam_order = [ x[1] for x in all_cam_info_list]
+            del all_cam_info_list
             print 'camera order',cam_order
+            for i,cam_no in enumerate(cam_order):
+                 print 'order %d: cam_no %d %s'%(i, cam_no, cam_iface.get_camera_info(cam_no))
             num_cams = len(cam_order)
 
         if num_cams == 0:
