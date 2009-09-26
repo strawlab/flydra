@@ -1300,6 +1300,9 @@ class ImageSource(threading.Thread):
         self.debug_acquire = debug_acquire
         self.cam_no_str = str(cam_no)
         self.quit_event = quit_event
+        self.cam_id = '<unassigned>'
+    def assign_cam_id(self,cam_id):
+        self.cam_id = cam_id
     def set_chain(self,new_chain):
         # XXX TODO FIXME: put self._chain behind lock
         if self._chain is not None:
@@ -2110,6 +2113,7 @@ class AppState(object):
                                                          )
 
             self.all_cam_ids[cam_no]=cam_id
+            self._image_sources[cam_no].assign_cam_id(cam_id)
             cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(self.all_cam_ids[cam_no])
 
             ##################################################################
