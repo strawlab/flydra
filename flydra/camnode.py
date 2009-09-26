@@ -1823,7 +1823,15 @@ class AppState(object):
             del all_cam_info_list
             print 'camera order',cam_order
             for i,cam_no in enumerate(cam_order):
-                 print 'order %d: cam_no %d %s'%(i, cam_no, cam_iface.get_camera_info(cam_no))
+                 print 'order %d: %s'%(i, cam_iface.get_camera_info(cam_no))
+
+            cams_only = options.cams_only
+            if cams_only is not None:
+                cams_only = map(int,cams_only.split(','))
+            
+                new_cam_order = [ cam_order[i] for i in cams_only ]
+                cam_order = new_cam_order
+
             num_cams = len(cam_order)
 
         if num_cams == 0:
@@ -1879,11 +1887,13 @@ class AppState(object):
                 backend = cam_iface.get_driver_name()
                 N_modes = cam_iface.get_num_modes(cam_order[cam_no])
                 use_mode = options.mode_num
-                print 'camera info:',cam_iface.get_camera_info(cam_order[cam_no])
-                print '%d available modes:'%N_modes
+                if options.show_cam_details:
+                    print 'camera info:',cam_iface.get_camera_info(cam_order[cam_no])
+                    print '%d available modes:'%N_modes
                 for i in range(N_modes):
                     mode_string = cam_iface.get_mode_string(cam_order[cam_no],i)
-                    print '  mode %d: %s'%(i,mode_string)
+                    if options.show_cam_details:
+                        print '  mode %d: %s'%(i,mode_string)
                     if 'format7_0' in mode_string.lower():
                         # prefer format7_0
                         if use_mode is None:
@@ -1891,7 +1901,8 @@ class AppState(object):
                 if use_mode is None:
                     use_mode = 0
                 cam = cam_iface.Camera(cam_order[cam_no],options.num_buffers,use_mode)
-                print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_order[cam_no],use_mode))
+                if options.show_cam_details:
+                    print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_order[cam_no],use_mode))
                 ImageSourceModel = ImageSourceFromCamera
 
                 initial_image_dict = None
@@ -2017,10 +2028,11 @@ class AppState(object):
             if 1:
                 # trigger modes
                 N_trigger_modes = cam.get_num_trigger_modes()
-                print '  %d available trigger modes:'%N_trigger_modes
-                for i in range(N_trigger_modes):
-                    mode_string = cam.get_trigger_mode_string(i)
-                    print '  mode %d: %s'%(i,mode_string)
+                if options.show_cam_details:
+                    print '  %d available trigger modes:'%N_trigger_modes
+                    for i in range(N_trigger_modes):
+                        mode_string = cam.get_trigger_mode_string(i)
+                        print '  mode %d: %s'%(i,mode_string)
                 scalar_control_info['N_trigger_modes'] = N_trigger_modes
                 # XXX TODO: scalar_control_info['trigger_mode'] # current value
 
@@ -2039,13 +2051,15 @@ class AppState(object):
                 if props['has_manual_mode']:
                     if force_manual or min_value <= new_value <= max_value:
                         try:
-                            print 'setting camera property "%s" to manual mode'%(props['name'],)
+                            if options.show_cam_details:
+                                print 'setting camera property "%s" to manual mode'%(props['name'],)
                             cam.set_camera_property( prop_num, new_value, 0 )
                         except:
                             print 'error while setting property %s to %d (from %d)'%(props['name'],new_value,current_value)
                             raise
                     else:
-                        print 'not setting property %s to %d (from %d) because out of range (%d<=value<=%d)'%(props['name'],new_value,current_value,min_value,max_value)
+                        if options.show_cam_details:
+                            print 'not setting property %s to %d (from %d) because out of range (%d<=value<=%d)'%(props['name'],new_value,current_value,min_value,max_value)
 
                     CAM_CONTROLS[props['name']]=prop_num
                 current_value,auto = cam.get_camera_property( prop_num )
@@ -2677,6 +2691,11 @@ def parse_args_and_run(benchmark=False):
 
     parser.add_option("--force-cam-ids", type="string",
                       help="list of names for each camera (comma separated)")
+
+    parser.add_option("--cams-only", type="string",
+                      help="list cameras to use (comma separated)")
+
+    parser.add_option("--show-cam-details", action='store_true', default=False)
 
     parser.add_option("--small-save-radius", type="int",
                       help='half the edge length of .ufmf movies [default: %default]')
