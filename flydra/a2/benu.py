@@ -11,6 +11,8 @@ import os, warnings
 import numpy as np
 import contextlib
 
+D2R = np.pi/180.0
+
 def numpy2cairo(raw):
     raw=np.asarray(raw)
     if raw.dtype!=np.uint8:
@@ -174,39 +176,49 @@ class Canvas(object):
                                   x0=(device_l-xscale*user_l),
                                   y0=(device_b-yscale*user_b),
                                   )
-        elif transform=='rot -90':
-            if 1:
-                raise NotImplementedError('"rot -90" transform is screwed up')
-            xscale = device_h/user_w
-            yscale = device_w/user_h
-            matrix = cairo.Matrix(xx=0,
-                                  yx=-xscale,
-                                  xy=-yscale,
-                                  yy=0,
-                                  x0=(device_l+xscale*user_b),
-                                  y0=(device_b+yscale*user_l),
-                                  )
-        elif transform=='rot 90':
-            # newer than above, tested more, seems to work
-            xscale = device_h/user_w
-            yscale = device_w/user_h
-            matrix = cairo.Matrix(xx=0,
-                                  yx=xscale,
-                                  xy=yscale,
-                                  yy=0,
-                                  x0=(device_l-xscale*user_b),
-                                  y0=(device_b-yscale*user_l),
-                                  )
-        elif transform=='rot 180':
-            xscale = device_w/user_w
-            yscale = device_h/user_h
-            matrix = cairo.Matrix(xx=-xscale,
-                                  yx=0,
-                                  xy=0,
-                                  yy=-yscale,
-                                  x0=(device_l+xscale*user_r),
-                                  y0=(device_b+yscale*user_t),
-                                  )
+        elif transform.startswith('rot '):
+            theta_deg = float(transform[4:])
+            theta = theta_deg * D2R
+
+            # user to device transform
+            rotation = cairo.Matrix(xx=np.cos(theta), xy=-np.sin(theta), x0=0.0,
+                                  yx=np.sin(theta), yy=np.cos(theta), y0=0.0)
+
+            # calculate scaling to fit for arbitrary rotation
+            user_verts = [ (user_l,user_b),
+                           (user_r,user_b),
+                           (user_r,user_t),
+                           (user_l,user_t)]
+            rotated_user_verts = np.array([ rotation.transform_point(*v) for v in user_verts])
+            rotated_user_l = np.min(rotated_user_verts[:,0])
+            rotated_user_r = np.max(rotated_user_verts[:,0])
+            rotated_user_b = np.min(rotated_user_verts[:,1])
+            rotated_user_t = np.max(rotated_user_verts[:,1])
+            rotated_user_w = rotated_user_r-rotated_user_l
+            rotated_user_h = rotated_user_t-rotated_user_b
+
+            rotated_scale_x = device_w/rotated_user_w
+            rotated_scale_y = device_h/rotated_user_h
+
+            scale = cairo.Matrix(xx=rotated_scale_x, xy=0.0, x0=0.0,
+                                 yx=0.0, yy=rotated_scale_y, y0=0.0)
+
+            x0 = (device_l-rotated_user_l*rotated_scale_x)
+            y0 = (device_b-rotated_user_b*rotated_scale_y)
+
+            translate = cairo.Matrix(xx=1.0, xy=0.0, x0=x0,
+                                     yx=0.0, yy=1.0, y0=y0)
+
+            matrix=rotation*scale*translate
+
+            if 0:
+                # pretend the device has y going up from origin at bottom
+                device_coord_flip = cairo.Matrix(xx=1.0, xy=0.0, x0=0.0,
+                                                 yx=0.0, yy=-1.0, y0=0.0)
+                device_coord_translate = cairo.Matrix(xx=1.0, xy=0.0, x0=0.0,
+                                                      yx=0.0, yy=1.0, y0=device_h)
+                matrix = matrix*device_coord_flip*device_coord_translate
+
         else:
             raise ValueError("unknown transform '%s'"%transform)
         return matrix
@@ -258,9 +270,36 @@ class Canvas(object):
         return matrix.transform_point(x,y)
 
 def test_benu():
-    c = Canvas('x.png',10,10)
+    canv = Canvas('/tmp/benu-test.png',1024,1024)
+    device_rect = (256,256,512,512)
+    user_rect = (0,0,50,50)
+
+    #transform = 'rot 10'
+    transform = 'rot -45'
+    #transform = 'orig'
+    pts =  [ (0,0),
+             (5,5),
+             (30,30),
+             (45,45),
+             (1,3),
+             (6,2),
+             ]
+    with canv.set_user_coords(device_rect, user_rect,
+                              transform=transform):
+        for pt in pts:
+            canv.scatter( [pt[0]], [pt[1]] )
+        canv.plot( [0,0,50,50,0],[0,50,50,0,0] )
+
+    for pt in pts:
+        x,y = canv.get_transformed_point(pt[0],pt[1],device_rect,user_rect,
+                                             transform=transform)
+        canv.text( '%s, %s'%(pt[0],pt[1]), x,y )
+    canv.save()
+
     # this test is broken...
     ## with c.set_user_coords(1,2):
     ##     pass
 
 
+if __name__=='__main__':
+    test_benu()
