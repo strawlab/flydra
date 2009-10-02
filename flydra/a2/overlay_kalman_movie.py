@@ -28,6 +28,7 @@ def doit(movie_fname=None,
          show_obj_ids=False,
          obj_only=None,
          image_format=None,
+         save_framelist_fname=None,
          ):
 
     if dest_dir is None:
@@ -75,6 +76,9 @@ def doit(movie_fname=None,
     fix_h = movie.get_height()
     is_color = imops.is_coding_color(movie.get_format())
 
+    if save_framelist_fname is not None:
+        save_framelist_fd = open(save_framelist_fname,mode='w')
+
     for movie_fno in range(start,stop+1):
         print 'movie_fno',movie_fno
         movie.seek(movie_fno)
@@ -86,6 +90,9 @@ def doit(movie_fname=None,
         h5_frame = extra['time_model'].timestamp2framestamp(timestamp)
         warnings.warn('not implemented: interpolating data')
         h5_frame = int(round(h5_frame))
+        if save_framelist_fname is not None:
+            save_framelist_fd.write('%d\n'%h5_frame)
+
         save_fname_path=os.path.splitext(movie_fname)[0]+'_frame%06d.%s'%(
             movie_fno,image_format)
         save_fname_path=os.path.join(dest_dir,save_fname_path)
@@ -180,6 +187,7 @@ def main():
                       help="show object ids")
     parser.add_option("--obj-only", type="string")
     parser.add_option("--image-format", type="string", default='png')
+    parser.add_option('--save-framelist', type='string')
     (options, args) = parser.parse_args()
 
     if len(args)<1:
@@ -202,6 +210,7 @@ def main():
          show_obj_ids=options.show_obj_ids,
          obj_only = options.obj_only,
          image_format=options.image_format,
+         save_framelist_fname=options.save_framelist,
          )
 
 if __name__=='__main__':
