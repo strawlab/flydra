@@ -1340,7 +1340,9 @@ class CoordinateProcessor(threading.Thread):
                         corrected_framenumber = k[0]
                         data_dict = realtime_coord_dict[corrected_framenumber]
                         this_cam_ids = data_dict.keys()
-                        print ' a guess at missing cam_id(s):',list(set(self.cam_ids) - set( this_cam_ids ))
+                        missing_cam_id_guess = list(set(self.cam_ids) - set( this_cam_ids ))
+                        if len(missing_cam_id_guess):
+                            print ' a guess at missing cam_id(s):',list(set(self.cam_ids) - set( this_cam_ids ))
 
                     for ki in k[:-50]:
                         del realtime_coord_dict[ki]
