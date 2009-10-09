@@ -495,6 +495,8 @@ class SingleCameraCalibration:
                                          scale_factor=new_scale_factor)
         self._scaled_cache[scale_factor] = scaled
         return scaled
+    def get_res(self):
+        return self.res
 
     def get_cam_center(self):
         """get the 3D location of the camera center in world coordinates"""
