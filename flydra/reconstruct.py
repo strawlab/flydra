@@ -230,13 +230,13 @@ def setOfSubsets(L):
                 if X & (1L<<i) ]
         for X in range(2**N) ]
 
+intrinsic_normalized_eps = 1e-6
 def normalize_pmat(pmat):
     pmat_orig = pmat
     M = pmat[:,:3]
     t = pmat[:,3,numpy.newaxis]
     K,R = my_rq(M)
-    eps = 1e-6
-    if abs(K[2,2]-1.0)>eps:
+    if abs(K[2,2]-1.0)>intrinsic_normalized_eps:
         pmat = pmat/K[2,2]
     assert numpy.allclose(pmat2cam_center(pmat_orig),pmat2cam_center(pmat))
     return pmat
@@ -717,9 +717,8 @@ def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
     cam_center = pmat2cam_center(M)
 
     intrinsic_parameters, cam_rotation = my_rq(M[:,:3])
-    #intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
-    eps = 1e-15
-    if abs(intrinsic_parameters[2,2]-1.0)>eps:
+    #intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize    
+    if abs(intrinsic_parameters[2,2]-1.0)>intrinsic_normalized_eps:
         raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
 
     # (K = intrinsic parameters)
