@@ -1399,6 +1399,8 @@ class ImageSourceFromCamera(ImageSource):
             print >> sys.stderr, msg
         except cam_iface.FrameDataMissing:
             pass
+        except cam_iface.FrameDataCorrupt:
+            pass
         except cam_iface.FrameSystemCallInterruption:
             pass
 
@@ -1420,6 +1422,14 @@ class ImageSourceFromCamera(ImageSource):
                 stdout_write('(M%s)'%self.cam_no_str)
             now = time.time()
             msg = 'Warning: frame data missing on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
+            #self.log_message_queue.put((self.cam_no_str,now,msg))
+            print >> sys.stderr, msg
+            try_again_condition = True
+        except cam_iface.FrameDataCorrupt:
+            if self.debug_acquire:
+                stdout_write('(C%s)'%self.cam_no_str)
+            now = time.time()
+            msg = 'Warning: frame data corrupt on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
             #self.log_message_queue.put((self.cam_no_str,now,msg))
             print >> sys.stderr, msg
             try_again_condition = True
