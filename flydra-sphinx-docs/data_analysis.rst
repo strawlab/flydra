@@ -216,7 +216,8 @@ Estimating longitudinal body orientation happens in several steps:
   to generate images or movies of the tracking.
 
 * Finally, another run through the tracker and data association now
-  using the 2D orientation data.
+  using the 2D orientation data. (Use the :command:`flydra_kalmanize`
+  program again.)
 
 An example of a call to
 :command:`flydra_analysis_image_based_orientation` is: (This was
