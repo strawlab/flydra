@@ -19,6 +19,7 @@ Contents:
   trigger_device.rst
   orientation_data.rst
   modules.rst
+  old/flydra.rst
 
 Contibutions to this documentation
 ----------------------------------
