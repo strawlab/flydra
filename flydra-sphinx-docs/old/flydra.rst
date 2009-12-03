@@ -25,6 +25,8 @@ Subpages about flydra
 Scripts of great interest
 -------------------------
 
+.. sourcelink:: centered text
+
  * [source:trunk/flydra/flydra/a2/kdviewer.py kdviewer] 3D viewer of Kalmanized trajectories saved in .h5 data file. (This is newer version of [source:trunk/flydra/flydra/analysis/flydra_analysis_plot_kalman_data.py flydra_analysis_plot_kalman_data.py] that uses TVTK.) |mama_small_image|
  * [source:trunk/flydra/flydra/kalman/kalmanize.py flydra_kalmanize] re-analyze 2D data saved in .h5 data file using same Kalman filtering code as realtime analysis. Note: this will only run the causal Kalman filter, which allows re-segmenting the data into trajectories. However, another step, of running the non-causal smoothing algorithm, is typically desired. (See below for reasons why you might want to do this.)
  * [source:trunk/flydra/flydra/analysis/flydra_analysis_generate_recalibration.py flydra_analysis_generate_recalibration] save 2D data from a previously saved .h5 file to perform a (re-)calibration. This new calibration typically has very low reprojection errors. Performing this step can use either 3D trajectories in the .h5 file in order to solve the correspondence problem (which 2D points from which cameras correspond to the same 3D point). Alternatively, if only (at most) a single point is tracked per camera per time point, they are assumed to be from the same 3D point. In this case, specify a start and stop frame.
