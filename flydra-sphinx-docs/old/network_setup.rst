@@ -6,7 +6,7 @@ old Trac wiki page about Flydra Network Setup
 Network topology
 ----------------
 
-[[Image(flydra_topology.jpg)]]
+.. image:: flydra_topology.jpg
 
 Setup of openssh to allow public key based authentication
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -26,6 +26,6 @@ adapters for the cameras. If the required port is not coming up as
 eth0, you can force it in Ubuntu by adjusting the file
 /etc/udev/rules.d/70-persistent-net.rules
 
-[[Image(source:/trunk/flydra/wiki-images/eth0_props.png)]]
-[[Image(source:/trunk/flydra/wiki-images/network_settings.png)]]
+.. image:: eth0_props.png
 
+.. image:: network_settings.png
