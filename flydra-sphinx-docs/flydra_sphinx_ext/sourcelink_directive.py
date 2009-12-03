@@ -7,7 +7,7 @@ class Sourcelink(Directive):
     Directive to create a centered line of bold text.
     """
 
-    has_content = True
+    has_content = False
     required_arguments = 1
     optional_arguments = 0
     final_argument_whitespace = True
