@@ -41,7 +41,7 @@ class Sourcelink(Directive):
         keys.sort()
         for k in keys:
             v = tdict[k]
-            tstrs.append( '%s:%s' % (k,v) )
+            tstrs.append( '%s: %s' % (k,v) )
 
         tstr = ', '.join(tstrs)
 
