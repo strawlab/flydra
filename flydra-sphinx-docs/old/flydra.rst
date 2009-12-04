@@ -25,16 +25,43 @@ Subpages about flydra
 Scripts of great interest
 -------------------------
 
-See these scripts:
+* |kdviewer| 3D viewer of Kalmanized trajectories saved in .h5 data
+  file. (This is newer version of |plot_kalman_data| that uses TVTK.)
 
- * |kdviewer| 3D viewer of Kalmanized trajectories saved in .h5 data file. (This is newer version of |plot_kalman_data| that uses TVTK.) |mama_small_image|
- * |flydra_kalmanize| re-analyze 2D data saved in .h5 data file using same Kalman filtering code as realtime analysis. Note: this will only run the causal Kalman filter, which allows re-segmenting the data into trajectories. However, another step, of running the non-causal smoothing algorithm, is typically desired. (See below for reasons why you might want to do this.)
- * |flydra_analysis_generate_recalibration| save 2D data from a previously saved .h5 file to perform a (re-)calibration. This new calibration typically has very low reprojection errors. Performing this step can use either 3D trajectories in the .h5 file in order to solve the correspondence problem (which 2D points from which cameras correspond to the same 3D point). Alternatively, if only (at most) a single point is tracked per camera per time point, they are assumed to be from the same 3D point. In this case, specify a start and stop frame.
- * |check_atmel| check the latencies of 3D reconstruction. Do this depends on the camera triggers actually being the Atmel device.
- * ``ffpmeg`` for example ``ffmpeg -b 2008000 -f mpeg2video -r 25 -i image%05d.png movie.mpeg``
- * |flydra_analysis_convert_to_mat| convert .h5 3D data to .mat for MATLAB; includes raw observations and realtime kalman filtered observations.
- * |data2smoothed| convert .h5 3D data to .mat file for MATLAB; returns only results of 2nd pass kalman smoothing and timestamps
- * |flydra_textlog2csv| save text log from .h5 file to CSV format (can be opened in Excel, for example)
+|mama_small_image|
+
+* |flydra_kalmanize| re-analyze 2D data saved in .h5 data file using
+  same Kalman filtering code as realtime analysis. Note: this will
+  only run the causal Kalman filter, which allows re-segmenting the
+  data into trajectories. However, another step, of running the
+  non-causal smoothing algorithm, is typically desired. (See below for
+  reasons why you might want to do this.)
+
+* |flydra_analysis_generate_recalibration| save 2D data from a
+  previously saved .h5 file to perform a (re-)calibration. This new
+  calibration typically has very low reprojection errors. Performing
+  this step can use either 3D trajectories in the .h5 file in order to
+  solve the correspondence problem (which 2D points from which cameras
+  correspond to the same 3D point). Alternatively, if only (at most) a
+  single point is tracked per camera per time point, they are assumed
+  to be from the same 3D point. In this case, specify a start and stop
+  frame.
+
+* |check_atmel| check the latencies of 3D reconstruction. Do this
+  depends on the camera triggers actually being the Atmel device.
+
+* ``ffpmeg`` for example ``ffmpeg -b 2008000 -f mpeg2video -r 25 -i
+  image%05d.png movie.mpeg``
+
+* |flydra_analysis_convert_to_mat| convert .h5 3D data to .mat for
+  MATLAB; includes raw observations and realtime kalman filtered
+  observations.
+
+* |data2smoothed| convert .h5 3D data to .mat file for MATLAB;
+  returns only results of 2nd pass kalman smoothing and timestamps
+
+* |flydra_textlog2csv| save text log from .h5 file to CSV format (can
+  be opened in Excel, for example)
 
 .. |mama_small_image| image:: mama_small.png
 
@@ -64,14 +91,24 @@ See these scripts:
 Scripts of lesser interest
 --------------------------
 
- * |flydra_analysis_filter_kalman_data.py| export a subset of the Kalmanized trajectories in an .h5 file to a new (smaller) .h5 file.
- * |flydra_analysis_plot_kalman_2d.py| plot 2D data (x against y), including Kalmanized trajectories. (This is more-or-less the camera view.) |plot_kalman_2d_small_image|
- * |plot_timeseries_2d_3d.py| plot 2D and 3D data against frame number. (This is a time series.) |data2d_small_image|
- * |plot_timeseries.py| plot 3D data against frame number. (This is a time series.)
- * |flydra_images_export| export images from .h5 file.
+* |flydra_analysis_filter_kalman_data.py| export a subset of the
+  Kalmanized trajectories in an .h5 file to a new (smaller) .h5 file.
 
-.. |plot_kalman_2d_small_image| image:: plot_kalman_2d_small.png
-.. |data2d_small_image| image:: data2d_small.png
+* |flydra_analysis_plot_kalman_2d.py| plot 2D data (x against y),
+  including Kalmanized trajectories. (This is more-or-less the camera
+  view.)
+
+.. image:: plot_kalman_2d_small.png
+
+* |plot_timeseries_2d_3d.py| plot 2D and 3D data against frame
+  number. (This is a time series.)
+
+.. image:: data2d_small.png
+
+* |plot_timeseries.py| plot 3D data against frame number. (This is a
+  time series.)
+
+* |flydra_images_export| export images from .h5 file.
 
 .. |flydra_analysis_filter_kalman_data.py| sourcelink:: flydra/analysis/flydra_analysis_filter_kalman_data.py
   :command: flydra_analysis_filter_kalman_data.py
@@ -173,11 +210,21 @@ added some profiling options. Here's the breakdown of times:
 The values above add up roughly to the values I remember from earlier
 in 2007, so I guess this is more-or-less what was happening back then.
 
-As of Nov. 16, 2007, the |check_atmel| script was used to generate this figure, which is total latency to reconstructed 3D on the mainbrain with ``flydra_camera_node`` using ``--num-points=2``. This includes the 20 msec Basler A602f latency, so presumably for GigE, you'd subtract approx. 15 msec. Faster 2D camera computers would probably knock off another 5 msec.
+As of Nov. 16, 2007, the |check_atmel| script was used to generate
+this figure, which is total latency to reconstructed 3D on the
+mainbrain with ``flydra_camera_node`` using ``--num-points=2``. This
+includes the 20 msec Basler A602f latency, so presumably for GigE,
+you'd subtract approx. 15 msec. Faster 2D camera computers would
+probably knock off another 5 msec.
 
 .. image:: overall_latency_20071115_baslerA602f.png
 
-As of Feb. 20, 2008, the |LED_test_latency| script was used to test total latency from LED on to UDP packets with position information. This total latency was between 34-70 msec, with the 3D reconstruction latency being from about 25-45 msec. Note that these are from the initial onset of illumination, which may have different amounts of latencies than ongoing tracking.
+As of Feb. 20, 2008, the |LED_test_latency| script was used to test
+total latency from LED on to UDP packets with position
+information. This total latency was between 34-70 msec, with the 3D
+reconstruction latency being from about 25-45 msec. Note that these
+are from the initial onset of illumination, which may have different
+amounts of latencies than ongoing tracking.
 
 .. |LED_test_latency| sourcelink:: flydra/LEDdriver/LED_test_latency.py
   :command: LED_test_latency.py
@@ -185,7 +232,15 @@ As of Feb. 20, 2008, the |LED_test_latency| script was used to test total latenc
 Profiling
 ---------
 
-To profile the realtime Kalman filter code, first run the ``flydra_mainbrain`` app with the ``--save-profiling-data`` option. You will have to load the 3D calibration, synchronize the cameras and begin tracking. The data sent to the Kalman tracker is accummulated to RAM and saved to file when you quit the program. There is no UI indication this is happening except when you finally quit it will mention the filename. With the saved data file, run |kalman_profile|. This will generate profiling output that can be opened in kcachegrind.
+To profile the realtime Kalman filter code, first run the
+``flydra_mainbrain`` app with the ``--save-profiling-data``
+option. You will have to load the 3D calibration, synchronize the
+cameras and begin tracking. The data sent to the Kalman tracker is
+accummulated to RAM and saved to file when you quit the program. There
+is no UI indication this is happening except when you finally quit it
+will mention the filename. With the saved data file, run
+|kalman_profile|. This will generate profiling output that can be
+opened in kcachegrind.
 
 .. |kalman_profile| sourcelink:: flydra/kalman/kalman_profile.py
   :command: kalman_profile.py
