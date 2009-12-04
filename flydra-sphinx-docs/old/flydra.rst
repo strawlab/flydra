@@ -25,20 +25,35 @@ Subpages about flydra
 Scripts of great interest
 -------------------------
 
-.. sourcelink:: centered text
-
 See these scripts:
 
- * [source:trunk/flydra/flydra/a2/kdviewer.py kdviewer] 3D viewer of Kalmanized trajectories saved in .h5 data file. (This is newer version of [source:trunk/flydra/flydra/analysis/flydra_analysis_plot_kalman_data.py flydra_analysis_plot_kalman_data.py] that uses TVTK.) |mama_small_image|
- * [source:trunk/flydra/flydra/kalman/kalmanize.py flydra_kalmanize] re-analyze 2D data saved in .h5 data file using same Kalman filtering code as realtime analysis. Note: this will only run the causal Kalman filter, which allows re-segmenting the data into trajectories. However, another step, of running the non-causal smoothing algorithm, is typically desired. (See below for reasons why you might want to do this.)
- * [source:trunk/flydra/flydra/analysis/flydra_analysis_generate_recalibration.py flydra_analysis_generate_recalibration] save 2D data from a previously saved .h5 file to perform a (re-)calibration. This new calibration typically has very low reprojection errors. Performing this step can use either 3D trajectories in the .h5 file in order to solve the correspondence problem (which 2D points from which cameras correspond to the same 3D point). Alternatively, if only (at most) a single point is tracked per camera per time point, they are assumed to be from the same 3D point. In this case, specify a start and stop frame.
- * [source:trunk/flydra/flydra/a2/check_atmel_clock.py check_atmel_clock.py] check the latencies of 3D reconstruction. Do this depends on the camera triggers actually being the Atmel device.
+ * |kdviewer| 3D viewer of Kalmanized trajectories saved in .h5 data file. (This is newer version of |plot_kalman_data| that uses TVTK.) |mama_small_image|
+ * |flydra_kalmanize| re-analyze 2D data saved in .h5 data file using same Kalman filtering code as realtime analysis. Note: this will only run the causal Kalman filter, which allows re-segmenting the data into trajectories. However, another step, of running the non-causal smoothing algorithm, is typically desired. (See below for reasons why you might want to do this.)
+ * |flydra_analysis_generate_recalibration| save 2D data from a previously saved .h5 file to perform a (re-)calibration. This new calibration typically has very low reprojection errors. Performing this step can use either 3D trajectories in the .h5 file in order to solve the correspondence problem (which 2D points from which cameras correspond to the same 3D point). Alternatively, if only (at most) a single point is tracked per camera per time point, they are assumed to be from the same 3D point. In this case, specify a start and stop frame.
+ * |check_atmel| check the latencies of 3D reconstruction. Do this depends on the camera triggers actually being the Atmel device.
  * ``ffpmeg`` for example ``ffmpeg -b 2008000 -f mpeg2video -r 25 -i image%05d.png movie.mpeg``
- * [source:trunk/flydra/flydra/analysis/flydra_analysis_convert_to_mat.py flydra_analysis_convert_to_mat] convert .h5 3D data to .mat for MATLAB; includes raw observations and realtime kalman filtered observations.
+ * |flydra_analysis_convert_to_mat| convert .h5 3D data to .mat for MATLAB; includes raw observations and realtime kalman filtered observations.
  * [source:trunk/flydra/flydra/a2/data2smoothed.py data2smoothed] convert .h5 3D data to .mat file for MATLAB; returns only results of 2nd pass kalman smoothing and timestamps
  * [source:trunk/flydra/flydra/a2/flydra_textlog2csv.py flydra_textlog2csv] save text log from .h5 file to CSV format (can be opened in Excel, for example)
 
 .. |mama_small_image| image:: mama_small.png
+
+.. |kdviewer| sourcelink:: flydra/a2/kdviewer.py
+  :command: kdviewer
+
+.. |plot_kalman_data| sourcelink:: flydra/analysis/flydra_analysis_plot_kalman_data.py
+
+.. |flydra_kalmanize| sourcelink:: flydra/kalman/kalmanize.py
+  :command: flydra_kalmanize
+
+.. |flydra_analysis_generate_recalibration| sourcelink:: flydra/analysis/flydra_analysis_generate_recalibration.py
+  :command: flydra_analysis_generate_recalibration
+
+.. |check_atmel| sourcelink:: flydra/a2/check_atmel_clock.py
+  :command: check_atmel_clock.py
+
+.. |flydra_analysis_convert_to_mat| sourcelink:: flydra/analysis/flydra_analysis_convert_to_mat.py
+   :command: flydra_analysis_convert_to_mat
 
 Scripts of lesser interest
 --------------------------
