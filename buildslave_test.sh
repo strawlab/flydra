@@ -14,8 +14,8 @@ easy_install nose-0.11.1.tar.gz
 #----- Now, run tests -----
 
 # check for expected permissions on X server
-python -c 'import os; assert os.path.exists("/etc/X2.hosts")'
-python -c 'fd = open("/etc/X2.hosts",mode="r"); assert "localhost\n" in fd.readlines()'
+python -c 'import os; assert os.path.exists("/etc/X2.hosts"), "no /etc/X2.hosts file exists for xvfb"'
+python -c 'fd = open("/etc/X2.hosts",mode="r"); assert "localhost\n" in fd.readlines(), "no localhost in /etc/X2.hosts"'
 
 # run X server
 Xvfb :2 &
