@@ -15,8 +15,8 @@ easy_install nose-0.11.1.tar.gz
 
 # check for expected permissions on X server
 python -c 'import os; assert os.path.exists(os.path.expanduser("~/.xvfb-display")), "no ~/.xvfb-display"'
-python -c 'import os; d=open(os.path.expanduser("~/.xvfb-display")).read()[1:]; assert os.path.exists("/etc/X%d.hosts"%d), "no /etc/X%d.hosts file exists for xvfb %d"'
-python -c 'import os; d=open(os.path.expanduser("~/.xvfb-display")).read()[1:]; fd = open("/etc/X%d.hosts"%d,mode="r"); assert "localhost\n" in fd.readlines(), "no localhost in /etc/X%d.hosts"%d'
+python -c 'import os; d=int(open(os.path.expanduser("~/.xvfb-display")).read()[1:]); assert os.path.exists("/etc/X%d.hosts"%d), "no /etc/X%d.hosts file exists for xvfb %d"'
+python -c 'import os; d=int(open(os.path.expanduser("~/.xvfb-display")).read()[1:]); fd = open("/etc/X%d.hosts"%d,mode="r"); assert "localhost\n" in fd.readlines(), "no localhost in /etc/X%d.hosts"%d'
 
 # run X server
 export DISPLAY=`cat ~/.xvfb-display`
