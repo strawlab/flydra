@@ -230,7 +230,7 @@ def doit(filename,
          fps=None,
          up_dir=None,
          vertical_scale=False,
-         max_vel=0.25,
+         max_vel=None,
          show_only_track_ends = False,
          save_still = False,
          exclude_vel_mps = None,
@@ -244,6 +244,8 @@ def doit(filename,
          ):
 
     assert exclude_vel_data in ['kalman','observations'] # kalman means smoothed or filtered, depending on use_kalman_smoothing
+
+    all_max_vel = 0.0
 
     if up_dir is not None:
         up_dir = np.array(up_dir,dtype=np.float)
@@ -670,8 +672,10 @@ def doit(filename,
                 else:
                     speeds = numpy.zeros( (verts.shape[1],) )
                 max_speed_this_obj = numpy.max(speeds)
-                if max_speed_this_obj > max_vel:
-                    print 'WARNING: max_vel = %s, but max speed is %.2f'%(max_vel,max_speed_this_obj)
+                all_max_vel = max( all_max_vel, max_speed_this_obj )
+                if max_vel is not None:
+                    if max_speed_this_obj > max_vel:
+                        print 'WARNING: max_vel = %s, but max speed is %.2f'%(max_vel,max_speed_this_obj)
 
         else:
             x0 = rows.field('x')[0]
@@ -754,9 +758,12 @@ def doit(filename,
             vel_mapper = tvtk.PolyDataMapper(input=g.output)
             if not obj_color:
                 vel_mapper.lookup_table = lut
-                if (options.highlight_start is not None and
-                    options.highlight_stop is not None):
-                    vel_mapper.scalar_range = 0.0, float(max_vel)
+                if (options.highlight_start is None and
+                    options.highlight_stop is None):
+                    if max_vel is not None:
+                        vel_mapper.scalar_range = 0.0, float(max_vel)
+                    else:
+                        vel_mapper.scalar_range = 0.0, float(all_max_vel)
                 else:
                     vel_mapper.scalar_range = 0.0, 1.0
             a = tvtk.Actor(mapper=vel_mapper)
@@ -1191,7 +1198,7 @@ def main():
     parser.add_option("--max-vel", type="float",
                       help="maximum velocity of colormap",
                       dest='max_vel',
-                      default=0.25)
+                      default=None)
 
     parser.add_option("--exclude-vel", type="float",
                       help=("exclude traces with median velocity less than "
