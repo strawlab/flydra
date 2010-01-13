@@ -167,7 +167,10 @@ def iterate_frames(h5_filename,
                 this_camn_ts = this_camn_ts[0]
 
                 # optimistic: get next frame. it's probably the one we want
-                image,image_ts,more = ufmf.get_next_frame(_return_more=True)
+                try:
+                    image,image_ts,more = ufmf.get_next_frame(_return_more=True)
+                except ufmf_mod.NoMoreFramesException:
+                    image_ts = None
                 if this_camn_ts != image_ts:
                     # It was not the frame we wanted. Find it.
                     ufmf_frame_idxs = np.nonzero(tss == this_camn_ts)[0]
