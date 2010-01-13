@@ -253,7 +253,7 @@ def kalman_smooth(orig_rows,
 
     fstart = obs_frames.min()
     fend = obs_frames.max()
-    assert fstart < fend
+    assert fstart < fend, 'fstart not less than fend: fstart=%s, fend=%d'%(fstart,fend)
     frames = numpy.arange(fstart,fend+1, dtype=np.int64)
     if frames.dtype != obs_frames.dtype:
         warnings.warn('searchsorted is probably very slow because of different dtypes')
