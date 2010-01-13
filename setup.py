@@ -63,6 +63,11 @@ setup(name='flydra',
 # analysis - re-kalmanize
     'flydra_kalmanize = flydra.kalman.kalmanize:main',
 
+# timestamp conversion
+    'flydra_analysis_frame2timestamp = flydra.analysis.result_utils:frame2timestamp_command',
+    'flydra_analysis_timestamp2frame = flydra.analysis.result_utils:timestamp2frame_command',
+
+
 # analysis - not yet classified
     'flydra_analysis_convert_to_mat = flydra.analysis.flydra_analysis_convert_to_mat:main',
     'flydra_analysis_plot_clock_drift = flydra.analysis.flydra_analysis_plot_clock_drift:main',

@@ -358,6 +358,24 @@ class TimeModel:
     def framestamp2timestamp(self, framestamp ):
         return framestamp*self.gain + self.offset
 
+def frame2timestamp_command():
+    h5_filename, frame_str = sys.argv[1:3]
+    frame = int(frame_str)
+    assert len(sys.argv)==3
+    results = tables.openFile(h5_filename,mode='r')
+    model = get_time_model_from_data(results)
+    print repr(model.framestamp2timestamp(frame))
+    results.close()
+
+def timestamp2frame_command():
+    h5_filename, timestamp_str = sys.argv[1:3]
+    timestamp = float(timestamp_str)
+    assert len(sys.argv)==3
+    results = tables.openFile(h5_filename,mode='r')
+    model = get_time_model_from_data(results)
+    print repr(model.timestamp2framestamp(timestamp))
+    results.close()
+
 class TextlogParseError(Exception):
     pass
 
