@@ -1060,7 +1060,7 @@ class CoordinateProcessor(threading.Thread):
                         ## print 'no latency estimate available -- skipping 3D reconstruction'
                         continue
                     if (time.time() - oldest_camera_timestamp) > max_reconstruction_latency_sec:
-                        print 'maximum reconstruction latency exceeded -- skipping 3D reconstruction'
+                        #print 'maximum reconstruction latency exceeded -- skipping 3D reconstruction'
                         continue
 
                     data_dict = realtime_coord_dict[corrected_framenumber]
