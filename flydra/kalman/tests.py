@@ -31,15 +31,17 @@ class TestTracker(unittest.TestCase):
                     state_vecs = numpy.random.randn( ss )
                     meanP = 1e-4
 
-            data_packet1 = x.encode_data_packet(fno1,timestamp1)
-            data_packet2 = x.encode_data_packet(fno2,timestamp2)
+            data_packet1 = x.encode_data_packet(fno1,timestamp1,timestamp1)
+            data_packet2 = x.encode_data_packet(fno2,timestamp2,timestamp2)
 
             in_packets = [data_packet1, data_packet2]
             super_packet = encode_super_packet( in_packets )
             for i,decoded_packet in enumerate(decode_super_packet(super_packet)):
                 orig_packet = in_packets[i]
 
-                corrected_framenumber, timestamp, state_vecs, meanP = decode_data_packet( decoded_packet )
+                (corrected_framenumber, acquire_timestamp,
+                 reconstruction_timestamp, state_vecs, meanP) = \
+                 decode_data_packet( decoded_packet )
 
 
 def get_test_suite():

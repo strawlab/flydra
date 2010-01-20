@@ -1210,7 +1210,8 @@ class CoordinateProcessor(threading.Thread):
                                 if 1:
                                     if self.tracker.live_tracked_objects.how_many_are_living():
                                         data_packet = self.tracker.encode_data_packet(
-                                            corrected_framenumber,now)
+                                            corrected_framenumber,
+                                            oldest_camera_timestamp,now)
                                         if data_packet is not None:
                                             self.realtime_kalman_data_queue.put(data_packet)
 

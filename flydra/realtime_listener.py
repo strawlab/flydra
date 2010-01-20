@@ -16,9 +16,13 @@ class Listener(threading.Thread):
             buf, addr = self.sockobj.recvfrom(1024)
             data_packets = flydra_tracker.decode_super_packet( buf )
             for data_packet in data_packets:
-                corrected_framenumber, timestamp, state_vecs,meanP=flydra_tracker.decode_data_packet(data_packet)
+
+                (corrected_framenumber, acquire_timestamp,
+                 reconstruction_timestamp, state_vecs, meanP) = \
+                 flydra_tracker.decode_data_packet(data_packet)
+
                 recv_ts = time.time()
-                self.q.put( (timestamp, state_vecs, recv_ts) )
+                self.q.put( (reconstruction_timestamp, state_vecs, recv_ts) )
                 if 0:
                     #print corrected_framenumber, timestamp, state_vecs
                     line3d=None
