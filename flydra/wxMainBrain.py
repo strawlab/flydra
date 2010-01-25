@@ -106,12 +106,13 @@ def wrap_loud( wxparent, func ):
 
 class wxMainBrainApp(wx.App):
     def OnInit(self,*args,**kw):
-        global use_opengl, wxglvideo
+        global use_opengl, wxglvideo, use_video_preview
 
-        if use_opengl:
-            import motmot.wxglvideo.simple_overlay as wxglvideo
-        else:
-            import motmot.wxvideo.wxvideo as wxglvideo
+        if use_video_preview:
+            if use_opengl:
+                import motmot.wxglvideo.simple_overlay as wxglvideo
+            else:
+                import motmot.wxvideo.wxvideo as wxglvideo
 
         self.pass_all_keystrokes = False
         wx.InitAllImageHandlers()
@@ -460,10 +461,13 @@ class wxMainBrainApp(wx.App):
             extra_kwargs = dict(child_kwargs=child_kwargs)
         else:
             extra_kwargs = {}
-        self.cam_image_canvas =wxglvideo.DynamicImageCanvas(dynamic_image_panel,
-                                                            -1,
-                                                            **extra_kwargs)
-        box.Add(self.cam_image_canvas,1,wx.EXPAND)
+        if use_video_preview:
+            self.cam_image_canvas =wxglvideo.DynamicImageCanvas(dynamic_image_panel,
+                                                                -1,
+                                                                **extra_kwargs)
+            box.Add(self.cam_image_canvas,1,wx.EXPAND)
+        else:
+            self.cam_image_canvas = None
         dynamic_image_panel.Layout()
 
         # setup per-camera container panel
@@ -1133,12 +1137,16 @@ class wxMainBrainApp(wx.App):
         self.main_brain.set_show_overall_latency(value)
 
     def OnToggleTint(self, event):
+        if self.cam_image_canvas is None:
+            return
         self.cam_image_canvas.set_clipping( event.IsChecked() )
 
     def OnShowLikelyPointsOnly(self, event):
         self.show_likely_points_only = event.IsChecked()
 
     def OnToggleDrawPoints(self, event):
+        if self.cam_image_canvas is None:
+            return
         self.cam_image_canvas.set_display_points( event.IsChecked() )
 
     def OnShowXMLStimulus(self, event):
@@ -1229,7 +1237,8 @@ class wxMainBrainApp(wx.App):
                 if l >= r or b >= t or r >= width or t >= height:
                     raise ValueError("ROI dimensions not possible")
                 self.main_brain.send_set_camera_property(cam_id,'roi',lbrt)
-                self.cam_image_canvas.set_lbrt(cam_id,lbrt)
+                if self.cam_image_canvas is not None:
+                    self.cam_image_canvas.set_lbrt(cam_id,lbrt)
         finally:
             dlg.Destroy()
             self.pass_all_keystrokes = False
@@ -1301,7 +1310,8 @@ class wxMainBrainApp(wx.App):
                         self.PreviewPerCamUpdateSetting(cam_id,property_name,value)
                         if property_name=='roi':
                             lbrt = value
-                            self.cam_image_canvas.set_lbrt(cam_id,lbrt)
+                            if self.cam_image_canvas is not None:
+                                self.cam_image_canvas.set_lbrt(cam_id,lbrt)
             except KeyError,x:
                 dlg2 = wx.MessageDialog( self.frame, 'Error opening configuration data:\n'\
                                         '%s: %s'%(x.__class__,x),
@@ -1431,11 +1441,13 @@ class wxMainBrainApp(wx.App):
                             #pt_undist,ln=r.find2d(cam_id,data3d,
                             #               Lcoords=line3d,distorted=False)
                             #self.cam_image_canvas.set_red_points(cam_id,([pt],[ln]))
-                            self.cam_image_canvas.set_red_points(cam_id,pts)
+                            if self.cam_image_canvas is not None:
+                                self.cam_image_canvas.set_red_points(cam_id,pts)
         else:
             for cam_id in self.cameras.keys():
                 if hasattr(self.cam_image_canvas,'set_red_points'):
-                    self.cam_image_canvas.set_red_points(cam_id,None)
+                    if self.cam_image_canvas is not None:
+                        self.cam_image_canvas.set_red_points(cam_id,None)
 
         if self.current_page == 'preview':
             PT_TUPLE_IDX_AREA = flydra.data_descriptions.PT_TUPLE_IDX_AREA
@@ -1493,16 +1505,17 @@ class wxMainBrainApp(wx.App):
                             else:
                                 linesegs = None
                                 lineseg_colors = None
-                            global use_opengl
+                            global use_opengl, use_video_preview
                             if use_opengl:
                                 extra_kwargs = dict(sort_add=True)
                             else:
                                 extra_kwargs = {}
-                            self.cam_image_canvas.update_image_and_drawings(cam_id,image,
-                                                                            points=points,
-                                                                            linesegs=linesegs,
-                                                                            lineseg_colors=lineseg_colors,
-                                                                            **extra_kwargs)
+                            if self.cam_image_canvas is not None:
+                                self.cam_image_canvas.update_image_and_drawings(cam_id,image,
+                                                                                points=points,
+                                                                                linesegs=linesegs,
+                                                                                lineseg_colors=lineseg_colors,
+                                                                                **extra_kwargs)
                     if show_fps is not None:
                         show_fps_label = xrc.XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
                         show_fps_label.SetLabel('fps: %.1f'%show_fps)
@@ -1598,7 +1611,8 @@ class wxMainBrainApp(wx.App):
         self.OnRecordRawStop(warn=False)
 
         try:
-            self.cam_image_canvas.delete_image(cam_id)
+            if self.cam_image_canvas is not None:
+                self.cam_image_canvas.delete_image(cam_id)
         except KeyError:
             # camera never sent frame
             pass
@@ -1625,6 +1639,8 @@ def main():
                       metavar="SERVER")
     parser.add_option("--disable-opengl", dest="use_opengl",
                       default=True, action="store_false")
+    parser.add_option("--disable-video-preview", dest="use_video_preview",
+                      default=True, action="store_false")
     parser.add_option("--save-profiling-data",
                       default=False, action="store_true",
                       help="save data to profile/debug the Kalman-filter based tracker (WARNING: SLOW)",
@@ -1635,8 +1651,9 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    global use_opengl
+    global use_opengl, use_video_preview
     use_opengl = options.use_opengl
+    use_video_preview = options.use_video_preview
     # initialize GUI
     #app = App(redirect=1,filename='flydra_log.txt')
     app = wxMainBrainApp(0)
