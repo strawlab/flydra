@@ -28,6 +28,7 @@ def doit(movie_fname=None,
          show_obj_ids=False,
          obj_only=None,
          image_format=None,
+         subtract_frame=None,
          save_framelist_fname=None,
          ):
 
@@ -76,6 +77,21 @@ def doit(movie_fname=None,
     fix_h = movie.get_height()
     is_color = imops.is_coding_color(movie.get_format())
 
+
+    if subtract_frame is not None:
+        if not subtract_frame.endswith('.fmf'):
+            raise NotImplementedError('only fmf supported for --subtract-frame')
+        tmp_fmf = fmf_mod.FlyMovie(subtract_frame)
+
+        if is_color:
+            tmp_frame, tmp_timestamp = tmp_fmf.get_next_frame()
+            subtract_frame = imops.to_rgb8(tmp_fmf.get_format(),tmp_frame)
+            subtract_frame = subtract_frame.astype(np.float32) # force upconversion to float
+        else:
+            tmp_frame, tmp_timestamp = tmp_fmf.get_next_frame()
+            subtract_frame = imops.to_mono8(tmp_fmf.get_format(),tmp_frame)
+            subtract_frame = subtract_frame.astype(np.float32) # force upconversion to float
+
     if save_framelist_fname is not None:
         save_framelist_fd = open(save_framelist_fname,mode='w')
 
@@ -86,6 +102,9 @@ def doit(movie_fname=None,
             image = imops.to_rgb8(movie.get_format(),image)
         else:
             image = imops.to_mono8(movie.get_format(),image)
+        if subtract_frame is not None:
+            new_image = np.clip(image - subtract_frame,0,255)
+            image = new_image.astype(np.uint8)
         h5_frame = extra['time_model'].timestamp2framestamp(timestamp)
         warnings.warn('not implemented: interpolating data')
         h5_frame = int(round(h5_frame))
@@ -186,6 +205,7 @@ def main():
                       help="show object ids")
     parser.add_option("--obj-only", type="string")
     parser.add_option("--image-format", type="string", default='png')
+    parser.add_option("--subtract-frame", type="string")
     parser.add_option('--save-framelist', type='string')
     (options, args) = parser.parse_args()
 
@@ -210,6 +230,7 @@ def main():
          obj_only = options.obj_only,
          image_format=options.image_format,
          save_framelist_fname=options.save_framelist,
+         subtract_frame=options.subtract_frame,
          )
 
 if __name__=='__main__':
