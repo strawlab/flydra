@@ -80,7 +80,6 @@ def doit(movie_fname=None,
         save_framelist_fd = open(save_framelist_fname,mode='w')
 
     for movie_fno in range(start,stop+1):
-        print 'movie_fno',movie_fno
         movie.seek(movie_fno)
         image,timestamp = movie.get_next_frame()
         if is_color:
