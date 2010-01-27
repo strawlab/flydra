@@ -25,6 +25,8 @@ def doit(movie_fname=None,
          transform=None,
          start=None,
          stop=None,
+         h5start=None,
+         h5stop=None,
          show_obj_ids=False,
          obj_only=None,
          image_format=None,
@@ -95,9 +97,17 @@ def doit(movie_fname=None,
     if save_framelist_fname is not None:
         save_framelist_fd = open(save_framelist_fname,mode='w')
 
+    movie_fno_count = 0
     for movie_fno in range(start,stop+1):
         movie.seek(movie_fno)
         image,timestamp = movie.get_next_frame()
+        h5_frame = extra['time_model'].timestamp2framestamp(timestamp)
+        if h5start is not None:
+            if h5_frame < h5start:
+                continue
+        if h5stop is not None:
+            if h5_frame > h5stop:
+                continue
         if is_color:
             image = imops.to_rgb8(movie.get_format(),image)
         else:
@@ -105,14 +115,20 @@ def doit(movie_fname=None,
         if subtract_frame is not None:
             new_image = np.clip(image - subtract_frame,0,255)
             image = new_image.astype(np.uint8)
-        h5_frame = extra['time_model'].timestamp2framestamp(timestamp)
         warnings.warn('not implemented: interpolating data')
         h5_frame = int(round(h5_frame))
         if save_framelist_fname is not None:
             save_framelist_fd.write('%d\n'%h5_frame)
 
-        save_fname_path=os.path.splitext(movie_fname)[0]+'_frame%06d.%s'%(
-            movie_fno,image_format)
+        movie_fno_count += 1
+        if 0:
+            # save starting from frame 1
+            save_fname_path=os.path.splitext(movie_fname)[0]+'_frame%06d.%s'%(
+                movie_fno_count,image_format)
+        else:
+            # frame is frame in movie file
+            save_fname_path=os.path.splitext(movie_fname)[0]+'_frame%06d.%s'%(
+                movie_fno,image_format)
         save_fname_path=os.path.join(dest_dir,save_fname_path)
         if transform in ['rot 90','rot -90']:
             device_rect = (0,0,fix_h,fix_w)
@@ -199,6 +215,10 @@ def main():
                       help="first frame of the movie (not .h5) file to export")
     parser.add_option('--stop', type='int', default=None,
                       help="last frame of the movie (not .h5) file to export")
+    parser.add_option('--h5start', type='int', default=None,
+                      help="first frame of the .h5 file to export")
+    parser.add_option('--h5stop', type='int', default=None,
+                      help="last frame of the .h5 file to export")
     parser.add_option('--transform', type='string', default=None,
                       help="how to orient the movie file")
     parser.add_option('--show-obj-ids', action='store_true', default=False,
@@ -226,6 +246,8 @@ def main():
          transform=options.transform,
          start=options.start,
          stop=options.stop,
+         h5start=options.h5start,
+         h5stop=options.h5stop,
          show_obj_ids=options.show_obj_ids,
          obj_only = options.obj_only,
          image_format=options.image_format,
