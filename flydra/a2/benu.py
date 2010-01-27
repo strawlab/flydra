@@ -114,6 +114,23 @@ class Canvas(object):
         if linewidth is not None:
             ctx.set_line_width(orig_linewidth)
 
+    def poly(self,xarr,yarr,color_rgba=None,edgewidth=0.0):
+        if color_rgba is None:
+            color_rgba = (1,1,1,1)
+        ctx = self._ctx # shorthand
+        if edgewidth is not None:
+            orig_linewidth = ctx.get_line_width()
+            ctx.set_line_width(edgewidth)
+        ctx.set_source_rgba(*color_rgba)
+        ctx.move_to(xarr[0],yarr[0])
+        for i in range(1,len(xarr)):
+            ctx.line_to(xarr[i],yarr[i])
+        ctx.close_path()
+        ctx.paint()
+        ctx.stroke()
+        if edgewidth is not None:
+            ctx.set_line_width(orig_linewidth)
+
     def scatter(self,xarr,yarr,color_rgba=None,
                 radius=1.0, markeredgewidth=None):
         """scatter plot of xarr vs. yarr"""
