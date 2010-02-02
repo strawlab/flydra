@@ -2611,7 +2611,7 @@ def benchmark():
 
 def parse_args_and_run(benchmark=False):
     parser = OptionParser(usage='%prog [options]',
-                          version="%prog 0.1")
+                          version="%prog "+flydra.version.__version__)
 
     defaults = get_app_defaults()
     parser.set_defaults(**defaults)
