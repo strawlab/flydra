@@ -1837,7 +1837,7 @@ class AppState(object):
             cams_only = options.cams_only
             if cams_only is not None:
                 cams_only = map(int,cams_only.split(','))
-            
+
                 new_cam_order = [ cam_order[i] for i in cams_only ]
                 cam_order = new_cam_order
 
