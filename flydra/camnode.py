@@ -63,6 +63,7 @@ import motmot.realtime_image_analysis.slow
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 import motmot.cam_iface.cam_iface_ctypes as cam_iface
 from optparse import OptionParser
+import camnode_colors
 
 def DEBUG(*args):
     if 0:
@@ -304,8 +305,6 @@ def get_free_buffer_from_pool(pool):
         if not buf._i_promise_to_return_buffer_to_the_pool:
             pool.return_buffer(buf)
 
-
-
 class ProcessCamClass(object):
     def __init__(self,
                  cam2mainbrain_port=None,
@@ -321,6 +320,7 @@ class ProcessCamClass(object):
                  diff_threshold_shared=None,
                  clear_threshold_shared=None,
                  n_sigma_shared=None,
+                 red_only_shared=None,
                  framerate = None,
                  lbrt=None,
                  max_height=None,
@@ -348,6 +348,7 @@ class ProcessCamClass(object):
         self.diff_threshold_shared = diff_threshold_shared
         self.clear_threshold_shared = clear_threshold_shared
         self.n_sigma_shared = n_sigma_shared
+        self.red_only_shared = red_only_shared
 
         self.new_roi = threading.Event()
         self.new_roi_data = None
@@ -680,6 +681,8 @@ class ProcessCamClass(object):
 
                 hw_roi_frame = chainbuf.get_buf()
                 cam_received_time = chainbuf.cam_received_time
+                if self.red_only_shared.get_nowait():
+                    camnode_colors.replace_with_red_image( hw_roi_frame, chainbuf.image_coding)
 
                 # get best guess as to when image was taken
                 timestamp=chainbuf.timestamp
@@ -2098,6 +2101,10 @@ class AppState(object):
             n_sigma_shared.set(options.n_sigma)
             scalar_control_info['n_sigma'] = n_sigma_shared.get_nowait()
 
+            red_only_shared = SharedValue()
+            red_only_shared.set(int(options.red_only))
+            scalar_control_info['red_only'] = red_only_shared.get_nowait()
+
             scalar_control_info['width'] = width
             scalar_control_info['height'] = height
             scalar_control_info['roi'] = 0,0,width-1,height-1
@@ -2155,6 +2162,7 @@ class AppState(object):
                         diff_threshold_shared=diff_threshold_shared,
                         clear_threshold_shared=clear_threshold_shared,
                         n_sigma_shared=n_sigma_shared,
+                        red_only_shared=red_only_shared,
                         framerate=None,
                         lbrt=lbrt,
                         max_height=cam.get_max_height(),
@@ -2397,6 +2405,9 @@ class AppState(object):
                     elif property_name == 'n_sigma':
                         print 'setting n_sigma',value
                         cam_processor.n_sigma_shared.set(value)
+                    elif property_name == 'red_only':
+                        print 'setting red_only',value
+                        cam_processor.red_only.set(value)
                     elif property_name == 'diff_threshold':
                         cam_processor.diff_threshold_shared.set(value)
                     elif property_name == 'clear_threshold':
@@ -2584,7 +2595,7 @@ def get_app_defaults():
     defaults = dict(# these are the most important 2D tracking parameters:
                     diff_threshold = 5,
                     n_sigma=7.0,
-
+                    red_only=0,
                     clear_threshold = 0.3,
 
                     debug_drop=False,
@@ -2623,6 +2634,9 @@ def parse_args_and_run(benchmark=False):
     parser.add_option("--n-sigma", type='float',
                       help=("criterion used to determine if a pixel is significantly "
                             "different than the mean [default: %default]"))
+
+    parser.add_option("--red-only", action='store_true', default=False,
+                      help=("if set, detect points only in red channel (requires color cameras)"))
 
     parser.add_option("--debug-drop", action='store_true',
                       help="save debugging information regarding dropped network packets")

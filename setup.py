@@ -7,6 +7,9 @@ version = flydra.version.__version__
 
 ext_modules = []
 
+ext_modules.append(Extension(name='flydra.camnode_colors',
+                             sources=['flydra/camnode_colors.pyx','flydra/colors.c']))
+
 ext_modules.append(Extension(name='flydra.reconstruct_utils',
                              sources=['src/reconstruct_utils.pyx']))
 
