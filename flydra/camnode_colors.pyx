@@ -1,7 +1,8 @@
 cimport c_python
 
 cdef extern from "colors.h":
-    int mono8_bggr_to_red(char*,int,int,int)
+    int mono8_bggr_to_red_channel(unsigned char*,int,int,int)
+    int mono8_bggr_to_red_color(unsigned char*,int,int,int)
 
 ctypedef struct PyArrayInterface:
     int two                       # contains the integer 2 as a sanity check
@@ -16,7 +17,16 @@ ctypedef struct PyArrayInterface:
 cdef char uchar
 uchar = ord("u")
 
-def replace_with_red_image( object arr, object coding):
+cdef int iRED_CHANNEL
+cdef int iRED_COLOR
+
+RED_CHANNEL = 0
+RED_COLOR = 1
+
+iRED_CHANNEL = 0
+iRED_COLOR = 1
+
+def replace_with_red_image( object arr, object coding, int chan):
     assert coding=='MONO8:BGGR'
     cdef int err
     cdef PyArrayInterface* inter
@@ -32,6 +42,11 @@ def replace_with_red_image( object arr, object coding):
     assert inter.typekind == uchar
     assert inter.itemsize == 1
     assert inter.flags & 0x401 # WRITEABLE and CONTIGUOUS
-    err = mono8_bggr_to_red( <char*>inter.data, inter.strides[0], inter.shape[0], inter.shape[1] )
+    if chan==iRED_CHANNEL:
+        err = mono8_bggr_to_red_channel( <unsigned char*>inter.data, inter.strides[0], inter.shape[0], inter.shape[1] )
+    elif chan==iRED_COLOR:
+        err = mono8_bggr_to_red_color( <unsigned char*>inter.data, inter.strides[0], inter.shape[0], inter.shape[1] )
+    else:
+        raise ValueError('unknown channel number %d'%chan)
     if err:
-        raise RuntimeError("to_red returned error %d"%err)
+        raise RuntimeError("to_red() returned error %d"%err)
