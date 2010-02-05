@@ -35,9 +35,9 @@ import math
 # ----Load the DLLs ----------------------------------------------------------
 
 if os.name == 'posix' and sys.platform.startswith('linux'):
-    _cxDLL = cdll.LoadLibrary('libcxcore.so.1')
-    _cvDLL = cdll.LoadLibrary('libcv.so.1')
-    _hgDLL = cdll.LoadLibrary('libhighgui.so.1')
+    _cxDLL = cdll.LoadLibrary('libcxcore.so')
+    _cvDLL = cdll.LoadLibrary('libcv.so')
+    _hgDLL = cdll.LoadLibrary('libhighgui.so')
 elif os.name == 'posix' and sys.platform.startswith('darwin'):
     _cxDLL = cdll.LoadLibrary('libcxcore.dylib')
     _cvDLL = cdll.LoadLibrary('libcv.dylib')
