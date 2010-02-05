@@ -2,6 +2,7 @@ from setuptools import setup, find_packages
 from distutils.core import Extension # actually monkey-patched by setuptools
 import flydra.version
 import numpy as np
+from Cython.Distutils import build_ext
 
 version = flydra.version.__version__
 
@@ -147,4 +148,5 @@ setup(name='flydra',
                                  'Makefile.kalmanize',
                                  ],
                     },
+      cmdclass = {'build_ext': build_ext},
       )
