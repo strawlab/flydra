@@ -27,7 +27,7 @@ ext_modules.append(Extension(name='flydra.fastgeom',
 
 ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
                              sources=['flydra/a2/fastfinder_help.c'],
-                             include_dirs=[np.get_numpy_include()],
+                             include_dirs=[np.get_include()],
                              )) # auto-generate with cython
 
 setup(name='flydra',
