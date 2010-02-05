@@ -1,8 +1,8 @@
 cimport c_python
 
 cdef extern from "colors.h":
-    int mono8_bggr_to_red_channel(unsigned char*,int,int,int)
-    int mono8_bggr_to_red_color(unsigned char*,int,int,int)
+    int mono8_bggr_to_red_channel(unsigned char*,int,int,int) nogil
+    int mono8_bggr_to_red_color(unsigned char*,int,int,int) nogil
 
 ctypedef struct PyArrayInterface:
     int two                       # contains the integer 2 as a sanity check
@@ -42,11 +42,11 @@ def replace_with_red_image( object arr, object coding, int chan):
     assert inter.typekind == uchar
     assert inter.itemsize == 1
     assert inter.flags & 0x401 # WRITEABLE and CONTIGUOUS
-    if chan==iRED_CHANNEL:
-        err = mono8_bggr_to_red_channel( <unsigned char*>inter.data, inter.strides[0], inter.shape[0], inter.shape[1] )
-    elif chan==iRED_COLOR:
-        err = mono8_bggr_to_red_color( <unsigned char*>inter.data, inter.strides[0], inter.shape[0], inter.shape[1] )
-    else:
-        raise ValueError('unknown channel number %d'%chan)
+    err = 2
+    with nogil:
+        if chan==iRED_CHANNEL:
+            err = mono8_bggr_to_red_channel( <unsigned char*>inter.data, inter.strides[0], inter.shape[0], inter.shape[1] )
+        elif chan==iRED_COLOR:
+            err = mono8_bggr_to_red_color( <unsigned char*>inter.data, inter.strides[0], inter.shape[0], inter.shape[1] )
     if err:
         raise RuntimeError("to_red() returned error %d"%err)

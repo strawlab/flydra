@@ -684,6 +684,7 @@ class ProcessCamClass(object):
                 if self.red_only_shared.get_nowait():
                     camnode_colors.replace_with_red_image( hw_roi_frame,
                                                            chainbuf.image_coding,
+                                                           #camnode_colors.RED_CHANNEL)
                                                            camnode_colors.RED_COLOR)
 
                 # get best guess as to when image was taken
