@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include "colors.h"
 
 #define MAX(a,b) (((a)>(b))?(a):(b))
