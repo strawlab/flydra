@@ -2,13 +2,37 @@ from setuptools import setup, find_packages
 from distutils.core import Extension # actually monkey-patched by setuptools
 import flydra.version
 import numpy as np
+import motmot.FastImage.FastImage as FastImage
+major,minor,build = FastImage.get_IPP_version()
+import motmot.FastImage.util as FastImage_util
 
 version = flydra.version.__version__
+
+# build with same IPP as FastImage
+vals = FastImage_util.get_build_info(ipp_static=FastImage.get_IPP_static(),
+                                     ipp_version='%d.%d'%(major,minor),
+                                     ipp_arch=FastImage.get_IPP_arch(),
+                                     )
+
+ipp_sources = vals.get('ipp_sources',[])
+ipp_include_dirs = vals.get('ipp_include_dirs',[])
+ipp_library_dirs = vals.get('ipp_library_dirs',[])
+ipp_libraries = vals.get('ipp_libraries',[])
+ipp_define_macros = vals.get('ipp_define_macros',[])
+ipp_extra_link_args = vals.get('extra_link_args',[])
+ipp_extra_compile_args = vals.get('extra_compile_args',[])
 
 ext_modules = []
 
 ext_modules.append(Extension(name='flydra.camnode_colors',
-                             sources=['flydra/camnode_colors.pyx','flydra/colors.c']))
+                             sources=['flydra/camnode_colors.pyx','flydra/colors.c']+ipp_sources,
+                             include_dirs=ipp_include_dirs,
+                             library_dirs=ipp_library_dirs,
+                             libraries=ipp_libraries+['cv'],
+                             define_macros=ipp_define_macros,
+                             extra_link_args=ipp_extra_link_args,
+                             extra_compile_args=ipp_extra_compile_args,
+                             ))
 
 ext_modules.append(Extension(name='flydra.reconstruct_utils',
                              sources=['src/reconstruct_utils.pyx']))
