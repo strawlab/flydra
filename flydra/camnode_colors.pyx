@@ -4,7 +4,7 @@ import motmot.FastImage.FastImage as FastImage
 cimport ipp
 
 cdef extern from "colors.h":
-    int mono8_bggr_to_red_color(ipp.Ipp8u* im, int step) nogil
+    int mono8_bggr_to_red_color(ipp.Ipp8u* im, int step, ipp.IppiSize) nogil
 
 cdef int iRED_CHANNEL
 cdef int iRED_COLOR
@@ -27,6 +27,6 @@ def replace_with_red_image( object arr, object coding, int chan):
         # if chan==iRED_CHANNEL:
         #     err = mono8_bggr_to_red_channel( <unsigned char*>inter.data, inter.strides[0], inter.shape[0], inter.shape[1] )
         if chan==iRED_COLOR:
-            err = mono8_bggr_to_red_color( <ipp.Ipp8u*>fiarr.im, fiarr.step)
+            err = mono8_bggr_to_red_color( <ipp.Ipp8u*>fiarr.im, fiarr.step, fiarr.imsiz.sz)
     if err:
         raise RuntimeError("to_red() returned error %d"%err)
