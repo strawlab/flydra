@@ -5,6 +5,7 @@ import numpy as np
 import motmot.FastImage.FastImage as FastImage
 major,minor,build = FastImage.get_IPP_version()
 import motmot.FastImage.util as FastImage_util
+from Cython.Distutils import build_ext
 
 version = flydra.version.__version__
 
@@ -51,7 +52,7 @@ ext_modules.append(Extension(name='flydra.fastgeom',
 
 ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
                              sources=['flydra/a2/fastfinder_help.c'],
-                             include_dirs=[np.get_numpy_include()],
+                             include_dirs=[np.get_include()],
                              )) # auto-generate with cython
 
 setup(name='flydra',
@@ -171,4 +172,5 @@ setup(name='flydra',
                                  'Makefile.kalmanize',
                                  ],
                     },
+      cmdclass = {'build_ext': build_ext},
       )

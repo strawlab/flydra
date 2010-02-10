@@ -61,7 +61,8 @@ import motmot.realtime_image_analysis.slow
 #DebugLock = flydra.debuglock.DebugLock
 
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
-import motmot.cam_iface.cam_iface_ctypes as cam_iface
+cam_iface = None # global variable, value set in main()
+import motmot.cam_iface.choose as cam_iface_choose
 from optparse import OptionParser
 import camnode_colors
 
@@ -1799,6 +1800,7 @@ class AppState(object):
                  benchmark = False,
                  options = None,
                  ):
+        global cam_iface
 
         self.options = options
         self._real_quit_function = None
@@ -1829,6 +1831,8 @@ class AppState(object):
             # Setup cameras
             #
             ##################################################################
+
+            cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
 
             all_cam_info_list = [
                 ('\0'.join(cam_iface.get_camera_info(i)),i) for i in range(cam_iface.get_num_cameras()) ]
@@ -2597,7 +2601,10 @@ def get_app_defaults():
         except: #socket.gaierror?
             default_main_brain_hostname = ''
 
-    defaults = dict(# these are the most important 2D tracking parameters:
+    defaults = dict(wrapper='ctypes',
+                    backend='unity',
+
+                    # these are the most important 2D tracking parameters:
                     diff_threshold = 5,
                     n_sigma=7.0,
                     red_only=0,
@@ -2626,7 +2633,17 @@ def benchmark():
     parse_args_and_run(benchmark=True)
 
 def parse_args_and_run(benchmark=False):
-    parser = OptionParser(usage='%prog [options]',
+    usage_lines = ['%prog [options]',
+                   '',
+                   '  available wrappers and backends:']
+
+    for wrapper,backends in cam_iface_choose.wrappers_and_backends.iteritems():
+        for backend in backends:
+            usage_lines.append('    --wrapper %s --backend %s'%(wrapper,backend))
+    del wrapper, backend # delete temporary variables
+    usage = '\n'.join(usage_lines)
+
+    parser = OptionParser(usage=usage,
                           version="%prog "+flydra.version.__version__)
 
     defaults = get_app_defaults()
@@ -2635,6 +2652,14 @@ def parse_args_and_run(benchmark=False):
     parser.add_option("--server", dest="server", type='string',
                       help="hostname of mainbrain SERVER",
                       metavar="SERVER [default: %default]")
+
+    parser.add_option("--wrapper", type='string',
+                      help="cam_iface WRAPPER to use [default: %default]",
+                      metavar="WRAPPER")
+
+    parser.add_option("--backend", type='string',
+                      help="cam_iface BACKEND to use [default: %default]",
+                      metavar="BACKEND")
 
     parser.add_option("--n-sigma", type='float',
                       help=("criterion used to determine if a pixel is significantly "
@@ -2710,6 +2735,16 @@ def parse_args_and_run(benchmark=False):
 
     (options, args) = parser.parse_args()
     #print dir(options)
+
+    if not options.wrapper:
+        print 'WRAPPER must be set'
+        parser.print_help()
+        return
+
+    if not options.backend:
+        print 'BACKEND must be set'
+        parser.print_help()
+        return
 
     app_state=AppState(options = options,
                        benchmark=benchmark,
