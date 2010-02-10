@@ -33,7 +33,7 @@ echo "PID $XVFBPID seems OK, will continue with tests"
 # Run tests, capture exit code, don't quit on error.
 set +o errexit
 #nosetests --verbosity=3 -A "not slow_command"
-nosetests -A "not known_fail" --all-modules
+nosetests -A "not known_fail" --all-modules --verbosity=3
 #nosetests --verbosity=3
 RESULT=$?
 set -o errexit
