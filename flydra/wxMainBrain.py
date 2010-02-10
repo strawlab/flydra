@@ -320,6 +320,7 @@ class wxMainBrainApp(wx.App):
         self.update_wx()
 
         self.collecting_background_buttons = {}
+        self.color_filter_buttons = {}
         self.take_background_buttons = {}
         self.clear_background_buttons = {}
         self.last_sound_time = time.time()
@@ -364,6 +365,16 @@ class wxMainBrainApp(wx.App):
                 event.SetEventObject( widget )
                 widget.Command( event )
             self.statusbar.SetStatusText('running BG collection toggled',0)
+        elif keyname == 'F':
+            for cam_id in self.cameras.keys():
+                widget = self.color_filter_buttons[cam_id]
+                widget.SetValue( not widget.GetValue() )
+                id = widget.GetId()
+                event = wx.CommandEvent(wx.wxEVT_COMMAND_CHECKBOX_CLICKED,id)
+                event.SetEventObject( widget )
+                widget.Command( event )
+            self.statusbar.SetStatusText('color filter toggled toggled',0)
+
         elif keyname == 'S':
             if str(self.statusbar.GetStatusText(2)) == '':
                 self.OnStartSavingData()
@@ -515,6 +526,11 @@ class wxMainBrainApp(wx.App):
         collecting_background.SetValue(scalar_control_info['collecting_background'])
         wx.EVT_CHECKBOX(collecting_background, collecting_background.GetId(),
                      self.OnCollectingBackground)
+
+        color_filter = xrc.XRCCTRL(previewPerCamPanel,"COLOR_FILTER")
+        self.color_filter_buttons[cam_id] = color_filter
+        wx.EVT_CHECKBOX(color_filter, color_filter.GetId(),
+                     self.OnColorFilter)
 
         take_background = xrc.XRCCTRL(previewPerCamPanel,"take_background")
         self.take_background_buttons[cam_id] = take_background
@@ -1547,6 +1563,13 @@ class wxMainBrainApp(wx.App):
         cam_id = self._get_cam_id_for_button(widget)
         self.main_brain.set_collecting_background( cam_id, widget.IsChecked() )
 
+
+    # COLOR FILTER
+    def OnColorFilter(self, event):
+        widget = event.GetEventObject()
+        cam_id = self._get_cam_id_for_button(widget)
+        self.main_brain.set_color_filter( cam_id, widget.IsChecked() )
+
     def OnStopAllCollectingBg(self, event):
         # XXX not finished
         pass
@@ -1618,6 +1641,7 @@ class wxMainBrainApp(wx.App):
             pass
 
         del self.collecting_background_buttons[cam_id]
+        del self.color_filter_buttons[cam_id]
         del self.take_background_buttons[cam_id]
         del self.clear_background_buttons[cam_id]
 

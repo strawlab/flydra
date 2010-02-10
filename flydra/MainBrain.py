@@ -1983,6 +1983,9 @@ class MainBrain(object):
     def set_collecting_background(self, cam_id, value):
         self.remote_api.external_send_set_camera_property( cam_id, 'collecting_background', value)
 
+    def set_color_filter(self, cam_id, value):
+        self.remote_api.external_send_set_camera_property( cam_id, 'color_filter', value)
+
     def take_background(self,cam_id):
         self.remote_api.external_take_background(cam_id)
 

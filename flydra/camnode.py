@@ -2452,6 +2452,8 @@ class AppState(object):
                     elif property_name == 'collecting_background':
                         if value: globals['collecting_background'].set()
                         else: globals['collecting_background'].clear()
+                    elif property_name == 'color_filter':
+                        cam_processor.red_only_shared.set(value)
                     elif property_name == 'visible_image_view':
                         globals['export_image_name'] = value
                         #print 'displaying',value,'image'
