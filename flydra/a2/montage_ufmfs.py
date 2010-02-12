@@ -36,9 +36,9 @@ def montage(fnames, title, target):
     tile = get_tile( len(fnames) )
     imnames = ' '.join(fnames)
 
-    CMD=("montage %s -mode Concatenate -tile %s -bordercolor white "
+    CMD=("gm montage %s -mode Concatenate -tile %s -bordercolor white "
          "-title '%s' "
-         "-border 2 %s"%(imnames, tile, title, target))
+         "%s"%(imnames, tile, title, target))
     #print CMD
     subprocess.check_call(CMD,shell=True)
 
