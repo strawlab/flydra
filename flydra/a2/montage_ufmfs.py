@@ -50,7 +50,8 @@ def make_montage( h5_filename,
         loaded_cfg = cherrypy._cpconfig.as_dict( cfg_filename )
         for section in loaded_cfg:
             config[section].update( loaded_cfg.get(section,{}) )
-
+    else:
+        warning.warn('no configuration file specified -- using defaults')
 
     if movie_fnames is None:
         movie_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
