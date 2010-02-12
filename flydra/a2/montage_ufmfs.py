@@ -53,6 +53,9 @@ def make_montage( h5_filename,
         movie_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
                                                        ufmf_dir=ufmf_dir,
                                                        careful=True )
+    else:
+        if ufmf_dir is not None:
+            movie_fnames = [ os.path.join(ufmf_dir,f) for f in movie_fnames]
 
     if len(movie_fnames)==0:
         raise ValueError('no input movies -- nothing to do')
