@@ -171,8 +171,8 @@ def doit(
                 else:
                     xdata = data['frame']
                 if n_valid >= 1:
-                    ax.plot( xdata, data['x'], 'r.' )
-                    ax.plot( xdata, data['y'], 'g.' )
+                    ax.plot( xdata, data['x'], 'ro',  ms=2, mew=0 )
+                    ax.plot( xdata, data['y'], 'go',  ms=2, mew=0 )
             ax.text(0.1,0,'%s: %d pts'%(cam_id,cam_id_n_valid),
                     horizontalalignment='left',
                     verticalalignment='bottom',
@@ -212,7 +212,7 @@ def doit(
             spread_msec = spread[valid_cond] * 1000.0
             ax.plot( frames[valid_cond],
                      spread_msec,
-                     '.' )
+                     'o', ms=2, mew=0 )
 
             if spread_msec.max() < 1.0:
                 ax.set_ylim((0,1))
