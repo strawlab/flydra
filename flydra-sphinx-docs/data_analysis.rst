@@ -164,6 +164,8 @@ Data flow
 Extracting longitudinal body orientation
 ========================================
 
+See also :ref:`Estimating orientations with flydra <orientation_data>`.
+
 Theoretical overview
 --------------------
 
