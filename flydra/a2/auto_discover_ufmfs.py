@@ -22,7 +22,12 @@ def find_ufmfs(filename,ufmf_dir=None,careful=False):
     all_ufmfs.sort()
 
     h5 = tables.openFile(filename,mode='r')
-    camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
+    try:
+        camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
+    except:
+        sys.stderr.write('While getting caminfo from "%s" (traceback below)\n'%
+                         filename)
+        raise
     cam_ids = cam_id2camns.keys()
 
     h5_start_quick = h5.root.data2d_distorted[0]['timestamp']
