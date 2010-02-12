@@ -13,6 +13,8 @@ import flydra.reconstruct
 import cherrypy  # ubuntu: install python-cherrypy3
 import benu
 
+from tables_tools import openFileSafe
+
 def get_tile(N):
     rows = int(np.ceil(np.sqrt(float(N))))
     cols = rows
@@ -41,6 +43,7 @@ def make_montage( h5_filename,
                   reconstructor_source = None,
                   movie_fnames = None,
                   movie_cam_ids = None,
+                  caminfo_h5_filename = None,
                   ):
     config = get_config_defaults()
     if cfg_filename is not None:
@@ -80,6 +83,13 @@ def make_montage( h5_filename,
     reconstructor = flydra.reconstruct.Reconstructor(
                     reconstructor_source)
 
+    if caminfo_h5_filename is not None:
+        with openFileSafe( caminfo_h5_filename, mode='r' ) as h5:
+            camn2cam_id, tmp = result_utils.get_caminfo_dicts(h5)
+            del tmp
+    else:
+        camn2cam_id = None
+
     blank_images = {}
 
     all_frame_montages = []
@@ -92,6 +102,7 @@ def make_montage( h5_filename,
         start = start,
         stop = stop,
         rgb8_if_color = True,
+        camn2cam_id = camn2cam_id,
         )):
         tracker_data = frame_dict['tracker_data']
 
@@ -281,6 +292,9 @@ transform='rot 180' # rotate the image 180 degrees (See transform
         "-r", "--reconstructor",type='string',
         help="calibration/reconstructor path")
 
+    parser.add_option( "--caminfo-h5-filename", type="string",
+                       help="path of h5 file from which to load caminfo")
+
     (options, args) = parser.parse_args()
 
     if len(args)<1:
@@ -308,4 +322,5 @@ transform='rot 180' # rotate the image 180 degrees (See transform
                   reconstructor_source = options.reconstructor,
                   movie_fnames = movie_fnames,
                   movie_cam_ids = movie_cam_ids,
+                  caminfo_h5_filename = options.caminfo_h5_filename,
                   )

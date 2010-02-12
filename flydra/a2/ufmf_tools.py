@@ -34,6 +34,7 @@ def iterate_frames(h5_filename,
                    stop = None,
                    rgb8_if_color=False,
                    movie_cam_ids=None,
+                   camn2cam_id = None,
                    ):
     """yield frame-by-frame data"""
 
@@ -72,7 +73,8 @@ def iterate_frames(h5_filename,
     cam_ids.sort()
 
     with openFileSafe( h5_filename, mode='r' ) as h5:
-        camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
+        if camn2cam_id is None:
+            camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
         parsed = result_utils.read_textlog_header(h5)
         flydra_version = parsed.get('flydra_version',None)
         if flydra_version is not None and flydra_version >= '0.4.45':
