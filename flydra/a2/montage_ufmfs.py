@@ -80,8 +80,11 @@ def make_montage( h5_filename,
     if reconstructor_source is None:
         reconstructor_source = h5_filename
 
-    reconstructor = flydra.reconstruct.Reconstructor(
-                    reconstructor_source)
+    try:
+        reconstructor = flydra.reconstruct.Reconstructor(
+            reconstructor_source)
+    except:
+        reconstructor = None
 
     if caminfo_h5_filename is not None:
         with openFileSafe( caminfo_h5_filename, mode='r' ) as h5:
