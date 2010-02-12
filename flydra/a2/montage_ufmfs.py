@@ -15,11 +15,6 @@ import benu
 
 from tables_tools import openFileSafe
 
-def get_tile(N):
-    rows = int(np.ceil(np.sqrt(float(N))))
-    cols = rows
-    return '%dx%d'%(rows,cols)
-
 def get_config_defaults():
     # keep in sync with usage in main() below
     what = {'show_2d_position': False,
@@ -30,6 +25,22 @@ def get_config_defaults():
     default = collections.defaultdict(dict)
     default['what to show']=what
     return default
+
+def montage(fnames, title, target):
+
+    def get_tile(N):
+        rows = int(np.ceil(np.sqrt(float(N))))
+        cols = rows
+        return '%dx%d'%(rows,cols)
+
+    tile = get_tile( len(fnames) )
+    imnames = ' '.join(fnames)
+
+    CMD=("montage %s -mode Concatenate -tile %s -bordercolor white "
+         "-title '%s' "
+         "-border 2 %s"%(imnames, tile, title, target))
+    #print CMD
+    subprocess.check_call(CMD,shell=True)
 
 def make_montage( h5_filename,
                   cfg_filename=None,
@@ -209,14 +220,9 @@ def make_montage( h5_filename,
 
         target = os.path.join(dest_dir, 'movie%s_frame%07d.jpg'%(
             datetime_str,frame_enum+1 ))
-        tile = get_tile( len(saved_fnames) )
-        imnames = ' '.join(saved_fnames)
         # All cameras saved for this frame, make montage
-        CMD=("montage %s -mode Concatenate -tile %s -bordercolor white "
-             "-title '%s frame %d' "
-             "-border 2 %s"%(imnames, tile, datetime_str, frame, target))
-        #print CMD
-        subprocess.check_call(CMD,shell=True)
+        title = '%s frame %d'%( datetime_str, frame )
+        montage(saved_fnames, title, target)
         all_frame_montages.append( target )
         if not no_remove:
             for fname in saved_fnames:
