@@ -1,8 +1,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include "colors.h"
+#include <stdio.h>
 
-#define CHK(errval) if ((errval)!=ippStsNoErr) return 1;
+#define CHK(errval) if ((errval)!=ippStsNoErr) {			\
+    fprintf(stderr,"%s, line %d: ipp error: %d\n",__FILE__,__LINE__,(errval)); \
+    return 1;								\
+  }
 
 int mono8_bggr_to_red_color( Ipp8u* im, int step, IppiSize sz) {
   int color_step, hls_step, hue_step, lum_step;
@@ -28,21 +32,25 @@ int mono8_bggr_to_red_color( Ipp8u* im, int step, IppiSize sz) {
 
   color_im = ippiMalloc_8u_C3(sz.width, sz.height, &color_step );
   if (color_im==NULL) {
+    fprintf(stderr,"%s, line %d: error allocating image\n",__FILE__,__LINE__);
     return 1;
   }
 
   hue_im = ippiMalloc_8u_C3(sz.width, sz.height, &hue_step );
   if (hue_im==NULL) {
+    fprintf(stderr,"%s, line %d: error allocating image\n",__FILE__,__LINE__);
     return 1;
   }
 
   lum_im = ippiMalloc_8u_C3(sz.width, sz.height, &lum_step );
   if (lum_im==NULL) {
+    fprintf(stderr,"%s, line %d: error allocating image\n",__FILE__,__LINE__);
     return 1;
   }
 
   hls_im = ippiMalloc_8u_C3(sz.width, sz.height, &hls_step );
   if (hls_im==NULL) {
+    fprintf(stderr,"%s, line %d: error allocating image\n",__FILE__,__LINE__);
     return 1;
   }
 
