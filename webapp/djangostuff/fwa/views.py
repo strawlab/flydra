@@ -1,8 +1,9 @@
 from django.template import RequestContext, loader
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
-from django.views.generic.simple import redirect_to
+from django import forms
+from django.core.urlresolvers import reverse
 
 from couchdb.client import Server
 import couchdb.http
@@ -10,6 +11,12 @@ import couchdb.http
 couchbase = settings.FWA_COUCH_BASE_URI
 couch_server = Server(couchbase)
 metadb = couch_server['flydraweb_metadata']
+
+class DatabaseForm(forms.Form):
+    database = forms.CharField()
+
+class DatasetForm(forms.Form):
+    dataset = forms.CharField()
 
 # helper for below
 def is_access_valid(db_name,user):
@@ -28,7 +35,7 @@ def is_access_valid(db_name,user):
         return False
 
 @login_required
-def db_index(request):
+def select_db(request):
     db_names = [row.key for row in metadb.view('meta/databases')]
 
     try:
@@ -42,14 +49,26 @@ def db_index(request):
 
     if len(valid_db_names)==1:
         # no need to choose manually, automatically fast-forward
-        return redirect_to(request,valid_db_names[0],permanent=False)
+        next = get_next_url(db_name=valid_db_names[0])
+        return HttpResponseRedirect(next)
 
-    t = loader.get_template('db_index.html')
-    c = RequestContext(request, {"valid_db_names":valid_db_names})
+    if request.method == 'POST': # If the form has been submitted...
+        form = DatabaseForm(request.POST) # A form bound to the POST data
+        if form.is_valid(): # All validation rules pass
+            next = get_next_url(db_name=form.cleaned_data['database'])
+            return HttpResponseRedirect(next)
+    else:
+        # GET
+        choices = [ (db_name,db_name) for db_name in valid_db_names ]
+        form = DatabaseForm()
+        form.fields['database'].widget = forms.Select(choices=choices)
+
+    t = loader.get_template('select.html')
+    c = RequestContext(request, {"form":form,"what":"database"})
     return HttpResponse(t.render(c))
 
 @login_required
-def db(request,db_name=None):
+def select_dataset(request,db_name=None):
     """view a db, which means select a dataset"""
     assert db_name is not None
     assert is_access_valid(db_name,request.user)
@@ -58,20 +77,31 @@ def db(request,db_name=None):
     db = couch_server[db_name]
 
     view_results = db.view('fw/datasets')
-    #raise str( type(view_result) ) + ' ' + str(view_result)
-
-    if len(view_results)==1:
-        # only one dataset, choose it
-        row = view_results.rows[0]
-
+    dataset_names = []
+    for row in view_results:
         dataset_id = row.id
-        #raise dataset_id
-        return redirect_to(request,dataset_id,permanent=False)
-        #return redirect_to(request,'noexist',permanent=False)
-    1/0
+        assert dataset_id.startswith('dataset:')
+        dataset = dataset_id[8:]
+        dataset_names.append(dataset)
 
-    t = loader.get_template('db.html')
-    c = RequestContext(request)
+    if len(dataset_names)==1:
+        next = get_next_url(db_name=db_name,dataset_name=dataset_names[0])
+        return HttpResponseRedirect(next)
+
+    if request.method == 'POST': # If the form has been submitted...
+        form = DatasetForm(request.POST) # A form bound to the POST data
+        if form.is_valid(): # All validation rules pass
+            next = get_next_url(db_name=db_name,
+                                dataset_name=form.cleaned_data['dataset'])
+            return HttpResponseRedirect(next)
+    else:
+        # GET
+        choices = [ (ds_name,ds_name) for ds_name in dataset_names ]
+        form = DatasetForm()
+        form.fields['dataset'].widget = forms.Select(choices=choices)
+
+    t = loader.get_template('select.html')
+    c = RequestContext(request, {"form":form,"what":"dataset"})
     return HttpResponse(t.render(c))
 
 @login_required
@@ -81,6 +111,16 @@ def dataset(request,db_name=None,dataset=None):
     assert is_access_valid(db_name,request.user)
 
     t = loader.get_template('dataset.html')
-    c = RequestContext(request)
+    c = RequestContext(request,{'dataset':dataset})
     return HttpResponse(t.render(c))
 
+approot = reverse(select_db)
+def get_next_url(db_name=None,dataset_name=None):
+    if db_name is None:
+        assert dataset_name is None
+        return approot
+    else:
+        if dataset_name is None:
+            return approot + db_name + '/'
+        else:
+            return approot + db_name + '/' + dataset_name + '/'

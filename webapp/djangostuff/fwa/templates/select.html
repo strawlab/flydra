@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+Hello {{ user }}, please choose a {{ what }}:
+
+<form action="" method="post">
+{{ form.as_p }}
+<input type="submit" value="Submit" />
+</form>
+
+{% endblock %}
