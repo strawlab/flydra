@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <title>Test of Arcs in Canvas</title>
+  <!--[if IE]><script language="javascript" type="text/javascript" src="../excanvas.js"></script><![endif]-->
+  <script type="text/javascript">
+    function draw(){
+      var canvas = document.getElementById('t1');
+      if (canvas.getContext){
+        var ctx = canvas.getContext('2d');
+        ctx.translate(75, 75);        
+        ctx.arc(0,0,45,0, Math.PI*2-.0001, false);
+        ctx.fill();
+        
+        canvas = document.getElementById('t2');
+        ctx = canvas.getContext('2d');
+        ctx.translate(75, 75);        
+        ctx.arc(0,0,45,0, Math.PI*2, false);
+        ctx.fill();
+        
+        canvas = document.getElementById('t3');
+        ctx = canvas.getContext('2d');
+        ctx.translate(75, 75);        
+        ctx.arc(0,0,45,1, 1+Math.PI*2-.0001, false);
+        ctx.fill();
+      }
+    }
+  </script>
+  <style type="text/css">
+    canvas { border: 1px solid black; }
+  </style>
+</head>
+<body onload="draw();">
+  <?php include "nav.inc"; ?>
+  <p>You should see black circles in the boxes.  IE (emulated through excanvas) and Chrome on Windows (and maybe others) fail the first test.  They seem to have trouble drawing arcs with a start angle 0 and an end angle nearly but not exactly 2*PI. It is strange behavior since IE doesn't even implement the canvas tag.</p>
+  
+  <p>Here is an arc that starts at 0 and ends at 2 * PI - 0.001</p>
+  <canvas id="t1" width="150" height="150"></canvas>
+  
+<p>Here is an arc that starts at 0 and ends at exactly 2 * PI.</p>
+  <canvas id="t2" width="150" height="150"></canvas>
+
+<p>Here is a nearly closed arc starting at 1 and ending at 1 + 2 * PI - 0.0001</p>
+  <canvas id="t3" width="150" height="150"></canvas>
+</body>
+</html>
