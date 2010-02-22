@@ -3,6 +3,8 @@
   <head>
     <title>Flydra analysis</title>
     <link rel="stylesheet" href="style/main.css" type="text/css">
+    <link rel="stylesheet" href="vendor/jqplot/jquery.jqplot.css" type="text/css">
+    <link rel="stylesheet" href="vendor/jqplot/examples/example.css" type="text/css">
   </head>
   <body>
     <div id="header">
@@ -13,6 +15,7 @@
       Dataset:
       <div id="datasets_summary"><img src="images/Spinning_wheel_throbber.gif" width="32" height="32"></div>
       <br style="clear:both;"/>
+      <div id="chartdiv" style="margin-top:20px; margin-left:20px; width:200px; height:100px;"></div>
     </div>
   </body>
   <script src="/_utils/script/json2.js"></script>
@@ -26,4 +29,28 @@
   <script src="vendor/couchapp/jquery.mustache.js"></script>
   <script src="script/md5.js"></script>
   <script src="script/app.js"></script>
+
+  <script language="javascript" type="text/javascript" src="vendor/jqplot/jquery.jqplot.js"></script>
+  <script language="javascript" type="text/javascript" src="vendor/jqplot/plugins/jqplot.categoryAxisRenderer.js"></script>
+  <script language="javascript" type="text/javascript" src="vendor/jqplot/plugins/jqplot.barRenderer.js"></script>
+  <script type="text/javascript" language="javascript">
+
+  $(document).ready(function(){
+
+                        data = [ [25,1], [26,0], [27,1], [28,0], [29,0], [30,3], [31,3]];
+                        plot1 = $.jqplot('chartdiv', [data], {
+                                axes: {
+                                        xaxis: {renderer: $.jqplot.CategoryAxisRenderer},
+                                        yaxis: {min:0, tickInterval: 1, tickOptions:{formatString:'%.1f'}}
+                                },
+                                grid: { borderWidth: 0.5 },
+                                seriesDefaults: {
+                                        color: '#F90',
+                                        renderer: $.jqplot.BarRenderer,
+                                        shadow: false
+                                }
+                        });
+  });
+  </script>
+
 </html>
