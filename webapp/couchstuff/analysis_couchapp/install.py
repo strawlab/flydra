@@ -12,5 +12,5 @@ def run(cmd):
     subprocess.check_call(cmd,shell=True)
 
 for db_name in db_names:
-    cmd = ['couchapp','push','.','http://%slocalhost:5984/%s'%(credentials,db_name)]
+    cmd = ['couchapp','push','.','http://%slocalhost:3388/%s'%(credentials,db_name)]
     run(cmd)

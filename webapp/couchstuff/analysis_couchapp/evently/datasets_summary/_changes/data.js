@@ -69,6 +69,8 @@ function getSizePrefix(pos) {
       dataset_name : r.value.dataset_doc.name,
       ufmf_bytes_human : size_format(r.value.ufmf_bytes),
       h5_bytes_human : size_format(r.value.h5_bytes),
+      ufmf_files : r.value.ufmf_files,
+      h5_files : r.value.h5_files,
     };
   });
   return {datasets:datasets};
