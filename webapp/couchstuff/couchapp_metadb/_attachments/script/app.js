@@ -1,7 +1,7 @@
 // $.couch.app() loads the design document from the server and 
 // then calls our application.
 $.couch.app(function(app) {
-  console.log(app.ddoc);
+	// console.log(app.ddoc);
 
   // customize the couchapp profile widget with our templates and selectors
   $.extend(true, 
