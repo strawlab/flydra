@@ -2,6 +2,7 @@
 import subprocess
 
 credentials = 'astraw:abc123@'
+host = 'localhost:5984'
 db_names = ['altshuler','pitch']
 
 def run(cmd):
@@ -12,5 +13,10 @@ def run(cmd):
     subprocess.check_call(cmd,shell=True)
 
 for db_name in db_names:
-    cmd = ['couchapp','push','.','http://%slocalhost:3388/%s'%(credentials,db_name)]
+    db_url = 'http://%s%s/%s'%(credentials,host,db_name)
+    cmd = ['couchapp','push','.',db_url]
     run(cmd)
+
+    print '--------- your db is at:'
+    print db_url+'/_design/analysis/_list/index/datasets'
+    print
