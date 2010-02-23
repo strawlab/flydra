@@ -1,5 +1,5 @@
 function(head, req) {
-    // !json templates.index
+    // !json templates
     // !code vendor/couchapp/path.js
     // !code lib/mustache.js
     // !code lib/human_sizes.js
@@ -35,7 +35,7 @@ function(head, req) {
             row_view.datasets.push( make_dataset( row, myshow_url ));
         };
 
-        var content = Mustache.to_html(templates.index.rows, row_view);
+        var content = Mustache.to_html(templates.list_datasets, row_view);
 
         var view = {
             title: "Flydra analysis",
@@ -44,7 +44,7 @@ function(head, req) {
             asset_path : assetPath()
         }
 
-        return Mustache.to_html(templates.index.must, view);
+        return Mustache.to_html(templates.base, view);
 
     });
 }
