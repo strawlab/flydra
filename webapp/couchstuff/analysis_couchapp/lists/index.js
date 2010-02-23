@@ -40,7 +40,8 @@ function(head, req) {
         var view = {
             title: "Flydra analysis",
             index: indexPath,
-            content : content
+            content : content,
+            asset_path : assetPath()
         }
 
         return Mustache.to_html(templates.index.must, view);
