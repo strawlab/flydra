@@ -766,6 +766,8 @@ def get_similar_direction_graphs(fmf,frame,
         pylab.show()
 
     x,y=extract_corners(imnx_use)
+    if len(x) == 0:
+        raise ValueError('extract corners found no corners. cannot continue')
 
     if chess_preview:
         pylab.imshow(imnx_use)
