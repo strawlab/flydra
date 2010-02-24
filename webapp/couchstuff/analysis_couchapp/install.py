@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 import subprocess
 
-credentials = 'astraw:abc123@'
-host = 'localhost:5984'
+credentials = ''
+host = 'localhost:3388'
 db_names = ['altshuler','pitch']
 
 def run(cmd):
