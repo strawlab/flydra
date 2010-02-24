@@ -1,12 +1,12 @@
 function(doc) {
 
-    var is_data_node = false;
+    var success = true;
     var props = [];
+    var value;
 
     switch (doc.type) {
     case "h5":
         // adapt to DataNode
-        is_data_node = true;
         if (doc.has_2d_position) {
             props = props.concat( "2d position" );
         }
@@ -23,22 +23,23 @@ function(doc) {
             props = props.concat( "calibration" );
         }
 
-        var value = { properties : props,
-                      start_time : doc.start_time,
-                      stop_time  : doc.stop_time,
-                      dataset    : doc.dataset,
-                      sources    : [doc._id],
-                    }
+        value = { properties : props,
+                  start_time : doc.start_time,
+                  stop_time  : doc.stop_time,
+                  dataset    : doc.dataset,
+                  sources    : [doc._id],
+                }
         break;
     case "datanode":
         // already implements DataNode
         value = doc;
         break;
     default:
+        success = false;
         break;
     }
 
-    if (is_data_node) {
+    if (success) {
         emit( [value.dataset, value.properties], value );
     }
 }
