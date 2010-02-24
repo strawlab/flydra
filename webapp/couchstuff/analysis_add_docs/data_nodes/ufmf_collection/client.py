@@ -6,7 +6,11 @@ import datetime
 from uuid import uuid4
 import base
 
+# TODO: query DataNode view for ufmf rather than hard-code
+# ufmf-specific information.
+
 class UfmfSet:
+    """create a 'datanode' document for a collection of ufmf files"""
     def __init__(self,first_doc):
         self.member_docs = [first_doc]
         self.dataset = first_doc['dataset']
@@ -55,13 +59,14 @@ class UfmfSet:
         common_name = common_name.rstrip('_cam')
         if len(common_name):
             doc['_id'] = 'datanode:%s:%s'%(dataset,common_name)
-        validate_data_node(doc)
+        base.validate_data_node(doc)
         return doc
 
-def validate_data_node(doc):
-    pass
-
 def main():
+
+    # Search database to find valid parents and create all possible
+    # children.
+
     uri = 'http://localhost:3388'
     server = couchdb.client.Server(uri)
     db = server['altshuler']

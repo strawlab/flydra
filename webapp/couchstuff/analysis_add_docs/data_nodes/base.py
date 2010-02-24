@@ -52,3 +52,7 @@ def test_string_start_intersection():
     c = 'abcdadfa'
     d = 'abcdefadfs'
     assert string_start_intersection( [a,b,c,d] ) == 'abc'
+
+def validate_data_node(doc):
+    # stub to validate required fields
+    pass
