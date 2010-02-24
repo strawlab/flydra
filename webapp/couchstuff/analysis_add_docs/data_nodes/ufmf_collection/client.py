@@ -4,54 +4,7 @@ import pprint
 import dateutil.parser
 import datetime
 from uuid import uuid4
-
-class NoTimeOverlapError(ValueError):
-    pass
-
-class TimeRange:
-    def __init__(self,start,stop):
-        self.start = start
-        self.stop = stop
-    def intersect(self,other):
-        assert isinstance(other,TimeRange)
-        start = max( self.start, other.start )
-        stop = min( self.stop, other.stop )
-        return TimeRange(start,stop)
-    def get_duration(self):
-        return self.stop-self.start
-    duration = property( get_duration )
-
-def decode_time(time_string):
-    return dateutil.parser.parse(time_string)
-
-def encode_time(timeval):
-    return timeval.isoformat()
-
-def decode_time_dict(doc):
-    for k,v in doc.iteritems():
-        if k.endswith('_time'):
-            if v is not None:
-                newv = decode_time(v)
-                doc[k] = newv
-        elif isinstance(v,dict):
-            decode_time_dict(v)
-
-def string_start_intersection( names ):
-    a = [ x for x in names[0] ]
-    for name in names[1:]:
-        for i in range(len(a)):
-            if name[i] != a[i]:
-                a=a[:i]
-                break
-    result = ''.join(a)
-    return result
-
-def test_string_start_intersection():
-    a = 'abc123'
-    b = 'abcdef'
-    c = 'abcdadfa'
-    d = 'abcdefadfs'
-    assert string_start_intersection( [a,b,c,d] ) == 'abc'
+import base
 
 class UfmfSet:
     def __init__(self,first_doc):
@@ -59,14 +12,16 @@ class UfmfSet:
         self.dataset = first_doc['dataset']
         latest_start_time = first_doc['start_time']
         earliest_stop_time = first_doc['stop_time']
-        self.overlap_times = TimeRange( latest_start_time, earliest_stop_time )
+        self.overlap_times = base.TimeRange( latest_start_time,
+                                             earliest_stop_time )
     def append(self,doc):
         if self.dataset != doc['dataset']:
             raise ValueError('doc not from my dataset')
         time_range_intersection = self.overlap_times.intersect(
-            TimeRange( doc['start_time'], doc['stop_time'] ))
+            base.TimeRange( doc['start_time'], doc['stop_time'] ))
         if not time_range_intersection.duration > datetime.timedelta(0):
-            raise NoTimeOverlapError('cannot append doc to UfmfSet unless there is overlap')
+            raise base.NoTimeOverlapError(
+                'cannot append doc to UfmfSet unless there is overlap')
         self.overlap_times = time_range_intersection
         self.member_docs.append( doc )
     def to_data_node(self):
@@ -89,14 +44,14 @@ class UfmfSet:
         doc = {
             'type'       : 'datanode',
             'properties' : ['ufmf collection'],
-            'start_time' : encode_time(self.overlap_times.start),
-            'stop_time'  : encode_time(self.overlap_times.stop),
+            'start_time' : base.encode_time(self.overlap_times.start),
+            'stop_time'  : base.encode_time(self.overlap_times.stop),
             'dataset'    : full_dataset,
             'sources'    : ids,
             'status_tags': ['built','collection','virtual'],
             'filenames'  : sorted([ d['filename'] for d in self.member_docs ]),
             }
-        common_name = string_start_intersection( fnames ).rstrip('_')
+        common_name = base.string_start_intersection( fnames ).rstrip('_')
         common_name = common_name.rstrip('_cam')
         if len(common_name):
             doc['_id'] = 'datanode:%s:%s'%(dataset,common_name)
@@ -134,7 +89,7 @@ def main():
             #pprint.pprint(row.value)
             doc = row.value
             try:
-                decode_time_dict(doc)
+                base.decode_time_dict(doc)
             except:
                 #print 'error decoding'
                 #pprint.pprint(doc)
@@ -147,7 +102,7 @@ def main():
                     coll.append( doc )
                     success = True
                     break
-                except NoTimeOverlapError:
+                except base.NoTimeOverlapError:
                     pass
             if not success:
                 # start a new ufmf collection
