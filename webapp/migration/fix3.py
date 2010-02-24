@@ -13,33 +13,7 @@ server_name = 'http://localhost:3388/'
 upload_dir = '/media/humdra-disk/humdra/2008_september/upload'
 tmp_dir = '/media/humdra-disk/humdra/tmp'
 
-files = glob.glob(os.path.join(upload_dir,'*ufmf.lzma'))
-files.sort()
 
-fshort = []
-for fname in files:
-    trim = os.path.split(fname)[-1]
-    dst = os.path.join( tmp_dir, trim )
-    if not os.path.exists(dst):
-        os.link( fname, dst )
-    fshort.append(trim)
-
-if 0:
-    # filter by already done
-    orig_fshort = fshort
-    fshort = []
-    for target in orig_fshort:
-        id = 'ufmf:humdra_200809:'+target
-        db_name = 'altshuler'
-        print 'id',id
-        url = server_name + db_name + '/' + id
-        result = get_couch(url)
-        doc = json.loads(result)
-        if doc['start_time']=='xxx':
-            print 'doing %s again'%target
-            fshort.append( target )
-        else:
-            print 'already did %s'%target
 
 def timestamp2string(ts_float,timezone='US/Pacific'):
     pacific = pytz.timezone(timezone)
@@ -118,6 +92,36 @@ def doit(fname):
         traceback.print_exc()
         print '^^^^^ in process for',fname
         raise
+
+
+files = glob.glob(os.path.join(upload_dir,'*ufmf.lzma'))
+files.sort()
+
+fshort = []
+for fname in files:
+    trim = os.path.split(fname)[-1]
+    dst = os.path.join( tmp_dir, trim )
+    if not os.path.exists(dst):
+        os.link( fname, dst )
+    fshort.append(trim)
+
+if 1:
+    # filter by already done
+    orig_fshort = fshort
+    fshort = []
+    for target in orig_fshort:
+        assert target.endswith('.lzma')
+        id = 'ufmf:humdra_200809:'+target[:-5]
+        db_name = 'altshuler'
+        print 'id',id
+        url = server_name + db_name + '/' + id
+        result = get_couch(url)
+        doc = json.loads(result)
+        if doc['start_time']=='xxx':
+            print 'doing %s again'%target
+            fshort.append( target )
+        else:
+            print 'already did %s'%target
 
 if 1:
     pool = Pool(processes=7)
