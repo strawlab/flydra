@@ -30,6 +30,12 @@ function(doc) {
                   sources    : [doc._id],
                 }
         break;
+    case "calibration":
+        value = { properties : ["calibration"],
+                  dataset    : doc.dataset,
+                  sources    : [doc._id],
+                }
+        break;
     case "datanode":
         // already implements DataNode
         value = doc;
