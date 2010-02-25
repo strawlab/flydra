@@ -650,8 +650,8 @@ def test_extract_corners():
         r=subprocess.Popen('lsb_release -c',shell=True,stdout=subprocess.PIPE)
         r.wait()
         lsb_release = r.stdout.read().strip().split('\t')[-1]
-        if lsb_release in ['hardy','karmic']:
-            warnings.warn('skipping test_extract_corners() on hardy and karmic')
+        if lsb_release in ['hardy']:
+            warnings.warn('skipping test_extract_corners() on hardy')
         return
     dirname = os.path.split(__file__)[0]
     fname = 'distorted.fmf'
@@ -776,6 +776,8 @@ def get_similar_direction_graphs(fmf,frame,
         pylab.show()
 
     x,y=extract_corners(imnx_use)
+    if len(x)==0:
+        raise RuntimeError('no corners found')
 
     if chess_preview:
         pylab.imshow(imnx_use)

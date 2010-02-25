@@ -673,6 +673,15 @@ class SingleCameraCalibration:
 
         self.helper.add_element( elem )
 
+    def as_obj_for_json(self):
+        result = dict(cam_id=self.cam_id,
+                      calibration_matrix= [ row.tolist() for row in self.Pmat ],
+                      resolution=list(self.res),
+                      scale_factor=self.scale_factor,
+                      non_linear_parameters=self.helper.as_obj_for_json(),
+                      )
+        return result
+
 def SingleCameraCalibration_fromfile(filename):
     params={}
     execfile(filename,params)
@@ -1143,6 +1152,14 @@ class Reconstructor:
         fd = open(xml_filename,mode='w')
         fd.write(result)
         fd.close()
+
+    def as_obj_for_json(self):
+        result = dict(cameras=[],
+                      minimum_eccentricity=self.minimum_eccentricity)
+        for cam_id in self.cam_ids:
+            scc = self.get_SingleCameraCalibration(cam_id)
+            result['cameras'].append(scc.as_obj_for_json())
+        return result
 
     def save_to_h5file(self, h5file, OK_to_delete_old_calibration=False):
         """create groups with calibration information"""

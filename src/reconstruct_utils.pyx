@@ -89,6 +89,12 @@ cdef class ReconstructHelper:
             e = ET.SubElement(elem, name)
             e.text = repr( getattr(self,name) )
 
+    def as_obj_for_json(self):
+        result = {}
+        for name in ['fc1','fc2','cc1','cc2','k1','k2','p1','p2','alpha_c']:
+            result[name] = getattr(self,name)
+        return result
+
     def save_to_rad_file( self, fname, comments=None ):
         rad_fd = open(fname,'w')
         K = self.get_K()
