@@ -50,8 +50,6 @@ def iterate_frames(h5_filename,
             cam_id = get_cam_id_from_ufmf_fname(ufmf_fname)
         cam_ids.append( cam_id )
         kwargs = {}
-        if white_background:
-            kwargs['use_conventional_named_mean_fmf']=False
         if ufmf_fname.lower().endswith('.fmf'):
             ufmf = fmf_mod.FlyMovie(ufmf_fname)
         else:
