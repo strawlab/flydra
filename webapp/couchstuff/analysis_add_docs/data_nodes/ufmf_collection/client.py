@@ -69,7 +69,7 @@ def main():
 
     uri = 'http://localhost:3388'
     server = couchdb.client.Server(uri)
-    db = server['altshuler']
+    db = server['pitch']
 
     design_name = 'ufmf_collection'
     try:

@@ -4,6 +4,7 @@ import pprint
 import dateutil.parser
 import datetime
 from uuid import uuid4
+import logging
 
 class NoTimeOverlapError(ValueError):
     pass
@@ -56,3 +57,17 @@ def test_string_start_intersection():
 def validate_data_node(doc):
     # stub to validate required fields
     pass
+
+
+# create logger
+logger = logging.getLogger("flydra_webapp_add_docs")
+logger.setLevel(logging.DEBUG)
+# create console handler and set level to debug
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+# create formatter
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+# add formatter to ch
+ch.setFormatter(formatter)
+# add ch to logger
+logger.addHandler(ch)

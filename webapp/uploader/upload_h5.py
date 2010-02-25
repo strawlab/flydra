@@ -8,14 +8,9 @@ import flydra.reconstruct
 import pprint
 import numpy as np
 
-default_preferences = {'dataset':'default dataset',
-                       'couch_url':'http://localhost:5984/',
-                       'couch_user':None,
-                       'couch_password':None,
-                       'couch_db':'flydra',
-                       }
+from defaults import default_preferences
 
-def doit(filenames,config):
+def upload_h5(filenames,config):
     if config['couch_user'] is not None or config['couch_password'] is not None:
         credentials = '%s:%s@'%(config['couch_user'],config['couch_password'])
     else:
@@ -70,8 +65,6 @@ def doit(filenames,config):
         doc['stop_time'] = stop_time
 
         doc['type'] = 'h5'
-        import time
-        doc['uuid'] = time.time()
 
         h5.close()
 
@@ -100,7 +93,7 @@ def main():
 
     filenames = args
 
-    doit( filenames, config )
+    upload_h5( filenames, config )
 
 if __name__=='__main__':
     main()

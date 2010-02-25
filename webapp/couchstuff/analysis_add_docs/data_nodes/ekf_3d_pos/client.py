@@ -14,6 +14,7 @@ def main():
     uri = 'http://localhost:3388'
     server = couchdb.client.Server(uri)
     db = server['altshuler']
+    dataset = 'dataset:humdra_200809'
 
     design_name = 'ekf_3d_pos'
     try:
@@ -39,14 +40,16 @@ def main():
             raise NotImplementedError('need to provide means to select calibration')
         calibration_doc = db[result[0].id]
 
-        result = list(db.view('analysis/DataNode',group=False))
+        result = db.view('analysis/DataNode',
+                         startkey=[dataset],
+                         endkey=[dataset,{}],
+                         reduce=False)
         source_ids = []
-        print 'result[0]',result[0]
-        for key,value in result:
-            print 'key,value',key,value
-            if "2d position" in key[1]:
-                source_ids.append( row_id )
-        print 'source_ids',source_ids
+        for row in result:
+            assert row.key[0]==dataset, "wrong dataset" # query already did this
+            if "2d position" in row.key[1]:
+                source_ids.append( row.id )
+        print 'source_ids',source_ids[:5]
         1/0
         result = list(db.view(design_name+'/'+view_name))
         collections = []
