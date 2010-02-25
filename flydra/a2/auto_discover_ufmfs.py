@@ -88,7 +88,12 @@ def find_ufmfs(filename,ufmf_dir=None,careful=False):
 
     results = []
     for ufmf_filename in possible_ufmfs:
-        ufmf = motmot.ufmf.ufmf.FlyMovieEmulator(ufmf_filename)
+        try:
+            ufmf = motmot.ufmf.ufmf.FlyMovieEmulator(ufmf_filename)
+        except Exception, err:
+            warnings.warn('auto_discover_ufmfs: error while reading %s: %s, '
+                          'skipping'%(ufmf_filename,err))
+            continue
         ufmf_timestamps = ufmf.get_all_timestamps()
         ufmf_start = ufmf_timestamps[0]
         ufmf_stop = ufmf_timestamps[-1]
