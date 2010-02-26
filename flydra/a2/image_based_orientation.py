@@ -554,6 +554,8 @@ def doit(h5_filename=None,
                             initx = np.array([RTS_com_coords[0,0],RTS_com_coords[0,1],0,0],
                                              dtype=np.float)
                             initV = 2*np.eye(4)
+                            initV[0,0] = 0.1
+                            initV[1,1] = 0.1
                             y=RTS_com_coords
                             xsmooth,Vsmooth = adskalman.adskalman.kalman_smoother(
                                 y,A,C,Q,R,initx,initV)
