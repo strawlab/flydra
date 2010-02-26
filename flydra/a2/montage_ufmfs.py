@@ -55,6 +55,7 @@ def make_montage( h5_filename,
                   movie_fnames = None,
                   movie_cam_ids = None,
                   caminfo_h5_filename = None,
+                  colormap = None,
                   ):
     config = get_config_defaults()
     if cfg_filename is not None:
@@ -179,7 +180,7 @@ def make_montage( h5_filename,
             user_rect = (0,0,image.shape[1],image.shape[0])
             with canv.set_user_coords(device_rect, user_rect,
                                       transform=transform):
-                canv.imshow(image,0,0)
+                canv.imshow(image,0,0,cmap=colormap)
                 if config['what to show']['show_2d_position'] and camn is not None:
                     cond = tracker_data['camn']==camn
                     this_cam_data = tracker_data[cond]
@@ -298,6 +299,8 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     parser.add_option('--movie-cam-ids', type='string', default=None,
                       help="cam_ids of movie files (don't autodiscover from .h5)")
 
+    parser.add_option('--colormap', type='string', default=None)
+
     parser.add_option(
         "-r", "--reconstructor",type='string',
         help="calibration/reconstructor path")
@@ -333,4 +336,5 @@ transform='rot 180' # rotate the image 180 degrees (See transform
                   movie_fnames = movie_fnames,
                   movie_cam_ids = movie_cam_ids,
                   caminfo_h5_filename = options.caminfo_h5_filename,
+                  colormap = options.colormap,
                   )
