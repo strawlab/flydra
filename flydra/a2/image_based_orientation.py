@@ -29,6 +29,8 @@ import adskalman.adskalman
 
 from tables_tools import clear_col, openFileSafe
 
+font_size=14
+
 def shift_image(im,xy):
     def mapping(x):
         return (x[0]+xy[1],x[1]+xy[0])
@@ -269,6 +271,7 @@ def doit(h5_filename=None,
          stack_N_images=None,
          stack_N_images_min=None,
          old_sync_timestamp_source=False,
+         do_rts_smoothing=True,
          ):
     """
 
@@ -522,7 +525,7 @@ def doit(h5_filename=None,
                                                  image_framenumbers[-1]+1)
 
                     com_coords = np.array(com_coords)
-                    if 1:
+                    if do_rts_smoothing:
                         # Perform RTS smoothing on center-of-mass coordinates.
 
                         # Find first good datum.
@@ -551,12 +554,13 @@ def doit(h5_filename=None,
                             initx = np.array([RTS_com_coords[0,0],RTS_com_coords[0,1],0,0],
                                              dtype=np.float)
                             initV = 2*np.eye(4)
+                            initV[0,0] = 0.1
+                            initV[1,1] = 0.1
                             y=RTS_com_coords
                             xsmooth,Vsmooth = adskalman.adskalman.kalman_smoother(
                                 y,A,C,Q,R,initx,initV)
                             com_coords_smooth[first_good:]=xsmooth[:,:2]
 
-                    if 1:
                         # Now shift images
 
                         image_shift = com_coords_smooth-com_coords
@@ -568,13 +572,21 @@ def doit(h5_filename=None,
                         shifted_morphed_images = [shift_image( im, xy ) for im,xy in
                                                   zip(morphed_images,image_shift)]
 
-                    results = flatten_image_stack( image_framenumbers,
-                                                   shifted_morphed_images,
-                                                   im_coords,
-                                                   camn_pt_no_array,
-                                                   N=stack_N_images,
-                                                   min_N=stack_N_images_min,
-                                                   )
+                        results = flatten_image_stack( image_framenumbers,
+                                                       shifted_morphed_images,
+                                                       im_coords,
+                                                       camn_pt_no_array,
+                                                       N=stack_N_images,
+                                                       min_N=stack_N_images_min,
+                                                       )
+                    else:
+                        results = flatten_image_stack( image_framenumbers,
+                                                       morphed_images,
+                                                       im_coords,
+                                                       camn_pt_no_array,
+                                                       N=stack_N_images,
+                                                       min_N=stack_N_images_min,
+                                                       )
 
                     # The variable fno (the first element of the results
                     # tuple) is guaranteed to be contiguous and to span
@@ -649,6 +661,7 @@ def doit(h5_filename=None,
                             margin = 10
                             scale = 5
 
+                            # calculate the orientation line
                             yintercept = y0-slope*x0
                             xplt=np.array([lowerleft[0]-5,
                                            lowerleft[0]+av_im_show.shape[1]+5])
@@ -662,11 +675,13 @@ def doit(h5_filename=None,
                                 row_width = max(top_row_width,rw)
                                 col_height = (n_stack_rows*scale*imh +
                                               (n_stack_rows+1)*margin)
+                                stack_margin=20
                             else:
                                 row_width = top_row_width
                                 col_height = scale*imh + 2*margin
+                                stack_margin=0
 
-                            canv=benu.Canvas(fname,row_width,col_height)
+                            canv=benu.Canvas(fname,row_width,col_height+stack_margin)
 
                             if SHOW_STACK:
                                 for (stacki,s_orig_idx) in enumerate(
@@ -687,7 +702,7 @@ def doit(h5_filename=None,
                                             y_display = 3*scale*imh + 4*margin
                                         display_rect = (
                                             x_display,
-                                            y_display,
+                                            y_display+stack_margin,
                                             scale*raw_im.shape[1],
                                             scale*raw_im.shape[0])
 
@@ -708,14 +723,17 @@ def doit(h5_filename=None,
                                             sx0,sy0=com_coords[s_orig_idx]
                                             X = [sx0-1,sx0+1]
                                             Y = [sy0-1,sy0+1]
+                                             # the raw coords in red
                                             canv.plot(X,Y,
                                                       color_rgba=(1,.5,.5,1))
 
-                                            sx0,sy0=com_coords_smooth[s_orig_idx]
-                                            X = [sx0-1,sx0+1]
-                                            Y = [sy0-1,sy0+1]
-                                            canv.plot(X,Y,
-                                                      color_rgba=(.5,1,.5,1))
+                                            if do_rts_smoothing:
+                                                sx0,sy0=com_coords_smooth[s_orig_idx]
+                                                X = [sx0-1,sx0+1]
+                                                Y = [sy0-1,sy0+1]
+                                                 # the RTS smoothed coords in green
+                                                canv.plot(X,Y,
+                                                          color_rgba=(.5,1,.5,1))
 
                                             if s_orig_idx==orig_idx:
                                                 boxx = np.array([s_raw_l,
@@ -735,7 +753,8 @@ def doit(h5_filename=None,
                                                 'morphed %d, shift: %.1f %.1f'%(
                                                 s_orig_idx-orig_idx,0,0),
                                                 display_rect[0],
-                                                (display_rect[1]+display_rect[3]),
+                                                (display_rect[1]+display_rect[3]+stack_margin),
+                                                font_size=font_size,
                                                 color_rgba=(1,1,1,1))
 
                             # Display raw_im
@@ -747,10 +766,11 @@ def doit(h5_filename=None,
                                                       transform=cam_id2view[cam_id],
                                                       ):
                                 canv.imshow(raw_im.astype(np.uint8),raw_l,raw_b)
-                                canv.plot(xplt,yplt,color_rgba=(0,1,0,.5))
+                                canv.plot(xplt,yplt,color_rgba=(0,1,0,.5)) # the orientation line
                             canv.text( 'raw',
                                        display_rect[0],
                                        display_rect[1]+display_rect[3],
+                                       font_size=font_size,
                                        color_rgba=(.2,.2,.8,0.8))
 
                             # Display mean_im
@@ -765,6 +785,7 @@ def doit(h5_filename=None,
                             canv.text( 'mean',
                                        display_rect[0],
                                        display_rect[1]+display_rect[3],
+                                       font_size=font_size,
                                        color_rgba=(.2,.2,.8,0.8))
 
                             # Display absdiff_im
@@ -797,6 +818,7 @@ def doit(h5_filename=None,
                             canv.text( 'morphed',
                                        display_rect[0],
                                        display_rect[1]+display_rect[3],
+                                       font_size=font_size,
                                        color_rgba=(.2,.2,.8,0.8))
 
                             # Display time-averaged absdiff_im
@@ -810,14 +832,17 @@ def doit(h5_filename=None,
                                                       ):
                                 canv.imshow(av_im_show.astype(np.uint8),
                                             lowerleft[0],lowerleft[1])
-                                canv.plot(xplt,yplt,color_rgba=(0,1,0,.5))
+                                canv.plot(xplt,yplt,color_rgba=(0,1,0,.5)) # the orientation line
                             canv.text( 'stacked/flattened',
                                        display_rect[0],
                                        display_rect[1]+display_rect[3],
+                                       font_size=font_size,
                                        color_rgba=(.2,.2,.8,0.8))
 
                             canv.text( '%s frame % 7d: eccentricity % 5.1f'%(
-                                cam_id,fno,eccentricity), 0, 8)
+                                cam_id,fno,eccentricity), 0, 16,
+                                       font_size=font_size,
+                                       )
                             canv.save()
 
                 # Save results to new table
@@ -879,6 +904,9 @@ def main():
     parser.add_option("--save-images", action='store_true',
                       default=False)
 
+    parser.add_option("--no-rts-smoothing", action='store_false',
+                      dest='do_rts_smoothing', default=True)
+
     parser.add_option("--save-image-dir", type='string', default=None)
 
     parser.add_option("--old-sync-timestamp-source", action='store_true',
@@ -923,6 +951,7 @@ def main():
          stack_N_images=options.stack_N_images,
          stack_N_images_min=options.stack_N_images_min,
          old_sync_timestamp_source=options.old_sync_timestamp_source,
+         do_rts_smoothing=options.do_rts_smoothing,
          )
 
 if __name__=='__main__':
