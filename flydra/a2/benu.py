@@ -10,21 +10,25 @@ import cairo
 import os, warnings
 import numpy as np
 import contextlib
+from benu_colormaps import cmaps
 
 D2R = np.pi/180.0
 
-def numpy2cairo(raw):
+def numpy2cairo(raw,cmap=None):
     raw=np.asarray(raw)
     if raw.dtype!=np.uint8:
         raise ValueError('only uint8 dtype is supported')
     if raw.ndim==2:
-        brga = np.ndarray(
-            shape=(raw.shape[0],raw.shape[1],4),
-            dtype=np.uint8)
-        brga[:,:,0]=raw
-        brga[:,:,1]=raw
-        brga[:,:,2]=raw
-        brga[:,:,3].fill(255)
+        if cmap==None: # gray
+            brga = np.ndarray(
+                shape=(raw.shape[0],raw.shape[1],4),
+                dtype=np.uint8)
+            brga[:,:,0]=raw
+            brga[:,:,1]=raw
+            brga[:,:,2]=raw
+            brga[:,:,3].fill(255)
+        else:
+            brga = cmaps[cmap][raw]
     elif raw.ndim==3:
         if raw.shape[2]==3:
             brga = np.ndarray(
@@ -70,7 +74,7 @@ class Canvas(object):
         self._surf = output_surface
         self._ctx = cairo.Context(self._surf)
         self._fname = fname
-    def imshow(self,im,l,b,filter='nearest'):
+    def imshow(self,im,l,b,filter='nearest',cmap=None):
         """show image im at location (l,b)
 
         filter can be one of ['best', 'bilinear', 'fast', 'gaussian',
@@ -81,7 +85,7 @@ class Canvas(object):
         cfilter = getattr(cairo,'FILTER_'+filter.upper())
 
         # Get cairo surface
-        in_surface = numpy2cairo(im)
+        in_surface = numpy2cairo(im,cmap=cmap)
 
         ctx = self._ctx # shorthand
         #ctx.rectangle(l,b,im.shape[1],im.shape[0])
