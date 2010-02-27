@@ -39,7 +39,7 @@ def is_access_valid(db_name,user):
 
 @login_required
 def select_db(request):
-    db_names = [row.key for row in metadb.view('meta/databases')]
+    db_names = [row.key for row in metadb.view('choose_database/databases')]
 
     try:
         valid_db_names = [db_name for db_name in db_names if is_access_valid(db_name,request.user)]
