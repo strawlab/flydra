@@ -6,6 +6,7 @@ from django import forms
 from django.core.urlresolvers import reverse
 
 from couchdb.client import Server
+import pystache
 
 couchbase = settings.FWA_COUCH_BASE_URI
 couch_server = Server(couchbase)
@@ -49,19 +50,16 @@ def select_db(request):
         next = get_next_url(db_name=valid_db_names[0])
         return HttpResponseRedirect(next)
 
-    if request.method == 'POST': # If the form has been submitted...
-        form = DatabaseForm(request.POST) # A form bound to the POST data
-        if form.is_valid(): # All validation rules pass
-            next = get_next_url(db_name=form.cleaned_data['database'])
-            return HttpResponseRedirect(next)
-    else:
-        # GET
-        choices = [ (db_name,db_name) for db_name in valid_db_names ]
-        form = DatabaseForm()
-        form.fields['database'].widget = forms.Select(choices=choices)
+    databases = []
+    for db_name in valid_db_names:
+        databases.append( {'path':get_next_url(db_name=db_name),
+                           'name':db_name,
+                           })
+    source, origin = loader.find_template_source('pystache_select.html') # abuse django.template to find pystache template
+    contents = pystache.render( source, {'what':'database','databases':databases} )
 
-    t = loader.get_template('select.html')
-    c = RequestContext(request, {"form":form,"what":"database"})
+    t = loader.get_template('pystache_wrapper.html')
+    c = RequestContext(request, {"pystache_contents":contents} )
     return HttpResponse(t.render(c))
 
 @login_required
