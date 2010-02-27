@@ -73,7 +73,7 @@ def select_dataset(request,db_name=None):
     view_results = db.view('analysis/datasets')
     dataset_names = []
     for row in view_results:
-        dataset_id = row.id
+        dataset_id = row.value['dataset_doc']['_id']
         assert dataset_id.startswith('dataset:')
         dataset = dataset_id[8:]
         dataset_names.append(dataset)
