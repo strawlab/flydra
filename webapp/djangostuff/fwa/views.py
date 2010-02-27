@@ -26,10 +26,7 @@ def is_access_valid(db_name,user):
     user_doc = metadb[user_id]
 
     db_id = 'database:%s'%db_name
-    try:
-        db_doc = metadb[db_id]
-    except Exception,err:
-        raise ValueError(db_id)
+    db_doc = metadb[db_id]
 
     valid_groups = list(set(user_doc['groups']).intersection( set( db_doc['groups'])))
     if len(valid_groups):
