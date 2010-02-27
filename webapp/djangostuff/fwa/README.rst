@@ -14,27 +14,20 @@ Install couchdb. There is one special database, called
 `flydraweb_metadata` and other databases are listed in that special
 database.
 
-django.contrib.auth
--------------------
+couchdb-python
+--------------
 
-Install django.contrib.auth. In your project urls.py include::
+Developed with 0.6.1.
 
-  (r'^accounts/login/$', 'django.contrib.auth.views.login')
+pystache
+--------
 
-And in your settings.py::
+Developed with git clone from defunkt from Feb 27, 2010.
 
-  MIDDLEWARE_CLASSES = (
-      'django.contrib.sessions.middleware.SessionMiddleware',
-      'django.contrib.auth.middleware.AuthenticationMiddleware',
-  )
+Pinax
+-----
 
-and::
-
-  INSTALLED_APPS = (
-      'django.contrib.auth',
-      'django.contrib.contenttypes',
-      'django.contrib.sessions',
-      )
+Developed with 0.7.1
 
 Installation
 ============
@@ -50,6 +43,6 @@ In your `settings.py` you need something like the following::
   # The couchdb location
   FWA_COUCH_BASE_URI = 'http://127.0.0.1:5984/'
 
-The django users authorized through django.contrib.auth must be
-present in the special metadata CouchDB database with ids of the form
-`"user:<username>"`.
+Create a django group (in django admin) called 'couchdb_DBNAME' for
+each CouchDB used. Make each Django user a group member to allow
+access to DBNAME.
