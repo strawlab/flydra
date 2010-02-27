@@ -1,6 +1,12 @@
-{% extends "base.html" %}
+{% extends "site_base.html" %}
 
-{% block content %}
+{% load i18n %}
+
+{% block head_title %}{% trans "analysis" %}{% endblock %}
+
+{% block tab_id %}id="home_tab"{% endblock %}
+
+{% block body %}
 
 There was an error processing your request. The error description is:
 
