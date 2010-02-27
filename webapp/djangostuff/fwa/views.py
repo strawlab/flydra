@@ -17,6 +17,8 @@ class DatabaseForm(forms.Form):
 class DatasetForm(forms.Form):
     dataset = forms.CharField()
 
+REDIRECT_OVER_SINGLE_OPTIONS=False
+
 # helper for below
 def is_access_valid(db_name,user):
     # couch permissions:
@@ -42,7 +44,7 @@ def select_db(request):
         if db_name.startswith('couchdb_'):
             valid_db_names.append( db_name[8:] )
 
-    if len(valid_db_names)==1:
+    if REDIRECT_OVER_SINGLE_OPTIONS and len(valid_db_names)==1:
         # no need to choose manually, automatically fast-forward
         next = get_next_url(db_name=valid_db_names[0])
         return HttpResponseRedirect(next)
@@ -78,7 +80,7 @@ def select_dataset(request,db_name=None):
         dataset = dataset_id[8:]
         dataset_names.append(dataset)
 
-    if len(dataset_names)==1:
+    if REDIRECT_OVER_SINGLE_OPTIONS and len(dataset_names)==1:
         next = get_next_url(db_name=db_name,dataset_name=dataset_names[0])
         return HttpResponseRedirect(next)
 
