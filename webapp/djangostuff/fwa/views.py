@@ -71,31 +71,30 @@ def select_dataset(request,db_name=None):
     db = couch_server[db_name]
 
     view_results = db.view('analysis/datasets')
-    dataset_names = []
+    datasets = []
     for row in view_results:
-        dataset_id = row.value['dataset_doc']['_id']
+        doc = row.value['dataset_doc']
+        dataset_id = doc['_id']
         assert dataset_id.startswith('dataset:')
         dataset = dataset_id[8:]
-        dataset_names.append(dataset)
+        datasets.append( dict( path=get_next_url(db_name=db_name,dataset_name=dataset),
+                               dataset_id=dataset_id,
+                               dataset_name=doc['name'],
+                               ufmf_bytes_human=row.value['ufmf_bytes'],
+                               h5_bytes_human=row.value['h5_bytes'],
+                               ufmf_files=row.value['ufmf_files'],
+                               h5_files=row.value['h5_files'],
+                               ))
 
     if REDIRECT_OVER_SINGLE_OPTIONS and len(dataset_names)==1:
         next = get_next_url(db_name=db_name,dataset_name=dataset_names[0])
-        return HttpResponseRedirect(next)
+        return HttpResponseRedirect(datasets[0]['path'])
 
-    if request.method == 'POST': # If the form has been submitted...
-        form = DatasetForm(request.POST) # A form bound to the POST data
-        if form.is_valid(): # All validation rules pass
-            next = get_next_url(db_name=db_name,
-                                dataset_name=form.cleaned_data['dataset'])
-            return HttpResponseRedirect(next)
-    else:
-        # GET
-        choices = [ (ds_name,ds_name) for ds_name in dataset_names ]
-        form = DatasetForm()
-        form.fields['dataset'].widget = forms.Select(choices=choices)
+    source, origin = loader.find_template_source('pystache_datasets.html') # abuse django.template to find pystache template
+    contents = pystache.render( source, {'datasets':datasets} )
 
-    t = loader.get_template('select.html')
-    c = RequestContext(request, {"form":form,"what":"dataset"})
+    t = loader.get_template('pystache_wrapper.html')
+    c = RequestContext(request, {"pystache_contents":contents} )
     return HttpResponse(t.render(c))
 
 @login_required
