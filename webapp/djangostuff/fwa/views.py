@@ -6,7 +6,6 @@ from django import forms
 from django.core.urlresolvers import reverse
 
 from couchdb.client import Server
-import couchdb.http
 
 couchbase = settings.FWA_COUCH_BASE_URI
 couch_server = Server(couchbase)
@@ -36,16 +35,12 @@ def is_access_valid(db_name,user):
 
 @login_required
 def select_db(request):
-    db_names = [row.key for row in metadb.view('choose_database/databases')]
-
-    try:
-        valid_db_names = [db_name for db_name in db_names if is_access_valid(db_name,request.user)]
-    except couchdb.http.ResourceNotFound,err:
-        t = loader.get_template('error.html')
-        c = RequestContext(request,
-                           {'description':'The django user %s was not found in the '
-                            'flydraweb_metadata database.'%request.user})
-        return HttpResponse(t.render(c))
+    # use membership in group "couchdb_DBNAME" to allow access to CouchDB database DBNAME
+    valid_db_names = []
+    for group in request.user.groups.all():
+        db_name = group.name
+        if db_name.startswith('couchdb_'):
+            valid_db_names.append( db_name[8:] )
 
     if len(valid_db_names)==1:
         # no need to choose manually, automatically fast-forward
@@ -73,10 +68,9 @@ def select_dataset(request,db_name=None):
     assert db_name is not None
     assert is_access_valid(db_name,request.user)
 
-    couch_server = Server(couchbase)
     db = couch_server[db_name]
 
-    view_results = db.view('fw/datasets')
+    view_results = db.view('analysis/datasets')
     dataset_names = []
     for row in view_results:
         dataset_id = row.id
