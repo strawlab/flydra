@@ -1,9 +1,10 @@
-from django.template import RequestContext, loader
+from django.template import RequestContext, loader, defaultfilters
 from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django import forms
 from django.core.urlresolvers import reverse
+from django.contrib.humanize.templatetags.humanize import intcomma
 
 from couchdb.client import Server
 import pystache
@@ -50,13 +51,13 @@ def select_db(request):
         next = get_next_url(db_name=valid_db_names[0])
         return HttpResponseRedirect(next)
 
-    databases = []
+    selections = []
     for db_name in valid_db_names:
-        databases.append( {'path':get_next_url(db_name=db_name),
+        selections.append( {'path':get_next_url(db_name=db_name),
                            'name':db_name,
                            })
     source, origin = loader.find_template_source('pystache_select.html') # abuse django.template to find pystache template
-    contents = pystache.render( source, {'what':'database','databases':databases} )
+    contents = pystache.render( source, {'what':'database','selections':selections} )
 
     t = loader.get_template('pystache_wrapper.html')
     c = RequestContext(request, {"pystache_contents":contents} )
@@ -72,6 +73,7 @@ def select_dataset(request,db_name=None):
 
     view_results = db.view('analysis/datasets')
     datasets = []
+    fsf = defaultfilters.filesizeformat
     for row in view_results:
         doc = row.value['dataset_doc']
         dataset_id = doc['_id']
@@ -80,10 +82,10 @@ def select_dataset(request,db_name=None):
         datasets.append( dict( path=get_next_url(db_name=db_name,dataset_name=dataset),
                                dataset_id=dataset_id,
                                dataset_name=doc['name'],
-                               ufmf_bytes_human=row.value['ufmf_bytes'],
-                               h5_bytes_human=row.value['h5_bytes'],
-                               ufmf_files=row.value['ufmf_files'],
-                               h5_files=row.value['h5_files'],
+                               ufmf_bytes_human=fsf(row.value['ufmf_bytes']),
+                               h5_bytes_human=fsf(row.value['h5_bytes']),
+                               ufmf_files=intcomma(row.value['ufmf_files']),
+                               h5_files=intcomma(row.value['h5_files']),
                                ))
 
     if REDIRECT_OVER_SINGLE_OPTIONS and len(dataset_names)==1:
