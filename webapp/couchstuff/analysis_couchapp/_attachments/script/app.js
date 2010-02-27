@@ -17,8 +17,6 @@ $.couch.app(function(app) {
   // trigger the profile widget's events corresponding to the account widget
   $.evently.connect($("#account"), $("#profile"), ["loggedIn", "loggedOut"]);
   
-  $("#datasets_summary").evently(app.ddoc.evently.datasets_summary, app);
-
   $.pathbinder.begin("/");
 });
 
