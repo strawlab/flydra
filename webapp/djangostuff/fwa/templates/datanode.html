@@ -1,0 +1,29 @@
+{% extends "site_base.html" %}
+
+{% load i18n %}
+
+{% block head_title %}{% trans "analysis" %}{% endblock %}
+
+{% block tab_id %}id="home_tab"{% endblock %}
+
+{% block body %}
+
+<h2>data node "{{row.id}}"</h2>
+
+{% if warn_no_specific_view %}
+<strong>Warning: no specific view for this document, showing a generic datanode view.</strong>
+{% endif %}
+
+<p>Status tags: {{row.value.status_tags}}</p>
+<p>Properties: {{row.value.properties}}</p>
+<p>Dataset: {{row.value.dataset}}</p>
+<p>Start time: {{row.value.start_time}}</p>
+<p>Stop time: {{row.value.stop_time}}</p>
+<p>Sources:
+<ul>
+  {% for source in row.value.sources %}
+    <li><a href="{{doc_url}}{{source}}">{{source}}</a></li>
+  {% endfor %}
+</ul>
+</p>
+{% endblock %}

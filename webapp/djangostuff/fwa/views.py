@@ -11,6 +11,7 @@ from couchdb.client import Server
 
 from paginatoe import SimpleCouchPaginator, CouchPaginator
 import pystache
+import pprint
 
 couchbase = settings.FWA_COUCH_BASE_URI
 couch_server = Server(couchbase)
@@ -22,7 +23,7 @@ class DatabaseForm(forms.Form):
 class DatasetForm(forms.Form):
     dataset = forms.CharField()
 
-REDIRECT_OVER_SINGLE_OPTIONS=False
+REDIRECT_OVER_SINGLE_OPTIONS=True
 
 # helper for below
 def is_access_valid(db_name,user):
@@ -97,8 +98,8 @@ def select_dataset(request,db_name=None):
                                h5_files=intcomma(row.value['h5_files']),
                                ))
 
-    if REDIRECT_OVER_SINGLE_OPTIONS and len(dataset_names)==1:
-        next = get_next_url(db_name=db_name,dataset_name=dataset_names[0])
+    if REDIRECT_OVER_SINGLE_OPTIONS and len(datasets)==1:
+        next = get_next_url(db_name=db_name,dataset_name=datasets[0]['dataset_name'])
         return HttpResponseRedirect(datasets[0]['path'])
 
     source, origin = loader.find_template_source('pystache_datasets.html') # abuse django.template to find pystache template
@@ -118,14 +119,14 @@ def dataset(request,db_name=None,dataset=None):
     db = couch_server[db_name]
     dataset_doc = db[dataset_id]
     summary_view = db.view('analysis/DataNode',
-                           start_key=[dataset_id],
-                           stop_key=[dataset_id,{}],
+                           startkey=[dataset_id],
+                           endkey=[dataset_id,{}],
                            )
     all_datanodes_value = [row for row in summary_view][0].value # Hack: get first (and only) row
     datanodes_count = all_datanodes_value['n_built']+all_datanodes_value['n_unbuilt']
     datanodes_view = db.view('analysis/DataNode',
-                              start_key=[dataset_id],
-                              stop_key=[dataset_id,{}],
+                              startkey=[dataset_id],
+                              endkey=[dataset_id,{}],
                               group_level=2,
                               )
     datanodes=[]
@@ -152,21 +153,26 @@ def dataset(request,db_name=None,dataset=None):
     return HttpResponse(t.render(c))
 
 @login_required
-def datanode_property(request,db_name=None,dataset=None,property_name=None,count=10):
+def datanodes_by_property(request,db_name=None,dataset=None,property_name=None,count=50):
     dataset_id = 'dataset:'+dataset
     db = couch_server[db_name]
 
+    if property_name is None:
+        startkey=[dataset_id]
+        endkey=[dataset_id,{}]
+        show_property_name='all'
+    else:
+        startkey=[dataset_id,property_name]
+        endkey=[dataset_id,property_name,{}]
+        show_property_name=property_name
+    options = dict(startkey=startkey,endkey=endkey)
+
     # modified from http://www.djangosnippets.org/snippets/1209/
     myitems = db.view('analysis/datanodes-by-dataset-and-property',
-                      start_key=[dataset_id,property_name],
-                      stop_key=[dataset_id,property_name,{}],
-                      reduce=False,
-                      )
+                      reduce=False,**options)
+
     pages_view = db.view('analysis/datanodes-by-dataset-and-property',
-                         start_key=[dataset_id,property_name],
-                         stop_key=[dataset_id,property_name,{}],
-                         reduce=True,
-                         )
+                         reduce=True,**options)
 
     try:
         page_number = request.GET.get('page', 1)
@@ -177,33 +183,85 @@ def datanode_property(request,db_name=None,dataset=None,property_name=None,count
         raise Http404("Page %s empty" % page_number)
     except PageNotAnInteger:
         raise Http404("No page '%s'" % page_number)
-    items[0]['value']
+
     context = {
-        'items': items,
-        'property_name':property_name,
-#        'hack': repr(items[0].keys()),
-        'number':page.number,
-        'num_pages':page.paginator.num_pages,
-        'has_previous' : page.has_previous(),
-        'previous_page_number' : page.previous_page_number(),
-        'has_next' : page.has_next(),
-        'next_page_number' : page.next_page_number(),
+        'items': page,
+        'property_name':show_property_name,
+        'doc_url': get_next_url(db_name=db_name,doc_base=True),
     }
 
-    t = loader.get_template('pystache_wrapper.html')
-    c = RequestContext(request,
-                       {"pystache_contents":mustache('datanodes.html',context)} )
+    t = loader.get_template('datanodes.html')
+    c = RequestContext(request,context)
     return HttpResponse(t.render(c))
+
+class NotDataNode(ValueError):
+    pass
+
+@login_required
+def datanode(request,db_name=None,doc_id=None,warn_no_specific_view=False):
+    db = couch_server[db_name]
+    doc = db[doc_id]
+    # get datanode view of doc
+    myitems = db.view('analysis/datanodes-by-docid',
+                      startkey=doc_id,
+                      endkey=doc_id,
+                      )
+    if len(myitems)==0:
+        raise NotDataNode('doc_id %s is not a datanode'%doc_id)
+    if len(myitems)!=1:
+        raise ValueError( 'for doc_id=%s, len(myitems)==%d'%(doc_id,len(myitems)))
+    for row in myitems:
+        pass # XXX hack to get item
+    t = loader.get_template('datanode.html')
+    c = RequestContext(request,{'row':row,
+                                'doc_url': get_next_url(db_name=db_name,doc_base=True),
+                                'warn_no_specific_view':warn_no_specific_view,
+                                })
+    return HttpResponse(t.render(c))
+
+@login_required
+def raw_doc(request,db_name=None,doc_id=None):
+    db = couch_server[db_name]
+    doc = db[doc_id]
+    t = loader.get_template('raw_doc.html')
+    c = RequestContext(request,{'id':doc['_id'],'raw':pprint.pformat(dict(doc))})
+    return HttpResponse(t.render(c))
+
+@login_required
+def h5_doc(request,db_name=None,doc_id=None):
+    db = couch_server[db_name]
+    doc = db[doc_id]
+    t = loader.get_template('h5_doc.html')
+    c = RequestContext(request,{'id':doc['_id'],'raw':pprint.pformat(dict(doc))})
+    return HttpResponse(t.render(c))
+
+@login_required
+def document_multiplexer(request,db_name=None,doc_id=None):
+    db = couch_server[db_name]
+    doc = db[doc_id]
+    if doc['type']=='datanode':
+        return datanode(request,db_name=db_name,doc_id=doc_id)
+    elif doc['type']=='h5':
+        return h5_doc(request,db_name=db_name,doc_id=doc_id)
+    else:
+        try:
+            return datanode(request,db_name=db_name,doc_id=doc_id,warn_no_specific_view=True)
+        except NotDataNode,err:
+            return raw_doc(request,db_name=db_name,doc_id=doc_id)
     
 approot = reverse(select_db)
-def get_next_url(db_name=None,dataset_name=None,datanode_property=None):
+def get_next_url(db_name=None,dataset_name=None,datanode_property=None,doc_base=False):
     if db_name is None:
         assert dataset_name is None
         return approot
     else:
         if dataset_name is None:
-            return approot + db_name + '/'
+            if doc_base:
+                return approot + db_name + '/doc/'
+            else:
+                return approot + db_name + '/'
         else:
+            assert not doc_base
             if datanode_property is None:
                 return approot + db_name + '/' + dataset_name + '/'
             else:

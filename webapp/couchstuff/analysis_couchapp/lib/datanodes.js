@@ -36,6 +36,8 @@ var parse_doc = function(doc) {
                   dataset    : doc.dataset,
                   sources    : [doc._id],
 		  status_tags: ["built"],
+                  start_time : doc.start_time,
+                  stop_time  : doc.stop_time,
                 }
         break;
     case "datanode":

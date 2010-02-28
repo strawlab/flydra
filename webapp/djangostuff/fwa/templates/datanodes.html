@@ -1,30 +1,39 @@
-<h2>{{property_name}} data nodes</h2>
+{% extends "site_base.html" %}
+
+{% load i18n %}
+
+{% block head_title %}{% trans "analysis" %}{% endblock %}
+
+{% block tab_id %}id="home_tab"{% endblock %}
+
+{% block body %}
+
+
+<h2>{{ property_name }} data nodes</h2>
 
 <div class="pagination">
   <span class="step-links">
-    {{#has_previous}}
-      <a href="?page={{ previous_page_number }}">previous</a>
-    {{/has_previous}}
+    {% if items.has_previous %}
+      <a href="?page={{ items.previous_page_number }}">previous</a>
+    {% endif %}
       
     <span class="current">
-      Page {{number}} of {{num_pages}}.
+      Page {{items.number}} of {{items.paginator.num_pages}}.
     </span>
 
-    {{#has_next}}
-      <a href="?page={{ next_page_number }}">next</a>
-    {{/has_next}}
+    {% if items.has_next %}
+      <a href="?page={{ items.next_page_number }}">next</a>
+    {% endif %}
 
     <ul>
-    {{#items}}
-      <li>
-	{{value}}
+    {% for item in items.object_list %}
+      <li> <a href="{{doc_url}}{{item.id}}">node</a> ({{ item.value.start_time }} - {{ item.value.stop_time }})
       </li>
-    {{/items}}
+    {% endfor %}
     </ul>
+
   </span>
 </dev>
 
 
-{{hack}}
-
-</h2>
+{% endblock %}
