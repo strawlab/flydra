@@ -1,12 +1,15 @@
 from django.template import RequestContext, loader, defaultfilters
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, Http404
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django import forms
 from django.core.urlresolvers import reverse
 from django.contrib.humanize.templatetags.humanize import intcomma
+from django.core.paginator import EmptyPage, PageNotAnInteger
 
 from couchdb.client import Server
+
+from paginatoe import SimpleCouchPaginator, CouchPaginator
 import pystache
 
 couchbase = settings.FWA_COUCH_BASE_URI
@@ -36,6 +39,12 @@ def is_access_valid(db_name,user):
         return True
     else:
         return False
+
+def mustache(fname,context):
+    """helper function to find and render a template"""
+    # abuse django.template to find pystache template
+    source, origin = loader.find_template_source(fname) 
+    return pystache.render( source, context )
 
 @login_required
 def select_db(request):
@@ -142,11 +151,50 @@ def dataset(request,db_name=None,dataset=None):
     c = RequestContext(request, {"pystache_contents":contents} )
     return HttpResponse(t.render(c))
 
-def datanode_property(request,db_name=None,dataset=None,property_name=None):
-    t = loader.get_template('pystache_wrapper.html')
-    c = RequestContext(request, {"pystache_contents":"datanode property %s"%property_name} )
-    return HttpResponse(t.render(c))
+@login_required
+def datanode_property(request,db_name=None,dataset=None,property_name=None,count=10):
+    dataset_id = 'dataset:'+dataset
+    db = couch_server[db_name]
 
+    # modified from http://www.djangosnippets.org/snippets/1209/
+    myitems = db.view('analysis/datanodes-by-dataset-and-property',
+                      start_key=[dataset_id,property_name],
+                      stop_key=[dataset_id,property_name,{}],
+                      reduce=False,
+                      )
+    pages_view = db.view('analysis/datanodes-by-dataset-and-property',
+                         start_key=[dataset_id,property_name],
+                         stop_key=[dataset_id,property_name,{}],
+                         reduce=True,
+                         )
+
+    try:
+        page_number = request.GET.get('page', 1)
+        paginate = CouchPaginator(myitems, count, pages_view=pages_view)
+        page = paginate.page(page_number)
+        items = paginate.object_list
+    except EmptyPage:
+        raise Http404("Page %s empty" % page_number)
+    except PageNotAnInteger:
+        raise Http404("No page '%s'" % page_number)
+    items[0]['value']
+    context = {
+        'items': items,
+        'property_name':property_name,
+#        'hack': repr(items[0].keys()),
+        'number':page.number,
+        'num_pages':page.paginator.num_pages,
+        'has_previous' : page.has_previous(),
+        'previous_page_number' : page.previous_page_number(),
+        'has_next' : page.has_next(),
+        'next_page_number' : page.next_page_number(),
+    }
+
+    t = loader.get_template('pystache_wrapper.html')
+    c = RequestContext(request,
+                       {"pystache_contents":mustache('datanodes.html',context)} )
+    return HttpResponse(t.render(c))
+    
 approot = reverse(select_db)
 def get_next_url(db_name=None,dataset_name=None,datanode_property=None):
     if db_name is None:

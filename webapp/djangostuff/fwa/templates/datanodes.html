@@ -1,0 +1,30 @@
+<h2>{{property_name}} data nodes</h2>
+
+<div class="pagination">
+  <span class="step-links">
+    {{#has_previous}}
+      <a href="?page={{ previous_page_number }}">previous</a>
+    {{/has_previous}}
+      
+    <span class="current">
+      Page {{number}} of {{num_pages}}.
+    </span>
+
+    {{#has_next}}
+      <a href="?page={{ next_page_number }}">next</a>
+    {{/has_next}}
+
+    <ul>
+    {{#items}}
+      <li>
+	{{value}}
+      </li>
+    {{/items}}
+    </ul>
+  </span>
+</dev>
+
+
+{{hack}}
+
+</h2>
