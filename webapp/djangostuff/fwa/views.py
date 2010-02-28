@@ -93,7 +93,7 @@ def select_dataset(request,db_name=None):
         return HttpResponseRedirect(datasets[0]['path'])
 
     source, origin = loader.find_template_source('pystache_datasets.html') # abuse django.template to find pystache template
-    contents = pystache.render( source, {'datasets':datasets} )
+    contents = pystache.render( source, {'db_name':db_name,'datasets':datasets} )
 
     t = loader.get_template('pystache_wrapper.html')
     c = RequestContext(request, {"pystache_contents":contents} )
@@ -105,12 +105,50 @@ def dataset(request,db_name=None,dataset=None):
     assert dataset is not None
     assert is_access_valid(db_name,request.user)
 
-    t = loader.get_template('dataset.html')
-    c = RequestContext(request,{'dataset':dataset})
+    dataset_id = 'dataset:'+dataset
+    db = couch_server[db_name]
+    dataset_doc = db[dataset_id]
+    summary_view = db.view('analysis/DataNode',
+                           start_key=[dataset_id],
+                           stop_key=[dataset_id,{}],
+                           )
+    all_datanodes_value = [row for row in summary_view][0].value # Hack: get first (and only) row
+    datanodes_count = all_datanodes_value['n_built']+all_datanodes_value['n_unbuilt']
+    datanodes_view = db.view('analysis/DataNode',
+                              start_key=[dataset_id],
+                              stop_key=[dataset_id,{}],
+                              group_level=2,
+                              )
+    datanodes=[]
+    for row in datanodes_view:
+        properties = []
+        for i,property_name in enumerate(row.key[1]):
+            properties.append( {'path':get_next_url(db_name=db_name, dataset_name=dataset, datanode_property=property_name),
+                                'name':property_name,
+                                'hackspace':' ', # Hack: pystache is trimming our whitespace (but not this).
+                                } )
+        node_dict =  {'count':intcomma(row.value['n_built']+row.value['n_unbuilt']),
+                      'properties':properties,
+                      }
+        node_dict.update(row.value)
+        datanodes.append(node_dict)
+    source, origin = loader.find_template_source('dataset.html') # abuse django.template to find pystache template
+    contents = pystache.render( source, {'dataset':dataset_doc['name'],
+                                         'num_data_nodes':intcomma(datanodes_count),
+                                         'datanodes':datanodes,
+                                         })
+
+    t = loader.get_template('pystache_wrapper.html')
+    c = RequestContext(request, {"pystache_contents":contents} )
+    return HttpResponse(t.render(c))
+
+def datanode_property(request,db_name=None,dataset=None,property_name=None):
+    t = loader.get_template('pystache_wrapper.html')
+    c = RequestContext(request, {"pystache_contents":"datanode property %s"%property_name} )
     return HttpResponse(t.render(c))
 
 approot = reverse(select_db)
-def get_next_url(db_name=None,dataset_name=None):
+def get_next_url(db_name=None,dataset_name=None,datanode_property=None):
     if db_name is None:
         assert dataset_name is None
         return approot
@@ -118,4 +156,8 @@ def get_next_url(db_name=None,dataset_name=None):
         if dataset_name is None:
             return approot + db_name + '/'
         else:
-            return approot + db_name + '/' + dataset_name + '/'
+            if datanode_property is None:
+                return approot + db_name + '/' + dataset_name + '/'
+            else:
+                return approot + db_name + '/' + dataset_name + '/' + 'DataNodes/' + defaultfilters.iriencode(datanode_property) + '/'
+

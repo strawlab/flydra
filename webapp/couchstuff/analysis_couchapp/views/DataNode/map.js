@@ -28,12 +28,14 @@ function(doc) {
                   stop_time  : doc.stop_time,
                   dataset    : doc.dataset,
                   sources    : [doc._id],
+		  status_tags: ["built"],
                 }
         break;
     case "calibration":
         value = { properties : ["calibration"],
                   dataset    : doc.dataset,
                   sources    : [doc._id],
+		  status_tags: ["built"],
                 }
         break;
     case "datanode":
@@ -46,6 +48,6 @@ function(doc) {
     }
 
     if (success) {
-        emit( [value.dataset, value.properties], value );
+        emit( [value.dataset, value.properties, value.status_tags], value );
     }
 }
