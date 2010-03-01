@@ -1,3 +1,13 @@
+{% extends "site_base.html" %}
+
+{% load i18n %}
+
+{% block head_title %}{% trans "analysis" %}{% endblock %}
+
+{% block tab_id %}id="home_tab"{% endblock %}
+
+{% block body %}
+
 <h1>What analysis do you want to do today?</h1>
 
 The following options are available on dataset "{{ dataset }}":
@@ -14,7 +24,14 @@ To be done...
 
 You have {{num_data_nodes}} data nodes that can be examined:
 <ul>
-  {{#datanodes}}
-  <li>{{count}} files with properties {{#properties}} {{hackspace}} <a href="{{path}}">{{name}}</a> {{/properties}} ({{n_built}} built, {{n_unbuilt}} unbuilt) </li>
-  {{/datanodes}}
+  {% for datanode in datanodes %}
+  <li>{{datanode.count}} files with properties 
+     {% for prop in datanode.properties %}
+       {{hackspace}} <a href="{{prop.path}}">{{prop.name}}</a>
+     {% endfor %}
+     ({{datanode.n_built}} built, {{datanode.n_unbuilt}} unbuilt)
+  </li>
+  {% endfor %}
 </ul>
+
+{% endblock %}

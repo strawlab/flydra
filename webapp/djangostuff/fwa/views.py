@@ -135,21 +135,19 @@ def dataset(request,db_name=None,dataset=None):
         for i,property_name in enumerate(row.key[1]):
             properties.append( {'path':get_next_url(db_name=db_name, dataset_name=dataset, datanode_property=property_name),
                                 'name':property_name,
-                                'hackspace':' ', # Hack: pystache is trimming our whitespace (but not this).
+                                'hackspace':' ', # Hack: don't trim our whitespace
                                 } )
         node_dict =  {'count':intcomma(row.value['n_built']+row.value['n_unbuilt']),
                       'properties':properties,
                       }
         node_dict.update(row.value)
         datanodes.append(node_dict)
-    source, origin = loader.find_template_source('dataset.html') # abuse django.template to find pystache template
-    contents = pystache.render( source, {'dataset':dataset_doc['name'],
+
+    t = loader.get_template('dataset.html')
+    c = RequestContext(request, {'dataset':dataset_doc['name'],
                                          'num_data_nodes':intcomma(datanodes_count),
                                          'datanodes':datanodes,
-                                         })
-
-    t = loader.get_template('pystache_wrapper.html')
-    c = RequestContext(request, {"pystache_contents":contents} )
+                                         } )
     return HttpResponse(t.render(c))
 
 @login_required
