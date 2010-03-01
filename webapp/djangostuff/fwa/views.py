@@ -125,10 +125,10 @@ def dataset(request,db_name=None,dataset=None):
     all_datanodes_value = [row for row in summary_view][0].value # Hack: get first (and only) row
     datanodes_count = all_datanodes_value['n_built']+all_datanodes_value['n_unbuilt']
     datanodes_view = db.view('analysis/DataNode',
-                              startkey=[dataset_id],
-                              endkey=[dataset_id,{}],
-                              group_level=2,
-                              )
+                             startkey=[dataset_id],
+                             endkey=[dataset_id,{}],
+                             group_level=2,
+                             )
     datanodes=[]
     for row in datanodes_view:
         properties = []
@@ -147,9 +147,9 @@ def dataset(request,db_name=None,dataset=None):
 
     t = loader.get_template('dataset.html')
     c = RequestContext(request, {'dataset':dataset_doc['name'],
-                                         'num_data_nodes':intcomma(datanodes_count),
-                                         'datanodes':datanodes,
-                                         } )
+                                 'num_data_nodes':intcomma(datanodes_count),
+                                 'datanodes':datanodes,
+                                 } )
     return HttpResponse(t.render(c))
 
 @login_required
