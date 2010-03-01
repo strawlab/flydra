@@ -118,6 +118,9 @@ def dataset(request,db_name=None,dataset=None):
     dataset_id = 'dataset:'+dataset
     db = couch_server[db_name]
     dataset_doc = db[dataset_id]
+    dataset_view = db.view('analysis/datasets')
+    dataset_reduction = [row for row in dataset_view][0].value # Hack: get first (and only) row
+
     summary_view = db.view('analysis/DataNode',
                            startkey=[dataset_id],
                            endkey=[dataset_id,{}],
@@ -146,9 +149,10 @@ def dataset(request,db_name=None,dataset=None):
         datanodes.append(node_dict)
 
     t = loader.get_template('dataset.html')
-    c = RequestContext(request, {'dataset':dataset_doc['name'],
+    c = RequestContext(request, {#'dataset':dataset_doc['name'],
                                  'num_data_nodes':intcomma(datanodes_count),
                                  'datanodes':datanodes,
+                                 'dataset':dataset_reduction,
                                  } )
     return HttpResponse(t.render(c))
 
