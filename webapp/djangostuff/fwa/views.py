@@ -133,7 +133,9 @@ def dataset(request,db_name=None,dataset=None):
     for row in datanodes_view:
         properties = []
         for i,property_name in enumerate(row.key[1]):
-            properties.append( {'path':get_next_url(db_name=db_name, dataset_name=dataset, datanode_property=property_name),
+            properties.append( {'path':get_next_url(db_name=db_name, 
+                                                    dataset_name=dataset, 
+                                                    datanode_property=property_name),
                                 'name':property_name,
                                 'hackspace':' ', # Hack: don't trim our whitespace
                                 } )
