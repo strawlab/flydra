@@ -220,6 +220,7 @@ def datanode(request,db_name=None,doc_id=None,warn_no_specific_view=False):
     c = RequestContext(request,{'row':row,
                                 'doc_url': get_next_url(db_name=db_name,doc_base=True),
                                 'warn_no_specific_view':warn_no_specific_view,
+                                'raw_value':pprint.pformat(row.value),
                                 })
     return HttpResponse(t.render(c))
 

@@ -2,13 +2,13 @@
 
 {% load i18n %}
 
-{% block head_title %}{% trans "analysis" %}{% endblock %}
+{% block head_title %}{{id}}{% endblock %}
 
 {% block tab_id %}id="home_tab"{% endblock %}
 
 {% block body %}
 
-<h2>document "{{id}}"</h2>
+<h2>{{id}}</h2>
 
 <pre>{{raw}}</pre>
 {% endblock %}

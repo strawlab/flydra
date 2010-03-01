@@ -2,7 +2,7 @@
 
 {% load i18n %}
 
-{% block head_title %}{% trans "analysis" %}{% endblock %}
+{% block head_title %}{{dataset.dataset_doc.name}} - analysis options{% endblock %}
 
 {% block tab_id %}id="home_tab"{% endblock %}
 
@@ -13,19 +13,19 @@
 <h3>About this dataset</h3>
 
 <ul>
-  <li>{{dataset.ufmf_files}} .ufmf files: {{dataset.ufmf_bytes|filesizeformat}}</li>
-  <li>{{dataset.h5_files}} .h5 files: {{dataset.h5_bytes|filesizeformat}}</li>
+  <li>{{dataset.ufmf_files}} .ufmf file{{dataset.ufmf_files|pluralize}}: {{dataset.ufmf_bytes|filesizeformat}}</li>
+  <li>{{dataset.h5_files}} .h5 file{{dataset.h5_files|pluralize}}: {{dataset.h5_bytes|filesizeformat}}</li>
 </ul>
 
-<h2>Examine data nodes by property</h2>
+<h2>Examine data node{{num_data_nodes|pluralize}} by property</h2>
 
-You have {{num_data_nodes}} data nodes that can be examined:
+You have {{num_data_nodes}} data node{{num_data_nodes|pluralize}} that can be examined:
 <ul>
   {% for datanode in datanodes %}
   <li>
      {% for prop in datanode.properties %}
        {{hackspace}} <a href="{{prop.path}}">{{prop.name}}</a>
-     {% endfor %}: {{datanode.count}} nodes
+     {% endfor %}: {{datanode.count}} node{{datanode.count|pluralize}}
      ({{datanode.n_unbuilt}} unbuilt)
   </li>
   {% endfor %}
