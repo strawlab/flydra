@@ -9,13 +9,23 @@ from django.core.paginator import EmptyPage, PageNotAnInteger
 
 from couchdb.client import Server
 
+import localglobal.client
+
 from paginatoe import SimpleCouchPaginator, CouchPaginator
 import pystache
 import pprint
 
-couchbase = settings.FWA_COUCH_BASE_URI
-couch_server = Server(couchbase)
+def _connect_couch():
+    couchbase = settings.FWA_COUCH_BASE_URI
+    return Server(couchbase)
+couch_server = _connect_couch()
 metadb = couch_server['flydraweb_metadata']
+
+def _connect_localglobal():
+    lghost = settings.FWA_LOCALGLOBAL_HOST
+    lgport = settings.FWA_LOCALGLOBAL_PORT
+    return localglobal.client.Server(host=lghost, port=lgport)
+localglobal_server = _connect_localglobal()
 
 class DatabaseForm(forms.Form):
     database = forms.CharField()
@@ -229,15 +239,36 @@ def raw_doc(request,db_name=None,doc_id=None):
     db = couch_server[db_name]
     doc = db[doc_id]
     t = loader.get_template('raw_doc.html')
-    c = RequestContext(request,{'id':doc['_id'],'raw':pprint.pformat(dict(doc))})
+    c = RequestContext(request,{'id':doc['_id'],'raw':pprint.pformat(dict(doc)),
+                                'localglobal':get_localglobal_context( doc['sha1sum'] ),
+                                })
     return HttpResponse(t.render(c))
+
+def get_localglobal_docs(sha1sum):
+    orig_lgdocs = localglobal_server.get_sha1sum_docs( sha1sum )
+    extra_lgdocs = []
+    for lgdoc in orig_lgdocs:
+        if lgdoc['type']!='compressed':
+            continue
+        extra = localglobal_server.get_sha1sum_docs( lgdoc['compressed_sha1sum'], return_compressed=False )
+        extra_lgdocs.extend( extra )
+    lgdocs = orig_lgdocs + extra_lgdocs
+    return lgdocs
+
+def get_localglobal_context(sha1sum):
+    """prepare for localglobal_doc.html template"""
+    lgdocs = get_localglobal_docs( sha1sum )
+    return {'docs':lgdocs,'raw':pprint.pformat(lgdocs)}
 
 @login_required
 def h5_doc(request,db_name=None,doc_id=None):
     db = couch_server[db_name]
     doc = db[doc_id]
+
     t = loader.get_template('h5_doc.html')
-    c = RequestContext(request,{'id':doc['_id'],'raw':pprint.pformat(dict(doc))})
+    c = RequestContext(request,{'id':doc['_id'],'raw':pprint.pformat(dict(doc)),
+                                'localglobal':get_localglobal_context( doc['sha1sum'] ),
+                                })
     return HttpResponse(t.render(c))
 
 @login_required

@@ -1,8 +1,6 @@
 {% extends "site_base.html" %}
 
-{% load i18n %}
-
-{% block head_title %}{% trans "analysis" %}{% endblock %}
+{% block head_title %}analysis{% endblock %}
 
 {% block tab_id %}id="home_tab"{% endblock %}
 
@@ -11,4 +9,7 @@
 <h2>h5 file "{{id}}"</h2>
 
 <pre>{{raw}}</pre>
+
+{% include "localglobal_file.html" %}
+
 {% endblock %}
