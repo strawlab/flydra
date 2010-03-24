@@ -5,7 +5,7 @@ if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
     tables.flavor.restrict_flavors(keep=['numpy'])
-import sets, os, sys, math, contextlib, collections, warnings
+import os, sys, math, contextlib, collections, warnings
 
 import pkg_resources
 import numpy as np
@@ -13,6 +13,7 @@ import tables as PT
 from optparse import OptionParser
 import flydra.reconstruct as reconstruct
 import motmot.ufmf.ufmf as ufmf
+import motmot.imops.imops as imops
 import flydra.a2.utils as utils
 import flydra.analysis.result_utils as result_utils
 import core_analysis
@@ -27,6 +28,8 @@ import benu
 import adskalman.adskalman
 
 from tables_tools import clear_col, openFileSafe
+
+font_size=14
 
 def shift_image(im,xy):
     def mapping(x):
@@ -136,7 +139,7 @@ def plot_image_subregion(raw_im, mean_im, absdiff_im,
         ## #ctx.scale( roisize/square_edge, square_edge/roisize)
 
         if 1:
-            in_surface = benu.numpy2cairo(display_im)
+            in_surface = benu.numpy2cairo(display_im.astype(np.uint8))
             ctx.rectangle(user_l,user_b,display_im.shape[1],display_im.shape[0])
             if 1:
                 ctx.save()
@@ -245,7 +248,10 @@ def clip_and_math( raw_image, mean_image, xy, roiradius, maxsize ):
 
     raw_im = raw_image[b:t,l:r]
     mean_im = mean_image[b:t,l:r]
-    absdiff_im = abs( mean_im - raw_im )
+    absdiff_im = abs( mean_im.astype(np.float32) - raw_im )
+    if absdiff_im.ndim==3:
+        # convert to grayscale
+        absdiff_im = np.mean(absdiff_im,axis=2)
 
     return (l,b,r,t), raw_im, mean_im, absdiff_im
 
@@ -264,6 +270,8 @@ def doit(h5_filename=None,
          final_thresh=None,
          stack_N_images=None,
          stack_N_images_min=None,
+         old_sync_timestamp_source=False,
+         do_rts_smoothing=True,
          ):
     """
 
@@ -294,521 +302,558 @@ def doit(h5_filename=None,
     if os.path.exists( output_h5_filename ):
         raise RuntimeError(
             "will not overwrite old file '%s'"%output_h5_filename)
-    output_h5 = tables.openFile( output_h5_filename, mode='w' )
-    #with openFileSafe( output_h5_filename, mode='w') as output_h5:
+    with openFileSafe( output_h5_filename, delete_on_error=True,
+                       mode='w') as output_h5:
+        if save_image_dir is not None:
+            if not os.path.exists( save_image_dir ):
+                os.mkdir( save_image_dir )
 
-    if save_image_dir is not None:
-        if not os.path.exists( save_image_dir ):
-            os.mkdir( save_image_dir )
+        with openFileSafe( h5_filename, mode='r' ) as h5:
 
-    with openFileSafe( h5_filename, mode='r' ) as h5:
+            fps = result_utils.get_fps( h5, fail_on_error=True )
 
-        fps = result_utils.get_fps( h5, fail_on_error=True )
+            for input_node in h5.root._f_iterNodes():
+                # copy everything from source to dest
+                input_node._f_copy(output_h5.root,recursive=True)
+            print 'done copying'
 
-        for input_node in h5.root._f_iterNodes():
-            # copy everything from source to dest
-            input_node._f_copy(output_h5.root,recursive=True)
-        print 'done copying'
+            # Clear values in destination table that we may overwrite.
+            dest_table = output_h5.root.data2d_distorted
+            for colname in ['x','y','area','slope','eccentricity','cur_val',
+                            'mean_val','sumsqf_val']:
+                if colname=='cur_val':
+                    fill_value = 0
+                else:
+                    fill_value = np.nan
+                clear_col(dest_table,colname,fill_value=fill_value)
+            dest_table.flush()
+            print 'done clearing'
 
-        # Clear values in destination table that we may overwrite.
-        dest_table = output_h5.root.data2d_distorted
-        for colname in ['x','y','area','slope','eccentricity','cur_val',
-                        'mean_val','sumsqf_val']:
-            if colname=='cur_val':
-                fill_value = 0
-            else:
-                fill_value = np.nan
-            clear_col(dest_table,colname,fill_value=fill_value)
-        dest_table.flush()
-        print 'done clearing'
+            camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
 
-        camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
+            cam_id2fmfs = collections.defaultdict(list)
+            cam_id2view = {}
+            for ufmf_filename in ufmf_filenames:
+                fmf = ufmf.FlyMovieEmulator(ufmf_filename,
+                                            #darken=-50,
+                                            allow_no_such_frame_errors=True)
+                timestamps = fmf.get_all_timestamps()
 
-        cam_id2fmfs = collections.defaultdict(list)
-        cam_id2view = {}
-        for ufmf_filename in ufmf_filenames:
-            fmf = ufmf.FlyMovieEmulator(ufmf_filename,
-                                        #darken=-50,
-                                        allow_no_such_frame_errors=True)
-            timestamps = fmf.get_all_timestamps()
+                cam_id = get_cam_id_from_filename(fmf.filename, cam_id2camns.keys())
+                cam_id2fmfs[cam_id].append(
+                    (fmf,result_utils.Quick1DIndexer(timestamps)))
 
-            cam_id = get_cam_id_from_filename(fmf.filename, cam_id2camns.keys())
-            cam_id2fmfs[cam_id].append(
-                (fmf,result_utils.Quick1DIndexer(timestamps)))
+                cam_id2view[cam_id] = filename2view[fmf.filename]
 
-            cam_id2view[cam_id] = filename2view[fmf.filename]
+            # associate framenumbers with timestamps using 2d .h5 file
+            data2d = h5.root.data2d_distorted[:] # load to RAM
+            data2d_idxs = np.arange(len(data2d))
+            h5_framenumbers = data2d['frame']
+            h5_frame_qfi = result_utils.QuickFrameIndexer(h5_framenumbers)
 
-        # associate framenumbers with timestamps using 2d .h5 file
-        data2d = h5.root.data2d_distorted[:] # load to RAM
-        data2d_idxs = np.arange(len(data2d))
-        h5_framenumbers = data2d['frame']
-        h5_frame_qfi = result_utils.QuickFrameIndexer(h5_framenumbers)
+            fpc = realtime_image_analysis.FitParamsClass() # allocate FitParamsClass
 
-        fpc = realtime_image_analysis.FitParamsClass() # allocate FitParamsClass
+            for obj_id_enum,obj_id in enumerate(use_obj_ids):
+                print 'object %d of %d'%(obj_id_enum,len(use_obj_ids))
 
-        for obj_id_enum,obj_id in enumerate(use_obj_ids):
-            print 'object %d of %d'%(obj_id_enum,len(use_obj_ids))
+                # get all images for this camera and this obj_id
 
-            # get all images for this camera and this obj_id
+                obj_3d_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file)
 
-            obj_3d_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file)
-
-            this_obj_framenumbers = collections.defaultdict(list)
-            if save_images:
-                this_obj_raw_images = collections.defaultdict(list)
-                this_obj_mean_images = collections.defaultdict(list)
-            this_obj_absdiff_images = collections.defaultdict(list)
-            this_obj_morphed_images = collections.defaultdict(list)
-            this_obj_im_coords = collections.defaultdict(list)
-            this_obj_com_coords = collections.defaultdict(list)
-            this_obj_camn_pt_no = collections.defaultdict(list)
-
-            for this_3d_row in obj_3d_rows:
-                # iterate over each sample in the current camera
-                framenumber = this_3d_row['frame']
-                if start is not None:
-                    if not framenumber >= start:
-                        continue
-                if stop is not None:
-                    if not framenumber <= stop:
-                        continue
-                h5_2d_row_idxs = h5_frame_qfi.get_frame_idxs(framenumber)
-
-                frame2d = data2d[h5_2d_row_idxs]
-                frame2d_idxs = data2d_idxs[h5_2d_row_idxs]
-
-                obs_2d_idx = this_3d_row['obs_2d_idx']
-                kobs_2d_data = kalman_observations_2d_idxs[int(obs_2d_idx)]
-
-                # Parse VLArray.
-                this_camns = kobs_2d_data[0::2]
-                this_camn_idxs = kobs_2d_data[1::2]
-
-                # Now, for each camera viewing this object at this
-                # frame, extract images.
-                for camn, camn_pt_no in zip(this_camns, this_camn_idxs):
-
-                    # find 2D point corresponding to object
-                    cam_id = camn2cam_id[camn]
-
-                    movie_tups_for_this_camn = cam_id2fmfs[cam_id]
-                    cond = ((frame2d['camn']==camn) &
-                            (frame2d['frame_pt_idx']==camn_pt_no))
-                    idxs = np.nonzero(cond)[0]
-                    assert len(idxs)==1
-                    idx = idxs[0]
-
-                    orig_data2d_rownum = frame2d_idxs[idx]
-                    frame_timestamp = frame2d[idx]['timestamp']
-                    found = None
-                    for fmf, fmf_timestamp_qi in movie_tups_for_this_camn:
-                        fmf_fnos = fmf_timestamp_qi.get_idxs(frame_timestamp)
-                        if not len(fmf_fnos):
-                            continue
-                        assert len(fmf_fnos)==1
-
-                        # should only be one .ufmf with this frame and cam_id
-                        assert found is None
-
-                        fmf_fno = fmf_fnos[0]
-                        found = (fmf, fmf_fno )
-                    if found is None:
-                        ## print 'no image data for frame timestamp %s cam_id %s'%(
-                        ##     repr(frame_timestamp),cam_id)
-                        continue
-                    fmf, fmf_fno = found
-                    image, fmf_timestamp = fmf.get_frame( fmf_fno )
-                    mean_image = fmf._ufmf.get_mean_for_timestamp(fmf_timestamp)
-
-                    xy = (int(round(frame2d[idx]['x'])),
-                          int(round(frame2d[idx]['y'])))
-                    maxsize = (fmf.get_width(), fmf.get_height())
-
-                    # Accumulate cropped images. Note that the region
-                    # of the full image that the cropped image
-                    # occupies changes over time as the tracked object
-                    # moves. Thus, averaging these cropped-and-shifted
-                    # images is not the same as simply averaging the
-                    # full frame.
-
-                    roiradius = fmf._ufmf._image_radius # Naughty
-                    tmp = clip_and_math( image, mean_image, xy, roiradius,
-                                         maxsize )
-                    im_coords, raw_im, mean_im, absdiff_im = tmp
-
-                    max_absdiff_im = absdiff_im.max()
-                    intermediate_thresh=intermediate_thresh_frac*max_absdiff_im
-                    absdiff_im[ absdiff_im <= intermediate_thresh] = 0
-
-                    if erode>0:
-                        morphed_im = scipy.ndimage.grey_erosion(absdiff_im,
-                                                                size=erode)
-                        ## morphed_im = scipy.ndimage.binary_erosion(absdiff_im>1).astype(np.float32)*255.0
-                    else:
-                        morphed_im = absdiff_im
-
-                    y0_roi,x0_roi = scipy.ndimage.center_of_mass(morphed_im)
-                    x0=im_coords[0]+x0_roi
-                    y0=im_coords[1]+y0_roi
-
-                    if 1:
-                        morphed_im_binary = morphed_im > 0
-                        labels,n_labels = scipy.ndimage.label(morphed_im_binary)
-                        if n_labels > 1:
-                            x0,y0 = np.nan, np.nan
-                            # More than one blob -- don't allow image.
-                            if 1:
-                                # for min flattening
-                                morphed_im = np.empty( morphed_im.shape, dtype=np.uint8 )
-                                morphed_im.fill(255)
-                            else:
-                                # for mean flattening
-                                morphed_im = np.zeros_like( morphed_im )
-
-                    this_obj_framenumbers[camn].append( framenumber )
-                    if save_images:
-                        this_obj_raw_images[camn].append((raw_im,im_coords))
-                        this_obj_mean_images[camn].append(mean_im)
-                    this_obj_absdiff_images[camn].append(absdiff_im)
-                    this_obj_morphed_images[camn].append(morphed_im)
-                    this_obj_im_coords[camn].append(im_coords)
-                    this_obj_com_coords[camn].append( (x0,y0) )
-                    this_obj_camn_pt_no[camn].append(orig_data2d_rownum)
-                    if 0:
-                        fname = 'obj%05d_%s_frame%07d_pt%02d.png'%(
-                            obj_id,cam_id,framenumber,camn_pt_no)
-                        plot_image_subregion( raw_im, mean_im, absdiff_im,
-                                              roiradius, fname, im_coords,
-                                              view=filename2view[fmf.filename],
-                                              )
-
-            # Now, all the frames from all cameras for this obj_id
-            # have been gathered. Do a camera-by-camera analysis.
-
-            for camn in this_obj_absdiff_images:
-                cam_id = camn2cam_id[camn]
-                image_framenumbers = np.array(this_obj_framenumbers[camn])
+                this_obj_framenumbers = collections.defaultdict(list)
                 if save_images:
-                    raw_images = this_obj_raw_images[camn]
-                    mean_images = this_obj_mean_images[camn]
-                absdiff_images = this_obj_absdiff_images[camn]
-                morphed_images = this_obj_morphed_images[camn]
-                im_coords = this_obj_im_coords[camn]
-                com_coords = this_obj_com_coords[camn]
-                camn_pt_no_array = this_obj_camn_pt_no[camn]
+                    this_obj_raw_images = collections.defaultdict(list)
+                    this_obj_mean_images = collections.defaultdict(list)
+                this_obj_absdiff_images = collections.defaultdict(list)
+                this_obj_morphed_images = collections.defaultdict(list)
+                this_obj_im_coords = collections.defaultdict(list)
+                this_obj_com_coords = collections.defaultdict(list)
+                this_obj_camn_pt_no = collections.defaultdict(list)
 
-                all_framenumbers = np.arange(image_framenumbers[0],
-                                             image_framenumbers[-1]+1)
+                for this_3d_row in obj_3d_rows:
+                    # iterate over each sample in the current camera
+                    framenumber = this_3d_row['frame']
+                    if start is not None:
+                        if not framenumber >= start:
+                            continue
+                    if stop is not None:
+                        if not framenumber <= stop:
+                            continue
+                    h5_2d_row_idxs = h5_frame_qfi.get_frame_idxs(framenumber)
 
-                com_coords = np.array(com_coords)
-                if 1:
-                    # Perform RTS smoothing on center-of-mass coordinates.
+                    frame2d = data2d[h5_2d_row_idxs]
+                    frame2d_idxs = data2d_idxs[h5_2d_row_idxs]
 
-                    # Find first good datum.
-                    fgnz = np.nonzero(~np.isnan(com_coords[:,0]))
-                    com_coords_smooth = np.empty( com_coords.shape,
-                                                  dtype=np.float)
-                    com_coords_smooth.fill(np.nan)
+                    obs_2d_idx = this_3d_row['obs_2d_idx']
+                    kobs_2d_data = kalman_observations_2d_idxs[int(obs_2d_idx)]
 
-                    if len(fgnz[0]):
-                        first_good = fgnz[0][0]
+                    # Parse VLArray.
+                    this_camns = kobs_2d_data[0::2]
+                    this_camn_idxs = kobs_2d_data[1::2]
 
-                        RTS_com_coords = com_coords[first_good:,:]
+                    # Now, for each camera viewing this object at this
+                    # frame, extract images.
+                    for camn, camn_pt_no in zip(this_camns, this_camn_idxs):
 
-                        # Setup parameters for Kalman filter.
-                        dt = 1.0/fps
-                        A = np.array([[1,0,dt,0], # process update
-                                      [0,1,0,dt],
-                                      [0,0,1,0],
-                                      [0,0,0,1]],
-                                     dtype=np.float)
-                        C = np.array([[1,0,0,0], # observation matrix
-                                      [0,1,0,0]],
-                                     dtype=np.float)
-                        Q = 0.1*np.eye(4) # process noise
-                        R = 1.0*np.eye(2) # observation noise
-                        initx = np.array([RTS_com_coords[0,0],RTS_com_coords[0,1],0,0],
-                                         dtype=np.float)
-                        initV = 2*np.eye(4)
-                        y=RTS_com_coords
-                        xsmooth,Vsmooth = adskalman.adskalman.kalman_smoother(
-                            y,A,C,Q,R,initx,initV)
-                        com_coords_smooth[first_good:]=xsmooth[:,:2]
+                        # find 2D point corresponding to object
+                        cam_id = camn2cam_id[camn]
 
-                if 1:
-                    # Now shift images
+                        movie_tups_for_this_camn = cam_id2fmfs[cam_id]
+                        cond = ((frame2d['camn']==camn) &
+                                (frame2d['frame_pt_idx']==camn_pt_no))
+                        idxs = np.nonzero(cond)[0]
+                        assert len(idxs)==1
+                        idx = idxs[0]
 
-                    image_shift = com_coords_smooth-com_coords
-                    bad_cond = np.isnan(image_shift[:,0])
-                    # broadcast zeros to places where no good tracking
-                    image_shift[ bad_cond, 0] = 0
-                    image_shift[ bad_cond, 1] = 0
+                        orig_data2d_rownum = frame2d_idxs[idx]
 
-                    shifted_morphed_images = [shift_image( im, xy ) for im,xy in
-                                              zip(morphed_images,image_shift)]
+                        if not old_sync_timestamp_source:
+                            # Change the next line to 'timestamp' for old
+                            # data (before May/June 2009 -- the switch to
+                            # fview_ext_trig)
+                            frame_timestamp = frame2d[idx]['cam_received_timestamp']
+                        else:
+                            # previous version
+                            frame_timestamp = frame2d[idx]['timestamp']
+                        found = None
+                        for fmf, fmf_timestamp_qi in movie_tups_for_this_camn:
+                            fmf_fnos = fmf_timestamp_qi.get_idxs(frame_timestamp)
+                            if not len(fmf_fnos):
+                                continue
+                            assert len(fmf_fnos)==1
 
-                results = flatten_image_stack( image_framenumbers,
-                                               shifted_morphed_images,
-                                               im_coords,
-                                               camn_pt_no_array,
-                                               N=stack_N_images,
-                                               min_N=stack_N_images_min,
-                                               )
+                            # should only be one .ufmf with this frame and cam_id
+                            assert found is None
 
-                # The variable fno (the first element of the results
-                # tuple) is guaranteed to be contiguous and to span
-                # the range from the first to last frames available.
+                            fmf_fno = fmf_fnos[0]
+                            found = (fmf, fmf_fno )
+                        if found is None:
+                            print 'no image data for frame timestamp %s cam_id %s'%(
+                                repr(frame_timestamp),cam_id)
+                            continue
+                        fmf, fmf_fno = found
+                        image, fmf_timestamp = fmf.get_frame( fmf_fno )
+                        mean_image = fmf.get_mean_for_timestamp(fmf_timestamp)
+                        coding = fmf.get_format()
+                        if imops.is_coding_color(coding):
+                            image = imops.to_rgb8(coding,image)
+                            mean_image = imops.to_rgb8(coding,mean_image)
+                        else:
+                            image = imops.to_mono8(coding,image)
+                            mean_image = imops.to_mono8(coding,mean_image)
 
-                for (fno, av_im, n_images_in_stack, lowerleft,
-                     orig_data2d_rownum, orig_idx,
-                     orig_idxs_in_average) in results:
+                        xy = (int(round(frame2d[idx]['x'])),
+                              int(round(frame2d[idx]['y'])))
+                        maxsize = (fmf.get_width(), fmf.get_height())
 
-                    # Clip image to reduce moment arms.
-                    av_im[av_im <= final_thresh] = 0
+                        # Accumulate cropped images. Note that the region
+                        # of the full image that the cropped image
+                        # occupies changes over time as the tracked object
+                        # moves. Thus, averaging these cropped-and-shifted
+                        # images is not the same as simply averaging the
+                        # full frame.
 
-                    fail_fit = False
-                    if 0:
+                        roiradius = 25
+                        warnings.warn('roiradius hard-coded to %d: could be set '
+                                      'from 3D tracking'%roiradius)
+                        tmp = clip_and_math( image, mean_image, xy, roiradius,
+                                             maxsize )
+                        im_coords, raw_im, mean_im, absdiff_im = tmp
 
-                        # Connected components labels -- allow slope
-                        # fit if only one blob in image.
+                        max_absdiff_im = absdiff_im.max()
+                        intermediate_thresh=intermediate_thresh_frac*max_absdiff_im
+                        absdiff_im[ absdiff_im <= intermediate_thresh] = 0
 
-                        av_im_binary = av_im > 0
-                        labels,n_labels = scipy.ndimage.label(av_im_binary)
-                        if n_labels != 1:
-                            fail_fit = True
+                        if erode>0:
+                            morphed_im = scipy.ndimage.grey_erosion(absdiff_im,
+                                                                    size=erode)
+                            ## morphed_im = scipy.ndimage.binary_erosion(absdiff_im>1).astype(np.float32)*255.0
+                        else:
+                            morphed_im = absdiff_im
 
-                    fast_av_im = FastImage.asfastimage( av_im.astype(np.uint8) )
-                    try:
-                        (x0_roi, y0_roi, area, slope, eccentricity) = fpc.fit(
-                            fast_av_im )
-                    except realtime_image_analysis.FitParamsError, err:
-                        fail_fit = True
-
-                    if fail_fit:
-                        x0_roi = np.nan
-                        y0_roi = np.nan
-                        area, slope, eccentricity = np.nan, np.nan, np.nan
-
-                    x0 = x0_roi + lowerleft[0]
-                    y0 = y0_roi + lowerleft[1]
-
-                    if 1:
-                        for row in dest_table.iterrows(
-                            start=orig_data2d_rownum,
-                            stop=orig_data2d_rownum+1):
-
-                            row['x']=x0
-                            row['y']=y0
-                            row['area']=area
-                            row['slope']=slope
-                            row['eccentricity']=eccentricity
-                            row.update() # save data
-
-                    if save_images:
-                        # Display debugging images
-                        fname = 'av_obj%05d_%s_frame%07d.png'%(
-                            obj_id,cam_id,fno)
-                        if save_image_dir is not None:
-                            fname = os.path.join(save_image_dir,fname)
-
-                        raw_im, raw_coords = raw_images[orig_idx]
-                        mean_im = mean_images[orig_idx]
-                        absdiff_im = absdiff_images[orig_idx]
-                        morphed_im = morphed_images[orig_idx]
-                        raw_l, raw_b = raw_coords[:2]
-
-                        imh, imw = raw_im.shape
-                        n_ims = 5
+                        y0_roi,x0_roi = scipy.ndimage.center_of_mass(morphed_im)
+                        x0=im_coords[0]+x0_roi
+                        y0=im_coords[1]+y0_roi
 
                         if 1:
-                            # increase contrast
-                            contrast_scale = 2.0
-                            av_im_show = np.clip(av_im*contrast_scale,0,255)
+                            morphed_im_binary = morphed_im > 0
+                            labels,n_labels = scipy.ndimage.label(morphed_im_binary)
+                            if n_labels > 1:
+                                x0,y0 = np.nan, np.nan
+                                # More than one blob -- don't allow image.
+                                if 1:
+                                    # for min flattening
+                                    morphed_im = np.empty( morphed_im.shape, dtype=np.uint8 )
+                                    morphed_im.fill(255)
+                                else:
+                                    # for mean flattening
+                                    morphed_im = np.zeros_like( morphed_im )
 
-                        margin = 10
-                        scale = 5
+                        this_obj_framenumbers[camn].append( framenumber )
+                        if save_images:
+                            this_obj_raw_images[camn].append((raw_im,im_coords))
+                            this_obj_mean_images[camn].append(mean_im)
+                        this_obj_absdiff_images[camn].append(absdiff_im)
+                        this_obj_morphed_images[camn].append(morphed_im)
+                        this_obj_im_coords[camn].append(im_coords)
+                        this_obj_com_coords[camn].append( (x0,y0) )
+                        this_obj_camn_pt_no[camn].append(orig_data2d_rownum)
+                        if 0:
+                            fname = 'obj%05d_%s_frame%07d_pt%02d.png'%(
+                                obj_id,cam_id,framenumber,camn_pt_no)
+                            plot_image_subregion( raw_im, mean_im, absdiff_im,
+                                                  roiradius, fname, im_coords,
+                                                  view=filename2view[fmf.filename],
+                                                  )
 
-                        yintercept = y0-slope*x0
-                        xplt=np.array([lowerleft[0]-5,
-                                       lowerleft[0]+av_im_show.shape[1]+5])
-                        yplt=slope*xplt+yintercept
+                # Now, all the frames from all cameras for this obj_id
+                # have been gathered. Do a camera-by-camera analysis.
 
-                        top_row_width = scale*imw*n_ims + (1+n_ims)*margin
-                        SHOW_STACK=True
-                        if SHOW_STACK:
-                            n_stack_rows = 4
-                            rw = scale*imw*n_images_in_stack + (1+n_ims)*margin
-                            row_width = max(top_row_width,rw)
-                            col_height = (n_stack_rows*scale*imh +
-                                          (n_stack_rows+1)*margin)
-                        else:
-                            row_width = top_row_width
-                            col_height = scale*imh + 2*margin
+                for camn in this_obj_absdiff_images:
+                    cam_id = camn2cam_id[camn]
+                    image_framenumbers = np.array(this_obj_framenumbers[camn])
+                    if save_images:
+                        raw_images = this_obj_raw_images[camn]
+                        mean_images = this_obj_mean_images[camn]
+                    absdiff_images = this_obj_absdiff_images[camn]
+                    morphed_images = this_obj_morphed_images[camn]
+                    im_coords = this_obj_im_coords[camn]
+                    com_coords = this_obj_com_coords[camn]
+                    camn_pt_no_array = this_obj_camn_pt_no[camn]
 
-                        canv=benu.Canvas(fname,row_width,col_height)
+                    all_framenumbers = np.arange(image_framenumbers[0],
+                                                 image_framenumbers[-1]+1)
 
-                        if SHOW_STACK:
-                            for (stacki,s_orig_idx) in enumerate(
-                                orig_idxs_in_average):
+                    com_coords = np.array(com_coords)
+                    if do_rts_smoothing:
+                        # Perform RTS smoothing on center-of-mass coordinates.
 
-                                (s_raw_im, s_raw_coords)=raw_images[s_orig_idx]
-                                s_raw_l, s_raw_b = s_raw_coords[:2]
-                                s_imh, s_imw = s_raw_im.shape
-                                user_rect = (s_raw_l,s_raw_b,s_imw,s_imh)
+                        # Find first good datum.
+                        fgnz = np.nonzero(~np.isnan(com_coords[:,0]))
+                        com_coords_smooth = np.empty( com_coords.shape,
+                                                      dtype=np.float)
+                        com_coords_smooth.fill(np.nan)
 
-                                x_display = (stacki+1)*margin+(scale*imw)*stacki
-                                for show in ['raw','absdiff','morphed']:
-                                    if show=='raw':
-                                        y_display = scale*imh + 2*margin
-                                    elif show=='absdiff':
-                                        y_display = 2*scale*imh + 3*margin
-                                    elif show=='morphed':
-                                        y_display = 3*scale*imh + 4*margin
-                                    display_rect = (
-                                        x_display,
-                                        y_display,
-                                        scale*raw_im.shape[1],
-                                        scale*raw_im.shape[0])
+                        if len(fgnz[0]):
+                            first_good = fgnz[0][0]
 
-                                    with canv.set_user_coords(
-                                        display_rect,user_rect,
-                                        transform=cam_id2view[cam_id]):
+                            RTS_com_coords = com_coords[first_good:,:]
 
+                            # Setup parameters for Kalman filter.
+                            dt = 1.0/fps
+                            A = np.array([[1,0,dt,0], # process update
+                                          [0,1,0,dt],
+                                          [0,0,1,0],
+                                          [0,0,0,1]],
+                                         dtype=np.float)
+                            C = np.array([[1,0,0,0], # observation matrix
+                                          [0,1,0,0]],
+                                         dtype=np.float)
+                            Q = 0.1*np.eye(4) # process noise
+                            R = 1.0*np.eye(2) # observation noise
+                            initx = np.array([RTS_com_coords[0,0],RTS_com_coords[0,1],0,0],
+                                             dtype=np.float)
+                            initV = 2*np.eye(4)
+                            initV[0,0] = 0.1
+                            initV[1,1] = 0.1
+                            y=RTS_com_coords
+                            xsmooth,Vsmooth = adskalman.adskalman.kalman_smoother(
+                                y,A,C,Q,R,initx,initV)
+                            com_coords_smooth[first_good:]=xsmooth[:,:2]
+
+                        # Now shift images
+
+                        image_shift = com_coords_smooth-com_coords
+                        bad_cond = np.isnan(image_shift[:,0])
+                        # broadcast zeros to places where no good tracking
+                        image_shift[ bad_cond, 0] = 0
+                        image_shift[ bad_cond, 1] = 0
+
+                        shifted_morphed_images = [shift_image( im, xy ) for im,xy in
+                                                  zip(morphed_images,image_shift)]
+
+                        results = flatten_image_stack( image_framenumbers,
+                                                       shifted_morphed_images,
+                                                       im_coords,
+                                                       camn_pt_no_array,
+                                                       N=stack_N_images,
+                                                       min_N=stack_N_images_min,
+                                                       )
+                    else:
+                        results = flatten_image_stack( image_framenumbers,
+                                                       morphed_images,
+                                                       im_coords,
+                                                       camn_pt_no_array,
+                                                       N=stack_N_images,
+                                                       min_N=stack_N_images_min,
+                                                       )
+
+                    # The variable fno (the first element of the results
+                    # tuple) is guaranteed to be contiguous and to span
+                    # the range from the first to last frames available.
+
+                    for (fno, av_im, n_images_in_stack, lowerleft,
+                         orig_data2d_rownum, orig_idx,
+                         orig_idxs_in_average) in results:
+
+                        # Clip image to reduce moment arms.
+                        av_im[av_im <= final_thresh] = 0
+
+                        fail_fit = False
+                        if 0:
+
+                            # Connected components labels -- allow slope
+                            # fit if only one blob in image.
+
+                            av_im_binary = av_im > 0
+                            labels,n_labels = scipy.ndimage.label(av_im_binary)
+                            if n_labels != 1:
+                                fail_fit = True
+
+                        fast_av_im = FastImage.asfastimage( av_im.astype(np.uint8) )
+                        try:
+                            (x0_roi, y0_roi, area, slope, eccentricity) = fpc.fit(
+                                fast_av_im )
+                        except realtime_image_analysis.FitParamsError, err:
+                            fail_fit = True
+
+                        if fail_fit:
+                            x0_roi = np.nan
+                            y0_roi = np.nan
+                            area, slope, eccentricity = np.nan, np.nan, np.nan
+
+                        x0 = x0_roi + lowerleft[0]
+                        y0 = y0_roi + lowerleft[1]
+
+                        if 1:
+                            for row in dest_table.iterrows(
+                                start=orig_data2d_rownum,
+                                stop=orig_data2d_rownum+1):
+
+                                row['x']=x0
+                                row['y']=y0
+                                row['area']=area
+                                row['slope']=slope
+                                row['eccentricity']=eccentricity
+                                row.update() # save data
+
+                        if save_images:
+                            # Display debugging images
+                            fname = 'av_obj%05d_%s_frame%07d.png'%(
+                                obj_id,cam_id,fno)
+                            if save_image_dir is not None:
+                                fname = os.path.join(save_image_dir,fname)
+
+                            raw_im, raw_coords = raw_images[orig_idx]
+                            mean_im = mean_images[orig_idx]
+                            absdiff_im = absdiff_images[orig_idx]
+                            morphed_im = morphed_images[orig_idx]
+                            raw_l, raw_b = raw_coords[:2]
+
+                            imh, imw = raw_im.shape[:2]
+                            n_ims = 5
+
+                            if 1:
+                                # increase contrast
+                                contrast_scale = 2.0
+                                av_im_show = np.clip(av_im*contrast_scale,0,255)
+
+                            margin = 10
+                            scale = 5
+
+                            # calculate the orientation line
+                            yintercept = y0-slope*x0
+                            xplt=np.array([lowerleft[0]-5,
+                                           lowerleft[0]+av_im_show.shape[1]+5])
+                            yplt=slope*xplt+yintercept
+
+                            top_row_width = scale*imw*n_ims + (1+n_ims)*margin
+                            SHOW_STACK=True
+                            if SHOW_STACK:
+                                n_stack_rows = 4
+                                rw = scale*imw*n_images_in_stack + (1+n_ims)*margin
+                                row_width = max(top_row_width,rw)
+                                col_height = (n_stack_rows*scale*imh +
+                                              (n_stack_rows+1)*margin)
+                                stack_margin=20
+                            else:
+                                row_width = top_row_width
+                                col_height = scale*imh + 2*margin
+                                stack_margin=0
+
+                            canv=benu.Canvas(fname,row_width,col_height+stack_margin)
+
+                            if SHOW_STACK:
+                                for (stacki,s_orig_idx) in enumerate(
+                                    orig_idxs_in_average):
+
+                                    (s_raw_im, s_raw_coords)=raw_images[s_orig_idx]
+                                    s_raw_l, s_raw_b = s_raw_coords[:2]
+                                    s_imh, s_imw = s_raw_im.shape[:2]
+                                    user_rect = (s_raw_l,s_raw_b,s_imw,s_imh)
+
+                                    x_display = (stacki+1)*margin+(scale*imw)*stacki
+                                    for show in ['raw','absdiff','morphed']:
                                         if show=='raw':
-                                            s_im = s_raw_im.astype(np.uint8)
+                                            y_display = scale*imh + 2*margin
                                         elif show=='absdiff':
-                                            tmp = absdiff_images[s_orig_idx]
-                                            s_im = tmp.astype(np.uint8)
+                                            y_display = 2*scale*imh + 3*margin
                                         elif show=='morphed':
-                                            tmp = morphed_images[s_orig_idx]
-                                            s_im = tmp.astype(np.uint8)
+                                            y_display = 3*scale*imh + 4*margin
+                                        display_rect = (
+                                            x_display,
+                                            y_display+stack_margin,
+                                            scale*raw_im.shape[1],
+                                            scale*raw_im.shape[0])
 
-                                        canv.imshow(s_im,s_raw_l,s_raw_b)
-                                        sx0,sy0=com_coords[s_orig_idx]
-                                        X = [sx0-1,sx0+1]
-                                        Y = [sy0-1,sy0+1]
-                                        canv.plot(X,Y,
-                                                  color_rgba=(1,.5,.5,1))
+                                        with canv.set_user_coords(
+                                            display_rect,user_rect,
+                                            transform=cam_id2view[cam_id]):
 
-                                        sx0,sy0=com_coords_smooth[s_orig_idx]
-                                        X = [sx0-1,sx0+1]
-                                        Y = [sy0-1,sy0+1]
-                                        canv.plot(X,Y,
-                                                  color_rgba=(.5,1,.5,1))
+                                            if show=='raw':
+                                                s_im = s_raw_im.astype(np.uint8)
+                                            elif show=='absdiff':
+                                                tmp = absdiff_images[s_orig_idx]
+                                                s_im = tmp.astype(np.uint8)
+                                            elif show=='morphed':
+                                                tmp = morphed_images[s_orig_idx]
+                                                s_im = tmp.astype(np.uint8)
 
-                                        if s_orig_idx==orig_idx:
-                                            boxx = np.array([s_raw_l,
-                                                             s_raw_l,
-                                                             s_raw_l+s_imw,
-                                                             s_raw_l+s_imw,
-                                                             s_raw_l])
-                                            boxy = np.array([s_raw_b,
-                                                             s_raw_b+s_imh,
-                                                             s_raw_b+s_imh,
-                                                             s_raw_b,
-                                                             s_raw_b])
-                                            canv.plot(boxx,boxy,
-                                                      color_rgba=(.5,1,.5,1))
-                                    if show=='morphed':
-                                        canv.text(
-                                            'morphed %d, shift: %.1f %.1f'%(
-                                            s_orig_idx-orig_idx,0,0),
-                                            display_rect[0],
-                                            (display_rect[1]+display_rect[3]),
-                                            color_rgba=(1,1,1,1))
+                                            canv.imshow(s_im,s_raw_l,s_raw_b)
+                                            sx0,sy0=com_coords[s_orig_idx]
+                                            X = [sx0-1,sx0+1]
+                                            Y = [sy0-1,sy0+1]
+                                             # the raw coords in red
+                                            canv.plot(X,Y,
+                                                      color_rgba=(1,.5,.5,1))
 
-                        # Display raw_im
-                        display_rect = (margin, margin,
-                                        scale*raw_im.shape[1],
-                                        scale*raw_im.shape[0])
-                        user_rect = (raw_l,raw_b,imw,imh)
-                        with canv.set_user_coords(display_rect, user_rect,
-                                                  transform=cam_id2view[cam_id],
-                                                  ):
-                            canv.imshow(raw_im.astype(np.uint8),raw_l,raw_b)
-                            canv.plot(xplt,yplt,color_rgba=(0,1,0,.5))
-                        canv.text( 'raw',
-                                   display_rect[0],
-                                   display_rect[1]+display_rect[3],
-                                   color_rgba=(.2,.2,.8,0.8))
+                                            if do_rts_smoothing:
+                                                sx0,sy0=com_coords_smooth[s_orig_idx]
+                                                X = [sx0-1,sx0+1]
+                                                Y = [sy0-1,sy0+1]
+                                                 # the RTS smoothed coords in green
+                                                canv.plot(X,Y,
+                                                          color_rgba=(.5,1,.5,1))
 
-                        # Display mean_im
-                        display_rect = (2*margin+(scale*imw), margin,
-                                        scale*mean_im.shape[1],
-                                        scale*mean_im.shape[0])
-                        user_rect = (raw_l,raw_b,imw,imh)
-                        with canv.set_user_coords(display_rect, user_rect,
-                                                  transform=cam_id2view[cam_id],
-                                                  ):
-                            canv.imshow(mean_im.astype(np.uint8),raw_l,raw_b)
-                        canv.text( 'mean',
-                                   display_rect[0],
-                                   display_rect[1]+display_rect[3],
-                                   color_rgba=(.2,.2,.8,0.8))
+                                            if s_orig_idx==orig_idx:
+                                                boxx = np.array([s_raw_l,
+                                                                 s_raw_l,
+                                                                 s_raw_l+s_imw,
+                                                                 s_raw_l+s_imw,
+                                                                 s_raw_l])
+                                                boxy = np.array([s_raw_b,
+                                                                 s_raw_b+s_imh,
+                                                                 s_raw_b+s_imh,
+                                                                 s_raw_b,
+                                                                 s_raw_b])
+                                                canv.plot(boxx,boxy,
+                                                          color_rgba=(.5,1,.5,1))
+                                        if show=='morphed':
+                                            canv.text(
+                                                'morphed %d, shift: %.1f %.1f'%(
+                                                s_orig_idx-orig_idx,0,0),
+                                                display_rect[0],
+                                                (display_rect[1]+display_rect[3]+stack_margin),
+                                                font_size=font_size,
+                                                color_rgba=(1,1,1,1))
 
-                        # Display absdiff_im
-                        display_rect = (3*margin+(scale*imw)*2, margin,
-                                        scale*absdiff_im.shape[1],
-                                        scale*absdiff_im.shape[0])
-                        user_rect = (raw_l,raw_b,imw,imh)
-                        absdiff_clip = np.clip(absdiff_im*contrast_scale,0,255)
-                        with canv.set_user_coords(display_rect, user_rect,
-                                                  transform=cam_id2view[cam_id],
-                                                  ):
-                            canv.imshow(absdiff_clip.astype(np.uint8),
-                                        raw_l,raw_b)
-                        canv.text( 'absdiff',
-                                   display_rect[0],
-                                   display_rect[1]+display_rect[3],
-                                   color_rgba=(.2,.2,.8,0.8))
+                            # Display raw_im
+                            display_rect = (margin, margin,
+                                            scale*raw_im.shape[1],
+                                            scale*raw_im.shape[0])
+                            user_rect = (raw_l,raw_b,imw,imh)
+                            with canv.set_user_coords(display_rect, user_rect,
+                                                      transform=cam_id2view[cam_id],
+                                                      ):
+                                canv.imshow(raw_im.astype(np.uint8),raw_l,raw_b)
+                                canv.plot(xplt,yplt,color_rgba=(0,1,0,.5)) # the orientation line
+                            canv.text( 'raw',
+                                       display_rect[0],
+                                       display_rect[1]+display_rect[3],
+                                       font_size=font_size,
+                                       color_rgba=(.2,.2,.8,0.8))
 
-                        # Display morphed_im
-                        display_rect = (4*margin+(scale*imw)*3, margin,
-                                        scale*morphed_im.shape[1],
-                                        scale*morphed_im.shape[0])
-                        user_rect = (raw_l,raw_b,imw,imh)
-                        morphed_clip = np.clip(morphed_im*contrast_scale,0,255)
-                        with canv.set_user_coords(display_rect, user_rect,
-                                                  transform=cam_id2view[cam_id],
-                                                  ):
-                            canv.imshow(morphed_clip.astype(np.uint8),
-                                        raw_l,raw_b)
-                        canv.text( 'morphed',
-                                   display_rect[0],
-                                   display_rect[1]+display_rect[3],
-                                   color_rgba=(.2,.2,.8,0.8))
+                            # Display mean_im
+                            display_rect = (2*margin+(scale*imw), margin,
+                                            scale*mean_im.shape[1],
+                                            scale*mean_im.shape[0])
+                            user_rect = (raw_l,raw_b,imw,imh)
+                            with canv.set_user_coords(display_rect, user_rect,
+                                                      transform=cam_id2view[cam_id],
+                                                      ):
+                                canv.imshow(mean_im.astype(np.uint8),raw_l,raw_b)
+                            canv.text( 'mean',
+                                       display_rect[0],
+                                       display_rect[1]+display_rect[3],
+                                       font_size=font_size,
+                                       color_rgba=(.2,.2,.8,0.8))
 
-                        # Display time-averaged absdiff_im
-                        display_rect = (5*margin+(scale*imw)*4, margin,
-                                        scale*av_im_show.shape[1],
-                                        scale*av_im_show.shape[0])
-                        user_rect = (lowerleft[0],lowerleft[1],
-                                     av_im_show.shape[1], av_im_show.shape[0])
-                        with canv.set_user_coords(display_rect, user_rect,
-                                                  transform=cam_id2view[cam_id],
-                                                  ):
-                            canv.imshow(av_im_show.astype(np.uint8),
-                                        lowerleft[0],lowerleft[1])
-                            canv.plot(xplt,yplt,color_rgba=(0,1,0,.5))
-                        canv.text( 'stacked/flattened',
-                                   display_rect[0],
-                                   display_rect[1]+display_rect[3],
-                                   color_rgba=(.2,.2,.8,0.8))
+                            # Display absdiff_im
+                            display_rect = (3*margin+(scale*imw)*2, margin,
+                                            scale*absdiff_im.shape[1],
+                                            scale*absdiff_im.shape[0])
+                            user_rect = (raw_l,raw_b,imw,imh)
+                            absdiff_clip = np.clip(absdiff_im*contrast_scale,0,255)
+                            with canv.set_user_coords(display_rect, user_rect,
+                                                      transform=cam_id2view[cam_id],
+                                                      ):
+                                canv.imshow(absdiff_clip.astype(np.uint8),
+                                            raw_l,raw_b)
+                            canv.text( 'absdiff',
+                                       display_rect[0],
+                                       display_rect[1]+display_rect[3],
+                                       color_rgba=(.2,.2,.8,0.8))
 
-                        canv.text( '%s frame % 7d: eccentricity % 5.1f'%(
-                            cam_id,fno,eccentricity), 0, 8)
-                        canv.save()
+                            # Display morphed_im
+                            display_rect = (4*margin+(scale*imw)*3, margin,
+                                            scale*morphed_im.shape[1],
+                                            scale*morphed_im.shape[0])
+                            user_rect = (raw_l,raw_b,imw,imh)
+                            morphed_clip = np.clip(morphed_im*contrast_scale,0,255)
+                            with canv.set_user_coords(display_rect, user_rect,
+                                                      transform=cam_id2view[cam_id],
+                                                      ):
+                                canv.imshow(morphed_clip.astype(np.uint8),
+                                            raw_l,raw_b)
+                            canv.text( 'morphed',
+                                       display_rect[0],
+                                       display_rect[1]+display_rect[3],
+                                       font_size=font_size,
+                                       color_rgba=(.2,.2,.8,0.8))
 
-            # Save results to new table
-            if 0:
-                recarray = np.rec.array(
-                    list_of_rows_of_data2d,
-                    dtype=Info2DCol_description)
-                dest_table.append( recarray )
-                dest_table.flush()
+                            # Display time-averaged absdiff_im
+                            display_rect = (5*margin+(scale*imw)*4, margin,
+                                            scale*av_im_show.shape[1],
+                                            scale*av_im_show.shape[0])
+                            user_rect = (lowerleft[0],lowerleft[1],
+                                         av_im_show.shape[1], av_im_show.shape[0])
+                            with canv.set_user_coords(display_rect, user_rect,
+                                                      transform=cam_id2view[cam_id],
+                                                      ):
+                                canv.imshow(av_im_show.astype(np.uint8),
+                                            lowerleft[0],lowerleft[1])
+                                canv.plot(xplt,yplt,color_rgba=(0,1,0,.5)) # the orientation line
+                            canv.text( 'stacked/flattened',
+                                       display_rect[0],
+                                       display_rect[1]+display_rect[3],
+                                       font_size=font_size,
+                                       color_rgba=(.2,.2,.8,0.8))
 
-    data_file.close()
-    output_h5.close()
+                            canv.text( '%s frame % 7d: eccentricity % 5.1f'%(
+                                cam_id,fno,eccentricity), 0, 16,
+                                       font_size=font_size,
+                                       )
+                            canv.save()
+
+                # Save results to new table
+                if 0:
+                    recarray = np.rec.array(
+                        list_of_rows_of_data2d,
+                        dtype=Info2DCol_description)
+                    dest_table.append( recarray )
+                    dest_table.flush()
+
+        data_file.close()
 
 def main():
     usage = '%prog [options]'
@@ -859,7 +904,14 @@ def main():
     parser.add_option("--save-images", action='store_true',
                       default=False)
 
+    parser.add_option("--no-rts-smoothing", action='store_false',
+                      dest='do_rts_smoothing', default=True)
+
     parser.add_option("--save-image-dir", type='string', default=None)
+
+    parser.add_option("--old-sync-timestamp-source", action='store_true',
+                      default=False,
+                      help="use data2d['timestamp'] to find matching ufmf frame")
 
     (options, args) = parser.parse_args()
 
@@ -898,6 +950,8 @@ def main():
          final_thresh=options.final_thresh,
          stack_N_images=options.stack_N_images,
          stack_N_images_min=options.stack_N_images_min,
+         old_sync_timestamp_source=options.old_sync_timestamp_source,
+         do_rts_smoothing=options.do_rts_smoothing,
          )
 
 if __name__=='__main__':

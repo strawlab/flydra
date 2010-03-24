@@ -1,6 +1,14 @@
 import tables as PT
+
+# pytables files stored using Numeric would by default return Numeric-based results. 
+# We want to force those results to be returned as numpy recarrays.
+# Note that we need to keep "python" in the flavors list, otherwise
+# pytables breaks.
 import tables.flavor
-tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
+tables.flavor.restrict_flavors(keep=['python','numpy']) # ensure pytables 2.x
+
+
+
 import numpy as np
 import sys, os, re, hashlib
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
@@ -349,6 +357,24 @@ class TimeModel:
         return (mainbain_timestamp-self.offset)/self.gain
     def framestamp2timestamp(self, framestamp ):
         return framestamp*self.gain + self.offset
+
+def frame2timestamp_command():
+    h5_filename, frame_str = sys.argv[1:3]
+    frame = int(frame_str)
+    assert len(sys.argv)==3
+    results = tables.openFile(h5_filename,mode='r')
+    model = get_time_model_from_data(results)
+    print repr(model.framestamp2timestamp(frame))
+    results.close()
+
+def timestamp2frame_command():
+    h5_filename, timestamp_str = sys.argv[1:3]
+    timestamp = float(timestamp_str)
+    assert len(sys.argv)==3
+    results = tables.openFile(h5_filename,mode='r')
+    model = get_time_model_from_data(results)
+    print repr(model.timestamp2framestamp(timestamp))
+    results.close()
 
 class TextlogParseError(Exception):
     pass

@@ -9,12 +9,13 @@ if 1:
     import tables.flavor
     tables.flavor.restrict_flavors(keep=['numpy'])
 
-import sets, os, sys, math
+import os, sys, math
 
 import pkg_resources
 import numpy
 import numpy as np
 import tables as PT
+import collections
 import flydra.reconstruct as reconstruct
 import flydra.analysis.result_utils as result_utils
 import matplotlib
@@ -195,7 +196,11 @@ def plot_top_and_side_views(subplot=None,
 
     allX = {}
     frame0 = None
+    results = collections.defaultdict(list)
     for obj_id in use_obj_ids:
+        line=None
+        ellipse_lines=[]
+        MLE_line=None
         try:
             kalman_rows = ca.load_data( obj_id, data_file,
                                         use_kalman_smoothing=use_kalman_smoothing,
@@ -271,6 +276,7 @@ def plot_top_and_side_views(subplot=None,
                     va = get_covariance( rowi )
                     ellx,elly = densities.gauss_ell( mu, va, [0,1], 30, 0.39 )
                     ellipse_line, = subplot['xy'].plot( ellx*scale, elly*scale, color=kws['color'])
+                    ellipse_lines.append(ellipse_line)
             if options.show_track_ends:
                 subplot['xy'].plot( [Xx[0]*scale,Xx[-1]*scale],
                                     [Xy[0]*scale,
@@ -294,10 +300,10 @@ def plot_top_and_side_views(subplot=None,
                 Xox = np.ma.masked_where(badcond,kobs_rows['x'])
                 Xoy = np.ma.masked_where(badcond,kobs_rows['y'])
 
-                subplot['xy'].plot( Xox*scale,
-                                    Xoy*scale,
-                                    'x', label='obj %d'%obj_id, **mykw)
-
+                MLE_line, = subplot['xy'].plot( Xox*scale,
+                                                Xoy*scale,
+                                                'x', label='obj %d'%obj_id,
+                                                **mykw)
 
         with keep_axes_dimensions_if( subplot['xz'], options.stim_xml ):
             line,=subplot['xz'].plot( Xx*scale, Xz*scale,
@@ -312,6 +318,7 @@ def plot_top_and_side_views(subplot=None,
                     ellipse_line, = subplot['xz'].plot( ellx*scale,
                                                         ellz*scale,
                                                         color=kws['color'])
+                    ellipse_lines.append(ellipse_line)
 
             if options.show_track_ends:
                 subplot['xz'].plot( [Xx[0]*scale, Xx[-1]*scale],
@@ -335,11 +342,14 @@ def plot_top_and_side_views(subplot=None,
                 Xox = np.ma.masked_where(badcond,kobs_rows['x'])
                 Xoz = np.ma.masked_where(badcond,kobs_rows['z'])
 
-                subplot['xz'].plot( Xox*scale,
-                                    Xoz*scale,
-                                    'x', label='obj %d'%obj_id, **mykw)
-
-
+                MLE_line, = subplot['xz'].plot( Xox*scale,
+                                                Xoz*scale,
+                                                'x', label='obj %d'%obj_id,
+                                                **mykw)
+        results['lines'].append(line)
+        results['ellipse_lines'].extend(ellipse_lines)
+        results['MLE_line'].append(MLE_line)
+    return results
 
 def doit(options = None,
          ):

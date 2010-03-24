@@ -10,35 +10,41 @@ import cairo
 import os, warnings
 import numpy as np
 import contextlib
+from benu_colormaps import cmaps
 
-def numpy2cairo(raw):
+D2R = np.pi/180.0
+
+def numpy2cairo(raw,cmap=None):
     raw=np.asarray(raw)
     if raw.dtype!=np.uint8:
         raise ValueError('only uint8 dtype is supported')
     if raw.ndim==2:
-        brga = np.ndarray(
-            shape=(raw.shape[0],raw.shape[1],4),
-            dtype=np.uint8)
-        brga[:,:,0]=raw
-        brga[:,:,1]=raw
-        brga[:,:,2]=raw
-        brga[:,:,3].fill(255)
+        if cmap==None: # gray
+            brga = np.ndarray(
+                shape=(raw.shape[0],raw.shape[1],4),
+                dtype=np.uint8)
+            brga[:,:,0]=raw
+            brga[:,:,1]=raw
+            brga[:,:,2]=raw
+            brga[:,:,3].fill(255)
+        else:
+            brga = cmaps[cmap][raw]
     elif raw.ndim==3:
         if raw.shape[2]==3:
             brga = np.ndarray(
                 shape=(raw.shape[0],raw.shape[1],4),
                 dtype=np.uint8)
             brga[:,:,0]=raw[:,:,2]
-            brga[:,:,1]=raw[:,:,0]
-            brga[:,:,2]=raw[:,:,1]
+            brga[:,:,1]=raw[:,:,1]
+            brga[:,:,2]=raw[:,:,0]
             brga[:,:,3].fill(255)
         elif raw.shape[2]==4:
             brga = np.ndarray(
                 shape=(raw.shape[0],raw.shape[1],4),
                 dtype=np.uint8)
             brga[:,:,0]=raw[:,:,2]
-            brga[:,:,1]=raw[:,:,0]
-            brga[:,:,2]=raw[:,:,1]
+            brga[:,:,1]=raw[:,:,1]
+            brga[:,:,2]=raw[:,:,0]
             brga[:,:,3]=raw[:,:,3]
         else:
             raise ValueError('if 3d array is given, it must be RGB or RGBA')
@@ -51,6 +57,7 @@ def numpy2cairo(raw):
     return in_surface
 
 class Canvas(object):
+    """A drawing surface which handles coordinate transforms"""
     def __init__(self,fname,width,height):
         self._output_ext = os.path.splitext(fname)[1].lower()
         if self._output_ext == '.pdf':
@@ -67,8 +74,8 @@ class Canvas(object):
         self._surf = output_surface
         self._ctx = cairo.Context(self._surf)
         self._fname = fname
-    def imshow(self,im,l,b,filter='nearest'):
-        """
+    def imshow(self,im,l,b,filter='nearest',cmap=None):
+        """show image im at location (l,b)
 
         filter can be one of ['best', 'bilinear', 'fast', 'gaussian',
         'good', 'nearest'].
@@ -78,7 +85,7 @@ class Canvas(object):
         cfilter = getattr(cairo,'FILTER_'+filter.upper())
 
         # Get cairo surface
-        in_surface = numpy2cairo(im)
+        in_surface = numpy2cairo(im,cmap=cmap)
 
         ctx = self._ctx # shorthand
         #ctx.rectangle(l,b,im.shape[1],im.shape[0])
@@ -88,12 +95,17 @@ class Canvas(object):
         ctx.paint()
         ctx.restore()
 
-    def plot(self,xarr,yarr,color_rgba=None,close_path=False):
+    def plot(self,xarr,yarr,color_rgba=None,close_path=False,linewidth=None):
+        """line plot of xarr vs. yarr"""
         if color_rgba is None:
             color_rgba = (1,1,1,1)
         if len(xarr)==1:
             warnings.warn('benu plot() currently only plots line segments')
         ctx = self._ctx # shorthand
+
+        if linewidth is not None:
+            orig_linewidth = ctx.get_line_width()
+            ctx.set_line_width(linewidth)
 
         ctx.set_source_rgba(*color_rgba)
         ctx.move_to(xarr[0],yarr[0])
@@ -103,10 +115,36 @@ class Canvas(object):
             ctx.close_path()
         ctx.stroke()
 
-    def scatter(self,xarr,yarr,color_rgba=None,radius=1.0):
+        if linewidth is not None:
+            ctx.set_line_width(orig_linewidth)
+
+    def poly(self,xarr,yarr,color_rgba=None,edgewidth=0.0):
         if color_rgba is None:
             color_rgba = (1,1,1,1)
         ctx = self._ctx # shorthand
+        if edgewidth is not None:
+            orig_linewidth = ctx.get_line_width()
+            ctx.set_line_width(edgewidth)
+        ctx.set_source_rgba(*color_rgba)
+        ctx.move_to(xarr[0],yarr[0])
+        for i in range(1,len(xarr)):
+            ctx.line_to(xarr[i],yarr[i])
+        ctx.close_path()
+        ctx.paint()
+        ctx.stroke()
+        if edgewidth is not None:
+            ctx.set_line_width(orig_linewidth)
+
+    def scatter(self,xarr,yarr,color_rgba=None,
+                radius=1.0, markeredgewidth=None):
+        """scatter plot of xarr vs. yarr"""
+        if color_rgba is None:
+            color_rgba = (1,1,1,1)
+        ctx = self._ctx # shorthand
+
+        if markeredgewidth is not None:
+            orig_linewidth = ctx.get_line_width()
+            ctx.set_line_width(markeredgewidth)
 
         ctx.set_source_rgba(*color_rgba)
         for x,y in zip(xarr,yarr):
@@ -115,7 +153,11 @@ class Canvas(object):
             ctx.arc(x,y,radius,0,2*np.pi)
         ctx.stroke()
 
+        if markeredgewidth is not None:
+            ctx.set_line_width(orig_linewidth)
+
     def save(self):
+        """save output to file"""
         if self._output_ext == '.png':
             self._surf.write_to_png(self._fname)
         else:
@@ -123,6 +165,7 @@ class Canvas(object):
             self._surf.finish()
 
     def text(self,text,x,y,color_rgba=None,font_size=10):
+        """draw text"""
         if color_rgba is None:
             color_rgba = (0,0,0,1)
 
@@ -136,14 +179,13 @@ class Canvas(object):
         ctx.move_to(x,y)
         ctx.show_text(text)
 
-    @contextlib.contextmanager
-    def set_user_coords(self, device_rect, user_rect,
-                        clip=True,
-                        transform='orig' ):
+    def _get_matrix_for_transform(self,device_rect, user_rect, transform=None):
         user_l, user_b, user_w, user_h = user_rect
         user_r = user_l+user_w
         user_t = user_b+user_h
         device_l, device_b, device_w, device_h = device_rect
+        if transform is None:
+            transform='orig'
 
         if transform=='orig':
             xscale = device_w/user_w
@@ -155,30 +197,79 @@ class Canvas(object):
                                   x0=(device_l-xscale*user_l),
                                   y0=(device_b-yscale*user_b),
                                   )
-        elif transform=='rot -90':
-            xscale = device_w/user_w
-            yscale = device_h/user_h
-            matrix = cairo.Matrix(xx=0,
-                                  yx=xscale, # XXX these could be flipped
-                                  xy=yscale,
-                                  yy=0,
-                                  x0=(device_l-xscale*user_b),
-                                  y0=(device_b-yscale*user_l),
-                                  )
-        elif transform=='rot 180':
-            xscale = device_w/user_w
-            yscale = device_h/user_h
-            matrix = cairo.Matrix(xx=-xscale,
-                                  yx=0,
-                                  xy=0,
-                                  yy=-yscale,
-                                  x0=(device_l+xscale*user_r),
-                                  y0=(device_b+yscale*user_t),
-                                  )
+        elif transform.startswith('rot '):
+            theta_deg = float(transform[4:])
+            theta = theta_deg * D2R
+
+            # user to device transform
+            rotation = cairo.Matrix(xx=np.cos(theta), xy=-np.sin(theta), x0=0.0,
+                                  yx=np.sin(theta), yy=np.cos(theta), y0=0.0)
+
+            # calculate scaling to fit for arbitrary rotation
+            user_verts = [ (user_l,user_b),
+                           (user_r,user_b),
+                           (user_r,user_t),
+                           (user_l,user_t)]
+            rotated_user_verts = np.array([ rotation.transform_point(*v) for v in user_verts])
+            rotated_user_l = np.min(rotated_user_verts[:,0])
+            rotated_user_r = np.max(rotated_user_verts[:,0])
+            rotated_user_b = np.min(rotated_user_verts[:,1])
+            rotated_user_t = np.max(rotated_user_verts[:,1])
+            rotated_user_w = rotated_user_r-rotated_user_l
+            rotated_user_h = rotated_user_t-rotated_user_b
+
+            rotated_scale_x = device_w/rotated_user_w
+            rotated_scale_y = device_h/rotated_user_h
+
+            scale = cairo.Matrix(xx=rotated_scale_x, xy=0.0, x0=0.0,
+                                 yx=0.0, yy=rotated_scale_y, y0=0.0)
+
+            x0 = (device_l-rotated_user_l*rotated_scale_x)
+            y0 = (device_b-rotated_user_b*rotated_scale_y)
+
+            translate = cairo.Matrix(xx=1.0, xy=0.0, x0=x0,
+                                     yx=0.0, yy=1.0, y0=y0)
+
+            matrix=rotation*scale*translate
+
+            if 0:
+                # pretend the device has y going up from origin at bottom
+                device_coord_flip = cairo.Matrix(xx=1.0, xy=0.0, x0=0.0,
+                                                 yx=0.0, yy=-1.0, y0=0.0)
+                device_coord_translate = cairo.Matrix(xx=1.0, xy=0.0, x0=0.0,
+                                                      yx=0.0, yy=1.0, y0=device_h)
+                matrix = matrix*device_coord_flip*device_coord_translate
+
         else:
             raise ValueError("unknown transform '%s'"%transform)
-        orig_matrix = self._ctx.get_matrix()
+        return matrix
 
+    @contextlib.contextmanager
+    def set_user_coords(self, device_rect, user_rect,
+                        clip=True,
+                        transform=None ):
+        """enter a benu context with a user-defined coordinate system
+
+        **Arguments**
+
+        device_rect : 4 element tuple
+            Specifies the coordinates in device space to draw into (l,b,w,h)
+        user_rect : 4 element tuple
+            Specifies the coordinates in arbitrary user defined space
+            mapping into device space (l,b,w,h)
+
+        **Optional keyword arguments**
+
+        clip : boolean
+            Whether to limit drawing within the device_rect
+        transform : string
+            how user_rect is transformed into device_rect. One of 'orig',
+            'rot -90', 'rot 180', 'rot 90'.
+        """
+        user_l, user_b, user_w, user_h = user_rect
+        orig_matrix = self._ctx.get_matrix()
+        matrix = self._get_matrix_for_transform(device_rect,user_rect,
+                                                transform=transform)
         self._ctx.set_matrix(matrix)
         if clip:
             self._ctx.save()
@@ -193,10 +284,43 @@ class Canvas(object):
                 self._ctx.restore()
             self._ctx.set_matrix(orig_matrix)
 
+    def get_transformed_point(self,x,y,device_rect,user_rect,
+                              transform=None):
+        matrix = self._get_matrix_for_transform(device_rect,user_rect,
+                                                transform=transform)
+        return matrix.transform_point(x,y)
+
 def test_benu():
-    c = Canvas('x.png',10,10)
+    canv = Canvas('/tmp/benu-test.png',1024,1024)
+    device_rect = (256,256,512,512)
+    user_rect = (0,0,50,50)
+
+    #transform = 'rot 10'
+    transform = 'rot -45'
+    #transform = 'orig'
+    pts =  [ (0,0),
+             (5,5),
+             (30,30),
+             (45,45),
+             (1,3),
+             (6,2),
+             ]
+    with canv.set_user_coords(device_rect, user_rect,
+                              transform=transform):
+        for pt in pts:
+            canv.scatter( [pt[0]], [pt[1]] )
+        canv.plot( [0,0,50,50,0],[0,50,50,0,0] )
+
+    for pt in pts:
+        x,y = canv.get_transformed_point(pt[0],pt[1],device_rect,user_rect,
+                                             transform=transform)
+        canv.text( '%s, %s'%(pt[0],pt[1]), x,y )
+    canv.save()
+
     # this test is broken...
     ## with c.set_user_coords(1,2):
     ##     pass
 
 
+if __name__=='__main__':
+    test_benu()

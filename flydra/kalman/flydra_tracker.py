@@ -484,7 +484,10 @@ class Tracker:
             for callback in self.kill_tracker_callbacks:
                 callback(tro)
 
-    def encode_data_packet(self,corrected_framenumber,timestamp):
+    def encode_data_packet(self,corrected_framenumber,
+                           acquire_timestamp,
+                           reconstruction_timestamp,
+                           ):
         # keep in sync: data_packets.py's decode_data_packet()
         state_size = self.kalman_model['ss']
         results = self.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
@@ -504,7 +507,8 @@ class Tracker:
             return None
         data_packet1 = struct.pack(packet_header_fmt,
                                    corrected_framenumber,
-                                   timestamp,
+                                   acquire_timestamp,
+                                   reconstruction_timestamp,
                                    N,
                                    state_size)
         data_packet = ''.join( [data_packet1]+data_packets_more )

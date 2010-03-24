@@ -2,7 +2,7 @@
 
 import struct
 
-packet_header_fmt = '<idBB' # XXX check format
+packet_header_fmt = '<iddBB' # XXX check format
 packet_header_fmtsize = struct.calcsize(packet_header_fmt)
 
 super_packet_header_fmt = '<H'
@@ -23,7 +23,8 @@ def decode_data_packet(buf):
     -------
 
     corrected_framenumber : int
-    timestamp : float
+    acquire_timestamp : float
+    reconstruction_timestamp : float
     state_vecs : list of objects
     meanP : float
     """
@@ -31,8 +32,8 @@ def decode_data_packet(buf):
     header = buf[:packet_header_fmtsize]
     rest = buf[packet_header_fmtsize:]
 
-    (corrected_framenumber,timestamp,N,state_size) = struct.unpack(
-        packet_header_fmt,header)
+    (corrected_framenumber,acquire_timestamp,reconstruction_timestamp,
+     N,state_size) = struct.unpack(packet_header_fmt,header)
     per_tracked_object_fmt = '<I'+'f'*(state_size+err_size)
     per_tracked_object_fmtsize = struct.calcsize(per_tracked_object_fmt)
     obj_ids = []
@@ -52,7 +53,8 @@ def decode_data_packet(buf):
         state_vecs.append( state_vec )
         meanPs.append( meanP )
 
-    return corrected_framenumber, timestamp, obj_ids, state_vecs, meanPs
+    return (corrected_framenumber, acquire_timestamp, reconstruction_timestamp,
+            obj_ids, state_vecs, meanPs)
 
 def encode_super_packet( data_packets ):
     """encode data packets into a single super packet

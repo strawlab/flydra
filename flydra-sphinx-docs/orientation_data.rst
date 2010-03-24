@@ -1,3 +1,5 @@
+.. _orientation_data:
+
 Estimating orientations with flydra
 ===================================
 

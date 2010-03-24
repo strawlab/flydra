@@ -16,6 +16,7 @@ import cgtypes
 from optparse import OptionParser
 
 R2D = 180.0/np.pi
+D2R = np.pi/180.0
 
 WARN_CALIB_DIFF = False
 
@@ -229,13 +230,13 @@ def setOfSubsets(L):
                 if X & (1L<<i) ]
         for X in range(2**N) ]
 
+intrinsic_normalized_eps = 1e-6
 def normalize_pmat(pmat):
     pmat_orig = pmat
     M = pmat[:,:3]
     t = pmat[:,3,numpy.newaxis]
     K,R = my_rq(M)
-    eps = 1e-6
-    if abs(K[2,2]-1.0)>eps:
+    if abs(K[2,2]-1.0)>intrinsic_normalized_eps:
         pmat = pmat/K[2,2]
     assert numpy.allclose(pmat2cam_center(pmat_orig),pmat2cam_center(pmat))
     return pmat
@@ -339,9 +340,9 @@ def angles_near(a,b, eps=None, mod_pi=False,debug=False):
     """compare if angles a and b are within eps of each other. assumes radians"""
 
     if mod_pi:
-        a = 2*a
-        b = 2*b
-        eps = 2*eps
+        r1 = angles_near(a, b, eps=eps, mod_pi=False,debug=debug)
+        r2 = angles_near(a+np.pi, b, eps=eps, mod_pi=False,debug=debug)
+        return r1 or r2
 
     diff = abs(a-b)
 
@@ -352,8 +353,6 @@ def angles_near(a,b, eps=None, mod_pi=False,debug=False):
         print 'a',a*R2D
         print 'b',b*R2D
         print 'diff',diff*R2D
-    if abs(diff-numpy.pi) < eps:
-        result = result or True
     if abs(diff-2*numpy.pi) < eps:
         result = result or True
     return result
@@ -365,8 +364,13 @@ def test_angles_near():
         assert angles_near(A,A+np.pi/8,eps=np.pi/4)==True
         assert angles_near(A,A-np.pi/8,eps=np.pi/4)==True
 
-        assert angles_near(A,A+1.1*np.pi/2,eps=np.pi/4)==False
-        assert angles_near(A,A+1.1*np.pi/2,eps=np.pi/4,mod_pi=True)==True
+        assert angles_near(A,A+1.1*np.pi,eps=np.pi/4)==False
+        assert angles_near(A,A+1.1*np.pi,eps=np.pi/4,mod_pi=True)==True
+
+def test_angles_near2():
+    a = 1.51026430701
+    b = 2.92753197003
+    assert angles_near(a,b,eps=10.0*D2R,mod_pi=True) == False
 
 class SingleCameraCalibration:
     """Complete per-camera calibration information.
@@ -379,8 +383,6 @@ class SingleCameraCalibration:
       camera calibration matrix
     res : sequence of length 2
       resolution (width,height)
-    pp : sequence of length 2
-      pricipal point (point on image plane on optical axis) (x,y)
     helper : :class:`CamParamsHelper` instance
       (optional) specifies camera distortion parameters
     scale_factor : None or float
@@ -390,9 +392,9 @@ class SingleCameraCalibration:
                  cam_id=None, # non-optional
                  Pmat=None,   # non-optional
                  res=None,    # non-optional
-#                 pp=None,
                  helper=None,
-                 scale_factor=None # scale_factor is for conversion to meters (e.g. should be 1e-3 if your units are mm)
+                 scale_factor=None, # scale_factor is for conversion to meters (e.g. should be 1e-3 if your units are mm)
+                 no_error_on_intrinsic_parameter_problem = False,
                  ):
         if type(cam_id) != str:
             raise TypeError('cam_id must be string')
@@ -408,26 +410,6 @@ class SingleCameraCalibration:
         self.Pmat=Pmat
         self.res=res
 
-##         pp_guess = False
-##         if pp is None:
-##             pp = self.res[0]/2.0,self.res[1]/2.0
-##             pp_guess = True
-##         if len(pp) != 2:
-##             raise ValueError('len(pp) must be 2')
-## #        self.pp = pp
-
-        if 0:
-            center = self.get_image_center()
-            if ((pp[0]-center[0])**2 + (pp[1]-center[1])**2 ) > 5:
-                if WARN_CALIB_DIFF:
-                    print 'WARNING: principal point and image center seriously misaligned'
-                    print '  pp: %s, center: %s'%(str(pp),str(center))
-                    if pp_guess:
-
-                        print '  (note: one of these parameters was guessed ' \
-                              'as the midpoint of the specified image resolution, ' \
-                              'and could be wrong)'
-
         if helper is None:
             M = numpy.asarray(Pmat)
             cam_center = pmat2cam_center(M)
@@ -436,9 +418,19 @@ class SingleCameraCalibration:
             #intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
             eps = 1e-6
             if abs(intrinsic_parameters[2,2]-1.0)>eps:
-                print 'WARNING: expected last row/col of intrinsic parameter matrix to be unity'
-                print 'intrinsic_parameters[2,2]',intrinsic_parameters[2,2]
-                raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
+                if no_error_on_intrinsic_parameter_problem:
+                    warnings.warn('expected last row/col of intrinsic '
+                                  'parameter matrix to be unity. It is %s'%
+                                  intrinsic_parameters[2,2])
+                    intrinsic_parameters = \
+                                 intrinsic_parameters/intrinsic_parameters[2,2]
+                    print intrinsic_parameters
+                else:
+                    print ('WARNING: expected last row/col of intrinsic '
+                           'parameter matrix to be unity')
+                    print 'intrinsic_parameters[2,2]',intrinsic_parameters[2,2]
+                    raise ValueError('expected last row/col of intrinsic '
+                                     'parameter matrix to be unity')
 
             fc1 = intrinsic_parameters[0,0]
             cc1 = intrinsic_parameters[0,2]
@@ -460,8 +452,7 @@ class SingleCameraCalibration:
         return not (self==other)
 
     def __eq__(self,other):
-        return (#numpy.allclose(self.pp,other.pp) and
-                (self.cam_id == other.cam_id) and
+        return ((self.cam_id == other.cam_id) and
                 numpy.allclose(self.Pmat,other.Pmat) and
                 numpy.allclose(self.res,other.res) and
                 self.helper == other.helper)
@@ -500,11 +491,12 @@ class SingleCameraCalibration:
         scaled = SingleCameraCalibration(cam_id=self.cam_id,
                                          Pmat=scaled_Pmat,
                                          res=self.res,
-#                                         self.pp,
                                          helper=self.helper,
                                          scale_factor=new_scale_factor)
         self._scaled_cache[scale_factor] = scaled
         return scaled
+    def get_res(self):
+        return self.res
 
     def get_cam_center(self):
         """get the 3D location of the camera center in world coordinates"""
@@ -589,7 +581,6 @@ class SingleCameraCalibration:
         fd.write(    '       ]\n')
 
         fd.write(    'res = (%d,%d)\n'%(self.res[0],self.res[1]))
-#        fd.write(    'pp = (%s,%s)\n'%(repr(self.pp[0]),repr(self.pp[1])))
 
         fd.write(    'K = [\n')
         for row in self.helper.get_K():
@@ -631,7 +622,14 @@ class SingleCameraCalibration:
         return result
 
     def get_3D_plane_and_ray(self, x0d, y0d, slope):
-        """(x0d,y0d) are the x,y distorted image coords"""
+        """return a ray and plane defined by a point and a slope at that point
+
+        The 2D distorted point (x0d, y0d) is transfored to a 3D
+        ray. Together with the slope at that point, a 3D plane that
+        passes through the 2D point in the direction of the slope is
+        returned.
+
+        """
         # undistort
         x0u,y0u = self.helper.undistort(x0d,y0d)
         rise=slope
@@ -677,13 +675,19 @@ class SingleCameraCalibration:
         res = ET.SubElement(elem, "resolution")
         res.text = ' '.join(map(str,self.res))
 
-#        pp = ET.SubElement(elem, "principal_point")
-#        pp.text = ' '.join(map(str,self.pp))
-
         scale_factor = ET.SubElement(elem, "scale_factor")
         scale_factor.text = str(self.scale_factor)
 
         self.helper.add_element( elem )
+
+    def as_obj_for_json(self):
+        result = dict(cam_id=self.cam_id,
+                      calibration_matrix= [ row.tolist() for row in self.Pmat ],
+                      resolution=list(self.res),
+                      scale_factor=self.scale_factor,
+                      non_linear_parameters=self.helper.as_obj_for_json(),
+                      )
+        return result
 
 def SingleCameraCalibration_fromfile(filename):
     params={}
@@ -708,7 +712,6 @@ def SingleCameraCalibration_fromfile(filename):
     return SingleCameraCalibration(cam_id=cam_id,
                                    Pmat=pmat,
                                    res=res,
-                                   pp=pp,
                                    helper=helper)
 
 def SingleCameraCalibration_from_xml(elem):
@@ -732,9 +735,8 @@ def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
     cam_center = pmat2cam_center(M)
 
     intrinsic_parameters, cam_rotation = my_rq(M[:,:3])
-    #intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
-    eps = 1e-15
-    if abs(intrinsic_parameters[2,2]-1.0)>eps:
+    #intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize    
+    if abs(intrinsic_parameters[2,2]-1.0)>intrinsic_normalized_eps:
         raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
 
     # (K = intrinsic parameters)
@@ -1157,6 +1159,14 @@ class Reconstructor:
         fd = open(xml_filename,mode='w')
         fd.write(result)
         fd.close()
+
+    def as_obj_for_json(self):
+        result = dict(cameras=[],
+                      minimum_eccentricity=self.minimum_eccentricity)
+        for cam_id in self.cam_ids:
+            scc = self.get_SingleCameraCalibration(cam_id)
+            result['cameras'].append(scc.as_obj_for_json())
+        return result
 
     def save_to_h5file(self, h5file, OK_to_delete_old_calibration=False):
         """create groups with calibration information"""

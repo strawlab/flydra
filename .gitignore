@@ -3,3 +3,4 @@ dist
 *.so
 *.kh5-smoothcache
 *.pyc
+*~

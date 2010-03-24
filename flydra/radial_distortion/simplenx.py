@@ -18,6 +18,10 @@ class Graph:
                 for v in vs:
                     self.add_edge(u,v)
 
+    def __repr__(self):
+        # XXX could return a more sparse representation
+        return "Graph(%s)"%repr(dict(self._adjacency))
+
     def add_edge(self,u,v=None):
 
         if v is None:
@@ -41,13 +45,55 @@ class Graph:
     def edges(self):
         edges = []
         for u in sorted_keys(self._adjacency):
-            for v in self._adjacency[u]:
+            for v in sorted_keys(self._adjacency[u]):
                 if (v,u) not in edges:
                     edges.append( (u,v) )
         return edges
 
     def nodes(self):
         return [u for u in sorted_keys(self._adjacency)]
+
+    def __eq__(self,other):
+        if len(self.edges()) != len(other.edges()):
+            return False
+        if len(self.nodes()) != len(other.nodes()):
+            return False
+        ses = [e for e in self.edges()]
+        oes = [e for e in other.edges()]
+        for se in ses:
+            if se not in oes:
+                return False
+        for oe in ses:
+            if oe not in ses:
+                return False
+        return True
+
+def test_graph_eq():
+    g = Graph()
+    g.add_edge(1,2)
+    g.add_edge(1,3)
+    g.add_edge(1,4)
+    g.add_edge(1,5)
+    g.add_edge(1,6)
+
+    g2 = Graph()
+    g2.add_edge(3,1)
+    g2.add_edge(2,1)
+    g2.add_edge(1,6)
+    g2.add_edge(1,5)
+    g2.add_edge(1,4)
+    assert g==g2
+
+def test_graph_repr():
+    g = Graph()
+    g.add_edge(1,2)
+    g.add_edge(1,4)
+    g.add_edge(2,8)
+    g.add_edge(2,1)
+    g.add_edge('x','y')
+    gs = repr(g)
+    g2 = eval(gs)
+    assert g == g2
 
 class Search:
     def dfs_preorder(self, G, source=None, reverse_graph=False):

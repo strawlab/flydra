@@ -4,7 +4,7 @@ if 1:
     import tables.flavor
     tables.flavor.restrict_flavors(keep=['numpy'])
 
-import sets, os, sys, math
+import os, sys, math
 
 import pkg_resources
 import numpy
@@ -171,8 +171,8 @@ def doit(
                 else:
                     xdata = data['frame']
                 if n_valid >= 1:
-                    ax.plot( xdata, data['x'], 'r.' )
-                    ax.plot( xdata, data['y'], 'g.' )
+                    ax.plot( xdata, data['x'], 'ro',  ms=2, mew=0 )
+                    ax.plot( xdata, data['y'], 'go',  ms=2, mew=0 )
             ax.text(0.1,0,'%s: %d pts'%(cam_id,cam_id_n_valid),
                     horizontalalignment='left',
                     verticalalignment='bottom',
@@ -212,7 +212,7 @@ def doit(
             spread_msec = spread[valid_cond] * 1000.0
             ax.plot( frames[valid_cond],
                      spread_msec,
-                     '.' )
+                     'o', ms=2, mew=0 )
 
             if spread_msec.max() < 1.0:
                 ax.set_ylim((0,1))
@@ -229,9 +229,6 @@ def doit(
         fig.autofmt_xdate()
 
     if kalman_filename is not None:
-        if options.timestamps:
-            raise NotImplementedError(
-                '--timestamps is currently incompatible with --kalman-filename')
         if 1:
             ax = pylab.subplot( n_subplots, 1, n_subplots, sharex=ax)
             ax_by_cam['kalman pmean'] = ax
@@ -245,6 +242,7 @@ def doit(
         ca = core_analysis.get_global_CachingAnalyzer()
         (obj_ids, use_obj_ids, is_mat_file, data_file,
          extra) = ca.initial_file_load(kalman_filename)
+        time_model = result_utils.get_time_model_from_data(data_file)
         if 'frames' in extra:
             frames = extra['frames']
             valid_cond = np.ones((len(frames,)),dtype=np.bool)
@@ -415,6 +413,7 @@ def doit(
                 X = numpy.vstack( (x,y,z,w) ).T
                 frame = kalman_rows['frame'][cond]
                 #print '%d %d %d'%(frame[0],obj_id, len(frame))
+                time_est = time_model.framestamp2timestamp(frame)
 
                 if kalman_smoothing:
                     kwprops = dict(lw=0.5)
@@ -429,15 +428,24 @@ def doit(
                     x2d = R.find2d(cam_id,X,distorted=True)
                     ## print '%d %d %s (%f,%f)'%(
                     ##     obj_id,frame[0],cam_id,x2d[0,0],x2d[1,0])
-                    ax.text( frame[0], x2d[0,0], '%d'%obj_id )
+                    if options.timestamps:
+                        xdata = time_est
+                    else:
+                        xdata = frame
+                    ax.text( xdata[0], x2d[0,0], '%d'%obj_id )
                     thisline,=ax.plot(
-                        frame, x2d[0,:], 'b-', picker=5,**kwprops)#5pt tolerance
+                        xdata, x2d[0,:], 'b-', picker=5,**kwprops)#5pt tolerance
                     all_kalman_lines[thisline] = obj_id
                     thisline,=ax.plot(
-                        frame, x2d[1,:], 'y-', picker=5,**kwprops)#5pt tolerance
+                        xdata, x2d[1,:], 'y-', picker=5,**kwprops)#5pt tolerance
                     all_kalman_lines[thisline] = obj_id
                     ax.set_ylim([-100,800])
-                    ax.set_xlim( (start_frame, stop_frame) )
+                    if options.timestamps:
+                        ## ax.set_xlim( *time_model.framestamp2timestamp(
+                        ##     (start_frame, stop_frame) ))
+                        pass
+                    else:
+                        ax.set_xlim( (start_frame, stop_frame) )
                 if not kalman_smoothing:
                     ax = ax_by_cam['kalman pmean']
                     P00 = kalman_rows['P00'][cond]
@@ -445,9 +453,16 @@ def doit(
                     P22 = kalman_rows['P22'][cond]
                     Pmean = numpy.sqrt( P00**2 + P11**2 + P22**2 ) # variance
                     std = numpy.sqrt(Pmean) # standard deviation (in meters)
-                    ax.plot( frame, std, 'k-')
+                    if options.timestamps:
+                        xdata = time_est
+                    else:
+                        xdata = frame
+                    ax.plot( xdata, std, 'k-')
 
-                    ax.set_xlabel('frame')
+                    if options.timestamps:
+                        ax.set_xlabel('time (sec)')
+                    else:
+                        ax.set_xlabel('frame')
                     ax.xaxis.set_major_formatter(
                         ticker.FormatStrFormatter("%d"))
                     ax.yaxis.set_major_formatter(
@@ -494,9 +509,13 @@ def doit(
                     kframes_used = numpy.array(kframes_used)
                     yval = -99*numpy.ones_like(kframes_used)
                     ax = ax_by_cam[cam_id]
-                    ax.plot( kframes_used, yval, 'kx' )
+                    if options.timestamps:
+                        ax.plot( time_model.framestamp2timestamp(kframes_used),
+                                 yval, 'kx' )
+                    else:
+                        ax.plot( kframes_used, yval, 'kx' )
+                        ax.set_xlim( (start_frame, stop_frame) )
                     ax.set_ylim([-100,800])
-                    ax.set_xlim( (start_frame, stop_frame) )
 
         data_file.close()
 

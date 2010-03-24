@@ -35,9 +35,9 @@ import math
 # ----Load the DLLs ----------------------------------------------------------
 
 if os.name == 'posix' and sys.platform.startswith('linux'):
-    _cxDLL = cdll.LoadLibrary('libcxcore.so.1')
-    _cvDLL = cdll.LoadLibrary('libcv.so.1')
-    _hgDLL = cdll.LoadLibrary('libhighgui.so.1')
+    _cxDLL = cdll.LoadLibrary('libcxcore.so')
+    _cvDLL = cdll.LoadLibrary('libcv.so')
+    _hgDLL = cdll.LoadLibrary('libhighgui.so')
 elif os.name == 'posix' and sys.platform.startswith('darwin'):
     _cxDLL = cdll.LoadLibrary('libcxcore.dylib')
     _cvDLL = cdll.LoadLibrary('libcv.dylib')
@@ -4321,12 +4321,6 @@ cvComputeCorrespondEpilines = cfunc('cvComputeCorrespondEpilines', _cvDLL, None,
     ('correspondent_lines', POINTER(CvMat), 1), # CvMat* correspondent_lines
 )
 
-# Convert points to/from homogenious coordinates
-cvConvertPointsHomogenious = cfunc('cvConvertPointsHomogenious', _cvDLL, None,
-    ('src', POINTER(CvMat), 1), # const CvMat* src
-    ('dst', POINTER(CvMat), 1), # CvMat* dst
-)
-
 # --- 1 Simple GUI -----------------------------------------------------------
 
 # Creates window
@@ -6403,11 +6397,6 @@ Calculates fundamental matrix from corresponding points in two images
 cvComputeCorrespondEpilines.__doc__ = """void cvComputeCorrespondEpilines(const CvMat* points, int which_image, const CvMat* fundamental_matrix, CvMat* correspondent_line)
 
 For points in one image of stereo pair computes the corresponding epilines in the other image
-"""
-
-cvConvertPointsHomogenious.__doc__ = """void cvConvertPointsHomogenious(const CvMat* src, CvMat* dst)
-
-Convert points to/from homogenious coordinates
 """
 
 cvNamedWindow.__doc__ = """int cvNamedWindow(const char* name, int flags)

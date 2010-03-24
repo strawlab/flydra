@@ -29,15 +29,20 @@ Getting and installing flydra from the source code repository
 -------------------------------------------------------------
 
 To download the development version of flydra, you need
-subversion_. To install it, run::
+git_. To install it, run::
 
-  sudo apt-get install subversion
+  sudo apt-get install git-core gitk
 
-.. _subversion: http://subversion.tigris.org/
+.. _git: http://git-scm.org/
 
-Now to download ("checkout") flydra into your current directory, type::
+You will need to send Andrew Straw your ssh key following `these
+instructions`__.
 
-  svn checkout https://code.astraw.com/kookaburra/trunk/flydra
+.. __: http://code.astraw.com/git-repos.html
+
+Now, to download ("checkout") flydra into your current directory, type::
+
+  git clone git@code.astraw.com:flydra.git
 
 To build and install flydra to your virtual Python installation::
 
@@ -66,10 +71,12 @@ Finally, the full test suite may be run with nose_::
 
 .. _nose: http://somethingaboutorange.com/mrl/projects/nose/
 
+.. _editing-the-docs:
+
 Editing the documentation
 -------------------------
 
-This documentation is built with Sphinx_ 0.5.1.
+This documentation is built with Sphinx_ 0.6.2.
 
 .. _Sphinx: http://sphinx.pocoo.org/
 
@@ -88,3 +95,13 @@ The documentation will be built in
 it with::
 
   firefox .build/html/index.html
+
+Alternatively, you can automatically build and upload it by pushing
+your changes to the central git repository and clicking the "Force
+build" button on the "doc uploader" build slave.
+
+Continuous integration
+----------------------
+
+We are running a Buildbot that builds and tests flydra. You can see
+the waterfall display at http://flydra.bb.astraw.com/waterfall .

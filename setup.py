@@ -1,10 +1,39 @@
 from setuptools import setup, find_packages
 from distutils.core import Extension # actually monkey-patched by setuptools
 import flydra.version
+import numpy as np
+import motmot.FastImage.FastImage as FastImage
+major,minor,build = FastImage.get_IPP_version()
+import motmot.FastImage.util as FastImage_util
+from Cython.Distutils import build_ext
 
 version = flydra.version.__version__
 
+# build with same IPP as FastImage
+vals = FastImage_util.get_build_info(ipp_static=FastImage.get_IPP_static(),
+                                     ipp_version='%d.%d'%(major,minor),
+                                     ipp_arch=FastImage.get_IPP_arch(),
+                                     )
+
+ipp_sources = vals.get('ipp_sources',[])
+ipp_include_dirs = vals.get('ipp_include_dirs',[])
+ipp_library_dirs = vals.get('ipp_library_dirs',[])
+ipp_libraries = vals.get('ipp_libraries',[])
+ipp_define_macros = vals.get('ipp_define_macros',[])
+ipp_extra_link_args = vals.get('extra_link_args',[])
+ipp_extra_compile_args = vals.get('extra_compile_args',[])
+
 ext_modules = []
+
+ext_modules.append(Extension(name='flydra.camnode_colors',
+                             sources=['flydra/camnode_colors.pyx','flydra/colors.c']+ipp_sources,
+                             include_dirs=ipp_include_dirs,
+                             library_dirs=ipp_library_dirs,
+                             libraries=ipp_libraries+['cv'],
+                             define_macros=ipp_define_macros,
+                             extra_link_args=ipp_extra_link_args,
+                             extra_compile_args=ipp_extra_compile_args,
+                             ))
 
 ext_modules.append(Extension(name='flydra.reconstruct_utils',
                              sources=['src/reconstruct_utils.pyx']))
@@ -22,7 +51,9 @@ ext_modules.append(Extension(name='flydra.fastgeom',
                              sources=['src/fastgeom.pyx']))
 
 ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
-                             sources=['flydra/a2/fastfinder_help.c'])) # auto-generate with cython
+                             sources=['flydra/a2/fastfinder_help.c'],
+                             include_dirs=[np.get_include()],
+                             )) # auto-generate with cython
 
 setup(name='flydra',
       version=version,
@@ -47,6 +78,9 @@ setup(name='flydra',
     'flydra_analysis_montage_ufmfs = flydra.a2.montage_ufmfs:main',
     'flydra_analysis_retrack_movies = flydra.a2.retrack_movies:main',
 
+# analysis - generate movies with tracking overlays (uses fmfs or ufmfs)
+    'flydra_analysis_overlay_kalman_movie = flydra.a2.overlay_kalman_movie:main',
+
 # analysis - .h5 file care and feeding
     'flydra_analysis_filter_kalman_data = flydra.analysis.flydra_analysis_filter_kalman_data:main',
     'flydra_analysis_h5_shorten = flydra.a2.h5_shorten:main',
@@ -56,6 +90,11 @@ setup(name='flydra',
 
 # analysis - re-kalmanize
     'flydra_kalmanize = flydra.kalman.kalmanize:main',
+
+# timestamp conversion
+    'flydra_analysis_frame2timestamp = flydra.analysis.result_utils:frame2timestamp_command',
+    'flydra_analysis_timestamp2frame = flydra.analysis.result_utils:timestamp2frame_command',
+
 
 # analysis - not yet classified
     'flydra_analysis_convert_to_mat = flydra.analysis.flydra_analysis_convert_to_mat:main',
@@ -106,7 +145,7 @@ setup(name='flydra',
 
 # testing
     'flydra_test_commands = flydra.test_commands:main',
-    'flydra_test_mpl_markersize = flydra.test.mpl_markersize:main',
+    'flydra_test_mpl_markersize = flydra.mpl_markersize:main',
     ],
 
     'gui_scripts': [
@@ -134,4 +173,5 @@ setup(name='flydra',
                                  'Makefile.kalmanize',
                                  ],
                     },
+      cmdclass = {'build_ext': build_ext},
       )

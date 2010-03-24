@@ -2,8 +2,8 @@
 
 import os
 opj=os.path.join
-import numarray as na
-import numarray.linear_algebra as la
+import numpy as na
+import numpy.linalg as la
 
 data_dir = '/home/astraw/mcsc_data'
 
@@ -70,28 +70,29 @@ def uP2X(Umat,Ps):
 def tripleIdx(a):
     return ( na.repeat(na.asarray(a)*3,[3]*len(a)) +
              na.resize( [0,1,2],(3*len(a),)) )
-            
-IdMat=load_ascii_matrix(opj(data_dir,IdMat_name))
-CAMS=IdMat.shape[0]
-points=load_ascii_matrix(opj(data_dir,points_name))
-Ws=points
 
-Pmat=[load_ascii_matrix(opj(data_dir,Pmat_name%(i+1))) for i in range(CAMS)]
-npts=0
-fd = open('X.recalc.dat',mode='wb')
-for j in range(IdMat.shape[1]):
-    cam_idx=na.nonzero(IdMat[:,j])[0]
-    if len(cam_idx)<NTUPLE:
-        fd.write('NaN NaN NaN\n')
-        continue
-    npts=npts+1
-    Wsx = Ws[tripleIdx(cam_idx),j]
-    Wsx = Wsx[:,na.NewAxis]
-    Pmatx = na.concatenate([Pmat[i] for i in cam_idx],axis=1)
-    X=uP2X(Wsx,Pmatx)
-    if 0:
-        save_ascii_matrix('Wsx%d.dat'%npts,Wsx)
-        save_ascii_matrix('Pmatx%d.dat'%npts,Pmatx)
-        save_ascii_matrix('X%d.dat'%npts,X)
-    fd.write('%f %f %f\n'%(X[0,0],X[1,0],X[2,0]))
-print npts,'points drawn'
+if __name__=='__main__':
+    IdMat=load_ascii_matrix(opj(data_dir,IdMat_name))
+    CAMS=IdMat.shape[0]
+    points=load_ascii_matrix(opj(data_dir,points_name))
+    Ws=points
+
+    Pmat=[load_ascii_matrix(opj(data_dir,Pmat_name%(i+1))) for i in range(CAMS)]
+    npts=0
+    fd = open('X.recalc.dat',mode='wb')
+    for j in range(IdMat.shape[1]):
+        cam_idx=na.nonzero(IdMat[:,j])[0]
+        if len(cam_idx)<NTUPLE:
+            fd.write('NaN NaN NaN\n')
+            continue
+        npts=npts+1
+        Wsx = Ws[tripleIdx(cam_idx),j]
+        Wsx = Wsx[:,na.newaxis]
+        Pmatx = na.concatenate([Pmat[i] for i in cam_idx],axis=1)
+        X=uP2X(Wsx,Pmatx)
+        if 0:
+            save_ascii_matrix('Wsx%d.dat'%npts,Wsx)
+            save_ascii_matrix('Pmatx%d.dat'%npts,Pmatx)
+            save_ascii_matrix('X%d.dat'%npts,X)
+        fd.write('%f %f %f\n'%(X[0,0],X[1,0],X[2,0]))
+    print npts,'points drawn'

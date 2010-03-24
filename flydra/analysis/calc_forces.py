@@ -2043,7 +2043,7 @@ def two_posts():
         scipy.io.savemat('smoothed',results)
         show()
 
-def test_icb():
+def check_icb():
     import result_browser
     filename = 'DATA20060315_170142.h5'
     results = result_browser.get_results(filename,mode='r+')

@@ -5,7 +5,6 @@ import MainBrain
 from MainBrain import DEBUG
 import wx
 from wx import xrc
-import pyglet.gl.lib
 import numpy
 import flydra.a2.xml_stimulus
 
@@ -107,12 +106,13 @@ def wrap_loud( wxparent, func ):
 
 class wxMainBrainApp(wx.App):
     def OnInit(self,*args,**kw):
-        global use_opengl, wxglvideo
+        global use_opengl, wxglvideo, use_video_preview
 
-        if use_opengl:
-            import motmot.wxglvideo.simple_overlay as wxglvideo
-        else:
-            import motmot.wxvideo.wxvideo as wxglvideo
+        if use_video_preview:
+            if use_opengl:
+                import motmot.wxglvideo.simple_overlay as wxglvideo
+            else:
+                import motmot.wxvideo.wxvideo as wxglvideo
 
         self.pass_all_keystrokes = False
         wx.InitAllImageHandlers()
@@ -195,10 +195,6 @@ class wxMainBrainApp(wx.App):
 
         #   View
         viewmenu = wx.Menu()
-        ID_debug_cameras = wx.NewId()
-        viewmenu.Append(ID_debug_cameras, "Camera debug mode",
-                        "Enter camera debug mode", wx.ITEM_CHECK)
-        wx.EVT_MENU(self, ID_debug_cameras, self.OnToggleDebugCameras)
 
         ID_toggle_image_tinting = wx.NewId()
         viewmenu.Append(ID_toggle_image_tinting, "Tint clipped data",
@@ -324,6 +320,7 @@ class wxMainBrainApp(wx.App):
         self.update_wx()
 
         self.collecting_background_buttons = {}
+        self.color_filter_buttons = {}
         self.take_background_buttons = {}
         self.clear_background_buttons = {}
         self.last_sound_time = time.time()
@@ -368,6 +365,16 @@ class wxMainBrainApp(wx.App):
                 event.SetEventObject( widget )
                 widget.Command( event )
             self.statusbar.SetStatusText('running BG collection toggled',0)
+        elif keyname == 'F':
+            for cam_id in self.cameras.keys():
+                widget = self.color_filter_buttons[cam_id]
+                widget.SetValue( not widget.GetValue() )
+                id = widget.GetId()
+                event = wx.CommandEvent(wx.wxEVT_COMMAND_CHECKBOX_CLICKED,id)
+                event.SetEventObject( widget )
+                widget.Command( event )
+            self.statusbar.SetStatusText('color filter toggled toggled',0)
+
         elif keyname == 'S':
             if str(self.statusbar.GetStatusText(2)) == '':
                 self.OnStartSavingData()
@@ -461,8 +468,17 @@ class wxMainBrainApp(wx.App):
             child_kwargs['attribList']=0
         else:
             child_kwargs=None
-        self.cam_image_canvas = wxglvideo.DynamicImageCanvas(dynamic_image_panel,-1,child_kwargs=child_kwargs)
-        box.Add(self.cam_image_canvas,1,wx.EXPAND)
+        if child_kwargs is not None:
+            extra_kwargs = dict(child_kwargs=child_kwargs)
+        else:
+            extra_kwargs = {}
+        if use_video_preview:
+            self.cam_image_canvas =wxglvideo.DynamicImageCanvas(dynamic_image_panel,
+                                                                -1,
+                                                                **extra_kwargs)
+            box.Add(self.cam_image_canvas,1,wx.EXPAND)
+        else:
+            self.cam_image_canvas = None
         dynamic_image_panel.Layout()
 
         # setup per-camera container panel
@@ -510,6 +526,11 @@ class wxMainBrainApp(wx.App):
         collecting_background.SetValue(scalar_control_info['collecting_background'])
         wx.EVT_CHECKBOX(collecting_background, collecting_background.GetId(),
                      self.OnCollectingBackground)
+
+        color_filter = xrc.XRCCTRL(previewPerCamPanel,"COLOR_FILTER")
+        self.color_filter_buttons[cam_id] = color_filter
+        wx.EVT_CHECKBOX(color_filter, color_filter.GetId(),
+                     self.OnColorFilter)
 
         take_background = xrc.XRCCTRL(previewPerCamPanel,"take_background")
         self.take_background_buttons[cam_id] = take_background
@@ -579,7 +600,7 @@ class wxMainBrainApp(wx.App):
                      0,wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL )
 
             txtctrl = wx.TextCtrl( per_cam_controls_panel, wx.NewId(),
-                                  size=(40,20))
+                                  size=(50,20))
             txtctrl.SetValue(str(current_value))
             grid.Add( txtctrl,0,wx.ALIGN_LEFT )
 
@@ -1091,9 +1112,6 @@ class wxMainBrainApp(wx.App):
             dlg.Destroy()
             self.pass_all_keystrokes = False
 
-    def OnToggleDebugCameras(self, event):
-        self.main_brain.set_all_cameras_debug_mode( event.IsChecked() )
-
     def OnChangeSaveDataDir(self, event):
         dlg = wx.DirDialog( self.frame, "Change save data directory",
                            style = wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON,
@@ -1135,12 +1153,16 @@ class wxMainBrainApp(wx.App):
         self.main_brain.set_show_overall_latency(value)
 
     def OnToggleTint(self, event):
+        if self.cam_image_canvas is None:
+            return
         self.cam_image_canvas.set_clipping( event.IsChecked() )
 
     def OnShowLikelyPointsOnly(self, event):
         self.show_likely_points_only = event.IsChecked()
 
     def OnToggleDrawPoints(self, event):
+        if self.cam_image_canvas is None:
+            return
         self.cam_image_canvas.set_display_points( event.IsChecked() )
 
     def OnShowXMLStimulus(self, event):
@@ -1231,7 +1253,8 @@ class wxMainBrainApp(wx.App):
                 if l >= r or b >= t or r >= width or t >= height:
                     raise ValueError("ROI dimensions not possible")
                 self.main_brain.send_set_camera_property(cam_id,'roi',lbrt)
-                self.cam_image_canvas.set_lbrt(cam_id,lbrt)
+                if self.cam_image_canvas is not None:
+                    self.cam_image_canvas.set_lbrt(cam_id,lbrt)
         finally:
             dlg.Destroy()
             self.pass_all_keystrokes = False
@@ -1303,7 +1326,8 @@ class wxMainBrainApp(wx.App):
                         self.PreviewPerCamUpdateSetting(cam_id,property_name,value)
                         if property_name=='roi':
                             lbrt = value
-                            self.cam_image_canvas.set_lbrt(cam_id,lbrt)
+                            if self.cam_image_canvas is not None:
+                                self.cam_image_canvas.set_lbrt(cam_id,lbrt)
             except KeyError,x:
                 dlg2 = wx.MessageDialog( self.frame, 'Error opening configuration data:\n'\
                                         '%s: %s'%(x.__class__,x),
@@ -1433,11 +1457,13 @@ class wxMainBrainApp(wx.App):
                             #pt_undist,ln=r.find2d(cam_id,data3d,
                             #               Lcoords=line3d,distorted=False)
                             #self.cam_image_canvas.set_red_points(cam_id,([pt],[ln]))
-                            self.cam_image_canvas.set_red_points(cam_id,pts)
+                            if self.cam_image_canvas is not None:
+                                self.cam_image_canvas.set_red_points(cam_id,pts)
         else:
             for cam_id in self.cameras.keys():
                 if hasattr(self.cam_image_canvas,'set_red_points'):
-                    self.cam_image_canvas.set_red_points(cam_id,None)
+                    if self.cam_image_canvas is not None:
+                        self.cam_image_canvas.set_red_points(cam_id,None)
 
         if self.current_page == 'preview':
             PT_TUPLE_IDX_AREA = flydra.data_descriptions.PT_TUPLE_IDX_AREA
@@ -1495,11 +1521,17 @@ class wxMainBrainApp(wx.App):
                             else:
                                 linesegs = None
                                 lineseg_colors = None
-                            self.cam_image_canvas.update_image_and_drawings(cam_id,image,
-                                                                            points=points,
-                                                                            linesegs=linesegs,
-                                                                            lineseg_colors=lineseg_colors,
-                                                                            sort_add=True)
+                            global use_opengl, use_video_preview
+                            if use_opengl:
+                                extra_kwargs = dict(sort_add=True)
+                            else:
+                                extra_kwargs = {}
+                            if self.cam_image_canvas is not None:
+                                self.cam_image_canvas.update_image_and_drawings(cam_id,image,
+                                                                                points=points,
+                                                                                linesegs=linesegs,
+                                                                                lineseg_colors=lineseg_colors,
+                                                                                **extra_kwargs)
                     if show_fps is not None:
                         show_fps_label = xrc.XRCCTRL(previewPerCamPanel,'acquired_fps_label') # get container
                         show_fps_label.SetLabel('fps: %.1f'%show_fps)
@@ -1530,6 +1562,13 @@ class wxMainBrainApp(wx.App):
         widget = event.GetEventObject()
         cam_id = self._get_cam_id_for_button(widget)
         self.main_brain.set_collecting_background( cam_id, widget.IsChecked() )
+
+
+    # COLOR FILTER
+    def OnColorFilter(self, event):
+        widget = event.GetEventObject()
+        cam_id = self._get_cam_id_for_button(widget)
+        self.main_brain.set_color_filter( cam_id, widget.IsChecked() )
 
     def OnStopAllCollectingBg(self, event):
         # XXX not finished
@@ -1595,12 +1634,14 @@ class wxMainBrainApp(wx.App):
         self.OnRecordRawStop(warn=False)
 
         try:
-            self.cam_image_canvas.delete_image(cam_id)
+            if self.cam_image_canvas is not None:
+                self.cam_image_canvas.delete_image(cam_id)
         except KeyError:
             # camera never sent frame
             pass
 
         del self.collecting_background_buttons[cam_id]
+        del self.color_filter_buttons[cam_id]
         del self.take_background_buttons[cam_id]
         del self.clear_background_buttons[cam_id]
 
@@ -1622,6 +1663,8 @@ def main():
                       metavar="SERVER")
     parser.add_option("--disable-opengl", dest="use_opengl",
                       default=True, action="store_false")
+    parser.add_option("--disable-video-preview", dest="use_video_preview",
+                      default=True, action="store_false")
     parser.add_option("--save-profiling-data",
                       default=False, action="store_true",
                       help="save data to profile/debug the Kalman-filter based tracker (WARNING: SLOW)",
@@ -1632,8 +1675,9 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    global use_opengl
+    global use_opengl, use_video_preview
     use_opengl = options.use_opengl
+    use_video_preview = options.use_video_preview
     # initialize GUI
     #app = App(redirect=1,filename='flydra_log.txt')
     app = wxMainBrainApp(0)
