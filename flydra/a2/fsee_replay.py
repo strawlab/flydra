@@ -150,12 +150,18 @@ def doit(options=None):
                 R = vision.get_last_retinal_imageR()
                 G = vision.get_last_retinal_imageG()
                 B = vision.get_last_retinal_imageB()
+                if options.plot_emds:
+                    emds = vision.get_last_emd_outputs()
+                else:
+                    emds = None
 
                 fname = 'receptors%07d'%frame
                 fig = fsee.plot_utils.plot_receptor_and_emd_fig(
                     R=R,G=G,B=B,
+                    emds=emds,
+                    scale=5e-4,
                     figsize=(6.40,4.80),
-                    dpi=200,
+                    dpi=100,
                     save_fname=fname+'.png',
                     optics=vision.get_optics(),
                     proj='stere',
@@ -175,8 +181,14 @@ def main():
     parser.add_option("--plot-receptors", action='store_true',
                       default=False)
 
+    parser.add_option("--plot-emds", action='store_true',
+                      default=False)
+
     analysis_options.add_common_options( parser )
     (options, args) = parser.parse_args()
+
+    if options.plot_emds:
+        assert options.plot_receptors
 
     if options.obj_only is not None:
         options.obj_only = core_analysis.parse_seq(options.obj_only)
