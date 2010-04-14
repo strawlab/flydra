@@ -622,7 +622,14 @@ class SingleCameraCalibration:
         return result
 
     def get_3D_plane_and_ray(self, x0d, y0d, slope):
-        """(x0d,y0d) are the x,y distorted image coords"""
+        """return a ray and plane defined by a point and a slope at that point
+
+        The 2D distorted point (x0d, y0d) is transfored to a 3D
+        ray. Together with the slope at that point, a 3D plane that
+        passes through the 2D point in the direction of the slope is
+        returned.
+
+        """
         # undistort
         x0u,y0u = self.helper.undistort(x0d,y0d)
         rise=slope
