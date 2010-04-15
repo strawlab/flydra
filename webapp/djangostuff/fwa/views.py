@@ -51,12 +51,6 @@ def is_access_valid(db_name,user):
     else:
         return False
 
-def mustache(fname,context):
-    """helper function to find and render a template"""
-    # abuse django.template to find pystache template
-    source, origin = loader.find_template_source(fname) 
-    return pystache.render( source, context )
-
 @login_required
 def select_db(request):
     # use membership in group "couchdb_DBNAME" to allow access to CouchDB database DBNAME
