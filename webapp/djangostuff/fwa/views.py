@@ -158,11 +158,22 @@ def dataset(request,db_name=None,dataset=None):
         node_dict.update(row.value)
         datanodes.append(node_dict)
 
+    new_datanode_types = [ {'name':'EKF-based 3d position',
+                            'path':get_next_url(db_name=db_name, 
+                                                dataset_name=dataset, 
+                                                datanode_type='EKF 3D position'),
+                            },
+                           ]
+
     t = loader.get_template('dataset.html')
     c = RequestContext(request, {#'dataset':dataset_doc['name'],
                                  'num_data_nodes':intcomma(datanodes_count),
                                  'datanodes':datanodes,
                                  'dataset':dataset_reduction,
+
+                                 'num_new_datanode_types' : len(new_datanode_types),
+                                 'new_datanode_types' : new_datanode_types,
+
                                  } )
     return HttpResponse(t.render(c))
 
@@ -205,6 +216,20 @@ def datanodes_by_property(request,db_name=None,dataset=None,property_name=None,c
     }
 
     t = loader.get_template('datanodes.html')
+    c = RequestContext(request,context)
+    return HttpResponse(t.render(c))
+
+
+@login_required
+def create_datanodes(request,db_name=None,dataset=None,datanode_type=None):
+    dataset_id = 'dataset:'+dataset
+    db = couch_server[db_name]
+
+    context = {
+        'datanode_type':datanode_type,
+        }
+
+    t = loader.get_template('create_datanodes.html')
     c = RequestContext(request,context)
     return HttpResponse(t.render(c))
 
@@ -286,7 +311,12 @@ def document_multiplexer(request,db_name=None,doc_id=None):
             return raw_doc(request,db_name=db_name,doc_id=doc_id)
     
 approot = reverse(select_db)
-def get_next_url(db_name=None,dataset_name=None,datanode_property=None,doc_base=False):
+def get_next_url(db_name=None,
+                 dataset_name=None,
+                 datanode_property=None,
+                 datanode_type=None,
+                 doc_base=False):
+
     if db_name is None:
         assert dataset_name is None
         return approot
@@ -299,7 +329,13 @@ def get_next_url(db_name=None,dataset_name=None,datanode_property=None,doc_base=
         else:
             assert not doc_base
             if datanode_property is None:
-                return approot + db_name + '/' + dataset_name + '/'
+                if datanode_type is not None:
+                    return ( approot + db_name + '/' + dataset_name + 
+                             '/' + 'create_datanodes/' + 
+                             defaultfilters.iriencode(datanode_type) + '/' )
+                else:
+                    return approot + db_name + '/' + dataset_name + '/'
             else:
+                assert datanode_type is None, "only one can be non-None"
                 return approot + db_name + '/' + dataset_name + '/' + 'DataNodes/' + defaultfilters.iriencode(datanode_property) + '/'
 

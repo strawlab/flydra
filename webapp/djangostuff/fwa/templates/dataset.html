@@ -33,7 +33,14 @@ You have {{num_data_nodes}} data node{{num_data_nodes|pluralize}} that can be ex
 
 <h2>Create new data nodes</h2>
 
-To be done...
+You have {{num_new_datanode_types}} data node type{{num_new_datanode_types|pluralize}} that can be created:
+<ul>
+  {% for datanode_type in new_datanode_types %}
+  <li>
+    <a href="{{datanode_type.path}}">{{datanode_type.name}}</a>
+  </li>
+  {% endfor %}
+</ul>
 
 <h2>Schedule data nodes for building</h2>
 
