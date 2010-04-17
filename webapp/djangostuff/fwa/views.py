@@ -136,8 +136,8 @@ def dataset(request,db_name=None,dataset=None):
     for row in datanodes_view:
         properties = []
         for i,property_name in enumerate(row.key[1]):
-            properties.append( {'path':get_next_url(db_name=db_name, 
-                                                    dataset_name=dataset, 
+            properties.append( {'path':get_next_url(db_name=db_name,
+                                                    dataset_name=dataset,
                                                     datanode_property=property_name),
                                 'name':property_name,
                                 'hackspace':' ', # Hack: don't trim our whitespace
@@ -150,8 +150,8 @@ def dataset(request,db_name=None,dataset=None):
 
     atypes = [ {'name':getattr(analysis_types,class_name).name,
                 'short_description':getattr(analysis_types,class_name).short_description,
-                'path':get_next_url(db_name=db_name, 
-                                    dataset_name=dataset, 
+                'path':get_next_url(db_name=db_name,
+                                    dataset_name=dataset,
                                     analysis_type=class_name),
                 } for class_name in analysis_types.class_names ]
 
@@ -301,7 +301,7 @@ def document_multiplexer(request,db_name=None,doc_id=None):
             return datanode(request,db_name=db_name,doc_id=doc_id,warn_no_specific_view=True)
         except NotDataNode,err:
             return raw_doc(request,db_name=db_name,doc_id=doc_id)
-    
+
 approot = reverse(select_db)
 def get_next_url(db_name=None,
                  dataset_name=None,
@@ -322,8 +322,8 @@ def get_next_url(db_name=None,
             assert not doc_base
             if datanode_property is None:
                 if analysis_type is not None:
-                    return ( approot + db_name + '/' + dataset_name + 
-                             '/' + 'apply_analysis_type/' + 
+                    return ( approot + db_name + '/' + dataset_name +
+                             '/' + 'apply_analysis_type/' +
                              defaultfilters.iriencode(analysis_type) + '/' )
                 else:
                     return approot + db_name + '/' + dataset_name + '/'
