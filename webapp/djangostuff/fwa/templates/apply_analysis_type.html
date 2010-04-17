@@ -2,14 +2,17 @@
 
 {% load i18n %}
 
-{% block head_title %}Apply analysis type - {{analysis_type}}{% endblock %}
+{% block head_title %}Apply analysis type - {{name}}{% endblock %}
 
 {% block tab_id %}id="home_tab"{% endblock %}
 
 {% block body %}
 
+<h2>Apply analysis type - {{name}}</h2>
 
-<h2>Apply analysis type - {{analysis_type}}</h2>
+Parent types: {{parent_node_types}}.
+
+<p>
 
 (Not yet implemented.)
 

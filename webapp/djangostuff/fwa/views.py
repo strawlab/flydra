@@ -12,6 +12,8 @@ from couchdb.client import Server
 import localglobal.client
 
 from paginatoe import SimpleCouchPaginator, CouchPaginator
+import analysis_types
+
 import pystache
 import pprint
 
@@ -152,12 +154,12 @@ def dataset(request,db_name=None,dataset=None):
         node_dict.update(row.value)
         datanodes.append(node_dict)
 
-    new_analysis_types = [ {'name':'EKF-based 3d position',
-                            'path':get_next_url(db_name=db_name, 
-                                                dataset_name=dataset, 
-                                                analysis_type='EKF 3D position'),
-                            },
-                           ]
+    atypes = [ {'name':getattr(analysis_types,class_name).name,
+                'short_description':getattr(analysis_types,class_name).short_description,
+                'path':get_next_url(db_name=db_name, 
+                                    dataset_name=dataset, 
+                                    analysis_type=class_name),
+                } for class_name in analysis_types.class_names ]
 
     t = loader.get_template('dataset.html')
     c = RequestContext(request, {#'dataset':dataset_doc['name'],
@@ -165,8 +167,8 @@ def dataset(request,db_name=None,dataset=None):
                                  'datanodes':datanodes,
                                  'dataset':dataset_reduction,
 
-                                 'num_new_analysis_types' : len(new_analysis_types),
-                                 'new_analysis_types' : new_analysis_types,
+                                 'num_analysis_types' : len(atypes),
+                                 'analysis_types' : atypes,
 
                                  } )
     return HttpResponse(t.render(c))
@@ -213,14 +215,16 @@ def datanodes_by_property(request,db_name=None,dataset=None,property_name=None,c
     c = RequestContext(request,context)
     return HttpResponse(t.render(c))
 
-
 @login_required
-def apply_analysis_type(request,db_name=None,dataset=None,analysis_type=None):
+def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
     dataset_id = 'dataset:'+dataset
     db = couch_server[db_name]
 
+    klass = getattr(analysis_types,class_name)
+
     context = {
-        'analysis_type':analysis_type,
+        'name':klass.name,
+        'parent_node_types':klass.parent_node_types,
         }
 
     t = loader.get_template('apply_analysis_type.html')
