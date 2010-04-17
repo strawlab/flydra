@@ -29,12 +29,6 @@ def _connect_localglobal():
     return localglobal.client.Server(host=lghost, port=lgport)
 localglobal_server = _connect_localglobal()
 
-class DatabaseForm(forms.Form):
-    database = forms.CharField()
-
-class DatasetForm(forms.Form):
-    dataset = forms.CharField()
-
 REDIRECT_OVER_SINGLE_OPTIONS=True
 
 # helper for below
