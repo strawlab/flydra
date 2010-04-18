@@ -251,7 +251,6 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
 
     context = {
         'name':klass.name,
-        'parent_node_types':klass.parent_node_types,
         'parent_node_types_json':simplejson.dumps(klass.parent_node_types),
         'dbname_json':simplejson.dumps(db_name),
         }

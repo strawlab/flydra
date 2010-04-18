@@ -14,17 +14,20 @@
 
 <h2>Apply analysis type - {{name}}</h2>
 
-Parent types: {{parent_node_types}}.
-
-<p>
-
-(Not yet implemented.)
+<div id="parent-datanode-selection">
+</div>
 
 <script>
 
-function load_datanodes( dbname, node_type ) {
-    $.getJSON("/analysis/couch-proxy/"+dbname+"/", function(data){
-       alert("Data Loaded: " + data.doc_count + " documents in database" );
+function ads_selector_escape(str) {
+  return str.replace(" ","-");
+}
+
+function load_datanodes( dbname, parent_dom_node, node_type ) {
+    couch_path = dbname+"/";
+    $.getJSON("/analysis/couch-proxy/"+couch_path, function(data){
+       var dom_node = parent_dom_node.find("#"+ads_selector_escape(node_type));
+       dom_node.append( node_type + ": " + data.doc_count + " documents" );
     });
 }
 
@@ -35,8 +38,11 @@ function load_parents() {
     var parent_node_types = {{parent_node_types_json}};
 {% endautoescape %}
 
+    var dom_node = $("#parent-datanode-selection");
+    //dom_node.replaceWith("");
     for (var i in parent_node_types) {
-        nodes = load_datanodes( dbname, parent_node_types[i] );
+        dom_node.append("<div id=\"" + ads_selector_escape(parent_node_types[i]) + "\"></div>");
+        nodes = load_datanodes( dbname, dom_node, parent_node_types[i] );
     }
 }
 $(document).ready(load_parents);
