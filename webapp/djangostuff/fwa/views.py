@@ -6,6 +6,7 @@ from django.core.urlresolvers import reverse
 from django.utils import simplejson
 from django.contrib.humanize.templatetags.humanize import intcomma
 from django.core.paginator import EmptyPage, PageNotAnInteger
+from django import forms
 
 from couchdb.client import Server
 
@@ -168,6 +169,8 @@ def dataset(request,db_name=None,dataset=None):
                                  } )
     return HttpResponse(t.render(c))
 
+
+
 @login_required
 def datanodes_by_property(request,db_name=None,dataset=None,property_name=None,count=50):
     dataset_id = 'dataset:'+dataset
@@ -248,11 +251,42 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
     db = couch_server[db_name]
 
     klass = getattr(analysis_types,class_name)
+    analysis_type = klass()
+
+    error_message = None
+    if request.method == 'POST':
+        # since we dynamically generated the form, we must manually ensure the POST is valid
+
+        verifier = analysis_types.Verifier( db, dataset, analysis_type )
+        try:
+            new_batch_jobs = verifier.validate_new_batch_jobs_request( request.POST )
+
+            error_message = repr(new_batch_jobs)
+
+            ## # new_batch_jobs are valid, insert them and thank user
+            ## #db.append( new_datanode_documents )
+            ## 1/0
+            ## return HttpResponseRedirect('/thanks/') # Redirect after POST
+
+        except analysis_types.InvalidRequest, err:
+            error_message = err.human_description
+
+    # dynamically generate a form to display
+    form = forms.Form()
+    for parent_node_type in analysis_type.parent_node_types:
+        datanodes_view = db.view('analysis/datanodes-by-dataset-and-property',
+                                 startkey=[dataset_id,parent_node_type],
+                                 endkey=[dataset_id,parent_node_type,{}],
+                                 reduce=False)
+        n_docs = len(datanodes_view)
+        form.fields[ parent_node_type ] = forms.ChoiceField(choices=[(row.id,row.id) for row in datanodes_view ],
+                                                            widget=forms.SelectMultiple())
+        analysis_types.add_fields_to_form( form, analysis_type )
 
     context = {
-        'name':klass.name,
-        'parent_node_types_json':simplejson.dumps(klass.parent_node_types),
-        'dbname_json':simplejson.dumps(db_name),
+        'name':analysis_type.name,
+        'form':form,
+        'error_message':error_message,
         }
 
     t = loader.get_template('apply_analysis_type.html')
