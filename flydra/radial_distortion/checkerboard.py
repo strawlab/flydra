@@ -617,6 +617,10 @@ def extract_corners(imnx_use,max_ncorn_per_side=30):
     sz = cv.Size(*ncorn)
 
     flags = 0
+
+    warnings.warn('calling cv.FindChessboardCorners without setting'
+                  'setting chessboard size')
+
     cv.FindChessboardCorners( im_ptr, sz,
                               ctypes.byref(corners[0]),
                               ctypes.byref(corner_count),
