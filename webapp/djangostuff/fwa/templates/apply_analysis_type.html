@@ -12,6 +12,10 @@
 
 {% block body %}
 
+{% if success_message %}
+<div class="success-message">Success : {{success_message}}</div>
+{% endif %}
+
 <h2>Apply analysis type - {{name}}</h2>
 
 {% if error_message %}

@@ -1,8 +1,40 @@
 import collections
+import time, datetime
+
 # --- pure descriptions that could be refactored for other purposes (e.g. dependency diagrams)
 
 class AnalysisType(object):
-    pass
+    def __init__(self,db=None):
+        assert db is not None
+        self.db = db
+        self.choices = {}
+    def convert_parents_to_cmdline_args(self,parents):
+        raise NotImplementedError('Abstract base class')
+    def _get_docs_shortened_parents(self,node_type,parents):
+        docs = []
+        unused_parents = []
+
+        for parent in parents:
+            doc = self.db[parent]
+
+            accept = False
+            if node_type=='2d position':
+                if doc['type']=='h5' and doc['has_2d_position']:
+                    accept=True
+            elif node_type=='calibration':
+                if doc['type']=='h5' and doc['has_calibration']:
+                    accept=True
+                elif doc['type']=='calibration':
+                    accept=True
+            else:
+                raise NotImplementedError('unknown node_type %s'%node_type)
+        
+            if accept:
+                docs.append( (node_type,doc) )
+            else:
+                unused_parents.append(parent)
+
+        return docs, unused_parents
 
 class EKF_based_3D_position( AnalysisType ):
     name = 'EKF-based 3D position'
@@ -10,12 +42,29 @@ class EKF_based_3D_position( AnalysisType ):
     parent_node_types = ['2d position', 'calibration']
     base_cmd = 'flydra_kalmanize'
 
-    def __init__(self):
-        self.choices = {}
+    def __init__(self,*args,**kwargs):
+        super( EKF_based_3D_position, self).__init__(*args,**kwargs)
         self.choices['--dynamic-model'] = [None,
                                            'EKF flydra, units: mm',
                                            'EKF humdra, units: mm',
                                            ]
+
+    def convert_parents_to_cmdline_args(self,parents):
+        short_parents = parents
+        docs = []
+        for pnt in self.parent_node_types:
+            ndocs,short_parents = self._get_docs_shortened_parents(pnt,short_parents)
+            docs.extend(ndocs)
+        cmdline_args = []
+        for (node_type,doc) in docs:
+            if node_type == '2d position':
+                cmdline_args.append( doc['filename'] )
+            elif node_type == 'calibration':
+                cmdline_args.append('--reconstructor=xxx')
+            else:
+                raise ValueError('unknown node_type as parent: %s'%node_type)
+        #return ['unfinished commandline args']
+        return cmdline_args
 
 # --- various django and CouchDB specific stuff ----------------
 from django import forms
@@ -76,10 +125,8 @@ class Verifier(object):
         for pnt in self.analysis_type.parent_node_types:
             del query[pnt]
 
-        cmd = [ self.analysis_type.base_cmd ]
-
-
         # now handle batch params that apply to all documents
+        choices = []
         for choice_name in self.analysis_type.choices:
             posted_value = query.pop(choice_name)
             assert len(posted_value)==1
@@ -90,8 +137,7 @@ class Verifier(object):
                 # use default
                 continue
             assert posted_value in valid_values
-            cmd.append( choice_name )
-            cmd.append( posted_value )
+            choices.append( (choice_name, posted_value) )
 
         # make sure no unhandled request data
         if len(query.keys()):
@@ -99,8 +145,29 @@ class Verifier(object):
                                  (query.keys(),))
 
         for doc in new_batch_jobs:
-            doc['cmd'] = cmd
+            parents = doc['parents']
+            doc['class_name'] = self.analysis_type.__class__.__name__
+            doc['choices'] = choices
 
         return new_batch_jobs
 
 class_names = ['EKF_based_3D_position']
+
+
+def submit_jobs( db, new_batch_jobs, user=None ):
+    #now = datetime.datetime.fromtimestamp( time.time() )
+    now = datetime.datetime.utcnow()
+    nowstr = now.isoformat()
+    docs = []
+    
+    for doc in new_batch_jobs:
+        doc['type'] = 'job'
+        doc['submit_time'] = nowstr
+        doc['state'] = 'created'
+        docs.append(doc)
+    
+    # bulk upload docs
+    db.update(docs)
+
+    hack_error_message = '\nsubmitted %s\n'%repr(docs)
+    return hack_error_message

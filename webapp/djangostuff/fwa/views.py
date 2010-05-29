@@ -251,22 +251,24 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
     db = couch_server[db_name]
 
     klass = getattr(analysis_types,class_name)
-    analysis_type = klass()
+    analysis_type = klass(db=db)
 
     error_message = None
+    success_message = None
     if request.method == 'POST':
         # since we dynamically generated the form, we must manually ensure the POST is valid
 
         verifier = analysis_types.Verifier( db, dataset, analysis_type )
         try:
             new_batch_jobs = verifier.validate_new_batch_jobs_request( request.POST )
-
-            error_message = repr(new_batch_jobs)
+            
+            success_message = analysis_types.submit_jobs(db,new_batch_jobs,
+                                                         user=str(request.user))
 
             ## # new_batch_jobs are valid, insert them and thank user
             ## #db.append( new_datanode_documents )
             ## 1/0
-            ## return HttpResponseRedirect('/thanks/') # Redirect after POST
+            #return HttpResponseRedirect('/thanks/') # Redirect after POST
 
         except analysis_types.InvalidRequest, err:
             error_message = err.human_description
@@ -287,6 +289,7 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
         'name':analysis_type.name,
         'form':form,
         'error_message':error_message,
+        'success_message':success_message,
         }
 
     t = loader.get_template('apply_analysis_type.html')
