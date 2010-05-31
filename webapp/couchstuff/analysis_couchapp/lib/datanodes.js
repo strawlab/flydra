@@ -2,6 +2,7 @@ var parse_doc = function(doc) {
     
     var success = true;
     var props = [];
+    var stat_tags = [];
     var value;
 
     switch (doc.type) {
@@ -23,12 +24,18 @@ var parse_doc = function(doc) {
             props = props.concat( "calibration" );
         }
 
+	if (doc.filename === undefined) {
+	    stat_tags = stat_tags.concat( 'unbuilt' );
+	} else {
+	    stat_tags = stat_tags.concat( 'built' );
+	}
+
         value = { properties : props,
                   start_time : doc.start_time,
                   stop_time  : doc.stop_time,
                   dataset    : doc.dataset,
                   sources    : [doc._id],
-		  status_tags: ["built"],
+		  status_tags: stat_tags,
                 }
         break;
     case "calibration":
