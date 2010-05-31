@@ -1,5 +1,6 @@
 import collections
 import time, datetime
+import datanodes
 
 # --- pure descriptions that could be refactored for other purposes (e.g. dependency diagrams)
 
@@ -8,14 +9,14 @@ class AnalysisType(object):
         assert db is not None
         self.db = db
         self.choices = {}
-    def convert_parents_to_cmdline_args(self,parents):
-        raise NotImplementedError('Abstract base class')
-    def _get_docs_shortened_parents(self,node_type,parents):
+#     def convert_sources_to_cmdline_args(self,sources):
+#         raise NotImplementedError('Abstract base class')
+    def _get_docs_shortened_sources(self,node_type,sources):
         docs = []
-        unused_parents = []
+        unused_sources = []
 
-        for parent in parents:
-            doc = self.db[parent]
+        for source in sources:
+            doc = self.db[source]
 
             accept = False
             if node_type=='2d position':
@@ -32,14 +33,14 @@ class AnalysisType(object):
             if accept:
                 docs.append( (node_type,doc) )
             else:
-                unused_parents.append(parent)
+                unused_sources.append(source)
 
-        return docs, unused_parents
+        return docs, unused_sources
 
 class EKF_based_3D_position( AnalysisType ):
     name = 'EKF-based 3D position'
     short_description = 'convert 2D data and calibration into 3D position data'
-    parent_node_types = ['2d position', 'calibration']
+    source_node_types = ['2d position', 'calibration']
     base_cmd = 'flydra_kalmanize'
 
     def __init__(self,*args,**kwargs):
@@ -49,22 +50,45 @@ class EKF_based_3D_position( AnalysisType ):
                                            'EKF humdra, units: mm',
                                            ]
 
-    def convert_parents_to_cmdline_args(self,parents):
-        short_parents = parents
-        docs = []
-        for pnt in self.parent_node_types:
-            ndocs,short_parents = self._get_docs_shortened_parents(pnt,short_parents)
-            docs.extend(ndocs)
-        cmdline_args = []
-        for (node_type,doc) in docs:
-            if node_type == '2d position':
-                cmdline_args.append( doc['filename'] )
-            elif node_type == 'calibration':
-                cmdline_args.append('--reconstructor=xxx')
-            else:
-                raise ValueError('unknown node_type as parent: %s'%node_type)
-        #return ['unfinished commandline args']
-        return cmdline_args
+    def get_datanode_doc_properties( self, sge_job_doc ):
+        source_list = sge_job_doc['sources']
+        props = {
+            'type':'h5',
+            'has_2d_orientation':False,
+            'has_2d_position':False,
+            'has_3d_orientation':False,
+            'has_3d_position':True,
+            'has_calibration':True,
+            'source':'computed from sources %s'%source_list,
+            'comments':'',
+            }
+        return props
+
+#     def convert_sources_to_cmdline_args(self,sources):
+#         short_sources = sources
+#         docs = []
+#         for snt in self.source_node_types:
+#             ndocs,short_sources = self._get_docs_shortened_sources(snt,short_sources)
+#             docs.extend(ndocs)
+#         cmdline_args = []
+#         for (node_type,doc) in docs:
+#             if node_type == '2d position':
+#                 cmdline_args.append( doc['filename'] )
+#             elif node_type == 'calibration':
+#                 cmdline_args.append('--reconstructor=xxx')
+#             else:
+#                 raise ValueError('unknown node_type as source: %s'%node_type)
+#         #return ['unfinished commandline args']
+#         return cmdline_args
+
+def analysis_type_factory( db, class_name ):
+    klass = globals()[class_name]
+    atype = klass(db)
+    return atype
+
+#def get_datanode_doc_properties( sge_job_doc ):
+
+    
 
 # --- various django and CouchDB specific stuff ----------------
 from django import forms
@@ -90,7 +114,7 @@ class Verifier(object):
     """helper class to verify arguments from POST request"""
     def __init__(self, db, dataset, analysis_type):
         self.db = db
-        self.dataset = dataset
+        self.dataset = 'dataset:'+dataset
         assert isinstance(analysis_type,AnalysisType)
         self.analysis_type = analysis_type
 
@@ -99,31 +123,33 @@ class Verifier(object):
         for key in orig_query:
             query[key] = orig_query.getlist(key)
 
-        n_values = dict([(pnt,len(query[pnt])) for pnt in self.analysis_type.parent_node_types])
+        n_values = dict([(snt,len(query[snt])) for snt in self.analysis_type.source_node_types])
         n_new_docs = max( n_values.itervalues() )
-        for pnt, n in n_values.iteritems():
-            # check there are all N or 1 documents for each parent node type
+        for snt, n in n_values.iteritems():
+            # check there are all N or 1 documents for each source node type
             if not ((n == n_new_docs) or (n == 1)):
-                raise InvalidRequest('For parent datanode type "%s", invalid '
-                                     'number of datanodes specified.'%pnt)
+                raise InvalidRequest('For source datanode type "%s", invalid '
+                                     'number of datanodes specified.'%snt)
 
         # XXX TODO auto-sort corresponding documents??
 
         new_batch_jobs = []
         for i in range(n_new_docs):
-            parents = []
-            for pnt in self.analysis_type.parent_node_types:
-                if n_values[pnt] == 1:
-                    parents.append( query[pnt][0] ) # only one, always use it
+            sources = []
+            for snt in self.analysis_type.source_node_types:
+                if n_values[snt] == 1:
+                    sources.append( query[snt][0] ) # only one, always use it
                 else:
-                    parents.append( query[pnt][i] )
+                    sources.append( query[snt][i] )
 
-            doc = { 'parents':parents }
+            doc = { 'sources':sources,
+                    'junk' : True, # XXX delete these docs when ready for production
+                    }
             new_batch_jobs.append( doc )
 
-        # finished with parents
-        for pnt in self.analysis_type.parent_node_types:
-            del query[pnt]
+        # finished with sources
+        for snt in self.analysis_type.source_node_types:
+            del query[snt]
 
         # now handle batch params that apply to all documents
         choices = []
@@ -145,29 +171,79 @@ class Verifier(object):
                                  (query.keys(),))
 
         for doc in new_batch_jobs:
-            parents = doc['parents']
             doc['class_name'] = self.analysis_type.__class__.__name__
             doc['choices'] = choices
+            doc['dataset'] = self.dataset
 
         return new_batch_jobs
 
 class_names = ['EKF_based_3D_position']
 
+def make_datanode_doc_for_sge_job( db, sge_job_doc ):
+    assert sge_job_doc['type'] == 'job'
+    
+    start = None
+    stop = None
+    for source in sge_job_doc['sources']:
+        sstart, sstop = datanodes.get_start_stop_times( db, source )
+        # find intersection of all times
+        if start is None or sstart > start:
+            start = sstart
+        if stop is None or sstop < stop:
+            stop = sstop
+
+    datanode_doc = {
+        #'type' : 'datanode',  # let analysis_type fill this in
+        'junk' : True, # XXX delete these docs when ready for production
+        # 'sources' : sge_job_doc['sources'], # let analysis_type fill this in
+        #'status_tags': ["unbuilt"], # let analysis_type fill this in
+        'dataset' : sge_job_doc['dataset'],
+        }
+
+    if start is not None:
+        datanode_doc['start_time'] = start.isoformat()
+    if stop is not None:
+        datanode_doc['stop_time'] = stop.isoformat()
+
+    if 1:
+        # set filenames, properties
+        atype = analysis_type_factory( db, sge_job_doc['class_name'] )
+        specific_properties = atype.get_datanode_doc_properties(sge_job_doc)
+        datanode_doc.update(specific_properties)
+    return datanode_doc
 
 def submit_jobs( db, new_batch_jobs, user=None ):
     #now = datetime.datetime.fromtimestamp( time.time() )
     now = datetime.datetime.utcnow()
     nowstr = now.isoformat()
-    docs = []
+    sge_job_docs = []
     
-    for doc in new_batch_jobs:
-        doc['type'] = 'job'
-        doc['submit_time'] = nowstr
-        doc['state'] = 'created'
-        docs.append(doc)
-    
-    # bulk upload docs
-    db.update(docs)
+    for sge_job_doc in new_batch_jobs:
+        sge_job_doc['type'] = 'job'
+        sge_job_doc['submit_time'] = nowstr
+        sge_job_doc['state'] = 'created'
+        sge_job_docs.append(sge_job_doc)
 
-    hack_error_message = '\nsubmitted %s\n'%repr(docs)
+    datanode_docs = [ make_datanode_doc_for_sge_job( db, doc ) for doc in sge_job_docs ]
+    
+    # upload datanode documents
+    datanode_results = db.update(datanode_docs)
+
+    try:
+        assert len(datanode_results) == len(sge_job_docs)
+        for ((upload_ok, upload_id, upload_rev), seg_job_doc) in zip(datanode_results,sge_job_docs):
+            assert upload_ok
+            sge_job_doc['datanode_id'] = upload_id
+        
+        # upload SGE job documents
+        results = db.update( sge_job_docs )
+    except:
+        
+        # on error, erase datanode documents
+        for (upload_ok, upload_id, upload_rev) in datanode_results:
+            print 'XXX should delete id %s'%upload_id
+
+        raise
+
+    hack_error_message = '\nsubmitted %s\n'%repr(sge_job_docs)
     return hack_error_message

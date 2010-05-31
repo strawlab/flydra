@@ -275,13 +275,13 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
 
     # dynamically generate a form to display
     form = forms.Form()
-    for parent_node_type in analysis_type.parent_node_types:
+    for source_node_type in analysis_type.source_node_types:
         datanodes_view = db.view('analysis/datanodes-by-dataset-and-property',
-                                 startkey=[dataset_id,parent_node_type],
-                                 endkey=[dataset_id,parent_node_type,{}],
+                                 startkey=[dataset_id,source_node_type],
+                                 endkey=[dataset_id,source_node_type,{}],
                                  reduce=False)
         n_docs = len(datanodes_view)
-        form.fields[ parent_node_type ] = forms.ChoiceField(choices=[(row.id,row.id) for row in datanodes_view ],
+        form.fields[ source_node_type ] = forms.ChoiceField(choices=[(row.id,row.id) for row in datanodes_view ],
                                                             widget=forms.SelectMultiple())
         analysis_types.add_fields_to_form( form, analysis_type )
 
