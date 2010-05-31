@@ -143,8 +143,8 @@ setup(name='flydra',
     'flydra_checkerboard = flydra.radial_distortion.checkerboard:main',
 
 # SGE/flydra.astraw.com commands
-    'flydra_sge_download_jobs = webapp.sge_utils.sge_download_jobs:main',
-    'flydra_sge_run_job = webapp.sge_utils.sge_run_job:main',
+    'flydra_sge_download_jobs = flydra.sge_utils.sge_download_jobs:main',
+    'flydra_sge_run_job = flydra.sge_utils.sge_run_job:main',
 
 # testing
     'flydra_test_commands = flydra.test_commands:main',
