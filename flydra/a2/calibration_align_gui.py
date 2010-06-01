@@ -183,6 +183,10 @@ def main():
                       metavar="RADIUS")
 
     parser.add_option("--obj-only", type="string")
+    
+    parser.add_option("--obj-filelist", type="string",
+                      help="use object ids from list in text file",
+                      )
 
     (options, args) = parser.parse_args()
     if len(args)>1:
@@ -220,6 +224,9 @@ def main():
             fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
         except xml_stimulus.WrongXMLTypeError:
             pass
+            
+            
+            
         else:
             include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp(
                 timestamp_string=file_timestamp )
@@ -238,7 +245,21 @@ def main():
     y = []
     z = []
     speed = []
+    
+    if options.obj_filelist is not None:
+        obj_filelist=options.obj_filelist
+    else:
+        obj_filelist=None
+    
+    if obj_filelist is not None:
+        obj_only = 1
+    
     if obj_only is not None:
+        if obj_filelist is not None:
+            data = np.loadtxt(obj_filelist,delimiter=',')
+            obj_only = np.array(data[:,0], dtype='int') 
+            print obj_only
+    
         use_obj_ids = numpy.array(obj_only)
 
     for obj_id_enum,obj_id in enumerate(use_obj_ids):
@@ -327,7 +348,7 @@ def main():
     e.add_module(v)
 
     if stim_xml is not None:
-        if 1:
+        if 0:
             stim_xml.draw_in_mayavi_scene(e)
         else:
             actors = stim_xml.get_tvtk_actors()
