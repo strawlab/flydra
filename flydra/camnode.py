@@ -551,6 +551,7 @@ class ProcessCamClass(object):
         return points
 
     def mainloop(self):
+
         disable_ifi_warning = self.options.disable_ifi_warning
         globals = self.globals
 
@@ -567,6 +568,7 @@ class ProcessCamClass(object):
         take_background_isSet = globals['take_background'].isSet
         take_background_clear = globals['take_background'].clear
         collecting_background_isSet = globals['collecting_background'].isSet
+        
 
         max_frame_size = FastImage.Size(self.max_width, self.max_height)
 
@@ -686,6 +688,7 @@ class ProcessCamClass(object):
         initial_take_bg_state = None
 
         while 1:
+
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
                 if chainbuf.quit_now:
                     break
@@ -1233,7 +1236,7 @@ class SaveSmallData(object):
                                          chainbuf.updated_running_sumsqf_image,
                                          chainbuf.cam_received_time)) # these were copied in process thread
                     if self._ufmf is None:
-                        filename_base = os.path.expanduser(filename_base)
+                        filename_base = os.path.abspath(os.path.expanduser(filename_base))
                         dirname = os.path.split(filename_base)[0]
 
                         with self._mkdir_lock:
