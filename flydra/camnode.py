@@ -321,6 +321,11 @@ class ProcessCamClass(object):
                  diff_threshold_shared=None,
                  clear_threshold_shared=None,
                  n_sigma_shared=None,
+                 n_erode_absdiff_shared=None,
+                 color_range_1_shared=None,
+                 color_range_2_shared=None,
+                 color_range_3_shared=None,
+                 sat_thresh_shared=None,
                  red_only_shared=None,
                  framerate = None,
                  lbrt=None,
@@ -349,7 +354,13 @@ class ProcessCamClass(object):
         self.diff_threshold_shared = diff_threshold_shared
         self.clear_threshold_shared = clear_threshold_shared
         self.n_sigma_shared = n_sigma_shared
+        self.n_erode_absdiff_shared = n_erode_absdiff_shared
         self.red_only_shared = red_only_shared
+        
+        self.color_range_1_shared = color_range_1_shared
+        self.color_range_2_shared = color_range_2_shared
+        self.color_range_3_shared = color_range_3_shared
+        self.sat_thresh_shared = sat_thresh_shared
 
         self.new_roi = threading.Event()
         self.new_roi_data = None
@@ -682,11 +693,24 @@ class ProcessCamClass(object):
 
                 hw_roi_frame = chainbuf.get_buf()
                 cam_received_time = chainbuf.cam_received_time
+                
                 if self.red_only_shared.get_nowait():
-                    camnode_colors.replace_with_red_image( hw_roi_frame,
-                                                           chainbuf.image_coding,
-                                                           #camnode_colors.RED_CHANNEL)
-                                                           camnode_colors.RED_COLOR)
+                    color_range_1 = self.color_range_1_shared.get_nowait()
+                    color_range_2 = self.color_range_2_shared.get_nowait()
+                    color_range_3 = self.color_range_3_shared.get_nowait()
+
+                    if color_range_1 < color_range_2:
+                        
+                        camnode_colors.replace_with_red_image( hw_roi_frame,
+                                                               chainbuf.image_coding,
+                                                               #camnode_colors.RED_CHANNEL)
+                                                               camnode_colors.RED_COLOR, 
+                                                               color_range_1,
+                                                               color_range_2,
+                                                               color_range_3,
+                                                               self.sat_thresh_shared.get_nowait())
+                    else:
+                        print 'ERROR: color_range_2 >= color_range_1 -- skipping'
 
                 # get best guess as to when image was taken
                 timestamp=chainbuf.timestamp
@@ -716,12 +740,14 @@ class ProcessCamClass(object):
                 old_fn = framenumber
 
                 work_start_time = time.time()
+                #print 'erode value', self.n_erode_absdiff_shared.get_nowait()
                 xpoints = self.realtime_analyzer.do_work(hw_roi_frame,
                                                          timestamp, framenumber, use_roi2,
                                                          use_cmp_isSet(),
                                                          #max_duration_sec=0.010, # maximum 10 msec in here
                                                          max_duration_sec=self.shortest_IFI-0.0005, # give .5 msec for other processing
                                                          return_debug_values=1,
+                                                         n_erode_absdiff=self.n_erode_absdiff_shared.get_nowait(),
                                                          )
                 ## if len(xpoints)>=self.max_num_points:
                 ##     msg = 'Warning: cannot save acquire points this frame because maximum number already acheived'
@@ -2107,6 +2133,26 @@ class AppState(object):
             n_sigma_shared = SharedValue()
             n_sigma_shared.set(options.n_sigma)
             scalar_control_info['n_sigma'] = n_sigma_shared.get_nowait()
+            
+            n_erode_absdiff_shared = SharedValue()
+            n_erode_absdiff_shared.set(options.n_erode_absdiff)
+            scalar_control_info['n_erode_absdiff'] = n_erode_absdiff_shared.get_nowait()
+            
+            color_range_1_shared = SharedValue()
+            color_range_1_shared.set(options.color_range_1)
+            scalar_control_info['color_range_1'] = color_range_1_shared.get_nowait()
+            
+            color_range_2_shared = SharedValue()
+            color_range_2_shared.set(options.color_range_2)
+            scalar_control_info['color_range_2'] = color_range_2_shared.get_nowait()
+            
+            color_range_3_shared = SharedValue()
+            color_range_3_shared.set(options.color_range_3)
+            scalar_control_info['color_range_3'] = color_range_3_shared.get_nowait()
+            
+            sat_thresh_shared = SharedValue()
+            sat_thresh_shared.set(options.sat_thresh)
+            scalar_control_info['sat_thresh'] = sat_thresh_shared.get_nowait()
 
             red_only_shared = SharedValue()
             red_only_shared.set(int(options.red_only))
@@ -2169,6 +2215,11 @@ class AppState(object):
                         diff_threshold_shared=diff_threshold_shared,
                         clear_threshold_shared=clear_threshold_shared,
                         n_sigma_shared=n_sigma_shared,
+                        n_erode_absdiff_shared=n_erode_absdiff_shared,
+                        color_range_1_shared=color_range_1_shared,
+                        color_range_2_shared=color_range_2_shared,
+                        color_range_3_shared=color_range_3_shared,
+                        sat_thresh_shared=sat_thresh_shared,
                         red_only_shared=red_only_shared,
                         framerate=None,
                         lbrt=lbrt,
@@ -2412,9 +2463,27 @@ class AppState(object):
                     elif property_name == 'n_sigma':
                         print 'setting n_sigma',value
                         cam_processor.n_sigma_shared.set(value)
+                    elif property_name == 'n_erode_absdiff':
+                        print 'setting n_erode_absdiff',value
+                        cam_processor.n_erode_absdiff_shared.set(value)
                     elif property_name == 'red_only':
                         print 'setting red_only',value
                         cam_processor.red_only.set(value)
+
+                        
+                    elif property_name == 'color_range_1':
+                        print 'setting color_range_1',value
+                        cam_processor.color_range_1_shared.set(value)
+                    elif property_name == 'color_range_2':
+                        print 'setting color_range_2',value
+                        cam_processor.color_range_2_shared.set(value)
+                    elif property_name == 'color_range_3':
+                        print 'setting color_range_3',value
+                        cam_processor.color_range_3_shared.set(value)
+                    elif property_name == 'sat_thresh':
+                        print 'setting sat_thresh',value
+                        cam_processor.sat_thresh_shared.set(value)
+                        
                     elif property_name == 'diff_threshold':
                         cam_processor.diff_threshold_shared.set(value)
                     elif property_name == 'clear_threshold':
@@ -2607,6 +2676,11 @@ def get_app_defaults():
                     # these are the most important 2D tracking parameters:
                     diff_threshold = 5,
                     n_sigma=7.0,
+                    n_erode_absdiff=0,
+                    color_range_1 = 0,
+                    color_range_2 = 150,
+                    color_range_3 = 255,
+                    sat_thresh = 100,
                     red_only=0,
                     clear_threshold = 0.3,
 
