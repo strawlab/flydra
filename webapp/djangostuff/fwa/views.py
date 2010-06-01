@@ -13,7 +13,8 @@ from couchdb.client import Server
 import localglobal.client
 
 from paginatoe import SimpleCouchPaginator, CouchPaginator
-import analysis_types
+import flydra.a3.analysis_types
+import analysis_types_fwa
 
 import pystache
 import pprint
@@ -150,12 +151,12 @@ def dataset(request,db_name=None,dataset=None):
         node_dict.update(row.value)
         datanodes.append(node_dict)
 
-    atypes = [ {'name':getattr(analysis_types,class_name).name,
-                'short_description':getattr(analysis_types,class_name).short_description,
+    atypes = [ {'name':getattr(flydra.a3.analysis_types,class_name).name,
+                'short_description':getattr(flydra.a3.analysis_types,class_name).short_description,
                 'path':get_next_url(db_name=db_name,
                                     dataset_name=dataset,
                                     analysis_type=class_name),
-                } for class_name in analysis_types.class_names ]
+                } for class_name in flydra.a3.analysis_types.class_names ]
 
     t = loader.get_template('dataset.html')
     c = RequestContext(request, {#'dataset':dataset_doc['name'],
@@ -250,7 +251,7 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
     dataset_id = 'dataset:'+dataset
     db = couch_server[db_name]
 
-    klass = getattr(analysis_types,class_name)
+    klass = getattr(flydra.a3.analysis_types,class_name)
     analysis_type = klass(db=db)
 
     error_message = None
@@ -258,19 +259,19 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
     if request.method == 'POST':
         # since we dynamically generated the form, we must manually ensure the POST is valid
 
-        verifier = analysis_types.Verifier( db, dataset, analysis_type )
+        verifier = analysis_types_fwa.Verifier( db, dataset, analysis_type )
         try:
             new_batch_jobs = verifier.validate_new_batch_jobs_request( request.POST )
             
-            success_message = analysis_types.submit_jobs(db,new_batch_jobs,
-                                                         user=str(request.user))
+            success_message = analysis_types_fwa.submit_jobs(db,new_batch_jobs,
+                                                             settings.FWA_STARCLUSTER_CONFIG_FNAME )
 
             ## # new_batch_jobs are valid, insert them and thank user
             ## #db.append( new_datanode_documents )
             ## 1/0
             #return HttpResponseRedirect('/thanks/') # Redirect after POST
 
-        except analysis_types.InvalidRequest, err:
+        except analysis_types_fwa.InvalidRequest, err:
             error_message = err.human_description
 
     # dynamically generate a form to display
@@ -283,7 +284,7 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
         n_docs = len(datanodes_view)
         form.fields[ source_node_type ] = forms.ChoiceField(choices=[(row.id,row.id) for row in datanodes_view ],
                                                             widget=forms.SelectMultiple())
-        analysis_types.add_fields_to_form( form, analysis_type )
+        analysis_types_fwa.add_fields_to_form( form, analysis_type )
 
     context = {
         'name':analysis_type.name,
