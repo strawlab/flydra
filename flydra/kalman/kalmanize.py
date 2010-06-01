@@ -873,6 +873,8 @@ This command will exit with a non-zero exit code if there are sync errors.
               )
 
 def main():
+    print 'sys.argv',sys.argv
+
     usage = '%prog FILE [options]'
 
     parser = OptionParser(usage)
@@ -971,6 +973,7 @@ def main():
         sys.exit(1)
 
     if len(args)<1:
+        print >> sys.stderr, ("no argument interpreted as FILE supplied")
         parser.print_help()
         sys.exit(1)
 

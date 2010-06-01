@@ -6,6 +6,7 @@ import time, datetime
 import datanodes
 
 from flydra.a3.analysis_types import *
+import flydra.sge_utils.states
 
 # --- various django and CouchDB specific stuff ----------------
 
@@ -135,7 +136,7 @@ def submit_jobs( db, new_batch_jobs, starcluster_config_fname ):
     for sge_job_doc in new_batch_jobs:
         sge_job_doc['type'] = 'job'
         sge_job_doc['submit_time'] = nowstr
-        sge_job_doc['state'] = 'created'
+        sge_job_doc['state'] = flydra.sge_utils.states.CREATED
         sge_job_docs.append(sge_job_doc)
 
     datanode_docs = [ make_datanode_doc_for_sge_job( db, doc ) for doc in sge_job_docs ]
