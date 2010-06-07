@@ -8,6 +8,7 @@ from django.contrib.humanize.templatetags.humanize import intcomma
 from django.core.paginator import EmptyPage, PageNotAnInteger
 from django import forms
 
+import couchdb.http
 from couchdb.client import Server
 
 import localglobal.client
@@ -370,7 +371,10 @@ def h5_doc(request,db_name=None,doc_id=None):
 @login_required
 def document_multiplexer(request,db_name=None,doc_id=None):
     db = couch_server[db_name]
-    doc = db[doc_id]
+    try:
+        doc = db[doc_id]
+    except couchdb.http.ResourceNotFound, err:
+        raise Http404("In database '%s', there is no document '%s'." % (db_name,doc_id))
     if doc['type']=='datanode':
         return datanode(request,db_name=db_name,doc_id=doc_id)
     elif doc['type']=='h5':
