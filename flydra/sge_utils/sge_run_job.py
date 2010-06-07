@@ -1,9 +1,11 @@
-import sys, os, shutil, subprocess
+import sys, os, shutil, subprocess, time
+import pytz, datetime
 from couchdb.client import Server
 from flydra.a3.analysis_types import analysis_type_factory
 import config
 from optparse import OptionParser
 import flydra.sge_utils.states
+import flydra.version
 
 def run_job(couch_url, db_name, doc_id, keep=False):
     '''called by SGE process for specific work job'''
@@ -50,7 +52,9 @@ def run_job(couch_url, db_name, doc_id, keep=False):
         sys.stdout.flush()
 
         cmd = ' '.join(cmd) # XXX why is this needed?
+        compute_start = pytz.utc.localize( datetime.datetime.utcnow() ).isoformat()
         subprocess.check_call(cmd,cwd=tmp_dirname,shell=True)
+        compute_stop = pytz.utc.localize( datetime.datetime.utcnow() ).isoformat()
         final_files = os.listdir(tmp_dirname)
 
         new_files = list(set(final_files) - set(orig_files))
@@ -71,7 +75,11 @@ def run_job(couch_url, db_name, doc_id, keep=False):
         # update datanode CouchDB document
         # update job CouchDB document
         datanode_doc.update( datanode_doc_custom )
-        datanode_doc['comments'] = 'command: %s'%repr(cmd)
+        datanode_doc.update( {'comments':'command: %s'%repr(cmd),
+                              'compute_start':compute_start,
+                              'compute_stop':compute_stop,
+                              'flydra_version':flydra.version.__version__,
+                              })
         status_tags = datanode_doc.get('status_tags',None)
         if status_tags is not None:
             status_tags.remove('unbuilt')
