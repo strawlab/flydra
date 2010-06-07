@@ -2,7 +2,7 @@ from django.conf import settings
 from django import forms
 
 import collections
-import time, datetime
+import time, datetime, pytz
 import datanodes
 
 from flydra.a3.analysis_types import *
@@ -154,9 +154,7 @@ def make_datanode_doc_for_sge_job( db, sge_job_doc ):
     return datanode_doc
 
 def upload_job_docs_to_couchdb( db, new_batch_jobs, starcluster_config_fname ):
-    #now = datetime.datetime.fromtimestamp( time.time() )
-    now = datetime.datetime.utcnow()
-    nowstr = now.isoformat()
+    nowstr = pytz.utc.localize( datetime.datetime.utcnow() ).isoformat()
     sge_job_docs = []
     
     for sge_job_doc in new_batch_jobs:
