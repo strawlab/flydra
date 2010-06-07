@@ -115,7 +115,8 @@ class EKF_based_3D_position( AnalysisType ):
         super( EKF_based_3D_position, self).__init__(*args,**kwargs)
         self.choices['--dynamic-model'] = [None,
                                            "'EKF flydra, units: mm'",
-                                           "'EKF humdra, units: mm'",
+                                           "'EKF hbird, units: mm'",
+                                           "'EKF hydra, units: mm'",
                                            ]
 
     def get_datanode_doc_properties( self, sge_job_doc ):
