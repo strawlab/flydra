@@ -6,6 +6,7 @@ from optparse import OptionParser
 import flydra.sge_utils.states
 
 def run_job(couch_url, db_name, doc_id, keep=False):
+    '''called by SGE process for specific work job'''
 
     # connect to CouchDB server
     couch_server = Server(couch_url)
@@ -13,8 +14,15 @@ def run_job(couch_url, db_name, doc_id, keep=False):
 
     # get job info
     job_doc = db[doc_id]
+    #if job_doc['state'] != flydra.sge_utils.states.SUBMITTED:
+    #    raise RuntimeError('will not run SGE job unless state is SUBMITTED')
+
     atype = analysis_type_factory( db, job_doc['class_name'] )
+
+    datanode_doc = db[job_doc['datanode_id']]
+
     print job_doc
+    print datanode_doc
     print
 
     # create job-specific directory in local instance store
@@ -35,10 +43,12 @@ def run_job(couch_url, db_name, doc_id, keep=False):
         orig_files = os.listdir(tmp_dirname)
 
         # run job in local instance store
-        cmd = [atype.base_cmd]
+        cmd = ['~/PY/bin/'+atype.base_cmd] # XXX use virtualenv in ~/PY
         cmd.extend( atype.convert_sources_to_cmdline_args(job_doc,source_info) )
         print ' '.join(cmd)
         print
+        sys.stdout.flush()
+
         cmd = ' '.join(cmd) # XXX why is this needed?
         subprocess.check_call(cmd,cwd=tmp_dirname,shell=True)
         final_files = os.listdir(tmp_dirname)
@@ -47,16 +57,22 @@ def run_job(couch_url, db_name, doc_id, keep=False):
         print 'new_files',new_files
         print
         # copy known result files to EBS
-        copied_files = atype.copy_outputs( job_doc, tmp_dirname )
+        copied_files, datanode_doc_custom = atype.copy_outputs( job_doc, tmp_dirname, '/datasink/astraw' ) # XXX hardcoded output dir
+        print 'copied_files',copied_files
+        print
 
-        lost_files = list(set(final_files) - set(orig_files) - set(copied_files))
+        lost_files = list((set(final_files) - set(orig_files)) - set(copied_files))
         print 'lost_files',lost_files
         print
 
-        success = True
+        # update datanode CouchDB document
+        # update job CouchDB document
+        datanode_doc.update( datanode_doc_custom )
+        datanode_doc['comments'] = 'command: %s'%repr(cmd)
+        job_doc['state'] = flydra.sge_utils.states.COMPLETE
+        db.update( [ datanode_doc, job_doc ] )
 
-        # XXX update datanode CouchDB document
-        # XXX remove job CouchDB document
+        success = True
 
     finally:
         if not keep:

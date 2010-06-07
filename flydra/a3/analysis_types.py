@@ -1,9 +1,20 @@
 import collections
-import time, datetime, os
+import time, datetime, os, glob, shutil, stat
 import subprocess
+import hashlib
 import datanodes
 import warnings
 import flydra.sge_utils.config as config
+
+def do_sha1sum(fname):
+    fd = open(fname,mode='r')
+    m = hashlib.sha1()
+    while 1:
+        buf = fd.read(1024*1024) # read 1 MB
+        m.update(buf)
+        if len(buf)==0:
+            break
+    return m.hexdigest()
 
 # --- pure descriptions that could be refactored for other purposes (e.g. dependency diagrams)
 
@@ -127,6 +138,30 @@ class EKF_based_3D_position( AnalysisType ):
             else:
                 raise ValueError('unknown node_type as source: %s'%node_type)
         return cmdline_args
+
+    def copy_outputs( self, sge_job_doc, tmp_dirname, save_dir_base ):
+        '''copy known outputs from dirname'''
+        copy_files = glob.glob(os.path.join(tmp_dirname,'*.kalmanized.h5'))
+        assert len(copy_files)==1
+        fname = copy_files[0]
+
+        copy_files = [f.replace(tmp_dirname+'/','') for f in copy_files]
+
+        outdir = os.path.join( save_dir_base, sge_job_doc['datanode_id'] )
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+
+        shutil.copy2( fname, outdir )
+
+        fname_only = os.path.split( fname )[-1]
+        filesize = os.stat(fname)[stat.ST_SIZE]
+        sha1sum = do_sha1sum(fname)
+
+        datanode_doc_custom = {'filename':fname_only,
+                               'filesize':filesize,
+                               'sha1sum':sha1sum,
+                               }
+        return copy_files, datanode_doc_custom
 
 def analysis_type_factory( db, class_name ):
     klass = globals()[class_name]
