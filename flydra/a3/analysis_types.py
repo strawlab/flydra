@@ -95,6 +95,16 @@ class AnalysisType(object):
         warnings.warn('copying outputs not implemented')
         return copied_files
 
+    def get_cmdline_args_from_choices(self, sge_job_doc, source_info ):
+        choices = sge_job_doc['choices']
+        cmdline_args = []
+        for choice in choices:
+            assert len(choice)==2
+            if choice[1]==None:
+                continue
+            cmdline_args.append( choice[0] + '=' + choice[1] )
+        return cmdline_args
+
 class EKF_based_3D_position( AnalysisType ):
     name = 'EKF-based 3D position'
     short_description = 'convert 2D data and calibration into 3D position data'
@@ -121,13 +131,6 @@ class EKF_based_3D_position( AnalysisType ):
             'comments':'',
             }
         return props
-
-    def get_cmdline_args_from_choices(self, sge_job_doc, source_info ):
-        choices = sge_job_doc['choices']
-        cmdline_args = []
-        for choice in choices:
-            cmdline_args.extend( choice )
-        return cmdline_args
 
     def convert_sources_to_cmdline_args(self, sge_job_doc, source_info ):
         sources = sge_job_doc['sources']
