@@ -247,6 +247,16 @@ def couch_proxy(orig_request,couch_path=None):
     return result
 
 @login_required
+def submit_SGE_jobs(request,db_name=None,dataset=None):
+    dataset_id = 'dataset:'+dataset
+    db = couch_server[db_name]
+
+    analysis_types_fwa.insert_jobs_into_sge(db,
+                                            settings.FWA_STARCLUSTER_CONFIG_FNAME )
+    url = get_next_url(db_name=db_name,dataset_name=dataset)
+    return HttpResponseRedirect(url) # Redirect after POST
+
+@login_required
 def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
     dataset_id = 'dataset:'+dataset
     db = couch_server[db_name]
@@ -263,8 +273,8 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
         try:
             new_batch_jobs = verifier.validate_new_batch_jobs_request( request.POST )
             
-            success_message = analysis_types_fwa.submit_jobs(db,new_batch_jobs,
-                                                             settings.FWA_STARCLUSTER_CONFIG_FNAME )
+            success_message = analysis_types_fwa.upload_job_docs_to_couchdb(db, new_batch_jobs,
+                                                                            settings.FWA_STARCLUSTER_CONFIG_FNAME )
 
             ## # new_batch_jobs are valid, insert them and thank user
             ## #db.append( new_datanode_documents )

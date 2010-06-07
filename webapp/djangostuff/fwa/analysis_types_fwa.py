@@ -59,9 +59,33 @@ class Verifier(object):
                 else:
                     sources.append( query[snt][i] )
 
+            job_depends = []
+
+            # Get job dependencies based on this source (if it is unbuilt)
+            for source_id in sources:
+                datanode_view = db.view('analysis/DataNode',
+                                        startkey=[source_id],
+                                        endkey=[source_id,{}],
+                                        reduce=False,
+                                        )
+                item_count = 0
+                for item in datanode_view:
+                    item_count += 1
+                    if 'unbuilt' in item.value['status_tags']:
+                        job_items_view = db.view('analysis/job-to-build-datanode',
+                                                 startkey=[source_id],
+                                                 endkey=[source_id,{}],
+                                                 reduce=False,
+                                                 )
+                        for job_item in job_items_view:
+                            job_depends.append( job_item._id )
+                assert item_count==1
+
             doc = { 'sources':sources,
                     'junk' : True, # XXX delete these docs when ready for production
                     }
+            if len(job_depends):
+                doc['job_depends'] = job_depends
             new_batch_jobs.append( doc )
 
         # finished with sources
@@ -127,7 +151,7 @@ def make_datanode_doc_for_sge_job( db, sge_job_doc ):
         datanode_doc.update(specific_properties)
     return datanode_doc
 
-def submit_jobs( db, new_batch_jobs, starcluster_config_fname ):
+def upload_job_docs_to_couchdb( db, new_batch_jobs, starcluster_config_fname ):
     #now = datetime.datetime.fromtimestamp( time.time() )
     now = datetime.datetime.utcnow()
     nowstr = now.isoformat()
@@ -160,7 +184,7 @@ def submit_jobs( db, new_batch_jobs, starcluster_config_fname ):
 
         raise
 
-    insert_jobs_into_sge(db,starcluster_config_fname)
+    #insert_jobs_into_sge(db,starcluster_config_fname)
 
     hack_error_message = '\nsubmitted %s\n'%repr(sge_job_docs)
     return hack_error_message
