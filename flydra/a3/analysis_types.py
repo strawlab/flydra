@@ -124,25 +124,19 @@ class PlotsAnalysisType( AnalysisType ):
         copy_files = glob.glob(os.path.join(tmp_dirname,'*.png'))
         copy_files_short_fnames = [f.replace(tmp_dirname+'/','') for f in copy_files]
 
-        outdir = os.path.join( save_dir_base, sge_job_doc['datanode_id'] )
-        if not os.path.exists(outdir):
-            os.makedirs(outdir)
-
-        filedict = {}
         datanode_doc_custom = {}
 
+        attachment_tuples = []
         for fname in copy_files:
-            fname = copy_files[0]
-            shutil.copy2( fname, outdir )
-
+            buf = open(fname,mode='r').read()
             fname_only = os.path.split( fname )[-1]
-            filesize = os.stat(fname)[stat.ST_SIZE]
-            sha1sum = do_sha1sum(fname)
-            filedict[fname_only] = { 'filesize':filesize,
-                                     'sha1sum':sha1sum,
-                                     }
-        datanode_doc_custom['files']=filedict
-        return copy_files_short_fnames, datanode_doc_custom
+            content_type = 'image/png'
+            attachment_tuples.append( (buf,fname_only,content_type) )
+        outputs = {'copied_files':copy_files_short_fnames,
+                   'datanode_doc_custom':datanode_doc_custom,
+                   'attachments':attachment_tuples,
+                   }
+        return outputs
 
 class PlotSummary3D( PlotsAnalysisType ):
     name = 'Plot: summary position'
@@ -233,7 +227,9 @@ class EKF_based_3D_position( AnalysisType ):
                                'filesize':filesize,
                                'sha1sum':sha1sum,
                                }
-        return copy_files, datanode_doc_custom
+        outputs = {'copied_files':copy_files,
+                   'datanode_doc_custom':datanode_doc_custom}
+        return outputs
 
 def analysis_type_factory( db, class_name ):
     klass = globals()[class_name]

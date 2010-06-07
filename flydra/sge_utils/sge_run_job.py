@@ -57,7 +57,10 @@ def run_job(couch_url, db_name, doc_id, keep=False):
         print 'new_files',new_files
         print
         # copy known result files to EBS
-        copied_files, datanode_doc_custom = atype.copy_outputs( job_doc, tmp_dirname, config.sink_dir )
+        outputs = atype.copy_outputs( job_doc, tmp_dirname, config.sink_dir )
+        copied_files = outputs['copied_files']
+        datanode_doc_custom = outputs['datanode_doc_custom']
+
         print 'copied_files',copied_files
         print
 
@@ -76,6 +79,8 @@ def run_job(couch_url, db_name, doc_id, keep=False):
             datanode_doc['status_tags'] = status_tags
         job_doc['state'] = flydra.sge_utils.states.COMPLETE
         db.update( [ datanode_doc, job_doc ] )
+        for (buf,fname,content_type) in outputs.get('attachments',[]):
+            db.put_attachment( datanode_doc, buf, fname, content_type )
 
     except Exception, err:
         errors = job_doc.get('errors',[])
