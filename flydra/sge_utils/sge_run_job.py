@@ -69,6 +69,11 @@ def run_job(couch_url, db_name, doc_id, keep=False):
         # update job CouchDB document
         datanode_doc.update( datanode_doc_custom )
         datanode_doc['comments'] = 'command: %s'%repr(cmd)
+        status_tags = datanode_doc.get('status_tags',None)
+        if status_tags is not None:
+            status_tags.remove('unbuilt')
+            status_tags.append('built')
+            datanode_doc['status_tags'] = status_tags
         job_doc['state'] = flydra.sge_utils.states.COMPLETE
         db.update( [ datanode_doc, job_doc ] )
 
