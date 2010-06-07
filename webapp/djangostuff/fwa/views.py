@@ -302,11 +302,25 @@ def datanode(request,db_name=None,doc_id=None,warn_no_specific_view=False):
         raise ValueError( 'for doc_id=%s, len(myitems)==%d'%(doc_id,len(myitems)))
     for row in myitems:
         pass # XXX hack to get item
+
+    doc = db[row.id]
+    attachments = doc.get('_attachments',{})
+    images = []
+    for fname, attachment in attachments.iteritems():
+        if attachment['content_type']=='image/png':
+            width, height = doc['imsize'][fname]
+            images.append( {'url':get_attachment_url( db_name=db_name, doc_id=row.id, fname=fname ),
+                            'width':width,
+                            'height':height,
+                            'fname':fname,
+                            } )
+
     t = loader.get_template('datanode.html')
     c = RequestContext(request,{'row':row,
                                 'doc_url': get_next_url(db_name=db_name,doc_base=True),
                                 'warn_no_specific_view':warn_no_specific_view,
                                 'raw_value':pprint.pformat(row.value),
+                                'images':images,
                                 })
     return HttpResponse(t.render(c))
 
@@ -367,6 +381,19 @@ def document_multiplexer(request,db_name=None,doc_id=None):
         except NotDataNode,err:
             return raw_doc(request,db_name=db_name,doc_id=doc_id)
 
+@login_required
+def serve_attachment(request,db_name=None,doc_id=None,fname=None):
+    db = couch_server[db_name]
+    doc = db[doc_id]
+    attachment = db.get_attachment(doc,fname)
+    buf = attachment.read()
+    content_type = doc['_attachments'][fname]['content_type']
+
+    result = HttpResponse(content=buf,
+                          content_type=content_type,
+                          )
+    return result
+
 approot = reverse(select_db)
 def get_next_url(db_name=None,
                  dataset_name=None,
@@ -396,3 +423,7 @@ def get_next_url(db_name=None,
                 assert analysis_type is None, "only one can be non-None"
                 return approot + db_name + '/' + dataset_name + '/' + 'DataNodes/' + defaultfilters.iriencode(datanode_property) + '/'
 
+def get_attachment_url(db_name=None,
+                  doc_id=None,
+                  fname=None):
+    return approot + db_name + '/attachment/' + doc_id +'/'+fname

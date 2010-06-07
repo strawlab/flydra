@@ -14,6 +14,16 @@
 <strong>Warning: no specific view for this document, showing a generic datanode view.</strong>
 {% endif %}
 
+{% if images %}
+<p>Images:
+<ul>
+  {% for image in images %}
+    <li><img src="{{image.url}}" width="{{image.width}}" height="{{image.height}}" alt="{{image.fname}}"/></li>
+  {% endfor %}
+</ul>
+</p>
+{% endif %}
+
 <p>Status tags: {{row.value.status_tags}}</p>
 <p>Properties: {{row.value.properties}}</p>
 <p>Dataset: {{row.value.dataset}}</p>

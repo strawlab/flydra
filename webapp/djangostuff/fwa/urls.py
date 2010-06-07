@@ -10,4 +10,5 @@ urlpatterns = patterns('fwa.views',
     (r'^(?P<db_name>\w+)/(?P<dataset>\w+)/apply_analysis_type/(?P<class_name>[\w ]+)/$', 'apply_analysis_type'),
 #    (r'^(?P<db_name>\w+)/DataNode/(?P<doc_id>.*)/$', 'datanode'), # show the datanode
     (r'^(?P<db_name>\w+)/doc/(?P<doc_id>.*)/$', 'document_multiplexer'), # show the raw document
+    (r'^(?P<db_name>\w+)/attachment/(?P<doc_id>.*)/(?P<fname>.*)$', 'serve_attachment'),
 )
