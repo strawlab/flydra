@@ -1,7 +1,7 @@
 import sys
 from couchdb.client import Server
 import subprocess
-import states
+import states, util # flydra.sge_utils
 
 def download_jobs(couch_url, db_name):
     couch_server = Server(couch_url)
@@ -22,7 +22,7 @@ def download_jobs(couch_url, db_name):
         if len(job_depends):
             job_depends = '-hold_jid '+job_depends
 
-        job_name = '-N job%s'%job_id
+        job_name = '-N %s'%util.get_SGE_job_name_from_couch_job_id(job_id)
         # XXX use virtualenv in ~/PY
         cmd = 'qsub -b y %s %s ~/PY/bin/flydra_sge_run_job %s %s %s'%(job_name, job_depends,
                                                                       couch_url, db_name, job_id)
