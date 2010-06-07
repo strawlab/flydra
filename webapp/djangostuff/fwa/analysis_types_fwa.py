@@ -63,22 +63,24 @@ class Verifier(object):
 
             # Get job dependencies based on this source (if it is unbuilt)
             for source_id in sources:
-                datanode_view = db.view('analysis/DataNode',
-                                        startkey=[source_id],
-                                        endkey=[source_id,{}],
-                                        reduce=False,
-                                        )
+                print
+                print 'source_id',source_id
+                datanode_view = self.db.view('analysis/datanodes-by-docid',
+                                             startkey=source_id,
+                                             endkey=source_id,
+                                             )
                 item_count = 0
                 for item in datanode_view:
                     item_count += 1
+                    print 'item',item_count
+                    print item.value
                     if 'unbuilt' in item.value['status_tags']:
-                        job_items_view = db.view('analysis/job-to-build-datanode',
-                                                 startkey=[source_id],
-                                                 endkey=[source_id,{}],
-                                                 reduce=False,
-                                                 )
+                        job_items_view = self.db.view('analysis/job-to-build-datanode',
+                                                      startkey=source_id,
+                                                      endkey=source_id,
+                                                      )
                         for job_item in job_items_view:
-                            job_depends.append( job_item._id )
+                            job_depends.append( job_item.id )
                 assert item_count==1
 
             doc = { 'sources':sources,
