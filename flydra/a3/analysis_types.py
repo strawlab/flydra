@@ -36,6 +36,9 @@ class AnalysisType(object):
             if node_type=='2d position':
                 if doc['type']=='h5' and doc['has_2d_position']:
                     accept=True
+            elif node_type=='3d position':
+                if doc['type']=='h5' and doc['has_3d_position']:
+                    accept=True
             elif node_type=='calibration':
                 if doc['type']=='h5' and doc['has_calibration']:
                     accept=True
@@ -103,6 +106,61 @@ class AnalysisType(object):
             if choice[1]==None:
                 continue
             cmdline_args.append( choice[0] + '=' + choice[1] )
+        return cmdline_args
+
+class PlotsAnalysisType( AnalysisType ):
+    def get_datanode_doc_properties( self, sge_job_doc ):
+        source_list = sge_job_doc['sources']
+        props = {
+            'type' : 'datanode',
+            'sources' : source_list,
+            }
+        return props
+
+    def copy_outputs( self, sge_job_doc, tmp_dirname, save_dir_base ):
+        '''copy known outputs from dirname'''
+        copy_files = glob.glob(os.path.join(tmp_dirname,'*.png'))
+        copy_files_short_fnames = [f.replace(tmp_dirname+'/','') for f in copy_files]
+
+        outdir = os.path.join( save_dir_base, sge_job_doc['datanode_id'] )
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+
+        filedict = {}
+
+        for fname in copy_files:
+            fname = copy_files[0]
+            shutil.copy2( fname, outdir )
+
+            fname_only = os.path.split( fname )[-1]
+            filesize = os.stat(fname)[stat.ST_SIZE]
+            sha1sum = do_sha1sum(fname)
+            filedict[fname_only] = { 'filesize':filesize,
+                                     'sha1sum':sha1sum,
+                                     }
+        datanode_doc_custom['files']=filedict
+        return copy_files_short_fnames, datanode_doc_custom
+
+class PlotSummary3D( PlotsAnalysisType ):
+    name = 'Plot: summary position'
+    short_description = 'plot of 3D position'
+    source_node_types = ['3d position']
+    base_cmd = 'flydra_analysis_plot_summary'
+
+    def convert_sources_to_cmdline_args(self, sge_job_doc, source_info ):
+        sources = sge_job_doc['sources']
+        short_sources = sources
+        docs = []
+        for snt in self.source_node_types:
+            ndocs,short_sources = self._get_docs_shortened_sources(snt,short_sources)
+            docs.extend(ndocs)
+        cmdline_args = []
+        for (node_type,doc) in docs:
+            if node_type == '3d position':
+                cmdline_args.extend( ['-k', source_info[doc['_id']]] )
+            else:
+                raise ValueError('unknown node_type as source: %s'%node_type)
+        assert len(cmdline_args)==2
         return cmdline_args
 
 class EKF_based_3D_position( AnalysisType ):
@@ -179,4 +237,4 @@ def analysis_type_factory( db, class_name ):
     atype = klass(db)
     return atype
 
-class_names = ['EKF_based_3D_position']
+class_names = ['EKF_based_3D_position','PlotSummary3D']
