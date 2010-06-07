@@ -114,6 +114,8 @@ class PlotsAnalysisType( AnalysisType ):
         props = {
             'type' : 'datanode',
             'sources' : source_list,
+            'properties': ['plots'],
+            'status_tags': ['unbuilt'],
             }
         return props
 
