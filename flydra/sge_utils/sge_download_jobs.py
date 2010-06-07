@@ -13,14 +13,6 @@ def download_jobs(couch_url, db_name):
         if row.key != states.CREATED:
             continue
 
-        #job_id = row.value['_id']
-        print 'row',row
-        print 'row.value',row.value
-        print 'row.key',row.key
-        print 'dir(row)',dir(row)
-        print 'row.id',row.id
-        print
-
         job_id = row.id
 
         doc = db[job_id]
