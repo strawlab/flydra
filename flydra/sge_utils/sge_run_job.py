@@ -30,7 +30,6 @@ def run_job(couch_url, db_name, doc_id, keep=False):
     if os.path.exists(tmp_dirname):
         raise RuntimeError('temp dir already exists: %s'%tmp_dirname)
 
-    success = False
     os.mkdir(tmp_dirname)
     try:
         job_doc['state'] = flydra.sge_utils.states.EXECUTING
@@ -73,15 +72,19 @@ def run_job(couch_url, db_name, doc_id, keep=False):
         job_doc['state'] = flydra.sge_utils.states.COMPLETE
         db.update( [ datanode_doc, job_doc ] )
 
-        success = True
+    except Exception, err:
+        errors = job_doc.get('errors',[])
+        if errors is None:
+            errors = []
+        errors.append('Failed with error: %s'%err)
+        # it's no longer in the SGE queue, so set to created state
+        job_doc['state'] = flydra.sge_utils.states.CREATED
+        job_doc['errors'] = errors
+        db.update( [job_doc] ) # upload new state
 
     finally:
         if not keep:
             shutil.rmtree(tmp_dirname)
-        if not success:
-            # it's no longer in the SGE queue, so set to created state
-            job_doc['state'] = flydra.sge_utils.states.CREATED
-            db.update( [job_doc] ) # upload new state    
 
 def main():
     usage = '%prog COUCH_URI DB_NAME DOC_ID [options]'
