@@ -122,6 +122,13 @@ class EKF_based_3D_position( AnalysisType ):
             }
         return props
 
+    def get_cmdline_args_from_choices(self, sge_job_doc, source_info ):
+        choices = sge_job_doc['choices']
+        cmdline_args = []
+        for choice in choices:
+            cmdline_args.extend( choice )
+        return cmdline_args
+
     def convert_sources_to_cmdline_args(self, sge_job_doc, source_info ):
         sources = sge_job_doc['sources']
         short_sources = sources
