@@ -5,6 +5,7 @@ import hashlib
 import datanodes
 import warnings
 import flydra.sge_utils.config as config
+import Image
 
 def do_sha1sum(fname):
     fd = open(fname,mode='r')
@@ -124,14 +125,18 @@ class PlotsAnalysisType( AnalysisType ):
         copy_files = glob.glob(os.path.join(tmp_dirname,'*.png'))
         copy_files_short_fnames = [f.replace(tmp_dirname+'/','') for f in copy_files]
 
-        datanode_doc_custom = {}
+        datanode_doc_custom = {'imsize':{}}
 
         attachment_tuples = []
         for fname in copy_files:
+            im = Image.open(fname)
+            width,height = im.size
             buf = open(fname,mode='r').read()
             fname_only = os.path.split( fname )[-1]
             content_type = 'image/png'
             attachment_tuples.append( (buf,fname_only,content_type) )
+            datanode_doc_custom['imsize'][fname_only] = (width,height)
+
         outputs = {'copied_files':copy_files_short_fnames,
                    'datanode_doc_custom':datanode_doc_custom,
                    'attachments':attachment_tuples,
