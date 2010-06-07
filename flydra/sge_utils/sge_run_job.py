@@ -57,7 +57,7 @@ def run_job(couch_url, db_name, doc_id, keep=False):
         print 'new_files',new_files
         print
         # copy known result files to EBS
-        copied_files, datanode_doc_custom = atype.copy_outputs( job_doc, tmp_dirname, '/datasink/astraw' ) # XXX hardcoded output dir
+        copied_files, datanode_doc_custom = atype.copy_outputs( job_doc, tmp_dirname, config.sink_dir )
         print 'copied_files',copied_files
         print
 

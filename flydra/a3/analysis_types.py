@@ -59,24 +59,30 @@ class AnalysisType(object):
         source_ids = sge_job_doc['sources']
         for source_id in source_ids:
             source_doc = self.db[source_id]
-            print 'source_doc'
-            print source_doc
-            print
             if 'filename' in source_doc:
                 filename = source_doc['filename']
                 outpath = os.path.join( target_dir, filename )
+
+                built_dir = os.path.join( config.sink_dir, source_doc['_id'] )
+
                 fullpath1 = os.path.join( config.src_dir, filename )
+                fullpath2 = fullpath1 + '.lzma'
+                fullpath3 = os.path.join( built_dir, filename )
+
                 if os.path.exists(fullpath1):
                     shutil.copy( fullpath1, target_dir )
+                elif os.path.exists(fullpath2):
+                    outfd = open(outpath,mode='wb')
+                    cmd = ['unlzma','--stdout',fullpath2]
+                    subprocess.check_call(cmd,stdout=outfd)
+                    outfd.close()
+                elif os.path.exists(fullpath3):
+                    shutil.copy( fullpath3, target_dir )
                 else:
-                    fullpath2 = fullpath1 + '.lzma'
-                    if os.path.exists(fullpath2):
-                        outfd = open(outpath,mode='wb')
-                        cmd = ['unlzma','--stdout',fullpath2]
-                        subprocess.check_call(cmd,stdout=outfd)
-                        outfd.close()
-                    else:
-                        raise RuntimeError('could not file source file %s'%filename)
+                    raise RuntimeError('could not find source file %s (tried %s)'%(filename,
+                                                                                   [fullpath1,
+                                                                                    fullpath2,
+                                                                                    fullpath3]))
             else:
                 if '_attachments' in source_doc:
                     filenames = source_doc['_attachments'].keys()
@@ -91,12 +97,6 @@ class AnalysisType(object):
                     outfd.close()
             result[source_id] = filename
         return result
-
-    def copy_outputs( self, job_doc, tmp_dirname ):
-        '''copy known outputs from dirname'''
-        copied_files = []
-        warnings.warn('copying outputs not implemented')
-        return copied_files
 
     def get_cmdline_args_from_choices(self, sge_job_doc, source_info ):
         choices = sge_job_doc['choices']
@@ -127,6 +127,7 @@ class PlotsAnalysisType( AnalysisType ):
             os.makedirs(outdir)
 
         filedict = {}
+        datanode_doc_custom = {}
 
         for fname in copy_files:
             fname = copy_files[0]
