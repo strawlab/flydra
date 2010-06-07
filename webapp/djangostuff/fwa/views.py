@@ -223,29 +223,6 @@ class JsonHttpResponse(HttpResponse):
         super(JsonHttpResponse, self).__init__(content=content,
                                            mimetype='application/json; charset=utf8')
 
-
-@login_required
-def couch_proxy(orig_request,couch_path=None):
-    if couch_path is None:
-        couch_path = ''
-    uri = settings.FWA_COUCH_BASE_URI + '/' + couch_path
-    new_request = urllib2.Request(uri)
-    if 'HTTP_ACCEPT' in orig_request.META:
-        new_request.add_header('Accept', orig_request.META['HTTP_ACCEPT'])
-    try:
-        f = urllib2.urlopen(new_request)
-    except urllib2.HTTPError,err:
-        return HttpResponse(content='error %s'%(err.code,),status=err.code)
-    meta = f.info()
-
-    result = HttpResponse(content=f.read(),
-                          # should also be set below, so this may be redundant
-                          content_type=meta['Content-Type'],
-                          )
-    for header in meta.keys():
-        result[header] = meta[header]
-    return result
-
 @login_required
 def submit_SGE_jobs(request,db_name=None,dataset=None):
     dataset_id = 'dataset:'+dataset
