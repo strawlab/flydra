@@ -184,7 +184,9 @@ def get_master_node(starcluster_config_fname):
             tag = starcluster.cluster.get_tag_from_sg(scg.name)
             tags.append(tag)
 
-    assert len(tags)==1
+    assert len(tags)<=1
+    if len(tags)==0:
+        raise RuntimeError('no master StarCluster node found')
     cl = starcluster.cluster.get_cluster(tag, cfg)
     master = cl.master_node
     return master
