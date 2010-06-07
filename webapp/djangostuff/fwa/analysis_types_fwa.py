@@ -84,7 +84,6 @@ class Verifier(object):
                 assert item_count==1
 
             doc = { 'sources':sources,
-                    'junk' : True, # XXX delete these docs when ready for production
                     }
             if len(job_depends):
                 doc['job_depends'] = job_depends
@@ -135,7 +134,6 @@ def make_datanode_doc_for_sge_job( db, sge_job_doc ):
 
     datanode_doc = {
         #'type' : 'datanode',  # let analysis_type fill this in
-        'junk' : True, # XXX delete these docs when ready for production
         # 'sources' : sge_job_doc['sources'], # let analysis_type fill this in
         #'status_tags': ["unbuilt"], # let analysis_type fill this in
         'dataset' : sge_job_doc['dataset'],
