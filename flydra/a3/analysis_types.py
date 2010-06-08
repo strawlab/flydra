@@ -84,18 +84,19 @@ class AnalysisType(object):
                                                                                    [fullpath1,
                                                                                     fullpath2,
                                                                                     fullpath3]))
+            elif '_attachments' in source_doc:
+                filenames = source_doc['_attachments'].keys()
+                assert len( filenames )==1
+                filename = filenames[0]
+                outpath = os.path.join( target_dir, filename )
+                contents = self.db.get_attachment( source_id, filename )
+                #print 'contents'
+                #print contents.read()
+                outfd = open(outpath,mode='wb')
+                outfd.write(contents.read())
+                outfd.close()
             else:
-                if '_attachments' in source_doc:
-                    filenames = source_doc['_attachments'].keys()
-                    assert len( filenames )==1
-                    filename = filenames[0]
-                    outpath = os.path.join( target_dir, filename )
-                    contents = self.db.get_attachment( source_id, filename )
-                    #print 'contents'
-                    #print contents.read()
-                    outfd = open(outpath,mode='wb')
-                    outfd.write(contents.read())
-                    outfd.close()
+                raise ValueError('no filename for source %s'%source_id)
             result[source_id] = filename
         return result
 
