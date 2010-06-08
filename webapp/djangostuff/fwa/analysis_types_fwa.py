@@ -166,14 +166,16 @@ def upload_job_docs_to_couchdb( db, new_batch_jobs, starcluster_config_fname ):
     # upload datanode documents
     datanode_results = db.update(datanode_docs)
 
+    updated_sge_job_docs = []
     try:
         assert len(datanode_results) == len(sge_job_docs)
         for ((upload_ok, upload_id, upload_rev), seg_job_doc) in zip(datanode_results,sge_job_docs):
             assert upload_ok
             sge_job_doc['datanode_id'] = upload_id
-        
+            updated_sge_job_docs.append( sge_job_doc )
+
         # upload SGE job documents
-        results = db.update( sge_job_docs )
+        results = db.update( updated_sge_job_docs )
     except:
         
         # on error, erase datanode documents
