@@ -63,8 +63,6 @@ class Verifier(object):
 
             # Get job dependencies based on this source (if it is unbuilt)
             for source_id in sources:
-                print
-                print 'source_id',source_id
                 datanode_view = self.db.view('analysis/datanodes-by-docid',
                                              startkey=source_id,
                                              endkey=source_id,
@@ -72,8 +70,6 @@ class Verifier(object):
                 item_count = 0
                 for item in datanode_view:
                     item_count += 1
-                    print 'item',item_count
-                    print item.value
                     if 'unbuilt' in item.value['status_tags']:
                         job_items_view = self.db.view('analysis/job-to-build-datanode',
                                                       startkey=source_id,
@@ -84,7 +80,6 @@ class Verifier(object):
                 assert item_count==1
 
             doc = { 'sources':sources,
-                    'junk' : True, # XXX delete these docs when ready for production
                     }
             if len(job_depends):
                 doc['job_depends'] = job_depends
@@ -135,7 +130,6 @@ def make_datanode_doc_for_sge_job( db, sge_job_doc ):
 
     datanode_doc = {
         #'type' : 'datanode',  # let analysis_type fill this in
-        'junk' : True, # XXX delete these docs when ready for production
         # 'sources' : sge_job_doc['sources'], # let analysis_type fill this in
         #'status_tags': ["unbuilt"], # let analysis_type fill this in
         'dataset' : sge_job_doc['dataset'],
@@ -168,14 +162,16 @@ def upload_job_docs_to_couchdb( db, new_batch_jobs, starcluster_config_fname ):
     # upload datanode documents
     datanode_results = db.update(datanode_docs)
 
+    updated_sge_job_docs = []
     try:
         assert len(datanode_results) == len(sge_job_docs)
         for ((upload_ok, upload_id, upload_rev), seg_job_doc) in zip(datanode_results,sge_job_docs):
             assert upload_ok
             sge_job_doc['datanode_id'] = upload_id
-        
+            updated_sge_job_docs.append( sge_job_doc )
+
         # upload SGE job documents
-        results = db.update( sge_job_docs )
+        results = db.update( updated_sge_job_docs )
     except:
         
         # on error, erase datanode documents
