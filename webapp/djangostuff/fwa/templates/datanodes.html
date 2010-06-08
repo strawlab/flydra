@@ -3,12 +3,13 @@
 {% load i18n %}
 
 {% block head_title %}{{property_name}} data nodes{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ STATIC_URL }}fwa/css/fwa-docs.css" />{% endblock %}
 
 {% block tab_id %}id="home_tab"{% endblock %}
 
 {% block body %}
 
-<a href="../..">(Go back to dataset view.)</a>
+<div class="fwa_nav_link"><a href="../..">(Go back to dataset view.)</a></div>
 
 <h2>{{ property_name }} data nodes</h2>
 

@@ -1,12 +1,17 @@
 {% extends "site_base.html" %}
 
 {% block head_title %}analysis{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ STATIC_URL }}fwa/css/fwa-docs.css" />{% endblock %}
 
 {% block tab_id %}id="home_tab"{% endblock %}
 
 {% block body %}
 
-<h2>h5 file "{{id}}"</h2>
+<div class="fwa_nav_link"><a href="../..">(Go back to dataset view.)</a></div>
+
+<div class="datanode_title">h5 file (document id: {{id}})</div>
+
+<div class="time_range"><p>{{ time_range }}</p></div>
 
 <pre>{{raw}}</pre>
 

@@ -8,6 +8,9 @@ from django.contrib.humanize.templatetags.humanize import intcomma
 from django.core.paginator import EmptyPage, PageNotAnInteger
 from django import forms
 
+import datetime
+import dateutil.parser
+
 import couchdb.http
 from couchdb.client import Server
 
@@ -288,6 +291,17 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
 class NotDataNode(ValueError):
     pass
 
+def get_datanode_common( doc ):
+    start_time = dateutil.parser.parse(doc['start_time'])
+    stop_time = dateutil.parser.parse(doc['stop_time'])
+    time_range = '%s - %s, %s'%( start_time.strftime('%H:%M:%S'),
+                                 stop_time.strftime('%H:%M:%S'), 
+                                 start_time.strftime('%A, %d %B %Y (UTC %z)' ) )
+    result = {
+        'time_range':time_range,
+        }
+    return result
+
 @login_required
 def datanode(request,db_name=None,doc_id=None,warn_no_specific_view=False):
     db = couch_server[db_name]
@@ -316,13 +330,17 @@ def datanode(request,db_name=None,doc_id=None,warn_no_specific_view=False):
                             'fname':fname,
                             } )
 
+    common_template = get_datanode_common( doc )
+
     t = loader.get_template('datanode.html')
-    c = RequestContext(request,{'row':row,
-                                'doc_url': get_next_url(db_name=db_name,doc_base=True),
-                                'warn_no_specific_view':warn_no_specific_view,
-                                'raw_value':pprint.pformat(row.value),
-                                'images':images,
-                                })
+    context = {'row':row,
+               'doc_url': get_next_url(db_name=db_name,doc_base=True),
+               'warn_no_specific_view':warn_no_specific_view,
+               'raw_value':pprint.pformat(row.value),
+               'images':images,
+               }
+    context.update( common_template )               
+    c = RequestContext(request,context)
     return HttpResponse(t.render(c))
 
 @login_required
@@ -362,10 +380,14 @@ def h5_doc(request,db_name=None,doc_id=None):
     else:
         lgc = None
 
+    common_template = get_datanode_common( doc )
+
     t = loader.get_template('h5_doc.html')
-    c = RequestContext(request,{'id':doc['_id'],'raw':pprint.pformat(dict(doc)),
-                                'localglobal': lgc,
-                                })
+    context = {'id':doc['_id'],'raw':pprint.pformat(dict(doc)),
+               'localglobal': lgc,
+               }
+    context.update( common_template )               
+    c = RequestContext(request,context)
     return HttpResponse(t.render(c))
 
 @login_required

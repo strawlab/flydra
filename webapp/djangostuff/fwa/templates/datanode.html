@@ -3,18 +3,21 @@
 {% load i18n %}
 
 {% block head_title %}{{row.id}}{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ STATIC_URL }}fwa/css/fwa-docs.css" />{% endblock %}
 
 {% block tab_id %}id="home_tab"{% endblock %}
 
 {% block body %}
 
-<a href="../..">(Go back to dataset view.)</a>
+<div class="fwa_nav_link"><a href="../..">(Go back to dataset view.)</a></div>
 
-<h1>data node {{row.id}}</h1>
+<div class="datanode_title">data node (document id: {{row.id}})</div>
 
 {% if warn_no_specific_view %}
 <strong>Warning: no specific view for this document, showing a generic datanode view.</strong>
 {% endif %}
+
+<div class="time_range"><p>{{ time_range }}</p></div>
 
 {% if images %}
 <p>Images:
