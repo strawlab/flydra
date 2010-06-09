@@ -154,7 +154,7 @@ outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 Info2D = flydra.data_descriptions.Info2D
 
 class CamSyncInfo(PT.IsDescription):
-    cam_id = PT.StringCol(16,pos=0)
+    cam_id = PT.StringCol(256,pos=0)
     camn   = PT.UInt16Col(pos=1)
     frame0 = PT.FloatCol(pos=2)
 
