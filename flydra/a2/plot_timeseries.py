@@ -188,6 +188,10 @@ def plot_timeseries(subplot=None,options = None):
         h5.close()
         table_data2d_frames_find = utils.FastFinder( table_data2d_frames )
 
+    if len(use_obj_ids)==0:
+        print 'No obj_ids to plot, quitting'
+        sys.exit(0)
+
     for obj_id in use_obj_ids:
         if not do_fuse:
             try:
