@@ -3,6 +3,7 @@
 {% load i18n %}
 
 {% block head_title %}{{dataset.dataset_doc.name}} - analysis options{% endblock %}
+{% block extra_head %}<link rel="stylesheef" href="{{ STATIC_URL }}fwa/css/fwa-docs.css" />{% endblock %}
 
 {% block tab_id %}id="home_tab"{% endblock %}
 
@@ -32,6 +33,11 @@ You have {{num_data_nodes}} data node{{num_data_nodes|pluralize}} that can be ex
 </ul>
 
 <h2>Create new batch jobs</h2>
+
+<div class="fwa_floatright_576">
+<img src="{{ STATIC_URL }}fwa/images/analysis_map.png" width="576" height="237" alt="analysis map"/><br>
+Anslysis map
+</div>
 
 You have {{num_analysis_types}} data analysis
 type{{num_analysis_types|pluralize}} that can be applied to create
