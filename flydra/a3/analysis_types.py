@@ -8,9 +8,7 @@ import flydra.sge_utils.config as config
 import Image
 
 class VarType(object):
-    def __init__(self,options=None,omit_on_default=True):
-        self.options = options
-        self.omit_on_default = omit_on_default
+    pass
 
 class RangeVarType(VarType):
     def __init__(self,min=None,max=None):
@@ -19,7 +17,11 @@ class RangeVarType(VarType):
         super(RangeVarType,self).__init__()
 
 class EnumVarType(VarType):
-    pass
+    def __init__(self,options=None):
+        self.options = options
+        super(EnumVarType,self).__init__()
+    def get_options(self):
+        return self.options
 
 class FloatVarType(RangeVarType):
     pass
@@ -198,7 +200,7 @@ class EKF_based_3D_position( AnalysisType ):
 
     def __init__(self,*args,**kwargs):
         super( EKF_based_3D_position, self).__init__(*args,**kwargs)
-        self.choices['--dynamic-model'] = EnumVarType([
+        self.choices['--dynamic-model'] = EnumVarType([None,
                                            "'EKF flydra, units: mm'",
                                            "'EKF hbird, units: mm'",
                                            "'EKF hydra, units: mm'",
@@ -324,4 +326,4 @@ def analysis_type_factory( db, class_name ):
     atype = klass(db)
     return atype
 
-class_names = ['EKF_based_3D_position','PlotSummary3D']
+class_names = ['EKF_based_3D_position','PlotSummary3D','ImageBased2DOrientation']

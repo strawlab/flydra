@@ -17,15 +17,27 @@ class InvalidRequest(ValueError):
 
 def add_fields_to_form( form, analysis_type ):
     assert isinstance(analysis_type,AnalysisType)
-    for name, valid_values in analysis_type.choices.iteritems():
-        form_choices = []
-        for elem in valid_values:
-            if elem is None:
-                form_elem =  ('','<default value>')
-            else:
-                form_elem = (elem,elem)
-            form_choices.append( form_elem )
-        form.fields[name] = forms.ChoiceField(choices = form_choices)
+    for name, vartype in analysis_type.choices.iteritems():
+        if isinstance(vartype,EnumVarType):
+            form_choices = []
+            for elem in vartype.get_options():
+                if elem is None:
+                    form_elem =  ('','<default value>')
+                else:
+                    form_elem = (elem,elem)
+                form_choices.append( form_elem )
+            form.fields[name] = forms.ChoiceField(choices = form_choices)
+        elif isinstance(vartype,IntVarType):
+            form.fields[name] = forms.IntegerField(max_value=vartype.max,
+                                                   min_value=vartype.min)
+        elif isinstance(vartype,FloatVarType):
+            form.fields[name] = forms.FloatField(max_value=vartype.max,
+                                                 min_value=vartype.min)
+        elif isinstance(vartype,BoolVarType):
+            form.fields[name] = forms.BooleanField()
+        else:
+            raise ValueError('unknown vartype %s'%vartype)
+        
 
 class Verifier(object):
     """helper class to verify arguments from POST request"""
@@ -92,16 +104,31 @@ class Verifier(object):
         # now handle batch params that apply to all documents
         choices = []
         for choice_name in self.analysis_type.choices:
-            posted_value = query.pop(choice_name)
-            assert len(posted_value)==1
-            posted_value = posted_value[0]
+            if choice_name in query:
+                posted_value = query.pop(choice_name)
+                assert len(posted_value)==1
+                posted_value = posted_value[0]
+            else:
+                posted_value = None
 
-            valid_values = self.analysis_type.choices[choice_name]
-            if (posted_value == '') and (None in valid_values):
-                # use default
-                continue
-            assert posted_value in valid_values
-            choices.append( (choice_name, posted_value) )
+            vartype = self.analysis_type.choices[choice_name]
+            if isinstance(vartype,EnumVarType):
+                if (posted_value == '') and (None in vartype.get_options()):
+                    # use default
+                    continue
+                assert posted_value in vartype.get_options()
+                choices.append( (choice_name, posted_value) )
+            elif isinstance(vartype,IntVarType):
+                if posted_value is not None and posted_value != '':
+                    choices.append( (choice_name, posted_value) )
+            elif isinstance(vartype,FloatVarType):
+                if posted_value is not None and posted_value != '':
+                    choices.append( (choice_name, posted_value) )
+            elif isinstance(vartype,BoolVarType):
+                if posted_value is not None and posted_value != '':
+                    choices.append( (choice_name, posted_value) )
+            else:
+                raise ValueError('unknown vartype %s'%vartype)
 
         # make sure no unhandled request data
         if len(query.keys()):
