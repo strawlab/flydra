@@ -7,6 +7,30 @@ import warnings
 import flydra.sge_utils.config as config
 import Image
 
+class VarType(object):
+    def __init__(self,options=None,omit_on_default=True):
+        self.options = options
+        self.omit_on_default = omit_on_default
+
+class RangeVarType(VarType):
+    def __init__(self,min=None,max=None):
+        self.min=min
+        self.max=max
+        super(RangeVarType,self).__init__()
+
+class EnumVarType(VarType):
+    pass
+
+class FloatVarType(RangeVarType):
+    pass
+
+class IntVarType(RangeVarType):
+    pass
+
+class BoolVarType(VarType):
+    def __init__(self):
+        super(BoolVarType,self).__init__()
+
 def do_sha1sum(fname):
     fd = open(fname,mode='r')
     m = hashlib.sha1()
@@ -174,11 +198,11 @@ class EKF_based_3D_position( AnalysisType ):
 
     def __init__(self,*args,**kwargs):
         super( EKF_based_3D_position, self).__init__(*args,**kwargs)
-        self.choices['--dynamic-model'] = [None,
+        self.choices['--dynamic-model'] = EnumVarType([
                                            "'EKF flydra, units: mm'",
                                            "'EKF hbird, units: mm'",
                                            "'EKF hydra, units: mm'",
-                                           ]
+                                           ])
 
     def get_datanode_doc_properties( self, sge_job_doc ):
         source_list = sge_job_doc['sources']
@@ -236,6 +260,64 @@ class EKF_based_3D_position( AnalysisType ):
         outputs = {'copied_files':copy_files,
                    'datanode_doc_custom':datanode_doc_custom}
         return outputs
+
+
+
+class ImageBased2DOrientation( AnalysisType ):
+    name = 'Image-based 2D orientation'
+    short_description = 'analyze .ufmf images to extract 2D orientation'
+    source_node_types = ['ufmf collection','3d position','2d position']
+    base_cmd = 'flydra_analysis_image_based_orientation'
+
+    def __init__(self,*args,**kwargs):
+        super( ImageBased2DOrientation, self).__init__(*args,**kwargs)
+        self.choices['--final-thresh'] = FloatVarType(min=0,max=1)
+        self.choices['--stack-N-images'] = IntVarType()
+        self.choices['--stack-N-images-min'] = IntVarType()
+        self.choices['--save-images'] = BoolVarType()
+        self.choices['--old-sync-timestamp-source'] = BoolVarType()
+        self.choices['--no-rts-smoothing'] = BoolVarType()
+        self.choices['--intermediate-thresh-frac'] =  FloatVarType(min=0,max=1)
+        self.choices['--erode'] = IntVarType(min=0)
+        self.choices['--start'] = IntVarType(min=0)
+        self.choices['--stop'] = IntVarType(min=0)
+
+    def get_datanode_doc_properties( self, sge_job_doc ):
+        source_list = sge_job_doc['sources']
+        props = {
+            'type':'h5',
+            'has_2d_orientation':True,
+            'has_2d_position':True,
+            'has_3d_orientation':False,
+            'has_3d_position':False,
+            'has_calibration':False,
+            'source':'computed from sources %s'%source_list,
+            'comments':'',
+            }
+        return props
+
+    def convert_sources_to_cmdline_args(self, sge_job_doc, source_info ):
+        sources = sge_job_doc['sources']
+        short_sources = sources
+        docs = []
+        for snt in self.source_node_types:
+            ndocs,short_sources = self._get_docs_shortened_sources(snt,short_sources)
+            docs.extend(ndocs)
+        cmdline_args = []
+        for (node_type,doc) in docs:
+            if node_type == '3d position':
+                cmdline_args.extend( ['--kalman', source_info[doc['_id']]] )
+            elif node_type == '2d position':
+                cmdline_args.extend( ['--h5', source_info[doc['_id']]] )
+            elif node_type == 'ufmf collection':
+                cmdline_args.append('--ufmfs='+source_info[doc['_id']] )
+            else:
+                raise ValueError('unknown node_type as source: %s'%node_type)
+        return cmdline_args
+
+    def copy_outputs( self, sge_job_doc, tmp_dirname, save_dir_base ):
+        '''copy known outputs from dirname'''
+        1/0
 
 def analysis_type_factory( db, class_name ):
     klass = globals()[class_name]
