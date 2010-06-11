@@ -1,5 +1,5 @@
 import collections
-import time, datetime, os, glob, shutil, stat
+import time, datetime, os, glob, shutil, stat, sys
 import subprocess
 import hashlib
 import datanodes
@@ -81,35 +81,59 @@ class AnalysisType(object):
 
         return docs, unused_sources
 
-    def prepare_sources( self, sge_job_doc, target_dir ):
+    def _copy_source_file( self, filename, target_dir, built_dir, verbose=0 ):
+        outpath = os.path.join( target_dir, filename )
+
+        fullpath1 = os.path.join( config.src_dir, filename )
+        fullpath2 = fullpath1 + '.lzma'
+        fullpath3 = os.path.join( built_dir, filename )
+
+        tstart=time.time()
+        if os.path.exists(fullpath1):
+            if verbose>=1:
+                print 'copying %s to %s'%(fullpath1,target_dir)
+                sys.stdout.flush()
+            shutil.copy( fullpath1, target_dir )
+        elif os.path.exists(fullpath2):
+            if verbose>=1:
+                print 'uncompressing %s to %s'%(fullpath2,target_dir)
+                sys.stdout.flush()
+            outfd = open(outpath,mode='wb')
+            cmd = ['unlzma','--stdout',fullpath2]
+            subprocess.check_call(cmd,stdout=outfd)
+            outfd.close()
+        elif os.path.exists(fullpath3):
+            if verbose>=1:
+                print 'copying (built) %s to %s'%(fullpath1,target_dir)
+                sys.stdout.flush()
+            shutil.copy( fullpath3, target_dir )
+        else:
+            raise RuntimeError('could not find source file %s (tried %s)'%(filename,
+                                                                           [fullpath1,
+                                                                            fullpath2,
+                                                                            fullpath3]))
+        tstop=time.time()
+        if verbose>=1:
+            filesize = os.stat(outpath)[stat.ST_SIZE]
+            dur = tstop-tstart
+            print 'wrote %d bytes in %.1f sec ( %.1f MB/sec )'%(filesize,dur, filesize/dur/1024.0/1024.0)
+            sys.stdout.flush()
+
+    def prepare_sources( self, sge_job_doc, target_dir, verbose=0 ):
         result = {}
         source_ids = sge_job_doc['sources']
         for source_id in source_ids:
             source_doc = self.db[source_id]
+            built_dir = os.path.join( config.sink_dir, source_doc['_id'] )
             if 'filename' in source_doc:
                 filename = source_doc['filename']
-                outpath = os.path.join( target_dir, filename )
-
-                built_dir = os.path.join( config.sink_dir, source_doc['_id'] )
-
-                fullpath1 = os.path.join( config.src_dir, filename )
-                fullpath2 = fullpath1 + '.lzma'
-                fullpath3 = os.path.join( built_dir, filename )
-
-                if os.path.exists(fullpath1):
-                    shutil.copy( fullpath1, target_dir )
-                elif os.path.exists(fullpath2):
-                    outfd = open(outpath,mode='wb')
-                    cmd = ['unlzma','--stdout',fullpath2]
-                    subprocess.check_call(cmd,stdout=outfd)
-                    outfd.close()
-                elif os.path.exists(fullpath3):
-                    shutil.copy( fullpath3, target_dir )
-                else:
-                    raise RuntimeError('could not find source file %s (tried %s)'%(filename,
-                                                                                   [fullpath1,
-                                                                                    fullpath2,
-                                                                                    fullpath3]))
+                self._copy_source_file( filename, target_dir, built_dir, verbose=verbose )
+                filename_str_list = filename # only one element
+            elif 'filenames' in source_doc:
+                filenames = source_doc['filenames']
+                for filename in filenames:
+                    self._copy_source_file( filename, target_dir, built_dir, verbose=verbose )
+                filename_str_list = os.path.pathsep.join(filenames)
             elif '_attachments' in source_doc:
                 filenames = source_doc['_attachments'].keys()
                 assert len( filenames )==1
@@ -121,9 +145,10 @@ class AnalysisType(object):
                 outfd = open(outpath,mode='wb')
                 outfd.write(contents.read())
                 outfd.close()
+                filename_str_list = filename # only one element
             else:
                 raise ValueError('no filename for source %s'%source_id)
-            result[source_id] = filename
+            result[source_id] = filename_str_list
         return result
 
     def get_cmdline_args_from_choices(self, sge_job_doc, source_info ):

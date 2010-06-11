@@ -8,7 +8,7 @@ import flydra.sge_utils.states
 import flydra.version
 import traceback
 
-def run_job(couch_url, db_name, doc_id, keep=False):
+def run_job(couch_url, db_name, doc_id, keep=False, verbose=0):
     '''called by SGE process for specific work job'''
 
     # connect to CouchDB server
@@ -40,9 +40,14 @@ def run_job(couch_url, db_name, doc_id, keep=False):
         db.update( [job_doc] ) # upload new state
 
         # copy source files from EBS
-        source_info = atype.prepare_sources( job_doc, tmp_dirname )
-        print 'copied files into',tmp_dirname
+        print 'copying source files'
+        sys.stdout.flush()
+        tstart = time.time()
+        source_info = atype.prepare_sources( job_doc, tmp_dirname, verbose=verbose )
+        tstop = time.time()
+        print 'copied files into %s in %.1f secs'%(tmp_dirname, tstop-tstart )
         print
+        sys.stdout.flusth()
         orig_files = os.listdir(tmp_dirname)
 
         # run job in local instance store
@@ -62,6 +67,7 @@ def run_job(couch_url, db_name, doc_id, keep=False):
         new_files = list(set(final_files) - set(orig_files))
         print 'new_files',new_files
         print
+        sys.stdout.flusth()
         # copy known result files to EBS
         outputs = atype.copy_outputs( job_doc, tmp_dirname, config.sink_dir )
         copied_files = outputs['copied_files']
@@ -119,6 +125,9 @@ def main():
                       help="keep the intermediate files",
                       default=False)
 
+    parser.add_option("--verbose", action='store_true',
+                      default=False)
+
     (options, args) = parser.parse_args()
     if len(args)!=3:
         print >> sys.stderr, 'error: invalid number of required arguments'
@@ -127,7 +136,7 @@ def main():
     couch_url = args[0]
     db_name = args[1]
     doc_id = args[2]
-    run_job(couch_url, db_name, doc_id, keep=options.keep)
+    run_job(couch_url, db_name, doc_id, keep=options.keep, verbose=options.verbose)
 
 if __name__=='__main__':
     main()
