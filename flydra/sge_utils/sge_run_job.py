@@ -30,10 +30,9 @@ def run_job(couch_url, db_name, doc_id, keep=False, verbose=0):
 
     # create job-specific directory in local instance store
     tmp_dirname = os.path.join(config.instance_store_dir, doc_id)
-    if os.path.exists(tmp_dirname):
-        raise RuntimeError('temp dir already exists: %s'%tmp_dirname)
+    if not os.path.exists(tmp_dirname):
+        os.mkdir(tmp_dirname)
 
-    os.mkdir(tmp_dirname)
     err_exit = False
     try:
         job_doc['state'] = flydra.sge_utils.states.EXECUTING
@@ -47,7 +46,7 @@ def run_job(couch_url, db_name, doc_id, keep=False, verbose=0):
         tstop = time.time()
         print 'copied files into %s in %.1f secs'%(tmp_dirname, tstop-tstart )
         print
-        sys.stdout.flusth()
+        sys.stdout.flush()
         orig_files = os.listdir(tmp_dirname)
 
         # run job in local instance store
@@ -67,7 +66,7 @@ def run_job(couch_url, db_name, doc_id, keep=False, verbose=0):
         new_files = list(set(final_files) - set(orig_files))
         print 'new_files',new_files
         print
-        sys.stdout.flusth()
+        sys.stdout.flush()
         # copy known result files to EBS
         outputs = atype.copy_outputs( job_doc, tmp_dirname, config.sink_dir )
         copied_files = outputs['copied_files']

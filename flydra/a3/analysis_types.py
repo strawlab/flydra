@@ -45,6 +45,23 @@ def do_sha1sum(fname):
 
 # --- pure descriptions that could be refactored for other purposes (e.g. dependency diagrams)
 
+def safe_copy(fullpath,target):
+    '''don't leave unfinished copy lying around'''
+    if os.path.isdir(target):
+        fname = os.path.split(fullpath)[-1]
+        outpath = os.path.join(target)
+    else:
+        outpath = target
+
+    try:
+        shutil.copy( fullpath, target )
+    except Exception, err1:
+        try:
+            os.unlink(outpath)
+        finally:
+            raise err1
+
+
 class AnalysisType(object):
     def __init__(self,db=None):
         assert db is not None
@@ -83,6 +100,11 @@ class AnalysisType(object):
 
     def _copy_source_file( self, filename, target_dir, built_dir, verbose=0 ):
         outpath = os.path.join( target_dir, filename )
+        if os.path.exists(outpath):
+            if verbose>=1:
+                print 'outpath %s already exists, skipping copy'%outpath
+                sys.stdout.flush()
+            return
 
         fullpath1 = os.path.join( config.src_dir, filename )
         fullpath2 = fullpath1 + '.lzma'
@@ -93,20 +115,25 @@ class AnalysisType(object):
             if verbose>=1:
                 print 'copying %s to %s'%(fullpath1,target_dir)
                 sys.stdout.flush()
-            shutil.copy( fullpath1, target_dir )
+            safe_copy(fullpath1, target_dir)
+
         elif os.path.exists(fullpath2):
             if verbose>=1:
                 print 'uncompressing %s to %s'%(fullpath2,target_dir)
                 sys.stdout.flush()
-            outfd = open(outpath,mode='wb')
-            cmd = ['unlzma','--stdout',fullpath2]
-            subprocess.check_call(cmd,stdout=outfd)
-            outfd.close()
+            try:
+                outfd = open(outpath,mode='wb')
+                cmd = ['unlzma','--stdout',fullpath2]
+                subprocess.check_call(cmd,stdout=outfd)
+                outfd.close()
+            except:
+                os.unlink(outpath)
+                raise
         elif os.path.exists(fullpath3):
             if verbose>=1:
                 print 'copying (built) %s to %s'%(fullpath1,target_dir)
                 sys.stdout.flush()
-            shutil.copy( fullpath3, target_dir )
+            safe_copy( fullpath3, target_dir )
         else:
             raise RuntimeError('could not find source file %s (tried %s)'%(filename,
                                                                            [fullpath1,
