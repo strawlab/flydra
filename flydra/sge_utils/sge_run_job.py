@@ -6,6 +6,7 @@ import config
 from optparse import OptionParser
 import flydra.sge_utils.states
 import flydra.version
+import traceback
 
 def run_job(couch_url, db_name, doc_id, keep=False):
     '''called by SGE process for specific work job'''
@@ -33,6 +34,7 @@ def run_job(couch_url, db_name, doc_id, keep=False):
         raise RuntimeError('temp dir already exists: %s'%tmp_dirname)
 
     os.mkdir(tmp_dirname)
+    err_exit = False
     try:
         job_doc['state'] = flydra.sge_utils.states.EXECUTING
         db.update( [job_doc] ) # upload new state
@@ -99,10 +101,15 @@ def run_job(couch_url, db_name, doc_id, keep=False):
         job_doc['state'] = flydra.sge_utils.states.CREATED
         job_doc['errors'] = errors
         db.update( [job_doc] ) # upload new state
+        traceback.print_exc(err)
+        err_exit = True
 
     finally:
         if not keep:
             shutil.rmtree(tmp_dirname)
+
+    if err_exit:
+        sys.exit(1)
 
 def main():
     usage = '%prog COUCH_URI DB_NAME DOC_ID [options]'
