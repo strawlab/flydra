@@ -602,19 +602,26 @@ def binarize( im ):
     newim = numpy.where( im > median, numpy.uint8(255), numpy.uint8(0) )
     return newim
 
-def extract_corners(imnx_use,max_ncorn_per_side=30):
+def extract_corners(imnx_use,max_ncorn_per_side=30,ncorners_h=None, ncorners_v=None):
     im_ptr = cv.CreateImage( cv.Size( imnx_use.shape[1], imnx_use.shape[0] ),
                              CVtypes.IPL_DEPTH_8U, 1 )
     ctypes.memmove( im_ptr.contents.imageData,
                     imnx_use.ctypes.data,
                     imnx_use.shape[0]*imnx_use.shape[1] )
 
-    ncorn = max_ncorn_per_side,max_ncorn_per_side
+
+    if ncorners_h is not None:
+        ncorn = ncorners_h,ncorners_v
+    else:
+        ncorn = max_ncorn_per_side,max_ncorn_per_side
+
     ncorn_tot = ncorn[0]* ncorn[1]
     corners = (cv.Point2D32f * ncorn_tot)()
     corner_count = ctypes.c_int(ncorn_tot)
 
     sz = cv.Size(*ncorn)
+
+    print 'Using specified number of checker corners: ', ncorn[0], ncorn[1]
 
     flags = 0
     cv.FindChessboardCorners( im_ptr, sz,
@@ -750,6 +757,8 @@ def get_similar_direction_graphs(fmf,frame,
                                  aspect_ratio = 1.0,
                                  direction_eps_radians=None,
                                  chess_preview=False,
+                                 ncorners_h=None,
+                                 ncorners_v=None,
                                  ):
     bg_im,tmp = fmf.get_frame(0)
     bg_im = imops.to_mono8(fmf.get_format(),bg_im)
@@ -775,9 +784,9 @@ def get_similar_direction_graphs(fmf,frame,
         pylab.title('preview of chessboard finding image - close to continue')
         pylab.show()
 
-    x,y=extract_corners(imnx_use)
-    if len(x)==0:
-        raise RuntimeError('no corners found')
+    x,y=extract_corners(imnx_use, ncorners_h=ncorners_h, ncorners_v=ncorners_v)
+    if len(x) == 0:
+        raise ValueError('extract corners found no corners. cannot continue')
 
     if chess_preview:
         pylab.imshow(imnx_use)
@@ -883,6 +892,9 @@ def main():
         angle_precision_degrees=10.0,
         aspect_ratio = 1.0,
 
+        ncorners_h = None,
+        ncorners_v = None,
+
         show_lines = False,
         return_early=False,
         debug_line_finding = False,
@@ -961,6 +973,8 @@ def main():
             aspect_ratio = options.aspect_ratio,
             direction_eps_radians=options.angle_precision_degrees*D2R,
             chess_preview=cli_options.show_chessboard_finder_preview,
+            ncorners_h=options.ncorners_h,
+            ncorners_v=options.ncorners_v,
             )
 
         if 1:

@@ -5,7 +5,6 @@ import numpy as np
 import motmot.FastImage.FastImage as FastImage
 major,minor,build = FastImage.get_IPP_version()
 import motmot.FastImage.util as FastImage_util
-from Cython.Distutils import build_ext
 
 version = flydra.version.__version__
 
@@ -176,5 +175,4 @@ setup(name='flydra',
                                  'Makefile.kalmanize',
                                  ],
                     },
-      cmdclass = {'build_ext': build_ext},
       )

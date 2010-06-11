@@ -220,6 +220,7 @@ def doit(filename,
          obj_start=None,
          obj_stop=None,
          obj_only=None,
+         obj_filelist=None,
          show_n_longest=None,
          radius=0.002, # in meters
          min_length=10,
@@ -377,7 +378,15 @@ def doit(filename,
         use_obj_ids = use_obj_ids[use_obj_ids >= obj_start]
     if obj_stop is not None:
         use_obj_ids = use_obj_ids[use_obj_ids <= obj_stop]
+    if obj_filelist is not None:
+        obj_only = 1
     if obj_only is not None:
+        if obj_filelist is not None:
+            data = np.loadtxt(obj_filelist,delimiter='_')
+            
+            obj_only = np.array(data[:], dtype='int')
+            
+
         use_obj_ids = numpy.array(obj_only)
 
     #################
@@ -1153,6 +1162,11 @@ def main():
                       metavar="OBJSTOP")
 
     parser.add_option("--obj-only", type="string")
+    
+    parser.add_option("--obj-filelist", 
+                      type="string",
+                      help="pull list of obj ids from a text file where first column is the object ids",
+                      )
 
     parser.add_option("--up-dir", type="string")
 
@@ -1334,6 +1348,7 @@ def main():
          obj_start=options.obj_start,
          obj_stop=options.obj_stop,
          obj_only=options.obj_only,
+         obj_filelist=options.obj_filelist,
          use_kalman_smoothing=options.use_kalman_smoothing,
          show_n_longest=options.n_top_traces,
          show_obj_ids = options.show_obj_ids,

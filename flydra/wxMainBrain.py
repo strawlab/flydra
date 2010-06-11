@@ -552,6 +552,31 @@ class wxMainBrainApp(wx.App):
         val = scalar_control_info['n_sigma']
         ctrl.SetValue( str( val ) )
         wx.EVT_TEXT(ctrl, ctrl.GetId(), self.OnSetCameraNSigma)
+        
+        n_erode_absdiff = xrc.XRCCTRL(previewPerCamPanel,"n_erode_absdiff")
+        val = scalar_control_info['n_erode_absdiff']
+        n_erode_absdiff.SetValue( str( val ) )
+        wx.EVT_TEXT(n_erode_absdiff, n_erode_absdiff.GetId(), self.OnSetErode)
+        
+        color_range_1 = xrc.XRCCTRL(previewPerCamPanel,"color_range_1")
+        val = scalar_control_info['color_range_1']
+        color_range_1.SetValue( str( val ) )
+        wx.EVT_TEXT(color_range_1, color_range_1.GetId(), self.OnSetColorR1)
+        
+        color_range_2 = xrc.XRCCTRL(previewPerCamPanel,"color_range_2")
+        val = scalar_control_info['color_range_2']
+        color_range_2.SetValue( str( val ) )
+        wx.EVT_TEXT(color_range_2, color_range_2.GetId(), self.OnSetColorR2)
+        
+        color_range_3 = xrc.XRCCTRL(previewPerCamPanel,"color_range_3")
+        val = scalar_control_info['color_range_3']
+        color_range_3.SetValue( str( val ) )
+        wx.EVT_TEXT(color_range_3, color_range_3.GetId(), self.OnSetColorR3)
+        
+        sat_thresh = xrc.XRCCTRL(previewPerCamPanel,"sat_thresh")
+        val = scalar_control_info['sat_thresh']
+        sat_thresh.SetValue( str( val ) )
+        wx.EVT_TEXT(sat_thresh, sat_thresh.GetId(), self.OnSetSatThresh)
 
         trigger_mode_value = xrc.XRCCTRL(previewPerCamPanel,"trigger_mode_number")
         val = 0 #TODO: scalar_control_info['trigger_mode']
@@ -677,6 +702,21 @@ class wxMainBrainApp(wx.App):
         elif param == 'n_sigma':
             ctrl = xrc.XRCCTRL(previewPerCamPanel,"n_sigma")
             ctrl.SetValue( str( value ) )
+        elif param == 'n_erode_absdiff':
+            n_erode_absdiff = xrc.XRCCTRL(previewPerCamPanel,"n_erode_absdiff")
+            n_erode_absdiff.SetValue( str( value ) )
+        elif param == 'color_range_1':
+            color_range_1 = xrc.XRCCTRL(previewPerCamPanel,"color_range_1")
+            color_range_1.SetValue( str( value ) )
+        elif param == 'color_range_2':
+            color_range_2 = xrc.XRCCTRL(previewPerCamPanel,"color_range_2")
+            color_range_2.SetValue( str( value ) )
+        elif param == 'color_range_3':
+            color_range_3 = xrc.XRCCTRL(previewPerCamPanel,"color_range_3")
+            color_range_3.SetValue( str( value ) )
+        elif param == 'sat_thresh':
+            sat_thresh = xrc.XRCCTRL(previewPerCamPanel,"sat_thresh")
+            sat_thresh.SetValue( str( value ) )
         elif param == 'trigger_mode':
             print 'WARNING: skipping trigger mode update in display'
         else:
@@ -1592,6 +1632,42 @@ class wxMainBrainApp(wx.App):
         if value:
             value = float(value)
             self.main_brain.send_set_camera_property(cam_id,'n_sigma',value)
+            
+    def OnSetErode(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        value = event.GetString()
+        if value:
+            value = float(value)
+            self.main_brain.send_set_camera_property(cam_id,'n_erode_absdiff',value)
+
+    def OnSetColorR1(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        value = event.GetString()
+        if value:
+            value = float(value)
+            self.main_brain.send_set_camera_property(cam_id,'color_range_1',value)
+            
+    def OnSetColorR2(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        value = event.GetString()
+        if value:
+            value = float(value)
+            self.main_brain.send_set_camera_property(cam_id,'color_range_2',value)
+            
+    def OnSetColorR3(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        value = event.GetString()
+        if value:
+            value = float(value)
+            self.main_brain.send_set_camera_property(cam_id,'color_range_3',value)
+            
+    def OnSetSatThresh(self, event):
+        cam_id = self._get_cam_id_for_button(event.GetEventObject())
+        value = event.GetString()
+        if value:
+            value = float(value)
+            self.main_brain.send_set_camera_property(cam_id,'sat_thresh',value)
+
 
     def OnSetCameraThreshold(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
