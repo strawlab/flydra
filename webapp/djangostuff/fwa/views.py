@@ -348,8 +348,12 @@ def raw_doc(request,db_name=None,doc_id=None):
     db = couch_server[db_name]
     doc = db[doc_id]
     t = loader.get_template('raw_doc.html')
+    if 'sha1sum' in doc:
+        lg = get_localglobal_context( doc['sha1sum'] )
+    else:
+        lg = None
     c = RequestContext(request,{'id':doc['_id'],'raw':pprint.pformat(dict(doc)),
-                                'localglobal':get_localglobal_context( doc['sha1sum'] ),
+                                'localglobal':lg,
                                 })
     return HttpResponse(t.render(c))
 
