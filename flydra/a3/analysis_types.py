@@ -440,31 +440,39 @@ class ImageBased2DOrientation( AnalysisType ):
             saved_images = {}
             by_cam_id = self._parse_image_fnames( save_image_fnames )
             for cam_id in by_cam_id:
-                out_fname = 'movie_' + sge_job_doc['datanode_id'] + '_' + cam_id + '.ogv'
-                full_out_fname = os.path.join( tmp_dirname, out_fname )
-                width,height = make_ogv( out_fname = full_out_fname, files = by_cam_id[cam_id], dirname=tmp_dirname )
-                
-                # upload image to ADS's dreamhost account
-                hostname='69.163.194.242' # 'static.flydra.astraw.com'
-                dest_path=os.path.join('static.flydra.astraw.com',out_fname)
-                cmd = 'scp -p %s %s:%s'%( full_out_fname,
-                                          hostname,
-                                          dest_path )
-                subprocess.check_call(cmd, shell=True)
+                for obj_id in by_cam_id[cam_id]:
+                    out_fname = 'movie_' + sge_job_doc['datanode_id'] + '_' + cam_id + '_obj'+str(obj_id)+'.ogv'
+                    full_out_fname = os.path.join( tmp_dirname, out_fname )
+                    width,height = make_ogv( out_fname = full_out_fname, 
+                                             files = by_cam_id[cam_id][obj_id],
+                                             dirname=tmp_dirname )
 
-                url = 'http://static.flydra.astraw.com/' + out_fname
-                saved_images[ url ] = (width,height)
+                    # upload image to ADS's dreamhost account
+                    hostname='69.163.194.242' # 'static.flydra.astraw.com'
+                    dest_path=os.path.join('static.flydra.astraw.com',out_fname)
+                    cmd = 'scp -p %s %s:%s'%( full_out_fname,
+                                              hostname,
+                                              dest_path )
+                    subprocess.check_call(cmd, shell=True)
+
+                    url = 'http://static.flydra.astraw.com/' + out_fname
+                    saved_images[ url ] = (width,height)
             outputs['saved_images'] = saved_images
         return outputs
 
     def _parse_image_fnames(self, fnames ):
-        by_cam_id = collections.defaultdict(list)
+        by_cam_id = {}
         fname_re = re.compile(r'^av_obj(?P<obj_id>[0-9]+)_(?P<cam_id>.*)_frame(?P<frame>[0-9]+)\.png$')
         
         for fname in fnames:
             matchobj = fname_re.search(fname)
-            by_cam_id[ matchobj.group('cam_id') ].append( fname )
-        by_cam_id = dict( by_cam_id )
+            cam_id = matchobj.group('cam_id')
+            obj_id = int(matchobj.group('obj_id'))
+            if cam_id not in by_cam_id:
+                by_cam_id[cam_id] = {}
+            if obj_id not in by_cam_id[cam_id]:
+                by_cam_id[cam_id][obj_id] = []
+            by_cam_id[cam_id][obj_id].append( fname )
         return by_cam_id
 
 def make_ogv( out_fname = None, files = None, dirname=None ):
