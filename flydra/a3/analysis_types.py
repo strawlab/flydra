@@ -468,6 +468,8 @@ class ImageBased2DOrientation( AnalysisType ):
         return by_cam_id
 
 def make_ogv( out_fname = None, files = None, dirname=None ):
+    files = files[:]
+    files.sort()
     rename_dir = os.path.join( dirname, 'tmp_fnames')
     os.mkdir(rename_dir)
     frame_fmt = 'frame%07d.png'
