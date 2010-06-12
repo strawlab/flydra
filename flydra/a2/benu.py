@@ -171,8 +171,10 @@ class Canvas(object):
             self._ctx.show_page()
             self._surf.finish()
 
-    def text(self,text,x,y,color_rgba=None,font_size=10):
+    def text(self,text,x,y,color_rgba=None,font_size=10,shadow_offset=None):
         """draw text"""
+        if shadow_offset is not None:
+            self.text( text, x+shadow_offset, y+shadow_offset, color_rgba=(0,0,0,1), font_size=font_size)
         if color_rgba is None:
             color_rgba = (0,0,0,1)
 
