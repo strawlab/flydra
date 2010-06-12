@@ -378,7 +378,7 @@ def h5_doc(request,db_name=None,doc_id=None):
     db = couch_server[db_name]
     doc = db[doc_id]
 
-    saved_images = doc.get('saved_images',None)
+    saved_images = doc.get('saved_images',{})
     si = [ {'url':k,'width':v[0],'height':v[1]} for (k,v) in saved_images.iteritems() ]
 
     sha1sum=doc.get('sha1sum',None)
