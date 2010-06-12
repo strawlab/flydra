@@ -94,6 +94,8 @@ def run_job(couch_url, db_name, doc_id, keep=False, verbose=0):
             status_tags.append('built')
             datanode_doc['status_tags'] = status_tags
         job_doc['state'] = flydra.sge_utils.states.COMPLETE
+        if 'saved_images' in outputs:
+            datanode_doc['saved_images'] = outputs['saved_images']
         db.update( [ datanode_doc, job_doc ] )
         for (buf,fname,content_type) in outputs.get('attachments',[]):
             db.put_attachment( datanode_doc, buf, fname, content_type )

@@ -364,7 +364,7 @@ class ImageBased2DOrientation( AnalysisType ):
         self.choices['--stop'] = IntVarType(min=0)
 
     def _get_output_h5_fname( self, sge_job_doc ):
-        idstr = sge_job_doc['_id']
+        idstr = sge_job_doc['datanode_id']
         outfname = idstr+'.h5'
         return outfname
 
