@@ -378,6 +378,9 @@ def h5_doc(request,db_name=None,doc_id=None):
     db = couch_server[db_name]
     doc = db[doc_id]
 
+    saved_images = doc.get('saved_images',None)
+    si = [ {'url':k,'width':v[0],'height':v[1]} for (k,v) in saved_images.iteritems() ]
+
     sha1sum=doc.get('sha1sum',None)
     if sha1sum is not None:
         lgc = get_localglobal_context( sha1sum )
@@ -389,6 +392,7 @@ def h5_doc(request,db_name=None,doc_id=None):
     t = loader.get_template('h5_doc.html')
     context = {'id':doc['_id'],'raw':pprint.pformat(dict(doc)),
                'localglobal': lgc,
+               'saved_images': si,
                }
     context.update( common_template )               
     c = RequestContext(request,context)

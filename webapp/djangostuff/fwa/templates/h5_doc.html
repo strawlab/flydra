@@ -13,6 +13,20 @@
 
 <div class="time_range"><p>{{ time_range }}</p></div>
 
+{% if saved_images %}
+<p>Movies:
+<ul>
+  {% for vid in saved_images %}
+    <li><video controls height="{{vid.height}}" width="{{vid.width}}">
+      <source src="{{vid.url}}" type="video/ogg"></source>
+      Sorry, your browser does not support the <pre>video</pre> tag with Ogg videos. (Use Firefox).
+    </video></li>
+  {% endfor %}
+</ul>
+</p>
+{% endif %}
+
+
 <pre>{{raw}}</pre>
 
 {% include "localglobal_file.html" %}
