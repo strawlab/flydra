@@ -53,6 +53,7 @@ def run_job(couch_url, db_name, doc_id, keep=False, verbose=0):
         cmd = ['~/PY/bin/'+atype.base_cmd] # XXX use virtualenv in ~/PY
         cmd.extend( atype.convert_sources_to_cmdline_args(job_doc,source_info) )
         cmd.extend( atype.get_cmdline_args_from_choices(job_doc,source_info) )
+        cmd.extend( atype.get_output_cmdline_args(job_doc,source_info) )
         print ' '.join(cmd)
         print
         sys.stdout.flush()

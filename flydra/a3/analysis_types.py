@@ -1,11 +1,12 @@
 import collections
-import time, datetime, os, glob, shutil, stat, sys
+import time, datetime, os, glob, shutil, stat, sys, re
 import subprocess
 import hashlib
 import datanodes
 import warnings
 import flydra.sge_utils.config as config
 import Image
+import re, glob, os, sys, tempfile, subprocess, Image, shutil
 
 class VarType(object):
     pass
@@ -69,6 +70,22 @@ class AnalysisType(object):
         self.choices = {}
 #     def convert_sources_to_cmdline_args(self,sources):
 #         raise NotImplementedError('Abstract base class')
+
+    def this_choices( self, sge_job_doc ):
+        result = {}
+        choices = sge_job_doc['choices']
+        for choice in choices:
+            assert len(choice)==2
+            key = choice[0]
+            if choice[1]==None:
+                continue
+            if choice[1]=='on':
+                result[ key ] = True
+            else:
+                result[ key ] = choice[1]
+            # XXX TODO: better parsing of types
+        return result
+
     def _get_docs_shortened_sources(self,node_type,sources):
         docs = []
         unused_sources = []
@@ -87,6 +104,9 @@ class AnalysisType(object):
                 if doc['type']=='h5' and doc['has_calibration']:
                     accept=True
                 elif doc['type']=='calibration':
+                    accept=True
+            elif node_type=='ufmf collection':
+                if doc['type']=='datanode' and 'ufmf collection' in doc['properties']:
                     accept=True
             else:
                 raise NotImplementedError('unknown node_type %s'%node_type)
@@ -178,14 +198,21 @@ class AnalysisType(object):
             result[source_id] = filename_str_list
         return result
 
+    def get_output_cmdline_args(self, sge_job_doc, source_info ):
+        return []
+
     def get_cmdline_args_from_choices(self, sge_job_doc, source_info ):
+        # XXX TODO: convert to use self.this_choices(sge_job_doc)
         choices = sge_job_doc['choices']
         cmdline_args = []
         for choice in choices:
             assert len(choice)==2
             if choice[1]==None:
                 continue
-            cmdline_args.append( choice[0] + '=' + choice[1] )
+            if choice[1]=='on':
+                cmdline_args.append( choice[0] ) # BoolVarType
+            else:
+                cmdline_args.append( choice[0] + '=' + choice[1] )
         return cmdline_args
 
 class PlotsAnalysisType( AnalysisType ):
@@ -336,6 +363,14 @@ class ImageBased2DOrientation( AnalysisType ):
         self.choices['--start'] = IntVarType(min=0)
         self.choices['--stop'] = IntVarType(min=0)
 
+    def _get_output_h5_fname( self, sge_job_doc ):
+        idstr = sge_job_doc['_id']
+        outfname = idstr+'.h5'
+        return outfname
+
+    def get_output_cmdline_args(self, sge_job_doc, source_info ):
+        return ['--output-h5='+self._get_output_h5_fname(sge_job_doc) ]
+
     def get_datanode_doc_properties( self, sge_job_doc ):
         source_list = sge_job_doc['sources']
         props = {
@@ -371,7 +406,83 @@ class ImageBased2DOrientation( AnalysisType ):
 
     def copy_outputs( self, sge_job_doc, tmp_dirname, save_dir_base ):
         '''copy known outputs from dirname'''
-        1/0
+
+
+
+        # copy H5 file
+        fname_short = self._get_output_h5_fname(sge_job_doc)
+        fname = os.path.join( tmp_dirname, fname_short )
+        copy_files = [fname_short]
+
+        outdir = os.path.join( save_dir_base, sge_job_doc['datanode_id'] )
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+
+        shutil.copy2( fname, outdir )
+
+        fname_only = os.path.split( fname )[-1]
+        filesize = os.stat(fname)[stat.ST_SIZE]
+        sha1sum = do_sha1sum(fname)
+
+        datanode_doc_custom = {'filename':fname_only,
+                               'filesize':filesize,
+                               'sha1sum':sha1sum,
+                               }
+        outputs = {'copied_files':copy_files,
+                   'datanode_doc_custom':datanode_doc_custom,
+                   }
+
+        # compress saved images into movie, upload them, create link
+        if self.this_choices( sge_job_doc ).get('--save-images',False):
+            # the "--save-images" option was given
+            save_image_fnames = glob.glob(os.path.join(tmp_dirname,'*.png'))            
+            save_image_fnames = [f.replace(tmp_dirname+'/','') for f in save_image_fnames]
+            saved_images = {}
+            by_cam_id = self._parse_image_fnames( save_image_fnames )
+            for cam_id in by_cam_id:
+                out_fname = 'movie_' + sge_job_doc['datanode_id'] + '_' + cam_id + '.ogv'
+                full_out_fname = os.path.join( tmp_dirname, out_fname )
+                width,height = make_ogv( out_fname = full_out_fname, files = by_cam_id[cam_id], dirname=tmp_dirname )
+                
+                # upload image to ADS's dreamhost account
+                hostname='69.163.194.242' # 'static.flydra.astraw.com'
+                dest_path=os.path.join('static.flydra.astraw.com',out_fname)
+                cmd = 'scp -p %s %s:%s'%( full_out_fname,
+                                          hostname,
+                                          dest_path )
+                subprocess.check_call(cmd, shell=True)
+
+                url = 'http://static.flydra.astraw.com/' + out_fname
+                saved_images[ url ] = (width,height)
+            outputs['saved_images'] = saved_images
+        return outputs
+
+    def _parse_image_fnames(self, fnames ):
+        by_cam_id = collections.defaultdict(list)
+        fname_re = re.compile(r'^av_obj(?P<obj_id>[0-9]+)_(?P<cam_id>.*)_frame(?P<frame>[0-9]+)\.png$')
+        
+        for fname in fnames:
+            matchobj = fname_re.search(fname)
+            by_cam_id[ matchobj.group('cam_id') ].append( fname )
+        by_cam_id = dict( by_cam_id )
+        return by_cam_id
+
+def make_ogv( out_fname = None, files = None, dirname=None ):
+    rename_dir = os.path.join( dirname, 'tmp_fnames')
+    os.mkdir(rename_dir)
+    frame_fmt = 'frame%07d.png'
+    for i,fname in enumerate(files):
+        os.symlink( os.path.join(dirname,fname),
+                    os.path.join(rename_dir,frame_fmt%(i+1,)) )
+
+    im = Image.open( os.path.join(dirname,fname) )
+    (width,height) = im.size
+
+    cmd = 'ffmpeg2theora -v 8 %s --inputfps 3 -o %s'%( frame_fmt, os.path.join(dirname,out_fname) )
+    subprocess.check_call( cmd, shell=True, cwd=rename_dir)
+
+    shutil.rmtree( rename_dir )
+    return (width,height)
 
 def analysis_type_factory( db, class_name ):
     klass = globals()[class_name]
