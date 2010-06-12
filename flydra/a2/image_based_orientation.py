@@ -659,7 +659,7 @@ def doit(h5_filename=None,
                                 av_im_show = np.clip(av_im*contrast_scale,0,255)
 
                             margin = 10
-                            scale = 5
+                            scale = 3
 
                             # calculate the orientation line
                             yintercept = y0-slope*x0
@@ -681,7 +681,7 @@ def doit(h5_filename=None,
                                 col_height = scale*imh + 2*margin
                                 stack_margin=0
 
-                            canv=benu.Canvas(fname,row_width,col_height+stack_margin)
+                            canv=benu.Canvas(fname,row_width,col_height+stack_margin, color_rgba=(1,1,1,1))
 
                             if SHOW_STACK:
                                 for (stacki,s_orig_idx) in enumerate(
@@ -771,7 +771,9 @@ def doit(h5_filename=None,
                                        display_rect[0],
                                        display_rect[1]+display_rect[3],
                                        font_size=font_size,
-                                       color_rgba=(.2,.2,.8,0.8))
+                                       color_rgba=(.5,.5,.9,1),
+                                       shadow_offset=1,
+                                       )
 
                             # Display mean_im
                             display_rect = (2*margin+(scale*imw), margin,
@@ -786,7 +788,9 @@ def doit(h5_filename=None,
                                        display_rect[0],
                                        display_rect[1]+display_rect[3],
                                        font_size=font_size,
-                                       color_rgba=(.2,.2,.8,0.8))
+                                       color_rgba=(.5,.5,.9,1),
+                                       shadow_offset=1,
+                                       )
 
                             # Display absdiff_im
                             display_rect = (3*margin+(scale*imw)*2, margin,
@@ -802,7 +806,10 @@ def doit(h5_filename=None,
                             canv.text( 'absdiff',
                                        display_rect[0],
                                        display_rect[1]+display_rect[3],
-                                       color_rgba=(.2,.2,.8,0.8))
+                                       font_size=font_size,
+                                       color_rgba=(.5,.5,.9,1),
+                                       shadow_offset=1,
+                                       )
 
                             # Display morphed_im
                             display_rect = (4*margin+(scale*imw)*3, margin,
@@ -819,7 +826,9 @@ def doit(h5_filename=None,
                                        display_rect[0],
                                        display_rect[1]+display_rect[3],
                                        font_size=font_size,
-                                       color_rgba=(.2,.2,.8,0.8))
+                                       color_rgba=(.5,.5,.9,1),
+                                       shadow_offset=1,
+                                       )
 
                             # Display time-averaged absdiff_im
                             display_rect = (5*margin+(scale*imw)*4, margin,
@@ -837,11 +846,15 @@ def doit(h5_filename=None,
                                        display_rect[0],
                                        display_rect[1]+display_rect[3],
                                        font_size=font_size,
-                                       color_rgba=(.2,.2,.8,0.8))
+                                       color_rgba=(.5,.5,.9,1),
+                                       shadow_offset=1,
+                                       )
 
                             canv.text( '%s frame % 7d: eccentricity % 5.1f'%(
-                                cam_id,fno,eccentricity), 0, 16,
+                                cam_id,fno,eccentricity), 0, 15,
                                        font_size=font_size,
+                                       color_rgba=(.6,.7,.9,1),
+                                       shadow_offset=1,
                                        )
                             canv.save()
 

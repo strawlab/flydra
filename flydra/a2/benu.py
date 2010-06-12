@@ -58,7 +58,7 @@ def numpy2cairo(raw,cmap=None):
 
 class Canvas(object):
     """A drawing surface which handles coordinate transforms"""
-    def __init__(self,fname,width,height):
+    def __init__(self,fname,width,height,color_rgba=None):
         self._output_ext = os.path.splitext(fname)[1].lower()
         if self._output_ext == '.pdf':
             output_surface = cairo.PDFSurface(fname,
@@ -74,6 +74,13 @@ class Canvas(object):
         self._surf = output_surface
         self._ctx = cairo.Context(self._surf)
         self._fname = fname
+
+        if color_rgba is not None:
+            self._ctx.save()
+            self._ctx.set_source_rgba(*color_rgba)
+            self._ctx.paint()
+            self._ctx.restore()
+
     def imshow(self,im,l,b,filter='nearest',cmap=None):
         """show image im at location (l,b)
 
@@ -164,8 +171,10 @@ class Canvas(object):
             self._ctx.show_page()
             self._surf.finish()
 
-    def text(self,text,x,y,color_rgba=None,font_size=10):
+    def text(self,text,x,y,color_rgba=None,font_size=10,shadow_offset=None):
         """draw text"""
+        if shadow_offset is not None:
+            self.text( text, x+shadow_offset, y+shadow_offset, color_rgba=(0,0,0,1), font_size=font_size)
         if color_rgba is None:
             color_rgba = (0,0,0,1)
 
