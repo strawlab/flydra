@@ -18,6 +18,7 @@ import tables as PT
 pytables_filt = numpy.asarray
 import atexit
 import pickle, copy
+import pkg_resources
 
 import motmot.utils.config
 import flydra.version
@@ -37,11 +38,32 @@ tables.flavor.restrict_flavors(keep=['numpy'])
 
 try:
     import roslib
-    import rospy
-
     have_ROS = True
 except ImportError, err:
     have_ROS = False
+    print 'do not have ROS (see http://ros.org )'
+
+if have_ROS:
+
+    # Tell ROS where our "ROS package" (directory with manifest.xml) is
+    
+    # trigger extraction
+    ROS_PACKAGE_PATH = pkg_resources.resource_filename(__name__,"rosmainbrain")
+
+    ros_pack_paths = os.environ.get('ROS_PACKAGE_PATH',None)
+    if ros_pack_paths is not None:
+        ros_pack_paths = ros_pack_paths.split(os.pathsep)
+    else:
+        ros_pack_paths = []
+    ros_pack_paths.append( ROS_PACKAGE_PATH )
+    ros_pack_paths = os.pathsep.join( ros_pack_paths )
+    os.environ['ROS_PACKAGE_PATH'] = ros_pack_paths
+    del ros_pack_paths, ROS_PACKAGE_PATH
+
+    roslib.load_manifest('rosmainbrain')
+
+    import rospy
+    print 'have ROS'
 
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
@@ -520,8 +542,9 @@ class CoordRealReceiver(threading.Thread):
 
 class CoordinateSender(threading.Thread):
       """a class to send realtime coordinate data from a separate thread"""
-      def __init__(self,my_queue,quit_event):
+      def __init__(self,my_queue,my_ros_queue,quit_event):
           self.my_queue = my_queue
+          self.my_ros_queue = my_ros_queue
           self.quit_event = quit_event
           name = 'CoordinateSender thread'
           threading.Thread.__init__(self,name=name)
@@ -531,6 +554,12 @@ class CoordinateSender(threading.Thread):
           block = 1
           timeout = .1
           encode_super_packet = flydra.kalman.data_packets.encode_super_packet
+
+          if have_ROS:
+              from rosmainbrain.msg import flydra_mainbrain_super_packet
+              pub = rospy.Publisher('flydra_mainbrain_super_packets', 
+                                    flydra_mainbrain_super_packet)
+
           while not self.quit_event.isSet():
               packets = []
               packets.append( self.my_queue.get() )
@@ -543,6 +572,18 @@ class CoordinateSender(threading.Thread):
               super_packet = encode_super_packet( packets )
               for downstream_host in downstream_kalman_hosts:
                   outgoing_UDP_socket.sendto(super_packet,downstream_host)
+
+              if have_ROS:
+                  ros_packets = []
+                  ros_packets.append( self.my_ros_queue.get() )
+                  while 1:
+                      try:
+                          ros_packets.append( self.my_ros_queue.get_nowait() )
+                      except Queue.Empty:
+                          break
+                  ros_super_packet = flydra_mainbrain_super_packet(packets=ros_packets)
+                  pub.publish(ros_super_packet)
+
 
 class CoordinateProcessor(threading.Thread):
     def __init__(self,main_brain,save_profiling_data=False,
@@ -559,6 +600,7 @@ class CoordinateProcessor(threading.Thread):
             self.data_dict_queue = []
 
         self.realtime_kalman_data_queue = Queue.Queue()
+        self.realtime_ros_packets = Queue.Queue()
 
         self.cam_ids = []
         self.cam2mainbrain_data_ports = []
@@ -594,7 +636,7 @@ class CoordinateProcessor(threading.Thread):
         self.realreceiver.setDaemon(True)
         self.realreceiver.start()
 
-        cs = CoordinateSender(self.realtime_kalman_data_queue,self.quit_event)
+        cs = CoordinateSender(self.realtime_kalman_data_queue,self.realtime_ros_packets,self.quit_event)
         cs.setDaemon(True)
         cs.start()
 
@@ -822,6 +864,8 @@ class CoordinateProcessor(threading.Thread):
 
         if NETWORK_PROTOCOL == 'tcp':
             old_data = {}
+
+        from rosmainbrain.msg import flydra_mainbrain_packet, flydra_object
 
         debug_drop_fd = None
 
@@ -1222,6 +1266,24 @@ class CoordinateProcessor(threading.Thread):
                                             oldest_camera_timestamp,now)
                                         if data_packet is not None:
                                             self.realtime_kalman_data_queue.put(data_packet)
+                                        if have_ROS:
+                                            results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' )
+                                            ros_objects = []
+                                            for result in results:
+                                                if result is None:
+                                                    continue
+                                                obj_id,xhat,P = result
+                                                this_ros_object = flydra_object(obj_id=obj_id,
+                                                                                pos=xhat[:3],
+                                                                                vel=xhat[3:6],
+                                                                                posvel_covariance_diagonal=numpy.diag(P)[:6])
+                                                ros_objects.append( this_ros_object )
+                                            ros_packet = flydra_mainbrain_packet(
+                                                framenumber=corrected_framenumber,
+                                                reconstruction_timestamp=now,
+                                                acquire_timestamp=oldest_camera_timestamp,
+                                                objects = ros_objects)
+                                            self.realtime_ros_packets.put( ros_packet )
 
                                 if SHOW_3D_PROCESSING_LATENCY:
                                     start_3d_proc_c = time.time()
@@ -1825,6 +1887,9 @@ class MainBrain(object):
         self.timestamp_echo_receiver.start()
 
         main_brain_keeper.register( self )
+
+        if have_ROS:
+            rospy.init_node('flydra_mainbrain')
 
     def get_fps(self):
         return self.trigger_device.frames_per_second_actual

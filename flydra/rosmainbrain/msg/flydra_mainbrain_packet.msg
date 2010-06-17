@@ -1,0 +1,4 @@
+uint64 framenumber
+float64 reconstruction_timestamp
+float64 acquire_timestamp
+flydra_object[] objects
