@@ -591,11 +591,11 @@ class CoordinateProcessor(threading.Thread):
         self.general_save_info = {}
 
         self.realreceiver = CoordRealReceiver(self.quit_event)
-        #self.realreceiver.setDaemon(True)
+        self.realreceiver.setDaemon(True)
         self.realreceiver.start()
 
         cs = CoordinateSender(self.realtime_kalman_data_queue,self.quit_event)
-        #cs.setDaemon(True)
+        cs.setDaemon(True)
         cs.start()
 
         name = 'CoordinateProcessor thread'
@@ -1817,11 +1817,11 @@ class MainBrain(object):
         self.coord_processor.start()
 
         self.trig_receiver = TrigReceiver(self)
-        #self.trig_receiver.setDaemon(True)
+        self.trig_receiver.setDaemon(True)
         self.trig_receiver.start()
 
         self.timestamp_echo_receiver = TimestampEchoReceiver(self)
-        #self.timestamp_echo_receiver.setDaemon(True)
+        self.timestamp_echo_receiver.setDaemon(True)
         self.timestamp_echo_receiver.start()
 
         main_brain_keeper.register( self )
