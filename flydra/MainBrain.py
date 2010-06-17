@@ -35,6 +35,14 @@ warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy'])
 
+try:
+    import roslib
+    import rospy
+
+    have_ROS = True
+except ImportError, err:
+    have_ROS = False
+
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
 
