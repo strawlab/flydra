@@ -44,24 +44,7 @@ except ImportError, err:
     print 'do not have ROS (see http://ros.org )'
 
 if have_ROS:
-
-    # Tell ROS where our "ROS package" (directory with manifest.xml) is
-    
-    # trigger extraction
-    ROS_PACKAGE_PATH = pkg_resources.resource_filename(__name__,"rosmainbrain")
-
-    ros_pack_paths = os.environ.get('ROS_PACKAGE_PATH',None)
-    if ros_pack_paths is not None:
-        ros_pack_paths = ros_pack_paths.split(os.pathsep)
-    else:
-        ros_pack_paths = []
-    ros_pack_paths.append( ROS_PACKAGE_PATH )
-    ros_pack_paths = os.pathsep.join( ros_pack_paths )
-    os.environ['ROS_PACKAGE_PATH'] = ros_pack_paths
-    del ros_pack_paths, ROS_PACKAGE_PATH
-
-    roslib.load_manifest('rosmainbrain')
-
+    roslib.load_manifest('ros_flydra')
     import rospy
     print 'have ROS'
 
@@ -556,7 +539,7 @@ class CoordinateSender(threading.Thread):
           encode_super_packet = flydra.kalman.data_packets.encode_super_packet
 
           if have_ROS:
-              from rosmainbrain.msg import flydra_mainbrain_super_packet
+              from ros_flydra.msg import flydra_mainbrain_super_packet
               pub = rospy.Publisher('flydra_mainbrain_super_packets', 
                                     flydra_mainbrain_super_packet)
 
@@ -865,7 +848,7 @@ class CoordinateProcessor(threading.Thread):
         if NETWORK_PROTOCOL == 'tcp':
             old_data = {}
 
-        from rosmainbrain.msg import flydra_mainbrain_packet, flydra_object
+        from ros_flydra.msg import flydra_mainbrain_packet, flydra_object
 
         debug_drop_fd = None
 
