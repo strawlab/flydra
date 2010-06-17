@@ -1,0 +1,14 @@
+<package>
+  <description brief="rosmainbrain">
+
+     rosmainbrain
+
+  </description>
+  <author>Floris van Breugel</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/rosmainbrain</url>
+
+</package>
+
+
