@@ -850,6 +850,7 @@ class CoordinateProcessor(threading.Thread):
 
         if have_ROS:
             from ros_flydra.msg import flydra_mainbrain_packet, flydra_object
+            from geometry_msgs.msg import Point, Vector3
 
         debug_drop_fd = None
 
@@ -1258,14 +1259,14 @@ class CoordinateProcessor(threading.Thread):
                                                     continue
                                                 obj_id,xhat,P = result
                                                 this_ros_object = flydra_object(obj_id=obj_id,
-                                                                                pos=xhat[:3],
-                                                                                vel=xhat[3:6],
-                                                                                posvel_covariance_diagonal=numpy.diag(P)[:6])
+                                                                                position=Point(*xhat[:3]),
+                                                                                velocity=Vector3(*xhat[3:6]),
+                                                                                posvel_covariance_diagonal=numpy.diag(P)[:6].tolist())
                                                 ros_objects.append( this_ros_object )
                                             ros_packet = flydra_mainbrain_packet(
                                                 framenumber=corrected_framenumber,
-                                                reconstruction_timestamp=now,
-                                                acquire_timestamp=oldest_camera_timestamp,
+                                                reconstruction_stamp=rospy.Time.from_sec(now),
+                                                acquire_stamp=rospy.Time.from_sec(oldest_camera_timestamp),
                                                 objects = ros_objects)
                                             self.realtime_ros_packets.put( ros_packet )
 
