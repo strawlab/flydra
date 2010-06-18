@@ -848,7 +848,8 @@ class CoordinateProcessor(threading.Thread):
         if NETWORK_PROTOCOL == 'tcp':
             old_data = {}
 
-        from ros_flydra.msg import flydra_mainbrain_packet, flydra_object
+        if have_ROS:
+            from ros_flydra.msg import flydra_mainbrain_packet, flydra_object
 
         debug_drop_fd = None
 
