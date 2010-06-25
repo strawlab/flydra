@@ -2415,9 +2415,9 @@ class AppState(object):
                 
                 try:
                     msg, addr = self.recvsock.recvfrom(4096)
-                    #print msg
-                except:
-                    pass
+                except socket.error, err:
+                    if err.errno == 11: #Resource temporarily unavailable
+                        pass
                 if msg=='record_ufmf':
                     self.timer = time.time()
                 if msg=='record_ufmf' and self.recording==0:
