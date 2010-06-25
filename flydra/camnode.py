@@ -186,7 +186,12 @@ def TimestampEcho():
     sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     hostname = ''
     port = flydra.common_variables.timestamp_echo_listener_port
-    sockobj.bind(( hostname, port))
+    try:
+        sockobj.bind(( hostname, port))
+    except socket.error, err:
+        if err.errno==98:
+            warnings.warn('TimestampEcho not available because port in use')
+            return
     sendto_port = flydra.common_variables.timestamp_echo_gatherer_port
     fmt = flydra.common_variables.timestamp_echo_fmt_diff
     while 1:
