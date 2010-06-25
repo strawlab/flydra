@@ -2750,7 +2750,7 @@ def get_app_defaults():
             default_main_brain_hostname = ''
 
     defaults = dict(wrapper='ctypes',
-                    backend='unity',
+                    backend='mega',
 
                     # these are the most important 2D tracking parameters:
                     diff_threshold = 5,
