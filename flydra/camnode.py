@@ -2318,12 +2318,7 @@ class AppState(object):
         my_host = '' # get fully qualified hostname
         my_port = 30043 # arbitrary number
         
-        try:
-            self.recvsock.bind((my_host, my_port))
-        except socket.error, err:
-            print "Couldn't be a udp server on port %d : %s" % (
-                    my_port, err)
-            raise SystemExit
+        self.recvsock.bind((my_host, my_port))
         print 'created udp server on port ', my_port
         
         self.recvsock.setblocking(0)
