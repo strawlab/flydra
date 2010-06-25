@@ -2322,11 +2322,17 @@ class AppState(object):
         self.recvsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         my_host = '' # get fully qualified hostname
         my_port = 30043 # arbitrary number
-        
-        self.recvsock.bind((my_host, my_port))
-        print 'created udp server on port ', my_port
-        
-        self.recvsock.setblocking(0)
+
+        try:
+            self.recvsock.bind((my_host, my_port))
+            print 'created udp server on port ', my_port
+        except socket.error, err:
+            if err.errno==98: # port in use
+                warnings.warn('self.recvsock not available because port in use')
+                self.recvsock = None
+
+        if self.recvsock is not None:
+            self.recvsock.setblocking(0)
         
         self.recording = 0
         self.timer = 0
@@ -2413,11 +2419,12 @@ class AppState(object):
 
                 msg = None
                 
-                try:
-                    msg, addr = self.recvsock.recvfrom(4096)
-                except socket.error, err:
-                    if err.errno == 11: #Resource temporarily unavailable
-                        pass
+                if self.recvsock is not None:
+                    try:
+                        msg, addr = self.recvsock.recvfrom(4096)
+                    except socket.error, err:
+                        if err.errno == 11: #Resource temporarily unavailable
+                            pass
                 if msg=='record_ufmf':
                     self.timer = time.time()
                 if msg=='record_ufmf' and self.recording==0:
