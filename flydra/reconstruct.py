@@ -951,10 +951,14 @@ class Reconstructor:
             res_fd.close()
 
             # load non linear parameters
+            rad_files = os.path.join(use_cal_source,'*.rad')
             for cam_id_enum, cam_id in enumerate(cam_ids):
                 filename = os.path.join(use_cal_source,
                                         'basename%d.rad'%(cam_id_enum+1,))
                 if not os.path.exists(filename):
+                    if len(rad_files):
+                        raise RuntimeError(
+                            '.rad files present but none named "%s"'%filename)
                     warnings.warn('no non-linear data (e.g. radial distortion) '
                                   'in calibration for %s'%cam_id)
                     self._helper[cam_id] = SingleCameraCalibration_from_basic_pmat(
