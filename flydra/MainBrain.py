@@ -540,7 +540,7 @@ class CoordinateSender(threading.Thread):
 
           if have_ROS:
               from ros_flydra.msg import flydra_mainbrain_super_packet
-              pub = rospy.Publisher('flydra_mainbrain_super_packets', 
+              pub = rospy.Publisher('flydra_mainbrain_super_packets',
                                     flydra_mainbrain_super_packet)
 
           while not self.quit_event.isSet():
