@@ -186,7 +186,12 @@ def TimestampEcho():
     sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     hostname = ''
     port = flydra.common_variables.timestamp_echo_listener_port
-    sockobj.bind(( hostname, port))
+    try:
+        sockobj.bind(( hostname, port))
+    except socket.error, err:
+        if err.errno==98:
+            warnings.warn('TimestampEcho not available because port in use')
+            return
     sendto_port = flydra.common_variables.timestamp_echo_gatherer_port
     fmt = flydra.common_variables.timestamp_echo_fmt_diff
     while 1:
@@ -1864,15 +1869,28 @@ class AppState(object):
 
             cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
 
-            all_cam_info_list = [
-                ('\0'.join(cam_iface.get_camera_info(i)),i) for i in range(cam_iface.get_num_cameras()) ]
+            all_cam_info_list = []
+            for i in range(cam_iface.get_num_cameras()):
+                try:
+                    this_info1 =  cam_iface.get_camera_info(i)
+                except cam_iface.CameraNotAvailable:
+                    this_info2 =  ('(not available)',i) 
+                else:
+                    this_info2 =  ('\0'.join(this_info1),i) 
+                all_cam_info_list.append(this_info2)
+                
             all_cam_info_list.sort() # make sure list is always in same order for given cameras
             all_cam_info_list.reverse() # any ordering will do, but reverse for historical reasons
             cam_order = [ x[1] for x in all_cam_info_list]
             del all_cam_info_list
             print 'camera order',cam_order
             for i,cam_no in enumerate(cam_order):
-                 print 'order %d: %s'%(i, cam_iface.get_camera_info(cam_no))
+                try:
+                    avail_string = cam_iface.get_camera_info(cam_no)
+                except cam_iface.CameraNotAvailable:
+                    avail_string = '(not available)'
+                print 'order %d: %s'%(i, avail_string)
+                 
 
             cams_only = options.cams_only
             if cams_only is not None:
@@ -2304,16 +2322,17 @@ class AppState(object):
         self.recvsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         my_host = '' # get fully qualified hostname
         my_port = 30043 # arbitrary number
-        
+
         try:
             self.recvsock.bind((my_host, my_port))
+            print 'created udp server on port ', my_port
         except socket.error, err:
-            print "Couldn't be a udp server on port %d : %s" % (
-                    my_port, err)
-            raise SystemExit
-        print 'created udp server on port ', my_port
-        
-        self.recvsock.setblocking(0)
+            if err.errno==98: # port in use
+                warnings.warn('self.recvsock not available because port in use')
+                self.recvsock = None
+
+        if self.recvsock is not None:
+            self.recvsock.setblocking(0)
         
         self.recording = 0
         self.timer = 0
@@ -2400,11 +2419,12 @@ class AppState(object):
 
                 msg = None
                 
-                try:
-                    msg, addr = self.recvsock.recvfrom(4096)
-                    #print msg
-                except:
-                    pass
+                if self.recvsock is not None:
+                    try:
+                        msg, addr = self.recvsock.recvfrom(4096)
+                    except socket.error, err:
+                        if err.errno == 11: #Resource temporarily unavailable
+                            pass
                 if msg=='record_ufmf':
                     self.timer = time.time()
                 if msg=='record_ufmf' and self.recording==0:
@@ -2737,7 +2757,7 @@ def get_app_defaults():
             default_main_brain_hostname = ''
 
     defaults = dict(wrapper='ctypes',
-                    backend='unity',
+                    backend='mega',
 
                     # these are the most important 2D tracking parameters:
                     diff_threshold = 5,
