@@ -205,7 +205,7 @@ class AnalysisType(object):
                  ('ufmf collection' in source_doc['properties']))):
                 import motmot.ufmf.reindex
                 for filename in filename_str_list.split(os.path.pathsep):
-                    motmot.ufmf.reindex.reindex(filename) # maybe should add this: short_file_ok=True
+                    motmot.ufmf.reindex.reindex(os.path.join(target_dir,filename)) # maybe should add this: short_file_ok=True
 
             result[source_id] = filename_str_list
         return result
