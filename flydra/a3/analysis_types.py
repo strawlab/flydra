@@ -195,6 +195,16 @@ class AnalysisType(object):
                 filename_str_list = filename # only one element
             else:
                 raise ValueError('no filename for source %s'%source_id)
+
+            # If source is a ufmf, reindex it. (Strictly speaking this
+            # shouldn't be necessary and is thus a hack. But it's
+            # pretty fast and prevents more frustrating errors.)
+
+            if source_doc['type'] == 'ufmf':
+                import motmot.ufmf.reindex
+                for filename in filename_str_list.split(os.path.pathsep):
+                    motmot.ufmf.reindex.reindex(filename) # maybe should add this: short_file_ok=True
+
             result[source_id] = filename_str_list
         return result
 
