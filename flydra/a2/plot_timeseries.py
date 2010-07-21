@@ -192,6 +192,8 @@ def plot_timeseries(subplot=None,options = None):
         print 'No obj_ids to plot, quitting'
         sys.exit(0)
 
+    time0 = 0.0 # set default value
+
     for obj_id in use_obj_ids:
         if not do_fuse:
             try:
