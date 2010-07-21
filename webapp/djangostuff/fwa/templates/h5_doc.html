@@ -17,9 +17,10 @@
 <p>Movies:
 <ul>
   {% for vid in saved_images %}
-    <li><video controls height="{{vid.height}}" width="{{vid.width}}">
+    <li>(Click this <a href="{{vid.url}}">link</a> to download.)
+      <video controls height="{{vid.height}}" width="{{vid.width}}">
       <source src="{{vid.url}}" type="video/ogg"></source>
-      Sorry, your browser does not support the <pre>video</pre> tag with Ogg videos. (Use Firefox).
+      Sorry, your browser does not support the <pre>video</pre> tag with Ogg videos. (Use Firefox or Chrome).
     </video></li>
   {% endfor %}
 </ul>
