@@ -721,19 +721,19 @@ def doit(h5_filename=None,
 
                                             canv.imshow(s_im,s_raw_l,s_raw_b)
                                             sx0,sy0=com_coords[s_orig_idx]
-                                            X = [sx0-1,sx0+1]
-                                            Y = [sy0-1,sy0+1]
+                                            X = [sx0]
+                                            Y = [sy0]
                                              # the raw coords in red
-                                            canv.plot(X,Y,
-                                                      color_rgba=(1,.5,.5,1))
+                                            canv.scatter(X,Y,
+                                                         color_rgba=(1,.5,.5,1))
 
                                             if do_rts_smoothing:
                                                 sx0,sy0=com_coords_smooth[s_orig_idx]
-                                                X = [sx0-1,sx0+1]
-                                                Y = [sy0-1,sy0+1]
+                                                X = [sx0]
+                                                Y = [sy0]
                                                  # the RTS smoothed coords in green
-                                                canv.plot(X,Y,
-                                                          color_rgba=(.5,1,.5,1))
+                                                canv.scatter(X,Y,
+                                                             color_rgba=(.5,1,.5,1))
 
                                             if s_orig_idx==orig_idx:
                                                 boxx = np.array([s_raw_l,
