@@ -37,7 +37,15 @@ def add_fields_to_form( form, analysis_type ):
             form.fields[name] = forms.BooleanField()
         else:
             raise ValueError('unknown vartype %s'%vartype)
-        
+
+def is_empty(posted_value):
+    if posted_value is None:
+        return True
+    if posted_value == '':
+        return True
+    if posted_value == u'':
+        return True
+    return False
 
 class Verifier(object):
     """helper class to verify arguments from POST request"""
@@ -119,13 +127,13 @@ class Verifier(object):
                 assert posted_value in vartype.get_options()
                 choices.append( (choice_name, posted_value) )
             elif isinstance(vartype,IntVarType):
-                if posted_value is not None and posted_value != '':
+                if not is_empty(posted_value):
                     choices.append( (choice_name, posted_value) )
             elif isinstance(vartype,FloatVarType):
-                if posted_value is not None and posted_value != '':
+                if not is_empty(posted_value):
                     choices.append( (choice_name, posted_value) )
             elif isinstance(vartype,BoolVarType):
-                if posted_value is not None and posted_value != '':
+                if not is_empty(posted_value):
                     choices.append( (choice_name, posted_value) )
             else:
                 raise ValueError('unknown vartype %s'%vartype)
