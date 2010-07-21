@@ -200,7 +200,9 @@ class AnalysisType(object):
             # shouldn't be necessary and is thus a hack. But it's
             # pretty fast and prevents more frustrating errors.)
 
-            if source_doc['type'] == 'ufmf':
+            if ((source_doc['type'] == 'ufmf') or
+                ((source_doc['type'] == 'datanode') and 
+                 ('ufmf collection' in source_doc['properties']))):
                 import motmot.ufmf.reindex
                 for filename in filename_str_list.split(os.path.pathsep):
                     motmot.ufmf.reindex.reindex(filename) # maybe should add this: short_file_ok=True
