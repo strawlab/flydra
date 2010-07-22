@@ -487,6 +487,82 @@ class ImageBased2DOrientation( AnalysisType ):
             by_cam_id[cam_id][obj_id].append( fname )
         return by_cam_id
 
+class Fit3DOrientation( AnalysisType ):
+    name = 'Fit 3D orientation'
+    short_description = 'combine 2D orientations with EKF to fit 3D orientation'
+    source_node_types = ['3d position','2d orientation']
+    base_cmd = 'lydra_analysis_orientation_ekf_fitter'
+
+    def __init__(self,*args,**kwargs):
+        super( Fit3DOrientation, self).__init__(*args,**kwargs)
+
+    def _get_output_h5_fname( self, sge_job_doc ):
+        idstr = sge_job_doc['datanode_id']
+        outfname = idstr+'.h5'
+        return outfname
+
+    def get_output_cmdline_args(self, sge_job_doc, source_info ):
+        return ['--output-h5='+self._get_output_h5_fname(sge_job_doc) ]
+
+    def get_datanode_doc_properties( self, sge_job_doc ):
+        source_list = sge_job_doc['sources']
+        props = {
+            'type':'h5',
+            'has_2d_orientation':False,
+            'has_2d_position':False,
+            'has_3d_orientation':True,
+            'has_3d_position':True,
+            'has_calibration':True,
+            'source':'computed from sources %s'%source_list,
+            'comments':'',
+            }
+        return props
+
+    def convert_sources_to_cmdline_args(self, sge_job_doc, source_info ):
+        sources = sge_job_doc['sources']
+        short_sources = sources
+        docs = []
+        for snt in self.source_node_types:
+            ndocs,short_sources = self._get_docs_shortened_sources(snt,short_sources)
+            docs.extend(ndocs)
+        cmdline_args = []
+        for (node_type,doc) in docs:
+            if node_type == '3d position':
+                cmdline_args.extend( ['--kalman-file', source_info[doc['_id']]] )
+            elif node_type == '2d orientation':
+                cmdline_args.extend( ['--h5', source_info[doc['_id']]] )
+            else:
+                raise ValueError('unknown node_type as source: %s'%node_type)
+        return cmdline_args
+
+    def copy_outputs( self, sge_job_doc, tmp_dirname, save_dir_base ):
+        '''copy known outputs from dirname'''
+
+        # copy H5 file
+        fname_short = self._get_output_h5_fname(sge_job_doc)
+        fname = os.path.join( tmp_dirname, fname_short )
+        copy_files = [fname_short]
+
+        outdir = os.path.join( save_dir_base, sge_job_doc['datanode_id'] )
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+
+        shutil.copy2( fname, outdir )
+
+        fname_only = os.path.split( fname )[-1]
+        filesize = os.stat(fname)[stat.ST_SIZE]
+        sha1sum = do_sha1sum(fname)
+
+        datanode_doc_custom = {'filename':fname_only,
+                               'filesize':filesize,
+                               'sha1sum':sha1sum,
+                               }
+        outputs = {'copied_files':copy_files,
+                   'datanode_doc_custom':datanode_doc_custom,
+                   }
+
+        return outputs
+
 def make_ogv( out_fname = None, files = None, dirname=None ):
     files = files[:]
     files.sort()
@@ -511,4 +587,4 @@ def analysis_type_factory( db, class_name ):
     atype = klass(db)
     return atype
 
-class_names = ['EKF_based_3D_position','PlotSummary3D','ImageBased2DOrientation']
+class_names = ['EKF_based_3D_position','PlotSummary3D','ImageBased2DOrientation','Fit3DOrientation']
