@@ -19,9 +19,15 @@ This cluster is running with {{num_nodes}} node{{num_nodes|pluralize}} active. <
   <li><a href="{{stop_cluster_url}}">stop cluster</a></li>
 </ul>
 {% else %}
-This cluster is not running.<ul>
-  <li><a href="{{start_cluster_url}}">start cluster</a></li>
-</ul>
+This cluster is not running.
+<form action="../cluster_admin/" method="POST">
+{{ form.as_p }}
+<input type="submit" value="Start cluster" />
+</form>
+
+Note: please be patient once you click "Start cluster" - it can take
+many minutes for the cluster to come up.
+
 {% endif %}
 
 {% endblock %}

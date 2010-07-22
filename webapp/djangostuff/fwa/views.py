@@ -238,12 +238,24 @@ def submit_SGE_jobs(request,db_name=None,dataset=None):
     url = get_next_url(db_name=db_name,dataset_name=dataset)
     return HttpResponseRedirect(url) # Redirect after POST
 
+class ClusterStartForm(forms.Form):
+    n_nodes = forms.IntegerField(initial=1,min_value=1)
+
 @login_required
 def cluster_admin(request,db_name=None,dataset=None):
     dataset_id = 'dataset:'+dataset
     db = couch_server[db_name]
 
     cluster_obj = cluster.StarCluster(settings.FWA_STARCLUSTER_CONFIG_FNAME)
+
+    if request.method == 'POST': # If the form has been submitted...
+        form = ClusterStartForm(request.POST) # A form bound to the POST data
+        if form.is_valid(): # All validation rules pass
+            # start cluster...
+            cluster_obj.start_n_nodes( form.cleaned_data['n_nodes'] )
+            return HttpResponseRedirect('..') # Redirect after POST
+    else:
+        form = ClusterStartForm() # An unbound form
 
     is_running = cluster_obj.is_running()
     context = {'name':cluster_obj.name,
@@ -252,13 +264,24 @@ def cluster_admin(request,db_name=None,dataset=None):
 
     if is_running:
         context['num_nodes'] = cluster_obj.get_num_nodes()
-        context['stop_cluster_url'] = '../stop_cluster'
+        context['stop_cluster_url'] = '../cluster_stop'
     else:
-        context['start_cluster_url'] = '../start_cluster'
+        context['form'] = form
 
     t = loader.get_template('cluster_admin.html')
     c = RequestContext(request,context)
     return HttpResponse(t.render(c))
+
+@login_required
+def cluster_stop(request,db_name=None,dataset=None):
+    dataset_id = 'dataset:'+dataset
+    db = couch_server[db_name]
+
+    cluster_obj = cluster.StarCluster(settings.FWA_STARCLUSTER_CONFIG_FNAME)
+    
+    if cluster_obj.is_running():
+        cluster_obj.shutdown()
+    return HttpResponseRedirect('../cluster_admin')
 
 @login_required
 def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
