@@ -14,8 +14,6 @@ import dateutil.parser
 import couchdb.http
 from couchdb.client import Server
 
-import localglobal.client
-
 from paginatoe import SimpleCouchPaginator, CouchPaginator
 import flydra.a3.analysis_types
 import analysis_types_fwa
@@ -30,12 +28,6 @@ def _connect_couch():
     return Server(couchbase)
 couch_server = _connect_couch()
 metadb = couch_server['flydraweb_metadata']
-
-def _connect_localglobal():
-    lghost = settings.FWA_LOCALGLOBAL_HOST
-    lgport = settings.FWA_LOCALGLOBAL_PORT
-    return localglobal.client.Server(host=lghost, port=lgport)
-localglobal_server = _connect_localglobal()
 
 REDIRECT_OVER_SINGLE_OPTIONS=True
 
@@ -396,30 +388,9 @@ def raw_doc(request,db_name=None,doc_id=None):
     db = couch_server[db_name]
     doc = db[doc_id]
     t = loader.get_template('raw_doc.html')
-    if 'sha1sum' in doc:
-        lg = get_localglobal_context( doc['sha1sum'] )
-    else:
-        lg = None
     c = RequestContext(request,{'id':doc['_id'],'raw':pprint.pformat(dict(doc)),
-                                'localglobal':lg,
                                 })
     return HttpResponse(t.render(c))
-
-def get_localglobal_docs(sha1sum):
-    orig_lgdocs = localglobal_server.get_sha1sum_docs( sha1sum )
-    extra_lgdocs = []
-    for lgdoc in orig_lgdocs:
-        if lgdoc['type']!='compressed':
-            continue
-        extra = localglobal_server.get_sha1sum_docs( lgdoc['compressed_sha1sum'], return_compressed=False )
-        extra_lgdocs.extend( extra )
-    lgdocs = orig_lgdocs + extra_lgdocs
-    return lgdocs
-
-def get_localglobal_context(sha1sum):
-    """prepare for localglobal_doc.html template"""
-    lgdocs = get_localglobal_docs( sha1sum )
-    return {'docs':lgdocs,'raw':pprint.pformat(lgdocs)}
 
 @login_required
 def h5_doc(request,db_name=None,doc_id=None):
@@ -429,17 +400,10 @@ def h5_doc(request,db_name=None,doc_id=None):
     saved_images = doc.get('saved_images',{})
     si = [ {'url':k,'width':v[0],'height':v[1]} for (k,v) in saved_images.iteritems() ]
 
-    sha1sum=doc.get('sha1sum',None)
-    if sha1sum is not None:
-        lgc = get_localglobal_context( sha1sum )
-    else:
-        lgc = None
-
     common_template = get_datanode_common( doc )
 
     t = loader.get_template('h5_doc.html')
     context = {'id':doc['_id'],'raw':pprint.pformat(dict(doc)),
-               'localglobal': lgc,
                'saved_images': si,
                }
     context.update( common_template )               
