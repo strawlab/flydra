@@ -5,6 +5,7 @@ urlpatterns = patterns('fwa.views',
     (r'^(?P<db_name>\w+)/$', 'select_dataset'), # show the datasets in database, choose dataset
     (r'^(?P<db_name>\w+)/(?P<dataset>\w+)/$', 'dataset'), # show the dataset
     (r'^(?P<db_name>\w+)/(?P<dataset>\w+)/submit_SGE_jobs/$', 'submit_SGE_jobs'), # submit CouchDB job docs to SGE
+    (r'^(?P<db_name>\w+)/(?P<dataset>\w+)/cluster_admin/$', 'cluster_admin'), # administer the cluster
     (r'^(?P<db_name>\w+)/(?P<dataset>\w+)/DataNodes/$', 'datanodes_by_property'), # show the dataset
     (r'^(?P<db_name>\w+)/(?P<dataset>\w+)/DataNodes/(?P<property_name>[\w ]+)/$', 'datanodes_by_property'),
     (r'^(?P<db_name>\w+)/(?P<dataset>\w+)/apply_analysis_type/(?P<class_name>[\w ]+)/$', 'apply_analysis_type'),

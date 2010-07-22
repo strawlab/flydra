@@ -19,6 +19,7 @@ import localglobal.client
 from paginatoe import SimpleCouchPaginator, CouchPaginator
 import flydra.a3.analysis_types
 import analysis_types_fwa
+import cluster
 
 import pystache
 import pprint
@@ -236,6 +237,28 @@ def submit_SGE_jobs(request,db_name=None,dataset=None):
                                             settings.FWA_STARCLUSTER_CONFIG_FNAME )
     url = get_next_url(db_name=db_name,dataset_name=dataset)
     return HttpResponseRedirect(url) # Redirect after POST
+
+@login_required
+def cluster_admin(request,db_name=None,dataset=None):
+    dataset_id = 'dataset:'+dataset
+    db = couch_server[db_name]
+
+    cluster_obj = cluster.StarCluster(settings.FWA_STARCLUSTER_CONFIG_FNAME)
+
+    is_running = cluster_obj.is_running()
+    context = {'name':cluster_obj.name,
+               'is_running':is_running,
+               }
+
+    if is_running:
+        context['num_nodes'] = cluster_obj.get_num_nodes()
+        context['stop_cluster_url'] = '../stop_cluster'
+    else:
+        context['start_cluster_url'] = '../start_cluster'
+
+    t = loader.get_template('cluster_admin.html')
+    c = RequestContext(request,context)
+    return HttpResponse(t.render(c))
 
 @login_required
 def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):

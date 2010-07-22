@@ -1,0 +1,27 @@
+{% extends "site_base.html" %}
+
+{% load i18n %}
+
+{% block head_title %}Cluster administration{% endblock %}
+{% block extra_head %}<link rel="stylesheef" href="{{ STATIC_URL }}fwa/css/fwa-docs.css" />{% endblock %}
+
+{% block tab_id %}id="home_tab"{% endblock %}
+
+{% block body %}
+
+<h1>Cluster administration</h1>
+
+Cluster: {{name}}
+
+<p>
+{% if is_running %}
+This cluster is running with {{num_nodes}} node{{num_nodes|pluralize}} active. <ul>
+  <li><a href="{{stop_cluster_url}}">stop cluster</a></li>
+</ul>
+{% else %}
+This cluster is not running.<ul>
+  <li><a href="{{start_cluster_url}}">start cluster</a></li>
+</ul>
+{% endif %}
+
+{% endblock %}
