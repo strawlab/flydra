@@ -9,6 +9,8 @@
 
 {% block body %}
 
+<a href="..">(Go back to dataset view.)</a>
+
 <h1>Cluster administration</h1>
 
 Cluster: {{name}}
@@ -26,7 +28,6 @@ page</a>.
 {% if is_running %}
 This cluster is running with {{num_nodes}} node{{num_nodes|pluralize}} active. <ul>
   <li><a href="{{stop_cluster_url}}">stop cluster</a></li>
-  <li>return to <a href="..">dataset view</a></li>
 </ul>
 {% else %}
 This cluster is not running.
@@ -37,10 +38,6 @@ This cluster is not running.
 
 Note: please be patient once you click "Start cluster" - it can take
 many minutes for the cluster to come up.
-
-<p>
-
-Return to <a href="..">dataset view</a>.
 
 {% endif %}
 
