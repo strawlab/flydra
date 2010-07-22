@@ -108,6 +108,9 @@ class AnalysisType(object):
             elif node_type=='ufmf collection':
                 if doc['type']=='datanode' and 'ufmf collection' in doc['properties']:
                     accept=True
+            elif node_type=='2d orientation':
+                if doc['type']=='h5' and doc['has_2d_orientation']:
+                    accept=True
             else:
                 raise NotImplementedError('unknown node_type %s'%node_type)
         
@@ -491,7 +494,7 @@ class Fit3DOrientation( AnalysisType ):
     name = 'Fit 3D orientation'
     short_description = 'combine 2D orientations with EKF to fit 3D orientation'
     source_node_types = ['3d position','2d orientation']
-    base_cmd = 'lydra_analysis_orientation_ekf_fitter'
+    base_cmd = 'flydra_analysis_orientation_ekf_fitter'
 
     def __init__(self,*args,**kwargs):
         super( Fit3DOrientation, self).__init__(*args,**kwargs)
