@@ -262,6 +262,8 @@ def cluster_admin(request,db_name=None,dataset=None):
                'is_running':is_running,
                }
 
+    context['is_ec2'] = isinstance(cluster_obj,cluster.StarCluster)
+
     if is_running:
         context['num_nodes'] = cluster_obj.get_num_nodes()
         context['stop_cluster_url'] = '../cluster_stop'
