@@ -649,7 +649,7 @@ class wxMainBrainApp(wx.App):
                     if self.label_if_shutter is not None:
                         # this is the shutter control
                         self.label_if_shutter.SetLabel(
-                            'Exposure (msec): %.1f'%(value*0.02,))
+                            'Exposure (msec): %.1f'%(value,))
                 def onScroll(self, event):
                     current_value = self.slider.GetValue()
                     self.txtctrl.SetValue(str(current_value))
@@ -672,7 +672,7 @@ class wxMainBrainApp(wx.App):
                 label_if_shutter = xrc.XRCCTRL(previewPerCamPanel,
                                            'exposure_label') # get label
                 label_if_shutter.SetLabel(
-                    'Exposure (msec): %.3f'%(current_value*0.02,))
+                    'Exposure (??): %.3f'%(current_value,))
             else:
                 label_if_shutter = None
             psh = ParamSliderHelper(param,cam_id,txtctrl,slider,
