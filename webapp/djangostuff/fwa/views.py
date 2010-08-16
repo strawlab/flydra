@@ -394,6 +394,7 @@ def raw_doc(request,db_name=None,doc_id=None):
 
 @login_required
 def h5_doc(request,db_name=None,doc_id=None):
+    # TODO: link to my sources (like plots document)
     db = couch_server[db_name]
     doc = db[doc_id]
 
