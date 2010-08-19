@@ -83,12 +83,42 @@ def my_rq(M):
 ##        K[0,:] = -K[0,:]
     return R,K
 
+def filter_comments(lines_tmp):
+    lines = []
+    for line in lines_tmp:
+        try:
+            comment_idx = line.index('#')
+            no_comment_line = line[:comment_idx]
+            no_comment_line.strip()
+            if len(no_comment_line):
+                line = no_comment_line
+            else:
+                continue # nothing on this line
+        except ValueError:
+            pass
+        lines.append(line)
+    return lines
+
 def load_ascii_matrix(filename):
     fd=open(filename,mode='rb')
     buf = fd.read()
     fd.close()
     lines = buf.split('\n')[:-1]
+    lines = filter_comments( lines )
     return nx.array([map(float,line.split()) for line in lines])
+
+def test_load_ascii_matrix():
+    contents = '''   5.1468544e+00  -1.8892933e-01  -3.7855949e+00  -6.3683613e+02
+  -4.1691492e-01  -6.2570417e+00  -7.0782063e-01   2.4157199e+03
+  -1.7169043e-03  -2.2409402e-04  -4.2079099e-03   6.6955409e+00
+'''
+    import tempfile
+    fname = tempfile.mktemp()
+    fd = open(fname,mode='w')
+    fd.write(contents)
+    fd.close()
+    result = load_ascii_matrix(fname)
+    assert result.shape == (3,4)
 
 def save_ascii_matrix(M,fd,isint=False):
     def fmt(f):
