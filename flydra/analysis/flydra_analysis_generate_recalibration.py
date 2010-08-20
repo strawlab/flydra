@@ -242,13 +242,24 @@ def do_it(filename,
         fd.write(reconstructor.get_calibration_unit()+'\n')
         fd.close()
 
-    results.close()
-    h5_2d_data.close()
-
-    if reconstructor is not None:
         cam_centers = numpy.asarray([reconstructor.get_camera_center(cam_id)[:,0]
                                      for cam_id in cam_ids])
         save_ascii_matrix(cam_centers,os.path.join(calib_dir,'original_cam_centers.dat'))
+
+    save_calibration_directory(IdMat=IdMat,points=points,reconstructor=reconstructor,Res=Res,calib_dir=calib_dir)
+    results.close()
+    h5_2d_data.close()
+
+    if row_keys is not None:
+        row_keys = numpy.array(row_keys)
+        save_ascii_matrix(row_keys,os.path.join(calib_dir,'obj_ids_zero_indexed.dat'),isint=True)
+
+def save_calibration_directory(IdMat=None,
+                               points=None,
+                               Res=None,
+                               calib_dir=None,
+                               cam_ids=None):
+
     save_ascii_matrix(IdMat,os.path.join(calib_dir,'IdMat.dat'))
     save_ascii_matrix(points,os.path.join(calib_dir,'points.dat'))
     save_ascii_matrix(Res,os.path.join(calib_dir,'Res.dat'),isint=True)
@@ -257,10 +268,6 @@ def do_it(filename,
     for cam_id in cam_ids:
         fd.write('%s\n'%cam_id)
     fd.close()
-
-    if row_keys is not None:
-        row_keys = numpy.array(row_keys)
-        save_ascii_matrix(row_keys,os.path.join(calib_dir,'obj_ids_zero_indexed.dat'),isint=True)
 
 def main():
     usage = '%prog FILE EFILE [options]'
