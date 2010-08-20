@@ -9,7 +9,7 @@ from numpy import nan, pi
 import tables as PT
 import pytz # from http://pytz.sourceforge.net/
 import datetime
-import sys, os, sets
+import sys, os
 from optparse import OptionParser
 import flydra.reconstruct
 import flydra.analysis.result_utils as result_utils
@@ -68,8 +68,8 @@ def do_it(filename,
 
         use_obj_ids = mylocals['long_ids']
         if 'bad' in mylocals:
-            use_obj_ids = sets.Set(use_obj_ids)
-            bad = sets.Set(mylocals['bad'])
+            use_obj_ids = set(use_obj_ids)
+            bad = set(mylocals['bad'])
             use_obj_ids = list(use_obj_ids.difference(bad))
         kobs = results.root.kalman_observations
         kobs_2d = results.root.kalman_observations_2d_idxs
