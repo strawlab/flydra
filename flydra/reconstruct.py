@@ -765,7 +765,7 @@ def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
     cam_center = pmat2cam_center(M)
 
     intrinsic_parameters, cam_rotation = my_rq(M[:,:3])
-    #intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize    
+    #intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
     if abs(intrinsic_parameters[2,2]-1.0)>intrinsic_normalized_eps:
         raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
 
