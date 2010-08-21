@@ -784,10 +784,13 @@ def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
     fc2 = intrinsic_parameters[1,1]
     cc2 = intrinsic_parameters[1,2]
 
-    helper = reconstruct_utils.ReconstructHelper(fc1,fc2, # focal length
-                                                 cc1,cc2, # image center
-                                                 0,0, # radial distortion
-                                                 0,0) # tangential distortion
+    if 'helper' in kw:
+        helper = kw.pop('helper')
+    else:
+        helper = reconstruct_utils.ReconstructHelper(fc1,fc2, # focal length
+                                                     cc1,cc2, # image center
+                                                     0,0, # radial distortion
+                                                     0,0) # tangential distortion
     return SingleCameraCalibration(Pmat=M,
                                    helper=helper,
                                    **kw)
