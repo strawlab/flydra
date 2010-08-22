@@ -29,6 +29,12 @@ page</a>.
 This cluster is running with {{num_nodes}} node{{num_nodes|pluralize}} active. <ul>
   <li><a href="{{stop_cluster_url}}">stop cluster</a></li>
 </ul>
+
+<form action="../cluster_admin/" method="POST">
+{{ form.as_p }}
+<input type="submit" value="Add new nodes" />
+</form>
+
 {% else %}
 This cluster is not running.
 <form action="../cluster_admin/" method="POST">

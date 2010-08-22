@@ -5,6 +5,8 @@ in future for static IMP cluster
 """
 
 import starcluster.config, starcluster.cluster
+import starcluster.addnode
+import starcluster.removenode
 
 class ClusterBase(object):
     pass
@@ -51,3 +53,17 @@ class StarCluster(ClusterBase):
         scluster.update({'cluster_size': n})
         assert scluster.is_valid()
         scluster.start(create=True)
+
+    def modify_num_nodes(self,n):
+        cl = starcluster.cluster.get_cluster(self._tag_name, self._config)
+        if n==0:
+            return # do nothing
+        if n>0:
+            # add nodes
+            starcluster.addnode.add_nodes(cl, n )
+        else:
+            assert n<0
+            n = abs(n)
+            raise NotImplementedError('cannot remove %d nodes: find out which node to remove'%n)
+            starcluster.removenode.remove_node( node, cl)
+

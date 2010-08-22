@@ -239,28 +239,30 @@ def cluster_admin(request,db_name=None,dataset=None):
     db = couch_server[db_name]
 
     cluster_obj = cluster.StarCluster(settings.FWA_STARCLUSTER_CONFIG_FNAME)
+    is_running = cluster_obj.is_running()
 
     if request.method == 'POST': # If the form has been submitted...
         form = ClusterStartForm(request.POST) # A form bound to the POST data
         if form.is_valid(): # All validation rules pass
             # start cluster...
-            cluster_obj.start_n_nodes( form.cleaned_data['n_nodes'] )
+            if not is_running:
+                cluster_obj.start_n_nodes( form.cleaned_data['n_nodes'] )
+            else:
+                cluster_obj.modify_num_nodes( form.cleaned_data['n_nodes'] )
             return HttpResponseRedirect('..') # Redirect after POST
     else:
         form = ClusterStartForm() # An unbound form
 
-    is_running = cluster_obj.is_running()
     context = {'name':cluster_obj.name,
                'is_running':is_running,
                }
 
     context['is_ec2'] = isinstance(cluster_obj,cluster.StarCluster)
+    context['form'] = form
 
     if is_running:
         context['num_nodes'] = cluster_obj.get_num_nodes()
         context['stop_cluster_url'] = '../cluster_stop'
-    else:
-        context['form'] = form
 
     t = loader.get_template('cluster_admin.html')
     c = RequestContext(request,context)
