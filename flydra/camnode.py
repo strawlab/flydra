@@ -2133,6 +2133,7 @@ class AppState(object):
                 current_value = new_value
                 scalar_control_info[props['name']] = (current_value,
                                                       min_value, max_value)
+                # XXX FIXME: should transmit is_scaled_quantity info (scaled_unit_name, scale_gain, scale_offset)
                 prop_names.append( props['name'] )
 
             scalar_control_info['camprops'] = prop_names
