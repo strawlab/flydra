@@ -23,6 +23,12 @@ import pystache
 import pprint
 import urllib2
 
+# Use simplejson or Python 2.6 json, prefer simplejson.
+try:
+    import simplejson as json
+except ImportError:
+    import json
+
 def _connect_couch():
     couchbase = settings.FWA_COUCH_BASE_URI
     return Server(couchbase)
@@ -309,6 +315,11 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
 
     # dynamically generate a form to display
     form = forms.Form()
+    js_client_info = {}
+    def myappend(list1,elemn):
+        list1.append(elemn)
+        return list1
+
     for source_node_type in analysis_type.source_node_types:
         datanodes_view = db.view('analysis/datanodes-by-dataset-and-property',
                                  startkey=[dataset_id,source_node_type],
@@ -317,10 +328,15 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
         n_docs = len(datanodes_view)
         form.fields[ source_node_type ] = forms.ChoiceField(choices=[(row.id,row.id) for row in datanodes_view ],
                                                             widget=forms.SelectMultiple())
+        rows = [ dict( myappend( row['value'].items(), ('id',row['id']))) for row in datanodes_view ]
+        js_client_info[ source_node_type ] = {'rows':rows,
+                                              'select_id':('id_'+source_node_type), # django seems to do this.
+                                              }
         analysis_types_fwa.add_fields_to_form( form, analysis_type )
 
     context = {
         'name':analysis_type.name,
+        'js_client_info':json.dumps(js_client_info),
         'form':form,
         'error_message':error_message,
         'success_message':success_message,
