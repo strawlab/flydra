@@ -363,6 +363,7 @@ class ImageBased2DOrientation( AnalysisType ):
     name = 'Image-based 2D orientation'
     short_description = 'analyze .ufmf images to extract 2D orientation'
     source_node_types = ['ufmf collection','3d position','2d position']
+    dominant_source_node_type = 'ufmf collection'
     base_cmd = 'flydra_analysis_image_based_orientation'
 
     def __init__(self,*args,**kwargs):
