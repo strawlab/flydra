@@ -526,14 +526,12 @@ def build_arena_posts():
     spacing = 4*ft2m
     radius = 0.02
     posts = []
-    x0 = -spacing/2.0
-    y0 = -spacing/2.0
-    for x in [x0,x0+spacing]:
-        for y in [y0,y0+spacing]:
-            ## if x==x0 and y==y0:
-            ##     continue
-            if x<0 and y>0:
-                continue
+    for theta in [0,120*D2R,240*D2R]:
+        if 1:
+            theta=theta+60*D2R
+            r = 1.407 # for 4ft equilateral
+            x = r*np.cos(theta)
+            y = r*np.sin(theta)
             post = CircularScreen( pos = TwoVec(x=x,y=y),
                                    radius = radius )
             posts.append(post)
@@ -546,28 +544,28 @@ def make_projector_groups(n,r=1.5,mirrors=True):
     colors = ['red','green','blue']
     for i in range(n):
         this_els=[]
-        theta0 = unwrap(delta*i + 20*D2R)
+        theta0 = unwrap(delta*i)# + 20*D2R)
         x = r*np.cos(theta0)
         y = r*np.sin(theta0)
         p = Projector( axis=RayEmitter( pos=TwoVec(x=x,y=y),
                                         direction=unwrap(np.pi+theta0)),
-                       width=0.65,
+                       width=1.2,
                        ray_color = colors[i],
                        n_rays=30,
                        )
         this_els.append(p)
 
-        odeg = 70
+        odeg = 140
         for sign in (-1,+1):
             theta_offset = 180 + sign*odeg
             thetam = unwrap(theta0 + theta_offset*D2R)
 
-            mirror_r = 1.0
+            mirror_r = 0.95
             x0 = mirror_r * np.cos(thetam)
             y0 = mirror_r * np.sin(thetam)
 
-            mirror_angle = thetam + 90*D2R - sign*30*D2R
-            mirror_width = 0.5
+            mirror_angle = thetam + 90*D2R - sign*60*D2R
+            mirror_width = 0.4
             mdx = mirror_width*np.cos(mirror_angle)
             mdy = mirror_width*np.sin(mirror_angle)
 
@@ -585,7 +583,7 @@ def make_projector_groups(n,r=1.5,mirrors=True):
 
 if __name__=='__main__':
 
-    elements = make_projector_groups(3,r=1.73,mirrors=False)
+    elements = make_projector_groups(3,r=1.73,mirrors=True)
     main_screen = CircularScreen( pos = TwoVec(x=0,y=0),
                                   radius = 0.5,
                                   angle = 0.0,
