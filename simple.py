@@ -530,25 +530,28 @@ def build_arena_posts():
     y0 = -spacing/2.0
     for x in [x0,x0+spacing]:
         for y in [y0,y0+spacing]:
+            ## if x==x0 and y==y0:
+            ##     continue
+            if x<0 and y>0:
+                continue
             post = CircularScreen( pos = TwoVec(x=x,y=y),
                                    radius = radius )
             posts.append(post)
     return posts
 
-def make_projector_groups(n):
+def make_projector_groups(n,r=1.5,mirrors=True):
     delta = 2*np.pi/n
     elements=[]
-    r = 1.5
 
     colors = ['red','green','blue']
     for i in range(n):
         this_els=[]
-        theta0 = delta*i
+        theta0 = unwrap(delta*i + 20*D2R)
         x = r*np.cos(theta0)
         y = r*np.sin(theta0)
         p = Projector( axis=RayEmitter( pos=TwoVec(x=x,y=y),
                                         direction=unwrap(np.pi+theta0)),
-                       width=1.2,
+                       width=0.65,
                        ray_color = colors[i],
                        n_rays=30,
                        )
@@ -572,7 +575,8 @@ def make_projector_groups(n):
             end2 = TwoVec(x=x0-mdx, y=y0-mdy)
 
             mirror = FlatMirror( end1 = end1, end2=end2)
-            this_els.append(mirror)
+            if mirrors:
+                this_els.append(mirror)
 
         elements.extend(this_els)
 
@@ -581,7 +585,7 @@ def make_projector_groups(n):
 
 if __name__=='__main__':
 
-    elements = make_projector_groups(2)
+    elements = make_projector_groups(3,r=1.73,mirrors=False)
     main_screen = CircularScreen( pos = TwoVec(x=0,y=0),
                                   radius = 0.5,
                                   angle = 0.0,
