@@ -1,0 +1,22 @@
+div.fwa_nav_link {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 80%;
+}
+
+div.time_range {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 140%;
+    font-weight: bold;
+}
+
+div.datanode_title {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 120%;
+}
+
+div.fwa_floatright_576 {
+    float: right;
+    width: 576px;
+    margin: 0 0 10px 10px;
+    border: 1px solid #666;
+}
