@@ -1,11 +1,17 @@
 {% extends "site_base.html" %}
 
 {% block extra_head %}
-<script type="text/javascript" src="/site_media/static/pinax/js/jquery-1.3.2.min.js"></script>
-<script type="text/javascript">
-js_client_info_global = {{ js_client_info|safe }}
-</script>
-<script type="text/javascript" src="/site_media/static/fwa/js/apply_analysis_type.js"></script>
+
+<link type="text/css" href="/site_media/static/fwa/css/ui-lightness/jquery-ui-1.7.3.custom.css" rel="stylesheet" />
+
+<style type="text/css">
+  #feedback { font-size: 1.4em; }
+  #selectable .ui-selecting { background: #FECA40; }
+  #selectable .ui-selected { background: #F39814; color: white; }
+  #selectable { list-style-type: none; margin: 0; padding: 0; width: 60%; }
+  #selectable li { margin: 3px; padding: 0.4em; font-size: 1.0em; }
+</style>
+
 {% endblock %}
 
 {% load i18n %}
@@ -35,5 +41,23 @@ js_client_info_global = {{ js_client_info|safe }}
 
 <input type="submit" value="Submit" />
 </form>
+
+
+
+{% endblock %}
+
+{% block extra_body %}
+
+<script type="text/javascript" src="/site_media/static/fwa/js/jquery-ui-1.7.3.custom.min.js"></script>
+
+
+<script type="text/javascript">
+// This is my post-jQuery JS section.
+</script>
+<script type="text/javascript" src="/site_media/static/fwa/js/apply_analysis_type.js"></script>
+<script type="text/javascript">
+js_client_info_global = {{ js_client_info|safe }};
+var ads="COOL";
+</script>
 
 {% endblock %}
