@@ -8,6 +8,10 @@ import datanodes
 from flydra.a3.analysis_types import *
 import flydra.sge_utils.states
 
+def fwa_id_escape(orig):
+    # keep in sync with apply_analysis_type.js source_node_type2id() et al.
+    return orig.replace(' ','_')
+
 # --- various django and CouchDB specific stuff ----------------
 
 class InvalidRequest(ValueError):
@@ -60,7 +64,10 @@ class Verifier(object):
         for key in orig_query:
             query[key] = orig_query.getlist(key)
 
-        n_values = dict([(snt,len(query[snt])) for snt in self.analysis_type.source_node_types])
+        escaped_snts = [ fwa_id_escape(snt) for snt in self.analysis_type.source_node_types ]
+
+        n_values = dict([(snt,len(query[snt])) for snt in escaped_snts])
+
         n_new_docs = max( n_values.itervalues() )
         for snt, n in n_values.iteritems():
             # check there are all N or 1 documents for each source node type
@@ -73,7 +80,7 @@ class Verifier(object):
         new_batch_jobs = []
         for i in range(n_new_docs):
             sources = []
-            for snt in self.analysis_type.source_node_types:
+            for snt in escaped_snts:
                 if n_values[snt] == 1:
                     sources.append( query[snt][0] ) # only one, always use it
                 else:
@@ -106,7 +113,7 @@ class Verifier(object):
             new_batch_jobs.append( doc )
 
         # finished with sources
-        for snt in self.analysis_type.source_node_types:
+        for snt in escaped_snts:
             del query[snt]
 
         # now handle batch params that apply to all documents
@@ -140,8 +147,8 @@ class Verifier(object):
 
         # make sure no unhandled request data
         if len(query.keys()):
-            raise InvalidRequest('Invalid request made with keys %s'%
-                                 (query.keys(),))
+             raise InvalidRequest('Invalid request made with keys %s'%
+                                  (query.keys(),))
 
         for doc in new_batch_jobs:
             doc['class_name'] = self.analysis_type.__class__.__name__

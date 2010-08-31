@@ -17,6 +17,7 @@ from couchdb.client import Server
 from paginatoe import SimpleCouchPaginator, CouchPaginator
 import flydra.a3.analysis_types
 import analysis_types_fwa
+from analysis_types_fwa import fwa_id_escape
 import cluster
 
 import pystache
@@ -301,7 +302,7 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
         verifier = analysis_types_fwa.Verifier( db, dataset, analysis_type )
         try:
             new_batch_jobs = verifier.validate_new_batch_jobs_request( request.POST )
-            
+
             success_message = analysis_types_fwa.upload_job_docs_to_couchdb(db, new_batch_jobs,
                                                                             settings.FWA_STARCLUSTER_CONFIG_FNAME )
 
@@ -321,20 +322,17 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
         list1.append(elemn)
         return list1
 
-    def id_escape(orig):
-        return orig.replace(' ','_')
-
     for source_node_type in analysis_type.source_node_types:
         datanodes_view = db.view('analysis/datanodes-by-dataset-and-property',
                                  startkey=[dataset_id,source_node_type],
                                  endkey=[dataset_id,source_node_type,{}],
                                  reduce=False)
         n_docs = len(datanodes_view)
-        form.fields[ id_escape(source_node_type) ] = forms.ChoiceField(choices=[(row.id,row.id) for row in datanodes_view ],
+        form.fields[ fwa_id_escape(source_node_type) ] = forms.ChoiceField(choices=[(row.id,row.id) for row in datanodes_view ],
                                                                        widget=forms.SelectMultiple())
         rows = [ dict( myappend( row['value'].items(), ('id',row['id']))) for row in datanodes_view ]
         js_client_info[ source_node_type ] = {'rows':rows,
-                                              'select_id':('id_'+id_escape(source_node_type)), # django seems to do this.
+                                              'select_id':('id_'+fwa_id_escape(source_node_type)), # django seems to do this.
                                               }
         analysis_types_fwa.add_fields_to_form( form, analysis_type )
 
