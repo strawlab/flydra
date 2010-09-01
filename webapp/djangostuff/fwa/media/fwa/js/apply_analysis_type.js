@@ -41,14 +41,6 @@ function get_select_form( source_node_type ) {
     return dom;
 }
 
-function sources_selection_selected(event, ui) { 
-    return sources_selection_changed(event, ui, this, "selected");
-}
-
-function sources_selection_unselected(event, ui) { 
-    return sources_selection_changed(event, ui, this, "unselected");
-}
-
 function get_row( rownum, source_node_type ) {
     return js_client_info_global.sources[source_node_type].rows[rownum];
 }
@@ -110,57 +102,172 @@ function compute_rownums_for( source_row, target_node_type ) {
     return rownums;
 }
 
-function sources_selection_changed(event, ui, widget, which_change) { 
-    var myid = widget.id;
+function sources_selection_selected(event, ui) {
+    return sources_selection_changed(event, ui, this, "selected");
+}
+
+function sources_selection_unselected(event, ui) {
+    return sources_selection_changed(event, ui, this, "unselected");
+}
+
+function sources_selection_changed(event, ui, widget, which_change) {
+    var element = ui[which_change];
+
+    var myid = element.parentNode.id;
+    //    var myid = widget.id;
     var orig_source_node_type = id2source_node_type(myid);
 
     // get the original select form
     var select_form = get_select_form( orig_source_node_type );
     var options = select_form[0].options;
 
-    // unselect all rows in the original select form
-    for (var i=0; i<options.length; i++){
-	options[i].selected = 0;
+    var select_choices = {};
+    select_choices[orig_source_node_type] = [];
+
+    var src_rownum = $(element).attr('data-rownum');
+    if (which_change=="selected") {
+	select_choices[orig_source_node_type] = [src_rownum];
+    }
+    else { // "unselected"
+	// no need to defer unselecting
+	options[src_rownum].selected = 0;
     }
 
-    // select the selected rows in the original select form
-    $(".ui-selected", widget).each(function(){
-	    var linum = $(this).attr('data-linum');
-	    options[linum].selected = 1;
-	});
+    var row = get_row( src_rownum, orig_source_node_type );
 
-
-
+    var have_choices = false;
     for (var source_node_type in js_client_info_global.sources) {
 	if (source_node_type == orig_source_node_type) {
 	    continue;
 	}
+	select_choices[source_node_type] = [];
+
+	// repeat for each of the other <select> forms, finding appropriate lines
 
 	// get the select form
 	var select_form = get_select_form( source_node_type );
 	var options = select_form[0].options;
-
-	// unselect all rows in the original select form
-	for (var i=0; i<options.length; i++){
-	    options[i].selected = 0;
+	var rownums = compute_rownums_for( row, source_node_type );
+	if (which_change=="unselected") {
+	    for (var optrow in rownums) {
+		options[rownums[optrow]].selected = 0;
+	    }
 	}
+	else { // "selected"
+	    for (var optrow in rownums ) {
+		select_choices[source_node_type].push( rownums[optrow] );
+	    }
+	    if (rownums.length > 1) {
+		var have_choices = true;
+	    }
 
-	// select the selected rows in the original select form
-	$(".ui-selected", widget).each(function(){
-		var rownum = $(this).attr('data-rownum');
-		var tmp = $(this).attr('data-source-node-type');
-		var row = get_row( rownum, tmp );
-		var rownums = compute_rownums_for( row, source_node_type );
-		if (rownums.length == 1) {
-		    options[rownums[0]].selected = 1;
-		} else {
-		    alert('flydra.astraw.com internal error: found '+rownums.length+' rows in \"'+source_node_type +'\" data. need one');
-		}
-	    });
+	}
     }
 
+    if (have_choices) {
+	var prompt_str = build_impromptu_choice_dialog(select_choices);
+	$.prompt(prompt_str,
+		 {submit: function(v,m,f) { submit_choice_selection(v,m,f,select_choices);}, // build a callback function
+			 callback: function(v,m,f) { callback_choice_selection(v,m,f,select_choices,element);}
+			 });
+    } else {
+	if (which_change=="selected") {
+	    apply_choice_selection(select_choices);
+	}
+    }
 
  }
+
+function build_impromptu_choice_dialog(select_choices) {
+	var prompt_str = '<div id="impromptu-window">\n';
+	for (var source_node_type in select_choices) {
+	    var this_choices = select_choices[source_node_type];
+	    if (this_choices.length>1)  {
+		var radio_group_name = source_node_type; // XXX escape?
+		var ids = [];
+		var values = [];
+		var texts = [];
+		for (var i=0; i<this_choices.length; i++){
+		    var rownum = this_choices[i];
+		    ids.push( rownum ); // XXX escape?
+		    values.push( rownum ); // line numbers
+
+		    var row = get_row( rownum, source_node_type);
+		    var mytext = pretty_print_row(row) + ' (id="'+row.id+'", status_tags="'+row.status_tags+'")';
+		    texts.push( mytext );
+		}
+
+		prompt_str = prompt_str + '<label for="'+ids[0]+'">Which '+source_node_type+' node do you want to use?</label><ul>';
+		for (var i=0; i<this_choices.length; i++){
+		    var checked_str='';
+		    if (i==0) {
+			checked_str = ' checked="checked"';
+		    }
+		    prompt_str = prompt_str + '<li><input type="radio" name="'+radio_group_name+'" id="'+ids[i]+'" value="'+values[i]+'"'+checked_str+'/>' + texts[i]+'</li>';
+		}
+		prompt_str  = prompt_str + '</ul>';
+	    }
+	}
+	prompt_str  = prompt_str +      '</div>\n';
+    return prompt_str;
+}
+
+function submit_choice_selection( v,m,f, select_choices ) {
+    // the submit callback is called only when "OK is pressed"
+
+    // apply the user feedback to get an updated result
+    for (var node_type in f) {
+	select_choices[node_type] = [f[node_type]];
+    }
+
+    // check whether the result is good
+    var is_bad = false;
+    for (var node_type in select_choices) {
+	if (select_choices[node_type].length != 1) {
+	    is_bad = true;
+	}
+    }
+
+    if (is_bad) {
+	// error parsing data, user prompted again
+	return false;
+    }
+    apply_choice_selection(select_choices);
+    return true;
+}
+
+function callback_choice_selection( v,m,f, select_choices, element ) {
+
+    // The "callback" callback is called whether the user pressed OK
+    // or cancelled.
+
+    // Unless we were successful, we need to de-select the original
+    // element to keep in sync with select boxes.
+
+    // check whether the result is good
+    var is_bad = false;
+    for (var node_type in select_choices) {
+	if (select_choices[node_type].length != 1) {
+	    is_bad = true;
+	}
+    }
+
+    if (is_bad) {
+	//unselect the original selectable
+	$(element).removeClass("ui-selected");
+    }
+}
+
+function apply_choice_selection( select_choices ) {
+    for (var source_node_type in select_choices ) {
+	// get the original select form
+	var select_form = get_select_form( source_node_type );
+	var options = select_form[0].options;
+
+	var idx = select_choices[source_node_type][0];
+	options[idx].selected = 1;
+    }
+}
 
 function pretty_print_row( row ) {
     var fmt = 'HH:mm, d MMM, yyyy';
@@ -222,13 +329,10 @@ function FWA_create_ul_for_items( elem ) {
 
 
 	var myitems = "";
-	var linum=0;
 	for (var rownum in js_client_info_global.sources[primary].rows) {
 	    var row = js_client_info_global.sources[primary].rows[rownum];
 	    var myid = row.id;
-	    myitems = myitems + "<li class=\"ui-widget-content\" data-source-node-type=\""+primary+"\" data-rownum=\""+rownum+"\" data-id=\""+row.id+"\" data-linum=\""+linum+"\">" + pretty_print_row(row) + "</li>";
-	    linum++;
-	    //	    debugger;
+	    myitems = myitems + "<li class=\"ui-widget-content\" data-rownum=\""+rownum+"\" data-id=\""+row.id+"\">" + pretty_print_row(row) + "</li>";
 	}
 
 	
@@ -255,6 +359,14 @@ function true_init() {
 
 	for (var source_node_type in js_client_info_global.sources) {
 	    // dom is just the <select> box, hide its parent (the <p>)
+
+	    var select_form = get_select_form( source_node_type );
+	    var options = select_form[0].options;
+	    // unselect all rows in the original select form
+	    for (var i=0; i<options.length; i++){
+		options[i].selected = 0;
+	    }
+
 	    get_select_form( source_node_type ).parent().hide();
 	}
 	
