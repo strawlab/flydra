@@ -49,11 +49,6 @@ function sources_selection_unselected(event, ui) {
     return sources_selection_changed(event, ui, this, "unselected");
 }
 
-// function sources_selection_stop(event, ui) { 
-//     console.log("stop");
-//     return sources_selection_changed(event, ui, this, "stop");
-// }
-
 function get_row( rownum, source_node_type ) {
     return js_client_info_global.sources[source_node_type].rows[rownum];
 }
@@ -246,8 +241,6 @@ function FWA_create_ul_for_items( elem ) {
 	elem.append( "</div>" );
 	$("#"+my_id).selectable({selected: sources_selection_selected,
 		unselected: sources_selection_unselected,
-		    //		stop: sources_selection_stop,
-		//stop: sources_selection_changed,
 		    });
 }
 
