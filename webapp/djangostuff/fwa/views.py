@@ -8,6 +8,8 @@ from django.contrib.humanize.templatetags.humanize import intcomma
 from django.core.paginator import EmptyPage, PageNotAnInteger
 from django import forms
 
+import os
+
 import datetime
 import dateutil.parser
 
@@ -175,6 +177,25 @@ def dataset(request,db_name=None,dataset=None):
     return HttpResponse(t.render(c))
 
 
+def _get_items_paginated(request,db,viewname,count=50,**options):
+    # modified from http://www.djangosnippets.org/snippets/1209/
+    myitems = db.view(viewname,
+                      reduce=False,**options)
+
+    pages_view = db.view(viewname,
+                         reduce=True,**options)
+
+    try:
+        page_number = request.GET.get('page', 1)
+        paginate = CouchPaginator(myitems, count, pages_view=pages_view)
+        page = paginate.page(page_number)
+        items = paginate.object_list
+    except EmptyPage:
+        raise Http404("Page %s empty" % page_number)
+    except PageNotAnInteger:
+        raise Http404("No page '%s'" % page_number)
+
+    return page
 
 @login_required
 def datanodes_by_property(request,db_name=None,dataset=None,property_name=None,count=50):
@@ -191,22 +212,8 @@ def datanodes_by_property(request,db_name=None,dataset=None,property_name=None,c
         show_property_name=property_name
     options = dict(startkey=startkey,endkey=endkey)
 
-    # modified from http://www.djangosnippets.org/snippets/1209/
-    myitems = db.view('analysis/datanodes-by-dataset-and-property',
-                      reduce=False,**options)
-
-    pages_view = db.view('analysis/datanodes-by-dataset-and-property',
-                         reduce=True,**options)
-
-    try:
-        page_number = request.GET.get('page', 1)
-        paginate = CouchPaginator(myitems, count, pages_view=pages_view)
-        page = paginate.page(page_number)
-        items = paginate.object_list
-    except EmptyPage:
-        raise Http404("Page %s empty" % page_number)
-    except PageNotAnInteger:
-        raise Http404("No page '%s'" % page_number)
+    page = _get_items_paginated(request,db,'analysis/datanodes-by-dataset-and-property',
+                                count=count,**options)
 
     context = {
         'items': page,
@@ -233,9 +240,24 @@ def submit_SGE_jobs(request,db_name=None,dataset=None):
     db = couch_server[db_name]
 
     analysis_types_fwa.insert_jobs_into_sge(db,
-                                            settings.FWA_STARCLUSTER_CONFIG_FNAME )
+                                            os.path.join(settings.FWA_STARCLUSTER_CONFIG_DIR,db_name) )
     url = get_next_url(db_name=db_name,dataset_name=dataset)
     return HttpResponseRedirect(url) # Redirect after POST
+
+@login_required
+def view_SGE_jobs(request,db_name=None,dataset=None):
+    dataset_id = 'dataset:'+dataset
+    db = couch_server[db_name]
+
+    items = _get_items_paginated(request,db,'analysis/list_pending_jobs')
+    context = {
+        'items': items,
+        }
+
+    t = loader.get_template('view_SGE_jobs.html')
+    context = {'items':items}
+    c = RequestContext(request,context)
+    return HttpResponse(t.render(c))
 
 class ClusterStartForm(forms.Form):
     n_nodes = forms.IntegerField(initial=1,min_value=1)
@@ -245,7 +267,7 @@ def cluster_admin(request,db_name=None,dataset=None):
     dataset_id = 'dataset:'+dataset
     db = couch_server[db_name]
 
-    cluster_obj = cluster.StarCluster(settings.FWA_STARCLUSTER_CONFIG_FNAME)
+    cluster_obj = cluster.StarCluster(os.path.join(settings.FWA_STARCLUSTER_CONFIG_DIR,db_name))
     is_running = cluster_obj.is_running()
 
     if request.method == 'POST': # If the form has been submitted...
@@ -280,7 +302,7 @@ def cluster_stop(request,db_name=None,dataset=None):
     dataset_id = 'dataset:'+dataset
     db = couch_server[db_name]
 
-    cluster_obj = cluster.StarCluster(settings.FWA_STARCLUSTER_CONFIG_FNAME)
+    cluster_obj = cluster.StarCluster(os.path.join(settings.FWA_STARCLUSTER_CONFIG_DIR,db_name))
     
     if cluster_obj.is_running():
         cluster_obj.shutdown()
@@ -304,7 +326,7 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
             new_batch_jobs = verifier.validate_new_batch_jobs_request( request.POST )
 
             success_message = analysis_types_fwa.upload_job_docs_to_couchdb(db, new_batch_jobs,
-                                                                            settings.FWA_STARCLUSTER_CONFIG_FNAME )
+                                                                            os.path.join(settings.FWA_STARCLUSTER_CONFIG_DIR,db_name) )
 
             ## # new_batch_jobs are valid, insert them and thank user
             ## #db.append( new_datanode_documents )

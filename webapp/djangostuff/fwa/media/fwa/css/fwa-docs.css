@@ -20,3 +20,28 @@ div.fwa_floatright_576 {
     margin: 0 0 10px 10px;
     border: 1px solid #666;
 }
+
+/* Table styling from http://www.smashingmagazine.com/2008/08/13/top-10-css-table-designs/ Horizontal minimalist */
+Table.fwa_table {
+    background:none repeat scroll 0 0 #FFFFFF;
+    border-collapse:collapse;
+    font-family:"Lucida Sans Unicode","Lucida Grande",Sans-Serif;
+    font-size:12px;
+    margin:20px;
+    text-align:left;
+    width:480px;
+}
+
+Table.fwa_table th {
+    border-bottom:2px solid #6678B1;
+    color:#003399;
+    font-size:14px;
+    font-weight:normal;
+    padding:10px 8px;
+}
+
+Table.fwa_table td {
+    border-bottom:1px solid #CCCCCC;
+    color:#666699;
+    padding:6px 8px;
+}
