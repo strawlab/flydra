@@ -144,6 +144,7 @@ setup(name='flydra',
 # SGE/flydra.astraw.com commands
     'flydra_sge_download_jobs = flydra.sge_utils.sge_download_jobs:main',
     'flydra_sge_run_job = flydra.sge_utils.sge_run_job:main',
+    'flydra_sge_update_couch_view_of_sge_status = flydra.sge_utils.update_couch_view_of_sge_status:main',
 
 # testing
     'flydra_test_commands = flydra.test_commands:main',
