@@ -171,6 +171,15 @@ class Canvas(object):
             self._ctx.show_page()
             self._surf.finish()
 
+    def as_numpy(self):
+        """save output to file"""
+        assert self._output_ext == '.png'
+        buf = self._surf.get_data()
+
+        a = np.frombuffer(buf, np.uint8)
+        a.shape = (self._surf.get_width(), self._surf.get_height(), 4)
+        return a
+
     def text(self,text,x,y,color_rgba=None,font_size=10,shadow_offset=None):
         """draw text"""
         if shadow_offset is not None:

@@ -216,9 +216,43 @@ def generate_point_cloud(full_info,n_pts = 200):
         }
     return results
 
-def test():
-    radial_distortion=True
-    #radial_distortion=False
+config_template = """[Files]
+Basename: %(basename)s
+Image-Extension: jpg
+
+[Images]
+Subpix: 0.5
+
+[Calibration]
+Num-Cameras: %(num_cameras)s
+Num-Projectors: 0
+Nonlinear-Parameters: 30    0    1    0    0    0
+Nonlinear-Update: 1   0   1   0   0   0
+Initial-Tolerance: 10
+Do-Global-Iterations: 0
+Global-Iteration-Threshold: 0.5
+Global-Iteration-Max: 100
+Num-Cameras-Fill: 2
+Do-Bundle-Adjustment: 1
+Undo-Radial: %(undo_radial_int)s
+Min-Points-Value: 30
+N-Tuples: 3
+Square-Pixels: %(square_pixels_int)s
+Use-Nth-Frame: 5
+"""
+
+def test(calib_dir=None,radial_distortion=True,square_pixels=True):
+    """generate a fake calibration and save it.
+
+    Arguments
+    ---------
+    calib_dir : string (optional)
+      the directory name to save the resulting calibration data
+    radial_distortion : boolean
+      whether or not the calibration should have radial distortion
+    square_pixels : boolen
+      whether or not the pixels are square
+    """
     full_info = generate_calibration(return_full_info=True,
                                      radial_distortion=radial_distortion)
     results = generate_point_cloud(full_info)
@@ -234,19 +268,31 @@ def test():
         Res.append( imsize )
     Res = numpy.array( Res )
 
-    calib_dir='test_cal_dir'
-    save_cal_dir = save_calibration_directory(IdMat=results['IdMat'],
-                                              points=results['points'],
-                                              Res=Res,
-                                              calib_dir=calib_dir,
-                                              cam_ids=cam_ids,
-                                              )
-    if radial_distortion:
-        for i, cam_id in enumerate(cam_ids):
-            fname = 'basename%d.rad'%(i+1)
-            scc = full_info['reconstructor'].get_SingleCameraCalibration(cam_id)
-            scc.helper.save_to_rad_file( os.path.join(calib_dir,fname) )
+    basename = 'basename'
+    if calib_dir is not None:
+        save_cal_dir = save_calibration_directory(IdMat=results['IdMat'],
+                                                  points=results['points'],
+                                                  Res=Res,
+                                                  calib_dir=calib_dir,
+                                                  cam_ids=cam_ids,
+                                                  )
+        if radial_distortion:
+            for i, cam_id in enumerate(cam_ids):
+                fname = '%s%d.rad'%(basename,i+1)
+                scc = full_info['reconstructor'].get_SingleCameraCalibration(cam_id)
+                scc.helper.save_to_rad_file( os.path.join(calib_dir,fname) )
+
+        vars = dict(
+            abs_path_calib_dir = os.path.abspath(calib_dir)+'/',
+            basename = basename,
+            num_cameras = len(cam_ids),
+            undo_radial_int = int(radial_distortion),
+            square_pixels_int = int(square_pixels),
+            )
+
+        fd = open( os.path.join(calib_dir,'multicamselfcal.cfg'), mode='w' )
+        fd.write( config_template % vars )
+        fd.close()
 
 if __name__=='__main__':
-    test()
-
+    test(calib_dir='test_cal_dir',radial_distortion=True)
