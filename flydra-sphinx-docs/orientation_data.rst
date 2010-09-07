@@ -4,6 +4,7 @@ Estimating orientations with flydra
 ===================================
 
 .. graphviz::
+
   strict digraph {
     animals -> onlinePosOri2D;
     animals -> ufmfs;
@@ -38,5 +39,4 @@ Contents:
 
   orientation_ekf_fitter.rst
 
-* Estimating 2D orientations from images (no description yet)
-
+See also :ref:`Data analysis <data_analysis>` (specifically the "Extracting longitudinal body orientation" section).
