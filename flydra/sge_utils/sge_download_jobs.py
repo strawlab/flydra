@@ -8,7 +8,7 @@ def download_jobs(couch_url, db_name):
     db = couch_server[db_name]
 
     # get all jobs that are created (not executing or complete)
-    view_results = db.view('analysis/jobs')
+    view_results = db.view('analysis/jobs',reduce=False)
     for row in view_results:
         if row.key != states.CREATED:
             continue
