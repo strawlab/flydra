@@ -6,17 +6,19 @@ import states, util # flydra.sge_utils
 import pytz, datetime
 from xml.etree import ElementTree
 
-COUCHDB_STATUS_DOC_ID = 'sge_status'
+from util import COUCHDB_STATUS_DOC_ID
 
 def update_couch_view_of_sge_status(couch_url, db_name):
     couch_server = Server(couch_url)
     db = couch_server[db_name]
 
+    doc = {'_id':COUCHDB_STATUS_DOC_ID}
     # get original CouchDB document
     try:
-        doc = db[COUCHDB_STATUS_DOC_ID]
+        orig_doc = db[COUCHDB_STATUS_DOC_ID]
+        doc['_rev'] = orig_doc['_rev']
     except couchdb.http.ResourceNotFound:
-        doc = {'_id':COUCHDB_STATUS_DOC_ID}
+        pass
 
     doc['update_time'] =  pytz.utc.localize( datetime.datetime.utcnow() ).isoformat()
 

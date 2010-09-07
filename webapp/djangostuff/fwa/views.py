@@ -177,7 +177,7 @@ def dataset(request,db_name=None,dataset=None):
     return HttpResponse(t.render(c))
 
 
-def _get_items_paginated(request,db,viewname,count=50,**options):
+def _get_items_paginated(db,viewname,page_number=1,count=50,**options):
     # modified from http://www.djangosnippets.org/snippets/1209/
     myitems = db.view(viewname,
                       reduce=False,**options)
@@ -185,15 +185,8 @@ def _get_items_paginated(request,db,viewname,count=50,**options):
     pages_view = db.view(viewname,
                          reduce=True,**options)
 
-    try:
-        page_number = request.GET.get('page', 1)
-        paginate = CouchPaginator(myitems, count, pages_view=pages_view)
-        page = paginate.page(page_number)
-        items = paginate.object_list
-    except EmptyPage:
-        raise Http404("Page %s empty" % page_number)
-    except PageNotAnInteger:
-        raise Http404("No page '%s'" % page_number)
+    paginate = CouchPaginator(myitems, count, pages_view=pages_view)
+    page = paginate.page(page_number)
 
     return page
 
@@ -212,7 +205,9 @@ def datanodes_by_property(request,db_name=None,dataset=None,property_name=None,c
         show_property_name=property_name
     options = dict(startkey=startkey,endkey=endkey)
 
-    page = _get_items_paginated(request,db,'analysis/datanodes-by-dataset-and-property',
+    page_number = request.GET.get('page', 1)
+    page = _get_items_paginated(db,'analysis/datanodes-by-dataset-and-property',
+                                page_number=page_number,
                                 count=count,**options)
 
     context = {
@@ -249,13 +244,27 @@ def view_SGE_jobs(request,db_name=None,dataset=None):
     dataset_id = 'dataset:'+dataset
     db = couch_server[db_name]
 
-    items = _get_items_paginated(request,db,'analysis/list_pending_jobs')
+    cluster_obj = cluster.StarCluster(os.path.join(settings.FWA_STARCLUSTER_CONFIG_DIR,db_name))
+
+    cluster_obj.update_couch_view_of_sge_status(settings.FWA_COUCH_BASE_URI, db.name)
+
+    sge_status = db['sge_status']
+
+    page_number = request.GET.get('page', 1)
+    try:
+        items = _get_items_paginated(db,'analysis/list_pending_jobs',
+                                     page_number=page_number,
+                                     )
+    except EmptyPage:
+        items = None
+
     context = {
         'items': items,
+        'doc_url': get_next_url(db_name=db_name,doc_base=True),
+        'sge_status':pprint.pformat(dict(sge_status)),
         }
 
     t = loader.get_template('view_SGE_jobs.html')
-    context = {'items':items}
     c = RequestContext(request,context)
     return HttpResponse(t.render(c))
 
@@ -303,7 +312,7 @@ def cluster_stop(request,db_name=None,dataset=None):
     db = couch_server[db_name]
 
     cluster_obj = cluster.StarCluster(os.path.join(settings.FWA_STARCLUSTER_CONFIG_DIR,db_name))
-    
+
     if cluster_obj.is_running():
         cluster_obj.shutdown()
     return HttpResponseRedirect('../cluster_admin')
@@ -377,16 +386,18 @@ def apply_analysis_type(request,db_name=None,dataset=None,class_name=None):
 class NotDataNode(ValueError):
     pass
 
-def get_datanode_common( doc ):
-    start_time = dateutil.parser.parse(doc['start_time'])
-    stop_time = dateutil.parser.parse(doc['stop_time'])
-    time_range = '%s - %s, %s'%( start_time.strftime('%H:%M:%S'),
-                                 stop_time.strftime('%H:%M:%S'), 
-                                 start_time.strftime('%A, %d %B %Y (UTC %z)' ) )
-    result = {
-        'time_range':time_range,
-        }
-    return result
+def get_job_id_for_datanode( db, doc_id ):
+    job_id_view = db.view('analysis/jobs-by-datanode-id',
+                           startkey=doc_id,
+                           endkey=doc_id,
+                           )
+    job_id_rows = [row for row in job_id_view] # Hack: get first (and only) row
+    if len(job_id_rows):
+        assert len(job_id_rows)==1
+        job_id = job_id_rows[0].id
+    else:
+        job_id = None
+    return job_id
 
 @login_required
 def datanode(request,db_name=None,doc_id=None,warn_no_specific_view=False):
@@ -416,7 +427,21 @@ def datanode(request,db_name=None,doc_id=None,warn_no_specific_view=False):
                             'fname':fname,
                             } )
 
-    common_template = get_datanode_common( doc )
+    start_time = dateutil.parser.parse(doc['start_time'])
+    stop_time = dateutil.parser.parse(doc['stop_time'])
+    time_range = '%s - %s, %s'%( start_time.strftime('%H:%M:%S'),
+                                 stop_time.strftime('%H:%M:%S'),
+                                 start_time.strftime('%A, %d %B %Y (UTC %z)' ) )
+
+    saved_images = doc.get('saved_images',{})
+    si = [ {'url':k,'width':v[0],'height':v[1]} for (k,v) in saved_images.iteritems() ]
+
+
+    # get job doc
+    job_id = get_job_id_for_datanode( db, doc_id )
+
+    # get children
+    children_ids = get_datanode_direct_children_ids(db, doc)
 
     t = loader.get_template('datanode.html')
     context = {'row':row,
@@ -424,8 +449,13 @@ def datanode(request,db_name=None,doc_id=None,warn_no_specific_view=False):
                'warn_no_specific_view':warn_no_specific_view,
                'raw_value':pprint.pformat(row.value),
                'images':images,
+               'saved_images': si,
+               'time_range':time_range,
+               'job_id':job_id,
+               'delete_doc_url': get_next_url(db_name=db_name,delete_doc_base=True),
+               'id':doc_id,
+               'children_ids':children_ids,
                }
-    context.update( common_template )               
     c = RequestContext(request,context)
     return HttpResponse(t.render(c))
 
@@ -439,22 +469,86 @@ def raw_doc(request,db_name=None,doc_id=None):
     return HttpResponse(t.render(c))
 
 @login_required
-def h5_doc(request,db_name=None,doc_id=None):
-    # TODO: link to my sources (like plots document)
+def job_doc(request,db_name=None,doc_id=None):
     db = couch_server[db_name]
     doc = db[doc_id]
+    t = loader.get_template('job_doc.html')
+    c = RequestContext(request,{'id':doc['_id'],
+                                'raw':pprint.pformat(dict(doc)),
+                                'datanode_id':doc['datanode_id'],
+                                'doc_url': get_next_url(db_name=db_name,doc_base=True),
+                                'delete_doc_url': get_next_url(db_name=db_name,delete_doc_base=True),
+                                })
+    return HttpResponse(t.render(c))
 
-    saved_images = doc.get('saved_images',{})
-    si = [ {'url':k,'width':v[0],'height':v[1]} for (k,v) in saved_images.iteritems() ]
+def delete_job( db, doc, also_delete_target=True ):
+    assert doc['type']=='job'
+    #assert doc['state'] != 'submitted' # already in SGE, can't stop it this way...
+    #assert doc['state'] != 'executing' # already in SGE, can't stop it this way...
+    if also_delete_target:
+        # get the target id
+        target_id = doc['datanode_id']
+        target_doc = db[target_id]
+        delete_datanode(db, target_doc, also_delete_job=False )
+    db.delete(doc)
 
-    common_template = get_datanode_common( doc )
+def get_datanode_direct_children_ids(db, doc):
+    doc_id = doc['_id']
+    children_view = db.view('analysis/datanode-children',
+                            startkey=doc_id,
+                            endkey=doc_id,
+                            )
+    children_ids = []
+    for row in children_view:
+        children_ids.append( row.id )
+    return children_ids
 
-    t = loader.get_template('h5_doc.html')
-    context = {'id':doc['_id'],'raw':pprint.pformat(dict(doc)),
-               'saved_images': si,
-               }
-    context.update( common_template )               
-    c = RequestContext(request,context)
+def delete_datanode( db, doc, also_delete_job=True ):
+
+    if doc['type']=='h5':
+        if 'filename' in doc:
+            filenames = [ doc['filename'] ]
+        else:
+            filenames = []
+    else:
+        assert doc['type']=='datanode'
+        filenames = doc.get('filenames',[])
+
+    child_list = get_datanode_direct_children_ids(db, doc)
+    if len(child_list):
+        raise RuntimeError('Attempting to delete datanode which is a source for other datanodes')
+
+    if len(filenames):
+        delete_filenames(filenames)
+
+    if also_delete_job:
+        # get the job id (if it exists)
+        job_id = get_job_id_for_datanode( db, doc['_id'] )
+        if job_id is not None:
+            job_doc = db[job_id]
+            delete_job(db, job_doc, also_delete_target=False )
+    db.delete(doc)
+
+def delete_filenames(filenames):
+    raise NotImplementedError('file deletion not yet implemented')
+
+@login_required
+def delete_document_multiplexer(request,db_name=None,doc_id=None):
+    db = couch_server[db_name]
+    try:
+        doc = db[doc_id]
+    except couchdb.http.ResourceNotFound, err:
+        raise Http404("In database '%s', there is no document '%s'." % (db_name,doc_id))
+    if doc['type']=='datanode':
+        delete_datanode( db, doc )
+    elif doc['type']=='h5':
+        delete_datanode( db, doc )
+    elif doc['type']=='job':
+        delete_job( db, doc )
+    else:
+        raise NotImplementedError('unknown document to delete')
+    t = loader.get_template('deleted_doc.html')
+    c = RequestContext(request,{'id':doc['_id']})
     return HttpResponse(t.render(c))
 
 @login_required
@@ -467,7 +561,9 @@ def document_multiplexer(request,db_name=None,doc_id=None):
     if doc['type']=='datanode':
         return datanode(request,db_name=db_name,doc_id=doc_id)
     elif doc['type']=='h5':
-        return h5_doc(request,db_name=db_name,doc_id=doc_id)
+        return datanode(request,db_name=db_name,doc_id=doc_id)
+    elif doc['type']=='job':
+        return job_doc(request,db_name=db_name,doc_id=doc_id)
     else:
         try:
             return datanode(request,db_name=db_name,doc_id=doc_id,warn_no_specific_view=True)
@@ -492,7 +588,15 @@ def get_next_url(db_name=None,
                  dataset_name=None,
                  datanode_property=None,
                  analysis_type=None,
-                 doc_base=False):
+                 doc_base=False,
+                 delete_doc_base=False,
+                 ):
+
+    # doc_base and delete_doc_base are mutually exclusive
+    if doc_base:
+        assert not delete_doc_base
+    if delete_doc_base:
+        assert not doc_base
 
     if db_name is None:
         assert dataset_name is None
@@ -502,9 +606,13 @@ def get_next_url(db_name=None,
             if doc_base:
                 return approot + db_name + '/doc/'
             else:
-                return approot + db_name + '/'
+                if delete_doc_base:
+                    return approot + db_name + '/delete_doc/'
+                else:
+                    return approot + db_name + '/'
         else:
             assert not doc_base
+            assert not delete_doc_base
             if datanode_property is None:
                 if analysis_type is not None:
                     return ( approot + db_name + '/' + dataset_name +

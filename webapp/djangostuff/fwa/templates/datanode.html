@@ -11,7 +11,7 @@
 
 <div class="fwa_nav_link"><a href="../..">(Go back to dataset view.)</a></div>
 
-<div class="datanode_title">data node (document id: {{row.id}})</div>
+<div class="datanode_title">data node (id: {{row.id}})</div>
 
 {% if warn_no_specific_view %}
 <strong>Warning: no specific view for this document, showing a generic datanode view.</strong>
@@ -29,9 +29,12 @@
 </p>
 {% endif %}
 
-<p>Status tags: {{row.value.status_tags}}</p>
-<p>Properties: {{row.value.properties}}</p>
+<p>Status tags: {{row.value.status_tags|join:", "}}</p>
+<p>Properties: {{row.value.properties|join:", "}}</p>
 <p>Dataset: {{row.value.dataset}}</p>
+{% if job_id %}
+<p>Job: <a href="{{doc_url}}{{job_id}}">{{job_id}}</a></p>
+{% endif %}
 <p>Start time: {{row.value.start_time}}</p>
 <p>Stop time: {{row.value.stop_time}}</p>
 <p>Sources:
@@ -41,9 +44,42 @@
   {% endfor %}
 </ul>
 </p>
-<p>Raw:
+
+{% if children_ids %}
+<p>Children (datanodes for which this datanode is a source):
+<ul>
+  {% for child_id in children_ids %}
+    <li><a href="{{doc_url}}{{child_id}}">{{child_id}}</a></li>
+  {% endfor %}
+</ul>
+</p>
+{% endif %}
+
+{% if saved_images %}
+<p>Movies:
+<ul>
+  {% for vid in saved_images %}
+    <li>(Click this <a href="{{vid.url}}">link</a> to download.)
+      <video controls height="{{vid.height}}" width="{{vid.width}}">
+      <source src="{{vid.url}}" type="video/ogg"></source>
+      Sorry, your browser does not support the <pre>video</pre> tag with Ogg videos. (Use Firefox or Chrome).
+    </video></li>
+  {% endfor %}
+</ul>
+</p>
+{% endif %}
+
+<p>Raw datanode view:
 <pre>
 {{raw_value}}
 </pre>
 </p>
+
+{% if job_id %}
+<a href="{{delete_doc_url}}{{id}}" class="fwa_delete_verify">Delete this datanode and job</a>
+{% else %}
+<a href="{{delete_doc_url}}{{id}}" class="fwa_delete_verify">Delete this datanode</a>
+{% endif %}
+
+
 {% endblock %}

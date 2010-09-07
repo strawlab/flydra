@@ -7,9 +7,29 @@ in future for static IMP cluster
 import starcluster.config, starcluster.cluster
 import starcluster.addnode
 import starcluster.removenode
+from flydra.sge_utils.util import COUCHDB_STATUS_DOC_ID
+from couchdb.client import Server
+import couchdb.http
+import pytz, datetime
 
 class ClusterBase(object):
-    pass
+
+    def update_couch_view_of_sge_status(self, couch_url, db_name):
+        if self.is_running():
+            cmd = '/home/astraw/PY/bin/flydra_sge_update_couch_view_of_sge_status %s %s'%(couch_url, db_name)
+            return self._execute_on_master(cmd)
+        else:
+            couch_server = Server(couch_url)
+            db = couch_server[db_name]
+            doc = {'_id':COUCHDB_STATUS_DOC_ID}
+            try:
+                orig_doc = db[COUCHDB_STATUS_DOC_ID]
+                doc['_rev'] = orig_doc['_rev']
+            except couchdb.http.ResourceNotFound:
+                pass
+            doc['update_time'] =  pytz.utc.localize( datetime.datetime.utcnow() ).isoformat()
+            doc['status']='stopped'
+            db.update( [doc] )
 
 class StarCluster(ClusterBase):
     def __init__(self, config_fname):
@@ -41,11 +61,8 @@ class StarCluster(ClusterBase):
         return len(cl.nodes)
 
     def shutdown(self):
-        ec2 = self._config.get_easy_ec2()
-        cluster = ec2.get_security_group(self._sg_name)
-        for node in cluster.instances():
-            node.stop()
-        cluster.delete()
+        cl = starcluster.cluster.get_cluster(self._tag_name, self._config)
+        cl.stop_cluster()
 
     def start_n_nodes(self,n):
         cfg = self._config
@@ -67,3 +84,7 @@ class StarCluster(ClusterBase):
             raise NotImplementedError('cannot remove %d nodes: find out which node to remove'%n)
             starcluster.removenode.remove_node( node, cl)
 
+    def _execute_on_master(self,cmd):
+        cl = starcluster.cluster.get_cluster(self._tag_name, self._config)
+        master = cl.master_node
+        return master.ssh.execute("su -l -c '%s' astraw"%cmd)
