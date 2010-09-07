@@ -1,0 +1,17 @@
+{% extends "site_base.html" %}
+
+{% load i18n %}
+
+{% block head_title %}{{id}}{% endblock %}
+
+{% block tab_id %}id="home_tab"{% endblock %}
+
+{% block body %}
+
+<div class="fwa_nav_link"><a href="../..">(Go back to dataset view.)</a></div>
+
+<h2>Deleted document {{id}}</h2>
+
+<p>Your deletion request was successful</p>
+
+{% endblock %}
