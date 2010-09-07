@@ -1,3 +1,4 @@
+.. _data_analysis:
 Data analysis
 *************
 
@@ -160,7 +161,6 @@ Data flow
     smoothed_kalman_estimates [label="smoothed kalman estimates [output of load_data(use_kalman_smoothing=True)]"];
   }
 
-
 Extracting longitudinal body orientation
 ========================================
 
@@ -231,6 +231,11 @@ automatically called via an SConstruct script using
   flydra_analysis_image_based_orientation --h5=DATA20080915_164551.h5 --kalman=DATA20080915_164551.kalmanized.h5 \
     --ufmfs=small_20080915_164551_cam1_0.ufmf:small_20080915_164551_cam2_0.ufmf:small_20080915_164551_cam3_0.ufmf:small_20080915_164551_cam4_0.ufmf \
     --output-h5=DATA20080915_164551.image-based-re2d.h5
+
+You can use the ``--save-images`` option to the :command:`flydra_analysis_image_based_orientation` command. You will then generate a series of images that look like this:
+
+.. image:: images/image-based-orientation.png
+
 
 When calling :command:`flydra_analysis_montage_ufmfs`, you'll need to
 use at least the following elements in a configuration file::
