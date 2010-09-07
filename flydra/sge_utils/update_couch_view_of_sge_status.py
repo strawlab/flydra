@@ -44,10 +44,7 @@ def update_couch_view_of_sge_status(couch_url, db_name):
 #         job['cpu'] = job_list.find("cpu_usage").text
 #         job['mem'] = job_list.find("mem_usage").text
 #         job['io'] = job_list.find("io_usage").text
-        qn = job_list.find("queue_name").text
-        job['queue'], node = qn.split("@")
-        job['node'] = node[:-6]
-        job['node_index'] = int(node[10:-6])
+        job['queue_name'] = job_list.find("queue_name").text
         job['slots'] = job_list.find("slots").text
         stime = datetime.datetime.strptime(job_list.find("JAT_start_time").text, "%Y-%m-%dT%H:%M:%S")
         job["submitted"] = stime.strftime("%Y-%m-%d %H:%M:%S")
