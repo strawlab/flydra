@@ -14,6 +14,7 @@ xmin,xmax=-3,3
 ymin,ymax=-3,3
 FAR = 6
 D2R = np.pi/180.
+R2D = 1./D2R
 
 def unwrap(angle):
     return angle % (2*np.pi)
@@ -193,6 +194,8 @@ class RayEmitter(OpticalElement):
             return dist
         elif isinstance(elem,Projector):
             return np.inf
+        elif isinstance(elem,InvisibleLineSegment):
+            return np.inf
         else:
             raise ValueError('unknown element %s'%elem)
 
@@ -323,6 +326,30 @@ class FlatMirror(OpticalElement):
     end2 = traits.Instance(TwoVec)
 
     traits_view = View( Group( Label('mirror'),
+                               Item('end1',
+                                    style='custom'),
+                               Item('end2',
+                                    style='custom'),
+                               )
+                        )
+
+    @traits.on_trait_change('end1,end2')
+    def new_attr(self):
+        self.on_trait_change(self.updated,'end1.anytrait')
+        self.on_trait_change(self.updated,'end2.anytrait')
+        self.updated()
+
+    def draw(self,*args,**kws):
+        drawable = {'type':'line',
+                    'x':[self.end1.x,self.end2.x],
+                    'y':[self.end1.y,self.end2.y]}
+        return [drawable]
+
+class InvisibleLineSegment(OpticalElement):
+    end1 = traits.Instance(TwoVec)
+    end2 = traits.Instance(TwoVec)
+
+    traits_view = View( Group( Label('invisible line'),
                                Item('end1',
                                     style='custom'),
                                Item('end2',
@@ -523,19 +550,37 @@ class MyApp(traits.HasTraits):
 def build_arena_posts():
     m2ft=100.0/2.54/12.0
     ft2m=1.0/m2ft
-    spacing = 4*ft2m
-    radius = 0.02
-    posts = []
-    for theta in [0,120*D2R,240*D2R]:
-        if 1:
-            theta=theta+60*D2R
-            r = 1.407 # for 4ft equilateral
-            x = r*np.cos(theta)
-            y = r*np.sin(theta)
-            post = CircularScreen( pos = TwoVec(x=x,y=y),
-                                   radius = radius )
-            posts.append(post)
-    return posts
+
+    in2ft = 1.0/12.0
+    in2m = in2ft*ft2m
+
+    # calculate edge lengths for equilateral triangles
+
+    triangle_inner = 74.0*in2m # measured in inches, inner edges of triangle
+    inner_altitude = triangle_inner*0.5 * np.tan( 60*D2R )
+    print inner_altitude
+
+    mid_altitude = inner_altitude + 0.02 # 20 mm to center of rail
+    half_mid_edge = mid_altitude/np.tan( 60*D2R )
+    mid_edge = 2*half_mid_edge
+
+    outer_altitude = inner_altitude + 0.04 # 40 mm to center of rail
+    half_outer_edge = outer_altitude/np.tan( 60*D2R )
+    outer_edge = 2*half_outer_edge
+
+    lines = []
+    for edge_length in [ triangle_inner, mid_edge, outer_edge ]:
+        r = edge_length*0.5/np.cos(30*D2R)
+        for i in range(3):
+            verts = []
+            for j in range(2):
+                k=j*2-1 # +1 or -1
+                theta = i*120*D2R + k*60*D2R
+                print 'theta*R2D',theta*R2D
+                verts.append(  TwoVec(x=np.cos(theta)*r, y=np.sin(theta)*r) )
+            line = InvisibleLineSegment( end1=verts[0], end2=verts[1] )
+            lines.append( line )
+    return lines
 
 def make_projector_groups(n,r=1.5,mirrors=True):
     delta = 2*np.pi/n
