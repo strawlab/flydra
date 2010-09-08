@@ -366,7 +366,9 @@ class InvisibleLineSegment(OpticalElement):
     def draw(self,*args,**kws):
         drawable = {'type':'line',
                     'x':[self.end1.x,self.end2.x],
-                    'y':[self.end1.y,self.end2.y]}
+                    'y':[self.end1.y,self.end2.y],
+                    'lw':0.1,
+                    }
         return [drawable]
 
 class CircularScreen(OpticalElement):
@@ -502,9 +504,14 @@ class MyApp(traits.HasTraits):
             assert drawable['type']=='line'
             color = drawable.get('ray_color',traits.Color('black'))
             mpl_color = traits2mpl_color(color)
+            opts = drawable.copy()
+            for unused in ['type','ray_color','x','y','target']:
+                if unused in opts:
+                    del opts[unused]
             mpl_line, = self.topview_ax.plot( drawable['x'],drawable['y'],
                                               '-',
-                                              color=mpl_color)
+                                              color=mpl_color,
+                                              **opts)
             self.mpl_lines.append(mpl_line)
 
         info = raytracing_result['target_info']
@@ -558,7 +565,6 @@ def build_arena_posts():
 
     triangle_inner = 74.0*in2m # measured in inches, inner edges of triangle
     inner_altitude = triangle_inner*0.5 * np.tan( 60*D2R )
-    print inner_altitude
 
     mid_altitude = inner_altitude + 0.02 # 20 mm to center of rail
     half_mid_edge = mid_altitude/np.tan( 60*D2R )
@@ -576,7 +582,6 @@ def build_arena_posts():
             for j in range(2):
                 k=j*2-1 # +1 or -1
                 theta = i*120*D2R + k*60*D2R
-                print 'theta*R2D',theta*R2D
                 verts.append(  TwoVec(x=np.cos(theta)*r, y=np.sin(theta)*r) )
             line = InvisibleLineSegment( end1=verts[0], end2=verts[1] )
             lines.append( line )
