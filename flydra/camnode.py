@@ -67,6 +67,21 @@ import motmot.cam_iface.choose as cam_iface_choose
 from optparse import OptionParser
 import camnode_colors
 
+try:
+    import roslib
+    have_ROS = True
+    print 'have ROS'
+except ImportError, err:
+    have_ROS = False
+    print 'do NOT have ROS'
+    print 'see http://www.ros.org/'
+    
+if have_ROS:
+    roslib.load_manifest('sensor_msgs')
+    from sensor_msgs.msg import Image
+    import rospy
+    import rospy.core
+
 def DEBUG(*args):
     if 0:
         sys.stdout.write(' '.join(map(str,args))+'\n')
@@ -342,6 +357,27 @@ class ProcessCamClass(object):
                  initial_image_dict = None,
                  benchmark = False,
                  ):
+                 
+        # ROS stuff
+        ## TODO
+        # get pixel_format from somewhere, right now hardcoded to MONO8 for camera_starting_notification
+        if have_ROS:
+            rospy.init_node('fview_ros',
+                            anonymous=True, # allow multiple instances to run
+                            disable_signals=True, # let WX intercept them
+                            )
+        self.publisher_lock = threading.Lock()
+        self.publisher = None
+        self.camera_starting_notification(cam_id,
+                                     pixel_format='MONO8',
+                                     max_width=max_width,
+                                     max_height=max_height)
+        self.topic_prefix = str(cam_id)
+        self._topic_prefix_changed()
+        self.rosrate = float(options.rosrate)
+        self.lasttime = time.time()
+        # end ROS stuff
+                 
         self.benchmark = benchmark
         self.options = options
         self.globals = globals
@@ -400,6 +436,36 @@ class ProcessCamClass(object):
 
         self._chain = camnode_utils.ChainLink()
         self._initial_image_dict = initial_image_dict
+        
+    def _topic_prefix_changed(self):
+        with self.publisher_lock:
+            # unregister old publisher
+            if self.publisher is not None:
+                self.publisher.unregister()
+
+            # register a new publisher
+            if have_ROS:
+                 self.publisher = rospy.Publisher('%s/image_raw'%self.topic_prefix,
+                                                  Image,
+                                                  tcp_nodelay=True,
+                                                  )
+                                                  
+    def camera_starting_notification(self,cam_id,
+                                     pixel_format=None,
+                                     max_width=None,
+                                     max_height=None):
+        if pixel_format == 'MONO8':
+            self.encoding = 'mono8'
+        elif pixel_format in ('RAW8:RGGB','MONO8:RGGB'):
+            self.encoding = 'bayer_rggb8'
+        elif pixel_format in ('RAW8:BGGR','MONO8:BGGR'):
+            self.encoding = 'bayer_bggr8'
+        elif pixel_format in ('RAW8:GBRG','MONO8:GBRG'):
+            self.encoding = 'bayer_gbrg8'
+        elif pixel_format in ('RAW8:GRBG','MONO8:GRBG'):
+            self.encoding = 'bayer_grbg8'
+        else:
+            raise ValueError('unknown pixel format "%s"'%pixel_format)
 
     def get_chain(self):
         return self._chain
@@ -724,6 +790,29 @@ class ProcessCamClass(object):
                 # get best guess as to when image was taken
                 timestamp=chainbuf.timestamp
                 framenumber=chainbuf.framenumber
+                
+                # publish raw image on ROS network
+                if have_ROS:
+                    now = time.time()
+                    if now-self.lasttime+0.005 > 1./(self.rosrate):
+                        msg = Image()
+                        msg.header.seq=framenumber
+                        msg.header.stamp=rospy.Time.from_sec(timestamp)
+                        msg.header.frame_id = "0"
+
+                        npbuf = np.array(hw_roi_frame)
+                        (height,width) = npbuf.shape
+
+                        msg.height = height
+                        msg.width = width
+                        msg.encoding = self.encoding
+                        msg.step = width
+                        msg.data = npbuf.tostring() # let numpy convert to string
+
+                        with self.publisher_lock:
+                            self.publisher.publish(msg)
+                        self.lasttime = now
+                # end ROS stuff
 
                 if 1:
                     if old_fn is None:
@@ -2180,7 +2269,7 @@ class AppState(object):
             red_only_shared = SharedValue()
             red_only_shared.set(int(options.red_only))
             scalar_control_info['red_only'] = red_only_shared.get_nowait()
-
+            
             scalar_control_info['width'] = width
             scalar_control_info['height'] = height
             scalar_control_info['roi'] = 0,0,width-1,height-1
@@ -2893,6 +2982,8 @@ def parse_args_and_run(benchmark=False):
 
     parser.add_option("--small-save-radius", type="int",
                       help='half the edge length of .ufmf movies [default: %default]')
+    parser.add_option("--rosrate", type="float", dest='rosrate', default=30.,
+                      help='desired framerate for the ROS raw image emitter (if ROS enabled)')
 
     (options, args) = parser.parse_args()
     #print dir(options)
