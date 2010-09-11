@@ -368,10 +368,6 @@ class ProcessCamClass(object):
                             )
         self.publisher_lock = threading.Lock()
         self.publisher = None
-        self.camera_starting_notification(cam_id,
-                                     pixel_format='MONO8',
-                                     max_width=max_width,
-                                     max_height=max_height)
         self.topic_prefix = str(cam_id)
         self._topic_prefix_changed()
         self.rosrate = float(options.rosrate)
@@ -450,23 +446,6 @@ class ProcessCamClass(object):
                                                   tcp_nodelay=True,
                                                   )
                                                   
-    def camera_starting_notification(self,cam_id,
-                                     pixel_format=None,
-                                     max_width=None,
-                                     max_height=None):
-        if pixel_format == 'MONO8':
-            self.encoding = 'mono8'
-        elif pixel_format in ('RAW8:RGGB','MONO8:RGGB'):
-            self.encoding = 'bayer_rggb8'
-        elif pixel_format in ('RAW8:BGGR','MONO8:BGGR'):
-            self.encoding = 'bayer_bggr8'
-        elif pixel_format in ('RAW8:GBRG','MONO8:GBRG'):
-            self.encoding = 'bayer_gbrg8'
-        elif pixel_format in ('RAW8:GRBG','MONO8:GRBG'):
-            self.encoding = 'bayer_grbg8'
-        else:
-            raise ValueError('unknown pixel format "%s"'%pixel_format)
-
     def get_chain(self):
         return self._chain
 
@@ -805,7 +784,21 @@ class ProcessCamClass(object):
 
                         msg.height = height
                         msg.width = width
-                        msg.encoding = self.encoding
+                        msg.encoding = chainbuf.image_coding
+                        pixel_format = chainbuf.image_coding
+                        if pixel_format == 'MONO8':
+                            msg.encoding = 'mono8'
+                        elif pixel_format in ('RAW8:RGGB','MONO8:RGGB'):
+                            msg.encoding = 'bayer_rggb8'
+                        elif pixel_format in ('RAW8:BGGR','MONO8:BGGR'):
+                            msg.encoding = 'bayer_bggr8'
+                        elif pixel_format in ('RAW8:GBRG','MONO8:GBRG'):
+                            msg.encoding = 'bayer_gbrg8'
+                        elif pixel_format in ('RAW8:GRBG','MONO8:GRBG'):
+                            msg.encoding = 'bayer_grbg8'
+                        else:
+                            raise ValueError('unknown pixel format "%s"'%pixel_format)
+                        
                         msg.step = width
                         msg.data = npbuf.tostring() # let numpy convert to string
 
