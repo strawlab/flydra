@@ -75,7 +75,7 @@ except ImportError, err:
     have_ROS = False
     print 'do NOT have ROS'
     print 'see http://www.ros.org/'
-    
+
 if have_ROS:
     roslib.load_manifest('sensor_msgs')
     from sensor_msgs.msg import Image
@@ -357,23 +357,21 @@ class ProcessCamClass(object):
                  initial_image_dict = None,
                  benchmark = False,
                  ):
-                 
-        # ROS stuff
-        ## TODO
-        # get pixel_format from somewhere, right now hardcoded to MONO8 for camera_starting_notification
+
         if have_ROS:
             rospy.init_node('fview_ros',
                             anonymous=True, # allow multiple instances to run
                             disable_signals=True, # let WX intercept them
                             )
-        self.publisher_lock = threading.Lock()
-        self.publisher = None
-        self.topic_prefix = str(cam_id)
-        self._topic_prefix_changed()
+            # register a new publisher
+            self.publisher = rospy.Publisher('%s/image_raw'%cam_id,
+                                             Image,
+                                             tcp_nodelay=True,
+                                             )
         self.rosrate = float(options.rosrate)
         self.lasttime = time.time()
         # end ROS stuff
-                 
+
         self.benchmark = benchmark
         self.options = options
         self.globals = globals
@@ -394,7 +392,7 @@ class ProcessCamClass(object):
         self.n_sigma_shared = n_sigma_shared
         self.n_erode_absdiff_shared = n_erode_absdiff_shared
         self.red_only_shared = red_only_shared
-        
+
         self.color_range_1_shared = color_range_1_shared
         self.color_range_2_shared = color_range_2_shared
         self.color_range_3_shared = color_range_3_shared
@@ -432,20 +430,7 @@ class ProcessCamClass(object):
 
         self._chain = camnode_utils.ChainLink()
         self._initial_image_dict = initial_image_dict
-        
-    def _topic_prefix_changed(self):
-        with self.publisher_lock:
-            # unregister old publisher
-            if self.publisher is not None:
-                self.publisher.unregister()
 
-            # register a new publisher
-            if have_ROS:
-                 self.publisher = rospy.Publisher('%s/image_raw'%self.topic_prefix,
-                                                  Image,
-                                                  tcp_nodelay=True,
-                                                  )
-                                                  
     def get_chain(self):
         return self._chain
 
@@ -618,7 +603,7 @@ class ProcessCamClass(object):
         take_background_isSet = globals['take_background'].isSet
         take_background_clear = globals['take_background'].clear
         collecting_background_isSet = globals['collecting_background'].isSet
-        
+
 
         max_frame_size = FastImage.Size(self.max_width, self.max_height)
 
@@ -747,18 +732,18 @@ class ProcessCamClass(object):
 
                 hw_roi_frame = chainbuf.get_buf()
                 cam_received_time = chainbuf.cam_received_time
-                
+
                 if self.red_only_shared.get_nowait():
                     color_range_1 = self.color_range_1_shared.get_nowait()
                     color_range_2 = self.color_range_2_shared.get_nowait()
                     color_range_3 = self.color_range_3_shared.get_nowait()
 
                     if color_range_1 < color_range_2:
-                        
+
                         camnode_colors.replace_with_red_image( hw_roi_frame,
                                                                chainbuf.image_coding,
                                                                #camnode_colors.RED_CHANNEL)
-                                                               camnode_colors.RED_COLOR, 
+                                                               camnode_colors.RED_COLOR,
                                                                color_range_1,
                                                                color_range_2,
                                                                color_range_3,
@@ -769,7 +754,7 @@ class ProcessCamClass(object):
                 # get best guess as to when image was taken
                 timestamp=chainbuf.timestamp
                 framenumber=chainbuf.framenumber
-                
+
                 # publish raw image on ROS network
                 if have_ROS:
                     now = time.time()
@@ -798,12 +783,11 @@ class ProcessCamClass(object):
                             msg.encoding = 'bayer_grbg8'
                         else:
                             raise ValueError('unknown pixel format "%s"'%pixel_format)
-                        
+
                         msg.step = width
                         msg.data = npbuf.tostring() # let numpy convert to string
 
-                        with self.publisher_lock:
-                            self.publisher.publish(msg)
+                        self.publisher.publish(msg)
                         self.lasttime = now
                 # end ROS stuff
 
@@ -1956,11 +1940,11 @@ class AppState(object):
                 try:
                     this_info1 =  cam_iface.get_camera_info(i)
                 except cam_iface.CameraNotAvailable:
-                    this_info2 =  ('(not available)',i) 
+                    this_info2 =  ('(not available)',i)
                 else:
-                    this_info2 =  ('\0'.join(this_info1),i) 
+                    this_info2 =  ('\0'.join(this_info1),i)
                 all_cam_info_list.append(this_info2)
-                
+
             all_cam_info_list.sort() # make sure list is always in same order for given cameras
             all_cam_info_list.reverse() # any ordering will do, but reverse for historical reasons
             cam_order = [ x[1] for x in all_cam_info_list]
@@ -1972,7 +1956,7 @@ class AppState(object):
                 except cam_iface.CameraNotAvailable:
                     avail_string = '(not available)'
                 print 'order %d: %s'%(i, avail_string)
-                 
+
 
             cams_only = options.cams_only
             if cams_only is not None:
@@ -2238,23 +2222,23 @@ class AppState(object):
             n_sigma_shared = SharedValue()
             n_sigma_shared.set(options.n_sigma)
             scalar_control_info['n_sigma'] = n_sigma_shared.get_nowait()
-            
+
             n_erode_absdiff_shared = SharedValue()
             n_erode_absdiff_shared.set(options.n_erode_absdiff)
             scalar_control_info['n_erode_absdiff'] = n_erode_absdiff_shared.get_nowait()
-            
+
             color_range_1_shared = SharedValue()
             color_range_1_shared.set(options.color_range_1)
             scalar_control_info['color_range_1'] = color_range_1_shared.get_nowait()
-            
+
             color_range_2_shared = SharedValue()
             color_range_2_shared.set(options.color_range_2)
             scalar_control_info['color_range_2'] = color_range_2_shared.get_nowait()
-            
+
             color_range_3_shared = SharedValue()
             color_range_3_shared.set(options.color_range_3)
             scalar_control_info['color_range_3'] = color_range_3_shared.get_nowait()
-            
+
             sat_thresh_shared = SharedValue()
             sat_thresh_shared.set(options.sat_thresh)
             scalar_control_info['sat_thresh'] = sat_thresh_shared.get_nowait()
@@ -2262,7 +2246,7 @@ class AppState(object):
             red_only_shared = SharedValue()
             red_only_shared.set(int(options.red_only))
             scalar_control_info['red_only'] = red_only_shared.get_nowait()
-            
+
             scalar_control_info['width'] = width
             scalar_control_info['height'] = height
             scalar_control_info['roi'] = 0,0,width-1,height-1
@@ -2395,13 +2379,13 @@ class AppState(object):
         self.n_raw_frames = [0 for i in range(num_cams)]
         self.last_measurement_time = [time_func() for i in range(num_cams)]
         self.last_return_info_check = [ 0.0 for i in range(num_cams)]
-        
+
         ##################################################################
         #
         # Set up listener to trigger recording
         #
         ##################################################################
-        
+
         self.recvsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         my_host = '' # get fully qualified hostname
         my_port = 30043 # arbitrary number
@@ -2416,11 +2400,11 @@ class AppState(object):
 
         if self.recvsock is not None:
             self.recvsock.setblocking(0)
-        
+
         self.recording = 0
         self.timer = 0
-        
-        
+
+
 
     def get_image_sources(self):
         return self._image_sources
@@ -2501,7 +2485,7 @@ class AppState(object):
             if 1:
 
                 msg = None
-                
+
                 if self.recvsock is not None:
                     try:
                         msg, addr = self.recvsock.recvfrom(4096)
@@ -2511,11 +2495,11 @@ class AppState(object):
                 if msg=='record_ufmf':
                     self.timer = time.time()
                 if msg=='record_ufmf' and self.recording==0:
-                    
+
                     self.recording = 1
                     print 'saving movies'
-                    
-                    if 1: 
+
+                    if 1:
                         for cam_no, cam_id in enumerate(self.all_cam_ids):
                             small_saver = self.all_small_savers[cam_no]
                             if small_saver is None:
@@ -2524,7 +2508,7 @@ class AppState(object):
 
                             small_filebasename = time.strftime( 'CAM_NODE_MOV_%Y%m%d_%H%M%S_camid_' + repr(cam_no) + '.ufmf')
                             small_saver.start_recording(small_filebasename=small_filebasename)
-                        
+
                 elif msg==None and self.recording==1 and time.time()-self.timer >= 4:
                     print 'stop saving movies'
                     self.recording = 0
@@ -2639,7 +2623,7 @@ class AppState(object):
                         print 'setting red_only',value
                         cam_processor.red_only.set(value)
 
-                        
+
                     elif property_name == 'color_range_1':
                         print 'setting color_range_1',value
                         cam_processor.color_range_1_shared.set(value)
@@ -2652,7 +2636,7 @@ class AppState(object):
                     elif property_name == 'sat_thresh':
                         print 'setting sat_thresh',value
                         cam_processor.sat_thresh_shared.set(value)
-                        
+
                     elif property_name == 'diff_threshold':
                         cam_processor.diff_threshold_shared.set(value)
                     elif property_name == 'clear_threshold':
