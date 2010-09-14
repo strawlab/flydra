@@ -290,7 +290,7 @@ class PlotSummary2D( PlotsAnalysisType ):
     name = 'Plot: summary 2D timeseries data'
     short_description = 'plot of 2D timeseries information'
     source_node_types = ['2d position']
-    base_cmd = 'flydra_analysis_plot_timeseries_2d3d'
+    base_cmd = 'flydra_analysis_plot_timeseries_2d_3d'
 
     def convert_sources_to_cmdline_args(self, sge_job_doc, source_info ):
         sources = sge_job_doc['sources']
