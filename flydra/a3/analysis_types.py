@@ -286,6 +286,28 @@ class PlotSummary3D( PlotsAnalysisType ):
         assert len(cmdline_args)==2
         return cmdline_args
 
+class PlotSummary2D( PlotsAnalysisType ):
+    name = 'Plot: summary 2D timeseries data'
+    short_description = 'plot of 2D timeseries information'
+    source_node_types = ['2d position']
+    base_cmd = 'flydra_analysis_plot_timeseries_2d3d'
+
+    def convert_sources_to_cmdline_args(self, sge_job_doc, source_info ):
+        sources = sge_job_doc['sources']
+        short_sources = sources
+        docs = []
+        for snt in self.source_node_types:
+            ndocs,short_sources = self._get_docs_shortened_sources(snt,short_sources)
+            docs.extend(ndocs)
+        cmdline_args = []
+        for (node_type,doc) in docs:
+            if node_type == '2d position':
+                cmdline_args.extend( [source_info[doc['_id']]] )
+            else:
+                raise ValueError('unknown node_type as source: %s'%node_type)
+        assert len(cmdline_args)==2
+        return cmdline_args
+
 class EKF_based_3D_position( AnalysisType ):
     name = 'EKF-based 3D position'
     short_description = 'convert 2D data and calibration into 3D position data'
@@ -591,4 +613,9 @@ def analysis_type_factory( db, class_name ):
     atype = klass(db)
     return atype
 
-class_names = ['EKF_based_3D_position','PlotSummary3D','ImageBased2DOrientation','Fit3DOrientation']
+class_names = ['EKF_based_3D_position',
+               'PlotSummary3D',
+               'PlotSummary2D',
+               'ImageBased2DOrientation',
+               'Fit3DOrientation',
+               ]
