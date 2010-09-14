@@ -301,11 +301,12 @@ class PlotSummary2D( PlotsAnalysisType ):
             docs.extend(ndocs)
         cmdline_args = []
         for (node_type,doc) in docs:
+            save_fig_fname = 'timeseries2d_plot_%s.png'%doc['_id']
             if node_type == '2d position':
-                cmdline_args.extend( [source_info[doc['_id']]] )
+                cmdline_args.extend( [source_info[doc['_id']],'--save-fig=%s'%save_fig_fname] )
             else:
                 raise ValueError('unknown node_type as source: %s'%node_type)
-        assert len(cmdline_args)==2
+        assert len(cmdline_args)==3
         return cmdline_args
 
 class EKF_based_3D_position( AnalysisType ):
