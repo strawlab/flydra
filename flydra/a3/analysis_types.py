@@ -306,7 +306,7 @@ class PlotSummary2D( PlotsAnalysisType ):
                 cmdline_args.extend( [source_info[doc['_id']],'--save-fig=%s'%save_fig_fname] )
             else:
                 raise ValueError('unknown node_type as source: %s'%node_type)
-        assert len(cmdline_args)==3
+        assert len(cmdline_args)==2
         return cmdline_args
 
 class EKF_based_3D_position( AnalysisType ):
