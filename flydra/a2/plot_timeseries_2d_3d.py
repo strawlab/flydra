@@ -15,7 +15,6 @@ import flydra.reconstruct as reconstruct
 
 import matplotlib
 import matplotlib.ticker as ticker
-import pylab
 
 import flydra.analysis.result_utils as result_utils
 import flydra.a2.utils as utils
@@ -56,6 +55,9 @@ def doit(
          up_dir = None,
          options = None,
          ):
+    if options.save_fig is not None:
+        matplotlib.use('Agg')
+    import pylab
 
     if not use_kalman_smoothing:
         if (fps is not None) or (dynamic_model is not None):
