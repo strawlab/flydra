@@ -4,3 +4,5 @@ dist
 *.kh5-smoothcache
 *.pyc
 *~
+flydra/camnode_colors.c
+src/reconstruct_utils.c
