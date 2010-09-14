@@ -295,6 +295,12 @@ function pretty_print_row( row ) {
     return "an unknown duration" + str1;
 }
 
+function sort_by_start_time(a, b) {
+    var x = a.start_time_obj;
+    var y = b.start_time_obj;
+    return ((x < y) ? -1 : ((x > y) ? 1 : 0));
+}
+
 function FWA_create_ul_for_items( elem ) {
 	var primary;
 
@@ -327,6 +333,8 @@ function FWA_create_ul_for_items( elem ) {
 	    }
 	}
 
+	// Sort rows by start time
+	js_client_info_global.sources[primary].rows.sort(sort_by_start_time);
 
 	var myitems = "";
 	for (var rownum in js_client_info_global.sources[primary].rows) {
