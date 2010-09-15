@@ -232,7 +232,8 @@ class NumpyDocString(object):
                 current_func = None
                 if ',' in line:
                     for func in line.split(','):
-                        push_item(func, [])
+                        if func.strip():
+                            push_item(func, [])
                 elif line.strip():
                     current_func = line
             elif current_func is not None:
@@ -411,19 +412,14 @@ class FunctionDoc(NumpyDocString):
     def __init__(self, func, role='func', doc=None, config={}):
         self._f = func
         self._role = role # e.g. "func" or "meth"
-        if doc is None:
-            doc = inspect.getdoc(func) or ''
-        try:
-            NumpyDocString.__init__(self, doc)
-        except ValueError, e:
-            print '*'*78
-            print "ERROR: '%s' while parsing `%s`" % (e, self._f)
-            print '*'*78
-            #print "Docstring follows:"
-            #print doclines
-            #print '='*78
 
-        if not self['Signature']:
+        if doc is None:
+            if func is None:
+                raise ValueError("No function or docstring given")
+            doc = inspect.getdoc(func) or ''
+        NumpyDocString.__init__(self, doc)
+
+        if not self['Signature'] and func is not None:
             func, func_name = self.get_func()
             try:
                 # try to read signature
@@ -465,17 +461,17 @@ class FunctionDoc(NumpyDocString):
 class ClassDoc(NumpyDocString):
     def __init__(self, cls, doc=None, modulename='', func_doc=FunctionDoc,
                  config={}):
-        if not inspect.isclass(cls):
-            raise ValueError("Initialise using a class. Got %r" % cls)
+        if not inspect.isclass(cls) and cls is not None:
+            raise ValueError("Expected a class or None, but got %r" % cls)
         self._cls = cls
 
         if modulename and not modulename.endswith('.'):
             modulename += '.'
         self._mod = modulename
-        self._name = cls.__name__
-        self._func_doc = func_doc
 
         if doc is None:
+            if cls is None:
+                raise ValueError("No class or documentation string given")
             doc = pydoc.getdoc(cls)
 
         NumpyDocString.__init__(self, doc)
@@ -490,10 +486,14 @@ class ClassDoc(NumpyDocString):
 
     @property
     def methods(self):
+        if self._cls is None:
+            return []
         return [name for name,func in inspect.getmembers(self._cls)
                 if not name.startswith('_') and callable(func)]
 
     @property
     def properties(self):
+        if self._cls is None:
+            return []
         return [name for name,func in inspect.getmembers(self._cls)
                 if not name.startswith('_') and func is None]
