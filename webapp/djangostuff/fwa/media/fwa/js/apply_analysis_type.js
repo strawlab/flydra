@@ -280,19 +280,29 @@ function pretty_print_row( row ) {
 
     //str1 =  " ("+row.duration_qsecs+" seconds) at " + str1;
     str1 =  " at " + str1;
+    var result = "";
+    var found = false;
     if (duration_days) {
-	return duration_days + " days" + str1;
+	found = true;
+	result = duration_days + " days" + str1;
     }
     else if (duration_hours) {
-	return duration_hours + " hours" + str1;
+	found = true;
+	result = duration_hours + " hours" + str1;
     }
     else if (duration_minutes) {
-	return duration_minutes + " minutes" + str1;
+	found = true;
+	result = duration_minutes + " minutes" + str1;
     }
     else if (duration_seconds) {
-	return duration_seconds + " seconds" + str1;
+	found = true;
+	result = duration_seconds + " seconds" + str1;
     }
-    return "an unknown duration" + str1;
+    if (found==false) {
+	result = "an unknown duration" + str1;
+    }
+    result = result + " (id: "+row.id +")";
+    return result;
 }
 
 function sort_by_start_time(a, b) {
