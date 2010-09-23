@@ -268,6 +268,31 @@ def view_SGE_jobs(request,db_name=None,dataset=None):
     c = RequestContext(request,context)
     return HttpResponse(t.render(c))
 
+@login_required
+def view_complete_SGE_jobs(request,db_name=None,dataset=None):
+    dataset_id = 'dataset:'+dataset
+    db = couch_server[db_name]
+
+    cluster_obj = cluster.StarCluster(os.path.join(settings.FWA_STARCLUSTER_CONFIG_DIR,db_name))
+
+    page_number = request.GET.get('page', 1)
+    try:
+        items = _get_items_paginated(db,'analysis/list_complete_jobs_by_submit_time',
+                                     page_number=page_number,
+                                     descending=True,
+                                     )
+    except EmptyPage:
+        items = None
+
+    context = {
+        'items': items,
+        'doc_url': get_next_url(db_name=db_name,doc_base=True),
+        }
+
+    t = loader.get_template('view_complete_SGE_jobs.html')
+    c = RequestContext(request,context)
+    return HttpResponse(t.render(c))
+
 class ClusterStartForm(forms.Form):
     n_nodes = forms.IntegerField(initial=1,min_value=1)
 

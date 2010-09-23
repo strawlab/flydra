@@ -1,0 +1,81 @@
+{% extends "site_base.html" %}
+
+{% load i18n %}
+
+{% block head_title %}Completed SGE jobs{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ STATIC_URL }}fwa/css/fwa-docs.css" />{% endblock %}
+
+{% block tab_id %}id="home_tab"{% endblock %}
+
+{% block body %}
+
+<div class="fwa_nav_link"><a href="../..">(Go back to dataset view.)</a></div>
+
+<h2>CouchDB concept of complete SGE jobs</h2>
+
+{% if items %}
+<div class="pagination">
+  <span class="step-links">
+      <div class="fwa_paged_table_nav">
+    {% if items.has_previous %}
+      <a href="?page={{ items.previous_page_number }}">previous</a>
+    {% endif %}
+      
+    <span class="current">
+      Page {{items.number}} of {{items.paginator.num_pages}}.
+    </span>
+
+    {% if items.has_next %}
+      <a href="?page={{ items.next_page_number }}">next</a>
+    {% endif %}
+      </div>
+
+      <table class="fwa_table">
+	<thead>
+	<tr>
+      <th>Datanode result</th>
+      <th>Submit time</th>
+      <th>Class</th>
+      <th>Job</th>
+      </tr>
+	</thead>
+	<tbody>
+    {% for item in items.object_list %}
+    <tr>
+      <td>
+	<a href="{{doc_url}}{{item.value.datanode_id}}" data-datanode-id="{{item.value.datanode_id}}">datanode</a>
+      </td>
+      <td>
+	{{ item.value.submit_time }}
+      </td>
+      <td>
+	{{ item.value.class_name }}
+      </td>
+      <td>
+	<a href="{{doc_url}}{{item.id}}">job doc</a>
+      </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+</table>
+      <div class="fwa_paged_table_nav">
+    {% if items.has_previous %}
+      <a href="?page={{ items.previous_page_number }}">previous</a>
+    {% endif %}
+      
+    <span class="current">
+      Page {{items.number}} of {{items.paginator.num_pages}}.
+    </span>
+
+    {% if items.has_next %}
+      <a href="?page={{ items.next_page_number }}">next</a>
+    {% endif %}
+      </div>
+
+  </span>
+</div>
+{% else %}
+No pending CouchDB jobs
+{% endif %}
+
+{% endblock %}
