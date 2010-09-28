@@ -1006,7 +1006,12 @@ def compute_ori_quality(kh5, orig_frames, obj_id, smooth_len=10):
 
 def plot_ori(kalman_filename=None,
              h5=None,
-             obj_only=None):
+             obj_only=None,
+             output_filename=None,
+             ):
+    if output_filename is not None:
+        import matplotlib
+        matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     import matplotlib.ticker as mticker
 
@@ -1109,7 +1114,10 @@ def plot_ori(kalman_filename=None,
     ax3.legend()
 
     ax4.set_ylabel('quality')
-    plt.show()
+    if output_filename is not None:
+        plt.show()
+    else:
+        plt.savefig( output_filename )
 
 def plot_ori_command_line():
     usage = '%prog [options]'
@@ -1121,6 +1129,7 @@ def plot_ori_command_line():
     parser.add_option("--h5", type='string',
                       help=".h5 file with data2d_distorted (REQUIRED)")
     parser.add_option("--obj-only", type="string")
+    parser.add_option("--output-filename",type="string")
     (options, args) = parser.parse_args()
     if options.kalman_filename is None:
         raise ValueError('--kalman-file option must be specified')
@@ -1128,7 +1137,9 @@ def plot_ori_command_line():
         options.obj_only = core_analysis.parse_seq(options.obj_only)
     plot_ori(kalman_filename=options.kalman_filename,
              h5=options.h5,
-             obj_only=options.obj_only)
+             obj_only=options.obj_only,
+             output_filename=options.output_filename,
+             )
 
 def main():
     usage = '%prog [options]'

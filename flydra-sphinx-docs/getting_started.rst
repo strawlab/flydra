@@ -104,4 +104,4 @@ Continuous integration
 ----------------------
 
 We are running a Buildbot that builds and tests flydra. You can see
-the waterfall display at http://code.astraw.com:8010/waterfall .
+the waterfall display at http://flydra.bb.astraw.com/waterfall .

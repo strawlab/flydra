@@ -15,7 +15,6 @@ easy_install Jinja2-2.1.1.tar.gz
 easy_install Sphinx-0.6.2.tar.gz
 
 cd flydra-sphinx-docs/
-./get-svn.sh
 
 echo "PATH=$PATH"
 echo "PYTHONPATH=$PYTHONPATH"

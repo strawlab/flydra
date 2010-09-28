@@ -14,6 +14,10 @@ DisplayImageEvent, EVT_DISPLAYIMAGE = wx.lib.newevent.NewEvent()
 
 class WxApp(wx.App):
     def OnInit(self):
+        self.known_cam_ids = []
+        self.gui_setup_done = False
+        self.cam_row_boxes = {}
+
         self.call_often = None
         wx.InitAllImageHandlers()
         self.frame = wx.Frame(None, -1, "camnode wx",size=(640,480))
@@ -110,12 +114,19 @@ class WxApp(wx.App):
             wx.PostEvent(self, event)
 
     def OnDisplayImageEvent(self, event):
+        if not self.gui_setup_done:
+            parent = self.frame
+            self.known_cam_ids.sort()
+            for cam_id in self.known_cam_ids:
+                cam_row_box = wx.StaticBoxSizer(wx.StaticBox(parent,-1,cam_id),wx.HORIZONTAL)
+                self.cam_row_boxes[cam_id] = cam_row_box
+                self.cic_box.Add(cam_row_box,proportion=1,flag=wx.EXPAND)
+            self.gui_setup_done = True
         if event.cam_id not in self.cam_image_canvases:
-            # first frame for this cam_id
+            # first frame for this cam_i22d
 
             parent = self.frame
-
-            cam_row_box = wx.StaticBoxSizer(wx.StaticBox(parent,-1,event.cam_id),wx.HORIZONTAL)
+            cam_row_box = self.cam_row_boxes[event.cam_id]
 
             # realtime image
             im_box = wx.BoxSizer(wx.VERTICAL)
@@ -196,8 +207,6 @@ class WxApp(wx.App):
                                 flag=wx.EXPAND|wx.ALL,border=2)
 
 
-            self.cic_box.Add(cam_row_box,proportion=1,flag=wx.EXPAND)
-
             parent.Layout()
             if self._full_debug_images:
                 self.cam_image_canvases[event.cam_id] = (raw_canvas, absdiff_canvas, mean_canvas, cmp_canvas)
@@ -221,6 +230,8 @@ class WxApp(wx.App):
                 cmp_canvas.update_image( event.cmp_buf )
 
     def generate_view(self, model, controller ):
+        assert not self.gui_setup_done
+        self.known_cam_ids.append(model.cam_id)
         self.controllers.append( controller )
         if hasattr(controller, 'trigger_single_frame_start' ):
             if not self._built_playback_GUI:

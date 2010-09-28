@@ -2,9 +2,9 @@ Flydra documentation
 ====================
 
 Flydra is a realtime, multi-camera flying animal tracking system. See
-`the paper`__ for algorithmic details.
-
-__ http://www.its.caltech.edu/~astraw/publications/flydra.pdf
+`the paper
+<http://rsif.royalsocietypublishing.org/content/early/2010/07/13/rsif.2010.0230.full>`__
+for algorithmic details.
 
 Contents:
 
@@ -20,6 +20,7 @@ Contents:
   orientation_data.rst
   formats.rst
   modules.rst
+  old/flydra.rst
 
 Contibutions to this documentation
 ----------------------------------

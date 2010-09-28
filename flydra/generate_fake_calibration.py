@@ -1,10 +1,18 @@
 from __future__ import division
 import numpy
+import numpy as np
 import scipy.linalg
 import flydra.reconstruct as reconstruct
 import cgtypes # cgkit 1.x
+import os
+import flydra.reconstruct_utils as reconstruct_utils
 
-def generate_calibration(n_cameras = 1):
+from flydra.analysis.flydra_analysis_generate_recalibration import save_calibration_directory
+
+def generate_calibration(n_cameras = 5,
+                         return_full_info=False,
+                         radial_distortion=False,
+                         ):
     pi = numpy.pi
 
     sccs = []
@@ -35,9 +43,10 @@ def generate_calibration(n_cameras = 1):
                 pos = cam_centers[i]
                 target = common_point
                 up = (0,0,1)
-                print 'pos',pos
-                print 'target',target
-                print 'up',up
+                if 0:
+                    print 'pos',pos
+                    print 'target',target
+                    print 'up',up
                 R = cgtypes.mat4().lookAt( pos,
                                            target,
                                            up )
@@ -71,11 +80,13 @@ def generate_calibration(n_cameras = 1):
 
     # 2. intrinsic parameters
 
+    resolutions = {}
     for cam_no in range(n_cameras):
         cam_id = 'fake_%d'%(cam_no+1)
 
         # resolution of image
         res = (1600,1200)
+        resolutions[cam_id] = res
 
         # principal point
         cc1 = res[0]/2.0
@@ -95,7 +106,7 @@ def generate_calibration(n_cameras = 1):
         t = numpy.dot( -R, C )
         Rt = numpy.concatenate( (R,t), axis=1)
         P= numpy.dot( K, Rt )
-        if 1:
+        if 0:
             print 'cam_id',cam_id
             print 'P'
             print P
@@ -116,6 +127,16 @@ def generate_calibration(n_cameras = 1):
 
             print '*'*60
 
+        if radial_distortion:
+            f = 1000.0
+            r1 = 0.8
+            r2 = -0.2
+
+            helper = reconstruct_utils.ReconstructHelper(f,f, # focal length
+                                                         cc1,cc2, # image center
+                                                         r1,r2, # radial distortion
+                                                         0,0) # tangential distortion
+
         scc = reconstruct.SingleCameraCalibration_from_basic_pmat(P,
                                                                   cam_id=cam_id,
                                                                   res=res,
@@ -124,7 +145,7 @@ def generate_calibration(n_cameras = 1):
         if 1:
             # XXX test
             K2,R2 = scc.get_KR()
-            if 1:
+            if 0:
                 print 'C',C
                 print 't',t
                 print 'K',K
@@ -146,11 +167,132 @@ def generate_calibration(n_cameras = 1):
                 else:
                     print 'WARNING: weird sign error in calibration math FIXME!'
     recon = reconstruct.Reconstructor(sccs)
+
+    full_info = {
+        'reconstructor':recon,
+        'center':common_point, # where all the cameras are looking
+        'camera_dist_from_center':r,
+        'resolutions':resolutions,
+        }
+    if return_full_info:
+        return full_info
     return recon
 
-def test():
-    generate_calibration()
+def generate_point_cloud(full_info,n_pts = 200):
+    recon = full_info['reconstructor']
+    std = full_info['camera_dist_from_center'] / 3.0
+    mean = full_info['center'][:,np.newaxis]
+    np.random.seed(3)
+    X = np.random.normal(size=(3,n_pts) )*std + mean
+    del n_pts # meaning above is different from meaning below
+
+    IdMat = []
+    points = []
+
+    for idx in range(X.shape[1]):
+        n_pts = 0
+        IdMat_row = []
+        points_row = []
+        for cam_id in recon.get_cam_ids():
+             # get the distorted projection
+            x2di = recon.find2d(cam_id, X[:,idx], distorted=True)
+
+            found=True
+            if not found:
+                IdMat_row.append( 0 )
+                points_row.extend( [numpy.nan, numpy.nan, numpy.nan] )
+            else:
+                n_pts += 1
+                IdMat_row.append( 1 )
+                points_row.extend( [x2di[0], x2di[1], 1.0] )
+
+        IdMat.append( IdMat_row )
+        points.append( points_row )
+    IdMat = numpy.array(IdMat,dtype=numpy.uint8).T
+    points = numpy.array(points,dtype=numpy.float32).T
+    results = {
+        'IdMat':IdMat,
+        'points':points,
+        }
+    return results
+
+config_template = """[Files]
+Basename: %(basename)s
+Image-Extension: jpg
+
+[Images]
+Subpix: 0.5
+
+[Calibration]
+Num-Cameras: %(num_cameras)s
+Num-Projectors: 0
+Nonlinear-Parameters: 30    0    1    0    0    0
+Nonlinear-Update: 1   0   1   0   0   0
+Initial-Tolerance: 10
+Do-Global-Iterations: 0
+Global-Iteration-Threshold: 0.5
+Global-Iteration-Max: 100
+Num-Cameras-Fill: 2
+Do-Bundle-Adjustment: 1
+Undo-Radial: %(undo_radial_int)s
+Min-Points-Value: 30
+N-Tuples: 3
+Square-Pixels: %(square_pixels_int)s
+Use-Nth-Frame: 5
+"""
+
+def test(calib_dir=None,radial_distortion=True,square_pixels=True):
+    """generate a fake calibration and save it.
+
+    Arguments
+    ---------
+    calib_dir : string (optional)
+      the directory name to save the resulting calibration data
+    radial_distortion : boolean
+      whether or not the calibration should have radial distortion
+    square_pixels : boolen
+      whether or not the pixels are square
+    """
+    full_info = generate_calibration(return_full_info=True,
+                                     radial_distortion=radial_distortion)
+    results = generate_point_cloud(full_info)
+    Res = full_info['resolutions']
+    dirname = 'test_cal_dir'
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
+    cam_ids = full_info['reconstructor'].get_cam_ids()
+
+    Res = []
+    for cam_id in cam_ids:
+        imsize = full_info['reconstructor'].get_resolution(cam_id)
+        Res.append( imsize )
+    Res = numpy.array( Res )
+
+    basename = 'basename'
+    if calib_dir is not None:
+        save_cal_dir = save_calibration_directory(IdMat=results['IdMat'],
+                                                  points=results['points'],
+                                                  Res=Res,
+                                                  calib_dir=calib_dir,
+                                                  cam_ids=cam_ids,
+                                                  )
+        if radial_distortion:
+            for i, cam_id in enumerate(cam_ids):
+                fname = '%s%d.rad'%(basename,i+1)
+                scc = full_info['reconstructor'].get_SingleCameraCalibration(cam_id)
+                scc.helper.save_to_rad_file( os.path.join(calib_dir,fname) )
+
+        vars = dict(
+            abs_path_calib_dir = os.path.abspath(calib_dir)+'/',
+            basename = basename,
+            num_cameras = len(cam_ids),
+            undo_radial_int = int(radial_distortion),
+            square_pixels_int = int(square_pixels),
+            )
+
+        fd = open( os.path.join(calib_dir,'multicamselfcal.cfg'), mode='w' )
+        fd.write( config_template % vars )
+        fd.close()
 
 if __name__=='__main__':
-    test()
-
+    test(calib_dir='test_cal_dir',radial_distortion=True)

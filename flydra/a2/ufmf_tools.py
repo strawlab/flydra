@@ -34,6 +34,7 @@ def iterate_frames(h5_filename,
                    stop = None,
                    rgb8_if_color=False,
                    movie_cam_ids=None,
+                   camn2cam_id = None,
                    ):
     """yield frame-by-frame data"""
 
@@ -49,8 +50,6 @@ def iterate_frames(h5_filename,
             cam_id = get_cam_id_from_ufmf_fname(ufmf_fname)
         cam_ids.append( cam_id )
         kwargs = {}
-        if white_background:
-            kwargs['use_conventional_named_mean_fmf']=False
         if ufmf_fname.lower().endswith('.fmf'):
             ufmf = fmf_mod.FlyMovie(ufmf_fname)
         else:
@@ -72,7 +71,8 @@ def iterate_frames(h5_filename,
     cam_ids.sort()
 
     with openFileSafe( h5_filename, mode='r' ) as h5:
-        camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
+        if camn2cam_id is None:
+            camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
         parsed = result_utils.read_textlog_header(h5)
         flydra_version = parsed.get('flydra_version',None)
         if flydra_version is not None and flydra_version >= '0.4.45':
@@ -167,7 +167,10 @@ def iterate_frames(h5_filename,
                 this_camn_ts = this_camn_ts[0]
 
                 # optimistic: get next frame. it's probably the one we want
-                image,image_ts,more = ufmf.get_next_frame(_return_more=True)
+                try:
+                    image,image_ts,more = ufmf.get_next_frame(_return_more=True)
+                except ufmf_mod.NoMoreFramesException:
+                    image_ts = None
                 if this_camn_ts != image_ts:
                     # It was not the frame we wanted. Find it.
                     ufmf_frame_idxs = np.nonzero(tss == this_camn_ts)[0]

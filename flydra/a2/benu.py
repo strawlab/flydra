@@ -10,19 +10,25 @@ import cairo
 import os, warnings
 import numpy as np
 import contextlib
+from benu_colormaps import cmaps
 
-def numpy2cairo(raw):
+D2R = np.pi/180.0
+
+def numpy2cairo(raw,cmap=None):
     raw=np.asarray(raw)
     if raw.dtype!=np.uint8:
         raise ValueError('only uint8 dtype is supported')
     if raw.ndim==2:
-        brga = np.ndarray(
-            shape=(raw.shape[0],raw.shape[1],4),
-            dtype=np.uint8)
-        brga[:,:,0]=raw
-        brga[:,:,1]=raw
-        brga[:,:,2]=raw
-        brga[:,:,3].fill(255)
+        if cmap==None: # gray
+            brga = np.ndarray(
+                shape=(raw.shape[0],raw.shape[1],4),
+                dtype=np.uint8)
+            brga[:,:,0]=raw
+            brga[:,:,1]=raw
+            brga[:,:,2]=raw
+            brga[:,:,3].fill(255)
+        else:
+            brga = cmaps[cmap][raw]
     elif raw.ndim==3:
         if raw.shape[2]==3:
             brga = np.ndarray(
@@ -52,7 +58,7 @@ def numpy2cairo(raw):
 
 class Canvas(object):
     """A drawing surface which handles coordinate transforms"""
-    def __init__(self,fname,width,height):
+    def __init__(self,fname,width,height,color_rgba=None):
         self._output_ext = os.path.splitext(fname)[1].lower()
         if self._output_ext == '.pdf':
             output_surface = cairo.PDFSurface(fname,
@@ -68,7 +74,14 @@ class Canvas(object):
         self._surf = output_surface
         self._ctx = cairo.Context(self._surf)
         self._fname = fname
-    def imshow(self,im,l,b,filter='nearest'):
+
+        if color_rgba is not None:
+            self._ctx.save()
+            self._ctx.set_source_rgba(*color_rgba)
+            self._ctx.paint()
+            self._ctx.restore()
+
+    def imshow(self,im,l,b,filter='nearest',cmap=None):
         """show image im at location (l,b)
 
         filter can be one of ['best', 'bilinear', 'fast', 'gaussian',
@@ -79,7 +92,7 @@ class Canvas(object):
         cfilter = getattr(cairo,'FILTER_'+filter.upper())
 
         # Get cairo surface
-        in_surface = numpy2cairo(im)
+        in_surface = numpy2cairo(im,cmap=cmap)
 
         ctx = self._ctx # shorthand
         #ctx.rectangle(l,b,im.shape[1],im.shape[0])
@@ -89,13 +102,17 @@ class Canvas(object):
         ctx.paint()
         ctx.restore()
 
-    def plot(self,xarr,yarr,color_rgba=None,close_path=False):
+    def plot(self,xarr,yarr,color_rgba=None,close_path=False,linewidth=None):
         """line plot of xarr vs. yarr"""
         if color_rgba is None:
             color_rgba = (1,1,1,1)
         if len(xarr)==1:
             warnings.warn('benu plot() currently only plots line segments')
         ctx = self._ctx # shorthand
+
+        if linewidth is not None:
+            orig_linewidth = ctx.get_line_width()
+            ctx.set_line_width(linewidth)
 
         ctx.set_source_rgba(*color_rgba)
         ctx.move_to(xarr[0],yarr[0])
@@ -105,11 +122,36 @@ class Canvas(object):
             ctx.close_path()
         ctx.stroke()
 
-    def scatter(self,xarr,yarr,color_rgba=None,radius=1.0):
+        if linewidth is not None:
+            ctx.set_line_width(orig_linewidth)
+
+    def poly(self,xarr,yarr,color_rgba=None,edgewidth=0.0):
+        if color_rgba is None:
+            color_rgba = (1,1,1,1)
+        ctx = self._ctx # shorthand
+        if edgewidth is not None:
+            orig_linewidth = ctx.get_line_width()
+            ctx.set_line_width(edgewidth)
+        ctx.set_source_rgba(*color_rgba)
+        ctx.move_to(xarr[0],yarr[0])
+        for i in range(1,len(xarr)):
+            ctx.line_to(xarr[i],yarr[i])
+        ctx.close_path()
+        ctx.paint()
+        ctx.stroke()
+        if edgewidth is not None:
+            ctx.set_line_width(orig_linewidth)
+
+    def scatter(self,xarr,yarr,color_rgba=None,
+                radius=1.0, markeredgewidth=None):
         """scatter plot of xarr vs. yarr"""
         if color_rgba is None:
             color_rgba = (1,1,1,1)
         ctx = self._ctx # shorthand
+
+        if markeredgewidth is not None:
+            orig_linewidth = ctx.get_line_width()
+            ctx.set_line_width(markeredgewidth)
 
         ctx.set_source_rgba(*color_rgba)
         for x,y in zip(xarr,yarr):
@@ -117,6 +159,9 @@ class Canvas(object):
             ctx.new_sub_path()
             ctx.arc(x,y,radius,0,2*np.pi)
         ctx.stroke()
+
+        if markeredgewidth is not None:
+            ctx.set_line_width(orig_linewidth)
 
     def save(self):
         """save output to file"""
@@ -126,8 +171,19 @@ class Canvas(object):
             self._ctx.show_page()
             self._surf.finish()
 
-    def text(self,text,x,y,color_rgba=None,font_size=10):
+    def as_numpy(self):
+        """save output to file"""
+        assert self._output_ext == '.png'
+        buf = self._surf.get_data()
+
+        a = np.frombuffer(buf, np.uint8)
+        a.shape = (self._surf.get_width(), self._surf.get_height(), 4)
+        return a
+
+    def text(self,text,x,y,color_rgba=None,font_size=10,shadow_offset=None):
         """draw text"""
+        if shadow_offset is not None:
+            self.text( text, x+shadow_offset, y+shadow_offset, color_rgba=(0,0,0,1), font_size=font_size)
         if color_rgba is None:
             color_rgba = (0,0,0,1)
 
@@ -159,39 +215,49 @@ class Canvas(object):
                                   x0=(device_l-xscale*user_l),
                                   y0=(device_b-yscale*user_b),
                                   )
-        elif transform=='rot -90':
-            if 1:
-                raise NotImplementedError('"rot -90" transform is screwed up')
-            xscale = device_h/user_w
-            yscale = device_w/user_h
-            matrix = cairo.Matrix(xx=0,
-                                  yx=-xscale,
-                                  xy=-yscale,
-                                  yy=0,
-                                  x0=(device_l+xscale*user_b),
-                                  y0=(device_b+yscale*user_l),
-                                  )
-        elif transform=='rot 90':
-            # newer than above, tested more, seems to work
-            xscale = device_h/user_w
-            yscale = device_w/user_h
-            matrix = cairo.Matrix(xx=0,
-                                  yx=xscale,
-                                  xy=yscale,
-                                  yy=0,
-                                  x0=(device_l-xscale*user_b),
-                                  y0=(device_b-yscale*user_l),
-                                  )
-        elif transform=='rot 180':
-            xscale = device_w/user_w
-            yscale = device_h/user_h
-            matrix = cairo.Matrix(xx=-xscale,
-                                  yx=0,
-                                  xy=0,
-                                  yy=-yscale,
-                                  x0=(device_l+xscale*user_r),
-                                  y0=(device_b+yscale*user_t),
-                                  )
+        elif transform.startswith('rot '):
+            theta_deg = float(transform[4:])
+            theta = theta_deg * D2R
+
+            # user to device transform
+            rotation = cairo.Matrix(xx=np.cos(theta), xy=-np.sin(theta), x0=0.0,
+                                  yx=np.sin(theta), yy=np.cos(theta), y0=0.0)
+
+            # calculate scaling to fit for arbitrary rotation
+            user_verts = [ (user_l,user_b),
+                           (user_r,user_b),
+                           (user_r,user_t),
+                           (user_l,user_t)]
+            rotated_user_verts = np.array([ rotation.transform_point(*v) for v in user_verts])
+            rotated_user_l = np.min(rotated_user_verts[:,0])
+            rotated_user_r = np.max(rotated_user_verts[:,0])
+            rotated_user_b = np.min(rotated_user_verts[:,1])
+            rotated_user_t = np.max(rotated_user_verts[:,1])
+            rotated_user_w = rotated_user_r-rotated_user_l
+            rotated_user_h = rotated_user_t-rotated_user_b
+
+            rotated_scale_x = device_w/rotated_user_w
+            rotated_scale_y = device_h/rotated_user_h
+
+            scale = cairo.Matrix(xx=rotated_scale_x, xy=0.0, x0=0.0,
+                                 yx=0.0, yy=rotated_scale_y, y0=0.0)
+
+            x0 = (device_l-rotated_user_l*rotated_scale_x)
+            y0 = (device_b-rotated_user_b*rotated_scale_y)
+
+            translate = cairo.Matrix(xx=1.0, xy=0.0, x0=x0,
+                                     yx=0.0, yy=1.0, y0=y0)
+
+            matrix=rotation*scale*translate
+
+            if 0:
+                # pretend the device has y going up from origin at bottom
+                device_coord_flip = cairo.Matrix(xx=1.0, xy=0.0, x0=0.0,
+                                                 yx=0.0, yy=-1.0, y0=0.0)
+                device_coord_translate = cairo.Matrix(xx=1.0, xy=0.0, x0=0.0,
+                                                      yx=0.0, yy=1.0, y0=device_h)
+                matrix = matrix*device_coord_flip*device_coord_translate
+
         else:
             raise ValueError("unknown transform '%s'"%transform)
         return matrix
@@ -243,9 +309,36 @@ class Canvas(object):
         return matrix.transform_point(x,y)
 
 def test_benu():
-    c = Canvas('x.png',10,10)
+    canv = Canvas('/tmp/benu-test.png',1024,1024)
+    device_rect = (256,256,512,512)
+    user_rect = (0,0,50,50)
+
+    #transform = 'rot 10'
+    transform = 'rot -45'
+    #transform = 'orig'
+    pts =  [ (0,0),
+             (5,5),
+             (30,30),
+             (45,45),
+             (1,3),
+             (6,2),
+             ]
+    with canv.set_user_coords(device_rect, user_rect,
+                              transform=transform):
+        for pt in pts:
+            canv.scatter( [pt[0]], [pt[1]] )
+        canv.plot( [0,0,50,50,0],[0,50,50,0,0] )
+
+    for pt in pts:
+        x,y = canv.get_transformed_point(pt[0],pt[1],device_rect,user_rect,
+                                             transform=transform)
+        canv.text( '%s, %s'%(pt[0],pt[1]), x,y )
+    canv.save()
+
     # this test is broken...
     ## with c.set_user_coords(1,2):
     ##     pass
 
 
+if __name__=='__main__':
+    test_benu()

@@ -17,6 +17,7 @@ import sys, os
 # is relative to the documentation root, use os.path.abspath to make it
 # absolute, like shown here.
 sys.path.append(os.path.abspath('ext'))
+sys.path.append(os.path.abspath('flydra_sphinx_ext'))
 
 # General configuration
 # ---------------------
@@ -25,7 +26,8 @@ sys.path.append(os.path.abspath('ext'))
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ['sphinx.ext.autodoc','sphinx.ext.pngmath',
               'sphinx.ext.doctest',
-              'numpydoc','sphinx.ext.graphviz','sphinx.ext.autosummary']
+              'numpydoc','sphinx.ext.graphviz','sphinx.ext.autosummary',
+              'sourcelink_directive']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

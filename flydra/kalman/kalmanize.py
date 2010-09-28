@@ -444,6 +444,8 @@ def kalmanize(src_filename,
 
             if do_full_kalmanization:
                 parsed = read_textlog_header(results)
+                if 'trigger_CS3' not in parsed:
+                    parsed['trigger_CS3'] = 'unknown'
                 textlog_save_lines = [
                     'kalmanize running at %s fps, (hypothesis_test_max_error %s, top %s, trigger_CS3 %s, flydra_version %s)'%(
                     str(frames_per_second),str(max_err),str(parsed['top']),

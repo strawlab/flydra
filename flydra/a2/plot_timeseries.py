@@ -173,6 +173,12 @@ def plot_timeseries(subplot=None,options = None):
 
     fuse_did_once = False
 
+    if not hasattr(options,'timestamp_file'):
+        options.timestamp_file = None
+
+    if not hasattr(options,'ori_qual'):
+        options.ori_qual = None
+
     if options.timestamp_file is not None:
         h5 = tables.openFile(options.timestamp_file,mode='r')
         print 'reading timestamps and frames'
@@ -181,6 +187,12 @@ def plot_timeseries(subplot=None,options = None):
         print 'done'
         h5.close()
         table_data2d_frames_find = utils.FastFinder( table_data2d_frames )
+
+    if len(use_obj_ids)==0:
+        print 'No obj_ids to plot, quitting'
+        sys.exit(0)
+
+    time0 = 0.0 # set default value
 
     for obj_id in use_obj_ids:
         if not do_fuse:
@@ -217,11 +229,10 @@ def plot_timeseries(subplot=None,options = None):
             if not len(kalman_rows):
                 continue
 
-            frame = kalman_rows['frame']
-
         walking_and_flying_kalman_rows = kalman_rows # preserve original data
 
         for flystate in ['flying','walking']:
+            frame = walking_and_flying_kalman_rows['frame'] # restore
             if flystate=='flying':
                 # assume flying unless we're told it's walking
                 state_cond = numpy.ones( frame.shape, dtype=numpy.bool )
@@ -243,8 +254,8 @@ def plot_timeseries(subplot=None,options = None):
                     else:
                         state_cond |= walking_bout
 
-                masked_cond = ~state_cond
-                kalman_rows = numpy.ma.masked_where( ~state_cond, walking_and_flying_kalman_rows )
+                kalman_rows = np.take( walking_and_flying_kalman_rows, np.nonzero(state_cond)[0] )
+                assert len(kalman_rows)==np.sum(state_cond)
                 frame = kalman_rows['frame']
 
             if frame0 is None:

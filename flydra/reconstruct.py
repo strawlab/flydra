@@ -83,12 +83,42 @@ def my_rq(M):
 ##        K[0,:] = -K[0,:]
     return R,K
 
+def filter_comments(lines_tmp):
+    lines = []
+    for line in lines_tmp:
+        try:
+            comment_idx = line.index('#')
+            no_comment_line = line[:comment_idx]
+            no_comment_line.strip()
+            if len(no_comment_line):
+                line = no_comment_line
+            else:
+                continue # nothing on this line
+        except ValueError:
+            pass
+        lines.append(line)
+    return lines
+
 def load_ascii_matrix(filename):
     fd=open(filename,mode='rb')
     buf = fd.read()
     fd.close()
     lines = buf.split('\n')[:-1]
+    lines = filter_comments( lines )
     return nx.array([map(float,line.split()) for line in lines])
+
+def test_load_ascii_matrix():
+    contents = '''   5.1468544e+00  -1.8892933e-01  -3.7855949e+00  -6.3683613e+02
+  -4.1691492e-01  -6.2570417e+00  -7.0782063e-01   2.4157199e+03
+  -1.7169043e-03  -2.2409402e-04  -4.2079099e-03   6.6955409e+00
+'''
+    import tempfile
+    fname = tempfile.mktemp()
+    fd = open(fname,mode='w')
+    fd.write(contents)
+    fd.close()
+    result = load_ascii_matrix(fname)
+    assert result.shape == (3,4)
 
 def save_ascii_matrix(M,fd,isint=False):
     def fmt(f):
@@ -230,13 +260,13 @@ def setOfSubsets(L):
                 if X & (1L<<i) ]
         for X in range(2**N) ]
 
+intrinsic_normalized_eps = 1e-6
 def normalize_pmat(pmat):
     pmat_orig = pmat
     M = pmat[:,:3]
     t = pmat[:,3,numpy.newaxis]
     K,R = my_rq(M)
-    eps = 1e-6
-    if abs(K[2,2]-1.0)>eps:
+    if abs(K[2,2]-1.0)>intrinsic_normalized_eps:
         pmat = pmat/K[2,2]
     assert numpy.allclose(pmat2cam_center(pmat_orig),pmat2cam_center(pmat))
     return pmat
@@ -419,8 +449,6 @@ class SingleCameraCalibration:
             eps = 1e-6
             if abs(intrinsic_parameters[2,2]-1.0)>eps:
                 if no_error_on_intrinsic_parameter_problem:
-                    print 'intrinsic_parameters'
-                    print intrinsic_parameters
                     warnings.warn('expected last row/col of intrinsic '
                                   'parameter matrix to be unity. It is %s'%
                                   intrinsic_parameters[2,2])
@@ -497,6 +525,8 @@ class SingleCameraCalibration:
                                          scale_factor=new_scale_factor)
         self._scaled_cache[scale_factor] = scaled
         return scaled
+    def get_res(self):
+        return self.res
 
     def get_cam_center(self):
         """get the 3D location of the camera center in world coordinates"""
@@ -622,7 +652,14 @@ class SingleCameraCalibration:
         return result
 
     def get_3D_plane_and_ray(self, x0d, y0d, slope):
-        """(x0d,y0d) are the x,y distorted image coords"""
+        """return a ray and plane defined by a point and a slope at that point
+
+        The 2D distorted point (x0d, y0d) is transfored to a 3D
+        ray. Together with the slope at that point, a 3D plane that
+        passes through the 2D point in the direction of the slope is
+        returned.
+
+        """
         # undistort
         x0u,y0u = self.helper.undistort(x0d,y0d)
         rise=slope
@@ -673,6 +710,15 @@ class SingleCameraCalibration:
 
         self.helper.add_element( elem )
 
+    def as_obj_for_json(self):
+        result = dict(cam_id=self.cam_id,
+                      calibration_matrix= [ row.tolist() for row in self.Pmat ],
+                      resolution=list(self.res),
+                      scale_factor=self.scale_factor,
+                      non_linear_parameters=self.helper.as_obj_for_json(),
+                      )
+        return result
+
 def SingleCameraCalibration_fromfile(filename):
     params={}
     execfile(filename,params)
@@ -720,8 +766,7 @@ def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
 
     intrinsic_parameters, cam_rotation = my_rq(M[:,:3])
     #intrinsic_parameters = intrinsic_parameters/intrinsic_parameters[2,2] # normalize
-    eps = 1e-15
-    if abs(intrinsic_parameters[2,2]-1.0)>eps:
+    if abs(intrinsic_parameters[2,2]-1.0)>intrinsic_normalized_eps:
         raise ValueError('expected last row/col of intrinsic parameter matrix to be unity')
 
     # (K = intrinsic parameters)
@@ -739,10 +784,13 @@ def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
     fc2 = intrinsic_parameters[1,1]
     cc2 = intrinsic_parameters[1,2]
 
-    helper = reconstruct_utils.ReconstructHelper(fc1,fc2, # focal length
-                                                 cc1,cc2, # image center
-                                                 0,0, # radial distortion
-                                                 0,0) # tangential distortion
+    if 'helper' in kw:
+        helper = kw.pop('helper')
+    else:
+        helper = reconstruct_utils.ReconstructHelper(fc1,fc2, # focal length
+                                                     cc1,cc2, # image center
+                                                     0,0, # radial distortion
+                                                     0,0) # tangential distortion
     return SingleCameraCalibration(Pmat=M,
                                    helper=helper,
                                    **kw)
@@ -936,10 +984,14 @@ class Reconstructor:
             res_fd.close()
 
             # load non linear parameters
+            rad_files = os.path.join(use_cal_source,'*.rad')
             for cam_id_enum, cam_id in enumerate(cam_ids):
                 filename = os.path.join(use_cal_source,
                                         'basename%d.rad'%(cam_id_enum+1,))
                 if not os.path.exists(filename):
+                    if len(rad_files):
+                        raise RuntimeError(
+                            '.rad files present but none named "%s"'%filename)
                     warnings.warn('no non-linear data (e.g. radial distortion) '
                                   'in calibration for %s'%cam_id)
                     self._helper[cam_id] = SingleCameraCalibration_from_basic_pmat(
@@ -1144,6 +1196,14 @@ class Reconstructor:
         fd = open(xml_filename,mode='w')
         fd.write(result)
         fd.close()
+
+    def as_obj_for_json(self):
+        result = dict(cameras=[],
+                      minimum_eccentricity=self.minimum_eccentricity)
+        for cam_id in self.cam_ids:
+            scc = self.get_SingleCameraCalibration(cam_id)
+            result['cameras'].append(scc.as_obj_for_json())
+        return result
 
     def save_to_h5file(self, h5file, OK_to_delete_old_calibration=False):
         """create groups with calibration information"""

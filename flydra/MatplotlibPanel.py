@@ -10,7 +10,6 @@ if ENABLED:
     import matplotlib.figure
     from matplotlib.backends.backend_wx import NavigationToolbar2Wx
     from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
-    from matplotlib.mlab import meshgrid
 
 import wx
 

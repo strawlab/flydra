@@ -13,10 +13,7 @@ import flydra.reconstruct
 import cherrypy  # ubuntu: install python-cherrypy3
 import benu
 
-def get_tile(N):
-    rows = int(np.ceil(np.sqrt(float(N))))
-    cols = rows
-    return '%dx%d'%(rows,cols)
+from tables_tools import openFileSafe
 
 def get_config_defaults():
     # keep in sync with usage in main() below
@@ -28,6 +25,22 @@ def get_config_defaults():
     default = collections.defaultdict(dict)
     default['what to show']=what
     return default
+
+def montage(fnames, title, target):
+
+    def get_tile(N):
+        rows = int(np.ceil(np.sqrt(float(N))))
+        cols = rows
+        return '%dx%d'%(rows,cols)
+
+    tile = get_tile( len(fnames) )
+    imnames = ' '.join(fnames)
+
+    CMD=("gm montage %s -mode Concatenate -tile %s -bordercolor white "
+         "-title '%s' "
+         "%s"%(imnames, tile, title, target))
+    #print CMD
+    subprocess.check_call(CMD,shell=True)
 
 def make_montage( h5_filename,
                   cfg_filename=None,
@@ -41,18 +54,24 @@ def make_montage( h5_filename,
                   reconstructor_source = None,
                   movie_fnames = None,
                   movie_cam_ids = None,
+                  caminfo_h5_filename = None,
+                  colormap = None,
                   ):
     config = get_config_defaults()
     if cfg_filename is not None:
         loaded_cfg = cherrypy._cpconfig.as_dict( cfg_filename )
         for section in loaded_cfg:
             config[section].update( loaded_cfg.get(section,{}) )
-
+    else:
+        warning.warn('no configuration file specified -- using defaults')
 
     if movie_fnames is None:
         movie_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
                                                        ufmf_dir=ufmf_dir,
                                                        careful=True )
+    else:
+        if ufmf_dir is not None:
+            movie_fnames = [ os.path.join(ufmf_dir,f) for f in movie_fnames]
 
     if len(movie_fnames)==0:
         raise ValueError('no input movies -- nothing to do')
@@ -74,8 +93,18 @@ def make_montage( h5_filename,
     if reconstructor_source is None:
         reconstructor_source = h5_filename
 
-    reconstructor = flydra.reconstruct.Reconstructor(
-                    reconstructor_source)
+    try:
+        reconstructor = flydra.reconstruct.Reconstructor(
+            reconstructor_source)
+    except:
+        reconstructor = None
+
+    if caminfo_h5_filename is not None:
+        with openFileSafe( caminfo_h5_filename, mode='r' ) as h5:
+            camn2cam_id, tmp = result_utils.get_caminfo_dicts(h5)
+            del tmp
+    else:
+        camn2cam_id = None
 
     blank_images = {}
 
@@ -89,6 +118,7 @@ def make_montage( h5_filename,
         start = start,
         stop = stop,
         rgb8_if_color = True,
+        camn2cam_id = camn2cam_id,
         )):
         tracker_data = frame_dict['tracker_data']
 
@@ -150,7 +180,7 @@ def make_montage( h5_filename,
             user_rect = (0,0,image.shape[1],image.shape[0])
             with canv.set_user_coords(device_rect, user_rect,
                                       transform=transform):
-                canv.imshow(image,0,0)
+                canv.imshow(image,0,0,cmap=colormap)
                 if config['what to show']['show_2d_position'] and camn is not None:
                     cond = tracker_data['camn']==camn
                     this_cam_data = tracker_data[cond]
@@ -191,14 +221,9 @@ def make_montage( h5_filename,
 
         target = os.path.join(dest_dir, 'movie%s_frame%07d.jpg'%(
             datetime_str,frame_enum+1 ))
-        tile = get_tile( len(saved_fnames) )
-        imnames = ' '.join(saved_fnames)
         # All cameras saved for this frame, make montage
-        CMD=("montage %s -mode Concatenate -tile %s -bordercolor white "
-             "-title '%s frame %d' "
-             "-border 2 %s"%(imnames, tile, datetime_str, frame, target))
-        #print CMD
-        subprocess.check_call(CMD,shell=True)
+        title = '%s frame %d'%( datetime_str, frame )
+        montage(saved_fnames, title, target)
         all_frame_montages.append( target )
         if not no_remove:
             for fname in saved_fnames:
@@ -274,9 +299,14 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     parser.add_option('--movie-cam-ids', type='string', default=None,
                       help="cam_ids of movie files (don't autodiscover from .h5)")
 
+    parser.add_option('--colormap', type='string', default=None)
+
     parser.add_option(
         "-r", "--reconstructor",type='string',
         help="calibration/reconstructor path")
+
+    parser.add_option( "--caminfo-h5-filename", type="string",
+                       help="path of h5 file from which to load caminfo")
 
     (options, args) = parser.parse_args()
 
@@ -305,4 +335,6 @@ transform='rot 180' # rotate the image 180 degrees (See transform
                   reconstructor_source = options.reconstructor,
                   movie_fnames = movie_fnames,
                   movie_cam_ids = movie_cam_ids,
+                  caminfo_h5_filename = options.caminfo_h5_filename,
+                  colormap = options.colormap,
                   )

@@ -220,6 +220,7 @@ def doit(filename,
          obj_start=None,
          obj_stop=None,
          obj_only=None,
+         obj_filelist=None,
          show_n_longest=None,
          radius=0.002, # in meters
          min_length=10,
@@ -230,7 +231,7 @@ def doit(filename,
          fps=None,
          up_dir=None,
          vertical_scale=False,
-         max_vel=0.25,
+         max_vel=None,
          show_only_track_ends = False,
          save_still = False,
          exclude_vel_mps = None,
@@ -244,6 +245,8 @@ def doit(filename,
          ):
 
     assert exclude_vel_data in ['kalman','observations'] # kalman means smoothed or filtered, depending on use_kalman_smoothing
+
+    all_max_vel = 0.0
 
     if up_dir is not None:
         up_dir = np.array(up_dir,dtype=np.float)
@@ -375,7 +378,15 @@ def doit(filename,
         use_obj_ids = use_obj_ids[use_obj_ids >= obj_start]
     if obj_stop is not None:
         use_obj_ids = use_obj_ids[use_obj_ids <= obj_stop]
+    if obj_filelist is not None:
+        obj_only = 1
     if obj_only is not None:
+        if obj_filelist is not None:
+            data = np.loadtxt(obj_filelist,delimiter='_')
+            
+            obj_only = np.array(data[:], dtype='int')
+            
+
         use_obj_ids = numpy.array(obj_only)
 
     #################
@@ -670,8 +681,10 @@ def doit(filename,
                 else:
                     speeds = numpy.zeros( (verts.shape[1],) )
                 max_speed_this_obj = numpy.max(speeds)
-                if max_speed_this_obj > max_vel:
-                    print 'WARNING: max_vel = %s, but max speed is %.2f'%(max_vel,max_speed_this_obj)
+                all_max_vel = max( all_max_vel, max_speed_this_obj )
+                if max_vel is not None:
+                    if max_speed_this_obj > max_vel:
+                        print 'WARNING: max_vel = %s, but max speed is %.2f'%(max_vel,max_speed_this_obj)
 
         else:
             x0 = rows.field('x')[0]
@@ -754,9 +767,12 @@ def doit(filename,
             vel_mapper = tvtk.PolyDataMapper(input=g.output)
             if not obj_color:
                 vel_mapper.lookup_table = lut
-                if (options.highlight_start is not None and
-                    options.highlight_stop is not None):
-                    vel_mapper.scalar_range = 0.0, float(max_vel)
+                if (options.highlight_start is None and
+                    options.highlight_stop is None):
+                    if max_vel is not None:
+                        vel_mapper.scalar_range = 0.0, float(max_vel)
+                    else:
+                        vel_mapper.scalar_range = 0.0, float(all_max_vel)
                 else:
                     vel_mapper.scalar_range = 0.0, 1.0
             a = tvtk.Actor(mapper=vel_mapper)
@@ -1146,6 +1162,11 @@ def main():
                       metavar="OBJSTOP")
 
     parser.add_option("--obj-only", type="string")
+    
+    parser.add_option("--obj-filelist", 
+                      type="string",
+                      help="pull list of obj ids from a text file where first column is the object ids",
+                      )
 
     parser.add_option("--up-dir", type="string")
 
@@ -1191,7 +1212,7 @@ def main():
     parser.add_option("--max-vel", type="float",
                       help="maximum velocity of colormap",
                       dest='max_vel',
-                      default=0.25)
+                      default=None)
 
     parser.add_option("--exclude-vel", type="float",
                       help=("exclude traces with median velocity less than "
@@ -1327,6 +1348,7 @@ def main():
          obj_start=options.obj_start,
          obj_stop=options.obj_stop,
          obj_only=options.obj_only,
+         obj_filelist=options.obj_filelist,
          use_kalman_smoothing=options.use_kalman_smoothing,
          show_n_longest=options.n_top_traces,
          show_obj_ids = options.show_obj_ids,

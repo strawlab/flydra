@@ -52,6 +52,7 @@ import errno
 import scipy.misc.pilutil
 import numpy.dual
 
+
 import contextlib
 
 import motmot.ufmf.ufmf as ufmf
@@ -64,6 +65,22 @@ import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 cam_iface = None # global variable, value set in main()
 import motmot.cam_iface.choose as cam_iface_choose
 from optparse import OptionParser
+import camnode_colors
+
+try:
+    import roslib
+    have_ROS = True
+    print 'have ROS'
+except ImportError, err:
+    have_ROS = False
+    print 'do NOT have ROS'
+    print 'see http://www.ros.org/'
+
+if have_ROS:
+    roslib.load_manifest('sensor_msgs')
+    from sensor_msgs.msg import Image
+    import rospy
+    import rospy.core
 
 def DEBUG(*args):
     if 0:
@@ -184,7 +201,12 @@ def TimestampEcho():
     sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     hostname = ''
     port = flydra.common_variables.timestamp_echo_listener_port
-    sockobj.bind(( hostname, port))
+    try:
+        sockobj.bind(( hostname, port))
+    except socket.error, err:
+        if err.errno==98:
+            warnings.warn('TimestampEcho not available because port in use')
+            return
     sendto_port = flydra.common_variables.timestamp_echo_gatherer_port
     fmt = flydra.common_variables.timestamp_echo_fmt_diff
     while 1:
@@ -305,8 +327,6 @@ def get_free_buffer_from_pool(pool):
         if not buf._i_promise_to_return_buffer_to_the_pool:
             pool.return_buffer(buf)
 
-
-
 class ProcessCamClass(object):
     def __init__(self,
                  cam2mainbrain_port=None,
@@ -322,6 +342,12 @@ class ProcessCamClass(object):
                  diff_threshold_shared=None,
                  clear_threshold_shared=None,
                  n_sigma_shared=None,
+                 n_erode_absdiff_shared=None,
+                 color_range_1_shared=None,
+                 color_range_2_shared=None,
+                 color_range_3_shared=None,
+                 sat_thresh_shared=None,
+                 red_only_shared=None,
                  framerate = None,
                  lbrt=None,
                  max_height=None,
@@ -331,6 +357,21 @@ class ProcessCamClass(object):
                  initial_image_dict = None,
                  benchmark = False,
                  ):
+
+        if have_ROS:
+            rospy.init_node('fview_ros',
+                            anonymous=True, # allow multiple instances to run
+                            disable_signals=True, # let WX intercept them
+                            )
+            # register a new publisher
+            self.publisher = rospy.Publisher('%s/image_raw'%cam_id,
+                                             Image,
+                                             tcp_nodelay=True,
+                                             )
+        self.rosrate = float(options.rosrate)
+        self.lasttime = time.time()
+        # end ROS stuff
+
         self.benchmark = benchmark
         self.options = options
         self.globals = globals
@@ -349,6 +390,13 @@ class ProcessCamClass(object):
         self.diff_threshold_shared = diff_threshold_shared
         self.clear_threshold_shared = clear_threshold_shared
         self.n_sigma_shared = n_sigma_shared
+        self.n_erode_absdiff_shared = n_erode_absdiff_shared
+        self.red_only_shared = red_only_shared
+
+        self.color_range_1_shared = color_range_1_shared
+        self.color_range_2_shared = color_range_2_shared
+        self.color_range_3_shared = color_range_3_shared
+        self.sat_thresh_shared = sat_thresh_shared
 
         self.new_roi = threading.Event()
         self.new_roi_data = None
@@ -538,6 +586,7 @@ class ProcessCamClass(object):
         return points
 
     def mainloop(self):
+
         disable_ifi_warning = self.options.disable_ifi_warning
         globals = self.globals
 
@@ -554,6 +603,7 @@ class ProcessCamClass(object):
         take_background_isSet = globals['take_background'].isSet
         take_background_clear = globals['take_background'].clear
         collecting_background_isSet = globals['collecting_background'].isSet
+
 
         max_frame_size = FastImage.Size(self.max_width, self.max_height)
 
@@ -673,6 +723,7 @@ class ProcessCamClass(object):
         initial_take_bg_state = None
 
         while 1:
+
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf:
                 if chainbuf.quit_now:
                     break
@@ -682,9 +733,63 @@ class ProcessCamClass(object):
                 hw_roi_frame = chainbuf.get_buf()
                 cam_received_time = chainbuf.cam_received_time
 
+                if self.red_only_shared.get_nowait():
+                    color_range_1 = self.color_range_1_shared.get_nowait()
+                    color_range_2 = self.color_range_2_shared.get_nowait()
+                    color_range_3 = self.color_range_3_shared.get_nowait()
+
+                    if color_range_1 < color_range_2:
+
+                        camnode_colors.replace_with_red_image( hw_roi_frame,
+                                                               chainbuf.image_coding,
+                                                               #camnode_colors.RED_CHANNEL)
+                                                               camnode_colors.RED_COLOR,
+                                                               color_range_1,
+                                                               color_range_2,
+                                                               color_range_3,
+                                                               self.sat_thresh_shared.get_nowait())
+                    else:
+                        print 'ERROR: color_range_2 >= color_range_1 -- skipping'
+
                 # get best guess as to when image was taken
                 timestamp=chainbuf.timestamp
                 framenumber=chainbuf.framenumber
+
+                # publish raw image on ROS network
+                if have_ROS:
+                    now = time.time()
+                    if now-self.lasttime+0.005 > 1./(self.rosrate):
+                        msg = Image()
+                        msg.header.seq=framenumber
+                        msg.header.stamp=rospy.Time.from_sec(timestamp)
+                        msg.header.frame_id = "0"
+
+                        npbuf = np.array(hw_roi_frame)
+                        (height,width) = npbuf.shape
+
+                        msg.height = height
+                        msg.width = width
+                        msg.encoding = chainbuf.image_coding
+                        pixel_format = chainbuf.image_coding
+                        if pixel_format == 'MONO8':
+                            msg.encoding = 'mono8'
+                        elif pixel_format in ('RAW8:RGGB','MONO8:RGGB'):
+                            msg.encoding = 'bayer_rggb8'
+                        elif pixel_format in ('RAW8:BGGR','MONO8:BGGR'):
+                            msg.encoding = 'bayer_bggr8'
+                        elif pixel_format in ('RAW8:GBRG','MONO8:GBRG'):
+                            msg.encoding = 'bayer_gbrg8'
+                        elif pixel_format in ('RAW8:GRBG','MONO8:GRBG'):
+                            msg.encoding = 'bayer_grbg8'
+                        else:
+                            raise ValueError('unknown pixel format "%s"'%pixel_format)
+
+                        msg.step = width
+                        msg.data = npbuf.tostring() # let numpy convert to string
+
+                        self.publisher.publish(msg)
+                        self.lasttime = now
+                # end ROS stuff
 
                 if 1:
                     if old_fn is None:
@@ -710,12 +815,14 @@ class ProcessCamClass(object):
                 old_fn = framenumber
 
                 work_start_time = time.time()
+                #print 'erode value', self.n_erode_absdiff_shared.get_nowait()
                 xpoints = self.realtime_analyzer.do_work(hw_roi_frame,
                                                          timestamp, framenumber, use_roi2,
                                                          use_cmp_isSet(),
                                                          #max_duration_sec=0.010, # maximum 10 msec in here
                                                          max_duration_sec=self.shortest_IFI-0.0005, # give .5 msec for other processing
                                                          return_debug_values=1,
+                                                         n_erode_absdiff=self.n_erode_absdiff_shared.get_nowait(),
                                                          )
                 ## if len(xpoints)>=self.max_num_points:
                 ##     msg = 'Warning: cannot save acquire points this frame because maximum number already acheived'
@@ -762,7 +869,7 @@ class ProcessCamClass(object):
 
                 if initial_take_bg_state is not None:
                     assert initial_take_bg_state == 'gather'
-                    n_initial_take = 50
+                    n_initial_take = 5
                     if 1:
                         initial_take_frames.append( numpy.array(hw_roi_frame,copy=True) )
                         if len( initial_take_frames ) >= n_initial_take:
@@ -1200,7 +1307,7 @@ class SaveSmallData(object):
                                          chainbuf.updated_running_sumsqf_image,
                                          chainbuf.cam_received_time)) # these were copied in process thread
                     if self._ufmf is None:
-                        filename_base = os.path.expanduser(filename_base)
+                        filename_base = os.path.abspath(os.path.expanduser(filename_base))
                         dirname = os.path.split(filename_base)[0]
 
                         with self._mkdir_lock:
@@ -1300,6 +1407,9 @@ class ImageSource(threading.Thread):
         self.debug_acquire = debug_acquire
         self.cam_no_str = str(cam_no)
         self.quit_event = quit_event
+        self.cam_id = '<unassigned>'
+    def assign_cam_id(self,cam_id):
+        self.cam_id = cam_id
     def set_chain(self,new_chain):
         # XXX TODO FIXME: put self._chain behind lock
         if self._chain is not None:
@@ -1396,6 +1506,8 @@ class ImageSourceFromCamera(ImageSource):
             print >> sys.stderr, msg
         except cam_iface.FrameDataMissing:
             pass
+        except cam_iface.FrameDataCorrupt:
+            pass
         except cam_iface.FrameSystemCallInterruption:
             pass
 
@@ -1417,6 +1529,14 @@ class ImageSourceFromCamera(ImageSource):
                 stdout_write('(M%s)'%self.cam_no_str)
             now = time.time()
             msg = 'Warning: frame data missing on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
+            #self.log_message_queue.put((self.cam_no_str,now,msg))
+            print >> sys.stderr, msg
+            try_again_condition = True
+        except cam_iface.FrameDataCorrupt:
+            if self.debug_acquire:
+                stdout_write('(C%s)'%self.cam_no_str)
+            now = time.time()
+            msg = 'Warning: frame data corrupt on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
             #self.log_message_queue.put((self.cam_no_str,now,msg))
             print >> sys.stderr, msg
             try_again_condition = True
@@ -1815,12 +1935,36 @@ class AppState(object):
 
             cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
 
-            all_cam_info_list = [
-                (cam_iface.get_camera_info(i),i) for i in range(cam_iface.get_num_cameras()) ]
+            all_cam_info_list = []
+            for i in range(cam_iface.get_num_cameras()):
+                try:
+                    this_info1 =  cam_iface.get_camera_info(i)
+                except cam_iface.CameraNotAvailable:
+                    this_info2 =  ('(not available)',i)
+                else:
+                    this_info2 =  ('\0'.join(this_info1),i)
+                all_cam_info_list.append(this_info2)
+
             all_cam_info_list.sort() # make sure list is always in same order for given cameras
             all_cam_info_list.reverse() # any ordering will do, but reverse for historical reasons
             cam_order = [ x[1] for x in all_cam_info_list]
+            del all_cam_info_list
             print 'camera order',cam_order
+            for i,cam_no in enumerate(cam_order):
+                try:
+                    avail_string = cam_iface.get_camera_info(cam_no)
+                except cam_iface.CameraNotAvailable:
+                    avail_string = '(not available)'
+                print 'order %d: %s'%(i, avail_string)
+
+
+            cams_only = options.cams_only
+            if cams_only is not None:
+                cams_only = map(int,cams_only.split(','))
+
+                new_cam_order = [ cam_order[i] for i in cams_only ]
+                cam_order = new_cam_order
+
             num_cams = len(cam_order)
 
         if num_cams == 0:
@@ -1876,11 +2020,13 @@ class AppState(object):
                 backend = cam_iface.get_driver_name()
                 N_modes = cam_iface.get_num_modes(cam_order[cam_no])
                 use_mode = options.mode_num
-                print 'camera info:',cam_iface.get_camera_info(cam_order[cam_no])
-                print '%d available modes:'%N_modes
+                if options.show_cam_details:
+                    print 'camera info:',cam_iface.get_camera_info(cam_order[cam_no])
+                    print '%d available modes:'%N_modes
                 for i in range(N_modes):
                     mode_string = cam_iface.get_mode_string(cam_order[cam_no],i)
-                    print '  mode %d: %s'%(i,mode_string)
+                    if options.show_cam_details:
+                        print '  mode %d: %s'%(i,mode_string)
                     if 'format7_0' in mode_string.lower():
                         # prefer format7_0
                         if use_mode is None:
@@ -1888,7 +2034,8 @@ class AppState(object):
                 if use_mode is None:
                     use_mode = 0
                 cam = cam_iface.Camera(cam_order[cam_no],options.num_buffers,use_mode)
-                print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_order[cam_no],use_mode))
+                if options.show_cam_details:
+                    print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_order[cam_no],use_mode))
                 ImageSourceModel = ImageSourceFromCamera
 
                 initial_image_dict = None
@@ -2014,10 +2161,11 @@ class AppState(object):
             if 1:
                 # trigger modes
                 N_trigger_modes = cam.get_num_trigger_modes()
-                print '  %d available trigger modes:'%N_trigger_modes
-                for i in range(N_trigger_modes):
-                    mode_string = cam.get_trigger_mode_string(i)
-                    print '  mode %d: %s'%(i,mode_string)
+                if options.show_cam_details:
+                    print '  %d available trigger modes:'%N_trigger_modes
+                    for i in range(N_trigger_modes):
+                        mode_string = cam.get_trigger_mode_string(i)
+                        print '  mode %d: %s'%(i,mode_string)
                 scalar_control_info['N_trigger_modes'] = N_trigger_modes
                 # XXX TODO: scalar_control_info['trigger_mode'] # current value
 
@@ -2036,19 +2184,22 @@ class AppState(object):
                 if props['has_manual_mode']:
                     if force_manual or min_value <= new_value <= max_value:
                         try:
-                            print 'setting camera property "%s" to manual mode'%(props['name'],)
+                            if options.show_cam_details:
+                                print 'setting camera property "%s" to manual mode'%(props['name'],)
                             cam.set_camera_property( prop_num, new_value, 0 )
                         except:
                             print 'error while setting property %s to %d (from %d)'%(props['name'],new_value,current_value)
                             raise
                     else:
-                        print 'not setting property %s to %d (from %d) because out of range (%d<=value<=%d)'%(props['name'],new_value,current_value,min_value,max_value)
+                        if options.show_cam_details:
+                            print 'not setting property %s to %d (from %d) because out of range (%d<=value<=%d)'%(props['name'],new_value,current_value,min_value,max_value)
 
                     CAM_CONTROLS[props['name']]=prop_num
                 current_value,auto = cam.get_camera_property( prop_num )
                 current_value = new_value
                 scalar_control_info[props['name']] = (current_value,
                                                       min_value, max_value)
+                # XXX FIXME: should transmit is_scaled_quantity info (scaled_unit_name, scale_gain, scale_offset)
                 prop_names.append( props['name'] )
 
             scalar_control_info['camprops'] = prop_names
@@ -2072,6 +2223,30 @@ class AppState(object):
             n_sigma_shared.set(options.n_sigma)
             scalar_control_info['n_sigma'] = n_sigma_shared.get_nowait()
 
+            n_erode_absdiff_shared = SharedValue()
+            n_erode_absdiff_shared.set(options.n_erode_absdiff)
+            scalar_control_info['n_erode_absdiff'] = n_erode_absdiff_shared.get_nowait()
+
+            color_range_1_shared = SharedValue()
+            color_range_1_shared.set(options.color_range_1)
+            scalar_control_info['color_range_1'] = color_range_1_shared.get_nowait()
+
+            color_range_2_shared = SharedValue()
+            color_range_2_shared.set(options.color_range_2)
+            scalar_control_info['color_range_2'] = color_range_2_shared.get_nowait()
+
+            color_range_3_shared = SharedValue()
+            color_range_3_shared.set(options.color_range_3)
+            scalar_control_info['color_range_3'] = color_range_3_shared.get_nowait()
+
+            sat_thresh_shared = SharedValue()
+            sat_thresh_shared.set(options.sat_thresh)
+            scalar_control_info['sat_thresh'] = sat_thresh_shared.get_nowait()
+
+            red_only_shared = SharedValue()
+            red_only_shared.set(int(options.red_only))
+            scalar_control_info['red_only'] = red_only_shared.get_nowait()
+
             scalar_control_info['width'] = width
             scalar_control_info['height'] = height
             scalar_control_info['roi'] = 0,0,width-1,height-1
@@ -2093,6 +2268,7 @@ class AppState(object):
                                                          )
 
             self.all_cam_ids[cam_no]=cam_id
+            self._image_sources[cam_no].assign_cam_id(cam_id)
             cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(self.all_cam_ids[cam_no])
 
             ##################################################################
@@ -2128,6 +2304,12 @@ class AppState(object):
                         diff_threshold_shared=diff_threshold_shared,
                         clear_threshold_shared=clear_threshold_shared,
                         n_sigma_shared=n_sigma_shared,
+                        n_erode_absdiff_shared=n_erode_absdiff_shared,
+                        color_range_1_shared=color_range_1_shared,
+                        color_range_2_shared=color_range_2_shared,
+                        color_range_3_shared=color_range_3_shared,
+                        sat_thresh_shared=sat_thresh_shared,
+                        red_only_shared=red_only_shared,
                         framerate=None,
                         lbrt=lbrt,
                         max_height=cam.get_max_height(),
@@ -2197,6 +2379,32 @@ class AppState(object):
         self.n_raw_frames = [0 for i in range(num_cams)]
         self.last_measurement_time = [time_func() for i in range(num_cams)]
         self.last_return_info_check = [ 0.0 for i in range(num_cams)]
+
+        ##################################################################
+        #
+        # Set up listener to trigger recording
+        #
+        ##################################################################
+
+        self.recvsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        my_host = '' # get fully qualified hostname
+        my_port = 30043 # arbitrary number
+
+        try:
+            self.recvsock.bind((my_host, my_port))
+            print 'created udp server on port ', my_port
+        except socket.error, err:
+            if err.errno==98: # port in use
+                warnings.warn('self.recvsock not available because port in use')
+                self.recvsock = None
+
+        if self.recvsock is not None:
+            self.recvsock.setblocking(0)
+
+        self.recording = 0
+        self.timer = 0
+
+
 
     def get_image_sources(self):
         return self._image_sources
@@ -2272,6 +2480,44 @@ class AppState(object):
                     raise
                 else:
                     self.handle_commands(cam_no,cmds)
+
+            # trigger recording
+            if 1:
+
+                msg = None
+
+                if self.recvsock is not None:
+                    try:
+                        msg, addr = self.recvsock.recvfrom(4096)
+                    except socket.error, err:
+                        if err.errno == 11: #Resource temporarily unavailable
+                            pass
+                if msg=='record_ufmf':
+                    self.timer = time.time()
+                if msg=='record_ufmf' and self.recording==0:
+
+                    self.recording = 1
+                    print 'saving movies'
+
+                    if 1:
+                        for cam_no, cam_id in enumerate(self.all_cam_ids):
+                            small_saver = self.all_small_savers[cam_no]
+                            if small_saver is None:
+                                print 'no small save thread -- cannot save small movies'
+                                continue
+
+                            small_filebasename = time.strftime( 'CAM_NODE_MOV_%Y%m%d_%H%M%S_camid_' + repr(cam_no) + '.ufmf')
+                            small_saver.start_recording(small_filebasename=small_filebasename)
+
+                elif msg==None and self.recording==1 and time.time()-self.timer >= 4:
+                    print 'stop saving movies'
+                    self.recording = 0
+                    for cam_no, cam_id in enumerate(self.all_cam_ids):
+                        small_saver = self.all_small_savers[cam_no]
+                        small_saver.stop_recording()
+
+
+
 
             # test if all closed
             all_closed = True
@@ -2370,6 +2616,27 @@ class AppState(object):
                     elif property_name == 'n_sigma':
                         print 'setting n_sigma',value
                         cam_processor.n_sigma_shared.set(value)
+                    elif property_name == 'n_erode_absdiff':
+                        print 'setting n_erode_absdiff',value
+                        cam_processor.n_erode_absdiff_shared.set(value)
+                    elif property_name == 'red_only':
+                        print 'setting red_only',value
+                        cam_processor.red_only.set(value)
+
+
+                    elif property_name == 'color_range_1':
+                        print 'setting color_range_1',value
+                        cam_processor.color_range_1_shared.set(value)
+                    elif property_name == 'color_range_2':
+                        print 'setting color_range_2',value
+                        cam_processor.color_range_2_shared.set(value)
+                    elif property_name == 'color_range_3':
+                        print 'setting color_range_3',value
+                        cam_processor.color_range_3_shared.set(value)
+                    elif property_name == 'sat_thresh':
+                        print 'setting sat_thresh',value
+                        cam_processor.sat_thresh_shared.set(value)
+
                     elif property_name == 'diff_threshold':
                         cam_processor.diff_threshold_shared.set(value)
                     elif property_name == 'clear_threshold':
@@ -2411,6 +2678,8 @@ class AppState(object):
                     elif property_name == 'collecting_background':
                         if value: globals['collecting_background'].set()
                         else: globals['collecting_background'].clear()
+                    elif property_name == 'color_filter':
+                        cam_processor.red_only_shared.set(value)
                     elif property_name == 'visible_image_view':
                         globals['export_image_name'] = value
                         #print 'displaying',value,'image'
@@ -2555,12 +2824,17 @@ def get_app_defaults():
             default_main_brain_hostname = ''
 
     defaults = dict(wrapper='ctypes',
-                    backend='unity',
+                    backend='mega',
 
                     # these are the most important 2D tracking parameters:
                     diff_threshold = 5,
                     n_sigma=7.0,
-
+                    n_erode_absdiff=0,
+                    color_range_1 = 0,
+                    color_range_2 = 150,
+                    color_range_3 = 255,
+                    sat_thresh = 100,
+                    red_only=0,
                     clear_threshold = 0.3,
 
                     debug_drop=False,
@@ -2597,7 +2871,7 @@ def parse_args_and_run(benchmark=False):
     usage = '\n'.join(usage_lines)
 
     parser = OptionParser(usage=usage,
-                          version="%prog 0.1")
+                          version="%prog "+flydra.version.__version__)
 
     defaults = get_app_defaults()
     parser.set_defaults(**defaults)
@@ -2617,6 +2891,9 @@ def parse_args_and_run(benchmark=False):
     parser.add_option("--n-sigma", type='float',
                       help=("criterion used to determine if a pixel is significantly "
                             "different than the mean [default: %default]"))
+
+    parser.add_option("--red-only", action='store_true', default=False,
+                      help=("if set, detect points only in red channel (requires color cameras)"))
 
     parser.add_option("--debug-drop", action='store_true',
                       help="save debugging information regarding dropped network packets")
@@ -2675,8 +2952,15 @@ def parse_args_and_run(benchmark=False):
     parser.add_option("--force-cam-ids", type="string",
                       help="list of names for each camera (comma separated)")
 
+    parser.add_option("--cams-only", type="string",
+                      help="list cameras to use (comma separated)")
+
+    parser.add_option("--show-cam-details", action='store_true', default=False)
+
     parser.add_option("--small-save-radius", type="int",
                       help='half the edge length of .ufmf movies [default: %default]')
+    parser.add_option("--rosrate", type="float", dest='rosrate', default=30.,
+                      help='desired framerate for the ROS raw image emitter (if ROS enabled)')
 
     (options, args) = parser.parse_args()
     #print dir(options)

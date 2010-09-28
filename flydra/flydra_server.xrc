@@ -220,6 +220,11 @@
                 <border>3</border>
               </object>
               <object class="sizeritem">
+                <object class="wxCheckBox" name="COLOR_FILTER">
+                  <label>Color filter</label>
+                </object>
+              </object>
+              <object class="sizeritem">
                 <object class="wxButton" name="take_background">
                   <label>take</label>
                 </object>
@@ -290,8 +295,6 @@
       </object>
       <object class="sizeritem">
         <object class="wxFlexGridSizer">
-          <cols>3</cols>
-          <rows>2</rows>
           <object class="sizeritem">
             <object class="wxStaticText" name="acquired_fps_label">
               <label>approx. fps: --</label>
@@ -340,20 +343,6 @@
             <flag>wxRIGHT</flag>
             <border>20</border>
           </object>
-          <hgap>10</hgap>
-          <object class="sizeritem">
-            <object class="wxBoxSizer">
-              <orient>wxHORIZONTAL</orient>
-              <object class="sizeritem">
-                <object class="wxStaticText">
-                  <label>Trig mode</label>
-                </object>
-              </object>
-              <object class="sizeritem">
-                <object class="wxTextCtrl" name="trigger_mode_number"/>
-              </object>
-            </object>
-          </object>
           <object class="sizeritem">
             <object class="wxBoxSizer">
               <orient>wxHORIZONTAL</orient>
@@ -372,6 +361,112 @@
               </object>
             </object>
           </object>
+          <object class="sizeritem">
+            <object class="wxBoxSizer">
+              <orient>wxHORIZONTAL</orient>
+              <object class="sizeritem">
+                <object class="wxStaticText">
+                  <label>Trig mode</label>
+                </object>
+              </object>
+              <object class="sizeritem">
+                <object class="wxTextCtrl" name="trigger_mode_number"/>
+              </object>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxBoxSizer">
+              <orient>wxHORIZONTAL</orient>
+              <object class="sizeritem">
+                <object class="wxStaticText">
+                  <label>N Erode</label>
+                </object>
+                <flag>wxTOP|wxRIGHT</flag>
+                <border>3</border>
+              </object>
+              <object class="sizeritem">
+                <object class="wxTextCtrl" name="n_erode_absdiff">
+                  <size>40,20</size>
+                  <value>?</value>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxBoxSizer">
+              <orient>wxHORIZONTAL</orient>
+              <object class="sizeritem">
+                <object class="wxStaticText">
+                  <label>Color R1</label>
+                </object>
+                <flag>wxTOP|wxRIGHT</flag>
+                <border>3</border>
+              </object>
+              <object class="sizeritem">
+                <object class="wxTextCtrl" name="color_range_1">
+                  <size>40,20</size>
+                  <value>?</value>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxBoxSizer">
+              <orient>wxHORIZONTAL</orient>
+              <object class="sizeritem">
+                <object class="wxStaticText">
+                  <label>Color R2</label>
+                </object>
+                <flag>wxTOP|wxRIGHT</flag>
+                <border>3</border>
+              </object>
+              <object class="sizeritem">
+                <object class="wxTextCtrl" name="color_range_2">
+                  <size>40,20</size>
+                  <value>?</value>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxBoxSizer">
+              <orient>wxHORIZONTAL</orient>
+              <object class="sizeritem">
+                <object class="wxStaticText">
+                  <label>Color R3</label>
+                </object>
+                <flag>wxTOP|wxRIGHT</flag>
+                <border>3</border>
+              </object>
+              <object class="sizeritem">
+                <object class="wxTextCtrl" name="color_range_3">
+                  <size>40,20</size>
+                  <value>?</value>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object class="sizeritem">
+            <object class="wxBoxSizer">
+              <orient>wxHORIZONTAL</orient>
+              <object class="sizeritem">
+                <object class="wxStaticText">
+                  <label>Sat Thresh</label>
+                </object>
+                <flag>wxTOP|wxRIGHT</flag>
+                <border>3</border>
+              </object>
+              <object class="sizeritem">
+                <object class="wxTextCtrl" name="sat_thresh">
+                  <size>40,20</size>
+                  <value>?</value>
+                </object>
+              </object>
+            </object>
+          </object>
+          <cols>3</cols>
+          <rows>4</rows>
+          <hgap>10</hgap>
         </object>
         <flag>wxEXPAND</flag>
       </object>
@@ -472,7 +567,7 @@
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="PreviewPerCamPanel">
-          <size>10,300</size>
+          <size>10,400</size>
         </object>
         <flag>wxEXPAND</flag>
       </object>

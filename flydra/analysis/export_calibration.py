@@ -14,7 +14,6 @@ import sys, os, sets
 from optparse import OptionParser
 import flydra.reconstruct
 import flydra.analysis.result_utils as result_utils
-import progressbar
 import numpy
 from flydra.reconstruct import save_ascii_matrix
 
