@@ -11,7 +11,7 @@ tables.flavor.restrict_flavors(keep=['python','numpy']) # ensure pytables 2.x
 
 import numpy as np
 import sys, os, re, hashlib
-import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
+
 import warnings
 
 import datetime
@@ -555,6 +555,7 @@ def make_exact_movie_info2(results,movie_dir=None):
         print 'filename2:',filename
         filename = os.path.expanduser(filename)
         print 'filename3:',filename
+        import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
         frame_server = FlyMovieFormat.FlyMovie(filename,check_integrity=True)
         status(' for %s %s:'%(cam_id,filename))
         tmp_frame, timestamp_movie_start = frame_server.get_frame( 0 )
