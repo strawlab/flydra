@@ -20,11 +20,13 @@ Download and install a binary distribution of HDF5. ::
 	
 Also: ::
 
-	$ export HDF5DIR=<dir>
+	$ export HDF5_DIR=<dir>
 	
 so that pytables can find it.
 
+Also install LZO and remember to do: ::
 
+	$ export LZO_DIR=<dir>
 
 cgtypes
 -------------------------------------
