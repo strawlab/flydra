@@ -38,7 +38,9 @@ def rotate_vec(q,v):
     # Note -- if you have a lot of vectors per quaternion, it's faster
     # to convert quat to matrix and multiply.
 
-    qv = cgtypes.quat(0, *v) # make quaternion from vector with w=0
+    # qv = cgtypes.quat(0, *v) # make quaternion from vector with w=0
+    qv = cgtypes.quat(0, v[0], v[1], v[2]) # make quaternion from vector with w=0
+    
     qresult = q*qv*q.inverse()
     return cgtypes.vec3( qresult.x, qresult.y, qresult.z )
 
