@@ -907,6 +907,8 @@ class CoordinateProcessor(threading.Thread):
                             # incomplete point info
                             break
                         predicted_framenumber = n_frames_skipped + self.last_framenumbers_skip[cam_idx] + 1
+                        print 'cam_idx, raw_framenumber:',cam_idx,raw_framenumber
+
                         if raw_framenumber<predicted_framenumber:
                             print 'raw_framenumber',raw_framenumber
                             print 'n_frames_skipped',n_frames_skipped
