@@ -8,6 +8,13 @@ from distutils.core import Extension # actually monkey-patched by setuptools
 #  on OS X)
 LIGHT_INSTALL = False
 
+try:
+	 import motmot.FastImage.FastImage as FastImage
+except:
+    print "I cannot import motmot.FastImage --- will do a light install without"\
+          " compiling some extensions."
+    LIGHT_INSTALL = True
+
 import flydra.version
 version = flydra.version.__version__
 
@@ -15,8 +22,10 @@ import numpy as np
 
 ext_modules = []
 
+
+
+
 if not LIGHT_INSTALL:
-    import motmot.FastImage.FastImage as FastImage
     major,minor,build = FastImage.get_IPP_version()
     import motmot.FastImage.util as FastImage_util
 
@@ -74,6 +83,7 @@ setup(name='flydra',
       packages = find_packages(),
       test_suite = 'nose.collector',
       ext_modules= ext_modules,
+      install_requires = ['pyrex', 'cython', 'tables','numexpr==1.3'],
       entry_points = {
     'console_scripts': [
 
