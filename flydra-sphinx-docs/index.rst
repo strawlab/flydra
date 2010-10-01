@@ -20,6 +20,8 @@ Contents:
   orientation_data.rst
   modules.rst
   old/flydra.rst
+  FAQ.rst
+  install_notes.rst
 
 Contibutions to this documentation
 ----------------------------------
