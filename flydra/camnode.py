@@ -2018,7 +2018,9 @@ class AppState(object):
             if cam_iface is not None:
                 backend = cam_iface.get_driver_name()
                 N_modes = cam_iface.get_num_modes(cam_order[cam_no])
-                use_mode = options.mode_num
+                use_mode = None
+                if options.mode_num is not None:
+                    options.show_cam_details = True
                 if options.show_cam_details:
                     print 'camera info:',cam_iface.get_camera_info(cam_order[cam_no])
                     print '%d available modes:'%N_modes
@@ -2032,6 +2034,8 @@ class AppState(object):
                             use_mode = i
                 if use_mode is None:
                     use_mode = 0
+                if options.mode_num is not None:
+                    use_mode = options.mode_num
                 cam = cam_iface.Camera(cam_order[cam_no],options.num_buffers,use_mode)
                 if options.show_cam_details:
                     print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_order[cam_no],use_mode))
@@ -2918,7 +2922,7 @@ def parse_args_and_run(benchmark=False):
     parser.add_option("--background-frame-alpha", type="float",
                       help="weight for each BG frame added to accumulator [default: %default]")
 
-    parser.add_option("--mode-num", type="int",
+    parser.add_option("--mode-num", type="int", default=None,
                       help="force a camera mode")
 
     parser.add_option("--num-buffers", type="int",
