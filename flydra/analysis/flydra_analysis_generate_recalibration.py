@@ -246,7 +246,12 @@ def do_it(filename,
                                      for cam_id in cam_ids])
         save_ascii_matrix(cam_centers,os.path.join(calib_dir,'original_cam_centers.dat'))
 
-    save_calibration_directory(IdMat=IdMat,points=points,reconstructor=reconstructor,Res=Res,calib_dir=calib_dir)
+    save_calibration_directory(IdMat=IdMat,
+                               points=points,
+                               cam_ids=cam_ids,
+                               Res=Res,
+                               calib_dir=calib_dir,
+                               )
     results.close()
     h5_2d_data.close()
 
