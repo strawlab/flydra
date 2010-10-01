@@ -1979,7 +1979,6 @@ class AppState(object):
         self.globals = [None]*num_cams
         self.all_cam_ids = [None]*num_cams
 
-        self.reconstruct_helper = []
         self._image_sources = [None]*num_cams
         self._image_controllers = [None]*num_cams
         initial_images = [None]*num_cams
@@ -2364,8 +2363,6 @@ class AppState(object):
             # Misc
             #
             ##################################################################
-
-            self.reconstruct_helper.append( None )
 
             if cam_iface is not None:
                 driver_string = 'using cam_iface driver: %s (wrapper: %s)'%(
@@ -2797,17 +2794,6 @@ class AppState(object):
                 cam_processor.set_scale_factor( scale_factor )
                 cam_processor.set_pmat( pmat )
                 cam_processor.make_reconstruct_helper(intlin, intnonlin) # let grab thread make one
-
-                ######
-                fc1 = intlin[0,0]
-                fc2 = intlin[1,1]
-                cc1 = intlin[0,2]
-                cc2 = intlin[1,2]
-                k1, k2, p1, p2 = intnonlin
-
-                # we make one, too
-                self.reconstruct_helper[cam_no] = reconstruct_utils.ReconstructHelper(
-                    fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
             else:
                 raise ValueError('unknown key "%s"'%key)
 
