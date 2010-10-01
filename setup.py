@@ -83,7 +83,6 @@ setup(name='flydra',
       packages = find_packages(),
       test_suite = 'nose.collector',
       ext_modules= ext_modules,
-      install_requires = ['pyrex', 'cython', 'tables','numexpr==1.3'],
       entry_points = {
     'console_scripts': [
 
