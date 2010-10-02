@@ -112,6 +112,19 @@ if os.name == 'posix' and sys.platform != 'darwin':
 
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
+from contextlib import contextmanager
+
+@contextmanager
+def monkeypatch_camera_method(self):
+    with self._monkeypatched_lock:
+        # get the lock
+
+        # hack the THREAD_DEBUG stuff in cam_iface_ctypes
+        self.mythread = threading.currentThread()
+
+        yield # run what we need to run
+
+    # release the lock
 
 class SharedValue:
     # in fview
@@ -1402,7 +1415,8 @@ class ImageSource(threading.Thread):
         threading.Thread.__init__(self,name='ImageSource')
         self._chain = chain
         self.cam = cam
-        self.image_coding = self.cam.get_pixel_coding()
+        with self.cam._hack_acquire_lock():
+            self.image_coding = self.cam.get_pixel_coding()
         self.buffer_pool = buffer_pool
         self.debug_acquire = debug_acquire
         self.cam_no_str = str(cam_no)
@@ -1499,7 +1513,8 @@ class ImageSourceFromCamera(ImageSource):
 
     def _grab_buffer_quick(self):
         try:
-            trash = self.cam.grab_next_frame_blocking()
+            with self.cam._hack_acquire_lock():
+                trash = self.cam.grab_next_frame_blocking()
         except cam_iface.BuffersOverflowed:
             msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
             self.log_message_queue.put((self.cam_no_str,now,msg))
@@ -1514,56 +1529,62 @@ class ImageSourceFromCamera(ImageSource):
     def _grab_into_buffer(self, _bufim ):
         try_again_condition= False
 
-        try:
-            self.cam.grab_next_frame_into_buf_blocking(_bufim)
-        except cam_iface.BuffersOverflowed:
-            if self.debug_acquire:
-                stdout_write('(O%s)'%self.cam_no_str)
-            now = time.time()
-            msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
-            self.log_message_queue.put((self.cam_no_str,now,msg))
-            print >> sys.stderr, msg
-            try_again_condition = True
-        except cam_iface.FrameDataMissing:
-            if self.debug_acquire:
-                stdout_write('(M%s)'%self.cam_no_str)
-            now = time.time()
-            msg = 'Warning: frame data missing on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
-            #self.log_message_queue.put((self.cam_no_str,now,msg))
-            print >> sys.stderr, msg
-            try_again_condition = True
-        except cam_iface.FrameDataCorrupt:
-            if self.debug_acquire:
-                stdout_write('(C%s)'%self.cam_no_str)
-            now = time.time()
-            msg = 'Warning: frame data corrupt on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
-            #self.log_message_queue.put((self.cam_no_str,now,msg))
-            print >> sys.stderr, msg
-            try_again_condition = True
-        except (cam_iface.FrameSystemCallInterruption, cam_iface.NoFrameReturned):
-            if self.debug_acquire:
-                stdout_write('(S%s)'%self.cam_no_str)
-            try_again_condition = True
+        with self.cam._hack_acquire_lock():
+            # transfer thread ownership into this thread. (This is a
+            # semi-evil hack into camera class... Should call a method
+            # like self.cam.acquire_thread())
+            # self.cam.mythread=threading.currentThread()
 
-        if not try_again_condition:
-            # get best guess as to when image was taken
-            timestamp=self.cam.get_last_timestamp()
-            framenumber=self.cam.get_last_framenumber()
+            try:
+                self.cam.grab_next_frame_into_buf_blocking(_bufim)
+            except cam_iface.BuffersOverflowed:
+                if self.debug_acquire:
+                    stdout_write('(O%s)'%self.cam_no_str)
+                now = time.time()
+                msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
+                self.log_message_queue.put((self.cam_no_str,now,msg))
+                print >> sys.stderr, msg
+                try_again_condition = True
+            except cam_iface.FrameDataMissing:
+                if self.debug_acquire:
+                    stdout_write('(M%s)'%self.cam_no_str)
+                now = time.time()
+                msg = 'Warning: frame data missing on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
+                #self.log_message_queue.put((self.cam_no_str,now,msg))
+                print >> sys.stderr, msg
+                try_again_condition = True
+            except cam_iface.FrameDataCorrupt:
+                if self.debug_acquire:
+                    stdout_write('(C%s)'%self.cam_no_str)
+                now = time.time()
+                msg = 'Warning: frame data corrupt on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
+                #self.log_message_queue.put((self.cam_no_str,now,msg))
+                print >> sys.stderr, msg
+                try_again_condition = True
+            except (cam_iface.FrameSystemCallInterruption, cam_iface.NoFrameReturned):
+                if self.debug_acquire:
+                    stdout_write('(S%s)'%self.cam_no_str)
+                try_again_condition = True
 
-            # Hack to deal with Prosilica framenumber resetting at
-            # 65535 (even though it's an unsigned long).
+            if not try_again_condition:
+                # get best guess as to when image was taken
+                timestamp=self.cam.get_last_timestamp()
+                framenumber=self.cam.get_last_framenumber()
 
-            _prosilica_hack_max_skipped_frames = 100
-            if ((framenumber<=_prosilica_hack_max_skipped_frames) and
-                (self._prosilica_hack_last_framenumber >= 65536-_prosilica_hack_max_skipped_frames) and
-                (self._prosilica_hack_last_framenumber < 65536)):
-                # We're dealing with a Prosilica camera which just
-                # rolled over.
-                self._prosilica_hack_framenumber_offset += 65636
-            self._prosilica_hack_last_framenumber = framenumber
-            framenumber += self._prosilica_hack_framenumber_offset
-        else:
-            timestamp = framenumber = None
+                # Hack to deal with Prosilica framenumber resetting at
+                # 65535 (even though it's an unsigned long).
+
+                _prosilica_hack_max_skipped_frames = 100
+                if ((framenumber<=_prosilica_hack_max_skipped_frames) and
+                    (self._prosilica_hack_last_framenumber >= 65536-_prosilica_hack_max_skipped_frames) and
+                    (self._prosilica_hack_last_framenumber < 65536)):
+                    # We're dealing with a Prosilica camera which just
+                    # rolled over.
+                    self._prosilica_hack_framenumber_offset += 65636
+                self._prosilica_hack_last_framenumber = framenumber
+                framenumber += self._prosilica_hack_framenumber_offset
+            else:
+                timestamp = framenumber = None
         return try_again_condition, timestamp, framenumber
 
 class ImageSourceFakeCamera(ImageSource):
@@ -1640,11 +1661,12 @@ class ImageSourceFakeCamera(ImageSource):
         time.sleep(0.05)
 
     def _grab_into_buffer(self, _bufim ):
-        self.cam.grab_next_frame_into_buf_blocking(_bufim, self.quit_event)
+        with self.cam._hack_acquire_lock():
+            self.cam.grab_next_frame_into_buf_blocking(_bufim, self.quit_event)
 
-        try_again_condition = False
-        timestamp=self.cam.get_last_timestamp()
-        framenumber=self.cam.get_last_framenumber()
+            try_again_condition = False
+            timestamp=self.cam.get_last_timestamp()
+            framenumber=self.cam.get_last_framenumber()
         return try_again_condition, timestamp, framenumber
 
 class FakeCamera(object):
@@ -1848,8 +1870,9 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
         port, width, height = map(int, args)
         cam = FakeCameraFromNetwork(port,(width,height))
         ImageSourceModel = ImageSourceFakeCamera
-        l,b,w,h = cam.get_frame_roi()
-        del l,b
+        with cam._hack_acquire_lock():
+            l,b,w,h = cam.get_frame_roi()
+            del l,b
 
         mean = np.ones( (h,w), dtype=np.uint8 )
         sumsqf = np.ones( (h,w), dtype=np.uint8 )
@@ -1862,7 +1885,8 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
         width, height = 640, 480
         cam = FakeCameraFromRNG('fakecam1',(width,height))
         ImageSourceModel = ImageSourceFakeCamera
-        l,b,w,h = cam.get_frame_roi()
+        with cam._hack_acquire_lock():
+            l,b,w,h = cam.get_frame_roi()
 
         mean = np.ones( (h,w), dtype=np.uint8 )
         sumsqf = np.ones( (h,w), dtype=np.uint8 )
@@ -2036,7 +2060,11 @@ class AppState(object):
                     use_mode = 0
                 if options.mode_num is not None:
                     use_mode = options.mode_num
+
+                cam_iface.Camera._hack_acquire_lock = monkeypatch_camera_method # add our monkeypatch
                 cam = cam_iface.Camera(cam_order[cam_no],options.num_buffers,use_mode)
+                cam._monkeypatched_lock = threading.Lock()
+
                 if options.show_cam_details:
                     print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_order[cam_no],use_mode))
                 ImageSourceModel = ImageSourceFromCamera
@@ -2064,10 +2092,12 @@ class AppState(object):
 
             self.all_cams[cam_no] = cam
             if cam is not None:
-                cam.start_camera()  # start camera
+                with cam._hack_acquire_lock():
+                    cam.start_camera()  # start camera
             self.cam_status[cam_no]= 'started'
             if ImageSourceModel is not None:
-                l,b,w,h = cam.get_frame_roi()
+                with cam._hack_acquire_lock():
+                    l,b,w,h = cam.get_frame_roi()
                 buffer_pool = PreallocatedBufferPool(FastImage.Size(w,h))
                 del l,b,w,h
                 image_source = ImageSourceModel(chain = None,
@@ -2135,244 +2165,246 @@ class AppState(object):
 
         for cam_no in range(num_cams):
             cam = self.all_cams[cam_no]
-            left,top,width,height = cam.get_frame_roi()
-            del left,top
-            globals = self.globals[cam_no] # shorthand
+            with cam._hack_acquire_lock():
 
-            if mask_images is not None:
-                mask_image_fname = mask_images[cam_no]
-                im = scipy.misc.pilutil.imread( mask_image_fname )
-                if len(im.shape) != 3:
-                    raise ValueError('mask image must have color channels')
-                if im.shape[2] != 4:
-                    raise ValueError('mask image must have an alpha (4th) channel')
-                alpha = im[:,:,3]
-                if numpy.any((alpha > 0) & (alpha < 255)):
-                    print ('WARNING: some alpha values between 0 and '
-                           '255 detected. Only zero and non-zero values are '
-                           'considered.')
-                mask = alpha.astype(numpy.bool)
-            else:
-                mask = numpy.zeros( (height,width), dtype=numpy.bool )
-            # mask is currently an array of bool
-            mask = mask.astype(numpy.uint8)*255
+                left,top,width,height = cam.get_frame_roi()
+                del left,top
+                globals = self.globals[cam_no] # shorthand
+
+                if mask_images is not None:
+                    mask_image_fname = mask_images[cam_no]
+                    im = scipy.misc.pilutil.imread( mask_image_fname )
+                    if len(im.shape) != 3:
+                        raise ValueError('mask image must have color channels')
+                    if im.shape[2] != 4:
+                        raise ValueError('mask image must have an alpha (4th) channel')
+                    alpha = im[:,:,3]
+                    if numpy.any((alpha > 0) & (alpha < 255)):
+                        print ('WARNING: some alpha values between 0 and '
+                               '255 detected. Only zero and non-zero values are '
+                               'considered.')
+                    mask = alpha.astype(numpy.bool)
+                else:
+                    mask = numpy.zeros( (height,width), dtype=numpy.bool )
+                # mask is currently an array of bool
+                mask = mask.astype(numpy.uint8)*255
 
 
-            # get settings
-            scalar_control_info = {}
+                # get settings
+                scalar_control_info = {}
 
-            if 1:
-                # trigger modes
-                N_trigger_modes = cam.get_num_trigger_modes()
-                if options.show_cam_details:
-                    print '  %d available trigger modes:'%N_trigger_modes
-                    for i in range(N_trigger_modes):
-                        mode_string = cam.get_trigger_mode_string(i)
-                        print '  mode %d: %s'%(i,mode_string)
-                scalar_control_info['N_trigger_modes'] = N_trigger_modes
-                # XXX TODO: scalar_control_info['trigger_mode'] # current value
+                if 1:
+                    # trigger modes
+                    N_trigger_modes = cam.get_num_trigger_modes()
+                    if options.show_cam_details:
+                        print '  %d available trigger modes:'%N_trigger_modes
+                        for i in range(N_trigger_modes):
+                            mode_string = cam.get_trigger_mode_string(i)
+                            print '  mode %d: %s'%(i,mode_string)
+                    scalar_control_info['N_trigger_modes'] = N_trigger_modes
+                    # XXX TODO: scalar_control_info['trigger_mode'] # current value
 
-            globals['cam_controls'] = {}
-            CAM_CONTROLS = globals['cam_controls']
+                globals['cam_controls'] = {}
+                CAM_CONTROLS = globals['cam_controls']
 
-            num_props = cam.get_num_camera_properties()
-            prop_names = []
-            for prop_num in range(num_props):
-                props = cam.get_camera_property_info(prop_num)
-                current_value,auto = cam.get_camera_property( prop_num )
-                new_value = current_value
-                min_value = props['min_value']
-                max_value = props['max_value']
-                force_manual = True
-                if props['has_manual_mode']:
-                    if force_manual or min_value <= new_value <= max_value:
-                        try:
+                num_props = cam.get_num_camera_properties()
+                prop_names = []
+                for prop_num in range(num_props):
+                    props = cam.get_camera_property_info(prop_num)
+                    current_value,auto = cam.get_camera_property( prop_num )
+                    new_value = current_value
+                    min_value = props['min_value']
+                    max_value = props['max_value']
+                    force_manual = True
+                    if props['has_manual_mode']:
+                        if force_manual or min_value <= new_value <= max_value:
+                            try:
+                                if options.show_cam_details:
+                                    print 'setting camera property "%s" to manual mode'%(props['name'],)
+                                cam.set_camera_property( prop_num, new_value, 0 )
+                            except:
+                                print 'error while setting property %s to %d (from %d)'%(props['name'],new_value,current_value)
+                                raise
+                        else:
                             if options.show_cam_details:
-                                print 'setting camera property "%s" to manual mode'%(props['name'],)
-                            cam.set_camera_property( prop_num, new_value, 0 )
-                        except:
-                            print 'error while setting property %s to %d (from %d)'%(props['name'],new_value,current_value)
-                            raise
+                                print 'not setting property %s to %d (from %d) because out of range (%d<=value<=%d)'%(props['name'],new_value,current_value,min_value,max_value)
+
+                        CAM_CONTROLS[props['name']]=prop_num
+                    current_value,auto = cam.get_camera_property( prop_num )
+                    current_value = new_value
+                    scalar_control_info[props['name']] = (current_value,
+                                                          min_value, max_value)
+                    # XXX FIXME: should transmit is_scaled_quantity info (scaled_unit_name, scale_gain, scale_offset)
+                    prop_names.append( props['name'] )
+
+                scalar_control_info['camprops'] = prop_names
+
+                diff_threshold_shared = SharedValue()
+                diff_threshold_shared.set(options.diff_threshold)
+                scalar_control_info['diff_threshold'] = diff_threshold_shared.get_nowait()
+
+                clear_threshold_shared = SharedValue()
+                clear_threshold_shared.set(options.clear_threshold)
+                scalar_control_info['clear_threshold'] = clear_threshold_shared.get_nowait()
+                scalar_control_info['visible_image_view'] = 'raw'
+
+                try:
+                    scalar_control_info['trigger_mode'] = cam.get_trigger_mode_number()
+                except cam_iface.CamIFaceError:
+                    scalar_control_info['trigger_mode'] = 0
+                scalar_control_info['cmp'] = globals['use_cmp'].isSet()
+
+                n_sigma_shared = SharedValue()
+                n_sigma_shared.set(options.n_sigma)
+                scalar_control_info['n_sigma'] = n_sigma_shared.get_nowait()
+
+                n_erode_absdiff_shared = SharedValue()
+                n_erode_absdiff_shared.set(options.n_erode_absdiff)
+                scalar_control_info['n_erode_absdiff'] = n_erode_absdiff_shared.get_nowait()
+
+                color_range_1_shared = SharedValue()
+                color_range_1_shared.set(options.color_range_1)
+                scalar_control_info['color_range_1'] = color_range_1_shared.get_nowait()
+
+                color_range_2_shared = SharedValue()
+                color_range_2_shared.set(options.color_range_2)
+                scalar_control_info['color_range_2'] = color_range_2_shared.get_nowait()
+
+                color_range_3_shared = SharedValue()
+                color_range_3_shared.set(options.color_range_3)
+                scalar_control_info['color_range_3'] = color_range_3_shared.get_nowait()
+
+                sat_thresh_shared = SharedValue()
+                sat_thresh_shared.set(options.sat_thresh)
+                scalar_control_info['sat_thresh'] = sat_thresh_shared.get_nowait()
+
+                red_only_shared = SharedValue()
+                red_only_shared.set(int(options.red_only))
+                scalar_control_info['red_only'] = red_only_shared.get_nowait()
+
+                scalar_control_info['width'] = width
+                scalar_control_info['height'] = height
+                scalar_control_info['roi'] = 0,0,width-1,height-1
+                scalar_control_info['max_framerate'] = cam.get_framerate()
+                scalar_control_info['collecting_background']=globals['collecting_background'].isSet()
+                scalar_control_info['debug_drop']=globals['debug_drop']
+                scalar_control_info['expected_trigger_framerate'] = 0.0
+
+                # register self with remote server
+                port = 9834 + cam_no # for local Pyro server
+                if force_cam_ids is None:
+                    force_cam_id = None
+                else:
+                    force_cam_id = force_cam_ids[cam_no]
+                cam_id = self.main_brain.register_new_camera(cam_no,
+                                                             scalar_control_info,
+                                                             port,
+                                                             force_cam_id=force_cam_id,
+                                                             )
+
+                self.all_cam_ids[cam_no]=cam_id
+                self._image_sources[cam_no].assign_cam_id(cam_id)
+                cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(self.all_cam_ids[cam_no])
+
+                ##################################################################
+                #
+                # Processing chains
+                #
+                ##################################################################
+
+                # setup chain for this camera:
+                if not DISABLE_ALL_PROCESSING:
+                    if 0:
+                        cam_processor = FakeProcessCamData()
                     else:
-                        if options.show_cam_details:
-                            print 'not setting property %s to %d (from %d) because out of range (%d<=value<=%d)'%(props['name'],new_value,current_value,min_value,max_value)
 
-                    CAM_CONTROLS[props['name']]=prop_num
-                current_value,auto = cam.get_camera_property( prop_num )
-                current_value = new_value
-                scalar_control_info[props['name']] = (current_value,
-                                                      min_value, max_value)
-                # XXX FIXME: should transmit is_scaled_quantity info (scaled_unit_name, scale_gain, scale_offset)
-                prop_names.append( props['name'] )
+                        initial_image_dict = initial_images[cam_no]
 
-            scalar_control_info['camprops'] = prop_names
+                        cam.get_max_height()
+                        l,b,w,h = cam.get_frame_roi()
+                        r = l+w-1
+                        t = b+h-1
+                        lbrt = l,b,r,t
+                        cam_processor = ProcessCamClass(
+                            cam2mainbrain_port=cam2mainbrain_port,
+                            cam_id=cam_id,
+                            log_message_queue=self.log_message_queue,
+                            max_num_points=options.num_points,
+                            roi2_radius=options.software_roi_radius,
+                            bg_frame_interval=options.background_frame_interval,
+                            bg_frame_alpha=options.background_frame_alpha,
+                            cam_no=cam_no,
+                            main_brain_hostname=self.main_brain_hostname,
+                            mask_image=mask,
+                            diff_threshold_shared=diff_threshold_shared,
+                            clear_threshold_shared=clear_threshold_shared,
+                            n_sigma_shared=n_sigma_shared,
+                            n_erode_absdiff_shared=n_erode_absdiff_shared,
+                            color_range_1_shared=color_range_1_shared,
+                            color_range_2_shared=color_range_2_shared,
+                            color_range_3_shared=color_range_3_shared,
+                            sat_thresh_shared=sat_thresh_shared,
+                            red_only_shared=red_only_shared,
+                            framerate=None,
+                            lbrt=lbrt,
+                            max_height=cam.get_max_height(),
+                            max_width=cam.get_max_width(),
+                            globals=globals,
+                            options=options,
+                            initial_image_dict = initial_image_dict,
+                            benchmark=benchmark,
+                            )
+                    self.all_cam_processors[cam_no]= cam_processor
 
-            diff_threshold_shared = SharedValue()
-            diff_threshold_shared.set(options.diff_threshold)
-            scalar_control_info['diff_threshold'] = diff_threshold_shared.get_nowait()
-
-            clear_threshold_shared = SharedValue()
-            clear_threshold_shared.set(options.clear_threshold)
-            scalar_control_info['clear_threshold'] = clear_threshold_shared.get_nowait()
-            scalar_control_info['visible_image_view'] = 'raw'
-
-            try:
-                scalar_control_info['trigger_mode'] = cam.get_trigger_mode_number()
-            except cam_iface.CamIFaceError:
-                scalar_control_info['trigger_mode'] = 0
-            scalar_control_info['cmp'] = globals['use_cmp'].isSet()
-
-            n_sigma_shared = SharedValue()
-            n_sigma_shared.set(options.n_sigma)
-            scalar_control_info['n_sigma'] = n_sigma_shared.get_nowait()
-
-            n_erode_absdiff_shared = SharedValue()
-            n_erode_absdiff_shared.set(options.n_erode_absdiff)
-            scalar_control_info['n_erode_absdiff'] = n_erode_absdiff_shared.get_nowait()
-
-            color_range_1_shared = SharedValue()
-            color_range_1_shared.set(options.color_range_1)
-            scalar_control_info['color_range_1'] = color_range_1_shared.get_nowait()
-
-            color_range_2_shared = SharedValue()
-            color_range_2_shared.set(options.color_range_2)
-            scalar_control_info['color_range_2'] = color_range_2_shared.get_nowait()
-
-            color_range_3_shared = SharedValue()
-            color_range_3_shared.set(options.color_range_3)
-            scalar_control_info['color_range_3'] = color_range_3_shared.get_nowait()
-
-            sat_thresh_shared = SharedValue()
-            sat_thresh_shared.set(options.sat_thresh)
-            scalar_control_info['sat_thresh'] = sat_thresh_shared.get_nowait()
-
-            red_only_shared = SharedValue()
-            red_only_shared.set(int(options.red_only))
-            scalar_control_info['red_only'] = red_only_shared.get_nowait()
-
-            scalar_control_info['width'] = width
-            scalar_control_info['height'] = height
-            scalar_control_info['roi'] = 0,0,width-1,height-1
-            scalar_control_info['max_framerate'] = cam.get_framerate()
-            scalar_control_info['collecting_background']=globals['collecting_background'].isSet()
-            scalar_control_info['debug_drop']=globals['debug_drop']
-            scalar_control_info['expected_trigger_framerate'] = 0.0
-
-            # register self with remote server
-            port = 9834 + cam_no # for local Pyro server
-            if force_cam_ids is None:
-                force_cam_id = None
-            else:
-                force_cam_id = force_cam_ids[cam_no]
-            cam_id = self.main_brain.register_new_camera(cam_no,
-                                                         scalar_control_info,
-                                                         port,
-                                                         force_cam_id=force_cam_id,
-                                                         )
-
-            self.all_cam_ids[cam_no]=cam_id
-            self._image_sources[cam_no].assign_cam_id(cam_id)
-            cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(self.all_cam_ids[cam_no])
-
-            ##################################################################
-            #
-            # Processing chains
-            #
-            ##################################################################
-
-            # setup chain for this camera:
-            if not DISABLE_ALL_PROCESSING:
-                if 0:
-                    cam_processor = FakeProcessCamData()
-                else:
-
-                    initial_image_dict = initial_images[cam_no]
-
-                    cam.get_max_height()
-                    l,b,w,h = cam.get_frame_roi()
-                    r = l+w-1
-                    t = b+h-1
-                    lbrt = l,b,r,t
-                    cam_processor = ProcessCamClass(
-                        cam2mainbrain_port=cam2mainbrain_port,
-                        cam_id=cam_id,
-                        log_message_queue=self.log_message_queue,
-                        max_num_points=options.num_points,
-                        roi2_radius=options.software_roi_radius,
-                        bg_frame_interval=options.background_frame_interval,
-                        bg_frame_alpha=options.background_frame_alpha,
-                        cam_no=cam_no,
-                        main_brain_hostname=self.main_brain_hostname,
-                        mask_image=mask,
-                        diff_threshold_shared=diff_threshold_shared,
-                        clear_threshold_shared=clear_threshold_shared,
-                        n_sigma_shared=n_sigma_shared,
-                        n_erode_absdiff_shared=n_erode_absdiff_shared,
-                        color_range_1_shared=color_range_1_shared,
-                        color_range_2_shared=color_range_2_shared,
-                        color_range_3_shared=color_range_3_shared,
-                        sat_thresh_shared=sat_thresh_shared,
-                        red_only_shared=red_only_shared,
-                        framerate=None,
-                        lbrt=lbrt,
-                        max_height=cam.get_max_height(),
-                        max_width=cam.get_max_width(),
-                        globals=globals,
-                        options=options,
-                        initial_image_dict = initial_image_dict,
-                        benchmark=benchmark,
-                        )
-                self.all_cam_processors[cam_no]= cam_processor
-
-                cam_processor_chain = cam_processor.get_chain()
-                self.all_cam_chains[cam_no]=cam_processor_chain
-                thread = threading.Thread( target = cam_processor.mainloop,
-                                           name = 'cam_processor.mainloop')
-                thread.setDaemon(True)
-                thread.start()
-                self.critical_threads.append( thread )
-
-                if 1:
-                    save_cam = SaveCamData()
-                    self.all_savers[cam_no]= save_cam
-                    cam_processor_chain.append_link( save_cam.get_chain() )
-                    thread = threading.Thread( target = save_cam.mainloop,
-                                               name = 'save_cam.mainloop')
+                    cam_processor_chain = cam_processor.get_chain()
+                    self.all_cam_chains[cam_no]=cam_processor_chain
+                    thread = threading.Thread( target = cam_processor.mainloop,
+                                               name = 'cam_processor.mainloop')
                     thread.setDaemon(True)
                     thread.start()
                     self.critical_threads.append( thread )
+
+                    if 1:
+                        save_cam = SaveCamData()
+                        self.all_savers[cam_no]= save_cam
+                        cam_processor_chain.append_link( save_cam.get_chain() )
+                        thread = threading.Thread( target = save_cam.mainloop,
+                                                   name = 'save_cam.mainloop')
+                        thread.setDaemon(True)
+                        thread.start()
+                        self.critical_threads.append( thread )
+                    else:
+                        print 'not starting full .fmf thread'
+
+                    if 1:
+                        save_small = SaveSmallData(options=self.options,
+                                                   mkdir_lock = save_small_data_mkdir_lock)
+                        self.all_small_savers[cam_no]= save_small
+                        cam_processor_chain.append_link( save_small.get_chain() )
+                        thread = threading.Thread( target = save_small.mainloop,
+                                                   name = 'save_small.mainloop')
+                        thread.setDaemon(True)
+                        thread.start()
+                        self.critical_threads.append( thread )
+                    else:
+                        print 'not starting small .fmf thread'
+
                 else:
-                    print 'not starting full .fmf thread'
+                    cam_processor_chain = None
 
-                if 1:
-                    save_small = SaveSmallData(options=self.options,
-                                               mkdir_lock = save_small_data_mkdir_lock)
-                    self.all_small_savers[cam_no]= save_small
-                    cam_processor_chain.append_link( save_small.get_chain() )
-                    thread = threading.Thread( target = save_small.mainloop,
-                                               name = 'save_small.mainloop')
-                    thread.setDaemon(True)
-                    thread.start()
-                    self.critical_threads.append( thread )
-                else:
-                    print 'not starting small .fmf thread'
+                self._image_sources[cam_no].set_chain( cam_processor_chain )
 
-            else:
-                cam_processor_chain = None
+                ##################################################################
+                #
+                # Misc
+                #
+                ##################################################################
 
-            self._image_sources[cam_no].set_chain( cam_processor_chain )
-
-            ##################################################################
-            #
-            # Misc
-            #
-            ##################################################################
-
-            if cam_iface is not None:
-                driver_string = 'using cam_iface driver: %s (wrapper: %s)'%(
-                    cam_iface.get_driver_name(),
-                    cam_iface.get_wrapper_name())
-                self.log_message_queue.put((cam_id,time.time(),driver_string))
+                if cam_iface is not None:
+                    driver_string = 'using cam_iface driver: %s (wrapper: %s)'%(
+                        cam_iface.get_driver_name(),
+                        cam_iface.get_wrapper_name())
+                    self.log_message_queue.put((cam_id,time.time(),driver_string))
 
         self.last_frames_by_cam = [ [] for c in range(num_cams) ]
         self.last_points_by_cam = [ [] for c in range(num_cams) ]
@@ -2593,101 +2625,104 @@ class AppState(object):
             CAM_CONTROLS = globals['cam_controls']
 
         for key in cmds.keys():
+
             DEBUG('  handle_commands: key',key)
             if key == 'set':
-                for property_name,value in cmds['set'].iteritems():
-                    print 'setting camera property', property_name, value,'...',
-                    sys.stdout.flush()
-                    if property_name in CAM_CONTROLS:
-                        enum = CAM_CONTROLS[property_name]
-                        if type(value) == tuple: # setting whole thing
-                            props = cam.get_camera_property_info(enum)
-                            #print 'props:',props
-                            if value[1] != props['min_value']:
-                                import warnings
-                                warnings.warn('value[1] != props["min_value"] (%d != %d)'%(value[1], props['min_value']))
-                            if value[2] != props['max_value']:
-                                import warnings
-                                warnings.warn('value[2] != props["max_value"] (%d != %d)'%(value[2], props['max_value']))
-                            value = value[0]
-                        cam.set_camera_property(enum,value,0)
-                    elif property_name == 'roi':
-                        print 'flydra_camera_node.py: ignoring ROI command for now...'
-                        #cam_processor.roi = value
-                    elif property_name == 'n_sigma':
-                        print 'setting n_sigma',value
-                        cam_processor.n_sigma_shared.set(value)
-                    elif property_name == 'n_erode_absdiff':
-                        print 'setting n_erode_absdiff',value
-                        cam_processor.n_erode_absdiff_shared.set(value)
-                    elif property_name == 'red_only':
-                        print 'setting red_only',value
-                        cam_processor.red_only.set(value)
+                with cam._hack_acquire_lock():
+
+                    for property_name,value in cmds['set'].iteritems():
+                        print 'setting camera property', property_name, value,'...',
+                        sys.stdout.flush()
+                        if property_name in CAM_CONTROLS:
+                            enum = CAM_CONTROLS[property_name]
+                            if type(value) == tuple: # setting whole thing
+                                props = cam.get_camera_property_info(enum)
+                                #print 'props:',props
+                                if value[1] != props['min_value']:
+                                    import warnings
+                                    warnings.warn('value[1] != props["min_value"] (%d != %d)'%(value[1], props['min_value']))
+                                if value[2] != props['max_value']:
+                                    import warnings
+                                    warnings.warn('value[2] != props["max_value"] (%d != %d)'%(value[2], props['max_value']))
+                                value = value[0]
+                            cam.set_camera_property(enum,value,0)
+                        elif property_name == 'roi':
+                            print 'flydra_camera_node.py: ignoring ROI command for now...'
+                            #cam_processor.roi = value
+                        elif property_name == 'n_sigma':
+                            print 'setting n_sigma',value
+                            cam_processor.n_sigma_shared.set(value)
+                        elif property_name == 'n_erode_absdiff':
+                            print 'setting n_erode_absdiff',value
+                            cam_processor.n_erode_absdiff_shared.set(value)
+                        elif property_name == 'red_only':
+                            print 'setting red_only',value
+                            cam_processor.red_only.set(value)
 
 
-                    elif property_name == 'color_range_1':
-                        print 'setting color_range_1',value
-                        cam_processor.color_range_1_shared.set(value)
-                    elif property_name == 'color_range_2':
-                        print 'setting color_range_2',value
-                        cam_processor.color_range_2_shared.set(value)
-                    elif property_name == 'color_range_3':
-                        print 'setting color_range_3',value
-                        cam_processor.color_range_3_shared.set(value)
-                    elif property_name == 'sat_thresh':
-                        print 'setting sat_thresh',value
-                        cam_processor.sat_thresh_shared.set(value)
+                        elif property_name == 'color_range_1':
+                            print 'setting color_range_1',value
+                            cam_processor.color_range_1_shared.set(value)
+                        elif property_name == 'color_range_2':
+                            print 'setting color_range_2',value
+                            cam_processor.color_range_2_shared.set(value)
+                        elif property_name == 'color_range_3':
+                            print 'setting color_range_3',value
+                            cam_processor.color_range_3_shared.set(value)
+                        elif property_name == 'sat_thresh':
+                            print 'setting sat_thresh',value
+                            cam_processor.sat_thresh_shared.set(value)
 
-                    elif property_name == 'diff_threshold':
-                        cam_processor.diff_threshold_shared.set(value)
-                    elif property_name == 'clear_threshold':
-                        cam_processor.clear_threshold_shared.set(value)
-                    elif property_name == 'width':
-                        assert cam.get_max_width() == value
-                    elif property_name == 'height':
-                        assert cam.get_max_height() == value
-                    elif property_name == 'trigger_mode':
-                        print 'cam.set_trigger_mode_number( value )',value
-                        try:
-                            cam.set_trigger_mode_number( value ) # XXX don't crash on exception here
-                        except Exception,err:
-                            print 'ERROR setting trigger mode'
-                            traceback.print_exc()
-                    elif property_name == 'cmp':
-                        if value:
-                            # print 'ignoring request to use_cmp'
-                            globals['use_cmp'].set()
-                        else: globals['use_cmp'].clear()
-                    elif property_name == 'expected_trigger_framerate':
-                        #print 'expecting trigger fps',value
-                        if value==0.0:
-                            print ('WARNING: expected_trigger_framerate is set '
-                                   'to 0, but setting shortest IFI to 10 msec '
-                                   'anyway')
-                            cam_processor.shortest_IFI = 0.01 # XXX TODO: FIXME: thread crossing bug
-                        else:
-                            cam_processor.shortest_IFI = 1.0/value # XXX TODO: FIXME: thread crossing bug
-                    elif property_name == 'max_framerate':
-                        if 0:
-                            #print 'ignoring request to set max_framerate'
-                            pass
-                        else:
+                        elif property_name == 'diff_threshold':
+                            cam_processor.diff_threshold_shared.set(value)
+                        elif property_name == 'clear_threshold':
+                            cam_processor.clear_threshold_shared.set(value)
+                        elif property_name == 'width':
+                            assert cam.get_max_width() == value
+                        elif property_name == 'height':
+                            assert cam.get_max_height() == value
+                        elif property_name == 'trigger_mode':
+                            print 'cam.set_trigger_mode_number( value )',value
                             try:
-                                cam.set_framerate(value)
+                                cam.set_trigger_mode_number( value ) # XXX don't crash on exception here
                             except Exception,err:
-                                print 'ERROR: failed setting framerate:',err
-                    elif property_name == 'collecting_background':
-                        if value: globals['collecting_background'].set()
-                        else: globals['collecting_background'].clear()
-                    elif property_name == 'color_filter':
-                        cam_processor.red_only_shared.set(value)
-                    elif property_name == 'visible_image_view':
-                        globals['export_image_name'] = value
-                        #print 'displaying',value,'image'
-                    else:
-                        print 'IGNORING property',property_name
+                                print 'ERROR setting trigger mode'
+                                traceback.print_exc()
+                        elif property_name == 'cmp':
+                            if value:
+                                # print 'ignoring request to use_cmp'
+                                globals['use_cmp'].set()
+                            else: globals['use_cmp'].clear()
+                        elif property_name == 'expected_trigger_framerate':
+                            #print 'expecting trigger fps',value
+                            if value==0.0:
+                                print ('WARNING: expected_trigger_framerate is set '
+                                       'to 0, but setting shortest IFI to 10 msec '
+                                       'anyway')
+                                cam_processor.shortest_IFI = 0.01 # XXX TODO: FIXME: thread crossing bug
+                            else:
+                                cam_processor.shortest_IFI = 1.0/value # XXX TODO: FIXME: thread crossing bug
+                        elif property_name == 'max_framerate':
+                            if 0:
+                                #print 'ignoring request to set max_framerate'
+                                pass
+                            else:
+                                try:
+                                    cam.set_framerate(value)
+                                except Exception,err:
+                                    print 'ERROR: failed setting framerate:',err
+                        elif property_name == 'collecting_background':
+                            if value: globals['collecting_background'].set()
+                            else: globals['collecting_background'].clear()
+                        elif property_name == 'color_filter':
+                            cam_processor.red_only_shared.set(value)
+                        elif property_name == 'visible_image_view':
+                            globals['export_image_name'] = value
+                            #print 'displaying',value,'image'
+                        else:
+                            print 'IGNORING property',property_name
 
-                    print 'OK'
+                        print 'OK'
 
 
             elif key == 'get_im':
@@ -2753,7 +2788,8 @@ class AppState(object):
             elif key == 'quit':
                 self._image_sources[cam_no].join(0.1)
                 # XXX TODO: quit and join chain threads
-                cam.close()
+                with cam._hack_acquire_lock():
+                    cam.close()
                 self.cam_status[cam_no] = 'destroyed'
                 cmds=self.main_brain.close(cam_id)
             elif key == 'take_bg':
