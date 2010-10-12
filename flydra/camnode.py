@@ -217,7 +217,7 @@ def TimestampEcho():
     try:
         sockobj.bind(( hostname, port))
     except socket.error, err:
-        if err.errno==98:
+        if err.args[0]==98:
             warnings.warn('TimestampEcho not available because port in use')
             return
     sendto_port = flydra.common_variables.timestamp_echo_gatherer_port
@@ -2427,7 +2427,7 @@ class AppState(object):
             self.recvsock.bind((my_host, my_port))
             print 'created udp server on port ', my_port
         except socket.error, err:
-            if err.errno==98: # port in use
+            if err.args[0]==98: # port in use
                 warnings.warn('self.recvsock not available because port in use')
                 self.recvsock = None
 
@@ -2523,7 +2523,7 @@ class AppState(object):
                     try:
                         msg, addr = self.recvsock.recvfrom(4096)
                     except socket.error, err:
-                        if err.errno == 11: #Resource temporarily unavailable
+                        if err.args[0] == 11: #Resource temporarily unavailable
                             pass
                 if msg=='record_ufmf':
                     self.timer = time.time()
