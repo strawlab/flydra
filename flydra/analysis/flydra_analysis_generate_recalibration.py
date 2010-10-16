@@ -17,6 +17,31 @@ import progressbar
 import numpy
 from flydra.reconstruct import save_ascii_matrix
 
+config_template = """[Files]
+Basename: %(basename)s
+Image-Extension: jpg
+
+[Images]
+Subpix: 0.5
+
+[Calibration]
+Num-Cameras: %(num_cameras)s
+Num-Projectors: 0
+Nonlinear-Parameters: 30    0    1    0    0    0
+Nonlinear-Update: 1   0   1   0   0   0
+Initial-Tolerance: 10
+Do-Global-Iterations: 0
+Global-Iteration-Threshold: 0.5
+Global-Iteration-Max: 100
+Num-Cameras-Fill: 2
+Do-Bundle-Adjustment: 1
+Undo-Radial: %(undo_radial_int)s
+Min-Points-Value: 30
+N-Tuples: 3
+Square-Pixels: %(square_pixels_int)s
+Use-Nth-Frame: 5
+"""
+
 def create_new_row(d2d, this_camns, this_camn_idxs, cam_ids, camn2cam_id, npoints_by_cam_id):
     n_pts = 0
     IdMat_row = []
@@ -246,7 +271,12 @@ def do_it(filename,
                                      for cam_id in cam_ids])
         save_ascii_matrix(cam_centers,os.path.join(calib_dir,'original_cam_centers.dat'))
 
-    save_calibration_directory(IdMat=IdMat,points=points,reconstructor=reconstructor,Res=Res,calib_dir=calib_dir)
+    save_calibration_directory(IdMat=IdMat,
+                               points=points,
+                               cam_ids=cam_ids,
+                               Res=Res,
+                               calib_dir=calib_dir,
+                               )
     results.close()
     h5_2d_data.close()
 
@@ -258,7 +288,36 @@ def save_calibration_directory(IdMat=None,
                                points=None,
                                Res=None,
                                calib_dir=None,
-                               cam_ids=None):
+                               cam_ids=None,
+                               radial_distortion=False,
+                               square_pixels=True,
+                               reconstructor=None, # only needed if radial_distortion==True
+                               ):
+    basename = 'basename'
+    if 1:
+
+        # This will overwrite the file that was just created with
+        # better defaults.
+
+        if radial_distortion:
+            if reconstrcutor is None:
+                raise ValueError('reconstructor must be specified if '
+                                 'radial_distortion is True')
+            for i, cam_id in enumerate(cam_ids):
+                fname = '%s%d.rad'%(basename,i+1)
+                scc = reconstructor.get_SingleCameraCalibration(cam_id)
+                scc.helper.save_to_rad_file( os.path.join(calib_dir,fname) )
+
+        vars = dict(
+            basename = basename,
+            num_cameras = len(cam_ids),
+            undo_radial_int = int(radial_distortion),
+            square_pixels_int = int(square_pixels),
+            )
+
+        fd = open( os.path.join(calib_dir,'multicamselfcal.cfg'), mode='w' )
+        fd.write( config_template % vars )
+        fd.close()
 
     save_ascii_matrix(IdMat,os.path.join(calib_dir,'IdMat.dat'))
     save_ascii_matrix(points,os.path.join(calib_dir,'points.dat'))
