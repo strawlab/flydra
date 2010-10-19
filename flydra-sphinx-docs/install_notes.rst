@@ -5,7 +5,8 @@ Installation notes
 RedHat 64bit
 ============
 
-(Written Sep'10)
+(as of September 2010)
+
 
 For making pytables install correctly
 -------------------------------------
@@ -51,7 +52,28 @@ At this point: ::
 	$ cd flydra
 	$ python setup.py develop
 
+
 Mac OS X
 ========
 
 ``motmot.FastImage`` cannot be installed, so you have to do a "light" installation.
+
+Apart from that, everything else can be installed.
+
+
+Ubuntu Lucid
+============
+
+(as of October 2010)
+
+Before installing pytables, you have to install the ``lzo`` library, otherwise
+you won't be able to read some compressed files created by flydra. 
+
+Here's a suitable sequence of commands: ::
+	
+	$ sudo apt-get install liblzo2-dev 
+	$ sudo apt-get install libbzip2-dev 
+	$ pip install numexpr=1.3
+	$ pip install tables
+
+
