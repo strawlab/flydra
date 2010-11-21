@@ -2,6 +2,18 @@ from setuptools import setup, find_packages
 from distutils.core import Extension # actually monkey-patched by setuptools
 
 
+# Make sure that some dependencies are installed
+try: 
+    # Copied from pytables's setup.py.
+    from Pyrex.Distutils import build_ext
+except:
+    print ("Please install pyrex, I need it to compile some extensions.")
+    print ("Try: ")
+    print ("      pip install pyrex")
+    print ("")
+    import sys; sys.exit(-1)
+
+
 # Set this to true to compile the extensions that depend on FastImage.
 # Those are not strictly necessary for running some of the analysis tools.
 # (the immediate motivation is to be able to use part of Flydra's functionalities
@@ -11,8 +23,9 @@ LIGHT_INSTALL = False
 try:
 	 import motmot.FastImage.FastImage as FastImage
 except:
-    print "I cannot import motmot.FastImage --- will do a light install without"\
-          " compiling some extensions."
+    print("I cannot import motmot.FastImage --- will do a light install without"\
+          " compiling some extensions.\n")
+    raw_input('Press any key to continue...')
     LIGHT_INSTALL = True
 
 import flydra.version
