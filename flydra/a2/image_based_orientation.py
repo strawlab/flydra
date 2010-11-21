@@ -180,11 +180,10 @@ def plot_image_subregion(raw_im, mean_im, absdiff_im,
 
 def flatten_image_stack( image_framenumbers, ims,
                          im_coords, camn_pt_no_array,
-                         N=None,
-                         min_N=None ):
+                         N=None ):
     """take a stack of several images and flatten by finding min pixel"""
-    if N is None or min_N is None:
-        raise ValueError('N and min_N must be specified')
+    if N is None:
+        raise ValueError('N must be specified')
     assert np.all( (image_framenumbers[1:]-image_framenumbers[:-1])
                    > 0 )
     all_framenumbers = np.arange(image_framenumbers[0],
@@ -193,9 +192,6 @@ def flatten_image_stack( image_framenumbers, ims,
 
     assert N%2==1
     offset = N//2
-
-    nan_im = np.ndarray(ims[0].shape, dtype=np.float)
-    nan_im.fill(np.nan)
 
     results = []
     for center_fno in range( offset, len(all_framenumbers)-offset):
@@ -211,12 +207,9 @@ def flatten_image_stack( image_framenumbers, ims,
                 orig_idxs_in_average.append(idx)
                 ims_to_average.append( ims[idx] )
                 coords_to_average.append( im_coords[idx] )
-            ## else:
-            ##     #print 'failed to find image %d'%fno
-            ##     ims_to_average.append( nan_im )
 
-        n_images = len(ims_to_average)
-        if n_images>=min_N:
+        n_images = len(coords_to_average)
+        if 1:
 
             # XXX this is not very efficient.
             to_av = np.array(ims_to_average)
@@ -577,7 +570,6 @@ def doit(h5_filename=None,
                                                        im_coords,
                                                        camn_pt_no_array,
                                                        N=stack_N_images,
-                                                       min_N=stack_N_images_min,
                                                        )
                     else:
                         results = flatten_image_stack( image_framenumbers,
@@ -585,7 +577,6 @@ def doit(h5_filename=None,
                                                        im_coords,
                                                        camn_pt_no_array,
                                                        N=stack_N_images,
-                                                       min_N=stack_N_images_min,
                                                        )
 
                     # The variable fno (the first element of the results
@@ -600,16 +591,6 @@ def doit(h5_filename=None,
                         av_im[av_im <= final_thresh] = 0
 
                         fail_fit = False
-                        if 0:
-
-                            # Connected components labels -- allow slope
-                            # fit if only one blob in image.
-
-                            av_im_binary = av_im > 0
-                            labels,n_labels = scipy.ndimage.label(av_im_binary)
-                            if n_labels != 1:
-                                fail_fit = True
-
                         fast_av_im = FastImage.asfastimage( av_im.astype(np.uint8) )
                         try:
                             (x0_roi, y0_roi, area, slope, eccentricity) = fpc.fit(
