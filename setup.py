@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 from distutils.core import Extension # actually monkey-patched by setuptools
-
+import sys
 
 # Make sure that some dependencies are installed
 try: 
@@ -11,7 +11,7 @@ except:
     print ("Try: ")
     print ("      pip install pyrex")
     print ("")
-    import sys; sys.exit(-1)
+    sys.exit(-1)
 
 
 # Set this to true to compile the extensions that depend on FastImage.
@@ -93,6 +93,7 @@ setup(name='flydra',
       author='Andrew Straw',
       author_email='strawman@astraw.com',
       description='multi-headed fly-tracking beast',
+      install_requires=['tables', 'adskalman'],
       packages = find_packages(),
       test_suite = 'nose.collector',
       ext_modules= ext_modules,
