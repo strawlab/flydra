@@ -23,8 +23,8 @@ except ImportError:
 LIGHT_INSTALL = False
 
 try:
-	 import motmot.FastImage.FastImage as FastImage
-except:
+    import motmot.FastImage.FastImage as FastImage
+except ImportError:
     print("I cannot import motmot.FastImage --- will do a light install without"\
           " compiling some extensions.\n")
     raw_input('Press any key to continue...')
