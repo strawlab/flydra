@@ -731,12 +731,12 @@ def doit(h5_filename=None,
                                                           color_rgba=(.5,1,.5,1))
                                         if show=='morphed':
                                             canv.text(
-                                                'morphed %d, shift: %.1f %.1f'%(
-                                                s_orig_idx-orig_idx,0,0),
+                                                'morphed %d'%(
+                                                s_orig_idx-orig_idx,),
                                                 display_rect[0],
-                                                (display_rect[1]+display_rect[3]+stack_margin),
+                                                (display_rect[1]+display_rect[3]+stack_margin-20),
                                                 font_size=font_size,
-                                                color_rgba=(1,1,1,1))
+                                                color_rgba=(1,0,0,1))
 
                             # Display raw_im
                             display_rect = (margin, margin,
