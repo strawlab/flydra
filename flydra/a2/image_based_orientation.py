@@ -507,7 +507,6 @@ def doit(h5_filename=None,
 
                 # Now, all the frames from all cameras for this obj_id
                 # have been gathered. Do a camera-by-camera analysis.
-
                 for camn in this_obj_absdiff_images:
                     cam_id = camn2cam_id[camn]
                     image_framenumbers = np.array(this_obj_framenumbers[camn])
@@ -823,13 +822,14 @@ def doit(h5_filename=None,
                                                       ):
                                 canv.imshow(morphed_clip.astype(np.uint8),
                                             raw_l,raw_b)
-                            canv.text( 'morphed',
-                                       display_rect[0],
-                                       display_rect[1]+display_rect[3],
-                                       font_size=font_size,
-                                       color_rgba=(.5,.5,.9,1),
-                                       shadow_offset=1,
-                                       )
+                            if 0:
+                                canv.text( 'morphed',
+                                           display_rect[0],
+                                           display_rect[1]+display_rect[3],
+                                           font_size=font_size,
+                                           color_rgba=(.5,.5,.9,1),
+                                           shadow_offset=1,
+                                           )
 
                             # Display time-averaged absdiff_im
                             display_rect = (5*margin+(scale*imw)*4, margin,
@@ -851,12 +851,14 @@ def doit(h5_filename=None,
                                        shadow_offset=1,
                                        )
 
-                            canv.text( '%s frame % 7d: eccentricity % 5.1f'%(
-                                cam_id,fno,eccentricity), 0, 15,
-                                       font_size=font_size,
-                                       color_rgba=(.6,.7,.9,1),
-                                       shadow_offset=1,
-                                       )
+                            canv.text(
+                                '%s frame % 7d: eccentricity % 5.1f, min N images %d, actual N images %d'%(
+                                cam_id,fno,eccentricity,stack_N_images_min,n_good_images),
+                                0, 15,
+                                font_size=font_size,
+                                color_rgba=(.6,.7,.9,1),
+                                shadow_offset=1,
+                                )
                             canv.save()
 
                 # Save results to new table
