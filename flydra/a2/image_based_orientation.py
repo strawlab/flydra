@@ -359,6 +359,7 @@ def doit(h5_filename=None,
                     this_obj_mean_images = collections.defaultdict(list)
                 this_obj_absdiff_images = collections.defaultdict(list)
                 this_obj_morphed_images = collections.defaultdict(list)
+                this_obj_morph_failures = collections.defaultdict(list)
                 this_obj_im_coords = collections.defaultdict(list)
                 this_obj_com_coords = collections.defaultdict(list)
                 this_obj_camn_pt_no = collections.defaultdict(list)
@@ -471,6 +472,8 @@ def doit(h5_filename=None,
                         if 1:
                             morphed_im_binary = morphed_im > 0
                             labels,n_labels = scipy.ndimage.label(morphed_im_binary)
+                            morph_fail_because_multiple_blobs = False
+
                             if n_labels > 1:
                                 x0,y0 = np.nan, np.nan
                                 # More than one blob -- don't allow image.
@@ -478,9 +481,11 @@ def doit(h5_filename=None,
                                     # for min flattening
                                     morphed_im = np.empty( morphed_im.shape, dtype=np.uint8 )
                                     morphed_im.fill(255)
+                                    morph_fail_because_multiple_blobs = True
                                 else:
                                     # for mean flattening
                                     morphed_im = np.zeros_like( morphed_im )
+                                    morph_fail_because_multiple_blobs = True
 
                         this_obj_framenumbers[camn].append( framenumber )
                         if save_images:
@@ -488,6 +493,7 @@ def doit(h5_filename=None,
                             this_obj_mean_images[camn].append(mean_im)
                         this_obj_absdiff_images[camn].append(absdiff_im)
                         this_obj_morphed_images[camn].append(morphed_im)
+                        this_obj_morph_failures[camn].append(morph_fail_because_multiple_blobs)
                         this_obj_im_coords[camn].append(im_coords)
                         this_obj_com_coords[camn].append( (x0,y0) )
                         this_obj_camn_pt_no[camn].append(orig_data2d_rownum)
@@ -510,6 +516,7 @@ def doit(h5_filename=None,
                         mean_images = this_obj_mean_images[camn]
                     absdiff_images = this_obj_absdiff_images[camn]
                     morphed_images = this_obj_morphed_images[camn]
+                    morph_failures = np.array(this_obj_morph_failures[camn])
                     im_coords = this_obj_im_coords[camn]
                     com_coords = this_obj_com_coords[camn]
                     camn_pt_no_array = this_obj_camn_pt_no[camn]
@@ -598,7 +605,20 @@ def doit(h5_filename=None,
                         except realtime_image_analysis.FitParamsError, err:
                             fail_fit = True
 
+                        this_morph_failures = morph_failures[orig_idxs_in_average]
+                        n_failed_images = np.sum( this_morph_failures)
+                        n_good_images = stack_N_images-n_failed_images
+                        if n_good_images >= stack_N_images_min:
+                            n_images_is_acceptable = True
+                        else:
+                            n_images_is_acceptable = False
+
                         if fail_fit:
+                            x0_roi = np.nan
+                            y0_roi = np.nan
+                            area, slope, eccentricity = np.nan, np.nan, np.nan
+
+                        if not n_images_is_acceptable:
                             x0_roi = np.nan
                             y0_roi = np.nan
                             area, slope, eccentricity = np.nan, np.nan, np.nan
