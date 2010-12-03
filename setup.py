@@ -3,16 +3,18 @@ from distutils.core import Extension # actually monkey-patched by setuptools
 import sys
 
 # Make sure that some dependencies are installed
-try: 
+try:
     # Copied from pytables's setup.py.
     from Pyrex.Distutils import build_ext
-except:
-    print ("Please install pyrex, I need it to compile some extensions.")
+except ImportError:
+    print ("Please install pyrex (or manually run cython on the .pyx files). "
+           "I need this to compile some extensions.")
     print ("Try: ")
     print ("      pip install pyrex")
     print ("")
-    sys.exit(-1)
-
+    print ("Type 'c' to continue without pyrex")
+    if raw_input('Press any key to continue...').lower() != 'c':
+        sys.exit(-1)
 
 # Set this to true to compile the extensions that depend on FastImage.
 # Those are not strictly necessary for running some of the analysis tools.
