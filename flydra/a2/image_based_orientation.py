@@ -219,7 +219,7 @@ def flatten_image_stack( image_framenumbers, ims,
 
             coords_to_average = np.array(coords_to_average)
             mean_lowerleft = np.mean( coords_to_average[:,:2], axis=0)
-            results.append( (center_fno, av_im, n_images,
+            results.append( (center_fno, av_im,
                              mean_lowerleft, camn_pt_no, center_idx,
                              orig_idxs_in_average) )
     return results
@@ -583,7 +583,7 @@ def doit(h5_filename=None,
                     # tuple) is guaranteed to be contiguous and to span
                     # the range from the first to last frames available.
 
-                    for (fno, av_im, n_images_in_stack, lowerleft,
+                    for (fno, av_im, lowerleft,
                          orig_data2d_rownum, orig_idx,
                          orig_idxs_in_average) in results:
 
@@ -652,7 +652,7 @@ def doit(h5_filename=None,
                             SHOW_STACK=True
                             if SHOW_STACK:
                                 n_stack_rows = 4
-                                rw = scale*imw*n_images_in_stack + (1+n_ims)*margin
+                                rw = scale*imw*stack_N_images + (1+n_ims)*margin
                                 row_width = max(top_row_width,rw)
                                 col_height = (n_stack_rows*scale*imh +
                                               (n_stack_rows+1)*margin)
