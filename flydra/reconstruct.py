@@ -9,7 +9,7 @@ from flydra.common_variables import MINIMUM_ECCENTRICITY as DEFAULT_MINIMUM_ECCE
 import scipy.linalg
 import traceback
 import flydra.pmat_jacobian
-import flydra.talign
+#import flydra.talign
 import xml.etree.ElementTree as ET
 import StringIO, warnings
 import cgtypes
@@ -493,6 +493,8 @@ class SingleCameraCalibration:
     def get_aligned_copy(self, M):
         if self.scale_factor != 1.0:
             warnings.warn('aligning calibration without unity scale')
+            
+        import flydra.talign
         aligned_Pmat = flydra.talign.align_pmat(M,self.Pmat)
         aligned = SingleCameraCalibration(cam_id=self.cam_id,
                                           Pmat=aligned_Pmat,

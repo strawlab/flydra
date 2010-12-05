@@ -216,31 +216,6 @@ def generate_point_cloud(full_info,n_pts = 200):
         }
     return results
 
-config_template = """[Files]
-Basename: %(basename)s
-Image-Extension: jpg
-
-[Images]
-Subpix: 0.5
-
-[Calibration]
-Num-Cameras: %(num_cameras)s
-Num-Projectors: 0
-Nonlinear-Parameters: 30    0    1    0    0    0
-Nonlinear-Update: 1   0   1   0   0   0
-Initial-Tolerance: 10
-Do-Global-Iterations: 0
-Global-Iteration-Threshold: 0.5
-Global-Iteration-Max: 100
-Num-Cameras-Fill: 2
-Do-Bundle-Adjustment: 1
-Undo-Radial: %(undo_radial_int)s
-Min-Points-Value: 30
-N-Tuples: 3
-Square-Pixels: %(square_pixels_int)s
-Use-Nth-Frame: 5
-"""
-
 def test(calib_dir=None,radial_distortion=True,square_pixels=True):
     """generate a fake calibration and save it.
 
@@ -275,24 +250,10 @@ def test(calib_dir=None,radial_distortion=True,square_pixels=True):
                                                   Res=Res,
                                                   calib_dir=calib_dir,
                                                   cam_ids=cam_ids,
+                                                  radial_distortion=radial_distortion,
+                                                  square_pixels=square_pixels,
+                                                  reconstructor=full_info['reconstructor'],
                                                   )
-        if radial_distortion:
-            for i, cam_id in enumerate(cam_ids):
-                fname = '%s%d.rad'%(basename,i+1)
-                scc = full_info['reconstructor'].get_SingleCameraCalibration(cam_id)
-                scc.helper.save_to_rad_file( os.path.join(calib_dir,fname) )
-
-        vars = dict(
-            abs_path_calib_dir = os.path.abspath(calib_dir)+'/',
-            basename = basename,
-            num_cameras = len(cam_ids),
-            undo_radial_int = int(radial_distortion),
-            square_pixels_int = int(square_pixels),
-            )
-
-        fd = open( os.path.join(calib_dir,'multicamselfcal.cfg'), mode='w' )
-        fd.write( config_template % vars )
-        fd.close()
 
 if __name__=='__main__':
     test(calib_dir='test_cal_dir',radial_distortion=True)

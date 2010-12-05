@@ -180,11 +180,10 @@ def plot_image_subregion(raw_im, mean_im, absdiff_im,
 
 def flatten_image_stack( image_framenumbers, ims,
                          im_coords, camn_pt_no_array,
-                         N=None,
-                         min_N=None ):
+                         N=None ):
     """take a stack of several images and flatten by finding min pixel"""
-    if N is None or min_N is None:
-        raise ValueError('N and min_N must be specified')
+    if N is None:
+        raise ValueError('N must be specified')
     assert np.all( (image_framenumbers[1:]-image_framenumbers[:-1])
                    > 0 )
     all_framenumbers = np.arange(image_framenumbers[0],
@@ -193,9 +192,6 @@ def flatten_image_stack( image_framenumbers, ims,
 
     assert N%2==1
     offset = N//2
-
-    nan_im = np.ndarray(ims[0].shape, dtype=np.float)
-    nan_im.fill(np.nan)
 
     results = []
     for center_fno in range( offset, len(all_framenumbers)-offset):
@@ -211,12 +207,9 @@ def flatten_image_stack( image_framenumbers, ims,
                 orig_idxs_in_average.append(idx)
                 ims_to_average.append( ims[idx] )
                 coords_to_average.append( im_coords[idx] )
-            ## else:
-            ##     #print 'failed to find image %d'%fno
-            ##     ims_to_average.append( nan_im )
 
-        n_images = len(ims_to_average)
-        if n_images>=min_N:
+        n_images = len(coords_to_average)
+        if 1:
 
             # XXX this is not very efficient.
             to_av = np.array(ims_to_average)
@@ -226,7 +219,7 @@ def flatten_image_stack( image_framenumbers, ims,
 
             coords_to_average = np.array(coords_to_average)
             mean_lowerleft = np.mean( coords_to_average[:,:2], axis=0)
-            results.append( (center_fno, av_im, n_images,
+            results.append( (center_fno, av_im,
                              mean_lowerleft, camn_pt_no, center_idx,
                              orig_idxs_in_average) )
     return results
@@ -366,6 +359,7 @@ def doit(h5_filename=None,
                     this_obj_mean_images = collections.defaultdict(list)
                 this_obj_absdiff_images = collections.defaultdict(list)
                 this_obj_morphed_images = collections.defaultdict(list)
+                this_obj_morph_failures = collections.defaultdict(list)
                 this_obj_im_coords = collections.defaultdict(list)
                 this_obj_com_coords = collections.defaultdict(list)
                 this_obj_camn_pt_no = collections.defaultdict(list)
@@ -478,6 +472,8 @@ def doit(h5_filename=None,
                         if 1:
                             morphed_im_binary = morphed_im > 0
                             labels,n_labels = scipy.ndimage.label(morphed_im_binary)
+                            morph_fail_because_multiple_blobs = False
+
                             if n_labels > 1:
                                 x0,y0 = np.nan, np.nan
                                 # More than one blob -- don't allow image.
@@ -485,9 +481,11 @@ def doit(h5_filename=None,
                                     # for min flattening
                                     morphed_im = np.empty( morphed_im.shape, dtype=np.uint8 )
                                     morphed_im.fill(255)
+                                    morph_fail_because_multiple_blobs = True
                                 else:
                                     # for mean flattening
                                     morphed_im = np.zeros_like( morphed_im )
+                                    morph_fail_because_multiple_blobs = True
 
                         this_obj_framenumbers[camn].append( framenumber )
                         if save_images:
@@ -495,6 +493,7 @@ def doit(h5_filename=None,
                             this_obj_mean_images[camn].append(mean_im)
                         this_obj_absdiff_images[camn].append(absdiff_im)
                         this_obj_morphed_images[camn].append(morphed_im)
+                        this_obj_morph_failures[camn].append(morph_fail_because_multiple_blobs)
                         this_obj_im_coords[camn].append(im_coords)
                         this_obj_com_coords[camn].append( (x0,y0) )
                         this_obj_camn_pt_no[camn].append(orig_data2d_rownum)
@@ -508,7 +507,6 @@ def doit(h5_filename=None,
 
                 # Now, all the frames from all cameras for this obj_id
                 # have been gathered. Do a camera-by-camera analysis.
-
                 for camn in this_obj_absdiff_images:
                     cam_id = camn2cam_id[camn]
                     image_framenumbers = np.array(this_obj_framenumbers[camn])
@@ -517,6 +515,7 @@ def doit(h5_filename=None,
                         mean_images = this_obj_mean_images[camn]
                     absdiff_images = this_obj_absdiff_images[camn]
                     morphed_images = this_obj_morphed_images[camn]
+                    morph_failures = np.array(this_obj_morph_failures[camn])
                     im_coords = this_obj_im_coords[camn]
                     com_coords = this_obj_com_coords[camn]
                     camn_pt_no_array = this_obj_camn_pt_no[camn]
@@ -577,7 +576,6 @@ def doit(h5_filename=None,
                                                        im_coords,
                                                        camn_pt_no_array,
                                                        N=stack_N_images,
-                                                       min_N=stack_N_images_min,
                                                        )
                     else:
                         results = flatten_image_stack( image_framenumbers,
@@ -585,14 +583,13 @@ def doit(h5_filename=None,
                                                        im_coords,
                                                        camn_pt_no_array,
                                                        N=stack_N_images,
-                                                       min_N=stack_N_images_min,
                                                        )
 
                     # The variable fno (the first element of the results
                     # tuple) is guaranteed to be contiguous and to span
                     # the range from the first to last frames available.
 
-                    for (fno, av_im, n_images_in_stack, lowerleft,
+                    for (fno, av_im, lowerleft,
                          orig_data2d_rownum, orig_idx,
                          orig_idxs_in_average) in results:
 
@@ -600,16 +597,6 @@ def doit(h5_filename=None,
                         av_im[av_im <= final_thresh] = 0
 
                         fail_fit = False
-                        if 0:
-
-                            # Connected components labels -- allow slope
-                            # fit if only one blob in image.
-
-                            av_im_binary = av_im > 0
-                            labels,n_labels = scipy.ndimage.label(av_im_binary)
-                            if n_labels != 1:
-                                fail_fit = True
-
                         fast_av_im = FastImage.asfastimage( av_im.astype(np.uint8) )
                         try:
                             (x0_roi, y0_roi, area, slope, eccentricity) = fpc.fit(
@@ -617,7 +604,20 @@ def doit(h5_filename=None,
                         except realtime_image_analysis.FitParamsError, err:
                             fail_fit = True
 
+                        this_morph_failures = morph_failures[orig_idxs_in_average]
+                        n_failed_images = np.sum( this_morph_failures)
+                        n_good_images = stack_N_images-n_failed_images
+                        if n_good_images >= stack_N_images_min:
+                            n_images_is_acceptable = True
+                        else:
+                            n_images_is_acceptable = False
+
                         if fail_fit:
+                            x0_roi = np.nan
+                            y0_roi = np.nan
+                            area, slope, eccentricity = np.nan, np.nan, np.nan
+
+                        if not n_images_is_acceptable:
                             x0_roi = np.nan
                             y0_roi = np.nan
                             area, slope, eccentricity = np.nan, np.nan, np.nan
@@ -671,7 +671,7 @@ def doit(h5_filename=None,
                             SHOW_STACK=True
                             if SHOW_STACK:
                                 n_stack_rows = 4
-                                rw = scale*imw*n_images_in_stack + (1+n_ims)*margin
+                                rw = scale*imw*stack_N_images + (1+n_ims)*margin
                                 row_width = max(top_row_width,rw)
                                 col_height = (n_stack_rows*scale*imh +
                                               (n_stack_rows+1)*margin)
@@ -750,12 +750,12 @@ def doit(h5_filename=None,
                                                           color_rgba=(.5,1,.5,1))
                                         if show=='morphed':
                                             canv.text(
-                                                'morphed %d, shift: %.1f %.1f'%(
-                                                s_orig_idx-orig_idx,0,0),
+                                                'morphed %d'%(
+                                                s_orig_idx-orig_idx,),
                                                 display_rect[0],
-                                                (display_rect[1]+display_rect[3]+stack_margin),
+                                                (display_rect[1]+display_rect[3]+stack_margin-20),
                                                 font_size=font_size,
-                                                color_rgba=(1,1,1,1))
+                                                color_rgba=(1,0,0,1))
 
                             # Display raw_im
                             display_rect = (margin, margin,
@@ -822,13 +822,14 @@ def doit(h5_filename=None,
                                                       ):
                                 canv.imshow(morphed_clip.astype(np.uint8),
                                             raw_l,raw_b)
-                            canv.text( 'morphed',
-                                       display_rect[0],
-                                       display_rect[1]+display_rect[3],
-                                       font_size=font_size,
-                                       color_rgba=(.5,.5,.9,1),
-                                       shadow_offset=1,
-                                       )
+                            if 0:
+                                canv.text( 'morphed',
+                                           display_rect[0],
+                                           display_rect[1]+display_rect[3],
+                                           font_size=font_size,
+                                           color_rgba=(.5,.5,.9,1),
+                                           shadow_offset=1,
+                                           )
 
                             # Display time-averaged absdiff_im
                             display_rect = (5*margin+(scale*imw)*4, margin,
@@ -850,12 +851,14 @@ def doit(h5_filename=None,
                                        shadow_offset=1,
                                        )
 
-                            canv.text( '%s frame % 7d: eccentricity % 5.1f'%(
-                                cam_id,fno,eccentricity), 0, 15,
-                                       font_size=font_size,
-                                       color_rgba=(.6,.7,.9,1),
-                                       shadow_offset=1,
-                                       )
+                            canv.text(
+                                '%s frame % 7d: eccentricity % 5.1f, min N images %d, actual N images %d'%(
+                                cam_id,fno,eccentricity,stack_N_images_min,n_good_images),
+                                0, 15,
+                                font_size=font_size,
+                                color_rgba=(.6,.7,.9,1),
+                                shadow_offset=1,
+                                )
                             canv.save()
 
                 # Save results to new table
