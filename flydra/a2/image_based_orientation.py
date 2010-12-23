@@ -215,10 +215,14 @@ def flatten_image_stack( image_framenumbers, ims,
             to_av = np.array(ims_to_average)
             ## print 'fno %d: min %.1f max %.1f'%(center_fno, to_av.min(), to_av.max())
             #av_im = np.mean( to_av, axis=0 )
-            av_im = np.min( to_av, axis=0 )
 
-            coords_to_average = np.array(coords_to_average)
-            mean_lowerleft = np.mean( coords_to_average[:,:2], axis=0)
+            if to_av.shape == (0,):
+                av_im = np.zeros( (2,2), dtype=np.uint8 ) # just create a small blank image
+                mean_lowerleft = np.array( [np.nan, np.nan] )
+            else:
+                av_im = np.min( to_av, axis=0 )
+                coords_to_average = np.array(coords_to_average)
+                mean_lowerleft = np.mean( coords_to_average[:,:2], axis=0)
             results.append( (center_fno, av_im,
                              mean_lowerleft, camn_pt_no, center_idx,
                              orig_idxs_in_average) )
@@ -571,6 +575,7 @@ def doit(h5_filename=None,
                         shifted_morphed_images = [shift_image( im, xy ) for im,xy in
                                                   zip(morphed_images,image_shift)]
 
+                        print 'camn',camn,'*'*80
                         results = flatten_image_stack( image_framenumbers,
                                                        shifted_morphed_images,
                                                        im_coords,
