@@ -575,7 +575,6 @@ def doit(h5_filename=None,
                         shifted_morphed_images = [shift_image( im, xy ) for im,xy in
                                                   zip(morphed_images,image_shift)]
 
-                        print 'camn',camn,'*'*80
                         results = flatten_image_stack( image_framenumbers,
                                                        shifted_morphed_images,
                                                        im_coords,
