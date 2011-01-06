@@ -8,29 +8,34 @@ Estimating orientations with flydra
   strict digraph {
     animals -> onlinePosOri2D;
     animals -> ufmfs;
-    onlinePosOri2D -> ufmfs -> imageOri2D -> Ori3D;
+    onlinePosOri2D -> ufmfs;
+    ufmfs -> IBO [ arrowhead="none"];
+    imageOri2D -> OEF [ arrowhead="none"];
     onlinePosOri2D -> retrackedPos2D;
     ufmfs -> retrackedPos2D;
     onlinePosOri2D -> ekfPos3D;
     calib -> onlineOri3D;
-    calib -> Ori3D;
+    calib -> OEF [ arrowhead="none"];
     calib -> ekfPos3D;
-    calib -> imageOri2D;
-    ekfPos3D -> Ori3D;
-    ekfPos3D -> Ori3D;
-    ekfPos3D -> imageOri2D;
+    calib -> IBO [ arrowhead="none"];
+    ekfPos3D -> OEF [ arrowhead="none"];
+    OEF -> Ori3D;
+    ekfPos3D -> IBO [ arrowhead="none"];
+    IBO -> imageOri2D;
     onlinePosOri2D -> onlineOri3D;
 
     animals [label="experiment"];
     //    onlinePos2D [label="online 2D position estimation"];
     ufmfs [label="saved images (.ufmf)",style=filled];
     imageOri2D [label="image based 2D orientation"];
+    IBO [ label = "image_based_orientation", style=filled,color=white ];
+    OEF [ label = "orientation_ekf_fitter", style=filled,color=white ];
     Ori3D [label="3D orientation"];
     calib [label="calibration"];
     ekfPos3D [label="EKF based 3D position"];
     onlineOri3D [label="online 3D orientation"];
     onlinePosOri2D [label="online 2D position and orientation",style=filled];
-  } 
+  }
 
 Contents:
 
