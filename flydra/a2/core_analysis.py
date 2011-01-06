@@ -1864,6 +1864,7 @@ class CachingAnalyzer:
                                use_kalman_smoothing=True,
                                frames_per_second=frames_per_second,
                                dynamic_model_name=dynamic_model_name,
+                               return_smoothed_directions = True,
                                )
         results = {}
         results['kalman_smoothed_rows'] = rows

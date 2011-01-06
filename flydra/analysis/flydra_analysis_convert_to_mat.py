@@ -80,6 +80,11 @@ def do_it(filename=None,
                  kalman_xvel = table1['xvel'],
                  kalman_yvel = table1['yvel'],
                  kalman_zvel = table1['zvel'])
+
+    if 'dir_x' in table1.dtype.fields:
+        for d in ('dir_x','dir_y','dir_z'):
+            data[d] = table1[d]
+
     if 'xaccel' in table1:
         # acceleration state not in newer dynamic models
         dict2 = dict(
