@@ -81,6 +81,12 @@ def do_it(filename=None,
                  kalman_yvel = table1['yvel'],
                  kalman_zvel = table1['zvel'])
 
+    # save (un-smoothed) orientation data if available
+    if 'rawdir_x' in table1.dtype.fields:
+        for d in ('rawdir_x','rawdir_y','rawdir_z'):
+            data[d] = table1[d]
+
+    # save smoothed orientation data if available
     if 'dir_x' in table1.dtype.fields:
         for d in ('dir_x','dir_y','dir_z'):
             data[d] = table1[d]
