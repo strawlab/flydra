@@ -27,7 +27,6 @@ def get_cam_id_from_ufmf_fname(ufmf_fname):
 
 def iterate_frames(h5_filename,
                    ufmf_fnames, # or fmfs
-                   reconstructor=None,
                    white_background=False,
                    max_n_frames = None,
                    start = None,

@@ -111,7 +111,6 @@ def make_montage( h5_filename,
     all_frame_montages = []
     for frame_enum,(frame_dict,frame) in enumerate(ufmf_tools.iterate_frames(
         h5_filename, movie_fnames,
-        reconstructor = reconstructor,
         movie_cam_ids = movie_cam_ids,
         white_background=config['what to show']['white_background'],
         max_n_frames = max_n_frames,
