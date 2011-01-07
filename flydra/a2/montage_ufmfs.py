@@ -9,7 +9,8 @@ import flydra.a2.utils as utils
 import flydra.analysis.result_utils as result_utils
 import subprocess, collections
 import flydra.a2.ufmf_tools as ufmf_tools
-import flydra.reconstruct
+import flydra.a2.core_analysis as core_analysis
+import flydra.reconstruct as reconstruct
 import cherrypy  # ubuntu: install python-cherrypy3
 import benu
 
@@ -19,6 +20,10 @@ def get_config_defaults():
     # keep in sync with usage in main() below
     what = {'show_2d_position': False,
             'show_2d_orientation': False,
+            #'show_3d_MLE_position': False,
+            'show_3d_smoothed_position': False,
+            #'show_3d_raw_orientation': False,
+            'show_3d_smoothed_orientation': False,
             'white_background': False,
             'max_resolution': None,
             }
@@ -42,6 +47,39 @@ def montage(fnames, title, target):
     #print CMD
     subprocess.check_call(CMD,shell=True)
 
+def load_3d_data(kalman_filename):
+    with openFileSafe( kalman_filename, mode='r' ) as kh5:
+        ca = core_analysis.get_global_CachingAnalyzer()
+        all_obj_ids, obj_ids, is_mat_file, data_file, extra = \
+                     ca.initial_file_load(kalman_filename)
+        fps = extra['frames_per_second']
+        dynamic_model_name = None
+        if dynamic_model_name is None:
+            dynamic_model_name = extra.get('dynamic_model_name',None)
+            if dynamic_model_name is None:
+                dynamic_model_name = 'fly dynamics, high precision calibration, units: mm'
+                warnings.warn('no dynamic model specified, using "%s"'%dynamic_model_name)
+            else:
+                print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
+            if dynamic_model_name.startswith('EKF '):
+                dynamic_model_name = dynamic_model_name[4:]
+            print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
+        allrows = []
+        for obj_id in obj_ids:
+            try:
+                rows = ca.load_data( obj_id, kalman_filename,
+                                     use_kalman_smoothing=True,
+                                     frames_per_second=fps,
+                                     dynamic_model_name=dynamic_model_name,
+                                     return_smoothed_directions = True,
+                                     )
+            except core_analysis.NotEnoughDataToSmoothError:
+                warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
+                continue
+            allrows.append( rows )
+    data3d = np.concatenate(allrows)
+    return data3d
+
 def make_montage( h5_filename,
                   cfg_filename=None,
                   ufmf_dir=None,
@@ -51,11 +89,11 @@ def make_montage( h5_filename,
                   max_n_frames = None,
                   start = None,
                   stop = None,
-                  reconstructor_source = None,
                   movie_fnames = None,
                   movie_cam_ids = None,
                   caminfo_h5_filename = None,
                   colormap = None,
+                  kalman_filename = None,
                   ):
     config = get_config_defaults()
     if cfg_filename is not None:
@@ -64,6 +102,19 @@ def make_montage( h5_filename,
             config[section].update( loaded_cfg.get(section,{}) )
     else:
         warning.warn('no configuration file specified -- using defaults')
+
+    orientation_3d_line_length = 0.1
+
+    if (config['what to show']['show_3d_smoothed_position'] or
+        config['what to show']['show_3d_smoothed_orientation']):
+        if kalman_filename is None:
+            raise ValueError('need kalman filename to show requested 3D data')
+
+    if kalman_filename is not None:
+        data3d = load_3d_data(kalman_filename)
+        R = reconstruct.Reconstructor(kalman_filename)
+    else:
+        data3d = R = None
 
     if movie_fnames is None:
         movie_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
@@ -90,14 +141,8 @@ def make_montage( h5_filename,
 
     workaround_ffmpeg2theora_bug = True
 
-    if reconstructor_source is None:
-        reconstructor_source = h5_filename
-
-    try:
-        reconstructor = flydra.reconstruct.Reconstructor(
-            reconstructor_source)
-    except:
-        reconstructor = None
+    if caminfo_h5_filename is None:
+        caminfo_h5_filename = h5_filename
 
     if caminfo_h5_filename is not None:
         with openFileSafe( caminfo_h5_filename, mode='r' ) as h5:
@@ -120,6 +165,9 @@ def make_montage( h5_filename,
         camn2cam_id = camn2cam_id,
         )):
         tracker_data = frame_dict['tracker_data']
+
+        if data3d is not None:
+            this_frame_3d_data = data3d[data3d['frame']==frame]
 
         if (frame_enum%100)==0:
             print '%s: frame %d'%(datetime_str,frame)
@@ -207,6 +255,33 @@ def make_montage( h5_filename,
                         canv.plot([x-xi,x+xi],[y-yi,y+yi],
                                   color_rgba=(0,1,0,0.4),
                                   )
+                if config['what to show']['show_3d_smoothed_position'] and camn is not None:
+                    if len(this_frame_3d_data):
+                        cam_id = camn2cam_id[camn]
+                        X = np.array([this_frame_3d_data['x'], this_frame_3d_data['y'], this_frame_3d_data['z'], np.ones_like(this_frame_3d_data['x'])]).T
+                        xarr,yarr = R.find2d( cam_id, X, distorted = True )
+                        canv.scatter(xarr, yarr,
+                                     color_rgba=(0,0,0,1),
+                                     radius=10,
+                                     )
+                        canv.scatter(xarr+1, yarr+1,
+                                     color_rgba=(1,1,1,1),
+                                     radius=10,
+                                     )
+
+                if config['what to show']['show_3d_smoothed_orientation'] and camn is not None:
+                    if len(this_frame_3d_data):
+                        cam_id = camn2cam_id[camn]
+                        for row in this_frame_3d_data:
+                            X0 = np.array([row['x'], row['y'], row['z'], np.ones_like(row['x'])]).T
+                            dx = np.array([row['dir_x'], row['dir_y'], row['dir_z'], np.zeros_like(row['x'])]).T
+                            X1 = X0 + dx*orientation_3d_line_length
+                            pts = np.vstack( [X0, X1] )
+                            xarr,yarr = R.find2d( cam_id, pts, distorted = True )
+                            canv.plot(xarr, yarr,
+                                      color_rgba=(1,0,0,1), # red
+                                      )
+
                 if workaround_ffmpeg2theora_bug:
                     # first frame should get a colored pixel so that
                     # ffmpeg doesn't interpret the whole move as grayscale
@@ -252,6 +327,8 @@ The default configuration correspondes to a config file:
 [what to show]
 show_2d_position = False
 show_2d_orientation = False
+show_3d_smoothed_position = False
+show_3d_smoothed_orientation = False
 white_background =  False
 max_resolution = None
 
@@ -267,6 +344,10 @@ transform='rot 180' # rotate the image 180 degrees (See transform
 """
 
     parser = OptionParser(usage)
+
+    parser.add_option('-k', "--kalman-file", dest="kalman_filename",
+                      type='string',
+                      help=".h5 file with 3D kalman data and 3D reconstructor")
 
     parser.add_option("--dest-dir", type='string',
                       help="destination directory to save resulting files")
@@ -300,10 +381,6 @@ transform='rot 180' # rotate the image 180 degrees (See transform
 
     parser.add_option('--colormap', type='string', default=None)
 
-    parser.add_option(
-        "-r", "--reconstructor",type='string',
-        help="calibration/reconstructor path")
-
     parser.add_option( "--caminfo-h5-filename", type="string",
                        help="path of h5 file from which to load caminfo")
 
@@ -323,6 +400,7 @@ transform='rot 180' # rotate the image 180 degrees (See transform
 
     h5_filename = args[0]
     make_montage( h5_filename,
+                  kalman_filename = options.kalman_filename,
                   cfg_filename = options.config,
                   ufmf_dir = options.ufmf_dir,
                   dest_dir = options.dest_dir,
@@ -331,7 +409,6 @@ transform='rot 180' # rotate the image 180 degrees (See transform
                   max_n_frames = options.max_n_frames,
                   start = options.start,
                   stop = options.stop,
-                  reconstructor_source = options.reconstructor,
                   movie_fnames = movie_fnames,
                   movie_cam_ids = movie_cam_ids,
                   caminfo_h5_filename = options.caminfo_h5_filename,
