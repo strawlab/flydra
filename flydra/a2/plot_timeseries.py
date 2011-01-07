@@ -200,6 +200,7 @@ def plot_timeseries(subplot=None,options = None):
                 kalman_rows =  ca.load_data( obj_id, data_file,
                                              use_kalman_smoothing=use_kalman_smoothing,
                                              dynamic_model_name = dynamic_model,
+                                             return_smoothed_directions = options.smooth_orientations,
                                              frames_per_second=fps,
                                              up_dir=options.up_dir,
                                              min_ori_quality_required=options.ori_qual,
@@ -208,6 +209,9 @@ def plot_timeseries(subplot=None,options = None):
                 continue
             #kobs_rows = ca.load_dynamics_free_MLE_position( obj_id, data_file )
         else:
+            if options.show_3d_orientations:
+                raise NotImplementedError('orientation data is not supported '
+                                          'when fusing obj_ids')
             if fuse_did_once:
                 break
             fuse_did_once = True
@@ -274,6 +278,16 @@ def plot_timeseries(subplot=None,options = None):
             Xy = kalman_rows['y']
             Xz = kalman_rows['z']
 
+            Dx = Dy = Dz = None
+            if options.smooth_orientations:
+                Dx = kalman_rows['dir_x']
+                Dy = kalman_rows['dir_y']
+                Dz = kalman_rows['dir_z']
+            elif 'rawdir_x' in kalman_rows.dtype.fields:
+                Dx = kalman_rows['rawdir_x']
+                Dy = kalman_rows['rawdir_y']
+                Dz = kalman_rows['rawdir_z']
+
             if not options.frames:
                 f2t = Frames2Time(frame0,fps,time0)
             else:
@@ -331,6 +345,12 @@ def plot_timeseries(subplot=None,options = None):
                 #bins = np.linspace(0,.8,30)
                 #print 'Xz.shape',Xz.shape
                 #pylab.hist(Xz, bins=bins)
+
+            for (dir_var,Dd) in [('dx',Dx),('dy',Dy),('dz',Dz)]:
+                if dir_var in subplot:
+                    line,=subplot[dir_var].plot( f2t(frame), Dd, label='obj %d (%s)'%(obj_id,flystate),**kws )
+                    line2obj_id[line]=obj_id
+                    kws['color'] = line.get_color()
 
             if numpy.__version__ >= '1.2.0':
                 X = numpy.ma.array((Xx,Xy,Xz))
@@ -432,6 +452,14 @@ def plot_timeseries(subplot=None,options = None):
         else:
             subplot['z'].set_xlabel(xlabel)
 
+    for dir_var in ['dx','dy','dz']:
+        if dir_var in subplot:
+            subplot[dir_var].set_ylabel(dir_var)
+            if time0 != 0.0:
+                fixup_ax(subplot[dir_var])
+            else:
+                subplot[dir_var].set_xlabel(xlabel)
+
     if 'z_hist' in subplot:# and flystate=='flying':
         Xz_all = np.hstack(Xz_all)
         bins = np.linspace(0,.8,30)
@@ -496,7 +524,10 @@ def doit(
 
     ax = None
     subplot ={}
-    subplots = ['x','y','z','xy_vel','vel','accel','frame']
+    if options.show_3d_orientations:
+        subplots = ['x','y','z','dx','dy','dz']
+    else:
+        subplots = ['x','y','z','xy_vel','vel','accel','frame']
     #subplots = ['x','y','z','vel','accel']
     for i, name in enumerate(subplots):
         ax = fig.add_subplot(len(subplots),1,i+1,sharex=ax)
@@ -577,6 +608,14 @@ def main():
 
     parser.add_option("--ori-qual", type='float', default=None,
                       help=('minimum orientation quality to use'))
+
+    parser.add_option("--smooth-orientations", action='store_true',
+                      help="if displaying orientations, use smoothed data",
+                      default=False)
+
+    parser.add_option("--show-3d-orientations", action='store_true',
+                      help="show orientation data?",
+                      default=False)
 
     (options, args) = parser.parse_args()
 
