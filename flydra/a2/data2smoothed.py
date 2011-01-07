@@ -19,7 +19,7 @@ def cam_id2hostname(cam_id):
 
 def convert(infilename,
             outfilename,
-            frames_per_second=100.0,
+            frames_per_second=None,
             save_timestamps=True,
             file_time_data=None,
             do_nothing=False, # set to true to test for file existance
@@ -140,6 +140,8 @@ def convert(infilename,
 
     ca = core_analysis.get_global_CachingAnalyzer()
     all_obj_ids, obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(infilename)
+    if frames_per_second is None:
+        frames_per_second = extra['frames_per_second']
     if dynamic_model_name is None:
         dynamic_model_name = extra.get('dynamic_model_name',None)
         if dynamic_model_name is None:
