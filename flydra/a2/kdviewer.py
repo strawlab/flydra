@@ -1294,7 +1294,7 @@ def main():
                       default=False)
 
     parser.add_option("--smooth-orientations", action='store_true',
-                      help="smoothe orientations",
+                      help="display smoothed orientations",
                       default=False)
 
     parser.add_option("--body-axis", action='store_true',
