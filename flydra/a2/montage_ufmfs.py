@@ -101,7 +101,7 @@ def make_montage( h5_filename,
         for section in loaded_cfg:
             config[section].update( loaded_cfg.get(section,{}) )
     else:
-        warning.warn('no configuration file specified -- using defaults')
+        warnings.warn('no configuration file specified -- using defaults')
 
     orientation_3d_line_length = 0.1
 
