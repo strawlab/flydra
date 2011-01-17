@@ -3,7 +3,7 @@
 from __future__ import division
 import tables
 
-# pytables files stored using Numeric would by default return Numeric-based results. 
+# pytables files stored using Numeric would by default return Numeric-based results.
 # We want to force those results to be returned as numpy recarrays.
 # Note that we need to keep "python" in the flavors list, otherwise
 # pytables breaks.
@@ -40,7 +40,7 @@ def rotate_vec(q,v):
 
     # qv = cgtypes.quat(0, *v) # make quaternion from vector with w=0
     qv = cgtypes.quat(0, v[0], v[1], v[2]) # make quaternion from vector with w=0
-    
+
     qresult = q*qv*q.inverse()
     return cgtypes.vec3( qresult.x, qresult.y, qresult.z )
 
@@ -1230,7 +1230,7 @@ class CachingAnalyzer:
      user code is optional for backwards compatibility. However, if a
      CachingAnalyzer instance does it, that instance will maintain a
      strong reference to the data file, perhaps resulting in large
-     memeory consumption.)
+     memory consumption.)
 
      2. get traces with CachingAnalyzer.load_data() (for kalman data)
      or CachingAnalyzer.load_dynamics_free_MLE_position() (for maximum
