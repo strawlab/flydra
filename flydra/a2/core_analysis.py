@@ -217,14 +217,23 @@ def _initial_file_load(filename):
         # XXX probably need to add time_model computation here
     else:
         kresults = tables.openFile(filename,mode='r')
-        try:
-            extra['frames_per_second'] = flydra.analysis.result_utils.get_fps(
-                kresults)
-        except tables.NoSuchNodeError:
-            pass
-        obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
-        extra['frames'] = kresults.root.kalman_estimates.read(field='frame')
-        unique_obj_ids = numpy.unique(obj_ids)
+        extra['frames_per_second'] = flydra.analysis.result_utils.get_fps(
+            kresults, fail_on_error=False)
+        textlog = kresults.root.textlog.readCoordinates([0])
+        infostr = textlog['message'].tostring().strip('\x00')
+        header = flydra.analysis.result_utils.read_textlog_header(
+            kresults, fail_on_error=False)
+        extra['header'] = header
+        if hasattr(kresults.root,'kalman_estimates'):
+            obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
+            extra['frames'] = kresults.root.kalman_estimates.read(field='frame')
+            unique_obj_ids = numpy.unique(obj_ids)
+            if hasattr(kresults.root.kalman_estimates.attrs,'dynamic_model_name'):
+                extra['dynamic_model_name'] = (
+                    kresults.root.kalman_estimates.attrs.dynamic_model_name)
+        else:
+            obj_ids = None
+            unique_obj_ids = None
         is_mat_file = False
         data_file = kresults
         extra['kresults'] = kresults
@@ -238,9 +247,6 @@ def _initial_file_load(filename):
             else:
                 if time_model is not None:
                     extra['time_model'] = time_model
-        if hasattr(kresults.root.kalman_estimates.attrs,'dynamic_model_name'):
-            extra['dynamic_model_name'] = (
-                kresults.root.kalman_estimates.attrs.dynamic_model_name)
     return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
 
 def kalman_smooth(orig_rows,
