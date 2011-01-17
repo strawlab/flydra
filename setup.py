@@ -117,6 +117,7 @@ setup(name='flydra',
     'flydra_analysis_overlay_kalman_movie = flydra.a2.overlay_kalman_movie:main',
 
 # analysis - .h5 file care and feeding
+    'flydra_analysis_print_h5_info = flydra.a2.h5_info:cmdline',
     'flydra_analysis_filter_kalman_data = flydra.analysis.flydra_analysis_filter_kalman_data:main',
     'flydra_analysis_h5_shorten = flydra.a2.h5_shorten:main',
     'flydra_analysis_check_sync = flydra.kalman.kalmanize:check_sync',
