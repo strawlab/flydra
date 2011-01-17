@@ -872,7 +872,7 @@ def doit(h5_filename=None,
                         dtype=Info2DCol_description)
                     dest_table.append( recarray )
                     dest_table.flush()
-
+            dest_table.attrs.has_ibo_data = True
         data_file.close()
 
 def main():
