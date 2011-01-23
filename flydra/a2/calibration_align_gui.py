@@ -90,6 +90,8 @@ class CalibrationAlignmentWindow(Widget):
         pd.point_data.scalars.name = 'speed'
         self.viewed_data = VTKDataSource(data=pd,
                                          name='aligned data')
+        self.params.s = 1000.0 # Switch to a more reasonable default scale
+        self._params_changed()
 
     def _params_changed(self):
         if self.orig_data_verts is None or self.viewed_data is None:
