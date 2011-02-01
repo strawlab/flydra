@@ -219,11 +219,12 @@ def _initial_file_load(filename):
         kresults = tables.openFile(filename,mode='r')
         extra['frames_per_second'] = flydra.analysis.result_utils.get_fps(
             kresults, fail_on_error=False)
-        textlog = kresults.root.textlog.readCoordinates([0])
-        infostr = textlog['message'].tostring().strip('\x00')
-        header = flydra.analysis.result_utils.read_textlog_header(
-            kresults, fail_on_error=False)
-        extra['header'] = header
+        if hasattr(kresults.root,'textlog'):
+            textlog = kresults.root.textlog.readCoordinates([0])
+            infostr = textlog['message'].tostring().strip('\x00')
+            header = flydra.analysis.result_utils.read_textlog_header(
+                kresults, fail_on_error=False)
+            extra['header'] = header
         if hasattr(kresults.root,'kalman_estimates'):
             obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
             extra['frames'] = kresults.root.kalman_estimates.read(field='frame')
