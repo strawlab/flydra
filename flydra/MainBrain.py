@@ -44,9 +44,14 @@ except ImportError, err:
     print 'do not have ROS (see http://ros.org )'
 
 if have_ROS:
-    roslib.load_manifest('ros_flydra')
-    import rospy
-    print 'have ROS'
+    try:
+        roslib.load_manifest('ros_flydra')
+    except roslib.packages.InvalidROSPkgException, err:
+        have_ROS = False
+        print 'have ROS, but ros_flydra manifest could not be loaded'
+    else:
+        import rospy
+        print 'have ROS'
 
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
