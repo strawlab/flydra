@@ -173,7 +173,7 @@ class ShowIt(object):
 %s
 current list of 2D points
 -------------------------
-"""%self.do_key_press.__doc__)
+"""%self.on_key_press.__doc__)
             for cam_id,(x,y) in self.cam_ids_and_points2d:
                 sys.stdout.write('%s: %s %s\n'%(cam_id,x,y))
             sys.stdout.write('\n')
