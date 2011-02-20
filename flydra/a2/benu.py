@@ -309,7 +309,9 @@ class Canvas(object):
         return matrix.transform_point(x,y)
 
 def test_benu():
-    canv = Canvas('/tmp/benu-test.png',1024,1024)
+    import tempfile
+    tmp_fname = tempfile.mktemp('.png')
+    canv = Canvas(tmp_fname,1024,1024)
     device_rect = (256,256,512,512)
     user_rect = (0,0,50,50)
 
