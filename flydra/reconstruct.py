@@ -493,7 +493,7 @@ class SingleCameraCalibration:
     def get_aligned_copy(self, M):
         if self.scale_factor != 1.0:
             warnings.warn('aligning calibration without unity scale')
-            
+
         import flydra.talign
         aligned_Pmat = flydra.talign.align_pmat(M,self.Pmat)
         aligned = SingleCameraCalibration(cam_id=self.cam_id,
@@ -1684,7 +1684,7 @@ def align_calibration():
      print 'R',R
      print 't',t
 
-     M = align.build_xfrom(s,R,t)
+     M = align.build_xform(s,R,t)
 
      alignedR = srcR.get_aligned_copy(M)
      alignedR.save_to_files_in_new_directory(dst)
