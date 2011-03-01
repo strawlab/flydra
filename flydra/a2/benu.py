@@ -137,7 +137,7 @@ class Canvas(object):
         for i in range(1,len(xarr)):
             ctx.line_to(xarr[i],yarr[i])
         ctx.close_path()
-        ctx.paint()
+        ctx.fill()
         ctx.stroke()
         if edgewidth is not None:
             ctx.set_line_width(orig_linewidth)
@@ -330,6 +330,8 @@ def test_benu():
         for pt in pts:
             canv.scatter( [pt[0]], [pt[1]] )
         canv.plot( [0,0,50,50,0],[0,50,50,0,0] )
+
+    canv.poly( [0,50,100,0,100,0], [100,0,100,50,50,100], color_rgba=(0,0,1,1), edgewidth=5 )
 
     for pt in pts:
         x,y = canv.get_transformed_point(pt[0],pt[1],device_rect,user_rect,
