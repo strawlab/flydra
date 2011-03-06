@@ -986,7 +986,7 @@ class Reconstructor:
             res_fd.close()
 
             # load non linear parameters
-            rad_files = os.path.join(use_cal_source,'*.rad')
+            rad_files = glob.glob(os.path.join(use_cal_source,'*.rad'))
             for cam_id_enum, cam_id in enumerate(cam_ids):
                 filename = os.path.join(use_cal_source,
                                         'basename%d.rad'%(cam_id_enum+1,))
