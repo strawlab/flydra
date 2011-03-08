@@ -710,7 +710,7 @@ class PreSmoothedDataCache(object):
             ##                  "(Hint: --up-dir='0,0,1')")
 
         if frames_per_second is None: raise ValueError('frames_per_second must be specified')
-        if dynamic_model_name is None: raise ValueError('dynamic_model_name must be specified')
+        if dynamic_model_name is None: raise ValueError('dynamic_model_name must be specified for smoothing')
 
         pdictname = 'params'
         # these values are double checked to ensure they're the same
