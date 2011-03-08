@@ -51,6 +51,48 @@ def cylindrical_arena(info=None):
     a.property.specular = 0.3
     return [a]
 
+def sphere_arena(info=None):
+    N = 32
+    theta = numpy.linspace(0,2*numpy.pi,N)
+    r = info['radius']
+    xs = r*numpy.cos( theta ) + info['origin'][0]
+    ys = r*numpy.sin( theta ) + info['origin'][1]
+
+    els = numpy.linspace(-np.pi/2, np.pi/2, 10)
+
+    # z_levels = numpy.linspace(info['origin'][2]-info['radius'],
+    #                           info['origin'][2]+info['radius'],
+    #                           5)
+
+    verts = []
+    vi = 0 # vert idx
+    lines = []
+
+    for el in els:
+        zs = np.sin(el)*numpy.ones_like(xs) * info['radius'] + info['origin'][2]
+        R = np.cos(el)
+        v = numpy.array([R*xs,R*ys,zs]).T
+        for i in range(N):
+            verts.append( v[i] )
+
+        for i in range(N-1):
+            lines.append( [i+vi,i+1+vi] )
+        lines.append( [vi+N-1,vi] )
+
+        vi += (N)
+    pd = tvtk.PolyData()
+    pd.points = verts
+    pd.lines = lines
+    pt = tvtk.TubeFilter(radius=0.001,input=pd,
+                         number_of_sides=4,
+                         vary_radius='vary_radius_off',
+                         )
+    m = tvtk.PolyDataMapper(input=pt.output)
+    a = tvtk.Actor(mapper=m)
+    a.property.color = .9, .9, .9
+    a.property.specular = 0.3
+    return [a]
+
 def cylindrical_post(info=None):
     verts=info['verts']
     diameter=info['diameter']

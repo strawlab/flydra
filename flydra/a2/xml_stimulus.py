@@ -176,6 +176,18 @@ class Stimulus(object):
                 raise ValueError('unknown tag: %s'%v.tag)
         return info
 
+    def _get_info_for_sphere_arena(self,child):
+        assert child.tag == 'sphere_arena'
+        info = {}
+        for v in child:
+            if v.tag == 'origin':
+                info['origin'] = numpy.array(map(float,v.text.split()))
+            elif v.tag == 'radius':
+                info['radius'] = float(v.text)
+            else:
+                raise ValueError('unknown tag: %s'%v.tag)
+        return info
+
     def _get_info_for_cubic_arena(self,child):
         assert child.tag == 'cubic_arena'
         info = {}
@@ -243,6 +255,9 @@ class Stimulus(object):
             elif child.tag == 'cylindrical_arena':
                 info = self._get_info_for_cylindrical_arena(child)
                 actors.extend( experiment_layout.cylindrical_arena(info=info))
+            elif child.tag == 'sphere_arena':
+                info = self._get_info_for_sphere_arena(child)
+                actors.extend( experiment_layout.sphere_arena(info=info))
             elif child.tag == 'cubic_arena':
                 info = self._get_info_for_cubic_arena(child)
                 actors.extend( experiment_layout.cubic_arena(
@@ -319,6 +334,8 @@ class Stimulus(object):
                     if len(this_lineseg)>2:
                         linesegs.append( this_lineseg )
                         lineseg_colors.append( (1,.5,.5,1) )
+            elif child.tag == 'sphere_arena':
+                raise NotImplementedError()
             elif child.tag == 'cylindrical_post':
                 plotted_anything = True
                 info = self._get_info_for_cylindrical_post(child)
@@ -427,6 +444,8 @@ class Stimulus(object):
                             x2d, y2d = result
                         plotx.append(x2d); ploty.append(y2d)
                     ax.plot( plotx, ploty, 'k-' )
+            elif child.tag == 'sphere_arena':
+                raise NotImplementedError()
             elif child.tag == 'cubic_arena':
                 plotted_anything = True
                 info = self._get_info_for_cubic_arena(child)
