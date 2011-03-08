@@ -23,7 +23,7 @@ import enthought.traits.api as traits
 from enthought.traits.ui.api import View, Item, Group, Handler, HGroup, \
      VGroup, RangeEditor
 
-from optparse import OptionParser
+import argparse
 
 import flydra.talign as talign
 import flydra.reconstruct as reconstruct
@@ -167,33 +167,32 @@ class IVTKWithCalGUI(SplitApplicationWindow):
         return self.cal_align.control
 
 def main():
-    usage = '%prog FILE [options]'
+    parser = argparse.ArgumentParser()
 
-    parser = OptionParser(usage)
+    parser.add_argument('h5_filename')
 
-    parser.add_option("--stim-xml",
-                      type="string",
-                      default=None,
-                      help="name of XML file with stimulus info",
-                      )
+    parser.add_argument("--stim-xml",
+                        type=str,
+                        default=None,
+                        help="name of XML file with stimulus info",
+                        required=True,
+                        )
 
-    parser.add_option("--radius", type="float",
+    parser.add_argument("--radius", type=float,
                       help="radius of line (in meters)",
                       default=0.002,
                       metavar="RADIUS")
 
-    parser.add_option("--obj-only", type="string")
+    parser.add_argument("--obj-only", type=str)
     
-    parser.add_option("--obj-filelist", type="string",
+    parser.add_argument("--obj-filelist", type=str,
                       help="use object ids from list in text file",
                       )
 
-    (options, args) = parser.parse_args()
-    if len(args)>1:
-        print >> sys.stderr, "FILE argument supplied more than once"
-        parser.print_help()
-        return
-    h5_filename=args[0]
+    args = parser.parse_args()
+    options = args # optparse OptionParser backwards compatibility
+
+    h5_filename=args.h5_filename
 
     if options.obj_only is not None:
         obj_only = core_analysis.parse_seq(options.obj_only)
