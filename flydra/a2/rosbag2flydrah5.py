@@ -159,7 +159,7 @@ def convert_to_flydrah5(bag_file, topic_name='pointcloud', out_h5=None, reconstr
     if reconstructor is not None:
         R = flydra.reconstruct.Reconstructor( reconstructor )
         R.save_to_h5file( h5file )
-    h5data3d_kalman_estimates.close()
+    h5file.close()
     bag.close()
 
 def main():
