@@ -89,13 +89,13 @@ def filter_comments(lines_tmp):
         try:
             comment_idx = line.index('#')
             no_comment_line = line[:comment_idx]
-            no_comment_line.strip()
-            if len(no_comment_line):
-                line = no_comment_line
-            else:
-                continue # nothing on this line
         except ValueError:
-            pass
+            no_comment_line = line
+        no_comment_line.strip()
+        if len(no_comment_line):
+            line = no_comment_line
+        else:
+            continue # nothing on this line
         lines.append(line)
     return lines
 
