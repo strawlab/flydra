@@ -5,10 +5,12 @@ import struct
 import ctypes
 import numpy as np
 
-import roslib; roslib.load_manifest('sensor_msgs')
-import rospy
-import rosbag
-from sensor_msgs.msg import PointCloud2, PointField
+def import_ros():
+    # allow this module to be imported without ROS installed (for nose tests)
+    import roslib; roslib.load_manifest('sensor_msgs')
+    import rospy
+    import rosbag
+    from sensor_msgs.msg import PointCloud2, PointField
 
 import flydra.data_descriptions
 import flydra.kalman.flydra_kalman_utils as flydra_kalman_utils
@@ -163,6 +165,8 @@ def convert_to_flydrah5(bag_file, topic_name='pointcloud', out_h5=None, reconstr
     bag.close()
 
 def main():
+    import_ros()
+
     parser = argparse.ArgumentParser()
     parser.add_argument('bag_file')
     parser.add_argument('--topic',default='pointcloud')
