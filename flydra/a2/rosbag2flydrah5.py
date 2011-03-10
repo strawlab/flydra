@@ -5,28 +5,23 @@ import struct
 import ctypes
 import numpy as np
 
-def import_ros():
-    # allow this module to be imported without ROS installed (for nose tests)
-    import roslib; roslib.load_manifest('sensor_msgs')
-    import rospy
-    import rosbag
-    from sensor_msgs.msg import PointCloud2, PointField
-
 import flydra.data_descriptions
 import flydra.kalman.flydra_kalman_utils as flydra_kalman_utils
 import flydra.reconstruct
 
-_DATATYPES = {}
-_DATATYPES[PointField.INT8]    = ('b', 1)
-_DATATYPES[PointField.UINT8]   = ('B', 1)
-_DATATYPES[PointField.INT16]   = ('h', 2)
-_DATATYPES[PointField.UINT16]  = ('H', 2)
-_DATATYPES[PointField.INT32]   = ('i', 4)
-_DATATYPES[PointField.UINT32]  = ('I', 4)
-_DATATYPES[PointField.FLOAT32] = ('f', 4)
-_DATATYPES[PointField.FLOAT64] = ('d', 8)
-
 def _get_struct_fmt(cloud, field_names=None):
+    from sensor_msgs.msg import PointField
+
+    _DATATYPES = {}
+    _DATATYPES[PointField.INT8]    = ('b', 1)
+    _DATATYPES[PointField.UINT8]   = ('B', 1)
+    _DATATYPES[PointField.INT16]   = ('h', 2)
+    _DATATYPES[PointField.UINT16]  = ('H', 2)
+    _DATATYPES[PointField.INT32]   = ('i', 4)
+    _DATATYPES[PointField.UINT32]  = ('I', 4)
+    _DATATYPES[PointField.FLOAT32] = ('f', 4)
+    _DATATYPES[PointField.FLOAT64] = ('d', 8)
+
     # originally from https://code.ros.org/trac/ros-pkg/attachment/ticket/4440/point_cloud.py
     fmt = '>' if cloud.is_bigendian else '<'
 
@@ -86,6 +81,7 @@ def read_points(cloud, field_names=None, skip_nans=False, uvs=[]):
                     offset += point_step
 
 def convert_to_flydrah5(bag_file, topic_name='pointcloud', out_h5=None, reconstructor=None):
+    import rosbag
 
     if out_h5 is None:
         out_h5 = bag_file + '.h5'
@@ -165,7 +161,8 @@ def convert_to_flydrah5(bag_file, topic_name='pointcloud', out_h5=None, reconstr
     bag.close()
 
 def main():
-    import_ros()
+    # defer import to allow this module to be imported without ROS installed (for nose tests)
+    import roslib; roslib.load_manifest('sensor_msgs')
 
     parser = argparse.ArgumentParser()
     parser.add_argument('bag_file')
