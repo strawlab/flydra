@@ -1633,6 +1633,10 @@ def align_calibration():
                              'applied to the scaled calibration'),
                        )
 
+     parser.add_option("--output-xml", action='store_true',
+                       default=False,
+                       )
+
      (options, args) = parser.parse_args()
 
      if options.orig_reconstructor is None:
@@ -1651,7 +1655,11 @@ def align_calibration():
 
      if options.dest_dir is None:
          dst = src+'.aligned'
+         if options.output_xml:
+             dst += '.xml'
      else:
+         if options.output_xml:
+             raise ValueError('cannot specify both --dest-dir and --output-xml')
          dst = options.dest_dir
      if os.path.exists(dst):
          raise RuntimeError('destination %s exists'%dst)
@@ -1687,7 +1695,10 @@ def align_calibration():
      M = align.build_xform(s,R,t)
 
      alignedR = srcR.get_aligned_copy(M)
-     alignedR.save_to_files_in_new_directory(dst)
+     if options.output_xml:
+         alignedR.save_to_xml_filename(dst)
+     else:
+         alignedR.save_to_files_in_new_directory(dst)
 
 if __name__=='__main__':
     test()
