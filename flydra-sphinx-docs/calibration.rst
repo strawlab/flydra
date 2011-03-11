@@ -79,6 +79,11 @@ MultiCamSelfCal can understand, the calibration directory.
 Running MultiCamSelfCal
 .......................
 
+**NOTE: This section is out of date.** The new version of
+MultiCamSelfCal does not require MATLAB and can be run purely with
+Octave. The new version of MultiCamSelfCal is available from
+https://github.com/strawlab/MultiCamSelfCal
+
 Edit the file ``kookaburra/MultiCamSelfCal/CommonCfgAndIO/configdata.m``.
 
 In the ``SETUP_NAME`` section, there a few variables you probably want
@@ -142,6 +147,24 @@ pretty good if things are going well. Note that, for the first
 calibration, it may not be particularly important to get a great
 calibration because it will be redone due to the considerations listed
 in :ref:`3d-recal`.
+
+Advanced: automatic homography (alignment) using approximate camera positions
+.............................................................................
+
+Let's say your calibration had three cameras and you know their
+approximate positions in world coordinates. You can automatically
+compute the homography (rotate, scale, and translate) between your
+original calibration and the new calibration such that the calibrated
+camera positions will be maximally similar to the given approximate
+positions.
+
+Create a file called, e.g. ``align-cams.txt``. Each line contains the
+3D coordinates of each camera. The order of the cameras must be the
+same as in the calibration. Now, simply run::
+
+  ``flydra_analysis_align_calibration --orig-reconstructor cal20110309a2.xml --align-cams align-cams.txt --output-xml``
+
+The aligned calibration will be in ``ORIGINAL_RECONSTRUCTOR.aligned.xml``.
 
 Advanced: using 3D trajectories to re-calibrate using MultiCamSelfCal
 .....................................................................
