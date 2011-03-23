@@ -26,7 +26,7 @@ XVFBPID=$!
 echo "Xvfb running in process $XVFBPID"
 
 echo "checking that Xvfb process is running"
-sleep 1
+sleep 5
 python -c "import os; assert os.path.exists(\"/proc/$XVFBPID\")"
 echo "PID $XVFBPID seems OK, will continue with tests"
 
