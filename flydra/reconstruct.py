@@ -89,13 +89,13 @@ def filter_comments(lines_tmp):
         try:
             comment_idx = line.index('#')
             no_comment_line = line[:comment_idx]
-            no_comment_line.strip()
-            if len(no_comment_line):
-                line = no_comment_line
-            else:
-                continue # nothing on this line
         except ValueError:
-            pass
+            no_comment_line = line
+        no_comment_line.strip()
+        if len(no_comment_line):
+            line = no_comment_line
+        else:
+            continue # nothing on this line
         lines.append(line)
     return lines
 
@@ -493,7 +493,7 @@ class SingleCameraCalibration:
     def get_aligned_copy(self, M):
         if self.scale_factor != 1.0:
             warnings.warn('aligning calibration without unity scale')
-            
+
         import flydra.talign
         aligned_Pmat = flydra.talign.align_pmat(M,self.Pmat)
         aligned = SingleCameraCalibration(cam_id=self.cam_id,
@@ -986,7 +986,7 @@ class Reconstructor:
             res_fd.close()
 
             # load non linear parameters
-            rad_files = os.path.join(use_cal_source,'*.rad')
+            rad_files = glob.glob(os.path.join(use_cal_source,'*.rad'))
             for cam_id_enum, cam_id in enumerate(cam_ids):
                 filename = os.path.join(use_cal_source,
                                         'basename%d.rad'%(cam_id_enum+1,))
@@ -1633,6 +1633,10 @@ def align_calibration():
                              'applied to the scaled calibration'),
                        )
 
+     parser.add_option("--output-xml", action='store_true',
+                       default=False,
+                       )
+
      (options, args) = parser.parse_args()
 
      if options.orig_reconstructor is None:
@@ -1651,7 +1655,11 @@ def align_calibration():
 
      if options.dest_dir is None:
          dst = src+'.aligned'
+         if options.output_xml:
+             dst += '.xml'
      else:
+         if options.output_xml:
+             raise ValueError('cannot specify both --dest-dir and --output-xml')
          dst = options.dest_dir
      if os.path.exists(dst):
          raise RuntimeError('destination %s exists'%dst)
@@ -1684,10 +1692,13 @@ def align_calibration():
      print 'R',R
      print 't',t
 
-     M = align.build_xfrom(s,R,t)
+     M = align.build_xform(s,R,t)
 
      alignedR = srcR.get_aligned_copy(M)
-     alignedR.save_to_files_in_new_directory(dst)
+     if options.output_xml:
+         alignedR.save_to_xml_filename(dst)
+     else:
+         alignedR.save_to_files_in_new_directory(dst)
 
 if __name__=='__main__':
     test()

@@ -372,7 +372,7 @@ class ProcessCamClass(object):
                  ):
 
         if have_ROS:
-            rospy.init_node('fview_ros',
+            rospy.init_node('flydra_camera_node',
                             anonymous=True, # allow multiple instances to run
                             disable_signals=True, # let WX intercept them
                             )
@@ -774,7 +774,7 @@ class ProcessCamClass(object):
                     if now-self.lasttime+0.005 > 1./(self.rosrate):
                         msg = Image()
                         msg.header.seq=framenumber
-                        msg.header.stamp=rospy.Time.from_sec(timestamp)
+                        msg.header.stamp=rospy.Time.from_sec(now) # XXX TODO: once camera trigger is ROS node, get accurate timestamp
                         msg.header.frame_id = "0"
 
                         npbuf = np.array(hw_roi_frame)

@@ -178,6 +178,9 @@ setup(name='flydra',
     'flydra_visualize_distortions = flydra.radial_distortion.visualize_distortions:main',
     'flydra_checkerboard = flydra.radial_distortion.checkerboard:main',
 
+# ROS pointcloud stuff
+    'flydra_analysis_rosbag2flydrah5 = flydra.a2.rosbag2flydrah5:main',
+
 # testing
     'flydra_test_commands = flydra.test_commands:main',
     'flydra_test_mpl_markersize = flydra.mpl_markersize:main',

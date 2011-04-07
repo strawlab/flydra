@@ -12,7 +12,7 @@ source $VIRTUALENVDIR/bin/activate
 
 # need to install our own sphinx into virtualenv so it picks up flydra
 easy_install Jinja2-2.1.1.tar.gz
-easy_install Sphinx-0.6.2.tar.gz
+easy_install Sphinx-1.0.7.tar.gz
 
 cd flydra-sphinx-docs/
 
@@ -23,10 +23,10 @@ echo "PYTHONPATH=$PYTHONPATH"
 rm -rf build
 
 # make
-make latex
-cd build/latex
-make all-pdf
-cd ../..
+## make latex
+## cd build/latex
+## make all-pdf
+## cd ../..
 make html
 
 chmod -R a+r build

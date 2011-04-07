@@ -137,7 +137,7 @@ class Canvas(object):
         for i in range(1,len(xarr)):
             ctx.line_to(xarr[i],yarr[i])
         ctx.close_path()
-        ctx.paint()
+        ctx.fill()
         ctx.stroke()
         if edgewidth is not None:
             ctx.set_line_width(orig_linewidth)
@@ -309,7 +309,9 @@ class Canvas(object):
         return matrix.transform_point(x,y)
 
 def test_benu():
-    canv = Canvas('/tmp/benu-test.png',1024,1024)
+    import tempfile
+    tmp_fname = tempfile.mktemp('.png')
+    canv = Canvas(tmp_fname,1024,1024)
     device_rect = (256,256,512,512)
     user_rect = (0,0,50,50)
 
@@ -328,6 +330,8 @@ def test_benu():
         for pt in pts:
             canv.scatter( [pt[0]], [pt[1]] )
         canv.plot( [0,0,50,50,0],[0,50,50,0,0] )
+
+    canv.poly( [0,50,100,0,100,0], [100,0,100,50,50,100], color_rgba=(0,0,1,1), edgewidth=5 )
 
     for pt in pts:
         x,y = canv.get_transformed_point(pt[0],pt[1],device_rect,user_rect,

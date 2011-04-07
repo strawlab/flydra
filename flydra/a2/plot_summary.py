@@ -31,6 +31,7 @@ def doit(options=None):
     options.show_obj_id = False
     options.show_landing = True
     options.show_track_ends = True
+    options.smooth_orientations = False
     plot_timeseries.plot_timeseries(subplot=subplot,
                                     options=options)
 
