@@ -31,8 +31,6 @@ Q_scalar_rate = 0.1
 Q_scalar_quat = 0.1
 R_scalar = 10
 
-gate_angle_threshold_radians = 40.0*D2R
-
 # everything else
 
 slope2modpi = np.arctan # assign function name
@@ -245,9 +243,12 @@ def get_group_for_obj(obj_id,h5,writeable=False):
 
 def doit(output_h5_filename=None,
          kalman_filename=None, data2d_filename=None, start = None, stop = None,
+         gate_angle_threshold_degrees = 40.0,
          area_threshold_for_orientation=0.0,
          obj_only=None,
          options=None):
+    gate_angle_threshold_radians = gate_angle_threshold_degrees*D2R
+
     if options.show:
         import matplotlib.pyplot as plt
         import matplotlib.ticker as mticker
@@ -1186,6 +1187,9 @@ def main():
     parser.add_option("--output-h5", type='string',
                       help="filename for output .h5 file with data2d_distorted")
 
+    parser.add_option('--gate-angle-threshold-degrees', type='float', default=40.0,
+                      help='maximum angle (in degrees) to include 2D orientation')
+
     parser.add_option('--area-threshold-for-orientation', type='float', default=0.0,
                       help='minimum area required to use 2D feature for 3D orientation')
 
@@ -1216,6 +1220,7 @@ def main():
     doit(kalman_filename=options.kalman_filename,
          data2d_filename=options.h5,
          area_threshold_for_orientation=options.area_threshold_for_orientation,
+         gate_angle_threshold_degrees = options.gate_angle_threshold_degrees,
          start=options.start,
          stop=options.stop,
          output_h5_filename=options.output_h5,
