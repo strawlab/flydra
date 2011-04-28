@@ -1115,7 +1115,7 @@ def plot_ori(kalman_filename=None,
     ax3.legend()
 
     ax4.set_ylabel('quality')
-    if output_filename is not None:
+    if output_filename is None:
         plt.show()
     else:
         plt.savefig( output_filename )
