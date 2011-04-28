@@ -31,6 +31,7 @@ def get_config_defaults():
             'max_resolution': None,
             'obj_labels':False,
             'linewidth':1.0,
+            'min_ori_quality_required':None,
             }
     default = collections.defaultdict(dict)
     default['what to show']=what
@@ -52,7 +53,7 @@ def montage(fnames, title, target):
     #print CMD
     subprocess.check_call(CMD,shell=True)
 
-def load_3d_data(kalman_filename):
+def load_3d_data(kalman_filename,min_ori_quality_required=None):
     with openFileSafe( kalman_filename, mode='r' ) as kh5:
         ca = core_analysis.get_global_CachingAnalyzer()
         all_obj_ids, obj_ids, is_mat_file, data_file, extra = \
@@ -77,6 +78,7 @@ def load_3d_data(kalman_filename):
                                      frames_per_second=fps,
                                      dynamic_model_name=dynamic_model_name,
                                      return_smoothed_directions = True,
+                                     min_ori_quality_required=min_ori_quality_required,
                                      )
             except core_analysis.NotEnoughDataToSmoothError:
                 warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
@@ -120,7 +122,8 @@ def make_montage( h5_filename,
             raise ValueError('need kalman filename to show object labels')
 
     if kalman_filename is not None:
-        data3d = load_3d_data(kalman_filename)
+        data3d = load_3d_data(kalman_filename,
+                              min_ori_quality_required=config['what to show']['min_ori_quality_required'])
         R = reconstruct.Reconstructor(kalman_filename)
     else:
         data3d = R = None
@@ -394,6 +397,7 @@ zoom_orig_pixels = 50
 zoom_factor = 5
 obj_labels = False
 linewidth = 1.0
+min_ori_quality_required = None
 
 Config files may also have sections such as:
 
