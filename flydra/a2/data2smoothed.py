@@ -23,9 +23,12 @@ def convert(infilename,
             save_timestamps=True,
             file_time_data=None,
             do_nothing=False, # set to true to test for file existance
+            start_obj_id=None,
             stop_obj_id=None,
             dynamic_model_name=None,
             ):
+    if start_obj_id is None:
+        start_obj_id=-numpy.inf
     if stop_obj_id is None:
         stop_obj_id=numpy.inf
 
@@ -87,14 +90,15 @@ def convert(infilename,
         print 'finding unique obj_ids...'
         unique_obj_ids = numpy.unique(obs_obj_ids)
         print '(found %d)'%(len(unique_obj_ids),)
+        unique_obj_ids = unique_obj_ids[ unique_obj_ids >= start_obj_id ]
+        unique_obj_ids = unique_obj_ids[ unique_obj_ids <= stop_obj_id ]
+        print '(will export %d)'%(len(unique_obj_ids),)
         print 'finding 2d data for each obj_id...'
         timestamp_time = numpy.zeros( unique_obj_ids.shape, dtype=numpy.float64)
         table_kobs_frame = table_kobs.read(field='frame')
         assert table_kobs_frame.dtype == table_data2d_frames.dtype # otherwise very slow
 
         for obj_id_enum,obj_id in enumerate(unique_obj_ids):
-            if obj_id > stop_obj_id:
-                break
             if obj_id_enum%100==0:
                 print '%d of %d'%(obj_id_enum,len(unique_obj_ids))
             valid_cond = obs_obj_ids == obj_id
@@ -140,6 +144,8 @@ def convert(infilename,
 
     ca = core_analysis.get_global_CachingAnalyzer()
     all_obj_ids, obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(infilename)
+    obj_ids = obj_ids[ obj_ids >= start_obj_id ]
+    obj_ids = obj_ids[ obj_ids <= stop_obj_id ]
     if frames_per_second is None:
         frames_per_second = extra['frames_per_second']
     if dynamic_model_name is None:
@@ -190,7 +196,9 @@ def main():
                       help="hdf5 file with 2d data FILE2D used to calculate timestamp information",
                       metavar="FILE2D")
     parser.add_option("--no-timestamps",action='store_true',dest='no_timestamps',default=False)
-    parser.add_option("--stop",dest='stop_obj_id',default=None,type='int')
+    parser.add_option("--start-obj-id",default=None,type='int',help='last obj_id to save')
+    parser.add_option("--stop-obj-id",default=None,type='int',help='last obj_id to save')
+    parser.add_option("--stop",default=None,type='int',help='last obj_id to save (DEPRECATED)')
     parser.add_option("--profile",action='store_true',dest='profile',default=False)
     parser.add_option("--dynamic-model",
                       type="string",
@@ -208,6 +216,13 @@ def main():
         parser.print_help()
         return
 
+    if options.stop_obj_id is not None and options.stop is not None:
+        raise ValueError('--stop and --stop-obj-id cannot both be set')
+
+    if options.stop is not None:
+        warnings.warn('DeprecationWarning: --stop will be phased out in favor of --stop-obj-id')
+        options.stop_obj_id = options.stop
+
     infilename = args[0]
     if options.dest_file is None:
         outfilename = os.path.splitext(infilename)[0] + '_smoothed.mat'
@@ -216,6 +231,7 @@ def main():
     cmd_str = """convert(infilename,outfilename,
                        file_time_data=options.file2d,
                        save_timestamps = not options.no_timestamps,
+                       start_obj_id=options.start_obj_id,
                        stop_obj_id=options.stop_obj_id,
                        dynamic_model_name=options.dynamic_model,
                        )"""
