@@ -11,6 +11,7 @@ import subprocess, collections
 import flydra.a2.ufmf_tools as ufmf_tools
 import flydra.a2.core_analysis as core_analysis
 import flydra.reconstruct as reconstruct
+import flydra.geom as geom
 import cherrypy  # ubuntu: install python-cherrypy3
 import benu
 
@@ -145,7 +146,8 @@ def make_montage( h5_filename,
     if kalman_filename is not None:
         data3d = load_3d_data(kalman_filename,
                               min_ori_quality_required=config['what to show']['min_ori_quality_required'])
-        if config['what to show']['show_3d_MLE_position']:
+        if (config['what to show']['show_3d_MLE_position'] or
+            config['what to show']['show_3d_raw_orientation']):
             data_raw_3d = load_3d_raw_data(kalman_filename,
                                            min_ori_quality_required=config['what to show']['min_ori_quality_required'])
         else:
@@ -368,17 +370,35 @@ def make_montage( h5_filename,
                                      )
 
                 if config['what to show']['show_3d_raw_orientation'] and camn is not None:
-                    if len(this_frame_3d_data):
-                        for row in this_frame_3d_data:
-                            X0 = np.array([row['x'], row['y'], row['z'], np.ones_like(row['x'])]).T
-                            dx = np.array([row['rawdir_x'], row['rawdir_y'], row['rawdir_z'], np.zeros_like(row['x'])]).T
-                            X1 = X0 + dx*orientation_3d_line_length
-                            pts = np.vstack( [X0, X1] )
-                            xarr,yarr = R.find2d( cam_id, pts, distorted = True )
-                            canv.plot(xarr, yarr,
-                                      color_rgba=(0,0,1,1), # blue
-                                      linewidth=config['what to show']['linewidth'],
-                                      )
+                    if len(this_frame_raw_3d_data):
+                        hzs = np.array([this_frame_raw_3d_data['hz_line0'],
+                                        this_frame_raw_3d_data['hz_line1'],
+                                        this_frame_raw_3d_data['hz_line2'],
+                                        this_frame_raw_3d_data['hz_line3'],
+                                        this_frame_raw_3d_data['hz_line4'],
+                                        this_frame_raw_3d_data['hz_line5']]).T
+                        for hz in hzs:
+                            line = geom.line_from_HZline(hz)
+                            X_ = line.closest() # get a point on the line
+                            ld = line.direction()
+                            dmag = abs(ld)
+                            du = ld*(1./dmag) # unit length direction (normalize)
+
+                            # XXX could/should be smarter and figure out if this is in the view of the camera...
+                            # e.g. call line.get_my_point_closest_to_line(camera_optical_axis) or, better,
+                            # line.get_my_point_closest_to_line(line_through_cam_center_and_3d_location)
+
+                            length = 100.0 # arbitrary
+                            N = 100 # n segments (to deal with distortion)
+
+                            X0 = X_.vals + du.vals*-length/2.0
+                            X = X0[:,np.newaxis] + np.linspace(0,length,N)[np.newaxis,:]*du.vals[:,np.newaxis]
+                            Xh = np.vstack( (X, np.ones_like( X[0,np.newaxis,:] ) ) ).T
+                            xarr,yarr = R.find2d( cam_id, Xh, distorted = True )
+                            canv.plot( xarr, yarr,
+                                       color_rgba=(0,0,1,1), # blue
+                                       linewidth=config['what to show']['linewidth'],
+                                       )
 
                 if config['what to show']['show_3d_smoothed_orientation'] and camn is not None:
                     if len(this_frame_3d_data):
