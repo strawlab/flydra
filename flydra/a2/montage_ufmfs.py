@@ -32,7 +32,6 @@ def get_config_defaults():
             'max_resolution': None,
             'obj_labels':False,
             'linewidth':1.0,
-            'min_ori_quality_required':None,
             }
     default = collections.defaultdict(dict)
     default['what to show']=what
@@ -54,18 +53,18 @@ def montage(fnames, title, target):
     #print CMD
     subprocess.check_call(CMD,shell=True)
 
-def load_3d_raw_data(kalman_filename,min_ori_quality_required=None):
+def load_3d_raw_data(kalman_filename,**kwargs):
     with openFileSafe( kalman_filename, mode='r' ) as kh5:
         ca = core_analysis.get_global_CachingAnalyzer()
         all_obj_ids, obj_ids, is_mat_file, data_file, extra = \
                      ca.initial_file_load(kalman_filename)
         allrows = []
+        this_kw = {'min_ori_quality_required':kwargs['min_ori_quality_required']}
         for obj_id in obj_ids:
             try:
                 rows = ca.load_dynamics_free_MLE_position( obj_id, kalman_filename,
-                                                           min_ori_quality_required=min_ori_quality_required,
                                                            #with_directions=True,
-                                                           )
+                                                           **this_kw)
             except core_analysis.NotEnoughDataToSmoothError:
                 warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
                 continue
@@ -73,7 +72,16 @@ def load_3d_raw_data(kalman_filename,min_ori_quality_required=None):
     data3d = np.concatenate(allrows)
     return data3d
 
-def load_3d_data(kalman_filename,min_ori_quality_required=None):
+def is_obj_in_frame_range( obj_id, all_obj_ids, frames, start=None, stop=None):
+    valid_cond = np.ones( frames.shape, dtype=np.bool)
+    if start is not None:
+        valid_cond = valid_cond & (frames >= start)
+    if stop is not None:
+        valid_cond = valid_cond & (frames <= stop )
+    valid_obj_ids = all_obj_ids[ valid_cond ]
+    return bool(np.sum(valid_obj_ids==obj_id))
+
+def load_3d_data(kalman_filename,start=None,stop=None,**kwargs):
     with openFileSafe( kalman_filename, mode='r' ) as kh5:
         ca = core_analysis.get_global_CachingAnalyzer()
         all_obj_ids, obj_ids, is_mat_file, data_file, extra = \
@@ -92,14 +100,16 @@ def load_3d_data(kalman_filename,min_ori_quality_required=None):
             print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
         allrows = []
         for obj_id in obj_ids:
+            if not is_obj_in_frame_range( obj_id, all_obj_ids, extra['frames'], start=start, stop=stop):
+                # obj_id not in range of frames that we're analyzing now
+                continue
             try:
                 rows = ca.load_data( obj_id, kalman_filename,
                                      use_kalman_smoothing=True,
                                      frames_per_second=fps,
                                      dynamic_model_name=dynamic_model_name,
                                      return_smoothed_directions = True,
-                                     min_ori_quality_required=min_ori_quality_required,
-                                     )
+                                     **kwargs)
             except core_analysis.NotEnoughDataToSmoothError:
                 warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
                 continue
@@ -121,7 +131,7 @@ def make_montage( h5_filename,
                   caminfo_h5_filename = None,
                   colormap = None,
                   kalman_filename = None,
-                  ):
+                  **kwargs):
     config = get_config_defaults()
     if cfg_filename is not None:
         loaded_cfg = cherrypy._cpconfig.as_dict( cfg_filename )
@@ -144,12 +154,11 @@ def make_montage( h5_filename,
             raise ValueError('need kalman filename to show object labels')
 
     if kalman_filename is not None:
-        data3d = load_3d_data(kalman_filename,
-                              min_ori_quality_required=config['what to show']['min_ori_quality_required'])
+        data3d = load_3d_data(kalman_filename,start=start,stop=stop,
+                              **kwargs)
         if (config['what to show']['show_3d_MLE_position'] or
             config['what to show']['show_3d_raw_orientation']):
-            data_raw_3d = load_3d_raw_data(kalman_filename,
-                                           min_ori_quality_required=config['what to show']['min_ori_quality_required'])
+            data_raw_3d = load_3d_raw_data(kalman_filename,**kwargs)
         else:
             data_raw_3d = None
         R = reconstruct.Reconstructor(kalman_filename)
@@ -481,7 +490,6 @@ zoom_orig_pixels = 50
 zoom_factor = 5
 obj_labels = False
 linewidth = 1.0
-min_ori_quality_required = None
 
 Config files may also have sections such as:
 
@@ -535,6 +543,7 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     parser.add_option( "--caminfo-h5-filename", type="string",
                        help="path of h5 file from which to load caminfo")
 
+    core_analysis.add_options_to_parser(parser)
     (options, args) = parser.parse_args()
 
     if len(args)<1:
@@ -550,6 +559,7 @@ transform='rot 180' # rotate the image 180 degrees (See transform
         movie_cam_ids = movie_cam_ids.split( os.pathsep )
 
     h5_filename = args[0]
+    kwargs = core_analysis.get_options_kwargs(options)
     make_montage( h5_filename,
                   kalman_filename = options.kalman_filename,
                   cfg_filename = options.config,
@@ -564,4 +574,4 @@ transform='rot 180' # rotate the image 180 degrees (See transform
                   movie_cam_ids = movie_cam_ids,
                   caminfo_h5_filename = options.caminfo_h5_filename,
                   colormap = options.colormap,
-                  )
+                  **kwargs)

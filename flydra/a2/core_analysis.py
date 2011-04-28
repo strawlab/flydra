@@ -33,9 +33,9 @@ import pkg_resources
 from nose.plugins.attrib import attr as nose_attr
 
 def add_options_to_parser(parser):
-    parser.add_option("--velocity-weight-gain",default=None,type='float')
-    parser.add_option("--max-velocity-weight",default=None,type='float')
-    parser.add_option("--elevation-up-bias-degrees",default=None,type='float')
+    parser.add_option("--velocity-weight-gain",default=0.5,type='float')
+    parser.add_option("--max-velocity-weight",default=0.9,type='float')
+    parser.add_option("--elevation-up-bias-degrees",default=45.0,type='float')
 
     parser.add_option("--min-ori-quality-required",default=None,type='float',
                       help='minimum orientation quality required to emit 3D orientation info')
