@@ -1,12 +1,14 @@
 .. _orientation_smoothing:
 
-Smoothing orientations with flydra
-==================================
+Smoothing 3D orientations
+=========================
 
-Given Pluecker coordinates estimating body direction found with
-<orientation_ekf_fitter-fusing-2d-orientations-to-3d>, we remove the
-180 degree ambiguity ("choose orientations") and perform final
-smoothing in the code in the :module:`flydra.a2.core_analysis`. This
-code is meant to be called directly from Python to perform the task at
-one. One command-line program that exports the data is
-:command:`flydra_analysis_data2smoothed`.
+Given the raw Pluecker coordinates estimating body direction found
+with :command:`flydra_analysis_orientation_ekf_fitter` (and described
+in `<orientation_ekf_fitter-fusing-2d-orientations-to-3d>`_), we
+remove the 180 degree ambiguity ("choose orientations") and perform
+final smoothing in the code in the module
+:mod:`flydra.a2.core_analysis`. One command-line program that exports
+this data is :command:`flydra_analysis_data2smoothed`. The
+command-line arguments to this program support changing all the
+various parameters in this smoothing and orientation selection.

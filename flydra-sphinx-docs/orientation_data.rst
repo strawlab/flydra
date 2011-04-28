@@ -34,7 +34,7 @@ Estimating orientations with flydra
     core_analysis [ label = "core_analysis.CachingAnalyzer", style=filled,color=white ];
     OEF [ label = "orientation_ekf_fitter", style=filled,color=white ];
     Ori3DHZ [label="3D orientation, Pluecker coords"];
-    Ori3D [label="3D orientation, Cartesian coords"];
+    Ori3D [label="smoothed 3D orientation, Cartesian coords"];
     calib [label="calibration"];
     ekfPos3D [label="EKF based 3D position"];
     onlineOri3D [label="online 3D orientation"];
