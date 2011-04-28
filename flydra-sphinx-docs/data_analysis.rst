@@ -193,12 +193,8 @@ body. **To add:** a description of the image blending technique used
 with high-framerate images for ignoring flapping wings.
 
 From the N estimates of body angle from N camera views, an estimate of
-the 3D body axis direction is made. For each camera, a line from the
-2D body angle estimate on the image plane and the 3D camera center
-(from the known camera calibration) are used to find a plane in 3D
-space.  Then, the best-fit line of intersection of the N planes is
-then found using an algorithm based on singular value decomposition.
-
+the 3D body axis direction is made. See :ref:`Estimating orientations
+with flydra <orientation_data>` for a description of this step.
 
 Practical steps
 ---------------
