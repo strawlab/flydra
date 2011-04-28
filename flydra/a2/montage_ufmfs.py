@@ -30,6 +30,7 @@ def get_config_defaults():
             'white_background': False,
             'max_resolution': None,
             'obj_labels':False,
+            'linewidth':1.0,
             }
     default = collections.defaultdict(dict)
     default['what to show']=what
@@ -277,10 +278,13 @@ def make_montage( h5_filename,
                     canv.scatter(xarr, yarr,
                                  color_rgba=(0,0,0,1),
                                  radius=10,
+                                 markeredgewidth=config['what to show']['linewidth'],
                                  )
-                    canv.scatter(xarr+1, yarr+1,
+                    # draw shadow
+                    canv.scatter(xarr+config['what to show']['linewidth'], yarr+config['what to show']['linewidth'],
                                  color_rgba=(1,1,1,1),
                                  radius=10,
+                                 markeredgewidth=config['what to show']['linewidth'],
                                  )
                 if config['what to show']['show_2d_orientation'] and camn is not None:
                     cond = tracker_data['camn']==camn
@@ -295,6 +299,7 @@ def make_montage( h5_filename,
                     for x,y,xi,yi in zip(xarr,yarr,xinc,yinc):
                         canv.plot([x-xi,x+xi],[y-yi,y+yi],
                                   color_rgba=(0,1,0,0.4),
+                                  linewidth=config['what to show']['linewidth'],
                                   )
                 if config['what to show']['show_3d_smoothed_position'] and camn is not None:
                     if len(this_frame_3d_data):
@@ -303,10 +308,13 @@ def make_montage( h5_filename,
                         canv.scatter(xarr, yarr,
                                      color_rgba=(0,0,0,1),
                                      radius=10,
+                                     markeredgewidth=config['what to show']['linewidth'],
                                      )
-                        canv.scatter(xarr+1, yarr+1,
+                        # draw shadow
+                        canv.scatter(xarr+config['what to show']['linewidth'], yarr+config['what to show']['linewidth'],
                                      color_rgba=(1,1,1,1),
                                      radius=10,
+                                     markeredgewidth=config['what to show']['linewidth'],
                                      )
 
                 if config['what to show']['show_3d_smoothed_orientation'] and camn is not None:
@@ -319,6 +327,7 @@ def make_montage( h5_filename,
                             xarr,yarr = R.find2d( cam_id, pts, distorted = True )
                             canv.plot(xarr, yarr,
                                       color_rgba=(1,0,0,1), # red
+                                      linewidth=config['what to show']['linewidth'],
                                       )
 
                 if config['what to show']['obj_labels'] and camn is not None:
@@ -384,6 +393,7 @@ zoom_obj = None
 zoom_orig_pixels = 50
 zoom_factor = 5
 obj_labels = False
+linewidth = 1.0
 
 Config files may also have sections such as:
 
