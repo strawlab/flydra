@@ -257,7 +257,6 @@ def make_montage( h5_filename,
                                   )
                 if config['what to show']['show_3d_smoothed_position'] and camn is not None:
                     if len(this_frame_3d_data):
-                        cam_id = camn2cam_id[camn]
                         X = np.array([this_frame_3d_data['x'], this_frame_3d_data['y'], this_frame_3d_data['z'], np.ones_like(this_frame_3d_data['x'])]).T
                         xarr,yarr = R.find2d( cam_id, X, distorted = True )
                         canv.scatter(xarr, yarr,
@@ -271,7 +270,6 @@ def make_montage( h5_filename,
 
                 if config['what to show']['show_3d_smoothed_orientation'] and camn is not None:
                     if len(this_frame_3d_data):
-                        cam_id = camn2cam_id[camn]
                         for row in this_frame_3d_data:
                             X0 = np.array([row['x'], row['y'], row['z'], np.ones_like(row['x'])]).T
                             dx = np.array([row['dir_x'], row['dir_y'], row['dir_z'], np.zeros_like(row['x'])]).T
