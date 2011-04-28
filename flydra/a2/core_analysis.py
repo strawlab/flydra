@@ -32,6 +32,24 @@ import unittest
 import pkg_resources
 from nose.plugins.attrib import attr as nose_attr
 
+def add_options_to_parser(parser):
+    parser.add_option("--velocity-weight-gain",default=None,type='float')
+    parser.add_option("--max-velocity-weight",default=None,type='float')
+    parser.add_option("--elevation-up-bias-degrees",default=None,type='float')
+
+    parser.add_option("--min-ori-quality-required",default=None,type='float',
+                      help='minimum orientation quality required to emit 3D orientation info')
+    parser.add_option("--ori-quality-smooth-len",default=10,type='int',
+                      help='smoothing length of trajectory')
+def get_options_kwargs(options):
+    result = dict(velocity_weight_gain=options.velocity_weight_gain,
+                  max_velocity_weight=options.max_velocity_weight,
+                  elevation_up_bias_degrees=options.elevation_up_bias_degrees,
+                  min_ori_quality_required=options.min_ori_quality_required,
+                  ori_quality_smooth_len=options.ori_quality_smooth_len,
+                  )
+    return result
+
 def rotate_vec(q,v):
     """rotate vector v by quaternion q"""
 
