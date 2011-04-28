@@ -20,7 +20,7 @@ def get_config_defaults():
     # keep in sync with usage in main() below
     what = {'show_2d_position': False,
             'show_2d_orientation': False,
-            #'show_3d_MLE_position': False,
+            'show_3d_MLE_position': False,
             'show_3d_smoothed_position': False,
             'show_3d_raw_orientation': False,
             'show_3d_smoothed_orientation': False,
@@ -52,6 +52,25 @@ def montage(fnames, title, target):
          "%s"%(imnames, tile, title, target))
     #print CMD
     subprocess.check_call(CMD,shell=True)
+
+def load_3d_raw_data(kalman_filename,min_ori_quality_required=None):
+    with openFileSafe( kalman_filename, mode='r' ) as kh5:
+        ca = core_analysis.get_global_CachingAnalyzer()
+        all_obj_ids, obj_ids, is_mat_file, data_file, extra = \
+                     ca.initial_file_load(kalman_filename)
+        allrows = []
+        for obj_id in obj_ids:
+            try:
+                rows = ca.load_dynamics_free_MLE_position( obj_id, kalman_filename,
+                                                           min_ori_quality_required=min_ori_quality_required,
+                                                           #with_directions=True,
+                                                           )
+            except core_analysis.NotEnoughDataToSmoothError:
+                warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
+                continue
+            allrows.append( rows )
+    data3d = np.concatenate(allrows)
+    return data3d
 
 def load_3d_data(kalman_filename,min_ori_quality_required=None):
     with openFileSafe( kalman_filename, mode='r' ) as kh5:
@@ -113,6 +132,7 @@ def make_montage( h5_filename,
     orientation_3d_line_length = 0.1
 
     if (config['what to show']['show_3d_smoothed_position'] or
+        config['what to show']['show_3d_MLE_position'] or
         config['what to show']['show_3d_raw_orientation'] or
         config['what to show']['show_3d_smoothed_orientation']):
         if kalman_filename is None:
@@ -125,9 +145,14 @@ def make_montage( h5_filename,
     if kalman_filename is not None:
         data3d = load_3d_data(kalman_filename,
                               min_ori_quality_required=config['what to show']['min_ori_quality_required'])
+        if config['what to show']['show_3d_MLE_position']:
+            data_raw_3d = load_3d_raw_data(kalman_filename,
+                                           min_ori_quality_required=config['what to show']['min_ori_quality_required'])
+        else:
+            data_raw_3d = None
         R = reconstruct.Reconstructor(kalman_filename)
     else:
-        data3d = R = None
+        data3d = R = data_raw_3d = None
 
     if movie_fnames is None:
         movie_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
@@ -183,6 +208,11 @@ def make_montage( h5_filename,
             this_frame_3d_data = data3d[data3d['frame']==frame]
         else:
             this_frame_3d_data = None
+
+        if data_raw_3d is not None:
+            this_frame_raw_3d_data = data_raw_3d[data_raw_3d['frame']==frame]
+        else:
+            this_frame_raw_3d_data = None
 
         if config['what to show']['zoom_obj'] is not None:
             zoom_cond_3d = this_frame_3d_data['obj_id']==config['what to show']['zoom_obj']
@@ -321,6 +351,22 @@ def make_montage( h5_filename,
                                      markeredgewidth=config['what to show']['linewidth'],
                                      )
 
+                if config['what to show']['show_3d_MLE_position'] and camn is not None:
+                    if len(this_frame_raw_3d_data):
+                        X = np.array([this_frame_raw_3d_data['x'], this_frame_raw_3d_data['y'], this_frame_raw_3d_data['z'], np.ones_like(this_frame_raw_3d_data['x'])]).T
+                        xarr,yarr = R.find2d( cam_id, X, distorted = True )
+                        canv.scatter(xarr, yarr,
+                                     color_rgba=(0.2,0.2,0.5,1),
+                                     radius=8,
+                                     markeredgewidth=config['what to show']['linewidth'],
+                                     )
+                        # draw shadow
+                        canv.scatter(xarr+config['what to show']['linewidth'], yarr+config['what to show']['linewidth'],
+                                     color_rgba=(0.7,0.7,1,1), # blue
+                                     radius=8,
+                                     markeredgewidth=config['what to show']['linewidth'],
+                                     )
+
                 if config['what to show']['show_3d_raw_orientation'] and camn is not None:
                     if len(this_frame_3d_data):
                         for row in this_frame_3d_data:
@@ -402,6 +448,7 @@ The default configuration correspondes to a config file:
 [what to show]
 show_2d_position = False
 show_2d_orientation = False
+show_3d_MLE_position = False
 show_3d_smoothed_position = False
 show_3d_raw_orientation = False
 show_3d_smoothed_orientation = False
