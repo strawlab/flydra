@@ -1008,6 +1008,8 @@ def compute_ori_quality(kh5, orig_frames, obj_id, smooth_len=10):
 def plot_ori(kalman_filename=None,
              h5=None,
              obj_only=None,
+             start=None,
+             stop=None,
              output_filename=None,
              ):
     if output_filename is not None:
@@ -1029,6 +1031,13 @@ def plot_ori(kalman_filename=None,
     with openFileSafe( kalman_filename,
                        mode='r') as kh5:
         kmle = kh5.root.kalman_observations[:] # load into RAM
+
+        if start is not None:
+            kmle = kmle[ kmle['frame'] >= start ]
+
+        if stop is not None:
+            kmle = kmle[ kmle['frame'] <= stop ]
+
         all_mle_obj_ids = kmle['obj_id']
 
         # walk all tables to get all obj_ids
@@ -1060,6 +1069,13 @@ def plot_ori(kalman_filename=None,
         for obj_id in use_obj_ids:
             table = all_obj_ids[obj_id]
             rows = table[:]
+
+            if start is not None:
+                rows = rows[ rows['frame'] >= start ]
+
+            if stop is not None:
+                rows = rows[ rows['frame'] <= stop ]
+
             frame=rows['frame']
             # get camns
             camns = []
@@ -1131,6 +1147,11 @@ def plot_ori_command_line():
                       help=".h5 file with data2d_distorted (REQUIRED)")
     parser.add_option("--obj-only", type="string")
     parser.add_option("--output-filename",type="string")
+    parser.add_option("--start", type='int', default=None,
+                      help="frame number to begin analysis on")
+
+    parser.add_option("--stop", type='int', default=None,
+                      help="frame number to end analysis on")
     (options, args) = parser.parse_args()
     if options.kalman_filename is None:
         raise ValueError('--kalman-file option must be specified')
@@ -1138,6 +1159,8 @@ def plot_ori_command_line():
         options.obj_only = core_analysis.parse_seq(options.obj_only)
     plot_ori(kalman_filename=options.kalman_filename,
              h5=options.h5,
+             start=options.start,
+             stop=options.stop,
              obj_only=options.obj_only,
              output_filename=options.output_filename,
              )
