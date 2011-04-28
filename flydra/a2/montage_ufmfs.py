@@ -24,6 +24,9 @@ def get_config_defaults():
             'show_3d_smoothed_position': False,
             #'show_3d_raw_orientation': False,
             'show_3d_smoothed_orientation': False,
+            'zoom_obj':None,
+            'zoom_orig_pixels':50,
+            'zoom_factor':5,
             'white_background': False,
             'max_resolution': None,
             }
@@ -168,6 +171,16 @@ def make_montage( h5_filename,
 
         if data3d is not None:
             this_frame_3d_data = data3d[data3d['frame']==frame]
+        else:
+            this_frame_3d_data = None
+
+        if config['what to show']['zoom_obj'] is not None:
+            zoom_cond_3d = this_frame_3d_data['obj_id']==config['what to show']['zoom_obj']
+            if np.sum( zoom_cond_3d ) == 0:
+                # object not in this frame
+                this_frame_this_obj_3d_data = None
+            else:
+                this_frame_this_obj_3d_data = this_frame_3d_data[ zoom_cond_3d ]
 
         if (frame_enum%100)==0:
             print '%s: frame %d'%(datetime_str,frame)
@@ -214,6 +227,29 @@ def make_montage( h5_filename,
                     device_w = fix_h*desire_aspect
                     device_y = 0
                     device_x = (fix_w-device_w)/2.0
+                user_rect = (0,0,image.shape[1],image.shape[0])
+            elif config['what to show']['zoom_obj'] is not None:
+                device_x = 0
+                device_y = 0
+                device_w = config['what to show']['zoom_orig_pixels']*config['what to show']['zoom_factor']
+                device_h = device_w
+                fix_w = device_w
+                fix_h = device_h
+
+                if this_frame_this_obj_3d_data is not None:
+                    X = np.array([this_frame_this_obj_3d_data['x'],
+                                  this_frame_this_obj_3d_data['y'],
+                                  this_frame_this_obj_3d_data['z'],
+                                  np.ones_like(this_frame_this_obj_3d_data['x'])]).T
+                    xarr,yarr = R.find2d( cam_id, X, distorted = True )
+                    assert len(xarr)==1
+                    x=xarr[0]
+                    y=yarr[0]
+                    r = config['what to show']['zoom_orig_pixels']*0.5
+                    user_rect = (x-r,y-r,r*2,r*2)
+                else:
+                    # we're not tracking object -- don't draw anything
+                    user_rect = (-1000,-1000,10,10)
             else:
                 device_x = 0
                 device_y = 0
@@ -221,10 +257,10 @@ def make_montage( h5_filename,
                 device_h = int(image.shape[0]*pixel_aspect) # compensate for pixel_aspect
                 fix_w = device_w
                 fix_h = device_h
+                user_rect = (0,0,image.shape[1],image.shape[0])
 
             canv=benu.Canvas(save_fname_path,fix_w,fix_h)
             device_rect = (device_x,device_y,device_w,device_h)
-            user_rect = (0,0,image.shape[1],image.shape[0])
             with canv.set_user_coords(device_rect, user_rect,
                                       transform=transform):
                 canv.imshow(image,0,0,cmap=colormap)
@@ -329,6 +365,9 @@ show_3d_smoothed_position = False
 show_3d_smoothed_orientation = False
 white_background =  False
 max_resolution = None
+zoom_obj = None
+zoom_orig_pixels = 50
+zoom_factor = 5
 
 Config files may also have sections such as:
 
