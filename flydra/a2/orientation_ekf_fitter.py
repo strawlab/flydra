@@ -32,7 +32,6 @@ Q_scalar_quat = 0.1
 R_scalar = 10
 
 gate_angle_threshold_radians = 40.0*D2R
-area_threshold_for_orientation = 0
 
 # everything else
 
@@ -246,6 +245,7 @@ def get_group_for_obj(obj_id,h5,writeable=False):
 
 def doit(output_h5_filename=None,
          kalman_filename=None, data2d_filename=None, start = None, stop = None,
+         area_threshold_for_orientation=0.0,
          obj_only=None,
          options=None):
     if options.show:
@@ -366,6 +366,7 @@ def doit(output_h5_filename=None,
                     dynamic_model = dynamic_model[4:]
             else:
                 dynamic_model = 'mamarama, units: mm'
+                warnings.warn('could not determine dynamic model name, using "%s"'%dynamic_model)
 
             for obj_id_enum,obj_id in enumerate(use_obj_ids):
             # Use data association step from kalmanization to load potentially
@@ -1156,6 +1157,9 @@ def main():
     parser.add_option("--output-h5", type='string',
                       help="filename for output .h5 file with data2d_distorted")
 
+    parser.add_option('--area-threshold-for-orientation', type='float', default=0.0,
+                      help='minimum area required to use 2D feature for 3D orientation')
+
     parser.add_option("--show", action='store_true', default=False)
 
     parser.add_option("--obj-only", type="string")
@@ -1176,6 +1180,7 @@ def main():
 
     doit(kalman_filename=options.kalman_filename,
          data2d_filename=options.h5,
+         area_threshold_for_orientation=options.area_threshold_for_orientation,
          output_h5_filename=options.output_h5,
          obj_only=options.obj_only,
          options=options)
