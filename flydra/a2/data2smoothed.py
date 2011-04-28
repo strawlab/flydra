@@ -180,7 +180,7 @@ def convert(infilename,
         newfilename=outfilename,
         extra_vars=extra_vars,
         )
-
+    ca.close()
 
 def main():
     usage = '%prog FILE [options]'
