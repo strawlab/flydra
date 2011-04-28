@@ -22,7 +22,7 @@ def get_config_defaults():
             'show_2d_orientation': False,
             #'show_3d_MLE_position': False,
             'show_3d_smoothed_position': False,
-            #'show_3d_raw_orientation': False,
+            'show_3d_raw_orientation': False,
             'show_3d_smoothed_orientation': False,
             'zoom_obj':None,
             'zoom_orig_pixels':50,
@@ -113,6 +113,7 @@ def make_montage( h5_filename,
     orientation_3d_line_length = 0.1
 
     if (config['what to show']['show_3d_smoothed_position'] or
+        config['what to show']['show_3d_raw_orientation'] or
         config['what to show']['show_3d_smoothed_orientation']):
         if kalman_filename is None:
             raise ValueError('need kalman filename to show requested 3D data')
@@ -320,6 +321,19 @@ def make_montage( h5_filename,
                                      markeredgewidth=config['what to show']['linewidth'],
                                      )
 
+                if config['what to show']['show_3d_raw_orientation'] and camn is not None:
+                    if len(this_frame_3d_data):
+                        for row in this_frame_3d_data:
+                            X0 = np.array([row['x'], row['y'], row['z'], np.ones_like(row['x'])]).T
+                            dx = np.array([row['rawdir_x'], row['rawdir_y'], row['rawdir_z'], np.zeros_like(row['x'])]).T
+                            X1 = X0 + dx*orientation_3d_line_length
+                            pts = np.vstack( [X0, X1] )
+                            xarr,yarr = R.find2d( cam_id, pts, distorted = True )
+                            canv.plot(xarr, yarr,
+                                      color_rgba=(0,0,1,1), # blue
+                                      linewidth=config['what to show']['linewidth'],
+                                      )
+
                 if config['what to show']['show_3d_smoothed_orientation'] and camn is not None:
                     if len(this_frame_3d_data):
                         for row in this_frame_3d_data:
@@ -389,6 +403,7 @@ The default configuration correspondes to a config file:
 show_2d_position = False
 show_2d_orientation = False
 show_3d_smoothed_position = False
+show_3d_raw_orientation = False
 show_3d_smoothed_orientation = False
 white_background =  False
 max_resolution = None
