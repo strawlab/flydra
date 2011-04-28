@@ -377,18 +377,20 @@ def make_montage( h5_filename,
                                         this_frame_raw_3d_data['hz_line3'],
                                         this_frame_raw_3d_data['hz_line4'],
                                         this_frame_raw_3d_data['hz_line5']]).T
-                        for hz in hzs:
-                            line = geom.line_from_HZline(hz)
-                            X_ = line.closest() # get a point on the line
-                            ld = line.direction()
+                        Xs = np.array([this_frame_raw_3d_data['x'],
+                                       this_frame_raw_3d_data['y'],
+                                       this_frame_raw_3d_data['z']]).T
+                        cam_center = R.get_camera_center( cam_id )[:,0]
+                        for (X,hz) in zip(Xs,hzs):
+                            cam_ray = geom.line_from_points( geom.ThreeTuple(cam_center), geom.ThreeTuple(X) )
+                            raw_ori_line = geom.line_from_HZline(hz)
+                            X_ = raw_ori_line.get_my_point_closest_to_line(cam_ray)
+
+                            ld = raw_ori_line.direction()
                             dmag = abs(ld)
                             du = ld*(1./dmag) # unit length direction (normalize)
 
-                            # XXX could/should be smarter and figure out if this is in the view of the camera...
-                            # e.g. call line.get_my_point_closest_to_line(camera_optical_axis) or, better,
-                            # line.get_my_point_closest_to_line(line_through_cam_center_and_3d_location)
-
-                            length = 100.0 # arbitrary
+                            length = 0.5 # arbitrary, 0.5 meters
                             N = 100 # n segments (to deal with distortion)
 
                             X0 = X_.vals + du.vals*-length/2.0
