@@ -26,6 +26,11 @@ def convert(infilename,
             start_obj_id=None,
             stop_obj_id=None,
             dynamic_model_name=None,
+            min_ori_quality_required=None,
+            ori_quality_smooth_len=10,
+            velocity_weight_gain=None,
+            max_velocity_weight=None,
+            elevation_up_bias_degrees=None,
             ):
     if start_obj_id is None:
         start_obj_id=-numpy.inf
@@ -170,6 +175,11 @@ def convert(infilename,
                                 infilename,
                                 dynamic_model_name=dynamic_model_name,
                                 frames_per_second=frames_per_second,
+                                min_ori_quality_required=min_ori_quality_required,
+                                ori_quality_smooth_len=ori_quality_smooth_len,
+                                velocity_weight_gain=velocity_weight_gain,
+                                max_velocity_weight=max_velocity_weight,
+                                elevation_up_bias_degrees=elevation_up_bias_degrees,
                                 )
         except core_analysis.NotEnoughDataToSmoothError:
             warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
@@ -205,6 +215,15 @@ def main():
                       dest="dynamic_model",
                       default=None,
                       )
+    parser.add_option("--velocity-weight-gain",default=None,type='float')
+    parser.add_option("--max-velocity-weight",default=None,type='float')
+    parser.add_option("--elevation-up-bias-degrees",default=None,type='float')
+
+    parser.add_option("--min-ori-quality-required",default=None,type='float',
+                      help='minimum orientation quality required to emit 3D orientation info')
+    parser.add_option("--ori-quality-smooth-len",default=10,type='int',
+                      help='smoothing length of trajectory')
+
     (options, args) = parser.parse_args()
 
     if len(args)>1:
@@ -234,6 +253,11 @@ def main():
                        start_obj_id=options.start_obj_id,
                        stop_obj_id=options.stop_obj_id,
                        dynamic_model_name=options.dynamic_model,
+                       min_ori_quality_required=options.min_ori_quality_required,
+                       ori_quality_smooth_len=options.ori_quality_smooth_len,
+                       velocity_weight_gain=options.velocity_weight_gain,
+                       max_velocity_weight=options.max_velocity_weight,
+                       elevation_up_bias_degrees=options.elevation_up_bias_degrees,
                        )"""
     if options.profile:
         import cProfile

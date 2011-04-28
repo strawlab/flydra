@@ -696,6 +696,9 @@ class PreSmoothedDataCache(object):
                       up_dir=None,
                       min_ori_quality_required=None,
                       ori_quality_smooth_len=10,
+                      velocity_weight_gain=0.5,
+                      max_velocity_weight=0.9,
+                      elevation_up_bias_degrees=45.0,
                       ):
         """query results
 
@@ -720,6 +723,9 @@ class PreSmoothedDataCache(object):
                       'up_dir':up_dir,
                       'min_ori_quality_required': min_ori_quality_required,
                       'ori_quality_smooth_len':ori_quality_smooth_len,
+                      'velocity_weight_gain':velocity_weight_gain,
+                      'max_velocity_weight':max_velocity_weight,
+                      'elevation_up_bias_degrees':elevation_up_bias_degrees,
                       }
 
         if 1:
@@ -927,7 +933,9 @@ class PreSmoothedDataCache(object):
                         #velocity_weight=1.0,
                         #max_velocity_weight=1.0,
                         # don't tip the velocity angle
-                        elevation_up_bias_degrees=45.0,
+                        velocity_weight_gain=velocity_weight_gain,
+                        max_velocity_weight=max_velocity_weight,
+                        elevation_up_bias_degrees=elevation_up_bias_degrees,
                         up_dir=up_dir,
                         )
                 rows['rawdir_x'] = chosen_directions[:,0]
@@ -936,16 +944,7 @@ class PreSmoothedDataCache(object):
 
             if return_smoothed_directions:
                 save_tablename = smoothed_tablename
-                if 0:
-                    smoother = PQmath.QuatSmoother(frames_per_second=frames_per_second,
-                                                   beta=1.0,
-                                                   percent_error_eps_quats=1,
-                                                   )
-                    bad_idxs = np.nonzero(np.isnan(directions[:,0]))[0]
-                    smooth_directions = smoother.smooth_directions(directions,
-                                                                   display_progress=True,
-                                                                   no_distance_penalty_idxs=bad_idxs)
-                else: # smooth on non-flipped data
+                if 1: # smooth on non-flipped data
                     smooth_directions, smooth_directions_missing = ori_smooth(
                         directions, frames_per_second=frames_per_second,
                         return_missing=True)
@@ -957,8 +956,10 @@ class PreSmoothedDataCache(object):
                         #velocity_weight=1.0,
                         #max_velocity_weight=1.0,
                         # don't tip the velocity angle
-                        elevation_up_bias_degrees=45.0,
                         up_dir=up_dir,
+                        velocity_weight_gain=velocity_weight_gain,
+                        max_velocity_weight=max_velocity_weight,
+                        elevation_up_bias_degrees=elevation_up_bias_degrees,
                         )
                     chosen_smooth_directions = np.array(
                         chosen_smooth_directions_missing,copy=True)
@@ -1389,6 +1390,10 @@ class CachingAnalyzer:
                   walking_start_stops=None, # list of (start,stop)
                   up_dir=None,
                   min_ori_quality_required = None,
+                  ori_quality_smooth_len=10,
+                  velocity_weight_gain=0.5,
+                  max_velocity_weight=0.9,
+                  elevation_up_bias_degrees=45.0,
                   ):
         """Load Kalman state estimates from data_file.
 
@@ -1571,6 +1576,10 @@ class CachingAnalyzer:
                     return_smoothed_directions=return_smoothed_directions,
                     up_dir=up_dir,
                     min_ori_quality_required=min_ori_quality_required,
+                    ori_quality_smooth_len=ori_quality_smooth_len,
+                    velocity_weight_gain=velocity_weight_gain,
+                    max_velocity_weight=max_velocity_weight,
+                    elevation_up_bias_degrees=elevation_up_bias_degrees,
                     )
 
         if not len(rows):
