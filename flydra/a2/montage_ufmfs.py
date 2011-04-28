@@ -29,6 +29,7 @@ def get_config_defaults():
             'zoom_factor':5,
             'white_background': False,
             'max_resolution': None,
+            'obj_labels':False,
             }
     default = collections.defaultdict(dict)
     default['what to show']=what
@@ -112,6 +113,10 @@ def make_montage( h5_filename,
         config['what to show']['show_3d_smoothed_orientation']):
         if kalman_filename is None:
             raise ValueError('need kalman filename to show requested 3D data')
+
+    if config['what to show']['obj_labels']:
+        if kalman_filename is None:
+            raise ValueError('need kalman filename to show object labels')
 
     if kalman_filename is not None:
         data3d = load_3d_data(kalman_filename)
@@ -316,6 +321,16 @@ def make_montage( h5_filename,
                                       color_rgba=(1,0,0,1), # red
                                       )
 
+                if config['what to show']['obj_labels'] and camn is not None:
+                    if len(this_frame_3d_data):
+                        X = np.array([this_frame_3d_data['x'], this_frame_3d_data['y'], this_frame_3d_data['z'], np.ones_like(this_frame_3d_data['x'])]).T
+                        xarr,yarr = R.find2d( cam_id, X, distorted = True )
+                        for i in range(len(xarr)):
+                            obj_id = this_frame_3d_data['obj_id'][i]
+                            canv.text( '%d'%obj_id, xarr[i], yarr[i],
+                                       font_size=4,
+                                       color_rgba=(1,0,0,1) )
+
                 if workaround_ffmpeg2theora_bug:
                     # first frame should get a colored pixel so that
                     # ffmpeg doesn't interpret the whole move as grayscale
@@ -368,6 +383,7 @@ max_resolution = None
 zoom_obj = None
 zoom_orig_pixels = 50
 zoom_factor = 5
+obj_labels = False
 
 Config files may also have sections such as:
 
