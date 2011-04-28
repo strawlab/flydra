@@ -47,5 +47,6 @@ Contents:
   :maxdepth: 2
 
   orientation_ekf_fitter.rst
+  orientation_smoothing.rst
 
 See also :ref:`Data analysis <data_analysis>` (specifically the "Extracting longitudinal body orientation" section).

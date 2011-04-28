@@ -4,7 +4,7 @@ Fusing 2D orientations to 3D
 ============================
 
 Flydra uses an extended Kalman filter (EKF) and a simple data
-association algorithm to fuse 2D orientation data into a 3D
+association algorithm to fuse 2D orientation data into an a 3D
 orientation estimate. The program
 :command:`flydra_analysis_orientation_ekf_fitter` is used to perform
 this step, and takes, amongst other data, the 2D orientation data
@@ -13,7 +13,12 @@ converts it into the ``hz_line*`` columns of the
 ``kalman_observations`` table. (The directional component of these
 Pluecker coordinates should be ignored, as it is meaningless.)
 
-The following sections detail the algorithm used for this conversion.
+See :ref:`smoothing orientations <orientation_smoothing>` for a
+description of the step that chooses orientations (and thus removes
+the 180 degree ambiguity in the body orientation estimates).
+
+The following sections detail the algorithm used for the finding of
+the hz_line data.
 
 Process model
 -------------
