@@ -968,8 +968,8 @@ def compute_ori_quality(kh5, orig_frames, obj_id, smooth_len=10):
     try:
         table = getattr(group,'obj%d'%obj_id)
     except:
-        sys.stderr.write('ERROR while opening %s\n'%kh5.filename)
-        sys.stderr.write('Hint: re-run orientation fitting for this file.\n')
+        sys.stderr.write('ERROR while getting EKF fit data for obj_id %d in file opening %s\n'%(obj_id,kh5.filename))
+        sys.stderr.write('Hint: re-run orientation fitting for this file (for this obj_id).\n')
         raise
     table_ram = table[:]
     frames = table_ram['frame']
