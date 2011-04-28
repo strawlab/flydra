@@ -799,15 +799,15 @@ class PreSmoothedDataCache(object):
                                                     sys.stderr.write(
                                                         'cached variable %s changed, but cannot ignore\n'%(
                                                         varname))
-                                                    same=False
-                                                    break
+                                                same=False
+                                                break
                                         else:
                                             if int(os.environ.get('CACHE_DEBUG','0')):
                                                 sys.stderr.write(
                                                     'cached variable %s changed (current value: %s, cached value: %s)\n'%(
                                                     varname,localval,savedval))
-                                                same=False
-                                                break
+                                            same=False
+                                            break
                                 except ValueError:
                                     if isinstance(savedval,np.ndarray):
                                         if not (savedval.shape==localval.shape and
