@@ -347,6 +347,10 @@ def doit(output_h5_filename=None,
 
             # associate framenumbers with timestamps using 2d .h5 file
             data2d = h5.root.data2d_distorted[:] # load to RAM
+            if start is not None:
+                data2d = data2d[ data2d['frame'] >= start ]
+            if stop is not None:
+                data2d = data2d[ data2d['frame'] <= stop ]
             data2d_idxs = np.arange(len(data2d))
             h5_framenumbers = data2d['frame']
             h5_frame_qfi = result_utils.QuickFrameIndexer(h5_framenumbers)
@@ -381,6 +385,10 @@ def doit(output_h5_filename=None,
                 output_row_obj_id_cond = all_kobs_obj_ids==obj_id
 
                 obj_3d_rows = ca.load_dynamics_free_MLE_position( obj_id, kh5)
+                if start is not None:
+                    obj_3d_rows = obj_3d_rows[ obj_3d_rows['frame'] >= start ]
+                if stop is not None:
+                    obj_3d_rows = obj_3d_rows[ obj_3d_rows['frame'] <= stop ]
 
                 try:
                     smoothed_3d_rows = ca.load_data(
@@ -408,12 +416,6 @@ def doit(output_h5_filename=None,
                     if framenumber > max_frame:
                         max_frame = framenumber
 
-                    if start is not None:
-                        if not framenumber >= start:
-                            continue
-                    if stop is not None:
-                        if not framenumber <= stop:
-                            continue
                     h5_2d_row_idxs = h5_frame_qfi.get_frame_idxs(framenumber)
 
                     frame2d = data2d[h5_2d_row_idxs]
@@ -435,7 +437,11 @@ def doit(output_h5_filename=None,
                         cond = ((frame2d['camn']==camn) &
                                 (frame2d['frame_pt_idx']==camn_pt_no))
                         idxs = np.nonzero(cond)[0]
+                        if len(idxs)==0:
+                            continue
                         assert len(idxs)==1
+                        ## if len(idxs)!=1:
+                        ##     raise ValueError('expected one (and only one) frame, got %d'%len(idxs))
                         idx = idxs[0]
 
                         orig_data2d_rownum = frame2d_idxs[idx]
@@ -1185,6 +1191,12 @@ def main():
 
     parser.add_option("--show", action='store_true', default=False)
 
+    parser.add_option("--start", type='int', default=None,
+                      help="frame number to begin analysis on")
+
+    parser.add_option("--stop", type='int', default=None,
+                      help="frame number to end analysis on")
+
     parser.add_option("--obj-only", type="string")
 
     (options, args) = parser.parse_args()
@@ -1204,6 +1216,8 @@ def main():
     doit(kalman_filename=options.kalman_filename,
          data2d_filename=options.h5,
          area_threshold_for_orientation=options.area_threshold_for_orientation,
+         start=options.start,
+         stop=options.stop,
          output_h5_filename=options.output_h5,
          obj_only=options.obj_only,
          options=options)
