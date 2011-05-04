@@ -127,6 +127,20 @@ value. Due to the definition of :math:`z_t` above, this is equivalent
 to saying only small absolute values of :math:`z_t` are associated
 with the target. This gating is established by the
 ``--gate-angle-threshold-degrees`` parameter to
-:command:`flydra_analysis_orientation_ekf_fitter`. Another parameter,
-``--area-threshold-for-orientation``, may also be to further improve
-reliability.
+:command:`flydra_analysis_orientation_ekf_fitter`. ``--gate-angle-threshold-degrees``
+is defined between 0 and 180. The basic idea is that the program has a
+prior estimate of orientation and angular velocity from past frames,
+and any new 2D orientation is accepted or not (gated) based on whether
+the acceptance makes sense -- whether it's close to the predicted
+value. So a value of zero means reject everything and 180 means accept
+everything. 10 means that you believe your prior estimates and only
+accept close observations, where as 170 means you think the prior is
+less reliable than the observation. (IIRC, the presence or absence of
+the green line in the videos indicates whether the 2D orientation was
+gated in or out, respectively.)
+
+``--area-threshold-for-orientation`` lets you discard a point if the
+area of the 2D detection is too low. Many spurious detections often
+have really low area, so this is a good way to get rid of
+them. However, the default of this value is zero, so I think when I
+wrote the program I found it to be unnecessary.
