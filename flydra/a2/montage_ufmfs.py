@@ -11,6 +11,7 @@ import subprocess, collections
 import flydra.a2.ufmf_tools as ufmf_tools
 import flydra.a2.core_analysis as core_analysis
 import flydra.reconstruct as reconstruct
+import flydra.geom as geom
 import cherrypy  # ubuntu: install python-cherrypy3
 import benu
 
@@ -20,12 +21,17 @@ def get_config_defaults():
     # keep in sync with usage in main() below
     what = {'show_2d_position': False,
             'show_2d_orientation': False,
-            #'show_3d_MLE_position': False,
+            'show_3d_MLE_position': False,
             'show_3d_smoothed_position': False,
-            #'show_3d_raw_orientation': False,
+            'show_3d_raw_orientation': False,
             'show_3d_smoothed_orientation': False,
+            'zoom_obj':None,
+            'zoom_orig_pixels':50,
+            'zoom_factor':5,
             'white_background': False,
             'max_resolution': None,
+            'obj_labels':False,
+            'linewidth':1.0,
             }
     default = collections.defaultdict(dict)
     default['what to show']=what
@@ -47,7 +53,35 @@ def montage(fnames, title, target):
     #print CMD
     subprocess.check_call(CMD,shell=True)
 
-def load_3d_data(kalman_filename):
+def load_3d_raw_data(kalman_filename,**kwargs):
+    with openFileSafe( kalman_filename, mode='r' ) as kh5:
+        ca = core_analysis.get_global_CachingAnalyzer()
+        all_obj_ids, obj_ids, is_mat_file, data_file, extra = \
+                     ca.initial_file_load(kalman_filename)
+        allrows = []
+        this_kw = {'min_ori_quality_required':kwargs['min_ori_quality_required']}
+        for obj_id in obj_ids:
+            try:
+                rows = ca.load_dynamics_free_MLE_position( obj_id, kalman_filename,
+                                                           #with_directions=True,
+                                                           **this_kw)
+            except core_analysis.NotEnoughDataToSmoothError:
+                warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
+                continue
+            allrows.append( rows )
+    data3d = np.concatenate(allrows)
+    return data3d
+
+def is_obj_in_frame_range( obj_id, all_obj_ids, frames, start=None, stop=None):
+    valid_cond = np.ones( frames.shape, dtype=np.bool)
+    if start is not None:
+        valid_cond = valid_cond & (frames >= start)
+    if stop is not None:
+        valid_cond = valid_cond & (frames <= stop )
+    valid_obj_ids = all_obj_ids[ valid_cond ]
+    return bool(np.sum(valid_obj_ids==obj_id))
+
+def load_3d_data(kalman_filename,start=None,stop=None,**kwargs):
     with openFileSafe( kalman_filename, mode='r' ) as kh5:
         ca = core_analysis.get_global_CachingAnalyzer()
         all_obj_ids, obj_ids, is_mat_file, data_file, extra = \
@@ -66,13 +100,16 @@ def load_3d_data(kalman_filename):
             print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
         allrows = []
         for obj_id in obj_ids:
+            if not is_obj_in_frame_range( obj_id, all_obj_ids, extra['frames'], start=start, stop=stop):
+                # obj_id not in range of frames that we're analyzing now
+                continue
             try:
                 rows = ca.load_data( obj_id, kalman_filename,
                                      use_kalman_smoothing=True,
                                      frames_per_second=fps,
                                      dynamic_model_name=dynamic_model_name,
                                      return_smoothed_directions = True,
-                                     )
+                                     **kwargs)
             except core_analysis.NotEnoughDataToSmoothError:
                 warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
                 continue
@@ -94,7 +131,7 @@ def make_montage( h5_filename,
                   caminfo_h5_filename = None,
                   colormap = None,
                   kalman_filename = None,
-                  ):
+                  **kwargs):
     config = get_config_defaults()
     if cfg_filename is not None:
         loaded_cfg = cherrypy._cpconfig.as_dict( cfg_filename )
@@ -106,15 +143,27 @@ def make_montage( h5_filename,
     orientation_3d_line_length = 0.1
 
     if (config['what to show']['show_3d_smoothed_position'] or
+        config['what to show']['show_3d_MLE_position'] or
+        config['what to show']['show_3d_raw_orientation'] or
         config['what to show']['show_3d_smoothed_orientation']):
         if kalman_filename is None:
             raise ValueError('need kalman filename to show requested 3D data')
 
+    if config['what to show']['obj_labels']:
+        if kalman_filename is None:
+            raise ValueError('need kalman filename to show object labels')
+
     if kalman_filename is not None:
-        data3d = load_3d_data(kalman_filename)
+        data3d = load_3d_data(kalman_filename,start=start,stop=stop,
+                              **kwargs)
+        if (config['what to show']['show_3d_MLE_position'] or
+            config['what to show']['show_3d_raw_orientation']):
+            data_raw_3d = load_3d_raw_data(kalman_filename,**kwargs)
+        else:
+            data_raw_3d = None
         R = reconstruct.Reconstructor(kalman_filename)
     else:
-        data3d = R = None
+        data3d = R = data_raw_3d = None
 
     if movie_fnames is None:
         movie_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
@@ -168,6 +217,21 @@ def make_montage( h5_filename,
 
         if data3d is not None:
             this_frame_3d_data = data3d[data3d['frame']==frame]
+        else:
+            this_frame_3d_data = None
+
+        if data_raw_3d is not None:
+            this_frame_raw_3d_data = data_raw_3d[data_raw_3d['frame']==frame]
+        else:
+            this_frame_raw_3d_data = None
+
+        if config['what to show']['zoom_obj'] is not None:
+            zoom_cond_3d = this_frame_3d_data['obj_id']==config['what to show']['zoom_obj']
+            if np.sum( zoom_cond_3d ) == 0:
+                # object not in this frame
+                this_frame_this_obj_3d_data = None
+            else:
+                this_frame_this_obj_3d_data = this_frame_3d_data[ zoom_cond_3d ]
 
         if (frame_enum%100)==0:
             print '%s: frame %d'%(datetime_str,frame)
@@ -214,6 +278,29 @@ def make_montage( h5_filename,
                     device_w = fix_h*desire_aspect
                     device_y = 0
                     device_x = (fix_w-device_w)/2.0
+                user_rect = (0,0,image.shape[1],image.shape[0])
+            elif config['what to show']['zoom_obj'] is not None:
+                device_x = 0
+                device_y = 0
+                device_w = config['what to show']['zoom_orig_pixels']*config['what to show']['zoom_factor']
+                device_h = device_w
+                fix_w = device_w
+                fix_h = device_h
+
+                if this_frame_this_obj_3d_data is not None:
+                    X = np.array([this_frame_this_obj_3d_data['x'],
+                                  this_frame_this_obj_3d_data['y'],
+                                  this_frame_this_obj_3d_data['z'],
+                                  np.ones_like(this_frame_this_obj_3d_data['x'])]).T
+                    xarr,yarr = R.find2d( cam_id, X, distorted = True )
+                    assert len(xarr)==1
+                    x=xarr[0]
+                    y=yarr[0]
+                    r = config['what to show']['zoom_orig_pixels']*0.5
+                    user_rect = (x-r,y-r,r*2,r*2)
+                else:
+                    # we're not tracking object -- don't draw anything
+                    user_rect = (-1000,-1000,10,10)
             else:
                 device_x = 0
                 device_y = 0
@@ -221,10 +308,10 @@ def make_montage( h5_filename,
                 device_h = int(image.shape[0]*pixel_aspect) # compensate for pixel_aspect
                 fix_w = device_w
                 fix_h = device_h
+                user_rect = (0,0,image.shape[1],image.shape[0])
 
             canv=benu.Canvas(save_fname_path,fix_w,fix_h)
             device_rect = (device_x,device_y,device_w,device_h)
-            user_rect = (0,0,image.shape[1],image.shape[0])
             with canv.set_user_coords(device_rect, user_rect,
                                       transform=transform):
                 canv.imshow(image,0,0,cmap=colormap)
@@ -236,10 +323,13 @@ def make_montage( h5_filename,
                     canv.scatter(xarr, yarr,
                                  color_rgba=(0,0,0,1),
                                  radius=10,
+                                 markeredgewidth=config['what to show']['linewidth'],
                                  )
-                    canv.scatter(xarr+1, yarr+1,
+                    # draw shadow
+                    canv.scatter(xarr+config['what to show']['linewidth'], yarr+config['what to show']['linewidth'],
                                  color_rgba=(1,1,1,1),
                                  radius=10,
+                                 markeredgewidth=config['what to show']['linewidth'],
                                  )
                 if config['what to show']['show_2d_orientation'] and camn is not None:
                     cond = tracker_data['camn']==camn
@@ -254,24 +344,75 @@ def make_montage( h5_filename,
                     for x,y,xi,yi in zip(xarr,yarr,xinc,yinc):
                         canv.plot([x-xi,x+xi],[y-yi,y+yi],
                                   color_rgba=(0,1,0,0.4),
+                                  linewidth=config['what to show']['linewidth'],
                                   )
                 if config['what to show']['show_3d_smoothed_position'] and camn is not None:
                     if len(this_frame_3d_data):
-                        cam_id = camn2cam_id[camn]
                         X = np.array([this_frame_3d_data['x'], this_frame_3d_data['y'], this_frame_3d_data['z'], np.ones_like(this_frame_3d_data['x'])]).T
                         xarr,yarr = R.find2d( cam_id, X, distorted = True )
                         canv.scatter(xarr, yarr,
                                      color_rgba=(0,0,0,1),
                                      radius=10,
+                                     markeredgewidth=config['what to show']['linewidth'],
                                      )
-                        canv.scatter(xarr+1, yarr+1,
+                        # draw shadow
+                        canv.scatter(xarr+config['what to show']['linewidth'], yarr+config['what to show']['linewidth'],
                                      color_rgba=(1,1,1,1),
                                      radius=10,
+                                     markeredgewidth=config['what to show']['linewidth'],
                                      )
+
+                if config['what to show']['show_3d_MLE_position'] and camn is not None:
+                    if len(this_frame_raw_3d_data):
+                        X = np.array([this_frame_raw_3d_data['x'], this_frame_raw_3d_data['y'], this_frame_raw_3d_data['z'], np.ones_like(this_frame_raw_3d_data['x'])]).T
+                        xarr,yarr = R.find2d( cam_id, X, distorted = True )
+                        canv.scatter(xarr, yarr,
+                                     color_rgba=(0.2,0.2,0.5,1),
+                                     radius=8,
+                                     markeredgewidth=config['what to show']['linewidth'],
+                                     )
+                        # draw shadow
+                        canv.scatter(xarr+config['what to show']['linewidth'], yarr+config['what to show']['linewidth'],
+                                     color_rgba=(0.7,0.7,1,1), # blue
+                                     radius=8,
+                                     markeredgewidth=config['what to show']['linewidth'],
+                                     )
+
+                if config['what to show']['show_3d_raw_orientation'] and camn is not None:
+                    if len(this_frame_raw_3d_data):
+                        hzs = np.array([this_frame_raw_3d_data['hz_line0'],
+                                        this_frame_raw_3d_data['hz_line1'],
+                                        this_frame_raw_3d_data['hz_line2'],
+                                        this_frame_raw_3d_data['hz_line3'],
+                                        this_frame_raw_3d_data['hz_line4'],
+                                        this_frame_raw_3d_data['hz_line5']]).T
+                        Xs = np.array([this_frame_raw_3d_data['x'],
+                                       this_frame_raw_3d_data['y'],
+                                       this_frame_raw_3d_data['z']]).T
+                        cam_center = R.get_camera_center( cam_id )[:,0]
+                        for (X,hz) in zip(Xs,hzs):
+                            cam_ray = geom.line_from_points( geom.ThreeTuple(cam_center), geom.ThreeTuple(X) )
+                            raw_ori_line = geom.line_from_HZline(hz)
+                            X_ = raw_ori_line.get_my_point_closest_to_line(cam_ray)
+
+                            ld = raw_ori_line.direction()
+                            dmag = abs(ld)
+                            du = ld*(1./dmag) # unit length direction (normalize)
+
+                            length = 0.5 # arbitrary, 0.5 meters
+                            N = 100 # n segments (to deal with distortion)
+
+                            X0 = X_.vals + du.vals*-length/2.0
+                            X = X0[:,np.newaxis] + np.linspace(0,length,N)[np.newaxis,:]*du.vals[:,np.newaxis]
+                            Xh = np.vstack( (X, np.ones_like( X[0,np.newaxis,:] ) ) ).T
+                            xarr,yarr = R.find2d( cam_id, Xh, distorted = True )
+                            canv.plot( xarr, yarr,
+                                       color_rgba=(0,0,1,1), # blue
+                                       linewidth=config['what to show']['linewidth'],
+                                       )
 
                 if config['what to show']['show_3d_smoothed_orientation'] and camn is not None:
                     if len(this_frame_3d_data):
-                        cam_id = camn2cam_id[camn]
                         for row in this_frame_3d_data:
                             X0 = np.array([row['x'], row['y'], row['z'], np.ones_like(row['x'])]).T
                             dx = np.array([row['dir_x'], row['dir_y'], row['dir_z'], np.zeros_like(row['x'])]).T
@@ -280,7 +421,18 @@ def make_montage( h5_filename,
                             xarr,yarr = R.find2d( cam_id, pts, distorted = True )
                             canv.plot(xarr, yarr,
                                       color_rgba=(1,0,0,1), # red
+                                      linewidth=config['what to show']['linewidth'],
                                       )
+
+                if config['what to show']['obj_labels'] and camn is not None:
+                    if len(this_frame_3d_data):
+                        X = np.array([this_frame_3d_data['x'], this_frame_3d_data['y'], this_frame_3d_data['z'], np.ones_like(this_frame_3d_data['x'])]).T
+                        xarr,yarr = R.find2d( cam_id, X, distorted = True )
+                        for i in range(len(xarr)):
+                            obj_id = this_frame_3d_data['obj_id'][i]
+                            canv.text( '%d'%obj_id, xarr[i], yarr[i],
+                                       font_size=4,
+                                       color_rgba=(1,0,0,1) )
 
                 if workaround_ffmpeg2theora_bug:
                     # first frame should get a colored pixel so that
@@ -327,10 +479,17 @@ The default configuration correspondes to a config file:
 [what to show]
 show_2d_position = False
 show_2d_orientation = False
+show_3d_MLE_position = False
 show_3d_smoothed_position = False
+show_3d_raw_orientation = False
 show_3d_smoothed_orientation = False
 white_background =  False
 max_resolution = None
+zoom_obj = None
+zoom_orig_pixels = 50
+zoom_factor = 5
+obj_labels = False
+linewidth = 1.0
 
 Config files may also have sections such as:
 
@@ -384,6 +543,7 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     parser.add_option( "--caminfo-h5-filename", type="string",
                        help="path of h5 file from which to load caminfo")
 
+    core_analysis.add_options_to_parser(parser)
     (options, args) = parser.parse_args()
 
     if len(args)<1:
@@ -399,6 +559,7 @@ transform='rot 180' # rotate the image 180 degrees (See transform
         movie_cam_ids = movie_cam_ids.split( os.pathsep )
 
     h5_filename = args[0]
+    kwargs = core_analysis.get_options_kwargs(options)
     make_montage( h5_filename,
                   kalman_filename = options.kalman_filename,
                   cfg_filename = options.config,
@@ -413,4 +574,4 @@ transform='rot 180' # rotate the image 180 degrees (See transform
                   movie_cam_ids = movie_cam_ids,
                   caminfo_h5_filename = options.caminfo_h5_filename,
                   colormap = options.colormap,
-                  )
+                  **kwargs)

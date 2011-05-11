@@ -313,7 +313,13 @@ def test_benu():
     tmp_fname = tempfile.mktemp('.png')
     canv = Canvas(tmp_fname,1024,1024)
     device_rect = (256,256,512,512)
-    user_rect = (0,0,50,50)
+    ux0 = 0
+    uy0 = 0
+    uw = 50
+    uh = 50
+    ux1 = ux0+uw
+    uy1 = uy0+uh
+    user_rect = (ux0,uy0,uw,uh)
 
     #transform = 'rot 10'
     transform = 'rot -45'
@@ -329,9 +335,18 @@ def test_benu():
                               transform=transform):
         for pt in pts:
             canv.scatter( [pt[0]], [pt[1]] )
-        canv.plot( [0,0,50,50,0],[0,50,50,0,0] )
+        # draw boundary in user coords
+        canv.plot( [ux0,ux0,ux1,ux1,ux0],[uy0,uy1,uy1,uy0,uy0], color_rgba=(1,0,0,1))
 
+    if 1:
+        # draw boundary of above coord system
+        canv.plot( [device_rect[0],        device_rect[0],         device_rect[0]+device_rect[2], device_rect[0]+device_rect[2], device_rect[0],],
+                   [device_rect[1], device_rect[1]+device_rect[3], device_rect[1]+device_rect[3],       device_rect[1],          device_rect[1],],
+                   color_rgba=(0,0.5,0,1) )
+
+    # draw star
     canv.poly( [0,50,100,0,100,0], [100,0,100,50,50,100], color_rgba=(0,0,1,1), edgewidth=5 )
+
 
     for pt in pts:
         x,y = canv.get_transformed_point(pt[0],pt[1],device_rect,user_rect,

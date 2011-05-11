@@ -23,9 +23,12 @@ def convert(infilename,
             save_timestamps=True,
             file_time_data=None,
             do_nothing=False, # set to true to test for file existance
+            start_obj_id=None,
             stop_obj_id=None,
             dynamic_model_name=None,
-            ):
+            **kwargs):
+    if start_obj_id is None:
+        start_obj_id=-numpy.inf
     if stop_obj_id is None:
         stop_obj_id=numpy.inf
 
@@ -87,14 +90,15 @@ def convert(infilename,
         print 'finding unique obj_ids...'
         unique_obj_ids = numpy.unique(obs_obj_ids)
         print '(found %d)'%(len(unique_obj_ids),)
+        unique_obj_ids = unique_obj_ids[ unique_obj_ids >= start_obj_id ]
+        unique_obj_ids = unique_obj_ids[ unique_obj_ids <= stop_obj_id ]
+        print '(will export %d)'%(len(unique_obj_ids),)
         print 'finding 2d data for each obj_id...'
         timestamp_time = numpy.zeros( unique_obj_ids.shape, dtype=numpy.float64)
         table_kobs_frame = table_kobs.read(field='frame')
         assert table_kobs_frame.dtype == table_data2d_frames.dtype # otherwise very slow
 
         for obj_id_enum,obj_id in enumerate(unique_obj_ids):
-            if obj_id > stop_obj_id:
-                break
             if obj_id_enum%100==0:
                 print '%d of %d'%(obj_id_enum,len(unique_obj_ids))
             valid_cond = obs_obj_ids == obj_id
@@ -140,6 +144,8 @@ def convert(infilename,
 
     ca = core_analysis.get_global_CachingAnalyzer()
     all_obj_ids, obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(infilename)
+    obj_ids = obj_ids[ obj_ids >= start_obj_id ]
+    obj_ids = obj_ids[ obj_ids <= stop_obj_id ]
     if frames_per_second is None:
         frames_per_second = extra['frames_per_second']
     if dynamic_model_name is None:
@@ -160,15 +166,14 @@ def convert(infilename,
         if i%100 == 0:
             print '%d of %d'%(i,len(obj_ids))
         try:
-            results = ca.get_smoothed(obj_id,
-                                      infilename,
-                                      frames_per_second=frames_per_second,
-                                      dynamic_model_name=dynamic_model_name,
-                                      )
+            rows = ca.load_data(obj_id,
+                                infilename,
+                                dynamic_model_name=dynamic_model_name,
+                                frames_per_second=frames_per_second,
+                                **kwargs)
         except core_analysis.NotEnoughDataToSmoothError:
             warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
             continue
-        rows = results['kalman_smoothed_rows']
         allrows.append(rows)
 
     allrows = numpy.concatenate( allrows )
@@ -180,7 +185,7 @@ def convert(infilename,
         newfilename=outfilename,
         extra_vars=extra_vars,
         )
-
+    ca.close()
 
 def main():
     usage = '%prog FILE [options]'
@@ -191,13 +196,16 @@ def main():
                       help="hdf5 file with 2d data FILE2D used to calculate timestamp information",
                       metavar="FILE2D")
     parser.add_option("--no-timestamps",action='store_true',dest='no_timestamps',default=False)
-    parser.add_option("--stop",dest='stop_obj_id',default=None,type='int')
+    parser.add_option("--start-obj-id",default=None,type='int',help='last obj_id to save')
+    parser.add_option("--stop-obj-id",default=None,type='int',help='last obj_id to save')
+    parser.add_option("--stop",default=None,type='int',help='last obj_id to save (DEPRECATED)')
     parser.add_option("--profile",action='store_true',dest='profile',default=False)
     parser.add_option("--dynamic-model",
                       type="string",
                       dest="dynamic_model",
                       default=None,
                       )
+    core_analysis.add_options_to_parser(parser)
     (options, args) = parser.parse_args()
 
     if len(args)>1:
@@ -209,30 +217,27 @@ def main():
         parser.print_help()
         return
 
+    if options.stop_obj_id is not None and options.stop is not None:
+        raise ValueError('--stop and --stop-obj-id cannot both be set')
+
+    if options.stop is not None:
+        warnings.warn('DeprecationWarning: --stop will be phased out in favor of --stop-obj-id')
+        options.stop_obj_id = options.stop
+
     infilename = args[0]
     if options.dest_file is None:
         outfilename = os.path.splitext(infilename)[0] + '_smoothed.mat'
     else:
         outfilename = options.dest_file
-    cmd_str = """convert(infilename,outfilename,
-                       file_time_data=options.file2d,
-                       save_timestamps = not options.no_timestamps,
-                       stop_obj_id=options.stop_obj_id,
-                       dynamic_model_name=options.dynamic_model,
-                       )"""
-    if options.profile:
-        import cProfile
-        import lsprofcalltree
-        p = cProfile.Profile()
 
-        print 'PROFILING'
-        p.runctx(cmd_str,globals(),locals())
-        k = lsprofcalltree.KCacheGrind(p)
-        data = open('data2smoothed.prof',mode='wb')
-        k.output(data)
-        data.close()
-    else:
-        exec(cmd_str)
+    kwargs = core_analysis.get_options_kwargs(options)
+    convert(infilename,outfilename,
+            file_time_data=options.file2d,
+            save_timestamps = not options.no_timestamps,
+            start_obj_id=options.start_obj_id,
+            stop_obj_id=options.stop_obj_id,
+            dynamic_model_name=options.dynamic_model,
+            **kwargs)
 
 if __name__=='__main__':
     main()

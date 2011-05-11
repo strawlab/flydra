@@ -193,12 +193,8 @@ body. **To add:** a description of the image blending technique used
 with high-framerate images for ignoring flapping wings.
 
 From the N estimates of body angle from N camera views, an estimate of
-the 3D body axis direction is made. For each camera, a line from the
-2D body angle estimate on the image plane and the 3D camera center
-(from the known camera calibration) are used to find a plane in 3D
-space.  Then, the best-fit line of intersection of the N planes is
-then found using an algorithm based on singular value decomposition.
-
+the 3D body axis direction is made. See :ref:`Estimating orientations
+with flydra <orientation_data>` for a description of this step.
 
 Practical steps
 ---------------
@@ -217,9 +213,15 @@ Estimating longitudinal body orientation happens in several steps:
 * Check the 2D body axis estimates using :command:`flydra_analysis_montage_ufmfs` 
   to generate images or movies of the tracking.
 
-* Finally, another run through the tracker and data association now
-  using the 2D orientation data. (Use the :command:`flydra_kalmanize`
-  program again.)
+* Finally, take the 2D orientation data and make 3D estimates. Nowdays
+  the best way to do this is with
+  :command:`flydra_analysis_orientation_ekf_fitter`, as described
+  :ref:`here
+  <orientation_ekf_fitter-fusing-2d-orientations-to-3d>`. (The old way
+  was another run through the tracker and data association using the
+  :command:`flydra_kalmanize` program again.) This 2D to 3D stage is
+  covered in the :ref:`estimating orientations with flydra
+  <orientation_data>` section.
 
 An example of a call to
 :command:`flydra_analysis_image_based_orientation` is: (This was

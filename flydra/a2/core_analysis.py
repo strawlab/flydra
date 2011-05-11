@@ -32,6 +32,24 @@ import unittest
 import pkg_resources
 from nose.plugins.attrib import attr as nose_attr
 
+def add_options_to_parser(parser):
+    parser.add_option("--velocity-weight-gain",default=0.5,type='float')
+    parser.add_option("--max-velocity-weight",default=0.9,type='float')
+    parser.add_option("--elevation-up-bias-degrees",default=45.0,type='float')
+
+    parser.add_option("--min-ori-quality-required",default=None,type='float',
+                      help='minimum orientation quality required to emit 3D orientation info')
+    parser.add_option("--ori-quality-smooth-len",default=10,type='int',
+                      help='smoothing length of trajectory')
+def get_options_kwargs(options):
+    result = dict(velocity_weight_gain=options.velocity_weight_gain,
+                  max_velocity_weight=options.max_velocity_weight,
+                  elevation_up_bias_degrees=options.elevation_up_bias_degrees,
+                  min_ori_quality_required=options.min_ori_quality_required,
+                  ori_quality_smooth_len=options.ori_quality_smooth_len,
+                  )
+    return result
+
 def rotate_vec(q,v):
     """rotate vector v by quaternion q"""
 
@@ -696,6 +714,9 @@ class PreSmoothedDataCache(object):
                       up_dir=None,
                       min_ori_quality_required=None,
                       ori_quality_smooth_len=10,
+                      velocity_weight_gain=0.5,
+                      max_velocity_weight=0.9,
+                      elevation_up_bias_degrees=45.0,
                       ):
         """query results
 
@@ -720,6 +741,9 @@ class PreSmoothedDataCache(object):
                       'up_dir':up_dir,
                       'min_ori_quality_required': min_ori_quality_required,
                       'ori_quality_smooth_len':ori_quality_smooth_len,
+                      'velocity_weight_gain':velocity_weight_gain,
+                      'max_velocity_weight':max_velocity_weight,
+                      'elevation_up_bias_degrees':elevation_up_bias_degrees,
                       }
 
         if 1:
@@ -799,15 +823,15 @@ class PreSmoothedDataCache(object):
                                                     sys.stderr.write(
                                                         'cached variable %s changed, but cannot ignore\n'%(
                                                         varname))
-                                                    same=False
-                                                    break
+                                                same=False
+                                                break
                                         else:
                                             if int(os.environ.get('CACHE_DEBUG','0')):
                                                 sys.stderr.write(
                                                     'cached variable %s changed (current value: %s, cached value: %s)\n'%(
                                                     varname,localval,savedval))
-                                                same=False
-                                                break
+                                            same=False
+                                            break
                                 except ValueError:
                                     if isinstance(savedval,np.ndarray):
                                         if not (savedval.shape==localval.shape and
@@ -927,7 +951,9 @@ class PreSmoothedDataCache(object):
                         #velocity_weight=1.0,
                         #max_velocity_weight=1.0,
                         # don't tip the velocity angle
-                        elevation_up_bias_degrees=45.0,
+                        velocity_weight_gain=velocity_weight_gain,
+                        max_velocity_weight=max_velocity_weight,
+                        elevation_up_bias_degrees=elevation_up_bias_degrees,
                         up_dir=up_dir,
                         )
                 rows['rawdir_x'] = chosen_directions[:,0]
@@ -936,16 +962,7 @@ class PreSmoothedDataCache(object):
 
             if return_smoothed_directions:
                 save_tablename = smoothed_tablename
-                if 0:
-                    smoother = PQmath.QuatSmoother(frames_per_second=frames_per_second,
-                                                   beta=1.0,
-                                                   percent_error_eps_quats=1,
-                                                   )
-                    bad_idxs = np.nonzero(np.isnan(directions[:,0]))[0]
-                    smooth_directions = smoother.smooth_directions(directions,
-                                                                   display_progress=True,
-                                                                   no_distance_penalty_idxs=bad_idxs)
-                else: # smooth on non-flipped data
+                if 1: # smooth on non-flipped data
                     smooth_directions, smooth_directions_missing = ori_smooth(
                         directions, frames_per_second=frames_per_second,
                         return_missing=True)
@@ -957,8 +974,10 @@ class PreSmoothedDataCache(object):
                         #velocity_weight=1.0,
                         #max_velocity_weight=1.0,
                         # don't tip the velocity angle
-                        elevation_up_bias_degrees=45.0,
                         up_dir=up_dir,
+                        velocity_weight_gain=velocity_weight_gain,
+                        max_velocity_weight=max_velocity_weight,
+                        elevation_up_bias_degrees=elevation_up_bias_degrees,
                         )
                     chosen_smooth_directions = np.array(
                         chosen_smooth_directions_missing,copy=True)
@@ -1389,6 +1408,10 @@ class CachingAnalyzer:
                   walking_start_stops=None, # list of (start,stop)
                   up_dir=None,
                   min_ori_quality_required = None,
+                  ori_quality_smooth_len=10,
+                  velocity_weight_gain=0.5,
+                  max_velocity_weight=0.9,
+                  elevation_up_bias_degrees=45.0,
                   ):
         """Load Kalman state estimates from data_file.
 
@@ -1571,6 +1594,10 @@ class CachingAnalyzer:
                     return_smoothed_directions=return_smoothed_directions,
                     up_dir=up_dir,
                     min_ori_quality_required=min_ori_quality_required,
+                    ori_quality_smooth_len=ori_quality_smooth_len,
+                    velocity_weight_gain=velocity_weight_gain,
+                    max_velocity_weight=max_velocity_weight,
+                    elevation_up_bias_degrees=elevation_up_bias_degrees,
                     )
 
         if not len(rows):

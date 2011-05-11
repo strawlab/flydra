@@ -31,9 +31,6 @@ Q_scalar_rate = 0.1
 Q_scalar_quat = 0.1
 R_scalar = 10
 
-gate_angle_threshold_radians = 40.0*D2R
-area_threshold_for_orientation = 0
-
 # everything else
 
 slope2modpi = np.arctan # assign function name
@@ -246,8 +243,12 @@ def get_group_for_obj(obj_id,h5,writeable=False):
 
 def doit(output_h5_filename=None,
          kalman_filename=None, data2d_filename=None, start = None, stop = None,
+         gate_angle_threshold_degrees = 40.0,
+         area_threshold_for_orientation=0.0,
          obj_only=None,
          options=None):
+    gate_angle_threshold_radians = gate_angle_threshold_degrees*D2R
+
     if options.show:
         import matplotlib.pyplot as plt
         import matplotlib.ticker as mticker
@@ -347,6 +348,10 @@ def doit(output_h5_filename=None,
 
             # associate framenumbers with timestamps using 2d .h5 file
             data2d = h5.root.data2d_distorted[:] # load to RAM
+            if start is not None:
+                data2d = data2d[ data2d['frame'] >= start ]
+            if stop is not None:
+                data2d = data2d[ data2d['frame'] <= stop ]
             data2d_idxs = np.arange(len(data2d))
             h5_framenumbers = data2d['frame']
             h5_frame_qfi = result_utils.QuickFrameIndexer(h5_framenumbers)
@@ -366,6 +371,7 @@ def doit(output_h5_filename=None,
                     dynamic_model = dynamic_model[4:]
             else:
                 dynamic_model = 'mamarama, units: mm'
+                warnings.warn('could not determine dynamic model name, using "%s"'%dynamic_model)
 
             for obj_id_enum,obj_id in enumerate(use_obj_ids):
             # Use data association step from kalmanization to load potentially
@@ -380,6 +386,10 @@ def doit(output_h5_filename=None,
                 output_row_obj_id_cond = all_kobs_obj_ids==obj_id
 
                 obj_3d_rows = ca.load_dynamics_free_MLE_position( obj_id, kh5)
+                if start is not None:
+                    obj_3d_rows = obj_3d_rows[ obj_3d_rows['frame'] >= start ]
+                if stop is not None:
+                    obj_3d_rows = obj_3d_rows[ obj_3d_rows['frame'] <= stop ]
 
                 try:
                     smoothed_3d_rows = ca.load_data(
@@ -407,12 +417,6 @@ def doit(output_h5_filename=None,
                     if framenumber > max_frame:
                         max_frame = framenumber
 
-                    if start is not None:
-                        if not framenumber >= start:
-                            continue
-                    if stop is not None:
-                        if not framenumber <= stop:
-                            continue
                     h5_2d_row_idxs = h5_frame_qfi.get_frame_idxs(framenumber)
 
                     frame2d = data2d[h5_2d_row_idxs]
@@ -434,7 +438,11 @@ def doit(output_h5_filename=None,
                         cond = ((frame2d['camn']==camn) &
                                 (frame2d['frame_pt_idx']==camn_pt_no))
                         idxs = np.nonzero(cond)[0]
+                        if len(idxs)==0:
+                            continue
                         assert len(idxs)==1
+                        ## if len(idxs)!=1:
+                        ##     raise ValueError('expected one (and only one) frame, got %d'%len(idxs))
                         idx = idxs[0]
 
                         orig_data2d_rownum = frame2d_idxs[idx]
@@ -960,8 +968,8 @@ def compute_ori_quality(kh5, orig_frames, obj_id, smooth_len=10):
     try:
         table = getattr(group,'obj%d'%obj_id)
     except:
-        sys.stderr.write('ERROR while opening %s\n'%kh5.filename)
-        sys.stderr.write('Hint: re-run orientation fitting for this file.\n')
+        sys.stderr.write('ERROR while getting EKF fit data for obj_id %d in file opening %s\n'%(obj_id,kh5.filename))
+        sys.stderr.write('Hint: re-run orientation fitting for this file (for this obj_id).\n')
         raise
     table_ram = table[:]
     frames = table_ram['frame']
@@ -1004,143 +1012,6 @@ def compute_ori_quality(kh5, orig_frames, obj_id, smooth_len=10):
             results = smooth(results,window_len=smooth_len)
     return results
 
-def plot_ori(kalman_filename=None,
-             h5=None,
-             obj_only=None,
-             output_filename=None,
-             ):
-    if output_filename is not None:
-        import matplotlib
-        matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    import matplotlib.ticker as mticker
-
-    fps = None
-    if h5 is not None:
-        h5f = tables.openFile(h5,mode='r')
-        camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5f)
-        fps = result_utils.get_fps( h5f )
-        h5f.close()
-    else:
-        camn2cam_id = {}
-
-    ca = core_analysis.get_global_CachingAnalyzer()
-    with openFileSafe( kalman_filename,
-                       mode='r') as kh5:
-        kmle = kh5.root.kalman_observations[:] # load into RAM
-        all_mle_obj_ids = kmle['obj_id']
-
-        # walk all tables to get all obj_ids
-        all_obj_ids = {}
-        parent = kh5.root.ori_ekf_qual
-        for group in parent._f_iterNodes():
-            for table in group._f_iterNodes():
-                assert table.name.startswith('obj')
-                obj_id = int(table.name[3:])
-                all_obj_ids[obj_id] = table
-
-        if obj_only is None:
-            use_obj_ids = all_obj_ids.keys()
-            mle_use_obj_ids = list(np.unique(all_mle_obj_ids))
-            missing_objs = list(set(mle_use_obj_ids) - set(use_obj_ids))
-            if len(missing_objs):
-                warnings.warn(
-                    'orientation not fit for %d obj_ids'%(len(missing_objs),))
-            use_obj_ids.sort()
-        else:
-            use_obj_ids = obj_only
-
-        # now, generate plots
-        fig = plt.figure()
-        ax1 = fig.add_subplot(411)
-        ax2 = fig.add_subplot(412,sharex=ax1)
-        ax3 = fig.add_subplot(413,sharex=ax1)
-        ax4 = fig.add_subplot(414,sharex=ax1)
-        for obj_id in use_obj_ids:
-            table = all_obj_ids[obj_id]
-            rows = table[:]
-            frame=rows['frame']
-            # get camns
-            camns = []
-            for colname in table.colnames:
-                if colname.startswith('dist'):
-                    camn = int(colname[4:])
-                    camns.append(camn)
-            for camn in camns:
-                label = camn2cam_id.get( camn, 'camn%d'%camn )
-                theta = rows['theta%d'%camn]
-                used = rows['used%d'%camn]
-                dist = rows['dist%d'%camn]
-                line,=ax1.plot(frame,theta*R2D,'o',mew=0,ms=2.0,label=label)
-                c = line.get_color()
-                ax2.plot(frame[used],dist[used]*R2D,'o',color=c,
-                         mew=0,label=label)
-                ax2.plot(frame[~used],dist[~used]*R2D,'o',color=c,
-                         mew=0,ms=2.0)
-            # plot 3D orientation
-            mle_row_cond = all_mle_obj_ids==obj_id
-            rows_this_obj = kmle[mle_row_cond]
-            frame = rows_this_obj['frame']
-            hz = [rows_this_obj['hz_line%d'%i] for i in range(6)]
-            #hz = np.rec.fromarrays(hz,names=['hz%d'%for i in range(6)])
-            hz = np.vstack(hz).T
-            orient = reconstruct.line_direction(hz)
-            ax3.plot(frame,orient[:,0],'ro',mew=0,ms=2.0,label='x')
-            ax3.plot(frame,orient[:,1],'go',mew=0,ms=2.0,label='y')
-            ax3.plot(frame,orient[:,2],'bo',mew=0,ms=2.0,label='z')
-
-            qual = compute_ori_quality(kh5,rows_this_obj['frame'],obj_id)
-            if 1:
-                if fps is None:
-                    fps = 1.0/200.0
-
-                orinan = np.array(orient,copy=True)
-                orinan[ qual < 3.0 ] = np.nan
-                sori = ori_smooth(orinan,frames_per_second=fps)
-                ax3.plot(frame,sori[:,0],'r-',mew=0,ms=2.0)#,label='x')
-                ax3.plot(frame,sori[:,1],'g-',mew=0,ms=2.0)#,label='y')
-                ax3.plot(frame,sori[:,2],'b-',mew=0,ms=2.0)#,label='z')
-
-            ax4.plot(frame, qual, 'b-')#, mew=0, ms=3 )
-    ax1.xaxis.set_major_formatter(mticker.FormatStrFormatter("%d"))
-    ax1.set_ylabel('theta (deg)')
-    ax1.legend()
-
-    ax2.set_ylabel('z (deg)')
-    ax2.legend()
-
-    ax3.set_ylabel('ori')
-    ax3.set_xlabel('frame')
-    ax3.legend()
-
-    ax4.set_ylabel('quality')
-    if output_filename is not None:
-        plt.show()
-    else:
-        plt.savefig( output_filename )
-
-def plot_ori_command_line():
-    usage = '%prog [options]'
-
-    parser = OptionParser(usage)
-    parser.add_option('-k', "--kalman-file", dest="kalman_filename",
-                      type='string',
-                      help=".h5 file with kalman data and 3D reconstructor")
-    parser.add_option("--h5", type='string',
-                      help=".h5 file with data2d_distorted (REQUIRED)")
-    parser.add_option("--obj-only", type="string")
-    parser.add_option("--output-filename",type="string")
-    (options, args) = parser.parse_args()
-    if options.kalman_filename is None:
-        raise ValueError('--kalman-file option must be specified')
-    if options.obj_only is not None:
-        options.obj_only = core_analysis.parse_seq(options.obj_only)
-    plot_ori(kalman_filename=options.kalman_filename,
-             h5=options.h5,
-             obj_only=options.obj_only,
-             output_filename=options.output_filename,
-             )
-
 def main():
     usage = '%prog [options]'
 
@@ -1156,7 +1027,19 @@ def main():
     parser.add_option("--output-h5", type='string',
                       help="filename for output .h5 file with data2d_distorted")
 
+    parser.add_option('--gate-angle-threshold-degrees', type='float', default=40.0,
+                      help='maximum angle (in degrees) to include 2D orientation')
+
+    parser.add_option('--area-threshold-for-orientation', type='float', default=0.0,
+                      help='minimum area required to use 2D feature for 3D orientation')
+
     parser.add_option("--show", action='store_true', default=False)
+
+    parser.add_option("--start", type='int', default=None,
+                      help="frame number to begin analysis on")
+
+    parser.add_option("--stop", type='int', default=None,
+                      help="frame number to end analysis on")
 
     parser.add_option("--obj-only", type="string")
 
@@ -1176,6 +1059,10 @@ def main():
 
     doit(kalman_filename=options.kalman_filename,
          data2d_filename=options.h5,
+         area_threshold_for_orientation=options.area_threshold_for_orientation,
+         gate_angle_threshold_degrees = options.gate_angle_threshold_degrees,
+         start=options.start,
+         stop=options.stop,
          output_h5_filename=options.output_h5,
          obj_only=options.obj_only,
          options=options)
