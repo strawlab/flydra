@@ -16,7 +16,7 @@ except ImportError:
     if raw_input('Press any key to continue...').lower() != 'c':
         sys.exit(-1)
 
-# Set this to true to compile the extensions that depend on FastImage.
+# Set this to false to compile the extensions that depend on FastImage.
 # Those are not strictly necessary for running some of the analysis tools.
 # (the immediate motivation is to be able to use part of Flydra's functionalities
 #  on OS X)
