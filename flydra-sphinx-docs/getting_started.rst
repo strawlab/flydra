@@ -87,7 +87,7 @@ To download and install sphinx into your virtual environment::
 Now, to build the flydra documentation::
 
   cd /path/to/flydra/flydra-sphinx-docs/
-  ./get-svn.sh
+  ./download-numpy-doc-sphinxext.sh
   make html
 
 The documentation will be built in
