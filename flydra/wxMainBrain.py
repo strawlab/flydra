@@ -116,7 +116,7 @@ class wxMainBrainApp(wx.App):
 
         self.pass_all_keystrokes = False
         wx.InitAllImageHandlers()
-        frame = wx.Frame(None, -1, "Flydra Main Brain",size=(650,600))
+        frame = wx.Frame(None, -1, "Flydra Main Brain (PID "+str(os.getpid())+")",size=(650,600))
 
         # statusbar ----------------------------------
         self.statusbar = frame.CreateStatusBar()
