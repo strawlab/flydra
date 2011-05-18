@@ -18,8 +18,10 @@ Contents:
   gallery.rst
   trigger_device.rst
   orientation_data.rst
-  modules.rst
   module_dump.rst
+  usage_notes.rst
+  design_notes.rst
+  modules.rst
   old/flydra.rst
   FAQ.rst
   install_notes.rst

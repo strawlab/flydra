@@ -3,6 +3,10 @@ Modules reference
 #################
 
 
+*N.B.*, this "modules reference" page is being phased out in favor of
+ :doc:`module_dump`.
+
+
 flydra.a2 - analysis (second generation)
 ========================================
 
