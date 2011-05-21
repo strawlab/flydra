@@ -64,7 +64,6 @@ SHOW_3D_PROCESSING_LATENCY = False
 import flydra.common_variables
 NETWORK_PROTOCOL = flydra.common_variables.NETWORK_PROTOCOL
 ATTEMPT_DATA_RECOVERY = True
-#ATTEMPT_DATA_RECOVERY = False
 
 if os.name == 'posix':
     try:
@@ -538,7 +537,7 @@ class CoordinateSender(threading.Thread):
           threading.Thread.__init__(self,name=name)
       def run(self):
           global downstream_kalman_hosts
-          out_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+          out_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # SCL: is this socket used?
           block = 1
           timeout = .1
           encode_super_packet = flydra.kalman.data_packets.encode_super_packet
@@ -790,7 +789,7 @@ class CoordinateProcessor(threading.Thread):
             return
 
         if self.last_timestamps[cam_idx] != IMPOSSIBLE_TIMESTAMP:
-            print cam_id,'(re)synchronized'
+            print cam_id,'(re)synchronized; post-sync fps: ' + str(self.main_brain.get_fps())
             # discard all previous data
             for k in realtime_coord_dict.keys():
                 del realtime_coord_dict[k]
@@ -864,6 +863,8 @@ class CoordinateProcessor(threading.Thread):
             if not len(incoming_2d_data):
                 continue
 
+            if len(new_data_framenumbers) >= 3:
+                print "****** Dropping %d frame entries" % len(new_data_framenumbers)
             new_data_framenumbers.clear()
 
             BENCHMARK_GATHER=False
@@ -1099,7 +1100,7 @@ class CoordinateProcessor(threading.Thread):
                 for corrected_framenumber in new_data_framenumbers:
                     oldest_camera_timestamp, n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
                     if oldest_camera_timestamp is None:
-                        ## print 'no latency estimate available -- skipping 3D reconstruction'
+                        #print 'no latency estimate available -- skipping 3D reconstruction'
                         continue
                     if (time.time() - oldest_camera_timestamp) > max_reconstruction_latency_sec:
                         #print 'maximum reconstruction latency exceeded -- skipping 3D reconstruction'
@@ -1437,11 +1438,12 @@ class MainBrain(object):
 
         # ================================================================
         #
-        # Methods called locally
+        # Methods called locally (mostly)
         #
         # ================================================================
 
         def get_version(self):
+            """get flydra version; N.B., this is called remotely."""
             return flydra.version.__version__
 
         def post_init(self, main_brain):
@@ -1655,7 +1657,9 @@ class MainBrain(object):
         # ================================================================
 
         def register_new_camera(self,cam_no,scalar_control_info,port,force_cam_id=None):
-            """register new camera, return cam_id (caller: remote camera)"""
+            """register new camera, return cam_id (caller: remote camera)
+
+            Called by camnode (via Pyro)."""
 
             caller= self.daemon.getLocalStorage().caller # XXX Pyro hack??
             caller_addr= caller.addr
@@ -1687,7 +1691,9 @@ class MainBrain(object):
             return cam_id
 
         def set_image(self,cam_id,coord_and_image):
-            """set most recent image (caller: remote camera)"""
+            """set most recent image (caller: remote camera)
+
+            Called by camnode (via Pyro)."""
             with self.cam_info_lock:
                 cam = self.cam_info[cam_id]
                 cam_lock = cam['lock']
@@ -1695,6 +1701,10 @@ class MainBrain(object):
                     self.cam_info[cam_id]['image'] = coord_and_image
 
         def receive_missing_data(self, cam_id, framenumber_offset, missing_data ):
+            """
+
+            Called by camnode (via Pyro)."""
+
             #print 'received missing data from camera %s (offset %d):'%(cam_id, framenumber_offset)
             if len(missing_data)==0:
                 # no missing data
@@ -1887,6 +1897,15 @@ class MainBrain(object):
     def set_fps(self,fps):
         self.do_synchronization(new_fps=fps)
 
+    def watch_for_resync(self):
+        """Watch for fps to return to above 0; echo feedback to user."""
+        # Tell user when fps is pulled back up from 0 after a
+        # trigger rate change.
+        time.sleep(2)  # SCL: This is sloppy; perhaps comm with live_timestamp_modeler?
+        while self.get_fps() < .1:
+            time.sleep(.1)
+        print 'Back up at %.3f fps.' % self.get_fps()
+
     def do_synchronization(self,new_fps=None):
         if self.is_saving_data():
             raise RuntimeError('will not (re)synchronize while saving data')
@@ -1895,6 +1914,7 @@ class MainBrain(object):
             self.trigger_device.frames_per_second = new_fps
             actual_new_fps = self.trigger_device.frames_per_second_actual
 
+        print 'Dropping fps to 0 while trigger signal settles...'
         self.timestamp_modeler.synchronize = True # fire event handler
         if new_fps is not None:
             cam_ids = self.remote_api.external_get_cam_ids()
@@ -1906,6 +1926,7 @@ class MainBrain(object):
                     print 'ERROR:',err
             rc_params['frames_per_second'] = actual_new_fps
             save_rc_params()
+        threading.Thread(target=self.watch_for_resync).start()
 
     def get_hypothesis_test_max_error(self):
         return self.hypothesis_test_max_error.get()

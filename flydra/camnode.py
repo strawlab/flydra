@@ -93,7 +93,7 @@ if not BENCHMARK:
     Pyro.config.PYRO_TRACELEVEL = 3
     Pyro.config.PYRO_USER_TRACELEVEL = 3
     Pyro.config.PYRO_DETAILED_TRACEBACK = 1
-    Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
+    # Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1  # This does not appear in Pyro as of v3.9.1.
     ConnectionClosedError = Pyro.errors.ConnectionClosedError
 else:
     class NonExistantError(Exception):
@@ -1900,6 +1900,19 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
     return cam, ImageSourceModel, initial_image_dict
 
 class ConsoleApp(object):
+    """The ``Console Application''.
+
+The MainLoop method of ConsoleApp is the ``main loop'' of the camera
+node code.  Importantly, when instantiated, ConsoleApp is given a
+callable reference, stored in attribute *call_often*, that is invoked
+with high frequency (currently hard-coded to be a loop that sleeps for
+50 ms on each iteration).
+
+Note that call_often is likely set to *main_thread_task* method of
+class AppState.  See code that boots up camera node, i.e. near end of
+definition of *parse_args_and_run* (which is called by *main*, which
+is called if camnode.py is run from terminal).
+"""
     def __init__(self, call_often=None):
         self.call_often = call_often
         self.exit_value = 0
@@ -1907,7 +1920,7 @@ class ConsoleApp(object):
     def MainLoop(self):
         while not self.quit_now:
             time.sleep(0.05)
-            self.call_often()
+            self.call_often()  # pointer to main_thread_task (in class AppState)
         if self.exit_value != 0:
             sys.exit(self.exit_value)
     def OnQuit(self, exit_value=0):
@@ -1920,7 +1933,7 @@ class ConsoleApp(object):
             controller.trigger_single_frame_start()
 
 class AppState(object):
-    """This class handles all camera states, properties, etc."""
+    """Handle all camera states, properties, etc."""
     def __init__(self,
                  benchmark = False,
                  options = None,
@@ -2496,7 +2509,7 @@ class AppState(object):
         return targets
 
     def main_thread_task(self):
-        """gets called often in mainloop of app"""
+        """gets called often in MainLoop of app (e.g., ConsoleApp)."""
         try:
             # handle pyro function calls
             for cam_no, cam_id in enumerate(self.all_cam_ids):
