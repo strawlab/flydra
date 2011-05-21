@@ -69,7 +69,7 @@ class CalibrationAlignmentWindow(Widget):
                                         ).control
         self.params.on_trait_change( self._params_changed )
 
-    def set_data(self,orig_data_verts,orig_data_speeds,reconstructor):
+    def set_data(self,orig_data_verts,orig_data_speeds,reconstructor, default_scale=1.0):
         self.orig_data_verts = orig_data_verts
         self.orig_data_speeds = orig_data_speeds
         self.reconstructor = reconstructor
@@ -90,7 +90,7 @@ class CalibrationAlignmentWindow(Widget):
         pd.point_data.scalars.name = 'speed'
         self.viewed_data = VTKDataSource(data=pd,
                                          name='aligned data')
-        self.params.s = 1000.0 # Switch to a more reasonable default scale
+        self.params.s = default_scale
         self._params_changed()
 
     def _params_changed(self):
@@ -190,6 +190,8 @@ def main():
     parser.add_argument("--obj-filelist", type=str,
                       help="use object ids from list in text file",
                       )
+
+    parser.add_argument("--scale", type=float, help="set default scaling factor.", default=1.0)
 
     args = parser.parse_args()
     options = args # optparse OptionParser backwards compatibility
@@ -329,7 +331,7 @@ def main():
     viewer.open()
     e.new_scene(viewer)
 
-    viewer.cal_align.set_data(verts,speed,R)
+    viewer.cal_align.set_data(verts,speed,R, options.scale)
 
     if 0:
         # Do this if you need to see the MayaVi tree view UI.
