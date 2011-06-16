@@ -1332,6 +1332,7 @@ class CachingAnalyzer:
 
     def load_dynamics_free_MLE_position(self,obj_id,data_file,
                                         min_ori_quality_required=None,
+                                        ori_quality_smooth_len=10,
                                         flystate='both', # 'both', 'walking', or 'flying'
                                         walking_start_stops=None, # list of (start,stop)
                                         with_directions=False):
@@ -1393,7 +1394,9 @@ class CachingAnalyzer:
             if min_ori_quality_required is not None:
                 quality_array = compute_ori_quality(
                     data_file, rows['frame'],
-                    obj_id)
+                    obj_id,
+                    ori_quality_smooth_len=ori_quality_smooth_len,
+                    )
                 good_cond = quality_array >= min_ori_quality_required
                 bad_cond = ~good_cond
                 directions[bad_cond,:]=np.nan # ignore bad quality data
@@ -1424,6 +1427,8 @@ class CachingAnalyzer:
         ---------
         min_ori_quality_required : None or float
           None for no requirement, float for required quality
+        ori_quality_smooth_len : int
+          Number of samples to smooth the orientation quality estimate over
 
         Returns
         -------

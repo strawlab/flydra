@@ -59,7 +59,8 @@ def load_3d_raw_data(kalman_filename,**kwargs):
         all_obj_ids, obj_ids, is_mat_file, data_file, extra = \
                      ca.initial_file_load(kalman_filename)
         allrows = []
-        this_kw = {'min_ori_quality_required':kwargs['min_ori_quality_required']}
+        this_kw = {'min_ori_quality_required':kwargs['min_ori_quality_required'],
+                   'ori_quality_smooth_len':kwargs['ori_quality_smooth_len']}
         for obj_id in obj_ids:
             try:
                 rows = ca.load_dynamics_free_MLE_position( obj_id, kalman_filename,
