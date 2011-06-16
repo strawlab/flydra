@@ -25,6 +25,7 @@ def get_config_defaults():
             'show_3d_MLE_position': False,
             'show_3d_smoothed_position': False,
             'show_3d_raw_orientation': False,
+            'show_3d_raw_chosen_orientation': False,
             'show_3d_smoothed_orientation': False,
             'minimum_display_orientation_quality':0,
             'zoom_obj':None,
@@ -160,6 +161,7 @@ def make_montage( h5_filename,
     if (config['what to show']['show_3d_smoothed_position'] or
         config['what to show']['show_3d_MLE_position'] or
         config['what to show']['show_3d_raw_orientation'] or
+        config['what to show']['show_3d_raw_chosen_orientation'] or
         config['what to show']['show_3d_smoothed_orientation']):
         if kalman_filename is None:
             raise ValueError('need kalman filename to show requested 3D data')
@@ -449,6 +451,21 @@ def make_montage( h5_filename,
                                       linewidth=config['what to show']['linewidth'],
                                       )
 
+                if config['what to show']['show_3d_raw_chosen_orientation'] and camn is not None:
+                    if len(this_frame_3d_data):
+                        for (row,ori_qual) in zip(this_frame_3d_data,this_frame_dataqual):
+                            if ori_qual < min_ori_qual:
+                                continue
+                            X0 = np.array([row['x'], row['y'], row['z'], np.ones_like(row['x'])]).T
+                            dx = np.array([row['rawdir_x'], row['rawdir_y'], row['rawdir_z'], np.zeros_like(row['x'])]).T
+                            X1 = X0 + dx*orientation_3d_line_length
+                            pts = np.vstack( [X0, X1] )
+                            xarr,yarr = R.find2d( cam_id, pts, distorted = True )
+                            canv.plot(xarr, yarr,
+                                      color_rgba=(1,159./255,0,1), # orange
+                                      linewidth=config['what to show']['linewidth'],
+                                      )
+
                 if config['what to show']['obj_labels'] and camn is not None:
                     if len(this_frame_3d_data):
                         X = np.array([this_frame_3d_data['x'], this_frame_3d_data['y'], this_frame_3d_data['z'], np.ones_like(this_frame_3d_data['x'])]).T
@@ -507,6 +524,7 @@ show_2d_orientation = False
 show_3d_MLE_position = False
 show_3d_smoothed_position = False
 show_3d_raw_orientation = False
+show_3d_raw_chosen_orientation = False
 show_3d_smoothed_orientation = False
 minimum_display_orientation_quality = 0
 white_background =  False
