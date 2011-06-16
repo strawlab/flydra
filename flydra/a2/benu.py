@@ -153,10 +153,6 @@ class Canvas(object):
     def scatter(self,xarr,yarr,color_rgba=None,
                 radius=1.0, markeredgewidth=None):
         """scatter plot of xarr vs. yarr"""
-        if (np.any( np.isnan( xarr ) ) or
-            np.any( np.isnan( yarr ) )):
-            raise ValueError('cannot plot data with nans')
-
         if color_rgba is None:
             color_rgba = (1,1,1,1)
         ctx = self._ctx # shorthand
@@ -167,6 +163,9 @@ class Canvas(object):
 
         ctx.set_source_rgba(*color_rgba)
         for x,y in zip(xarr,yarr):
+            if np.isnan( x ) or np.isnan( y ):
+                continue
+
             #cairo_new_sub_path()
             ctx.new_sub_path()
             ctx.arc(x,y,radius,0,2*np.pi)
