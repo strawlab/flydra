@@ -749,7 +749,7 @@ class PreSmoothedDataCache(object):
         if 1:
             orig_hash = flydra.analysis.result_utils.md5sum_headtail(
                 data_file.filename)
-            expected_title = 'v=2;up_dir=(%.3f, %.3f, %.3f);hash="%s";dynamic_model="%s"'%(
+            expected_title = 'v=3;up_dir=(%.3f, %.3f, %.3f);hash="%s";dynamic_model="%s"'%(
                 up_dir[0],up_dir[1],up_dir[2],orig_hash,dynamic_model_name)
             cache_h5file_name = os.path.abspath(os.path.splitext(data_file.filename)[0]) + '.kh5-smoothcache'
             make_new_cache = True
@@ -962,12 +962,25 @@ class PreSmoothedDataCache(object):
 
             if return_smoothed_directions:
                 save_tablename = smoothed_tablename
-                if 1: # smooth on non-flipped data
+
+                # get first non-nan direction information
+                bad_direction_cond = np.any(np.isnan(directions),axis=1)
+                good_direction_cond = ~bad_direction_cond
+                good_direction_idxs = np.nonzero(good_direction_cond)[0]
+                if not len(good_direction_idxs):
+                    # no good data, no point in smoothing, set all nan
+                    chosen_smooth_directions = np.nan*np.ones( directions.shape )
+                else:
+                    # start with a valid direction
+                    start_idx = good_direction_idxs[0]
+                    valid_directions = directions[start_idx:,:]
+
+                    # smooth on non-flipped data
                     smooth_directions, smooth_directions_missing = ori_smooth(
-                        directions, frames_per_second=frames_per_second,
+                        valid_directions, frames_per_second=frames_per_second,
                         return_missing=True)
 
-                if 1: # (potentially) flip smoothed data as one chunk
+                    # flip smoothed data as one chunk (XXX could flip as multiple small chunks)
                     chosen_smooth_directions_missing = choose_orientations(
                         rows, smooth_directions_missing,
                         frames_per_second=frames_per_second,
@@ -985,6 +998,10 @@ class PreSmoothedDataCache(object):
                     if not min_ori_quality_required==0:
                         # don't take bad orientations
                         chosen_smooth_directions[np.isnan(smooth_directions)]=np.nan
+
+                    pad_directions = np.nan * np.ones( (start_idx,3) )
+                    chosen_smooth_directions = np.vstack(
+                        [pad_directions, chosen_smooth_directions] )
 
                 rows['dir_x'] = chosen_smooth_directions[:,0]
                 rows['dir_y'] = chosen_smooth_directions[:,1]
