@@ -10,6 +10,7 @@ import flydra.analysis.result_utils as result_utils
 import subprocess, collections
 import flydra.a2.ufmf_tools as ufmf_tools
 import flydra.a2.core_analysis as core_analysis
+from flydra.a2.orientation_ekf_fitter import compute_ori_quality
 import flydra.reconstruct as reconstruct
 import flydra.geom as geom
 import cherrypy  # ubuntu: install python-cherrypy3
@@ -25,6 +26,7 @@ def get_config_defaults():
             'show_3d_smoothed_position': False,
             'show_3d_raw_orientation': False,
             'show_3d_smoothed_orientation': False,
+            'minimum_display_orientation_quality':0,
             'zoom_obj':None,
             'zoom_orig_pixels':50,
             'zoom_factor':5,
@@ -59,14 +61,24 @@ def load_3d_raw_data(kalman_filename,**kwargs):
         all_obj_ids, obj_ids, is_mat_file, data_file, extra = \
                      ca.initial_file_load(kalman_filename)
         allrows = []
+        allqualrows = []
         this_kw = {'min_ori_quality_required':kwargs['min_ori_quality_required'],
                    'ori_quality_smooth_len':kwargs['ori_quality_smooth_len']}
         for obj_id in obj_ids:
             rows = ca.load_dynamics_free_MLE_position( obj_id, kalman_filename,
                                                        **this_kw)
             allrows.append( rows )
+            if np.any( ~np.isnan( rows['hz_line0'] )):
+                qualrows = compute_ori_quality(data_file,
+                                               rows['frame'],
+                                               obj_id,
+                                               smooth_len=0)
+            else:
+                qualrows = np.zeros_like(rows['hz_line0'])
+            allqualrows.append( qualrows )
     data3d = np.concatenate(allrows)
-    return data3d
+    dataqual3d = np.concatenate(allqualrows)
+    return data3d, dataqual3d
 
 def is_obj_in_frame_range( obj_id, all_obj_ids, frames, start=None, stop=None):
     valid_cond = np.ones( frames.shape, dtype=np.bool)
@@ -95,6 +107,7 @@ def load_3d_data(kalman_filename,start=None,stop=None,**kwargs):
                 dynamic_model_name = dynamic_model_name[4:]
             print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
         allrows = []
+        allqualrows = []
         for obj_id in obj_ids:
             if not is_obj_in_frame_range( obj_id, all_obj_ids, extra['frames'], start=start, stop=stop):
                 # obj_id not in range of frames that we're analyzing now
@@ -109,9 +122,15 @@ def load_3d_data(kalman_filename,start=None,stop=None,**kwargs):
             except core_analysis.NotEnoughDataToSmoothError:
                 warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
                 continue
+            qualrows = compute_ori_quality(data_file,
+                                           rows['frame'],
+                                           obj_id,
+                                           smooth_len=0)
             allrows.append( rows )
+            allqualrows.append( qualrows )
     data3d = np.concatenate(allrows)
-    return data3d
+    dataqual3d = np.concatenate(allqualrows)
+    return data3d, dataqual3d
 
 def make_montage( h5_filename,
                   cfg_filename=None,
@@ -150,16 +169,18 @@ def make_montage( h5_filename,
             raise ValueError('need kalman filename to show object labels')
 
     if kalman_filename is not None:
-        data3d = load_3d_data(kalman_filename,start=start,stop=stop,
-                              **kwargs)
+        data3d, dataqual_3d = load_3d_data(kalman_filename,start=start,stop=stop,
+                                           **kwargs)
         if (config['what to show']['show_3d_MLE_position'] or
             config['what to show']['show_3d_raw_orientation']):
-            data_raw_3d = load_3d_raw_data(kalman_filename,**kwargs)
+            data_raw_3d, dataqual_raw_3d = load_3d_raw_data(kalman_filename,**kwargs)
         else:
-            data_raw_3d = None
+            data_raw_3d, dataqual_raw_3d = None, None
         R = reconstruct.Reconstructor(kalman_filename)
     else:
-        data3d = R = data_raw_3d = None
+        data3d = R = data_raw_3d, dataqual_raw_3d, dataqual_3d = None
+
+    min_ori_qual = config['what to show']['minimum_display_orientation_quality']
 
     if movie_fnames is None:
         movie_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
@@ -213,13 +234,17 @@ def make_montage( h5_filename,
 
         if data3d is not None:
             this_frame_3d_data = data3d[data3d['frame']==frame]
+            this_frame_dataqual = dataqual_3d[data3d['frame']==frame]
         else:
             this_frame_3d_data = None
+            this_frame_dataqual = None
 
         if data_raw_3d is not None:
             this_frame_raw_3d_data = data_raw_3d[data_raw_3d['frame']==frame]
+            this_frame_raw_dataqual = dataqual_raw_3d[data_raw_3d['frame']==frame]
         else:
             this_frame_raw_3d_data = None
+            this_frame_raw_dataqual = None
 
         if config['what to show']['zoom_obj'] is not None:
             zoom_cond_3d = this_frame_3d_data['obj_id']==config['what to show']['zoom_obj']
@@ -386,7 +411,9 @@ def make_montage( h5_filename,
                                        this_frame_raw_3d_data['y'],
                                        this_frame_raw_3d_data['z']]).T
                         cam_center = R.get_camera_center( cam_id )[:,0]
-                        for (X,hz) in zip(Xs,hzs):
+                        for (X,hz,this_dataqual) in zip(Xs,hzs,this_frame_raw_dataqual):
+                            if this_dataqual < min_ori_qual:
+                                continue
                             cam_ray = geom.line_from_points( geom.ThreeTuple(cam_center), geom.ThreeTuple(X) )
                             raw_ori_line = geom.line_from_HZline(hz)
                             X_ = raw_ori_line.get_my_point_closest_to_line(cam_ray)
@@ -409,7 +436,9 @@ def make_montage( h5_filename,
 
                 if config['what to show']['show_3d_smoothed_orientation'] and camn is not None:
                     if len(this_frame_3d_data):
-                        for row in this_frame_3d_data:
+                        for (row,ori_qual) in zip(this_frame_3d_data,this_frame_dataqual):
+                            if ori_qual < min_ori_qual:
+                                continue
                             X0 = np.array([row['x'], row['y'], row['z'], np.ones_like(row['x'])]).T
                             dx = np.array([row['dir_x'], row['dir_y'], row['dir_z'], np.zeros_like(row['x'])]).T
                             X1 = X0 + dx*orientation_3d_line_length
@@ -479,6 +508,7 @@ show_3d_MLE_position = False
 show_3d_smoothed_position = False
 show_3d_raw_orientation = False
 show_3d_smoothed_orientation = False
+minimum_display_orientation_quality = 0
 white_background =  False
 max_resolution = None
 zoom_obj = None
