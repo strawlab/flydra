@@ -365,7 +365,11 @@ def make_montage( h5_filename,
                     xinc = np.cos(thetaarr)*line_len
                     yinc = np.sin(thetaarr)*line_len/float(pixel_aspect)
                     for x,y,xi,yi in zip(xarr,yarr,xinc,yinc):
-                        canv.plot([x-xi,x+xi],[y-yi,y+yi],
+                        xarr = np.array([x-xi,x+xi])
+                        yarr = np.array([y-yi,y+yi])
+                        if np.any(np.isnan( xarr )) or np.any(np.isnan( yarr )):
+                            continue
+                        canv.plot( xarr, yarr,
                                   color_rgba=(0,1,0,0.4),
                                   linewidth=config['what to show']['linewidth'],
                                   )
@@ -444,6 +448,8 @@ def make_montage( h5_filename,
                             X0 = np.array([row['x'], row['y'], row['z'], np.ones_like(row['x'])]).T
                             dx = np.array([row['dir_x'], row['dir_y'], row['dir_z'], np.zeros_like(row['x'])]).T
                             X1 = X0 + dx*orientation_3d_line_length
+                            if np.any( np.isnan(X1) ):
+                                continue
                             pts = np.vstack( [X0, X1] )
                             xarr,yarr = R.find2d( cam_id, pts, distorted = True )
                             canv.plot(xarr, yarr,
@@ -459,6 +465,8 @@ def make_montage( h5_filename,
                             X0 = np.array([row['x'], row['y'], row['z'], np.ones_like(row['x'])]).T
                             dx = np.array([row['rawdir_x'], row['rawdir_y'], row['rawdir_z'], np.zeros_like(row['x'])]).T
                             X1 = X0 + dx*orientation_3d_line_length
+                            if np.any( np.isnan(X1) ):
+                                continue
                             pts = np.vstack( [X0, X1] )
                             xarr,yarr = R.find2d( cam_id, pts, distorted = True )
                             canv.plot(xarr, yarr,
