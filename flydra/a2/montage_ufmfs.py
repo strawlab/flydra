@@ -62,13 +62,8 @@ def load_3d_raw_data(kalman_filename,**kwargs):
         this_kw = {'min_ori_quality_required':kwargs['min_ori_quality_required'],
                    'ori_quality_smooth_len':kwargs['ori_quality_smooth_len']}
         for obj_id in obj_ids:
-            try:
-                rows = ca.load_dynamics_free_MLE_position( obj_id, kalman_filename,
-                                                           #with_directions=True,
-                                                           **this_kw)
-            except core_analysis.NotEnoughDataToSmoothError:
-                warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
-                continue
+            rows = ca.load_dynamics_free_MLE_position( obj_id, kalman_filename,
+                                                       **this_kw)
             allrows.append( rows )
     data3d = np.concatenate(allrows)
     return data3d
