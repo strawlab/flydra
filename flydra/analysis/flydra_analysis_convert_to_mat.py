@@ -15,7 +15,8 @@ def do_it(filename=None,
           ignore_observations=False,
           min_num_observations=10,
           newfilename=None,
-          extra_vars=None):
+          extra_vars=None,
+          orientation_quality=None):
 
     if filename is None and rows is None:
         raise ValueError("either filename or rows must be set")
@@ -80,6 +81,10 @@ def do_it(filename=None,
                  kalman_xvel = table1['xvel'],
                  kalman_yvel = table1['yvel'],
                  kalman_zvel = table1['zvel'])
+
+    if orientation_quality is not None:
+        assert len(orientation_quality)==len( data['kalman_obj_id'] )
+        data['orientation_quality'] = orientation_quality
 
     # save (un-smoothed) orientation data if available
     if 'rawdir_x' in table1.dtype.fields:
