@@ -11,6 +11,7 @@ import flydra.analysis.flydra_analysis_convert_to_mat
 import tables
 import flydra.analysis.result_utils as result_utils
 import flydra.a2.utils as utils
+from flydra.a2.orientation_ekf_fitter import compute_ori_quality
 import warnings
 
 def cam_id2hostname(cam_id):
@@ -160,6 +161,7 @@ def convert(infilename,
         print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
 
     allrows = []
+    allqualrows=[]
     for i,obj_id in enumerate(obj_ids):
         if obj_id > stop_obj_id:
             break
@@ -174,9 +176,15 @@ def convert(infilename,
         except core_analysis.NotEnoughDataToSmoothError:
             warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
             continue
+        qualrows = compute_ori_quality(data_file,
+                                       rows['frame'],
+                                       obj_id,
+                                       smooth_len=0)
         allrows.append(rows)
+        allqualrows.append( qualrows )
 
     allrows = numpy.concatenate( allrows )
+    allqualrows = numpy.concatenate( allqualrows )
     recarray = numpy.rec.array(allrows)
 
     flydra.analysis.flydra_analysis_convert_to_mat.do_it(
@@ -184,6 +192,7 @@ def convert(infilename,
         ignore_observations=True,
         newfilename=outfilename,
         extra_vars=extra_vars,
+        orientation_quality = allqualrows,
         )
     ca.close()
 

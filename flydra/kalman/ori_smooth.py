@@ -52,6 +52,7 @@ def ori_smooth(directions,frames_per_second=None,return_missing=False):
     R = 30.0*np.eye(3)
 
     init_x = np.hstack((directions[0,:],np.zeros((3,))))
+    assert not np.any( np.isnan( init_x ) ), "cannot start with missing orientation"
     init_V = 2*Q
     y=directions
     dirsmooth,V = adskalman.kalman_smoother(y,A,C,Q,R,init_x,init_V)

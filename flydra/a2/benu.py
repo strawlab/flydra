@@ -104,6 +104,10 @@ class Canvas(object):
 
     def plot(self,xarr,yarr,color_rgba=None,close_path=False,linewidth=None):
         """line plot of xarr vs. yarr"""
+        if (np.any( np.isnan( xarr ) ) or
+            np.any( np.isnan( yarr ) )):
+            raise ValueError('cannot plot data with nans')
+
         if color_rgba is None:
             color_rgba = (1,1,1,1)
         if len(xarr)==1:
@@ -126,6 +130,10 @@ class Canvas(object):
             ctx.set_line_width(orig_linewidth)
 
     def poly(self,xarr,yarr,color_rgba=None,edgewidth=0.0):
+        if (np.any( np.isnan( xarr ) ) or
+            np.any( np.isnan( yarr ) )):
+            raise ValueError('cannot plot data with nans')
+
         if color_rgba is None:
             color_rgba = (1,1,1,1)
         ctx = self._ctx # shorthand
@@ -155,6 +163,9 @@ class Canvas(object):
 
         ctx.set_source_rgba(*color_rgba)
         for x,y in zip(xarr,yarr):
+            if np.isnan( x ) or np.isnan( y ):
+                continue
+
             #cairo_new_sub_path()
             ctx.new_sub_path()
             ctx.arc(x,y,radius,0,2*np.pi)
@@ -182,6 +193,10 @@ class Canvas(object):
 
     def text(self,text,x,y,color_rgba=None,font_size=10,shadow_offset=None):
         """draw text"""
+        if ( np.isnan( x ) or
+             np.isnan( y )):
+            raise ValueError('cannot plot data with nans')
+
         if shadow_offset is not None:
             self.text( text, x+shadow_offset, y+shadow_offset, color_rgba=(0,0,0,1), font_size=font_size)
         if color_rgba is None:
