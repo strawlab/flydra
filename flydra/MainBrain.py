@@ -863,8 +863,6 @@ class CoordinateProcessor(threading.Thread):
             if not len(incoming_2d_data):
                 continue
 
-            if len(new_data_framenumbers) >= 3:
-                print "****** Dropping %d frame entries" % len(new_data_framenumbers)
             new_data_framenumbers.clear()
 
             BENCHMARK_GATHER=False
