@@ -246,6 +246,7 @@ def main():
             start_obj_id=options.start_obj_id,
             stop_obj_id=options.stop_obj_id,
             dynamic_model_name=options.dynamic_model,
+            return_smoothed_directions = True,
             **kwargs)
 
 if __name__=='__main__':
