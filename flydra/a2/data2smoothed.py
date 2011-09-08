@@ -26,6 +26,7 @@ def convert(infilename,
             do_nothing=False, # set to true to test for file existance
             start_obj_id=None,
             stop_obj_id=None,
+            obj_only=None,
             dynamic_model_name=None,
             **kwargs):
     if start_obj_id is None:
@@ -93,6 +94,11 @@ def convert(infilename,
         print '(found %d)'%(len(unique_obj_ids),)
         unique_obj_ids = unique_obj_ids[ unique_obj_ids >= start_obj_id ]
         unique_obj_ids = unique_obj_ids[ unique_obj_ids <= stop_obj_id ]
+
+        if obj_only is not None:
+            unique_obj_ids = numpy.array([ oid for oid in unique_obj_ids if oid in obj_only ])
+            print 'filtered to obj_only',obj_only
+
         print '(will export %d)'%(len(unique_obj_ids),)
         print 'finding 2d data for each obj_id...'
         timestamp_time = numpy.zeros( unique_obj_ids.shape, dtype=numpy.float64)
@@ -162,6 +168,8 @@ def convert(infilename,
 
     allrows = []
     allqualrows=[]
+    failed_quality = False
+
     for i,obj_id in enumerate(obj_ids):
         if obj_id > stop_obj_id:
             break
@@ -176,15 +184,21 @@ def convert(infilename,
         except core_analysis.NotEnoughDataToSmoothError:
             warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
             continue
-        qualrows = compute_ori_quality(data_file,
-                                       rows['frame'],
-                                       obj_id,
-                                       smooth_len=0)
         allrows.append(rows)
-        allqualrows.append( qualrows )
+        try:
+            qualrows = compute_ori_quality(data_file,
+                                           rows['frame'],
+                                           obj_id,
+                                           smooth_len=0)
+            allqualrows.append( qualrows )
+        except ValueError:
+            failed_quality = True
 
     allrows = numpy.concatenate( allrows )
-    allqualrows = numpy.concatenate( allqualrows )
+    if not failed_quality:
+        allqualrows = numpy.concatenate( allqualrows )
+    else:
+        allqualrows = None
     recarray = numpy.rec.array(allrows)
 
     flydra.analysis.flydra_analysis_convert_to_mat.do_it(
@@ -207,6 +221,7 @@ def main():
     parser.add_option("--no-timestamps",action='store_true',dest='no_timestamps',default=False)
     parser.add_option("--start-obj-id",default=None,type='int',help='last obj_id to save')
     parser.add_option("--stop-obj-id",default=None,type='int',help='last obj_id to save')
+    parser.add_option("--obj-only", type="string")
     parser.add_option("--stop",default=None,type='int',help='last obj_id to save (DEPRECATED)')
     parser.add_option("--profile",action='store_true',dest='profile',default=False)
     parser.add_option("--dynamic-model",
@@ -229,6 +244,12 @@ def main():
     if options.stop_obj_id is not None and options.stop is not None:
         raise ValueError('--stop and --stop-obj-id cannot both be set')
 
+    if options.obj_only is not None:
+        options.obj_only = core_analysis.parse_seq(options.obj_only)
+
+        if options.start_obj_id is not None or options.stop_obj_id is not None:
+            raise ValueError("cannot specify start and stop with --obj-only option")
+
     if options.stop is not None:
         warnings.warn('DeprecationWarning: --stop will be phased out in favor of --stop-obj-id')
         options.stop_obj_id = options.stop
@@ -245,6 +266,7 @@ def main():
             save_timestamps = not options.no_timestamps,
             start_obj_id=options.start_obj_id,
             stop_obj_id=options.stop_obj_id,
+            obj_only=options.obj_only,
             dynamic_model_name=options.dynamic_model,
             return_smoothed_directions = True,
             **kwargs)
