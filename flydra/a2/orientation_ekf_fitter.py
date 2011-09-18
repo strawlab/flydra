@@ -992,7 +992,7 @@ def compute_ori_quality(kh5, orig_frames, obj_id, smooth_len=10):
         this_row = table_ram[idx]
         used_this_row = np.array([this_row['used%d'%camn] for camn in camns])
         n_used = np.sum(used_this_row)
-        if 0:
+        if 1:
             results[origi] = n_used
         else:
             theta_this_row=np.array(
