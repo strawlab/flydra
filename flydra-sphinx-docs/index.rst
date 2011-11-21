@@ -12,6 +12,7 @@ Contents:
   :maxdepth: 2
 
   getting_started.rst
+  tutorial.rst
   calibration.rst
   realtime_data.rst
   data_analysis.rst
