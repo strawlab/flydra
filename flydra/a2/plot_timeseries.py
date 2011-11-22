@@ -305,6 +305,9 @@ def plot_timeseries(subplot=None,options = None):
             if 'frame' in subplot:
                 subplot['frame'].plot( f2t(frame), frame )
 
+            if 'P55' in subplot:
+                subplot['P55'].plot( f2t(frame), kalman_rows['P55'] )
+
             if 'x' in subplot:
                 line,=subplot['x'].plot( f2t(frame), Xx, label='obj %d (%s)'%(obj_id,flystate),**kws )
                 line2obj_id[line]=obj_id
@@ -528,6 +531,10 @@ def doit(
         subplots = ['x','y','z','dx','dy','dz']
     else:
         subplots = ['x','y','z','xy_vel','vel','accel','frame']
+
+    if options.P55:
+        subplots.append('P55')
+
     #subplots = ['x','y','z','vel','accel']
     for i, name in enumerate(subplots):
         ax = fig.add_subplot(len(subplots),1,i+1,sharex=ax)
@@ -597,6 +604,10 @@ def main():
 
     parser.add_option("--fuse", action='store_true',
                       help="fuse object ids corresponding to a single fly (requires stim-xml fanout)",
+                      default=False)
+
+    parser.add_option("--P55", action='store_true',
+                      help="plot P[5,5] component of covariance matrix",
                       default=False)
 
     parser.add_option("--timestamp-file", type='string',
