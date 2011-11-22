@@ -861,9 +861,9 @@ def doit(filename,
             g = tvtk.Glyph3D(scale_mode='data_scaling_off',
                              vector_mode = 'use_vector',
                              input=pd)
-            ss = tvtk.SphereSource(radius = 0.005,
-                                   theta_resolution=8,
-                                   phi_resolution=8,
+            ss = tvtk.SphereSource(radius = 3*radius,
+                                   theta_resolution=20,
+                                   phi_resolution=20,
                                    )
             g.source = ss.output
             mapper = tvtk.PolyDataMapper(input=g.output)
