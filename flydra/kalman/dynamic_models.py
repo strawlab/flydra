@@ -146,6 +146,51 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
     newdict.update(base_model_dict)
     dynamic_models['hbird, units: mm'] = newdict
 
+
+    ######################################
+    # 'rmm_lab, units: m':
+    # process covariance
+
+    base_model_dict = _get_fixed_vel_model(dt)
+    ss = base_model_dict['ss']
+    os = base_model_dict['os']
+
+    Q = numpy.zeros((ss,ss))
+    for i in range(0,3):
+        Q[i,i] = (0.04)**2
+    for i in range(3,6):
+        Q[i,i] = (0.4)**2
+
+    Q = Q*1000**2 # convert to meters
+    
+    # measurement noise covariance matrix
+    R = 1e-2*numpy.eye(os)
+
+    newdict = dict(
+
+        # data association parameters
+
+        # birth model
+        min_dist_to_believe_new_meters=0.2, # 20 cm
+        min_dist_to_believe_new_sigma=3.0,
+
+        initial_position_covariance_estimate=1e-2,
+        initial_velocity_covariance_estimate=10,
+
+        # support existint object
+        n_sigma_accept=20.0, # geometric euclidian distance
+
+        # death model
+        max_variance_dist_meters=0.2,
+        max_frames_skipped=100,
+
+        # kalman filter parameters
+        Q=Q,
+        R=R)
+    newdict.update(base_model_dict)
+    dynamic_models['rmm_lab, units: m'] = newdict
+
+
     ######################################
 
     # 'fly dynamics, high precision calibration, units: mm':
@@ -370,9 +415,37 @@ class HbirdEKFAllParams(EKFAllParams):
         # distance in the raw image plane (i.e. before radial undistortion)
         self['distorted_pixel_euclidian_distance_accept']=15.0
 
+class RmmLabEKFAllParams(EKFAllParams):
+    """Flying Robot arena non-linear dynamic model in millimemter units for EKF"""
+    def __init__(self,dt=None):
+        super( RmmLabEKFAllParams, self).__init__()
+        assert dt is not None
+        linear_dict = get_kalman_model( name='rmm_lab, units: m',
+                                        dt=dt )
+
+        # update some parameters from linear model
+        for key in [
+                    'initial_position_covariance_estimate',
+                    'max_frames_skipped',
+                    'A',
+                    'Q',
+                    'dt',
+                    'min_dist_to_believe_new_meters',
+                    'min_dist_to_believe_new_sigma',
+                    'max_variance_dist_meters'
+                    ]:
+            self[key] = linear_dict[key]
+        self['ekf_observation_covariance_pixels'] = numpy.array(
+            [[15.0, 0.0],
+             [0.0, 15.0]],
+            dtype=numpy.float64 )
+        # distance in the raw image plane (i.e. before radial undistortion)
+        self['distorted_pixel_euclidian_distance_accept']=15.0
+
 ekf_models = {'EKF mamarama, units: mm':MamaramaMMEKFAllParams,
               'EKF hydra, units: m':HydraMEKFAllParams,
               'EKF hbird, units: mm':HbirdEKFAllParams,
+              'EKF rmm_lab, units: m':RmmLabEKFAllParams,
               }
 
 def get_model_names(ekf_ok=True):
