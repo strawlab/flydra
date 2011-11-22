@@ -266,6 +266,8 @@ def doit(filename,
             raise RuntimeError('cannot show cameras if hack_postmultiply is being used')
     ca = core_analysis.get_global_CachingAnalyzer(hack_postmultiply=options.hack_postmultiply)
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(filename)
+    if obj_ids is None:
+        raise ValueError('no obj_ids in file')
 
     if options.stim_xml is not None:
         if (data_file.filename.startswith('DATA') and
