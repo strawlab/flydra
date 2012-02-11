@@ -23,10 +23,10 @@ echo "PYTHONPATH=$PYTHONPATH"
 rm -rf build
 
 # make
-## make latex
-## cd build/latex
-## make all-pdf
-## cd ../..
+make latex
+cd build/latex
+make all-pdf
+cd ../..
 make html
 
 chmod -R a+r build
