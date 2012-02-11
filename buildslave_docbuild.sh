@@ -12,7 +12,7 @@ source $VIRTUALENVDIR/bin/activate
 
 # need to install our own sphinx into virtualenv so it picks up flydra
 easy_install Jinja2-2.1.1.tar.gz
-easy_install Sphinx-1.0.7.tar.gz
+easy_install Sphinx-1.1.2.tar.gz
 
 cd flydra-sphinx-docs/
 
