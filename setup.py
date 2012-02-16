@@ -64,7 +64,7 @@ if not LIGHT_INSTALL:
                                  sources=['flydra/camnode_colors.pyx','flydra/colors.c']+ipp_sources,
                                  include_dirs=ipp_include_dirs,
                                  library_dirs=ipp_library_dirs,
-                                 libraries=ipp_libraries+['cv'],
+                                 libraries=ipp_libraries,
                                  define_macros=ipp_define_macros,
                                  extra_link_args=ipp_extra_link_args,
                                  extra_compile_args=ipp_extra_compile_args,
