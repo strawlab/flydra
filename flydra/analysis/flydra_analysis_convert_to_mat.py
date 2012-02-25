@@ -157,9 +157,9 @@ def do_it(filename=None,
                                         'kalman_z',
 
                                         ],
-                      'objects': ['obj_ids',
-                                  'timestamps',
-                                  ],
+                      # 'objects': ['obj_ids',
+                      #             'timestamps',
+                      #             ],
                       }
 
         for table_name in table_info:
