@@ -2,7 +2,7 @@ from __future__ import division
 import numpy
 import tables as PT
 import scipy.io
-import sys
+import sys, math
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy'])
 
@@ -10,13 +10,24 @@ def main():
     filename = sys.argv[1]
     do_it(filename=filename)
 
+def get_valid_userblock_size( min ):
+    result = 2**int(math.ceil(math.log( min, 2)))
+    if result < 512:
+        result = 512
+    return result
+
 def do_it(filename=None,
           rows=None,
           ignore_observations=False,
           min_num_observations=10,
           newfilename=None,
           extra_vars=None,
-          orientation_quality=None):
+          orientation_quality=None,
+          hdf5=False,
+          ):
+
+    if hdf5:
+        import h5py
 
     if filename is None and rows is None:
         raise ValueError("either filename or rows must be set")
@@ -68,10 +79,16 @@ def do_it(filename=None,
         table2 = table2[obs_cond]
 
         if newfilename is None:
-            newfilename = filename + '-short-only.mat'
+            if hdf5:
+                newfilename = filename + '-short-only.h5'
+            else:
+                newfilename = filename + '-short-only.mat'
     else:
         if newfilename is None:
-            newfilename = filename + '.mat'
+            if hdf5:
+                newfilename = filename + '.h5'
+            else:
+                newfilename = filename + '.mat'
 
     data = dict( kalman_obj_id = table1['obj_id'],
                  kalman_frame = table1['frame'],
@@ -126,7 +143,49 @@ def do_it(filename=None,
             continue
         data[key] = value
 
-    scipy.io.savemat(newfilename,data,appendmat=False)
+    if hdf5:
+        first_chars = '{"schema": "http://strawlab.org/schemas/flydra/1.0"}'
+        pow2_bytes = get_valid_userblock_size( len(first_chars))
+        userblock = first_chars + '\0'*(pow2_bytes-len(first_chars))
+
+        f = h5py.File(newfilename,'w', userblock_size=pow2_bytes)
+        table_info = {'smoothed_data': ['kalman_obj_id',
+                                        'kalman_frame',
+
+                                        'kalman_x',
+                                        'kalman_y',
+                                        'kalman_z',
+
+                                        'kalman_xvel',
+                                        'kalman_yvel',
+                                        'kalman_zvel',
+                                        ],
+                      'objects': ['obj_ids',
+                                  'timestamps',
+                                  ],
+                      }
+
+        for table_name in table_info:
+            colnames = table_info[table_name]
+            dtype_elements = []
+            rows = None
+            for colname in colnames:
+                dtype_elements.append( (colname, data[colname].dtype) )
+                assert data[colname].ndim == 1
+                if rows is None:
+                    rows = data[colname].shape[0]
+                else:
+                    assert rows == data[colname].shape[0]
+            my_dtype = numpy.dtype( dtype_elements )
+            arr = numpy.empty( rows, dtype=my_dtype )
+            for colname in colnames:
+                arr[colname]= data[colname]
+            f.create_dataset( table_name, data=arr )
+        f.close()
+        with open(newfilename,mode='r+') as f:
+            f.write(userblock)
+    else:
+        scipy.io.savemat(newfilename,data,appendmat=False)
 
 if __name__=='__main__':
     print "WARNING: are you sure you want to run this program and not 'data2smoothed'?"

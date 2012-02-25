@@ -28,6 +28,7 @@ def convert(infilename,
             stop_obj_id=None,
             obj_only=None,
             dynamic_model_name=None,
+            hdf5=False,
             **kwargs):
     if start_obj_id is None:
         start_obj_id=-numpy.inf
@@ -207,6 +208,7 @@ def convert(infilename,
         newfilename=outfilename,
         extra_vars=extra_vars,
         orientation_quality = allqualrows,
+        hdf5=hdf5,
         )
     ca.close()
 
@@ -219,6 +221,7 @@ def main():
                       help="hdf5 file with 2d data FILE2D used to calculate timestamp information",
                       metavar="FILE2D")
     parser.add_option("--no-timestamps",action='store_true',dest='no_timestamps',default=False)
+    parser.add_option("--hdf5",action='store_true',default=False,help='save output as .hdf5 file (not .mat)')
     parser.add_option("--start-obj-id",default=None,type='int',help='last obj_id to save')
     parser.add_option("--stop-obj-id",default=None,type='int',help='last obj_id to save')
     parser.add_option("--obj-only", type="string")
@@ -256,7 +259,10 @@ def main():
 
     infilename = args[0]
     if options.dest_file is None:
-        outfilename = os.path.splitext(infilename)[0] + '_smoothed.mat'
+        if options.hdf5:
+            outfilename = os.path.splitext(infilename)[0] + '_smoothed.h5'
+        else:
+            outfilename = os.path.splitext(infilename)[0] + '_smoothed.mat'
     else:
         outfilename = options.dest_file
 
@@ -269,6 +275,7 @@ def main():
             obj_only=options.obj_only,
             dynamic_model_name=options.dynamic_model,
             return_smoothed_directions = True,
+            hdf5 = options.hdf5,
             **kwargs)
 
 if __name__=='__main__':
