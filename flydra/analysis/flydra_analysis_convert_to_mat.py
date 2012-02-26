@@ -149,34 +149,34 @@ def do_it(filename=None,
         userblock = first_chars + '\0'*(pow2_bytes-len(first_chars))
 
         f = h5py.File(newfilename,'w', userblock_size=pow2_bytes)
-        table_info = {'smoothed_data': ['kalman_obj_id',
-                                        'kalman_frame',
+        table_info = {'trajectories': [('kalman_obj_id','obj_id'),
+                                       ('kalman_frame','framenumber'),
 
-                                        'kalman_x',
-                                        'kalman_y',
-                                        'kalman_z',
-
-                                        ],
-                      # 'objects': ['obj_ids',
-                      #             'timestamps',
-                      #             ],
+                                       ('kalman_x','x'),
+                                       ('kalman_y','y'),
+                                       ('kalman_z','z'),
+                                       ],
+                      'trajectory_start_times': [('obj_ids','obj_id'),
+                                                 ('timestamps','first_timestamp'),
+                                                 ],
                       }
 
         for table_name in table_info:
             colnames = table_info[table_name]
             dtype_elements = []
             rows = None
-            for colname in colnames:
-                dtype_elements.append( (colname, data[colname].dtype) )
-                assert data[colname].ndim == 1
+            for orig_colname,new_colname in colnames:
+                dtype_elements.append( (new_colname, data[orig_colname].dtype) )
+                assert data[orig_colname].ndim == 1
                 if rows is None:
-                    rows = data[colname].shape[0]
+                    rows = data[orig_colname].shape[0]
                 else:
-                    assert rows == data[colname].shape[0]
+                    assert rows == data[orig_colname].shape[0]
+            print 'dtype_elements',dtype_elements
             my_dtype = numpy.dtype( dtype_elements )
             arr = numpy.empty( rows, dtype=my_dtype )
-            for colname in colnames:
-                arr[colname]= data[colname]
+            for orig_colname,new_colname in colnames:
+                arr[new_colname]= data[orig_colname]
             f.create_dataset( table_name, data=arr )
         f.close()
         with open(newfilename,mode='r+') as f:
