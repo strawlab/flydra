@@ -157,26 +157,37 @@ def do_it(filename=None,
                                        ('kalman_z','z'),
                                        ],
                       'trajectory_start_times': [('obj_ids','obj_id'),
-                                                 ('timestamps','first_timestamp'),
+                                                 ('timestamps','first_timestamp_secs'),
+                                                 ('timestamps','first_timestamp_nsecs'),
                                                  ],
                       }
 
         for table_name in table_info:
             colnames = table_info[table_name]
             dtype_elements = []
-            rows = None
+            num_rows = None
             for orig_colname,new_colname in colnames:
-                dtype_elements.append( (new_colname, data[orig_colname].dtype) )
-                assert data[orig_colname].ndim == 1
-                if rows is None:
-                    rows = data[orig_colname].shape[0]
+                if new_colname.endswith('_secs') or new_colname.endswith('_nsecs'):
+                    dtype_elements.append( (new_colname, numpy.uint64) )
                 else:
-                    assert rows == data[orig_colname].shape[0]
+                    dtype_elements.append( (new_colname, data[orig_colname].dtype) )
+                assert data[orig_colname].ndim == 1
+                if num_rows is None:
+                    num_rows = data[orig_colname].shape[0]
+                else:
+                    assert num_rows == data[orig_colname].shape[0]
             print 'dtype_elements',dtype_elements
             my_dtype = numpy.dtype( dtype_elements )
-            arr = numpy.empty( rows, dtype=my_dtype )
+            arr = numpy.empty( num_rows, dtype=my_dtype )
             for orig_colname,new_colname in colnames:
-                arr[new_colname]= data[orig_colname]
+                if new_colname.endswith('_secs'):
+                    timestamps = data[orig_colname]
+                    arr[new_colname]= numpy.floor(timestamps).astype( numpy.uint64 )
+                elif new_colname.endswith('_nsecs'):
+                    timestamps = data[orig_colname]
+                    arr[new_colname]= (numpy.mod(timestamps,1.0)*1e9).astype( numpy.uint64 )
+                else:
+                    arr[new_colname]= data[orig_colname]
             f.create_dataset( table_name, data=arr )
         f.close()
         with open(newfilename,mode='r+') as f:
