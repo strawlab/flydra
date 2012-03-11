@@ -260,6 +260,8 @@ def main():
     infilename = args[0]
     if options.dest_file is None:
         if options.hdf5:
+            # import h5py early so if we don't have it we know sooner rather than later.
+            import h5py
             outfilename = os.path.splitext(infilename)[0] + '_smoothed.h5'
         else:
             outfilename = os.path.splitext(infilename)[0] + '_smoothed.mat'
