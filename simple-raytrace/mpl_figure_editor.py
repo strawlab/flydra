@@ -22,7 +22,6 @@ from enthought.traits.ui.api import View, Item, InstanceEditor, ListEditor
 import numpy as np
 
 class _MPLFigureEditor(Editor):
-
     scrollable  = True
 
     def init(self, parent):
@@ -40,11 +39,17 @@ class _MPLFigureEditor(Editor):
         panel.SetSizer(sizer)
         # matplotlib commands to create a canvas
         mpl_control = FigureCanvas(panel, -1, self.value)
+        mpl_control.mpl_connect('motion_notify_event', self.motion_notify)
         sizer.Add(mpl_control, 1, wx.LEFT | wx.TOP | wx.GROW)
         toolbar = NavigationToolbar2Wx(mpl_control)
         sizer.Add(toolbar, 0, wx.EXPAND)
         self.value.canvas.SetMinSize((10,10))
         return panel
+
+    def motion_notify(self, event):
+        if event.inaxes:
+            x, y = event.xdata, event.ydata
+            print '% 10.3f  % 10.3f'%( x,y)
 
 class MPLFigureEditor(BasicEditorFactory):
 
