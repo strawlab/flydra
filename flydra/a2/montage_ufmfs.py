@@ -180,7 +180,9 @@ def make_montage( h5_filename,
             data_raw_3d, dataqual_raw_3d = None, None
         R = reconstruct.Reconstructor(kalman_filename)
     else:
-        data3d = R = data_raw_3d, dataqual_raw_3d, dataqual_3d = None
+        data3d = R = data_raw_3d = None
+        dataqual_raw_3d = None
+        dataqual_3d = None
 
     min_ori_qual = config['what to show']['minimum_display_orientation_quality']
 
