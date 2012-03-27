@@ -20,10 +20,24 @@ import pkg_resources
 from optparse import OptionParser
 import pprint
 
-import enthought.traits.api as traits
-from enthought.traits.ui.api import View, Item, Group, Handler, HGroup, \
-     VGroup, RangeEditor
+traits_version = None
+try:
+    # Enthought library imports
+    import enthought.traits.api as traits
+    traits_version = 3
+except ImportError:
+    # traits 4
+    import traits.api as traits
+    traits_version = 4
 
+if traits_version==3:
+    import enthought.traits.api as traits
+    from enthought.traits.ui.api import View, Item, Group, Handler, HGroup, \
+     VGroup, RangeEditor
+elif traits_version==4:
+    import traits.api as traits
+    from traitsui.api import View, Item, Group, Handler, HGroup, \
+     VGroup, RangeEditor
 
 SCROLLED=True
 if SCROLLED:
