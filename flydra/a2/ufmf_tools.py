@@ -114,7 +114,7 @@ def iterate_frames(h5_filename,
                 umax=np.max(tss)
                 cond = (umin<=narrow_timestamps) & (narrow_timestamps<=umax)
                 ucamns = narrow_camns[cond]
-                ucamns = np.unique1d(ucamns)
+                ucamns = np.unique(ucamns)
                 camns = []
                 for camn in ucamns:
                     if camn2cam_id[camn]==cam_id:
@@ -125,7 +125,7 @@ def iterate_frames(h5_filename,
                     cam_id2camn[cam_id] = camns[0]
 
         ff = utils.FastFinder(narrow_h5_data['frame'])
-        unique_frames = list(np.unique1d(narrow_h5_data['frame']))
+        unique_frames = list(np.unique(narrow_h5_data['frame']))
         unique_frames.sort()
         unique_frames = np.array( unique_frames )
         if start is not None:
