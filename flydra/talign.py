@@ -1,6 +1,6 @@
 from __future__ import division
-import enthought.traits.api as traits
-from enthought.traits.ui.api import View, Item, Group
+import traits.api as traits
+from traitsui.api import View, Item, Group
 import cgtypes # import cgkit 1.x
 import numpy as np
 

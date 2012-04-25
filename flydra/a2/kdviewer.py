@@ -8,7 +8,10 @@ import os, sys, math
 import warnings
 
 import pkg_resources
-from enthought.tvtk.api import tvtk
+try:
+    from enthought.tvtk.api import tvtk
+except ImportError:
+    from tvtk.api import tvtk
 import numpy
 import numpy as np
 import tables as PT

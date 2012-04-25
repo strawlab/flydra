@@ -4,23 +4,23 @@
 
 from os.path import join, dirname
 import warnings
-from enthought.tvtk.api import tvtk
-from enthought.pyface.api import GUI
+from tvtk.api import tvtk
+from pyface.api import GUI
 # The core Engine.
-from enthought.mayavi.core.engine import Engine
-from enthought.mayavi.core.ui.engine_view import EngineView
+from mayavi.core.engine import Engine
+from mayavi.core.ui.engine_view import EngineView
 # Usual MayaVi imports
-from enthought.mayavi.sources.api import VTKXMLFileReader, VTKDataSource
-from enthought.mayavi.modules.api import Outline, ScalarCutPlane, Streamline
+from mayavi.sources.api import VTKXMLFileReader, VTKDataSource
+from mayavi.modules.api import Outline, ScalarCutPlane, Streamline
 import numpy
 import numpy as np
 
-import enthought.mayavi.tools.sources as sources
-from enthought.mayavi.sources.array_source import ArraySource
-from enthought.mayavi.modules.vectors import Vectors
+import mayavi.tools.sources as sources
+from mayavi.sources.array_source import ArraySource
+from mayavi.modules.vectors import Vectors
 
-import enthought.traits.api as traits
-from enthought.traits.ui.api import View, Item, Group, Handler, HGroup, \
+import traits.api as traits
+from traitsui.api import View, Item, Group, Handler, HGroup, \
      VGroup, RangeEditor
 
 import argparse
@@ -33,10 +33,10 @@ import flydra.analysis.result_utils as result_utils
 
 import cgtypes # import cgkit 1.x
 
-from enthought.pyface.api import Widget, Window
-from enthought.tvtk.pyface.api import Scene, DecoratedScene
-from enthought.pyface.api import SplitApplicationWindow
-from enthought.pyface.api import FileDialog, OK
+from pyface.api import Widget, Window
+from tvtk.pyface.api import Scene, DecoratedScene
+from pyface.api import SplitApplicationWindow
+from pyface.api import FileDialog, OK
 
 def hom2vtk(arr):
     """convert 3D homogeneous coords to VTK"""
@@ -321,7 +321,7 @@ def main():
     e.start()
 
     # Create a new scene.
-    from enthought.tvtk.tools import ivtk
+    from tvtk.tools import ivtk
     #viewer = ivtk.IVTK(size=(600,600))
     viewer = IVTKWithCalGUI(size=(800,600))
     viewer.open()
