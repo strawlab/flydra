@@ -317,7 +317,7 @@ current list of 2D points
         camns = data2d.read(field='camn')
         camns = camns[use_idxs]
         #camns = data2d.readCoordinates( use_idxs, field='camn')
-        unique_camns = numpy.unique1d(camns)
+        unique_camns = numpy.unique(camns)
         unique_cam_ids = list(set([camn2cam_id[camn] for camn in unique_camns]))
         unique_cam_ids.sort()
         print '%d cameras with data'%(len(unique_cam_ids),)
