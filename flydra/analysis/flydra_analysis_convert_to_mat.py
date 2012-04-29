@@ -189,7 +189,11 @@ def do_it(filename=None,
                         arr[new_colname]= (numpy.mod(timestamps,1.0)*1e9).astype( numpy.uint64 )
                     else:
                         arr[new_colname]= data[orig_colname]
-                f.create_dataset( table_name, data=arr )
+                dset = f.create_dataset( table_name, data=arr,
+                                         compression='gzip',
+                                         compression_opts=9)
+                assert dset.compression == 'gzip'
+                assert dset.compression_opts == 9
         with open(newfilename,mode='r+') as f:
             f.write(userblock)
     else:
