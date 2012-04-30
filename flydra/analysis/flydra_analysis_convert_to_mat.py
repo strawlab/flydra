@@ -2,7 +2,7 @@ from __future__ import division
 import numpy
 import tables as PT
 import scipy.io
-import sys
+import sys, math
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy'])
 
@@ -10,13 +10,24 @@ def main():
     filename = sys.argv[1]
     do_it(filename=filename)
 
+def get_valid_userblock_size( min ):
+    result = 2**int(math.ceil(math.log( min, 2)))
+    if result < 512:
+        result = 512
+    return result
+
 def do_it(filename=None,
           rows=None,
           ignore_observations=False,
           min_num_observations=10,
           newfilename=None,
           extra_vars=None,
-          orientation_quality=None):
+          orientation_quality=None,
+          hdf5=False,
+          ):
+
+    if hdf5:
+        import h5py
 
     if filename is None and rows is None:
         raise ValueError("either filename or rows must be set")
@@ -68,10 +79,16 @@ def do_it(filename=None,
         table2 = table2[obs_cond]
 
         if newfilename is None:
-            newfilename = filename + '-short-only.mat'
+            if hdf5:
+                newfilename = filename + '-short-only.h5'
+            else:
+                newfilename = filename + '-short-only.mat'
     else:
         if newfilename is None:
-            newfilename = filename + '.mat'
+            if hdf5:
+                newfilename = filename + '.h5'
+            else:
+                newfilename = filename + '.mat'
 
     data = dict( kalman_obj_id = table1['obj_id'],
                  kalman_frame = table1['frame'],
@@ -126,7 +143,61 @@ def do_it(filename=None,
             continue
         data[key] = value
 
-    scipy.io.savemat(newfilename,data,appendmat=False)
+    if hdf5:
+        first_chars = '{"schema": "http://strawlab.org/schemas/flydra/1.0"}'
+        pow2_bytes = get_valid_userblock_size( len(first_chars))
+        userblock = first_chars + '\0'*(pow2_bytes-len(first_chars))
+
+        with h5py.File(newfilename,'w', userblock_size=pow2_bytes) as f:
+            actual_userblock_size = f.userblock_size # an AttributeError here indicates h5py is too old
+            assert actual_userblock_size==len(userblock)
+            table_info = {'trajectories': [('kalman_obj_id','obj_id'),
+                                           ('kalman_frame','framenumber'),
+
+                                           ('kalman_x','x'),
+                                           ('kalman_y','y'),
+                                           ('kalman_z','z'),
+                                           ],
+                          'trajectory_start_times': [('obj_ids','obj_id'),
+                                                     ('timestamps','first_timestamp_secs'),
+                                                     ('timestamps','first_timestamp_nsecs'),
+                                                     ],
+                          }
+
+            for table_name in table_info:
+                colnames = table_info[table_name]
+                dtype_elements = []
+                num_rows = None
+                for orig_colname,new_colname in colnames:
+                    if new_colname.endswith('_secs') or new_colname.endswith('_nsecs'):
+                        dtype_elements.append( (new_colname, numpy.uint64) )
+                    else:
+                        dtype_elements.append( (new_colname, data[orig_colname].dtype) )
+                    assert data[orig_colname].ndim == 1
+                    if num_rows is None:
+                        num_rows = data[orig_colname].shape[0]
+                    else:
+                        assert num_rows == data[orig_colname].shape[0]
+                my_dtype = numpy.dtype( dtype_elements )
+                arr = numpy.empty( num_rows, dtype=my_dtype )
+                for orig_colname,new_colname in colnames:
+                    if new_colname.endswith('_secs'):
+                        timestamps = data[orig_colname]
+                        arr[new_colname]= numpy.floor(timestamps).astype( numpy.uint64 )
+                    elif new_colname.endswith('_nsecs'):
+                        timestamps = data[orig_colname]
+                        arr[new_colname]= (numpy.mod(timestamps,1.0)*1e9).astype( numpy.uint64 )
+                    else:
+                        arr[new_colname]= data[orig_colname]
+                dset = f.create_dataset( table_name, data=arr,
+                                         compression='gzip',
+                                         compression_opts=9)
+                assert dset.compression == 'gzip'
+                assert dset.compression_opts == 9
+        with open(newfilename,mode='r+') as f:
+            f.write(userblock)
+    else:
+        scipy.io.savemat(newfilename,data,appendmat=False)
 
 if __name__=='__main__':
     print "WARNING: are you sure you want to run this program and not 'data2smoothed'?"

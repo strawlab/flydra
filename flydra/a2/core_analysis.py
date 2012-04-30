@@ -768,13 +768,19 @@ class PreSmoothedDataCache(object):
                         else:
                             mode='r+'
                         cache_h5file = tables.openFile(cache_h5file_name, mode=mode)
-                    except IOError:
+                    except IOError, err:
                         warnings.warn(
                             'Broken cache file %s. Deleting'%cache_h5file_name)
                         if int(os.environ.get('CACHE_DEBUG','0')):
-                            sys.stderr.write('Broken cache file %s. Deleting\n'%cache_h5file_name)
+                            sys.stderr.write('Broken cache file %s. Deleting. '
+                                             '(Original error: %s)\n'%(
+                                cache_h5file_name, err))
                         # not in self.open_cache_h5files, no need to remove it
-                        os.unlink( cache_h5file_name )
+                        try:
+                            os.unlink( cache_h5file_name )
+                        except OSError:
+                            # If it's just a permission error, make a temp file.
+                             cache_h5file_name = tempfile.mktemp('.h5')
                         cache_h5file = None
                     else:
                         #no error, keep reference to opened file

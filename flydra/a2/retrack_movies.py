@@ -297,7 +297,7 @@ def retrack_movies( h5_filename,
     shutil.move(tmp_output_h5_filename, output_h5_filename)
 
 def main():
-    usage = '%prog DATAFILE2D.h5 [options]'
+    usage = '%prog [options]'
 
     parser = OptionParser(usage)
 
