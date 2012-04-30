@@ -3,6 +3,7 @@
 # 1. make variable eccentricity threshold dependent on area (bigger area = lower threshold)
 from __future__ import with_statement, division
 import threading, time, socket, select, sys, os, copy, struct, math
+import warnings, errno
 import collections
 import traceback
 import Pyro.core
@@ -13,14 +14,16 @@ import numpy as nx
 from numpy import nan, inf
 near_inf = 9.999999e20
 import Queue
-import tables
-import tables as PT
+
 pytables_filt = numpy.asarray
 import atexit
 import pickle, copy
 import pkg_resources
 
 import motmot.utils.config
+import motmot.fview_ext_trig.ttrigger
+import motmot.fview_ext_trig.live_timestamp_modeler
+
 import flydra.version
 import flydra.kalman.flydra_kalman_utils as flydra_kalman_utils
 import flydra.kalman.flydra_tracker
@@ -29,29 +32,21 @@ import flydra.fastgeom as geom
 
 import flydra.data_descriptions
 
-import warnings, errno
-warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
-
 # ensure that pytables uses numpy:
+import tables
+import tables as PT
+assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy'])
+warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
 
-try:
-    import roslib
-    have_ROS = True
-except ImportError, err:
-    have_ROS = False
-    print 'do not have ROS (see http://ros.org )'
-
-if have_ROS:
-    try:
-        roslib.load_manifest('ros_flydra')
-    except roslib.packages.InvalidROSPkgException, err:
-        have_ROS = False
-        print 'have ROS, but ros_flydra manifest could not be loaded'
-    else:
-        import rospy
-        print 'have ROS'
+import roslib
+roslib.load_manifest('rospy')
+import rospy
+roslib.load_manifest('ros_flydra')
+from ros_flydra.msg import flydra_mainbrain_super_packet
+from ros_flydra.msg import flydra_mainbrain_packet, flydra_object
+from geometry_msgs.msg import Point, Vector3
 
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
@@ -530,10 +525,12 @@ class CoordRealReceiver(threading.Thread):
 
 class CoordinateSender(threading.Thread):
       """a class to send realtime coordinate data from a separate thread"""
-      def __init__(self,my_queue,my_ros_queue,quit_event):
+      def __init__(self,my_queue,my_ros_queue,quit_event, publish_ros):
           self.my_queue = my_queue
           self.my_ros_queue = my_ros_queue
           self.quit_event = quit_event
+          self.publish_ros = publish_ros
+          self.pub = None
           name = 'CoordinateSender thread'
           threading.Thread.__init__(self,name=name)
       def run(self):
@@ -543,9 +540,9 @@ class CoordinateSender(threading.Thread):
           timeout = .1
           encode_super_packet = flydra.kalman.data_packets.encode_super_packet
 
-          if have_ROS:
-              from ros_flydra.msg import flydra_mainbrain_super_packet
-              pub = rospy.Publisher('flydra_mainbrain_super_packets',
+          if self.publish_ros:
+              self.pub = rospy.Publisher(
+                                    'flydra_mainbrain_super_packets',
                                     flydra_mainbrain_super_packet)
 
           while not self.quit_event.isSet():
@@ -561,7 +558,7 @@ class CoordinateSender(threading.Thread):
               for downstream_host in downstream_kalman_hosts:
                   outgoing_UDP_socket.sendto(super_packet,downstream_host)
 
-              if have_ROS:
+              if self.publish_ros:
                   ros_packets = []
                   ros_packets.append( self.my_ros_queue.get() )
                   while 1:
@@ -570,18 +567,20 @@ class CoordinateSender(threading.Thread):
                       except Queue.Empty:
                           break
                   ros_super_packet = flydra_mainbrain_super_packet(packets=ros_packets)
-                  pub.publish(ros_super_packet)
+                  self.pub.publish(ros_super_packet)
 
 
 class CoordinateProcessor(threading.Thread):
     def __init__(self,main_brain,save_profiling_data=False,
                  debug_level=None,
                  show_sync_errors=True,
-                 show_overall_latency=None):
+                 show_overall_latency=None,
+                 publish_ros=False):
         global hostname
         self.main_brain = main_brain
         self.debug_level = debug_level
         self.show_overall_latency = show_overall_latency
+        self.publish_ros = publish_ros
 
         self.save_profiling_data = save_profiling_data
         if self.save_profiling_data:
@@ -605,7 +604,7 @@ class CoordinateProcessor(threading.Thread):
         self.reconstructor = None
         self.reconstructor_meters = None
         self.tracker = None
-	self.show_sync_errors=show_sync_errors
+        self.show_sync_errors=show_sync_errors
 
         self.ip2hostname = {}
 
@@ -624,7 +623,11 @@ class CoordinateProcessor(threading.Thread):
         self.realreceiver.setDaemon(True)
         self.realreceiver.start()
 
-        cs = CoordinateSender(self.realtime_kalman_data_queue,self.realtime_ros_packets,self.quit_event)
+        cs = CoordinateSender(
+                self.realtime_kalman_data_queue,
+                self.realtime_ros_packets,
+                self.quit_event,
+                self.publish_ros)
         cs.setDaemon(True)
         cs.start()
 
@@ -852,10 +855,6 @@ class CoordinateProcessor(threading.Thread):
 
         if NETWORK_PROTOCOL == 'tcp':
             old_data = {}
-
-        if have_ROS:
-            from ros_flydra.msg import flydra_mainbrain_packet, flydra_object
-            from geometry_msgs.msg import Point, Vector3
 
         debug_drop_fd = None
 
@@ -1256,7 +1255,7 @@ class CoordinateProcessor(threading.Thread):
                                             oldest_camera_timestamp,now)
                                         if data_packet is not None:
                                             self.realtime_kalman_data_queue.put(data_packet)
-                                        if have_ROS:
+                                        if self.publish_ros:
                                             results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' )
                                             ros_objects = []
                                             for result in results:
@@ -1667,6 +1666,8 @@ class MainBrain(object):
             else:
                 cam_id = force_cam_id
 
+            print "REGISTER NEW CAMERA", cam_id
+
             cam2mainbrain_data_port = self.main_brain.coord_processor.connect(cam_id)
             with self.cam_info_lock:
                 self.cam_info[cam_id] = {'commands':{}, # command queue for cam
@@ -1770,17 +1771,14 @@ class MainBrain(object):
 
     # main MainBrain class
 
-    def __init__(self,server=None,save_profiling_data=False, show_sync_errors=True):
+    def __init__(self,server=None,save_profiling_data=False, show_sync_errors=True, publish_ros=False):
         global main_brain_keeper, hostname
 
-        import motmot.fview_ext_trig.ttrigger
-        import motmot.fview_ext_trig.live_timestamp_modeler
+        self.publish_ros = publish_ros
 
         if server is not None:
             hostname = server
         print 'running mainbrain at hostname "%s"'%hostname
-
-        assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
 
         self.debug_level = threading.Event()
         self.show_overall_latency = threading.Event()
@@ -1864,7 +1862,7 @@ class MainBrain(object):
                                                    debug_level=self.debug_level,
                                                    show_overall_latency=self.show_overall_latency,
                                                    show_sync_errors=show_sync_errors,
-                                                   )
+                                                   publish_ros=self.publish_ros)
         #self.coord_processor.setDaemon(True)
         self.coord_processor.start()
 
@@ -1877,9 +1875,6 @@ class MainBrain(object):
         self.timestamp_echo_receiver.start()
 
         main_brain_keeper.register( self )
-
-        if have_ROS:
-            rospy.init_node('flydra_mainbrain')
 
     def get_fps(self):
         return self.trigger_device.frames_per_second_actual
@@ -2007,7 +2002,6 @@ class MainBrain(object):
         self._check_latencies()
 
     def _trigger_framecount_check(self):
-        import motmot.fview_ext_trig.live_timestamp_modeler
         try:
             tmp = self.timestamp_modeler.update(return_last_measurement_info=True)
             start_timestamp, stop_timestamp, framecount, tcnt = tmp
