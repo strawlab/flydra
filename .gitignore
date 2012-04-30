@@ -1,5 +1,7 @@
 build
 dist
+msg_gen
+srv_gen
 *.so
 *.kh5-smoothcache
 *.pyc
