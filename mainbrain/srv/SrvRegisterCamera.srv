@@ -1,0 +1,6 @@
+int32 cam_no
+string pickled_scalar_control_info
+int32 port
+string force_cam_id
+---
+string cam_id

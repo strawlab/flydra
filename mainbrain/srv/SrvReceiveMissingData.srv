@@ -1,0 +1,4 @@
+string cam_id
+int32 framenumber_offset
+string pickled_missing_data
+---

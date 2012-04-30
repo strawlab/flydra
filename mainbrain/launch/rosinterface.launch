@@ -1,0 +1,17 @@
+<launch>
+
+	<param name="mainbrain/hostname" type="string" value="brain1" />
+	<param name="mainbrain/port_mainbrain" type="int" value="9833" />
+	<param name="mainbrain/port_coordinate_base" type="int" value="34813" />
+	<param name="mainbrain/port_camera_base" type="int" value="9834" />
+	<param name="mainbrain/port_timestamp" type="int" value="28993" />
+	<param name="mainbrain/port_timestamp_camnode" type="int" value="28992" />
+	<param name="mainbrain/port_timestamp_camera_base" type="int" value="28995" />
+	<param name="mainbrain/timestamp_echo_fmt1" type="string" value="&lt;d" />
+	<param name="mainbrain/timestamp_echo_fmt_diff" type="string" value="&lt;d" />
+	<param name="mainbrain/timestamp_echo_fmt2"     type="string" value="&lt;dd" />
+
+	<param name="mainbrain/network_protocol" type="string" value="udp"/>
+
+	<node pkg="mainbrain" type="mainbrain_rosinterface.py" name="MainbrainROSInterface" />
+</launch>

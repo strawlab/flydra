@@ -1,0 +1,16 @@
+<package>
+  <description brief="mainbrain">
+
+     mainbrain
+
+  </description>
+  <author>Steve Safarik</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/mainbrain</url>
+
+  <depend package="rospy" />
+  
+</package>
+
+

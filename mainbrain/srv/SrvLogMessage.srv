@@ -1,0 +1,4 @@
+string cam_id
+float64 host_timestamp
+string message
+---
