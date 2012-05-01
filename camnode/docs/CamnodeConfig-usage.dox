@@ -1,0 +1,27 @@
+\subsubsection usage Usage
+\verbatim
+<node name="camnode" pkg="camnode" type="camnode">
+  <param name="brightness" type="int" value="0" />
+  <param name="gain" type="int" value="100" />
+  <param name="shutter" type="int" value="100" />
+  <param name="framerate_trigger" type="double" value="20.0" />
+  <param name="framerate_max" type="double" value="20.0" />
+  <param name="threshold_diff" type="double" value="5.0" />
+  <param name="threshold_clear" type="double" value="0.3" />
+  <param name="n_sigma" type="double" value="7.0" />
+  <param name="n_erode" type="int" value="0" />
+  <param name="roi/left" type="int" value="0" />
+  <param name="roi/top" type="int" value="0" />
+  <param name="roi/right" type="int" value="1023" />
+  <param name="roi/bottom" type="int" value="767" />
+  <param name="trigger_mode" type="int" value="0" />
+  <param name="dynamic_background" type="bool" value="True" />
+  <param name="use_cmp" type="bool" value="False" />
+  <param name="use_color_filter" type="bool" value="False" />
+  <param name="color_filter_1" type="int" value="0" />
+  <param name="color_filter_2" type="int" value="150" />
+  <param name="color_filter_3" type="int" value="255" />
+  <param name="color_filter_sat" type="int" value="100" />
+</node>
+\endverbatim
+

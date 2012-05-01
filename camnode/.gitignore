@@ -1,0 +1,9 @@
+build
+dist
+msg_gen
+srv_gen
+cpp
+*.so
+*.pyc
+*~
+
