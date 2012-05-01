@@ -1,0 +1,10 @@
+<launch>
+	<arg name="guid" />
+	
+    <node name="camera_$(arg guid)" pkg="camnode" type="camnode.py" >
+        <param name="guid" value="$(arg guid)" />
+        <rosparam file="$(find camnode)/yaml/camera_$(arg guid).yaml" /> 
+
+    </node>
+   
+</launch>

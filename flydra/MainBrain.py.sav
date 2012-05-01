@@ -2,19 +2,23 @@
 # TODO:
 # 1. make variable eccentricity threshold dependent on area (bigger area = lower threshold)
 from __future__ import with_statement, division
-import threading, time, socket, select, sys, os, struct, pickle, copy
+import threading, time, socket, select, sys, os, copy, struct, math
 import collections
 import traceback
 import Pyro.core
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
 import numpy
+import numpy as nx
 from numpy import nan, inf
 near_inf = 9.999999e20
 import Queue
 import tables
+import tables as PT
 pytables_filt = numpy.asarray
 import atexit
+import pickle, copy
+import pkg_resources
 
 import motmot.utils.config
 import flydra.version
@@ -25,7 +29,7 @@ import flydra.fastgeom as geom
 
 import flydra.data_descriptions
 
-import warnings
+import warnings, errno
 warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
 
 # ensure that pytables uses numpy:
@@ -167,62 +171,62 @@ outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # 2D data format for PyTables:
 Info2D = flydra.data_descriptions.Info2D
 
-class CamSyncInfo(tables.IsDescription):
-    cam_id = tables.StringCol(256,pos=0)
-    camn   = tables.UInt16Col(pos=1)
-    frame0 = tables.FloatCol(pos=2)
+class CamSyncInfo(PT.IsDescription):
+    cam_id = PT.StringCol(256,pos=0)
+    camn   = PT.UInt16Col(pos=1)
+    frame0 = PT.FloatCol(pos=2)
 
-class HostClockInfo(tables.IsDescription):
-    remote_hostname  = tables.StringCol(255,pos=0)
-    start_timestamp  = tables.FloatCol(pos=1)
-    remote_timestamp = tables.FloatCol(pos=2)
-    stop_timestamp   = tables.FloatCol(pos=3)
+class HostClockInfo(PT.IsDescription):
+    remote_hostname  = PT.StringCol(255,pos=0)
+    start_timestamp  = PT.FloatCol(pos=1)
+    remote_timestamp = PT.FloatCol(pos=2)
+    stop_timestamp   = PT.FloatCol(pos=3)
 
-class TriggerClockInfo(tables.IsDescription):
-    start_timestamp  = tables.FloatCol(pos=0)
-    framecount       = tables.Int64Col(pos=1)
-    tcnt             = tables.UInt16Col(pos=2)
-    stop_timestamp   = tables.FloatCol(pos=3)
+class TriggerClockInfo(PT.IsDescription):
+    start_timestamp  = PT.FloatCol(pos=0)
+    framecount       = PT.Int64Col(pos=1)
+    tcnt             = PT.UInt16Col(pos=2)
+    stop_timestamp   = PT.FloatCol(pos=3)
 
-class MovieInfo(tables.IsDescription):
-    cam_id             = tables.StringCol(16,pos=0)
-    filename           = tables.StringCol(255,pos=1)
-    approx_start_frame = tables.Int64Col(pos=2)
-    approx_stop_frame  = tables.Int64Col(pos=3)
+class MovieInfo(PT.IsDescription):
+    cam_id             = PT.StringCol(16,pos=0)
+    filename           = PT.StringCol(255,pos=1)
+    approx_start_frame = PT.Int64Col(pos=2)
+    approx_stop_frame  = PT.Int64Col(pos=3)
 
-class Info3D(tables.IsDescription):
+class Info3D(PT.IsDescription):
     # This is for the non-Kalman version.
-    frame      = tables.Int64Col(pos=0)
+    frame      = PT.Int64Col(pos=0)
 
-    x          = tables.Float32Col(pos=1)
-    y          = tables.Float32Col(pos=2)
-    z          = tables.Float32Col(pos=3)
+    x          = PT.Float32Col(pos=1)
+    y          = PT.Float32Col(pos=2)
+    z          = PT.Float32Col(pos=3)
 
-    p0         = tables.Float32Col(pos=4)
-    p1         = tables.Float32Col(pos=5)
-    p2         = tables.Float32Col(pos=6)
-    p3         = tables.Float32Col(pos=7)
-    p4         = tables.Float32Col(pos=8)
-    p5         = tables.Float32Col(pos=9)
+    p0         = PT.Float32Col(pos=4)
+    p1         = PT.Float32Col(pos=5)
+    p2         = PT.Float32Col(pos=6)
+    p3         = PT.Float32Col(pos=7)
+    p4         = PT.Float32Col(pos=8)
+    p5         = PT.Float32Col(pos=9)
 
-    timestamp  = tables.FloatCol(pos=10)
+    timestamp  = PT.FloatCol(pos=10)
 
-    camns_used = tables.StringCol(32,pos=11)
-    mean_dist  = tables.Float32Col(pos=12) # mean 2D reconstruction error
+    camns_used = PT.StringCol(32,pos=11)
+    mean_dist  = PT.Float32Col(pos=12) # mean 2D reconstruction error
 
-class TextLogDescription(tables.IsDescription):
-    mainbrain_timestamp = tables.FloatCol(pos=0)
-    cam_id = tables.StringCol(255,pos=1)
-    host_timestamp = tables.FloatCol(pos=2)
-    message = tables.StringCol(255,pos=3)
+class TextLogDescription(PT.IsDescription):
+    mainbrain_timestamp = PT.FloatCol(pos=0)
+    cam_id = PT.StringCol(255,pos=1)
+    host_timestamp = PT.FloatCol(pos=2)
+    message = PT.StringCol(255,pos=3)
 
 FilteredObservations = flydra_kalman_utils.FilteredObservations
 kalman_observations_2d_idxs_type = flydra_kalman_utils.kalman_observations_2d_idxs_type
 
-h5_obs_names = tables.Description(FilteredObservations().columns)._v_names
+h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
 
 # allow rapid building of numpy.rec.array:
-Info2DCol_description = tables.Description(Info2D().columns)._v_nestedDescr
+Info2DCol_description = PT.Description(Info2D().columns)._v_nestedDescr
 
 def encode_data_packet( corrected_framenumber,
                         line3d_valid,
@@ -316,25 +320,25 @@ class TimestampEchoReceiver(threading.Thread):
                 del tlist[:] # clear list
                 start_timestamps = tarray[:,0]
                 stop_timestamps = tarray[:,2]
-                durationsRoundtrip = stop_timestamps-start_timestamps
-                # find best measurement (that with shortest durationsRoundtrip)
-                iMinDuration = numpy.argmin(durationsRoundtrip)
-                srs = tarray[iMinDuration,:] # Get the (start,remote,stop) times of the quickest entry.
+                roundtrip_duration = stop_timestamps-start_timestamps
+                # find best measurement (that with shortest roundtrip_duration)
+                rowidx = numpy.argmin(roundtrip_duration)
+                srs = tarray[rowidx,:]
                 start_timestamp, remote_timestamp, stop_timestamp = srs
-                durationToRemote = remote_timestamp - start_timestamp
-                durationFromRemote = stop_timestamp - remote_timestamp
-                if True: #durationToRemote > 1:
-                    rospy.logwarn('%s : durationToRemote=%.2fms durationFromRemote=%.2fms, durationTotal=%0.2fms' % (remote_hostname, 
-                                                                                                             durationToRemote*1e3, 
-                                                                                                             durationFromRemote*1e3, 
-                                                                                                             durationsRoundtrip[iMinDuration]*1e3,))
+                clock_diff_msec = abs(remote_timestamp-start_timestamp)*1e3
+                if clock_diff_msec > 1:
+                    print '%s : clock diff: %.3f msec(measurement err: %.3f msec)'%(
+                        remote_hostname,
+                        clock_diff_msec,
+                        roundtrip_duration[rowidx]*1e3,
+                        )
 
                 self.main_brain.queue_host_clock_info.put(  (remote_hostname,
                                                              start_timestamp,
                                                              remote_timestamp,
                                                              stop_timestamp) )
-                if False:
-                    measurement_duration = durationsRoundtrip[iMinDuration]
+                if 0:
+                    measurement_duration = roundtrip_duration[rowidx]
                     clock_diff = stop_timestamp-remote_timestamp
 
                     print '%s: the remote diff is %.1f msec (within 0-%.1f msec accuracy)'%(
@@ -350,13 +354,13 @@ class TrigReceiver(threading.Thread):
     def run(self):
         global hostname
 
-        socketTrigger = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        trigger_network_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         port = flydra.common_variables.trigger_network_socket_port
-        socketTrigger.bind((hostname, port))
+        trigger_network_socket.bind((hostname, port))
 
         while 1: # XXX enable quit
             try:
-                trig_buf, (remote_ip,cam_port) = socketTrigger.recvfrom(4096)
+                trig_buf, (remote_ip,cam_port) = trigger_network_socket.recvfrom(4096)
             except Exception, err:
                 print 'WARNING: unknown Exception receiving trigger data:',str(err)
                 continue
@@ -525,58 +529,56 @@ class CoordRealReceiver(threading.Thread):
                     self.out_queue.put((cam_id, data ))
 
 class CoordinateSender(threading.Thread):
-      """a class to send realtime coordinate data from a separate thread"""
-      def __init__(self,my_queue,my_ros_queue,quit_event):
-          self.my_queue = my_queue
-          self.my_ros_queue = my_ros_queue
-          self.quit_event = quit_event
-          name = 'CoordinateSender thread'
-          threading.Thread.__init__(self,name=name)
-      def run(self):
-          global downstream_kalman_hosts
-          out_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-          block = 1
-          timeout = .1
-          encode_super_packet = flydra.kalman.data_packets.encode_super_packet
-
-          if have_ROS:
-              from ros_flydra.msg import flydra_mainbrain_super_packet
-              pub = rospy.Publisher('flydra_mainbrain_super_packets',
-                                    flydra_mainbrain_super_packet)
-
-          while not self.quit_event.isSet():
-              packets = []
-              packets.append( self.my_queue.get() )
-              while 1:
-                  try:
-                      packets.append( self.my_queue.get_nowait() )
-                  except Queue.Empty:
-                      break
-              # now packets is a list of all recent data
-              super_packet = encode_super_packet( packets )
-              for downstream_host in downstream_kalman_hosts:
-                  outgoing_UDP_socket.sendto(super_packet,downstream_host)
-
-              if have_ROS:
-                  ros_packets = []
-                  ros_packets.append( self.my_ros_queue.get() )
-                  while 1:
-                      try:
-                          ros_packets.append( self.my_ros_queue.get_nowait() )
-                      except Queue.Empty:
-                          break
-                  ros_super_packet = flydra_mainbrain_super_packet(packets=ros_packets)
-                  pub.publish(ros_super_packet)
-
+    """a class to send realtime coordinate data from a separate thread"""
+    def __init__(self,my_queue,my_ros_queue,quit_event):
+        self.my_queue = my_queue
+        self.my_ros_queue = my_ros_queue
+        self.quit_event = quit_event
+        name = 'CoordinateSender thread'
+        threading.Thread.__init__(self,name=name)
+    def run(self):
+        global downstream_kalman_hosts
+        out_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        block = 1
+        timeout = .1
+        encode_super_packet = flydra.kalman.data_packets.encode_super_packet
+    
+        if have_ROS:
+            from ros_flydra.msg import flydra_mainbrain_super_packet
+            pub = rospy.Publisher('flydra_mainbrain_super_packets',
+                                  flydra_mainbrain_super_packet)
+    
+        while not self.quit_event.isSet():
+            packets = []
+            packets.append( self.my_queue.get() )
+            while 1:
+                try:
+                    packets.append( self.my_queue.get_nowait() )
+                except Queue.Empty:
+                    break
+            # now packets is a list of all recent data
+            super_packet = encode_super_packet( packets )
+            for downstream_host in downstream_kalman_hosts:
+                outgoing_UDP_socket.sendto(super_packet,downstream_host)
+    
+            if have_ROS:
+                ros_packets = []
+                ros_packets.append( self.my_ros_queue.get() )
+                while 1:
+                    try:
+                        ros_packets.append( self.my_ros_queue.get_nowait() )
+                    except Queue.Empty:
+                        break
+                ros_super_packet = flydra_mainbrain_super_packet(packets=ros_packets)
+                pub.publish(ros_super_packet)
+    
 
 class CoordinateProcessor(threading.Thread):
     def __init__(self,main_brain,save_profiling_data=False,
                  debug_level=None,
                  show_sync_errors=True,
                  show_overall_latency=None):
-        
         global hostname
-        
         self.main_brain = main_brain
         self.debug_level = debug_level
         self.show_overall_latency = show_overall_latency
@@ -823,22 +825,16 @@ class CoordinateProcessor(threading.Thread):
 
         if os.name == 'posix':
             try:
-                #priority = posix_sched.get_priority_max( posix_sched.FIFO )
-                priority = 1 #posix_sched.get_priority_min( posix_sched.FIFO )  # Faster than user procs, slower than kernel procs: rtprio=41.
-                sched_params = posix_sched.SchedParam(priority)
-                rv = posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
-                print 'Excellent (%d), 3D reconstruction thread running in maximum priority mode' % rv
+                max_priority = posix_sched.get_priority_max( posix_sched.FIFO )
+                sched_params = posix_sched.SchedParam(max_priority)
+                posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
+                print 'excellent, 3D reconstruction thread running in maximum prioity mode'
             except Exception, x:
-                import ctypes
-                # The 186 comes from the command:  grep -r _gettid /usr/include/*
-                # and may vary on linux flavor, 32/64 bitness, etc.
-                print 'WARNING: Could not change to FIFO priority=%d, <threadID>=%d: %s' % (priority, ctypes.CDLL('libc.so.6').syscall(186), str(x)) 
-                print 'You can set this manually via:'
-                print 'sudo chrt -f -p 1 %d' % ctypes.CDLL('libc.so.6').syscall(186)
+                print 'WARNING: could not run in maximum priority mode (PID %d): %s'%(os.getpid(),str(x))
 
         header_fmt = '<ddliI'
         header_size = struct.calcsize(header_fmt)
-        pt_fmt = '<dddddddddBBddBddddddddd' # keep in sync with camnode.py
+        pt_fmt = '<dddddddddBBddBddddddBdd' # keep in sync with camnode.py
         pt_size = struct.calcsize(pt_fmt)
 
         realtime_coord_dict = {}
@@ -1009,10 +1005,8 @@ class CoordinateProcessor(threading.Thread):
                         #  * using time.time() can fail if the network
                         #    latency jitter is on the order of the
                         #    inter frame interval.
-                        tmp = self.main_brain.timestamp_modeler.register_frame(cam_id,
-                                                                               raw_framenumber,
-                                                                               camn_received_time,
-                                                                               full_output=True)
+                        tmp = self.main_brain.timestamp_modeler.register_frame(
+                            cam_id,raw_framenumber,camn_received_time,full_output=True)
                         trigger_timestamp, corrected_framenumber, did_frame_offset_change = tmp
                         if did_frame_offset_change:
                             self.OnSynchronize( cam_idx, cam_id, raw_framenumber, trigger_timestamp,
@@ -1231,7 +1225,7 @@ class CoordinateProcessor(threading.Thread):
                                             found_data_dict,
                                             max_error,
                                             max_n_cams=max_N_hypothesis_test,
-                                            )
+                                            ) 
                                     except ru.NoAcceptablePointFound, err:
                                         pass
                                     else:
@@ -1371,7 +1365,7 @@ class CoordinateProcessor(threading.Thread):
                                 print repr(xy)
 
                         if 1:
-                            diff_from_start = []
+                            diff_from_start = [] 
                             for cam_id, tmp_trigger_timestamp in timestamp_check_dict[finished].iteritems():
                                 diff_from_start.append( tmp_trigger_timestamp )
                             timestamps_by_cam_id = numpy.array( diff_from_start )
@@ -1517,7 +1511,7 @@ class MainBrain(object):
                     cam['commands'].setdefault('set',{})[property_name]=value
                     old_value = cam['scalar_control_info'][property_name]
                     if type(old_value) == tuple and type(value) == int:
-                        # i.e. (current, min, max)
+                        # brightness, gain, shutter
                         cam['scalar_control_info'][property_name] = (value, old_value[1], old_value[2])
                     else:
                         cam['scalar_control_info'][property_name] = value
@@ -1660,10 +1654,11 @@ class MainBrain(object):
         #
         # ================================================================
 
-        def register_new_camera(self, cam_no, scalar_control_info, port, force_cam_id=None):
+        def register_new_camera(self,cam_no,scalar_control_info,port,force_cam_id=None):
             """register new camera, return cam_id (caller: remote camera)"""
 
             caller= self.daemon.getLocalStorage().caller # XXX Pyro hack??
+            print "register_new_camera(cam_no=",cam_no,", port=",port,", force_cam_id=",force_cam_id,")"
             caller_addr= caller.addr
             caller_ip, caller_port = caller_addr
             fqdn = socket.getfqdn(caller_ip)
@@ -1692,7 +1687,7 @@ class MainBrain(object):
                 self.new_cam_ids.append(cam_id)
             return cam_id
 
-        def set_image(self, cam_id, coord_and_image):
+        def set_image(self,cam_id,coord_and_image):
             """set most recent image (caller: remote camera)"""
             with self.cam_info_lock:
                 cam = self.cam_info[cam_id]
@@ -1735,7 +1730,7 @@ class MainBrain(object):
                                             +(frame_pt_idx,cur_val,mean_val,sumsqf_val))
             self.main_brain.queue_data2d.put(deferred_2d_data)
 
-        def set_fps(self, cam_id, fps):
+        def set_fps(self,cam_id,fps):
             """set most recent fps (caller: remote camera)"""
             with self.cam_info_lock:
                 cam = self.cam_info[cam_id]
@@ -1743,7 +1738,7 @@ class MainBrain(object):
                 with cam_lock:
                     self.cam_info[cam_id]['fps'] = fps
 
-        def get_and_clear_commands(self, cam_id):
+        def get_and_clear_commands(self,cam_id):
             with self.cam_info_lock:
                 cam = self.cam_info[cam_id]
                 cam_lock = cam['lock']
@@ -1752,17 +1747,17 @@ class MainBrain(object):
                     cam['commands'] = {}
             return cmds
 
-        def get_cam2mainbrain_port(self, cam_id):
+        def get_cam2mainbrain_port(self,cam_id):
             """Send port number to which camera should send realtime data"""
             cam2mainbrain_data_port = self.main_brain.coord_processor.get_cam2mainbrain_data_port(cam_id)
             return cam2mainbrain_data_port
 
-        def log_message(self, cam_id, host_timestamp, message):
+        def log_message(self,cam_id,host_timestamp,message):
             mainbrain_timestamp = time.time()
             print 'received log message from %s: %s'%(cam_id,message)
-            self.message_queue.put( (mainbrain_timestamp, cam_id, host_timestamp, message) )
+            self.message_queue.put( (mainbrain_timestamp,cam_id,host_timestamp,message) )
 
-        def close(self, cam_id):
+        def close(self,cam_id):
             """gracefully say goodbye (caller: remote camera)"""
             with self.cam_info_lock:
                 self.main_brain.coord_processor.disconnect(cam_id)
@@ -1786,7 +1781,7 @@ class MainBrain(object):
             hostname = server
         print 'running mainbrain at hostname "%s"'%hostname
 
-        assert tables.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
+        assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
 
         self.debug_level = threading.Event()
         self.show_overall_latency = threading.Event()
@@ -2021,11 +2016,10 @@ class MainBrain(object):
         except motmot.fview_ext_trig.live_timestamp_modeler.ImpreciseMeasurementError, err:
             pass
 
-#    OLD VERSION vvvv Uses one ip:port combination per camnode (multiple cameras per camnode) to do the timestamp echo procedure.  port = 28992.
     def _check_latencies(self):
         timestamp_echo_fmt1 = flydra.common_variables.timestamp_echo_fmt1
         timestamp_echo_listener_port = flydra.common_variables.timestamp_echo_listener_port
-        
+
         for cam_id in self.MainBrain_cam_ids_copy:
             if cam_id not in self._fqdns_by_cam_id:
                 sci, fqdn, cam2mainbrain_port = self.remote_api.external_get_info(cam_id)
@@ -2034,22 +2028,6 @@ class MainBrain(object):
                 fqdn = self._fqdns_by_cam_id[cam_id]
             buf = struct.pack( timestamp_echo_fmt1, time.time() )
             self.outgoing_latency_UDP_socket.sendto(buf,(fqdn,timestamp_echo_listener_port))
-#    OLD VERSION ^^^^
-        
-    # NEW VERSION - Uses one ip:port combination per camera to do the timestamp echo procedure.  port = 28995+iCamera
-#    def _check_latencies(self):
-#        timestamp_echo_fmt1 = flydra.common_variables.timestamp_echo_fmt1
-#        timestamp_echo_listener_port_base = flydra.common_variables.timestamp_echo_listener_port_base
-#
-#        for iCamera,cam_id in enumerate(self.MainBrain_cam_ids_copy):
-#            timestamp_echo_listener_port = timestamp_echo_listener_port_base + iCamera 
-#            if cam_id not in self._fqdns_by_cam_id:
-#                sci, fqdn, cam2mainbrain_port = self.remote_api.external_get_info(cam_id)
-#                self._fqdns_by_cam_id[cam_id] = fqdn
-#            else:
-#                fqdn = self._fqdns_by_cam_id[cam_id]
-#            buf = struct.pack( timestamp_echo_fmt1, time.time() )
-#            self.outgoing_latency_UDP_socket.sendto(buf,(fqdn,timestamp_echo_listener_port))
 
     def get_last_image_fps(self, cam_id):
         # XXX should extend to include lines
@@ -2216,7 +2194,7 @@ class MainBrain(object):
         self.dynamic_model=dynamic_model
         self.dynamic_model_name=kalman_model_name
 
-        self.h5_xhat_names = tables.Description(self.KalmanEstimatesDescription().columns)._v_names
+        self.h5_xhat_names = PT.Description(self.KalmanEstimatesDescription().columns)._v_names
 
         # send params over to realtime coords thread
         self.coord_processor.set_new_tracker(kalman_model=dynamic_model)
@@ -2232,7 +2210,7 @@ class MainBrain(object):
             raise RuntimeError("will not overwrite data file")
 
         self.timestamp_modeler.block_activity = True
-        self.h5file = tables.openFile(filename, mode="w", title="Flydra data file")
+        self.h5file = PT.openFile(filename, mode="w", title="Flydra data file")
         expected_rows = int(1e6)
         ct = self.h5file.createTable # shorthand
         root = self.h5file.root # shorthand

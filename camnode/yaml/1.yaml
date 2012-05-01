@@ -1,0 +1,16 @@
+video_mode: format7_mode0
+frame_id: Camera0
+camera_info_url: file:///cameras/basler_a622f_calibration.yaml
+  
+frame_rate: 59
+auto_brightness: 3
+brightness: 0
+auto_exposure: 5
+exposure: 0
+auto_gain: 3
+gain: 100
+auto_shutter: 3
+shutter: 512
+
+diff_threshold: 30
+

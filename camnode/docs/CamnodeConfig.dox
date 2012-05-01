@@ -1,0 +1,26 @@
+\subsubsection parameters ROS parameters
+
+Reads and maintains the following parameters on the ROS server
+
+- \b "~brightness" : \b [int] Brightness min: 0, default: 0, max: 255
+- \b "~gain" : \b [int] Percent multiplication on pixel values min: 0, default: 100, max: 740
+- \b "~shutter" : \b [int] Exposure time in microseconds min: 0, default: 100, max: 4095
+- \b "~framerate_trigger" : \b [double] Trigger framerate min: 0.0, default: 20.0, max: 200.0
+- \b "~framerate_max" : \b [double] Maximum framerate min: 0.0, default: 20.0, max: 200.0
+- \b "~threshold_diff" : \b [double] Threshold for absdiff min: 0.0, default: 5.0, max: 10.0
+- \b "~threshold_clear" : \b [double] Threshold for clear min: 0.0, default: 0.3, max: 10.0
+- \b "~n_sigma" : \b [double] Criterion to determine if a pixel is significantly different than the mean min: 0.0, default: 7.0, max: 20.0
+- \b "~n_erode" : \b [int] Number of erosions min: 0, default: 0, max: 20
+- \b "~roi/left" : \b [int] ROI left min: 0, default: 0, max: 1920
+- \b "~roi/top" : \b [int] ROI top min: 0, default: 0, max: 1080
+- \b "~roi/right" : \b [int] ROI right min: 0, default: 1023, max: 1920
+- \b "~roi/bottom" : \b [int] ROI bottom min: 0, default: 767, max: 1080
+- \b "~trigger_mode" : \b [int] Trigger mode min: 0, default: 0, max: 10
+- \b "~dynamic_background" : \b [bool] Moving Average Background min: False, default: True, max: True
+- \b "~use_cmp" : \b [bool] Use cmp min: False, default: False, max: True
+- \b "~use_color_filter" : \b [bool] Convert pixels to red (requires color cameras) min: False, default: False, max: True
+- \b "~color_filter_1" : \b [int] Color filter 1 min: 0, default: 0, max: 255
+- \b "~color_filter_2" : \b [int] Color filter 2 min: 0, default: 150, max: 255
+- \b "~color_filter_3" : \b [int] Color filter 3 min: 0, default: 255, max: 255
+- \b "~color_filter_sat" : \b [int] Color filter saturation min: 0, default: 100, max: 255
+
