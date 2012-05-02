@@ -2,6 +2,7 @@ build
 dist
 msg_gen
 srv_gen
+src
 *.so
 *.pyc
 *~

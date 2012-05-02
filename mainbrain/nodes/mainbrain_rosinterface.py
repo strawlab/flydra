@@ -131,14 +131,14 @@ class MainbrainRosInterface(object):
 
         # Expose the flydra_mainbrain API functions as ROS services.  Same as the Pyro function call, except with a few parameters pickled.
         rospy.Service ('mainbrain/get_version',              SrvGetVersion, self.callback_get_version)
-        rospy.Service ('mainbrain/register_new_camera',      SrvRegisterCamera, self.callback_register_camera)
+        rospy.Service ('mainbrain/register_camera',          SrvRegisterCamera, self.callback_register_camera)
         rospy.Service ('mainbrain/get_cam2mainbrain_port',   SrvGetCam2MainbrainPort, self.callback_get_mainbrain_port)
         rospy.Service ('mainbrain/get_and_clear_commands',   SrvGetAndClearCommands, self.callback_get_and_clear_commands)
         rospy.Service ('mainbrain/set_fps',                  SrvSetFps, self.callback_set_fps)
         rospy.Service ('mainbrain/set_image',                SrvSetImage, self.callback_set_image)
         rospy.Service ('mainbrain/log_message',              SrvLogMessage, self.callback_log_message)
         rospy.Service ('mainbrain/receive_missing_data',     SrvReceiveMissingData, self.callback_receive_missing_data)
-        rospy.Service ('mainbrain/close',                    SrvClose, self.callback_close_camera)
+        rospy.Service ('mainbrain/close_camera',             SrvClose, self.callback_close_camera)
         rospy.Service ('mainbrain/get_recording_status',     SrvGetRecordingStatus, self.callback_get_recording_status)
 
 

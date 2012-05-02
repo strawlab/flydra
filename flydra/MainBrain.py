@@ -84,6 +84,8 @@ PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
 PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
 PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_IDX
 
+USE_ONE_TIMEPORT_PER_CAMERA = False # True=OnePerCamera, False=OnePerCamnode.  Keep in sync with camnode.py
+
 ########
 # persistent configuration data ( implementation in motmot.utils.config )
 def get_rc_params():
@@ -2021,35 +2023,36 @@ class MainBrain(object):
         except motmot.fview_ext_trig.live_timestamp_modeler.ImpreciseMeasurementError, err:
             pass
 
-#    OLD VERSION vvvv Uses one ip:port combination per camnode (multiple cameras per camnode) to do the timestamp echo procedure.  port = 28992.
-    def _check_latencies(self):
-        timestamp_echo_fmt1 = flydra.common_variables.timestamp_echo_fmt1
-        timestamp_echo_listener_port = flydra.common_variables.timestamp_echo_listener_port
-        
-        for cam_id in self.MainBrain_cam_ids_copy:
-            if cam_id not in self._fqdns_by_cam_id:
-                sci, fqdn, cam2mainbrain_port = self.remote_api.external_get_info(cam_id)
-                self._fqdns_by_cam_id[cam_id] = fqdn
-            else:
-                fqdn = self._fqdns_by_cam_id[cam_id]
-            buf = struct.pack( timestamp_echo_fmt1, time.time() )
-            self.outgoing_latency_UDP_socket.sendto(buf,(fqdn,timestamp_echo_listener_port))
-#    OLD VERSION ^^^^
-        
+    # OLD VERSION - Uses one ip:port combination per camnode (multiple cameras per camnode) to do the timestamp echo procedure.  port = 28992.
     # NEW VERSION - Uses one ip:port combination per camera to do the timestamp echo procedure.  port = 28995+iCamera
-#    def _check_latencies(self):
-#        timestamp_echo_fmt1 = flydra.common_variables.timestamp_echo_fmt1
-#        timestamp_echo_listener_port_base = flydra.common_variables.timestamp_echo_listener_port_base
-#
-#        for iCamera,cam_id in enumerate(self.MainBrain_cam_ids_copy):
-#            timestamp_echo_listener_port = timestamp_echo_listener_port_base + iCamera 
-#            if cam_id not in self._fqdns_by_cam_id:
-#                sci, fqdn, cam2mainbrain_port = self.remote_api.external_get_info(cam_id)
-#                self._fqdns_by_cam_id[cam_id] = fqdn
-#            else:
-#                fqdn = self._fqdns_by_cam_id[cam_id]
-#            buf = struct.pack( timestamp_echo_fmt1, time.time() )
-#            self.outgoing_latency_UDP_socket.sendto(buf,(fqdn,timestamp_echo_listener_port))
+    def _check_latencies(self):
+        if USE_ONE_TIMEPORT_PER_CAMERA:
+            timestamp_echo_fmt1 = flydra.common_variables.timestamp_echo_fmt1
+            timestamp_echo_listener_port_base = rospy.get_param('mainbrain/port_timestamp_camera_base', 28995) #flydra.common_variables.timestamp_echo_listener_port_base
+    
+            for iCamera,cam_id in enumerate(self.MainBrain_cam_ids_copy):
+                timestamp_echo_listener_port = timestamp_echo_listener_port_base + iCamera 
+                if cam_id not in self._fqdns_by_cam_id:
+                    sci, fqdn, cam2mainbrain_port = self.remote_api.external_get_info(cam_id)
+                    self._fqdns_by_cam_id[cam_id] = fqdn
+                else:
+                    fqdn = self._fqdns_by_cam_id[cam_id]
+                buf = struct.pack( timestamp_echo_fmt1, time.time() )
+                self.outgoing_latency_UDP_socket.sendto(buf,(fqdn,timestamp_echo_listener_port))
+        else:
+            timestamp_echo_fmt1 = flydra.common_variables.timestamp_echo_fmt1
+            timestamp_echo_listener_port = flydra.common_variables.timestamp_echo_listener_port
+            
+            for cam_id in self.MainBrain_cam_ids_copy:
+                if cam_id not in self._fqdns_by_cam_id:
+                    sci, fqdn, cam2mainbrain_port = self.remote_api.external_get_info(cam_id)
+                    self._fqdns_by_cam_id[cam_id] = fqdn
+                else:
+                    fqdn = self._fqdns_by_cam_id[cam_id]
+                buf = struct.pack( timestamp_echo_fmt1, time.time() )
+                self.outgoing_latency_UDP_socket.sendto(buf,(fqdn,timestamp_echo_listener_port))
+        
+
 
     def get_last_image_fps(self, cam_id):
         # XXX should extend to include lines

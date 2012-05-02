@@ -76,7 +76,7 @@ from flydra.reconstruct import do_3d_operations_on_2d_point
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
 
-#from mainbrain.srv import *
+from mainbrain.srv import *
 gLockParams = threading.Lock()
 
 #FastImage.set_debug(3)
@@ -97,7 +97,7 @@ LOGLEVEL = rospy.WARN
 #LOGLEVEL = rospy.FATAL
 
 USE_ROS = False # False=UseTheSocketsInterfaceToMainbrain,  True=UseTheROSServicesInterfaceToMainbrain
-USE_ONE_PORT_PER_CAMERA = True
+USE_ONE_TIMEPORT_PER_CAMERA = USE_ROS # True=OnePerCamera, False=OnePerCamnode.  Keep MainBrain.py in sync with this.
 
 if not BENCHMARK:
     import Pyro.core, Pyro.errors, Pyro.util
@@ -2214,7 +2214,7 @@ class AppState(object):
         ##################################################################
         # Initialize "camerainfo" variables.
         ##################################################################
-
+        rospy.logwarn ('Initializing camera %d' % iCamera)
         self.camerainfolist[iCamera] = {} # intialize
 
         self.camerainfolist[iCamera]['debug_drop']=self.options.debug_drop
@@ -2807,10 +2807,14 @@ def ThreadEchoTimestamp(iCamera, camera):
     socketReceiveTimestamp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     hostname = ''
     with gLockParams:
-        portReceiveTimestampBase = rospy.get_param('mainbrain/port_timestamp_camera_base', 28992)
-    portReceiveTimestamp = portReceiveTimestampBase + iCamera
+        if iCamera is None:
+            portReceiveTimestamp = rospy.get_param('mainbrain/port_timestamp_camera', 28992) # One port per camnode.
+        else:
+            portReceiveTimestampBase = rospy.get_param('mainbrain/port_timestamp_camera_base', 28995) # One port per camera.
+            portReceiveTimestamp = portReceiveTimestampBase + iCamera
     try:
         socketReceiveTimestamp.bind(( hostname, portReceiveTimestamp))
+        rospy.logwarn('Created udp server (to receive timestamps) on port %s:%d' % (hostname, portReceiveTimestamp))
     except socket.error, err:
         if err.args[0]==98:
             with gLockParams:
@@ -2875,13 +2879,14 @@ class MainbrainInterface(object):
     #   Note that the MainbrainRosInterface node must be running.
     #
     def AttachMainbrainRosInterface(self):
-        self.send_coordinates_service = []
+        self.send_coordinates_service_list = []
+        self.idCameras_list = []
         
         stSrv = 'mainbrain/get_version'
         rospy.wait_for_service(stSrv)
         self.get_version_service = rospy.ServiceProxy(stSrv, SrvGetVersion)
 
-        stSrv = 'mainbrain/register_new_camera'
+        stSrv = 'mainbrain/register_camera'
         rospy.wait_for_service(stSrv)
         self.register_new_camera_service = rospy.ServiceProxy(stSrv, SrvRegisterCamera)
 
@@ -2942,10 +2947,10 @@ class MainbrainInterface(object):
         
 
         # Each camera also needs to have a place to send its coordinates.
-        stSrv = 'mainbrain/send_coordinates/'+idCamera
-        rospy.logwarn('Camnode connecting to service %s...' % stSrv)
+        stSrv = 'mainbrain/coordinates/'+idCamera
         rospy.wait_for_service(stSrv)
-        self.send_coordinates_service.append(rospy.ServiceProxy(stSrv, SrvCoordinates))
+        rospy.logwarn('Camnode connected to service %s...' % stSrv)
+        self.send_coordinates_service_list.append(rospy.ServiceProxy(stSrv, SrvCoordinates))
         
         return idCamera
 
@@ -2967,7 +2972,7 @@ class MainbrainInterface(object):
 
 
     def set_image_ros (self, idCamera, (leftbottom, npim)):
-        self.mainbrain.set_image_service(cam_id=idCamera, 
+        self.set_image_service(cam_id=idCamera, 
                                          pickled_coord_and_image=pickle.dumps((leftbottom, npim,)))
         return 
 
@@ -2994,7 +2999,7 @@ class MainbrainInterface(object):
         
     def send_coordinates_ros(self, idCamera, data):
         iCamera = self.ICameraFromId(idCamera)
-        response = self.send_coordinates_service[iCamera](idCamera, data)
+        response = self.send_coordinates_service_list[iCamera](idCamera, data)
         return
 
 
@@ -3063,6 +3068,14 @@ class MainbrainInterface(object):
         if self.socketTriggerRecording is not None:
             self.socketTriggerRecording.setblocking(0)
 
+        if not USE_ONE_TIMEPORT_PER_CAMERA:
+            # Launch only one thread to handle echo_timestamp.
+            rospy.logwarn('Starting: %s...' % ('thread_timestamp'))
+            self.threadEchoTime_list.append (threading.Thread(target=ThreadEchoTimestamp, name='thread_timestamp', args=(None, None,)))
+            self.threadEchoTime_list[0].setDaemon(True) # quit that thread if it's the only one left...
+            self.threadEchoTime_list[0].start()
+            rospy.logwarn('Started thread %s' % ('thread_timestamp'))
+
 
         # Point to the socket-based versions of the API.
         self.get_version            = self.proxyMainbrain.get_version
@@ -3105,13 +3118,14 @@ class MainbrainInterface(object):
         self.socket_coordinates_list.append(socketCoordinates)
 
 
-        # Launch a thread to handle echo_timestamp, once per each camera.
-        rospy.logwarn('Starting: %s...' % ('thread_timestamp_'+idCamera))
-        camera = {'echo_timestamp': self.get_echo_time}
-        self.threadEchoTime_list.append (threading.Thread(target=ThreadEchoTimestamp, name='thread_timestamp_'+idCamera, args=(iCamera, camera,)))
-        self.threadEchoTime_list[iCamera].setDaemon(True) # quit that thread if it's the only one left...
-        self.threadEchoTime_list[iCamera].start()
-        rospy.logwarn('Started thread %s' % ('thread_timestamp_'+idCamera))
+        if USE_ONE_TIMEPORT_PER_CAMERA:
+            # Launch a thread to handle echo_timestamp, once per each camera.
+            rospy.logwarn('Starting: %s...' % ('thread_timestamp_'+idCamera))
+            camera = {'echo_timestamp': self.get_echo_time}
+            self.threadEchoTime_list.append (threading.Thread(target=ThreadEchoTimestamp, name='thread_timestamp_'+idCamera, args=(iCamera, camera,)))
+            self.threadEchoTime_list[iCamera].setDaemon(True) # quit that thread if it's the only one left...
+            self.threadEchoTime_list[iCamera].start()
+            rospy.logwarn('Started thread %s' % ('thread_timestamp_'+idCamera))
         
         return idCamera
 
