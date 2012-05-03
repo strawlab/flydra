@@ -1,4 +1,32 @@
 #!/usr/bin/env python
+
+###############################################################################
+# mainbrain_rosinterface
+#
+# This file contains a node that provides a ROS-style abstraction to the sockets-based 
+# interface of mainbrain.  A program can still communicate with mainbrain via sockets 
+# calls, but in order to move toward ROS, we encapsulate in this file all that 
+# sockets stuff, and repackage the interface as ROS services.  
+#
+# This transition requires one significant change to the architecture.  
+#
+# Formerly there was one camnode per computer, each with multiple cameras.  So you might have 
+# two camnodes running, each with three cameras.  Mainbrain did an echo_timestamp once per 
+# camnode, able to distinguish the roundtrip times to each camnode because each had
+# a unique fqdn:port (e.g. hostabc:28992, hostdef:28992)
+#
+# Now, there's only one rosinterface node pretending to be a camnode with all the cameras, 
+# and mainbrain needs to distinguish the roundtrip times to the cameras. 
+# Since there's just one fqdn for the rosinterface, we need to use a separate port for 
+# each camera (e.g. hostabc:28995,6,7,8,9).  This makes one echo_timestamp per camera, 
+# not one per camnode.
+# 
+# The bottom line:
+# You can run MainBrain.py the old way by setting USE_ONE_TIMEPORT_PER_CAMERA=False.
+# You can run MainBrain.py the new way by setting USE_ONE_TIMEPORT_PER_CAMERA=True.
+#
+  
+  
 from __future__ import division
 import roslib; roslib.load_manifest('mainbrain')
 import rospy
@@ -6,7 +34,6 @@ import socket
 import Pyro.core
 import pickle
 from mainbrain.srv import *
-import flydra.common_variables
 
 import threading
 import struct
