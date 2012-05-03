@@ -1,0 +1,28 @@
+video_mode: format7_mode0
+frame_id: Camera0
+camera_info_url: file:///cameras/basler_a622f_calibration.yaml
+  
+brightness: 0
+gain: 100
+shutter: 512
+framerate_max: 20
+framerate_trigger: 20
+trigger_mode: 0
+threshold_diff: 6
+threshold_clear: 0.3
+n_sigma: 7
+n_erode: 0
+roi:
+    left: 0
+    top: 0
+    right: 1023
+    bottom: 767
+dynamic_background: True
+use_cmp: False
+
+use_color_filter: False
+color_filter_1: 0
+color_filter_2: 150
+color_filter_3: 255
+color_filter_sat: 100
+
