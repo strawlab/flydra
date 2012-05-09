@@ -313,7 +313,7 @@ class PreallocatedBufferPool(object):
             self._zero_buffer_lock.clear()
             return buffer
 
-    def return_buffer(self,buffer):
+    def release(self,buffer):
         assert isinstance(buffer, PreallocatedBuffer)
         with self._lock:
             self._buffers_handed_out -= 1
@@ -333,12 +333,12 @@ class PreallocatedBufferPool(object):
 def get_free_buffer_from_pool(pool):
     """manage access to buffers from the pool"""
     buf = pool.get_free_buffer()
-    buf._i_promise_to_return_buffer_to_the_pool = False
+    buf._i_promise_to_release_to_the_pool = False
     try:
         yield buf
     finally:
-        if not buf._i_promise_to_return_buffer_to_the_pool:
-            pool.return_buffer(buf)
+        if not buf._i_promise_to_release_to_the_pool:
+            pool.release(buf)
 
 class ProcessCamClass(object):
     def __init__(self,
@@ -1477,22 +1477,22 @@ class ImageSource(threading.Thread):
 
                     # Setting this gives responsibility to the last
                     # chain to call
-                    # "buffer_pool.return_buffer(chainbuf)" when
+                    # "buffer_pool.release(chainbuf)" when
                     # done. This is acheived automatically by the
                     # context manager in use_buffer_from_chain() and
                     # the ChainLink.end_buf() method which returns the
                     # buffer when the last link in the chain is done.
-                    chainbuf._i_promise_to_return_buffer_to_the_pool = True
+                    chainbuf._i_promise_to_release_to_the_pool = True
 
-                    self._chain.fire( chainbuf ) # the end of the chain will call return_buffer()
-        # now, we are quitting, so fire one last event through the chain to signal quit
+                    self._chain.put( chainbuf ) # the end of the chain will call release()
+        # now, we are quitting, so put one last event through the chain to signal quit
         with get_free_buffer_from_pool( buffer_pool ) as chainbuf:
             chainbuf.quit_now = True
 
             # see above for this stuff
             if self._chain is not None:
-                chainbuf._i_promise_to_return_buffer_to_the_pool = True
-                self._chain.fire( chainbuf )
+                chainbuf._i_promise_to_release_to_the_pool = True
+                self._chain.put( chainbuf )
 
 class ImageSourceBaseController(object):
     pass
@@ -2367,7 +2367,7 @@ class AppState(object):
                     if 1:
                         save_cam = SaveCamData()
                         self.all_savers[cam_no]= save_cam
-                        cam_processor_chain.append_link( save_cam.get_chain() )
+                        cam_processor_chain.append_chain( save_cam.get_chain() )
                         thread = threading.Thread( target = save_cam.mainloop,
                                                    name = 'save_cam.mainloop')
                         thread.setDaemon(True)
@@ -2380,7 +2380,7 @@ class AppState(object):
                         save_small = SaveSmallData(options=self.options,
                                                    mkdir_lock = save_small_data_mkdir_lock)
                         self.all_small_savers[cam_no]= save_small
-                        cam_processor_chain.append_link( save_small.get_chain() )
+                        cam_processor_chain.append_chain( save_small.get_chain() )
                         thread = threading.Thread( target = save_small.mainloop,
                                                    name = 'save_small.mainloop')
                         thread.setDaemon(True)
@@ -2485,7 +2485,7 @@ class AppState(object):
             else:
                 thread_instance = klass(*args,**base_kwargs)
 
-            chain.append_link( thread_instance.get_chain() )
+            chain.append_chain( thread_instance.get_chain() )
             name = basename + ' ' + cam_id
             thread = threading.Thread( target = thread_instance.mainloop,
                                        name = name )

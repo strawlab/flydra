@@ -5,55 +5,59 @@ from __future__ import with_statement
 import contextlib
 
 import threading, Queue
+import rospy
 
 class ChainLink(object):
-    """essentially a linked list of threads"""
+    """Essentially a threadsafe linked list of image queues."""
     def __init__(self):
         self._queue = Queue.Queue()
-
         self._lock = threading.Lock()
         # start: vars access controlled by self._lock
         self._next = None
         #   end: vars access controlled by self._lock
 
-    def fire(self, buf):
-        """fire a listener in new thread. Threadsafe"""
-        self._queue.put( buf )
-
-    def append_link(self, chain ):
-        if not isinstance(chain,ChainLink):
+    def append_chain(self, chain):
+        if not isinstance(chain, ChainLink):
             raise ValueError("%s is not instance of ChainLink"%(str(chain),))
+
         with self._lock:
             if self._next is None:
                 self._next = chain
                 return
             else:
                 next = self._next
-        next.append_link( chain )
+        next.append_chain( chain )
 
-    def get_buf(self,blocking=True):
-        """called from client thread to get a buffer"""
-        if blocking:
-            return self._queue.get()
-        else:
-            return self._queue.get_nowait()
+    def put(self, image):
+        """put an image into queue."""
+        with self._lock:
+            #rospy.logwarn('put(%s)' % image)
+            self._queue.put(image)
 
-    def end_buf(self,buf):
-        """called from client thread to release a buffer"""
+    def get(self, blocking=True):
+        """Called from client thread to get a image."""
+        image = self._queue.get(blocking)
+        #rospy.logwarn('get(%s)' % image)
+        return image
+    
+
+    def release(self, image):
+        """Called from client thread to release an image."""
+        #rospy.logwarn('release(%s)' % image)
         with self._lock:
             next = self._next
 
         if next is not None:
-            next.fire(buf)
+            next.put(image)           # Kick the image down to the end chainlink.
         else:
-            pool = buf.get_pool()
-            pool.return_buffer( buf )
+            pool = image.get_pool()   # If we're the end, then release the image into its pool.
+            pool.release(image)
 
 @contextlib.contextmanager
-def use_buffer_from_chain(link,blocking=True):
+def use_buffer_from_chain(chain, blocking=True):
     """manage access to the buffer"""
-    buf = link.get_buf(blocking=blocking)
+    image = chain.get(blocking=blocking)
     try:
-        yield buf
+        yield image
     finally:
-        link.end_buf(buf)
+        chain.release(image)

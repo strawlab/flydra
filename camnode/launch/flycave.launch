@@ -1,0 +1,6 @@
+<launch>
+	<arg name="guidlist" default='all' />
+	
+    <include file="$(find camnode)/launch/camera.launch"> <arg name="guidlist" value="$(arg guidlist)" /> </include>
+       
+</launch>

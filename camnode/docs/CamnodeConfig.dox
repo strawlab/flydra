@@ -4,7 +4,7 @@ Reads and maintains the following parameters on the ROS server
 
 - \b "~brightness" : \b [int] Brightness min: 0, default: 0, max: 255
 - \b "~gain" : \b [int] Percent multiplication on pixel values min: 0, default: 100, max: 740
-- \b "~shutter" : \b [int] Exposure time in microseconds min: 0, default: 100, max: 4095
+- \b "~shutter" : \b [int] Exposure time in microseconds min: 0, default: 100, max: 1000000
 - \b "~framerate_trigger" : \b [double] Trigger framerate min: 0.0, default: 20.0, max: 200.0
 - \b "~framerate_max" : \b [double] Maximum framerate min: 0.0, default: 20.0, max: 200.0
 - \b "~threshold_diff" : \b [double] Threshold for absdiff min: 0.0, default: 5.0, max: 10.0
