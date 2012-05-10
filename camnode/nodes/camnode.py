@@ -1996,7 +1996,7 @@ class AppState(object):
         else:                                                                           # None of the above.  Use the cameras.
             self.sourceImages = 'Cameras'
             g_cam_iface = cam_iface_choose.import_backend( self.options.backend, self.options.wrapper )
-            self.camerainfolist = self.GetCamerainfoList()
+            self.camerainfolist = self.get_camerainfo_list()
             nCameras = len(self.camerainfolist)
 
         if nCameras == 0:
@@ -2057,7 +2057,7 @@ class AppState(object):
             self.filespeclistMasks = None
 
 
-        guidlist = self.GetGuidList()
+        guidlist = self.get_guid_list()
 
         # Print camera details..
         if self.options.show_cam_details:
@@ -2202,8 +2202,8 @@ class AppState(object):
     def mask_from_guid(self, guid):
         # Get the image mask.
         if self.filespeclistMasks is not None:
-            guidlist = self.GetGuidList()
-            mask = self.MaskFromFile(self.filespeclistMasks[guidlist.index(guid)])
+            guidlist = self.get_guid_list()
+            mask = self.get_mask_from_file(self.filespeclistMasks[guidlist.index(guid)])
         else:
             left,top,width,height = self.cameras_dict[guid].get_frame_roi()
             mask = numpy.zeros((height,width), dtype=numpy.uint8)
@@ -2218,7 +2218,7 @@ class AppState(object):
     #
     def callback_dynamic_reconfigure(self, params_dict, level):
         # Until each camera has a node of its own, the parameters apply to all cameras.
-        guidlist = self.GetGuidList()
+        guidlist = self.get_guid_list()
         if params_dict['index'] < len(guidlist):
             guid = guidlist[params_dict['index']]
         
@@ -2252,7 +2252,7 @@ class AppState(object):
                 pass
             else:
                 # Set other parameters.
-                guidlist = self.GetGuidList()                
+                guidlist = self.get_guid_list()                
                 if param == 'visible_image_type':
                     for guid in guidlist:
                         self.cameraparams_dict[guid]['visible_image_type'] = value                        
@@ -2384,10 +2384,10 @@ class AppState(object):
             self.image_controllers_dict[guid]= None
 
 
-    # GetGuidList()
+    # get_guid_list()
     # From the list of all cameras (self.camerainfolist), and any guids on the command-line (--guidlist),
     # Return the list of guids to use.
-    def GetGuidList (self):
+    def get_guid_list (self):
         guidlistAll = []
         if self.camerainfolist is not None:
             for cil in self.camerainfolist:
@@ -2396,7 +2396,7 @@ class AppState(object):
         return guidlistAll
     
     
-    def GetCamerainfoList(self):
+    def get_camerainfo_list(self):
         # Get the camerainfo for all the cameras, in default order.
         camerainfolistAll = []
         for iCamiface in range(g_cam_iface.get_num_cameras()):
@@ -2421,11 +2421,21 @@ class AppState(object):
             camerainfolist = camerainfolist
         else:
             camerainfolist = camerainfolistAll
+
         
+        if self.options.show_cam_details:
+            rospy.logwarn ('Detected Cameras:')
+            for camerainfoEx in camerainfolistAll:
+                rospy.logwarn(camerainfoEx[0])
+            rospy.logwarn ('Using Cameras:')
+            for camerainfoEx in camerainfolist:
+                rospy.logwarn(camerainfoEx[0])
+                 
+                
         return camerainfolist
 
     
-    def MaskFromFile(self, filespecMaskImage):
+    def get_mask_from_file(self, filespecMaskImage):
         im = scipy.misc.pilutil.imread( filespecMaskImage )
         if len(im.shape) != 3:
             raise ValueError('mask image must have color channels')
@@ -2579,7 +2589,7 @@ class AppState(object):
             basename = 'appended thread'
             
         targets = {}
-        guidlist = self.GetGuidList()
+        guidlist = self.get_guid_list()
         for guid in guidlist:   #for iCamera, (idCamera, chain) in enumerate(zip(self.idCameras, self.chains_dict)):
             base_kwargs = dict(guid=guid)
 
@@ -2611,7 +2621,7 @@ class AppState(object):
         """gets called often in mainloop of app"""
         try:
             # handle pyro function calls
-            guidlist = self.GetGuidList()
+            guidlist = self.get_guid_list()
             for guid in guidlist:
                 if self.statusCamera_dict[guid] == 'destroyed':
                     # ignore commands for closed cameras
@@ -2711,7 +2721,7 @@ class AppState(object):
     # handle_commands()
     # Commands coming from mainbrain are handled here.        
     def handle_commands(self, guid, cmds):
-        guidlist = self.GetGuidList()
+        guidlist = self.get_guid_list()
         for cmd in cmds.keys():
             if cmd == 'set':    # Change a parameter value.
                 params2 = {}
@@ -3079,7 +3089,6 @@ class MainbrainInterface(object):
         self.socket_coordinates_dict = {}
         self.threadEchoTime_dict = {}
         
-#    with self.lockParameters:
         self.protocol = rospy.get_param('mainbrain/network_protocol','udp')
         self.portMainbrain = rospy.get_param('mainbrain/port_mainbrain', 9833)
         self.nameMainbrain = rospy.get_param('mainbrain/hostname', 'main_brain')
@@ -3092,7 +3101,7 @@ class MainbrainInterface(object):
                 self.hostnameMainbrain = socket.gethostbyname(socket.gethostname()) # try localhost
             except: #socket.gaierror?
                 self.hostnameMainbrain = ''
-        uriMainbrain = "PYROLOC://%s:%d/%s" % (self.hostnameMainbrain, self.portMainbrain, self.nameMainbrain)
+        uriMainbrain = "PYROLOC://%s:%d/%s" % (self.hostnameMainbrain, self.portMainbrain, 'main_brain')#self.nameMainbrain)
 
 
         # Connect to mainbrain.
