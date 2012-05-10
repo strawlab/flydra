@@ -1,10 +1,6 @@
 <launch>
-    <include file="$(find camnode)/launch/camera.launch"> <arg name="guid" value="305300013AA532h" /> </include>
-    
-    <!-- 
-    <include file="$(find camnode)/launch/processing.launch"> <arg name="guid" value="0" /> </include>
-    <include file="$(find camnode)/launch/camera.launch"> <arg name="guid" value="1" /> </include>
-    <include file="$(find camnode)/launch/processing.launch"> <arg name="guid" value="1" /> </include>
-    -->    
-   
+	<arg name="guidlist" default='all' />
+	
+    <include file="$(find camnode)/launch/camera.launch"> <arg name="guidlist" value="$(arg guidlist)" /> </include>
+       
 </launch>
