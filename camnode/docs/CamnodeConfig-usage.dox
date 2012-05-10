@@ -1,6 +1,7 @@
 \subsubsection usage Usage
 \verbatim
 <node name="camnode" pkg="camnode" type="camnode">
+  <param name="index" type="int" value="0" />
   <param name="brightness" type="int" value="0" />
   <param name="gain" type="int" value="100" />
   <param name="shutter" type="int" value="100" />

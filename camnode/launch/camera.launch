@@ -2,10 +2,7 @@
 	<arg name="guidlist" default='all' />
 	
     <node name="camnode" pkg="camnode" type="camnode.py" args="--guidlist=$(arg guidlist)" >
-        <!--
-        <param name="guid" value="$(arg guid)" />
-        <rosparam file="$(find camnode)/yaml/$(arg guid).yaml" />
-        --> 
+        <param name="dir_yaml" value="$(find camnode)/yaml" />
     </node>
    
 </launch>

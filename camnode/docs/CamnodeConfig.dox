@@ -2,6 +2,7 @@
 
 Reads and maintains the following parameters on the ROS server
 
+- \b "~index" : \b [int] Camera number min: 0, default: 0, max: 8
 - \b "~brightness" : \b [int] Brightness min: 0, default: 0, max: 255
 - \b "~gain" : \b [int] Percent multiplication on pixel values min: 0, default: 100, max: 740
 - \b "~shutter" : \b [int] Exposure time in microseconds min: 0, default: 100, max: 1000000
