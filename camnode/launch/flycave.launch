@@ -1,5 +1,6 @@
 <launch>
 	<arg name="guidlist" default='all' />
+	
 	<param name='mainbrain/hostname' value='flycave3' />
     <include file="$(find camnode)/launch/camera.launch"> <arg name="guidlist" value="$(arg guidlist)" /> </include>
        

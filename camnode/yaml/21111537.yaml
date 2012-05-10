@@ -1,10 +1,10 @@
 video_mode: format7_mode0
-frame_id: Camera985
+frame_id: Camera537
 camera_info_url: file:///cameras/basler_a622f_calibration.yaml
   
 brightness: 0
-gain: 130
-shutter: 10030
+gain: 122
+shutter: 10022
 framerate_max: 100
 framerate_trigger: 100
 trigger_mode: 0

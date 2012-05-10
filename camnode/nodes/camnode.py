@@ -2262,9 +2262,9 @@ class AppState(object):
     def index_camiface_from_guid(self, guid):
         iCamiface = None
         if self.camerainfolist is not None:
-            for cil in self.camerainfolist:
-                if cil[0][2]==guid:
-                    iCamiface = cil[1]
+            for ci in self.camerainfolist:
+                if ci[2]==guid:
+                    iCamiface = ci[3]
                     break
             
         return iCamiface
@@ -2390,8 +2390,8 @@ class AppState(object):
     def get_guid_list (self):
         guidlistAll = []
         if self.camerainfolist is not None:
-            for cil in self.camerainfolist:
-                guidlistAll.append(cil[0][2])
+            for ci in self.camerainfolist:
+                guidlistAll.append(ci[2])
                 
         return guidlistAll
     
@@ -2405,7 +2405,7 @@ class AppState(object):
             except g_cam_iface.CameraNotAvailable:
                 camerainfo = ('na','na','na')
                 
-            camerainfoEx = (camerainfo, iCamiface)                  # A camerainfoEx is:  (('brand','model','guid'), index)
+            camerainfoEx = camerainfo + (iCamiface,)                  # A camerainfoEx is:  ('brand','model','guid', index)
             camerainfolistAll.append(camerainfoEx)
         camerainfolistAll.sort() # Make sure list is always in same order for attached cameras
         camerainfolistAll.reverse() # Any ordering will do, but reverse for historical reasons
@@ -2416,7 +2416,7 @@ class AppState(object):
             camerainfolist = []
             for guid in guidlist:
                 for camerainfoEx in camerainfolistAll:
-                    if guid==camerainfoEx[0][2]:
+                    if guid==camerainfoEx[2]:
                         camerainfolist.append(camerainfoEx)
             camerainfolist = camerainfolist
         else:
@@ -2426,10 +2426,10 @@ class AppState(object):
         if self.options.show_cam_details:
             rospy.logwarn ('Detected Cameras:')
             for camerainfoEx in camerainfolistAll:
-                rospy.logwarn(camerainfoEx[0])
+                rospy.logwarn(camerainfoEx)
             rospy.logwarn ('Using Cameras:')
             for camerainfoEx in camerainfolist:
-                rospy.logwarn(camerainfoEx[0])
+                rospy.logwarn(camerainfoEx)
                  
                 
         return camerainfolist

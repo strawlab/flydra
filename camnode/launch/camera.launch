@@ -1,7 +1,7 @@
 <launch>
 	<arg name="guidlist" default='all' />
 	
-    <node name="camnode" pkg="camnode" type="camnode.py" args="--show-cam-details --guidlist=$(arg guidlist)" >
+    <node name="$(anon camnode)" pkg="camnode" type="camnode.py" args="--show-cam-details --guidlist=$(arg guidlist)" >
         <param name="dir_yaml" value="$(find camnode)/yaml" />
     </node>
    
