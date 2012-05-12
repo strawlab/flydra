@@ -328,7 +328,7 @@ class ProcessCamData(object):
                  lbrt=None,
                  max_height=None,
                  max_width=None,
-                 cameravars = None,
+                 events = None,
                  options = None,
                  initial_images = None,
                  benchmark = False,
@@ -339,7 +339,7 @@ class ProcessCamData(object):
 
         self.benchmark = benchmark
         self.options = options
-        self.cameravars = cameravars
+        self.events = events
         self.mainbrain = mainbrain
         
         if framerate is not None:
@@ -362,6 +362,7 @@ class ProcessCamData(object):
         self.new_roi = threading.Event()
         self.new_roi_data = None
         self.new_roi_data_lock = threading.Lock()
+        self.queue_incoming_raw_frames = Queue.Queue()
 
         self.max_height = max_height
         self.max_width = max_width
@@ -381,6 +382,7 @@ class ProcessCamData(object):
                                                                           roi2_radius,
                                                                           )
         self.queueParameters = Queue.Queue()
+        self.most_recent_frame_potentially_corrupt = None
         
         self.realtime_analyzer.diff_threshold = self.parameters['threshold_diff']
         self.realtime_analyzer.clear_threshold = self.parameters['threshold_clear']
@@ -578,16 +580,22 @@ class ProcessCamData(object):
         return points
 
 
+    def get_raw_queued_frame(self):
+        return self.queue_incoming_raw_frames.get_nowait()
+
+    def get_most_recent_frame(self):
+        return self.most_recent_frame_potentially_corrupt
+
     def mainloop(self):
         disable_ifi_warning = self.options.disable_ifi_warning
         DEBUG_DROP = self.options.debug_drop
         if DEBUG_DROP:
             debug_fd = open('debug_framedrop_cam.txt',mode='w')
 
-        cam_quit_event = self.cameravars['cam_quit_event']
+        cam_quit_event = self.events['cam_quit_event']
         bg_frame_number = -1
-        clear_background_event = self.cameravars['clear_background_event']
-        take_background_event = self.cameravars['take_background_event']
+        clear_background_event = self.events['clear_background_event']
+        take_background_event = self.events['take_background_event']
 
 
         max_frame_size = FastImage.Size(self.max_width, self.max_height)
@@ -669,16 +677,15 @@ class ProcessCamData(object):
 
             if 1:
                 rospy.logwarn('WARNING: ignoring initial images and taking new background.')
-                self.cameravars['take_background_event'].set()
+                self.events['take_background_event'].set()
 
         else:
-            self.cameravars['take_background_event'].set()
+            self.events['take_background_event'].set()
 
         imgRunningMean.get_8u_copy_put( running_mean8u_im, cur_fisize )
 
         #################### done initializing images ############
 
-        incoming_raw_frames_queue = self.cameravars['incoming_raw_frames_queue']
         initial_take_bg_state = None
 
         while 1:
@@ -813,23 +820,23 @@ class ProcessCamData(object):
                     export_image = imgROI
                 else:
                     export_image = self.realtime_analyzer.get_image_view(self.parameters['visible_image_view']) # get image
-                self.cameravars['most_recent_frame_potentially_corrupt'] = (0,0), export_image # give view of image, receiver must be careful
+                self.most_recent_frame_potentially_corrupt = (0,0), export_image # give view of image, receiver must be careful
 
                 if 1:
                     # Allow other thread to see raw image always (for saving)
-                    if incoming_raw_frames_queue.qsize() >1000:
+                    if self.queue_incoming_raw_frames.qsize() >1000:
                         # Chop off some old frames to prevent memory explosion
                         rospy.logwarn('ERROR: Deleting 100 old frames to make room for new ones!')
                         for i in range(100):
-                            incoming_raw_frames_queue.get_nowait()
+                            self.queue_incoming_raw_frames.get_nowait()
                             
-                    incoming_raw_frames_queue.put((imgROI.get_8u_copy(imgROI.size), # save a copy
-                                                  timestamp,
-                                                  framenumber,
-                                                  points,
-                                                  self.realtime_analyzer.roi,
-                                                  cam_received_time,
-                                                  ))
+                    self.queue_incoming_raw_frames.put((imgROI.get_8u_copy(imgROI.size), # save a copy
+                                                      timestamp,
+                                                      framenumber,
+                                                      points,
+                                                      self.realtime_analyzer.roi,
+                                                      cam_received_time,
+                                                      ))
                     #rospy.logwarn(' '*20+'put frame')
 
                 do_bg_maint = False
@@ -2013,7 +2020,7 @@ class AppState(object):
         self.processors_byguid = {}
         self.saversFMF_byguid = {}
         self.saversUFMF_byguid = {}
-        self.cameravars_byguid = {}
+        self.events_byguid = {}
         self.imagesources_byguid = {}
         self.imagecontrollers_byguid = {}
         self.initial_images_byguid = {}
@@ -2057,7 +2064,31 @@ class AppState(object):
 
         # Initialize each camera.
         for guid in guidlist:
-            self.initialize_cameravars(guid)
+            rospy.logwarn ('Initializing camera %s' % guid)
+
+            self.initialize_events(guid)
+            (camera, imagesource_model, initial_images) = self.initialize_imagesource(guid)
+            
+    
+            # Take a background image.
+            if initial_images is None:
+                self.events_byguid[guid]['take_background_event'].set()
+            else:
+                self.events_byguid[guid]['take_background_event'].clear()
+    
+            self.initial_images_byguid[guid] = initial_images
+    
+    
+            # Start the camera.
+            self.cameras_byguid[guid] = camera
+            if camera is not None:
+                with camera._hack_acquire_lock():
+                    camera.start_camera()  # start camera
+            self.status_camera_byguid[guid]= 'started'
+    
+            
+            # Start the image source.
+            self.start_imagesource (guid, imagesource_model, camera)
 
             # Keep the list of parameters that this guid's processor handles.
             self.params_processor_byguid[guid] = self.paramsProcessor
@@ -2077,7 +2108,6 @@ class AppState(object):
                 guidMB = self.mainbrain.register_camera(iCamera=guidlist.index(guid), # Position in list, not index in cam_iface.
                                                           scalar_control_info=scalar_control_info,
                                                           guid=guid)
-                #self.imagesources_byguid[guid].assign_guid(guid) # moved to initialize_cameravars()
 
 
                 ##################################################################
@@ -2105,7 +2135,7 @@ class AppState(object):
                             lbrt = lbrt,
                             max_height = camera.get_max_height(),
                             max_width = camera.get_max_width(),
-                            cameravars = self.cameravars_byguid[guid],
+                            events = self.events_byguid[guid],
                             options = self.options,
                             initial_images = self.initial_images_byguid[guid],
                             benchmark = self.benchmark,
@@ -2252,45 +2282,13 @@ class AppState(object):
         return iCamiface
         
 
-    def initialize_cameravars(self, guid):
-        ##################################################################
-        # Initialize "cameravars" variables.
-        ##################################################################
-        rospy.logwarn ('Initializing camera %s' % guid)
-        self.cameravars_byguid[guid] = {} # initialize
+    def initialize_events(self, guid):
+        # Control flow events for threading model
+        self.events_byguid[guid] = {} # initialize
+        self.events_byguid[guid]['cam_quit_event'] = threading.Event()
+        self.events_byguid[guid]['take_background_event'] = threading.Event()
+        self.events_byguid[guid]['clear_background_event'] = threading.Event()
 
-        self.cameravars_byguid[guid]['incoming_raw_frames_queue']=Queue.Queue()
-        self.cameravars_byguid[guid]['most_recent_frame_potentially_corrupt']=None  # Contains the latest potentially corrupt frame.
-
-        # control flow events for threading model
-        self.cameravars_byguid[guid]['cam_quit_event'] = threading.Event()
-        self.cameravars_byguid[guid]['take_background_event'] = threading.Event()
-        self.cameravars_byguid[guid]['clear_background_event'] = threading.Event()
-
-        
-        # Initialize the image source.
-        (camera, imagesource_model, initial_images) = self.initialize_imagesource(guid)
-        
-
-        # Take a background image.
-        if initial_images is None:
-            self.cameravars_byguid[guid]['take_background_event'].set()
-        else:
-            self.cameravars_byguid[guid]['take_background_event'].clear()
-
-        self.initial_images_byguid[guid] = initial_images
-
-
-        # Start the camera.
-        self.cameras_byguid[guid] = camera
-        if camera is not None:
-            with camera._hack_acquire_lock():
-                camera.start_camera()  # start camera
-        self.status_camera_byguid[guid]= 'started'
-
-        
-        # Start the image source.
-        self.start_imagesource (guid, imagesource_model, camera)
         
         
         
@@ -2367,7 +2365,7 @@ class AppState(object):
                                             imagebuffer_pool = imagebuffer_pool,
                                             guid = guid,
                                             camera_control_properties =camera_control_properties, 
-                                            quit_event = self.cameravars_byguid[guid]['cam_quit_event'],
+                                            quit_event = self.events_byguid[guid]['cam_quit_event'],
                                             )
             if self.benchmark: # Maybe for any simulated camera in non-GUI mode?
                 imagesource.register_imagebuffer_pool( imagebuffer_pool )
@@ -2544,8 +2542,8 @@ class AppState(object):
         return self.imagecontrollers_byguid
 
     def quit_function(self,exit_value):
-        for guid,cameravars in self.cameravars_byguid.iteritems():
-            cameravars['cam_quit_event'].set()
+        for guid,events in self.events_byguid.iteritems():
+            events['cam_quit_event'].set()
 
         for thread in self.critical_threads:
             if thread.isAlive():
@@ -2673,7 +2671,7 @@ class AppState(object):
                         self.n_raw_frames_dict[guid] = 0
 
                     # Get new raw frames from grab thread.
-                    get_raw_frame = self.cameravars_byguid[guid]['incoming_raw_frames_queue'].get_nowait
+                    get_raw_frame = self.processors_byguid[guid].get_raw_queued_frame
                     try:
                         while 1:
                             (frame,timestamp,framenumber,points,lbrt,cam_received_time) = get_raw_frame() # this may raise Queue.Empty
@@ -2718,7 +2716,7 @@ class AppState(object):
                     
 
             elif cmd == 'get_im':   # Send the image from the camprocessor to mainbrain. 
-                val = self.cameravars_byguid[guid]['most_recent_frame_potentially_corrupt']
+                val = self.processors_byguid[guid].get_most_recent_frame()
                 if val is not None: # prevent race condition
                     leftbottom, im = val
                     #npim = np.array(im) # copy to native np form, not view of __array_struct__ form
@@ -2785,10 +2783,10 @@ class AppState(object):
                 self.mainbrain.close_camera(guid)
                 
             elif cmd == 'take_bg':
-                self.cameravars_byguid[guid]['take_background_event'].set()
+                self.events_byguid[guid]['take_background_event'].set()
                 
             elif cmd == 'clear_bg':
-                self.cameravars_byguid[guid]['clear_background_event'].set()
+                self.events_byguid[guid]['clear_background_event'].set()
 
             elif cmd == 'start_recording':
                 if self.saversFMF_byguid[guid] is None:
