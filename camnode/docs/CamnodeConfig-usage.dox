@@ -23,6 +23,7 @@
   <param name="color_filter_2" type="int" value="150" />
   <param name="color_filter_3" type="int" value="255" />
   <param name="color_filter_sat" type="int" value="100" />
+  <param name="visible_image_view" type="str" value="raw" />
 </node>
 \endverbatim
 

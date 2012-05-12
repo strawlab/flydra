@@ -24,4 +24,5 @@ Reads and maintains the following parameters on the ROS server
 - \b "~color_filter_2" : \b [int] Color filter 2 min: 0, default: 150, max: 255
 - \b "~color_filter_3" : \b [int] Color filter 3 min: 0, default: 255, max: 255
 - \b "~color_filter_sat" : \b [int] Color filter saturation min: 0, default: 100, max: 255
+- \b "~visible_image_view" : \b [str] View image min: , default: raw, max: 
 
