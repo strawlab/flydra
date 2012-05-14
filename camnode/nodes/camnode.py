@@ -2874,7 +2874,7 @@ def ThreadEchoTimestamp(guid, iCamera, camera):
     while True:
         # Receive timestamp from mainbrain.
         try:
-            packTimestamp, (orig_host,orig_port) = socketReceiveTimestamp.recvfrom(4096)
+            packTimestamp, (hostOrigin,portOrigin) = socketReceiveTimestamp.recvfrom(4096)
         except socket.error, err:
             if err.args[0] == errno.EINTR: # interrupted system call
                 continue
@@ -2890,7 +2890,12 @@ def ThreadEchoTimestamp(guid, iCamera, camera):
         
         # Send both times back to mainbrain.
         packTimestamp2 = packTimestamp + struct.pack( fmt, timeCamera)
-        socketSendTimestamp.sendto(packTimestamp2, (orig_host, portSendTimestamp))
+        nBytesTotal = len(packTimestamp2)
+        nBytesSent = 0
+        while nBytesSent < nBytesTotal:
+            nBytes = socketSendTimestamp.sendto(packTimestamp2[nBytesSent:], (hostOrigin, portSendTimestamp))
+            nBytesSent += nBytes
+        
         
     
 
@@ -2902,9 +2907,9 @@ class MainbrainInterface(object):
         self.use_ros_interface = use_ros_interface
         
         if use_ros_interface:
-            self.AttachMainbrainRosInterface()
+            self.attach_mainbrain_rosinterface()
         else:
-            self.AttachMainbrainSocketInterface()
+            self.attach_mainbrain_socketinterface()
             
             
     # Get the index of a camera (into self.cameras_byguid) from its idCamera.
@@ -2920,10 +2925,10 @@ class MainbrainInterface(object):
     ###########################################################################
     # The ..._ros() functions wrap the service calls.
 
-    # AttachMainbrainRosInterface()
+    # attach_mainbrain_rosinterface()
     #   Note that the MainbrainRosInterface node must be running.
     #
-    def AttachMainbrainRosInterface(self):
+    def attach_mainbrain_rosinterface(self):
         self.send_coordinates_service_dict = {}
         
         stSrv = 'mainbrain/get_version'
@@ -3052,7 +3057,7 @@ class MainbrainInterface(object):
     # Most of these are just the self.proxyMainbrain versions, but a few need
     # special attention.
 
-    def AttachMainbrainSocketInterface(self):
+    def attach_mainbrain_socketinterface(self):
         Pyro.core.initClient(banner=0)
 
         ##################################################################
@@ -3068,13 +3073,10 @@ class MainbrainInterface(object):
             
         # Construct a URI to mainbrain.
         try:
-            self.hostnameMainbrain = socket.gethostbyname(self.nameMainbrain)
+            self.hostMainbrain = socket.gethostbyname(self.nameMainbrain) # Convert name to IP.
         except:
-            try:
-                self.hostnameMainbrain = socket.gethostbyname(socket.gethostname()) # try localhost
-            except: #socket.gaierror?
-                self.hostnameMainbrain = ''
-        uriMainbrain = "PYROLOC://%s:%d/%s" % (self.hostnameMainbrain, self.portMainbrain, 'main_brain')#self.nameMainbrain)
+            self.hostMainbrain = socket.gethostbyname(socket.gethostname()) # try localhost
+        uriMainbrain = "PYROLOC://%s:%d/%s" % (self.hostMainbrain, self.portMainbrain, 'main_brain')#self.nameMainbrain)
 
 
         # Connect to mainbrain.
@@ -3151,7 +3153,7 @@ class MainbrainInterface(object):
             socketCoordinates = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         elif self.protocol == 'tcp':
             socketCoordinates = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            socketCoordinates.connect((self.hostnameMainbrain, self.portMainbrainCoordinates_dict[guid]))
+            socketCoordinates.connect((self.hostMainbrain, self.portMainbrainCoordinates_dict[guid]))
         else:
             raise ValueError('Unknown network_protocol %s' % self.protocol)
 
@@ -3173,12 +3175,21 @@ class MainbrainInterface(object):
     def send_coordinates_socket(self, guid, data):
         if self.protocol == 'udp':
             try:
-                self.socket_coordinates_dict[guid].sendto(data, (self.hostnameMainbrain, self.portMainbrainCoordinates_dict[guid]))
+                nBytesTotal = len(data)
+                nBytesSent = 0
+                while nBytesSent < nBytesTotal:
+                    nBytes = self.socket_coordinates_dict[guid].sendto(data[nBytesSent:], (self.hostMainbrain, self.portMainbrainCoordinates_dict[guid]))
+                    nBytesSent += nBytes
+                    
             except socket.error, err:
-                rospy.logwarn('WARNING: Ignoring error: %s' % err)
+                rospy.logwarn('WARNING: socket_coordinates, sendto(%s, %s): %s' % (self.hostMainbrain, self.portMainbrainCoordinates_dict[guid], err))
                 
         elif self.protocol == 'tcp':
-            self.socket_coordinates_dict[guid].send(data)
+            nBytesTotal = len(data)
+            nBytesSent = 0
+            while nBytesSent < nBytesTotal:
+                nBytes = self.socket_coordinates_dict[guid].send(data[nBytesSent:])
+                nBytesSent += nBytes
         else:
             raise ValueError('Unknown network_protocol %s' % self.protocol)
 
