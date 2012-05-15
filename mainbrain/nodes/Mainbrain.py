@@ -78,6 +78,7 @@ PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
 PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
 PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_IDX
 
+USE_ROS_INTERFACE = False # temporary.
 USE_ONE_TIMEPORT_PER_CAMERA = False # True=OnePerCamera, False=OnePerCamnode.  Keep in sync with camnode.py
 
 ########
@@ -271,6 +272,42 @@ def DEBUG(msg=''):
     return
 
 
+class ThreadEchoTimestamp(threading.Thread):
+    def __init__(self):
+        self.echotimestamp_byguid = {}
+        
+    def register_camera(self, guid):
+        if guid not in self.echotimestamp_byguid:
+            st_service = 'guid_%s' % guid 
+            rospy.wait_for_service(st_service)
+            self.echotimestamp_byguid[guid] = {}
+            self.echotimestamp_byguid[guid]['service'] = rospy.ServiceProxy(st_service, SrvEchoTimestamp)
+    
+    def deregister_camera(self, guid):
+        if guid in self.echotimestamp_byguid:
+            self.echotimestamp_byguid.pop(guid)
+    
+    def measure_durations(self):
+        # Measure the times.
+        for guid in self.echotimestamp_byguid:
+            timestampMainbrainPre = rospy.Time.now().to_sec()
+            rv = self.echotimestamp_byguid[guid]['service'](timestampMainbrain)
+            timestampCamera = rv.time
+            timestampMainbrainPost = rospy.Time.now().to_sec()
+            
+            self.echotimestamp_byguid[guid]['durationM2C'] = timestampCamera - timestampMainbrainPre
+            self.echotimestamp_byguid[guid]['durationC2M'] = timestampMainbrainPost - timestampCamera
+            
+        # Report the times.
+        for guid in self.echotimestamp_byguid:
+            durationTotal = self.echotimestamp_byguid[guid]['durationM2C'] + self.echotimestamp_byguid[guid]['durationC2M']
+            rospy.logwarn('duration[%s] M2C:%0.3f, C2M:%0.3f, total:%0.3f' % (guid,
+                                                                              self.echotimestamp_byguid[guid]['durationM2C'],
+                                                                              self.echotimestamp_byguid[guid]['durationC2M'], 
+                                                                              durationTotal))
+            
+            
+            
 
 class TimestampEchoReceiver(threading.Thread):
     def __init__(self,mainbrain):
@@ -278,6 +315,8 @@ class TimestampEchoReceiver(threading.Thread):
 
         name = 'TimestampEchoReceiver thread'
         threading.Thread.__init__(self,name=name)
+        
+        
 
     def run(self):
         rospy.sleep(1)  # Haven't investigated why, but we get a raise ResponseNotReady() from rospy if we don't do it.
@@ -546,7 +585,13 @@ class CoordinateSender(threading.Thread):
               # Now packets is a list of all recent data
               super_packet = encode_super_packet( packets )
               for downstream_host in g_downstream_kalman_hosts:
-                  g_socket_outgoing_UDP.sendto(super_packet,downstream_host)
+                nBytesTotal = len(super_packet)
+                nBytesSent = 0
+                while nBytesSent < nBytesTotal:
+                    nBytes = g_socket_outgoing_UDP.sendto(super_packet[nBytesSent:],downstream_host)
+                    nBytesSent += nBytes
+
+
 
               ros_packets = []
               ros_packets.append( self.my_ros_queue.get() )
@@ -857,6 +902,8 @@ class CoordinateProcessor(threading.Thread):
         debug_drop_fd = None
 
         while not self.quit_event.isSet():
+            #self.mainbrain.echotimestamp.measure_durations()
+            
             incoming_2d_data = self.realreceiver.get_data() # blocks
             if not len(incoming_2d_data):
                 continue
@@ -1323,7 +1370,11 @@ class CoordinateProcessor(threading.Thread):
                             g_best_realtime_data = [X], min_mean_dist
                             try:
                                 for downstream_host in g_downstream_hosts:
-                                    g_socket_outgoing_UDP.sendto(data_packet,downstream_host)
+                                    nBytesTotal = len(data_packet)
+                                    nBytesSent = 0
+                                    while nBytesSent < nBytesTotal:
+                                        nBytes = g_socket_outgoing_UDP.sendto(data_packet[nBytesSent:],downstream_host)
+                                        nBytesSent += nBytes
                             except:
                                 rospy.logwarn( 'Could not send 3d point data over UDP')
                             if self.mainbrain.is_saving_data():
@@ -1794,6 +1845,8 @@ class Mainbrain(object):
             if guid is None:
                 guid = 'camera_%d' % cam_no
 
+            self.mainbrain.echotimestamp.register_camera(guid)
+            
             port_coordinates = self.mainbrain.coord_processor.connect(guid)
             with self.lock_caminfo:
                 self.caminfo_byguid[guid] = {'commands':{}, # command queue for cam
@@ -1875,6 +1928,7 @@ class Mainbrain(object):
         def callback_close_camera (self, srvreqClose):
             """gracefully say goodbye (caller: remote camera)"""
             guid = srvreqClose.guid
+            self.mainbrain.echotimestamp.deregister_camera(guid)
             self.mainbrain.remote_api.close_camera(guid)
 
             return {}
@@ -2037,11 +2091,17 @@ class Mainbrain(object):
         self.trig_receiver.setDaemon(True)
         self.trig_receiver.start()
 
-        self.timestamp_echo_receiver = TimestampEchoReceiver(self)
-        self.timestamp_echo_receiver.setDaemon(True)
-        self.timestamp_echo_receiver.start()
 
-        g_mainbrain_keeper.register( self )
+        if USE_ROS_INTERFACE:
+            self.echotimestamp = ThreadEchoTimestamp()
+        else:
+            self.timestamp_echo_receiver = TimestampEchoReceiver(self)
+            self.timestamp_echo_receiver.setDaemon(True)
+            self.timestamp_echo_receiver.start()
+        
+
+        g_mainbrain_keeper.register(self)
+
 
     def get_fps(self):
         return self.trigger_device.frames_per_second_actual
@@ -2192,7 +2252,11 @@ class Mainbrain(object):
                 else:
                     fqdn = self._fqdns_by_guid[guid]
                 buf = struct.pack( timestamp_echo_fmt1, time.time() )
-                self.socket_outgoing_latency_udp.sendto(buf,(fqdn,port_echo_timestamp_camera))
+                nBytesTotal = len(buf)
+                nBytesSent = 0
+                while nBytesSent < nBytesTotal:
+                    nBytes = self.socket_outgoing_latency_udp.sendto(buf[nBytesSent:],(fqdn,port_echo_timestamp_camera))
+                    nBytesSent += nBytes
         else:
             timestamp_echo_fmt1 = rospy.get_param('mainbrain/timestamp_echo_fmt1', '&lt;d')
             port_echo_timestamp_camnode = rospy.get_param('mainbrain/port_timestamp_camnode', 28993)
@@ -2204,7 +2268,12 @@ class Mainbrain(object):
                 else:
                     fqdn = self._fqdns_by_guid[guid]
                 buf = struct.pack( timestamp_echo_fmt1, time.time() )
-                self.socket_outgoing_latency_udp.sendto(buf,(fqdn,port_echo_timestamp_camnode))
+                nBytesTotal = len(buf)
+                nBytesSent = 0
+                while nBytesSent < nBytesTotal:
+                    nBytes = self.socket_outgoing_latency_udp.sendto(buf[nBytesSent:],(fqdn,port_echo_timestamp_camnode))
+                    nBytesSent += nBytes
+                
         
 
 

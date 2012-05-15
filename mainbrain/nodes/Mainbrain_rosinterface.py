@@ -216,7 +216,7 @@ class MainbrainRosInterface(object):
 
 
         # Connect to the camera's echo_timestamp ROS service, e.g. "echo_timestamp_camera1".
-        stSrv = guidNew+'/echo_timestamp'
+        stSrv = 'guid_'+guidNew+'/echo_timestamp'
         rospy.wait_for_service(stSrv)
         self.cameras[iCamera]['echo_timestamp'] = rospy.ServiceProxy(stSrv, SrvEchoTimestamp)
         print 'Connected to service %s' % stSrv

@@ -2101,7 +2101,7 @@ class AppState(object):
                 
                 # Offer the EchoTimestamp service.
                 if ((not self.benchmark) or (not FLYDRA_BT)) and (USE_ROS_INTERFACE):
-                    rospy.Service (rospy.get_name()+'/camera_'+guid + '/echo_timestamp', SrvEchoTimestamp, self.callback_echo_timestamp)
+                    rospy.Service (rospy.get_name()+'/guid_'+guid + '/echo_timestamp', SrvEchoTimestamp, self.callback_echo_timestamp)
 
                 # Register cameras with Mainbrain
                 rospy.logwarn("Registering camera %s with mainbrain" % guid)
