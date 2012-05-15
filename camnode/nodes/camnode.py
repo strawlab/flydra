@@ -2847,7 +2847,7 @@ def ThreadEchoTimestamp(guid, iCamera, camera):
     # Create timestamp sending socket.
     socketSendTimestamp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     with gLockParams:
-        portSendTimestamp = rospy.get_param('mainbrain/port_timestamp', 28993)
+        portSendTimestamp = rospy.get_param('mainbrain/port_timestamp_mainbrain', 28993)
 
     # Offer a receiving socket for echo_timestamp from mainbrain:  localhost:28995,6,7,8,...
     socketReceiveTimestamp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -2989,7 +2989,7 @@ class MainbrainInterface(object):
         # Register the camera with mainbrain.
         response = self.register_new_camera_service(cam_no=iCamera,
                                                     pickled_scalar_control_info=pickle.dumps(scalar_control_info),
-                                                    force_cam_id=guid)
+                                                    force_guid=guid)
         guidNew = response.cam_id
         #self.idCameras_list.append(guidNew)
         #assert(iCamera==len(self.idCameras_list)-1)
@@ -3069,14 +3069,14 @@ class MainbrainInterface(object):
         
         self.protocol = rospy.get_param('mainbrain/network_protocol','udp')
         self.portMainbrain = rospy.get_param('mainbrain/port_mainbrain', 9833)
-        self.nameMainbrain = rospy.get_param('mainbrain/hostname', 'main_brain')
+        self.nameMainbrain = rospy.get_param('mainbrain/hostname', 'mainbrain')
             
         # Construct a URI to mainbrain.
         try:
             self.hostMainbrain = socket.gethostbyname(self.nameMainbrain) # Convert name to IP.
         except:
             self.hostMainbrain = socket.gethostbyname(socket.gethostname()) # try localhost
-        uriMainbrain = "PYROLOC://%s:%d/%s" % (self.hostMainbrain, self.portMainbrain, 'main_brain')#self.nameMainbrain)
+        uriMainbrain = "PYROLOC://%s:%d/%s" % (self.hostMainbrain, self.portMainbrain, 'mainbrain')#self.nameMainbrain)
 
 
         # Connect to mainbrain.
@@ -3140,7 +3140,7 @@ class MainbrainInterface(object):
         guid = self.proxyMainbrain.register_new_camera(cam_no=iCamera,
                                                           scalar_control_info=scalar_control_info,
                                                           port=port,
-                                                          force_cam_id=guid)
+                                                          force_guid=guid)
         #self.idCameras_list.append(idCamera)
         #assert(iCamera==len(self.idCameras_list)-1)
         
