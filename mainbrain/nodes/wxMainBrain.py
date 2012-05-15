@@ -1780,7 +1780,7 @@ def main():
     app = wxMainBrainApp(0)
 
     # create main_brain server (not started yet)
-    main_brain = Mainbrain.MainBrain(server=options.server,
+    main_brain = Mainbrain.Mainbrain(server=options.server,
                                      save_profiling_data=options.save_profiling_data,
                                      show_sync_errors=options.show_sync_errors,
                                      )

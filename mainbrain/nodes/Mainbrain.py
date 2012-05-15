@@ -46,6 +46,7 @@ LOGLEVEL = rospy.WARN
 #LOGLEVEL = rospy.FATAL
 
 from mainbrain.msg import *
+from mainbrain.srv import *
 
 
 DO_KALMAN= True # Enables/disables Kalman filter based tracking
@@ -107,9 +108,9 @@ max_N_hypothesis_test =  rc_params['max_N_hypothesis_test']
 
 g_XXX_framenumber = 0
 
-# MainBrainKeeper()
+# MainbrainKeeper()
 # Keeps track of all mainbrain instances, and cleans up gracefully when exiting.
-class MainBrainKeeper:
+class MainbrainKeeper:
     def __init__(self):
         self.kept = []
         atexit.register(self.atexit)
@@ -119,7 +120,7 @@ class MainBrainKeeper:
         for k in self.kept:
             k.quit() # closes hdf5 file and closes cameras
 
-g_mainbrain_keeper = MainBrainKeeper() # global to close MainBrain instances upon exit
+g_mainbrain_keeper = MainbrainKeeper() # global to close Mainbrain instances upon exit
 
 class LockedValue:
     def __init__(self,initial_value=None):
@@ -436,7 +437,7 @@ class CoordRealReceiver(threading.Thread):
         L = []
 
         try:
-            L.append( Q.get(1,.1) ) # block for 0.1 second timeout for the first item
+            L.append( Q.get(1, 0.1) ) # block for 0.1 second timeout for the first item
             while 1:
                 # don't wait for next items, but collect them if they're there
                 L.append( Q.get_nowait() )
@@ -717,18 +718,19 @@ class CoordinateProcessor(threading.Thread):
         with self.lock_alldata:
             self.guids.append(guid)
 
-            # find port_coordinates
+            # Allocate a port for coordinates.
             if len(self.port_coordinates_byguid)>0:
                 port_coordinates = max(self.port_coordinates_byguid.values())+1
             else:
                 port_coordinates = rospy.get_param('mainbrain/port_coordinate_base', 34813)
             self.port_coordinates_byguid[guid] = port_coordinates
 
-            # find camn
+            # Allocate a cam index.
             self.max_camns += 1
             camn = self.max_camns
             self.camns_byguid[guid] = camn
 
+            # Map guids to indices.
             self.guid_from_index[camn] = guid
             self.index_from_guid[guid] = camn
 
@@ -890,7 +892,7 @@ class CoordinateProcessor(threading.Thread):
                         if BENCHMARK_GATHER:
                             incoming_remote_received_timestamps.append( camn_received_time )
 
-                        DEBUG_DROP = self.mainbrain.remote_api.cam_info[guid]['scalar_control_info']['debug_drop']
+                        DEBUG_DROP = self.mainbrain.remote_api.caminfo_byguid[guid]['scalar_control_info']['debug_drop']
                         if DEBUG_DROP:
                             if debug_drop_fd is None:
                                 debug_drop_fd = open('debug_framedrop.txt',mode='w')
@@ -984,9 +986,9 @@ class CoordinateProcessor(threading.Thread):
                         # ===================================================
 
                         # XXX hack? make data available via cam_byguid
-                        cam_dict = self.mainbrain.remote_api.cam_info[guid]
-                        with cam_dict['lock']:
-                            cam_dict['points_distorted']=points_distorted
+                        caminfo = self.mainbrain.remote_api.caminfo_byguid[guid]
+                        with caminfo['lock']:
+                            caminfo['points_distorted']=points_distorted
 
                         # Use camn_received_time to determine sync
                         # info. This avoids 2 potential problems:
@@ -1416,7 +1418,7 @@ class CoordinateProcessor(threading.Thread):
                 if self.tracker is not None:
                     self.tracker.kill_all_trackers() # save (if necessary) all old data
 
-class MainBrain(object):
+class Mainbrain(object):
     """Handle all camera network stuff and interact with application"""
 
     class RemoteAPI(Pyro.core.ObjBase):
@@ -1433,7 +1435,7 @@ class MainBrain(object):
         def post_init(self, mainbrain):
             """call after __init__"""
             # let Pyro handle __init__
-            self.cam_info = {}
+            self.caminfo_byguid = {}
             self.lock_caminfo = threading.Lock()
             self.lock_changed_cam = threading.Lock()
             self.event_no_cams = threading.Event()
@@ -1458,29 +1460,27 @@ class MainBrain(object):
 
         def external_get_guids(self):
             with self.lock_caminfo:
-                guids = self.cam_info.keys()
+                guids = self.caminfo_byguid.keys()
             guids.sort()
             return guids
 
         def external_get_info(self, guid):
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    scalar_control_info = copy.deepcopy(cam['scalar_control_info'])
-                    fqdn = cam['fqdn']
-                    port = cam['port']
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    scalar_control_info = copy.deepcopy(caminfo['scalar_control_info'])
+                    fqdn = caminfo['fqdn']
+                    port = caminfo['port']
             return scalar_control_info, fqdn, port
 
         def external_get_image_fps_points(self, guid):
             ### XXX should extend to include lines
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    coord_and_image = cam['image']
-                    fps = cam['fps']
-                    points_distorted = cam['points_distorted'][:]
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    coord_and_image = caminfo['image']
+                    fps = caminfo['fps']
+                    points_distorted = caminfo['points_distorted'][:]
             # NB: points are distorted (and therefore align
             # with distorted image)
             if coord_and_image is not None:
@@ -1491,95 +1491,84 @@ class MainBrain(object):
 
         def external_send_set_camera_property( self, guid, property_name, value):
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands'].setdefault('set',{})[property_name]=value
-                    old_value = cam['scalar_control_info'][property_name]
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    caminfo['commands'].setdefault('set',{})[property_name]=value
+                    old_value = caminfo['scalar_control_info'][property_name]
                     if type(old_value) == tuple and type(value) == int:
                         # i.e. (current, min, max)
-                        cam['scalar_control_info'][property_name] = (value, old_value[1], old_value[2])
+                        caminfo['scalar_control_info'][property_name] = (value, old_value[1], old_value[2])
                     else:
-                        cam['scalar_control_info'][property_name] = value
+                        caminfo['scalar_control_info'][property_name] = value
 
         def external_request_image_async(self, guid):
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['get_im']=None
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    caminfo['commands']['get_im']=None
 
         def external_start_recording( self, guid, raw_file_basename):
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['start_recording']=raw_file_basename
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    caminfo['commands']['start_recording']=raw_file_basename
 
         def external_stop_recording( self, guid):
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['stop_recording']=None
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    caminfo['commands']['stop_recording']=None
 
         def external_start_small_recording( self, guid,
                                             small_filebasename):
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['start_small_recording']=small_filebasename
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    caminfo['commands']['start_small_recording']=small_filebasename
 
         def external_stop_small_recording( self, guid):
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['stop_small_recording']=None
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    caminfo['commands']['stop_small_recording']=None
 
         def external_quit( self, guid):
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['quit']=True
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    caminfo['commands']['quit']=True
 
         def external_take_background( self, guid):
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['take_bg']=None
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    caminfo['commands']['take_bg']=None
 
         def external_request_missing_data(self, guid, camn, framenumber_offset, list_of_missing_framenumbers):
             with self.lock_caminfo:
-                if guid not in self.cam_info:
+                if guid not in self.caminfo_byguid:
                     # the camera was dropped, ignore this request
                     return
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
+                caminfo = self.caminfo_byguid[guid]
 
                 camn_and_list = [camn, framenumber_offset]
                 camn_and_list.extend( list_of_missing_framenumbers )
                 cmd_str = ' '.join(map(repr,camn_and_list))
-                with cam_lock:
-                    cam['commands']['request_missing']=cmd_str
+                with caminfo['lock']:
+                    caminfo['commands']['request_missing']=cmd_str
 
         def external_clear_background( self, guid):
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['clear_bg']=None
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    caminfo['commands']['clear_bg']=None
 
         def external_set_cal( self, guid, pmat, intlin, intnonlin, scale_factor):
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['cal']= pmat, intlin, intnonlin, scale_factor
-                    cam['is_calibrated'] = True
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    caminfo['commands']['cal']= pmat, intlin, intnonlin, scale_factor
+                    caminfo['is_calibrated'] = True
         # === thread boundary =========================================
 
         def listen(self, daemon):
@@ -1592,14 +1581,14 @@ class MainBrain(object):
                     continue
 
                 with self.lock_caminfo:
-                    guids = self.cam_info.keys()
+                    guids = self.caminfo_byguid.keys()
                     
                 for guid in guids:
-                    with self.lock_caminfo:
-                        connected = self.cam_info[guid]['caller'].connected
+                    with self.caminfo_byguid[guid]['lock']:
+                        connected = self.caminfo_byguid[guid]['caller'].connected
                     if not connected:
                         rospy.logwarn( 'mainbrain lost camera %s at %s'%(guid, time.asctime()))
-                        self.close(guid)
+                        self.close_camera(guid)
             self.thread_done.set()
 
         # ================================================================
@@ -1640,22 +1629,21 @@ class MainBrain(object):
         #
         # ================================================================
 
-        def register_new_camera(self, cam_no, scalar_control_info, port, force_guid=None):
+        def register_camera(self, cam_no, scalar_control_info, port, guid=None):
             """register new camera, return guid (caller: remote camera)"""
 
             caller= self.daemon.getLocalStorage().caller # XXX Pyro hack??
+            rospy.logwarn(dir(caller))
             caller_addr= caller.addr
             caller_ip, caller_port = caller_addr
             fqdn = socket.getfqdn(caller_ip)
 
-            if force_guid is None:
+            if guid is None:
                 guid = '%s_%d'%(fqdn,cam_no)
-            else:
-                guid = force_guid
 
             port_coordinates = self.mainbrain.coord_processor.connect(guid)
             with self.lock_caminfo:
-                self.cam_info[guid] = {'commands':{}, # command queue for cam
+                self.caminfo_byguid[guid] = {'commands':{}, # command queue for cam
                                          'lock':threading.Lock(), # prevent concurrent access
                                          'image':None,  # most recent image from cam
                                          'fps':None,    # most recept fps from cam
@@ -1664,7 +1652,6 @@ class MainBrain(object):
                                          'scalar_control_info':scalar_control_info,
                                          'fqdn':fqdn,
                                          'port':port,
-                                         'cam2mainbrain_data_port':port_coordinates,
                                          'is_calibrated':False, # has 3D calibration been sent yet?
                                          }
             self.event_no_cams.clear()
@@ -1675,10 +1662,9 @@ class MainBrain(object):
         def set_image(self, guid, coord_and_image):
             """set most recent image (caller: remote camera)"""
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    self.cam_info[guid]['image'] = coord_and_image
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    caminfo['image'] = coord_and_image
 
         def receive_missing_data(self, guid, framenumber_offset, missing_data ):
             #rospy.logwarn('Received missing data from camera %s (offset %d):' % (guid, framenumber_offset))
@@ -1718,36 +1704,34 @@ class MainBrain(object):
         def set_fps(self, guid, fps):
             """set most recent fps (caller: remote camera)"""
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    self.cam_info[guid]['fps'] = fps
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    caminfo['fps'] = fps
 
         def get_and_clear_commands(self, guid):
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cmds = cam['commands']
-                    cam['commands'] = {}
+                caminfo = self.caminfo_byguid[guid]
+                with caminfo['lock']:
+                    cmds = caminfo['commands']
+                    caminfo['commands'] = {}
             return cmds
 
-        def get_cam2mainbrain_port(self, guid):
+        def get_coordinates_port(self, guid):
             """Send port number to which camera should send realtime data"""
             port_coordinates = self.mainbrain.coord_processor.port_coordinates_from_guid(guid)
             return port_coordinates
 
-        def log_message(self, guid, host_timestamp, message):
-            mainbrain_timestamp = time.time()
-            rospy.logwarn('Received log message from %s: %s' % (guid,message))
-            self.message_queue.put( (mainbrain_timestamp, guid, host_timestamp, message) )
+        def log_message(self, guid, timestamp_host, message):
+            timestamp_mainbrain = time.time()
+            rospy.logwarn('Received log message from %s: %s' % (guid, message))
+            self.message_queue.put( (timestamp_mainbrain, guid, timestamp_host, message) )
 
-        def close(self, guid):
+        def close_camera(self, guid):
             """gracefully say goodbye (caller: remote camera)"""
             with self.lock_caminfo:
                 self.mainbrain.coord_processor.disconnect(guid)
-                del self.cam_info[guid]
-                if not len(self.cam_info):
+                del self.caminfo_byguid[guid]
+                if not len(self.caminfo_byguid):
                     self.event_no_cams.set()
                 with self.lock_changed_cam:
                     self.old_guids.append(guid)
@@ -1755,13 +1739,31 @@ class MainBrain(object):
     ######## end of RemoteAPI class
     
     
-    
+    # Not finished implementing the ProvideRosInterface()...
     class ProvideRosInterface():
-        def __init__(self):
+        def post_init(self, mainbrain):
+            """call after __init__"""
+            # let Pyro handle __init__
+            self.caminfo_byguid = {}
+            self.lock_caminfo = threading.Lock()
+            self.lock_changed_cam = threading.Lock()
+            self.event_no_cams = threading.Event()
+            self.event_no_cams.set()
+            with self.lock_changed_cam:
+                self.new_guids = []
+                self.old_guids = []
+            self.mainbrain = mainbrain
+
+            # threading control locks
+            self.quit_now = threading.Event()
+            self.thread_done = threading.Event()
+            self.message_queue = Queue.Queue()
+
+
             # Expose the flydra_mainbrain API functions as ROS services.  Same as the Pyro function call, except with a few parameters pickled.
             rospy.Service ('mainbrain/get_version',              SrvGetVersion, self.callback_get_version)
             rospy.Service ('mainbrain/register_camera',          SrvRegisterCamera, self.callback_register_camera)
-            rospy.Service ('mainbrain/get_cam2mainbrain_port',   SrvGetCam2MainbrainPort, self.callback_get_mainbrain_port)
+            rospy.Service ('mainbrain/get_coordinates_port',     SrvGetCoordinatesPort, self.callback_get_coordinates_port)
             rospy.Service ('mainbrain/get_and_clear_commands',   SrvGetAndClearCommands, self.callback_get_and_clear_commands)
             rospy.Service ('mainbrain/set_fps',                  SrvSetFps, self.callback_set_fps)
             rospy.Service ('mainbrain/set_image',                SrvSetImage, self.callback_set_image)
@@ -1781,50 +1783,39 @@ class MainBrain(object):
     
             
         def callback_register_camera (self, srvreqRegisterCamera):
-            """register new camera, return guid (caller: remote camera)"""
+            """Register camera, return guid (caller: remote camera)"""
 
+            # Unpack the parameters.
             cam_no = srvreqRegisterCamera.cam_no
             scalar_control_info = pickle.loads(srvreqRegisterCamera.pickled_scalar_control_info)
             port = srvreqRegisterCamera.port
-            force_guid = srvreqRegisterCamera.force_guid
+            guid = srvreqRegisterCamera.guid
     
-    
-            caller= self.daemon.getLocalStorage().caller # XXX Pyro hack??
-            caller_addr= caller.addr
-            caller_ip, caller_port = caller_addr
-            fqdn = socket.getfqdn(caller_ip)
-    
-            if force_guid is None:
-                guid = '%s_%d'%(fqdn,cam_no)
-            else:
-                guid = force_guid
-    
+            if guid is None:
+                guid = 'camera_%d' % cam_no
+
             port_coordinates = self.mainbrain.coord_processor.connect(guid)
             with self.lock_caminfo:
-                self.cam_info[guid] = {'commands':{}, # command queue for cam
+                self.caminfo_byguid[guid] = {'commands':{}, # command queue for cam
                                          'lock':threading.Lock(), # prevent concurrent access
                                          'image':None,  # most recent image from cam
                                          'fps':None,    # most recept fps from cam
                                          'points_distorted':[], # 2D image points
-                                         'caller':caller,
                                          'scalar_control_info':scalar_control_info,
-                                         'fqdn':fqdn,
                                          'port':port,
-                                         'cam2mainbrain_data_port':port_coordinates,
                                          'is_calibrated':False, # has 3D calibration been sent yet?
                                          }
             self.event_no_cams.clear()
-            
             with self.lock_changed_cam:
                 self.new_guids.append(guid)
-                
-            return {'guid': guid}
+
+            return {'guid': guidNew}
     
     
     
-        def callback_get_mainbrain_port (self, srvreqGetCam2MainbrainPort):
+        def callback_get_coordinates_port (self, srvreqGetCoordinatesPort):
             """Send port number to which camera should send realtime data"""
-            guid = srvreqGetCam2MainbrainPort.guid
+            guid = srvreqGetCoordinatesPort.guid
 
             port_coordinates = self.mainbrain.coord_processor.port_coordinates_from_guid(guid)
             return {'port': port_coordinates}
@@ -1835,11 +1826,11 @@ class MainBrain(object):
             guid = srvreqGetAndClearCommands.guid
 
             with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cmds = cam['commands']
-                    cam['commands'] = {}
+                caminfo = self.caminfo_byguid[guid]
+                
+                with caminfo['lock']:
+                    cmds = caminfo['commands']
+                    caminfo['commands'] = {}
 
             return {'pickled_cmds': pickle.dumps(cmds)}
 
@@ -1849,12 +1840,8 @@ class MainBrain(object):
             """set most recent fps (caller: remote camera)"""
             guid = srvreqSetFps.guid
             fps = srvreqSetFps.fps
-            
-            with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    self.cam_info[guid]['fps'] = fps
+            self.mainbrain.remote_api.set_fps(guid, fps)
+
             return {}
 
     
@@ -1862,24 +1849,16 @@ class MainBrain(object):
             """set most recent image (caller: remote camera)"""
             guid = srvreqSetImage.guid
             coord_and_image = pickle.loads(srvreqSetImage.pickled_coord_and_image)
-
-            with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    self.cam_info[guid]['image'] = coord_and_image
+            self.mainbrain.remote_api.set_image(guid, coord_and_image)
 
             return {}
     
     
         def callback_log_message (self, srvreqLogMessage):
             guid = srvreqLogMessage.guid
-            host_timestamp = srvreqLogMessage.host_timestamp
+            timestamp_host = srvreqLogMessage.host_timestamp
             message = srvreqLogMessage.message
-            
-            mainbrain_timestamp = time.time()
-            rospy.logwarn('Received log message from %s: %s' % (guid,message))
-            self.message_queue.put( (mainbrain_timestamp, guid, host_timestamp, message) )
+            self.mainbrain.remote_api.log_message (guid, timestamp_host, message)
 
             return {}
 
@@ -1888,39 +1867,7 @@ class MainBrain(object):
             guid = srvreqReceiveMissingData.guid
             framenumber_offset = srvreqReceiveMissingData.framenumber_offset
             missing_data = pickle.loads(srvreqReceiveMissingData.pickled_missing_data)
-            #rospy.logwarn('Received missing data from camera %s (offset %d):'%(guid, framenumber_offset))
-            if len(missing_data)==0:
-                # no missing data
-                return {}
-
-            deferred_2d_data = []
-            for (camn, framenumber, remote_timestamp, camn_received_time,
-                 points_distorted) in missing_data:
-
-                corrected_framenumber = framenumber-framenumber_offset
-                if len(points_distorted)==0:
-                    # no point was tracked that frame
-                    points_distorted = [(nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)] # same as no_point_tuple
-                for point_tuple in points_distorted:
-                    # Save 2D data (even when no point found) to allow
-                    # temporal correlation of movie frames to 2D data.
-                    try:
-                        frame_pt_idx = point_tuple[PT_TUPLE_IDX_FRAME_PT_IDX]
-                        cur_val = point_tuple[PT_TUPLE_IDX_CUR_VAL_IDX]
-                        mean_val = point_tuple[PT_TUPLE_IDX_MEAN_VAL_IDX]
-                        sumsqf_val = point_tuple[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
-                    except:
-                        rospy.logerror('While appending point_tuple: %s' % point_tuple)
-                        raise
-                    if corrected_framenumber is None:
-                        # don't bother saving if we don't know when it was from
-                        continue
-                    deferred_2d_data.append((camn, # defer saving to later
-                                             corrected_framenumber,
-                                             remote_timestamp, camn_received_time)
-                                            +point_tuple[:5]
-                                            +(frame_pt_idx,cur_val,mean_val,sumsqf_val))
-            self.mainbrain.queue_data2d.put(deferred_2d_data)
+            self.mainbrain.remote_api.receive_missing_data (guid, framenumber_offset, missing_data)
 
             return {}    
     
@@ -1928,273 +1875,55 @@ class MainBrain(object):
         def callback_close_camera (self, srvreqClose):
             """gracefully say goodbye (caller: remote camera)"""
             guid = srvreqClose.guid
+            self.mainbrain.remote_api.close_camera(guid)
 
-            with self.lock_caminfo:
-                self.mainbrain.coord_processor.disconnect(guid)
-                del self.cam_info[guid]
-                if not len(self.cam_info):
-                    self.event_no_cams.set()
-                with self.lock_changed_cam:
-                    self.old_guids.append(guid)
             return {}
 
     
         
     
-        # Not sure that mainbrain uses this anymore.
+        # Not sure if mainbrain uses this anymore.
         def callback_get_recording_status (self, srvreqGetRecordingStatus):        
-            msg = None
-            if self.socketTriggerRecording is not None:
-                try:
-                    msg, addr = self.socketTriggerRecording.recvfrom(4096) # Call mainbrain to get any trigger recording commands.
-                except socket.error, err:
-                    if err.args[0] == 11: #Resource temporarily unavailable
-                        pass
-    
-            #rospy.logwarn( ">>> %s <<< %s" % (msg, self.isRecording)) 
-            
-            if msg=='record_ufmf':
-                if self.isRecording==False:
-                    self.isRecording = True
-                    rospy.logwarn('Start saving video.')
-            
-            elif msg==None:
-                if (self.isRecording==True) and (rospy.Time.now().to_sec() - self.timeRecord >= 4): # Record at least 4 secs of video.
-                    self.isRecording = False
-                    rospy.logwarn('Stop saving video.')
-    
-            self.timeRecord = rospy.Time.now().to_sec()
+#            msg = None
+#            if self.socketTriggerRecording is not None:
+#                try:
+#                    msg, addr = self.socketTriggerRecording.recvfrom(4096) # Call mainbrain to get any trigger recording commands.
+#                except socket.error, err:
+#                    if err.args[0] == 11: #Resource temporarily unavailable
+#                        pass
+#    
+#            #rospy.logwarn( ">>> %s <<< %s" % (msg, self.isRecording)) 
+#            
+#            if msg=='record_ufmf':
+#                if self.isRecording==False:
+#                    self.isRecording = True
+#                    rospy.logwarn('Start saving video.')
+#            
+#            elif msg==None:
+#                if (self.isRecording==True) and (rospy.Time.now().to_sec() - self.timeRecord >= 4): # Record at least 4 secs of video.
+#                    self.isRecording = False
+#                    rospy.logwarn('Stop saving video.')
+#    
+#            self.timeRecord = rospy.Time.now().to_sec()
                     
     
-            return {'status': self.isRecording}
+            return {'status': False}#self.isRecording}
     
     
             
         def callback_coordinates(self, srvreqCoordinates):
-            iCamera = self.ICameraFromId(srvreqCoordinates.id)
-            socketCoordinates = self.cameras[iCamera]['socketCoordinates']
-            
-            if rospy.get_param('mainbrain/network_protocol','udp') == 'udp':
-                try:
-                    socketCoordinates.sendto(srvreqCoordinates.data, (self.hostnameMainbrain, self.portMainbrainCoordinates))
-                except socket.error, err:
-                    rospy.logwarn('Exception in coordinates socket: %s' % err)
-                    traceback.print_exc()
-    
-            elif rospy.get_param('mainbrain/network_protocol','udp') == 'tcp':
-                socketCoordinates.send(srvreqCoordinates.data)
-            else:
-                raise ValueError('unknown network_protocol')
+            guid = srvreqCoordinates.guid
+            data = srvreqCoordinates.data
+            self.mainbrain.coord_processor.realreceiver.out_queue.put((guid, data))
     
             return {}
         
     
-#####################################    
-#####################################    
-        def post_init(self, mainbrain):
-            """call after __init__"""
-            # let Pyro handle __init__
-            self.cam_info = {}
-            self.lock_caminfo = threading.Lock()
-            self.lock_changed_cam = threading.Lock()
-            self.event_no_cams = threading.Event()
-            self.event_no_cams.set()
-            with self.lock_changed_cam:
-                self.new_guids = []
-                self.old_guids = []
-            self.mainbrain = mainbrain
-
-            # threading control locks
-            self.quit_now = threading.Event()
-            self.thread_done = threading.Event()
-            self.message_queue = Queue.Queue()
-
-        def external_get_and_clear_pending_cams(self):
-            with self.lock_changed_cam:
-                new_guids = self.new_guids
-                self.new_guids = []
-                old_guids = self.old_guids
-                self.old_guids = []
-            return new_guids, old_guids
-
-        def external_get_guids(self):
-            with self.lock_caminfo:
-                guids = self.cam_info.keys()
-            guids.sort()
-            return guids
-
-        def external_get_info(self, guid):
-            with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    scalar_control_info = copy.deepcopy(cam['scalar_control_info'])
-                    fqdn = cam['fqdn']
-                    port = cam['port']
-            return scalar_control_info, fqdn, port
-
-        def external_get_image_fps_points(self, guid):
-            ### XXX should extend to include lines
-            with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    coord_and_image = cam['image']
-                    fps = cam['fps']
-                    points_distorted = cam['points_distorted'][:]
-            # NB: points are distorted (and therefore align
-            # with distorted image)
-            if coord_and_image is not None:
-                image_coords, image = coord_and_image
-            else:
-                image_coords, image = None, None
-            return image, fps, points_distorted, image_coords
-
-        def external_send_set_camera_property( self, guid, property_name, value):
-            with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands'].setdefault('set',{})[property_name]=value
-                    old_value = cam['scalar_control_info'][property_name]
-                    if type(old_value) == tuple and type(value) == int:
-                        # i.e. (current, min, max)
-                        cam['scalar_control_info'][property_name] = (value, old_value[1], old_value[2])
-                    else:
-                        cam['scalar_control_info'][property_name] = value
-
-        def external_request_image_async(self, guid):
-            with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['get_im']=None
-
-        def external_start_recording( self, guid, raw_file_basename):
-            with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['start_recording']=raw_file_basename
-
-        def external_stop_recording( self, guid):
-            with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['stop_recording']=None
-
-        def external_start_small_recording( self, guid,
-                                            small_filebasename):
-            with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['start_small_recording']=small_filebasename
-
-        def external_stop_small_recording( self, guid):
-            with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['stop_small_recording']=None
-
-        def external_quit( self, guid):
-            with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['quit']=True
-
-        def external_take_background( self, guid):
-            with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['take_bg']=None
-
-        def external_request_missing_data(self, guid, camn, framenumber_offset, list_of_missing_framenumbers):
-            with self.lock_caminfo:
-                if guid not in self.cam_info:
-                    # the camera was dropped, ignore this request
-                    return
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-
-                camn_and_list = [camn, framenumber_offset]
-                camn_and_list.extend( list_of_missing_framenumbers )
-                cmd_str = ' '.join(map(repr,camn_and_list))
-                with cam_lock:
-                    cam['commands']['request_missing']=cmd_str
-
-        def external_clear_background( self, guid):
-            with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['clear_bg']=None
-
-        def external_set_cal( self, guid, pmat, intlin, intnonlin, scale_factor):
-            with self.lock_caminfo:
-                cam = self.cam_info[guid]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['cal']= pmat, intlin, intnonlin, scale_factor
-                    cam['is_calibrated'] = True
-        # === thread boundary =========================================
-
-        def listen(self,daemon):
-            """thread mainloop"""
-            while not self.quit_now.isSet():
-                try:
-                    daemon.handleRequests(0.1) # block on select for n seconds
-                except select.error, err:
-                    rospy.logwarn('Exception in RemoteAPI.listen(): %s' % err)
-                    continue
-
-                with self.lock_caminfo:
-                    guids = self.cam_info.keys()
-                for guid in guids:
-                    with self.lock_caminfo:
-                        connected = self.cam_info[guid]['caller'].connected
-                    if not connected:
-                        rospy.logwarn( 'mainbrain lost %s at %s'%(guid,time.asctime()))
-                        self.close(guid)
-            self.thread_done.set()
-
-        # ================================================================
-        #
-        # Methods called remotely from listeners
-        #
-        # These all get called in their own thread.  Don't call across
-        # the thread boundary without using locks, especially to GUI
-        # or OpenGL.
-        #
-        # ================================================================
-
-        def register_downstream_kalman_host(self,host,port):
-            global g_downstream_kalman_hosts
-            addr = (host,port)
-            if addr not in g_downstream_kalman_hosts:
-                rospy.logwarn('Appending to kalman host list: %s' % addr)
-                g_downstream_kalman_hosts.append( (host,port) )
-            else:
-                rospy.logwarn('Already in kalman host list: %s' % addr)
-
-        def remove_downstream_kalman_host(self,host,port):
-            global g_downstream_kalman_hosts
-            host_tuple = (host,port)
-            try:
-                i = g_downstream_kalman_hosts.index( host_tuple )
-            except ValueError:
-                return # could not find entry
-            del g_downstream_kalman_hosts[i]
-
     ######## end of ProvideRosInterface class
 
 
 
-    ######## Continue with the MainBrain class...
+    ######## Continue with the Mainbrain class...
 
     def __init__(self,
                  server=None,
@@ -2230,7 +1959,7 @@ class MainBrain(object):
 
         # start Pyro server
         daemon = Pyro.core.Daemon(host=g_hostname,port=port)
-        remote_api = MainBrain.RemoteAPI(); remote_api.post_init(self)
+        remote_api = Mainbrain.RemoteAPI(); remote_api.post_init(self)
         URI=daemon.connect(remote_api, 'mainbrain')
 
         # create (but don't start) listen thread
@@ -2240,6 +1969,10 @@ class MainBrain(object):
         #self.listen_thread.setDaemon(True) # don't let this thread keep app alive
         self.remote_api = remote_api
 
+        self.rosinterface = self.ProvideRosInterface()
+        self.rosinterface.post_init(self)
+        
+        
         self._new_camera_functions = []
         self._old_camera_functions = []
 
@@ -2250,7 +1983,7 @@ class MainBrain(object):
         self.socket_outgoing_latency_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         self.num_cams = 0
-        self.MainBrain_guids_copy = [] # Keep a copy of all guids connected
+        self.Mainbrain_guids_copy = [] # Keep a copy of all guids connected
         self._fqdns_by_guid = {}
         self.set_new_camera_callback(self.IncreaseCamCounter)
         self.set_new_camera_callback(self.SendExpectedFPS)
@@ -2346,7 +2079,7 @@ class MainBrain(object):
 
     def IncreaseCamCounter(self,guid,scalar_control_info,fqdn_and_port):
         self.num_cams += 1
-        self.MainBrain_guids_copy.append( guid )
+        self.Mainbrain_guids_copy.append( guid )
 
     def SendExpectedFPS(self,guid,scalar_control_info,fqdn_and_port):
         self.send_set_camera_property( guid, 'expected_trigger_framerate', self.trigger_device.frames_per_second_actual )
@@ -2361,12 +2094,12 @@ class MainBrain(object):
 
     def DecreaseCamCounter(self,guid):
         try:
-            idx = self.MainBrain_guids_copy.index( guid )
+            idx = self.Mainbrain_guids_copy.index( guid )
         except ValueError, err:
             rospy.logwarn('DecreaseCamCounter() called with non-existant guid: %s' % err)
             return
         self.num_cams -= 1
-        del self.MainBrain_guids_copy[idx]
+        del self.Mainbrain_guids_copy[idx]
 
     def get_num_cams(self):
         return self.num_cams
@@ -2406,7 +2139,7 @@ class MainBrain(object):
         self._old_camera_functions.append(handler)
 
     def service_pending(self):
-        """the MainBrain application calls this fairly frequently (e.g. every 100 msec)"""
+        """the Mainbrain application calls this fairly frequently (e.g. every 100 msec)"""
         new_guids, old_guids = self.remote_api.external_get_and_clear_pending_cams()
         for guid in new_guids:
             if guid in old_guids:
@@ -2451,10 +2184,10 @@ class MainBrain(object):
             timestamp_echo_fmt1 = rospy.get_param('mainbrain/timestamp_echo_fmt1', '&lt;d')
             port_echo_timestamp_camera_base = rospy.get_param('mainbrain/port_timestamp_camera_base', 28995)
     
-            for iCamera,guid in enumerate(self.MainBrain_guids_copy):
+            for iCamera,guid in enumerate(self.Mainbrain_guids_copy):
                 port_echo_timestamp_camera = port_echo_timestamp_camera_base + iCamera 
                 if guid not in self._fqdns_by_guid:
-                    sci, fqdn, cam2mainbrain_port = self.remote_api.external_get_info(guid)
+                    sci, fqdn, coordinates_port = self.remote_api.external_get_info(guid)
                     self._fqdns_by_guid[guid] = fqdn
                 else:
                     fqdn = self._fqdns_by_guid[guid]
@@ -2464,9 +2197,9 @@ class MainBrain(object):
             timestamp_echo_fmt1 = rospy.get_param('mainbrain/timestamp_echo_fmt1', '&lt;d')
             port_echo_timestamp_camnode = rospy.get_param('mainbrain/port_timestamp_camnode', 28993)
             
-            for guid in self.MainBrain_guids_copy:
+            for guid in self.Mainbrain_guids_copy:
                 if guid not in self._fqdns_by_guid:
-                    sci, fqdn, cam2mainbrain_port = self.remote_api.external_get_info(guid)
+                    sci, fqdn, coordinates_port = self.remote_api.external_get_info(guid)
                     self._fqdns_by_guid[guid] = fqdn
                 else:
                     fqdn = self._fqdns_by_guid[guid]
@@ -2577,7 +2310,7 @@ class MainBrain(object):
         # XXX ====== non-isolated calls to remote_api being done ======
         # this may be called twice: once explicitly and once by __del__
         with self.remote_api.lock_caminfo:
-            guids = self.remote_api.cam_info.keys()
+            guids = self.remote_api.caminfo_byguid.keys()
 
         for guid in guids:
             try:
@@ -2590,7 +2323,7 @@ class MainBrain(object):
         self.remote_api.quit_now.set() # tell thread to finish
         self.remote_api.thread_done.wait(0.5) # wait for thread to finish
         if not self.remote_api.event_no_cams.isSet():
-            guids = self.remote_api.cam_info.keys()
+            guids = self.remote_api.caminfo_byguid.keys()
             rospy.logwarn('Cameras failed to quit cleanly: %s' % str(guids))
             #raise RuntimeError('cameras failed to quit cleanly: %s'%str(guids))
 
@@ -2740,7 +2473,7 @@ class MainBrain(object):
 
         list_of_textlog_data = [
             (timestamp,guid,timestamp,
-             ('MainBrain running at %s fps, (top %s, '
+             ('Mainbrain running at %s fps, (top %s, '
               'hypothesis_test_max_error %s, trigger_CS3 %s, FOSC %s, flydra_version %s)'%(
             str(self.trigger_device.frames_per_second_actual),
             str(self.trigger_device._t3_state.timer3_top),

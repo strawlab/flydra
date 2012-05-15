@@ -98,7 +98,7 @@ LOGLEVEL = rospy.WARN
 #LOGLEVEL = rospy.FATAL
 
 USE_ROS_INTERFACE = False # False=UseTheSocketsInterfaceToMainbrain,  True=UseTheROSServicesInterfaceToMainbrain
-USE_ONE_TIMEPORT_PER_CAMERA = USE_ROS_INTERFACE # True=OnePerCamera, False=OnePerCamnode.  Keep MainBrain.py in sync with this.
+USE_ONE_TIMEPORT_PER_CAMERA = False # True=OnePerCamera, False=OnePerCamnode.  Keep MainBrain.py in sync with this.
 
 if not BENCHMARK:
     import Pyro.core, Pyro.errors, Pyro.util
@@ -199,9 +199,9 @@ class DummyMainBrain:
         self.camno = 0
     def noop(self,*args,**kw):
         return
-    def get_cam2mainbrain_port(self,*args,**kw):
+    def get_coordinates_port(self,*args,**kw):
         return 12345
-    def register_new_camera(self,*args,**kw):
+    def register_camera(self,*args,**kw):
         result = 'camdummy_%d'%self.camno
         self.camno += 1
         return result
@@ -1716,8 +1716,8 @@ class FakeCamera(object):
         return 'fake camera trigger'
 
 class FakeCameraFromNetwork(FakeCamera):
-    def __init__(self,id,frame_size):
-        self.id = id
+    def __init__(self,guid,frame_size):
+        self.guid = guid
         self.frame_size = frame_size
         self.proxyRemote = None
         Pyro.core.initClient(banner=0)
@@ -1740,7 +1740,7 @@ class FakeCameraFromNetwork(FakeCamera):
         # XXX TODO: implement quit_event checking
         self._ensure_remote()
 
-        pt_list = self.proxyRemote.get_point_list(self.id) # this will block...
+        pt_list = self.proxyRemote.get_point_list(self.guid) # this will block...
         width,height = self.frame_size
         new_raw = np.asarray( buf )
         assert new_raw.shape == (height,width)
@@ -1753,15 +1753,15 @@ class FakeCameraFromNetwork(FakeCamera):
 
     def get_last_timestamp(self):
         self._ensure_remote()
-        return self.proxyRemote.get_last_timestamp(self.id) # this will block...
+        return self.proxyRemote.get_last_timestamp(self.guid) # this will block...
 
     def get_last_framenumber(self):
         self._ensure_remote()
-        return self.proxyRemote.get_last_framenumber(self.id) # this will block...
+        return self.proxyRemote.get_last_framenumber(self.guid) # this will block...
 
 class FakeCameraFromRNG(FakeCamera):
-    def __init__(self,id,frame_size):
-        self.id = id
+    def __init__(self, guid, frame_size):
+        self.guid = guid
         self.frame_size = frame_size
         self.proxyRemote = None
         self.last_timestamp = 0.0
@@ -2569,7 +2569,7 @@ class AppState(object):
             
         targets = {}
         guidlist = self.get_guid_list()
-        for guid in guidlist:   #for iCamera, (idCamera, chain) in enumerate(zip(self.idCameras, self.chains_byguid)):
+        for guid in guidlist:   #for iCamera, (idCamera, chain) in enumerate(zip(self.guidCameras, self.chains_byguid)):
             base_kwargs = dict(guid=guid)
 
             if kwargs is not None:
@@ -2608,7 +2608,7 @@ class AppState(object):
                 try:
                     cmds = self.mainbrain.get_and_clear_commands(guid)
                 except KeyError:
-                    rospy.logwarn('Mainbrain appears to have lost cam_id %s' % guid)
+                    rospy.logwarn('Mainbrain appears to have lost guid %s' % guid)
                 except Exception, x:
                     rospy.logerr('Remote traceback:'+'*'*30)
                     rospy.logerr(''.join(Pyro.util.getPyroTraceback(x)))
@@ -2763,7 +2763,7 @@ class AppState(object):
                     missing_data.append( (int(camn), int(missing_framenumber), float(timestamp),
                                           float(camn_received_time), points) )
                 if len(missing_data):
-                    self.mainbrain.receive_missing_data(cam_id=guid, 
+                    self.mainbrain.receive_missing_data(guid=guid, 
                                                         framenumber_offset=framenumber_offset, 
                                                         missing_data=missing_data)
 
@@ -2937,7 +2937,7 @@ class MainbrainInterface(object):
 
         stSrv = 'mainbrain/register_camera'
         rospy.wait_for_service(stSrv)
-        self.register_new_camera_service = rospy.ServiceProxy(stSrv, SrvRegisterCamera)
+        self.register_camera_service = rospy.ServiceProxy(stSrv, SrvRegisterCamera)
 
         stSrv = 'mainbrain/get_and_clear_commands'
         rospy.wait_for_service(stSrv)
@@ -2987,10 +2987,10 @@ class MainbrainInterface(object):
         
     def register_camera_ros (self, guid, iCamera, scalar_control_info):
         # Register the camera with mainbrain.
-        response = self.register_new_camera_service(cam_no=iCamera,
+        response = self.register_camera_service(cam_no=iCamera,
                                                     pickled_scalar_control_info=pickle.dumps(scalar_control_info),
-                                                    force_guid=guid)
-        guidNew = response.cam_id
+                                                    guid=guid)
+        guidNew = response.guid
         #self.idCameras_list.append(guidNew)
         #assert(iCamera==len(self.idCameras_list)-1)
         
@@ -3021,7 +3021,7 @@ class MainbrainInterface(object):
 
 
     def set_image_ros (self, guid, (leftbottom, npim)):
-        self.set_image_service(cam_id=guid, 
+        self.set_image_service(guid=guid, 
                                          pickled_coord_and_image=pickle.dumps((leftbottom, npim,)))
         return 
 
@@ -3031,7 +3031,7 @@ class MainbrainInterface(object):
         return
 
     def receive_missing_data_ros (self, guid, framenumber_offset, missing_data):
-        self.receive_missing_data_service(cam_id=guid, framenumber_offset=framenumber_offset, missing_data=missing_data)
+        self.receive_missing_data_service(guid=guid, framenumber_offset=framenumber_offset, missing_data=missing_data)
         return
 
 
@@ -3137,16 +3137,16 @@ class MainbrainInterface(object):
         # Register the camera with mainbrain.
         port = rospy.get_param('mainbrain/port_camera_base', 9834) + iCamera
             
-        guid = self.proxyMainbrain.register_new_camera(cam_no=iCamera,
+        guid = self.proxyMainbrain.register_camera(cam_no=iCamera,
                                                           scalar_control_info=scalar_control_info,
                                                           port=port,
-                                                          force_guid=guid)
+                                                          guid=guid)
         #self.idCameras_list.append(idCamera)
         #assert(iCamera==len(self.idCameras_list)-1)
         
 
         # Get mainbrain's coordinates port, once per each camera.
-        self.portMainbrainCoordinates_dict[guid] = self.proxyMainbrain.get_cam2mainbrain_port(guid)
+        self.portMainbrainCoordinates_dict[guid] = self.proxyMainbrain.get_coordinates_port(guid)
 
         # Each camera also needs to have a place to send its coordinates.
         if self.protocol == 'udp':

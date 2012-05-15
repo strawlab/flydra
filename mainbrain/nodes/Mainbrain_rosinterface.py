@@ -159,7 +159,7 @@ class MainbrainRosInterface(object):
         # Expose the flydra_mainbrain API functions as ROS services.  Same as the Pyro function call, except with a few parameters pickled.
         rospy.Service ('mainbrain/get_version',              SrvGetVersion, self.callback_get_version)
         rospy.Service ('mainbrain/register_camera',          SrvRegisterCamera, self.callback_register_camera)
-        rospy.Service ('mainbrain/get_cam2mainbrain_port',   SrvGetCam2MainbrainPort, self.callback_get_mainbrain_port)
+        rospy.Service ('mainbrain/get_coordinates_port',     SrvGetCoordinatesPort, self.callback_get_coordinates_port)
         rospy.Service ('mainbrain/get_and_clear_commands',   SrvGetAndClearCommands, self.callback_get_and_clear_commands)
         rospy.Service ('mainbrain/set_fps',                  SrvSetFps, self.callback_set_fps)
         rospy.Service ('mainbrain/set_image',                SrvSetImage, self.callback_set_image)
@@ -169,9 +169,9 @@ class MainbrainRosInterface(object):
         rospy.Service ('mainbrain/get_recording_status',     SrvGetRecordingStatus, self.callback_get_recording_status)
 
 
-    def ICameraFromId (self, id):
+    def ICameraFromId (self, guid):
         for iCamera in range(len(self.cameras)):
-            if self.cameras[iCamera]['id']==id:
+            if self.cameras[iCamera]['guid']==guid:
                 break
             
         return iCamera
@@ -193,36 +193,36 @@ class MainbrainRosInterface(object):
         iCamera = len(self.cameras)
         self.cameras.append({})
         
-        force_cam_id = srvreqRegisterCamera.force_cam_id
+        guid = srvreqRegisterCamera.guid
         try:
-            if len(force_cam_id)==0:
-                force_cam_id = None
+            if len(guid)==0:
+                guid = None
         except TypeError:
-            force_cam_id = None
+            guid = None
                     
 
         # Register the camera with mainbrain.        
         port = rospy.get_param('mainbrain/port_camera_base', 9834) + iCamera
         scalar_control_info = pickle.loads(srvreqRegisterCamera.pickled_scalar_control_info)
-        idCamera = self.proxyMainbrain.register_new_camera(cam_no=srvreqRegisterCamera.cam_no, 
+        guidNew = self.proxyMainbrain.register_new_camera(cam_no=srvreqRegisterCamera.cam_no, 
                                                            scalar_control_info=scalar_control_info, 
                                                            port=port, #srvreqRegisterCamera.port,  # Mainbrain now talks with us, not the actual camnode.
-                                                           force_cam_id = force_cam_id)
+                                                           guid = guid)
 
-        print "Registering camera %d as %s" % (iCamera, idCamera)
+        print "Registering camera %d as %s" % (iCamera, guidNew)
         
         # Keep the camera's ID.
-        self.cameras[iCamera]['id'] = idCamera
+        self.cameras[iCamera]['guid'] = guidNew
 
 
         # Connect to the camera's echo_timestamp ROS service, e.g. "echo_timestamp_camera1".
-        stSrv = idCamera+'/echo_timestamp'
+        stSrv = guidNew+'/echo_timestamp'
         rospy.wait_for_service(stSrv)
         self.cameras[iCamera]['echo_timestamp'] = rospy.ServiceProxy(stSrv, SrvEchoTimestamp)
         print 'Connected to service %s' % stSrv
 
         # Connect to mainbrain's coordinates port.
-        self.portMainbrainCoordinates = self.proxyMainbrain.get_cam2mainbrain_port(idCamera)
+        self.portMainbrainCoordinates = self.proxyMainbrain.get_coordinates_port(guidNew)
         #self.portMainbrainCoordinates = rv.port
 
         if rospy.get_param('mainbrain/network_protocol','udp') == 'udp':
@@ -235,61 +235,61 @@ class MainbrainRosInterface(object):
 
 
         # Offer the coordinate data collection service, e.g. "coordinates_camera1".
-        rospy.Service ('mainbrain/coordinates/'+idCamera, 
+        rospy.Service ('mainbrain/coordinates/'+guidNew, 
                        SrvCoordinates, 
                        self.callback_coordinates)
 
 
         # Launch a thread to handle echo_timestamp.
-        print 'Starting thread %s...' % ('thread_timestamp_'+idCamera)
-        self.cameras[iCamera]['thread_timestamp'] = threading.Thread(target=ThreadEchoTimestamp, name='thread_timestamp_'+idCamera, args=(iCamera,self.cameras[iCamera],))
+        print 'Starting thread %s...' % ('thread_timestamp_'+guidNew)
+        self.cameras[iCamera]['thread_timestamp'] = threading.Thread(target=ThreadEchoTimestamp, name='thread_timestamp_'+guidNew, args=(iCamera,self.cameras[iCamera],))
         self.cameras[iCamera]['thread_timestamp'].setDaemon(True) # quit that thread if it's the only one left...
         self.cameras[iCamera]['thread_timestamp'].start()
-        print 'Started thread %s' % ('thread_timestamp_'+idCamera)
+        print 'Started thread %s' % ('thread_timestamp_'+guidNew)
 
         
-        return {'cam_id': idCamera}
+        return {'guid': guidNew}
 
 
-    def callback_get_mainbrain_port (self, srvreqGetCam2MainbrainPort):
-        portMainbrain = self.proxyMainbrain.get_cam2mainbrain_port(srvreqGetCam2MainbrainPort.cam_id)
-        return {'port': portMainbrain}
+    def callback_get_coordinates_port (self, srvreqGetCoordinatesPort):
+        portCoordinates = self.proxyMainbrain.get_coordinates_port(srvreqGetCoordinatesPort.guid)
+        return {'port': portCoordinates}
 
 
     def callback_get_and_clear_commands (self, srvreqGetAndClearCommands):
-        cmds=self.proxyMainbrain.get_and_clear_commands(srvreqGetAndClearCommands.cam_id)
+        cmds=self.proxyMainbrain.get_and_clear_commands(srvreqGetAndClearCommands.guid)
         return {'pickled_cmds': pickle.dumps(cmds)}
     
     
     def callback_set_fps (self, srvreqSetFps):
-        self.proxyMainbrain.set_fps(srvreqSetFps.cam_id, 
+        self.proxyMainbrain.set_fps(srvreqSetFps.guid, 
                                     srvreqSetFps.fps)
         return {}
 
 
     def callback_set_image (self, srvreqSetImage):
         coord_and_image = pickle.loads(srvreqSetImage.pickled_coord_and_image)
-        self.proxyMainbrain.set_image(srvreqSetImage.cam_id, 
+        self.proxyMainbrain.set_image(srvreqSetImage.guid, 
                                       coord_and_image)
         return {}
 
 
     def callback_log_message (self, srvreqLogMessage):
-        self.proxyMainbrain.log_message(srvreqLogMessage.cam_id, 
+        self.proxyMainbrain.log_message(srvreqLogMessage.guid, 
                                         srvreqLogMessage.host_timestamp, 
                                         srvreqLogMessage.message)
         return {}
 
     def callback_receive_missing_data (self, srvreqReceiveMissingData):
         missing_data = pickle.loads(srvreqReceiveMissingData.pickled_missing_data)
-        self.proxyMainbrain.receive_missing_data(srvreqReceiveMissingData.cam_id, 
+        self.proxyMainbrain.receive_missing_data(srvreqReceiveMissingData.guid, 
                                                  srvreqReceiveMissingData.framenumber_offset, 
                                                  missing_data)
         return {}
 
 
     def callback_close_camera (self, srvreqClose):
-        self.proxyMainbrain.close(srvreqClose.cam_id)
+        self.proxyMainbrain.close(srvreqClose.guid)
         return {}
     
 
@@ -323,7 +323,7 @@ class MainbrainRosInterface(object):
 
         
     def callback_coordinates(self, srvreqCoordinates):
-        iCamera = self.ICameraFromId(srvreqCoordinates.id)
+        iCamera = self.ICameraFromId(srvreqCoordinates.guid)
         socketCoordinates = self.cameras[iCamera]['socketCoordinates']
         
         if rospy.get_param('mainbrain/network_protocol','udp') == 'udp':

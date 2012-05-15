@@ -1,3 +1,3 @@
-string cam_id
+string guid
 string pickled_coord_and_image
 ---
