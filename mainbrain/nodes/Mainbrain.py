@@ -465,7 +465,7 @@ class CoordRealReceiver(threading.Thread):
                             guid = self.guid_from_socket_server[sockobj]
                         client_sockobj, addr = sockobj.accept()
                         client_sockobj.setblocking(False)
-                        rospy.logwarn( guid, 'connected from',addr
+                        rospy.logwarn('Camera %s connected from %s' % (guid, addr))
                         with self.lock_socket:
                             self.guid_from_socket_listen[client_sockobj]=guid
 
@@ -757,12 +757,12 @@ class CoordinateProcessor(threading.Thread):
         if self.save_profiling_data:
             fname = "data_for_kalman_profiling.pkl"
             fullpath = os.path.abspath(fname)
-            rospy.logwarn( "saving data for profiling to %s"%fullpath
+            rospy.logwarn("Saving data for profiling to %s" % fullpath)
             to_save = self.data_dict_queue
             save_fd = open(fullpath,mode="wb")
             pickle.dump( to_save, save_fd )
             save_fd.close()
-            rospy.logwarn( "done saving"
+            rospy.logwarn("Done saving")
         self.quit_event.set()
         self.join() # wait until CoordReveiver thread quits
 
@@ -777,11 +777,11 @@ class CoordinateProcessor(threading.Thread):
                       new_data_framenumbers):
 
         if self.mainbrain.is_saving_data():
-            rospy.logwarn( 'ERROR: re-synchronized while saving data!'
+            rospy.logerror('Re-synchronized while saving data!')
             return
 
         if self.last_timestamps_byguid[guid] != IMPOSSIBLE_TIMESTAMP:
-            rospy.logwarn( guid,'(re)synchronized'
+            rospy.logwarn('(Re)synchronized camera %s' % guid)
             # discard all previous data
             for k in realtime_coord_byframenumber.keys():
                 del realtime_coord_byframenumber[k]
@@ -821,14 +821,14 @@ class CoordinateProcessor(threading.Thread):
                 priority = 1 #41 #posix_sched.get_priority_min( posix_sched.FIFO )  # Faster than user procs, slower than kernel procs: rtprio=41.
                 sched_params = posix_sched.SchedParam(priority)
                 rv = posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
-                rospy.logwarn( 'Excellent (%d), 3D reconstruction thread running in maximum priority mode' % rv
+                rospy.logwarn('Excellent (%d), 3D reconstruction thread running in maximum priority mode' % rv)
             except Exception, x:
                 import ctypes
                 # The 186 comes from the command:  grep -r _gettid /usr/include/*
                 # and may vary on linux flavor, 32/64 bitness, etc.
-                rospy.logwarn( 'WARNING: Could not change to FIFO priority=%d, <threadID>=%d: %s' % (priority, ctypes.CDLL('libc.so.6').syscall(186), str(x)) 
-                rospy.logwarn( 'You can set this manually via:'
-                rospy.logwarn( 'sudo chrt -f -p 1 %d' % ctypes.CDLL('libc.so.6').syscall(186)
+                rospy.logwarn('WARNING: Could not change to FIFO priority=%d, <threadID>=%d: %s' % (priority, ctypes.CDLL('libc.so.6').syscall(186), str(x))) 
+                rospy.logwarn('You can set this manually via:')
+                rospy.logwarn('sudo chrt -f -p 1 %d' % ctypes.CDLL('libc.so.6').syscall(186))
 
         header_fmt = '<ddliI'
         header_size = struct.calcsize(header_fmt)
@@ -903,17 +903,17 @@ class CoordinateProcessor(threading.Thread):
                             break
                         predicted_framenumber = n_frames_skipped + self.last_framenumbers_skip_byguid[guid] + 1
                         if raw_framenumber<predicted_framenumber:
-                            rospy.logwarn( 'raw_framenumber',raw_framenumber
-                            rospy.logwarn( 'n_frames_skipped',n_frames_skipped
-                            rospy.logwarn( 'predicted_framenumber',predicted_framenumber
-                            rospy.logwarn( 'self.last_framenumbers_skip_byguid[guid]',self.last_framenumbers_skip_byguid[guid]
+                            rospy.logwarn('raw_framenumber %d' % raw_framenumber)
+                            rospy.logwarn('n_frames_skipped: %d' % n_frames_skipped)
+                            rospy.logwarn('predicted_framenumber: %d' % predicted_framenumber)
+                            rospy.logwarn('self.last_framenumbers_skip_byguid[%s]: %s' % (guid, self.last_framenumbers_skip_byguid[guid]))
                             raise RuntimeError('got framenumber already received or skipped!')
                         elif raw_framenumber>predicted_framenumber:
                             if not self.last_framenumbers_skip_byguid[guid]==-1:
                                 # this is not the first frame
 
                                 # probably because network buffer filled up before we emptied it
-                                rospy.logwarn( '  WARNING: frame data loss %s'%(guid,)
+                                rospy.logwarn('Frame data loss %s' % guid)
 
                             if ATTEMPT_DATA_RECOVERY:
                                 if not self.last_framenumbers_skip_byguid[guid]==-1:
@@ -1073,8 +1073,8 @@ class CoordinateProcessor(threading.Thread):
                     finish_packet_sorting_time = time.time()
                     min_packet_gather_dur = finish_packet_sorting_time-max_incoming_remote_timestamp
                     max_packet_gather_dur = finish_packet_sorting_time-min_incoming_remote_timestamp
-                    rospy.logwarn( 'proc dur: % 3.1f % 3.1f'%(min_packet_gather_dur*1e3,
-                                                     max_packet_gather_dur*1e3)
+                    rospy.logwarn('proc dur: % 3.1f % 3.1f' % (min_packet_gather_dur*1e3,
+                                                               max_packet_gather_dur*1e3))
 
                 finished_corrected_framenumbers = [] # for quick deletion
 
@@ -1140,7 +1140,7 @@ class CoordinateProcessor(threading.Thread):
                                         if result is None:
                                             continue
                                         obj_id,last_xhat,P = result
-                                        rospy.logdebug( last_xhat[:3]
+                                        rospy.logdebug(last_xhat[:3])
 
                                 if self.save_profiling_data:
                                     self.data_dict_queue.append(('ntrack',self.tracker.live_tracked_objects.how_many_are_living()))
