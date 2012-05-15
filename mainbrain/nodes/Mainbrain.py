@@ -107,6 +107,8 @@ max_N_hypothesis_test =  rc_params['max_N_hypothesis_test']
 
 g_XXX_framenumber = 0
 
+# MainBrainKeeper()
+# Keeps track of all mainbrain instances, and cleans up gracefully when exiting.
 class MainBrainKeeper:
     def __init__(self):
         self.kept = []
@@ -240,10 +242,10 @@ def encode_data_packet( corrected_framenumber,
                                   line3d_valid,
                                   *packable_data)
     except SystemError, x:
-        print 'fmt',fmt
-        print 'corrected_framenumber',corrected_framenumber
-        print 'line3d_valid',line3d_valid
-        print 'packable_data',packable_data
+        rospy.logwarn( 'fmt: %s' % fmt)
+        rospy.logwarn( 'corrected_framenumber: %d' % corrected_framenumber)
+        rospy.logwarn( 'line3d_valid: %s' % line3d_valid)
+        rospy.logwarn( 'packable_data: %s' % packable_data)
         raise
     return data_packet
 
@@ -260,9 +262,9 @@ def get_best_realtime_data():
     return data
 
 ##def DEBUG(msg=''):
-##    print msg,'line',sys._getframe().f_back.f_lineno,', thread', threading.currentThread()
+##    rospy.logwarn( msg,'line',sys._getframe().f_back.f_lineno,', thread', threading.currentThread()
 ##    #for t in threading.enumerate():
-##    #    print '   ',t
+##    #    rospy.logwarn( '   ',t
 
 def DEBUG(msg=''):
     return
@@ -282,28 +284,25 @@ class TimestampEchoReceiver(threading.Thread):
         ip2hostname = {}
         timestamp_echo_fmt2 = rospy.get_param('mainbrain/timestamp_echo_fmt2', '&lt;dd')
 
-        socket_echo_timestamp_mainbrain = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         port = rospy.get_param('mainbrain/port_timestamp_mainbrain', 28993)
+        socket_echo_timestamp_mainbrain = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         socket_echo_timestamp_mainbrain.bind((g_hostname, port))
 
-        last_clock_diff_measurements = collections.defaultdict(list)
+        diff_last_clock = collections.defaultdict(list)
 
         while 1:
             try:
                 timestamp_echo_buf, (timestamp_echo_remote_ip,cam_port) = socket_echo_timestamp_mainbrain.recvfrom(4096)
             except Exception, err:
-                print 'WARNING: unknown Exception receiving timestamp echo data:',str(err)
-                continue
-            except:
-                print 'WARNING: unknown error (non-Exception!) receiving timestamp echo data'
+                rospy.logwarn( 'Exception receiving timestamp echo data: %s' % str(err))
                 continue
 
             stop_timestamp = time.time()
 
             start_timestamp,remote_timestamp = struct.unpack(timestamp_echo_fmt2,timestamp_echo_buf)
 
-            tlist = last_clock_diff_measurements[timestamp_echo_remote_ip]
-            tlist.append( (start_timestamp,remote_timestamp,stop_timestamp) )
+            tlist = diff_last_clock[timestamp_echo_remote_ip]
+            tlist.append( (start_timestamp, remote_timestamp, stop_timestamp) )
             if len(tlist)==100:
                 if timestamp_echo_remote_ip not in ip2hostname:
                     ip2hostname[timestamp_echo_remote_ip]=socket.getfqdn(timestamp_echo_remote_ip)
@@ -322,20 +321,21 @@ class TimestampEchoReceiver(threading.Thread):
                 durationFromRemote = stop_timestamp - remote_timestamp
                 if True: #durationToRemote > 1:
                     rospy.logwarn('%s : durationToRemote=%.2fms durationFromRemote=%.2fms, durationTotal=%0.2fms' % (remote_hostname, 
-                                                                                                             durationToRemote*1e3, 
-                                                                                                             durationFromRemote*1e3, 
-                                                                                                             durationsRoundtrip[iMinDuration]*1e3,))
+                                                                                                                     durationToRemote*1e3, 
+                                                                                                                     durationFromRemote*1e3, 
+                                                                                                                     durationsRoundtrip[iMinDuration]*1e3,))
 
                 self.mainbrain.queue_host_clock_info.put(  (remote_hostname,
                                                              start_timestamp,
                                                              remote_timestamp,
                                                              stop_timestamp) )
                 if False:
-                    measurement_duration = durationsRoundtrip[iMinDuration]
+                    duration_measurement = durationsRoundtrip[iMinDuration]
                     clock_diff = stop_timestamp-remote_timestamp
 
-                    print '%s: the remote diff is %.1f msec (within 0-%.1f msec accuracy)'%(
-                        remote_hostname, clock_diff*1000, measurement_duration*1000)
+                    rospy.logwarn( '%s: remote diff is %.1f msec (within 0-%.1f msec accuracy)' % (remote_hostname, 
+                                                                                                   clock_diff*1000, 
+                                                                                                   duration_measurement*1000))
 
 class TrigReceiver(threading.Thread):
     def __init__(self,mainbrain):
@@ -348,18 +348,15 @@ class TrigReceiver(threading.Thread):
         global g_hostname
 
         rospy.sleep(2)
-        socket_trigger_network = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         port = rospy.get_param('mainbrain/port_trigger_network', 28994)
+        socket_trigger_network = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         socket_trigger_network.bind((g_hostname, port))
 
         while 1: # XXX enable quit
             try:
                 trig_buf, (remote_ip,cam_port) = socket_trigger_network.recvfrom(4096)
             except Exception, err:
-                print 'WARNING: unknown Exception receiving trigger data:',str(err)
-                continue
-            except:
-                print 'WARNING: unknown error (non-Exception!) receiving trigger data'
+                rospy.logwarn( 'Exception receiving trigger data: %s' % str(err))
                 continue
 
             if trig_buf=='1':
@@ -447,7 +444,7 @@ class CoordRealReceiver(threading.Thread):
             pass
         return L
 
-    # called from CoordRealReceiver thread
+    # Called from CoordRealReceiver thread
     def run(self):
         timeout=0.1
         BENCHMARK_2D_GATHER = False
@@ -460,28 +457,24 @@ class CoordRealReceiver(threading.Thread):
                     sockobjs = self.guid_from_socket_server.keys()
                 try:
                     sock_in_ready, sock_out_ready, sock_exc_ready = select.select(sockobjs, [],  [],  0.0)
-                except select.error, exc:
-                    print 'select.error on server socket, ignoring...'
-                except socket.error, exc:
-                    print 'socket.error on server socket, ignoring...'
+                except (select.error, socket.error), exc:
+                    rospy.logwarn('Exception in server socket: %s' % exc)
                 else:
                     for sockobj in sock_in_ready:
                         with self.lock_socket:
                             guid = self.guid_from_socket_server[sockobj]
                         client_sockobj, addr = sockobj.accept()
                         client_sockobj.setblocking(False)
-                        print guid, 'connected from',addr
+                        rospy.logwarn( guid, 'connected from',addr
                         with self.lock_socket:
                             self.guid_from_socket_listen[client_sockobj]=guid
-            DEBUG('1')
+
             with self.lock_socket:
                 sockobjs = self.guid_from_socket_listen.keys()
             try:
                 sock_in_ready, sock_out_ready, sock_exc_ready = select.select(sockobjs, [], [],  timeout)
-            except select.error, exc:
-                print 'select.error on listen socket, ignoring...'
-            except socket.error, exc:
-                print 'socket.error on listen socket, ignoring...'
+            except (select.error, socket.error), exc:
+                rospy.logwarn('Exception in listen socket: %s' % exc)
             else:
                 if not len(sock_in_ready):
                     continue
@@ -493,7 +486,7 @@ class CoordRealReceiver(threading.Thread):
                         with self.lock_socket:
                             guid = self.guid_from_socket_listen[sockobj]
                     except KeyError,ValueError:
-                        print 'strange - what is in my listen sockets list?',sockobj
+                        rospy.logwarn( 'Strange - what is in my listen sockets list?  %s' % sockobj)
                         # XXX camera was dropped?
                         continue
 
@@ -501,10 +494,7 @@ class CoordRealReceiver(threading.Thread):
                         try:
                             data, addr = sockobj.recvfrom(4096)
                         except Exception, err:
-                            print 'WARNING: unknown Exception receiving UDP data:',str(err)
-                            continue
-                        except:
-                            print 'WARNING: unknown error (non-Exception!) receiving UDP data:'
+                            rospy.logwarn( 'Exception receiving UDP data: %s' % str(err))
                             continue
                     elif NETWORK_PROTOCOL == 'tcp':
                         data = sockobj.recv(4096)
@@ -520,7 +510,7 @@ class CoordRealReceiver(threading.Thread):
                         (timestamp, camn_received_time, framenumber,
                          n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
                         recv_latency_msec = (time.time()-camn_received_time)*1e3
-                        print 'recv_latency_msec % 3.1f'%recv_latency_msec
+                        rospy.logwarn('recv_latency_msec: %3.1f' % recv_latency_msec)
                     self.out_queue.put((guid, data ))
 
 
@@ -535,9 +525,10 @@ class CoordinateSender(threading.Thread):
           
       def run(self):
           global g_downstream_kalman_hosts
+          
           out_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
           block = 1
-          timeout = .1
+          timeout = 0.1
           encode_super_packet = flydra.kalman.data_packets.encode_super_packet
 
           
@@ -551,7 +542,7 @@ class CoordinateSender(threading.Thread):
                       packets.append( self.my_queue.get_nowait() )
                   except Queue.Empty:
                       break
-              # now packets is a list of all recent data
+              # Now packets is a list of all recent data
               super_packet = encode_super_packet( packets )
               for downstream_host in g_downstream_kalman_hosts:
                   g_socket_outgoing_UDP.sendto(super_packet,downstream_host)
@@ -708,7 +699,7 @@ class CoordinateProcessor(threading.Thread):
         # this is from called within the realtime coords thread
         if self.mainbrain.is_saving_data():
             if self.debug_level.isSet():
-                print 'saving finished kalman object with %d frames'%(len(tracked_object.frames),)
+                rospy.logdebug('Saving finished kalman object with %d frames' % len(tracked_object.frames))
             self.mainbrain.queue_data3d_kalman_estimates.put(
                 (tracked_object.obj_id,
                  tracked_object.frames, tracked_object.xhats, tracked_object.Ps,
@@ -766,12 +757,12 @@ class CoordinateProcessor(threading.Thread):
         if self.save_profiling_data:
             fname = "data_for_kalman_profiling.pkl"
             fullpath = os.path.abspath(fname)
-            print "saving data for profiling to %s"%fullpath
+            rospy.logwarn( "saving data for profiling to %s"%fullpath
             to_save = self.data_dict_queue
             save_fd = open(fullpath,mode="wb")
             pickle.dump( to_save, save_fd )
             save_fd.close()
-            print "done saving"
+            rospy.logwarn( "done saving"
         self.quit_event.set()
         self.join() # wait until CoordReveiver thread quits
 
@@ -786,11 +777,11 @@ class CoordinateProcessor(threading.Thread):
                       new_data_framenumbers):
 
         if self.mainbrain.is_saving_data():
-            print 'ERROR: re-synchronized while saving data!'
+            rospy.logwarn( 'ERROR: re-synchronized while saving data!'
             return
 
         if self.last_timestamps_byguid[guid] != IMPOSSIBLE_TIMESTAMP:
-            print guid,'(re)synchronized'
+            rospy.logwarn( guid,'(re)synchronized'
             # discard all previous data
             for k in realtime_coord_byframenumber.keys():
                 del realtime_coord_byframenumber[k]
@@ -802,7 +793,7 @@ class CoordinateProcessor(threading.Thread):
             new_data_framenumbers.clear()
 
         #else:
-        #    print guid,'first 2D coordinates received'
+        #    rospy.logwarn( guid,'first 2D coordinates received'
 
         # make new camn to indicate new synchronization state
         self.max_camns += 1
@@ -818,7 +809,7 @@ class CoordinateProcessor(threading.Thread):
         self.mainbrain.queue_cam_info.put(  (guid, camn, timestamp) )
 
     def run(self):
-        """main loop of CoordinateProcessor"""
+        """Main loop of CoordinateProcessor"""
         global g_downstream_hosts
         global g_best_realtime_data
         global g_socket_outgoing_UDP
@@ -830,14 +821,14 @@ class CoordinateProcessor(threading.Thread):
                 priority = 1 #41 #posix_sched.get_priority_min( posix_sched.FIFO )  # Faster than user procs, slower than kernel procs: rtprio=41.
                 sched_params = posix_sched.SchedParam(priority)
                 rv = posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
-                print 'Excellent (%d), 3D reconstruction thread running in maximum priority mode' % rv
+                rospy.logwarn( 'Excellent (%d), 3D reconstruction thread running in maximum priority mode' % rv
             except Exception, x:
                 import ctypes
                 # The 186 comes from the command:  grep -r _gettid /usr/include/*
                 # and may vary on linux flavor, 32/64 bitness, etc.
-                print 'WARNING: Could not change to FIFO priority=%d, <threadID>=%d: %s' % (priority, ctypes.CDLL('libc.so.6').syscall(186), str(x)) 
-                print 'You can set this manually via:'
-                print 'sudo chrt -f -p 1 %d' % ctypes.CDLL('libc.so.6').syscall(186)
+                rospy.logwarn( 'WARNING: Could not change to FIFO priority=%d, <threadID>=%d: %s' % (priority, ctypes.CDLL('libc.so.6').syscall(186), str(x)) 
+                rospy.logwarn( 'You can set this manually via:'
+                rospy.logwarn( 'sudo chrt -f -p 1 %d' % ctypes.CDLL('libc.so.6').syscall(186)
 
         header_fmt = '<ddliI'
         header_size = struct.calcsize(header_fmt)
@@ -912,17 +903,17 @@ class CoordinateProcessor(threading.Thread):
                             break
                         predicted_framenumber = n_frames_skipped + self.last_framenumbers_skip_byguid[guid] + 1
                         if raw_framenumber<predicted_framenumber:
-                            print 'raw_framenumber',raw_framenumber
-                            print 'n_frames_skipped',n_frames_skipped
-                            print 'predicted_framenumber',predicted_framenumber
-                            print 'self.last_framenumbers_skip_byguid[guid]',self.last_framenumbers_skip_byguid[guid]
+                            rospy.logwarn( 'raw_framenumber',raw_framenumber
+                            rospy.logwarn( 'n_frames_skipped',n_frames_skipped
+                            rospy.logwarn( 'predicted_framenumber',predicted_framenumber
+                            rospy.logwarn( 'self.last_framenumbers_skip_byguid[guid]',self.last_framenumbers_skip_byguid[guid]
                             raise RuntimeError('got framenumber already received or skipped!')
                         elif raw_framenumber>predicted_framenumber:
                             if not self.last_framenumbers_skip_byguid[guid]==-1:
                                 # this is not the first frame
 
                                 # probably because network buffer filled up before we emptied it
-                                print '  WARNING: frame data loss %s'%(guid,)
+                                rospy.logwarn( '  WARNING: frame data loss %s'%(guid,)
 
                             if ATTEMPT_DATA_RECOVERY:
                                 if not self.last_framenumbers_skip_byguid[guid]==-1:
@@ -1082,7 +1073,7 @@ class CoordinateProcessor(threading.Thread):
                     finish_packet_sorting_time = time.time()
                     min_packet_gather_dur = finish_packet_sorting_time-max_incoming_remote_timestamp
                     max_packet_gather_dur = finish_packet_sorting_time-min_incoming_remote_timestamp
-                    print 'proc dur: % 3.1f % 3.1f'%(min_packet_gather_dur*1e3,
+                    rospy.logwarn( 'proc dur: % 3.1f % 3.1f'%(min_packet_gather_dur*1e3,
                                                      max_packet_gather_dur*1e3)
 
                 finished_corrected_framenumbers = [] # for quick deletion
@@ -1100,17 +1091,17 @@ class CoordinateProcessor(threading.Thread):
                 for corrected_framenumber in new_data_framenumbers:
                     oldest_camera_timestamp, n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
                     if oldest_camera_timestamp is None:
-                        ## print 'no latency estimate available -- skipping 3D reconstruction'
+                        ## rospy.logwarn( 'no latency estimate available -- skipping 3D reconstruction'
                         continue
                     if (time.time() - oldest_camera_timestamp) > max_reconstruction_latency_sec:
-                        #print 'maximum reconstruction latency exceeded -- skipping 3D reconstruction'
+                        #rospy.logwarn( 'maximum reconstruction latency exceeded -- skipping 3D reconstruction'
                         continue
 
                     data_byguid = realtime_coord_byframenumber[corrected_framenumber]
                     if len(data_byguid)==len(self.guids): # all camera data arrived
 
                         if self.debug_level.isSet():
-                            print 'frame %d'%(corrected_framenumber,)
+                            rospy.logdebug('Frame: %d' % corrected_framenumber)
 
                         if SHOW_3D_PROCESSING_LATENCY:
                             start_3d_proc = time.time()
@@ -1142,15 +1133,14 @@ class CoordinateProcessor(threading.Thread):
                                     self.guid_from_index)
 
                                 if self.debug_level.isSet():
-                                    print '%d live objects:'%(self.tracker.live_tracked_objects.how_many_are_living(),),
+                                    rospy.logdebug('%d live objects' % self.tracker.live_tracked_objects.how_many_are_living())
                                     results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
                                     Xs = []
                                     for result in results:
                                         if result is None:
                                             continue
                                         obj_id,last_xhat,P = result
-                                        print last_xhat[:3]
-                                    print
+                                        rospy.logdebug( last_xhat[:3]
 
                                 if self.save_profiling_data:
                                     self.data_dict_queue.append(('ntrack',self.tracker.live_tracked_objects.how_many_are_living()))
@@ -1162,18 +1152,14 @@ class CoordinateProcessor(threading.Thread):
                                     oldest_camera_timestamp, n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
                                     if n>0:
                                         if 0:
-                                            print 'overall latency %d: %.1f msec (oldest: %s now: %s)'%(
-                                                n,
-                                                (now-oldest_camera_timestamp)*1e3,
-                                                repr(oldest_camera_timestamp),
-                                                repr(now),
-                                                )
+                                            rospy.logwarn('Overall latency %d: %.1f msec (oldest: %s now: %s)' % (n,
+                                                                                                                  (now-oldest_camera_timestamp)*1e3,
+                                                                                                                  repr(oldest_camera_timestamp),
+                                                                                                                  repr(now)))
                                         else:
 
-                                            print 'overall latency (%d camera detected 2d points): %.1f msec (note: may exclude camera->camera computer latency)'%(
-                                                n,
-                                                (now-oldest_camera_timestamp)*1e3,
-                                                )
+                                            rospy.logwarn( 'Overall latency (%d camera detected 2d points): %.1f msec (note: may exclude camera->camera computer latency)'%(n,
+                                                                                                                                                (now-oldest_camera_timestamp)*1e3))
 
                                 if 1:
                                     # The above calls
@@ -1212,9 +1198,9 @@ class CoordinateProcessor(threading.Thread):
 
                                 if SHOW_3D_PROCESSING_LATENCY:
                                     if len(found_data_dict) < 2:
-                                        print ' ',
+                                        rospy.logwarn(' ')
                                     else:
-                                        print '*',
+                                        rospy.logwarn('*')
 
                                 if len(found_data_dict) >= 2:
                                     # Can't do any 3D math without at least 2 cameras giving good
@@ -1300,11 +1286,11 @@ class CoordinateProcessor(threading.Thread):
                                     max_n_cams=max_N_hypothesis_test,
                                     )
                             except:
-                                # this prevents us from bombing this thread...
-                                print 'WARNING:'
+                                # This prevents us from bombing this thread...
                                 traceback.print_exc()
-                                print 'SKIPPED 3d calculation for this frame.'
+                                rospy.logwarn('SKIPPED 3d calculation for this frame.')
                                 continue
+                            
                             cam_nos_used = [self.index_from_guid[guid] for guid in guids_used]
 
                             if line3d is None:
@@ -1337,8 +1323,7 @@ class CoordinateProcessor(threading.Thread):
                                 for downstream_host in g_downstream_hosts:
                                     g_socket_outgoing_UDP.sendto(data_packet,downstream_host)
                             except:
-                                print 'WARNING: could not send 3d point data over UDP'
-                                print
+                                rospy.logwarn( 'Could not send 3d point data over UDP')
                             if self.mainbrain.is_saving_data():
                                 self.mainbrain.queue_data3d_best.put( (corrected_framenumber,
                                                                         outgoing_data,
@@ -1351,11 +1336,10 @@ class CoordinateProcessor(threading.Thread):
                             dur_3d_proc_msec_b = (start_3d_proc_b - start_3d_proc)*1e3
                             dur_3d_proc_msec_c = (start_3d_proc_c - start_3d_proc)*1e3
 
-                            print 'dur_3d_proc_msec % 3.1f % 3.1f % 3.1f % 3.1f'%(
-                                dur_3d_proc_msec,
-                                dur_3d_proc_msec_a,
-                                dur_3d_proc_msec_b,
-                                dur_3d_proc_msec_c)
+                            rospy.logwarn('dur_3d_proc_msec % 3.1f % 3.1f % 3.1f % 3.1f'%(dur_3d_proc_msec,
+                                                                                          dur_3d_proc_msec_a,
+                                                                                          dur_3d_proc_msec_b,
+                                                                                          dur_3d_proc_msec_c))
 
                 for finished in finished_corrected_framenumbers:
                     if 1:
@@ -1363,7 +1347,7 @@ class CoordinateProcessor(threading.Thread):
                         if 0:
                             timestamps_by_guid = numpy.array(timestamp_check_byframenumber[finished].values())
                             for xy in timestamp_check_byframenumber[finished].iteritems():
-                                print repr(xy)
+                                rospy.logwarn( repr(xy))
 
                         if 1:
                             diff_from_start = []
@@ -1373,8 +1357,9 @@ class CoordinateProcessor(threading.Thread):
 
                         if self.show_sync_errors:
                             if len(timestamps_by_guid):
-                                if numpy.max(abs(timestamps_by_guid - timestamps_by_guid[0])) > 0.005:
-                                    print 'timestamps off by more than 5 msec -- synchronization error'
+                                diff = numpy.max(abs(timestamps_by_guid - timestamps_by_guid[0]))
+                                if diff > 0.005:
+                                    rospy.logwarn( 'Timestamps off by %0.3f (more than 5 msec) -- synchronization error' % diff)
 
                     del realtime_coord_byframenumber[finished]
                     del timestamp_check_byframenumber[finished]
@@ -1393,7 +1378,7 @@ class CoordinateProcessor(threading.Thread):
                 # re-sync, but who cares?
 
                 if len(realtime_coord_byframenumber)>100:
-                    print 'Cameras not synchronized or network dropping packets -- unmatched 2D data accumulating'
+                    rospy.logwarn('Cameras not synchronized or network dropping packets -- unmatched 2D data accumulating')
                     k=realtime_coord_byframenumber.keys()
                     k.sort()
 
@@ -1404,14 +1389,14 @@ class CoordinateProcessor(threading.Thread):
                         this_guids = data_dict.keys()
                         missing_guid_guess = list(set(self.guids) - set( this_guids ))
                         if len(missing_guid_guess):
-                            print ' a guess at missing guid(s):',list(set(self.guids) - set( this_guids ))
+                            rospy.logwarn('A guess at missing guid(s): %s' % list(set(self.guids)-set(this_guids)))
 
                     for ki in k[:-50]:
                         del realtime_coord_byframenumber[ki]
                         del timestamp_check_byframenumber[ki]
 
                 if len(realtime_kalman_coord_byframenumber)>100:
-                    print 'deleting unused 3D data (this should be a rare occurrance)'
+                    rospy.logwarn('Deleting unused 3D data (this should be a rare occurrance)')
                     k=realtime_kalman_coord_byframenumber.keys()
                     k.sort()
                     for ki in k[:-50]:
@@ -1597,23 +1582,23 @@ class MainBrain(object):
                     cam['is_calibrated'] = True
         # === thread boundary =========================================
 
-        def listen(self,daemon):
+        def listen(self, daemon):
             """thread mainloop"""
-            hr = daemon.handleRequests
             while not self.quit_now.isSet():
                 try:
-                    hr(0.1) # block on select for n seconds
+                    daemon.handleRequests(0.1) # block on select for n seconds
                 except select.error, err:
-                    print 'select.error on RemoteAPI.listen(), ignoring...'
+                    rospy.logwarn('Exception in RemoteAPI.listen(): %s' % err)
                     continue
-                DEBUG('2')
+
                 with self.lock_caminfo:
                     guids = self.cam_info.keys()
+                    
                 for guid in guids:
                     with self.lock_caminfo:
                         connected = self.cam_info[guid]['caller'].connected
                     if not connected:
-                        print 'mainbrain WARNING: lost %s at %s'%(guid,time.asctime())
+                        rospy.logwarn( 'mainbrain lost camera %s at %s'%(guid, time.asctime()))
                         self.close(guid)
             self.thread_done.set()
 
@@ -1631,10 +1616,10 @@ class MainBrain(object):
             global g_downstream_kalman_hosts
             addr = (host,port)
             if addr not in g_downstream_kalman_hosts:
-                print 'appending to kalman host list:',addr
+                rospy.logwarn('Appending to kalman host list: %s' % addr)
                 g_downstream_kalman_hosts.append( (host,port) )
             else:
-                print 'already in kalman host list:',addr
+                rospy.logwarn('Already in kalman host list: %s' % addr)
 
         def remove_downstream_kalman_host(self,host,port):
             global g_downstream_kalman_hosts
@@ -1696,7 +1681,7 @@ class MainBrain(object):
                     self.cam_info[guid]['image'] = coord_and_image
 
         def receive_missing_data(self, guid, framenumber_offset, missing_data ):
-            #print 'received missing data from camera %s (offset %d):'%(guid, framenumber_offset)
+            #rospy.logwarn('Received missing data from camera %s (offset %d):' % (guid, framenumber_offset))
             if len(missing_data)==0:
                 # no missing data
                 return
@@ -1718,7 +1703,7 @@ class MainBrain(object):
                         mean_val = point_tuple[PT_TUPLE_IDX_MEAN_VAL_IDX]
                         sumsqf_val = point_tuple[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
                     except:
-                        print >> sys.stderr, 'error while appending point_tuple',point_tuple
+                        rospy.logerror('While appending point_tuple %s' % point_tuple)
                         raise
                     if corrected_framenumber is None:
                         # don't bother saving if we don't know when it was from
@@ -1754,7 +1739,7 @@ class MainBrain(object):
 
         def log_message(self, guid, host_timestamp, message):
             mainbrain_timestamp = time.time()
-            print 'received log message from %s: %s'%(guid,message)
+            rospy.logwarn('Received log message from %s: %s' % (guid,message))
             self.message_queue.put( (mainbrain_timestamp, guid, host_timestamp, message) )
 
         def close(self, guid):
@@ -1893,7 +1878,7 @@ class MainBrain(object):
             message = srvreqLogMessage.message
             
             mainbrain_timestamp = time.time()
-            print 'received log message from %s: %s'%(guid,message)
+            rospy.logwarn('Received log message from %s: %s' % (guid,message))
             self.message_queue.put( (mainbrain_timestamp, guid, host_timestamp, message) )
 
             return {}
@@ -1903,7 +1888,7 @@ class MainBrain(object):
             guid = srvreqReceiveMissingData.guid
             framenumber_offset = srvreqReceiveMissingData.framenumber_offset
             missing_data = pickle.loads(srvreqReceiveMissingData.pickled_missing_data)
-            #print 'received missing data from camera %s (offset %d):'%(guid, framenumber_offset)
+            #rospy.logwarn('Received missing data from camera %s (offset %d):'%(guid, framenumber_offset))
             if len(missing_data)==0:
                 # no missing data
                 return {}
@@ -1925,7 +1910,7 @@ class MainBrain(object):
                         mean_val = point_tuple[PT_TUPLE_IDX_MEAN_VAL_IDX]
                         sumsqf_val = point_tuple[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
                     except:
-                        print >> sys.stderr, 'error while appending point_tuple',point_tuple
+                        rospy.logerror('While appending point_tuple: %s' % point_tuple)
                         raise
                     if corrected_framenumber is None:
                         # don't bother saving if we don't know when it was from
@@ -1966,17 +1951,17 @@ class MainBrain(object):
                     if err.args[0] == 11: #Resource temporarily unavailable
                         pass
     
-            #print ">>>", msg, "<<<", self.isRecording 
+            #rospy.logwarn( ">>> %s <<< %s" % (msg, self.isRecording)) 
             
             if msg=='record_ufmf':
                 if self.isRecording==False:
                     self.isRecording = True
-                    print 'Start saving video.'
+                    rospy.logwarn('Start saving video.')
             
             elif msg==None:
                 if (self.isRecording==True) and (rospy.Time.now().to_sec() - self.timeRecord >= 4): # Record at least 4 secs of video.
                     self.isRecording = False
-                    print 'Stop saving video.'
+                    rospy.logwarn('Stop saving video.')
     
             self.timeRecord = rospy.Time.now().to_sec()
                     
@@ -1993,7 +1978,7 @@ class MainBrain(object):
                 try:
                     socketCoordinates.sendto(srvreqCoordinates.data, (self.hostnameMainbrain, self.portMainbrainCoordinates))
                 except socket.error, err:
-                    print >> sys.stderr, 'WARNING: ignoring error:'
+                    rospy.logwarn('Exception in coordinates socket: %s' % err)
                     traceback.print_exc()
     
             elif rospy.get_param('mainbrain/network_protocol','udp') == 'tcp':
@@ -2160,21 +2145,20 @@ class MainBrain(object):
 
         def listen(self,daemon):
             """thread mainloop"""
-            hr = daemon.handleRequests
             while not self.quit_now.isSet():
                 try:
-                    hr(0.1) # block on select for n seconds
+                    daemon.handleRequests(0.1) # block on select for n seconds
                 except select.error, err:
-                    print 'select.error on RemoteAPI.listen(), ignoring...'
+                    rospy.logwarn('Exception in RemoteAPI.listen(): %s' % err)
                     continue
-                DEBUG('2')
+
                 with self.lock_caminfo:
                     guids = self.cam_info.keys()
                 for guid in guids:
                     with self.lock_caminfo:
                         connected = self.cam_info[guid]['caller'].connected
                     if not connected:
-                        print 'mainbrain WARNING: lost %s at %s'%(guid,time.asctime())
+                        rospy.logwarn( 'mainbrain lost %s at %s'%(guid,time.asctime()))
                         self.close(guid)
             self.thread_done.set()
 
@@ -2192,10 +2176,10 @@ class MainBrain(object):
             global g_downstream_kalman_hosts
             addr = (host,port)
             if addr not in g_downstream_kalman_hosts:
-                print 'appending to kalman host list:',addr
+                rospy.logwarn('Appending to kalman host list: %s' % addr)
                 g_downstream_kalman_hosts.append( (host,port) )
             else:
-                print 'already in kalman host list:',addr
+                rospy.logwarn('Already in kalman host list: %s' % addr)
 
         def remove_downstream_kalman_host(self,host,port):
             global g_downstream_kalman_hosts
@@ -2226,7 +2210,7 @@ class MainBrain(object):
 
         if server is not None:
             g_hostname = server
-        print 'running mainbrain at hostname "%s"'%g_hostname
+        rospy.logwarn('Running mainbrain at hostname: %s' % g_hostname)
 
         assert tables.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
 
@@ -2247,7 +2231,7 @@ class MainBrain(object):
         # start Pyro server
         daemon = Pyro.core.Daemon(host=g_hostname,port=port)
         remote_api = MainBrain.RemoteAPI(); remote_api.post_init(self)
-        URI=daemon.connect(remote_api,'mainbrain')
+        URI=daemon.connect(remote_api, 'mainbrain')
 
         # create (but don't start) listen thread
         self.listen_thread=threading.Thread(target=remote_api.listen,
@@ -2266,7 +2250,7 @@ class MainBrain(object):
         self.socket_outgoing_latency_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         self.num_cams = 0
-        self.MainBrain_guids_copy = [] # keep a copy of all guids connected
+        self.MainBrain_guids_copy = [] # Keep a copy of all guids connected
         self._fqdns_by_guid = {}
         self.set_new_camera_callback(self.IncreaseCamCounter)
         self.set_new_camera_callback(self.SendExpectedFPS)
@@ -2348,7 +2332,7 @@ class MainBrain(object):
                     self.send_set_camera_property(
                         guid, 'expected_trigger_framerate', actual_new_fps )
                 except Exception,err:
-                    print 'ERROR:',err
+                    rospy.logwarn('Exception with send_set_camera_property(): %s' % err)
             rc_params['frames_per_second'] = actual_new_fps
             save_rc_params()
 
@@ -2379,7 +2363,7 @@ class MainBrain(object):
         try:
             idx = self.MainBrain_guids_copy.index( guid )
         except ValueError, err:
-            print 'IGNORING ERROR: DecreaseCamCounter() called with non-existant guid'
+            rospy.logwarn('DecreaseCamCounter() called with non-existant guid: %s' % err)
             return
         self.num_cams -= 1
         del self.MainBrain_guids_copy[idx]
@@ -2600,14 +2584,14 @@ class MainBrain(object):
                 self.close_camera(guid)
             except Pyro.errors.ProtocolError:
                 # disconnection results in error
-                print 'ignoring exception on',guid
+                rospy.logwarn('Exception on camera %s' % guid)
                 pass
         self.remote_api.event_no_cams.wait(2.0)
         self.remote_api.quit_now.set() # tell thread to finish
         self.remote_api.thread_done.wait(0.5) # wait for thread to finish
         if not self.remote_api.event_no_cams.isSet():
             guids = self.remote_api.cam_info.keys()
-            print 'cameras failed to quit cleanly: %s'%str(guids)
+            rospy.logwarn('Cameras failed to quit cleanly: %s' % str(guids))
             #raise RuntimeError('cameras failed to quit cleanly: %s'%str(guids))
 
         self.stop_saving_data()
@@ -2783,7 +2767,7 @@ class MainBrain(object):
             # request from camera computers any data that we're missing
             missing_data_dict = self.coord_processor.get_missing_data_dict()
             for camn, (guid, framenumber_offset, list_of_missing_framenumbers) in missing_data_dict.iteritems():
-                #print 'requesting from camn %d: %d frames %s'%(camn,len(list_of_missing_framenumbers), numpy.array(list_of_missing_framenumbers) )
+                #rospy.logwarn('Requesting from camn %d: %d frames %s' % (camn,len(list_of_missing_framenumbers), numpy.array(list_of_missing_framenumbers) ))
                 self.remote_api.external_request_missing_data(guid,camn,framenumber_offset,list_of_missing_framenumbers)
 
     def _service_save_data(self):
@@ -2817,7 +2801,7 @@ class MainBrain(object):
         if 1:
             for textlog_data in list_of_textlog_data:
                 (mainbrain_timestamp,guid,host_timestamp,message) = textlog_data
-                print 'MESSAGE: %s %s "%s"'%(guid, time.asctime(time.localtime(host_timestamp)), message)
+                rospy.logwarn('MESSAGE: %s %s "%s"' % (guid, time.asctime(time.localtime(host_timestamp)), message))
         #   save
         if self.h5textlog is not None and len(list_of_textlog_data):
             textlog_row = self.h5textlog.row
@@ -2863,8 +2847,7 @@ class MainBrain(object):
             except Queue.Empty:
                 pass
             if self.h5data3d_kalman_estimates is not None:
-##                print 'saving kalman data (%d objects)'%(
-##                    len(list_of_3d_data),)
+##                rospy.logwarn('Saving kalman data (%d objects)' % len(list_of_3d_data))
                 for (obj_id, tro_frames, tro_xhats, tro_Ps, tro_timestamps,
                      obs_frames, obs_data,
                      observations_2d, obs_Lcoords) in list_of_3d_data:
@@ -2873,11 +2856,11 @@ class MainBrain(object):
                     if len(obs_frames)<MIN_KALMAN_OBSERVATIONS_TO_SAVE:
                         # only save data with at least 10 observations
                         if self.debug_level.isSet():
-                            print 'not saving kalman object -- too few observations to save'
+                            rospy.logwarn('Not saving kalman object -- too few observations to save')
                         continue
 
                     if self.debug_level.isSet():
-                        print 'saving kalman object %d'%(obj_id,)
+                        rospy.logwarn('Saving kalman object %d' % obj_id)
 
                     # save observation 2d data indexes
                     this_idxs = []
