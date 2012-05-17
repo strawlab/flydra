@@ -55,6 +55,8 @@ SHOW_3D_PROCESSING_LATENCY = False
 NETWORK_PROTOCOL = rospy.get_param('mainbrain/network_protocol', 'udp')
 ATTEMPT_DATA_RECOVERY = True
 #ATTEMPT_DATA_RECOVERY = False
+BENCHMARK_GATHER=False
+
 
 if os.name == 'posix':
     try:
@@ -224,7 +226,7 @@ h5_obs_names = tables.Description(FilteredObservations().columns)._v_names
 # allow rapid building of numpy.rec.array:
 Info2DCol_description = tables.Description(Info2D().columns)._v_nestedDescr
 
-def encode_data_packet( corrected_framenumber,
+def encode_data_packet( fn_corrected,
                         line3d_valid,
                         outgoing_data,
                         min_mean_dist):
@@ -240,12 +242,12 @@ def encode_data_packet( corrected_framenumber,
     packable_data.append( min_mean_dist )
     try:
         data_packet = struct.pack(fmt,
-                                  corrected_framenumber,
+                                  fn_corrected,
                                   line3d_valid,
                                   *packable_data)
     except SystemError, x:
         rospy.logwarn( 'fmt: %s' % fmt)
-        rospy.logwarn( 'corrected_framenumber: %d' % corrected_framenumber)
+        rospy.logwarn( 'corrected_framenumber: %d' % fn_corrected)
         rospy.logwarn( 'line3d_valid: %s' % line3d_valid)
         rospy.logwarn( 'packable_data: %s' % packable_data)
         raise
@@ -322,7 +324,7 @@ class TimestampEchoReceiver(threading.Thread):
         rospy.sleep(1)  # Haven't investigated why, but we get a raise ResponseNotReady() from rospy if we don't do it.
 
         ip2hostname = {}
-        timestamp_echo_fmt2 = rospy.get_param('mainbrain/timestamp_echo_fmt2', '&lt;dd')
+        fmt_timestamp_echo_2 = rospy.get_param('mainbrain/timestamp_echo_fmt2', '&lt;dd')
 
         port = rospy.get_param('mainbrain/port_timestamp_mainbrain', 28993)
         socket_echo_timestamp_mainbrain = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -331,15 +333,22 @@ class TimestampEchoReceiver(threading.Thread):
         diff_last_clock = collections.defaultdict(list)
 
         while 1:
+            size_echotimestamp = struct.calcsize(fmt_timestamp_echo_2) 
+            timestamp_echo_buf = ''
             try:
-                timestamp_echo_buf, (timestamp_echo_remote_ip,cam_port) = socket_echo_timestamp_mainbrain.recvfrom(4096)
+                while len(timestamp_echo_buf)<size_echotimestamp:
+                    chunk,(timestamp_echo_remote_ip,cam_port) = socket_echo_timestamp_mainbrain.recvfrom(size_echotimestamp-len(timestamp_echo_buf))
+                    if chunk == '':
+                        raise RuntimeError("socket connection broken")
+                    timestamp_echo_buf += chunk
+                    
             except Exception, err:
                 rospy.logwarn( 'Exception receiving timestamp echo data: %s' % str(err))
                 continue
 
-            stop_timestamp = time.time()
+            stop_timestamp = rospy.Time.now().to_sec()
 
-            start_timestamp,remote_timestamp = struct.unpack(timestamp_echo_fmt2,timestamp_echo_buf)
+            start_timestamp,remote_timestamp = struct.unpack(fmt_timestamp_echo_2,timestamp_echo_buf)
 
             tlist = diff_last_clock[timestamp_echo_remote_ip]
             tlist.append( (start_timestamp, remote_timestamp, stop_timestamp) )
@@ -394,28 +403,28 @@ class TrigReceiver(threading.Thread):
 
         while 1: # XXX enable quit
             try:
-                trig_buf, (remote_ip,cam_port) = socket_trigger_network.recvfrom(4096)
+                trig_buf, (remote_ip,cam_port) = socket_trigger_network.recvfrom(4096) # BUG: Need to wrap this in a while loop.
             except Exception, err:
                 rospy.logwarn( 'Exception receiving trigger data: %s' % str(err))
                 continue
 
             if trig_buf=='1':
                 with self.mainbrain.lock_trigger_device:
-                    pre_timestamp = time.time()
+                    pre_timestamp = rospy.Time.now().to_sec()
                     self.mainbrain.trigger_device.ext_trig1 = True
                     # hmm, calling log_message is normally what the cameras do..
                     self.mainbrain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG1')
 
             elif trig_buf=='2':
                 with self.mainbrain.lock_trigger_device:
-                    pre_timestamp = time.time()
+                    pre_timestamp = rospy.Time.now().to_sec()
                     self.mainbrain.trigger_device.ext_trig2 = True
                     # hmm, calling log_message is normally what the cameras do..
                     self.mainbrain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG2')
 
             elif trig_buf=='3':
                 with self.mainbrain.lock_trigger_device:
-                    pre_timestamp = time.time()
+                    pre_timestamp = rospy.Time.now().to_sec()
                     self.mainbrain.trigger_device.ext_trig3 = True
                     # hmm, calling log_message is normally what the cameras do..
                     self.mainbrain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG3')
@@ -428,7 +437,7 @@ class CoordRealReceiver(threading.Thread):
         self.quit_event = quit_event
         self.lock_socket = threading.Lock()
 
-        self.out_queue = Queue.Queue()
+        self.coordinatesframe_queue = Queue.Queue()
         with self.lock_socket:
             self.guid_from_socket_listen = {}
             self.guid_from_socket_server = {}
@@ -471,26 +480,34 @@ class CoordRealReceiver(threading.Thread):
                     del self.guid_from_socket_server[socket_coordinates]
                     break # XXX naughty to delete item inside iteration
 
-    def get_data(self):
-        Q = self.out_queue
-        L = []
+    def get_coordinatesframes(self):
+        # One item in list looks like:
+        #header = struct.pack('<ddliI',
+        #                   timestamp_image, 
+        #                   timestamp_camera_received,
+        #                   framenumber,
+        #                   len(points),
+        #                   n_frames_skipped)
+        # coordinatesframe = header + multiple copies of struct.pack(pt_fmt, *point_tuple)
+        # item = (guid, coordinatesframe)
+        coordinatesframe_list = []
 
         try:
-            L.append( Q.get(1, 0.1) ) # block for 0.1 second timeout for the first item
+            coordinatesframe_list.append( self.coordinatesframe_queue.get(True, 0.1) ) # block for 0.1 second timeout for the first item
             while 1:
-                # don't wait for next items, but collect them if they're there
-                L.append( Q.get_nowait() )
+                # Don't wait for next items, but collect them if they're there
+                coordinatesframe_list.append( self.coordinatesframe_queue.get_nowait() )
         except Queue.Empty:
             pass
-        return L
+        return coordinatesframe_list
 
     # Called from CoordRealReceiver thread
     def run(self):
         timeout=0.1
         BENCHMARK_2D_GATHER = False
         if BENCHMARK_2D_GATHER:
-            header_fmt = '<ddliI'
-            header_size = struct.calcsize(header_fmt)
+            fmt_header = '<ddliI'
+            size_header = struct.calcsize(fmt_header)
         while not self.quit_event.isSet():
             if NETWORK_PROTOCOL == 'tcp':
                 with self.lock_socket:
@@ -532,7 +549,7 @@ class CoordRealReceiver(threading.Thread):
 
                     if NETWORK_PROTOCOL == 'udp':
                         try:
-                            data, addr = sockobj.recvfrom(4096)
+                            data, addr = sockobj.recvfrom(4096)  # BUG: Need to wrap this in a while loop.
                         except Exception, err:
                             rospy.logwarn( 'Exception receiving UDP data: %s' % str(err))
                             continue
@@ -542,16 +559,16 @@ class CoordRealReceiver(threading.Thread):
                         raise ValueError('unknown NETWORK_PROTOCOL')
 
                     if BENCHMARK_2D_GATHER:
-                        header = data[:header_size]
-                        if len(header) != header_size:
+                        header = data[:size_header]
+                        if len(header) != size_header:
                             # incomplete header buffer
                             break
                         # this timestamp is the remote camera's timestamp
-                        (timestamp, camn_received_time, framenumber,
-                         n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
-                        recv_latency_msec = (time.time()-camn_received_time)*1e3
+                        (timestamp, timestamp_camera_received, framenumber,
+                         n_points,n_frames_skipped) = struct.unpack(fmt_header,header)
+                        recv_latency_msec = (rospy.Time.now().to_sec()-timestamp_camera_received)*1e3
                         rospy.logwarn('recv_latency_msec: %3.1f' % recv_latency_msec)
-                    self.out_queue.put((guid, data ))
+                    self.coordinatesframe_queue.put((guid, data ))
 
 
 class CoordinateSender(threading.Thread):
@@ -625,12 +642,10 @@ class CoordinateProcessor(threading.Thread):
         self.realtime_kalman_data_queue = Queue.Queue()
         self.realtime_ros_packets = Queue.Queue()
 
-        self.guids = []
+        self.guid_list = []
         self.port_coordinates_byguid = {}
-        self.camns_byguid = {}
-        self.last_timestamps_byguid = {}
-        self.last_framenumbers_delay_byguid = {}
-        self.last_framenumbers_skip_byguid = {}
+        self.timestamp_prev_byguid = {}
+        self.fn_skip_prev_byguid = {}
         self.general_save_info_byguid = {}
 
         if ATTEMPT_DATA_RECOVERY:
@@ -653,7 +668,7 @@ class CoordinateProcessor(threading.Thread):
         #self.lock_alldata = DebugLock('lock_alldata',verbose=False)
         self.quit_event = threading.Event()
 
-        self.max_camns = -1
+        #self.max_camns = -1
 
 
         self.realreceiver = CoordRealReceiver(self.quit_event)
@@ -682,28 +697,29 @@ class CoordinateProcessor(threading.Thread):
         result_by_camn = {}
         with self.lock_request_data:
             # Go through all the cameras.
-            for camn,tmp_queue in self.request_data.iteritems():
-                list_of_missing_framenumbers = []
+            for camn,queue_tmp in self.request_data.iteritems():
+                fn_missing_list = []
                 guid = None
-                framenumber_offset = None
+                offset_fn = None
                 try:
                     # Get all the queued framenumbers for camera N.
                     while 1:
-                        value = tmp_queue.get_nowait()
-                        this_guid, this_framenumber_offset, this_list = value
+                        guid_this, offset_fn_this, fn_list_this = queue_tmp.get_nowait()
                         if guid is None:
-                            guid = this_guid
-                        if framenumber_offset is None:
-                            framenumber_offset = this_framenumber_offset
+                            guid = guid_this
+                        if offset_fn is None:
+                            offset_fn = offset_fn_this
 
-                        assert guid == this_guid # make sure given camn comes from single guid
-                        assert framenumber_offset == this_framenumber_offset
+                        assert guid == guid_this # make sure given camn comes from single guid
+                        assert offset_fn == offset_fn_this
 
-                        list_of_missing_framenumbers.extend( this_list )
+                        fn_missing_list.extend( fn_list_this )
                 except Queue.Empty:
                     pass
-                if len(list_of_missing_framenumbers):
-                    result_by_camn[camn] = guid, framenumber_offset, list_of_missing_framenumbers
+                
+                if len(fn_missing_list):
+                    result_by_camn[camn] = guid, offset_fn, fn_missing_list
+                    
         return result_by_camn
 
     def set_reconstructor(self,r):
@@ -754,6 +770,16 @@ class CoordinateProcessor(threading.Thread):
                  tracked_object.observations_2d, tracked_object.observations_Lcoords,
                  ) )
 
+    # Find the lowest available value in the dict, starting at 0.
+    def find_first_free_value(self, index_dict):
+        index = 0
+        values = index_dict.values()
+        while index in values:
+            index += 1
+        
+        return index
+        
+        
     def connect(self, guid):
         # called from Remote-API thread on camera connect
         global g_hostname
@@ -761,7 +787,7 @@ class CoordinateProcessor(threading.Thread):
         assert not self.mainbrain.is_saving_data()
 
         with self.lock_alldata:
-            self.guids.append(guid)
+            self.guid_list.append(guid)
 
             # Allocate a port for coordinates.
             if len(self.port_coordinates_byguid)>0:
@@ -771,9 +797,7 @@ class CoordinateProcessor(threading.Thread):
             self.port_coordinates_byguid[guid] = port_coordinates
 
             # Allocate a cam index.
-            self.max_camns += 1
-            camn = self.max_camns
-            self.camns_byguid[guid] = camn
+            camn = self.find_first_free_value(self.index_from_guid)#self.max_camns
 
             # Map guids to indices.
             self.guid_from_index[camn] = guid
@@ -781,9 +805,8 @@ class CoordinateProcessor(threading.Thread):
 
             # create and bind socket to listen to
             self.realreceiver.add_socket(port_coordinates,guid)
-            self.last_timestamps_byguid[guid] = IMPOSSIBLE_TIMESTAMP # arbitrary impossible number
-            self.last_framenumbers_delay_byguid[guid] = -1 # arbitrary impossible number
-            self.last_framenumbers_skip_byguid[guid] = -1 # arbitrary impossible number
+            self.timestamp_prev_byguid[guid] = IMPOSSIBLE_TIMESTAMP # arbitrary impossible number
+            self.fn_skip_prev_byguid[guid] = -1 # arbitrary impossible number
             self.general_save_info_byguid[guid] = {'camn':camn,
                                               'frame0':IMPOSSIBLE_TIMESTAMP}
             self.mainbrain.queue_cam_info.put(  (guid, camn, IMPOSSIBLE_TIMESTAMP) )
@@ -791,12 +814,13 @@ class CoordinateProcessor(threading.Thread):
 
     def disconnect(self, guid):
         with self.lock_alldata:
+            camn = self.index_from_guid[guid]
+            del self.index_from_guid[guid]
+            del self.guid_from_index[camn]
             del self.port_coordinates_byguid[guid]
-            del self.camns_byguid[guid]
             self.realreceiver.remove_socket(guid)
-            del self.last_timestamps_byguid[guid]
-            del self.last_framenumbers_delay_byguid[guid]
-            del self.last_framenumbers_skip_byguid[guid]
+            del self.timestamp_prev_byguid[guid]
+            del self.fn_skip_prev_byguid[guid]
             del self.general_save_info_byguid[guid]
 
     def quit(self):
@@ -817,43 +841,168 @@ class CoordinateProcessor(threading.Thread):
                       guid, 
                       framenumber, 
                       timestamp,
-                      realtime_coord_byframenumber, 
-                      timestamp_check_byframenumber,
-                      realtime_kalman_coord_byframenumber,
-                      oldest_timestamp_by_corrected_framenumber,
-                      new_data_framenumbers):
+                      points_undistorted_byguid_byfn, 
+                      timestamp_check_byfn,
+                      realtime_kalman_coord_byfn,
+                      timestamp_oldest_byfn_corrected,
+                      fn_corrected_set):
 
+        rospy.logwarn ('SYNCHRONIZE')
         if self.mainbrain.is_saving_data():
             rospy.logerror('Re-synchronized while saving data!')
             return
 
-        if self.last_timestamps_byguid[guid] != IMPOSSIBLE_TIMESTAMP:
+        if self.timestamp_prev_byguid[guid] != IMPOSSIBLE_TIMESTAMP:
             rospy.logwarn('(Re)synchronized camera %s' % guid)
             # discard all previous data
-            for k in realtime_coord_byframenumber.keys():
-                del realtime_coord_byframenumber[k]
-                del timestamp_check_byframenumber[k]
-            for k in realtime_kalman_coord_byframenumber.keys():
-                del realtime_kalman_coord_byframenumber[k]
-            for k in oldest_timestamp_by_corrected_framenumber.keys():
-                del oldest_timestamp_by_corrected_framenumber[k]
-            new_data_framenumbers.clear()
+            for fn in points_undistorted_byguid_byfn.keys():
+                del points_undistorted_byguid_byfn[fn]
+                del timestamp_check_byfn[fn]
+            for fn in realtime_kalman_coord_byfn.keys():
+                del realtime_kalman_coord_byfn[fn]
+            for fn in timestamp_oldest_byfn_corrected.keys():
+                del timestamp_oldest_byfn_corrected[fn]
+            fn_corrected_set.clear()
 
         #else:
         #    rospy.logwarn( guid,'first 2D coordinates received'
 
-        # make new camn to indicate new synchronization state
-        self.max_camns += 1
-        camn = self.max_camns
-        self.camns_byguid[guid] = camn
+        # Make new camn to indicate new synchronization state
+        camn_old = self.index_from_guid[guid]
+        camn_new = self.find_first_free_value(self.index_from_guid)#self.max_camns
+        self.guid_from_index.pop(camn_old)
+        
+        self.guid_from_index[camn_new] = guid
+        self.index_from_guid[guid] = camn_new
+        rospy.logwarn ('OnSynchronize() changing cam number: %d->%d' % (self.index_from_guid[guid], camn_new))
 
-        self.guid_from_index[camn] = guid
-        self.index_from_guid[guid] = camn
-
-        self.general_save_info_byguid[guid]['camn']=camn
+        self.general_save_info_byguid[guid]['camn']=camn_new
         self.general_save_info_byguid[guid]['frame0']=timestamp
 
-        self.mainbrain.queue_cam_info.put(  (guid, camn, timestamp) )
+        self.mainbrain.queue_cam_info.put(  (guid, camn_new, timestamp) )
+
+
+    # get_points_from_coordinatesframe()
+    # Get three lists of points from the given coordinatesframe.
+    #
+    def get_points_from_coordinatesframe(self, guid, coordinatesframe):                    
+        fmt_header = '<ddliI'
+        size_header = struct.calcsize(fmt_header)
+        pt_fmt = '<dddddddddBBddBddddddddd' # keep in sync with camnode.py
+        size_point = struct.calcsize(pt_fmt)
+
+        header = coordinatesframe[:size_header]
+        pointarray = coordinatesframe[size_header:]
+        
+        # Check for valid header.
+        if len(header) != size_header:
+            # incomplete header buffer
+            raise RuntimeError('Incomplete header buffer in coordinatesframe.')
+        
+        # Unpack the header.
+        # timestamp_raw is the remote camera's timestamp (?? from the driver, not the host clock??)
+        (timestamp_raw, timestamp_camera_received, fn_raw, n_points, n_frames_skipped) = struct.unpack(fmt_header, header)
+        if BENCHMARK_GATHER:
+            timestamp_camera_received_list.append( timestamp_camera_received )
+
+        # Write some debugging info.
+        DEBUG_DROP = self.mainbrain.remote_api.caminfo_byguid[guid]['scalar_control_info']['debug_drop']
+        if DEBUG_DROP:
+            if debug_drop_fd is None:
+                debug_drop_fd = open('debug_framedrop.txt',mode='w')
+            debug_drop_fd.write('%d,%d\n'%(fn_raw,n_points))
+            
+        # Check for valid points array.
+        if len(pointarray) < n_points * size_point:
+            raise RuntimeError('Incomplete point info in coordinatesframe.')
+        
+        # Check that frame numbers make sense.
+        fn_predicted = n_frames_skipped + self.fn_skip_prev_byguid[guid] + 1
+        if fn_raw < fn_predicted:
+            rospy.logwarn('fn_raw: %d' % fn_raw)
+            rospy.logwarn('n_frames_skipped: %d' % n_frames_skipped)
+            rospy.logwarn('fn_predicted: %d' % fn_predicted)
+            rospy.logwarn('self.fn_skip_prev_byguid[%s]: %s' % (guid, self.fn_skip_prev_byguid[guid]))
+            raise RuntimeError('Got framenumber already received or skipped!')
+
+        elif fn_raw > fn_predicted:
+            if not (self.fn_skip_prev_byguid[guid] == -1):
+                # This is not the first frame.
+                # Probably because network buffer filled up before we emptied it.
+                rospy.logwarn('Frame data loss %s' % guid)
+
+                if ATTEMPT_DATA_RECOVERY:
+                    # this is not the first frame
+                    fn_missing_list_tmp = range(self.fn_skip_prev_byguid[guid]+1, fn_raw)
+
+                    with self.lock_request_data:
+                        queue_tmp = self.request_data.setdefault(camn, Queue.Queue())
+
+                    offset_fn_tmp = self.mainbrain.timestamp_modeler.get_frame_offset(guid)
+                    queue_tmp.put( (guid, offset_fn_tmp, fn_missing_list_tmp) )
+                    del offset_fn_tmp
+                    del queue_tmp # drop reference to queue
+                    del fn_missing_list_tmp
+
+        self.fn_skip_prev_byguid[guid] = fn_raw
+
+        # Set up lists of points.                        
+        points_pluecker = []
+        points_undistorted = []
+        points_distorted = []
+        
+        if n_points:
+            start = 0
+            for i_point in range(n_points):
+                (x_distorted, y_distorted,
+                 area, slope, eccentricity,
+                 p1, p2, p3, p4,
+                 line_found,
+                 slope_found,
+                 x_undistorted, y_undistorted,
+                 ray_valid,
+                 ray0, ray1, ray2, ray3, ray4, ray5, # pluecker coords from cam center to detected point
+                 cur_val, mean_val, sumsqf_val,
+                 ) = struct.unpack(pt_fmt, pointarray[start:(start+size_point)])
+                 
+                # nan cannot get sent across network in platform-independent way
+                if not line_found:
+                    p1,p2,p3,p4 = nan,nan,nan,nan
+                if slope == near_inf:
+                    slope = inf
+                if eccentricity == near_inf:
+                    eccentricity = inf
+                if not slope_found:
+                    slope = nan
+
+                # Keep in sync with kalmanize.py and data_descriptions.py
+                pt_undistorted = (x_undistorted,y_undistorted,
+                                  area,slope,eccentricity,
+                                  p1,p2,p3,p4, line_found, i_point,
+                                  cur_val, mean_val, sumsqf_val)
+                pt_distorted = (x_distorted,y_distorted,
+                                area,slope,eccentricity,
+                                p1,p2,p3,p4, line_found, i_point,
+                                cur_val, mean_val, sumsqf_val)
+                if ray_valid:
+                    points_pluecker.append( (pt_undistorted,
+                                                              geom.line_from_HZline((ray0,ray1,
+                                                                                     ray2,ray3,
+                                                                                     ray4,ray5))
+                                                              ))
+                points_undistorted.append( pt_undistorted )
+                points_distorted.append( pt_distorted )
+                start += size_point
+        else:
+            # Append a non-point to allow correlation of
+            # timestamps with frame number
+            no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)
+            points_distorted.append( no_point_tuple )
+            points_undistorted.append( no_point_tuple )
+            
+            
+        return (points_pluecker, points_undistorted, points_distorted)
+
 
     def run(self):
         """Main loop of CoordinateProcessor"""
@@ -862,6 +1011,8 @@ class CoordinateProcessor(threading.Thread):
         global g_socket_outgoing_UDP
         global g_XXX_framenumber
 
+
+        # Improve our thread priority.
         if os.name == 'posix':
             try:
                 #priority = posix_sched.get_priority_max( posix_sched.FIFO )
@@ -877,255 +1028,158 @@ class CoordinateProcessor(threading.Thread):
                 rospy.logwarn('You can set this manually via:')
                 rospy.logwarn('sudo chrt -f -p 1 %d' % ctypes.CDLL('libc.so.6').syscall(186))
 
-        header_fmt = '<ddliI'
-        header_size = struct.calcsize(header_fmt)
-        pt_fmt = '<dddddddddBBddBddddddddd' # keep in sync with camnode.py
-        pt_size = struct.calcsize(pt_fmt)
 
-        realtime_coord_byframenumber = {}
-        timestamp_check_byframenumber = {}
-        realtime_kalman_coord_byframenumber = collections.defaultdict(dict)
-        oldest_timestamp_by_corrected_framenumber = {}
+        points_undistorted_byguid_byfn = {}
+        timestamp_check_byfn = {}
+        realtime_kalman_coord_byfn = collections.defaultdict(dict)
+        timestamp_oldest_byfn_corrected = {}
 
-        new_data_framenumbers = set()
-
-        no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)
+        #fn_corrected_set_byguid = {}
+        #for guid in self.guid_list:
+        #    fn_corrected_set_byguid[guid] = set()
+        fn_corrected_set = set()
 
         convert_format = flydra_kalman_utils.convert_format # shorthand
-
         max_error = self.mainbrain.get_hypothesis_test_max_error()
-
-        if NETWORK_PROTOCOL == 'tcp':
-            old_data = {}
 
 
         debug_drop_fd = None
 
         while not self.quit_event.isSet():
-            #self.mainbrain.echotimestamp.measure_durations()
-            
-            incoming_2d_data = self.realreceiver.get_data() # blocks
-            if not len(incoming_2d_data):
+            coordinatesframes_list = self.realreceiver.get_coordinatesframes() # This blocks.
+            if not len(coordinatesframes_list):
                 continue
 
-            new_data_framenumbers.clear()
 
-            BENCHMARK_GATHER=False
             if BENCHMARK_GATHER:
-                incoming_remote_received_timestamps = []
+                timestamp_camera_received_list = []
 
             with self.lock_alldata:
             #self.lock_alldata.acquire(latency_warn_msec=1.0)
 
-                deferred_2d_data = []
-                for guid, newdata in incoming_2d_data:
-
-                    camn = self.camns_byguid[guid]
-
-                    if NETWORK_PROTOCOL == 'tcp':
-                        data = old_data.get( sockobj, '')
-                        data += newdata
+                datarowlist_to_save = []
+                #points_pluecker = []
+                #points_undistorted = []
+                #points_distorted = []
+                fn_corrected_set.clear()
+                fmt_header = '<ddliI'
+                size_header = struct.calcsize(fmt_header)
+                for guid, coordinatesframe in coordinatesframes_list:
+                    try:
+                        # Get the camera number.
+                        camn = self.index_from_guid[guid]
+                    except KeyError:
+                        pass # Camera no longer exists.
                     else:
-                        data = newdata
-
-                    while len(data):
-                        header = data[:header_size]
-                        if len(header) != header_size:
-                            # incomplete header buffer
-                            break
-                        # this raw_timestamp is the remote camera's timestamp (?? from the driver, not the host clock??)
-                        (raw_timestamp, camn_received_time, raw_framenumber,
-                         n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
-                        if BENCHMARK_GATHER:
-                            incoming_remote_received_timestamps.append( camn_received_time )
-
-                        DEBUG_DROP = self.mainbrain.remote_api.caminfo_byguid[guid]['scalar_control_info']['debug_drop']
-                        if DEBUG_DROP:
-                            if debug_drop_fd is None:
-                                debug_drop_fd = open('debug_framedrop.txt',mode='w')
-                            debug_drop_fd.write('%d,%d\n'%(raw_framenumber,n_pts))
-                        points_in_pluecker_coords_meters = []
-                        points_undistorted = []
-                        points_distorted = []
-                        if len(data) < header_size + n_pts*pt_size:
-                            # incomplete point info
-                            break
-                        predicted_framenumber = n_frames_skipped + self.last_framenumbers_skip_byguid[guid] + 1
-                        if raw_framenumber<predicted_framenumber:
-                            rospy.logwarn('raw_framenumber %d' % raw_framenumber)
-                            rospy.logwarn('n_frames_skipped: %d' % n_frames_skipped)
-                            rospy.logwarn('predicted_framenumber: %d' % predicted_framenumber)
-                            rospy.logwarn('self.last_framenumbers_skip_byguid[%s]: %s' % (guid, self.last_framenumbers_skip_byguid[guid]))
-                            raise RuntimeError('got framenumber already received or skipped!')
-                        elif raw_framenumber>predicted_framenumber:
-                            if not self.last_framenumbers_skip_byguid[guid]==-1:
-                                # this is not the first frame
-
-                                # probably because network buffer filled up before we emptied it
-                                rospy.logwarn('Frame data loss %s' % guid)
-
-                            if ATTEMPT_DATA_RECOVERY:
-                                if not self.last_framenumbers_skip_byguid[guid]==-1:
-                                    # this is not the first frame
-                                    missing_frame_numbers = range(
-                                        self.last_framenumbers_skip_byguid[guid]+1,
-                                        raw_framenumber)
-
-                                    with self.lock_request_data:
-                                        tmp_queue = self.request_data.setdefault(camn,Queue.Queue())
-
-                                    tmp_framenumber_offset = self.mainbrain.timestamp_modeler.get_frame_offset(guid)
-                                    tmp_queue.put( (guid,  tmp_framenumber_offset, missing_frame_numbers) )
-                                    del tmp_framenumber_offset
-                                    del tmp_queue # drop reference to queue
-                                    del missing_frame_numbers
-
-                        self.last_framenumbers_skip_byguid[guid]=raw_framenumber
-                        start=header_size
-                        if n_pts:
-                            # valid points
-                            for frame_pt_idx in range(n_pts):
-                                end=start+pt_size
-                                (x_distorted,y_distorted,area,slope,eccentricity,
-                                 p1,p2,p3,p4,line_found,slope_found,
-                                 x_undistorted,y_undistorted,
-                                 ray_valid,
-                                 ray0, ray1, ray2, ray3, ray4, ray5, # pluecker coords from cam center to detected point
-                                 cur_val, mean_val, sumsqf_val,
-                                 )= struct.unpack(pt_fmt,data[start:end])
-                                # nan cannot get sent across network in platform-independent way
-                                if not line_found:
-                                    p1,p2,p3,p4 = nan,nan,nan,nan
-                                if slope == near_inf:
-                                    slope = inf
-                                if eccentricity == near_inf:
-                                    eccentricity = inf
-                                if not slope_found:
-                                    slope = nan
-
-                                # Keep in sync with kalmanize.py and data_descriptions.py
-                                pt_undistorted = (x_undistorted,y_undistorted,
-                                                  area,slope,eccentricity,
-                                                  p1,p2,p3,p4, line_found, frame_pt_idx,
-                                                  cur_val, mean_val, sumsqf_val)
-                                pt_distorted = (x_distorted,y_distorted,
-                                                area,slope,eccentricity,
-                                                p1,p2,p3,p4, line_found, frame_pt_idx,
-                                                cur_val, mean_val, sumsqf_val)
-                                if ray_valid:
-                                    points_in_pluecker_coords_meters.append( (pt_undistorted,
-                                                                              geom.line_from_HZline((ray0,ray1,
-                                                                                                            ray2,ray3,
-                                                                                                            ray4,ray5))
-                                                                              ))
-                                points_undistorted.append( pt_undistorted )
-                                points_distorted.append( pt_distorted )
-                                start=end
-                        else:
-                            # no points found
-                            end = start
-                            # append non-point to allow correlation of
-                            # timestamps with frame number
-                            points_distorted.append( no_point_tuple )
-                            points_undistorted.append( no_point_tuple )
-                        data = data[end:]
-
+                        # Get the header info.
+                        header = coordinatesframe[:size_header]
+                        (timestamp_raw, timestamp_camera_received, fn_raw, n_points, n_frames_skipped) = struct.unpack(fmt_header, header)
+    
+                        # Extract the points from the coordinatesframe.
+                        (points_pluecker, points_undistorted, points_distorted) = self.get_points_from_coordinatesframe(guid, coordinatesframe)
+                        #(pt1_list_tmp, pt2_list_tmp, pt3_list_tmp) = self.get_points_from_coordinatesframe(guid, coordinatesframe)
+                        #points_pluecker.extend(pt1_list_tmp)
+                        #points_undistorted.extend(pt2_list_tmp)
+                        #points_distorted.extend(pt3_list_tmp)
+    
+    
                         # ===================================================
-
-                        # XXX hack? make data available via cam_byguid
-                        caminfo = self.mainbrain.remote_api.caminfo_byguid[guid]
-                        with caminfo['lock']:
-                            caminfo['points_distorted']=points_distorted
-
-                        # Use camn_received_time to determine sync
+    
+                        # Use timestamp_camera_received to determine sync
                         # info. This avoids 2 potential problems:
-                        #  * using raw_timestamp can fail if the
+                        #  * using timestamp_raw can fail if the
                         #    camera drivers don't provide useful data
-                        #  * using time.time() can fail if the network
+                        #  * using rospy.Time.now().to_sec() can fail if the network
                         #    latency jitter is on the order of the
                         #    inter frame interval.
                         tmp = self.mainbrain.timestamp_modeler.register_frame(guid,
-                                                                               raw_framenumber,
-                                                                               camn_received_time,
-                                                                               full_output=True)
-                        trigger_timestamp, corrected_framenumber, did_frame_offset_change = tmp
+                                                                              fn_raw,
+                                                                              timestamp_camera_received,
+                                                                              full_output=True)
+                        timestamp_trigger, fn_corrected, did_frame_offset_change = tmp
+                        timestamp_trigger = timestamp_camera_received # register_frame gives back strange trigger times.
+                        
                         if did_frame_offset_change:
-                            self.OnSynchronize( guid, raw_framenumber, trigger_timestamp,
-                                                realtime_coord_byframenumber,
-                                                timestamp_check_byframenumber,
-                                                realtime_kalman_coord_byframenumber,
-                                                oldest_timestamp_by_corrected_framenumber,
-                                                new_data_framenumbers )
-
-                        self.last_timestamps_byguid[guid] = trigger_timestamp
-                        self.last_framenumbers_delay_byguid[guid] = raw_framenumber
-                        g_XXX_framenumber = corrected_framenumber
-
+                            self.OnSynchronize( guid, fn_raw, timestamp_trigger,
+                                                points_undistorted_byguid_byfn,
+                                                timestamp_check_byfn,
+                                                realtime_kalman_coord_byfn,
+                                                timestamp_oldest_byfn_corrected,
+                                                fn_corrected_set)
+    
+                        self.timestamp_prev_byguid[guid] = timestamp_trigger
+                        g_XXX_framenumber = fn_corrected
+    
                         if self.mainbrain.is_saving_data():
                             for point_tuple in points_distorted:
                                 # Save 2D data (even when no point found) to allow
                                 # temporal correlation of movie frames to 2D data.
-                                frame_pt_idx = point_tuple[PT_TUPLE_IDX_FRAME_PT_IDX]
+                                i_point = point_tuple[PT_TUPLE_IDX_FRAME_PT_IDX]
                                 cur_val = point_tuple[PT_TUPLE_IDX_CUR_VAL_IDX]
                                 mean_val = point_tuple[PT_TUPLE_IDX_MEAN_VAL_IDX]
                                 sumsqf_val = point_tuple[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
-                                if corrected_framenumber is None:
+                                if fn_corrected is None:
                                     # don't bother saving if we don't know when it was from
                                     continue
-                                deferred_2d_data.append((camn, # defer saving to later
-                                                         corrected_framenumber,
-                                                         trigger_timestamp,camn_received_time)
+                                
+                                datarowlist_to_save.append((camn, # defer saving to later
+                                                         fn_corrected,
+                                                         timestamp_trigger,timestamp_camera_received)
                                                         +point_tuple[:5]
-                                                        +(frame_pt_idx,cur_val,mean_val,sumsqf_val))
-                        # save new frame data
-
-                        if corrected_framenumber not in realtime_coord_byframenumber:
-                            realtime_coord_byframenumber[corrected_framenumber] = {}
-                            timestamp_check_byframenumber[corrected_framenumber] = {}
-
+                                                        +(i_point,cur_val,mean_val,sumsqf_val))
+    
+                        if fn_corrected not in points_undistorted_byguid_byfn:
+                            points_undistorted_byguid_byfn[fn_corrected] = {}
+                            timestamp_check_byfn[fn_corrected] = {}
+    
                         # For hypothesis testing: attempt 3D reconstruction of 1st point from each 2D view
-                        realtime_coord_byframenumber[corrected_framenumber][guid]= points_undistorted[0]
-                        #timestamp_check_byframenumber[corrected_framenumber][guid]= camn_received_time
-                        timestamp_check_byframenumber[corrected_framenumber][guid]= trigger_timestamp
-
-                        if len( points_in_pluecker_coords_meters):
+                        points_undistorted_byguid_byfn[fn_corrected][guid]= points_undistorted[0]
+                        #timestamp_check_byfn[fn_corrected][guid]= timestamp_camera_received
+                        timestamp_check_byfn[fn_corrected][guid]= timestamp_trigger
+    
+                        if len(points_pluecker):
                             # save all 3D Pluecker coordinates for Kalman filtering
-                            realtime_kalman_coord_byframenumber[corrected_framenumber][camn]=(
-                                points_in_pluecker_coords_meters)
-
-                        if n_pts:
+                            realtime_kalman_coord_byfn[fn_corrected][camn] = points_pluecker
+    
+                        if n_points:
                             inc_val = 1
                         else:
                             inc_val = 0
-
-                        if corrected_framenumber in oldest_timestamp_by_corrected_framenumber:
-                            orig_timestamp,n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
-                            if orig_timestamp is None:
-                                oldest = trigger_timestamp # this may also be None, but eventually won't be
-                            else:
-                                oldest = min(trigger_timestamp, orig_timestamp)
-                            oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ] = (oldest,n+inc_val)
-                            del oldest, n, orig_timestamp
+    
+                        # Store the trigger timestamp, but don't overwrite older timestamps.
+                        if fn_corrected not in timestamp_oldest_byfn_corrected:
+                            timestamp_oldest_byfn_corrected[ fn_corrected ] = timestamp_trigger, inc_val
                         else:
-                            oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ] = trigger_timestamp, inc_val
+                            timestamp_tmp,n = timestamp_oldest_byfn_corrected[fn_corrected]
+                            if timestamp_tmp is None:
+                                timestamp_oldest = timestamp_trigger # this may also be None, but eventually won't be
+                            else:
+                                timestamp_oldest = min(timestamp_trigger, timestamp_tmp)
+                                
+                            timestamp_oldest_byfn_corrected[fn_corrected] = (timestamp_oldest, n+inc_val)
+                            del timestamp_oldest, n, timestamp_tmp
+                            
+                        fn_corrected_set.add(fn_corrected)
 
-                        new_data_framenumbers.add( corrected_framenumber ) # insert into set
 
-                    # preserve unprocessed data
-                    if NETWORK_PROTOCOL == 'tcp':
-                        old_data[sockobj] = data
+                        # XXX hack? make data available via caminfo_byguid
+                        caminfo = self.mainbrain.remote_api.caminfo_byguid[guid]
+                        with caminfo['lock']:
+                            caminfo['points_distorted'] = points_distorted
+    
+                    # end try block
 
                 if BENCHMARK_GATHER:
-                    incoming_remote_received_timestamps = numpy.array(incoming_remote_received_timestamps)
-                    min_incoming_remote_timestamp = incoming_remote_received_timestamps.min()
-                    max_incoming_remote_timestamp = incoming_remote_received_timestamps.max()
-                    finish_packet_sorting_time = time.time()
+                    timestamp_camera_received_list = numpy.array(timestamp_camera_received_list)
+                    min_incoming_remote_timestamp = timestamp_camera_received_list.min()
+                    max_incoming_remote_timestamp = timestamp_camera_received_list.max()
+                    finish_packet_sorting_time = rospy.Time.now().to_sec()
                     min_packet_gather_dur = finish_packet_sorting_time-max_incoming_remote_timestamp
                     max_packet_gather_dur = finish_packet_sorting_time-min_incoming_remote_timestamp
                     rospy.logwarn('proc dur: % 3.1f % 3.1f' % (min_packet_gather_dur*1e3,
                                                                max_packet_gather_dur*1e3))
 
-                finished_corrected_framenumbers = [] # for quick deletion
+                fn_finished_list = [] # for quick deletion
 
                 ########################################################################
 
@@ -1136,276 +1190,291 @@ class CoordinateProcessor(threading.Thread):
                 # on that data.
 
                 ########################################################################
-
-                for corrected_framenumber in new_data_framenumbers:
-                    oldest_camera_timestamp, n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
-                    if oldest_camera_timestamp is None:
-                        ## rospy.logwarn( 'no latency estimate available -- skipping 3D reconstruction'
-                        continue
-                    if (time.time() - oldest_camera_timestamp) > max_reconstruction_latency_sec:
-                        #rospy.logwarn( 'maximum reconstruction latency exceeded -- skipping 3D reconstruction'
-                        continue
-
-                    data_byguid = realtime_coord_byframenumber[corrected_framenumber]
-                    if len(data_byguid)==len(self.guids): # all camera data arrived
-
-                        if self.debug_level.isSet():
-                            rospy.logdebug('Frame: %d' % corrected_framenumber)
-
-                        if SHOW_3D_PROCESSING_LATENCY:
-                            start_3d_proc = time.time()
-
-                        # mark for deletion out of data queue
-                        finished_corrected_framenumbers.append( corrected_framenumber )
-
-                        if self.reconstructor is None:
-                            # can't do any 3D math without calibration information
-                            g_best_realtime_data = None
+                #for guid in self.guid_list:
+                #rospy.logwarn ('fn_corrected_set=%s' % (fn_corrected_set))
+                
+                #for guid in self.guid_list:
+                if True:
+                    for fn_corrected in fn_corrected_set:
+                        (timestamp_oldest, n) = timestamp_oldest_byfn_corrected[ fn_corrected]
+                        if timestamp_oldest is None:
+                            ## rospy.logwarn( 'no latency estimate available -- skipping 3D reconstruction'
                             continue
-
-                        if DO_KALMAN:
-                            with self.lock_tracker:
-                                if self.tracker is None: # tracker isn't instantiated yet...
-                                    g_best_realtime_data = None
-                                    continue
-
-                                pluecker_coords_by_camn = realtime_kalman_coord_byframenumber[corrected_framenumber]
-
-                                if self.save_profiling_data:
-                                    dumps = pickle.dumps(pluecker_coords_by_camn)
-                                    self.data_dict_queue.append(('gob',(corrected_framenumber,
-                                                                        dumps,
-                                                                        self.guid_from_index)))
-                                pluecker_coords_by_camn = self.tracker.calculate_a_posteriori_estimates(
-                                    corrected_framenumber,
-                                    pluecker_coords_by_camn,
-                                    self.guid_from_index)
-
-                                if self.debug_level.isSet():
-                                    rospy.logdebug('%d live objects' % self.tracker.live_tracked_objects.how_many_are_living())
-                                    results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
-                                    Xs = []
-                                    for result in results:
-                                        if result is None:
-                                            continue
-                                        obj_id,last_xhat,P = result
-                                        rospy.logdebug(last_xhat[:3])
-
-                                if self.save_profiling_data:
-                                    self.data_dict_queue.append(('ntrack',self.tracker.live_tracked_objects.how_many_are_living()))
-
-                                now = time.time()
-                                if SHOW_3D_PROCESSING_LATENCY:
-                                    start_3d_proc_a = now
-                                if self.show_overall_latency.isSet():
-                                    oldest_camera_timestamp, n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
-                                    if n>0:
-                                        if 0:
-                                            rospy.logwarn('Overall latency %d: %.1f msec (oldest: %s now: %s)' % (n,
-                                                                                                                  (now-oldest_camera_timestamp)*1e3,
-                                                                                                                  repr(oldest_camera_timestamp),
-                                                                                                                  repr(now)))
-                                        else:
-
-                                            rospy.logwarn( 'Overall latency (%d camera detected 2d points): %.1f msec (note: may exclude camera->camera computer latency)'%(n,
-                                                                                                                                                (now-oldest_camera_timestamp)*1e3))
-
-                                if 1:
-                                    # The above calls
-                                    # self.enqueue_finished_tracked_object()
-                                    # when a tracked object is no longer
-                                    # tracked.
-
-                                    # Now, tracked objects have been updated (and their 2D data points
-                                    # removed from consideration), so we can use old flydra
-                                    # "hypothesis testing" algorithm on remaining data to see if there
-                                    # are new objects.
-
-                                    scale_factor = self.tracker.scale_factor
-                                    results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
-                                    Xs = []
-                                    for result in results:
-                                        if result is None:
-                                            continue
-                                        obj_id,last_xhat,P = result
-                                        X = last_xhat[0]/scale_factor, last_xhat[1]/scale_factor, last_xhat[2]/scale_factor
-                                        Xs.append(X)
-                                    if len(Xs):
-                                        g_best_realtime_data = Xs, 0.0
-                                    else:
+#                        if (rospy.Time.now().to_sec() - timestamp_oldest) > max_reconstruction_latency_sec:
+#                            rospy.logwarn( 'Maximum reconstruction latency exceeded (%0.4f>%0.4f) -- skipping 3D reconstruction' % ((rospy.Time.now().to_sec() - timestamp_oldest), max_reconstruction_latency_sec))
+#                            continue
+                        #rospy.logwarn( 'latency %0.4f>%0.4f' % ((rospy.Time.now().to_sec() - timestamp_oldest), max_reconstruction_latency_sec))    
+                        points_undistorted_byguid = points_undistorted_byguid_byfn[fn_corrected]
+                        #rospy.logwarn('points_undistorted_byguid=%s' % points_undistorted_byguid)
+                        #rospy.logwarn ('len(points_undistorted_byguid)==len(self.guid_list): %d==%d' % (len(points_undistorted_byguid),len(self.guid_list)))
+                        if len(points_undistorted_byguid)==len(self.guid_list): # all camera data arrived
+                            rospy.logwarn ('frame %d has %s, latency %0.4f' % (fn_corrected,
+                                                                               points_undistorted_byguid.keys(),
+                                                                               (rospy.Time.now().to_sec() - timestamp_oldest)))
+                            #rospy.logwarn ('All camera data arrived.')
+                            if self.debug_level.isSet():
+                                rospy.logdebug('Frame: %d' % fn_corrected)
+    
+                            if SHOW_3D_PROCESSING_LATENCY:
+                                start_3d_proc = rospy.Time.now().to_sec()
+    
+                            # Mark for deletion out of data queue
+                            fn_finished_list.append( fn_corrected )
+    
+                            if self.reconstructor is None:
+                                # can't do any 3D math without calibration information
+                                g_best_realtime_data = None
+                                continue
+    
+                            if DO_KALMAN:
+                                with self.lock_tracker:
+                                    if self.tracker is None: # tracker isn't instantiated yet...
                                         g_best_realtime_data = None
-
-                                if SHOW_3D_PROCESSING_LATENCY:
-                                    start_3d_proc_b = time.time()
-
-                                # Convert to format accepted by find_best_3d()
-                                found_data_dict,first_idx_by_camn = convert_format(
-                                    pluecker_coords_by_camn,
-                                    self.guid_from_index,
-                                    area_threshold=0.0,
-                                    only_likely=True)
-
-                                if SHOW_3D_PROCESSING_LATENCY:
-                                    if len(found_data_dict) < 2:
-                                        rospy.logwarn(' ')
-                                    else:
-                                        rospy.logwarn('*')
-
-                                if len(found_data_dict) >= 2:
-                                    # Can't do any 3D math without at least 2 cameras giving good
-                                    # data.
-                                    try:
-                                        (this_observation_orig_units, this_observation_Lcoords_orig_units, guids_used,
-                                         min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
-                                            self.reconstructor,
-                                            found_data_dict,
-                                            max_error,
-                                            max_n_cams=max_N_hypothesis_test,
-                                            )
-                                    except ru.NoAcceptablePointFound, err:
-                                        pass
-                                    else:
-                                        this_observation_camns = [self.index_from_guid[guid] for guid in guids_used]
-                                        this_observation_idxs = [first_idx_by_camn[camn] for camn in this_observation_camns] # zero idx
-                                        ####################################
-                                        #  Now join found point into Tracker
-                                        if self.save_profiling_data:
-                                            self.data_dict_queue.append(('join',(corrected_framenumber,
-                                                                                 this_observation_orig_units,
-                                                                                 this_observation_Lcoords_orig_units,
-                                                                                 this_observation_camns,
-                                                                                 this_observation_idxs
-                                                                                 )))
-                                        # test for novelty
-                                        believably_new = self.tracker.is_believably_new( this_observation_orig_units)
-                                        if believably_new:
-                                            self.tracker.join_new_obj( corrected_framenumber,
-                                                                       this_observation_orig_units,
-                                                                       this_observation_Lcoords_orig_units,
-                                                                       this_observation_camns,
-                                                                       this_observation_idxs
-                                                                       )
-                                if 1:
-                                    if self.tracker.live_tracked_objects.how_many_are_living():
-                                        data_packet = self.tracker.encode_data_packet(
-                                            corrected_framenumber,
-                                            oldest_camera_timestamp,now)
-                                        if data_packet is not None:
-                                            self.realtime_kalman_data_queue.put(data_packet)
-                                            
-                                        results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' )
-                                        ros_objects = []
+                                        continue
+    
+                                    pluecker_coords_by_camn = realtime_kalman_coord_byfn[fn_corrected]
+    
+                                    if self.save_profiling_data:
+                                        dumps = pickle.dumps(pluecker_coords_by_camn)
+                                        self.data_dict_queue.append(('gob',(fn_corrected,
+                                                                            dumps,
+                                                                            self.guid_from_index)))
+                                    pluecker_coords_by_camn = self.tracker.calculate_a_posteriori_estimates(
+                                        fn_corrected,
+                                        pluecker_coords_by_camn,
+                                        self.guid_from_index)
+    
+                                    if self.debug_level.isSet():
+                                        rospy.logdebug('%d live objects' % self.tracker.live_tracked_objects.how_many_are_living())
+                                        results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
+                                        Xs = []
                                         for result in results:
                                             if result is None:
                                                 continue
-                                            obj_id,xhat,P = result
-                                            this_ros_object = flydra_object(obj_id=obj_id,
-                                                                            position=Point(*xhat[:3]),
-                                                                            velocity=Vector3(*xhat[3:6]),
-                                                                            posvel_covariance_diagonal=numpy.diag(P)[:6].tolist())
-                                            ros_objects.append( this_ros_object )
-                                        ros_packet = flydra_mainbrain_packet(
-                                            framenumber=corrected_framenumber,
-                                            reconstruction_stamp=rospy.Time.from_sec(now),
-                                            acquire_stamp=rospy.Time.from_sec(oldest_camera_timestamp),
-                                            objects = ros_objects)
-                                        self.realtime_ros_packets.put( ros_packet )
+                                            obj_id,last_xhat,P = result
+                                            rospy.logdebug(last_xhat[:3])
+    
+                                    if self.save_profiling_data:
+                                        self.data_dict_queue.append(('ntrack',self.tracker.live_tracked_objects.how_many_are_living()))
+    
+                                    now = rospy.Time.now().to_sec()
+                                    if SHOW_3D_PROCESSING_LATENCY:
+                                        start_3d_proc_a = now
+                                    if self.show_overall_latency.isSet():
+                                        timestamp_oldest, n = timestamp_oldest_byfn_corrected[ fn_corrected ]
+                                        if n>0:
+                                            if 0:
+                                                rospy.logwarn('Overall latency %d: %.1f msec (oldest: %s now: %s)' % (n,
+                                                                                                                      (now-timestamp_oldest)*1e3,
+                                                                                                                      repr(timestamp_oldest),
+                                                                                                                      repr(now)))
+                                            else:
+    
+                                                rospy.logwarn( 'Overall latency (%d camera detected 2d points): %.1f msec (note: may exclude camera->camera computer latency)'%(n,
+                                                                                                                                                    (now-timestamp_oldest)*1e3))
+    
+                                    if 1:
+                                        # The above calls
+                                        # self.enqueue_finished_tracked_object()
+                                        # when a tracked object is no longer
+                                        # tracked.
+    
+                                        # Now, tracked objects have been updated (and their 2D data points
+                                        # removed from consideration), so we can use old flydra
+                                        # "hypothesis testing" algorithm on remaining data to see if there
+                                        # are new objects.
+    
+                                        scale_factor = self.tracker.scale_factor
+                                        results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
+                                        Xs = []
+                                        for result in results:
+                                            if result is None:
+                                                continue
+                                            obj_id,last_xhat,P = result
+                                            X = last_xhat[0]/scale_factor, last_xhat[1]/scale_factor, last_xhat[2]/scale_factor
+                                            Xs.append(X)
+                                        if len(Xs):
+                                            g_best_realtime_data = Xs, 0.0
+                                        else:
+                                            g_best_realtime_data = None
+    
+                                    if SHOW_3D_PROCESSING_LATENCY:
+                                        start_3d_proc_b = rospy.Time.now().to_sec()
+    
+                                    # Convert to format accepted by find_best_3d()
+                                    found_data_dict,first_idx_by_camn = convert_format(
+                                        pluecker_coords_by_camn,
+                                        self.guid_from_index,
+                                        area_threshold=0.0,
+                                        only_likely=True)
+    
+                                    if SHOW_3D_PROCESSING_LATENCY:
+                                        if len(found_data_dict) < 2:
+                                            rospy.logwarn(' ')
+                                        else:
+                                            rospy.logwarn('*')
+    
+                                    if len(found_data_dict) >= 2:
+                                        # Can't do any 3D math without at least 2 cameras giving good
+                                        # data.
+                                        try:
+                                            (this_observation_orig_units, this_observation_Lcoords_orig_units, guids_used,
+                                             min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
+                                                self.reconstructor,
+                                                found_data_dict,
+                                                max_error,
+                                                max_n_cams=max_N_hypothesis_test,
+                                                )
+                                        except ru.NoAcceptablePointFound, err:
+                                            pass
+                                        else:
+                                            this_observation_camns = [self.index_from_guid[guid] for guid in guids_used]
+                                            this_observation_idxs = [first_idx_by_camn[camn] for camn in this_observation_camns] # zero idx
+                                            ####################################
+                                            #  Now join found point into Tracker
+                                            if self.save_profiling_data:
+                                                self.data_dict_queue.append(('join',(fn_corrected,
+                                                                                     this_observation_orig_units,
+                                                                                     this_observation_Lcoords_orig_units,
+                                                                                     this_observation_camns,
+                                                                                     this_observation_idxs
+                                                                                     )))
+                                            # test for novelty
+                                            believably_new = self.tracker.is_believably_new( this_observation_orig_units)
+                                            if believably_new:
+                                                self.tracker.join_new_obj( fn_corrected,
+                                                                           this_observation_orig_units,
+                                                                           this_observation_Lcoords_orig_units,
+                                                                           this_observation_camns,
+                                                                           this_observation_idxs
+                                                                           )
+                                    if 1:
+                                        if self.tracker.live_tracked_objects.how_many_are_living():
+                                            data_packet = self.tracker.encode_data_packet(
+                                                fn_corrected,
+                                                timestamp_oldest,now)
+                                            if data_packet is not None:
+                                                self.realtime_kalman_data_queue.put(data_packet)
+                                                
+                                            results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' )
+                                            ros_objects = []
+                                            for result in results:
+                                                if result is None:
+                                                    continue
+                                                obj_id,xhat,P = result
+                                                this_ros_object = flydra_object(obj_id=obj_id,
+                                                                                position=Point(*xhat[:3]),
+                                                                                velocity=Vector3(*xhat[3:6]),
+                                                                                posvel_covariance_diagonal=numpy.diag(P)[:6].tolist())
+                                                ros_objects.append( this_ros_object )
+                                            ros_packet = flydra_mainbrain_packet(
+                                                framenumber=fn_corrected,
+                                                reconstruction_stamp=rospy.Time.from_sec(now),
+                                                acquire_stamp=rospy.Time.from_sec(timestamp_oldest),
+                                                objects = ros_objects)
+                                            self.realtime_ros_packets.put( ros_packet )
+    
+                                    if SHOW_3D_PROCESSING_LATENCY:
+                                        start_3d_proc_c = rospy.Time.now().to_sec()
+    
+                            else: # closes "if DO_KALMAN:"
+    
+                                found_data_dict = {} # old "good" points will go in here
+                                for guid, this_point in data_dict.iteritems():
+                                    if not numpy.isnan(this_point[0]): # only use if point was found
+                                        found_data_dict[guid] = this_point[:9]
+    
+                                if len(found_data_dict) < 2:
+                                    # Can't do any 3D math without at least 2
+                                    # cameras giving good data.
+                                    continue
+    
+                                try:
+                                    # hypothesis testing algorithm
+                                    (X, line3d, guids_used,min_mean_dist
+                                     ) = ru.hypothesis_testing_algorithm__find_best_3d(
+                                        self.reconstructor,
+                                        found_data_dict,
+                                        max_n_cams=max_N_hypothesis_test,
+                                        )
+                                except:
+                                    # This prevents us from bombing this thread...
+                                    traceback.print_exc()
+                                    rospy.logwarn('SKIPPED 3d calculation for this frame.')
+                                    continue
+                                
+                                cam_nos_used = [self.index_from_guid[guid] for guid in guids_used]
+    
+                                if line3d is None:
+                                    line3d = nan, nan, nan, nan, nan, nan
+                                    line3d_valid = False
+                                else:
+                                    line3d_valid = True
+    
+                                find3d_time = rospy.Time.now().to_sec()
+    
+                                x,y,z=X
+                                outgoing_data = [x,y,z]
+                                outgoing_data.extend( line3d ) # 6 component vector
+                                outgoing_data.append( find3d_time )
+    
+                                if len(g_downstream_hosts):
+                                    # This is for the non-Kalman data. See
+                                    # tracker.encode_data_packet() for
+                                    # Kalman version.
+                                    data_packet = encode_data_packet(
+                                        fn_corrected,
+                                        line3d_valid,
+                                        outgoing_data,
+                                        min_mean_dist,
+                                        )
+    
+                                # realtime 3d data
+                                g_best_realtime_data = [X], min_mean_dist
+                                try:
+                                    for downstream_host in g_downstream_hosts:
+                                        nBytesTotal = len(data_packet)
+                                        nBytesSent = 0
+                                        while nBytesSent < nBytesTotal:
+                                            nBytes = g_socket_outgoing_UDP.sendto(data_packet[nBytesSent:],downstream_host)
+                                            nBytesSent += nBytes
+                                except:
+                                    rospy.logwarn( 'Could not send 3d point data over UDP')
+                                if self.mainbrain.is_saving_data():
+                                    self.mainbrain.queue_data3d_best.put( (fn_corrected,
+                                                                            outgoing_data,
+                                                                            cam_nos_used,
+                                                                            min_mean_dist) )
+                            if SHOW_3D_PROCESSING_LATENCY:
+                                stop_3d_proc = rospy.Time.now().to_sec()
+                                dur_3d_proc_msec = (stop_3d_proc - start_3d_proc)*1e3
+                                dur_3d_proc_msec_a = (start_3d_proc_a - start_3d_proc)*1e3
+                                dur_3d_proc_msec_b = (start_3d_proc_b - start_3d_proc)*1e3
+                                dur_3d_proc_msec_c = (start_3d_proc_c - start_3d_proc)*1e3
+    
+                                rospy.logwarn('dur_3d_proc_msec % 3.1f % 3.1f % 3.1f % 3.1f'%(dur_3d_proc_msec,
+                                                                                              dur_3d_proc_msec_a,
+                                                                                              dur_3d_proc_msec_b,
+                                                                                              dur_3d_proc_msec_c))
+#                rospy.logwarn ('----------------------')
+#                rospy.logwarn ('            fn_finished_list=%s' % fn_finished_list)
+#                for fn in points_undistorted_byguid_byfn:
+#                    if fn is not None:
+#                        rospy.logwarn ('len(points_undistorted_byguid_byfn[%d])=%d' % (fn,len(points_undistorted_byguid_byfn[fn])))
+#                rospy.logwarn ('----------------------')
 
-                                if SHOW_3D_PROCESSING_LATENCY:
-                                    start_3d_proc_c = time.time()
-
-                        else: # closes "if DO_KALMAN:"
-
-                            found_data_dict = {} # old "good" points will go in here
-                            for guid, this_point in data_dict.iteritems():
-                                if not numpy.isnan(this_point[0]): # only use if point was found
-                                    found_data_dict[guid] = this_point[:9]
-
-                            if len(found_data_dict) < 2:
-                                # Can't do any 3D math without at least 2
-                                # cameras giving good data.
-                                continue
-
-                            try:
-                                # hypothesis testing algorithm
-                                (X, line3d, guids_used,min_mean_dist
-                                 ) = ru.hypothesis_testing_algorithm__find_best_3d(
-                                    self.reconstructor,
-                                    found_data_dict,
-                                    max_n_cams=max_N_hypothesis_test,
-                                    )
-                            except:
-                                # This prevents us from bombing this thread...
-                                traceback.print_exc()
-                                rospy.logwarn('SKIPPED 3d calculation for this frame.')
-                                continue
-                            
-                            cam_nos_used = [self.index_from_guid[guid] for guid in guids_used]
-
-                            if line3d is None:
-                                line3d = nan, nan, nan, nan, nan, nan
-                                line3d_valid = False
-                            else:
-                                line3d_valid = True
-
-                            find3d_time = time.time()
-
-                            x,y,z=X
-                            outgoing_data = [x,y,z]
-                            outgoing_data.extend( line3d ) # 6 component vector
-                            outgoing_data.append( find3d_time )
-
-                            if len(g_downstream_hosts):
-                                # This is for the non-Kalman data. See
-                                # tracker.encode_data_packet() for
-                                # Kalman version.
-                                data_packet = encode_data_packet(
-                                    corrected_framenumber,
-                                    line3d_valid,
-                                    outgoing_data,
-                                    min_mean_dist,
-                                    )
-
-                            # realtime 3d data
-                            g_best_realtime_data = [X], min_mean_dist
-                            try:
-                                for downstream_host in g_downstream_hosts:
-                                    nBytesTotal = len(data_packet)
-                                    nBytesSent = 0
-                                    while nBytesSent < nBytesTotal:
-                                        nBytes = g_socket_outgoing_UDP.sendto(data_packet[nBytesSent:],downstream_host)
-                                        nBytesSent += nBytes
-                            except:
-                                rospy.logwarn( 'Could not send 3d point data over UDP')
-                            if self.mainbrain.is_saving_data():
-                                self.mainbrain.queue_data3d_best.put( (corrected_framenumber,
-                                                                        outgoing_data,
-                                                                        cam_nos_used,
-                                                                        min_mean_dist) )
-                        if SHOW_3D_PROCESSING_LATENCY:
-                            stop_3d_proc = time.time()
-                            dur_3d_proc_msec = (stop_3d_proc - start_3d_proc)*1e3
-                            dur_3d_proc_msec_a = (start_3d_proc_a - start_3d_proc)*1e3
-                            dur_3d_proc_msec_b = (start_3d_proc_b - start_3d_proc)*1e3
-                            dur_3d_proc_msec_c = (start_3d_proc_c - start_3d_proc)*1e3
-
-                            rospy.logwarn('dur_3d_proc_msec % 3.1f % 3.1f % 3.1f % 3.1f'%(dur_3d_proc_msec,
-                                                                                          dur_3d_proc_msec_a,
-                                                                                          dur_3d_proc_msec_b,
-                                                                                          dur_3d_proc_msec_c))
-
-                for finished in finished_corrected_framenumbers:
+                for fn_finished in fn_finished_list:
                     if 1:
                         #check that timestamps are in reasonable agreement (low priority)
                         if 0:
-                            timestamps_by_guid = numpy.array(timestamp_check_byframenumber[finished].values())
-                            for xy in timestamp_check_byframenumber[finished].iteritems():
+                            timestamps_by_guid = numpy.array(timestamp_check_byfn[fn_finished].values())
+                            for xy in timestamp_check_byfn[fn_finished].iteritems():
                                 rospy.logwarn( repr(xy))
 
                         if 1:
                             diff_from_start = []
-                            for guid, tmp_trigger_timestamp in timestamp_check_byframenumber[finished].iteritems():
-                                diff_from_start.append( tmp_trigger_timestamp )
+                            for guid, timestamp_trigger_tmp in timestamp_check_byfn[fn_finished].iteritems():
+                                diff_from_start.append(timestamp_trigger_tmp)
                             timestamps_by_guid = numpy.array( diff_from_start )
 
                         if self.show_sync_errors:
@@ -1414,10 +1483,10 @@ class CoordinateProcessor(threading.Thread):
                                 if diff > 0.005:
                                     rospy.logwarn( 'Timestamps off by %0.3f (more than 5 msec) -- synchronization error' % diff)
 
-                    del realtime_coord_byframenumber[finished]
-                    del timestamp_check_byframenumber[finished]
+                    del points_undistorted_byguid_byfn[fn_finished]
+                    del timestamp_check_byfn[fn_finished]
                     try:
-                        del realtime_kalman_coord_byframenumber[finished]
+                        del realtime_kalman_coord_byfn[fn_finished]
                     except KeyError:
                         pass
 
@@ -1430,39 +1499,39 @@ class CoordinateProcessor(threading.Thread):
                 # XXX This probably drops unintended frames on
                 # re-sync, but who cares?
 
-                if len(realtime_coord_byframenumber)>100:
-                    rospy.logwarn('Cameras not synchronized or network dropping packets -- unmatched 2D data accumulating')
-                    k=realtime_coord_byframenumber.keys()
+                if len(points_undistorted_byguid_byfn)>100:
+                    rospy.logwarn('Cameras not synchronized or network dropping packets -- unmatched 2D data accumulating: len=%d' % len(points_undistorted_byguid_byfn))
+                    k=points_undistorted_byguid_byfn.keys()
                     k.sort()
 
                     if 1:
                         # get one sample
-                        corrected_framenumber = k[0]
-                        data_dict = realtime_coord_byframenumber[corrected_framenumber]
-                        this_guids = data_dict.keys()
-                        missing_guid_guess = list(set(self.guids) - set( this_guids ))
+                        fn_corrected = k[0]
+                        data_dict = points_undistorted_byguid_byfn[fn_corrected]
+                        this_guid_list = data_dict.keys()
+                        missing_guid_guess = list(set(self.guid_list) - set( this_guid_list ))
                         if len(missing_guid_guess):
-                            rospy.logwarn('A guess at missing guid(s): %s' % list(set(self.guids)-set(this_guids)))
+                            rospy.logwarn('A guess at missing guid(s): %s' % list(set(self.guid_list)-set(this_guid_list)))
 
                     for ki in k[:-50]:
-                        del realtime_coord_byframenumber[ki]
-                        del timestamp_check_byframenumber[ki]
+                        del points_undistorted_byguid_byfn[ki]
+                        del timestamp_check_byfn[ki]
 
-                if len(realtime_kalman_coord_byframenumber)>100:
+                if len(realtime_kalman_coord_byfn)>100:
                     rospy.logwarn('Deleting unused 3D data (this should be a rare occurrance)')
-                    k=realtime_kalman_coord_byframenumber.keys()
+                    k=realtime_kalman_coord_byfn.keys()
                     k.sort()
                     for ki in k[:-50]:
-                        del realtime_kalman_coord_byframenumber[ki]
+                        del realtime_kalman_coord_byfn[ki]
 
-                if len(oldest_timestamp_by_corrected_framenumber)>100:
-                    k=oldest_timestamp_by_corrected_framenumber.keys()
+                if len(timestamp_oldest_byfn_corrected)>100:
+                    k=timestamp_oldest_byfn_corrected.keys()
                     k.sort()
                     for ki in k[:-50]:
-                        del oldest_timestamp_by_corrected_framenumber[ki]
+                        del timestamp_oldest_byfn_corrected[ki]
 
-                if len(deferred_2d_data):
-                    self.mainbrain.queue_data2d.put( deferred_2d_data )
+                if len(datarowlist_to_save):
+                    self.mainbrain.queue_data2d.put( datarowlist_to_save )
 
         if DO_KALMAN:
             with self.lock_tracker:
@@ -1595,16 +1664,16 @@ class Mainbrain(object):
                 with caminfo['lock']:
                     caminfo['commands']['take_bg']=None
 
-        def external_request_missing_data(self, guid, camn, framenumber_offset, list_of_missing_framenumbers):
+        def external_request_missing_data(self, guid, camn, offset_fn, fn_missing_list):
             with self.lock_caminfo:
                 if guid not in self.caminfo_byguid:
                     # the camera was dropped, ignore this request
                     return
                 caminfo = self.caminfo_byguid[guid]
 
-                camn_and_list = [camn, framenumber_offset]
-                camn_and_list.extend( list_of_missing_framenumbers )
-                cmd_str = ' '.join(map(repr,camn_and_list))
+                camn_and_list = [camn, offset_fn]
+                camn_and_list.extend( fn_missing_list )
+                cmd_str = ' '.join(map(repr, camn_and_list))
                 with caminfo['lock']:
                     caminfo['commands']['request_missing']=cmd_str
 
@@ -1684,7 +1753,6 @@ class Mainbrain(object):
             """register new camera, return guid (caller: remote camera)"""
 
             caller= self.daemon.getLocalStorage().caller # XXX Pyro hack??
-            rospy.logwarn(dir(caller))
             caller_addr= caller.addr
             caller_ip, caller_port = caller_addr
             fqdn = socket.getfqdn(caller_ip)
@@ -1717,17 +1785,17 @@ class Mainbrain(object):
                 with caminfo['lock']:
                     caminfo['image'] = coord_and_image
 
-        def receive_missing_data(self, guid, framenumber_offset, missing_data ):
-            #rospy.logwarn('Received missing data from camera %s (offset %d):' % (guid, framenumber_offset))
+        def receive_missing_data(self, guid, offset_fn, missing_data ):
+            #rospy.logwarn('Received missing data from camera %s (offset %d):' % (guid, offset_fn))
             if len(missing_data)==0:
                 # no missing data
                 return
 
-            deferred_2d_data = []
-            for (camn, framenumber, remote_timestamp, camn_received_time,
+            datarowlist_to_save = []
+            for (camn, framenumber, remote_timestamp, timestamp_camera_received,
                  points_distorted) in missing_data:
 
-                corrected_framenumber = framenumber-framenumber_offset
+                fn_corrected = framenumber-offset_fn
                 if len(points_distorted)==0:
                     # no point was tracked that frame
                     points_distorted = [(nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)] # same as no_point_tuple
@@ -1735,22 +1803,22 @@ class Mainbrain(object):
                     # Save 2D data (even when no point found) to allow
                     # temporal correlation of movie frames to 2D data.
                     try:
-                        frame_pt_idx = point_tuple[PT_TUPLE_IDX_FRAME_PT_IDX]
+                        i_point = point_tuple[PT_TUPLE_IDX_FRAME_PT_IDX]
                         cur_val = point_tuple[PT_TUPLE_IDX_CUR_VAL_IDX]
                         mean_val = point_tuple[PT_TUPLE_IDX_MEAN_VAL_IDX]
                         sumsqf_val = point_tuple[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
                     except:
                         rospy.logerror('While appending point_tuple %s' % point_tuple)
                         raise
-                    if corrected_framenumber is None:
+                    if fn_corrected is None:
                         # don't bother saving if we don't know when it was from
                         continue
-                    deferred_2d_data.append((camn, # defer saving to later
-                                             corrected_framenumber,
-                                             remote_timestamp, camn_received_time)
+                    datarowlist_to_save.append((camn, # defer saving to later
+                                             fn_corrected,
+                                             remote_timestamp, timestamp_camera_received)
                                             +point_tuple[:5]
-                                            +(frame_pt_idx,cur_val,mean_val,sumsqf_val))
-            self.mainbrain.queue_data2d.put(deferred_2d_data)
+                                            +(i_point,cur_val,mean_val,sumsqf_val))
+            self.mainbrain.queue_data2d.put(datarowlist_to_save)
 
         def set_fps(self, guid, fps):
             """set most recent fps (caller: remote camera)"""
@@ -1773,7 +1841,7 @@ class Mainbrain(object):
             return port_coordinates
 
         def log_message(self, guid, timestamp_host, message):
-            timestamp_mainbrain = time.time()
+            timestamp_mainbrain = rospy.Time.now().to_sec()
             rospy.logwarn('Received log message from %s: %s' % (guid, message))
             self.message_queue.put( (timestamp_mainbrain, guid, timestamp_host, message) )
 
@@ -1918,9 +1986,9 @@ class Mainbrain(object):
     
         def callback_receive_missing_data (self, srvreqReceiveMissingData):
             guid = srvreqReceiveMissingData.guid
-            framenumber_offset = srvreqReceiveMissingData.framenumber_offset
+            offset_fn = srvreqReceiveMissingData.framenumber_offset
             missing_data = pickle.loads(srvreqReceiveMissingData.pickled_missing_data)
-            self.mainbrain.remote_api.receive_missing_data (guid, framenumber_offset, missing_data)
+            self.mainbrain.remote_api.receive_missing_data (guid, offset_fn, missing_data)
 
             return {}    
     
@@ -1968,7 +2036,7 @@ class Mainbrain(object):
         def callback_coordinates(self, srvreqCoordinates):
             guid = srvreqCoordinates.guid
             data = srvreqCoordinates.data
-            self.mainbrain.coord_processor.realreceiver.out_queue.put((guid, data))
+            self.mainbrain.coord_processor.realreceiver.coordinatesframe_queue.put((guid, data))
     
             return {}
         
@@ -2111,7 +2179,7 @@ class Mainbrain(object):
 
     def do_synchronization(self,new_fps=None):
         if self.is_saving_data():
-            raise RuntimeError('will not (re)synchronize while saving data')
+            raise RuntimeError('Will not (re)synchronize while saving data')
 
         if new_fps is not None:
             self.trigger_device.frames_per_second = new_fps
@@ -2122,8 +2190,7 @@ class Mainbrain(object):
             guids = self.remote_api.external_get_guids()
             for guid in guids:
                 try:
-                    self.send_set_camera_property(
-                        guid, 'expected_trigger_framerate', actual_new_fps )
+                    self.send_set_camera_property(guid, 'expected_trigger_framerate', actual_new_fps )
                 except Exception,err:
                     rospy.logwarn('Exception with send_set_camera_property(): %s' % err)
             rc_params['frames_per_second'] = actual_new_fps
@@ -2214,7 +2281,7 @@ class Mainbrain(object):
             for old_cam_func in self._old_camera_functions:
                 old_cam_func(guid)
 
-        now = time.time()
+        now = rospy.Time.now().to_sec()
         diff = now - self.last_saved_data_time
         if diff >= 5.0: # request missing data and save data every 5 seconds
             self._request_missing_data()
@@ -2251,7 +2318,7 @@ class Mainbrain(object):
                     self._fqdns_by_guid[guid] = fqdn
                 else:
                     fqdn = self._fqdns_by_guid[guid]
-                buf = struct.pack( timestamp_echo_fmt1, time.time() )
+                buf = struct.pack( timestamp_echo_fmt1, rospy.Time.now().to_sec() )
                 nBytesTotal = len(buf)
                 nBytesSent = 0
                 while nBytesSent < nBytesTotal:
@@ -2267,7 +2334,7 @@ class Mainbrain(object):
                     self._fqdns_by_guid[guid] = fqdn
                 else:
                     fqdn = self._fqdns_by_guid[guid]
-                buf = struct.pack( timestamp_echo_fmt1, time.time() )
+                buf = struct.pack( timestamp_echo_fmt1, rospy.Time.now().to_sec() )
                 nBytesTotal = len(buf)
                 nBytesSent = 0
                 while nBytesSent < nBytesTotal:
@@ -2535,7 +2602,7 @@ class Mainbrain(object):
     def _startup_message(self):
         textlog_row = self.h5textlog.row
         guid = 'mainbrain'
-        timestamp = time.time()
+        timestamp = rospy.Time.now().to_sec()
 
         # This line is important (including the formatting). It is
         # read by flydra.a2.check_atmel_clock.
@@ -2568,25 +2635,25 @@ class Mainbrain(object):
         if ATTEMPT_DATA_RECOVERY:
             # request from camera computers any data that we're missing
             missing_data_dict = self.coord_processor.get_missing_data_dict()
-            for camn, (guid, framenumber_offset, list_of_missing_framenumbers) in missing_data_dict.iteritems():
-                #rospy.logwarn('Requesting from camn %d: %d frames %s' % (camn,len(list_of_missing_framenumbers), numpy.array(list_of_missing_framenumbers) ))
-                self.remote_api.external_request_missing_data(guid,camn,framenumber_offset,list_of_missing_framenumbers)
+            for camn, (guid, offset_fn, fn_missing_list) in missing_data_dict.iteritems():
+                #rospy.logwarn('Requesting from camn %d: %d frames %s' % (camn,len(fn_missing_list), numpy.array(fn_missing_list) ))
+                self.remote_api.external_request_missing_data(guid,camn,offset_fn,fn_missing_list)
 
     def _service_save_data(self):
         # ** 2d data **
         #   clear queue
-        list_of_rows_of_data2d = []
+        datarowlist_to_save = []
         try:
             while True:
-                tmp = self.queue_data2d.get(0)
-                list_of_rows_of_data2d.extend( tmp )
+                datarowlist_tmp = self.queue_data2d.get(False)
+                datarowlist_to_save.extend( datarowlist_tmp )
         except Queue.Empty:
             pass
         #   save
-        if self.h5data2d is not None and len(list_of_rows_of_data2d):
+        if self.h5data2d is not None and len(datarowlist_to_save):
             # it's much faster to convert to numpy first:
             recarray = numpy.rec.array(
-                list_of_rows_of_data2d,
+                datarowlist_to_save,
                 dtype=Info2DCol_description)
             self.h5data2d.append( recarray )
             self.h5data2d.flush()
@@ -2596,7 +2663,7 @@ class Mainbrain(object):
         list_of_textlog_data = []
         try:
             while True:
-                tmp = self.remote_api.message_queue.get(0)
+                tmp = self.remote_api.message_queue.get(False)
                 list_of_textlog_data.append( tmp )
         except Queue.Empty:
             pass
@@ -2622,7 +2689,7 @@ class Mainbrain(object):
         list_of_cam_info = []
         try:
             while True:
-                list_of_cam_info.append( self.queue_cam_info.get(0) )
+                list_of_cam_info.append( self.queue_cam_info.get(False) )
         except Queue.Empty:
             pass
         #   save
@@ -2645,7 +2712,7 @@ class Mainbrain(object):
             list_of_3d_data = []
             try:
                 while True:
-                    list_of_3d_data.append( q.get(0) )
+                    list_of_3d_data.append( q.get(False) )
             except Queue.Empty:
                 pass
             if self.h5data3d_kalman_estimates is not None:
@@ -2714,18 +2781,18 @@ class Mainbrain(object):
             list_of_3d_data = []
             try:
                 while True:
-                    list_of_3d_data.append( q.get(0) )
+                    list_of_3d_data.append( q.get(False) )
             except Queue.Empty:
                 pass
             #   save
             if h5table is not None:
                 row = h5table.row
                 for data3d in list_of_3d_data:
-                    corrected_framenumber, outgoing_data, cam_nos_used, mean_dist = data3d
+                    fn_corrected, outgoing_data, cam_nos_used, mean_dist = data3d
                     cam_nos_used.sort()
                     cam_nos_used_str = ' '.join( map(str, cam_nos_used) )
 
-                    row['frame']=corrected_framenumber
+                    row['frame']=fn_corrected
 
                     row['x']=outgoing_data[0]
                     row['y']=outgoing_data[1]
@@ -2751,7 +2818,7 @@ class Mainbrain(object):
         list_of_host_clock_info = []
         try:
             while True:
-                list_of_host_clock_info.append( self.queue_host_clock_info.get(0) )
+                list_of_host_clock_info.append( self.queue_host_clock_info.get(False) )
         except Queue.Empty:
             pass
         #   save
@@ -2771,7 +2838,7 @@ class Mainbrain(object):
         list_of_trigger_clock_info = []
         try:
             while True:
-                list_of_trigger_clock_info.append( self.queue_trigger_clock_info.get(0) )
+                list_of_trigger_clock_info.append( self.queue_trigger_clock_info.get(False) )
         except Queue.Empty:
             pass
         #   save

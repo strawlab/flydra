@@ -615,8 +615,8 @@ class ProcessCamData(object):
 
 #        imgROI = fi8ufactory( cur_fisize )
 #        self._imgROI = imgROI # make accessible to other code
-        old_ts = rospy.Time.now().to_sec()
-        old_fn = None
+        timestamp_prev = rospy.Time.now().to_sec()
+        framenumber_prev = None
         points = []
 
         #FastImage.set_debug(3) # let us see any images malloced, should only happen on hardware ROI size change
@@ -699,7 +699,7 @@ class ProcessCamData(object):
                 imagebuffer.updated_running_sumsqf_image = None
 
                 imgROI = imagebuffer.get_image()
-                cam_received_time = imagebuffer.cam_received_time
+                timestamp_camera_received = imagebuffer.cam_received_time
 
 
                 # Run the color filter.
@@ -718,8 +718,8 @@ class ProcessCamData(object):
                         rospy.logwarn('ERROR: color_filter_2 >= color_filter_1 -- skipping')
 
                 # Get best guess as to when image was taken
-                timestamp=imagebuffer.timestamp
-                framenumber=imagebuffer.framenumber
+                timestamp_image = imagebuffer.timestamp
+                framenumber = imagebuffer.framenumber
 
                 # Publish raw image on ROS network
                 now = rospy.Time.now().to_sec()
@@ -770,34 +770,32 @@ class ProcessCamData(object):
                     self.lasttime = now
 
                 if 1:
-                    if old_fn is None:
+                    if framenumber_prev is None:
                         # no old frame
-                        old_fn = framenumber-1
-                    if framenumber-old_fn > 1:
-                        n_frames_skipped = framenumber-old_fn-1
-                        msg = '  frames apparently skipped: %d'%(n_frames_skipped,)
-                        rospy.logerr(msg)
+                        framenumber_prev = framenumber-1
+                    if framenumber-framenumber_prev > 1:
+                        n_frames_skipped = framenumber-framenumber_prev-1
+                        rospy.logerr('Frames apparently skipped: %d' % (n_frames_skipped,))
                     else:
                         n_frames_skipped = 0
 
-                    diff = timestamp-old_ts
+                    diff = timestamp_image - timestamp_prev
                     time_per_frame = diff/(n_frames_skipped+1)
                     if not disable_ifi_warning:
                         if time_per_frame > 2*self.shortest_IFI:
-                            msg = 'Warning: IFI is %f on %s at %s (frame skipped?)'%(time_per_frame, self.guid, time.asctime())
-                            rospy.logerr(msg)
+                            rospy.logerr('IFI is %f on %s at %s (frame skipped?)' % (time_per_frame, self.guid, rospy.Time.now().to_sec()))
 
-                old_ts = timestamp
-                old_fn = framenumber
+                timestamp_prev = timestamp_image
+                framenumber_prev = framenumber
 
                 #rospy.logwarn('erode value=%d'% self.parameters['n_erode'])
                 xpoints = self.realtime_analyzer.do_work(imgROI,
-                                                         timestamp, 
+                                                         timestamp_image, 
                                                          framenumber, 
                                                          use_roi2,
                                                          self.parameters['use_cmp'],
                                                          max_duration_sec=self.shortest_IFI-0.0005, # give .5 msec for other processing
-                                                         return_debug_values=1,
+                                                         return_debug_values=True,
                                                          n_erode_absdiff = int(self.parameters['n_erode']))
                     
                 ## if len(xpoints)>=self.max_num_points:
@@ -831,11 +829,11 @@ class ProcessCamData(object):
                             self.queue_incoming_raw_frames.get_nowait()
                             
                     self.queue_incoming_raw_frames.put((imgROI.get_8u_copy(imgROI.size), # save a copy
-                                                      timestamp,
+                                                      timestamp_image,
                                                       framenumber,
                                                       points,
                                                       self.realtime_analyzer.roi,
-                                                      cam_received_time,
+                                                      timestamp_camera_received,
                                                       ))
                     #rospy.logwarn(' '*20+'put frame')
 
@@ -971,24 +969,26 @@ class ProcessCamData(object):
                 self.realtime_analyzer.clear_threshold = self.parameters['threshold_clear']
 
                 # XXX could speed this with a join operation I think
-                data = struct.pack('<ddliI',
-                                   timestamp, 
-                                   cam_received_time,
+                header = struct.pack('<ddliI',
+                                   timestamp_image, 
+                                   timestamp_camera_received,
                                    framenumber,
                                    len(points),
                                    n_frames_skipped)
                 
+                pointarray = ''
                 for point_tuple in points:
                     try:
-                        data = data + struct.pack(pt_fmt, *point_tuple)
+                        pointarray = pointarray + struct.pack(pt_fmt, *point_tuple)
                     except:
                         rospy.logwarn('Error-causing data: %s'%point_tuple)
                         raise
                 if 0:
-                    local_processing_time = (rospy.Time.now().to_sec() - cam_received_time)*1e3
+                    local_processing_time = (rospy.Time.now().to_sec() - timestamp_camera_received)*1e3
                     rospy.logwarn('local_processing_time %3.1fms' % local_processing_time)
                     
-                self.mainbrain.send_coordinates(self.guid, data)
+                coordinatesframe = header+pointarray
+                self.mainbrain.send_coordinates(self.guid, coordinatesframe)
 
                 if DEBUG_DROP:
                     debug_fd.write('%d,%d\n'%(framenumber,len(points)))
@@ -1432,9 +1432,7 @@ class ImageSource(threading.Thread):
 
                 rospy.logdebug(self.guid)
 
-                cam_received_time = rospy.Time.now().to_sec()
-
-                imagebuffer.cam_received_time = cam_received_time
+                imagebuffer.cam_received_time = rospy.Time.now().to_sec()
                 imagebuffer.timestamp = timestamp
                 imagebuffer.framenumber = framenumber
                 imagebuffer.image_coding = self.image_coding
@@ -1492,7 +1490,7 @@ class ImageSourceFromCamera(ImageSource):
             with self.camera._hack_acquire_lock():
                 trash = self.camera.grab_next_frame_blocking()
         except g_cam_iface.BuffersOverflowed:
-            msg = 'ERROR: Buffers overflowed on %s at %s'%(self.guid, time.asctime(time.localtime(now)))
+            msg = 'ERROR: Buffers overflowed on %s at %s'%(self.guid, rospy.Time.now().to_sec())
             rospy.logerr(msg)
         except g_cam_iface.FrameDataMissing:
             pass
@@ -1515,19 +1513,19 @@ class ImageSourceFromCamera(ImageSource):
             except g_cam_iface.BuffersOverflowed:
                 rospy.logdebug('(O%s)'%self.guid)
                 now = rospy.Time.now().to_sec()
-                msg = 'ERROR: Buffers overflowed on %s at %s'%(self.guid, time.asctime(time.localtime(now)))
+                msg = 'ERROR: Buffers overflowed on %s at %s'%(self.guid, rospy.Time.now().to_sec())
                 rospy.logerr(msg)
                 try_again_condition = True
             except g_cam_iface.FrameDataMissing:
                 rospy.logdebug('(M%s)'%self.guid)
                 now = rospy.Time.now().to_sec()
-                msg = 'Warning: frame data missing on %s at %s'%(self.guid, time.asctime(time.localtime(now)))
+                msg = 'Warning: frame data missing on %s at %s'%(self.guid, rospy.Time.now().to_sec())
                 rospy.logerr(msg)
                 try_again_condition = True
             except g_cam_iface.FrameDataCorrupt:
                 rospy.logdebug('(C%s)'%self.guid)
                 now = rospy.Time.now().to_sec()
-                msg = 'Warning: frame data corrupt on %s at %s'%(self.guid,time.asctime(time.localtime(now)))
+                msg = 'Warning: frame data corrupt on %s at %s'%(self.guid,rospy.Time.now().to_sec())
                 rospy.logerr(msg)
                 try_again_condition = True
             except (g_cam_iface.FrameSystemCallInterruption, g_cam_iface.NoFrameReturned):
@@ -2674,13 +2672,13 @@ class AppState(object):
                     get_raw_frame = self.processors_byguid[guid].get_raw_queued_frame
                     try:
                         while 1:
-                            (frame,timestamp,framenumber,points,lbrt,cam_received_time) = get_raw_frame() # this may raise Queue.Empty
+                            (frame,timestamp,framenumber,points,lbrt,timestamp_camera_received) = get_raw_frame() # this may raise Queue.Empty
                             last_frames.append( (frame,timestamp,framenumber,points) ) # save for post-triggering
                             while len(last_frames)>200:
                                 del last_frames[0]
 
                             last_points_framenumbers.append( framenumber ) # save for dropped packet recovery
-                            last_points.append( (timestamp,points,cam_received_time) ) # save for dropped packet recovery
+                            last_points.append( (timestamp,points,timestamp_camera_received) ) # save for dropped packet recovery
                             while len(last_points)>10000:
                                 del last_points[:100]
                                 del last_points_framenumbers[:100]
@@ -2729,7 +2727,7 @@ class AppState(object):
                 camn_and_list = map(int,cmds[cmd].split())
                 camn, framenumber_offset = camn_and_list[:2]
                 missing_framenumbers = camn_and_list[2:]
-                rospy.logwarn('Mainbrain wants %d frames (camn %d) at %s:'%(len(missing_framenumbers), camn, time.asctime()))
+                rospy.logwarn('Mainbrain wants %d frames (camn %d) at %s:'%(len(missing_framenumbers), camn, rospy.Time.now().to_sec()))
                 if len(missing_framenumbers) > 200:
                     rospy.logwarn(str(missing_framenumbers[:25]) + ' + ... + ' + str(missing_framenumbers[-25:]))
                 else:
@@ -2869,7 +2867,7 @@ def ThreadEchoTimestamp(guid, iCamera, camera):
 
     
     with gLockParams:
-        fmt = rospy.get_param('mainbrain/timestamp_echo_fmt1', '<d') #flydra.common_variables.timestamp_echo_fmt_diff
+        fmt = rospy.get_param('mainbrain/timestamp_echo_fmt1', '&lt;d') #flydra.common_variables.timestamp_echo_fmt_diff
     
     while True:
         # Receive timestamp from mainbrain.
@@ -3046,8 +3044,8 @@ class MainbrainInterface(object):
         return response.status
 
         
-    def send_coordinates_ros(self, guid, data):
-        response = self.send_coordinates_service_dict[guid](guid, data)
+    def send_coordinates_ros(self, guid, coordinatesframe):
+        response = self.send_coordinates_service_dict[guid](guid, coordinatesframe)
         return
 
 
@@ -3172,23 +3170,23 @@ class MainbrainInterface(object):
         return guid
 
 
-    def send_coordinates_socket(self, guid, data):
+    def send_coordinates_socket(self, guid, coordinatesframe):
         if self.protocol == 'udp':
             try:
-                nBytesTotal = len(data)
+                nBytesTotal = len(coordinatesframe)
                 nBytesSent = 0
                 while nBytesSent < nBytesTotal:
-                    nBytes = self.socket_coordinates_dict[guid].sendto(data[nBytesSent:], (self.hostMainbrain, self.portMainbrainCoordinates_dict[guid]))
+                    nBytes = self.socket_coordinates_dict[guid].sendto(coordinatesframe[nBytesSent:], (self.hostMainbrain, self.portMainbrainCoordinates_dict[guid]))
                     nBytesSent += nBytes
                     
             except socket.error, err:
                 rospy.logwarn('WARNING: socket_coordinates, sendto(%s, %s): %s' % (self.hostMainbrain, self.portMainbrainCoordinates_dict[guid], err))
                 
         elif self.protocol == 'tcp':
-            nBytesTotal = len(data)
+            nBytesTotal = len(coordinatesframe)
             nBytesSent = 0
             while nBytesSent < nBytesTotal:
-                nBytes = self.socket_coordinates_dict[guid].send(data[nBytesSent:])
+                nBytes = self.socket_coordinates_dict[guid].send(coordinatesframe[nBytesSent:])
                 nBytesSent += nBytes
         else:
             raise ValueError('Unknown network_protocol %s' % self.protocol)
