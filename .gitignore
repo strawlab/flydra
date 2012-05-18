@@ -12,4 +12,7 @@ src/reconstruct_utils.c
 src/fastgeom.c
 flydra.egg-info
 Pyro_log
+.project
+.cproject
+cmake_install.cmake
 
