@@ -348,7 +348,7 @@ class ProcessCamData(object):
             self.shortest_IFI = numpy.inf
         self.guid = guid
         self.rosrate = float(self.options.rosrate)
-        self.lasttime = rospy.Time.now().to_sec()
+        self.time_prev = rospy.Time.now().to_sec()
 
 
         self.bg_frame_alpha = bg_frame_alpha
@@ -692,7 +692,6 @@ class ProcessCamData(object):
             #rospy.logwarn('mainloop')
             #rospy.logwarn('waiting for imagebuffer from %s' % self._chain)
             with camnode_utils.use_buffer_from_chain(self._chain) as imagebuffer:
-                #rospy.logwarn('got imagebuffer')
                 if imagebuffer.quit_now:
                     break
                 imagebuffer.updated_running_mean_image = None
@@ -700,7 +699,6 @@ class ProcessCamData(object):
 
                 imgROI = imagebuffer.get_image()
                 timestamp_camera_received = imagebuffer.cam_received_time
-
 
                 # Run the color filter.
                 if self.parameters['use_color_filter']:
@@ -715,7 +713,7 @@ class ProcessCamData(object):
                                                                self.parameters['color_filter_3'],
                                                                self.parameters['color_filter_sat'])
                     else:
-                        rospy.logwarn('ERROR: color_filter_2 >= color_filter_1 -- skipping')
+                        rospy.logwarn('color_filter_2 >= color_filter_1 -- skipping')
 
                 # Get best guess as to when image was taken
                 timestamp_image = imagebuffer.timestamp
@@ -723,7 +721,7 @@ class ProcessCamData(object):
 
                 # Publish raw image on ROS network
                 now = rospy.Time.now().to_sec()
-                if now-self.lasttime+0.005 > 1./(self.rosrate):
+                if now-self.time_prev+0.005 > 1./(self.rosrate): # Don't publish faster than rosrate.
                     # Create and publish an image_raw message.
                     imageRaw = Image()
                     imageRaw.header.seq=framenumber
@@ -767,14 +765,15 @@ class ProcessCamData(object):
                     camera_info.P = [1,0,0,0, 0,1,0,0, 0,0,1,0]
                     self.pubCameraInfo.publish(camera_info)
                     
-                    self.lasttime = now
+                    self.time_prev = now
 
                 if 1:
                     if framenumber_prev is None:
                         # no old frame
-                        framenumber_prev = framenumber-1
-                    if framenumber-framenumber_prev > 1:
-                        n_frames_skipped = framenumber-framenumber_prev-1
+                        framenumber_prev = framenumber - 1
+                        
+                    if framenumber - framenumber_prev > 1:
+                        n_frames_skipped = framenumber - framenumber_prev - 1
                         rospy.logerr('Frames apparently skipped: %d' % (n_frames_skipped,))
                     else:
                         n_frames_skipped = 0
@@ -989,7 +988,7 @@ class ProcessCamData(object):
                     
                 coordinatesframe = header+pointarray
                 self.mainbrain.send_coordinates(self.guid, coordinatesframe)
-
+                
                 if DEBUG_DROP:
                     debug_fd.write('%d,%d\n'%(framenumber,len(points)))
                 #rospy.logwarn('Sent data...')
@@ -2773,7 +2772,8 @@ class AppState(object):
                         rospy.logwarn(str(still_missing))
 
             elif cmd == 'quit':
-                self.imagesources_byguid[guid].join(0.1)
+                timeout = 0.1
+                self.imagesources_byguid[guid].join(timeout)
                 # XXX TODO: quit and join chain threads
                 with self.cameras_byguid[guid]._hack_acquire_lock():
                     self.cameras_byguid[guid].close()
@@ -3180,7 +3180,7 @@ class MainbrainInterface(object):
                     nBytesSent += nBytes
                     
             except socket.error, err:
-                rospy.logwarn('WARNING: socket_coordinates, sendto(%s, %s): %s' % (self.hostMainbrain, self.portMainbrainCoordinates_dict[guid], err))
+                rospy.logwarn('Exception on socket_coordinates.sendto(%s, %s): %s' % (self.hostMainbrain, self.portMainbrainCoordinates_dict[guid], err))
                 
         elif self.protocol == 'tcp':
             nBytesTotal = len(coordinatesframe)
