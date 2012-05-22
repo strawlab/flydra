@@ -48,6 +48,7 @@ bright_non_gaussian_replacement = 5
 
 import contextlib
 from contextlib import contextmanager
+import copy
 import errno
 import numpy as np
 import numpy.dual
@@ -161,9 +162,10 @@ def monkeypatch_camera_method(self):
         # get the lock
         # hack the THREAD_DEBUG stuff in cam_iface_ctypes
         self.mythread = threading.currentThread()
-
+        #rospy.logwarn ('lock.hold')
         yield # run what we need to run
-        
+
+    #rospy.logwarn ('lock.release')
     # release the lock
 
 
@@ -357,7 +359,27 @@ class ProcessCamData(object):
         self.namespace_base      = '%s_%s' % ('guid',guid)
         self.namespace_camera    = self.namespace_base+'/camera'
         self.namespace_processor = self.namespace_base+'/processor'
-        self.parameters = rospy.get_param(self.namespace_processor)
+        parameters_default =  {'framerate_trigger': 100,
+                               'threshold_diff': 6,
+                                'threshold_clear': 0.3,
+                                'n_sigma': 7,
+                                'n_erode': 0,
+                                'roi': {'left': 0,
+                                        'top': 0,
+                                        'right': 1023,
+                                        'bottom': 767
+                                        },
+                                'dynamic_background': True,
+                                'use_cmp': False,
+                                'use_color_filter': False,
+                                'color_filter_1': 0,
+                                'color_filter_2': 150,
+                                'color_filter_3': 255,
+                                'color_filter_sat': 100,
+                                'visible_image_view': 'raw'
+                                }
+
+        self.parameters = rospy.get_param(self.namespace_processor, parameters_default)
 
         self.new_roi = threading.Event()
         self.new_roi_data = None
@@ -381,7 +403,7 @@ class ProcessCamData(object):
                                                                           self.max_num_points,
                                                                           roi2_radius,
                                                                           )
-        self.queueParameters = Queue.Queue()
+        self.parameters_queue = Queue.Queue()  # dynamic_reconfigure callback puts param changes here.  We deal with them at our leisure.
         self.most_recent_frame_potentially_corrupt = None
         
         self.realtime_analyzer.diff_threshold = self.parameters['threshold_diff']
@@ -402,12 +424,14 @@ class ProcessCamData(object):
     def get_namespace(self):
         return self.namespace_processor
     
+    def get_parameters(self):
+        return self.parameters
     
     # Set any queued processor parameters (from dynamic_reconfigure).
     def handle_queued_parameters(self):
-        while not self.queueParameters.empty():
+        while not self.parameters_queue.empty():
             try:
-                (param,value) = self.queueParameters.get()
+                (param,value) = self.parameters_queue.get()
             except Queue.Empty:
                 pass
             else:
@@ -721,6 +745,7 @@ class ProcessCamData(object):
 
                 # Publish raw image on ROS network
                 now = rospy.Time.now().to_sec()
+                #rospy.logwarn(now-self.time_prev)
                 if now-self.time_prev+0.005 > 1./(self.rosrate): # Don't publish faster than rosrate.
                     # Create and publish an image_raw message.
                     imageRaw = Image()
@@ -1372,7 +1397,7 @@ class ImageSource(threading.Thread):
                  imagebuffer_pool=None,
                  guid = None,
                  quit_event = None,
-                 camera_control_properties=None,
+                 camera_control_properties=None
                  ):
 
         threading.Thread.__init__(self, name='ImageSource')
@@ -1384,8 +1409,11 @@ class ImageSource(threading.Thread):
         self.imagebuffer_pool = imagebuffer_pool
         self.quit_event = quit_event
         self.guid = guid
-        self.queueParameters = Queue.Queue()
-        self.namespace = 'guid_%s/camera' % guid
+        self.parameters_queue = Queue.Queue()  # dynamic_reconfigure callback puts param changes here.  We deal with them at our leisure.
+
+        self.namespace_base      = '%s_%s' % ('guid',guid)
+        self.namespace_camera    = self.namespace_base+'/camera'
+        self.namespace_processor = self.namespace_base+'/processor'
         
         
     def assign_guid(self, guid):
@@ -1399,7 +1427,7 @@ class ImageSource(threading.Thread):
         self._chain = new_chain
         
     def get_namespace(self):
-        return self.namespace
+        return self.namespace_camera
         
     def run(self):
         rospy.logwarn( 'ImageSource running in process %s' % os.getpid())
@@ -1555,37 +1583,39 @@ class ImageSourceFromCamera(ImageSource):
 
     # Handle queued parameters (from dynamic_reconfigure).
     def handle_queued_parameters(self):
-        while not self.queueParameters.empty():
+        parameters = {}
+        
+        # Flush the queue, keeping only the latest param value.
+        while not self.parameters_queue.empty():
             try:
-                (param,value) = self.queueParameters.get()
+                (param,value) = self.parameters_queue.get()
             except Queue.Empty:
                 pass
             else:
-                # Set all the parameters into ROS.
-                #rospy.set_param (rospy.get_name()+'/'+param, value)
-                
-                # Save the parameter values.
-                #self.parameters[param] = value                     
+                parameters[param] = value
 
-    
-                # Set parameters into the camera.            
-                if param in self.camera_control_properties: # i.e. gain, shutter
-                    #rospy.logwarn ('Setting camera %s=%s' % (param,value))
-                    enum = self.camera_control_properties[param]['index']
-                    with self.camera._hack_acquire_lock():
-                        self.camera.set_camera_property(enum,value,0)
+        # Set all the parameters into ROS.
+        for param,value in parameters.iteritems():
+            #rospy.set_param (rospy.get_name()+'/'+param, value)
+            
+            # Save the parameter values.
+            #self.parameters[param] = value                     
+
+
+            # Set parameters into the camera.            
+            if param in self.camera_control_properties: # i.e. gain, shutter
+                #rospy.logwarn ('Setting camera %s=%s' % (param,value))
+                enum = self.camera_control_properties[param]['index']
+                with self.camera._hack_acquire_lock():
+                    self.camera.set_camera_property(enum,value,0)
+                
+            elif param == 'trigger_mode':
+                with self.camera._hack_acquire_lock():
+                    self.camera.set_trigger_mode_number(value)
                     
-                elif param == 'trigger_mode':
-                    with self.camera._hack_acquire_lock():
-                        self.camera.set_trigger_mode_number(value)
-                        
-                elif param == 'framerate_max':
-                    if 0:
-                        #print 'Ignoring request to set max_framerate'
-                        pass
-                    else:
-                        with self.camera._hack_acquire_lock():
-                            self.camera.set_framerate(value)
+            elif param == 'framerate_max':
+                with self.camera._hack_acquire_lock():
+                    self.camera.set_framerate(value)
                 
                             
     
@@ -1958,8 +1988,13 @@ class AppState(object):
 
         # Check version of Mainbrain.
         if not self.options.ignore_version:
-            versionMainbrain = self.mainbrain.get_version()
-            assert versionMainbrain == flydra.version.__version__
+            try:
+                versionMainbrain = self.mainbrain.get_version()
+            except Pyro.errors.ProtocolError, err:
+                rospy.logerr ('CANNOT FIND MAINBRAIN.')
+                raise Pyro.errors.ProtocolError
+            else:
+                assert versionMainbrain == flydra.version.__version__
 
 
 
@@ -1985,52 +2020,30 @@ class AppState(object):
         if nCameras == 0:
             raise RuntimeError('No cameras detected')
 
-        # Lists of which parameters are handled by each of the respective threads.
-        self.params_imagesource_base = ['trigger_mode',
-                                        'framerate_max']      # This list gets camera properties added to it later.
-        
-        self.paramsProcessor = ['threshold_diff',
-                               'threshold_clear',
-                               'color_filter_sat',
-                               'n_sigma',
-                               'n_erode',
-                               'use_color_filter',
-                               'color_filter_1',
-                               'color_filter_2',
-                               'color_filter_3',
-                               'dynamic_background',
-                               'roi/left',
-                               'roi/right',
-                               'roi/top',
-                               'roi/bottom',
-                               'roi',
-                               'use_color_filter',
-                               'framerate_trigger',
-                               'use_cmp',
-                               'visible_image_view']
-        
-
         # Dictionaries for each guid.
         self.cameras_byguid = {}
         self.status_camera_byguid = {}
         self.chains_byguid = {}
-        self.processors_byguid = {}
+        self.processor_byguid = {}
         self.saversFMF_byguid = {}
         self.saversUFMF_byguid = {}
         self.events_byguid = {}
-        self.imagesources_byguid = {}
+        self.imagesource_byguid = {}
         self.imagecontrollers_byguid = {}
         self.initial_images_byguid = {}
         self.params_imagesource_byguid = {}
         self.params_processor_byguid = {}
         
-        self.queueParameters = Queue.Queue()
+        self.parameters_queue = Queue.Queue()  # dynamic_reconfigure callback puts param changes here.  We deal with them at our leisure.
         
         self.critical_threads = []
         self.lock_echo_timestamp = threading.Lock()
         lock_save_ufmf_data_mkdir = threading.Lock()
         self.statusRecordingPrev = False
 
+        self.namespace_base      = 'guid_%s'
+        self.namespace_camera    = self.namespace_base+'/camera'
+        self.namespace_processor = self.namespace_base+'/processor'
 
         # Get the filenames of the mask images.
         filespecMaskImages = self.options.mask_images
@@ -2048,20 +2061,60 @@ class AppState(object):
                 rospy.logwarn('Camera guid: %s'%guid)
                 
         # Read each camera's .yaml file into that camera's namespace.
-        dirYaml = rospy.get_param(rospy.get_name()+'/dir_yaml')
+        dirYaml = rospy.get_param(rospy.get_name()+'/dir_yaml', '~')
         for guid in guidlist:
-            namespace = '%s_%s' % ('guid',guid)
+            namespace = self.namespace_base % guid
             try:
                 filenameYaml = '%s/%s.yaml' % (dirYaml,guid)
                 rospy.logwarn ('rosparam load %s' % filenameYaml)
-                subprocess.call(['rosparam', 'load', filenameYaml, namespace])
+                subprocess.call(['rosparam', 'load', filenameYaml, namespace]) # File potentially does not exist.
             except OSError, e:
                 rospy.logwarn ('rosparam load %s: %s' % (filenameYaml,e))
                 pass
 
-        # Initialize each camera.
+
+        # Default parameters.
+        parameters_imagesource_default = {
+                                            'camera_info_url': 'file:///cameras/default_calibration.yaml',
+                                            'video_mode': 'format7_mode0',
+                                            'gain': 100,
+                                            'shutter': 1000,
+                                            'framerate_max': 100,
+                                            'trigger_mode': 0
+                                          }
+        parameters_processor_default =    {
+                                            'framerate_trigger': 100,
+                                            'threshold_diff': 6,
+                                            'threshold_clear': 0.3,
+                                            'n_sigma': 7,
+                                            'n_erode': 0,
+                                            'roi': {'left': 0,
+                                                    'top': 0,
+                                                    'right': 1023,
+                                                    'bottom': 767
+                                                    },
+                                            'dynamic_background': True,
+                                            'use_cmp': False,
+                                            'use_color_filter': False,
+                                            'color_filter_1': 0,
+                                            'color_filter_2': 150,
+                                            'color_filter_3': 255,
+                                            'color_filter_sat': 100,
+                                            'visible_image_view': 'raw'
+                                          }
+
+
+        # Initialize each imagesource/camera/processor.
         for guid in guidlist:
             rospy.logwarn ('Initializing camera %s' % guid)
+
+            (namespace_imagesource, namespace_processor) = self.get_namespaces(guid)
+            (self.params_imagesource_byguid[guid], 
+             self.params_processor_byguid[guid]) = self.get_params_initial(namespace_imagesource, 
+                                                                           namespace_processor,
+                                                                           parameters_imagesource_default, 
+                                                                           parameters_processor_default)
+
 
             self.initialize_events(guid)
             (camera, imagesource_model, initial_images) = self.initialize_imagesource(guid)
@@ -2086,33 +2139,29 @@ class AppState(object):
             
             # Start the image source.
             self.start_imagesource (guid, imagesource_model, camera)
+            
+            # Get the settings for mainbrain UI controls.
+            scalar_control_info = self.get_scalar_control_info(camera, 
+                                                               self.params_imagesource_byguid[guid], 
+                                                               self.params_processor_byguid[guid], 
+                                                               self.options)
+            
+            # Offer the EchoTimestamp service.
+            if ((not self.benchmark) or (not FLYDRA_BT)) and (USE_ROS_INTERFACE):
+                rospy.Service (rospy.get_name()+'/guid_'+guid + '/echo_timestamp', SrvEchoTimestamp, self.callback_echo_timestamp)
 
-            # Keep the list of parameters that this guid's processor handles.
-            self.params_processor_byguid[guid] = self.paramsProcessor
+            # Register camera with Mainbrain
+            rospy.logwarn("Registering camera %s with mainbrain" % guid)
+            guidMB = self.mainbrain.register_camera(camn = guidlist.index(guid), # Position in list, not index in cam_iface.
+                                                    scalar_control_info = scalar_control_info,
+                                                    guid = guid)
 
 
-            camera = self.cameras_byguid[guid]
             with camera._hack_acquire_lock():
-                    
-                scalar_control_info = self.get_scalar_control_info(guid, camera, self.options)
-                
-                # Offer the EchoTimestamp service.
-                if ((not self.benchmark) or (not FLYDRA_BT)) and (USE_ROS_INTERFACE):
-                    rospy.Service (rospy.get_name()+'/guid_'+guid + '/echo_timestamp', SrvEchoTimestamp, self.callback_echo_timestamp)
-
-                # Register cameras with Mainbrain
-                rospy.logwarn("Registering camera %s with mainbrain" % guid)
-                guidMB = self.mainbrain.register_camera(iCamera=guidlist.index(guid), # Position in list, not index in cam_iface.
-                                                          scalar_control_info=scalar_control_info,
-                                                          guid=guid)
-
-
-                ##################################################################
-                # Spawn threads for ProcessCam(), SaveFMF(), and SaveUFMF().
-                ##################################################################
+                #Start the camera processor.
                 if not DISABLE_ALL_PROCESSING:
                     if 0:
-                        self.processors_byguid[guid] = FakeProcessCamData()
+                        self.processor_byguid[guid] = FakeProcessCamData()
                     else:
                         camera.get_max_height()
                         left,bottom,width,height = camera.get_frame_roi()
@@ -2121,7 +2170,7 @@ class AppState(object):
                         lbrt = left,bottom,right,top
                         
                         mask = self.mask_from_guid(guid)
-                        self.processors_byguid[guid] = ProcessCamData(
+                        self.processor_byguid[guid] = ProcessCamData(
                             guid = guid,
                             max_num_points = self.options.num_points,
                             roi2_radius = self.options.software_roi_radius,
@@ -2139,10 +2188,10 @@ class AppState(object):
                             mainbrain = self.mainbrain,
                             )
 
-                    # Spawn a thread for the camera processor.
-                    chainCamera = self.processors_byguid[guid].get_chain()
+                    # Make the processor into its own thread.
+                    chainCamera = self.processor_byguid[guid].get_chain()
                     self.chains_byguid[guid] = chainCamera
-                    thread = threading.Thread(target=self.processors_byguid[guid].mainloop,
+                    thread = threading.Thread(target=self.processor_byguid[guid].mainloop,
                                               name='processor_%s'%guidMB)
                     thread.setDaemon(True)
                     thread.start()
@@ -2180,7 +2229,7 @@ class AppState(object):
                 else:
                     chainCamera = None
 
-                self.imagesources_byguid[guid].set_chain(chainCamera)
+                self.imagesource_byguid[guid].set_chain(chainCamera)
 
                 ##################################################################
                 # Log a message.
@@ -2191,33 +2240,37 @@ class AppState(object):
                     rospy.loginfo('Camera %s using driver %s' % (guidMB, driver_string))
             # end, with lock
         # end, for guid in guidlist
-        
+
+        # Set up dynamic_reconfigure for parameters.        
         self.srvDynReconf = Server(CamnodeConfig, self.callback_dynamic_reconfigure)
+
         
-        # Get default parameters, and put them in the queue so they get set.
-        parameters = rospy.get_param(self.imagesources_byguid[guid].get_namespace())#'guid_%s/camera' % guid)
-        parameters['index'] = self.index_camiface_from_guid(guid) 
-        self.srvDynReconf.update_configuration(parameters)
-
-        # Read parameter values from server, and put them in the queue so they get used.
-        parameters = rospy.get_param(self.processors_byguid[guid].get_namespace())
-        parameters['index'] = self.index_camiface_from_guid(guid) 
-        self.srvDynReconf.update_configuration(parameters)
-            
-
-        self.last_frames_dict = {}
-        self.last_points_dict = {}
-        self.last_points_framenumbers_dict = {}
-        self.n_raw_frames_dict = {}
-        self.last_measurement_time_dict = {}
+        # Read parameter values from server, and put them in the queue so they get used by the various threads.
         for guid in guidlist:
-            self.last_frames_dict[guid] = []
-            self.last_points_dict[guid] = []
-            self.last_points_framenumbers_dict[guid] = []
-            self.n_raw_frames_dict[guid] = 0
-            self.last_measurement_time_dict[guid] = rospy.Time.now().to_sec()
+            parameters = rospy.get_param(self.imagesource_byguid[guid].get_namespace(), parameters_imagesource_default)
+            parameters['index'] = self.index_camiface_from_guid(guid) 
+            self.srvDynReconf.update_configuration(parameters)
+    
+            parameters = rospy.get_param(self.processor_byguid[guid].get_namespace(), parameters_processor_default)
+            self.srvDynReconf.update_configuration(parameters)
             
-        
+
+        self.last_frames_byguid = {}
+        self.last_points_byguid = {}
+        self.last_points_framenumbers_byguid = {}
+        self.n_raw_frames_byguid = {}
+        self.timestamp_last_measurement_byguid = {}
+        for guid in guidlist:
+            self.last_frames_byguid[guid] = []
+            self.last_points_byguid[guid] = []
+            self.last_points_framenumbers_byguid[guid] = []
+            self.n_raw_frames_byguid[guid] = 0
+            self.timestamp_last_measurement_byguid[guid] = rospy.Time.now().to_sec()
+            
+    def get_namespaces(self, guid):
+        return (self.namespace_camera % guid, 
+                self.namespace_processor % guid)
+
 
     # mask_from_guid()
     # Return a mask image for the given camera guid. 
@@ -2243,16 +2296,17 @@ class AppState(object):
         if params_dict['index'] < len(guidlist): # If it's a valid camera index.
             guid = guidlist[params_dict['index']]
         
+            # Put each parameter in the appropriate queue.
             for param,value in params_dict.iteritems():
                 try:
                     if param in self.params_imagesource_byguid[guid]:
-                        self.imagesources_byguid[guid].queueParameters.put((param,value,))
+                        self.imagesource_byguid[guid].parameters_queue.put((param,value,))
                 except KeyError:
                     pass
                     
                 try:
                     if param in self.params_processor_byguid[guid]:
-                        self.processors_byguid[guid].queueParameters.put((param,value,))
+                        self.processor_byguid[guid].parameters_queue.put((param,value,))
                 except KeyError:
                     pass
                     
@@ -2299,15 +2353,16 @@ class AppState(object):
             if self.options.show_cam_details:
                 (brand,model,guid2) = g_cam_iface.get_camera_info(self.index_camiface_from_guid(guid))
                 rospy.logwarn('Camerainfo: (%s, %s, %s)' % (brand,model,guid2))
-                rospy.logwarn('%d available modes:' % nModes)
+                rospy.logwarn('%d available video modes:' % nModes)
                 
             for i in range(nModes):
                 mode_string = g_cam_iface.get_mode_string(self.index_camiface_from_guid(guid),i)
                 if self.options.show_cam_details:
                     rospy.logwarn('  mode %d: %s'%(i,mode_string))
                     
-                if ('format7_0' in mode_string.lower()) or ('format7_mode0' in mode_string.lower()):
+                #if ('format7_0' in mode_string.lower()) or ('format7_mode0' in mode_string.lower()):
                     # prefer format7_0
+                if self.params_imagesource_byguid[guid]['video_mode'].lower() in mode_string.lower(): 
                     if mode is None:
                         mode = i
                         
@@ -2344,16 +2399,20 @@ class AppState(object):
 
 
     def start_imagesource(self, guid, imagesource_model, camera):
+        imagesource = None
+        imagecontroller = None
+        
         if (imagesource_model is not None) and (camera is not None):
             with camera._hack_acquire_lock():
                 left,bottom,width,height = camera.get_frame_roi()
             imagebuffer_pool = PreallocatedImagePool(FastImage.Size(width,height))
             del left,bottom,width,height
             camera_control_properties = self.get_camera_control_properties(camera)
-                
+
             # Create the list of parameters that the ImageSource handles.
             params_camera = list(camera_control_properties)
-            self.params_imagesource_byguid[guid] = self.params_imagesource_base + params_camera
+            for param in list(camera_control_properties):
+                self.params_imagesource_byguid[guid][param] = camera_control_properties[param]['cur']  # = self.params_imagesource_base + params_camera
 
 
             # Start the imagesource.
@@ -2374,14 +2433,19 @@ class AppState(object):
             imagesource.setDaemon(True)
             imagesource.start()
             rospy.logwarn('Started thread ImageSource for %s' % guid)
-            self.imagesources_byguid[guid] = imagesource
-            self.imagecontrollers_byguid[guid]= imagecontroller
             
-        else:
-            self.imagesources_byguid[guid] = None
-            self.imagecontrollers_byguid[guid]= None
+                    
+        self.imagesource_byguid[guid] = imagesource    
+        self.imagecontrollers_byguid[guid]= imagecontroller
 
 
+    def initialize_processcamdata(self, guid):
+        pass
+    
+    def start_processcamdata(self, guid):
+        pass
+    
+    
     # get_guid_list()
     # From the list of all cameras (self.camerainfolist), and any guids on the command-line (--guidlist),
     # Return the list of guids to use.
@@ -2485,15 +2549,36 @@ class AppState(object):
         return cameraproperties
     
     
+    # get_params_initial()
+    # Starting with the given defaults, read the parameters from the parameterserver over the top of them, and return the results.
+    def get_params_initial (self, namespace_imagesource, namespace_processor, parameters_imagesource_default, parameters_processor_default):
+        # Set all the default values.
+        params_imagesource = copy.copy(parameters_imagesource_default)
+        params_processor = copy.copy(parameters_processor_default)
+        
+        
+        # Update with parameters from server.
+        params_imagesource_new = rospy.get_param(namespace_imagesource, {})
+        params_imagesource.update(params_imagesource_new)
+        
+        params_processor_new = rospy.get_param(namespace_processor, {})
+        params_processor.update(params_processor_new)
+            
+        
+        return (params_imagesource, params_processor)
+            
+
+        
+    
     # get_scalar_control_info()
     # Specifies the default values for the user controls in mainbrain.
     # The scalar_control_info stuff might be moved entirely out of mainbrain (and handled via the ROS parameter server).
-    def get_scalar_control_info(self, guid, camera, options):
-        scalar_control_info = {}    # This could really be called mainbrain_user_control_info
+    def get_scalar_control_info(self, camera, parameters_imagesource, parameters_processor, options):
+        scalar_control_info = {}    # This could really be called mainbrain_ui_info
         cameraproperties = self.get_camera_control_properties(camera)
             
         
-        # Get trigger modes.
+        # Get trigger modes from the camera.
         N_trigger_modes = camera.get_num_trigger_modes()
         if options.show_cam_details:
             rospy.logwarn('  %d available trigger modes:'%N_trigger_modes)
@@ -2503,21 +2588,27 @@ class AppState(object):
         scalar_control_info['N_trigger_modes'] = N_trigger_modes
 
         scalar_control_info['camprops'] = list(cameraproperties)
+
         
-        # Read the imagesource parameters into the scalar_control_info.
-        namespace_imagesource = self.imagesources_byguid[guid].get_namespace()
-        for param in self.params_imagesource_byguid[guid]:
+        # Set the imagesource values, reformatting if necessary.
+        for param,value in parameters_imagesource.iteritems():
             if param in cameraproperties:
-                scalar_control_info[oldname_from_newname(param)]  = (rospy.get_param(namespace_imagesource+'/'+param), cameraproperties[param]['min'], cameraproperties[param]['max'])
+                scalar_control_info[oldname_from_newname(param)]  = (value, cameraproperties[param]['min'], cameraproperties[param]['max'])
             else:
-                scalar_control_info[oldname_from_newname(param)]  = rospy.get_param(namespace_imagesource+'/'+param)
+                scalar_control_info[oldname_from_newname(param)] = value
+
             
-        # Read the processor parameters into the scalar_control_info.
-        namespace_processor = 'guid_%s/processor' % guid #self.processors_byguid[guid].get_namespace()
-        for param in self.params_processor_byguid[guid]:
-            scalar_control_info[oldname_from_newname(param)] = rospy.get_param(namespace_processor+'/'+param)
-        try:        # Convert roi to a tuple.
-            roi = (scalar_control_info['roi/left'],scalar_control_info['roi/top'],scalar_control_info['roi/right'],scalar_control_info['roi/bottom'])
+        # Set the processor values.
+        for param,value in parameters_processor.iteritems():
+            scalar_control_info[oldname_from_newname(param)] = value
+
+
+        # Convert roi to a tuple.
+        try:        
+            roi = (scalar_control_info['roi/left'],
+                   scalar_control_info['roi/top'],
+                   scalar_control_info['roi/right'],
+                   scalar_control_info['roi/bottom'])
             scalar_control_info['roi'] = roi
             scalar_control_info.pop('roi/left')
             scalar_control_info.pop('roi/top')
@@ -2533,7 +2624,7 @@ class AppState(object):
             
 
     def get_imagesources(self):
-        return self.imagesources_byguid
+        return self.imagesource_byguid
 
     def get_imagecontrollers(self):
         return self.imagecontrollers_byguid
@@ -2566,7 +2657,7 @@ class AppState(object):
             
         targets = {}
         guidlist = self.get_guid_list()
-        for guid in guidlist:   #for iCamera, (idCamera, chain) in enumerate(zip(self.guidCameras, self.chains_byguid)):
+        for guid in guidlist:   #for camn, (idCamera, chain) in enumerate(zip(self.guidCameras, self.chains_byguid)):
             base_kwargs = dict(guid=guid)
 
             if kwargs is not None:
@@ -2653,22 +2744,22 @@ class AppState(object):
 
             if not DISABLE_ALL_PROCESSING:
                 for guid in guidlist:
-                    last_frames = self.last_frames_dict[guid]
-                    last_points = self.last_points_dict[guid]
-                    last_points_framenumbers = self.last_points_framenumbers_dict[guid]
+                    last_frames = self.last_frames_byguid[guid]
+                    last_points = self.last_points_byguid[guid]
+                    last_points_framenumbers = self.last_points_framenumbers_byguid[guid]
 
                     now = rospy.Time.now().to_sec() # roughly flydra_camera_node.py line 1504
 
                     # calculate and send FPS every 5 sec
-                    elapsed = now-self.last_measurement_time_dict[guid]
+                    elapsed = now-self.timestamp_last_measurement_byguid[guid]
                     if elapsed > 5.0:
-                        fps = self.n_raw_frames_dict[guid]/elapsed
+                        fps = self.n_raw_frames_byguid[guid]/elapsed
                         self.mainbrain.set_fps(guid,fps)
-                        self.last_measurement_time_dict[guid] = now
-                        self.n_raw_frames_dict[guid] = 0
+                        self.timestamp_last_measurement_byguid[guid] = now
+                        self.n_raw_frames_byguid[guid] = 0
 
                     # Get new raw frames from grab thread.
-                    get_raw_frame = self.processors_byguid[guid].get_raw_queued_frame
+                    get_raw_frame = self.processor_byguid[guid].get_raw_queued_frame
                     try:
                         while 1:
                             (frame,timestamp,framenumber,points,lbrt,timestamp_camera_received) = get_raw_frame() # this may raise Queue.Empty
@@ -2682,7 +2773,7 @@ class AppState(object):
                                 del last_points[:100]
                                 del last_points_framenumbers[:100]
 
-                            self.n_raw_frames_dict[guid] += 1
+                            self.n_raw_frames_byguid[guid] += 1
                     except Queue.Empty:
                         pass
                     
@@ -2713,7 +2804,7 @@ class AppState(object):
                     
 
             elif cmd == 'get_im':   # Send the image from the camprocessor to mainbrain. 
-                val = self.processors_byguid[guid].get_most_recent_frame()
+                val = self.processor_byguid[guid].get_most_recent_frame()
                 if val is not None: # prevent race condition
                     leftbottom, im = val
                     #npim = np.array(im) # copy to native np form, not view of __array_struct__ form
@@ -2732,8 +2823,8 @@ class AppState(object):
                 else:
                     rospy.logwarn(str(missing_framenumbers))
 
-                last_points_framenumbers = self.last_points_framenumbers_dict[guid]
-                last_points = self.last_points_dict[guid]
+                last_points_framenumbers = self.last_points_framenumbers_byguid[guid]
+                last_points = self.last_points_byguid[guid]
 
                 # convert to numpy arrays for quick indexing
                 last_points_framenumbers = numpy.array( last_points_framenumbers, dtype=numpy.int64 )
@@ -2773,7 +2864,7 @@ class AppState(object):
 
             elif cmd == 'quit':
                 timeout = 0.1
-                self.imagesources_byguid[guid].join(timeout)
+                self.imagesource_byguid[guid].join(timeout)
                 # XXX TODO: quit and join chain threads
                 with self.cameras_byguid[guid]._hack_acquire_lock():
                     self.cameras_byguid[guid].close()
@@ -2826,9 +2917,9 @@ class AppState(object):
 
                 # XXX TODO: FIXME: thread crossing bug
                 # these three should always be done together in this order:
-                self.processors_byguid[guid].set_scale_factor( scale_factor )
-                self.processors_byguid[guid].set_pmat( pmat )
-                self.processors_byguid[guid].make_reconstruct_helper(intlin, intnonlin) # let grab thread make one
+                self.processor_byguid[guid].set_scale_factor( scale_factor )
+                self.processor_byguid[guid].set_pmat( pmat )
+                self.processor_byguid[guid].make_reconstruct_helper(intlin, intnonlin) # let grab thread make one
             else:
                 raise ValueError('Unknown cmd "%s"'%cmd)
 
@@ -2841,7 +2932,7 @@ class AppState(object):
 ###############################################################################
 
 # Thread to echo timestamps from mainbrain, to camera, back to mainbrain.
-def ThreadEchoTimestamp(guid, iCamera, camera):
+def ThreadEchoTimestamp(guid, camn, camera):
     # Create timestamp sending socket.
     socketSendTimestamp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     with gLockParams:
@@ -2855,7 +2946,7 @@ def ThreadEchoTimestamp(guid, iCamera, camera):
             portReceiveTimestamp = rospy.get_param('mainbrain/port_timestamp_camera', 28992) # One port per camnode.
         else:
             portReceiveTimestampBase = rospy.get_param('mainbrain/port_timestamp_camera_base', 28995) # One port per camera.
-            portReceiveTimestamp = portReceiveTimestampBase + iCamera
+            portReceiveTimestamp = portReceiveTimestampBase + camn
     try:
         socketReceiveTimestamp.bind(( hostname, portReceiveTimestamp))
         rospy.logwarn('Created udp server (to receive timestamps) on port %s:%d' % (hostname, portReceiveTimestamp))
@@ -2983,14 +3074,14 @@ class MainbrainInterface(object):
         return response.version
 
         
-    def register_camera_ros (self, guid, iCamera, scalar_control_info):
+    def register_camera_ros (self, guid, camn, scalar_control_info):
         # Register the camera with mainbrain.
-        response = self.register_camera_service(cam_no=iCamera,
+        response = self.register_camera_service(cam_no=camn,
                                                     pickled_scalar_control_info=pickle.dumps(scalar_control_info),
                                                     guid=guid)
         guidNew = response.guid
         #self.idCameras_list.append(guidNew)
-        #assert(iCamera==len(self.idCameras_list)-1)
+        #assert(camn==len(self.idCameras_list)-1)
         
 
         # Each camera also needs to have a place to send its coordinates.
@@ -3131,16 +3222,16 @@ class MainbrainInterface(object):
         self.send_coordinates       = self.send_coordinates_socket
 
 
-    def register_camera_socket (self, guid, iCamera, scalar_control_info):
+    def register_camera_socket (self, guid, camn, scalar_control_info):
         # Register the camera with mainbrain.
-        port = rospy.get_param('mainbrain/port_camera_base', 9834) + iCamera
+        port = rospy.get_param('mainbrain/port_camera_base', 9834) + camn
             
-        guid = self.proxyMainbrain.register_camera(cam_no=iCamera,
+        guid = self.proxyMainbrain.register_camera(cam_no=camn,
                                                           scalar_control_info=scalar_control_info,
                                                           port=port,
                                                           guid=guid)
         #self.idCameras_list.append(idCamera)
-        #assert(iCamera==len(self.idCameras_list)-1)
+        #assert(camn==len(self.idCameras_list)-1)
         
 
         # Get mainbrain's coordinates port, once per each camera.
@@ -3162,7 +3253,7 @@ class MainbrainInterface(object):
             # Launch a thread to handle echo_timestamp, once per each camera.
             rospy.logwarn('Starting: %s...' % ('echo_timestamp_'+guid))
             camera = {'echo_timestamp': self.get_echo_time}
-            self.threadEchoTime_dict[guid] = threading.Thread(target=ThreadEchoTimestamp, name='echo_timestamp_'+guid, args=(guid, iCamera, camera))
+            self.threadEchoTime_dict[guid] = threading.Thread(target=ThreadEchoTimestamp, name='echo_timestamp_'+guid, args=(guid, camn, camera))
             self.threadEchoTime_dict[guid].setDaemon(True) # quit that thread if it's the only one left...
             self.threadEchoTime_dict[guid].start()
             rospy.logwarn('Started %s' % ('echo_timestamp_'+guid))
