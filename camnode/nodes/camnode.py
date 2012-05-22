@@ -1984,42 +1984,6 @@ class AppState(object):
         self.options = options
         self._real_quit_function = None
         
-        self.mainbrain = MainbrainInterface(use_ros_interface=USE_ROS_INTERFACE)
-
-        # Check version of Mainbrain.
-        if not self.options.ignore_version:
-            try:
-                versionMainbrain = self.mainbrain.get_version()
-            except Pyro.errors.ProtocolError, err:
-                rospy.logerr ('CANNOT FIND MAINBRAIN.')
-                raise Pyro.errors.ProtocolError
-            else:
-                assert versionMainbrain == flydra.version.__version__
-
-
-
-        # Get the source of the images, i.e. from files, from simulation, or from the cameras. 
-        self.filespecImageSources = self.options.emulation_imagesources
-        if self.filespecImageSources is not None:                                       # Command-line specified image sources, i.e. emulation.
-            self.sourceImages = 'Emulation'
-            self.filespecImageSources = self.filespecImageSources.split( os.pathsep )
-            nCameras = len( self.filespecImageSources )
-        elif self.options.simulate_point_extraction is not None:                        # Command-line specified simulation. 
-            self.sourceImages = 'Simulation'
-            self.filespecImageSources = self.options.simulate_point_extraction.split( os.pathsep )
-            nCameras = len( self.filespecImageSources )
-        elif self.benchmark:                                                            # Command-line specified to benchmark. 
-            self.sourceImages = 'Benchmark'
-            nCameras = 1
-        else:                                                                           # None of the above.  Use the cameras.
-            self.sourceImages = 'Cameras'
-            g_cam_iface = cam_iface_choose.import_backend( self.options.backend, self.options.wrapper )
-            self.camerainfolist = self.get_camerainfo_list()
-            nCameras = len(self.camerainfolist)
-
-        if nCameras == 0:
-            raise RuntimeError('No cameras detected')
-
         # Dictionaries for each guid.
         self.cameras_byguid = {}
         self.status_camera_byguid = {}
@@ -2029,6 +1993,7 @@ class AppState(object):
         self.saversUFMF_byguid = {}
         self.events_byguid = {}
         self.imagesource_byguid = {}
+        self.filename_imagesource_byguid = {}
         self.imagecontrollers_byguid = {}
         self.initial_images_byguid = {}
         self.params_imagesource_byguid = {}
@@ -2044,6 +2009,50 @@ class AppState(object):
         self.namespace_base      = 'guid_%s'
         self.namespace_camera    = self.namespace_base+'/camera'
         self.namespace_processor = self.namespace_base+'/processor'
+
+        self.mainbrain = MainbrainInterface(use_ros_interface=USE_ROS_INTERFACE)
+
+        # Check version of Mainbrain.
+        if not self.options.ignore_version:
+            try:
+                versionMainbrain = self.mainbrain.get_version()
+            except Pyro.errors.ProtocolError, err:
+                rospy.logerr ('CANNOT FIND MAINBRAIN.')
+                raise Pyro.errors.ProtocolError
+            else:
+                assert versionMainbrain == flydra.version.__version__
+
+
+        g_cam_iface = cam_iface_choose.import_backend( self.options.backend, self.options.wrapper )
+        self.camerainfo_list = self.get_camerainfo_list()
+        guidlist = self.get_guid_list()
+
+
+        # Get the source of the images, i.e. from files, from simulation, or from the cameras. 
+        if self.options.emulation_imagesources is not None:                             # Command-line specified image sources, i.e. emulation.
+            self.sourceImages = 'Emulation'
+            filename_list = self.options.emulation_imagesources.split( os.pathsep )
+            for filename in filename_list:
+                guid = self.guid_from_filename(filename)
+                self.filename_imagesource_byguid[guid] = filename
+                     
+            nCameras = len( self.filename_imagesource_byguid )
+            
+        elif self.options.simulate_point_extraction is not None:                        # Command-line specified simulation. 
+            self.sourceImages = 'Simulation'
+            self.filename_imagesource_byguid = self.options.simulate_point_extraction.split( os.pathsep )
+            nCameras = len( self.filename_imagesource_byguid )
+            
+        elif self.benchmark:                                                            # Command-line specified to benchmark. 
+            self.sourceImages = 'Benchmark'
+            nCameras = 1
+            
+        else:                                                                           # None of the above.  Use the cameras.
+            self.sourceImages = 'Cameras'
+            nCameras = len(self.camerainfo_list)
+
+        if nCameras == 0:
+            raise RuntimeError('No cameras detected')
 
         # Get the filenames of the mask images.
         filespecMaskImages = self.options.mask_images
@@ -2324,8 +2333,8 @@ class AppState(object):
     # Convert a guid into the camera index as used by g_cam_iface.
     def index_camiface_from_guid(self, guid):
         iCamiface = None
-        if self.camerainfolist is not None:
-            for ci in self.camerainfolist:
+        if self.camerainfo_list is not None:
+            for ci in self.camerainfo_list:
                 if ci[2]==guid:
                     iCamiface = ci[3]
                     break
@@ -2384,13 +2393,16 @@ class AppState(object):
 
         
         elif self.sourceImages=='Simulation': #self.options.simulate_point_extraction:
-            (camera, imagesource_model, initial_images)  = create_cam_for_emulation_imagesource(self.filespecImageSources[guid])
+            (camera, imagesource_model, initial_images)  = create_cam_for_emulation_imagesource(self.filename_imagesource_byguid[guid])
         
         elif self.sourceImages=='Benchmark': #self.benchmark: # emulate full images with random number generator
             (camera, imagesource_model, initial_images) = create_cam_for_emulation_imagesource('<rng>')
         
-        else: #self.sourceImages=='Emulation': # emulate full images
-            (camera, imagesource_model, initial_images)  = create_cam_for_emulation_imagesource(self.filespecImageSources[guid])
+        elif self.sourceImages=='Emulation': # emulate full images
+            (camera, imagesource_model, initial_images)  = create_cam_for_emulation_imagesource(self.filename_imagesource_byguid[guid])
+
+        else:
+            assert(False)
             
             
         return (camera, imagesource_model, initial_images)
@@ -2447,20 +2459,32 @@ class AppState(object):
     
     
     # get_guid_list()
-    # From the list of all cameras (self.camerainfolist), and any guids on the command-line (--guidlist),
     # Return the list of guids to use.
     def get_guid_list (self):
         guidlistAll = []
-        if self.camerainfolist is not None:
-            for ci in self.camerainfolist:
+        if self.camerainfo_list is not None:
+            for ci in self.camerainfo_list:
                 guidlistAll.append(ci[2])
                 
         return guidlistAll
     
     
+    # guid_from_filename()
+    # Returns the guid portion from a filename of the format:  /home/user/FLYDRA_SMALL_MOVIES/small_20120522_132930_3053000138E639h.ufmf
+    # Where the guid is located between the last underscore and the last period.  
+    def guid_from_filename(self, filename):
+        i_underscore = filename.rfind('_')
+        i_period = filename.rfind('.')
+        return filename[i_underscore+1:i_period]
+    
+    
+    # From the list of all cameras via cam_iface, 
+    # and from any guids on the command-line (--guidlist),
+    # and from any guids indirectly contained in command-line filenames (--emulation-source),
+    # Create the list of camerainfo.
     def get_camerainfo_list(self):
         # Get the camerainfo for all the cameras, in default order.
-        camerainfolistAll = []
+        camerainfoCameras_list = []
         for iCamiface in range(g_cam_iface.get_num_cameras()):
             try:
                 camerainfo =  g_cam_iface.get_camera_info(iCamiface)  # A camerainfo is:    ('brand','model','guid')
@@ -2468,33 +2492,51 @@ class AppState(object):
                 camerainfo = ('na','na','na')
                 
             camerainfoEx = camerainfo + (iCamiface,)                  # A camerainfoEx is:  ('brand','model','guid', index)
-            camerainfolistAll.append(camerainfoEx)
-        camerainfolistAll.sort() # Make sure list is always in same order for attached cameras
-        camerainfolistAll.reverse() # Any ordering will do, but reverse for historical reasons
+            camerainfoCameras_list.append(camerainfoEx)
+        camerainfoCameras_list.sort() # Make sure list is always in same order for attached cameras
+        camerainfoCameras_list.reverse() # Any ordering will do, but reverse for historical reasons
 
-        # If any guids on the command-line, then make a new camerainfolist consisting only of entries w/ those guids.
-        if self.options.guidlist != 'all':
+        # If command-line imagesources, then create the camerainfo_list from those given (indirectly) in the command-line filenames. 
+        if self.options.emulation_imagesources is not None:
+            camerainfoEmulation_list = []
+            for filename in self.options.emulation_imagesources.split(os.pathsep):
+                guid = self.guid_from_filename(filename)
+                iCamiface = None
+                for i in range(len(camerainfoCameras_list)):
+                    if camerainfoCameras_list[i][2] == guid:
+                        brand =camerainfoCameras_list[i][0]
+                        model =camerainfoCameras_list[i][1]
+                        iCamiface = i
+                camerainfoEx = (brand, model, guid, iCamiface)
+                camerainfoEmulation_list.append(camerainfoEx)
+                camerainfo_list = camerainfoEmulation_list
+
+            
+        # Else if command-line guids, then use them.
+        elif self.options.guidlist != 'all':
             guidlist = self.options.guidlist.split(',')
-            camerainfolist = []
+            camerainfoGuid_list = []
             for guid in guidlist:
-                for camerainfoEx in camerainfolistAll:
+                for camerainfoEx in camerainfoCameras_list:
                     if guid==camerainfoEx[2]:
-                        camerainfolist.append(camerainfoEx)
-            camerainfolist = camerainfolist
+                        camerainfoGuid_list.append(camerainfoEx)
+            camerainfo_list = camerainfoGuid_list
+            
+        # Else use the connected cameras.
         else:
-            camerainfolist = camerainfolistAll
+            camerainfo_list = camerainfoCameras_list
 
         
         if self.options.show_cam_details:
             rospy.logwarn ('Detected Cameras:')
-            for camerainfoEx in camerainfolistAll:
+            for camerainfoEx in camerainfoCameras_list:
                 rospy.logwarn(camerainfoEx)
             rospy.logwarn ('Using Cameras:')
-            for camerainfoEx in camerainfolist:
+            for camerainfoEx in camerainfo_list:
                 rospy.logwarn(camerainfoEx)
                  
                 
-        return camerainfolist
+        return camerainfo_list
 
     
     def get_mask_from_file(self, filespecMaskImage):

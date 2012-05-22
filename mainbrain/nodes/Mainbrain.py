@@ -1097,7 +1097,7 @@ class CoordinateProcessor(threading.Thread):
                 sumsqf_val = point_tuple[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
 
                 # Don't bother saving if we don't know when it was from
-                if fn_corrected is None:
+                if fn is None:
                     continue
                 
                 # Append all to the given list.
