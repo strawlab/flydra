@@ -1890,7 +1890,7 @@ class Mainbrain(object):
                     with self.caminfo_byguid[guid]['lock']:
                         connected = self.caminfo_byguid[guid]['caller'].connected
                     if not connected:
-                        rospy.logwarn( 'mainbrain lost camera %s at %s'%(guid, time.asctime()))
+                        rospy.logwarn( 'Lost camera:  %s' % guid)
                         self.close_camera(guid)
             self.thread_done.set()
 
@@ -1959,6 +1959,8 @@ class Mainbrain(object):
             self.event_no_cams.clear()
             with self.lock_changed_cam:
                 self.new_guids.append(guid)
+                
+            rospy.logwarn ('Registered camera:  %s' % guid)
             return guid
 
         def set_image(self, guid, coord_and_image):

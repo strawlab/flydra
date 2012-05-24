@@ -337,7 +337,23 @@ class ProcessCamData(object):
                  mainbrain = None,
                  ):
 
-        
+#        rospy.logwarn ('ProcessCamData(')
+#        for item in [guid,
+#                     max_num_points,
+#                     roi2_radius,
+#                     bg_frame_interval,
+#                     bg_frame_alpha,
+#                     mask_image,
+#                     framerate,
+#                     lbrt,
+#                     max_height,
+#                     max_width,
+#                     events,
+#                     options,
+#                     initial_images,
+#                     benchmark,
+#                     mainbrain]:
+#            rospy.logwarn ('%s' % repr(item))
 
         self.benchmark = benchmark
         self.options = options
@@ -384,7 +400,7 @@ class ProcessCamData(object):
         self.new_roi = threading.Event()
         self.new_roi_data = None
         self.new_roi_data_lock = threading.Lock()
-        self.queue_incoming_raw_frames = Queue.Queue()
+        self.incoming_raw_frames_queue = Queue.Queue()
 
         self.max_height = max_height
         self.max_width = max_width
@@ -605,7 +621,7 @@ class ProcessCamData(object):
 
 
     def get_raw_queued_frame(self):
-        return self.queue_incoming_raw_frames.get_nowait()
+        return self.incoming_raw_frames_queue.get_nowait()
 
     def get_most_recent_frame(self):
         return self.most_recent_frame_potentially_corrupt
@@ -620,7 +636,7 @@ class ProcessCamData(object):
         bg_frame_number = -1
         clear_background_event = self.events['clear_background_event']
         take_background_event = self.events['take_background_event']
-
+  
 
         max_frame_size = FastImage.Size(self.max_width, self.max_height)
 
@@ -712,9 +728,8 @@ class ProcessCamData(object):
 
         initial_take_bg_state = None
 
-        while 1:
-            #rospy.logwarn('mainloop')
-            #rospy.logwarn('waiting for imagebuffer from %s' % self._chain)
+        while True:
+            #rospy.logwarn ('processor.mainloop(), chain.queue.qsize()=%d.  Will block if empty.' % self._chain._queue.qsize())
             with camnode_utils.use_buffer_from_chain(self._chain) as imagebuffer:
                 if imagebuffer.quit_now:
                     break
@@ -768,8 +783,8 @@ class ProcessCamData(object):
                         imageRaw.encoding = 'bayer_bggr8'
                     elif pixel_format in ('RAW8:GBRG','MONO8:GBRG'):
                         imageRaw.encoding = 'bayer_gbrg8'
-                    elif pixel_format in ('RAW8:GRBG','MONO8:GRBG'):
-                        imageRaw.encoding = 'bayer_grbg8'
+                    elif pixel_format == 'UNKNOWN':
+                        imageRaw.encoding = 'mono8'
                     else:
                         raise ValueError('unknown pixel format "%s"'%pixel_format)
 
@@ -837,7 +852,6 @@ class ProcessCamData(object):
                 points = self._convert_to_wire_order( xpoints, imgROI, imgRunningMean, running_sumsqf)
 
                 # Allow other thread to see images
-                #rospy.logwarn (self.parameters['visible_image_view'])
                 if self.parameters['visible_image_view'] == 'raw':
                     export_image = imgROI
                 else:
@@ -846,20 +860,19 @@ class ProcessCamData(object):
 
                 if 1:
                     # Allow other thread to see raw image always (for saving)
-                    if self.queue_incoming_raw_frames.qsize() >1000:
+                    if self.incoming_raw_frames_queue.qsize() >1000:
                         # Chop off some old frames to prevent memory explosion
                         rospy.logwarn('ERROR: Deleting 100 old frames to make room for new ones!')
                         for i in range(100):
-                            self.queue_incoming_raw_frames.get_nowait()
-                            
-                    self.queue_incoming_raw_frames.put((imgROI.get_8u_copy(imgROI.size), # save a copy
+                            self.incoming_raw_frames_queue.get_nowait()
+
+                    self.incoming_raw_frames_queue.put((imgROI.get_8u_copy(imgROI.size), # save a copy
                                                       timestamp_image,
                                                       framenumber,
                                                       points,
                                                       self.realtime_analyzer.roi,
                                                       timestamp_camera_received,
                                                       ))
-                    #rospy.logwarn(' '*20+'put frame')
 
                 do_bg_maint = False
 
@@ -1080,18 +1093,18 @@ class SaveFMF(object):
                  quit_event=None):
         self._chain = camnode_utils.ChainLink()
         self._guid = guid
-        self.cmd = Queue.Queue()
+        self.cmd_queue = Queue.Queue()
         
     def get_chain(self):
         return self._chain
     
     def start_recording(self, filenamebaseFMF = None):
         """threadsafe"""
-        self.cmd.put( ('save', filenamebaseFMF) )
+        self.cmd_queue.put( ('save', filenamebaseFMF) )
 
     def stop_recording(self, *args, **kw):
         """threadsafe"""
-        self.cmd.put( ('stop',) )
+        self.cmd_queue.put( ('stop',) )
 
     def mainloop(self):
         # Note: need to accummulate frames into queue and add with .add_frames() for speed
@@ -1111,8 +1124,8 @@ class SaveFMF(object):
         while True:
 
             # 1: process commands
-            while not self.cmd.empty():
-                cmd = self.cmd.get()
+            while not self.cmd_queue.empty():
+                cmd = self.cmd_queue.get()
                 
                 if cmd[0] == 'save':
                     rospy.logwarn('Saving .fmf'+'-'*50)
@@ -1229,7 +1242,7 @@ class SaveUFMF(object):
         self.options = options
         self._chain = camnode_utils.ChainLink()
         self._guid = guid
-        self.cmd = Queue.Queue()
+        self.cmd_queue = Queue.Queue()
         self.movieUfmf = None
         if mkdir_lock is not None:
             self._mkdir_lock = mkdir_lock
@@ -1241,11 +1254,11 @@ class SaveUFMF(object):
     
     def start_recording(self, filenamebaseUFMF=None):
         """threadsafe"""
-        self.cmd.put( ('save',filenamebaseUFMF))
+        self.cmd_queue.put( ('save',filenamebaseUFMF))
 
     def stop_recording(self,*args,**kw):
         """threadsafe"""
-        self.cmd.put( ('stop',) )
+        self.cmd_queue.put( ('stop',) )
 
     def mainloop(self):
         # Note: need to accummulate frames into queue and add with .add_frames() for speed
@@ -1262,9 +1275,9 @@ class SaveUFMF(object):
         while True:
 
             while True:
-                if self.cmd.empty():
+                if self.cmd_queue.empty():
                     break
-                cmd = self.cmd.get()
+                cmd = self.cmd_queue.get()
                 
                 if cmd[0] == 'save':
                     print 'Saving .ufmf','-'*50
@@ -1423,7 +1436,7 @@ class ImageSource(threading.Thread):
     def set_chain(self, new_chain):
         # XXX TODO FIXME: put self._chain behind lock
         if self._chain is not None:
-            raise NotImplementedError('replacing a processing chain not implemented')
+            raise NotImplementedError('Replacing a processing chain not implemented.')
         self._chain = new_chain
         
     def get_namespace(self):
@@ -1447,7 +1460,7 @@ class ImageSource(threading.Thread):
                         rospy.logwarn ('Resuming normal image acquisition')
                         break
 
-            # this gets a new (unused) imagebuffer from the preallocated pool
+            # This gets an imagebuffer from the preallocated pool.
             with get_free_imagebuffer_from_pool(self.imagebuffer_pool) as imagebuffer:
                 imagebuffer.quit_now = False
 
@@ -1494,93 +1507,6 @@ class ImageSource(threading.Thread):
                 self._chain.put( imagebuffer )
 
 
-
-class ImageSourceControllerBase(object):
-    pass
-
-class ImageSourceFromCamera(ImageSource):
-    def __init__(self,*args,**kwargs):
-        ImageSource.__init__(self,*args,**kwargs)
-        self._prosilica_hack_last_framenumber = None
-        self._prosilica_hack_framenumber_offset = 0
-
-    def _block_until_ready(self):
-        # no-op for realtime camera processing
-        pass
-
-    def spawn_controller(self):
-        imagecontroller = ImageSourceControllerBase()
-        return imagecontroller
-
-    def _grab_imagebuffer_quick(self):
-        try:
-            with self.camera._hack_acquire_lock():
-                trash = self.camera.grab_next_frame_blocking()
-        except g_cam_iface.BuffersOverflowed:
-            msg = 'ERROR: Buffers overflowed on %s at %s'%(self.guid, rospy.Time.now().to_sec())
-            rospy.logerr(msg)
-        except g_cam_iface.FrameDataMissing:
-            pass
-        except g_cam_iface.FrameDataCorrupt:
-            pass
-        except g_cam_iface.FrameSystemCallInterruption:
-            pass
-
-    def _grab_into_imagebuffer(self, image ):
-        try_again_condition= False
-
-        with self.camera._hack_acquire_lock():
-            # transfer thread ownership into this thread. (This is a
-            # semi-evil hack into camera class... Should call a method
-            # like self.camera.acquire_thread())
-            # self.camera.mythread=threading.currentThread()
-
-            try:
-                self.camera.grab_next_frame_into_buf_blocking(image)
-            except g_cam_iface.BuffersOverflowed:
-                rospy.logdebug('(O%s)'%self.guid)
-                now = rospy.Time.now().to_sec()
-                msg = 'ERROR: Buffers overflowed on %s at %s'%(self.guid, rospy.Time.now().to_sec())
-                rospy.logerr(msg)
-                try_again_condition = True
-            except g_cam_iface.FrameDataMissing:
-                rospy.logdebug('(M%s)'%self.guid)
-                now = rospy.Time.now().to_sec()
-                msg = 'Warning: frame data missing on %s at %s'%(self.guid, rospy.Time.now().to_sec())
-                rospy.logerr(msg)
-                try_again_condition = True
-            except g_cam_iface.FrameDataCorrupt:
-                rospy.logdebug('(C%s)'%self.guid)
-                now = rospy.Time.now().to_sec()
-                msg = 'Warning: frame data corrupt on %s at %s'%(self.guid,rospy.Time.now().to_sec())
-                rospy.logerr(msg)
-                try_again_condition = True
-            except (g_cam_iface.FrameSystemCallInterruption, g_cam_iface.NoFrameReturned):
-                rospy.logdebug('(S%s)'%self.guid)
-                try_again_condition = True
-
-            if not try_again_condition:
-                # get best guess as to when image was taken
-                timestamp=self.camera.get_last_timestamp()
-                framenumber=self.camera.get_last_framenumber()
-
-                # Hack to deal with Prosilica framenumber resetting at
-                # 65535 (even though it's an unsigned long).
-
-                _prosilica_hack_max_skipped_frames = 100
-                if ((framenumber<=_prosilica_hack_max_skipped_frames) and
-                    (self._prosilica_hack_last_framenumber >= 65536-_prosilica_hack_max_skipped_frames) and
-                    (self._prosilica_hack_last_framenumber < 65536)):
-                    # We're dealing with a Prosilica camera which just
-                    # rolled over.
-                    self._prosilica_hack_framenumber_offset += 65636
-                self._prosilica_hack_last_framenumber = framenumber
-                framenumber += self._prosilica_hack_framenumber_offset
-            else:
-                timestamp = framenumber = None
-        return try_again_condition, timestamp, framenumber
-
-
     # Handle queued parameters (from dynamic_reconfigure).
     def handle_queued_parameters(self):
         parameters = {}
@@ -1621,6 +1547,94 @@ class ImageSourceFromCamera(ImageSource):
     
 
 
+class ImageSourceControllerBase(object):
+    pass
+
+class ImageSourceFromCamera(ImageSource):
+    def __init__(self,*args,**kwargs):
+        ImageSource.__init__(self,*args,**kwargs)
+        self._prosilica_hack_fn_cur = None
+        self._prosilica_hack_framenumber_offset = 0
+
+    def _block_until_ready(self):
+        # no-op for realtime camera processing
+        pass
+
+    def spawn_controller(self):
+        imagecontroller = ImageSourceControllerBase()
+        return imagecontroller
+
+    def _grab_imagebuffer_quick(self):
+        try:
+            with self.camera._hack_acquire_lock():
+                trash = self.camera.grab_next_frame_blocking()
+        except g_cam_iface.BuffersOverflowed:
+            msg = 'ERROR: Buffers overflowed on %s at %s'%(self.guid, rospy.Time.now().to_sec())
+            rospy.logerr(msg)
+        except g_cam_iface.FrameDataMissing:
+            pass
+        except g_cam_iface.FrameDataCorrupt:
+            pass
+        except g_cam_iface.FrameSystemCallInterruption:
+            pass
+
+    def _grab_into_imagebuffer(self, image ):
+        try_again_condition= False
+
+        with self.camera._hack_acquire_lock():
+            # transfer thread ownership into this thread. (This is a
+            # semi-evil hack into camera class... Should call a method
+            # like self.camera.acquire_thread())
+            # self.camera.mythread=threading.currentThread()
+
+            try:
+                self.camera.grab_next_frame_into_buf_blocking(image) # This can block.
+            except g_cam_iface.BuffersOverflowed:
+                rospy.logdebug('(O%s)'%self.guid)
+                now = rospy.Time.now().to_sec()
+                msg = 'ERROR: Buffers overflowed on %s at %s'%(self.guid, rospy.Time.now().to_sec())
+                rospy.logerr(msg)
+                try_again_condition = True
+            except g_cam_iface.FrameDataMissing:
+                rospy.logdebug('(M%s)'%self.guid)
+                now = rospy.Time.now().to_sec()
+                msg = 'Warning: frame data missing on %s at %s'%(self.guid, rospy.Time.now().to_sec())
+                rospy.logerr(msg)
+                try_again_condition = True
+            except g_cam_iface.FrameDataCorrupt:
+                rospy.logdebug('(C%s)'%self.guid)
+                now = rospy.Time.now().to_sec()
+                msg = 'Warning: frame data corrupt on %s at %s'%(self.guid,rospy.Time.now().to_sec())
+                rospy.logerr(msg)
+                try_again_condition = True
+            except (g_cam_iface.FrameSystemCallInterruption, g_cam_iface.NoFrameReturned):
+                rospy.logdebug('(S%s)'%self.guid)
+                try_again_condition = True
+
+            if not try_again_condition:
+                # get best guess as to when image was taken
+                timestamp=self.camera.get_last_timestamp()
+                framenumber=self.camera.get_last_framenumber()
+
+                # Hack to deal with Prosilica framenumber resetting at
+                # 65535 (even though it's an unsigned long).
+
+                _prosilica_hack_max_skipped_frames = 100
+                if ((framenumber<=_prosilica_hack_max_skipped_frames) and
+                    (self._prosilica_hack_fn_cur >= 65536-_prosilica_hack_max_skipped_frames) and
+                    (self._prosilica_hack_fn_cur < 65536)):
+                    # We're dealing with a Prosilica camera which just
+                    # rolled over.
+                    self._prosilica_hack_framenumber_offset += 65636
+                self._prosilica_hack_fn_cur = framenumber
+                framenumber += self._prosilica_hack_framenumber_offset
+            else:
+                timestamp = framenumber = None
+        return try_again_condition, timestamp, framenumber
+
+
+
+
 class ImageSourceFakeCamera(ImageSource):
 
     # XXX TODO: I should actually just incorporate all the fake cam
@@ -1637,19 +1651,20 @@ class ImageSourceFakeCamera(ImageSource):
         super( ImageSourceFakeCamera, self).__init__(*args,**kw)
 
     def _block_until_ready(self):
-        while 1:
+        while True:
             if self.quit_event.isSet():
                 return
 
+            # Every 1000 frames, print the frames-per-second.
             if self._count==0:
                 self._tstart = rospy.Time.now().to_sec()
-            elif self._count>=1000:
+            elif self._count >= 1000:
                 tstop = rospy.Time.now().to_sec()
                 dur = tstop-self._tstart
                 fps = self._count/dur
-                print 'fps: %.1f'%(fps,)
+                rospy.logwarn ('fps: %.1f' % fps)
 
-                # prepare for next
+                # Prepare for next
                 self._tstart = tstop
                 self._count = 0
             self._count += 1
@@ -1657,13 +1672,16 @@ class ImageSourceFakeCamera(ImageSource):
             # This lock ping-pongs execution back and forth between
             # "acquire" and process.
 
+            # Check if a "step" is requested; unblock.
             self._do_step.wait(0.01) # timeout
             if self._do_step.isSet():
                 self._do_step.clear()
                 return
+            
             if self._imagebuffer_pool is not None:
                 r=self._imagebuffer_pool.get_num_outstanding_imagebuffers()
                 self._do_step.set()
+
 
     def register_imagebuffer_pool( self, imagebuffer_pool ):
         assert self._imagebuffer_pool is None,'imagebuffer pool may only be set once'
@@ -1677,8 +1695,8 @@ class ImageSourceFakeCamera(ImageSource):
                 self._quit_event = quit_event
             def trigger_single_frame_start(self):
                 self._do_step.set()
-            def set_to_frame_0(self):
-                self._fake_cam.set_to_frame_0()
+            def set_to_fn0(self):
+                self._fake_cam.set_to_fn0()
             def is_finished(self):
                 #print 'self._fake_cam.is_finished()',self._fake_cam.is_finished()
                 return self._fake_cam.is_finished()
@@ -1692,7 +1710,7 @@ class ImageSourceFakeCamera(ImageSource):
         return imagecontroller
 
     def _grab_imagebuffer_quick(self):
-        time.sleep(0.05)
+        rospy.sleep(0.05)
 
     def _grab_into_imagebuffer(self, image ):
         with self.camera._hack_acquire_lock():
@@ -1701,7 +1719,10 @@ class ImageSourceFakeCamera(ImageSource):
             try_again_condition = False
             timestamp=self.camera.get_last_timestamp()
             framenumber=self.camera.get_last_framenumber()
+            
         return try_again_condition, timestamp, framenumber
+
+
 
 
 ###############################################################################
@@ -1721,6 +1742,9 @@ class FakeCamera(object):
 
     def get_trigger_mode_number(self):
         return 0
+    
+    def set_trigger_mode_number(self, mode):
+        pass
 
     def get_max_height(self):
         left,bottom,width,height = self.get_frame_roi()
@@ -1741,6 +1765,7 @@ class FakeCamera(object):
 
     def get_trigger_mode_string(self,i):
         return 'fake camera trigger'
+
 
 class FakeCameraFromNetwork(FakeCamera):
     def __init__(self,guid,frame_size):
@@ -1763,20 +1788,21 @@ class FakeCameraFromNetwork(FakeCamera):
             uriRemote = "PYROLOC://%s:%d/%s" % (hostname, port, name)
             self.proxyRemote = Pyro.core.getProxyForURI(uriRemote)
 
-    def grab_next_frame_into_buf_blocking(self,buf, quit_event):
+
+    def grab_next_frame_into_buf_blocking(self, image, quit_event):
         # XXX TODO: implement quit_event checking
         self._ensure_remote()
 
-        pt_list = self.proxyRemote.get_point_list(self.guid) # this will block...
+        pt_list = self.proxyRemote.get_point_list(self.guid) # This can block.
         width,height = self.frame_size
-        new_raw = np.asarray( buf )
-        assert new_raw.shape == (height,width)
+        npimage = np.asarray( image )
+        assert npimage.shape == (height,width)
         for pt in pt_list:
             x,y = pt
             xi = int(round(x))
             yi = int(round(y))
-            new_raw[yi,xi] = 10
-        return new_raw
+            npimage[yi,xi] = 10
+        return npimage
 
     def get_last_timestamp(self):
         self._ensure_remote()
@@ -1786,13 +1812,14 @@ class FakeCameraFromNetwork(FakeCamera):
         self._ensure_remote()
         return self.proxyRemote.get_last_framenumber(self.guid) # this will block...
 
+
 class FakeCameraFromRNG(FakeCamera):
     def __init__(self, guid, frame_size):
         self.guid = guid
         self.frame_size = frame_size
         self.proxyRemote = None
-        self.last_timestamp = 0.0
-        self.last_count = -1
+        self._timestamp_cur = 0.0
+        self._fn_cur = -1
         self._hack_acquire_lock = threading.Lock
 
     def get_pixel_coding(self):
@@ -1802,119 +1829,125 @@ class FakeCameraFromRNG(FakeCamera):
         width,height=self.frame_size
         return 0,0,width,height
 
-    def grab_next_frame_into_buf_blocking(self,buf, quit_event):
+    def grab_next_frame_into_buf_blocking(self, image, quit_event):
         # XXX TODO: implement quit_event checking
         width,height = self.frame_size
-        new_raw = np.asarray( buf )
-        assert new_raw.shape == (height,width)
-        self.last_timestamp = rospy.Time.now().to_sec()
-        self.last_count += 1
+        npimage = np.asarray(image)
+        assert npimage.shape == (height,width)
+        self._timestamp_cur = rospy.Time.now().to_sec()
+        self._fn_cur += 1
         for pt_num in range( np.random.randint(5) ):
             x,y = np.random.uniform(0.0,1.0,size=(2,))
             xi = int(round(x*(width-1)))
             yi = int(round(y*(height-1)))
-            new_raw[yi,xi] = 10
-        return new_raw
+            npimage[yi,xi] = 10
+        return npimage
 
     def get_last_timestamp(self):
-        return self.last_timestamp
+        return self._timestamp_cur
 
     def get_last_framenumber(self):
-        return self.last_count
+        return self._fn_cur
+
 
 class FakeCameraFromFMF(FakeCamera):
 
-    def __init__(self,filename):
-        self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
+    def __init__(self, filename):
+        self.fmf_recarray = FlyMovieFormat.mmap_flymovie(filename)
         if 0:
             print 'short!'
             self.fmf_recarray = self.fmf_recarray[:600]
 
         self._n_frames = len(self.fmf_recarray)
-        self._curframe = SharedValue1(0)
-        self._frame_offset = 0
+        self._fn_cur = SharedValue1(0)
+        self._offset_fn = 0 # The offset makes sure the fn_cur monotonically increases when the file loops, etc.
         self._hack_acquire_lock = threading.Lock
+        self._framerate = 20.0
+        self._timestamp_cur = None
 
+    def set_framerate(self, framerate):
+        self._framerate = framerate
 
     def get_n_frames(self):
         return self._n_frames
 
     def get_frame_roi(self):
         height,width = self.fmf_recarray['frame'][0].shape
-        return 0,0,width,height
+        return (0,0,width,height)
 
-    def grab_next_frame_into_buf_blocking(self, buf, quit_event):
-        buf = numpy.asarray( buf )
-        curframe = self._curframe.get()
-        while self.is_finished():
+    def grab_next_frame_into_buf_blocking(self, image, quit_event):
+        npimage = numpy.asarray(image)
+        
+        while self.is_finished(): # While we're being asked to go off the end, wait until we get told to return to beginning.
             if quit_event.isSet():
                 return
-            # We're being asked to go off the end here...
-            # wait until we get told to return to beginning.
-            time.sleep(0.05)
-            curframe = self._curframe.get()
-        buf[:,:] = self.fmf_recarray['frame'][ curframe ]
-        self._last_timestamp = self.fmf_recarray['timestamp'][ curframe ]
-        self._last_framenumber = curframe + self._frame_offset
-        self._curframe.set( curframe + 1 )
+
+            rospy.sleep(1/self._framerate)
+            
+        
+        fn_cur = self._fn_cur.get()
+        npimage[:,:] = self.fmf_recarray['frame'][fn_cur]
+        self._timestamp_cur = self.fmf_recarray['timestamp'][fn_cur]
+        #self._fn_cur = fn_cur + self._offset_fn
+        self._fn_cur.set(fn_cur + 1)
+        #rospy.logwarn('fn_cur = %d' % fn_cur)
 
     def get_last_timestamp(self):
-        return self._last_timestamp
+        return self._timestamp_cur
 
     def get_last_framenumber(self):
-        return self._last_framenumber
+        return self._fn_cur.get() + self._offset_fn
 
-    def set_to_frame_0(self):
-        self._frame_offset += self._curframe.get()
-        self._curframe.set( 0 )
+    def set_to_fn0(self):
+        self._offset_fn += self._fn_cur.get()
+        self._fn_cur.set(0)
 
     def is_finished(self):
         # this can is called by any thread
         #print "len( self.fmf_recarray['frame'] )",len( self.fmf_recarray['frame'] )
-        #print "self._curframe.get()",self._curframe.get()
-        result = self._curframe.get() >= len( self.fmf_recarray['frame'] )
-        #print result
-        #print
-        return result
+        #print "self._fn_cur.get()",self._fn_cur.get()
+        rv = self._fn_cur.get() >= len(self.fmf_recarray['frame'])
 
-def create_cam_for_emulation_imagesource( filename_or_pseudofilename ):
-    """factory function to create fake camera and imagesource_model"""
-    fname = filename_or_pseudofilename
-    if fname.endswith('.fmf'):
-        camera = FakeCameraFromFMF(fname)
+        return rv
+
+def create_cam_for_emulation_imagesource(filename):
+    """Factory function to create fake camera and imagesource_model"""
+    if filename.endswith('.fmf'):
+        camera = FakeCameraFromFMF(filename)
         imagesource_model = ImageSourceFakeCamera
 
-        mean_filename = os.path.splitext(fname)[0] + '_mean' + '.fmf'
-        sumsqf_filename = os.path.splitext(fname)[0] + '_sumsqf' + '.fmf'
+        filename_mean = os.path.splitext(filename)[0] + '_mean' + '.fmf'
+        filename_sumsqf = os.path.splitext(filename)[0] + '_sumsqf' + '.fmf'
 
-        fmf_ra = FlyMovieFormat.mmap_flymovie( fname )
-        mean_ra =  FlyMovieFormat.mmap_flymovie( mean_filename )
-        sumsqf_ra = FlyMovieFormat.mmap_flymovie( sumsqf_filename ) # not really mean2 (actually running_sumsqf)
+        ra_fmf = FlyMovieFormat.mmap_flymovie(filename)
+        ra_mean =  FlyMovieFormat.mmap_flymovie(filename_mean)
+        ra_sumsqf = FlyMovieFormat.mmap_flymovie(filename_sumsqf)
 
-        t0 = fmf_ra['timestamp'][0]
-        mean_t0 = mean_ra['timestamp'][0]
-        sumsqf_t0 = sumsqf_ra['timestamp'][0]
+        t0 = ra_fmf['timestamp'][0]
+        t0_mean = ra_mean['timestamp'][0]
+        t0_sumsqf = ra_sumsqf['timestamp'][0]
 
-        if not ((t0 >= mean_t0) and (t0 >= sumsqf_t0)):
+        if not ((t0 >= t0_mean) and (t0 >= t0_sumsqf)):
             print '*'*80
             print 'WARNING timestamps of first image frame is not before mean image timestamps. they are'
             print ' raw .fmf: %s'%repr(t0)
-            print ' mean .fmf:  %s'%repr(mean_t0)
-            print ' sumsqf .fmf: %s'%repr(sumsqf_t0)
+            print ' mean .fmf:  %s'%repr(t0_mean)
+            print ' sumsqf .fmf: %s'%repr(t0_sumsqf)
             print '*'*80
 
-        initial_images = {'mean':mean_ra['frame'][0],
-                              'sumsqf':sumsqf_ra['frame'][0],  # not really mean2 (actually running_sumsqf)
-                              'raw':fmf_ra['frame'][0]}
-        if 0 and len( mean_ra['frame'] ) > 1:
+        initial_images = {'mean':ra_mean['frame'][0],
+                          'sumsqf':ra_sumsqf['frame'][0],
+                          'raw':ra_fmf['frame'][0]}
+        if 0 and len( ra_mean['frame'] ) > 1:
             print ("No current support for reading back multi-frame "
                    "background/cmp. (But this should not be necessary, "
                    "as you can reconstruct them, anyway.)")
 
-    elif fname.endswith('.ufmf'):
+    elif filename.endswith('.ufmf'):
         raise NotImplementedError('Patience, young grasshopper')
-    elif fname.startswith('<net') and fname.endswith('>'):
-        args = fname[4:-1].strip()
+    
+    elif filename.startswith('<net') and filename.endswith('>'):
+        args = filename[4:-1].strip()
         args = args.split()
         port, width, height = map(int, args)
         camera = FakeCameraFromNetwork(port,(width,height))
@@ -1923,14 +1956,15 @@ def create_cam_for_emulation_imagesource( filename_or_pseudofilename ):
             left,bottom,width,height = camera.get_frame_roi()
             del left,bottom
 
-        imgMean = np.ones( (height,width), dtype=np.uint8 )
-        imgSumSq = np.ones( (height,width), dtype=np.uint8 )
-        imgRaw = np.ones( (height,width), dtype=np.uint8 )
+        imgMean = np.ones((height,width), dtype=np.uint8)
+        imgSumSq = np.ones((height,width), dtype=np.uint8)
+        imgRaw = np.ones((height,width), dtype=np.uint8)
 
         initial_images = {'mean':imgMean,
-                              'sumsqf':imgSumSq,
-                              'raw':imgRaw}
-    elif fname == '<rng>':
+                          'sumsqf':imgSumSq,
+                          'raw':imgRaw}
+        
+    elif filename == '<rng>':
         width, height = 640, 480
         camera = FakeCameraFromRNG('fakecam1',(width,height))
         imagesource_model = ImageSourceFakeCamera
@@ -1944,9 +1978,12 @@ def create_cam_for_emulation_imagesource( filename_or_pseudofilename ):
         initial_images = {'mean':imgMean,
                               'sumsqf':imgSumSq,
                               'raw':imgRaw}
+        
     else:
-        raise ValueError('Could not create emulation image source')
-    return camera, imagesource_model, initial_images
+        raise ValueError('Could not create emulation image source for:  %s' % filename)
+    
+    
+    return (camera, imagesource_model, initial_images)
 
 
 ###############################################################################
@@ -1960,7 +1997,7 @@ class ConsoleApp(object):
         self.quit_now = False
     def MainLoop(self):
         while not self.quit_now:
-            time.sleep(0.05)
+            rospy.sleep(0.05)
             self.call_often()
         if self.exit_value != 0:
             sys.exit(self.exit_value)
@@ -2017,7 +2054,7 @@ class AppState(object):
             try:
                 versionMainbrain = self.mainbrain.get_version()
             except Pyro.errors.ProtocolError, err:
-                rospy.logerr ('CANNOT FIND MAINBRAIN.')
+                rospy.logerr ('CANNOT FIND MAINBRAIN.  IS IT RUNNING?')
                 raise Pyro.errors.ProtocolError
             else:
                 assert versionMainbrain == flydra.version.__version__
@@ -2029,37 +2066,37 @@ class AppState(object):
 
 
         # Get the source of the images, i.e. from files, from simulation, or from the cameras. 
-        if self.options.emulation_imagesources is not None:                             # Command-line specified image sources, i.e. emulation.
-            self.sourceImages = 'Emulation'
+        if self.options.emulation_imagesources != "None":                             # Command-line specified image sources, i.e. emulation.
+            source_type = 'Emulation'
             filename_list = self.options.emulation_imagesources.split( os.pathsep )
             for filename in filename_list:
                 guid = self.guid_from_filename(filename)
-                self.filename_imagesource_byguid[guid] = filename
+                if guid is not None:
+                    self.filename_imagesource_byguid[guid] = filename
                      
-            nCameras = len( self.filename_imagesource_byguid )
+            nCameras = len(self.filename_imagesource_byguid)
             
         elif self.options.simulate_point_extraction is not None:                        # Command-line specified simulation. 
-            self.sourceImages = 'Simulation'
+            source_type = 'Simulation'
             self.filename_imagesource_byguid = self.options.simulate_point_extraction.split( os.pathsep )
             nCameras = len( self.filename_imagesource_byguid )
             
         elif self.benchmark:                                                            # Command-line specified to benchmark. 
-            self.sourceImages = 'Benchmark'
+            source_type = 'Benchmark'
             nCameras = 1
             
         else:                                                                           # None of the above.  Use the cameras.
-            self.sourceImages = 'Cameras'
+            source_type = 'Cameras'
             nCameras = len(self.camerainfo_list)
 
         if nCameras == 0:
-            raise RuntimeError('No cameras detected')
+            raise RuntimeError('No imagesources (i.e. cameras) detected')
 
         # Get the filenames of the mask images.
-        filespecMaskImages = self.options.mask_images
-        if filespecMaskImages is not None:
-            self.filespeclistMasks = filespecMaskImages.split( os.pathsep )
+        if self.options.mask_images is not None:
+            self.filename_masks_list = self.options.mask_images.split( os.pathsep )
         else:
-            self.filespeclistMasks = None
+            self.filename_masks_list = None
 
 
         guidlist = self.get_guid_list()
@@ -2070,15 +2107,15 @@ class AppState(object):
                 rospy.logwarn('Camera guid: %s'%guid)
                 
         # Read each camera's .yaml file into that camera's namespace.
-        dirYaml = rospy.get_param(rospy.get_name()+'/dir_yaml', '~')
+        dir_yaml = rospy.get_param(rospy.get_name()+'/dir_yaml', '~')
         for guid in guidlist:
             namespace = self.namespace_base % guid
             try:
-                filenameYaml = '%s/%s.yaml' % (dirYaml,guid)
-                rospy.logwarn ('rosparam load %s' % filenameYaml)
-                subprocess.call(['rosparam', 'load', filenameYaml, namespace]) # File potentially does not exist.
+                filename_yaml = '%s/%s.yaml' % (dir_yaml, guid)
+                rospy.logwarn ('rosparam load %s' % filename_yaml)
+                subprocess.call(['rosparam', 'load', filename_yaml, namespace]) # File potentially does not exist.
             except OSError, e:
-                rospy.logwarn ('rosparam load %s: %s' % (filenameYaml,e))
+                rospy.logwarn ('rosparam load %s: %s' % (filename_yaml,e))
                 pass
 
 
@@ -2126,7 +2163,7 @@ class AppState(object):
 
 
             self.initialize_events(guid)
-            (camera, imagesource_model, initial_images) = self.initialize_imagesource(guid)
+            (camera, imagesource_model, initial_images) = self.initialize_imagesource(guid, source_type)
             
     
             # Take a background image.
@@ -2147,7 +2184,7 @@ class AppState(object):
     
             
             # Start the image source.
-            self.start_imagesource (guid, imagesource_model, camera)
+            self.start_imagesource (guid, imagesource_model, camera, source_type)
             
             # Get the settings for mainbrain UI controls.
             scalar_control_info = self.get_scalar_control_info(camera, 
@@ -2198,10 +2235,9 @@ class AppState(object):
                             )
 
                     # Make the processor into its own thread.
-                    chainCamera = self.processor_byguid[guid].get_chain()
-                    self.chains_byguid[guid] = chainCamera
-                    thread = threading.Thread(target=self.processor_byguid[guid].mainloop,
-                                              name='processor_%s'%guidMB)
+                    self.chains_byguid[guid] = self.processor_byguid[guid].get_chain()
+                    thread = threading.Thread(target = self.processor_byguid[guid].mainloop,
+                                              name = 'processor_%s'%guidMB)
                     thread.setDaemon(True)
                     thread.start()
                     self.critical_threads.append(thread)
@@ -2211,7 +2247,7 @@ class AppState(object):
                     # Spawn a thread to save full video frames.
                     if 1:
                         self.saversFMF_byguid[guid]= SaveFMF()
-                        chainCamera.append_chain(self.saversFMF_byguid[guid].get_chain())
+                        self.chains_byguid[guid].append_chain(self.saversFMF_byguid[guid].get_chain())
                         thread = threading.Thread(target=self.saversFMF_byguid[guid].mainloop,
                                                   name='save_fmf_%s'%guidMB)
                         thread.setDaemon(True)
@@ -2225,7 +2261,7 @@ class AppState(object):
                     # Spawn a thread to save small video frames.
                     if 1:
                         self.saversUFMF_byguid[guid] = SaveUFMF(options=self.options, mkdir_lock=lock_save_ufmf_data_mkdir)
-                        chainCamera.append_chain(self.saversUFMF_byguid[guid].get_chain())
+                        self.chains_byguid[guid].append_chain(self.saversUFMF_byguid[guid].get_chain())
                         thread = threading.Thread(target=self.saversUFMF_byguid[guid].mainloop,
                                                   name='save_ufmf_%s'%guidMB)
                         thread.setDaemon(True)
@@ -2236,9 +2272,9 @@ class AppState(object):
                         print 'Not starting .ufmf thread'
 
                 else:
-                    chainCamera = None
+                    self.chains_byguid[guid] = None
 
-                self.imagesource_byguid[guid].set_chain(chainCamera)
+                self.imagesource_byguid[guid].set_chain(self.chains_byguid[guid])
 
                 ##################################################################
                 # Log a message.
@@ -2285,9 +2321,9 @@ class AppState(object):
     # Return a mask image for the given camera guid. 
     def mask_from_guid(self, guid):
         # Get the image mask.
-        if self.filespeclistMasks is not None:
+        if self.filename_masks_list is not None:
             guidlist = self.get_guid_list()
-            mask = self.get_mask_from_file(self.filespeclistMasks[guidlist.index(guid)])
+            mask = self.get_mask_from_file(self.filename_masks_list[guidlist.index(guid)])
         else:
             left,top,width,height = self.cameras_byguid[guid].get_frame_roi()
             mask = numpy.zeros((height,width), dtype=numpy.uint8)
@@ -2352,28 +2388,28 @@ class AppState(object):
         
         
         
-    def initialize_imagesource(self, guid):
-        if self.sourceImages == 'Cameras':
-            nModes = g_cam_iface.get_num_modes(self.index_camiface_from_guid(guid))
+    def initialize_imagesource(self, guid, source_type):
+        if source_type == 'Cameras':
+            n_modes = g_cam_iface.get_num_modes(self.index_camiface_from_guid(guid))
             mode = None
             if self.options.mode_num is not None:
                 self.options.show_cam_details = True
                 
             if self.options.show_cam_details:
-                (brand,model,guid2) = g_cam_iface.get_camera_info(self.index_camiface_from_guid(guid))
-                rospy.logwarn('Camerainfo: (%s, %s, %s)' % (brand,model,guid2))
-                rospy.logwarn('%d available video modes:' % nModes)
+                (brand, model, guid_cam) = g_cam_iface.get_camera_info(self.index_camiface_from_guid(guid))
+                rospy.logwarn('Camerainfo: (%s, %s, %s)' % (brand, model, guid_cam))
+                rospy.logwarn('%d available video modes:' % n_modes)
                 
-            for i in range(nModes):
-                mode_string = g_cam_iface.get_mode_string(self.index_camiface_from_guid(guid),i)
+            for i_mode in range(n_modes):
+                mode_string = g_cam_iface.get_mode_string(self.index_camiface_from_guid(guid), i_mode)
                 if self.options.show_cam_details:
-                    rospy.logwarn('  mode %d: %s'%(i,mode_string))
+                    rospy.logwarn('  mode %d: %s'%(i_mode, mode_string))
                     
                 #if ('format7_0' in mode_string.lower()) or ('format7_mode0' in mode_string.lower()):
                     # prefer format7_0
                 if self.params_imagesource_byguid[guid]['video_mode'].lower() in mode_string.lower(): 
                     if mode is None:
-                        mode = i
+                        mode = i_mode
                         
             if mode is None:
                 mode = 0
@@ -2389,28 +2425,28 @@ class AppState(object):
             initial_images = None
 
             if self.options.show_cam_details:
-                rospy.logwarn('Using mode %d: %s'%(mode, g_cam_iface.get_mode_string(self.index_camiface_from_guid(guid),mode)))
+                rospy.logwarn('Using video mode %d: %s'%(mode, g_cam_iface.get_mode_string(self.index_camiface_from_guid(guid),mode)))
 
         
-        elif self.sourceImages=='Simulation': #self.options.simulate_point_extraction:
+        elif source_type=='Simulation': #self.options.simulate_point_extraction:
             (camera, imagesource_model, initial_images)  = create_cam_for_emulation_imagesource(self.filename_imagesource_byguid[guid])
         
-        elif self.sourceImages=='Benchmark': #self.benchmark: # emulate full images with random number generator
+        elif source_type=='Benchmark': #self.benchmark: # emulate full images with random number generator
             (camera, imagesource_model, initial_images) = create_cam_for_emulation_imagesource('<rng>')
         
-        elif self.sourceImages=='Emulation': # emulate full images
+        elif source_type=='Emulation': # emulate full images
             (camera, imagesource_model, initial_images)  = create_cam_for_emulation_imagesource(self.filename_imagesource_byguid[guid])
 
         else:
             assert(False)
             
-            
+        
         return (camera, imagesource_model, initial_images)
 
 
 
 
-    def start_imagesource(self, guid, imagesource_model, camera):
+    def start_imagesource(self, guid, imagesource_model, camera, source_type):
         imagesource = None
         imagecontroller = None
         
@@ -2435,7 +2471,7 @@ class AppState(object):
                                             camera_control_properties =camera_control_properties, 
                                             quit_event = self.events_byguid[guid]['cam_quit_event'],
                                             )
-            if self.benchmark: # Maybe for any simulated camera in non-GUI mode?
+            if self.benchmark or source_type=='Emulation':
                 imagesource.register_imagebuffer_pool( imagebuffer_pool )
                 
 
@@ -2473,9 +2509,15 @@ class AppState(object):
     # Returns the guid portion from a filename of the format:  /home/user/FLYDRA_SMALL_MOVIES/small_20120522_132930_3053000138E639h.ufmf
     # Where the guid is located between the last underscore and the last period.  
     def guid_from_filename(self, filename):
-        i_underscore = filename.rfind('_')
-        i_period = filename.rfind('.')
-        return filename[i_underscore+1:i_period]
+        rv = None
+        try:
+            i_underscore = filename.rfind('_')
+            i_period = filename.rfind('.')
+            rv = filename[i_underscore+1:i_period]
+        except:
+            pass
+        
+        return rv
     
     
     # From the list of all cameras via cam_iface, 
@@ -2496,8 +2538,8 @@ class AppState(object):
         camerainfoCameras_list.sort() # Make sure list is always in same order for attached cameras
         camerainfoCameras_list.reverse() # Any ordering will do, but reverse for historical reasons
 
-        # If command-line imagesources, then create the camerainfo_list from those given (indirectly) in the command-line filenames. 
-        if self.options.emulation_imagesources is not None:
+        # If command-line imagesources, then create the camerainfo_list from those given (indirectly) in the command-line filenames.
+        if self.options.emulation_imagesources != "None":
             camerainfoEmulation_list = []
             for filename in self.options.emulation_imagesources.split(os.pathsep):
                 guid = self.guid_from_filename(filename)
@@ -2623,12 +2665,12 @@ class AppState(object):
         # Get trigger modes from the camera.
         N_trigger_modes = camera.get_num_trigger_modes()
         if options.show_cam_details:
-            rospy.logwarn('  %d available trigger modes:'%N_trigger_modes)
-            for i in range(N_trigger_modes):
-                mode_string = camera.get_trigger_mode_string(i)
-                rospy.logwarn('  mode %d: %s'%(i,mode_string))
+            rospy.logwarn('  %d available trigger modes:' % N_trigger_modes)
+            for i_mode in range(N_trigger_modes):
+                mode_string = camera.get_trigger_mode_string(i_mode)
+                rospy.logwarn('  mode %d: %s'%(i_mode, mode_string))
+                
         scalar_control_info['N_trigger_modes'] = N_trigger_modes
-
         scalar_control_info['camprops'] = list(cameraproperties)
 
         
@@ -2744,8 +2786,8 @@ class AppState(object):
                     rospy.logerr(''.join(Pyro.util.getPyroTraceback(x)))
                     raise
                 else:
+                    #rospy.logwarn('handle_commands(%s, %s)' % (guid, cmds))
                     self.handle_commands(guid, cmds)
-                
 
 
             # Video recording.
@@ -2775,10 +2817,10 @@ class AppState(object):
             # Quit if no more cameras
             if all_closed:
                 if self.quit_function is None:
-                    raise RuntimeError('all cameras closed, but no quit_function set')
+                    raise RuntimeError('All cameras closed, but no quit_function set')
                 self.quit_function(0)
 
-            # if any threads have died, quit
+            # If any threads have died, quit
             for thread in self.critical_threads:
                 if not thread.isAlive():
                     rospy.logwarn('ERROR: Thread %s died unexpectedly. Quitting'%(thread.getName()))
@@ -2848,11 +2890,10 @@ class AppState(object):
             elif cmd == 'get_im':   # Send the image from the camprocessor to mainbrain. 
                 val = self.processor_byguid[guid].get_most_recent_frame()
                 if val is not None: # prevent race condition
-                    leftbottom, im = val
-                    #npim = np.array(im) # copy to native np form, not view of __array_struct__ form
-                    npim = np.asarray(im) # view of __array_struct__ form
-                    self.mainbrain.set_image(guid, 
-                                             (leftbottom, npim,))
+                    leftbottom, image = val
+                    #npimage = np.array(im) # copy to native np form, not view of __array_struct__ form
+                    npimage = np.asarray(image) # view of __array_struct__ form
+                    self.mainbrain.set_image(guid, (leftbottom, npimage,))
 
 
             elif cmd == 'request_missing':
@@ -2926,10 +2967,10 @@ class AppState(object):
 
                 filenamebaseFMF = cmds[cmd]
                 filenamebaseFMF = os.path.expanduser(filenamebaseFMF)
-                save_dir = os.path.split(filenamebaseFMF)[0]
-                if not os.path.exists(save_dir):
-                    rospy.logwarn('Making %s'%save_dir)
-                    os.makedirs(save_dir)
+                dir_save = os.path.split(filenamebaseFMF)[0]
+                if not os.path.exists(dir_save):
+                    rospy.logwarn('Making dir %s' % dir_save)
+                    os.makedirs(dir_save)
 
                 self.saversFMF_byguid[guid].start_recording(filenamebaseFMF = filenamebaseFMF)
 
@@ -2943,10 +2984,10 @@ class AppState(object):
 
                 filenamebaseUFMF = cmds[cmd]
                 filenamebaseUFMF = os.path.expanduser(filenamebaseUFMF)
-                save_dir = os.path.split(filenamebaseUFMF)[0]
-                if not os.path.exists(save_dir):
-                    rospy.logwarn('Making %s'%save_dir)
-                    os.makedirs(save_dir)
+                dir_save = os.path.split(filenamebaseUFMF)[0]
+                if not os.path.exists(dir_save):
+                    rospy.logwarn('Making dir %s'%dir_save)
+                    os.makedirs(dir_save)
 
                 self.saversUFMF_byguid[guid].start_recording(filenamebaseUFMF=filenamebaseUFMF)
                 
