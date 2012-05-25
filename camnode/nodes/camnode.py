@@ -337,24 +337,6 @@ class ProcessCamData(object):
                  mainbrain = None,
                  ):
 
-#        rospy.logwarn ('ProcessCamData(')
-#        for item in [guid,
-#                     max_num_points,
-#                     roi2_radius,
-#                     bg_frame_interval,
-#                     bg_frame_alpha,
-#                     mask_image,
-#                     framerate,
-#                     lbrt,
-#                     max_height,
-#                     max_width,
-#                     events,
-#                     options,
-#                     initial_images,
-#                     benchmark,
-#                     mainbrain]:
-#            rospy.logwarn ('%s' % repr(item))
-
         self.benchmark = benchmark
         self.options = options
         self.events = events
@@ -784,7 +766,7 @@ class ProcessCamData(object):
                     elif pixel_format in ('RAW8:GBRG','MONO8:GBRG'):
                         imageRaw.encoding = 'bayer_gbrg8'
                     elif pixel_format == 'UNKNOWN':
-                        imageRaw.encoding = 'mono8'
+                        imageRaw.encoding = 'mono8' # Should really figure out the correct type.
                     else:
                         raise ValueError('unknown pixel format "%s"'%pixel_format)
 
@@ -1543,8 +1525,8 @@ class ImageSource(threading.Thread):
                 with self.camera._hack_acquire_lock():
                     self.camera.set_framerate(value)
                 
-                            
-    
+# End class ImageSource()
+
 
 
 class ImageSourceControllerBase(object):
@@ -1632,7 +1614,7 @@ class ImageSourceFromCamera(ImageSource):
                 timestamp = framenumber = None
         return try_again_condition, timestamp, framenumber
 
-
+# End class ImageSourceFromCamera()
 
 
 class ImageSourceFakeCamera(ImageSource):
@@ -1712,7 +1694,7 @@ class ImageSourceFakeCamera(ImageSource):
     def _grab_imagebuffer_quick(self):
         rospy.sleep(0.05)
 
-    def _grab_into_imagebuffer(self, image ):
+    def _grab_into_imagebuffer(self, image):
         with self.camera._hack_acquire_lock():
             self.camera.grab_next_frame_into_buf_blocking(image, self.quit_event)
 
@@ -1722,6 +1704,7 @@ class ImageSourceFakeCamera(ImageSource):
             
         return try_again_condition, timestamp, framenumber
 
+# End class ImageSourceFakeCamera()
 
 
 
@@ -1730,6 +1713,14 @@ class ImageSourceFakeCamera(ImageSource):
 ###############################################################################
 
 class FakeCamera(object):
+    def __init__(self):
+        self._framerate = 20.0
+        self.rosrate = rospy.Rate(self._framerate)
+
+    def set_framerate(self, framerate):
+        self._framerate = framerate
+        self.rosrate = rospy.Rate(self._framerate)
+
     def start_camera(self):
         # no-op
         pass
@@ -1766,9 +1757,12 @@ class FakeCamera(object):
     def get_trigger_mode_string(self,i):
         return 'fake camera trigger'
 
+# End class FakeCamera()
+
 
 class FakeCameraFromNetwork(FakeCamera):
     def __init__(self,guid,frame_size):
+        FakeCamera.__init__(self)
         self.guid = guid
         self.frame_size = frame_size
         self.proxyRemote = None
@@ -1812,9 +1806,12 @@ class FakeCameraFromNetwork(FakeCamera):
         self._ensure_remote()
         return self.proxyRemote.get_last_framenumber(self.guid) # this will block...
 
+# End class FakeCameraFromNetwork()
+
 
 class FakeCameraFromRNG(FakeCamera):
     def __init__(self, guid, frame_size):
+        FakeCamera.__init__(self)
         self.guid = guid
         self.frame_size = frame_size
         self.proxyRemote = None
@@ -1841,6 +1838,10 @@ class FakeCameraFromRNG(FakeCamera):
             xi = int(round(x*(width-1)))
             yi = int(round(y*(height-1)))
             npimage[yi,xi] = 10
+            
+        # Wait for the framerate.
+        self.rosrate.sleep()
+        
         return npimage
 
     def get_last_timestamp(self):
@@ -1849,10 +1850,13 @@ class FakeCameraFromRNG(FakeCamera):
     def get_last_framenumber(self):
         return self._fn_cur
 
+# End class FakeCameraFromRNG()
+
 
 class FakeCameraFromFMF(FakeCamera):
 
     def __init__(self, filename):
+        FakeCamera.__init__(self)
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie(filename)
         if 0:
             print 'short!'
@@ -1862,11 +1866,7 @@ class FakeCameraFromFMF(FakeCamera):
         self._fn_cur = SharedValue1(0)
         self._offset_fn = 0 # The offset makes sure the fn_cur monotonically increases when the file loops, etc.
         self._hack_acquire_lock = threading.Lock
-        self._framerate = 20.0
         self._timestamp_cur = None
-
-    def set_framerate(self, framerate):
-        self._framerate = framerate
 
     def get_n_frames(self):
         return self._n_frames
@@ -1882,15 +1882,15 @@ class FakeCameraFromFMF(FakeCamera):
             if quit_event.isSet():
                 return
 
-            rospy.sleep(1/self._framerate)
-            
-        
+            self.rosrate.sleep()
+
+        # Get the current frame, and wait for the framerate.            
         fn_cur = self._fn_cur.get()
         npimage[:,:] = self.fmf_recarray['frame'][fn_cur]
         self._timestamp_cur = self.fmf_recarray['timestamp'][fn_cur]
-        #self._fn_cur = fn_cur + self._offset_fn
         self._fn_cur.set(fn_cur + 1)
-        #rospy.logwarn('fn_cur = %d' % fn_cur)
+        #rospy.logdebug('fn_cur = %d' % fn_cur)
+        self.rosrate.sleep()
 
     def get_last_timestamp(self):
         return self._timestamp_cur
@@ -1909,6 +1909,69 @@ class FakeCameraFromFMF(FakeCamera):
         rv = self._fn_cur.get() >= len(self.fmf_recarray['frame'])
 
         return rv
+
+# End class FakeCameraFromFMF()
+
+
+class FakeCameraFromUFMF(FakeCamera):
+
+    def __init__(self, filename):
+        FakeCamera.__init__(self)
+        self.ufmf_recarray = FlyMovieFormat.mmap_flymovie(filename)
+        if 0:
+            print 'short!'
+            self.ufmf_recarray = self.ufmf_recarray[:600]
+
+        self._n_frames = len(self.ufmf_recarray)
+        self._fn_cur = SharedValue1(0)
+        self._offset_fn = 0 # The offset makes sure the fn_cur monotonically increases when the file loops, etc.
+        self._hack_acquire_lock = threading.Lock
+        self._timestamp_cur = None
+
+    def get_n_frames(self):
+        return self._n_frames
+
+    def get_frame_roi(self):
+        height,width = self.ufmf_recarray['frame'][0].shape
+        return (0,0,width,height)
+
+    def grab_next_frame_into_buf_blocking(self, image, quit_event):
+        npimage = numpy.asarray(image)
+        
+        while self.is_finished(): # While we're being asked to go off the end, wait until we get told to return to beginning.
+            if quit_event.isSet():
+                return
+
+            self.rosrate.sleep()
+
+        # Get the current frame, and wait for the framerate.            
+        fn_cur = self._fn_cur.get()
+        npimage[:,:] = self.ufmf_recarray['frame'][fn_cur]
+        self._timestamp_cur = self.ufmf_recarray['timestamp'][fn_cur]
+        self._fn_cur.set(fn_cur + 1)
+        #rospy.logdebug('fn_cur = %d' % fn_cur)
+        self.rosrate.sleep()
+
+    def get_last_timestamp(self):
+        return self._timestamp_cur
+
+    def get_last_framenumber(self):
+        return self._fn_cur.get() + self._offset_fn
+
+    def set_to_fn0(self):
+        self._offset_fn += self._fn_cur.get()
+        self._fn_cur.set(0)
+
+    def is_finished(self):
+        # this can is called by any thread
+        #print "len( self.ufmf_recarray['frame'] )",len( self.ufmf_recarray['frame'] )
+        #print "self._fn_cur.get()",self._fn_cur.get()
+        rv = self._fn_cur.get() >= len(self.ufmf_recarray['frame'])
+
+        return rv
+
+# End class FakeCameraFromUFMF()
+
 
 def create_cam_for_emulation_imagesource(filename):
     """Factory function to create fake camera and imagesource_model"""
@@ -2688,19 +2751,21 @@ class AppState(object):
 
 
         # Convert roi to a tuple.
+        try:
+            scalar_control_info['width'] = scalar_control_info['roi']['right'] - scalar_control_info['roi']['left'] + 1
+            scalar_control_info['height'] = scalar_control_info['roi']['bottom'] - scalar_control_info['roi']['top'] + 1
+        except KeyError, e:
+            rospy.logwarn ('Exception on height/width: %s' % e)
+
         try:        
-            roi = (scalar_control_info['roi/left'],
-                   scalar_control_info['roi/top'],
-                   scalar_control_info['roi/right'],
-                   scalar_control_info['roi/bottom'])
+            roi = (scalar_control_info['roi']['left'],
+                   scalar_control_info['roi']['top'],
+                   scalar_control_info['roi']['right'],
+                   scalar_control_info['roi']['bottom'])
             scalar_control_info['roi'] = roi
-            scalar_control_info.pop('roi/left')
-            scalar_control_info.pop('roi/top')
-            scalar_control_info.pop('roi/right')
-            scalar_control_info.pop('roi/bottom')
-        except KeyError:
-            pass
-            
+        except KeyError, e:
+            rospy.logwarn ('Exception on roi: %s' % e)            
+        
         
         scalar_control_info['debug_drop'] = self.options.debug_drop
         

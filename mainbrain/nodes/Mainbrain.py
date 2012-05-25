@@ -2427,6 +2427,7 @@ class Mainbrain(object):
 
     def get_widthheight(self, guid):
         sci, fqdn, port = self.remote_api.external_get_info(guid)
+        rospy.logwarn (sci)
         w = sci['width']
         h = sci['height']
         return w,h
