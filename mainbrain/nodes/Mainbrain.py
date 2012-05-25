@@ -170,7 +170,7 @@ g_socket_outgoing_UDP = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 Info2D = flydra.data_descriptions.Info2D
 
 class CamSyncInfo(tables.IsDescription):
-    guid = tables.StringCol(256,pos=0)
+    cam_id = tables.StringCol(256,pos=0)
     camn   = tables.UInt16Col(pos=1)
     frame0 = tables.FloatCol(pos=2)
 
@@ -187,7 +187,7 @@ class TriggerClockInfo(tables.IsDescription):
     stop_timestamp   = tables.FloatCol(pos=3)
 
 class MovieInfo(tables.IsDescription):
-    guid             = tables.StringCol(16,pos=0)
+    cam_id             = tables.StringCol(16,pos=0)
     filename           = tables.StringCol(255,pos=1)
     approx_start_frame = tables.Int64Col(pos=2)
     approx_stop_frame  = tables.Int64Col(pos=3)
@@ -214,7 +214,7 @@ class Info3D(tables.IsDescription):
 
 class TextLogDescription(tables.IsDescription):
     mainbrain_timestamp = tables.FloatCol(pos=0)
-    guid = tables.StringCol(255,pos=1)
+    cam_id = tables.StringCol(255,pos=1)
     host_timestamp = tables.FloatCol(pos=2)
     message = tables.StringCol(255,pos=3)
 
@@ -2103,14 +2103,14 @@ class Mainbrain(object):
             port_coordinates = self.mainbrain.coord_processor.connect(guid)
             with self.lock_caminfo:
                 self.caminfo_byguid[guid] = {'commands':{}, # command queue for cam
-                                         'lock':threading.Lock(), # prevent concurrent access
-                                         'image':None,  # most recent image from cam
-                                         'fps':None,    # most recept fps from cam
-                                         'points_distorted':[], # 2D image points
-                                         'scalar_control_info':scalar_control_info,
-                                         'port':port,
-                                         'is_calibrated':False, # has 3D calibration been sent yet?
-                                         }
+                                             'lock':threading.Lock(), # prevent concurrent access
+                                             'image':None,  # most recent image from cam
+                                             'fps':None,    # most recept fps from cam
+                                             'points_distorted':[], # 2D image points
+                                             'scalar_control_info':scalar_control_info,
+                                             'port':port,
+                                             'is_calibrated':False, # has 3D calibration been sent yet?
+                                             }
             self.event_no_cams.clear()
             with self.lock_changed_cam:
                 self.new_guids.append(guid)
@@ -2593,7 +2593,7 @@ class Mainbrain(object):
         approx_start_frame = g_XXX_framenumber
         self._currently_recording_movies[ guid ] = (raw_file_basename, approx_start_frame)
         if self.is_saving_data():
-            self.h5movie_info.row['guid'] = guid
+            self.h5movie_info.row['cam_id'] = guid
             self.h5movie_info.row['filename'] = raw_file_basename+'.fmf'
             self.h5movie_info.row['approx_start_frame'] = approx_start_frame
             self.h5movie_info.row.append()
@@ -2610,7 +2610,7 @@ class Mainbrain(object):
             nrow = None
             for r in self.h5movie_info:
                 # get row in table
-                if (r['guid'] == guid and r['filename'] == raw_file_basename+'.fmf' and
+                if (r['cam_id'] == guid and r['filename'] == raw_file_basename+'.fmf' and
                     r['approx_start_frame']==approx_start_frame):
                     nrow =r.nrow
                     break
@@ -2754,7 +2754,7 @@ class Mainbrain(object):
 
         general_save_info_byguid=self.coord_processor.get_general_cam_info()
         for guid,dd in general_save_info_byguid.iteritems():
-            self.h5cam_info.row['guid'] = guid
+            self.h5cam_info.row['cam_id'] = guid
             self.h5cam_info.row['camn']   = dd['camn']
             self.h5cam_info.row['frame0'] = dd['frame0']
             self.h5cam_info.row.append()
@@ -2800,22 +2800,30 @@ class Mainbrain(object):
 
         list_of_textlog_data = [
             (timestamp,guid,timestamp,
-             ('Mainbrain running at %s fps, (top %s, '
-              'hypothesis_test_max_error %s, trigger_CS3 %s, FOSC %s, flydra_version %s)'%(
-            str(self.trigger_device.frames_per_second_actual),
-            str(self.trigger_device._t3_state.timer3_top),
-            str(self.get_hypothesis_test_max_error()),
-            str(self.trigger_device._t3_state.timer3_CS),
-            str(self.trigger_device.FOSC),
-            flydra.version.__version__,
-            ))),
-            (timestamp,guid,timestamp, 'using flydra version %s'%(
-             flydra.version.__version__,)),
+                ('Mainbrain running at %s fps, (top %s, '
+                 'hypothesis_test_max_error %s, trigger_CS3 %s, FOSC %s, flydra_version %s)'
+                 %(
+                    str(self.trigger_device.frames_per_second_actual),
+                    str(self.trigger_device._t3_state.timer3_top),
+                    str(self.get_hypothesis_test_max_error()),
+                    str(self.trigger_device._t3_state.timer3_CS),
+                    str(self.trigger_device.FOSC),
+                    flydra.version.__version__,
+                   )
+                 )
+             ),
+            (timestamp,guid,timestamp, 
+             'using flydra version %s'
+             %(
+               flydra.version.__version__,
+               )
+             ),
             ]
+
         for textlog_data in list_of_textlog_data:
             (mainbrain_timestamp,guid,host_timestamp,message) = textlog_data
             textlog_row['mainbrain_timestamp'] = mainbrain_timestamp
-            textlog_row['guid'] = guid
+            textlog_row['cam_id'] = guid
             textlog_row['host_timestamp'] = host_timestamp
             textlog_row['message'] = message
             textlog_row.append()
@@ -2869,7 +2877,7 @@ class Mainbrain(object):
             for textlog_data in list_of_textlog_data:
                 (mainbrain_timestamp,guid,host_timestamp,message) = textlog_data
                 textlog_row['mainbrain_timestamp'] = mainbrain_timestamp
-                textlog_row['guid'] = guid
+                textlog_row['cam_id'] = guid
                 textlog_row['host_timestamp'] = host_timestamp
                 textlog_row['message'] = message
                 textlog_row.append()
@@ -2889,7 +2897,7 @@ class Mainbrain(object):
             cam_info_row = self.h5cam_info.row
             for cam_info in list_of_cam_info:
                 guid, camn, frame0 = cam_info
-                cam_info_row['guid'] = guid
+                cam_info_row['cam_id'] = guid
                 cam_info_row['camn']   = camn
                 cam_info_row['frame0'] = frame0
                 cam_info_row.append()

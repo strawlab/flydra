@@ -677,9 +677,11 @@ class wxMainBrainApp(wx.App):
                     self.update(current_value)
                 def onText(self, event):
                     val = self.txtctrl.GetValue()
-                    if val == '':
+                    try:
+                        current_value = int(val)
+                    except ValueError:
                         return
-                    current_value = int(val)
+                    
                     if (current_value >= self.slider.GetMin() and
                         current_value <= self.slider.GetMax()):
                         self.slider.SetValue(current_value)
