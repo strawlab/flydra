@@ -348,8 +348,6 @@ class ProcessCamData(object):
         else:
             self.shortest_IFI = numpy.inf
         self.guid = guid
-        self.rosrate = float(self.options.rosrate)
-        self.time_prev = rospy.Time.now().to_sec()
 
 
         self.bg_frame_alpha = bg_frame_alpha
@@ -414,10 +412,6 @@ class ProcessCamData(object):
 
         self._chain = camnode_utils.ChainLink()
         self._initial_images = initial_images
-
-        rospy.logwarn('Publishing %s/image_raw' % self.namespace_camera )
-        self.pubImageRaw = rospy.Publisher('%s/image_raw' % self.namespace_camera, Image, tcp_nodelay=True)
-        self.pubCameraInfo = rospy.Publisher('%s/camera_info' % self.namespace_camera, CameraInfo, tcp_nodelay=True)
 
 
     def get_namespace(self):
@@ -741,55 +735,6 @@ class ProcessCamData(object):
                 # Get best guess as to when image was taken
                 timestamp_image = imagebuffer.timestamp
                 framenumber = imagebuffer.framenumber
-
-                # Publish raw image on ROS network
-                now = rospy.Time.now().to_sec()
-                #rospy.logwarn(now-self.time_prev)
-                if now-self.time_prev+0.005 > 1./(self.rosrate): # Don't publish faster than rosrate.
-                    # Create and publish an image_raw message.
-                    imageRaw = Image()
-                    imageRaw.header.seq=framenumber
-                    imageRaw.header.stamp=rospy.Time.now() # XXX TODO: once camera trigger is ROS node, get accurate timestamp
-                    imageRaw.header.frame_id = "Camera_%s" % self.guid
-
-                    npimgROI = np.array(imgROI)
-                    (height,width) = npimgROI.shape
-
-                    imageRaw.height = height
-                    imageRaw.width = width
-                    imageRaw.encoding = imagebuffer.image_coding
-                    pixel_format = imagebuffer.image_coding
-                    if pixel_format == 'MONO8':
-                        imageRaw.encoding = 'mono8'
-                    elif pixel_format in ('RAW8:RGGB','MONO8:RGGB'):
-                        imageRaw.encoding = 'bayer_rggb8'
-                    elif pixel_format in ('RAW8:BGGR','MONO8:BGGR'):
-                        imageRaw.encoding = 'bayer_bggr8'
-                    elif pixel_format in ('RAW8:GBRG','MONO8:GBRG'):
-                        imageRaw.encoding = 'bayer_gbrg8'
-                    elif pixel_format == 'UNKNOWN':
-                        imageRaw.encoding = 'mono8' # Should really figure out the correct type.
-                    else:
-                        raise ValueError('unknown pixel format "%s"'%pixel_format)
-
-                    imageRaw.step = width
-                    imageRaw.data = npimgROI.tostring() # let numpy convert to string
-
-                    self.pubImageRaw.publish(imageRaw)
-                    
-                    # Create and publish a camera_info message.
-                    camera_info = CameraInfo()
-                    camera_info.header = imageRaw.header
-                    camera_info.height = imageRaw.height
-                    camera_info.width = imageRaw.width
-                    camera_info.distortion_model = 'plumb_bob'
-                    camera_info.D = [0, 0, 0, 0, 0]
-                    camera_info.K = [1,0,0, 0,1,0, 0,0,1]
-                    camera_info.R = [1,0,0, 0,1,0, 0,0,1]
-                    camera_info.P = [1,0,0,0, 0,1,0,0, 0,0,1,0]
-                    self.pubCameraInfo.publish(camera_info)
-                    
-                    self.time_prev = now
 
                 if 1:
                     if framenumber_prev is None:
@@ -1407,10 +1352,16 @@ class ImageSource(threading.Thread):
         self.quit_event = quit_event
         self.guid = guid
         self.parameters_queue = Queue.Queue()  # dynamic_reconfigure callback puts param changes here.  We deal with them at our leisure.
+        self.time_prev = rospy.Time.now().to_sec()
+        self.rosrate = 20.0#float(self.options.rosrate)
 
         self.namespace_base      = '%s_%s' % ('guid',guid)
         self.namespace_camera    = self.namespace_base+'/camera'
         self.namespace_processor = self.namespace_base+'/processor'
+
+        rospy.logwarn('Publishing %s/image_raw' % self.namespace_camera )
+        self.pubImageRaw = rospy.Publisher('%s/image_raw' % self.namespace_camera, Image, tcp_nodelay=True)
+        self.pubCameraInfo = rospy.Publisher('%s/camera_info' % self.namespace_camera, CameraInfo, tcp_nodelay=True)
         
         
     def assign_guid(self, guid):
@@ -1460,6 +1411,56 @@ class ImageSource(threading.Thread):
                 imagebuffer.timestamp = timestamp
                 imagebuffer.framenumber = framenumber
                 imagebuffer.image_coding = self.image_coding
+
+
+                # Publish raw image on ROS network
+                now = rospy.Time.now().to_sec()
+                if now-self.time_prev+0.005 > 1./(self.rosrate): # Don't publish faster than rosrate.
+                    # Create and publish an image_raw message.
+                    imageRaw = Image()
+                    imageRaw.header.seq=framenumber
+                    imageRaw.header.stamp=rospy.Time.now() # XXX TODO: once camera trigger is ROS node, get accurate timestamp
+                    imageRaw.header.frame_id = "Camera_%s" % self.guid
+
+                    npimage = np.array(_image)
+                    (height,width) = npimage.shape
+
+                    imageRaw.height = height
+                    imageRaw.width = width
+                    imageRaw.encoding = imagebuffer.image_coding
+                    pixel_format = imagebuffer.image_coding
+                    if pixel_format == 'MONO8':
+                        imageRaw.encoding = 'mono8'
+                    elif pixel_format in ('RAW8:RGGB','MONO8:RGGB'):
+                        imageRaw.encoding = 'bayer_rggb8'
+                    elif pixel_format in ('RAW8:BGGR','MONO8:BGGR'):
+                        imageRaw.encoding = 'bayer_bggr8'
+                    elif pixel_format in ('RAW8:GBRG','MONO8:GBRG'):
+                        imageRaw.encoding = 'bayer_gbrg8'
+                    elif pixel_format == 'UNKNOWN':
+                        imageRaw.encoding = 'mono8' # Should really figure out the correctcamera_info type.
+                    else:
+                        raise ValueError('unknown pixel format "%s"'%pixel_format)
+
+                    imageRaw.step = width
+                    imageRaw.data = npimage.tostring() # let numpy convert to string
+
+                    self.pubImageRaw.publish(imageRaw)
+                    
+                    # Create and publish a camera_info message.
+                    camera_info = CameraInfo()
+                    camera_info.header = imageRaw.header
+                    camera_info.height = imageRaw.height
+                    camera_info.width = imageRaw.width
+                    camera_info.distortion_model = 'plumb_bob'
+                    camera_info.D = [0, 0, 0, 0, 0]
+                    camera_info.K = [1,0,0, 0,1,0, 0,0,1]
+                    camera_info.R = [1,0,0, 0,1,0, 0,0,1]
+                    camera_info.P = [1,0,0,0, 0,1,0,0, 0,0,1,0]
+                    self.pubCameraInfo.publish(camera_info)
+                    
+                    self.time_prev = now
+
 
                 # Now we get rid of the frame from this thread by passing
                 # it to processing threads. The last one of these will
