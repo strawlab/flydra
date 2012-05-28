@@ -16,6 +16,7 @@ import warnings
 
 import datetime
 import pytz # from http://pytz.sourceforge.net/
+DEFAULT_TZ = 'US/Pacific'
 
 # should avoid using any matplotlib here -- we want to keep this
 # module lean and mean
@@ -329,9 +330,9 @@ def create_data2d_camera_summary(results):
         newrow.append()
     table.flush()
 
-def timestamp2string(ts_float,timezone='US/Pacific'):
-    pacific = pytz.timezone(timezone)
-    dt_ts = datetime.datetime.fromtimestamp(ts_float,pacific)
+def timestamp2string(ts_float,timezone=DEFAULT_TZ):
+    tz = pytz.timezone(timezone)
+    dt_ts = datetime.datetime.fromtimestamp(ts_float,tz)
     # dt_ts.ctime()
     return dt_ts.isoformat()
 
@@ -407,6 +408,15 @@ def get_fps(results,fail_on_error=True):
     if parsed is None and not fail_on_error:
         return None
     return float(parsed['fps'])
+
+def get_tzname0(results,default=DEFAULT_TZ):
+    parsed = read_textlog_header(results,fail_on_error=True)
+    return parsed.get( 'time_tzname0', default )
+
+def get_tz(results,default=DEFAULT_TZ):
+    tzname0 = get_tzname0(results,default=default)
+    tz = pytz.timezone(tzname0)
+    return tz
 
 def get_time_model_from_data(results,debug=False,full_output=False):
     parsed = read_textlog_header(results)
