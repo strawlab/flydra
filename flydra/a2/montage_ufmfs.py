@@ -15,6 +15,7 @@ import flydra.reconstruct as reconstruct
 import flydra.geom as geom
 import cherrypy  # ubuntu: install python-cherrypy3
 import benu
+import csv
 
 from tables_tools import openFileSafe
 
@@ -65,6 +66,7 @@ def load_3d_raw_data(kalman_filename,**kwargs):
         allqualrows = []
         this_kw = {'min_ori_quality_required':kwargs['min_ori_quality_required'],
                    'ori_quality_smooth_len':kwargs['ori_quality_smooth_len']}
+
         for obj_id in obj_ids:
             rows = ca.load_dynamics_free_MLE_position( obj_id, kalman_filename,
                                                        **this_kw)
@@ -134,6 +136,8 @@ def load_3d_data(kalman_filename,start=None,stop=None,**kwargs):
     return data3d, dataqual3d
 
 def make_montage( h5_filename,
+		  frames_test, #ps
+	 	  nth_frame, #ps
                   cfg_filename=None,
                   ufmf_dir=None,
                   dest_dir = None,
@@ -148,6 +152,7 @@ def make_montage( h5_filename,
                   colormap = None,
                   kalman_filename = None,
                   **kwargs):
+
     config = get_config_defaults()
     if cfg_filename is not None:
         loaded_cfg = cherrypy._cpconfig.as_dict( cfg_filename )
@@ -156,7 +161,7 @@ def make_montage( h5_filename,
     else:
         warnings.warn('no configuration file specified -- using defaults')
 
-    orientation_3d_line_length = 0.1
+    orientation_3d_line_length = 0.2
 
     if (config['what to show']['show_3d_smoothed_position'] or
         config['what to show']['show_3d_MLE_position'] or
@@ -180,9 +185,7 @@ def make_montage( h5_filename,
             data_raw_3d, dataqual_raw_3d = None, None
         R = reconstruct.Reconstructor(kalman_filename)
     else:
-        data3d = R = data_raw_3d = None
-        dataqual_raw_3d = None
-        dataqual_3d = None
+        data3d = R = data_raw_3d, dataqual_raw_3d, dataqual_3d = None
 
     min_ori_qual = config['what to show']['minimum_display_orientation_quality']
 
@@ -222,7 +225,10 @@ def make_montage( h5_filename,
         camn2cam_id = None
 
     blank_images = {}
-
+   
+    count = 0 #ps
+    frame2 = 0 #ps
+    
     all_frame_montages = []
     for frame_enum,(frame_dict,frame) in enumerate(ufmf_tools.iterate_frames(
         h5_filename, movie_fnames,
@@ -235,6 +241,20 @@ def make_montage( h5_filename,
         camn2cam_id = camn2cam_id,
         )):
         tracker_data = frame_dict['tracker_data']
+
+### ps: nth_frame
+
+
+	if count!=0 and count!=nth_frame:
+		count=count+1
+		
+		continue
+	frame2=frame2+1
+	count=1
+	
+	
+#####		
+
 
         if data3d is not None:
             this_frame_3d_data = data3d[data3d['frame']==frame]
@@ -341,6 +361,7 @@ def make_montage( h5_filename,
                                       transform=transform):
                 canv.imshow(image,0,0,cmap=colormap)
                 if config['what to show']['show_2d_position'] and camn is not None:
+
                     cond = tracker_data['camn']==camn
                     this_cam_data = tracker_data[cond]
                     xarr = np.atleast_1d(this_cam_data['x'])
@@ -350,6 +371,7 @@ def make_montage( h5_filename,
                                  radius=10,
                                  markeredgewidth=config['what to show']['linewidth'],
                                  )
+
                     # draw shadow
                     canv.scatter(xarr+config['what to show']['linewidth'], yarr+config['what to show']['linewidth'],
                                  color_rgba=(1,1,1,1),
@@ -367,6 +389,7 @@ def make_montage( h5_filename,
                     xinc = np.cos(thetaarr)*line_len
                     yinc = np.sin(thetaarr)*line_len/float(pixel_aspect)
                     for x,y,xi,yi in zip(xarr,yarr,xinc,yinc):
+
                         xarr = np.array([x-xi,x+xi])
                         yarr = np.array([y-yi,y+yi])
                         if np.any(np.isnan( xarr )) or np.any(np.isnan( yarr )):
@@ -379,6 +402,9 @@ def make_montage( h5_filename,
                     if len(this_frame_3d_data):
                         X = np.array([this_frame_3d_data['x'], this_frame_3d_data['y'], this_frame_3d_data['z'], np.ones_like(this_frame_3d_data['x'])]).T
                         xarr,yarr = R.find2d( cam_id, X, distorted = True )
+
+
+
                         canv.scatter(xarr, yarr,
                                      color_rgba=(0,0,0,1),
                                      radius=10,
@@ -395,6 +421,8 @@ def make_montage( h5_filename,
                     if len(this_frame_raw_3d_data):
                         X = np.array([this_frame_raw_3d_data['x'], this_frame_raw_3d_data['y'], this_frame_raw_3d_data['z'], np.ones_like(this_frame_raw_3d_data['x'])]).T
                         xarr,yarr = R.find2d( cam_id, X, distorted = True )
+
+
                         canv.scatter(xarr, yarr,
                                      color_rgba=(0.2,0.2,0.5,1),
                                      radius=8,
@@ -420,7 +448,8 @@ def make_montage( h5_filename,
                                        this_frame_raw_3d_data['z']]).T
                         cam_center = R.get_camera_center( cam_id )[:,0]
                         for (X,hz,this_dataqual) in zip(Xs,hzs,this_frame_raw_dataqual):
-                            if this_dataqual < min_ori_qual:
+
+			    if this_dataqual < min_ori_qual:
                                 continue
                             cam_ray = geom.line_from_points( geom.ThreeTuple(cam_center), geom.ThreeTuple(X) )
                             raw_ori_line = geom.line_from_HZline(hz)
@@ -444,7 +473,9 @@ def make_montage( h5_filename,
 
                 if config['what to show']['show_3d_smoothed_orientation'] and camn is not None:
                     if len(this_frame_3d_data):
+			
                         for (row,ori_qual) in zip(this_frame_3d_data,this_frame_dataqual):
+
                             if ori_qual < min_ori_qual:
                                 continue
                             X0 = np.array([row['x'], row['y'], row['z'], np.ones_like(row['x'])]).T
@@ -454,14 +485,24 @@ def make_montage( h5_filename,
                                 continue
                             pts = np.vstack( [X0, X1] )
                             xarr,yarr = R.find2d( cam_id, pts, distorted = True )
+			
+			######### ps  
+
+			    a=frames_test[frames_test[:,1]==row[0]]			   
+                            if frame not in a:
+				continue
+				
+			########
+
                             canv.plot(xarr, yarr,
                                       color_rgba=(1,0,0,1), # red
                                       linewidth=config['what to show']['linewidth'],
                                       )
-
+			    
                 if config['what to show']['show_3d_raw_chosen_orientation'] and camn is not None:
                     if len(this_frame_3d_data):
                         for (row,ori_qual) in zip(this_frame_3d_data,this_frame_dataqual):
+
                             if ori_qual < min_ori_qual:
                                 continue
                             X0 = np.array([row['x'], row['y'], row['z'], np.ones_like(row['x'])]).T
@@ -483,7 +524,7 @@ def make_montage( h5_filename,
                         for i in range(len(xarr)):
                             obj_id = this_frame_3d_data['obj_id'][i]
                             canv.text( '%d'%obj_id, xarr[i], yarr[i],
-                                       font_size=4,
+                                       font_size=15,
                                        color_rgba=(1,0,0,1) )
 
                 if workaround_ffmpeg2theora_bug:
@@ -498,7 +539,7 @@ def make_montage( h5_filename,
             saved_fnames.append( save_fname_path )
 
         target = os.path.join(dest_dir, 'movie%s_frame%07d.jpg'%(
-            datetime_str,frame_enum+1 ))
+            datetime_str,frame2))#_enum+1 ))
         # All cameras saved for this frame, make montage
         title = '%s frame %d'%( datetime_str, frame )
         montage(saved_fnames, title, target)
@@ -521,6 +562,7 @@ def make_montage( h5_filename,
         if not no_remove:
             for fname in all_frame_montages:
                 os.unlink(fname)
+   
 
 def main():
     # keep default config file in sync with get_config_defaults() above
@@ -597,6 +639,13 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     parser.add_option( "--caminfo-h5-filename", type="string",
                        help="path of h5 file from which to load caminfo")
 
+    parser.add_option( "--frames-to-include", type="string", #ps
+                       help="path of csv file from which to include frames")
+
+    parser.add_option( "--nth-frame", type="string", default=1, #ps
+		       help="nth-frame to save")
+
+
     core_analysis.add_options_to_parser(parser)
     (options, args) = parser.parse_args()
 
@@ -611,10 +660,29 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     movie_cam_ids = options.movie_cam_ids
     if movie_cam_ids is not None:
         movie_cam_ids = movie_cam_ids.split( os.pathsep )
+#####ps
+    frames_to_include = options.frames_to_include
+    if frames_to_include is not None:
+
+	inFile = open(frames_to_include,"r")
+	lines = inFile.readlines()	
+
+   	frames_test= np.zeros(((len(lines)-1),2), float)
+
+   	for N in range(1,len(lines)):
+			
+		temp = str(lines[N]).split(',')    			
+		frames_test[N-1,:]=(float(temp[0]),float(temp[1]))
+
+	
+    nth_frame= int(options.nth_frame)
+#####
 
     h5_filename = args[0]
     kwargs = core_analysis.get_options_kwargs(options)
     make_montage( h5_filename,
+		  frames_test, #ps
+		  nth_frame, #ps
                   kalman_filename = options.kalman_filename,
                   cfg_filename = options.config,
                   ufmf_dir = options.ufmf_dir,

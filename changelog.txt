@@ -1,0 +1,24 @@
+montage_ufmf:
+	
+	added 2 new options:
+		nth_frame=save only every nth frame, default=1
+
+		frames_test= name of a .csv file that contains the frames that contains at least two columns- 1)frame 			numbers, 2)object_ids. This file is now required. My Data_cropped_manipulated.csv files work as inputs for this. Now the 3d_smoothed_orientation will only show the orientations of frames that are included in the frames_test file. 
+
+
+
+
+	
+image_based_orientation:
+	
+	1.) Stacks every other frame. (currently only supports stack-n-frames=5, or else it doesn't work. stack-n-min should also be 3 or less or it doesn't really make sense)
+
+	2.) Image processing works as follows:
+		1.) Does first pass with int-thresh-frac=.7 (later will change this to an input parameter)
+		2.) Looks for multiple COM of multiple blobs in the image, calculates distance to previous frame COM.
+		3.) Assumes blob closest to previous COM is the good one, as long as it is within 15 pixels (later should make this an input parameter).
+			3b.) if it is too far, uses previous frame's COM.
+
+		4.) Then, using the COM calculated in the previous steps and the image transformed by the input parameters (int_thresh_frac, erode, etc) it looks for the blob closest to the COM, and then blacks out everything else.
+		5.) Uses this image for the stack.
+	

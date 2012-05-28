@@ -127,8 +127,8 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
         # data association parameters
 
         # birth model
-        min_dist_to_believe_new_meters=0.2, # 20 cm
-        min_dist_to_believe_new_sigma=3.0,
+        min_dist_to_believe_new_meters=0.02, # 20 cm
+        min_dist_to_believe_new_sigma=15.0,
 
         initial_position_covariance_estimate=1e-2,
         initial_velocity_covariance_estimate=10,
@@ -137,7 +137,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
         n_sigma_accept=20.0, # geometric euclidian distance
 
         # death model
-        max_variance_dist_meters=0.08,
+        max_variance_dist_meters=0.02,
         max_frames_skipped=10,
 
         # kalman filter parameters
@@ -334,7 +334,7 @@ class HydraMEKFAllParams(EKFAllParams):
         self['min_dist_to_believe_new_meters']=0.2
         self['min_dist_to_believe_new_sigma']=10.0
 
-        self['distorted_pixel_euclidian_distance_accept']=20.0 # distance in the raw image plane (i.e. before radial undistortion)
+        self['distorted_pixel_euclidian_distance_accept']=25.0 # distance in the raw image plane (i.e. before radial undistortion)
 
         if 0:
             # restrictive (better for e.g. making new calibration)
@@ -348,7 +348,7 @@ class HbirdEKFAllParams(EKFAllParams):
     def __init__(self,dt=None):
         super( HbirdEKFAllParams, self).__init__()
         assert dt is not None
-        linear_dict = get_kalman_model( name='mamarama, units: mm',
+        linear_dict = get_kalman_model( name='hbird, units: mm',
                                         dt=dt )
 
         # update some parameters from linear model
@@ -368,7 +368,7 @@ class HbirdEKFAllParams(EKFAllParams):
              [0.0, 15.0]],
             dtype=numpy.float64 )
         # distance in the raw image plane (i.e. before radial undistortion)
-        self['distorted_pixel_euclidian_distance_accept']=15.0
+        self['distorted_pixel_euclidian_distance_accept']=15.0 #ps modified to 20 from original 15
 
 ekf_models = {'EKF mamarama, units: mm':MamaramaMMEKFAllParams,
               'EKF hydra, units: m':HydraMEKFAllParams,
