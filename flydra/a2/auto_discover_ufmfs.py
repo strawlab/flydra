@@ -70,6 +70,7 @@ def find_ufmfs(filename,ufmf_dir=None,careful=False):
             approx_starts.append( ufmf_approx_start )
             this_cam_id_fnames.append( ufmf_filename )
 
+        warnings.warn('this_cam_id_fnames: %s' % this_cam_id_fnames)
         if len(this_cam_id_fnames)==0:
             continue
 
@@ -85,7 +86,9 @@ def find_ufmfs(filename,ufmf_dir=None,careful=False):
         good_cond = ~bad_cond
         good_idx = np.nonzero(good_cond)[0]
         possible_ufmfs.extend( [ this_cam_id_fnames[idx] for idx in good_idx] )
+        warnings.warn('good_idx: %s' % good_idx)
 
+    warnings.warn('possible_ufmfs: %s' % possible_ufmfs)
     results = []
     for ufmf_filename in possible_ufmfs:
         try:

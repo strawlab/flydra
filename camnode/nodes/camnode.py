@@ -72,6 +72,7 @@ import motmot.realtime_image_analysis.realtime_image_analysis as realtime_image_
 import flydra.camnode_colors as camnode_colors
 import flydra.camnode_utils as camnode_utils
 
+import flydra.a2.auto_discover_ufmfs as auto_discover_ufmfs
 import flydra.reconstruct_utils as reconstruct_utils
 import flydra.version
 from flydra.reconstruct import do_3d_operations_on_2d_point
@@ -724,17 +725,18 @@ class ProcessCamData(object):
                 # Run the color filter.
                 if self.parameters['use_color_filter']:
                     if self.parameters['color_filter_1'] < self.parameters['color_filter_2']:
-
-                        camnode_colors.replace_with_red_image( imgROI,
-                                                               imagebuffer.image_coding,
-                                                               #camnode_colors.RED_CHANNEL)
-                                                               camnode_colors.RED_COLOR,
-                                                               self.parameters['color_filter_1'],
-                                                               self.parameters['color_filter_2'],
-                                                               self.parameters['color_filter_3'],
-                                                               self.parameters['color_filter_sat'])
+                        if imagebuffer.image_coding=='MONO8:BGGR':
+                            camnode_colors.replace_with_red_image( imgROI,
+                                                                   imagebuffer.image_coding,
+                                                                   camnode_colors.RED_COLOR,
+                                                                   self.parameters['color_filter_1'],
+                                                                   self.parameters['color_filter_2'],
+                                                                   self.parameters['color_filter_3'],
+                                                                   self.parameters['color_filter_sat'])
+                        else:
+                            rospy.logwarn ('Color Filter: unsupported coding, %s.  Only image_coding==MONO8:BGGR is presently supported.' % imagebuffer.image_coding)
                     else:
-                        rospy.logwarn('color_filter_2 >= color_filter_1 -- skipping')
+                        rospy.logwarn('color_filter_2 >= color_filter_1 -- Skipping.')
 
                 # Get best guess as to when image was taken
                 timestamp_image = imagebuffer.timestamp
@@ -2043,7 +2045,7 @@ def create_cam_for_emulation_imagesource(filename):
                               'raw':imgRaw}
         
     else:
-        raise ValueError('Could not create emulation image source for:  %s' % filename)
+        raise ValueError('Could not create emulation imagesource for:  %s' % filename)
     
     
     return (camera, imagesource_model, initial_images)
@@ -2128,16 +2130,30 @@ class AppState(object):
         guidlist = self.get_guid_list()
 
 
-        # Get the source of the images, i.e. from files, from simulation, or from the cameras. 
-        if self.options.emulation_imagesources != "None":                             # Command-line specified image sources, i.e. emulation.
+        # Get the source of the images, i.e. from .fmf, .ufmf, .h5, simulation, or from the cameras. 
+        if self.options.emulation_imagesource != "None":                             # Command-line specified image sources, i.e. emulation.
             source_type = 'Emulation'
-            filename_list = self.options.emulation_imagesources.split( os.pathsep )
+            (tmp,ext) = os.path.splitext(self.options.emulation_imagesource)
+            if ext=='.h5':
+                abspath_h5 = os.path.abspath(self.options.emulation_imagesource)
+                dir_h5, name_h5 = os.path.split(abspath_h5)
+                filename_list = auto_discover_ufmfs.find_ufmfs(abspath_h5,
+                                                               ufmf_dir = dir_h5,
+                                                               careful = True)
+                raise RuntimeError('Not yet implemented.')
+            
+            elif ext=='.fmf' or ext=='.ufmf': 
+                filename_list = self.options.emulation_imagesource.split( os.pathsep )
+            else:
+                raise RuntimeError('Unknown imagesource type in --emulation-imagesource.')
+                
             for filename in filename_list:
                 guid = self.guid_from_filename(filename)
                 if guid is not None:
                     self.filename_imagesource_byguid[guid] = filename
                      
             nCameras = len(self.filename_imagesource_byguid)
+            rospy.logdebug('AppState.__init__(), filename_list=%s' % filename_list)
             
         elif self.options.simulate_point_extraction is not None:                        # Command-line specified simulation. 
             source_type = 'Simulation'
@@ -2585,9 +2601,11 @@ class AppState(object):
     
     # From the list of all cameras via cam_iface, 
     # and from any guids on the command-line (--guidlist),
-    # and from any guids indirectly contained in command-line filenames (--emulation-source),
+    # and from any guids indirectly contained in command-line filenames (--emulation-imagesource),
     # Create the list of camerainfo.
     def get_camerainfo_list(self):
+        camerainfo_list = [] 
+        
         # Get the camerainfo for all the cameras, in default order.
         camerainfoCameras_list = []
         for iCamiface in range(g_cam_iface.get_num_cameras()):
@@ -2602,9 +2620,24 @@ class AppState(object):
         camerainfoCameras_list.reverse() # Any ordering will do, but reverse for historical reasons
 
         # If command-line imagesources, then create the camerainfo_list from those given (indirectly) in the command-line filenames.
-        if self.options.emulation_imagesources != "None":
+        if self.options.emulation_imagesource != "None":
             camerainfoEmulation_list = []
-            for filename in self.options.emulation_imagesources.split(os.pathsep):
+            (tmp,ext) = os.path.splitext(self.options.emulation_imagesource)
+            if ext=='.h5':
+                abspath_h5 = os.path.abspath(self.options.emulation_imagesource)
+                dir_h5, name_h5 = os.path.split(abspath_h5)
+                rospy.logwarn ('Locating related .ufmf from: %s' % abspath_h5)
+                filename_list = auto_discover_ufmfs.find_ufmfs(abspath_h5,
+                                                               ufmf_dir = dir_h5,
+                                                               careful = True)
+                raise RuntimeError('Not yet implemented.')
+            
+            elif ext=='.fmf' or ext=='.ufmf': 
+                filename_list = self.options.emulation_imagesource.split( os.pathsep )
+
+            rospy.logdebug('get_camerainfo_list() filename_list=%s' % filename_list)
+
+            for filename in filename_list:
                 guid = self.guid_from_filename(filename)
                 iCamiface = None
                 for i in range(len(camerainfoCameras_list)):
@@ -2615,7 +2648,7 @@ class AppState(object):
                 camerainfoEx = (brand, model, guid, iCamiface)
                 camerainfoEmulation_list.append(camerainfoEx)
                 camerainfo_list = camerainfoEmulation_list
-
+            
             
         # Else if command-line guids, then use them.
         elif self.options.guidlist != 'all':
@@ -2754,10 +2787,6 @@ class AppState(object):
         try:
             scalar_control_info['width'] = scalar_control_info['roi']['right'] - scalar_control_info['roi']['left'] + 1
             scalar_control_info['height'] = scalar_control_info['roi']['bottom'] - scalar_control_info['roi']['top'] + 1
-        except KeyError, e:
-            rospy.logwarn ('Exception on height/width: %s' % e)
-
-        try:        
             roi = (scalar_control_info['roi']['left'],
                    scalar_control_info['roi']['top'],
                    scalar_control_info['roi']['right'],
@@ -3522,10 +3551,10 @@ def Parse_args_and_run(benchmark=False):
                       metavar="BACKEND")
 
     parser.add_option("--debug-drop", action='store_true',
-                      help="save debugging information regarding dropped network packets")
+                      help="Save debugging information regarding dropped network packets")
 
     parser.add_option("--debug-std", action='store_true',
-                      help="show mean pixel STD every 200 frames")
+                      help="Show mean pixel STD every 200 frames")
 
     parser.add_option("--sdl", action='store_true',
                       help="SDL-based display of raw images")
@@ -3537,59 +3566,61 @@ def Parse_args_and_run(benchmark=False):
                       help="wx-based GUI to display raw and processed images")
 
     parser.add_option("--debug-acquire", action='store_true',
-                      help="print to the console information on each frame")
+                      help="Print to the console information on each frame")
 
     parser.add_option("--disable-ifi-warning", action='store_true',
-                      help=("do not print a warning if the inter-frame-interval "
+                      help=("Do not print a warning if the inter-frame-interval "
                             "(IFI) is longer than expected"))
 
     parser.add_option("--ignore-version", action='store_true',
-                      help=("do not care if version is mismatched with mainbrain"))
+                      help=("Do not care if version is mismatched with mainbrain"))
 
     parser.add_option("--num-points", type="int",
-                      help="number of points to track per cameras [default: %default]")
+                      help="Number of points to track per cameras [default: %default]")
 
     parser.add_option("--software-roi-radius", type="int",
-                      help="radius of software region of interest [default: %default]")
+                      help="Radius of software region of interest [default: %default]")
 
     parser.add_option("--background-frame-interval", type="int",
-                      help="every N frames, add a new BG image to the accumulator [default: %default]")
+                      help="Every N frames, add a new BG image to the accumulator [default: %default]")
 
     parser.add_option("--background-frame-alpha", type="float",
-                      help="weight for each BG frame added to accumulator [default: %default]")
+                      help="Weight for each BG frame added to accumulator [default: %default]")
 
     parser.add_option("--mode-num", type="int", default=None,
-                      help="force a camera mode")
+                      help="Force a camera mode")
 
     parser.add_option("--num-imagebuffers", type="int",
-                      help="force number of imagebuffers [default: %default]")
+                      help="Force number of imagebuffers [default: %default]")
 
     parser.add_option("--mask-images", type="string",
-                      help="list of masks for each camera (uses OS-specific path separator, ':' for POSIX, ';' for Windows)")
+                      help="List of masks for each camera (uses OS-specific path separator, ':' for POSIX, ';' for Windows)")
 
-    parser.add_option("--emulation-imagesources", type="string",
-                      help=("list of imagesources for each camera (uses OS-specific "
-                            "path separator, ':' for POSIX, ';' for Windows) ends with '.fmf', "
-                            "'.ufmf', or is '<random:params=x>'"))
+    parser.add_option("--emulation-imagesource", type="string",
+                      help=("List of file imagesources for each camera"
+                            "(uses OS-specific path separator, ':' for POSIX, ';' for Windows)"
+                            "ends with '.fmf', or '.ufmf', "
+                            "or is '<random:params=x>',"
+                            "or is a single .h5 file, with related .ufmf's in the same dir."))
 
     parser.add_option("--simulate-point-extraction", type="string",
                       help="list of image sources for each camera")
 
     parser.add_option("--force-cam-ids", type="string",
-                      help="list of names for each camera (comma separated)")
+                      help="List of names for each camera (comma separated)")
 
     parser.add_option("--cams-only", type="string",
-                      help="list of cameras to use (comma separated list of indices)")
+                      help="List of cameras to use (comma separated list of indices)")
 
     parser.add_option("--guidlist", type="string",
-                      help="list of cameras to use (comma separated list of guids)")
+                      help="List of cameras to use (comma separated list of guids)")
 
     parser.add_option("--show-cam-details", action='store_true', default=False)
 
     parser.add_option("--small-save-radius", type="int",
-                      help='half the edge length of .ufmf movies [default: %default]')
+                      help='Half the edge length of .ufmf movies [default: %default]')
     parser.add_option("--rosrate", type="float", dest='rosrate', default=30.,
-                      help='desired framerate for the ROS raw image emitter (if ROS enabled)')
+                      help='Desired framerate for the ROS raw image emitter (if ROS enabled)')
 
     (options, args) = parser.parse_args()
     #rospy.logwarn(dir(options))

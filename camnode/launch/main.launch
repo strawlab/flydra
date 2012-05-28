@@ -1,11 +1,11 @@
 <launch>
 	<arg name="guidlist" default='all' />
-	<arg name="emulation-imagesources" default="None" />
+	<arg name="emulation-imagesource" default="None" />
 	
 	<param name='mainbrain/hostname' value='mainbrain' />
-    <include file="$(find camnode)/launch/camera.launch"> 
-        <arg name="guidlist" value="$(arg guidlist)" />
-        <arg name="emulation-imagesources" value="$(arg emulation-imagesources)" /> 
+    <include file='$(find camnode)/launch/camera.launch'> 
+        <arg name='guidlist' value='$(arg guidlist)' />
+        <arg name='emulation-imagesource' value='$(arg emulation-imagesource)' /> 
     </include>
        
 </launch>

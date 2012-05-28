@@ -1,8 +1,11 @@
 <launch>
 	<arg name="guidlist" default='all' />
-	<arg name="emulation-imagesources" default='None' />
+	<arg name="emulation-imagesource" default='None' />
 	
-    <node name="$(anon camnode)" pkg="camnode" type="camnode.py" args="--show-cam-details --guidlist=$(arg guidlist) --emulation-imagesources=$(arg emulation-imagesources)" >
+    <node name="$(anon camnode)" pkg="camnode" type="camnode.py" 
+    	args="--show-cam-details 
+    		  --guidlist=$(arg guidlist) 
+    	      --emulation-imagesource=$(arg emulation-imagesource)" >
         <param name="dir_yaml" value="$(find camnode)/yaml" />
     </node>
    
