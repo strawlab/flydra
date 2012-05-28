@@ -50,6 +50,8 @@ def convert(infilename,
             h52d = tables.openFile(file_time_data,mode='r')
             close_h52d = True
 
+        tzname = result_utils.get_tzname0(h52d)
+
         try:
             table_data2d = h52d.root.data2d_distorted # Table to get timestamps from. (If you don't have timestamps, use the '--no-timestamps' option.)
         except tables.exceptions.NoSuchNodeError, err:
@@ -209,6 +211,7 @@ def convert(infilename,
         extra_vars=extra_vars,
         orientation_quality = allqualrows,
         hdf5=hdf5,
+        tzname=tzname,
         )
     ca.close()
 

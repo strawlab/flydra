@@ -24,10 +24,12 @@ def do_it(filename=None,
           extra_vars=None,
           orientation_quality=None,
           hdf5=False,
+          tzname=None,
           ):
 
     if hdf5:
         import h5py
+        assert tzname is not None
 
     if filename is None and rows is None:
         raise ValueError("either filename or rows must be set")
@@ -144,7 +146,7 @@ def do_it(filename=None,
         data[key] = value
 
     if hdf5:
-        first_chars = '{"schema": "http://strawlab.org/schemas/flydra/1.0"}'
+        first_chars = '{"schema": "http://strawlab.org/schemas/flydra/1.1"}'
         pow2_bytes = get_valid_userblock_size( len(first_chars))
         userblock = first_chars + '\0'*(pow2_bytes-len(first_chars))
 
@@ -194,6 +196,9 @@ def do_it(filename=None,
                                          compression_opts=9)
                 assert dset.compression == 'gzip'
                 assert dset.compression_opts == 9
+                if table_name=='trajectory_start_times':
+                    dset.attrs['timezone'] = tzname
+                    assert dset.attrs['timezone'] == tzname # ensure it is actually saved
         with open(newfilename,mode='r+') as f:
             f.write(userblock)
     else:
