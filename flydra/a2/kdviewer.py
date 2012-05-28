@@ -23,8 +23,6 @@ import flydra.a2.xml_stimulus as xml_stimulus
 import flydra.a2.flypos
 import flydra.analysis.PQmath as PQmath
 
-pacific = pytz.timezone('US/Pacific')
-
 import cgtypes # cgkit 1.x
 import flydra.a2.pos_ori2fu
 #from flydra.a2.experiment_layout import get_tvtk_actors_for_file
@@ -510,7 +508,7 @@ def doit(filename,
                 dur = my_rows['timestamp'][-1] - my_timestamp
                 print '%d 3D triangulation started at %s (took %.2f seconds)'%(
                     obj_id,
-                    datetime.datetime.fromtimestamp(my_timestamp,pacific),
+                    datetime.datetime.fromtimestamp(my_timestamp),
                     dur)
                 print '  estimate frames: %d - %d (%d frames)'%(
                     my_rows['frame'][0],

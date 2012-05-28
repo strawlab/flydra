@@ -33,7 +33,6 @@ import core_analysis
 
 import warnings
 import pytz, datetime
-pacific = pytz.timezone('US/Pacific')
 
 def ensure_minsize_image( arr, (h,w), fill=0):
     if ((arr.shape[0] < h) or (arr.shape[1] < w)):
@@ -800,7 +799,7 @@ def doit(fmf_filename=None,
 
                 if style=='debug':
                     try:
-                        strtime = datetime.datetime.fromtimestamp(mainbrain_timestamp,pacific)
+                        strtime = datetime.datetime.fromtimestamp(mainbrain_timestamp)
                     except:
                         strtime = '<no 2d data timestamp>'
                     #draw.text( (0,0), 'frame %d, %s timestamp %s - %s'%(
