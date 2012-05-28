@@ -2297,13 +2297,15 @@ class MainBrain(object):
         list_of_textlog_data = [
             (timestamp,cam_id,timestamp,
              ('MainBrain running at %s fps, (top %s, '
-              'hypothesis_test_max_error %s, trigger_CS3 %s, FOSC %s, flydra_version %s)'%(
+              'hypothesis_test_max_error %s, trigger_CS3 %s, FOSC %s, flydra_version %s, '
+              'time_tzname0 %s)'%(
             str(self.trigger_device.frames_per_second_actual),
             str(self.trigger_device._t3_state.timer3_top),
             str(self.get_hypothesis_test_max_error()),
             str(self.trigger_device._t3_state.timer3_CS),
             str(self.trigger_device.FOSC),
             flydra.version.__version__,
+            time.tzname[0],
             ))),
             (timestamp,cam_id,timestamp, 'using flydra version %s'%(
              flydra.version.__version__,)),
