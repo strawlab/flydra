@@ -28,13 +28,15 @@ import flydra.analysis.result_utils as result_utils
 import core_analysis
 
 import pytz, datetime, time
-pacific = pytz.timezone('US/Pacific')
 
-def format_date(x, pos=None):
-    return str(datetime.datetime.fromtimestamp(x,pacific))
-    ## return datetime.datetime.fromtimestamp(x,pacific).strftime(
-    ##     '%Y-%m-%d %H:%M:%S.%f')
+class DateFormatter:
+    def __init__(self,tz):
+        self.tz = tz
 
+    def format_date(self, x, pos=None):
+        return str(datetime.datetime.fromtimestamp(x,self.tz))
+        ## return datetime.datetime.fromtimestamp(x,self.tz).strftime(
+        ##     '%Y-%m-%d %H:%M:%S.%f')
 
 def plot_err( ax, x, mean, err, color=None ):
     ax.plot( x, mean+err, color=color)
@@ -54,17 +56,20 @@ class Frames2Time:
         f2  = f/self.fps + self.time0
         return f2
 
-def fixup_ax(ax,ha='right',rotation=30):
+class FixupAxesWithTimeZone:
+    def __init__(self,tz):
+        self.df = DateFormatter(tz)
 
-    ax.xaxis.set_major_formatter(
-        ticker.FuncFormatter(format_date))
+    def fixup_ax(self,ax,ha='right',rotation=30):
+        ax.xaxis.set_major_formatter(
+            ticker.FuncFormatter(self.df.format_date))
 
-    # inspired by matplotlib/figure.py autofmt_xdate()
-    for label in ax.get_xticklabels():
-        label.set_ha(ha)
-        label.set_rotation(rotation)
+        # inspired by matplotlib/figure.py autofmt_xdate()
+        for label in ax.get_xticklabels():
+            label.set_ha(ha)
+            label.set_rotation(rotation)
 
-    ax.set_xlabel('time')
+        ax.set_xlabel('time')
 
 def plot_timeseries(subplot=None,options = None):
     kalman_filename=options.kalman_filename
@@ -157,6 +162,8 @@ def plot_timeseries(subplot=None,options = None):
             fps = 100.0
             import warnings
             warnings.warn('Setting fps to default value of %f'%fps)
+
+        tz = result_utils.get_tz( data_file )
 
     dt = 1.0/fps
 
@@ -412,6 +419,8 @@ def plot_timeseries(subplot=None,options = None):
             ticker.FormatStrFormatter("%d"))
         ax.yaxis.set_major_formatter(
             ticker.FormatStrFormatter("%s"))
+
+    fixup_ax = FixupAxesWithTimeZone(tz).fixup_ax
 
     if 'frame' in subplot:
         if time0 != 0.0:
