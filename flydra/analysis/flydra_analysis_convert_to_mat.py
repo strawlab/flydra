@@ -25,11 +25,13 @@ def do_it(filename=None,
           orientation_quality=None,
           hdf5=False,
           tzname=None,
+          fps=None,
           ):
 
     if hdf5:
         import h5py
         assert tzname is not None
+        assert fps is not None
 
     if filename is None and rows is None:
         raise ValueError("either filename or rows must be set")
@@ -199,6 +201,9 @@ def do_it(filename=None,
                 if table_name=='trajectory_start_times':
                     dset.attrs['timezone'] = tzname
                     assert dset.attrs['timezone'] == tzname # ensure it is actually saved
+                elif table_name=='trajectories':
+                    dset.attrs['frames_per_second'] = fps
+                    assert dset.attrs['frames_per_second'] == fps
         with open(newfilename,mode='r+') as f:
             f.write(userblock)
     else:

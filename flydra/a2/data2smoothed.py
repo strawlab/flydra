@@ -51,6 +51,7 @@ def convert(infilename,
             close_h52d = True
 
         tzname = result_utils.get_tzname0(h52d)
+        fps = result_utils.get_fps(h52d)
 
         try:
             table_data2d = h52d.root.data2d_distorted # Table to get timestamps from. (If you don't have timestamps, use the '--no-timestamps' option.)
@@ -212,6 +213,7 @@ def convert(infilename,
         orientation_quality = allqualrows,
         hdf5=hdf5,
         tzname=tzname,
+        fps=fps,
         )
     ca.close()
 
