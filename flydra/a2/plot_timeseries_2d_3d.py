@@ -24,8 +24,6 @@ import core_analysis
 import pytz, datetime, time
 import collections
 
-pacific = pytz.timezone('US/Pacific')
-
 all_kalman_lines = {}
 
 def onpick_callback(event):
@@ -39,10 +37,14 @@ def onpick_callback(event):
         ind = event.ind
         print 'picked line:',zip(numpy.take(xdata, ind), numpy.take(ydata, ind))
 
-def format_date(x, pos=None):
-    return str(datetime.datetime.fromtimestamp(x,pacific))
-    ## return datetime.datetime.fromtimestamp(x,pacific).strftime(
-    ##     '%Y-%m-%d %H:%M:%S.%f')
+class DateFormatter:
+    def __init__(self,tz):
+        self.tz = tz
+
+    def format_date(self, x, pos=None):
+        return str(datetime.datetime.fromtimestamp(x,self.tz))
+        ## return datetime.datetime.fromtimestamp(x,self.tz).strftime(
+        ##     '%Y-%m-%d %H:%M:%S.%f')
 
 def doit(
          filenames=None,
@@ -192,8 +194,10 @@ def doit(
                 ax.set_xlim( (start_frame, stop_frame) )
         ax.set_xlabel('frame')
         if options.timestamps:
+            tz = result_utils.get_tz( h5 )
+            df = DateFormatter(tz)
             ax.xaxis.set_major_formatter(
-                ticker.FuncFormatter(format_date))
+                ticker.FuncFormatter(df.format_date))
         else:
             ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
         ax.yaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
