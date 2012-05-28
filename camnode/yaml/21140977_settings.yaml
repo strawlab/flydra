@@ -1,10 +1,10 @@
 camera:  
-    camera_info_url: file:///cameras/basler_a622f_calibration.yaml
+    camera_info_url: file://~/21140977_calibration.yaml
     video_mode: format7_mode0
     brightness: 0
-    gain: 122
-    shutter: 2048
-    framerate: 100
+    gain: 120
+    shutter: 10020
+    framerate_max: 100
     trigger_mode: 0
 
 processor:
@@ -26,5 +26,4 @@ processor:
     color_filter_3: 255
     color_filter_sat: 100
     visible_image_view: raw
-
 

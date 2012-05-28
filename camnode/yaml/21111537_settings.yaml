@@ -1,5 +1,5 @@
 camera:  
-    camera_info_url: file:///cameras/basler_a622f_calibration.yaml
+    camera_info_url: file://~/21111537_calibration.yaml
     video_mode: format7_mode0
     brightness: 0
     gain: 122

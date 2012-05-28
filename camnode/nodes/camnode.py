@@ -1354,6 +1354,7 @@ class ImageSource(threading.Thread):
         self.parameters_queue = Queue.Queue()  # dynamic_reconfigure callback puts param changes here.  We deal with them at our leisure.
         self.time_prev = rospy.Time.now().to_sec()
         self.rosrate = 20.0#float(self.options.rosrate)
+        self.parameters = {}
 
         self.namespace_base      = '%s_%s' % ('guid',guid)
         self.namespace_camera    = self.namespace_base+'/camera'
@@ -1445,19 +1446,23 @@ class ImageSource(threading.Thread):
                     imageRaw.step = width
                     imageRaw.data = npimage.tostring() # let numpy convert to string
 
-                    self.pubImageRaw.publish(imageRaw)
                     
                     # Create and publish a camera_info message.
-                    camera_info = CameraInfo()
-                    camera_info.header = imageRaw.header
-                    camera_info.height = imageRaw.height
-                    camera_info.width = imageRaw.width
-                    camera_info.distortion_model = 'plumb_bob'
-                    camera_info.D = [0, 0, 0, 0, 0]
-                    camera_info.K = [1,0,0, 0,1,0, 0,0,1]
-                    camera_info.R = [1,0,0, 0,1,0, 0,0,1]
-                    camera_info.P = [1,0,0,0, 0,1,0,0, 0,0,1,0]
-                    self.pubCameraInfo.publish(camera_info)
+                    try:
+                        camera_info = CameraInfo()
+                        camera_info.header = imageRaw.header
+                        camera_info.height = imageRaw.height
+                        camera_info.width = imageRaw.width
+                        camera_info.distortion_model = self.parameters['distortion_model'] #'plumb_bob'
+                        camera_info.D = self.parameters['distortion_coefficients']['data'] #[0, 0, 0, 0, 0]
+                        camera_info.K = self.parameters['camera_matrix']['data'] #[1,0,0, 0,1,0, 0,0,1]
+                        camera_info.R = self.parameters['rectification_matrix']['data'] #[1,0,0, 0,1,0, 0,0,1]
+                        camera_info.P = self.parameters['projection_matrix']['data'] #[1,0,0,0, 0,1,0,0, 0,0,1,0]
+                    except KeyError:
+                        pass
+                    else:
+                        self.pubImageRaw.publish(imageRaw)
+                        self.pubCameraInfo.publish(camera_info)
                     
                     self.time_prev = now
 
@@ -1496,7 +1501,7 @@ class ImageSource(threading.Thread):
     def handle_queued_parameters(self):
         parameters = {}
         
-        # Flush the queue, keeping only the latest param value.
+        # Flush the queue, keeping the latest value of each param.
         while not self.parameters_queue.empty():
             try:
                 (param,value) = self.parameters_queue.get()
@@ -1507,11 +1512,6 @@ class ImageSource(threading.Thread):
 
         # Set all the parameters into ROS.
         for param,value in parameters.iteritems():
-            #rospy.set_param (rospy.get_name()+'/'+param, value)
-            
-            # Save the parameter values.
-            #self.parameters[param] = value                     
-
 
             # Set parameters into the camera.            
             if param in self.camera_control_properties: # i.e. gain, shutter
@@ -1527,6 +1527,9 @@ class ImageSource(threading.Thread):
             elif param == 'framerate_max':
                 with self.camera._hack_acquire_lock():
                     self.camera.set_framerate(value)
+                    
+            else:
+                self.parameters[param] = value
                 
 # End class ImageSource()
 
@@ -2186,12 +2189,34 @@ class AppState(object):
             for guid in guidlist:
                 rospy.logwarn('Camera guid: %s'%guid)
                 
-        # Read each camera's .yaml file into that camera's namespace.
+        # Read each camera's .yaml settings file into that camera's namespace.
         dir_yaml = rospy.get_param(rospy.get_name()+'/dir_yaml', '~')
         for guid in guidlist:
             namespace = self.namespace_base % guid
+            filename_yaml = '%s/%s_settings.yaml' % (dir_yaml, guid)
             try:
-                filename_yaml = '%s/%s.yaml' % (dir_yaml, guid)
+                rospy.logwarn ('rosparam load %s' % filename_yaml)
+                subprocess.call(['rosparam', 'load', filename_yaml, namespace]) # File potentially does not exist.
+            except OSError, e:
+                rospy.logwarn ('rosparam load %s: %s' % (filename_yaml,e))
+                pass
+
+        # Look for the .yaml intrinsic parameters file.
+        # 1st try file camera/%s_intrinsic.yaml
+        # 2nd try file at param camera/camera_info_url (skip the 'file://' part)
+        # 3rd try file ~/.ros/camera_info/%s.yaml
+        for guid in guidlist:
+            namespace = self.namespace_camera % guid
+            filename_yaml = '%s/%s_intrinsic.yaml' % (dir_yaml, guid) 
+            if not os.path.exists(filename_yaml):
+                url_yaml = rospy.get_param(namespace+'/camera_info_url', '~/.ros/camera_info/%s.yaml'%guid) # Get the location of the yaml.
+                parts = urlparse.urlparse(url_yaml)
+                filename_yaml = parts[1]+parts[2] 
+                if not os.path.exists(filename_yaml):
+                    filename_yaml = '~/.ros/camera_info/%s.yaml'%guid
+                    
+            # Load the parameters file into that camera's namespace.
+            try:
                 rospy.logwarn ('rosparam load %s' % filename_yaml)
                 subprocess.call(['rosparam', 'load', filename_yaml, namespace]) # File potentially does not exist.
             except OSError, e:
@@ -2201,13 +2226,24 @@ class AppState(object):
 
         # Default parameters.
         parameters_imagesource_default = {
-                                            'camera_info_url': 'file:///cameras/default_calibration.yaml',
+                                            'camera_info_url': 'file://~/.ros/camera_info/default_calibration.yaml',
                                             'video_mode': 'format7_mode0',
                                             'gain': 100,
                                             'shutter': 1000,
                                             'framerate_max': 100,
-                                            'trigger_mode': 0
+                                            'trigger_mode': 0,
+                                            # Following are the default intrinsic calibration params.
+                                            'image_width': 640,
+                                            'image_height': 480,
+                                            'camera_name': 'changeme',
+                                            'camera_matrix': {'rows': 3, 'cols': 3, 'data': [1000, 0, 0, 0, 1000, 0, 0, 0, 1]},
+                                            'distortion_model': 'plumb_bob',
+                                            'distortion_coefficients': {'rows': 1, 'cols': 5, 'data': [0, 0, 0, 0, 0]},
+                                            'rectification_matrix': {'rows': 3, 'cols': 3, 'data': [1, 0, 0, 0, 1, 0, 0, 0, 1]},
+                                            'projection_matrix': {'rows': 3, 'cols': 4, 'data': [1000, 0, 0, 0, 0, 1000, 0, 0, 0, 0, 1, 0]}
                                           }
+        
+          
         parameters_processor_default =    {
                                             'framerate_trigger': 100,
                                             'threshold_diff': 6,
@@ -2538,7 +2574,6 @@ class AppState(object):
             camera_control_properties = self.get_camera_control_properties(camera)
 
             # Create the list of parameters that the ImageSource handles.
-            params_camera = list(camera_control_properties)
             for param in list(camera_control_properties):
                 self.params_imagesource_byguid[guid][param] = camera_control_properties[param]['cur']  # = self.params_imagesource_base + params_camera
 
