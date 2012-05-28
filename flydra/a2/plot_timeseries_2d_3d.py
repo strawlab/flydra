@@ -73,6 +73,7 @@ def doit(
 
     assert len(filenames)>=1, 'must give at least one filename!'
 
+    n_files = 0
     for filename in filenames:
 
         if options.show_source_name:
@@ -119,8 +120,14 @@ def doit(
         else:
             all_data = h5.root.data2d_distorted[:]
 
-        start_frame = all_data['frame'].min()
-        stop_frame = all_data['frame'].max()
+        tmp_frames = all_data['frame']
+        if len(tmp_frames)==0:
+            print 'file %s has no frames, skipping.'%filename
+            continue
+        n_files += 1
+        start_frame = tmp_frames.min()
+        stop_frame = tmp_frames.max()
+        del tmp_frames
 
         for cam_id_enum, cam_id in enumerate( cam_ids ):
             if cam_id in ax_by_cam:
@@ -521,14 +528,14 @@ def doit(
 
         data_file.close()
 
-    if len(filenames):
+    if n_files >= 1:
         if options.save_fig is not None:
             pylab.savefig(options.save_fig)
         else:
             fig.canvas.mpl_connect('pick_event', onpick_callback)
             pylab.show()
     else:
-        print 'No filename(s) given -- nothing to do!'
+        print 'No filename(s) with data given -- nothing to do!'
 
 def main():
     usage = '%prog [options] FILE1 [FILE2] ...'
