@@ -360,9 +360,6 @@ class ProcessCamClass(object):
                  benchmark = False,
                  ):
 
-        rospy.init_node('flydra_camera',
-                        disable_signals=True, # let WX intercept them
-                        )
         # register a new publisher
         self.publisher = rospy.Publisher('%s/image_raw'%cam_id,
                                          Image,
@@ -2818,18 +2815,15 @@ class AppState(object):
                 raise ValueError('unknown key "%s"'%key)
 
 def get_app_defaults():
+    #some defaults are per camera node, other per flydra instance
+    flydra_defaults = dict(
+                       server = socket.gethostbyname(socket.gethostname())
+                       )
+    for k,v in flydra_defaults.items():
+        flydra_defaults[k] = rospy.get_param('/flydra/%s' % k, v)
 
-    # where is the "main brain" server?
-    try:
-        default_main_brain_hostname = socket.gethostbyname('brain1')
-    except:
-        # try localhost
-        try:
-            default_main_brain_hostname = socket.gethostbyname(socket.gethostname())
-        except: #socket.gaierror?
-            default_main_brain_hostname = ''
-
-    defaults = dict(# these are the most important 2D tracking parameters:
+    camnode_defaults = dict(
+                    # these are the most important 2D tracking parameters:
                     diff_threshold = 5,
                     n_sigma=7.0,
                     n_erode_absdiff=0,
@@ -2851,12 +2845,18 @@ def get_app_defaults():
                     small_save_radius=10,
                     background_frame_interval=50,
                     background_frame_alpha=1.0/50.0,
-                    server = default_main_brain_hostname,
                     mask_images = None,
                     )
+    for k,v in camnode_defaults.items():
+        camnode_defaults[k] = rospy.get_param('~%s' % k, v)
+
+    defaults = flydra_defaults.copy()
+    defaults.update(camnode_defaults)
+
     return defaults
 
 def main():
+    rospy.init_node('flydra_camera',disable_signals=True)
     parse_args_and_run()
 
 def benchmark():
