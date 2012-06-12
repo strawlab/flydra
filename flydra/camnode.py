@@ -67,20 +67,11 @@ import motmot.cam_iface.choose as cam_iface_choose
 from optparse import OptionParser
 import camnode_colors
 
-try:
-    import roslib
-    have_ROS = True
-    print 'have ROS'
-except ImportError, err:
-    have_ROS = False
-    print 'do NOT have ROS'
-    print 'see http://www.ros.org/'
+import roslib;
+roslib.load_manifest('sensor_msgs')
+from sensor_msgs.msg import Image
+import rospy
 
-if have_ROS:
-    roslib.load_manifest('sensor_msgs')
-    from sensor_msgs.msg import Image
-    import rospy
-    import rospy.core
 
 def DEBUG(*args):
     if 0:
@@ -371,19 +362,16 @@ class ProcessCamClass(object):
                  benchmark = False,
                  ):
 
-        if have_ROS:
-            rospy.init_node('flydra_camera_node',
-                            anonymous=True, # allow multiple instances to run
-                            disable_signals=True, # let WX intercept them
-                            )
-            # register a new publisher
-            self.publisher = rospy.Publisher('%s/image_raw'%cam_id,
-                                             Image,
-                                             tcp_nodelay=True,
-                                             )
+        rospy.init_node('flydra_camera',
+                        disable_signals=True, # let WX intercept them
+                        )
+        # register a new publisher
+        self.publisher = rospy.Publisher('%s/image_raw'%cam_id,
+                                         Image,
+                                         tcp_nodelay=True,
+                                         )
         self.rosrate = float(options.rosrate)
         self.lasttime = time.time()
-        # end ROS stuff
 
         self.benchmark = benchmark
         self.options = options
@@ -769,40 +757,38 @@ class ProcessCamClass(object):
                 framenumber=chainbuf.framenumber
 
                 # publish raw image on ROS network
-                if have_ROS:
-                    now = time.time()
-                    if now-self.lasttime+0.005 > 1./(self.rosrate):
-                        msg = Image()
-                        msg.header.seq=framenumber
-                        msg.header.stamp=rospy.Time.from_sec(now) # XXX TODO: once camera trigger is ROS node, get accurate timestamp
-                        msg.header.frame_id = "0"
+                now = time.time()
+                if now-self.lasttime+0.005 > 1./(self.rosrate):
+                    msg = Image()
+                    msg.header.seq=framenumber
+                    msg.header.stamp=rospy.Time.from_sec(now) # XXX TODO: once camera trigger is ROS node, get accurate timestamp
+                    msg.header.frame_id = "0"
 
-                        npbuf = np.array(hw_roi_frame)
-                        (height,width) = npbuf.shape
+                    npbuf = np.array(hw_roi_frame)
+                    (height,width) = npbuf.shape
 
-                        msg.height = height
-                        msg.width = width
-                        msg.encoding = chainbuf.image_coding
-                        pixel_format = chainbuf.image_coding
-                        if pixel_format == 'MONO8':
-                            msg.encoding = 'mono8'
-                        elif pixel_format in ('RAW8:RGGB','MONO8:RGGB'):
-                            msg.encoding = 'bayer_rggb8'
-                        elif pixel_format in ('RAW8:BGGR','MONO8:BGGR'):
-                            msg.encoding = 'bayer_bggr8'
-                        elif pixel_format in ('RAW8:GBRG','MONO8:GBRG'):
-                            msg.encoding = 'bayer_gbrg8'
-                        elif pixel_format in ('RAW8:GRBG','MONO8:GRBG'):
-                            msg.encoding = 'bayer_grbg8'
-                        else:
-                            raise ValueError('unknown pixel format "%s"'%pixel_format)
+                    msg.height = height
+                    msg.width = width
+                    msg.encoding = chainbuf.image_coding
+                    pixel_format = chainbuf.image_coding
+                    if pixel_format == 'MONO8':
+                        msg.encoding = 'mono8'
+                    elif pixel_format in ('RAW8:RGGB','MONO8:RGGB'):
+                        msg.encoding = 'bayer_rggb8'
+                    elif pixel_format in ('RAW8:BGGR','MONO8:BGGR'):
+                        msg.encoding = 'bayer_bggr8'
+                    elif pixel_format in ('RAW8:GBRG','MONO8:GBRG'):
+                        msg.encoding = 'bayer_gbrg8'
+                    elif pixel_format in ('RAW8:GRBG','MONO8:GRBG'):
+                        msg.encoding = 'bayer_grbg8'
+                    else:
+                        raise ValueError('unknown pixel format "%s"'%pixel_format)
 
-                        msg.step = width
-                        msg.data = npbuf.tostring() # let numpy convert to string
+                    msg.step = width
+                    msg.data = npbuf.tostring() # let numpy convert to string
 
-                        self.publisher.publish(msg)
-                        self.lasttime = now
-                # end ROS stuff
+                    self.publisher.publish(msg)
+                    self.lasttime = now
 
                 if 1:
                     if old_fn is None:
@@ -1926,6 +1912,8 @@ class AppState(object):
                  options = None,
                  ):
         global cam_iface
+
+        raise 1
 
         self.options = options
         self._real_quit_function = None
