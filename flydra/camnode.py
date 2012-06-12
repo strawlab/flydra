@@ -2856,7 +2856,7 @@ def get_app_defaults():
     return defaults
 
 def main():
-    rospy.init_node('flydra_camera',disable_signals=True)
+    rospy.init_node('flydra_camera_node',disable_signals=True)
     parse_args_and_run()
 
 def benchmark():
