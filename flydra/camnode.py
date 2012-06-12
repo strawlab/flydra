@@ -1940,6 +1940,9 @@ class AppState(object):
             for i in range(cam_iface.get_num_cameras()):
                 try:
                     this_info1 =  cam_iface.get_camera_info(i)
+                    mfg,model,guid = this_info1
+                    if options.cams_only and guid not in set(options.cams_only.split(',')):
+                        continue
                 except cam_iface.CameraNotAvailable:
                     this_info2 =  ('(not available)',i)
                 else:
@@ -1957,14 +1960,6 @@ class AppState(object):
                 except cam_iface.CameraNotAvailable:
                     avail_string = '(not available)'
                 print 'order %d: %s'%(i, avail_string)
-
-
-            cams_only = options.cams_only
-            if cams_only is not None:
-                cams_only = map(int,cams_only.split(','))
-
-                new_cam_order = [ cam_order[i] for i in cams_only ]
-                cam_order = new_cam_order
 
             num_cams = len(cam_order)
 
@@ -2823,6 +2818,8 @@ def get_app_defaults():
         flydra_defaults[k] = rospy.get_param('/flydra/%s' % k, v)
 
     camnode_defaults = dict(
+                    cams_only="",
+
                     # these are the most important 2D tracking parameters:
                     diff_threshold = 5,
                     n_sigma=7.0,
