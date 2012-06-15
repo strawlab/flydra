@@ -1942,6 +1942,7 @@ class AppState(object):
                     this_info1 =  cam_iface.get_camera_info(i)
                     mfg,model,guid = this_info1
                     if options.cams_only and guid not in set(options.cams_only.split(',')):
+                        print 'skipping camera %s' % guid
                         continue
                 except cam_iface.CameraNotAvailable:
                     this_info2 =  ('(not available)',i)
