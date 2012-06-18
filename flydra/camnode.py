@@ -2108,13 +2108,13 @@ class AppState(object):
             main_brain_URI = "PYROLOC://%s:%d/%s" % (self.main_brain_hostname,port,name)
             try:
                 self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
+                main_brain_version = self.main_brain.get_version()
             except:
                 print 'ERROR while connecting to',main_brain_URI
                 raise
             self.main_brain._setOneway(['set_image','set_fps','close','log_message','receive_missing_data'])
 
             if not options.ignore_version:
-                main_brain_version = self.main_brain.get_version()
                 assert main_brain_version == flydra.version.__version__
 
         ##################################################################
