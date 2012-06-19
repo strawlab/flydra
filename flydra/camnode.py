@@ -1652,9 +1652,8 @@ class ImageSourceFakeCamera(ImageSource):
             framenumber=self.cam.get_last_framenumber()
         return try_again_condition, timestamp, framenumber
 
-class FakeCamera(object):
+class _Camera(object):
     def start_camera(self):
-        # no-op
         pass
 
     def get_framerate(self):
@@ -1683,7 +1682,44 @@ class FakeCamera(object):
     def get_trigger_mode_string(self,i):
         return 'fake camera trigger'
 
-class FakeCameraFromNetwork(FakeCamera):
+    def get_frame_roi(self):
+        raise NotImplementedError
+
+    def load_configuration(self):
+        pass
+
+class CamifaceCamera(cam_iface.Camera, _Camera):
+    def __init__(self, guid, cam_no, show_cam_details, num_buffers=50):
+        self._guid = guid
+        self._show_cam_details = show_cam_details
+
+        N_modes = cam_iface.get_num_modes(cam_no)
+        use_mode = None
+        if show_cam_details:
+            print 'camera info:',cam_iface.get_camera_info(cam_no)
+            print '%d available modes:'%N_modes
+        for i in range(N_modes):
+            mode_string = cam_iface.get_mode_string(cam_no,i)
+            if show_cam_details:
+                print '  mode %d: %s'%(i,mode_string)
+            if 'format7_0' in mode_string.lower():
+                use_mode = i
+        if use_mode is None:
+            use_mode = 0
+
+        cam_iface.Camera.__init__(self,cam_no,num_buffers,use_mode)
+
+        #cache the properties
+        num_props = self.get_num_camera_properties()
+        self._prop_numbers_from_name = {}
+        for i in range(num_props):
+            info = self.get_camera_property_info(i)
+            self._prop_numbers_from_name[info['name']] = i
+
+    def load_configuration(self):
+        print self._prop_numbers_from_name
+
+class FakeCameraFromNetwork(_Camera):
     def __init__(self,id,frame_size):
         self.id = id
         self.frame_size = frame_size
@@ -1724,7 +1760,7 @@ class FakeCameraFromNetwork(FakeCamera):
         self._ensure_remote()
         return self.remote.get_last_framenumber(self.id) # this will block...
 
-class FakeCameraFromRNG(FakeCamera):
+class FakeCameraFromRNG(_Camera):
     def __init__(self,id,frame_size):
         self.id = id
         self.frame_size = frame_size
@@ -1759,7 +1795,7 @@ class FakeCameraFromRNG(FakeCamera):
     def get_last_framenumber(self):
         return self.last_count
 
-class FakeCameraFromFMF(FakeCamera):
+class FakeCameraFromFMF(_Camera):
     def __init__(self,filename):
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
         if 0:
@@ -2019,35 +2055,11 @@ class AppState(object):
             globals['use_cmp'].set()
 
             if cam_iface is not None:
-                backend = cam_iface.get_driver_name()
-                N_modes = cam_iface.get_num_modes(cam_id)
-                use_mode = None
-                if options.mode_num is not None:
-                    options.show_cam_details = True
-                if options.show_cam_details:
-                    print 'camera info:',cam_iface.get_camera_info(cam_id)
-                    print '%d available modes:'%N_modes
-                for i in range(N_modes):
-                    mode_string = cam_iface.get_mode_string(cam_id,i)
-                    if options.show_cam_details:
-                        print '  mode %d: %s'%(i,mode_string)
-                    if 'format7_0' in mode_string.lower():
-                        # prefer format7_0
-                        if use_mode is None:
-                            use_mode = i
-                if use_mode is None:
-                    use_mode = 0
-                if options.mode_num is not None:
-                    use_mode = options.mode_num
-
-                cam_iface.Camera._hack_acquire_lock = monkeypatch_camera_method # add our monkeypatch
-                cam = cam_iface.Camera(cam_id,options.num_buffers,use_mode)
+                CamifaceCamera._hack_acquire_lock = monkeypatch_camera_method # add our monkeypatch
+                guid = self.all_cam_ids[cam_no] = guid
+                cam = CamifaceCamera(guid,cam_id,options.show_cam_details)
                 cam._monkeypatched_lock = threading.Lock()
-
-                if options.show_cam_details:
-                    print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_id,use_mode))
                 ImageSourceModel = ImageSourceFromCamera
-
                 initial_image_dict = None
             elif options.simulate_point_extraction: # emulate points
                 # call factory function
@@ -2061,6 +2073,9 @@ class AppState(object):
                 # call factory function
                 (cam, ImageSourceModel,
                  initial_image_dict)  = create_cam_for_emulation_image_source( emulation_image_sources[cam_no] )
+
+            #load backend specific configuration (i.e. from ROS at a backend specific prefix)
+            cam.load_configuration()
 
             if initial_image_dict is None:
                 globals['take_background'].set()
