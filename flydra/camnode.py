@@ -426,7 +426,6 @@ class ProcessCamClass(object):
         self._hlper = None
         self._pmat = None
         self._scale_factor = None # for 3D calibration stuff
-        self.cam_no_str = str(cam_no)
 
         self._chain = camnode_utils.ChainLink()
         self._initial_image_dict = initial_image_dict
@@ -1388,12 +1387,13 @@ class SaveSmallData(object):
 class ImageSource(threading.Thread):
     """One instance of this class for each camera. Do nothing but get
     new frames, copy them, and pass to listener chain."""
+
     def __init__(self,
                  chain=None,
                  cam=None,
                  buffer_pool=None,
                  debug_acquire = False,
-                 cam_no = None,
+                 cam_id = '<unassigned>',
                  quit_event = None,
                  ):
 
@@ -1404,11 +1404,9 @@ class ImageSource(threading.Thread):
             self.image_coding = self.cam.get_pixel_coding()
         self.buffer_pool = buffer_pool
         self.debug_acquire = debug_acquire
-        self.cam_no_str = str(cam_no)
         self.quit_event = quit_event
-        self.cam_id = '<unassigned>'
-    def assign_cam_id(self,cam_id):
         self.cam_id = cam_id
+
     def set_chain(self,new_chain):
         # XXX TODO FIXME: put self._chain behind lock
         if self._chain is not None:
@@ -1446,7 +1444,7 @@ class ImageSource(threading.Thread):
                     continue
 
                 if self.debug_acquire:
-                    stdout_write(self.cam_no_str)
+                    stdout_write(self.cam_id)
 
                 cam_received_time = time.time()
 
@@ -1501,8 +1499,8 @@ class ImageSourceFromCamera(ImageSource):
             with self.cam._hack_acquire_lock():
                 trash = self.cam.grab_next_frame_blocking()
         except cam_iface.BuffersOverflowed:
-            msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
-            self.log_message_queue.put((self.cam_no_str,now,msg))
+            msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
+            self.log_message_queue.put((self.cam_id,now,msg))
             print >> sys.stderr, msg
         except cam_iface.FrameDataMissing:
             pass
@@ -1524,31 +1522,31 @@ class ImageSourceFromCamera(ImageSource):
                 self.cam.grab_next_frame_into_buf_blocking(_bufim)
             except cam_iface.BuffersOverflowed:
                 if self.debug_acquire:
-                    stdout_write('(O%s)'%self.cam_no_str)
+                    stdout_write('(O%s)'%self.cam_id)
                 now = time.time()
-                msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
-                self.log_message_queue.put((self.cam_no_str,now,msg))
+                msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
+                self.log_message_queue.put((self.cam_id,now,msg))
                 print >> sys.stderr, msg
                 try_again_condition = True
             except cam_iface.FrameDataMissing:
                 if self.debug_acquire:
-                    stdout_write('(M%s)'%self.cam_no_str)
+                    stdout_write('(M%s)'%self.cam_id)
                 now = time.time()
-                msg = 'Warning: frame data missing on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
-                #self.log_message_queue.put((self.cam_no_str,now,msg))
+                msg = 'Warning: frame data missing on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
+                #self.log_message_queue.put((self.cam_id,now,msg))
                 print >> sys.stderr, msg
                 try_again_condition = True
             except cam_iface.FrameDataCorrupt:
                 if self.debug_acquire:
-                    stdout_write('(C%s)'%self.cam_no_str)
+                    stdout_write('(C%s)'%self.cam_id)
                 now = time.time()
-                msg = 'Warning: frame data corrupt on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
-                #self.log_message_queue.put((self.cam_no_str,now,msg))
+                msg = 'Warning: frame data corrupt on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
+                #self.log_message_queue.put((self.cam_id,now,msg))
                 print >> sys.stderr, msg
                 try_again_condition = True
             except (cam_iface.FrameSystemCallInterruption, cam_iface.NoFrameReturned):
                 if self.debug_acquire:
-                    stdout_write('(S%s)'%self.cam_no_str)
+                    stdout_write('(S%s)'%self.cam_id)
                 try_again_condition = True
 
             if not try_again_condition:
@@ -1982,9 +1980,9 @@ class AppState(object):
             #cam_id is the libcamiface number of the camera
             cam_id = cam_order[cam_no]
             try:
-                mfg,model,guid = cam_iface.get_camera_info(cam_no)
+                mfg,model,guid = cam_iface.get_camera_info(cam_id)
                 if not guid:
-                    raise RuntimeError('camera %d has invalid guid' % (cam_no, guid))
+                    raise RuntimeError('libcamiface camera %d has invalid guid' % (cam_id, guid))
                 self.all_cam_ids[cam_no] = guid
             except cam_iface.CameraNotAvailable:
                 raise RuntimeError('camera %d not available' % cam_no)
@@ -2085,7 +2083,7 @@ class AppState(object):
                                                 cam = cam,
                                                 buffer_pool = buffer_pool,
                                                 debug_acquire = options.debug_acquire,
-                                                cam_no = cam_no,
+                                                cam_id = self.all_cam_ids[cam_no],
                                                 quit_event = globals['cam_quit_event'],
                                                 )
                 if benchmark: # should maybe be for any simulated camera in non-GUI mode?
@@ -2277,7 +2275,6 @@ class AppState(object):
                 self.main_brain.register_new_camera(cam_id,
                                                     scalar_control_info,
                                                     port)
-                self._image_sources[cam_no].assign_cam_id(cam_id)
                 cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(cam_id)
 
                 ##################################################################
