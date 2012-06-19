@@ -115,6 +115,9 @@ def monkeypatch_camera_method(self):
 
     # release the lock
 
+def ros_ensure_valid_name(name):
+    return name.replace('-','_')
+
 class SharedValue:
     # in fview
     def __init__(self):
@@ -361,8 +364,9 @@ class ProcessCamClass(object):
                  benchmark = False,
                  ):
 
+        self.ros_namespace = ros_ensure_valid_name(cam_guid)
         # register a new publisher
-        self.publisher = rospy.Publisher('%s/image_raw'%cam_id,
+        self.publisher = rospy.Publisher('%s/image_raw'%self.ros_namespace,
                                          Image,
                                          tcp_nodelay=True,
                                          )
