@@ -1654,7 +1654,7 @@ class MainBrain(object):
         # ================================================================
 
         def register_new_camera(self,cam_guid,scalar_control_info,port):
-            """register new camera, return cam_guid (caller: remote camera)"""
+            """register new camera with the given guid"""
 
             caller= self.daemon.getLocalStorage().caller # XXX Pyro hack??
             caller_addr= caller.addr
@@ -1665,6 +1665,8 @@ class MainBrain(object):
 
             cam2mainbrain_data_port = self.main_brain.coord_processor.connect(cam_guid)
             with self.cam_info_lock:
+                if cam_guid in self.cam_info:
+                    raise RuntimeError("camera with guid %s already exists" % cam_guid)
                 self.cam_info[cam_guid] = {'commands':{}, # command queue for cam
                                          'lock':threading.Lock(), # prevent concurrent access
                                          'image':None,  # most recent image from cam
@@ -1680,7 +1682,6 @@ class MainBrain(object):
             self.no_cams_connected.clear()
             with self.changed_cam_lock:
                 self.new_cam_ids.append(cam_guid)
-            return cam_guid
 
         def set_image(self,cam_id,coord_and_image):
             """set most recent image (caller: remote camera)"""

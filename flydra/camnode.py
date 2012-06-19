@@ -334,7 +334,6 @@ def get_free_buffer_from_pool(pool):
 
 class ProcessCamClass(object):
     def __init__(self,
-                 cam_guid=None,
                  cam2mainbrain_port=None,
                  cam_id=None,
                  log_message_queue=None,
@@ -364,7 +363,7 @@ class ProcessCamClass(object):
                  benchmark = False,
                  ):
 
-        self.ros_namespace = ros_ensure_valid_name(cam_guid)
+        self.ros_namespace = ros_ensure_valid_name(cam_id)
         # register a new publisher
         self.publisher = rospy.Publisher('%s/image_raw'%self.ros_namespace,
                                          Image,
@@ -1968,7 +1967,6 @@ class AppState(object):
         self.all_cams = [None]*num_cams
         self.cam_status = [None]*num_cams
         self.all_cam_chains = [None]*num_cams
-        self.all_cam_guids = [None]*num_cams
         self.all_cam_processors = [None]*num_cams
         self.all_savers = [None]*num_cams
         self.all_small_savers = [None]*num_cams
@@ -1987,7 +1985,7 @@ class AppState(object):
                 mfg,model,guid = cam_iface.get_camera_info(cam_no)
                 if not guid:
                     raise RuntimeError('camera %d has invalid guid' % (cam_no, guid))
-                self.all_cam_guids[cam_no] = guid
+                self.all_cam_ids[cam_no] = guid
             except cam_iface.CameraNotAvailable:
                 raise RuntimeError('camera %d not available' % cam_no)
 
@@ -2275,14 +2273,12 @@ class AppState(object):
 
                 # register self with remote server
                 port = 9834 + cam_no # for local Pyro server
-
-                cam_id = self.main_brain.register_new_camera(self.all_cam_guids[cam_no],
-                                                             scalar_control_info,
-                                                             port)
-
-                self.all_cam_ids[cam_no]=cam_id
+                cam_id = self.all_cam_ids[cam_no]
+                self.main_brain.register_new_camera(cam_id,
+                                                    scalar_control_info,
+                                                    port)
                 self._image_sources[cam_no].assign_cam_id(cam_id)
-                cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(self.all_cam_ids[cam_no])
+                cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(cam_id)
 
                 ##################################################################
                 #
@@ -2304,7 +2300,6 @@ class AppState(object):
                         t = b+h-1
                         lbrt = l,b,r,t
                         cam_processor = ProcessCamClass(
-                            cam_guid=self.all_cam_guids[cam_no],
                             cam2mainbrain_port=cam2mainbrain_port,
                             cam_id=cam_id,
                             log_message_queue=self.log_message_queue,
