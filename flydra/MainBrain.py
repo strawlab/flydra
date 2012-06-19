@@ -1653,24 +1653,19 @@ class MainBrain(object):
         #
         # ================================================================
 
-        def register_new_camera(self,cam_no,scalar_control_info,port,force_cam_id=None):
-            """register new camera, return cam_id (caller: remote camera)"""
+        def register_new_camera(self,cam_guid,scalar_control_info,port):
+            """register new camera, return cam_guid (caller: remote camera)"""
 
             caller= self.daemon.getLocalStorage().caller # XXX Pyro hack??
             caller_addr= caller.addr
             caller_ip, caller_port = caller_addr
             fqdn = socket.getfqdn(caller_ip)
 
-            if force_cam_id is None:
-                cam_id = '%s_%d'%(fqdn,cam_no)
-            else:
-                cam_id = force_cam_id
+            print "REGISTER NEW CAMERA", cam_guid
 
-            print "REGISTER NEW CAMERA", cam_id
-
-            cam2mainbrain_data_port = self.main_brain.coord_processor.connect(cam_id)
+            cam2mainbrain_data_port = self.main_brain.coord_processor.connect(cam_guid)
             with self.cam_info_lock:
-                self.cam_info[cam_id] = {'commands':{}, # command queue for cam
+                self.cam_info[cam_guid] = {'commands':{}, # command queue for cam
                                          'lock':threading.Lock(), # prevent concurrent access
                                          'image':None,  # most recent image from cam
                                          'fps':None,    # most recept fps from cam
@@ -1684,8 +1679,8 @@ class MainBrain(object):
                                          }
             self.no_cams_connected.clear()
             with self.changed_cam_lock:
-                self.new_cam_ids.append(cam_id)
-            return cam_id
+                self.new_cam_ids.append(cam_guid)
+            return cam_guid
 
         def set_image(self,cam_id,coord_and_image):
             """set most recent image (caller: remote camera)"""

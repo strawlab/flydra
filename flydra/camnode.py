@@ -2275,15 +2275,10 @@ class AppState(object):
 
                 # register self with remote server
                 port = 9834 + cam_no # for local Pyro server
-                if force_cam_ids is None:
-                    force_cam_id = None
-                else:
-                    force_cam_id = force_cam_ids[cam_no]
-                cam_id = self.main_brain.register_new_camera(cam_no,
+
+                cam_id = self.main_brain.register_new_camera(self.all_cam_guids[cam_no],
                                                              scalar_control_info,
-                                                             port,
-                                                             force_cam_id=force_cam_id,
-                                                             )
+                                                             port)
 
                 self.all_cam_ids[cam_no]=cam_id
                 self._image_sources[cam_no].assign_cam_id(cam_id)
