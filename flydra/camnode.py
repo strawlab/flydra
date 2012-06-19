@@ -331,6 +331,7 @@ def get_free_buffer_from_pool(pool):
 
 class ProcessCamClass(object):
     def __init__(self,
+                 cam_guid=None,
                  cam2mainbrain_port=None,
                  cam_id=None,
                  log_message_queue=None,
@@ -1942,11 +1943,12 @@ class AppState(object):
                     this_info1 =  cam_iface.get_camera_info(i)
                     mfg,model,guid = this_info1
                     if options.cams_only and guid not in set(options.cams_only.split(',')):
-                        print 'skipping camera %s' % guid
+                        print 'skipping camera guid: %s (cam_id: %d)' % (guid,i)
                         continue
                 except cam_iface.CameraNotAvailable:
                     this_info2 =  ('(not available)',i)
                 else:
+                    print 'choosing camera guid: %s (cam_id: %d)' % (guid,i)
                     this_info2 =  ('\0'.join(this_info1),i)
                 all_cam_info_list.append(this_info2)
 
@@ -1954,14 +1956,6 @@ class AppState(object):
             all_cam_info_list.reverse() # any ordering will do, but reverse for historical reasons
             cam_order = [ x[1] for x in all_cam_info_list]
             del all_cam_info_list
-            print 'camera order',cam_order
-            for i,cam_no in enumerate(cam_order):
-                try:
-                    avail_string = cam_iface.get_camera_info(cam_no)
-                except cam_iface.CameraNotAvailable:
-                    avail_string = '(not available)'
-                print 'order %d: %s'%(i, avail_string)
-
             num_cams = len(cam_order)
 
         if num_cams == 0:
@@ -1970,6 +1964,7 @@ class AppState(object):
         self.all_cams = [None]*num_cams
         self.cam_status = [None]*num_cams
         self.all_cam_chains = [None]*num_cams
+        self.all_cam_guids = [None]*num_cams
         self.all_cam_processors = [None]*num_cams
         self.all_savers = [None]*num_cams
         self.all_small_savers = [None]*num_cams
@@ -1982,6 +1977,17 @@ class AppState(object):
         self.critical_threads = []
 
         for cam_no in range(num_cams):
+            #cam_id is the libcamiface number of the camera
+            cam_id = cam_order[cam_no]
+            try:
+                mfg,model,guid = cam_iface.get_camera_info(cam_no)
+                if not guid:
+                    raise RuntimeError('camera %d has invalid guid' % (cam_no, guid))
+                self.all_cam_guids[cam_no] = guid
+            except cam_iface.CameraNotAvailable:
+                raise RuntimeError('camera %d not available' % cam_no)
+
+            print 'constructing camera guid: %s (cam_id: %d cam_no: %d)' % (guid,cam_id,cam_no)
 
             ##################################################################
             #
@@ -2014,15 +2020,15 @@ class AppState(object):
 
             if cam_iface is not None:
                 backend = cam_iface.get_driver_name()
-                N_modes = cam_iface.get_num_modes(cam_order[cam_no])
+                N_modes = cam_iface.get_num_modes(cam_id)
                 use_mode = None
                 if options.mode_num is not None:
                     options.show_cam_details = True
                 if options.show_cam_details:
-                    print 'camera info:',cam_iface.get_camera_info(cam_order[cam_no])
+                    print 'camera info:',cam_iface.get_camera_info(cam_id)
                     print '%d available modes:'%N_modes
                 for i in range(N_modes):
-                    mode_string = cam_iface.get_mode_string(cam_order[cam_no],i)
+                    mode_string = cam_iface.get_mode_string(cam_id,i)
                     if options.show_cam_details:
                         print '  mode %d: %s'%(i,mode_string)
                     if 'format7_0' in mode_string.lower():
@@ -2035,11 +2041,11 @@ class AppState(object):
                     use_mode = options.mode_num
 
                 cam_iface.Camera._hack_acquire_lock = monkeypatch_camera_method # add our monkeypatch
-                cam = cam_iface.Camera(cam_order[cam_no],options.num_buffers,use_mode)
+                cam = cam_iface.Camera(cam_id,options.num_buffers,use_mode)
                 cam._monkeypatched_lock = threading.Lock()
 
                 if options.show_cam_details:
-                    print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_order[cam_no],use_mode))
+                    print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_id,use_mode))
                 ImageSourceModel = ImageSourceFromCamera
 
                 initial_image_dict = None
@@ -2299,6 +2305,7 @@ class AppState(object):
                         t = b+h-1
                         lbrt = l,b,r,t
                         cam_processor = ProcessCamClass(
+                            cam_guid=self.all_cam_guids[cam_no],
                             cam2mainbrain_port=cam2mainbrain_port,
                             cam_id=cam_id,
                             log_message_queue=self.log_message_queue,
