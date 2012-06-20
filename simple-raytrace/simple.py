@@ -1,11 +1,12 @@
 import numpy as np
-import enthought.traits.api as traits
-from enthought.traits.ui.api import View, Item, Group, ListEditor, Label, \
+
+import traits.api as traits
+from traitsui.api import View, Item, Group, ListEditor, Label, \
      RangeEditor
 
-from enthought.chaco.api import DataView, ArrayDataSource, ScatterPlot, \
+from chaco.api import DataView, ArrayDataSource, ScatterPlot, \
      LinePlot, LinearMapper, ArrayPlotData, Plot, gray
-from enthought.enable.component_editor import ComponentEditor
+from enable.component_editor import ComponentEditor
 
 import mpl_figure_editor
 import warnings, collections

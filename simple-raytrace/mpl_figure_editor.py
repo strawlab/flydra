@@ -11,13 +11,13 @@ import matplotlib.patches as mpatches
 import matplotlib.path as mpath
 from matplotlib.backends.backend_wx import NavigationToolbar2Wx
 
-from enthought.traits.api import Any, Instance, ListInstance
-from enthought.traits.ui.wx.editor import Editor
-from enthought.traits.ui.wx.basic_editor_factory import BasicEditorFactory
+from traits.api import Any, Instance, ListInstance
+from traitsui.wx.editor import Editor
+from traitsui.wx.basic_editor_factory import BasicEditorFactory
 
-from enthought.traits.api import HasTraits, Range, on_trait_change, Float, Event
-import enthought.traits.api as traits
-from enthought.traits.ui.api import View, Item, InstanceEditor, ListEditor
+from traits.api import HasTraits, Range, on_trait_change, Float, Event
+import traits.api as traits
+from traitsui.api import View, Item, InstanceEditor, ListEditor
 
 import numpy as np
 
