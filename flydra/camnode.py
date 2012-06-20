@@ -1653,6 +1653,9 @@ class ImageSourceFakeCamera(ImageSource):
         return try_again_condition, timestamp, framenumber
 
 class _Camera(object):
+
+    ROS_PROPERTIES = {}
+
     def start_camera(self):
         pass
 
@@ -1676,6 +1679,12 @@ class _Camera(object):
     def close(self):
         return
 
+    def set_trigger_mode_number(self, v):
+        pass
+
+    def get_trigger_mode_number(self):
+        return 0
+
     def get_num_trigger_modes(self):
         return 1
 
@@ -1685,14 +1694,25 @@ class _Camera(object):
     def get_frame_roi(self):
         raise NotImplementedError
 
+    def set_camera_property(self, prop_num, prop_value, auto):
+        pass
+
     def load_configuration(self):
         pass
 
 class CamifaceCamera(cam_iface.Camera, _Camera):
+
+    ROS_PROPERTIES = dict(
+        shutter=9000,
+        gain=300,
+        trigger_mode=-1
+    )
+
     def __init__(self, guid, cam_no, show_cam_details, num_buffers=50):
         self._guid = guid
         self._show_cam_details = show_cam_details
 
+        # auto select format7_0 mode
         N_modes = cam_iface.get_num_modes(cam_no)
         use_mode = None
         if show_cam_details:
@@ -1709,15 +1729,60 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
 
         cam_iface.Camera.__init__(self,cam_no,num_buffers,use_mode)
 
+        # cache trigger mode names
+        self._trigger_mode_numbers_from_name = {}
+        N_trigger_modes = self.get_num_trigger_modes()
+        if show_cam_details:
+            print '  %d available trigger modes:'%N_trigger_modes
+            print '  current trigger modes: %d' % self.get_trigger_mode_number()
+            for i in range(N_trigger_modes):
+                mode_string = self.get_trigger_mode_string(i)
+                self._trigger_mode_numbers_from_name[mode_string] = i
+                print '  mode %d: %s'%(i,mode_string)
+
         #cache the properties
         num_props = self.get_num_camera_properties()
         self._prop_numbers_from_name = {}
+        self._prop_names_from_numbers = {}
         for i in range(num_props):
             info = self.get_camera_property_info(i)
-            self._prop_numbers_from_name[info['name']] = i
+            name = info['name']
+            self._prop_numbers_from_name[name] = i
+            self._prop_names_from_numbers[i] = name
+
+    def _get_rosparam_path(self, paramname):
+        return "/%s/%s" % (ros_ensure_valid_name(self._guid), paramname)
 
     def load_configuration(self):
-        print self._prop_numbers_from_name
+        for k,v in self.ROS_PROPERTIES.iteritems():
+            parampath = self._get_rosparam_path(k)
+            paramval = rospy.get_param(parampath, v)
+            if k in self._prop_numbers_from_name:
+                prop_num = self._prop_numbers_from_name[k]
+                #call directly to camiface, these parameters are already from the parameter server
+                cam_iface.Camera.set_camera_property(self,prop_num,paramval,0)
+            elif k == "trigger_mode":
+                print "SET TRIGGER MODE = %d" % paramval
+                if paramval < 0:
+                    cam_iface.Camera.set_framerate(self, 999)
+                else:
+                    cam_iface.Camera.set_trigger_mode_number(self, paramval)
+
+    def set_camera_property(self, prop_num, prop_value, auto):
+        if prop_num in self._prop_names_from_numbers:
+            paramname = self._prop_names_from_numbers[prop_num]
+            if paramname in self.ROS_PROPERTIES:
+                parampath = self._get_rosparam_path(paramname)
+                rospy.set_param(parampath, prop_value)
+        cam_iface.Camera.set_camera_property(self,prop_num,prop_value,auto)
+
+    def set_trigger_mode_number(self, v):
+        print "SAVE TRIGGER MODE"
+        parampath = self._get_rosparam_path("trigger_mode")
+        rospy.set_param(parampath, v)
+
+    def set_framerate(self, *args):
+        raise 1
 
 class FakeCameraFromNetwork(_Camera):
     def __init__(self,id,frame_size):
@@ -2186,18 +2251,6 @@ class AppState(object):
 
                 # get settings
                 scalar_control_info = {}
-
-                if 1:
-                    # trigger modes
-                    N_trigger_modes = cam.get_num_trigger_modes()
-                    if options.show_cam_details:
-                        print '  %d available trigger modes:'%N_trigger_modes
-                        for i in range(N_trigger_modes):
-                            mode_string = cam.get_trigger_mode_string(i)
-                            print '  mode %d: %s'%(i,mode_string)
-                    scalar_control_info['N_trigger_modes'] = N_trigger_modes
-                    # XXX TODO: scalar_control_info['trigger_mode'] # current value
-
                 globals['cam_controls'] = {}
                 CAM_CONTROLS = globals['cam_controls']
 
