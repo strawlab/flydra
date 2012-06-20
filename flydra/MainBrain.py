@@ -1819,6 +1819,7 @@ class MainBrain(object):
         self.set_new_camera_callback(self.SendCalibration)
         self.set_old_camera_callback(self.DecreaseCamCounter)
 
+        self.save_data_dir = os.path.expanduser('~')
         self.last_saved_data_time = 0.0
         self.last_trigger_framecount_check_time = 0.0
 
@@ -2069,51 +2070,74 @@ class MainBrain(object):
         else:
             self.show_overall_latency.clear()
 
-    def start_recording(self, cam_id, raw_file_basename):
+    def start_recording(self, raw_file_basename=None, *cam_ids):
         global XXX_framenumber
+        nowstr = time.strftime( '%Y%m%d_%H%M%S' )
 
-        self.remote_api.external_start_recording( cam_id, raw_file_basename)
-        approx_start_frame = XXX_framenumber
-        self._currently_recording_movies[ cam_id ] = (raw_file_basename, approx_start_frame)
-        if self.is_saving_data():
-            self.h5movie_info.row['cam_id'] = cam_id
-            self.h5movie_info.row['filename'] = raw_file_basename+'.fmf'
-            self.h5movie_info.row['approx_start_frame'] = approx_start_frame
-            self.h5movie_info.row.append()
-            self.h5movie_info.flush()
+        if not raw_file_basename:
+            raw_file_basename = os.path.join(self.save_data_dir, 'FLYDRA_LARGE_MOVIES')
 
-    def stop_recording(self, cam_id):
+        if len(cam_ids) == 0:
+            cam_ids = self.remote_api.external_get_cam_ids()
+
+        for cam_id in cam_ids:
+            raw_file_name = os.path.join(raw_file_basename,
+                                         "full_%s_%s" % (nowstr, cam_id))
+            self.remote_api.external_start_recording( cam_id, raw_file_name)
+            approx_start_frame = XXX_framenumber
+            self._currently_recording_movies[ cam_id ] = (raw_file_name, approx_start_frame)
+            if self.is_saving_data():
+                self.h5movie_info.row['cam_id'] = cam_id
+                self.h5movie_info.row['filename'] = raw_file_name+'.fmf'
+                self.h5movie_info.row['approx_start_frame'] = approx_start_frame
+                self.h5movie_info.row.append()
+                self.h5movie_info.flush()
+
+    def stop_recording(self, *cam_ids):
         global XXX_framenumber
-        self.remote_api.external_stop_recording(cam_id)
-        approx_stop_frame = XXX_framenumber
-        raw_file_basename, approx_start_frame = self._currently_recording_movies[ cam_id ]
-        del self._currently_recording_movies[ cam_id ]
-        # modify save file to include approximate movie stop time
-        if self.is_saving_data():
-            nrow = None
-            for r in self.h5movie_info:
-                # get row in table
-                if (r['cam_id'] == cam_id and r['filename'] == raw_file_basename+'.fmf' and
-                    r['approx_start_frame']==approx_start_frame):
-                    nrow =r.nrow
-                    break
-            if nrow is not None:
-                nrowi = int(nrow) # pytables bug workaround...
-                assert nrowi == nrow # pytables bug workaround...
-                approx_stop_framei = int(approx_stop_frame)
-                assert approx_stop_framei == approx_stop_frame
+        if len(cam_ids) == 0:
+            cam_ids = self.remote_api.external_get_cam_ids()
+        for cam_id in cam_ids:
+            self.remote_api.external_stop_recording(cam_id)
+            approx_stop_frame = XXX_framenumber
+            raw_file_basename, approx_start_frame = self._currently_recording_movies[ cam_id ]
+            del self._currently_recording_movies[ cam_id ]
+            # modify save file to include approximate movie stop time
+            if self.is_saving_data():
+                nrow = None
+                for r in self.h5movie_info:
+                    # get row in table
+                    if (r['cam_id'] == cam_id and r['filename'] == raw_file_basename+'.fmf' and
+                        r['approx_start_frame']==approx_start_frame):
+                        nrow =r.nrow
+                        break
+                if nrow is not None:
+                    nrowi = int(nrow) # pytables bug workaround...
+                    assert nrowi == nrow # pytables bug workaround...
+                    approx_stop_framei = int(approx_stop_frame)
+                    assert approx_stop_framei == approx_stop_frame
 
-                new_columns = numpy.rec.fromarrays([[approx_stop_framei]], formats='i8')
-                self.h5movie_info.modifyColumns(start=nrowi, columns=new_columns, names=['approx_stop_frame'])
-            else:
-                raise RuntimeError("could not find row to save movie stop frame.")
+                    new_columns = numpy.rec.fromarrays([[approx_stop_framei]], formats='i8')
+                    self.h5movie_info.modifyColumns(start=nrowi, columns=new_columns, names=['approx_stop_frame'])
+                else:
+                    raise RuntimeError("could not find row to save movie stop frame.")
 
-    def start_small_recording(self, cam_id, small_filename):
-        self.remote_api.external_start_small_recording( cam_id,
-                                                        small_filename)
+    def start_small_recording(self, raw_file_basename=None, *cam_ids):
+        nowstr = time.strftime( '%Y%m%d_%H%M%S' )
+        if not raw_file_basename:
+            raw_file_basename = os.path.join(self.save_data_dir, 'FLYDRA_SMALL_MOVIES')
+        if len(cam_ids) == 0:
+            cam_ids = self.remote_api.external_get_cam_ids()
+        for cam_id in cam_ids:
+            raw_file_name = os.path.join(raw_file_basename,
+                                         "small_%s_%s" % (nowstr, cam_id))
+            self.remote_api.external_start_small_recording(cam_id, raw_file_name)
 
-    def stop_small_recording(self, cam_id):
-        self.remote_api.external_stop_small_recording(cam_id)
+    def stop_small_recording(self, *cam_ids):
+        if len(cam_ids) == 0:
+            cam_ids = self.remote_api.external_get_cam_ids()
+        for cam_id in cam_ids:
+            self.remote_api.external_stop_small_recording(cam_id)
 
     def quit(self):
         """closes any files being saved and closes camera connections"""
@@ -2191,10 +2215,30 @@ class MainBrain(object):
     def __del__(self):
         self.quit()
 
+    def _safe_makedir(self, path):
+        """ raises OSError if path cannot be made """
+        if not os.path.exists(path):
+            os.makedirs(path)
+            return path
+
+    def set_save_data_dir(self, path):
+        if os.path.isdir(path):
+            self.save_data_dir = path
+        else:
+            try:
+                self.save_data_dir = self._safe_makedir(path)
+            except OSError:
+                return None
+        return self.save_data_dir
+
     def is_saving_data(self):
         return self.h5file is not None
 
-    def start_saving_data(self, filename):
+    def start_saving_data(self, filename=None):
+        if not filename:
+            filename = time.strftime('DATA%Y%m%d_%H%M%S.h5')
+        filename = os.path.join(self.save_data_dir, filename)
+
         if os.path.exists(filename):
             raise RuntimeError("will not overwrite data file")
 

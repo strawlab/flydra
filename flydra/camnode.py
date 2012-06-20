@@ -1117,7 +1117,7 @@ class SaveCamData(object):
                     full_raw = raw_file_basename + '.fmf'
                     full_bg = raw_file_basename + '_mean.fmf'
                     full_std = raw_file_basename + '_sumsqf.fmf'
-                    print 'saving movies','-'*50
+                    print 'saving movies to',raw_file_basename
                     raw_movie = FlyMovieFormat.FlyMovieSaver(full_raw,
                                                              format=image_coding,
                                                              bits_per_pixel=8,
