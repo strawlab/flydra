@@ -42,8 +42,10 @@ warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
 
 import roslib
 roslib.load_manifest('rospy')
-import rospy
+roslib.load_manifest('std_srvs')
 roslib.load_manifest('ros_flydra')
+import rospy
+import std_srvs.srv
 from ros_flydra.msg import flydra_mainbrain_super_packet
 from ros_flydra.msg import flydra_mainbrain_packet, flydra_object
 from geometry_msgs.msg import Point, Vector3
@@ -1432,6 +1434,17 @@ class CoordinateProcessor(threading.Thread):
 class MainBrain(object):
     """Handle all camera network stuff and interact with application"""
 
+    ROS_CONTROL_API = dict(
+        start_saving_data=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
+        stop_saving_data=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
+        start_recording=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
+        stop_recording=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
+        start_small_recording=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
+        stop_small_recording=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
+        do_synchronization=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
+        quit=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
+    )
+
     class RemoteAPI(Pyro.core.ObjBase):
 
         # ================================================================
@@ -1871,7 +1884,29 @@ class MainBrain(object):
         self.timestamp_echo_receiver.setDaemon(True)
         self.timestamp_echo_receiver.start()
 
+        self._init_ros_interface()
+
         main_brain_keeper.register( self )
+
+    def _ros_generic_service_dispatch(self, req):
+        calledservice = req._connection_header['service']
+        calledfunction = calledservice.split('/')[-1]
+        if calledfunction in self.ROS_CONTROL_API:
+            srvresponseclass = self.ROS_CONTROL_API[calledfunction][1]
+            print "ROS API Calling %s " % calledfunction
+            #fixme: we should pass userdata params here....
+            result = getattr(self, calledfunction)()
+            if srvresponseclass == std_srvs.srv.EmptyResponse:
+                return std_srvs.srv.EmptyResponse()
+            else:
+                #ensure that result is a tuple (or list)
+                if not isinstance(result, (list, tuple)):
+                    result = (result,)
+                return srvresponseclass(*result)
+
+    def _init_ros_interface(self):
+        for name, (srv, srvresp) in self.ROS_CONTROL_API.iteritems():
+            rospy.Service('~%s' % name, srv, self._ros_generic_service_dispatch)
 
     def get_fps(self):
         return self.trigger_device.frames_per_second_actual
