@@ -527,11 +527,10 @@ class CoordRealReceiver(threading.Thread):
 
 class CoordinateSender(threading.Thread):
       """a class to send realtime coordinate data from a separate thread"""
-      def __init__(self,my_queue,my_ros_queue,quit_event, publish_ros):
+      def __init__(self,my_queue,my_ros_queue,quit_event):
           self.my_queue = my_queue
           self.my_ros_queue = my_ros_queue
           self.quit_event = quit_event
-          self.publish_ros = publish_ros
           self.pub = None
           name = 'CoordinateSender thread'
           threading.Thread.__init__(self,name=name)
@@ -542,10 +541,9 @@ class CoordinateSender(threading.Thread):
           timeout = .1
           encode_super_packet = flydra.kalman.data_packets.encode_super_packet
 
-          if self.publish_ros:
-              self.pub = rospy.Publisher(
-                                    'flydra_mainbrain_super_packets',
-                                    flydra_mainbrain_super_packet)
+          self.pub = rospy.Publisher(
+                                'flydra_mainbrain_super_packets',
+                                flydra_mainbrain_super_packet)
 
           while not self.quit_event.isSet():
               packets = []
@@ -560,29 +558,26 @@ class CoordinateSender(threading.Thread):
               for downstream_host in downstream_kalman_hosts:
                   outgoing_UDP_socket.sendto(super_packet,downstream_host)
 
-              if self.publish_ros:
-                  ros_packets = []
-                  ros_packets.append( self.my_ros_queue.get() )
-                  while 1:
-                      try:
-                          ros_packets.append( self.my_ros_queue.get_nowait() )
-                      except Queue.Empty:
-                          break
-                  ros_super_packet = flydra_mainbrain_super_packet(packets=ros_packets)
-                  self.pub.publish(ros_super_packet)
+              ros_packets = []
+              ros_packets.append( self.my_ros_queue.get() )
+              while 1:
+                  try:
+                      ros_packets.append( self.my_ros_queue.get_nowait() )
+                  except Queue.Empty:
+                      break
+              ros_super_packet = flydra_mainbrain_super_packet(packets=ros_packets)
+              self.pub.publish(ros_super_packet)
 
 
 class CoordinateProcessor(threading.Thread):
     def __init__(self,main_brain,save_profiling_data=False,
                  debug_level=None,
                  show_sync_errors=True,
-                 show_overall_latency=None,
-                 publish_ros=False):
+                 show_overall_latency=None):
         global hostname
         self.main_brain = main_brain
         self.debug_level = debug_level
         self.show_overall_latency = show_overall_latency
-        self.publish_ros = publish_ros
 
         self.save_profiling_data = save_profiling_data
         if self.save_profiling_data:
@@ -628,8 +623,7 @@ class CoordinateProcessor(threading.Thread):
         cs = CoordinateSender(
                 self.realtime_kalman_data_queue,
                 self.realtime_ros_packets,
-                self.quit_event,
-                self.publish_ros)
+                self.quit_event)
         cs.setDaemon(True)
         cs.start()
 
@@ -1257,24 +1251,25 @@ class CoordinateProcessor(threading.Thread):
                                             oldest_camera_timestamp,now)
                                         if data_packet is not None:
                                             self.realtime_kalman_data_queue.put(data_packet)
-                                        if self.publish_ros:
-                                            results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' )
-                                            ros_objects = []
-                                            for result in results:
-                                                if result is None:
-                                                    continue
-                                                obj_id,xhat,P = result
-                                                this_ros_object = flydra_object(obj_id=obj_id,
-                                                                                position=Point(*xhat[:3]),
-                                                                                velocity=Vector3(*xhat[3:6]),
-                                                                                posvel_covariance_diagonal=numpy.diag(P)[:6].tolist())
-                                                ros_objects.append( this_ros_object )
-                                            ros_packet = flydra_mainbrain_packet(
-                                                framenumber=corrected_framenumber,
-                                                reconstruction_stamp=rospy.Time.from_sec(now),
-                                                acquire_stamp=rospy.Time.from_sec(oldest_camera_timestamp),
-                                                objects = ros_objects)
-                                            self.realtime_ros_packets.put( ros_packet )
+
+                                        #publish state to ROS
+                                        results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' )
+                                        ros_objects = []
+                                        for result in results:
+                                            if result is None:
+                                                continue
+                                            obj_id,xhat,P = result
+                                            this_ros_object = flydra_object(obj_id=obj_id,
+                                                                            position=Point(*xhat[:3]),
+                                                                            velocity=Vector3(*xhat[3:6]),
+                                                                            posvel_covariance_diagonal=numpy.diag(P)[:6].tolist())
+                                            ros_objects.append( this_ros_object )
+                                        ros_packet = flydra_mainbrain_packet(
+                                            framenumber=corrected_framenumber,
+                                            reconstruction_stamp=rospy.Time.from_sec(now),
+                                            acquire_stamp=rospy.Time.from_sec(oldest_camera_timestamp),
+                                            objects = ros_objects)
+                                        self.realtime_ros_packets.put( ros_packet )
 
                                 if SHOW_3D_PROCESSING_LATENCY:
                                     start_3d_proc_c = time.time()
@@ -1780,10 +1775,8 @@ class MainBrain(object):
 
     # main MainBrain class
 
-    def __init__(self,server=None,save_profiling_data=False, show_sync_errors=True, publish_ros=False):
+    def __init__(self,server=None,save_profiling_data=False, show_sync_errors=True):
         global main_brain_keeper, hostname
-
-        self.publish_ros = publish_ros
 
         if server is not None:
             hostname = server
@@ -1871,8 +1864,8 @@ class MainBrain(object):
                                                    save_profiling_data=save_profiling_data,
                                                    debug_level=self.debug_level,
                                                    show_overall_latency=self.show_overall_latency,
-                                                   show_sync_errors=show_sync_errors,
-                                                   publish_ros=self.publish_ros)
+                                                   show_sync_errors=show_sync_errors)
+
         #self.coord_processor.setDaemon(True)
         self.coord_processor.start()
 

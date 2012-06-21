@@ -1773,8 +1773,7 @@ def main():
     # create main_brain server (not started yet)
     main_brain = MainBrain.MainBrain(server=options.server,
                                      save_profiling_data=options.save_profiling_data,
-                                     show_sync_errors=options.show_sync_errors,
-                                     publish_ros=True)
+                                     show_sync_errors=options.show_sync_errors)
 
     try:
         # connect server to GUI
