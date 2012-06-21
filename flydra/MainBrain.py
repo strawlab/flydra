@@ -20,7 +20,6 @@ import atexit
 import pickle, copy
 import pkg_resources
 
-import motmot.utils.config
 import motmot.fview_ext_trig.ttrigger
 import motmot.fview_ext_trig.live_timestamp_modeler
 
@@ -84,31 +83,6 @@ PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
 PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
 PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_IDX
-
-########
-# persistent configuration data ( implementation in motmot.utils.config )
-def get_rc_params():
-    defaultParams = {
-        'frames_per_second'  : 100.0,
-        'hypothesis_test_max_acceptable_error' : 50.0,
-        'kalman_model' :'EKF mamarama, units: mm',
-        'max_reconstruction_latency_sec':0.06, # 60 msec
-        'max_N_hypothesis_test':3,
-        }
-    fviewrc_fname = motmot.utils.config.rc_fname(filename='mainbrainrc',
-                                                 dirname='.flydra')
-    rc_params = motmot.utils.config.get_rc_params(fviewrc_fname,
-                                                  defaultParams)
-    return rc_params
-def save_rc_params():
-    save_fname = motmot.utils.config.rc_fname(must_already_exist=False,
-                                              filename='mainbrainrc',
-                                              dirname='.flydra')
-    motmot.utils.config.save_rc_params(save_fname,rc_params)
-rc_params = get_rc_params()
-max_reconstruction_latency_sec = rc_params['max_reconstruction_latency_sec']
-max_N_hypothesis_test =  rc_params['max_N_hypothesis_test']
-########
 
 XXX_framenumber = 0
 
@@ -570,14 +544,18 @@ class CoordinateSender(threading.Thread):
 
 
 class CoordinateProcessor(threading.Thread):
-    def __init__(self,main_brain,save_profiling_data=False,
-                 debug_level=None,
-                 show_sync_errors=True,
-                 show_overall_latency=None):
+    def __init__(self,main_brain,save_profiling_data,
+                 debug_level,
+                 show_sync_errors,
+                 show_overall_latency,
+                 max_reconstruction_latency_sec,
+                 max_N_hypothesis_test):
         global hostname
         self.main_brain = main_brain
         self.debug_level = debug_level
         self.show_overall_latency = show_overall_latency
+        self.max_reconstruction_latency_sec = max_reconstruction_latency_sec
+        self.max_N_hypothesis_test = max_N_hypothesis_test
 
         self.save_profiling_data = save_profiling_data
         if self.save_profiling_data:
@@ -1096,7 +1074,7 @@ class CoordinateProcessor(threading.Thread):
                     if oldest_camera_timestamp is None:
                         ## print 'no latency estimate available -- skipping 3D reconstruction'
                         continue
-                    if (time.time() - oldest_camera_timestamp) > max_reconstruction_latency_sec:
+                    if (time.time() - oldest_camera_timestamp) > self.max_reconstruction_latency_sec:
                         #print 'maximum reconstruction latency exceeded -- skipping 3D reconstruction'
                         continue
 
@@ -1219,7 +1197,7 @@ class CoordinateProcessor(threading.Thread):
                                             self.reconstructor,
                                             found_data_dict,
                                             max_error,
-                                            max_n_cams=max_N_hypothesis_test,
+                                            max_n_cams=self.max_N_hypothesis_test,
                                             )
                                     except ru.NoAcceptablePointFound, err:
                                         pass
@@ -1292,7 +1270,7 @@ class CoordinateProcessor(threading.Thread):
                                  ) = ru.hypothesis_testing_algorithm__find_best_3d(
                                     self.reconstructor,
                                     found_data_dict,
-                                    max_n_cams=max_N_hypothesis_test,
+                                    max_n_cams=self.max_N_hypothesis_test,
                                     )
                             except:
                                 # this prevents us from bombing this thread...
@@ -1439,6 +1417,15 @@ class MainBrain(object):
         do_synchronization=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
         quit=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
     )
+
+    ROS_CONFIGURATION = dict(
+        frames_per_second=100.0,
+        hypothesis_test_max_acceptable_error=50.0,
+        kalman_model='EKF mamarama, units: mm',
+        max_reconstruction_latency_sec=0.06, # 60 msec
+        max_N_hypothesis_test=3,
+    )
+
 
     class RemoteAPI(Pyro.core.ObjBase):
 
@@ -1782,13 +1769,15 @@ class MainBrain(object):
             hostname = server
         print 'running mainbrain at hostname "%s"'%hostname
 
+        self.load_config()
+
         self.debug_level = threading.Event()
         self.show_overall_latency = threading.Event()
 
         self.trigger_device_lock = threading.Lock()
         with self.trigger_device_lock:
             self.trigger_device = motmot.fview_ext_trig.ttrigger.DeviceModel()
-            self.trigger_device.frames_per_second = rc_params['frames_per_second']
+            self.trigger_device.frames_per_second = self.config['frames_per_second']
             self.timestamp_modeler = motmot.fview_ext_trig.live_timestamp_modeler.LiveTimestampModeler()
             self.timestamp_modeler.set_trigger_device( self.trigger_device )
 
@@ -1858,13 +1847,15 @@ class MainBrain(object):
         self.queue_data3d_kalman_estimates = Queue.Queue()
 
         self.hypothesis_test_max_error = LockedValue(
-            rc_params['hypothesis_test_max_acceptable_error']) # maximum reprojection error
+            self.config['hypothesis_test_max_acceptable_error']) # maximum reprojection error
 
         self.coord_processor = CoordinateProcessor(self,
-                                                   save_profiling_data=save_profiling_data,
-                                                   debug_level=self.debug_level,
-                                                   show_overall_latency=self.show_overall_latency,
-                                                   show_sync_errors=show_sync_errors)
+                                   save_profiling_data=save_profiling_data,
+                                   debug_level=self.debug_level,
+                                   show_overall_latency=self.show_overall_latency,
+                                   show_sync_errors=show_sync_errors,
+                                   max_reconstruction_latency_sec=self.config['max_reconstruction_latency_sec'],
+                                   max_N_hypothesis_test=self.config['max_N_hypothesis_test'])
 
         #self.coord_processor.setDaemon(True)
         self.coord_processor.start()
@@ -1901,6 +1892,17 @@ class MainBrain(object):
         for name, (srv, srvresp) in self.ROS_CONTROL_API.iteritems():
             rospy.Service('~%s' % name, srv, self._ros_generic_service_dispatch)
 
+    def load_config(self):
+        self.config = {}
+        for k,v in self.ROS_CONFIGURATION.iteritems():
+            self.config[k] = rospy.get_param('~%s' % k, v)
+        print self.config
+
+    def save_config(self):
+        for k,v in self.config.iteritems():
+            if k in self.ROS_CONFIGURATION:
+                rospy.set_param("~%s" % k, v)
+
     def get_fps(self):
         return self.trigger_device.frames_per_second_actual
 
@@ -1924,16 +1926,16 @@ class MainBrain(object):
                         cam_id, 'expected_trigger_framerate', actual_new_fps )
                 except Exception,err:
                     print 'ERROR:',err
-            rc_params['frames_per_second'] = actual_new_fps
-            save_rc_params()
+            self.config['frames_per_second'] = float(actual_new_fps)
+            self.save_config()
 
     def get_hypothesis_test_max_error(self):
         return self.hypothesis_test_max_error.get()
 
     def set_hypothesis_test_max_error(self,val):
         self.hypothesis_test_max_error.set(val)
-        rc_params['hypothesis_test_max_acceptable_error'] = val
-        save_rc_params()
+        self.config['hypothesis_test_max_acceptable_error'] = val
+        self.save_config()
 
     def IncreaseCamCounter(self,cam_id,scalar_control_info,fqdn_and_port):
         self.num_cams += 1

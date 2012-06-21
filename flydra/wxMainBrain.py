@@ -747,8 +747,8 @@ class wxMainBrainApp(wx.App):
         kalman_param_string = ctrl.GetStringSelection()
         name=str(kalman_param_string)
 
-        MainBrain.rc_params['kalman_model'] = name
-        MainBrain.save_rc_params()
+        self.main_brain.config['kalman_model'] = name
+        self.main_brain.save_config()
 
         if self.main_brain.reconstructor is not None:
             print 'setting model to',name
@@ -1330,7 +1330,7 @@ class wxMainBrainApp(wx.App):
             found_rc_default = None
             for i,model_name in enumerate(model_names):
                 ctrl.Append(model_name)
-                if MainBrain.rc_params['kalman_model'] == model_name:
+                if self.main_brain.config['kalman_model'] == model_name:
                     found_rc_default = i
             ctrl.GetParent().GetSizer().Layout()
             if not found_rc_default:
