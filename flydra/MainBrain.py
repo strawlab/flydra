@@ -1424,6 +1424,7 @@ class MainBrain(object):
         kalman_model='EKF mamarama, units: mm',
         max_reconstruction_latency_sec=0.06, # 60 msec
         max_N_hypothesis_test=3,
+        save_data_dir='~/FLYDRA',
     )
 
 
@@ -1814,7 +1815,6 @@ class MainBrain(object):
         self.set_new_camera_callback(self.SendCalibration)
         self.set_old_camera_callback(self.DecreaseCamCounter)
 
-        self.save_data_dir = os.path.expanduser('~')
         self.last_saved_data_time = 0.0
         self.last_trigger_framecount_check_time = 0.0
 
@@ -2105,7 +2105,9 @@ class MainBrain(object):
         nowstr = time.strftime( '%Y%m%d_%H%M%S' )
 
         if not raw_file_basename:
-            raw_file_basename = os.path.join(self.save_data_dir, 'FLYDRA_LARGE_MOVIES')
+            raw_file_basename = os.path.join(
+                                    os.path.expanduser(self.config['save_data_dir']),
+                                    'LARGE_MOVIES')
 
         if len(cam_ids) == 0:
             cam_ids = self.remote_api.external_get_cam_ids()
@@ -2155,7 +2157,9 @@ class MainBrain(object):
     def start_small_recording(self, raw_file_basename=None, *cam_ids):
         nowstr = time.strftime( '%Y%m%d_%H%M%S' )
         if not raw_file_basename:
-            raw_file_basename = os.path.join(self.save_data_dir, 'FLYDRA_SMALL_MOVIES')
+            raw_file_basename = os.path.join(
+                                    os.path.expanduser(self.config['save_data_dir']),
+                                    'SMALL_MOVIES')
         if len(cam_ids) == 0:
             cam_ids = self.remote_api.external_get_cam_ids()
         for cam_id in cam_ids:
@@ -2253,13 +2257,15 @@ class MainBrain(object):
 
     def set_save_data_dir(self, path):
         if os.path.isdir(path):
-            self.save_data_dir = path
+            save_data_dir = path
         else:
             try:
-                self.save_data_dir = self._safe_makedir(path)
+                save_data_dir = self._safe_makedir(path)
             except OSError:
                 return None
-        return self.save_data_dir
+        self.config['save_data_dir'] = save_data_dir
+        self.save_config()
+        return save_data_dir
 
     def is_saving_data(self):
         return self.h5file is not None
@@ -2267,7 +2273,9 @@ class MainBrain(object):
     def start_saving_data(self, filename=None):
         if not filename:
             filename = time.strftime('DATA%Y%m%d_%H%M%S.h5')
-        filename = os.path.join(self.save_data_dir, filename)
+        filename = os.path.join(
+                    os.path.expanduser(self.config['save_data_dir']),
+                    filename)
 
         if os.path.exists(filename):
             raise RuntimeError("will not overwrite data file")
