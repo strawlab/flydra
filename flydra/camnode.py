@@ -342,7 +342,7 @@ class ProcessCamClass(object):
                  bg_frame_interval=None,
                  bg_frame_alpha=None,
                  cam_no=-1,
-                 main_brain_hostname=None,
+                 main_brain_ipaddr=None,
                  mask_image=None,
                  diff_threshold_shared=None,
                  clear_threshold_shared=None,
@@ -375,7 +375,7 @@ class ProcessCamClass(object):
         self.benchmark = benchmark
         self.options = options
         self.globals = globals
-        self.main_brain_hostname = main_brain_hostname
+        self.main_brain_ipaddr = main_brain_ipaddr
         if framerate is not None:
             self.shortest_IFI = 1.0/framerate
         else:
@@ -630,7 +630,7 @@ class ProcessCamClass(object):
                 coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             elif NETWORK_PROTOCOL == 'tcp':
                 coord_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                coord_socket.connect((self.main_brain_hostname,self.cam2mainbrain_port))
+                coord_socket.connect((self.main_brain_ipaddr,self.cam2mainbrain_port))
             else:
                 raise ValueError('unknown NETWORK_PROTOCOL')
 
@@ -1012,8 +1012,7 @@ class ProcessCamClass(object):
                     print 'local_processing_time % 3.1f'%local_processing_time
                 if NETWORK_PROTOCOL == 'udp':
                     try:
-                        coord_socket.sendto(data,
-                                            (self.main_brain_hostname,self.cam2mainbrain_port))
+                        coord_socket.sendto(data,(self.main_brain_ipaddr,self.cam2mainbrain_port))
                     except socket.error, err:
                         print >> sys.stderr, 'WARNING: ignoring error:'
                         traceback.print_exc()
@@ -2012,7 +2011,18 @@ class AppState(object):
         self.options = options
         self._real_quit_function = None
 
-        self.main_brain_hostname = options.main_brain
+        #Performance of the coordinate processor thread is critical. The time
+        #taken to perform DNS lookups is non-trivial (i.e. 2ms x ncameras x 100Hz)
+        #so can cause the camnode to fall behind mainbrain and never catch up. Ensure
+        #that communication is done using ip addresses, and check that these are valid
+        try:
+            self.main_brain_ipaddr = socket.gethostbyname(options.main_brain)
+        except socket.gaierror:
+            raise RuntimeError('Mainbrain host %s not found' % options.main_brain)
+        try:
+            socket.inet_aton(self.main_brain_ipaddr)
+        except socket.error:
+            raise RuntimeError('Mainbrain ip address %s not valid' % self.main_brain_ipaddr)
 
         self.log_message_queue = Queue.Queue()
 
@@ -2188,7 +2198,7 @@ class AppState(object):
             Pyro.core.initClient(banner=0)
             port = flydra.common_variables.mainbrain_port
             name = 'main_brain'
-            main_brain_URI = "PYROLOC://%s:%d/%s" % (self.main_brain_hostname,port,name)
+            main_brain_URI = "PYROLOC://%s:%d/%s" % (self.main_brain_ipaddr,port,name)
             try:
                 self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
                 main_brain_version = self.main_brain.get_version()
@@ -2370,7 +2380,7 @@ class AppState(object):
                             bg_frame_interval=options.background_frame_interval,
                             bg_frame_alpha=options.background_frame_alpha,
                             cam_no=cam_no,
-                            main_brain_hostname=self.main_brain_hostname,
+                            main_brain_ipaddr=self.main_brain_ipaddr,
                             mask_image=mask,
                             diff_threshold_shared=diff_threshold_shared,
                             clear_threshold_shared=clear_threshold_shared,
