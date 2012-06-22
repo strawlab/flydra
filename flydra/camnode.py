@@ -2012,10 +2012,7 @@ class AppState(object):
         self.options = options
         self._real_quit_function = None
 
-        if options.server is None:
-            self.main_brain_hostname = default_main_brain_hostname
-        else:
-            self.main_brain_hostname = options.server
+        self.main_brain_hostname = options.main_brain
 
         self.log_message_queue = Queue.Queue()
 
@@ -2879,8 +2876,8 @@ class AppState(object):
 def get_app_defaults():
     #some defaults are per camera node, other per flydra instance
     flydra_defaults = dict(
-                       server = socket.gethostbyname(socket.gethostname())
-                       )
+                       main_brain = socket.gethostname())
+
     for k,v in flydra_defaults.items():
         flydra_defaults[k] = rospy.get_param('/flydra/%s' % k, v)
 
@@ -2933,10 +2930,8 @@ def parse_args_and_run(benchmark=False):
     defaults = get_app_defaults()
     parser.set_defaults(**defaults)
 
-    parser.add_option("--server", dest="server", type='string',
-                      help="hostname of mainbrain SERVER",
-                      metavar="SERVER [default: %default]")
-
+    parser.add_option("--main-brain", type='string',
+                      help="hostname of mainbrain")
     parser.add_option("--n-sigma", type='float',
                       help=("criterion used to determine if a pixel is significantly "
                             "different than the mean [default: %default]"))
