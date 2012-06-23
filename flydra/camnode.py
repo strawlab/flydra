@@ -42,7 +42,7 @@ near_inf = 9.999999e20
 bright_non_gaussian_cutoff = 255
 bright_non_gaussian_replacement = 5
 
-import threading, time, socket, sys, struct, select, math, warnings
+import threading, time, socket, sys, struct, select, math, warnings, optparse
 import traceback
 import Queue
 import numpy
@@ -62,25 +62,14 @@ import motmot.realtime_image_analysis.slow
 #DebugLock = flydra.debuglock.DebugLock
 
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
-cam_iface = None # global variable, value set in main()
-import motmot.cam_iface.choose as cam_iface_choose
-from optparse import OptionParser
+import motmot.cam_iface.cam_iface_ctypes as cam_iface
 import camnode_colors
 
-try:
-    import roslib
-    have_ROS = True
-    print 'have ROS'
-except ImportError, err:
-    have_ROS = False
-    print 'do NOT have ROS'
-    print 'see http://www.ros.org/'
+import roslib;
+roslib.load_manifest('sensor_msgs')
+from sensor_msgs.msg import Image
+import rospy
 
-if have_ROS:
-    roslib.load_manifest('sensor_msgs')
-    from sensor_msgs.msg import Image
-    import rospy
-    import rospy.core
 
 def DEBUG(*args):
     if 0:
@@ -371,19 +360,13 @@ class ProcessCamClass(object):
                  benchmark = False,
                  ):
 
-        if have_ROS:
-            rospy.init_node('flydra_camera_node',
-                            anonymous=True, # allow multiple instances to run
-                            disable_signals=True, # let WX intercept them
-                            )
-            # register a new publisher
-            self.publisher = rospy.Publisher('%s/image_raw'%cam_id,
-                                             Image,
-                                             tcp_nodelay=True,
-                                             )
+        # register a new publisher
+        self.publisher = rospy.Publisher('%s/image_raw'%cam_id,
+                                         Image,
+                                         tcp_nodelay=True,
+                                         )
         self.rosrate = float(options.rosrate)
         self.lasttime = time.time()
-        # end ROS stuff
 
         self.benchmark = benchmark
         self.options = options
@@ -769,40 +752,38 @@ class ProcessCamClass(object):
                 framenumber=chainbuf.framenumber
 
                 # publish raw image on ROS network
-                if have_ROS:
-                    now = time.time()
-                    if now-self.lasttime+0.005 > 1./(self.rosrate):
-                        msg = Image()
-                        msg.header.seq=framenumber
-                        msg.header.stamp=rospy.Time.from_sec(now) # XXX TODO: once camera trigger is ROS node, get accurate timestamp
-                        msg.header.frame_id = "0"
+                now = time.time()
+                if now-self.lasttime+0.005 > 1./(self.rosrate):
+                    msg = Image()
+                    msg.header.seq=framenumber
+                    msg.header.stamp=rospy.Time.from_sec(now) # XXX TODO: once camera trigger is ROS node, get accurate timestamp
+                    msg.header.frame_id = "0"
 
-                        npbuf = np.array(hw_roi_frame)
-                        (height,width) = npbuf.shape
+                    npbuf = np.array(hw_roi_frame)
+                    (height,width) = npbuf.shape
 
-                        msg.height = height
-                        msg.width = width
-                        msg.encoding = chainbuf.image_coding
-                        pixel_format = chainbuf.image_coding
-                        if pixel_format == 'MONO8':
-                            msg.encoding = 'mono8'
-                        elif pixel_format in ('RAW8:RGGB','MONO8:RGGB'):
-                            msg.encoding = 'bayer_rggb8'
-                        elif pixel_format in ('RAW8:BGGR','MONO8:BGGR'):
-                            msg.encoding = 'bayer_bggr8'
-                        elif pixel_format in ('RAW8:GBRG','MONO8:GBRG'):
-                            msg.encoding = 'bayer_gbrg8'
-                        elif pixel_format in ('RAW8:GRBG','MONO8:GRBG'):
-                            msg.encoding = 'bayer_grbg8'
-                        else:
-                            raise ValueError('unknown pixel format "%s"'%pixel_format)
+                    msg.height = height
+                    msg.width = width
+                    msg.encoding = chainbuf.image_coding
+                    pixel_format = chainbuf.image_coding
+                    if pixel_format == 'MONO8':
+                        msg.encoding = 'mono8'
+                    elif pixel_format in ('RAW8:RGGB','MONO8:RGGB'):
+                        msg.encoding = 'bayer_rggb8'
+                    elif pixel_format in ('RAW8:BGGR','MONO8:BGGR'):
+                        msg.encoding = 'bayer_bggr8'
+                    elif pixel_format in ('RAW8:GBRG','MONO8:GBRG'):
+                        msg.encoding = 'bayer_gbrg8'
+                    elif pixel_format in ('RAW8:GRBG','MONO8:GRBG'):
+                        msg.encoding = 'bayer_grbg8'
+                    else:
+                        raise ValueError('unknown pixel format "%s"'%pixel_format)
 
-                        msg.step = width
-                        msg.data = npbuf.tostring() # let numpy convert to string
+                    msg.step = width
+                    msg.data = npbuf.tostring() # let numpy convert to string
 
-                        self.publisher.publish(msg)
-                        self.lasttime = now
-                # end ROS stuff
+                    self.publisher.publish(msg)
+                    self.lasttime = now
 
                 if 1:
                     if old_fn is None:
@@ -1925,8 +1906,6 @@ class AppState(object):
                  benchmark = False,
                  options = None,
                  ):
-        global cam_iface
-
         self.options = options
         self._real_quit_function = None
 
@@ -1957,12 +1936,14 @@ class AppState(object):
             #
             ##################################################################
 
-            cam_iface = cam_iface_choose.import_backend( options.backend, options.wrapper )
-
             all_cam_info_list = []
             for i in range(cam_iface.get_num_cameras()):
                 try:
                     this_info1 =  cam_iface.get_camera_info(i)
+                    mfg,model,guid = this_info1
+                    if options.cams_only and guid not in set(options.cams_only.split(',')):
+                        print 'skipping camera %s' % guid
+                        continue
                 except cam_iface.CameraNotAvailable:
                     this_info2 =  ('(not available)',i)
                 else:
@@ -1980,14 +1961,6 @@ class AppState(object):
                 except cam_iface.CameraNotAvailable:
                     avail_string = '(not available)'
                 print 'order %d: %s'%(i, avail_string)
-
-
-            cams_only = options.cams_only
-            if cams_only is not None:
-                cams_only = map(int,cams_only.split(','))
-
-                new_cam_order = [ cam_order[i] for i in cams_only ]
-                cam_order = new_cam_order
 
             num_cams = len(cam_order)
 
@@ -2838,19 +2811,15 @@ class AppState(object):
                 raise ValueError('unknown key "%s"'%key)
 
 def get_app_defaults():
+    #some defaults are per camera node, other per flydra instance
+    flydra_defaults = dict(
+                       server = socket.gethostbyname(socket.gethostname())
+                       )
+    for k,v in flydra_defaults.items():
+        flydra_defaults[k] = rospy.get_param('/flydra/%s' % k, v)
 
-    # where is the "main brain" server?
-    try:
-        default_main_brain_hostname = socket.gethostbyname('brain1')
-    except:
-        # try localhost
-        try:
-            default_main_brain_hostname = socket.gethostbyname(socket.gethostname())
-        except: #socket.gaierror?
-            default_main_brain_hostname = ''
-
-    defaults = dict(wrapper='ctypes',
-                    backend='mega',
+    camnode_defaults = dict(
+                    cams_only="",
 
                     # these are the most important 2D tracking parameters:
                     diff_threshold = 5,
@@ -2874,29 +2843,25 @@ def get_app_defaults():
                     small_save_radius=10,
                     background_frame_interval=50,
                     background_frame_alpha=1.0/50.0,
-                    server = default_main_brain_hostname,
                     mask_images = None,
                     )
+    for k,v in camnode_defaults.items():
+        camnode_defaults[k] = rospy.get_param('~%s' % k, v)
+
+    defaults = flydra_defaults.copy()
+    defaults.update(camnode_defaults)
+
     return defaults
 
 def main():
+    rospy.init_node('flydra_camera_node',disable_signals=True)
     parse_args_and_run()
 
 def benchmark():
     parse_args_and_run(benchmark=True)
 
 def parse_args_and_run(benchmark=False):
-    usage_lines = ['%prog [options]',
-                   '',
-                   '  available wrappers and backends:']
-
-    for wrapper,backends in cam_iface_choose.wrappers_and_backends.iteritems():
-        for backend in backends:
-            usage_lines.append('    --wrapper %s --backend %s'%(wrapper,backend))
-    del wrapper, backend # delete temporary variables
-    usage = '\n'.join(usage_lines)
-
-    parser = OptionParser(usage=usage,
+    parser = optparse.OptionParser(usage="%prog [options]",
                           version="%prog "+flydra.version.__version__)
 
     defaults = get_app_defaults()
@@ -2905,14 +2870,6 @@ def parse_args_and_run(benchmark=False):
     parser.add_option("--server", dest="server", type='string',
                       help="hostname of mainbrain SERVER",
                       metavar="SERVER [default: %default]")
-
-    parser.add_option("--wrapper", type='string',
-                      help="cam_iface WRAPPER to use [default: %default]",
-                      metavar="WRAPPER")
-
-    parser.add_option("--backend", type='string',
-                      help="cam_iface BACKEND to use [default: %default]",
-                      metavar="BACKEND")
 
     parser.add_option("--n-sigma", type='float',
                       help=("criterion used to determine if a pixel is significantly "
@@ -2990,16 +2947,6 @@ def parse_args_and_run(benchmark=False):
 
     (options, args) = parser.parse_args()
     #print dir(options)
-
-    if not options.wrapper:
-        print 'WRAPPER must be set'
-        parser.print_help()
-        return
-
-    if not options.backend:
-        print 'BACKEND must be set'
-        parser.print_help()
-        return
 
     app_state=AppState(options = options,
                        benchmark=benchmark,

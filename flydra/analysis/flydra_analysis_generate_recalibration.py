@@ -209,7 +209,7 @@ def do_it(filename,
     if start is None:
         start = 0
     if stop is None:
-        stop = frames.max()
+        stop = int(frames.max())
 
     if not use_kalman_data:
         row_keys = None

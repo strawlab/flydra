@@ -45,6 +45,10 @@ if SCROLLED:
 
 import motmot.wxvalidatedtext.wxvalidatedtext as wxvt
 
+import roslib
+roslib.load_manifest('rospy')
+import rospy
+
  # trigger extraction
 RESFILE = pkg_resources.resource_filename(__name__,"flydra_server.xrc")
 pkg_resources.resource_filename(__name__,"flydra_server_art.png")
@@ -1765,6 +1769,8 @@ def main():
 
     (options, args) = parser.parse_args()
 
+    rospy.init_node('flydra_mainbrain')
+
     global use_opengl, use_video_preview
     use_opengl = options.use_opengl
     use_video_preview = options.use_video_preview
@@ -1776,7 +1782,7 @@ def main():
     main_brain = MainBrain.MainBrain(server=options.server,
                                      save_profiling_data=options.save_profiling_data,
                                      show_sync_errors=options.show_sync_errors,
-                                     )
+                                     publish_ros=True)
 
     try:
         # connect server to GUI

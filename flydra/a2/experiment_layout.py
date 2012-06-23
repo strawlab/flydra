@@ -2,12 +2,12 @@ import conditions_draw
 import numpy
 import numpy as np
 from numpy import array
-from enthought.tvtk.api import tvtk
 import warnings
 
-from enthought.mayavi.sources.api import VTKDataSource
-from enthought.mayavi.modules.surface import Surface
-from enthought.mayavi.modules.vectors import Vectors
+from tvtk.api import tvtk
+from mayavi.sources.api import VTKDataSource
+from mayavi.modules.surface import Surface
+from mayavi.modules.vectors import Vectors
 
 def cylindrical_arena(info=None):
     assert numpy.allclose(info['axis'],numpy.array([0,0,1])), (
