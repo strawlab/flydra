@@ -14,8 +14,17 @@ import flydra.a2.utils as utils
 from flydra.a2.orientation_ekf_fitter import compute_ori_quality
 import warnings
 
-def cam_id2hostname(cam_id):
-    hostname = '_'.join(   cam_id.split('_')[:-1] )
+def cam_id2hostname(cam_id, h52d):
+    ci = h52d.root.cam_info[:]
+    if 'hostname' in ci.dtype.names:
+        # new style
+        cond = ci['cam_id']==cam_id
+        rows = ci[cond]
+        assert len(rows)==1
+        hostname = rows['hostname'][0]
+    else:
+        # old style
+        hostname = '_'.join(   cam_id.split('_')[:-1] )
     return hostname
 
 def convert(infilename,
@@ -131,7 +140,7 @@ def convert(infilename,
                 continue
 
             cam_id = camn2cam_id[this_camn]
-            remote_hostname = cam_id2hostname(cam_id)
+            remote_hostname = cam_id2hostname(cam_id, h52d)
             mainbrain_timestamp = remote_timestamp*gain[remote_hostname] + offset[remote_hostname] # find mainbrain timestamp
 
             timestamp_time[obj_id_enum] = mainbrain_timestamp
