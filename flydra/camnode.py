@@ -2269,7 +2269,7 @@ class AppState(object):
                     device_number = cam_order[cam_no]
                     this_info1 =  cam_iface.get_camera_info(device_number)
                     mfg,model,guid = this_info1
-                    force_cam_id = guid
+                    force_cam_id = guid.replace('-','_')
                 else:
                     force_cam_id = force_cam_ids[cam_no]
                 cam_id = self.main_brain.register_new_camera(cam_no,
