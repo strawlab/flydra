@@ -146,6 +146,7 @@ class CamSyncInfo(PT.IsDescription):
     cam_id = PT.StringCol(256,pos=0)
     camn   = PT.UInt16Col(pos=1)
     frame0 = PT.FloatCol(pos=2)
+    camnode_ros_name = PT.StringCol(2048,pos=0)
 
 class HostClockInfo(PT.IsDescription):
     remote_hostname  = PT.StringCol(255,pos=0)
@@ -694,7 +695,7 @@ class CoordinateProcessor(threading.Thread):
                  tracked_object.observations_2d, tracked_object.observations_Lcoords,
                  ) )
 
-    def connect(self,cam_id):
+    def connect(self,cam_id,camnode_ros_name):
 
         # called from Remote-API thread on camera connect
 
@@ -727,7 +728,7 @@ class CoordinateProcessor(threading.Thread):
             self.last_framenumbers_skip.append(-1) # arbitrary impossible number
             self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no,
                                               'frame0':IMPOSSIBLE_TIMESTAMP}
-            self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, IMPOSSIBLE_TIMESTAMP) )
+            self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, IMPOSSIBLE_TIMESTAMP, camnode_ros_name) )
         return cam2mainbrain_data_port
 
     def disconnect(self,cam_id):
@@ -1649,17 +1650,18 @@ class MainBrain(object):
         #
         # ================================================================
 
-        def register_new_camera(self,cam_guid,scalar_control_info,port):
-            """register new camera with the given guid"""
+        def register_new_camera(self,cam_guid,scalar_control_info,port,camnode_ros_name):
+            """register new camera, return cam_id (caller: remote camera)"""
 
+            assert camnode_ros_name is not None
             caller= self.daemon.getLocalStorage().caller # XXX Pyro hack??
             caller_addr= caller.addr
             caller_ip, caller_port = caller_addr
             fqdn = socket.getfqdn(caller_ip)
 
-            print "REGISTER NEW CAMERA", cam_guid
+            print "REGISTER NEW CAMERA %s from node %s" % (cam_guid,camnode_ros_name)
+            cam2mainbrain_data_port = self.main_brain.coord_processor.connect(cam_guid,camnode_ros_name)
 
-            cam2mainbrain_data_port = self.main_brain.coord_processor.connect(cam_guid)
             with self.cam_info_lock:
                 if cam_guid in self.cam_info:
                     raise RuntimeError("camera with guid %s already exists" % cam_guid)
@@ -1672,6 +1674,7 @@ class MainBrain(object):
                                          'scalar_control_info':scalar_control_info,
                                          'fqdn':fqdn,
                                          'port':port,
+                                         'camnode_ros_name':camnode_ros_name,
                                          'cam2mainbrain_data_port':cam2mainbrain_data_port,
                                          'is_calibrated':False, # has 3D calibration been sent yet?
                                          }
@@ -2341,6 +2344,8 @@ class MainBrain(object):
             self.h5cam_info.row['cam_id'] = cam_id
             self.h5cam_info.row['camn']   = dd['absolute_cam_no']
             self.h5cam_info.row['frame0'] = dd['frame0']
+            with self.remote_api.cam_info_lock:
+                self.h5cam_info.row['camnode_ros_name'] = self.remote_api.cam_info[cam_id]['camnode_ros_name']
             self.h5cam_info.row.append()
         self.h5cam_info.flush()
 
@@ -2471,10 +2476,11 @@ class MainBrain(object):
         if self.h5cam_info is not None:
             cam_info_row = self.h5cam_info.row
             for cam_info in list_of_cam_info:
-                cam_id, absolute_cam_no, frame0 = cam_info
+                cam_id, absolute_cam_no, frame0, camnode_ros_name = cam_info
                 cam_info_row['cam_id'] = cam_id
                 cam_info_row['camn']   = absolute_cam_no
                 cam_info_row['frame0'] = frame0
+                cam_info_row['camnode_ros_name'] = camnode_ros_name
                 cam_info_row.append()
 
             self.h5cam_info.flush()

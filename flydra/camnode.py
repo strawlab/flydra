@@ -2349,7 +2349,8 @@ class AppState(object):
                 cam_id = self.all_cam_ids[cam_no]
                 self.main_brain.register_new_camera(cam_id,
                                                     scalar_control_info,
-                                                    port)
+                                                    port,
+                                                    camnode_ros_name = rospy.get_name())
                 cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(cam_id)
 
                 ##################################################################
@@ -2928,6 +2929,7 @@ def get_app_defaults():
 
 def main():
     rospy.init_node('flydra_camera_node',disable_signals=True)
+    print 'ROS name:',rospy.get_name()
     parse_args_and_run()
 
 def benchmark():
