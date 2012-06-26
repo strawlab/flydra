@@ -791,7 +791,7 @@ class ProcessCamClass(object):
                         old_fn = framenumber-1
                     if framenumber-old_fn > 1:
                         n_frames_skipped = framenumber-old_fn-1
-                        msg = '  frames apparently skipped: %d'%(n_frames_skipped,)
+                        msg = '  %s frames apparently skipped: %d'%(self.cam_id, n_frames_skipped)
                         self.log_message_queue.put((self.cam_id,time.time(),msg))
                         print >> sys.stderr, msg
                     else:
