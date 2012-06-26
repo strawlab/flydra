@@ -913,6 +913,7 @@ class CoordinateProcessor(threading.Thread):
                             break
                         predicted_framenumber = n_frames_skipped + self.last_framenumbers_skip[cam_idx] + 1
                         if raw_framenumber<predicted_framenumber:
+                            print 'cam_id',cam_id
                             print 'raw_framenumber',raw_framenumber
                             print 'n_frames_skipped',n_frames_skipped
                             print 'predicted_framenumber',predicted_framenumber
