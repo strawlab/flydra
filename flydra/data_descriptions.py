@@ -34,3 +34,9 @@ class Info2D(PT.IsDescription):
     cur_val      = PT.UInt8Col(pos=10)
     mean_val     = PT.Float32Col(pos=11)
     sumsqf_val   = PT.Float32Col(pos=12) # estimate of <x^2> (running_sumsqf)
+
+class TextLogDescription(PT.IsDescription):
+    mainbrain_timestamp = PT.FloatCol(pos=0)
+    cam_id = PT.StringCol(255,pos=1)
+    host_timestamp = PT.FloatCol(pos=2)
+    message = PT.StringCol(255,pos=3)

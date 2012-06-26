@@ -166,6 +166,8 @@ outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # 2D data format for PyTables:
 Info2D = flydra.data_descriptions.Info2D
 
+TextLogDescription = flydra.data_descriptions.TextLogDescription
+
 class CamSyncInfo(PT.IsDescription):
     cam_id = PT.StringCol(256,pos=0)
     camn   = PT.UInt16Col(pos=1)
@@ -209,12 +211,6 @@ class Info3D(PT.IsDescription):
 
     camns_used = PT.StringCol(32,pos=11)
     mean_dist  = PT.Float32Col(pos=12) # mean 2D reconstruction error
-
-class TextLogDescription(PT.IsDescription):
-    mainbrain_timestamp = PT.FloatCol(pos=0)
-    cam_id = PT.StringCol(255,pos=1)
-    host_timestamp = PT.FloatCol(pos=2)
-    message = PT.StringCol(255,pos=3)
 
 FilteredObservations = flydra_kalman_utils.FilteredObservations
 kalman_observations_2d_idxs_type = flydra_kalman_utils.kalman_observations_2d_idxs_type

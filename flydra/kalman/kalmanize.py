@@ -19,7 +19,7 @@ from optparse import OptionParser
 import dynamic_models
 import collections
 import flydra.version
-from flydra.MainBrain import TextLogDescription
+from flydra.data_descriptions import TextLogDescription
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 from flydra.reconstruct import do_3d_operations_on_2d_point
 import flydra.a2.utils as utils
