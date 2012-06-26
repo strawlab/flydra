@@ -1408,14 +1408,14 @@ class MainBrain(object):
     """Handle all camera network stuff and interact with application"""
 
     ROS_CONTROL_API = dict(
-        start_saving_data=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
-        stop_saving_data=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
-        start_recording=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
-        stop_recording=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
-        start_small_recording=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
-        stop_small_recording=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
-        do_synchronization=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
-        quit=(std_srvs.srv.Empty,std_srvs.srv.EmptyResponse),
+        start_saving_data=(std_srvs.srv.Empty),
+        stop_saving_data=(std_srvs.srv.Empty),
+        start_recording=(std_srvs.srv.Empty),
+        stop_recording=(std_srvs.srv.Empty),
+        start_small_recording=(std_srvs.srv.Empty),
+        stop_small_recording=(std_srvs.srv.Empty),
+        do_synchronization=(std_srvs.srv.Empty),
+        quit=(std_srvs.srv.Empty),
     )
 
     ROS_CONFIGURATION = dict(
@@ -1876,20 +1876,36 @@ class MainBrain(object):
         calledservice = req._connection_header['service']
         calledfunction = calledservice.split('/')[-1]
         if calledfunction in self.ROS_CONTROL_API:
-            srvresponseclass = self.ROS_CONTROL_API[calledfunction][1]
-            print "ROS API Calling %s " % calledfunction
-            #fixme: we should pass userdata params here....
-            result = getattr(self, calledfunction)()
-            if srvresponseclass == std_srvs.srv.EmptyResponse:
-                return std_srvs.srv.EmptyResponse()
-            else:
-                #ensure that result is a tuple (or list)
-                if not isinstance(result, (list, tuple)):
-                    result = (result,)
-                return srvresponseclass(*result)
+            srvclass = self.ROS_CONTROL_API[calledfunction]
+
+            #dynamically build the request and response argument lists for the mainbrain api
+            #call. This requires the mainbrain api have the same calling signature as the
+            #service definitions, and, if you want to return something over ros, the return
+            #type signature must again match the service return type signature
+
+            respclass = srvclass._response_class
+
+            #determine the args to pass to the function based on the srv description (which
+            #is embodied in __slots__, a variable created by the ros build system to list
+            #the attributes (i.e. parameters only) of the request
+            kwargs = {}
+            for attr in req.__slots__:
+                kwargs[attr] = getattr(req,attr)
+
+            print "calling mainbrain api %s with args %s" % (calledfunction,kwargs)
+
+            result = getattr(self, calledfunction)(**kwargs)
+
+            kwargs = {}
+            for i,attr in enumerate(respclass.__slots__):
+                kwargs[attr] = result[i]
+
+            print "result = %s (marshaling over ros as %s klass %s)" % (result,kwargs,respclass)
+
+            return respclass(**kwargs)
 
     def _init_ros_interface(self):
-        for name, (srv, srvresp) in self.ROS_CONTROL_API.iteritems():
+        for name, srv in self.ROS_CONTROL_API.iteritems():
             rospy.Service('~%s' % name, srv, self._ros_generic_service_dispatch)
 
     def load_config(self):
