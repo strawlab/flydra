@@ -2907,8 +2907,6 @@ def get_app_defaults():
                     clear_threshold = 0.3,
 
                     debug_drop=False,
-                    wx=False,
-                    sdl=False,
                     debug_acquire=False,
                     disable_ifi_warning=False,
                     num_points=20,
@@ -2956,15 +2954,6 @@ def parse_args_and_run(benchmark=False):
 
     parser.add_option("--debug-std", action='store_true',
                       help="show mean pixel STD every 200 frames")
-
-    parser.add_option("--sdl", action='store_true',
-                      help="SDL-based display of raw images")
-
-    parser.add_option("--wx", action='store_true',
-                      help="wx-based GUI to display raw images")
-
-    parser.add_option("--wx-full", action='store_true',
-                      help="wx-based GUI to display raw and processed images")
 
     parser.add_option("--debug-acquire", action='store_true',
                       help="print to the console information on each frame")
@@ -3025,28 +3014,8 @@ def parse_args_and_run(benchmark=False):
                        benchmark=benchmark,
                        )
 
-    if options.wx or options.wx_full:
-        assert options.sdl == False, 'cannot have wx and sdl simultaneously enabled!'
-        full = bool(options.wx_full)
-        import camnodewx
-        app=camnodewx.WxApp()
-        if not DISABLE_ALL_PROCESSING:
-            app_state.append_chain( klass = camnodewx.DisplayCamData, args=(app,),
-                                    kwargs = dict(full=full),
-                                    basename = 'camnodewx.DisplayCamData' )
-        app.post_init(call_often = app_state.main_thread_task,full=full)
-        app_state.set_quit_function( app.OnQuit )
-    elif options.sdl:
-        import camnodesdl
-        app=camnodesdl.SdlApp(
-                              call_often = app_state.main_thread_task)
-        if not DISABLE_ALL_PROCESSING:
-            app_state.append_chain( klass = camnodesdl.DisplayCamData, args=(app,),
-                                    basename = 'camnodesdl.DisplayCamData' )
-        app_state.set_quit_function( app.OnQuit )
-    else:
-        app=ConsoleApp(call_often = app_state.main_thread_task)
-        app_state.set_quit_function( app.OnQuit )
+    app=ConsoleApp(call_often = app_state.main_thread_task)
+    app_state.set_quit_function( app.OnQuit )
 
     for (model, controller) in zip(app_state.get_image_sources(),
                                    app_state.get_image_controllers()):
