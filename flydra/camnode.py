@@ -70,12 +70,6 @@ roslib.load_manifest('sensor_msgs')
 from sensor_msgs.msg import Image
 import rospy
 
-
-def DEBUG(*args):
-    if 0:
-        sys.stdout.write(' '.join(map(str,args))+'\n')
-        sys.stdout.flush()
-
 if not BENCHMARK:
     import Pyro.core, Pyro.errors, Pyro.util
     Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here!
@@ -91,6 +85,7 @@ else:
 import flydra.reconstruct_utils as reconstruct_utils
 import flydra.reconstruct
 import flydra.version
+import flydra.log
 from flydra.reconstruct import do_3d_operations_on_2d_point
 
 import camnode_utils
@@ -102,6 +97,8 @@ if os.name == 'posix' and sys.platform != 'darwin':
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
 from contextlib import contextmanager
+
+LOG = flydra.log.Log()
 
 @contextmanager
 def monkeypatch_camera_method(self):
@@ -518,7 +515,7 @@ class ProcessCamClass(object):
             try:
                 (x0_abs, y0_abs, area, slope, eccentricity, index_x, index_y) = xpt
             except:
-                print 'xpt',xpt
+                LOG.warn('converting xpt %s' % xpt)
                 raise
 
             # Find values at location in image that triggered
@@ -705,9 +702,8 @@ class ProcessCamClass(object):
             numpy.asarray(running_mean_im_full)[:,:] = self._initial_image_dict['mean']
             numpy.asarray(running_sumsqf)[:,:] = self._initial_image_dict['sumsqf']
 
-            if 1:
-                print 'WARNING: ignoring initial images and taking new background'
-                globals['take_background'].set()
+            LOG.warn('WARNING: ignoring initial images and taking new background')
+            globals['take_background'].set()
 
         else:
             globals['take_background'].set()
@@ -748,7 +744,7 @@ class ProcessCamClass(object):
                                                                color_range_3,
                                                                self.sat_thresh_shared.get_nowait())
                     else:
-                        print 'ERROR: color_range_2 >= color_range_1 -- skipping'
+                        LOG.error('ERROR: color_range_2 >= color_range_1 -- skipping')
 
                 # get best guess as to when image was taken
                 timestamp=chainbuf.timestamp
@@ -796,7 +792,7 @@ class ProcessCamClass(object):
                         n_frames_skipped = framenumber-old_fn-1
                         msg = '  %s frames apparently skipped: %d'%(self.cam_id, n_frames_skipped)
                         self.log_message_queue.put((self.cam_id,time.time(),msg))
-                        print >> sys.stderr, msg
+                        LOG.warn(msg)
                     else:
                         n_frames_skipped = 0
 
@@ -806,7 +802,7 @@ class ProcessCamClass(object):
                         if time_per_frame > 2*self.shortest_IFI:
                             msg = 'Warning: IFI is %f on %s at %s (frame skipped?)'%(time_per_frame,self.cam_id,time.asctime())
                             self.log_message_queue.put((self.cam_id,time.time(),msg))
-                            print >> sys.stderr, msg
+                            LOG.warn(msg)
 
                 old_ts = timestamp
                 old_fn = framenumber
@@ -823,7 +819,7 @@ class ProcessCamClass(object):
                                                          )
                 ## if len(xpoints)>=self.max_num_points:
                 ##     msg = 'Warning: cannot save acquire points this frame because maximum number already acheived'
-                ##     print >> sys.stderr, msg
+                ##     LOG.warn(msg)
                 chainbuf.processed_points = xpoints
                 if NAUGHTY_BUT_FAST:
                     chainbuf.absdiff8u_im_full = absdiff8u_im_full
@@ -849,7 +845,7 @@ class ProcessCamClass(object):
                     # allow other thread to see raw image always (for saving)
                     if incoming_raw_frames_queue.qsize() >1000:
                         # chop off some old frames to prevent memory explosion
-                        print 'ERROR: deleting old frames to make room for new ones! (and sleeping)'
+                        LOG.warn('ERROR: deleting old frames to make room for new ones! (and sleeping)')
                         for i in range(100):
                             incoming_raw_frames_queue.get_nowait()
                     incoming_raw_frames_queue_put(
@@ -860,7 +856,6 @@ class ProcessCamClass(object):
                          self.realtime_analyzer.roi,
                          cam_received_time,
                          ) )
-                    #print ' '*20,'put frame'
 
                 do_bg_maint = False
 
@@ -877,7 +872,7 @@ class ProcessCamClass(object):
 
                             numpy.asarray(running_mean_im)[:,:] = mean_frame
                             numpy.asarray(running_sumsqf)[:,:] = sumsqf_frame
-                            print 'using slow method, calculated mean and sumsqf frames from first %d frames'%(n_initial_take,)
+                            LOG.info('using slow method, calculated mean and sumsqf frames from first %d frames' % n_initial_take)
 
                             # we're done with initial transient, set stuff
                             do_bg_maint = True
@@ -908,12 +903,10 @@ class ProcessCamClass(object):
                             del initial_take_frames_done
 
                 if take_background_isSet():
-                    print 'taking new bg'
+                    LOG.info('taking new bg')
                     # reset background image with current frame as mean and 0 STD
                     if cur_fisize != max_frame_size:
-                        print cur_fisize
-                        print max_frame_size
-                        print 'ERROR: can only take background image if not using ROI'
+                        LOG.warn('ERROR: can only take background image if not using ROI')
                     else:
                         if 0:
                             # old way
@@ -974,7 +967,7 @@ class ProcessCamClass(object):
                 if self.options.debug_std:
                     if framenumber % 200 == 0:
                         mean_std = numpy.mean( numpy.mean( numpy.array(running_stdframe,dtype=numpy.float32 )))
-                        print '%s mean STD %.2f'%(self.cam_id,mean_std)
+                        LOG.info('%s mean STD %.2f'%(self.cam_id,mean_std))
 
                 if clear_background_isSet():
                     # reset background image with 0 mean and 0 STD
@@ -1005,17 +998,16 @@ class ProcessCamClass(object):
                     try:
                         data = data + struct.pack(pt_fmt,*point_tuple)
                     except:
-                        print 'error-causing data: ',point_tuple
+                        LOG.warn('error-causing data: %s' % (point_tuple,))
                         raise
                 if 0:
                     local_processing_time = (time.time()-cam_received_time)*1e3
-                    print 'local_processing_time % 3.1f'%local_processing_time
+                    LOG.debug('local_processing_time % 3.1f'%local_processing_time)
                 if NETWORK_PROTOCOL == 'udp':
                     try:
                         coord_socket.sendto(data,(self.main_brain_ipaddr,self.cam2mainbrain_port))
                     except socket.error, err:
-                        print >> sys.stderr, 'WARNING: ignoring error:'
-                        traceback.print_exc()
+                        LOG.warn('WARNING: ignoring error: %s' % traceback.format_exc())
 
                 elif NETWORK_PROTOCOL == 'tcp':
                     coord_socket.send(data)
@@ -1023,7 +1015,6 @@ class ProcessCamClass(object):
                     raise ValueError('unknown NETWORK_PROTOCOL')
                 if DEBUG_DROP:
                     debug_fd.write('%d,%d\n'%(framenumber,len(points)))
-                #print 'sent data...'
 
                 if 0 and self.new_roi.isSet():
                     with self.new_roi_data_lock:
@@ -1034,15 +1025,15 @@ class ProcessCamClass(object):
                     w = r-l+1
                     h = t-b+1
                     self.realtime_analyzer.roi = lbrt
-                    print 'desired l,b,w,h',l,b,w,h
+                    LOG.info('desired l,b,w,h %s,%s,%s,%s' % (l,b,w,h))
 
                     l2,b2,w2,h2 = self.cam.get_frame_roi()
                     if ((l==l2) and (b==b2) and (w==w2) and (h==h2)):
-                        print 'current ROI matches desired ROI - not changing'
+                        LOG.info('current ROI matches desired ROI - not changing')
                     else:
                         self.cam.set_frame_roi(l,b,w,h)
                         l,b,w,h = self.cam.get_frame_roi()
-                        print 'actual l,b,w,h',l,b,w,h
+                        LOG.info('actual l,b,w,h %s,%s,%s,%s' % (l,b,w,h))
                     r = l+w-1
                     t = b+h-1
                     cur_fisize = FastImage.Size(w, h)
@@ -1116,7 +1107,7 @@ class SaveCamData(object):
                     full_raw = raw_file_basename + '.fmf'
                     full_bg = raw_file_basename + '_mean.fmf'
                     full_std = raw_file_basename + '_sumsqf.fmf'
-                    print 'saving movies to',raw_file_basename
+                    LOG.info('saving movies to %s' % raw_file_basename)
                     raw_movie = FlyMovieFormat.FlyMovieSaver(full_raw,
                                                              format=image_coding,
                                                              bits_per_pixel=8,
@@ -1125,9 +1116,7 @@ class SaveCamData(object):
                         tmp_coding = 'MONO32f:' + image_coding[6:]
                     else:
                         if image_coding != 'MONO8':
-                            print >> sys.stderr, ('WARNING: unknown image '
-                                                  'coding %s for .fmf files'%(
-                                image_coding,))
+                            LOG.warn('WARNING: unknown image coding %s for .fmf files' % image_coding)
                         tmp_coding = 'MONO32f'
                     bg_movie = FlyMovieFormat.FlyMovieSaver(full_bg,
                                                             format=tmp_coding,
@@ -1148,10 +1137,10 @@ class SaveCamData(object):
                                             last_bgcmp_image_timestamp,
                                             error_if_not_fast=True)
                     else:
-                        print 'WARNING: could not save initial bg and std frames'
+                        LOG.warn('WARNING: could not save initial bg and std frames')
 
                 elif cmd[0] == 'stop':
-                    print 'done saving movies','-'*50
+                    LOG.info('done saving movies')
                     raw_movie.close()
                     bg_movie.close()
                     std_movie.close()
@@ -1313,7 +1302,7 @@ class SaveSmallData(object):
                             if not os.path.exists(dirname):
                                 os.makedirs(dirname)
                         filename = filename_base + '.ufmf'
-                        print 'saving to',filename
+                        LOG.info('saving to %s' % filename)
                         if chainbuf.image_coding.startswith('MONO8'):
                             h,w=numpy.array(chainbuf.get_buf(), copy=False).shape
                         else:
@@ -1376,7 +1365,7 @@ class SaveSmallData(object):
     def _tobuf( self, chainbuf ):
         frame = chainbuf.get_buf()
         if 0:
-            print 'saving %d points'%(len(chainbuf.processed_points ),)
+            LOG.info('saving %d points' % len(chainbuf.processed_points))
         pts = []
         wh = self.options.small_save_radius*2
         for pt in chainbuf.processed_points:
@@ -1414,7 +1403,7 @@ class ImageSource(threading.Thread):
     def get_buffer_pool(self):
         return self.buffer_pool
     def run(self):
-        print 'ImageSource running in process',os.getpid()
+        LOG.info('ImageSource running in process %s' % os.getpid())
         buffer_pool = self.buffer_pool
         cam_quit_event_isSet = self.quit_event.isSet
         while not cam_quit_event_isSet():
@@ -1423,13 +1412,11 @@ class ImageSource(threading.Thread):
                 # Grab some frames (wait) until the number of
                 # outstanding buffers decreases -- give processing
                 # threads time to catch up.
-                print ('*'*80+'\n')*5
-                print 'ERROR: We seem to be leaking buffers - will not acquire more images for a while!'
-                print ('*'*80+'\n')*5
+                LOG.warn('ERROR: We seem to be leaking buffers - will not acquire more images for a while!')
                 while 1:
                     self._grab_buffer_quick()
                     if buffer_pool.get_num_outstanding_buffers() < 10:
-                        print 'Resuming normal image acquisition'
+                        LOG.info('Resuming normal image acquisition')
                         break
 
             # this gets a new (unused) buffer from the preallocated pool
@@ -1500,7 +1487,7 @@ class ImageSourceFromCamera(ImageSource):
         except cam_iface.BuffersOverflowed:
             msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
             self.log_message_queue.put((self.cam_id,now,msg))
-            print >> sys.stderr, msg
+            LOG.warn(msg)
         except cam_iface.FrameDataMissing:
             pass
         except cam_iface.FrameDataCorrupt:
@@ -1525,7 +1512,7 @@ class ImageSourceFromCamera(ImageSource):
                 now = time.time()
                 msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
                 self.log_message_queue.put((self.cam_id,now,msg))
-                print >> sys.stderr, msg
+                LOG.warn(msg)
                 try_again_condition = True
             except cam_iface.FrameDataMissing:
                 if self.debug_acquire:
@@ -1533,7 +1520,7 @@ class ImageSourceFromCamera(ImageSource):
                 now = time.time()
                 msg = 'Warning: frame data missing on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
                 #self.log_message_queue.put((self.cam_id,now,msg))
-                print >> sys.stderr, msg
+                LOG.warn(msg)
                 try_again_condition = True
             except cam_iface.FrameDataCorrupt:
                 if self.debug_acquire:
@@ -1541,7 +1528,7 @@ class ImageSourceFromCamera(ImageSource):
                 now = time.time()
                 msg = 'Warning: frame data corrupt on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
                 #self.log_message_queue.put((self.cam_id,now,msg))
-                print >> sys.stderr, msg
+                LOG.warn(msg)
                 try_again_condition = True
             except (cam_iface.FrameSystemCallInterruption, cam_iface.NoFrameReturned):
                 if self.debug_acquire:
@@ -1595,7 +1582,7 @@ class ImageSourceFakeCamera(ImageSource):
                 tstop = time.time()
                 dur = tstop-self._tstart
                 fps = self._count/dur
-                print 'fps: %.1f'%(fps,)
+                LOG.debug('fps: %.1f' % fps)
 
                 # prepare for next
                 self._tstart = tstop
@@ -1628,7 +1615,6 @@ class ImageSourceFakeCamera(ImageSource):
             def set_to_frame_0(self):
                 self._fake_cam.set_to_frame_0()
             def is_finished(self):
-                #print 'self._fake_cam.is_finished()',self._fake_cam.is_finished()
                 return self._fake_cam.is_finished()
             def quit_now(self):
                 self._quit_event.set()
@@ -1715,12 +1701,11 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
         N_modes = cam_iface.get_num_modes(cam_no)
         use_mode = None
         if show_cam_details:
-            print 'camera info:',cam_iface.get_camera_info(cam_no)
-            print '%d available modes:'%N_modes
+            LOG.info('camera info: %s' % (cam_iface.get_camera_info(cam_no),))
         for i in range(N_modes):
             mode_string = cam_iface.get_mode_string(cam_no,i)
             if show_cam_details:
-                print '  mode %d: %s'%(i,mode_string)
+                LOG.info('  mode %d: %s'%(i,mode_string))
             if 'format7_0' in mode_string.lower():
                 use_mode = i
         if use_mode is None:
@@ -1732,12 +1717,12 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
         self._trigger_mode_numbers_from_name = {}
         N_trigger_modes = self.get_num_trigger_modes()
         if show_cam_details:
-            print '  %d available trigger modes:'%N_trigger_modes
-            print '  current trigger modes: %d' % self.get_trigger_mode_number()
+            LOG.info('  %d available trigger modes:'%N_trigger_modes)
+            LOG.info('  current trigger modes: %d' % self.get_trigger_mode_number())
             for i in range(N_trigger_modes):
                 mode_string = self.get_trigger_mode_string(i)
                 self._trigger_mode_numbers_from_name[mode_string] = i
-                print '  mode %d: %s'%(i,mode_string)
+                LOG.info('  mode %d: %s'%(i,mode_string))
 
         #cache the properties
         num_props = self.get_num_camera_properties()
@@ -1761,7 +1746,6 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
                 #call directly to camiface, these parameters are already from the parameter server
                 cam_iface.Camera.set_camera_property(self,prop_num,paramval,0)
             elif k == "trigger_mode":
-                print "SET TRIGGER MODE = %d" % paramval
                 if paramval < 0:
                     cam_iface.Camera.set_framerate(self, 999)
                 else:
@@ -1776,7 +1760,6 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
         cam_iface.Camera.set_camera_property(self,prop_num,prop_value,auto)
 
     def set_trigger_mode_number(self, v):
-        print "SAVE TRIGGER MODE"
         parampath = self._get_rosparam_path("trigger_mode")
         rospy.set_param(parampath, v)
 
@@ -1863,7 +1846,7 @@ class FakeCameraFromFMF(_Camera):
     def __init__(self,filename):
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
         if 0:
-            print 'short!'
+            LOG.warn('short!')
             self.fmf_recarray = self.fmf_recarray[:600]
 
         self._n_frames = len(self.fmf_recarray)
@@ -1904,11 +1887,7 @@ class FakeCameraFromFMF(_Camera):
 
     def is_finished(self):
         # this can is called by any thread
-        #print "len( self.fmf_recarray['frame'] )",len( self.fmf_recarray['frame'] )
-        #print "self._curframe.get()",self._curframe.get()
         result = self._curframe.get() >= len( self.fmf_recarray['frame'] )
-        #print result
-        #print
         return result
 
 def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
@@ -1930,20 +1909,18 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
         sumsqf_t0 = sumsqf_ra['timestamp'][0]
 
         if not ((t0 >= mean_t0) and (t0 >= sumsqf_t0)):
-            print '*'*80
-            print 'WARNING timestamps of first image frame is not before mean image timestamps. they are'
-            print ' raw .fmf: %s'%repr(t0)
-            print ' mean .fmf:  %s'%repr(mean_t0)
-            print ' sumsqf .fmf: %s'%repr(sumsqf_t0)
-            print '*'*80
+            LOG.warn('WARNING timestamps of first image frame is not before mean image timestamps. they are'
+                     ' raw .fmf: %s\n'%
+                     ' mean .fmf:  %s\n'%
+                     ' sumsqf .fmf: %s'%(repr(t0),repr(mean_t0),repr(sumsqf_t0)))
 
         initial_image_dict = {'mean':mean_ra['frame'][0],
                               'sumsqf':sumsqf_ra['frame'][0],  # not really mean2 (actually running_sumsqf)
                               'raw':fmf_ra['frame'][0]}
         if 0 and len( mean_ra['frame'] ) > 1:
-            print ("no current support for reading back multi-frame "
-                   "background/cmp. (But this should not be necessary, "
-                   "as you can reconstruct them, anyway.)")
+            LOG.info("no current support for reading back multi-frame "
+                     "background/cmp. (But this should not be necessary, "
+                     "as you can reconstruct them, anyway.)")
 
     elif fname.endswith('.ufmf'):
         raise NotImplementedError('patience, young grasshopper')
@@ -2052,12 +2029,12 @@ class AppState(object):
                     this_info1 =  cam_iface.get_camera_info(i)
                     mfg,model,guid = this_info1
                     if options.cams_only and guid not in set(options.cams_only.split(',')):
-                        print 'skipping camera guid: %s (cam_id: %d)' % (guid,i)
+                        LOG.info('skipping camera guid: %s (cam_id: %d)' % (guid,i))
                         continue
                 except cam_iface.CameraNotAvailable:
                     this_info2 =  ('(not available)',i)
                 else:
-                    print 'choosing camera guid: %s (cam_id: %d)' % (guid,i)
+                    LOG.info('choosing camera guid: %s (cam_id: %d)' % (guid,i))
                     this_info2 =  ('\0'.join(this_info1),i)
                 all_cam_info_list.append(this_info2)
 
@@ -2095,7 +2072,7 @@ class AppState(object):
             except cam_iface.CameraNotAvailable:
                 raise RuntimeError('camera %d not available' % cam_no)
 
-            print 'constructing camera guid: %s (cam_id: %d cam_no: %d)' % (guid,cam_id,cam_no)
+            LOG.info('constructing camera guid: %s (cam_id: %d cam_no: %d)' % (guid,cam_id,cam_no))
             del guid
 
             ##################################################################
@@ -2203,7 +2180,7 @@ class AppState(object):
                 self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
                 main_brain_version = self.main_brain.get_version()
             except:
-                print 'ERROR while connecting to',main_brain_URI
+                LOG.fatal('ERROR while connecting to main brain %s' % main_brain_URI)
                 raise
             self.main_brain._setOneway(['set_image','set_fps','close','log_message','receive_missing_data'])
 
@@ -2246,9 +2223,9 @@ class AppState(object):
                         raise ValueError('mask image must have an alpha (4th) channel')
                     alpha = im[:,:,3]
                     if numpy.any((alpha > 0) & (alpha < 255)):
-                        print ('WARNING: some alpha values between 0 and '
-                               '255 detected. Only zero and non-zero values are '
-                               'considered.')
+                        LOG.warning('WARNING: some alpha values between 0 and '
+                                    '255 detected. Only zero and non-zero values are '
+                                    'considered.')
                     mask = alpha.astype(numpy.bool)
                 else:
                     mask = numpy.zeros( (height,width), dtype=numpy.bool )
@@ -2274,14 +2251,14 @@ class AppState(object):
                         if force_manual or min_value <= new_value <= max_value:
                             try:
                                 if options.show_cam_details:
-                                    print 'setting camera property "%s" to manual mode'%(props['name'],)
+                                    LOG.info('setting camera property "%s" to manual mode' % props['name'])
                                 cam.set_camera_property( prop_num, new_value, 0 )
                             except:
-                                print 'error while setting property %s to %d (from %d)'%(props['name'],new_value,current_value)
+                                LOG.warn('error while setting property %s to %d (from %d)' % (props['name'],new_value,current_value))
                                 raise
                         else:
                             if options.show_cam_details:
-                                print 'not setting property %s to %d (from %d) because out of range (%d<=value<=%d)'%(props['name'],new_value,current_value,min_value,max_value)
+                                LOG.info('not setting property %s to %d (from %d) because out of range (%d<=value<=%d)'%(props['name'],new_value,current_value,min_value,max_value))
 
                         CAM_CONTROLS[props['name']]=prop_num
                     current_value,auto = cam.get_camera_property( prop_num )
@@ -2421,7 +2398,7 @@ class AppState(object):
                         thread.start()
                         self.critical_threads.append( thread )
                     else:
-                        print 'not starting full .fmf thread'
+                        LOG.info('not starting full .fmf thread')
 
                     if 1:
                         save_small = SaveSmallData(options=self.options,
@@ -2434,7 +2411,7 @@ class AppState(object):
                         thread.start()
                         self.critical_threads.append( thread )
                     else:
-                        print 'not starting small .fmf thread'
+                        LOG.info('not starting small .fmf thread')
 
                 else:
                     cam_processor_chain = None
@@ -2472,7 +2449,7 @@ class AppState(object):
 
         try:
             self.recvsock.bind((my_host, my_port))
-            print 'created udp server on port ', my_port
+            LOG.info('created udp server on port %s' % my_port)
         except socket.error, err:
             if err.args[0]==98: # port in use
                 warnings.warn('self.recvsock not available because port in use')
@@ -2553,10 +2530,9 @@ class AppState(object):
                 try:
                     cmds=self.main_brain.get_and_clear_commands(cam_id)
                 except KeyError:
-                    print 'main brain appears to have lost cam_id',cam_id
+                    LOG.warn('main brain appears to have lost cam_id %s' % cam_id)
                 except Exception, x:
-                    print >> sys.stderr,'Remote traceback:','*'*30
-                    print >> sys.stderr,''.join(Pyro.util.getPyroTraceback(x))
+                    LOG.warn('Remote traceback:\n%s', ''.join(Pyro.util.getPyroTraceback(x)))
                     raise
                 else:
                     self.handle_commands(cam_no,cmds)
@@ -2577,20 +2553,20 @@ class AppState(object):
                 if msg=='record_ufmf' and self.recording==0:
 
                     self.recording = 1
-                    print 'saving movies'
+                    LOG.info('saving movies')
 
                     if 1:
                         for cam_no, cam_id in enumerate(self.all_cam_ids):
                             small_saver = self.all_small_savers[cam_no]
                             if small_saver is None:
-                                print 'no small save thread -- cannot save small movies'
+                                LOG.warn('no small save thread -- cannot save small movies')
                                 continue
 
                             small_filebasename = time.strftime( 'CAM_NODE_MOV_%Y%m%d_%H%M%S_camid_' + repr(cam_no) + '.ufmf')
                             small_saver.start_recording(small_filebasename=small_filebasename)
 
                 elif msg==None and self.recording==1 and time.time()-self.timer >= 4:
-                    print 'stop saving movies'
+                    LOG.warn('stop saving movies')
                     self.recording = 0
                     for cam_no, cam_id in enumerate(self.all_cam_ids):
                         small_saver = self.all_small_savers[cam_no]
@@ -2615,7 +2591,7 @@ class AppState(object):
             # if any threads have died, quit
             for thread in self.critical_threads:
                 if not thread.isAlive():
-                    print 'ERROR: thread %s died unexpectedly. Quitting'%(thread.getName())
+                    LOG.fatal('ERROR: thread %s died unexpectedly. Quitting' % thread.getName())
                     self.quit_function(1)
 
             if not DISABLE_ALL_PROCESSING:
@@ -2656,7 +2632,7 @@ class AppState(object):
                         pass
 
         except:
-            traceback.print_exc()
+            LOG.fatal(traceback.format_exc())
             self.quit_function(1)
 
     def handle_commands(self, cam_no, cmds):
@@ -2672,19 +2648,17 @@ class AppState(object):
             CAM_CONTROLS = globals['cam_controls']
 
         for key in cmds.keys():
-
-            DEBUG('  handle_commands: key',key)
+            LOG.info('  handle_commands: key %s' % key)
             if key == 'set':
                 with cam._hack_acquire_lock():
 
                     for property_name,value in cmds['set'].iteritems():
-                        print 'setting camera property', property_name, value,'...',
+                        LOG.info('setting camera property %s=%s' % (property_name, value))
                         sys.stdout.flush()
                         if property_name in CAM_CONTROLS:
                             enum = CAM_CONTROLS[property_name]
                             if type(value) == tuple: # setting whole thing
                                 props = cam.get_camera_property_info(enum)
-                                #print 'props:',props
                                 if value[1] != props['min_value']:
                                     import warnings
                                     warnings.warn('value[1] != props["min_value"] (%d != %d)'%(value[1], props['min_value']))
@@ -2694,32 +2668,21 @@ class AppState(object):
                                 value = value[0]
                             cam.set_camera_property(enum,value,0)
                         elif property_name == 'roi':
-                            print 'flydra_camera_node.py: ignoring ROI command for now...'
-                            #cam_processor.roi = value
+                            LOG.info('flydra_camera_node.py: ignoring ROI command for now...')
                         elif property_name == 'n_sigma':
-                            print 'setting n_sigma',value
                             cam_processor.n_sigma_shared.set(value)
                         elif property_name == 'n_erode_absdiff':
-                            print 'setting n_erode_absdiff',value
                             cam_processor.n_erode_absdiff_shared.set(value)
                         elif property_name == 'red_only':
-                            print 'setting red_only',value
                             cam_processor.red_only.set(value)
-
-
                         elif property_name == 'color_range_1':
-                            print 'setting color_range_1',value
                             cam_processor.color_range_1_shared.set(value)
                         elif property_name == 'color_range_2':
-                            print 'setting color_range_2',value
                             cam_processor.color_range_2_shared.set(value)
                         elif property_name == 'color_range_3':
-                            print 'setting color_range_3',value
                             cam_processor.color_range_3_shared.set(value)
                         elif property_name == 'sat_thresh':
-                            print 'setting sat_thresh',value
                             cam_processor.sat_thresh_shared.set(value)
-
                         elif property_name == 'diff_threshold':
                             cam_processor.diff_threshold_shared.set(value)
                         elif property_name == 'clear_threshold':
@@ -2729,35 +2692,30 @@ class AppState(object):
                         elif property_name == 'height':
                             assert cam.get_max_height() == value
                         elif property_name == 'trigger_mode':
-                            print 'cam.set_trigger_mode_number( value )',value
                             try:
                                 cam.set_trigger_mode_number( value ) # XXX don't crash on exception here
                             except Exception,err:
-                                print 'ERROR setting trigger mode'
-                                traceback.print_exc()
+                                LOG.warn('ERROR setting trigger mode\n%s' % traceback.format_exc())
                         elif property_name == 'cmp':
                             if value:
-                                # print 'ignoring request to use_cmp'
                                 globals['use_cmp'].set()
                             else: globals['use_cmp'].clear()
                         elif property_name == 'expected_trigger_framerate':
-                            #print 'expecting trigger fps',value
                             if value==0.0:
-                                print ('WARNING: expected_trigger_framerate is set '
-                                       'to 0, but setting shortest IFI to 10 msec '
-                                       'anyway')
+                                LOG.warn('WARNING: expected_trigger_framerate is set '
+                                         'to 0, but setting shortest IFI to 10 msec '
+                                         'anyway')
                                 cam_processor.shortest_IFI = 0.01 # XXX TODO: FIXME: thread crossing bug
                             else:
                                 cam_processor.shortest_IFI = 1.0/value # XXX TODO: FIXME: thread crossing bug
                         elif property_name == 'max_framerate':
                             if 0:
-                                #print 'ignoring request to set max_framerate'
                                 pass
                             else:
                                 try:
                                     cam.set_framerate(value)
                                 except Exception,err:
-                                    print 'ERROR: failed setting framerate:',err
+                                    LOG.warn('ERROR: failed setting framerate: %s' % err)
                         elif property_name == 'collecting_background':
                             if value: globals['collecting_background'].set()
                             else: globals['collecting_background'].clear()
@@ -2765,12 +2723,8 @@ class AppState(object):
                             cam_processor.red_only_shared.set(value)
                         elif property_name == 'visible_image_view':
                             globals['export_image_name'] = value
-                            #print 'displaying',value,'image'
                         else:
-                            print 'IGNORING property',property_name
-
-                        print 'OK'
-
+                            LOG.warn('IGNORING property %s' % property_name)
 
             elif key == 'get_im':
                 val = globals['most_recent_frame_potentially_corrupt']
@@ -2785,13 +2739,13 @@ class AppState(object):
                 camn_and_list = map(int,cmds[key].split())
                 camn, framenumber_offset = camn_and_list[:2]
                 missing_framenumbers = camn_and_list[2:]
-                print 'I know main brain wants %d frames (camn %d) at %s:'%(
-                    len(missing_framenumbers),
-                    camn,time.asctime()),
+                msg = 'I know main brain wants %d frames (camn %d) at %s:'%(
+                        len(missing_framenumbers),
+                        camn,time.asctime())
                 if len(missing_framenumbers) > 200:
-                    print str(missing_framenumbers[:25]) + ' + ... + ' + str(missing_framenumbers[-25:])
+                    LOG.info(msg+str(missing_framenumbers[:25]) + ' + ... + ' + str(missing_framenumbers[-25:]))
                 else:
-                    print str(missing_framenumbers)
+                    LOG.info(msg+str(missing_framenumbers))
 
                 last_points_framenumbers = self.last_points_framenumbers_by_cam[cam_no]
                 last_points = self.last_points_by_cam[cam_no]
@@ -2824,13 +2778,13 @@ class AppState(object):
                     self.main_brain.receive_missing_data(cam_id, framenumber_offset, missing_data)
 
                 if len(still_missing):
-                    print '  Unable to find %d frames (camn %d):'%(
-                        len(still_missing),
-                        camn),
+                    msg = '  Unable to find %d frames (camn %d):'%(
+                            len(still_missing),
+                            camn),
                     if len(still_missing) > 200:
-                        print str(still_missing[:25]) + ' + ... + ' + str(still_missing[-25:])
+                        LOG.info(msg+str(still_missing[:25]) + ' + ... + ' + str(still_missing[-25:]))
                     else:
-                        print str(still_missing)
+                        LOG.info(msg+str(still_missing))
 
             elif key == 'quit':
                 self._image_sources[cam_no].join(0.1)
@@ -2846,7 +2800,7 @@ class AppState(object):
 
             elif key == 'start_recording':
                 if saver is None:
-                    print 'no save thread -- cannot save movies'
+                    LOG.warn('no save thread -- cannot save movies')
                     continue
                 raw_file_basename = cmds[key]
 
@@ -2854,7 +2808,7 @@ class AppState(object):
 
                 save_dir = os.path.split(raw_file_basename)[0]
                 if not os.path.exists(save_dir):
-                    print 'making %s'%save_dir
+                    LOG.info('making %s'%save_dir)
                     os.makedirs(save_dir)
 
                 saver.start_recording(
@@ -2865,7 +2819,7 @@ class AppState(object):
 
             elif key == 'start_small_recording':
                 if small_saver is None:
-                    print 'no small save thread -- cannot save small movies'
+                    LOG.warn('no small save thread -- cannot save small movies')
                     continue
 
                 small_filebasename = cmds[key]
@@ -2873,7 +2827,7 @@ class AppState(object):
             elif key == 'stop_small_recording':
                 small_saver.stop_recording()
             elif key == 'cal':
-                print 'setting calibration'
+                LOG.info('setting calibration')
                 pmat, intlin, intnonlin, scale_factor = cmds[key]
 
                 # XXX TODO: FIXME: thread crossing bug
@@ -2927,7 +2881,7 @@ def get_app_defaults():
 
 def main():
     rospy.init_node('flydra_camera_node',disable_signals=True)
-    print 'ROS name:',rospy.get_name()
+    LOG.info('ROS name: %s' % rospy.get_name())
     parse_args_and_run()
 
 def benchmark():
