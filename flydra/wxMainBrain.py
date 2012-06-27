@@ -747,8 +747,8 @@ class wxMainBrainApp(wx.App):
         kalman_param_string = ctrl.GetStringSelection()
         name=str(kalman_param_string)
 
-        MainBrain.rc_params['kalman_model'] = name
-        MainBrain.save_rc_params()
+        self.main_brain.config['kalman_model'] = name
+        self.main_brain.save_config()
 
         if self.main_brain.reconstructor is not None:
             print 'setting model to',name
@@ -912,11 +912,8 @@ class wxMainBrainApp(wx.App):
             self.record_raw.SetValue(False)
             return
         try:
-            nowstr = time.strftime( '%Y%m%d_%H%M%S' )
             for cam_id in cam_ids:
-                basename = '~/FLYDRA_LARGE_MOVIES/full_%s_%s'%(nowstr,cam_id)
-                self.main_brain.start_recording(cam_id,
-                                                basename)
+                self.main_brain.start_recording(None,cam_id)
                 self._currently_recording_cams.append(cam_id)
             self.statusbar.SetStatusText('Recording started on %d cameras'%(
                 len(self._currently_recording_cams),),0)
@@ -953,11 +950,8 @@ class wxMainBrainApp(wx.App):
             self.record_small.SetValue(False)
             return
         try:
-            nowstr = time.strftime( '%Y%m%d_%H%M%S' )
             for cam_id in cam_ids:
-                basename = '~/FLYDRA_SMALL_MOVIES/small_%s_%s'%(nowstr,cam_id)
-                self.main_brain.start_small_recording(cam_id,
-                                                      basename)
+                self.main_brain.start_small_recording(None, cam_id)
                 self._currently_recording_small_cams.append(cam_id)
             self.statusbar.SetStatusText('Small recording started on %d cameras'%(
                 len(self._currently_recording_small_cams),),0)
@@ -1183,17 +1177,15 @@ class wxMainBrainApp(wx.App):
             self.pass_all_keystrokes = False
 
     def OnStartSavingData(self, event=None):
-        display_save_filename = time.strftime( 'DATA%Y%m%d_%H%M%S.h5' )
-        save_filename = os.path.join( self.save_data_dir, display_save_filename )
-        if 1:
-            try:
-                self.main_brain.start_saving_data(save_filename)
-                self.statusbar.SetStatusText("Saving data to '%s'"%save_filename)
-                self.statusbar.SetStatusText(display_save_filename,2)
-            except:
-                self.statusbar.SetStatusText("Error saving data to '%s', see console"%save_filename)
-                self.statusbar.SetStatusText("",2)
-                raise
+        save_filename = time.strftime( 'DATA%Y%m%d_%H%M%S.h5' )
+        try:
+            self.main_brain.start_saving_data(save_filename)
+            self.statusbar.SetStatusText("Saving data to '%s'"%save_filename)
+            self.statusbar.SetStatusText("",2)
+        except:
+            self.statusbar.SetStatusText("Error saving data to '%s', see console"%save_filename)
+            self.statusbar.SetStatusText("",2)
+            raise
 
     def OnStopSavingData(self, event=None):
         self.main_brain.stop_saving_data()
@@ -1338,7 +1330,7 @@ class wxMainBrainApp(wx.App):
             found_rc_default = None
             for i,model_name in enumerate(model_names):
                 ctrl.Append(model_name)
-                if MainBrain.rc_params['kalman_model'] == model_name:
+                if self.main_brain.config['kalman_model'] == model_name:
                     found_rc_default = i
             ctrl.GetParent().GetSizer().Layout()
             if not found_rc_default:
@@ -1781,8 +1773,7 @@ def main():
     # create main_brain server (not started yet)
     main_brain = MainBrain.MainBrain(server=options.server,
                                      save_profiling_data=options.save_profiling_data,
-                                     show_sync_errors=options.show_sync_errors,
-                                     publish_ros=True)
+                                     show_sync_errors=options.show_sync_errors)
 
     try:
         # connect server to GUI

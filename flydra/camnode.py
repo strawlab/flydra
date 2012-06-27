@@ -115,6 +115,9 @@ def monkeypatch_camera_method(self):
 
     # release the lock
 
+def ros_ensure_valid_name(name):
+    return name.replace('-','_')
+
 class SharedValue:
     # in fview
     def __init__(self):
@@ -339,7 +342,7 @@ class ProcessCamClass(object):
                  bg_frame_interval=None,
                  bg_frame_alpha=None,
                  cam_no=-1,
-                 main_brain_hostname=None,
+                 main_brain_ipaddr=None,
                  mask_image=None,
                  diff_threshold_shared=None,
                  clear_threshold_shared=None,
@@ -360,8 +363,9 @@ class ProcessCamClass(object):
                  benchmark = False,
                  ):
 
+        self.ros_namespace = cam_id
         # register a new publisher
-        self.publisher = rospy.Publisher('%s/image_raw'%cam_id,
+        self.publisher = rospy.Publisher('%s/image_raw'%self.ros_namespace,
                                          Image,
                                          tcp_nodelay=True,
                                          )
@@ -371,7 +375,7 @@ class ProcessCamClass(object):
         self.benchmark = benchmark
         self.options = options
         self.globals = globals
-        self.main_brain_hostname = main_brain_hostname
+        self.main_brain_ipaddr = main_brain_ipaddr
         if framerate is not None:
             self.shortest_IFI = 1.0/framerate
         else:
@@ -422,7 +426,6 @@ class ProcessCamClass(object):
         self._hlper = None
         self._pmat = None
         self._scale_factor = None # for 3D calibration stuff
-        self.cam_no_str = str(cam_no)
 
         self._chain = camnode_utils.ChainLink()
         self._initial_image_dict = initial_image_dict
@@ -627,7 +630,7 @@ class ProcessCamClass(object):
                 coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             elif NETWORK_PROTOCOL == 'tcp':
                 coord_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                coord_socket.connect((self.main_brain_hostname,self.cam2mainbrain_port))
+                coord_socket.connect((self.main_brain_ipaddr,self.cam2mainbrain_port))
             else:
                 raise ValueError('unknown NETWORK_PROTOCOL')
 
@@ -1009,8 +1012,7 @@ class ProcessCamClass(object):
                     print 'local_processing_time % 3.1f'%local_processing_time
                 if NETWORK_PROTOCOL == 'udp':
                     try:
-                        coord_socket.sendto(data,
-                                            (self.main_brain_hostname,self.cam2mainbrain_port))
+                        coord_socket.sendto(data,(self.main_brain_ipaddr,self.cam2mainbrain_port))
                     except socket.error, err:
                         print >> sys.stderr, 'WARNING: ignoring error:'
                         traceback.print_exc()
@@ -1114,7 +1116,7 @@ class SaveCamData(object):
                     full_raw = raw_file_basename + '.fmf'
                     full_bg = raw_file_basename + '_mean.fmf'
                     full_std = raw_file_basename + '_sumsqf.fmf'
-                    print 'saving movies','-'*50
+                    print 'saving movies to',raw_file_basename
                     raw_movie = FlyMovieFormat.FlyMovieSaver(full_raw,
                                                              format=image_coding,
                                                              bits_per_pixel=8,
@@ -1384,12 +1386,13 @@ class SaveSmallData(object):
 class ImageSource(threading.Thread):
     """One instance of this class for each camera. Do nothing but get
     new frames, copy them, and pass to listener chain."""
+
     def __init__(self,
                  chain=None,
                  cam=None,
                  buffer_pool=None,
                  debug_acquire = False,
-                 cam_no = None,
+                 cam_id = '<unassigned>',
                  quit_event = None,
                  ):
 
@@ -1400,11 +1403,9 @@ class ImageSource(threading.Thread):
             self.image_coding = self.cam.get_pixel_coding()
         self.buffer_pool = buffer_pool
         self.debug_acquire = debug_acquire
-        self.cam_no_str = str(cam_no)
         self.quit_event = quit_event
-        self.cam_id = '<unassigned>'
-    def assign_cam_id(self,cam_id):
         self.cam_id = cam_id
+
     def set_chain(self,new_chain):
         # XXX TODO FIXME: put self._chain behind lock
         if self._chain is not None:
@@ -1442,7 +1443,7 @@ class ImageSource(threading.Thread):
                     continue
 
                 if self.debug_acquire:
-                    stdout_write(self.cam_no_str)
+                    stdout_write(self.cam_id)
 
                 cam_received_time = time.time()
 
@@ -1497,8 +1498,8 @@ class ImageSourceFromCamera(ImageSource):
             with self.cam._hack_acquire_lock():
                 trash = self.cam.grab_next_frame_blocking()
         except cam_iface.BuffersOverflowed:
-            msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
-            self.log_message_queue.put((self.cam_no_str,now,msg))
+            msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
+            self.log_message_queue.put((self.cam_id,now,msg))
             print >> sys.stderr, msg
         except cam_iface.FrameDataMissing:
             pass
@@ -1520,31 +1521,31 @@ class ImageSourceFromCamera(ImageSource):
                 self.cam.grab_next_frame_into_buf_blocking(_bufim)
             except cam_iface.BuffersOverflowed:
                 if self.debug_acquire:
-                    stdout_write('(O%s)'%self.cam_no_str)
+                    stdout_write('(O%s)'%self.cam_id)
                 now = time.time()
-                msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
-                self.log_message_queue.put((self.cam_no_str,now,msg))
+                msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
+                self.log_message_queue.put((self.cam_id,now,msg))
                 print >> sys.stderr, msg
                 try_again_condition = True
             except cam_iface.FrameDataMissing:
                 if self.debug_acquire:
-                    stdout_write('(M%s)'%self.cam_no_str)
+                    stdout_write('(M%s)'%self.cam_id)
                 now = time.time()
-                msg = 'Warning: frame data missing on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
-                #self.log_message_queue.put((self.cam_no_str,now,msg))
+                msg = 'Warning: frame data missing on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
+                #self.log_message_queue.put((self.cam_id,now,msg))
                 print >> sys.stderr, msg
                 try_again_condition = True
             except cam_iface.FrameDataCorrupt:
                 if self.debug_acquire:
-                    stdout_write('(C%s)'%self.cam_no_str)
+                    stdout_write('(C%s)'%self.cam_id)
                 now = time.time()
-                msg = 'Warning: frame data corrupt on %s at %s'%(self.cam_no_str,time.asctime(time.localtime(now)))
-                #self.log_message_queue.put((self.cam_no_str,now,msg))
+                msg = 'Warning: frame data corrupt on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
+                #self.log_message_queue.put((self.cam_id,now,msg))
                 print >> sys.stderr, msg
                 try_again_condition = True
             except (cam_iface.FrameSystemCallInterruption, cam_iface.NoFrameReturned):
                 if self.debug_acquire:
-                    stdout_write('(S%s)'%self.cam_no_str)
+                    stdout_write('(S%s)'%self.cam_id)
                 try_again_condition = True
 
             if not try_again_condition:
@@ -1650,9 +1651,11 @@ class ImageSourceFakeCamera(ImageSource):
             framenumber=self.cam.get_last_framenumber()
         return try_again_condition, timestamp, framenumber
 
-class FakeCamera(object):
+class _Camera(object):
+
+    ROS_PROPERTIES = {}
+
     def start_camera(self):
-        # no-op
         pass
 
     def get_framerate(self):
@@ -1675,13 +1678,112 @@ class FakeCamera(object):
     def close(self):
         return
 
+    def set_trigger_mode_number(self, v):
+        pass
+
+    def get_trigger_mode_number(self):
+        return 0
+
     def get_num_trigger_modes(self):
         return 1
 
     def get_trigger_mode_string(self,i):
         return 'fake camera trigger'
 
-class FakeCameraFromNetwork(FakeCamera):
+    def get_frame_roi(self):
+        raise NotImplementedError
+
+    def set_camera_property(self, prop_num, prop_value, auto):
+        pass
+
+    def load_configuration(self):
+        pass
+
+class CamifaceCamera(cam_iface.Camera, _Camera):
+
+    ROS_PROPERTIES = dict(
+        shutter=9000,
+        gain=300,
+        trigger_mode=-1
+    )
+
+    def __init__(self, guid, cam_no, show_cam_details, num_buffers=50):
+        self._guid = guid
+        self._show_cam_details = show_cam_details
+
+        # auto select format7_0 mode
+        N_modes = cam_iface.get_num_modes(cam_no)
+        use_mode = None
+        if show_cam_details:
+            print 'camera info:',cam_iface.get_camera_info(cam_no)
+            print '%d available modes:'%N_modes
+        for i in range(N_modes):
+            mode_string = cam_iface.get_mode_string(cam_no,i)
+            if show_cam_details:
+                print '  mode %d: %s'%(i,mode_string)
+            if 'format7_0' in mode_string.lower():
+                use_mode = i
+        if use_mode is None:
+            use_mode = 0
+
+        cam_iface.Camera.__init__(self,cam_no,num_buffers,use_mode)
+
+        # cache trigger mode names
+        self._trigger_mode_numbers_from_name = {}
+        N_trigger_modes = self.get_num_trigger_modes()
+        if show_cam_details:
+            print '  %d available trigger modes:'%N_trigger_modes
+            print '  current trigger modes: %d' % self.get_trigger_mode_number()
+            for i in range(N_trigger_modes):
+                mode_string = self.get_trigger_mode_string(i)
+                self._trigger_mode_numbers_from_name[mode_string] = i
+                print '  mode %d: %s'%(i,mode_string)
+
+        #cache the properties
+        num_props = self.get_num_camera_properties()
+        self._prop_numbers_from_name = {}
+        self._prop_names_from_numbers = {}
+        for i in range(num_props):
+            info = self.get_camera_property_info(i)
+            name = info['name']
+            self._prop_numbers_from_name[name] = i
+            self._prop_names_from_numbers[i] = name
+
+    def _get_rosparam_path(self, paramname):
+        return "/%s/%s" % (self._guid, paramname)
+
+    def load_configuration(self):
+        for k,v in self.ROS_PROPERTIES.iteritems():
+            parampath = self._get_rosparam_path(k)
+            paramval = rospy.get_param(parampath, v)
+            if k in self._prop_numbers_from_name:
+                prop_num = self._prop_numbers_from_name[k]
+                #call directly to camiface, these parameters are already from the parameter server
+                cam_iface.Camera.set_camera_property(self,prop_num,paramval,0)
+            elif k == "trigger_mode":
+                print "SET TRIGGER MODE = %d" % paramval
+                if paramval < 0:
+                    cam_iface.Camera.set_framerate(self, 999)
+                else:
+                    cam_iface.Camera.set_trigger_mode_number(self, paramval)
+
+    def set_camera_property(self, prop_num, prop_value, auto):
+        if prop_num in self._prop_names_from_numbers:
+            paramname = self._prop_names_from_numbers[prop_num]
+            if paramname in self.ROS_PROPERTIES:
+                parampath = self._get_rosparam_path(paramname)
+                rospy.set_param(parampath, prop_value)
+        cam_iface.Camera.set_camera_property(self,prop_num,prop_value,auto)
+
+    def set_trigger_mode_number(self, v):
+        print "SAVE TRIGGER MODE"
+        parampath = self._get_rosparam_path("trigger_mode")
+        rospy.set_param(parampath, v)
+
+    def set_framerate(self, *args):
+        raise 1
+
+class FakeCameraFromNetwork(_Camera):
     def __init__(self,id,frame_size):
         self.id = id
         self.frame_size = frame_size
@@ -1722,7 +1824,7 @@ class FakeCameraFromNetwork(FakeCamera):
         self._ensure_remote()
         return self.remote.get_last_framenumber(self.id) # this will block...
 
-class FakeCameraFromRNG(FakeCamera):
+class FakeCameraFromRNG(_Camera):
     def __init__(self,id,frame_size):
         self.id = id
         self.frame_size = frame_size
@@ -1757,7 +1859,7 @@ class FakeCameraFromRNG(FakeCamera):
     def get_last_framenumber(self):
         return self.last_count
 
-class FakeCameraFromFMF(FakeCamera):
+class FakeCameraFromFMF(_Camera):
     def __init__(self,filename):
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
         if 0:
@@ -1909,10 +2011,18 @@ class AppState(object):
         self.options = options
         self._real_quit_function = None
 
-        if options.server is None:
-            self.main_brain_hostname = default_main_brain_hostname
-        else:
-            self.main_brain_hostname = options.server
+        #Performance of the coordinate processor thread is critical. The time
+        #taken to perform DNS lookups is non-trivial (i.e. 2ms x ncameras x 100Hz)
+        #so can cause the camnode to fall behind mainbrain and never catch up. Ensure
+        #that communication is done using ip addresses, and check that these are valid
+        try:
+            self.main_brain_ipaddr = socket.gethostbyname(options.main_brain)
+        except socket.gaierror:
+            raise RuntimeError('Mainbrain host %s not found' % options.main_brain)
+        try:
+            socket.inet_aton(self.main_brain_ipaddr)
+        except socket.error:
+            raise RuntimeError('Mainbrain ip address %s not valid' % self.main_brain_ipaddr)
 
         self.log_message_queue = Queue.Queue()
 
@@ -1942,26 +2052,19 @@ class AppState(object):
                     this_info1 =  cam_iface.get_camera_info(i)
                     mfg,model,guid = this_info1
                     if options.cams_only and guid not in set(options.cams_only.split(',')):
-                        print 'skipping camera %s' % guid
+                        print 'skipping camera guid: %s (cam_id: %d)' % (guid,i)
                         continue
                 except cam_iface.CameraNotAvailable:
                     this_info2 =  ('(not available)',i)
                 else:
+                    print 'choosing camera guid: %s (cam_id: %d)' % (guid,i)
                     this_info2 =  ('\0'.join(this_info1),i)
                 all_cam_info_list.append(this_info2)
 
             all_cam_info_list.sort() # make sure list is always in same order for given cameras
             all_cam_info_list.reverse() # any ordering will do, but reverse for historical reasons
             cam_order = [ x[1] for x in all_cam_info_list]
-            del all_cam_info_list
-            print 'camera order',cam_order
-            for i,cam_no in enumerate(cam_order):
-                try:
-                    avail_string = cam_iface.get_camera_info(cam_no)
-                except cam_iface.CameraNotAvailable:
-                    avail_string = '(not available)'
-                print 'order %d: %s'%(i, avail_string)
-
+            del all_cam_info_list, guid
             num_cams = len(cam_order)
 
         if num_cams == 0:
@@ -1982,6 +2085,18 @@ class AppState(object):
         self.critical_threads = []
 
         for cam_no in range(num_cams):
+            #cam_id is the libcamiface number of the camera
+            cam_id = cam_order[cam_no]
+            try:
+                mfg,model,guid = cam_iface.get_camera_info(cam_id)
+                if not guid:
+                    raise RuntimeError('libcamiface camera %d has invalid guid' % (cam_id, guid))
+                self.all_cam_ids[cam_no] = ros_ensure_valid_name(guid)
+            except cam_iface.CameraNotAvailable:
+                raise RuntimeError('camera %d not available' % cam_no)
+
+            print 'constructing camera guid: %s (cam_id: %d cam_no: %d)' % (guid,cam_id,cam_no)
+            del guid
 
             ##################################################################
             #
@@ -2013,35 +2128,10 @@ class AppState(object):
             globals['use_cmp'].set()
 
             if cam_iface is not None:
-                backend = cam_iface.get_driver_name()
-                N_modes = cam_iface.get_num_modes(cam_order[cam_no])
-                use_mode = None
-                if options.mode_num is not None:
-                    options.show_cam_details = True
-                if options.show_cam_details:
-                    print 'camera info:',cam_iface.get_camera_info(cam_order[cam_no])
-                    print '%d available modes:'%N_modes
-                for i in range(N_modes):
-                    mode_string = cam_iface.get_mode_string(cam_order[cam_no],i)
-                    if options.show_cam_details:
-                        print '  mode %d: %s'%(i,mode_string)
-                    if 'format7_0' in mode_string.lower():
-                        # prefer format7_0
-                        if use_mode is None:
-                            use_mode = i
-                if use_mode is None:
-                    use_mode = 0
-                if options.mode_num is not None:
-                    use_mode = options.mode_num
-
-                cam_iface.Camera._hack_acquire_lock = monkeypatch_camera_method # add our monkeypatch
-                cam = cam_iface.Camera(cam_order[cam_no],options.num_buffers,use_mode)
+                CamifaceCamera._hack_acquire_lock = monkeypatch_camera_method # add our monkeypatch
+                cam = CamifaceCamera(self.all_cam_ids[cam_no],cam_id,options.show_cam_details)
                 cam._monkeypatched_lock = threading.Lock()
-
-                if options.show_cam_details:
-                    print 'using mode %d: %s'%(use_mode, cam_iface.get_mode_string(cam_order[cam_no],use_mode))
                 ImageSourceModel = ImageSourceFromCamera
-
                 initial_image_dict = None
             elif options.simulate_point_extraction: # emulate points
                 # call factory function
@@ -2055,6 +2145,9 @@ class AppState(object):
                 # call factory function
                 (cam, ImageSourceModel,
                  initial_image_dict)  = create_cam_for_emulation_image_source( emulation_image_sources[cam_no] )
+
+            #load backend specific configuration (i.e. from ROS at a backend specific prefix)
+            cam.load_configuration()
 
             if initial_image_dict is None:
                 globals['take_background'].set()
@@ -2077,7 +2170,7 @@ class AppState(object):
                                                 cam = cam,
                                                 buffer_pool = buffer_pool,
                                                 debug_acquire = options.debug_acquire,
-                                                cam_no = cam_no,
+                                                cam_id = self.all_cam_ids[cam_no],
                                                 quit_event = globals['cam_quit_event'],
                                                 )
                 if benchmark: # should maybe be for any simulated camera in non-GUI mode?
@@ -2105,16 +2198,16 @@ class AppState(object):
             Pyro.core.initClient(banner=0)
             port = flydra.common_variables.mainbrain_port
             name = 'main_brain'
-            main_brain_URI = "PYROLOC://%s:%d/%s" % (self.main_brain_hostname,port,name)
+            main_brain_URI = "PYROLOC://%s:%d/%s" % (self.main_brain_ipaddr,port,name)
             try:
                 self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
+                main_brain_version = self.main_brain.get_version()
             except:
                 print 'ERROR while connecting to',main_brain_URI
                 raise
             self.main_brain._setOneway(['set_image','set_fps','close','log_message','receive_missing_data'])
 
             if not options.ignore_version:
-                main_brain_version = self.main_brain.get_version()
                 assert main_brain_version == flydra.version.__version__
 
         ##################################################################
@@ -2165,18 +2258,6 @@ class AppState(object):
 
                 # get settings
                 scalar_control_info = {}
-
-                if 1:
-                    # trigger modes
-                    N_trigger_modes = cam.get_num_trigger_modes()
-                    if options.show_cam_details:
-                        print '  %d available trigger modes:'%N_trigger_modes
-                        for i in range(N_trigger_modes):
-                            mode_string = cam.get_trigger_mode_string(i)
-                            print '  mode %d: %s'%(i,mode_string)
-                    scalar_control_info['N_trigger_modes'] = N_trigger_modes
-                    # XXX TODO: scalar_control_info['trigger_mode'] # current value
-
                 globals['cam_controls'] = {}
                 CAM_CONTROLS = globals['cam_controls']
 
@@ -2265,22 +2346,12 @@ class AppState(object):
 
                 # register self with remote server
                 port = 9834 + cam_no # for local Pyro server
-                if force_cam_ids is None:
-                    device_number = cam_order[cam_no]
-                    this_info1 =  cam_iface.get_camera_info(device_number)
-                    mfg,model,guid = this_info1
-                    force_cam_id = guid.replace('-','_')
-                else:
-                    force_cam_id = force_cam_ids[cam_no]
-                cam_id = self.main_brain.register_new_camera(cam_no,
-                                                             scalar_control_info,
-                                                             port,
-                                                             force_cam_id=force_cam_id,
-                                                             )
-
-                self.all_cam_ids[cam_no]=cam_id
-                self._image_sources[cam_no].assign_cam_id(cam_id)
-                cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(self.all_cam_ids[cam_no])
+                cam_id = self.all_cam_ids[cam_no]
+                self.main_brain.register_new_camera(cam_id,
+                                                    scalar_control_info,
+                                                    port,
+                                                    camnode_ros_name = rospy.get_name())
+                cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(cam_id)
 
                 ##################################################################
                 #
@@ -2310,7 +2381,7 @@ class AppState(object):
                             bg_frame_interval=options.background_frame_interval,
                             bg_frame_alpha=options.background_frame_alpha,
                             cam_no=cam_no,
-                            main_brain_hostname=self.main_brain_hostname,
+                            main_brain_ipaddr=self.main_brain_ipaddr,
                             mask_image=mask,
                             diff_threshold_shared=diff_threshold_shared,
                             clear_threshold_shared=clear_threshold_shared,
@@ -2816,8 +2887,8 @@ class AppState(object):
 def get_app_defaults():
     #some defaults are per camera node, other per flydra instance
     flydra_defaults = dict(
-                       server = socket.gethostbyname(socket.gethostname())
-                       )
+                       main_brain = socket.gethostname())
+
     for k,v in flydra_defaults.items():
         flydra_defaults[k] = rospy.get_param('/flydra/%s' % k, v)
 
@@ -2858,6 +2929,7 @@ def get_app_defaults():
 
 def main():
     rospy.init_node('flydra_camera_node',disable_signals=True)
+    print 'ROS name:',rospy.get_name()
     parse_args_and_run()
 
 def benchmark():
@@ -2870,10 +2942,8 @@ def parse_args_and_run(benchmark=False):
     defaults = get_app_defaults()
     parser.set_defaults(**defaults)
 
-    parser.add_option("--server", dest="server", type='string',
-                      help="hostname of mainbrain SERVER",
-                      metavar="SERVER [default: %default]")
-
+    parser.add_option("--main-brain", type='string',
+                      help="hostname of mainbrain")
     parser.add_option("--n-sigma", type='float',
                       help=("criterion used to determine if a pixel is significantly "
                             "different than the mean [default: %default]"))
