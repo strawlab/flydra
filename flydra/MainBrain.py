@@ -1477,7 +1477,8 @@ class MainBrain(object):
                     scalar_control_info = copy.deepcopy(cam['scalar_control_info'])
                     fqdn = cam['fqdn']
                     port = cam['port']
-            return scalar_control_info, fqdn, port
+                    ip = cam['ip']
+            return scalar_control_info, fqdn, port, ip
 
         def external_get_image_fps_points(self, cam_id):
             ### XXX should extend to include lines
@@ -1670,6 +1671,7 @@ class MainBrain(object):
                                          'caller':caller,
                                          'scalar_control_info':scalar_control_info,
                                          'fqdn':fqdn,
+                                         'ip':caller_ip,
                                          'port':port,
                                          'camnode_ros_name':camnode_ros_name,
                                          'cam2mainbrain_data_port':cam2mainbrain_data_port,
@@ -1809,7 +1811,7 @@ class MainBrain(object):
 
         self.num_cams = 0
         self.MainBrain_cam_ids_copy = [] # keep a copy of all cam_ids connected
-        self._fqdns_by_cam_id = {}
+        self._ip_addrs_by_cam_id = {}
         self.set_new_camera_callback(self.IncreaseCamCounter)
         self.set_new_camera_callback(self.SendExpectedFPS)
         self.set_new_camera_callback(self.SendCalibration)
@@ -1981,17 +1983,17 @@ class MainBrain(object):
         return self.num_cams
 
     def get_scalarcontrolinfo(self, cam_id):
-        sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, port, ip = self.remote_api.external_get_info(cam_id)
         return sci
 
     def get_widthheight(self, cam_id):
-        sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, port, ip = self.remote_api.external_get_info(cam_id)
         w = sci['width']
         h = sci['height']
         return w,h
 
     def get_roi(self, cam_id):
-        sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, port, ip = self.remote_api.external_get_info(cam_id)
         lbrt = sci['roi']
         return lbrt
 
@@ -1999,7 +2001,7 @@ class MainBrain(object):
         cam_ids = self.remote_api.external_get_cam_ids()
         all = {}
         for cam_id in cam_ids:
-            sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+            sci, fqdn, port, ip = self.remote_api.external_get_info(cam_id)
             all[cam_id] = sci
         return all
 
@@ -2022,7 +2024,7 @@ class MainBrain(object):
                 continue # inserted and then removed
             if self.is_saving_data():
                 raise RuntimeError("Cannot add new camera while saving data")
-            scalar_control_info, fqdn, port = self.remote_api.external_get_info(cam_id)
+            scalar_control_info, fqdn, port, ip = self.remote_api.external_get_info(cam_id)
             for new_cam_func in self._new_camera_functions:
                 new_cam_func(cam_id,scalar_control_info,(fqdn,port))
 
@@ -2057,13 +2059,13 @@ class MainBrain(object):
         timestamp_echo_listener_port = flydra.common_variables.timestamp_echo_listener_port
 
         for cam_id in self.MainBrain_cam_ids_copy:
-            if cam_id not in self._fqdns_by_cam_id:
-                sci, fqdn, cam2mainbrain_port = self.remote_api.external_get_info(cam_id)
-                self._fqdns_by_cam_id[cam_id] = fqdn
+            if cam_id not in self._ip_addrs_by_cam_id:
+                sci, fqdn, cam2mainbrain_port, ip = self.remote_api.external_get_info(cam_id)
+                self._ip_addrs_by_cam_id[cam_id] = ip
             else:
-                fqdn = self._fqdns_by_cam_id[cam_id]
+                ip = self._ip_addrs_by_cam_id[cam_id]
             buf = struct.pack( timestamp_echo_fmt1, time.time() )
-            self.outgoing_latency_UDP_socket.sendto(buf,(fqdn,timestamp_echo_listener_port))
+            self.outgoing_latency_UDP_socket.sendto(buf,(ip,timestamp_echo_listener_port))
 
     def get_last_image_fps(self, cam_id):
         # XXX should extend to include lines
