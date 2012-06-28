@@ -33,7 +33,7 @@ Initial-Tolerance: 10
 Do-Global-Iterations: 0
 Global-Iteration-Threshold: 0.5
 Global-Iteration-Max: 100
-Num-Cameras-Fill: 2
+Num-Cameras-Fill: %(num_cameras)s
 Do-Bundle-Adjustment: 1
 Undo-Radial: %(undo_radial_int)s
 Min-Points-Value: 30
