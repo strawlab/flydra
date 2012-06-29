@@ -96,21 +96,8 @@ if os.name == 'posix' and sys.platform != 'darwin':
 
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
-from contextlib import contextmanager
 
 LOG = flydra.log.Log()
-
-@contextmanager
-def monkeypatch_camera_method(self):
-    with self._monkeypatched_lock:
-        # get the lock
-
-        # hack the THREAD_DEBUG stuff in cam_iface_ctypes
-        self.mythread = threading.currentThread()
-
-        yield # run what we need to run
-
-    # release the lock
 
 def ros_ensure_valid_name(name):
     return name.replace('-','_')
@@ -1379,7 +1366,7 @@ class ImageSource(threading.Thread):
         threading.Thread.__init__(self,name='ImageSource')
         self._chain = chain
         self.cam = cam
-        with self.cam._hack_acquire_lock():
+        with self.cam.lock:
             self.image_coding = self.cam.get_pixel_coding()
         self.buffer_pool = buffer_pool
         self.debug_acquire = debug_acquire
@@ -1471,7 +1458,7 @@ class ImageSourceFromCamera(ImageSource):
 
     def _grab_buffer_quick(self):
         try:
-            with self.cam._hack_acquire_lock():
+            with self.cam.lock:
                 trash = self.cam.grab_next_frame_blocking()
         except cam_iface.BuffersOverflowed:
             msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
@@ -1487,7 +1474,7 @@ class ImageSourceFromCamera(ImageSource):
     def _grab_into_buffer(self, _bufim ):
         try_again_condition= False
 
-        with self.cam._hack_acquire_lock():
+        with self.cam.lock:
             # transfer thread ownership into this thread. (This is a
             # semi-evil hack into camera class... Should call a method
             # like self.cam.acquire_thread())
@@ -1605,7 +1592,7 @@ class ImageSourceFakeCamera(ImageSource):
         time.sleep(0.05)
 
     def _grab_into_buffer(self, _bufim ):
-        with self.cam._hack_acquire_lock():
+        with self.cam.lock:
             self.cam.grab_next_frame_into_buf_blocking(_bufim, self.quit_event)
 
             try_again_condition = False
@@ -1616,6 +1603,10 @@ class ImageSourceFakeCamera(ImageSource):
 class _Camera(object):
 
     ROS_PROPERTIES = {}
+
+    def __init__(self, guid):
+        self.guid = guid
+        self.lock = threading.Lock()
 
     def start_camera(self):
         pass
@@ -1670,7 +1661,6 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
     )
 
     def __init__(self, guid, cam_no, show_cam_details, num_buffers=50):
-        self._guid = guid
         self._show_cam_details = show_cam_details
 
         # auto select format7_0 mode
@@ -1710,8 +1700,10 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
             self._prop_numbers_from_name[name] = i
             self._prop_names_from_numbers[i] = name
 
+        _Camera.__init__(self, guid)
+
     def _get_rosparam_path(self, paramname):
-        return "/%s/%s" % (self._guid, paramname)
+        return "/%s/%s" % (self.guid, paramname)
 
     def load_configuration(self):
         for k,v in self.ROS_PROPERTIES.iteritems():
@@ -1743,8 +1735,8 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
         raise 1
 
 class FakeCameraFromNetwork(_Camera):
-    def __init__(self,id,frame_size):
-        self.id = id
+    def __init__(self,guid,frame_size):
+        _Camera.__init__(self, guid)
         self.frame_size = frame_size
         self.remote = None
 
@@ -1764,7 +1756,7 @@ class FakeCameraFromNetwork(_Camera):
         # XXX TODO: implement quit_event checking
         self._ensure_remote()
 
-        pt_list = self.remote.get_point_list(self.id) # this will block...
+        pt_list = self.remote.get_point_list(self.guid) # this will block...
         w,h = self.frame_size
         new_raw = np.asarray( buf )
         assert new_raw.shape == (h,w)
@@ -1777,15 +1769,15 @@ class FakeCameraFromNetwork(_Camera):
 
     def get_last_timestamp(self):
         self._ensure_remote()
-        return self.remote.get_last_timestamp(self.id) # this will block...
+        return self.remote.get_last_timestamp(self.guid) # this will block...
 
     def get_last_framenumber(self):
         self._ensure_remote()
-        return self.remote.get_last_framenumber(self.id) # this will block...
+        return self.remote.get_last_framenumber(self.guid) # this will block...
 
 class FakeCameraFromRNG(_Camera):
-    def __init__(self,id,frame_size):
-        self.id = id
+    def __init__(self,guid,frame_size):
+        _Camera.__init__(self, guid)
         self.frame_size = frame_size
         self.remote = None
         self.last_timestamp = 0.0
@@ -1820,10 +1812,8 @@ class FakeCameraFromRNG(_Camera):
 
 class FakeCameraFromFMF(_Camera):
     def __init__(self,filename):
+        _Camera.__init__(self, filename)
         self.fmf_recarray = FlyMovieFormat.mmap_flymovie( filename )
-        if 0:
-            LOG.warn('short!')
-            self.fmf_recarray = self.fmf_recarray[:600]
 
         self._n_frames = len(self.fmf_recarray)
         self._curframe = SharedValue1(0)
@@ -1906,7 +1896,7 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
         port, width, height = map(int, args)
         cam = FakeCameraFromNetwork(port,(width,height))
         ImageSourceModel = ImageSourceFakeCamera
-        with cam._hack_acquire_lock():
+        with cam.lock:
             l,b,w,h = cam.get_frame_roi()
             del l,b
 
@@ -1921,7 +1911,7 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
         width, height = 640, 480
         cam = FakeCameraFromRNG('fakecam1',(width,height))
         ImageSourceModel = ImageSourceFakeCamera
-        with cam._hack_acquire_lock():
+        with cam.lock:
             l,b,w,h = cam.get_frame_roi()
 
         mean = np.ones( (h,w), dtype=np.uint8 )
@@ -2081,9 +2071,7 @@ class AppState(object):
             globals['use_cmp'].set()
 
             if cam_iface is not None:
-                CamifaceCamera._hack_acquire_lock = monkeypatch_camera_method # add our monkeypatch
                 cam = CamifaceCamera(self.all_cam_ids[cam_no],cam_id,options.show_cam_details)
-                cam._monkeypatched_lock = threading.Lock()
                 ImageSourceModel = ImageSourceFromCamera
                 initial_image_dict = None
             elif options.simulate_point_extraction: # emulate points
@@ -2111,11 +2099,11 @@ class AppState(object):
 
             self.all_cams[cam_no] = cam
             if cam is not None:
-                with cam._hack_acquire_lock():
+                with cam.lock:
                     cam.start_camera()  # start camera
             self.cam_status[cam_no]= 'started'
             if ImageSourceModel is not None:
-                with cam._hack_acquire_lock():
+                with cam.lock:
                     l,b,w,h = cam.get_frame_roi()
                 buffer_pool = PreallocatedBufferPool(FastImage.Size(w,h))
                 del l,b,w,h
@@ -2184,7 +2172,7 @@ class AppState(object):
 
         for cam_no in range(num_cams):
             cam = self.all_cams[cam_no]
-            with cam._hack_acquire_lock():
+            with cam.lock:
 
                 left,top,width,height = cam.get_frame_roi()
                 del left,top
@@ -2625,7 +2613,7 @@ class AppState(object):
         for key in cmds.keys():
             LOG.info('  handle_commands: key %s' % key)
             if key == 'set':
-                with cam._hack_acquire_lock():
+                with cam.lock:
 
                     for property_name,value in cmds['set'].iteritems():
                         LOG.info('setting camera property %s=%s' % (property_name, value))
@@ -2764,7 +2752,7 @@ class AppState(object):
             elif key == 'quit':
                 self._image_sources[cam_no].join(0.1)
                 # XXX TODO: quit and join chain threads
-                with cam._hack_acquire_lock():
+                with cam.lock:
                     cam.close()
                 self.cam_status[cam_no] = 'destroyed'
                 cmds=self.main_brain.close(cam_id)
