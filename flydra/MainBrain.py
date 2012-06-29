@@ -1841,6 +1841,7 @@ class MainBrain(object):
                 raise RuntimeError("Cannot add new camera while saving data")
             scalar_control_info, fqdn, port, ip = self.remote_api.external_get_info(cam_id)
             for new_cam_func in self._new_camera_functions:
+                print cam_id,"*"*40,scalar_control_info,(fqdn,port)
                 new_cam_func(cam_id,scalar_control_info,(fqdn,port))
 
         for cam_id in old_cam_ids:

@@ -559,6 +559,40 @@ class ProcessCamClass(object):
             points.append( pt )
         return points
 
+    def _publish_ros_image(self, framenumber, hw_roi_frame, chainbuf):
+        now = time.time()
+        if now-self.lasttime+0.005 > 1./(self.rosrate):
+            msg = Image()
+            msg.header.seq=framenumber
+            msg.header.stamp=rospy.Time.from_sec(now) # XXX TODO: once camera trigger is ROS node, get accurate timestamp
+            msg.header.frame_id = "0"
+
+            npbuf = np.array(hw_roi_frame)
+            (height,width) = npbuf.shape
+
+            msg.height = height
+            msg.width = width
+            msg.encoding = chainbuf.image_coding
+            pixel_format = chainbuf.image_coding
+            if pixel_format == 'MONO8':
+                msg.encoding = 'mono8'
+            elif pixel_format in ('RAW8:RGGB','MONO8:RGGB'):
+                msg.encoding = 'bayer_rggb8'
+            elif pixel_format in ('RAW8:BGGR','MONO8:BGGR'):
+                msg.encoding = 'bayer_bggr8'
+            elif pixel_format in ('RAW8:GBRG','MONO8:GBRG'):
+                msg.encoding = 'bayer_gbrg8'
+            elif pixel_format in ('RAW8:GRBG','MONO8:GRBG'):
+                msg.encoding = 'bayer_grbg8'
+            else:
+                raise ValueError('unknown pixel format "%s"'%pixel_format)
+
+            msg.step = width
+            msg.data = npbuf.tostring() # let numpy convert to string
+
+            self.publisher.publish(msg)
+            self.lasttime = now
+
     def mainloop(self):
 
         disable_ifi_warning = self.options.disable_ifi_warning
@@ -728,39 +762,9 @@ class ProcessCamClass(object):
                 timestamp=chainbuf.timestamp
                 framenumber=chainbuf.framenumber
 
-                # publish raw image on ROS network
-                now = time.time()
-                if now-self.lasttime+0.005 > 1./(self.rosrate):
-                    msg = Image()
-                    msg.header.seq=framenumber
-                    msg.header.stamp=rospy.Time.from_sec(now) # XXX TODO: once camera trigger is ROS node, get accurate timestamp
-                    msg.header.frame_id = "0"
-
-                    npbuf = np.array(hw_roi_frame)
-                    (height,width) = npbuf.shape
-
-                    msg.height = height
-                    msg.width = width
-                    msg.encoding = chainbuf.image_coding
-                    pixel_format = chainbuf.image_coding
-                    if pixel_format == 'MONO8':
-                        msg.encoding = 'mono8'
-                    elif pixel_format in ('RAW8:RGGB','MONO8:RGGB'):
-                        msg.encoding = 'bayer_rggb8'
-                    elif pixel_format in ('RAW8:BGGR','MONO8:BGGR'):
-                        msg.encoding = 'bayer_bggr8'
-                    elif pixel_format in ('RAW8:GBRG','MONO8:GBRG'):
-                        msg.encoding = 'bayer_gbrg8'
-                    elif pixel_format in ('RAW8:GRBG','MONO8:GRBG'):
-                        msg.encoding = 'bayer_grbg8'
-                    else:
-                        raise ValueError('unknown pixel format "%s"'%pixel_format)
-
-                    msg.step = width
-                    msg.data = npbuf.tostring() # let numpy convert to string
-
-                    self.publisher.publish(msg)
-                    self.lasttime = now
+                # publish on ROS network
+                if not self.benchmark:
+                    self._publish_ros_image(framenumber, hw_roi_frame, chainbuf)
 
                 if 1:
                     if old_fn is None:
@@ -2028,19 +2032,6 @@ class AppState(object):
         self.critical_threads = []
 
         for cam_no in range(num_cams):
-            #cam_id is the libcamiface number of the camera
-            cam_id = cam_order[cam_no]
-            try:
-                mfg,model,guid = cam_iface.get_camera_info(cam_id)
-                if not guid:
-                    raise RuntimeError('libcamiface camera %d has invalid guid' % (cam_id, guid))
-                self.all_cam_ids[cam_no] = ros_ensure_valid_name(guid)
-            except cam_iface.CameraNotAvailable:
-                raise RuntimeError('camera %d not available' % cam_no)
-
-            LOG.info('constructing camera guid: %s (cam_id: %d cam_no: %d)' % (guid,cam_id,cam_no))
-            del guid
-
             ##################################################################
             #
             # Initialize "global" variables
@@ -2070,22 +2061,35 @@ class AppState(object):
             #print 'not using ongoing variance estimate'
             globals['use_cmp'].set()
 
-            if cam_iface is not None:
-                cam = CamifaceCamera(self.all_cam_ids[cam_no],cam_id,options.show_cam_details)
-                ImageSourceModel = ImageSourceFromCamera
-                initial_image_dict = None
+            if benchmark: # emulate full images with random number generator
+                # call factory function
+                (cam, ImageSourceModel, initial_image_dict) = \
+                      create_cam_for_emulation_image_source( '<rng>' )
             elif options.simulate_point_extraction: # emulate points
                 # call factory function
                 (cam, ImageSourceModel,
                  initial_image_dict)  = create_cam_for_emulation_image_source( image_sources[cam_no] )
-            elif benchmark: # emulate full images with random number generator
-                # call factory function
-                (cam, ImageSourceModel, initial_image_dict) = \
-                      create_cam_for_emulation_image_source( '<rng>' )
-            else: # emulate full images
+            elif emulation_image_sources: # emulate full images
                 # call factory function
                 (cam, ImageSourceModel,
                  initial_image_dict)  = create_cam_for_emulation_image_source( emulation_image_sources[cam_no] )
+            else:
+                #cam_id is the libcamiface number of the camera
+                cam_id = cam_order[cam_no]
+                try:
+                    mfg,model,guid = cam_iface.get_camera_info(cam_id)
+                    if not guid:
+                        raise RuntimeError('libcamiface camera %d has invalid guid' % (cam_id, guid))
+                    self.all_cam_ids[cam_no] = ros_ensure_valid_name(guid)
+                except cam_iface.CameraNotAvailable:
+                    raise RuntimeError('camera %d not available' % cam_no)
+
+                LOG.info('constructing camera guid: %s (cam_id: %d cam_no: %d)' % (guid,cam_id,cam_no))
+                del guid
+                cam = CamifaceCamera(self.all_cam_ids[cam_no],cam_id,options.show_cam_details)
+                ImageSourceModel = ImageSourceFromCamera
+                initial_image_dict = None
+
 
             #load backend specific configuration (i.e. from ROS at a backend specific prefix)
             cam.load_configuration()
