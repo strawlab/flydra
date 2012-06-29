@@ -795,7 +795,7 @@ def kalmanize(src_filename,
         print 'saved %s'%accum_frame_spread_filename
 
     if max_all_check_times > sync_error_threshold:
-        if 0:
+        if 1:
             if do_full_kalmanization:
                 print 'max_all_check_times %.2f msec'%(
                     max_all_check_times*1000.0)
