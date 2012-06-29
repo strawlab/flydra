@@ -1335,7 +1335,8 @@ class MainBrain(object):
                     fqdn = cam['fqdn']
                     port = cam['port']
                     ip = cam['ip']
-            return scalar_control_info, fqdn, port, ip
+                    camnode_ros_name = cam['camnode_ros_name']
+            return scalar_control_info, fqdn, port, ip, camnode_ros_name
 
         def external_get_image_fps_points(self, cam_id):
             ### XXX should extend to include lines
@@ -1798,17 +1799,17 @@ class MainBrain(object):
         return self.num_cams
 
     def get_scalarcontrolinfo(self, cam_id):
-        sci, fqdn, port, ip = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
         return sci
 
     def get_widthheight(self, cam_id):
-        sci, fqdn, port, ip = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
         w = sci['width']
         h = sci['height']
         return w,h
 
     def get_roi(self, cam_id):
-        sci, fqdn, port, ip = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
         lbrt = sci['roi']
         return lbrt
 
@@ -1816,7 +1817,7 @@ class MainBrain(object):
         cam_ids = self.remote_api.external_get_cam_ids()
         all = {}
         for cam_id in cam_ids:
-            sci, fqdn, port, ip = self.remote_api.external_get_info(cam_id)
+            sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
             all[cam_id] = sci
         return all
 
@@ -1839,10 +1840,9 @@ class MainBrain(object):
                 continue # inserted and then removed
             if self.is_saving_data():
                 raise RuntimeError("Cannot add new camera while saving data")
-            scalar_control_info, fqdn, port, ip = self.remote_api.external_get_info(cam_id)
+            sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
             for new_cam_func in self._new_camera_functions:
-                print cam_id,"*"*40,scalar_control_info,(fqdn,port)
-                new_cam_func(cam_id,scalar_control_info,(fqdn,port))
+                new_cam_func(cam_id,sci,(fqdn,port))
 
         for cam_id in old_cam_ids:
             for old_cam_func in self._old_camera_functions:
@@ -1876,7 +1876,7 @@ class MainBrain(object):
 
         for cam_id in self.MainBrain_cam_ids_copy:
             if cam_id not in self._ip_addrs_by_cam_id:
-                sci, fqdn, cam2mainbrain_port, ip = self.remote_api.external_get_info(cam_id)
+                sci, fqdn, cam2mainbrain_port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
                 self._ip_addrs_by_cam_id[cam_id] = ip
             else:
                 ip = self._ip_addrs_by_cam_id[cam_id]
