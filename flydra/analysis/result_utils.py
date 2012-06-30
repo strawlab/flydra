@@ -153,7 +153,7 @@ def get_caminfo_dicts(results):
         camn2cam_id[camn]=cam_id
     return camn2cam_id, cam_id2camns
 
-def get_results(filename,mode='r+'):
+def get_results(filename,mode='r+',create_camera_summary=False):
     h5file = PT.openFile(filename,mode=mode)
     if hasattr(h5file.root,'data3d_best'):
         frame_col = h5file.root.data3d_best.cols.frame
@@ -182,7 +182,7 @@ def get_results(filename,mode='r+'):
     ##            timestamp_col.createIndex()
     ##            print 'done'
 
-        if 0 and not hasattr(h5file.root,'data2d_camera_summary') and h5file._isWritable():
+        if create_camera_summary and not hasattr(h5file.root,'data2d_camera_summary'):
             print 'creating data2d camera summary ...'
             create_data2d_camera_summary(h5file)
             print 'done'
