@@ -294,8 +294,8 @@ def create_data2d_camera_summary(results):
     class Data2DCameraSummary(PT.IsDescription):
         cam_id             = PT.StringCol(16,pos=0)
         camn               = PT.Int32Col(pos=1)
-        start_frame        = PT.Int32Col(pos=2)
-        stop_frame         = PT.Int32Col(pos=3)
+        start_frame        = PT.UInt64Col(pos=2)
+        stop_frame         = PT.UInt64Col(pos=3)
         start_timestamp    = PT.FloatCol(pos=4)
         stop_timestamp     = PT.FloatCol(pos=5)
 
@@ -534,8 +534,8 @@ def make_exact_movie_info2(results,movie_dir=None):
     class ExactMovieInfo(PT.IsDescription):
         cam_id             = PT.StringCol(16,pos=0)
         filename           = PT.StringCol(255,pos=1)
-        start_frame        = PT.Int32Col(pos=2)
-        stop_frame         = PT.Int32Col(pos=3)
+        start_frame        = PT.UInt64Col(pos=2)
+        stop_frame         = PT.UInt64Col(pos=3)
         start_timestamp    = PT.FloatCol(pos=4)
         stop_timestamp     = PT.FloatCol(pos=5)
 
