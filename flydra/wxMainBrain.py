@@ -1181,7 +1181,7 @@ class wxMainBrainApp(wx.App):
         try:
             self.main_brain.start_saving_data(save_filename)
             self.statusbar.SetStatusText("Saving data to '%s'"%save_filename)
-            self.statusbar.SetStatusText("",2)
+            self.statusbar.SetStatusText(save_filename,2)
         except:
             self.statusbar.SetStatusText("Error saving data to '%s', see console"%save_filename)
             self.statusbar.SetStatusText("",2)
