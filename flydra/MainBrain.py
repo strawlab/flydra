@@ -147,8 +147,7 @@ TextLogDescription = flydra.data_descriptions.TextLogDescription
 class CamSyncInfo(PT.IsDescription):
     cam_id = PT.StringCol(256,pos=0)
     camn   = PT.UInt16Col(pos=1)
-    frame0 = PT.FloatCol(pos=2)
-    hostname = PT.StringCol(2048,pos=0)
+    hostname = PT.StringCol(2048,pos=2)
 
 class HostClockInfo(PT.IsDescription):
     remote_hostname  = PT.StringCol(255,pos=0)
@@ -722,9 +721,8 @@ class CoordinateProcessor(threading.Thread):
             self.last_timestamps.append(IMPOSSIBLE_TIMESTAMP) # arbitrary impossible number
             self.last_framenumbers_delay.append(-1) # arbitrary impossible number
             self.last_framenumbers_skip.append(-1) # arbitrary impossible number
-            self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no,
-                                              'frame0':IMPOSSIBLE_TIMESTAMP}
-            self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, IMPOSSIBLE_TIMESTAMP, cam_hostname) )
+            self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no}
+            self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, cam_hostname) )
         return cam2mainbrain_data_port
 
     def disconnect(self,cam_id):
@@ -787,7 +785,6 @@ class CoordinateProcessor(threading.Thread):
         self.cam_id2cam_no[cam_id] = absolute_cam_no
 
         self.general_save_info[cam_id]['absolute_cam_no']=absolute_cam_no
-        self.general_save_info[cam_id]['frame0']=timestamp
 
         self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, timestamp) )
 
@@ -2342,7 +2339,6 @@ class MainBrain(object):
         for cam_id,dd in general_save_info.iteritems():
             self.h5cam_info.row['cam_id'] = cam_id
             self.h5cam_info.row['camn']   = dd['absolute_cam_no']
-            self.h5cam_info.row['frame0'] = dd['frame0']
             with self.remote_api.cam_info_lock:
                 self.h5cam_info.row['hostname'] = self.remote_api.cam_info[cam_id]['fqdn']
             self.h5cam_info.row.append()
@@ -2477,10 +2473,9 @@ class MainBrain(object):
         if self.h5cam_info is not None:
             cam_info_row = self.h5cam_info.row
             for cam_info in list_of_cam_info:
-                cam_id, absolute_cam_no, frame0, camhost = cam_info
+                cam_id, absolute_cam_no, camhost = cam_info
                 cam_info_row['cam_id'] = cam_id
                 cam_info_row['camn']   = absolute_cam_no
-                cam_info_row['frame0'] = frame0
                 cam_info_row['hostname'] = camhost
                 cam_info_row.append()
 
