@@ -1,8 +1,6 @@
 from __future__ import division
-if 1:
-    # deal with old files, forcing to numpy
-    import tables.flavor
-    tables.flavor.restrict_flavors(keep=['numpy'])
+import tables.flavor
+tables.flavor.restrict_flavors(keep=['numpy'])
 
 import numpy
 from numpy import nan, pi
@@ -33,7 +31,7 @@ Initial-Tolerance: 10
 Do-Global-Iterations: 0
 Global-Iteration-Threshold: 0.5
 Global-Iteration-Max: 100
-Num-Cameras-Fill: %(num_cameras)s
+Num-Cameras-Fill: %(num_cameras_fill)s
 Do-Bundle-Adjustment: 1
 Undo-Radial: %(undo_radial_int)s
 Min-Points-Value: 30
@@ -292,32 +290,38 @@ def save_calibration_directory(IdMat=None,
                                radial_distortion=False,
                                square_pixels=True,
                                reconstructor=None, # only needed if radial_distortion==True
-                               ):
+                               num_cameras_fill=-1):
     basename = 'basename'
-    if 1:
 
-        # This will overwrite the file that was just created with
-        # better defaults.
+    # This will overwrite the file that was just created with
+    # better defaults.
 
-        if radial_distortion:
-            if reconstrcutor is None:
-                raise ValueError('reconstructor must be specified if '
-                                 'radial_distortion is True')
-            for i, cam_id in enumerate(cam_ids):
-                fname = '%s%d.rad'%(basename,i+1)
-                scc = reconstructor.get_SingleCameraCalibration(cam_id)
-                scc.helper.save_to_rad_file( os.path.join(calib_dir,fname) )
+    if radial_distortion:
+        if reconstrcutor is None:
+            raise ValueError('reconstructor must be specified if '
+                             'radial_distortion is True')
+        for i, cam_id in enumerate(cam_ids):
+            fname = '%s%d.rad'%(basename,i+1)
+            scc = reconstructor.get_SingleCameraCalibration(cam_id)
+            scc.helper.save_to_rad_file( os.path.join(calib_dir,fname) )
 
-        vars = dict(
-            basename = basename,
-            num_cameras = len(cam_ids),
-            undo_radial_int = int(radial_distortion),
-            square_pixels_int = int(square_pixels),
-            )
+    num_cameras = len(cam_ids)            
+    if num_cameras_fill == -1:
+        num_cameras_fill = num_cameras
+    elif num_cameras_fill > num_cameras:
+        raise ValueError('num_cameras_fill cannot be greater than num_cameras')
 
-        fd = open( os.path.join(calib_dir,'multicamselfcal.cfg'), mode='w' )
-        fd.write( config_template % vars )
-        fd.close()
+    vars = dict(
+        basename = basename,
+        num_cameras = num_cameras,
+        num_cameras_fill = num_cameras_fill,
+        undo_radial_int = int(radial_distortion),
+        square_pixels_int = int(square_pixels),
+        )
+
+    fd = open( os.path.join(calib_dir,'multicamselfcal.cfg'), mode='w' )
+    fd.write( config_template % vars )
+    fd.close()
 
     save_ascii_matrix(IdMat,os.path.join(calib_dir,'IdMat.dat'))
     save_ascii_matrix(points,os.path.join(calib_dir,'points.dat'))
@@ -381,6 +385,13 @@ To ignore 3D trajectories and simply use all data::
                       type="int",
                       default=3)
 
+    parser.add_option("--num-cameras-fill",
+                      type="int",
+                      help="when a point is missing from one camera, how many other cameras should be should "
+                      "be used to calculate the position of the missing point. In general, set this to 0 "
+                      "(disable) or -1 (use all cameras). Only choose other values if you know what you are doing.",
+                      default=-1)
+
     (options, args) = parser.parse_args()
 
     if len(args)>2:
@@ -406,7 +417,7 @@ To ignore 3D trajectories and simply use all data::
           use_kalman_data=options.use_kalman_data,
           start=options.start,
           stop=options.stop,
-          options=options,
+          options=options
           )
 
 if __name__=='__main__':
