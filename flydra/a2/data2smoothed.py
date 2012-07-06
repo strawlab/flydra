@@ -226,7 +226,11 @@ def convert(infilename,
         )
     ca.close()
 
-def main():
+def export_flydra_hdf5():
+    main(hdf5_only=True)
+
+def main(hdf5_only=False):
+    # hdf5_only is to maintain backwards compatibility...
     usage = '%prog FILE [options]'
     parser = OptionParser(usage)
     parser.add_option("--dest-file", type='string', default=None,
@@ -235,7 +239,8 @@ def main():
                       help="hdf5 file with 2d data FILE2D used to calculate timestamp information",
                       metavar="FILE2D")
     parser.add_option("--no-timestamps",action='store_true',dest='no_timestamps',default=False)
-    parser.add_option("--hdf5",action='store_true',default=False,help='save output as .hdf5 file (not .mat)')
+    if not hdf5_only:
+        parser.add_option("--hdf5",action='store_true',default=False,help='save output as .hdf5 file (not .mat)')
     parser.add_option("--start-obj-id",default=None,type='int',help='last obj_id to save')
     parser.add_option("--stop-obj-id",default=None,type='int',help='last obj_id to save')
     parser.add_option("--obj-only", type="string")
@@ -271,9 +276,14 @@ def main():
         warnings.warn('DeprecationWarning: --stop will be phased out in favor of --stop-obj-id')
         options.stop_obj_id = options.stop
 
+    if hdf5_only:
+        do_hdf5 = True
+    else:
+        do_hdf5 = options.hdf5
+
     infilename = args[0]
     if options.dest_file is None:
-        if options.hdf5:
+        if do_hdf5:
             # import h5py early so if we don't have it we know sooner rather than later.
             import h5py
             outfilename = os.path.splitext(infilename)[0] + '_smoothed.h5'
@@ -291,7 +301,7 @@ def main():
             obj_only=options.obj_only,
             dynamic_model_name=options.dynamic_model,
             return_smoothed_directions = True,
-            hdf5 = options.hdf5,
+            hdf5 = do_hdf5,
             **kwargs)
 
 if __name__=='__main__':

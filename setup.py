@@ -147,6 +147,7 @@ setup(name='flydra',
     'kdviewer = flydra.a2.kdviewer:main',
     'kdmovie_saver = flydra.a2.kdmovie_saver:main',
     'flydra_analysis_data2smoothed = flydra.a2.data2smoothed:main',
+    'flydra_analysis_export_flydra_hdf5 = flydra.a2.data2smoothed:export_flydra_hdf5',
     'flydra_textlog2csv = flydra.a2.flydra_textlog2csv:main',
     'flydra_analysis_print_kalmanize_makefile_location = flydra.a2.print_kalmanize_makefile_location:main',
 
