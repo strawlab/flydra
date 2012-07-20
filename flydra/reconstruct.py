@@ -1301,7 +1301,7 @@ class Reconstructor:
         return self._helper
 
     def find3d(self, cam_ids_and_points2d, return_X_coords = True,
-               return_line_coords = True, orientation_consensus = 0):
+               return_line_coords = True, orientation_consensus = 0, undistort = False):
         """Find 3D coordinate using all data given
 
         Implements a linear triangulation method to find a 3D
@@ -1313,8 +1313,7 @@ class Reconstructor:
         hypothesis_testing_algorithm__find_best_3d() in
         reconstruct_utils.
 
-        The data should already be undistorted before passing to this
-        function.
+        This function can optionally undistort points.
 
         """
         svd = scipy.linalg.svd
@@ -1328,10 +1327,14 @@ class Reconstructor:
             if len(value_tuple)==2:
                 # only point information ( no line )
                 x,y = value_tuple
+                if undistort:
+                    x,y = self.undistort(cam_id,(x,y))
                 have_line_coords = False
                 if return_line_coords:
                     raise ValueError('requesting 3D line coordinates, but no 2D line coordinates given')
             else:
+                if undistort:
+                    raise ValueError('Undistoring line coords not implemneted')
                 # get shape information from each view of a blob:
                 x,y,area,slope,eccentricity, p1,p2,p3,p4 = value_tuple
                 have_line_coords = True
