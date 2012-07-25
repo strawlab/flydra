@@ -413,8 +413,7 @@ def kalmanize(src_filename,
                     options.force_minimum_eccentricity):
                     raise ValueError('could not force minimum_eccentricity')
 
-            reconstructor_meters = reconst_orig_units.get_scaled(
-                reconst_orig_units.get_scale_factor())
+            reconstructor_meters = reconst_orig_units
 
             if dest_filename is None:
                 dest_filename = os.path.splitext(
@@ -471,7 +470,6 @@ def kalmanize(src_filename,
 
                 tracker = Tracker(
                     reconstructor_meters,
-                    scale_factor=reconst_orig_units.get_scale_factor(),
                     kalman_model=kalman_model,
                     save_all_data=True,
                     area_threshold=area_threshold,
@@ -678,15 +676,6 @@ def kalmanize(src_filename,
 
                         (x_undistorted,y_undistorted) = reconst_orig_units.undistort(
                             cam_id,(x_distorted,y_distorted))
-                        if 0:
-                            (x_undistorted_m,y_undistorted_m) = reconstructor_meters.undistort(
-                                cam_id,(x_distorted,y_distorted))
-                            if x_undistorted != x_undistorted_m:
-                                raise ValueError('scaled reconstructors have different '
-                                                 'distortion!?')
-                            if y_undistorted != y_undistorted_m:
-                                raise ValueError('scaled reconstructors have different '
-                                                 'distortion!?')
 
                         (area,slope,eccentricity,frame_pt_idx) = (row['area'],
                                                                   row['slope'],

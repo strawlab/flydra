@@ -674,15 +674,12 @@ class CoordinateProcessor(threading.Thread):
             self.reconstructor_meters = None
             return
 
-        # get version that operates in meters
-        scale_factor = self.reconstructor.get_scale_factor()
-        self.reconstructor_meters = self.reconstructor.get_scaled(scale_factor)
+        # backwards-compatibility cruft (delete me)
+        self.reconstructor_meters = self.reconstructor
 
     def set_new_tracker(self,kalman_model=None):
         # called from main thread, must lock to send to realtime coord thread
-        scale_factor = self.reconstructor.get_scale_factor()
         tracker = flydra.kalman.flydra_tracker.Tracker(self.reconstructor_meters,
-                                                       scale_factor=scale_factor,
                                                        kalman_model=kalman_model)
         tracker.set_killed_tracker_callback( self.enqueue_finished_tracked_object )
         with self.tracker_lock:
@@ -1181,14 +1178,13 @@ class CoordinateProcessor(threading.Thread):
                                     # "hypothesis testing" algorithm on remaining data to see if there
                                     # are new objects.
 
-                                    scale_factor = self.tracker.scale_factor
                                     results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
                                     Xs = []
                                     for result in results:
                                         if result is None:
                                             continue
                                         obj_id,last_xhat,P = result
-                                        X = last_xhat[0]/scale_factor, last_xhat[1]/scale_factor, last_xhat[2]/scale_factor
+                                        X = last_xhat[0], last_xhat[1], last_xhat[2]
                                         Xs.append(X)
                                     if len(Xs):
                                         best_realtime_data = Xs, 0.0
@@ -1583,12 +1579,12 @@ class MainBrain(object):
                 with cam_lock:
                     cam['commands']['clear_bg']=None
 
-        def external_set_cal( self, cam_id, pmat, intlin, intnonlin, scale_factor):
+        def external_set_cal( self, cam_id, pmat, intlin, intnonlin):
             with self.cam_info_lock:
                 cam = self.cam_info[cam_id]
                 cam_lock = cam['lock']
                 with cam_lock:
-                    cam['commands']['cal']= pmat, intlin, intnonlin, scale_factor
+                    cam['commands']['cal']= pmat, intlin, intnonlin
                     cam['is_calibrated'] = True
         # === thread boundary =========================================
 
@@ -1923,8 +1919,7 @@ class MainBrain(object):
             pmat = self.reconstructor.get_pmat(cam_id)
             intlin = self.reconstructor.get_intrinsic_linear(cam_id)
             intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
-            scale_factor = self.reconstructor.get_scale_factor()
-            self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin, scale_factor)
+            self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin)
 
     def DecreaseCamCounter(self,cam_id):
         try:
@@ -2161,9 +2156,8 @@ class MainBrain(object):
             pmat = self.reconstructor.get_pmat(cam_id)
             intlin = self.reconstructor.get_intrinsic_linear(cam_id)
             intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
-            scale_factor = self.reconstructor.get_scale_factor()
             if cam_id in connected_cam_ids:
-                self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin, scale_factor )
+                self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin )
 
     def clear_calibration(self):
         if self.is_saving_data():

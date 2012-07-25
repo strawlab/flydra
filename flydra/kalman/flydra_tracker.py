@@ -267,7 +267,6 @@ class Tracker:
     """
     def __init__(self,
                  reconstructor_meters,
-                 scale_factor=None,
                  kalman_model=None,
                  max_frames_skipped=25,
                  save_all_data=False,
@@ -282,7 +281,6 @@ class Tracker:
         arguments
         =========
         reconstructor_meters - reconstructor instance with internal units of meters
-        scale_factor - how to convert from arbitrary units (of observations) into meters (e.g. 1e-3 for mm)
         kalman_model - dictionary of Kalman filter parameters
         area_threshold - minimum area to consider for tracking use
 
@@ -301,11 +299,6 @@ class Tracker:
         self.cur_obj_id = 0
 
         # set values for passing to TrackedObject
-        if scale_factor is None:
-            print 'WARNING: scale_factor set to 1e-3 (because no value was specified)',__file__
-            self.scale_factor = 1e-3
-        else:
-            self.scale_factor = scale_factor
         self.max_frames_skipped = max_frames_skipped
 
         if kalman_model is None:
@@ -319,7 +312,7 @@ class Tracker:
         tracker."""
 
         believably_new = True
-        X = Xmm*self.scale_factor
+        X = Xmm
         min_dist_to_believe_new_meters = self.kalman_model['min_dist_to_believe_new_meters']
         min_dist_to_believe_new_nsigma = self.kalman_model['min_dist_to_believe_new_sigma']
         results = self.live_tracked_objects.rmap( 'distance_in_meters_and_nsigma', X ) # reverse map
@@ -460,7 +453,6 @@ class Tracker:
             first_observation_Lcoords_orig_units,
             first_observation_camns,
             first_observation_idxs,
-            scale_factor=self.scale_factor,
             kalman_model=self.kalman_model,
             save_all_data=self.save_all_data,
             area_threshold=self.area_threshold,

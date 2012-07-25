@@ -438,19 +438,12 @@ class ProcessCamClass(object):
 
         self._hlper = None
         self._pmat = None
-        self._scale_factor = None # for 3D calibration stuff
-        self.cam_no_str = str(cam_no)
 
         self._chain = camnode_utils.ChainLink()
         self._initial_image_dict = initial_image_dict
 
     def get_chain(self):
         return self._chain
-
-    def get_scale_factor(self):
-        return self._scale_factor
-    def set_scale_factor(self,value):
-        self._scale_factor = value
 
     def get_roi(self):
         return self.realtime_analyzer.roi
@@ -467,7 +460,6 @@ class ProcessCamClass(object):
             self._pmat = None
             self._camera_center = None
             self._pmat_inv = None
-            self._scale_factor = None
             self._pmat_meters = None
             self._pmat_meters_inv = None
             self._camera_center_meters = None
@@ -492,9 +484,7 @@ class ProcessCamClass(object):
         self._camera_center = nx.array( [ X/T, Y/T, Z/T, 1.0 ] )
         self._pmat_inv = numpy.dual.pinv(self._pmat)
 
-        scale_array = numpy.ones((3,4))
-        scale_array[:,3] = self._scale_factor # mulitply last column by scale_factor
-        self._pmat_meters = scale_array*self._pmat # element-wise multiplication
+        self._pmat_meters = self._pmat # element-wise multiplication
         self._pmat_meters_inv = numpy.dual.pinv(self._pmat_meters)
         P = self._pmat_meters
         # find camera center in 3D world coordinates
@@ -2234,7 +2224,6 @@ class AppState(object):
                     current_value = new_value
                     scalar_control_info[props['name']] = (current_value,
                                                           min_value, max_value)
-                    # XXX FIXME: should transmit is_scaled_quantity info (scaled_unit_name, scale_gain, scale_offset)
                     prop_names.append( props['name'] )
 
                 scalar_control_info['camprops'] = prop_names
@@ -2826,12 +2815,16 @@ class AppState(object):
             elif key == 'stop_small_recording':
                 small_saver.stop_recording()
             elif key == 'cal':
+<<<<<<< HEAD
                 print 'setting calibration'
                 pmat, intlin, intnonlin, scale_factor = cmds[key]
+=======
+                LOG.info('setting calibration')
+                pmat, intlin, intnonlin = cmds[key]
+>>>>>>> 161f76d... Remove scale factors from flydra.reconstructor. Closes #5.
 
                 # XXX TODO: FIXME: thread crossing bug
                 # these three should always be done together in this order:
-                cam_processor.set_scale_factor( scale_factor )
                 cam_processor.set_pmat( pmat )
                 cam_processor.make_reconstruct_helper(intlin, intnonlin) # let grab thread make one
             else:

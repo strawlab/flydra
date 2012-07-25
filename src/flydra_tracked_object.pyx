@@ -134,7 +134,6 @@ cdef class TrackedObject:
     cdef double area_threshold, area_threshold_for_orientation
 
     cdef object reconstructor_meters, my_kalman
-    cdef double scale_factor
     cdef object distorted_pixel_euclidian_distance_accept
     cdef double max_variance
     cdef object ekf_observation_covariance_pixels
@@ -154,7 +153,6 @@ cdef class TrackedObject:
                  first_observation_Lcoords_orig_units, # first data
                  first_observation_camns,
                  first_observation_idxs,
-                 scale_factor=None,
                  kalman_model=None,
                  save_all_data=False,
                  double area_threshold=0.0,
@@ -171,7 +169,6 @@ cdef class TrackedObject:
         obj_id - unique identifier for each object
         frame - frame number of first observation data
         first_observation_orig_units - first observation (in arbitrary units)
-        scale_factor - how to convert from arbitrary units (of observations) into meters (e.g. 1e-3 for mm)
         kalman_model - Kalman parameters
         area_threshold - minimum area to consider for tracking use
         """
@@ -187,18 +184,13 @@ cdef class TrackedObject:
         self.fake_timestamp = fake_timestamp
 
         self.current_frameno = frame
-        if scale_factor is None:
-            print 'WARNING: no scale_factor given in flydra_tracker, assuming 1e-3'
-            self.scale_factor = 1e-3
-        else:
-            self.scale_factor = scale_factor
-        first_observation_meters = first_observation_orig_units*self.scale_factor
+        first_observation_meters = first_observation_orig_units
         if first_observation_Lcoords_orig_units is None:
             first_observation_Lcoords = NO_LCOORDS
         else:
             line3d_orig_units = flydra.geom.line_from_HZline(first_observation_Lcoords_orig_units) # PlueckerLine instance
             loc = line3d_orig_units.closest() # closest point on line to origin
-            loc_meters = loc*self.scale_factor
+            loc_meters = loc
             line3d_meters = flydra.geom.line_from_points( loc_meters, loc_meters+line3d_orig_units.direction() )
             first_observation_Lcoords = line3d_meters.to_hz()
         ss = kalman_model['ss']
