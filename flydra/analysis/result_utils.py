@@ -181,11 +181,14 @@ def get_results(filename,mode='r+',create_camera_summary=False):
     ##            print 'creating index on data2d_distorted.cols.timestamp ...'
     ##            timestamp_col.createIndex()
     ##            print 'done'
+        pass
 
-        if create_camera_summary and not hasattr(h5file.root,'data2d_camera_summary'):
-            print 'creating data2d camera summary ...'
-            create_data2d_camera_summary(h5file)
-            print 'done'
+    if create_camera_summary and not hasattr(h5file.root,'data2d_camera_summary'):
+        if not hasattr(h5file.root,'data2d_distorted'):
+            raise ValueError('need data2d_distorted to make camera summary')
+        print 'creating data2d camera summary ...'
+        create_data2d_camera_summary(h5file)
+        print 'done'
     return h5file
 
 def get_f_xyz_L_err( results, max_err = 10, typ = 'best', include_timestamps=False):
