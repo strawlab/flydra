@@ -135,7 +135,6 @@ setup(name='flydra',
 # analysis - not yet classified
     'flydra_analysis_convert_to_mat = flydra.analysis.flydra_analysis_convert_to_mat:main',
     'flydra_analysis_plot_clock_drift = flydra.analysis.flydra_analysis_plot_clock_drift:main',
-    'flydra_analysis_plot_cameras = flydra.analysis.flydra_analysis_plot_cameras:main',
     'flydra_analysis_plot_kalman_2d = flydra.a2.plot_kalman_2d:main',
     'flydra_analysis_plot_summary = flydra.a2.plot_summary:main',
     'flydra_analysis_plot_timeseries_2d_3d = flydra.a2.plot_timeseries_2d_3d:main',
