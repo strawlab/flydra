@@ -47,7 +47,6 @@ def do_show_cameras(results, renderers, frustums=True, axes=True, labels=True, c
         R = results
     else:
         R = reconstruct.Reconstructor(results)
-    R = R.get_scaled( R.get_scale_factor() )
 
     if centers:
         cam_centers = tvtk.Points()

@@ -6,8 +6,7 @@ import pkg_resources
 class TestTracker(unittest.TestCase):
     def setUp(self):
         caldir = pkg_resources.resource_filename('flydra','sample_calibration')
-        self.reconst_orig_units = flydra.reconstruct.Reconstructor(caldir)
-        self.reconstructor_meters = self.reconst_orig_units.get_scaled(self.reconst_orig_units.get_scale_factor())
+        self.reconstructor = flydra.reconstruct.Reconstructor(caldir)
 
     def test_encode_decode_roundtrip(self):
         if 1:
@@ -17,8 +16,7 @@ class TestTracker(unittest.TestCase):
         for model_name in models.keys():
             kalman_model = models[ model_name ]
 
-            x = flydra_tracker.Tracker(self.reconstructor_meters,
-                                       scale_factor=self.reconst_orig_units.get_scale_factor(),
+            x = flydra_tracker.Tracker(self.reconstructor,
                                        kalman_model=kalman_model,
                                        )
             n_packets = 3

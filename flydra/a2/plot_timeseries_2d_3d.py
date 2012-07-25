@@ -271,7 +271,6 @@ def doit(
                              'because it is missing the reconstructor '
                              'and ability to get framenumbers')
         R = reconstruct.Reconstructor(data_file)
-        R = R.get_scaled( R.get_scale_factor() )
 
         if options.obj_only is not None:
             use_obj_ids = options.obj_only
