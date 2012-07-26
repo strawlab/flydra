@@ -490,6 +490,15 @@ class SingleCameraCalibration:
     def get_pmat(self):
         return self.Pmat
 
+    def get_copy(self):
+        Pmat = np.array(self.Pmat,copy=True)
+        copy = SingleCameraCalibration(cam_id=self.cam_id,
+                                       Pmat=Pmat,
+                                       res=self.res,
+                                       helper=self.helper,
+                                       )
+        return copy
+
     def get_aligned_copy(self, M):
         if self.scale_factor != 1.0:
             warnings.warn('aligning calibration without unity scale')
@@ -1102,6 +1111,13 @@ class Reconstructor:
 
         if close_cal_source:
             use_cal_source.close()
+
+    def get_copy(self):
+        orig_sccs = [self.get_SingleCameraCalibration(cam_id)
+                     for cam_id in self.cam_ids]
+        aligned_sccs = [scc.get_copy() for scc in orig_sccs]
+        return Reconstructor(aligned_sccs,
+                             minimum_eccentricity=self.minimum_eccentricity)
 
     def get_aligned_copy(self, M):
         orig_sccs = [self.get_SingleCameraCalibration(cam_id)
