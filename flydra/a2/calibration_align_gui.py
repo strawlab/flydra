@@ -14,6 +14,7 @@ from mayavi.sources.api import VTKXMLFileReader, VTKDataSource
 from mayavi.modules.api import Outline, ScalarCutPlane, Streamline
 import numpy
 import numpy as np
+import tables
 
 import mayavi.tools.sources as sources
 from mayavi.sources.array_source import ArraySource
@@ -37,6 +38,14 @@ from pyface.api import Widget, Window
 from tvtk.pyface.api import Scene, DecoratedScene
 from pyface.api import SplitApplicationWindow
 from pyface.api import FileDialog, OK
+
+try:
+    import pcl
+    have_pcl = True
+    pcl_import_error = None
+except ImportError, err:
+    have_pcl = False
+    pcl_import_error = err
 
 def hom2vtk(arr):
     """convert 3D homogeneous coords to VTK"""
@@ -169,7 +178,9 @@ class IVTKWithCalGUI(SplitApplicationWindow):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('h5_filename')
+    parser.add_argument('filename',
+                        help='name of flydra .hdf5 or .pcd (libpcl) file',
+                        )
 
     parser.add_argument("--stim-xml",
                         type=str,
@@ -189,32 +200,69 @@ def main():
                       help="use object ids from list in text file",
                       )
 
+    parser.add_argument(
+        "-r", "--reconstructor", dest="reconstructor_path",
+        type=str,
+        help=("calibration/reconstructor path (if not specified, "
+              "defaults to FILE)"))
+
     args = parser.parse_args()
     options = args # optparse OptionParser backwards compatibility
 
-    h5_filename=args.h5_filename
+    # Is the input an h5 file?
+    if tables.isHDF5File(args.filename):
+        h5_filename=args.filename
+    else:
+        h5_filename=None
+
+    # If not, is it a .pcd (point cloud) file?
+    if h5_filename is None:
+        if not have_pcl:
+            print >> sys.stderr, "PCL required to try non-HDF5 file as .PCD file"
+            raise pcl_import_error
+        pcd = pcl.PointCloud()
+        pcd.from_file( args.filename )
+        use_obj_ids = [0]
+    else:
+        pcd = None
 
     if options.obj_only is not None:
         obj_only = core_analysis.parse_seq(options.obj_only)
     else:
         obj_only = None
 
-    ca = core_analysis.get_global_CachingAnalyzer()
-    obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(
-        h5_filename)
-    R = reconstruct.Reconstructor(data_file).get_scaled()
-    fps = result_utils.get_fps( data_file, fail_on_error=False )
+    reconstructor_path = args.reconstructor_path
 
-    if fps is None:
-        fps = 100.0
-        warnings.warn('Setting fps to default value of %f'%fps)
+    if h5_filename is not None:
+        ca = core_analysis.get_global_CachingAnalyzer()
+        obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(
+            h5_filename)
+        if reconstructor_path is None:
+            reconstructor_path = data_file
+    else:
+        if reconstructor_path is None:
+            raise RuntimeError('must specify reconstructor from CLI if not using .h5 files')
+
+    R = reconstruct.Reconstructor(reconstructor_path).get_scaled()
+
+    if h5_filename is not None:
+        fps = result_utils.get_fps( data_file, fail_on_error=False )
+
+        if fps is None:
+            fps = 100.0
+            warnings.warn('Setting fps to default value of %f'%fps)
+    else:
+        fps = 1.0
 
     if options.stim_xml is None:
         raise ValueError(
             'stim_xml must be specified (how else will you align the data?')
 
     if options.stim_xml is not None:
-        file_timestamp = data_file.filename[4:19]
+        if h5_filename is not None:
+            file_timestamp = data_file.filename[4:19]
+        else:
+            file_timestamp = None
         stim_xml = xml_stimulus.xml_stimulus_from_filename(
             options.stim_xml,
             timestamp_string=file_timestamp,
@@ -262,13 +310,18 @@ def main():
         use_obj_ids = numpy.array(obj_only)
 
     for obj_id_enum,obj_id in enumerate(use_obj_ids):
-        rows = ca.load_data( obj_id, data_file,
-                                use_kalman_smoothing=False,
-                                #dynamic_model_name = dynamic_model_name,
-                                #frames_per_second=fps,
-                                #up_dir=up_dir,
-                                )
-        verts = numpy.array( [rows['x'], rows['y'], rows['z']] ).T
+        if h5_filename is not None:
+            rows = ca.load_data( obj_id, data_file,
+                                    use_kalman_smoothing=False,
+                                    #dynamic_model_name = dynamic_model_name,
+                                    #frames_per_second=fps,
+                                    #up_dir=up_dir,
+                                    )
+            verts = numpy.array( [rows['x'], rows['y'], rows['z']] ).T
+        else:
+            assert obj_id==0
+            verts = pcd.to_array()
+            print 'verts.shape',verts.shape
         if len(verts)>=3:
             verts_central_diff = verts[2:,:] - verts[:-2,:]
             dt = 1.0/fps
@@ -279,11 +332,11 @@ def main():
         else:
             speeds = numpy.zeros( (verts.shape[0],) )
 
-        if len(rows['x']) != len(speeds):
+        if verts.shape[0] != len(speeds):
             raise ValueError('mismatch length of x data and speeds')
-        x.append( rows['x'] )
-        y.append( rows['y'] )
-        z.append( rows['z'] )
+        x.append( verts[:,0] )
+        y.append( verts[:,1] )
+        z.append( verts[:,2] )
         speed.append(speeds)
 
     if 0:
@@ -302,7 +355,8 @@ def main():
                     z.append( [vi[2]] )
                     speed.append( [100.0] )
 
-    data_file.close()
+    if h5_filename:
+        data_file.close()
     x = np.concatenate(x)
     y = np.concatenate(y)
     z = np.concatenate(z)
