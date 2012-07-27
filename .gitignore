@@ -10,3 +10,4 @@ flydra/camnode_colors.c
 src/reconstruct_utils.c
 src/fastgeom.c
 flydra.egg-info
+src/flydra_tracked_object.c
