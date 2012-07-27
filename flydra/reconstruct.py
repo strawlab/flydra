@@ -1202,10 +1202,6 @@ class Reconstructor:
             fname = 'basename%d.rad'%(i+1)
             self._helper[cam_id].save_to_rad_file( os.path.join(new_dirname,fname) )
 
-        fd = open(os.path.join(new_dirname,'calibration_units.txt'),mode='w')
-        fd.write(self.get_calibration_unit()+'\n')
-        fd.close()
-
     def save_to_xml_filename(self, xml_filename):
         root = ET.Element("root")
         self.add_element(root)
@@ -1643,6 +1639,9 @@ def align_calibration():
      parser.add_option("--align-raw", type='string',
                        help="raw alignment file path")
 
+     parser.add_option("--align-json", type='string',
+                       help=".json alignment file path")
+
      parser.add_option("--align-cams", type='string',
                        help="new camera locations alignment file path")
 
@@ -1661,13 +1660,10 @@ def align_calibration():
      if options.orig_reconstructor is None:
          raise ValueError('--orig-reconstructor must be specified')
 
-     if options.align_raw is None and options.align_cams is None:
+     if options.align_raw is None and options.align_cams is None and \
+             options.align_json is None:
          raise ValueError(
-             'either --align-raw or --align-cams must be specified')
-
-     if options.align_raw is not None and options.align_cams is not None:
-         raise ValueError(
-             'only one of --align-raw and --align-cams can be specified')
+             'either --align-raw or --align-cams --align-json must be specified')
 
      src=options.orig_reconstructor
      origR = Reconstructor(cal_source=src)
@@ -1696,8 +1692,7 @@ def align_calibration():
          s = mylocals['s']
          R = np.array(mylocals['R'])
          t = np.array(mylocals['t'])
-     else:
-         assert options.align_cams is not None
+     elif options.align_cams is not None:
          cam_ids = srcR.get_cam_ids()
          ccs = [srcR.get_camera_center(cam_id)[:,0] for cam_id in cam_ids]
          print 'ccs',ccs
@@ -1706,6 +1701,15 @@ def align_calibration():
          new_cam_centers = load_ascii_matrix(options.align_cams).T
          print 'new_cam_centers',new_cam_centers.T
          s,R,t = align.estsimt(orig_cam_centers,new_cam_centers)
+     else:
+         assert options.align_json is not None
+         import json
+         with open(options.align_json,mode='r') as fd:
+             buf = fd.read()
+         mylocals = json.loads(buf)
+         s = mylocals['s']
+         R = np.array(mylocals['R'])
+         t = np.array(mylocals['t'])
 
      print 's',s
      print 'R',R
