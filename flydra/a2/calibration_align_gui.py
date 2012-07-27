@@ -15,6 +15,7 @@ from mayavi.modules.api import Outline, ScalarCutPlane, Streamline
 import numpy
 import numpy as np
 import tables
+import sys
 
 import mayavi.tools.sources as sources
 from mayavi.sources.array_source import ArraySource
@@ -195,7 +196,7 @@ def main():
                       metavar="RADIUS")
 
     parser.add_argument("--obj-only", type=str)
-    
+
     parser.add_argument("--obj-filelist", type=str,
                       help="use object ids from list in text file",
                       )
@@ -271,9 +272,9 @@ def main():
             fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
         except xml_stimulus.WrongXMLTypeError:
             pass
-            
-            
-            
+
+
+
         else:
             include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp(
                 timestamp_string=file_timestamp )
@@ -292,21 +293,21 @@ def main():
     y = []
     z = []
     speed = []
-    
+
     if options.obj_filelist is not None:
         obj_filelist=options.obj_filelist
     else:
         obj_filelist=None
-    
+
     if obj_filelist is not None:
         obj_only = 1
-    
+
     if obj_only is not None:
         if obj_filelist is not None:
             data = np.loadtxt(obj_filelist,delimiter=',')
-            obj_only = np.array(data[:,0], dtype='int') 
+            obj_only = np.array(data[:,0], dtype='int')
             print obj_only
-    
+
         use_obj_ids = numpy.array(obj_only)
 
     for obj_id_enum,obj_id in enumerate(use_obj_ids):
