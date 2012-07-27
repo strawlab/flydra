@@ -16,6 +16,7 @@ import numpy
 import numpy as np
 import tables
 import sys
+import json
 
 import mayavi.tools.sources as sources
 from mayavi.sources.array_source import ArraySource
@@ -54,11 +55,13 @@ def hom2vtk(arr):
 
 class CalibrationAlignmentWindow(Widget):
     params = traits.Instance( talign.Alignment )
+    save_align_json = traits.Button(label='Save alignment data as .json file')
     save_new_cal = traits.Button(label='Save new calibration as .xml file')
     save_new_cal_dir = traits.Button(label='Save new calibration as directory')
 
     traits_view = View( Group( ( Item( 'params', style='custom',
                                        show_label=False),
+                                 Item( 'save_align_json', show_label = False ),
                                  Item( 'save_new_cal', show_label = False ),
                                  Item( 'save_new_cal_dir', show_label = False ),
                                  )),
@@ -115,6 +118,17 @@ class CalibrationAlignmentWindow(Widget):
         scaled = self.reconstructor
         alignedR = scaled.get_aligned_copy(M)
         return alignedR
+
+    def _save_align_json_fired(self):
+        wildcard = 'JSON files (*.json)|*.json|' + FileDialog.WILDCARD_ALL
+        dialog = FileDialog(#parent=self.window.control,
+                            title='Save alignment as .json file',
+                            action='save as', wildcard=wildcard
+                            )
+        if dialog.open() == OK:
+            buf = json.dumps(self.params.as_dict())
+            with open(dialog.path,mode='w') as fd:
+                fd.write(buf)
 
     def _save_new_cal_fired(self):
         wildcard = 'XML files (*.xml)|*.xml|' + FileDialog.WILDCARD_ALL

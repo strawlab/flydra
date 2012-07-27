@@ -95,3 +95,26 @@ class Alignment(traits.HasTraits):
         T = np.dot(flip,T)
         #T = np.dot(T,flip)
         return T
+
+    def as_dict(self):
+        if self.flip_x or self.flip_y or self.flip_z:
+            raise ValueError('cannot represent alignment with flip as simple dictionary') # or maybe we can in R mat?
+
+        qx = cgtypes.quat().fromAngleAxis( self.r_x*D2R, cgtypes.vec3(1,0,0))
+        qy = cgtypes.quat().fromAngleAxis( self.r_y*D2R, cgtypes.vec3(0,1,0))
+        qz = cgtypes.quat().fromAngleAxis( self.r_z*D2R, cgtypes.vec3(0,0,1))
+        Rx = cgmat2np(qx.toMat3())
+        Ry = cgmat2np(qy.toMat3())
+        Rz = cgmat2np(qz.toMat3())
+        _R = np.dot(Rx, np.dot(Ry,Rz))
+
+        s = float(self.s)
+        t = map( float, [self.tx, self.ty, self.tz] )
+        R = []
+        for row in _R:
+            R.append( map( float, [i for i in row] ) )
+
+        result = {'s':s,
+                  't':t,
+                  'R':R}
+        return result
