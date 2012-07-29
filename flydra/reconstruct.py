@@ -486,6 +486,15 @@ class SingleCameraCalibration:
     def get_pmat(self):
         return self.Pmat
 
+    def get_copy(self):
+        Pmat = np.array(self.Pmat,copy=True)
+        copy = SingleCameraCalibration(cam_id=self.cam_id,
+                                       Pmat=Pmat,
+                                       res=self.res,
+                                       helper=self.helper,
+                                       )
+        return copy
+
     def get_aligned_copy(self, M):
         import flydra.talign
         aligned_Pmat = flydra.talign.align_pmat(M,self.Pmat)
@@ -711,19 +720,25 @@ def SingleCameraCalibration_fromfile(filename):
                                    res=res,
                                    helper=helper)
 
-def SingleCameraCalibration_from_xml(elem):
+def SingleCameraCalibration_from_xml(elem, helper=None):
+    """ loads a camera calibration from an Elementree XML node """
     assert ET.iselement(elem)
     assert elem.tag == "single_camera_calibration"
     cam_id = elem.find("cam_id").text
     pmat = numpy.array(numpy.mat(elem.find("calibration_matrix").text))
     res = numpy.array(numpy.mat(elem.find("resolution").text))[0,:]
-    helper_elem = elem.find("non_linear_parameters")
-    helper = reconstruct_utils.ReconstructHelper_from_xml(helper_elem)
+    if not helper:
+        helper_elem = elem.find("non_linear_parameters")
+        helper = reconstruct_utils.ReconstructHelper_from_xml(helper_elem)
 
     return SingleCameraCalibration(cam_id=cam_id,
                                    Pmat=pmat,
                                    res=res,
                                    helper=helper)
+
+def SingleCameraCalibration_from_xmlfile(fname, *args, **kwargs):
+    root = ET.parse(fname).getroot()
+    return SingleCameraCalibration_from_xml(root, *args, **kwargs)
 
 def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
     M = numpy.asarray(pmat)
@@ -789,6 +804,7 @@ def pretty_dump(e, ind=''):
     return s
 
 def Reconstructor_from_xml(elem):
+    """ Loads a reconstructor from an Elementree XML node """
     assert ET.iselement(elem)
     assert elem.tag == "multi_camera_reconstructor"
     sccs = []
@@ -1206,7 +1222,7 @@ class Reconstructor:
         return self._helper
 
     def find3d(self, cam_ids_and_points2d, return_X_coords = True,
-               return_line_coords = True, orientation_consensus = 0):
+               return_line_coords = True, orientation_consensus = 0, undistort = False):
         """Find 3D coordinate using all data given
 
         Implements a linear triangulation method to find a 3D
@@ -1218,8 +1234,7 @@ class Reconstructor:
         hypothesis_testing_algorithm__find_best_3d() in
         reconstruct_utils.
 
-        The data should already be undistorted before passing to this
-        function.
+        This function can optionally undistort points.
 
         """
         svd = scipy.linalg.svd
@@ -1233,10 +1248,14 @@ class Reconstructor:
             if len(value_tuple)==2:
                 # only point information ( no line )
                 x,y = value_tuple
+                if undistort:
+                    x,y = self.undistort(cam_id,(x,y))
                 have_line_coords = False
                 if return_line_coords:
                     raise ValueError('requesting 3D line coordinates, but no 2D line coordinates given')
             else:
+                if undistort:
+                    raise ValueError('Undistoring line coords not implemneted')
                 # get shape information from each view of a blob:
                 x,y,area,slope,eccentricity, p1,p2,p3,p4 = value_tuple
                 have_line_coords = True
@@ -1522,6 +1541,9 @@ def align_calibration():
      parser.add_option("--align-raw", type='string',
                        help="raw alignment file path")
 
+     parser.add_option("--align-json", type='string',
+                       help=".json alignment file path")
+
      parser.add_option("--align-cams", type='string',
                        help="new camera locations alignment file path")
 
@@ -1540,13 +1562,10 @@ def align_calibration():
      if options.orig_reconstructor is None:
          raise ValueError('--orig-reconstructor must be specified')
 
-     if options.align_raw is None and options.align_cams is None:
+     if options.align_raw is None and options.align_cams is None and \
+             options.align_json is None:
          raise ValueError(
-             'either --align-raw or --align-cams must be specified')
-
-     if options.align_raw is not None and options.align_cams is not None:
-         raise ValueError(
-             'only one of --align-raw and --align-cams can be specified')
+             'either --align-raw or --align-cams --align-json must be specified')
 
      src=options.orig_reconstructor
      origR = Reconstructor(cal_source=src)
@@ -1575,8 +1594,7 @@ def align_calibration():
          s = mylocals['s']
          R = np.array(mylocals['R'])
          t = np.array(mylocals['t'])
-     else:
-         assert options.align_cams is not None
+     elif options.align_cams is not None:
          cam_ids = srcR.get_cam_ids()
          ccs = [srcR.get_camera_center(cam_id)[:,0] for cam_id in cam_ids]
          print 'ccs',ccs
@@ -1585,6 +1603,15 @@ def align_calibration():
          new_cam_centers = load_ascii_matrix(options.align_cams).T
          print 'new_cam_centers',new_cam_centers.T
          s,R,t = align.estsimt(orig_cam_centers,new_cam_centers)
+     else:
+         assert options.align_json is not None
+         import json
+         with open(options.align_json,mode='r') as fd:
+             buf = fd.read()
+         mylocals = json.loads(buf)
+         s = mylocals['s']
+         R = np.array(mylocals['R'])
+         t = np.array(mylocals['t'])
 
      print 's',s
      print 'R',R
