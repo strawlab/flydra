@@ -1,20 +1,7 @@
 from setuptools import setup, find_packages
 from distutils.core import Extension # actually monkey-patched by setuptools
+from Cython.Build import cythonize
 import sys
-
-# Make sure that some dependencies are installed
-try:
-    # Copied from pytables's setup.py.
-    from Pyrex.Distutils import build_ext
-except ImportError:
-    print ("Please install pyrex (or manually run cython on the .pyx files). "
-           "I need this to compile some extensions.")
-    print ("Try: ")
-    print ("      pip install pyrex")
-    print ("")
-    print ("Type 'c' to continue without pyrex")
-    if raw_input('Press any key to continue...').lower() != 'c':
-        sys.exit(-1)
 
 # Set this to true to compile the extensions that depend on FastImage.
 # Those are not strictly necessary for running some of the analysis tools.
@@ -77,7 +64,7 @@ ext_modules.append(Extension(name='flydra.pmat_jacobian',
                              sources=['src/pmat_jacobian.pyx']))
 
 ext_modules.append(Extension(name='flydra.kalman.flydra_tracked_object',
-                             sources=['src/flydra_tracked_object.c'])) # auto-generate with cython
+                             sources=['src/flydra_tracked_object.pyx']))
 
 ext_modules.append(Extension(name='flydra.mahalanobis',
                              sources=['src/mahalanobis.pyx']))
@@ -86,9 +73,9 @@ ext_modules.append(Extension(name='flydra.fastgeom',
                              sources=['src/fastgeom.pyx']))
 
 ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
-                             sources=['flydra/a2/fastfinder_help.c'],
+                             sources=['flydra/a2/fastfinder_help.pyx'],
                              include_dirs=[np.get_include()],
-                             )) # auto-generate with cython
+                             ))
 
 setup(name='flydra',
       version=version,
@@ -97,7 +84,7 @@ setup(name='flydra',
       description='multi-headed fly-tracking beast',
       packages = find_packages(),
       test_suite = 'nose.collector',
-      ext_modules= ext_modules,
+      ext_modules= cythonize(ext_modules),
       entry_points = {
     'console_scripts': [
 
