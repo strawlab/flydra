@@ -1021,6 +1021,13 @@ class Reconstructor:
         if close_cal_source:
             use_cal_source.close()
 
+    def get_scaled(self):
+        """return a copy of self. (DEPRECATED.)"""
+        warnings.warn("reconstruct.Reconstructor.get_scaled() is deprecated. "
+                      "It is maintained only for backwards-compatibility.",
+                      DeprecationWarning)
+        return self.get_copy()
+
     def get_copy(self):
         orig_sccs = [self.get_SingleCameraCalibration(cam_id)
                      for cam_id in self.cam_ids]
