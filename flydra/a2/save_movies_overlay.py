@@ -180,7 +180,6 @@ def doit(fmf_filename=None,
                              'and ability to get framenumbers')
 
         R = reconstruct.Reconstructor(data_file)
-        R = R.get_scaled( R.get_scale_factor() )
 
         print 'loading frame numbers for kalman objects (estimates)'
         kalman_rows = []
