@@ -23,7 +23,7 @@ version = flydra.version.__version__
 import numpy as np
 
 ext_modules = []
-
+pyrex_modules = [] # really Pyrex, not Cython
 
 
 
@@ -47,7 +47,7 @@ if not LIGHT_INSTALL:
 
 
 
-    ext_modules.append(Extension(name='flydra.camnode_colors',
+    pyrex_modules.append(Extension(name='flydra.camnode_colors',
                                  sources=['flydra/camnode_colors.pyx','flydra/colors.c']+ipp_sources,
                                  include_dirs=ipp_include_dirs,
                                  library_dirs=ipp_library_dirs,
@@ -84,7 +84,7 @@ setup(name='flydra',
       description='multi-headed fly-tracking beast',
       packages = find_packages(),
       test_suite = 'nose.collector',
-      ext_modules= cythonize(ext_modules),
+      ext_modules= cythonize(ext_modules)+pyrex_modules,
       entry_points = {
     'console_scripts': [
 
