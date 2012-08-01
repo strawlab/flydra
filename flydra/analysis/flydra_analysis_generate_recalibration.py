@@ -261,10 +261,6 @@ def do_it(filename,
     Res = numpy.array( Res )
 
     if reconstructor is not None:
-        fd = open(os.path.join(calib_dir,'calibration_units.txt'),mode='w')
-        fd.write(reconstructor.get_calibration_unit()+'\n')
-        fd.close()
-
         cam_centers = numpy.asarray([reconstructor.get_camera_center(cam_id)[:,0]
                                      for cam_id in cam_ids])
         save_ascii_matrix(cam_centers,os.path.join(calib_dir,'original_cam_centers.dat'))
