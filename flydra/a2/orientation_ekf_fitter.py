@@ -9,7 +9,7 @@ import flydra.reconstruct as reconstruct
 import collections, time, sys, os
 from optparse import OptionParser
 
-from image_based_orientation import openFileSafe,clear_col
+from tables_tools import clear_col, openFileSafe
 import flydra.kalman.ekf as kalman_ekf
 import flydra.analysis.PQmath as PQmath
 import flydra.geom as geom
