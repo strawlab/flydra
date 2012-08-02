@@ -50,10 +50,14 @@ def make_ReconstructHelper(*args,**kw):
 
 cdef class ReconstructHelper:
     cdef readonly double fc1, fc2, cc1, cc2
+    cdef readonly double fc1p, fc2p, cc1p, cc2p
     cdef readonly double k1, k2, p1, p2
     cdef readonly double alpha_c
+    cdef readonly int simple
 
-    def __init__(self, fc1, fc2, cc1, cc2, k1, k2, p1, p2, alpha_c=0 ):
+    def __init__(self, fc1, fc2, cc1, cc2, k1, k2, p1, p2, alpha_c=0,
+                 fc1p=None, fc2p=None, cc1p=None, cc2p=None,
+                 ):
         """create instance of ReconstructHelper
 
         ReconstructHelper(fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
@@ -64,20 +68,40 @@ cdef class ReconstructHelper:
         p - tangential distortion parameters (non-linear)
         alpha_c - skew between X and Y pixel axes
         """
-        self.fc1 = fc1
-        self.fc2 = fc2
-        self.cc1 = cc1
-        self.cc2 = cc2
+        self.fc1 = self.fc1p = fc1
+        self.fc2 = self.fc2p = fc2
+        self.cc1 = self.cc1p = cc1
+        self.cc2 = self.cc2p = cc2
         self.k1 = k1
         self.k2 = k2
         self.p1 = p1
         self.p2 = p2
         self.alpha_c = alpha_c
 
+        # "simple" means that the forward and back normalizations from
+        # pixel coords to normalized coords are identical.
+
+        self.simple=1
+        if fc1p is not None and fc1p!=fc1:
+            self.simple = 0
+            self.fc1p = fc1p
+        if fc2p is not None and fc2p!=fc2:
+            self.simple = 0
+            self.fc2p = fc2p
+        if cc1p is not None and cc1p!=cc1:
+            self.simple = 0
+            self.cc1p = cc1p
+        if cc2p is not None and cc2p!=cc2:
+            self.simple = 0
+            self.cc2p = cc2p
+        if not self.simple and self.alpha_c != 0:
+            raise NotImplementedError('skew not tested with non-simple distortion model')
+
     def __reduce__(self):
         """this allows ReconstructHelper to be pickled"""
         args = (self.fc1, self.fc2, self.cc1, self.cc2,
-                self.k1, self.k2, self.p1, self.p2, self.alpha_c)
+                self.k1, self.k2, self.p1, self.p2, self.alpha_c,
+                self.fc1p, self.fc2p, self.cc1p, self.cc2p)
         return (make_ReconstructHelper, args)
 
     def add_element(self, parent):
@@ -85,17 +109,22 @@ cdef class ReconstructHelper:
         assert ET.iselement(parent)
         elem = ET.SubElement(parent,"non_linear_parameters")
 
-        for name in ['fc1','fc2','cc1','cc2','k1','k2','p1','p2','alpha_c']:
+        for name in ['fc1','fc2','cc1','cc2','k1','k2','p1','p2','alpha_c',
+                     'fc1p', 'fc2p', 'cc1p', 'cc2p',
+                     ]:
             e = ET.SubElement(elem, name)
             e.text = repr( getattr(self,name) )
 
     def as_obj_for_json(self):
         result = {}
-        for name in ['fc1','fc2','cc1','cc2','k1','k2','p1','p2','alpha_c']:
+        for name in ['fc1','fc2','cc1','cc2','k1','k2','p1','p2','alpha_c',
+                     'fc1p', 'fc2p', 'cc1p', 'cc2p']:
             result[name] = getattr(self,name)
         return result
 
     def save_to_rad_file( self, fname, comments=None ):
+        if not self.simple:
+            raise ValueError('cannot encode non-simple intrinsic model as a .rad file')
         rad_fd = open(fname,'w')
         K = self.get_K()
         nlparams = self.get_nlparams()
@@ -132,7 +161,8 @@ cdef class ReconstructHelper:
 
         if isinstance(other, ReconstructHelper):
             isequal = (numpy.allclose(self.get_K(),other.get_K()) and
-                      numpy.allclose(self.get_nlparams(),other.get_nlparams()) )
+                       numpy.allclose(self.get_Kp(),other.get_Kp()) and
+                       numpy.allclose(self.get_nlparams(),other.get_nlparams()) )
         else:
             isequal = False
 
@@ -150,6 +180,12 @@ cdef class ReconstructHelper:
         K = numpy.array((( self.fc1, self.alpha_c*self.fc1, self.cc1),
                          ( 0,        self.fc2,              self.cc2),
                          ( 0,        0,                     1       )))
+        return K
+
+    def get_Kp(self):
+        K = numpy.array((( self.fc1p, 0,                     self.cc1p),
+                         ( 0,         self.fc2p,             self.cc2p),
+                         ( 0,         0,                     1       )))
         return K
 
     def get_nlparams(self):
@@ -196,8 +232,8 @@ cdef class ReconstructHelper:
 
         # undoradial.m
 
-        xl = (self.fc1)*x + (self.fc1*self.alpha_c)*y + (self.cc1)
-        yl = (self.fc2)*y + (self.cc2)
+        xl = (self.fc1p)*x + (self.fc1p*self.alpha_c)*y + (self.cc1p)
+        yl = (self.fc2p)*y + (self.cc2p)
         return (xl, yl)
 
     def distort(self, double xl, double yl):
@@ -205,8 +241,10 @@ cdef class ReconstructHelper:
 
         cdef double x, y, r_2, term1, xd, yd
 
-        x = ( xl - self.cc1 ) / self.fc1
-        y = ( yl - self.cc2 ) / self.fc2
+        assert self.alpha_c==0 # there's no way the following code works otherwise
+
+        x = ( xl - self.cc1p ) / self.fc1p
+        y = ( yl - self.cc2p ) / self.fc2p
 
         r_2 = x*x + y*y
         r_4 = r_2**2
@@ -235,6 +273,9 @@ cdef class ReconstructHelper:
         f = self.fc1, self.fc2 # focal length
         c = self.cc1, self.cc2 # center
         k = self.k1, self.k2, self.p1, self.p2, 0  # NL terms: r^2, r^4, tan1, tan2, r^6
+
+        assert self.simple
+        assert self.alpha_c==0
 
         imnew = flydra.undistort.rect(numpy_image, f=f, c=c, k=k) # perform the undistortion
         imnew = imnew.astype(numpy.uint8)
