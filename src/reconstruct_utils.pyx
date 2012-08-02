@@ -222,7 +222,7 @@ cdef class ReconstructHelper:
         x = xd
         y = yd
 
-        for i from 0<=i<20:
+        for i from 0<=i<5:
             r_2 = x*x + y*y
             k_radial = 1.0 + (self.k1) * r_2 + (self.k2) * r_2*r_2
             delta_x = 2.0 * (self.p1)*x*y + (self.p2)*(r_2 + 2.0*x*x)
