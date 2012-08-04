@@ -189,11 +189,22 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
     ss = base_model_dict['ss']
     os = base_model_dict['os']
 
-    Q = numpy.zeros((ss,ss))
-    for i in range(0,3):
-        Q[i,i] = (0.01)**2
-    for i in range(3,6):
-        Q[i,i] = (0.5)**2
+    if 1:
+        # this form is after N. Shimkin's lecture notes in
+        # Estimation and Identification in Dynamical Systems
+        # http://webee.technion.ac.il/people/shimkin/Estimation09/ch8_target.pdf
+        assert ss==6
+        T33 = dt**3/3.0
+        T22 = dt**2/2.0
+        T   = dt
+        Q = numpy.array( [[ T33,   0,   0,     T22,   0,   0],
+                          [   0, T33,   0,       0, T22,   0],
+                          [   0,   0, T33,       0,   0, T22],
+                          [   T22,   0, 0,       T,   0,   0],
+                          [     0, T22, 0,       0,   T,   0],
+                          [     0, 0, T22,       0,   0,   T]])
+    # the scale of the covariance
+    Q = 0.0001*Q
 
     # measurement noise covariance matrix
     R = 1e-3*numpy.eye(os)
