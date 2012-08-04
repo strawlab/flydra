@@ -197,21 +197,14 @@ def do_show_cameras(results, renderers, frustums=True, axes=True, labels=True, c
     return actors
 
 def set_color_for_obj_id(obj_id,a):
-    if 1:
-        warnings.warn('HACK to set obj_id color')
-        if obj_id==178:
-            a.property.color = 0, .45, .70
-        else:
-            a.property.color = .3, .65, .10
-    else:
-        if obj_id%4==0:
-            a.property.color = .9, .8, 0
-        if obj_id%4==1:
-            a.property.color = 0, .45, .70
-        if obj_id%4==2:
-            a.property.color = .3, .65, .10
-        if obj_id%4==3:
-            a.property.color = 0, 1, 0
+    if obj_id%4==0:
+        a.property.color = .9, .8, 0
+    if obj_id%4==1:
+        a.property.color = 0, .45, .70
+    if obj_id%4==2:
+        a.property.color = .3, .65, .10
+    if obj_id%4==3:
+        a.property.color = 0, 1, 0
 
 def doit(filename,
          show_obj_ids=False,
