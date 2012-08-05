@@ -852,7 +852,7 @@ class ProcessCamClass(object):
 
                 if initial_take_bg_state is not None:
                     assert initial_take_bg_state == 'gather'
-                    n_initial_take = 5
+                    n_initial_take = 20
                     if 1:
                         initial_take_frames.append( numpy.array(hw_roi_frame,copy=True) )
                         if len( initial_take_frames ) >= n_initial_take:
