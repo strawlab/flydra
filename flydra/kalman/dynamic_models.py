@@ -217,8 +217,8 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
         min_dist_to_believe_new_meters=0.08, # 8 cm
         min_dist_to_believe_new_sigma=3.0,
 
-        initial_position_covariance_estimate=1e-6,
-        initial_velocity_covariance_estimate=1,
+        initial_position_covariance_estimate=1e-3,
+        initial_velocity_covariance_estimate=10,
 
         # support existint object
         n_sigma_accept=20.0, # geometric euclidian distance
