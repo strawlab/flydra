@@ -394,7 +394,7 @@ cdef class TrackedObject:
             # threshold at which it should be terminated.
             if Pmean > self.max_variance:
                 self.kill_me = True
-                if debug1>1:
+                if debug1>=1:
                     print 'will kill next time because Pmean too large (%f > %f)'%(Pmean,self.max_variance)
 
             ############ save outputs ###############

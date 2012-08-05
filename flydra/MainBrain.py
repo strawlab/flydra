@@ -614,8 +614,6 @@ class CoordinateProcessor(threading.Thread):
     def enqueue_finished_tracked_object(self, tracked_object ):
         # this is from called within the realtime coords thread
         if self.main_brain.is_saving_data():
-            if self.debug_level.isSet():
-                print 'saving finished kalman object with %d frames'%(len(tracked_object.frames),)
             self.main_brain.queue_data3d_kalman_estimates.put(
                 (tracked_object.obj_id,
                  tracked_object.frames, tracked_object.xhats, tracked_object.Ps,
@@ -633,6 +631,9 @@ class CoordinateProcessor(threading.Thread):
             acquire_stamp=rospy.Time.from_sec(0),
             objects = [this_ros_object])
         self.realtime_ros_packets.put( ros_packet )
+
+        if self.debug_level.isSet():
+            print 'killing obj_id %d:'%tracked_object.obj_id
 
     def connect(self,cam_id,cam_hostname):
 
@@ -1049,7 +1050,8 @@ class CoordinateProcessor(threading.Thread):
                                 pluecker_coords_by_camn = self.tracker.calculate_a_posteriori_estimates(
                                     corrected_framenumber,
                                     pluecker_coords_by_camn,
-                                    self.camn2cam_id)
+                                    self.camn2cam_id,
+                                    debug2=self.debug_level.isSet())
 
                                 if self.debug_level.isSet():
                                     print '%d live objects:'%(self.tracker.live_tracked_objects.how_many_are_living(),),
@@ -1059,7 +1061,12 @@ class CoordinateProcessor(threading.Thread):
                                         if result is None:
                                             continue
                                         obj_id,last_xhat,P = result
-                                        print last_xhat[:3]
+                                        Pmean = numpy.sqrt(numpy.sum([P[i,i]**2 for i in range(3)]))
+                                        print 'obj_id %d: (%.3f, %.3f, %.3f), Pmean: %.3f'%(obj_id,
+                                                                                            last_xhat[0],
+                                                                                            last_xhat[1],
+                                                                                            last_xhat[2],
+                                                                                            Pmean)
                                     print
 
                                 if self.save_profiling_data:
@@ -2382,21 +2389,13 @@ class MainBrain(object):
             except Queue.Empty:
                 pass
             if self.h5data3d_kalman_estimates is not None:
-##                print 'saving kalman data (%d objects)'%(
-##                    len(list_of_3d_data),)
                 for (obj_id, tro_frames, tro_xhats, tro_Ps, tro_timestamps,
                      obs_frames, obs_data,
                      observations_2d, obs_Lcoords) in list_of_3d_data:
 
-
                     if len(obs_frames)<MIN_KALMAN_OBSERVATIONS_TO_SAVE:
-                        # only save data with at least 10 observations
-                        if self.debug_level.isSet():
-                            print 'not saving kalman object -- too few observations to save'
+                        # only save data with at least N observations
                         continue
-
-                    if self.debug_level.isSet():
-                        print 'saving kalman object %d'%(obj_id,)
 
                     # save observation 2d data indexes
                     this_idxs = []
