@@ -1054,9 +1054,9 @@ class CoordinateProcessor(threading.Thread):
                                     debug2=self.debug_level.isSet())
 
                                 if self.debug_level.isSet():
-                                    print '%d live objects:'%(self.tracker.live_tracked_objects.how_many_are_living(),),
-                                    results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
-                                    Xs = []
+                                    print '%d live objects:'%(self.tracker.how_many_are_living(),),
+                                    results = [tro.get_most_recent_data() \
+                                                   for tro in self.tracker.live_tracked_objects]
                                     for result in results:
                                         if result is None:
                                             continue
@@ -1070,7 +1070,7 @@ class CoordinateProcessor(threading.Thread):
                                     print
 
                                 if self.save_profiling_data:
-                                    self.data_dict_queue.append(('ntrack',self.tracker.live_tracked_objects.how_many_are_living()))
+                                    self.data_dict_queue.append(('ntrack',self.tracker.how_many_are_living()))
 
                                 now = time.time()
                                 if SHOW_3D_PROCESSING_LATENCY:
@@ -1103,7 +1103,9 @@ class CoordinateProcessor(threading.Thread):
                                     # "hypothesis testing" algorithm on remaining data to see if there
                                     # are new objects.
 
-                                    results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
+                                    results = [ tro.get_most_recent_data() \
+                                                    for tro in self.tracker.live_tracked_objects]
+
                                     Xs = []
                                     for result in results:
                                         if result is None:
@@ -1167,9 +1169,10 @@ class CoordinateProcessor(threading.Thread):
                                                                        this_observation_idxs
                                                                        )
                                 if 1:
-                                    if self.tracker.live_tracked_objects.how_many_are_living():
+                                    if self.tracker.how_many_are_living():
                                         #publish state to ROS
-                                        results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' )
+                                        results = [tro.get_most_recent_data() \
+                                                       for tro in self.tracker.live_tracked_objects]
                                         ros_objects = []
                                         for result in results:
                                             if result is None:
