@@ -120,25 +120,6 @@ try:
 except:
     hostname = socket.gethostbyname(socket.gethostname())
 
-downstream_hosts = []
-
-if 0:
-    downstream_hosts.append( ('192.168.1.199',28931) ) # projector
-if 0:
-    downstream_hosts.append( ('127.0.0.1',28931) ) # self
-if 0:
-    downstream_hosts.append( ('192.168.1.151',28931) ) # brain1
-
-downstream_kalman_hosts = []
-if 1:
-    downstream_kalman_hosts.append( ('127.0.0.1',28931) ) # localhost
-    downstream_kalman_hosts.append( ('192.168.10.41',28931) ) # wtstim
-#    downstream_kalman_hosts.append( ('255.255.255.255',28931) ) # broadcast to every device on subnet
-if 0:
-    downstream_kalman_hosts.append( ('astraw-office.kicks-ass.net',28931) ) # send off subnet
-
-outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
 # 2D data format for PyTables:
 Info2D = flydra.data_descriptions.Info2D
 
@@ -194,33 +175,6 @@ h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
 
 # allow rapid building of numpy.rec.array:
 Info2DCol_description = PT.Description(Info2D().columns)._v_nestedDescr
-
-def encode_data_packet( corrected_framenumber,
-                        line3d_valid,
-                        outgoing_data,
-                        min_mean_dist):
-
-    # This is for the non-Kalman data. See
-    # kalman.flydra_tracker.Tracker.encode_data_packet and
-    # kalman.data_packets.encode_data_packet() for Kalman version.
-
-    fmt = '<iBfffffffffdf' # XXX I guess this no longer works -- what's the B for? 20071011
-    packable_data = list(outgoing_data)
-    if not line3d_valid:
-        packable_data[3:9] = 0,0,0,0,0,0
-    packable_data.append( min_mean_dist )
-    try:
-        data_packet = struct.pack(fmt,
-                                  corrected_framenumber,
-                                  line3d_valid,
-                                  *packable_data)
-    except SystemError, x:
-        print 'fmt',fmt
-        print 'corrected_framenumber',corrected_framenumber
-        print 'line3d_valid',line3d_valid
-        print 'packable_data',packable_data
-        raise
-    return data_packet
 
 def save_ascii_matrix(filename,m):
     fd=open(filename,mode='wb')
@@ -497,37 +451,21 @@ class CoordRealReceiver(threading.Thread):
 
 class CoordinateSender(threading.Thread):
       """a class to send realtime coordinate data from a separate thread"""
-      def __init__(self,my_queue,my_ros_queue,quit_event):
-          self.my_queue = my_queue
+      def __init__(self,my_ros_queue,quit_event):
           self.my_ros_queue = my_ros_queue
           self.quit_event = quit_event
           self.pub = None
           name = 'CoordinateSender thread'
           threading.Thread.__init__(self,name=name)
       def run(self):
-          global downstream_kalman_hosts
-          out_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
           block = 1
           timeout = .1
-          encode_super_packet = flydra.kalman.data_packets.encode_super_packet
 
           self.pub = rospy.Publisher(
                                 'flydra_mainbrain_super_packets',
                                 flydra_mainbrain_super_packet)
 
           while not self.quit_event.isSet():
-              packets = []
-              packets.append( self.my_queue.get() )
-              while 1:
-                  try:
-                      packets.append( self.my_queue.get_nowait() )
-                  except Queue.Empty:
-                      break
-              # now packets is a list of all recent data
-              super_packet = encode_super_packet( packets )
-              for downstream_host in downstream_kalman_hosts:
-                  outgoing_UDP_socket.sendto(super_packet,downstream_host)
-
               ros_packets = []
               ros_packets.append( self.my_ros_queue.get() )
               while 1:
@@ -557,7 +495,6 @@ class CoordinateProcessor(threading.Thread):
         if self.save_profiling_data:
             self.data_dict_queue = []
 
-        self.realtime_kalman_data_queue = Queue.Queue()
         self.realtime_ros_packets = Queue.Queue()
 
         self.cam_ids = []
@@ -595,7 +532,6 @@ class CoordinateProcessor(threading.Thread):
         self.realreceiver.start()
 
         cs = CoordinateSender(
-                self.realtime_kalman_data_queue,
                 self.realtime_ros_packets,
                 self.quit_event)
         cs.setDaemon(True)
@@ -787,8 +723,7 @@ class CoordinateProcessor(threading.Thread):
 
     def run(self):
         """main loop of CoordinateProcessor"""
-        global downstream_hosts, best_realtime_data
-        global outgoing_UDP_socket
+        global best_realtime_data
         global XXX_framenumber
 
         if os.name == 'posix':
@@ -1215,12 +1150,6 @@ class CoordinateProcessor(threading.Thread):
                                                                        )
                                 if 1:
                                     if self.tracker.live_tracked_objects.how_many_are_living():
-                                        data_packet = self.tracker.encode_data_packet(
-                                            corrected_framenumber,
-                                            oldest_camera_timestamp,now)
-                                        if data_packet is not None:
-                                            self.realtime_kalman_data_queue.put(data_packet)
-
                                         #publish state to ROS
                                         results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' )
                                         ros_objects = []
@@ -1284,25 +1213,8 @@ class CoordinateProcessor(threading.Thread):
                             outgoing_data.extend( line3d ) # 6 component vector
                             outgoing_data.append( find3d_time )
 
-                            if len(downstream_hosts):
-                                # This is for the non-Kalman data. See
-                                # tracker.encode_data_packet() for
-                                # Kalman version.
-                                data_packet = encode_data_packet(
-                                    corrected_framenumber,
-                                    line3d_valid,
-                                    outgoing_data,
-                                    min_mean_dist,
-                                    )
-
                             # realtime 3d data
                             best_realtime_data = [X], min_mean_dist
-                            try:
-                                for downstream_host in downstream_hosts:
-                                    outgoing_UDP_socket.sendto(data_packet,downstream_host)
-                            except:
-                                print 'WARNING: could not send 3d point data over UDP'
-                                print
                             if self.main_brain.is_saving_data():
                                 self.main_brain.queue_data3d_best.put( (corrected_framenumber,
                                                                         outgoing_data,
@@ -1602,34 +1514,6 @@ class MainBrain(object):
                         print 'main_brain WARNING: lost %s at %s'%(cam_id,time.asctime())
                         self.close(cam_id)
             self.thread_done.set()
-
-        # ================================================================
-        #
-        # Methods called remotely from listeners
-        #
-        # These all get called in their own thread.  Don't call across
-        # the thread boundary without using locks, especially to GUI
-        # or OpenGL.
-        #
-        # ================================================================
-
-        def register_downstream_kalman_host(self,host,port):
-            global downstream_kalman_hosts
-            addr = (host,port)
-            if addr not in downstream_kalman_hosts:
-                print 'appending to kalman host list:',addr
-                downstream_kalman_hosts.append( (host,port) )
-            else:
-                print 'already in kalman host list:',addr
-
-        def remove_downstream_kalman_host(self,host,port):
-            global downstream_kalman_hosts
-            host_tuple = (host,port)
-            try:
-                i = downstream_kalman_hosts.index( host_tuple )
-            except ValueError:
-                return # could not find entry
-            del downstream_kalman_hosts[i]
 
         # ================================================================
         #

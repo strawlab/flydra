@@ -12,13 +12,7 @@ from pprint import pprint
 import flydra_tracked_object
 from flydra_tracked_object import TrackedObject
 
-# Need all these names for backwards compatibility:
-from data_packets import decode_data_packet, encode_super_packet, \
-     decode_super_packet, packet_header_fmt, packet_header_fmtsize, \
-     super_packet_header_fmt, super_packet_header_fmtsize, \
-     super_packet_subheader, err_size
-
-__all__ = ['TrackedObject','Tracker','decode_data_packet']
+__all__ = ['TrackedObject','Tracker']
 
 class AsyncApplier(object):
     def __init__(self,mylist,name,args=None,kwargs=None,targets=None):
@@ -475,48 +469,3 @@ class Tracker:
             tro = self.dead_tracked_objects.pop(0)
             for callback in self.kill_tracker_callbacks:
                 callback(tro)
-
-    def encode_data_packet(self,corrected_framenumber,
-                           acquire_timestamp,
-                           reconstruction_timestamp,
-                           ):
-        # keep in sync: data_packets.py's decode_data_packet()
-        state_size = self.kalman_model['ss']
-        results = self.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
-
-        data_packets_more = []
-        per_tracked_object_fmt = '<I'+'f'*(state_size+err_size)
-        for result in results:
-            if result is None:
-                continue
-            obj_id,xhat,P = result
-            meanP = math.sqrt(numpy.sum(numpy.array([P[i,i]**2 for i in range(3)])))
-            data_values = [obj_id]+[xhat[i] for i in range(state_size)]+[meanP]
-            data_packets_more.append( struct.pack(per_tracked_object_fmt,*data_values) )
-
-        N = len(data_packets_more)
-        if N==0:
-            return None
-        data_packet1 = struct.pack(packet_header_fmt,
-                                   corrected_framenumber,
-                                   acquire_timestamp,
-                                   reconstruction_timestamp,
-                                   N,
-                                   state_size)
-        data_packet = ''.join( [data_packet1]+data_packets_more )
-        return data_packet
-
-
-def test():
-    packetA = 'hello'
-    packetB = 'world!'
-    packetC = '(and sawyer, too)'
-    super_packet = encode_super_packet( [packetA, packetB, packetC] )
-    packets = decode_super_packet( super_packet )
-    assert packets[0] == packetA
-    assert packets[1] == packetB
-    assert packets[2] == packetC
-
-if __name__=='__main__':
-    test()
-
