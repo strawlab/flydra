@@ -129,7 +129,8 @@ cdef class TrackedObject:
     TrackedObject handles all internal units in meters, but external interfaces are original units
 
     """
-    cdef long current_frameno, max_frames_skipped
+    cdef readonly long current_frameno
+    cdef long max_frames_skipped
     cdef mybool kill_me, save_all_data
     cdef double area_threshold, area_threshold_for_orientation
 

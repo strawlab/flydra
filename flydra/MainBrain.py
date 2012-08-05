@@ -622,6 +622,16 @@ class CoordinateProcessor(threading.Thread):
                  tracked_object.observations_frames, tracked_object.observations_data,
                  tracked_object.observations_2d, tracked_object.observations_Lcoords,
                  ) )
+        # send a ROS message that this object is dead
+        this_ros_object = flydra_object(obj_id=tracked_object.obj_id,
+                                        position=Point(numpy.nan,numpy.nan,numpy.nan),
+                                        )
+        ros_packet = flydra_mainbrain_packet(
+            framenumber=tracked_object.current_frameno,
+            reconstruction_stamp=rospy.Time.now(),
+            acquire_stamp=rospy.Time.from_sec(0),
+            objects = [this_ros_object])
+        self.realtime_ros_packets.put( ros_packet )
 
     def connect(self,cam_id,cam_hostname):
 
