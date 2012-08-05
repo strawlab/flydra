@@ -310,31 +310,25 @@ cdef class TrackedObject:
         # For each frame that was skipped, step the Kalman filter.
         # Since we have no observation, the estimated error will
         # rise.
-        cdef long i,frames_skipped
+        cdef long i, frames_since_update
         cdef double Pmean
-        frames_skipped = frame-self.current_frameno-1
+        frames_since_update = frame-self.current_frameno-1
 
         if debug1>2:
             print 'doing',self,'============--'
+            print 'updating for %d frames since update'%(frames_since_update,)
 
-        if frames_skipped > self.max_frames_skipped:
-            self.kill_me = True # don't run Kalman filter, just quit
-            if debug1>2:
-                print 'killed because too many frames skipped'
-        else:
-            if debug1>2:
-                print 'updating for %d frames skipped'%(frames_skipped,)
-            for i in range(frames_skipped):
-                if isinstance(self.my_kalman, kalman_ekf.EKF):
-                    xhat, P = self.my_kalman.step(self.ekf_kalman_A,
-                                                  self.ekf_kalman_Q)
-                else:
-                    xhat, P = self.my_kalman.step()
-                ############ save outputs ###############
-                self.frames.append( self.current_frameno + i + 1 )
-                self.xhats.append( xhat )
-                self.timestamps.append( 0.0 )
-                self.Ps.append( P )
+        for i in range(frames_since_update):
+            if isinstance(self.my_kalman, kalman_ekf.EKF):
+                xhat, P = self.my_kalman.step(self.ekf_kalman_A,
+                                              self.ekf_kalman_Q)
+            else:
+                xhat, P = self.my_kalman.step()
+            ############ save outputs ###############
+            self.frames.append( self.current_frameno + i + 1 )
+            self.xhats.append( xhat )
+            self.timestamps.append( 0.0 )
+            self.Ps.append( P )
 
         this_observations_2d_hash = None
         used_camns_and_idxs = []
