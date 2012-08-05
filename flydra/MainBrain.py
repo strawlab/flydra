@@ -463,7 +463,8 @@ class CoordinateSender(threading.Thread):
 
           self.pub = rospy.Publisher(
                                 'flydra_mainbrain_super_packets',
-                                flydra_mainbrain_super_packet)
+                                flydra_mainbrain_super_packet,
+                                tcp_nodelay=True)
 
           while not self.quit_event.isSet():
               ros_packets = []
