@@ -130,6 +130,7 @@ cdef class TrackedObject:
 
     """
     cdef readonly long current_frameno
+    cdef readonly long last_frameno_with_data
     cdef long max_frames_skipped
     cdef mybool kill_me, save_all_data
     cdef double area_threshold, area_threshold_for_orientation
@@ -185,6 +186,7 @@ cdef class TrackedObject:
         self.fake_timestamp = fake_timestamp
 
         self.current_frameno = frame
+        self.last_frameno_with_data = frame
         first_observation_meters = first_observation_orig_units
         if first_observation_Lcoords_orig_units is None:
             first_observation_Lcoords = NO_LCOORDS
@@ -311,6 +313,7 @@ cdef class TrackedObject:
         # Since we have no observation, the estimated error will
         # rise.
         cdef long i, frames_since_update
+        cdef long frames_skipped
         cdef double Pmean
         frames_since_update = frame-self.current_frameno-1
 
@@ -397,6 +400,13 @@ cdef class TrackedObject:
                 if debug1>=1:
                     print 'will kill next time because Pmean too large (%f > %f)'%(Pmean,self.max_variance)
 
+            frames_skipped = frame - self.last_frameno_with_data
+            if frames_skipped > self.max_frames_skipped:
+                self.kill_me = True
+                if debug1>=1:
+                    print 'will kill next time because frames skipped (%f > %f)'%(frames_skipped,
+                                                                                  self.max_frames_skipped)
+
             ############ save outputs ###############
             self.frames.append( frame )
             self.xhats.append( xhat )
@@ -407,6 +417,7 @@ cdef class TrackedObject:
             self.Ps.append( P )
 
             if observation_meters is not None:
+                self.last_frameno_with_data = frame
                 self.observations_frames.append( frame )
                 self.observations_data.append( observation_meters )
                 if Lcoords is None:
