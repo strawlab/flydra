@@ -42,9 +42,9 @@ class DateFormatter:
         self.tz = tz
 
     def format_date(self, x, pos=None):
-        return str(datetime.datetime.fromtimestamp(x,self.tz))
-        ## return datetime.datetime.fromtimestamp(x,self.tz).strftime(
-        ##     '%Y-%m-%d %H:%M:%S.%f')
+        val = datetime.datetime.fromtimestamp(x,self.tz)
+        return val.strftime(
+            '%Y-%m-%d %H:%M:%S.%f')
 
 def doit(
          filenames=None,
@@ -89,6 +89,7 @@ def doit(
             pylab.figtext(0,0,figtitle)
 
         h5 = PT.openFile( filename, mode='r' )
+        timezone = result_utils.get_tz( h5 )
         if options.spreadh5 is not None:
             h5spread = PT.openFile(options.spreadh5, mode='r')
         else:
@@ -194,8 +195,7 @@ def doit(
                 ax.set_xlim( (start_frame, stop_frame) )
         ax.set_xlabel('frame')
         if options.timestamps:
-            tz = result_utils.get_tz( h5 )
-            df = DateFormatter(tz)
+            df = DateFormatter(timezone)
             ax.xaxis.set_major_formatter(
                 ticker.FuncFormatter(df.format_date))
         else:
@@ -473,10 +473,16 @@ def doit(
 
                     if options.timestamps:
                         ax.set_xlabel('time (sec)')
+                        df = DateFormatter(timezone)
+                        ax.xaxis.set_major_formatter(
+                            ticker.FuncFormatter(df.format_date))
+                        for label in ax.get_xticklabels():
+                            label.set_rotation(30)
+
                     else:
                         ax.set_xlabel('frame')
-                    ax.xaxis.set_major_formatter(
-                        ticker.FormatStrFormatter("%d"))
+                        ax.xaxis.set_major_formatter(
+                            ticker.FormatStrFormatter("%d"))
                     ax.yaxis.set_major_formatter(
                         ticker.FormatStrFormatter("%s"))
 
