@@ -139,11 +139,11 @@ cdef class TrackedObject:
     cdef double max_variance
     cdef object ekf_observation_covariance_pixels
 
-    cdef public object frames, xhats, timestamps, Ps, observations_data, observations_Lcoords
-    cdef public object observations_frames, observations_2d
+    cdef readonly object frames, xhats, timestamps, Ps, observations_data, observations_Lcoords
+    cdef readonly object observations_frames, observations_2d
     cdef int disable_image_stat_gating, orientation_consensus
     cdef object fake_timestamp
-    cdef public u_int32_t obj_id
+    cdef readonly u_int32_t obj_id
     cdef object ekf_kalman_A, ekf_kalman_Q
 
     def __init__(self,
