@@ -53,7 +53,7 @@ import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
 
 DO_KALMAN= True # Enables/disables Kalman filter based tracking
-MIN_KALMAN_OBSERVATIONS_TO_SAVE = 10 # how many data points are required before saving trajectory?
+MIN_KALMAN_OBSERVATIONS_TO_SAVE = 0 # how many data points are required before saving trajectory?
 
 SHOW_3D_PROCESSING_LATENCY = False
 
