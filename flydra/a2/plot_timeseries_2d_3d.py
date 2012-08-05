@@ -80,13 +80,15 @@ def doit(
 
         if options.show_source_name:
             figtitle = filename
+            if kalman_filename is not None:
+                figtitle += ' '+kalman_filename
         else:
             figtitle = ''
         if options.obj_only is not None:
             figtitle += ' only showing objects: ' + ' '.join(
                 map(str,options.obj_only))
         if figtitle != '':
-            pylab.figtext(0,0,figtitle)
+            pylab.figtext(0.01,0.01,figtitle,verticalalignment='bottom')
 
         h5 = PT.openFile( filename, mode='r' )
         timezone = result_utils.get_tz( h5 )
