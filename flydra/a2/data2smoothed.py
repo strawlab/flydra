@@ -49,8 +49,12 @@ def convert(infilename,
         print 'opening file %s...'%infilename
 
         h5file_raw = tables.openFile(infilename,mode='r')
-        table_kobs   = h5file_raw.root.ML_estimates # table to get framenumbers from
-        kobs_2d = h5file_raw.root.ML_estimates_2d_idxs # VLArray linking two
+        try:
+            table_kobs   = h5file_raw.root.ML_estimates # table to get framenumbers from
+            kobs_2d = h5file_raw.root.ML_estimates_2d_idxs # VLArray linking two
+        except tables.exceptions.NoSuchNodeError, err:
+            table_kobs   = h5file_raw.root.kalman_observations # table to get framenumbers from
+            kobs_2d = h5file_raw.root.kalman_observations_2d_idxs # VLArray linking two
 
         if file_time_data is None:
             h52d = h5file_raw
@@ -70,7 +74,9 @@ def convert(infilename,
 
         print 'caching raw 2D data...',
         sys.stdout.flush()
-        table_data2d_frames = table_data2d.read(field='frame').astype(numpy.uint64) # cast to uint64 for fast searching
+        table_data2d_frames = table_data2d.read(field='frame')
+        assert numpy.max(table_data2d_frames) < 2**63
+        table_data2d_frames = table_data2d_frames.astype(numpy.int64)
         #table_data2d_frames_find = fastsearch.binarysearch.BinarySearcher( table_data2d_frames )
         table_data2d_frames_find = utils.FastFinder( table_data2d_frames )
         table_data2d_camns = table_data2d.read(field='camn')
@@ -116,6 +122,8 @@ def convert(infilename,
         print 'finding 2d data for each obj_id...'
         timestamp_time = numpy.zeros( unique_obj_ids.shape, dtype=numpy.float64)
         table_kobs_frame = table_kobs.read(field='frame')
+        assert numpy.max(table_kobs_frame) < 2**63
+        table_kobs_frame = table_kobs_frame.astype(numpy.int64)
         assert table_kobs_frame.dtype == table_data2d_frames.dtype # otherwise very slow
 
         for obj_id_enum,obj_id in enumerate(unique_obj_ids):
