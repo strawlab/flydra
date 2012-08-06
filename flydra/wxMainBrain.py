@@ -1078,12 +1078,6 @@ class wxMainBrainApp(wx.App):
         sizer.Add(control, 1, wx.EXPAND)
         panel.SetSizer( sizer )
 
-    def OnHypothesisTestMaxError(self,event):
-        ctrl = xrc.XRCCTRL(self.status_panel,
-                       "HYPOTHESIS_TEST_MAX_ERR")
-        val = float(ctrl.GetValue())
-        self.main_brain.set_hypothesis_test_max_error(val)
-
     def OnManualTriggerDevice1(self,event):
         sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sender.sendto('1',(MainBrain.hostname,common_variables.trigger_network_socket_port))
@@ -1316,14 +1310,6 @@ class wxMainBrainApp(wx.App):
     def attach_and_start_main_brain(self,main_brain):
         self.main_brain = main_brain
 
-        if 1:
-            ctrl = xrc.XRCCTRL(self.status_panel,
-                               "HYPOTHESIS_TEST_MAX_ERR")
-            ctrl.SetValue(str(self.main_brain.get_hypothesis_test_max_error()))
-            wxvt.Validator(ctrl,
-                           ctrl.GetId(),
-                           self.OnHypothesisTestMaxError,
-                           validate_positive_float)
         if 1:
             fps = self.main_brain.get_fps()
             model_names = flydra.kalman.dynamic_models.get_model_names()

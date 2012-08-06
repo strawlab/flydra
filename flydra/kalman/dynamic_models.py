@@ -127,6 +127,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
         # data association parameters
 
         # birth model
+        hypothesis_test_max_acceptable_error=50.0,
         min_dist_to_believe_new_meters=0.2, # 20 cm
         min_dist_to_believe_new_sigma=3.0,
 
@@ -166,6 +167,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
     R = 1e-6*numpy.eye(os)
 
     newdict = dict(
+        hypothesis_test_max_acceptable_error=5.0,
         min_dist_to_believe_new_meters=0.01, # 1 cm
         min_dist_to_believe_new_sigma=3.0,
         n_sigma_accept=math.sqrt(9.0),
@@ -203,6 +205,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
         # data association parameters
 
         # birth model
+        hypothesis_test_max_acceptable_error=50.0,
         min_dist_to_believe_new_meters=0.08, # 8 cm
         min_dist_to_believe_new_sigma=3.0,
 
@@ -248,6 +251,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
         # data association parameters
 
         # birth model
+        hypothesis_test_max_acceptable_error=50.0,
         min_dist_to_believe_new_meters=0.08, # 8 cm
         min_dist_to_believe_new_sigma=3.0,
 
@@ -292,6 +296,7 @@ class MamaramaMMEKFAllParams(EKFAllParams):
                     'A',
                     'Q',
                     'dt',
+                    'hypothesis_test_max_acceptable_error',
                     ]:
             self[key] = linear_dict[key]
         self['ekf_observation_covariance_pixels'] = numpy.array( [[1.0, 0.0],
@@ -358,9 +363,10 @@ class HbirdEKFAllParams(EKFAllParams):
                     'A',
                     'Q',
                     'dt',
+                    'hypothesis_test_max_acceptable_error',
                     'min_dist_to_believe_new_meters',
                     'min_dist_to_believe_new_sigma',
-                    'max_variance_dist_meters'
+                    'max_variance_dist_meters',
                     ]:
             self[key] = linear_dict[key]
         self['ekf_observation_covariance_pixels'] = numpy.array(
@@ -432,5 +438,3 @@ def get_kalman_model( name=None, dt=None ):
             valid_names = get_model_names()
             raise KeyError("'%s', valid model names: %s"%(str(name),', '.join(map(repr,valid_names))))
     return kalman_model
-
-
