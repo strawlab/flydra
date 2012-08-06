@@ -23,7 +23,7 @@ PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_I
 
 class KalmanEstimates(PT.IsDescription):
     obj_id     = PT.UInt32Col(pos=0)
-    frame      = PT.UInt64Col(pos=1)
+    frame      = PT.Int64Col(pos=1)
     timestamp  = PT.Float64Col(pos=2) # time of reconstruction
     x          = PT.Float32Col(pos=3)
     y          = PT.Float32Col(pos=4)
@@ -47,7 +47,7 @@ class KalmanEstimates(PT.IsDescription):
 
 class KalmanEstimatesVelOnly(PT.IsDescription):
     obj_id     = PT.UInt32Col(pos=0)
-    frame      = PT.UInt64Col(pos=1)
+    frame      = PT.Int64Col(pos=1)
     timestamp  = PT.Float64Col(pos=2) # time of reconstruction
     x          = PT.Float32Col(pos=3)
     y          = PT.Float32Col(pos=4)
@@ -65,7 +65,7 @@ class KalmanEstimatesVelOnly(PT.IsDescription):
 
 class KalmanEstimatesVelOnlyWithDirection(PT.IsDescription):
     obj_id     = PT.UInt32Col(pos=0)
-    frame      = PT.UInt64Col(pos=1)
+    frame      = PT.Int64Col(pos=1)
     timestamp  = PT.Float64Col(pos=2) # time of reconstruction
     x          = PT.Float32Col(pos=3)
     y          = PT.Float32Col(pos=4)
@@ -90,7 +90,7 @@ class KalmanEstimatesVelOnlyWithDirection(PT.IsDescription):
 
 class KalmanEstimatesVelOnlyPositionCovariance(PT.IsDescription):
     obj_id     = PT.UInt32Col(pos=0)
-    frame      = PT.UInt64Col(pos=1)
+    frame      = PT.Int64Col(pos=1)
     timestamp  = PT.Float64Col(pos=2) # time of reconstruction
     x          = PT.Float32Col(pos=3)
     y          = PT.Float32Col(pos=4)
@@ -111,7 +111,7 @@ class KalmanEstimatesVelOnlyPositionCovariance(PT.IsDescription):
 
 class KalmanEstimatesVelOnlyWithDirectionPositionCovariance(PT.IsDescription):
     obj_id     = PT.UInt32Col(pos=0)
-    frame      = PT.UInt64Col(pos=1)
+    frame      = PT.Int64Col(pos=1)
     timestamp  = PT.Float64Col(pos=2) # time of reconstruction
     x          = PT.Float32Col(pos=3)
     y          = PT.Float32Col(pos=4)
