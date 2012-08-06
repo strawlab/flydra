@@ -2222,7 +2222,7 @@ class MainBrain(object):
                 self.h5data3d_kalman_estimates.attrs.dynamic_model = self.dynamic_model
 
                 self.h5data3d_kalman_observations = ct(root,'kalman_observations', FilteredObservations,
-                                                       "3d data (input to Kalman filter)",
+                                                       'dynamics-free maximum liklihood estimates',
                                                        expectedrows=expected_rows)
                 self.h5_2d_obs = self.h5file.createVLArray(self.h5file.root,
                                                            'kalman_observations_2d_idxs',
