@@ -44,8 +44,8 @@ def ensure_minsize_image( arr, (h,w), fill=0):
 class KObsRowCacher:
     def __init__(self,h5):
         self.h5 = h5
-        self.all_rows_obj_ids = h5.root.kalman_observations.read(field='obj_id')
-        self.all_rows_frames = h5.root.kalman_observations.read(field='frame')
+        self.all_rows_obj_ids = h5.root.ML_estimates.read(field='obj_id')
+        self.all_rows_frames = h5.root.ML_estimates.read(field='frame')
         self.cache = {}
     def get(self,obj_id):
         if obj_id in self.cache:
@@ -476,7 +476,7 @@ def doit(fmf_filename=None,
 
                     vert_image = R.find2d(cam_id,vert,distorted=True)
                     obs_2d_idx = this_3d_row['obs_2d_idx']
-                    kobs_2d_data = data_file.root.kalman_observations_2d_idxs[int(obs_2d_idx)]
+                    kobs_2d_data = data_file.root.ML_estimates_2d_idxs[int(obs_2d_idx)]
 
                     # parse VLArray
                     this_camns = kobs_2d_data[0::2]

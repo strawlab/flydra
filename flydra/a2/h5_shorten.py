@@ -25,7 +25,7 @@ def get_start_stop(src_h5,name,start,stop):
 def copy_selective(src_h5,input_node,output_group,options):
     if input_node.name in ['data2d_distorted',
                            'kalman_estimates',
-                           'kalman_observations',
+                           'ML_estimates',
                            ]:
 
         startrow,stoprow=get_start_stop(src_h5,input_node.name,
@@ -34,21 +34,21 @@ def copy_selective(src_h5,input_node,output_group,options):
         input_node._f_copy(output_group,
                            start=startrow,
                            stop=stoprow)
-    elif input_node.name=='kalman_observations_2d_idxs':
-        # kalman_observations and kalman_observations_2d_idxs must be
+    elif input_node.name=='ML_estimates_2d_idxs':
+        # ML_estimates and ML_estimates_2d_idxs must be
         # reduced with knowledge of each other. Column obs_2d_idx of
-        # kalman_observations must point to row number of
-        # corresponding kalman_observations_2d_idxs. Therefore, if
-        # rows are dropped from start of kalman_observations_2d_idxs,
-        # kalman_observations must be updated.
+        # ML_estimates must point to row number of
+        # corresponding ML_estimates_2d_idxs. Therefore, if
+        # rows are dropped from start of ML_estimates_2d_idxs,
+        # ML_estimates must be updated.
 
         if options.start is not None:
             warnings.warn('filtering initial data in table '
-                          'kalman_observations_2d_idxs not implemented')
+                          'ML_estimates_2d_idxs not implemented')
 
-        startrow,stoprow=get_start_stop(src_h5,'kalman_observations',
+        startrow,stoprow=get_start_stop(src_h5,'ML_estimates',
                                         options.start,options.stop)
-        my_stoprow = int(src_h5.root.kalman_observations[stoprow]['obs_2d_idx'])
+        my_stoprow = int(src_h5.root.ML_estimates[stoprow]['obs_2d_idx'])
         input_node._f_copy(output_group,
                            start=0,
                            stop=my_stoprow+1)
@@ -66,8 +66,8 @@ def doit(input_filename, output_filename, options):
         if (hasattr(input_node,'name') and
             input_node.name in ['data2d_distorted',
                                 'kalman_estimates',
-                                'kalman_observations',
-                                'kalman_observations_2d_idxs']):
+                                'ML_estimates',
+                                'ML_estimates_2d_idxs']):
             copy_selective(h5,input_node,output_h5.root,options)
         else:
             # copy everything from source to dest

@@ -37,11 +37,11 @@ def main(files=None,
                 else:
                     obj_id_find=obj_id
 
-                observation_frame_idxs = kresults.root.kalman_observations.getWhereList(
-                    kresults.root.kalman_observations.cols.obj_id==obj_id_find,
+                observation_frame_idxs = kresults.root.ML_estimates.getWhereList(
+                    kresults.root.ML_estimates.cols.obj_id==obj_id_find,
                     flavor='numpy')
                 
-                observation_frames = kresults.root.kalman_observations.readCoordinates(
+                observation_frames = kresults.root.ML_estimates.readCoordinates(
                     observation_frame_idxs,
                     field='frame',
                     flavor='numpy')

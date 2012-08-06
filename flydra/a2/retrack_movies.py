@@ -118,8 +118,8 @@ def retrack_movies( h5_filename,
             for input_node in h5.root._f_iterNodes():
                 if input_node._v_name not in ['data2d_distorted',
                                               'kalman_estimates',
-                                              'kalman_observations',
-                                              'kalman_observations_2d_idxs',
+                                              'ML_estimates',
+                                              'ML_estimates_2d_idxs',
                                               ]:
                     print 'copying',input_node._v_name
                     # copy everything from source to dest

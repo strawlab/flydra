@@ -217,7 +217,7 @@ class Info3D(PT.IsDescription):
     mean_dist  = PT.Float32Col(pos=12) # mean 2D reconstruction error
 
 FilteredObservations = flydra_kalman_utils.FilteredObservations
-kalman_observations_2d_idxs_type = flydra_kalman_utils.kalman_observations_2d_idxs_type
+ML_estimates_2d_idxs_type = flydra_kalman_utils.ML_estimates_2d_idxs_type
 
 h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
 
@@ -1834,7 +1834,7 @@ class MainBrain(object):
         self.h5textlog = None
         if DO_KALMAN:
             self.h5data3d_kalman_estimates = None
-            self.h5data3d_kalman_observations = None
+            self.h5data3d_ML_estimates = None
             self.h5_2d_obs = None
         else:
             self.h5data3d_best = None
@@ -2225,12 +2225,12 @@ class MainBrain(object):
                 self.h5data3d_kalman_estimates.attrs.dynamic_model_name = self.dynamic_model_name
                 self.h5data3d_kalman_estimates.attrs.dynamic_model = self.dynamic_model
 
-                self.h5data3d_kalman_observations = ct(root,'kalman_observations', FilteredObservations,
-                                                       "3d data (input to Kalman filter)",
+                self.h5data3d_ML_estimates = ct(root,'ML_estimates', FilteredObservations,
+                                                       'dynamics-free maximum liklihood estimates',
                                                        expectedrows=expected_rows)
                 self.h5_2d_obs = self.h5file.createVLArray(self.h5file.root,
-                                                           'kalman_observations_2d_idxs',
-                                                           kalman_observations_2d_idxs_type(), # dtype should match with tro.observations_2d
+                                                           'ML_estimates_2d_idxs',
+                                                           ML_estimates_2d_idxs_type(), # dtype should match with tro.observations_2d
                                                            "camns and idxs")
                 self.h5_2d_obs_next_idx = 0
             else:
@@ -2271,7 +2271,7 @@ class MainBrain(object):
         self.h5textlog = None
         if DO_KALMAN:
             self.h5data3d_kalman_estimates = None
-            self.h5data3d_kalman_observations = None
+            self.h5data3d_ML_estimates = None
             self.h5_2d_obs = None
         else:
             self.h5data3d_best = None
@@ -2419,7 +2419,7 @@ class MainBrain(object):
                         self.h5_2d_obs_next_idx += 1
                     self.h5_2d_obs.flush()
 
-                    this_idxs = numpy.array( this_idxs, dtype=numpy.uint64 ) # becomes obs_2d_idx (index into 'kalman_observations_2d_idxs')
+                    this_idxs = numpy.array( this_idxs, dtype=numpy.uint64 ) # becomes obs_2d_idx (index into 'ML_estimates_2d_idxs')
 
                     # save observations
                     observations_frames = numpy.array(obs_frames, dtype=numpy.uint64)
@@ -2432,8 +2432,8 @@ class MainBrain(object):
                     array_list = [obj_id_array,observations_frames]+list_of_obs+[this_idxs]+list_of_lines
                     obs_recarray = numpy.rec.fromarrays(array_list, names = h5_obs_names)
 
-                    self.h5data3d_kalman_observations.append(obs_recarray)
-                    self.h5data3d_kalman_observations.flush()
+                    self.h5data3d_ML_estimates.append(obs_recarray)
+                    self.h5data3d_ML_estimates.flush()
 
                     # save xhat info (kalman estimates)
                     frames = numpy.array(tro_frames, dtype=numpy.uint64)

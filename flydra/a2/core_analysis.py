@@ -1388,7 +1388,7 @@ class CachingAnalyzer:
                 idxs.append( numpy.nonzero(obs_obj_ids == oi)[0] )
             idxs = numpy.concatenate( idxs )
 
-        rows = kresults.root.kalman_observations.readCoordinates(idxs)
+        rows = kresults.root.ML_estimates.readCoordinates(idxs)
         if not len(rows):
             raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
 
@@ -1538,7 +1538,7 @@ class CachingAnalyzer:
                 # Kalman observations are already always in meters, no
                 # scale factor needed
 
-                orig_rows = kresults.root.kalman_observations.readCoordinates(
+                orig_rows = kresults.root.ML_estimates.readCoordinates(
                     obs_idxs)
 
                 if len(orig_rows)==0:
@@ -2013,8 +2013,8 @@ class CachingAnalyzer:
             self_should_close = False
             # XXX I should make my reference a weakref
         obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
-        if hasattr(kresults.root,'kalman_observations'):
-            obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id')
+        if hasattr(kresults.root,'ML_estimates'):
+            obs_obj_ids = kresults.root.ML_estimates.read(field='obj_id')
         else:
             obs_obj_ids = []
         unique_obj_ids = numpy.unique(obs_obj_ids)
@@ -2219,13 +2219,13 @@ class TestCoreAnalysis:
                 continue
             for obj_id in test_obj_ids:
                 ######## 1. load observations
-                obs_obj_ids = data_file.root.kalman_observations.read(
+                obs_obj_ids = data_file.root.ML_estimates.read(
                     field='obj_id')
                 obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
 
                 # Kalman observations are already always in meters, no
                 # scale factor needed
-                orig_rows = data_file.root.kalman_observations.readCoordinates(
+                orig_rows = data_file.root.ML_estimates.readCoordinates(
                     obs_idxs)
 
                 ######## 2. perform Kalman smoothing

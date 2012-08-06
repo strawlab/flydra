@@ -26,7 +26,7 @@ def do_filter(filename,
     output = PT.openFile(filename+'.output',mode="w")
     output_xhat = output.createTable(output.root,'kalman_estimates', KalmanEstimates,
                                      "Kalman a posteri estimates of tracked object")
-    output_obs = output.createTable(output.root,'kalman_observations', FilteredObservations,
+    output_obs = output.createTable(output.root,'ML_estimates', FilteredObservations,
                                     "observations of tracked object")
 
     kresults = PT.openFile(filename,mode="r")
@@ -55,9 +55,9 @@ def do_filter(filename,
         else:
             obj_id_find=obj_id
 
-        observation_frame_idxs = kresults.root.kalman_observations.getWhereList(
+        observation_frame_idxs = kresults.root.ML_estimates.getWhereList(
             'obj_id==obj_id_find')
-        observation_frames = kresults.root.kalman_observations.readCoordinates(
+        observation_frames = kresults.root.ML_estimates.readCoordinates(
             observation_frame_idxs,
             field='frame')
         max_observation_frame=observation_frames.max()
@@ -75,7 +75,7 @@ def do_filter(filename,
             print 'obj_id %d: %d observation frames, skipping'%(obj_id,n_observations,)
             continue
 
-        obs_recarray = kresults.root.kalman_observations.readCoordinates(
+        obs_recarray = kresults.root.ML_estimates.readCoordinates(
             observation_frame_idxs)
         output_obs.append( obs_recarray )
         xhats_recarray = kresults.root.kalman_estimates.readCoordinates(row_idxs)

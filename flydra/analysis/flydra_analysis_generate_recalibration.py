@@ -96,8 +96,8 @@ def do_it(filename,
             use_obj_ids = set(use_obj_ids)
             bad = set(mylocals['bad'])
             use_obj_ids = list(use_obj_ids.difference(bad))
-        kobs = results.root.kalman_observations
-        kobs_2d = results.root.kalman_observations_2d_idxs
+        kobs = results.root.ML_estimates
+        kobs_2d = results.root.ML_estimates_2d_idxs
 
     try:
         reconstructor = flydra.reconstruct.Reconstructor(results)

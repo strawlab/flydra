@@ -450,7 +450,7 @@ current list of 2D points
 
         # Do same as above for Kalman-filtered data
 
-        kobs = kresults.root.kalman_observations
+        kobs = kresults.root.ML_estimates
         kframes = kobs.read(field='frame')
         if frame_start is not None:
             k_after_start = numpy.nonzero( kframes>=frame_start )[0]
@@ -485,7 +485,7 @@ current list of 2D points
         kframes = kframes[k_use_idxs]#kobs.readCoordinates( k_use_idxs,
                                       # field='frame')
 
-        kobs_2d = kresults.root.kalman_observations_2d_idxs
+        kobs_2d = kresults.root.ML_estimates_2d_idxs
         xys_by_obj_id = {}
         for obj_id,kframe,obs_2d_idx in zip(obj_ids,kframes,obs_2d_idxs):
             obs_2d_idx_find = int(obs_2d_idx) # XXX grr, why can't pytables do this?

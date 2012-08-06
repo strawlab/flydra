@@ -10,7 +10,7 @@ orientation estimate. The program
 this step, and takes, amongst other data, the 2D orientation data
 stored in the ``slope`` column of the ``data2d_distorted`` table and
 converts it into the ``hz_line*`` columns of the
-``kalman_observations`` table. (The directional component of these
+``ML_estimates`` table. (The directional component of these
 Pluecker coordinates should be ignored, as it is meaningless.)
 
 See :ref:`smoothing orientations <orientation_smoothing>` for a
