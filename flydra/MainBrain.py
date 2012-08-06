@@ -52,7 +52,6 @@ from geometry_msgs.msg import Point, Vector3
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
 
-DO_KALMAN= True # Enables/disables Kalman filter based tracking
 MIN_KALMAN_OBSERVATIONS_TO_SAVE = 0 # how many data points are required before saving trajectory?
 
 SHOW_3D_PROCESSING_LATENCY = False
@@ -147,26 +146,6 @@ class MovieInfo(PT.IsDescription):
     filename           = PT.StringCol(255,pos=1)
     approx_start_frame = PT.Int64Col(pos=2)
     approx_stop_frame  = PT.Int64Col(pos=3)
-
-class Info3D(PT.IsDescription):
-    # This is for the non-Kalman version.
-    frame      = PT.Int64Col(pos=0)
-
-    x          = PT.Float32Col(pos=1)
-    y          = PT.Float32Col(pos=2)
-    z          = PT.Float32Col(pos=3)
-
-    p0         = PT.Float32Col(pos=4)
-    p1         = PT.Float32Col(pos=5)
-    p2         = PT.Float32Col(pos=6)
-    p3         = PT.Float32Col(pos=7)
-    p4         = PT.Float32Col(pos=8)
-    p5         = PT.Float32Col(pos=9)
-
-    timestamp  = PT.FloatCol(pos=10)
-
-    camns_used = PT.StringCol(32,pos=11)
-    mean_dist  = PT.Float32Col(pos=12) # mean 2D reconstruction error
 
 FilteredObservations = flydra_kalman_utils.FilteredObservations
 kalman_observations_2d_idxs_type = flydra_kalman_utils.kalman_observations_2d_idxs_type
@@ -1034,7 +1013,7 @@ class CoordinateProcessor(threading.Thread):
                             best_realtime_data = None
                             continue
 
-                        if DO_KALMAN:
+                        if 1:
                             with self.tracker_lock:
                                 if self.tracker is None: # tracker isn't instantiated yet...
                                     best_realtime_data = None
@@ -1193,54 +1172,6 @@ class CoordinateProcessor(threading.Thread):
                                 if SHOW_3D_PROCESSING_LATENCY:
                                     start_3d_proc_c = time.time()
 
-                        else: # closes "if DO_KALMAN:"
-
-                            found_data_dict = {} # old "good" points will go in here
-                            for cam_id, this_point in data_dict.iteritems():
-                                if not numpy.isnan(this_point[0]): # only use if point was found
-                                    found_data_dict[cam_id] = this_point[:9]
-
-                            if len(found_data_dict) < 2:
-                                # Can't do any 3D math without at least 2
-                                # cameras giving good data.
-                                continue
-
-                            try:
-                                # hypothesis testing algorithm
-                                (X, line3d, cam_ids_used,min_mean_dist
-                                 ) = ru.hypothesis_testing_algorithm__find_best_3d(
-                                    self.reconstructor,
-                                    found_data_dict,
-                                    max_n_cams=self.max_N_hypothesis_test,
-                                    )
-                            except:
-                                # this prevents us from bombing this thread...
-                                print 'WARNING:'
-                                traceback.print_exc()
-                                print 'SKIPPED 3d calculation for this frame.'
-                                continue
-                            cam_nos_used = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
-
-                            if line3d is None:
-                                line3d = nan, nan, nan, nan, nan, nan
-                                line3d_valid = False
-                            else:
-                                line3d_valid = True
-
-                            find3d_time = time.time()
-
-                            x,y,z=X
-                            outgoing_data = [x,y,z]
-                            outgoing_data.extend( line3d ) # 6 component vector
-                            outgoing_data.append( find3d_time )
-
-                            # realtime 3d data
-                            best_realtime_data = [X], min_mean_dist
-                            if self.main_brain.is_saving_data():
-                                self.main_brain.queue_data3d_best.put( (corrected_framenumber,
-                                                                        outgoing_data,
-                                                                        cam_nos_used,
-                                                                        min_mean_dist) )
                         if SHOW_3D_PROCESSING_LATENCY:
                             stop_3d_proc = time.time()
                             dur_3d_proc_msec = (stop_3d_proc - start_3d_proc)*1e3
@@ -1323,7 +1254,7 @@ class CoordinateProcessor(threading.Thread):
                 if len(deferred_2d_data):
                     self.main_brain.queue_data2d.put( deferred_2d_data )
 
-        if DO_KALMAN:
+        if 1:
             with self.tracker_lock:
                 if self.tracker is not None:
                     self.tracker.kill_all_trackers() # save (if necessary) all old data
@@ -1730,12 +1661,10 @@ class MainBrain(object):
         self.h5trigger_clock_info = None
         self.h5movie_info = None
         self.h5textlog = None
-        if DO_KALMAN:
+        if 1:
             self.h5data3d_kalman_estimates = None
             self.h5data3d_kalman_observations = None
             self.h5_2d_obs = None
-        else:
-            self.h5data3d_best = None
 
         # Queues of information to save
         self.queue_data2d          = Queue.Queue()
@@ -2214,7 +2143,7 @@ class MainBrain(object):
         self._startup_message()
         if self.reconstructor is not None:
             self.reconstructor.save_to_h5file(self.h5file)
-            if DO_KALMAN:
+            if 1:
                 self.h5data3d_kalman_estimates = ct(root,'kalman_estimates', self.KalmanEstimatesDescription,
                                                     "3d data (from Kalman filter)",
                                                     expectedrows=expected_rows)
@@ -2229,10 +2158,6 @@ class MainBrain(object):
                                                            kalman_observations_2d_idxs_type(), # dtype should match with tro.observations_2d
                                                            "camns and idxs")
                 self.h5_2d_obs_next_idx = 0
-            else:
-                self.h5data3d_best = ct(root,'data3d_best', Info3D,
-                                        "3d data (best)",
-                                        expectedrows=expected_rows)
 
         general_save_info=self.coord_processor.get_general_cam_info()
         for cam_id,dd in general_save_info.iteritems():
@@ -2266,12 +2191,10 @@ class MainBrain(object):
         self.h5trigger_clock_info = None
         self.h5movie_info = None
         self.h5textlog = None
-        if DO_KALMAN:
+        if 1:
             self.h5data3d_kalman_estimates = None
             self.h5data3d_kalman_observations = None
             self.h5_2d_obs = None
-        else:
-            self.h5data3d_best = None
 
     def _startup_message(self):
         textlog_row = self.h5textlog.row
@@ -2380,7 +2303,7 @@ class MainBrain(object):
 
             self.h5cam_info.flush()
 
-        if DO_KALMAN:
+        if 1:
             # ** 3d data - kalman **
             q = self.queue_data3d_kalman_estimates
 
@@ -2440,47 +2363,6 @@ class MainBrain(object):
 
                     self.h5data3d_kalman_estimates.append( xhats_recarray )
                     self.h5data3d_kalman_estimates.flush()
-
-        else:
-            # ** 3d data - hypothesis testing **
-            q = self.queue_data3d_best
-            h5table = self.h5data3d_best
-
-            #   clear queue
-            list_of_3d_data = []
-            try:
-                while True:
-                    list_of_3d_data.append( q.get(0) )
-            except Queue.Empty:
-                pass
-            #   save
-            if h5table is not None:
-                row = h5table.row
-                for data3d in list_of_3d_data:
-                    corrected_framenumber, outgoing_data, cam_nos_used, mean_dist = data3d
-                    cam_nos_used.sort()
-                    cam_nos_used_str = ' '.join( map(str, cam_nos_used) )
-
-                    row['frame']=corrected_framenumber
-
-                    row['x']=outgoing_data[0]
-                    row['y']=outgoing_data[1]
-                    row['z']=outgoing_data[2]
-
-                    row['p0']=outgoing_data[3]
-                    row['p1']=outgoing_data[4]
-                    row['p2']=outgoing_data[5]
-                    row['p3']=outgoing_data[6]
-                    row['p4']=outgoing_data[7]
-                    row['p5']=outgoing_data[8]
-
-                    row['timestamp']=outgoing_data[9]
-
-                    row['camns_used']=cam_nos_used_str
-                    row['mean_dist']=mean_dist
-                    row.append()
-
-                h5table.flush()
 
         # ** camera info **
         #   clear queue
