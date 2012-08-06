@@ -188,7 +188,7 @@ class KalmanSaveInfo(object):
 
 class FilteredObservations(PT.IsDescription): # Not really "observations" but ML estimates
     obj_id     = PT.UInt32Col(pos=0)
-    frame      = PT.UInt64Col(pos=1)
+    frame      = PT.Int64Col(pos=1)
     x          = PT.Float32Col(pos=2)
     y          = PT.Float32Col(pos=3)
     z          = PT.Float32Col(pos=4)
