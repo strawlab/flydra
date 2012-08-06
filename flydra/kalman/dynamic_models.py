@@ -217,8 +217,8 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
 
         # birth model
         hypothesis_test_max_acceptable_error=5.0,
-        min_dist_to_believe_new_meters=0.08, # 8 cm
-        min_dist_to_believe_new_sigma=3.0,
+        min_dist_to_believe_new_meters=0.2,
+        min_dist_to_believe_new_sigma=10.0,
 
         initial_position_covariance_estimate=1e-3,
         initial_velocity_covariance_estimate=10,
@@ -227,7 +227,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
         n_sigma_accept=20.0, # geometric euclidian distance
 
         # death model
-        max_variance_dist_meters=0.08,
+        max_variance_dist_meters=0.25,
         max_frames_skipped=10,
 
         # kalman filter parameters
@@ -308,22 +308,15 @@ class MamaramaMMEKFAllParams(EKFAllParams):
                     'Q',
                     'dt',
                     'hypothesis_test_max_acceptable_error',
+                    'min_dist_to_believe_new_meters',
+                    'min_dist_to_believe_new_sigma',
+                    'max_variance_dist_meters',
                     ]:
             self[key] = linear_dict[key]
         self['ekf_observation_covariance_pixels'] = numpy.array( [[1.0, 0.0],
                                                                   [0.0, 1.0]],
                                                                  dtype=numpy.float64 )
-        self['min_dist_to_believe_new_meters']=0.2
-        self['min_dist_to_believe_new_sigma']=10.0
-
         self['distorted_pixel_euclidian_distance_accept']=20.0 # distance in the raw image plane (i.e. before radial undistortion)
-
-        if 1:
-            # restrictive (better for e.g. making new calibration)
-            self['max_variance_dist_meters']=0.25
-        else:
-            # loosy-goosy
-            self['max_variance_dist_meters']=2 # let grow huge
 
 class HydraMEKFAllParams(EKFAllParams):
     """Fly non-linear dynamic model in meter units for EKF"""
