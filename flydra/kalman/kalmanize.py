@@ -43,13 +43,14 @@ class FakeThreadingEvent:
         self._set = False
 
 def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
-                  max_err=None, debug=0, kalman_model=None, area_threshold=0):
+                  debug=0, kalman_model=None, area_threshold=0):
     if debug is None:
         debug=0
     frame_data = tracker.calculate_a_posteriori_estimates(
         frame,frame_data,camn2cam_id,debug2=debug)
 
     frame_data = tracker.remove_duplicate_detections(frame,frame_data)
+    max_err=tracker.kalman_model['hypothesis_test_max_acceptable_error']
 
     # Now, tracked objects have been updated (and their 2D data points
     # removed from consideration), so we can use old flydra
@@ -367,7 +368,6 @@ def kalmanize(src_filename,
               dynamic_model_name=None,
               debug=False,
               frames_per_second=None,
-              max_err=None,
               area_threshold=0,
               min_observations_to_save=0,
               options=None,
@@ -446,8 +446,8 @@ def kalmanize(src_filename,
                 if 'trigger_CS3' not in parsed:
                     parsed['trigger_CS3'] = 'unknown'
                 textlog_save_lines = [
-                    'kalmanize running at %s fps, (hypothesis_test_max_error %s, top %s, trigger_CS3 %s, flydra_version %s)'%(
-                    str(frames_per_second),str(max_err),str(parsed['top']),
+                    'kalmanize running at %s fps, (top %s, trigger_CS3 %s, flydra_version %s)'%(
+                    str(frames_per_second),str(parsed['top']),
                     str(parsed['trigger_CS3']),flydra.version.__version__),
                     'original file: %s'%(src_filename,),
                     'dynamic model: %s'%(dynamic_model_name,),
@@ -480,9 +480,6 @@ def kalmanize(src_filename,
                     )
 
                 tracker.set_killed_tracker_callback( h5saver.save_tro )
-
-                print ('max reprojection error to accept new 3D point '
-                       'with hypothesis testing: %.1f (pixels)'%(max_err,))
 
                 # copy timestamp data into newly created kalmanized file
                 if hasattr(results.root,'trigger_clock_info'):
@@ -623,7 +620,7 @@ def kalmanize(src_filename,
                                 else:
                                     process_frame(reconst_orig_units,tracker,
                                                   last_frame,frame_data,camn2cam_id,
-                                                  max_err=max_err,debug=debug,
+                                                  debug=debug,
                                                   kalman_model=kalman_model,
                                                   area_threshold=area_threshold)
                             frame_count += 1
@@ -895,11 +892,6 @@ def main():
                       help="frames per second (used for Kalman filtering)")
 
     parser.add_option(
-        "--max-err", type='float',
-        default=50.0,
-        help="maximum mean reprojection error for hypothesis testing algorithm")
-
-    parser.add_option(
         "--exclude-cam-ids", type='string',
         help="camera ids to exclude from reconstruction (space separated)",
         metavar="EXCLUDE_CAM_IDS")
@@ -976,7 +968,6 @@ def main():
               dynamic_model_name = options.dynamic_model,
               debug = options.debug,
               frames_per_second = options.fps,
-              max_err = options.max_err,
               area_threshold=options.area_threshold,
               min_observations_to_save=options.min_observations_to_save,
               options=options,

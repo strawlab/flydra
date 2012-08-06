@@ -742,8 +742,6 @@ class CoordinateProcessor(threading.Thread):
 
         convert_format = flydra_kalman_utils.convert_format # shorthand
 
-        max_error = self.main_brain.get_hypothesis_test_max_error()
-
         if NETWORK_PROTOCOL == 'tcp':
             old_data = {}
 
@@ -1116,6 +1114,9 @@ class CoordinateProcessor(threading.Thread):
                                 if len(found_data_dict) >= 2:
                                     # Can't do any 3D math without at least 2 cameras giving good
                                     # data.
+                                    max_error = \
+                                        self.tracker.kalman_model['hypothesis_test_max_acceptable_error']
+
                                     try:
                                         (this_observation_orig_units, this_observation_Lcoords_orig_units, cam_ids_used,
                                          min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
@@ -1275,7 +1276,6 @@ class MainBrain(object):
 
     ROS_CONFIGURATION = dict(
         frames_per_second=100.0,
-        hypothesis_test_max_acceptable_error=50.0,
         kalman_model='EKF mamarama, units: mm',
         max_reconstruction_latency_sec=0.06, # 60 msec
         max_N_hypothesis_test=3,
@@ -1675,9 +1675,6 @@ class MainBrain(object):
 
         self.queue_data3d_kalman_estimates = Queue.Queue()
 
-        self.hypothesis_test_max_error = LockedValue(
-            self.config['hypothesis_test_max_acceptable_error']) # maximum reprojection error
-
         self.coord_processor = CoordinateProcessor(self,
                                    save_profiling_data=save_profiling_data,
                                    debug_level=self.debug_level,
@@ -1773,14 +1770,6 @@ class MainBrain(object):
                     print 'ERROR:',err
             self.config['frames_per_second'] = float(actual_new_fps)
             self.save_config()
-
-    def get_hypothesis_test_max_error(self):
-        return self.hypothesis_test_max_error.get()
-
-    def set_hypothesis_test_max_error(self,val):
-        self.hypothesis_test_max_error.set(val)
-        self.config['hypothesis_test_max_acceptable_error'] = val
-        self.save_config()
 
     def IncreaseCamCounter(self,cam_id,scalar_control_info,fqdn_and_port):
         self.num_cams += 1
@@ -2207,11 +2196,10 @@ class MainBrain(object):
         list_of_textlog_data = [
             (timestamp,cam_id,timestamp,
              ('MainBrain running at %s fps, (top %s, '
-              'hypothesis_test_max_error %s, trigger_CS3 %s, FOSC %s, flydra_version %s, '
+              'trigger_CS3 %s, FOSC %s, flydra_version %s, '
               'time_tzname0 %s)'%(
             str(self.trigger_device.frames_per_second_actual),
             str(self.trigger_device._t3_state.timer3_top),
-            str(self.get_hypothesis_test_max_error()),
             str(self.trigger_device._t3_state.timer3_CS),
             str(self.trigger_device.FOSC),
             flydra.version.__version__,
