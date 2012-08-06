@@ -149,6 +149,11 @@ def convert(infilename,
 
             cam_id = camn2cam_id[this_camn]
             remote_hostname = cam_id2hostname(cam_id, h52d)
+            if remote_hostname not in gain:
+                warnings.warn('no host %s in timestamp data. making up '
+                              'data.'%remote_hostname)
+                gain[remote_hostname]=1.0
+                offset[remote_hostname]=0.0
             mainbrain_timestamp = remote_timestamp*gain[remote_hostname] + offset[remote_hostname] # find mainbrain timestamp
 
             timestamp_time[obj_id_enum] = mainbrain_timestamp
