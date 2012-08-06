@@ -220,7 +220,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
         initial_position_covariance_estimate=1e-3,
         initial_velocity_covariance_estimate=10,
 
-        # support existint object
+        # support existing object
         n_sigma_accept=20.0, # geometric euclidian distance
 
         # death model
