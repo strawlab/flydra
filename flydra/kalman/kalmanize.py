@@ -28,8 +28,8 @@ from flydra.a2.tables_tools import openFileSafe
 # Not really "observations" but ML estimates
 FilteredObservations = flydra_kalman_utils.FilteredObservations
 convert_format = flydra_kalman_utils.convert_format
-tmp = flydra_kalman_utils.kalman_observations_2d_idxs_type
-kalman_observations_2d_idxs_type = tmp
+tmp = flydra_kalman_utils.ML_estimates_2d_idxs_type
+ML_estimates_2d_idxs_type = tmp
 del tmp
 
 class FakeThreadingEvent:
@@ -206,18 +206,18 @@ class KalmanSaver:
         self.h5_xhat.attrs.dynamic_model = dynamic_model
 
         self.h5_obs = self.h5file.createTable(
-            self.h5file.root,'kalman_observations', FilteredObservations,
+            self.h5file.root,'ML_estimates', FilteredObservations,
             "observations of tracked object",filters=filters)
 
         self.h5_2d_obs_next_idx = 0
 
-        # Note that kalman_observations_2d_idxs_type() should
+        # Note that ML_estimates_2d_idxs_type() should
         # match dtype with tro.observations_2d.
 
         self.h5_2d_obs = self.h5file.createVLArray(
             self.h5file.root,
-            'kalman_observations_2d_idxs',
-            kalman_observations_2d_idxs_type(),
+            'ML_estimates_2d_idxs',
+            ML_estimates_2d_idxs_type(),
             "camns and idxs")
 
         self.obj_id = -1
@@ -285,7 +285,7 @@ class KalmanSaver:
         if debugADS:
             print
 
-        # becomes obs_2d_idx (index into 'kalman_observations_2d_idxs')
+        # becomes obs_2d_idx (index into 'ML_estimates_2d_idxs')
         this_idxs = numpy.array( this_idxs, dtype=numpy.uint64 )
 
         # save observations ####################################

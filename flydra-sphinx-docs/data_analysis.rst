@@ -84,7 +84,7 @@ types of such files:
    be represented as :file:`DATAFILE2D.h5`.
 
  * "Kalmanized" 3D data files. These contain ``/kalman_estimates`` and
-   ``/kalman_observations`` tables in addition to a ``/calibration``
+   ``/ML_estimates`` tables in addition to a ``/calibration``
    group.  Throughout the documentation, such files will be
    represented as :file:`DATAFILE3D.h5`.
 
@@ -147,9 +147,9 @@ Data flow
     TwoDee -> da;
     cal -> da;
     motion_model -> da;
-    da -> kalman_observations;
+    da -> ML_estimates;
     da -> kalman_estimates;
-    kalman_observations -> smoothed_kalman_estimates;
+    ML_estimates -> smoothed_kalman_estimates;
     motion_model -> smoothed_kalman_estimates;
 
     da [label="data association & tracking (flydra_kalmanize or flydra_mainbrain)"];
@@ -157,7 +157,7 @@ Data flow
     cal [label="calibration"];
     motion_model [label="dynamic model"];
     kalman_estimates [label="kalman_estimates (in .h5 file)"];
-    kalman_observations [label="kalman_observations (in .h5 file)"];
+    ML_estimates [label="ML_estimates (in .h5 file)"];
     smoothed_kalman_estimates [label="smoothed kalman estimates [output of load_data(use_kalman_smoothing=True)]"];
   }
 

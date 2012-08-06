@@ -318,7 +318,7 @@ def doit(
                     # no observation this frame
                     continue
                 obs_2d_idx = this_3d_row['obs_2d_idx']
-                kobs_2d_data = data_file.root.kalman_observations_2d_idxs[
+                kobs_2d_data = data_file.root.ML_estimates_2d_idxs[
                     int(obs_2d_idx)]
 
                 # parse VLArray
@@ -493,7 +493,7 @@ def doit(
                 # this is forked from flydra_analysis_plot_kalman_2d.py
 
                 kresults = PT.openFile(kalman_filename,mode='r')
-                kobs = kresults.root.kalman_observations
+                kobs = kresults.root.ML_estimates
                 kframes = kobs.read(field='frame')
                 if frame_start is not None:
                     k_after_start = numpy.nonzero( kframes>=frame_start )[0]
@@ -516,7 +516,7 @@ def doit(
                 obs_2d_idxs = kobs.read(field='obs_2d_idx')[k_use_idxs]
                 kframes = kframes[k_use_idxs]
 
-                kobs_2d = kresults.root.kalman_observations_2d_idxs
+                kobs_2d = kresults.root.ML_estimates_2d_idxs
                 # this will be slooow...
                 used_cam_ids = collections.defaultdict(list)
                 for obs_2d_idx,kframe in zip(obs_2d_idxs,kframes):

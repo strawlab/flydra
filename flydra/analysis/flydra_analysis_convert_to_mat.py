@@ -48,7 +48,7 @@ def do_it(filename=None,
         print 'reading files...'
         table1 = kresults.root.kalman_estimates.read()
         if not ignore_observations:
-            table2 = kresults.root.kalman_observations.read()
+            table2 = kresults.root.ML_estimates.read()
         print 'done.'
         kresults.close()
         del kresults

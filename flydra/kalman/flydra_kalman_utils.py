@@ -192,7 +192,7 @@ class FilteredObservations(PT.IsDescription): # Not really "observations" but ML
     x          = PT.Float32Col(pos=2)
     y          = PT.Float32Col(pos=3)
     z          = PT.Float32Col(pos=4)
-    obs_2d_idx = PT.UInt64Col(pos=5) # index into VLArray 'kalman_observations_2d_idxs'
+    obs_2d_idx = PT.UInt64Col(pos=5) # index into VLArray 'ML_estimates_2d_idxs'
     hz_line0 = PT.Float32Col(pos=6)
     hz_line1 = PT.Float32Col(pos=7)
     hz_line2 = PT.Float32Col(pos=8)
@@ -200,7 +200,7 @@ class FilteredObservations(PT.IsDescription): # Not really "observations" but ML
     hz_line4 = PT.Float32Col(pos=10)
     hz_line5 = PT.Float32Col(pos=11)
 
-kalman_observations_2d_idxs_type = PT.UInt16Atom
+ML_estimates_2d_idxs_type = PT.UInt16Atom
 
 def convert_format(current_data,camn2cam_id,area_threshold=0.0,only_likely=False):
     """convert data from format used for Kalman tracker to hypothesis tester"""

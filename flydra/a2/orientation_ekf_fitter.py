@@ -324,7 +324,7 @@ def doit(output_h5_filename=None,
                 # copy everything from source to dest
                 input_node._f_copy(output_h5.root,recursive=True)
 
-            dest_table = output_h5.root.kalman_observations
+            dest_table = output_h5.root.ML_estimates
             for colname in ['hz_line%d'%i for i in range(6)]:
                 clear_col(dest_table,colname)
             dest_table.flush()
@@ -356,8 +356,8 @@ def doit(output_h5_filename=None,
             h5_framenumbers = data2d['frame']
             h5_frame_qfi = result_utils.QuickFrameIndexer(h5_framenumbers)
 
-            kalman_observations_2d_idxs = (
-                kh5.root.kalman_observations_2d_idxs[:])
+            ML_estimates_2d_idxs = (
+                kh5.root.ML_estimates_2d_idxs[:])
 
             all_kobs_obj_ids = dest_table.read(field='obj_id')
             all_kobs_frames = dest_table.read(field='frame')
@@ -423,7 +423,7 @@ def doit(output_h5_filename=None,
                     frame2d_idxs = data2d_idxs[h5_2d_row_idxs]
 
                     obs_2d_idx = this_3d_row['obs_2d_idx']
-                    kobs_2d_data = kalman_observations_2d_idxs[int(obs_2d_idx)]
+                    kobs_2d_data = ML_estimates_2d_idxs[int(obs_2d_idx)]
 
                     # Parse VLArray.
                     this_camns = kobs_2d_data[0::2]
@@ -861,7 +861,7 @@ def doit(output_h5_filename=None,
                     ax5.legend()
 
     # record that we did this...
-    output_h5.root.kalman_observations.attrs.ori_ekf_time = time.time()
+    output_h5.root.ML_estimates.attrs.ori_ekf_time = time.time()
     output_h5.close()
     ca.close()
 
@@ -877,8 +877,8 @@ def doit(output_h5_filename=None,
 
 def is_orientation_fit(filename):
     with openFileSafe( filename, mode='r') as h5:
-        if hasattr(h5.root.kalman_observations.attrs,'ori_ekf_time'):
-            ori_ekf_time = h5.root.kalman_observations.attrs.ori_ekf_time
+        if hasattr(h5.root.ML_estimates.attrs,'ori_ekf_time'):
+            ori_ekf_time = h5.root.ML_estimates.attrs.ori_ekf_time
             return True
         else:
             return False
@@ -962,7 +962,7 @@ def compute_ori_quality(kh5, orig_frames, obj_id, smooth_len=10):
     kh5: pytables file
         an open pytables file
     """
-    #h5.root.kalman_observations
+    #h5.root.ML_estimates
     ca = core_analysis.get_global_CachingAnalyzer()
     group = get_group_for_obj(obj_id,kh5)
     try:

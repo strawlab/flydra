@@ -95,7 +95,7 @@ def convert_to_flydrah5(bag_file, topic_name='pointcloud', out_h5=None, reconstr
     # save data as both "observations" (ML estimates) and "kalman estimates" (MAP estimates)
 
     FilteredObservations = flydra_kalman_utils.FilteredObservations
-    h5data3d_kalman_observations = ct(root,'kalman_observations', FilteredObservations,
+    h5data3d_ML_estimates = ct(root,'ML_estimates', FilteredObservations,
                                       "3d data (input to Kalman filter)")
     h5_obs_names = tables.Description(FilteredObservations().columns)._v_names
 
@@ -119,7 +119,7 @@ def convert_to_flydrah5(bag_file, topic_name='pointcloud', out_h5=None, reconstr
         shape1d = (len(pts),)
         shape2d_6 = (len(pts),6)
         this_idxs = np.zeros(shape1d, dtype=np.uint64)
-        #this_idxs = numpy.array( this_idxs, dtype=numpy.uint64 ) # becomes obs_2d_idx (index into 'kalman_observations_2d_idxs')
+        #this_idxs = numpy.array( this_idxs, dtype=numpy.uint64 ) # becomes obs_2d_idx (index into 'ML_estimates_2d_idxs')
 
         observations_frames = np.arange( len(pts), dtype=np.uint64)
         obj_id_array = np.empty(observations_frames.shape, dtype=np.uint32)
@@ -131,8 +131,8 @@ def convert_to_flydrah5(bag_file, topic_name='pointcloud', out_h5=None, reconstr
         array_list = [obj_id_array,observations_frames]+list_of_obs+[this_idxs]+list_of_lines
         obs_recarray = np.rec.fromarrays(array_list, names = h5_obs_names)
 
-        h5data3d_kalman_observations.append(obs_recarray)
-        h5data3d_kalman_observations.flush()
+        h5data3d_ML_estimates.append(obs_recarray)
+        h5data3d_ML_estimates.flush()
 
 
 
