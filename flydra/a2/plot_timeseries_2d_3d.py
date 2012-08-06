@@ -187,12 +187,12 @@ def doit(
                 if n_valid >= 1:
                     ax.plot( xdata, data['x'], 'ro',  ms=2, mew=0 )
                     ax.plot( xdata, data['y'], 'go',  ms=2, mew=0 )
-            ax.text(0.1,0,'%s: %d pts'%(cam_id,cam_id_n_valid),
+            ax.text(0.1,0,'%s %s: %d pts'%(cam_id,cam_id2camns[cam_id],cam_id_n_valid),
                     horizontalalignment='left',
                     verticalalignment='bottom',
                     transform = ax.transAxes,
                     )
-            ax.set_ylabel('%s\npixels'%cam_id)
+            ax.set_ylabel('pixels')
             if not options.timestamps:
                 ax.set_xlim( (start_frame, stop_frame) )
         ax.set_xlabel('frame')
