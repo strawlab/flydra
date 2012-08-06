@@ -216,7 +216,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
         # data association parameters
 
         # birth model
-        hypothesis_test_max_acceptable_error=50.0,
+        hypothesis_test_max_acceptable_error=5.0,
         min_dist_to_believe_new_meters=0.08, # 8 cm
         min_dist_to_believe_new_sigma=3.0,
 
