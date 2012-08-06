@@ -191,7 +191,7 @@ def do_it(filename=None,
                     arr[new_colname]= data[orig_colname]
 
             data_dict[table_name] = arr
-        
+
         # save as h5 file
         save_as_flydra_hdf5(newfilename, data_dict, tzname, fps)
 

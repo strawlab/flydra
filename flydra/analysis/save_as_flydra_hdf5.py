@@ -8,8 +8,8 @@ def get_valid_userblock_size( min ):
     return result
 
 
-def save_as_flydra_hdf5(newfilename, data, tzname, fps):   
-    
+def save_as_flydra_hdf5(newfilename, data, tzname, fps):
+
     first_chars = '{"schema": "http://strawlab.org/schemas/flydra/1.1"}'
     pow2_bytes = get_valid_userblock_size( len(first_chars))
     userblock = first_chars + '\0'*(pow2_bytes-len(first_chars))
