@@ -206,7 +206,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
                           [     0, T22, 0,       0,   T,   0],
                           [     0, 0, T22,       0,   0,   T]])
     # the scale of the covariance
-    Q = 0.0001*Q
+    Q = 0.01*Q
 
     # measurement noise covariance matrix
     R = 1e-3*numpy.eye(os)
