@@ -209,7 +209,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
     Q = 0.01*Q
 
     # measurement noise covariance matrix
-    R = 1e-3*numpy.eye(os)
+    R = 1e-7*numpy.eye(os)
 
     newdict = dict(
 
