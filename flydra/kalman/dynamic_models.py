@@ -151,41 +151,6 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
 
     ######################################
 
-    # 'fly dynamics, high precision calibration, units: mm':
-    # process covariance
-    base_model_dict = _get_decreasing_accel_model(dt)
-    ss = base_model_dict['ss']
-    os = base_model_dict['os']
-
-    Q = numpy.zeros((ss,ss))
-    for i in range(0,3):
-        Q[i,i] = (0.001)**2
-    for i in range(3,6):
-        Q[i,i] = (0.2)**2
-    for i in range(6,9):
-        Q[i,i] = 10.0 # acceleration noise (near (3.16m*sec**-2)**2)
-
-    # measurement noise covariance matrix
-    R = 1e-6*numpy.eye(os)
-
-    newdict = dict(
-        hypothesis_test_max_acceptable_error=5.0,
-        min_dist_to_believe_new_meters=0.01, # 1 cm
-        min_dist_to_believe_new_sigma=3.0,
-        n_sigma_accept=math.sqrt(9.0),
-        max_variance_dist_meters=0.02,
-        initial_position_covariance_estimate=1e-6,
-        initial_acceleration_covariance_estimate=15,
-        max_frames_skipped=25,
-        Q=Q,
-        R=R)
-    newdict.update(base_model_dict)
-    dynamic_models['fly dynamics, high precision calibration, units: mm'] = newdict
-
-    ## ##################################################
-
-    ######################################
-
     # 'mamarama, units: mm':
     # process covariance
 
