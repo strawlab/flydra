@@ -111,6 +111,10 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
     # 'hbird, units: mm':
     # process covariance
 
+    # WARNING: these parameters haven't been tested since the
+    # consolidation of the flydra calibration stuff in July-August
+    # 2012.
+
     base_model_dict = _get_fixed_vel_model(dt)
     ss = base_model_dict['ss']
     os = base_model_dict['os']
@@ -209,6 +213,10 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
     # 'hydra, units: m':
     # process covariance
 
+    # WARNING: these parameters haven't been tested since the
+    # consolidation of the flydra calibration stuff in July-August
+    # 2012.
+
     base_model_dict = _get_fixed_vel_model(dt)
     ss = base_model_dict['ss']
     os = base_model_dict['os']
@@ -260,7 +268,7 @@ class EKFAllParams(dict):
         self['isEKF']=True
 
 class MamaramaMMEKFAllParams(EKFAllParams):
-    """Drosophila non-linear dynamic model in millimemter units for EKF"""
+    """Drosophila non-linear dynamic model for EKF"""
     def __init__(self,dt=None):
         super( MamaramaMMEKFAllParams, self).__init__()
         assert dt is not None
@@ -286,7 +294,10 @@ class MamaramaMMEKFAllParams(EKFAllParams):
         self['distorted_pixel_euclidian_distance_accept']=20.0 # distance in the raw image plane (i.e. before radial undistortion)
 
 class HydraMEKFAllParams(EKFAllParams):
-    """Fly non-linear dynamic model in meter units for EKF"""
+    # WARNING: these parameters haven't been tested since the
+    # consolidation of the flydra calibration stuff in July-August
+    # 2012.
+
     def __init__(self,dt=None):
         super( HydraMEKFAllParams, self).__init__()
         assert dt is not None
@@ -320,7 +331,10 @@ class HydraMEKFAllParams(EKFAllParams):
             self['max_variance_dist_meters']=2 # let grow huge
 
 class HbirdEKFAllParams(EKFAllParams):
-    """Drosophila non-linear dynamic model in millimemter units for EKF"""
+    # WARNING: these parameters haven't been tested since the
+    # consolidation of the flydra calibration stuff in July-August
+    # 2012.
+
     def __init__(self,dt=None):
         super( HbirdEKFAllParams, self).__init__()
         assert dt is not None
