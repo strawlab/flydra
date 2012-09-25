@@ -301,7 +301,7 @@ def kalman_smooth(orig_rows,
     obs = numpy.vstack(( x,y,z )).T
 
     if dynamic_model_name is None:
-        dynamic_model_name = 'fly dynamics, high precision calibration, units: mm'
+        dynamic_model_name = flydra.kalman.dynamic_models.DEFAULT_MODEL
         warnings.warn('No Kalman model specified. Using "%s" for Kalman smoothing'%(dynamic_model_name,))
 
     model = flydra.kalman.dynamic_models.get_kalman_model(name=dynamic_model_name,dt=(1.0/frames_per_second))
@@ -2138,7 +2138,7 @@ class TestCoreAnalysis:
             self.data_files.append( data_file )
             self.is_mat_files.append( is_mat_file )
             fps = 100.0
-            kalman_model = 'fly dynamics, high precision calibration, units: mm'
+            kalman_model = flydra.kalman.dynamic_models.DEFAULT_MODEL
             self.fps.append( fps )
             self.dynamic_model.append(kalman_model)
 
@@ -2196,8 +2196,7 @@ class TestCoreAnalysis:
                         method='position based',
                         method_params={'downsample':1,
                                        },
-                        dynamic_model_name=
-                        'fly dynamics, high precision calibration, units: mm',
+                        dynamic_model_name=flydra.kalman.dynamic_models.DEFAULT_MODEL,
                         )
                 except NoObjectIDError:
                     pass

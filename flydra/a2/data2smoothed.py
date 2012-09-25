@@ -8,6 +8,7 @@ import sys, os, time
 import flydra.a2.core_analysis as core_analysis
 from optparse import OptionParser
 import flydra.analysis.flydra_analysis_convert_to_mat
+import flydra.kalman.dynamic_models as dynamic_models
 import tables
 import flydra.analysis.result_utils as result_utils
 import flydra.a2.utils as utils
@@ -184,7 +185,7 @@ def convert(infilename,
     if dynamic_model_name is None:
         dynamic_model_name = extra.get('dynamic_model_name',None)
         if dynamic_model_name is None:
-            dynamic_model_name = 'fly dynamics, high precision calibration, units: mm'
+            dynamic_model_name = dynamic_models.DEFAULT_MODEL
             warnings.warn('no dynamic model specified, using "%s"'%dynamic_model_name)
         else:
             print 'detected file loaded with dynamic model "%s"'%dynamic_model_name

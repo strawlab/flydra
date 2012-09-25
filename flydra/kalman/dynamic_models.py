@@ -5,6 +5,8 @@ import math
 import warnings
 import re
 
+DEFAULT_MODEL = 'mamarama, units: mm'
+
 def _get_decreasing_accel_model(dt=None):
     """get linear dynamical system matrices A and C
 
