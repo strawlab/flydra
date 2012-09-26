@@ -510,7 +510,7 @@ def doit(output_h5_filename=None,
                     ax1.legend()
 
                 if 1:
-                    # guesstimate initial orientation (XXX not done)
+                    warnings.warn('guesstimate initial orientation (XXX not done)')
                     up_vec = 0,0,1
                     q0 = PQmath.orientation_to_quat( up_vec )
                     w0 = 0,0,0 # no angular rate
