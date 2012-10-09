@@ -2710,9 +2710,9 @@ class AppState(object):
                         len(missing_framenumbers),
                         camn,time.asctime())
                 if len(missing_framenumbers) > 200:
-                    LOG.info(msg+str(missing_framenumbers[:25]) + ' + ... + ' + str(missing_framenumbers[-25:]))
+                    LOG.info("%s %s + ... + %s" % (msg,missing_framenumbers[:25],missing_framenumbers[-25:]))
                 else:
-                    LOG.info(msg+str(missing_framenumbers))
+                    LOG.info("%s %s" % (msg,missing_framenumbers))
 
                 last_points_framenumbers = self.last_points_framenumbers_by_cam[cam_no]
                 last_points = self.last_points_by_cam[cam_no]
@@ -2749,9 +2749,9 @@ class AppState(object):
                             len(still_missing),
                             camn),
                     if len(still_missing) > 200:
-                        LOG.info(msg+str(still_missing[:25]) + ' + ... + ' + str(still_missing[-25:]))
+                        LOG.info("%s %s + ... + %s" % (msg,still_missing[:25],still_missing[-25:]))
                     else:
-                        LOG.info(msg+str(still_missing))
+                        LOG.info("%s %s" % (msg,still_missing))
 
             elif key == 'quit':
                 self._image_sources[cam_no].join(0.1)
