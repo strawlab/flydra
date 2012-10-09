@@ -720,19 +720,25 @@ def SingleCameraCalibration_fromfile(filename):
                                    res=res,
                                    helper=helper)
 
-def SingleCameraCalibration_from_xml(elem):
+def SingleCameraCalibration_from_xml(elem, helper=None):
+    """ loads a camera calibration from an Elementree XML node """
     assert ET.iselement(elem)
     assert elem.tag == "single_camera_calibration"
     cam_id = elem.find("cam_id").text
     pmat = numpy.array(numpy.mat(elem.find("calibration_matrix").text))
     res = numpy.array(numpy.mat(elem.find("resolution").text))[0,:]
-    helper_elem = elem.find("non_linear_parameters")
-    helper = reconstruct_utils.ReconstructHelper_from_xml(helper_elem)
+    if not helper:
+        helper_elem = elem.find("non_linear_parameters")
+        helper = reconstruct_utils.ReconstructHelper_from_xml(helper_elem)
 
     return SingleCameraCalibration(cam_id=cam_id,
                                    Pmat=pmat,
                                    res=res,
                                    helper=helper)
+
+def SingleCameraCalibration_from_xmlfile(fname, *args, **kwargs):
+    root = ET.parse(fname).getroot()
+    return SingleCameraCalibration_from_xml(root, *args, **kwargs)
 
 def SingleCameraCalibration_from_basic_pmat(pmat,**kw):
     M = numpy.asarray(pmat)
@@ -798,6 +804,7 @@ def pretty_dump(e, ind=''):
     return s
 
 def Reconstructor_from_xml(elem):
+    """ Loads a reconstructor from an Elementree XML node """
     assert ET.iselement(elem)
     assert elem.tag == "multi_camera_reconstructor"
     sccs = []
