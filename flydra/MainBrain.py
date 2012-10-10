@@ -1665,17 +1665,20 @@ class MainBrain(object):
         self.timestamp_echo_receiver.setDaemon(True)
         self.timestamp_echo_receiver.start()
 
+        #setup ROS
         self.pub_data_file = rospy.Publisher(
                                 'flydra_mainbrain_data_file',
                                 std_msgs.msg.String,
                                 latch=True)
+
         self.exp_uuid = None
         self.sub_exp_uuid = rospy.Subscriber(
                                 'experiment/uuid',
                                 std_msgs.msg.String,
                                 self._on_experiment_uuid)
 
-        self._init_ros_interface()
+        for name, srv in self.ROS_CONTROL_API.iteritems():
+            rospy.Service('~%s' % name, srv, self._ros_generic_service_dispatch)
 
         main_brain_keeper.register( self )
 
@@ -1717,10 +1720,6 @@ class MainBrain(object):
             LOG.debug("result = %s (marshaling over ros as %s klass %s)" % (result,kwargs,respclass))
 
             return respclass(**kwargs)
-
-    def _init_ros_interface(self):
-        for name, srv in self.ROS_CONTROL_API.iteritems():
-            rospy.Service('~%s' % name, srv, self._ros_generic_service_dispatch)
 
     def load_config(self):
         self.config = {}
