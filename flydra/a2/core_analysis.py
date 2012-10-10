@@ -1390,8 +1390,13 @@ class CachingAnalyzer:
 
         try:
             rows = kresults.root.ML_estimates.readCoordinates(idxs)
-        except tables.exceptions.NoSuchNodeError, err:
-            rows = kresults.root.kalman_observations.readCoordinates(idxs)
+        except tables.exceptions.NoSuchNodeError, err1:
+            #backwards compatibility
+            try:
+                rows = kresults.root.kalman_observations.readCoordinates(idxs)
+            except tables.exceptions.NoSuchNodeError, err2:
+                raise err1
+
         if not len(rows):
             raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
 

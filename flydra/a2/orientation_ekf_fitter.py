@@ -324,7 +324,14 @@ def doit(output_h5_filename=None,
                 # copy everything from source to dest
                 input_node._f_copy(output_h5.root,recursive=True)
 
-            dest_table = output_h5.root.ML_estimates
+            try:
+                dest_table = output_h5.root.ML_estimates
+            except tables.exceptions.NoSuchNodeError, err1:
+                # backwards compatibility
+                try:
+                    dest_table = output_h5.root.kalman_observations
+                except tables.exceptions.NoSuchNodeError, err2:
+                    raise err1
             for colname in ['hz_line%d'%i for i in range(6)]:
                 clear_col(dest_table,colname)
             dest_table.flush()
