@@ -50,8 +50,8 @@ from ros_flydra.msg import flydra_mainbrain_super_packet
 from ros_flydra.msg import flydra_mainbrain_packet, flydra_object
 from geometry_msgs.msg import Point, Vector3
 
-import flydra.log
-LOG = flydra.log.Log()
+import flydra.rosutils
+LOG = flydra.rosutils.Log()
 
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
@@ -1625,6 +1625,7 @@ class MainBrain(object):
 
         # Attributes which come in use when saving data occurs
         self.h5file = None
+        self.h5filename = ''
         self.h5data2d = None
         self.h5cam_info = None
         self.h5host_clock_info = None
@@ -1927,9 +1928,7 @@ class MainBrain(object):
         nowstr = time.strftime( '%Y%m%d_%H%M%S' )
 
         if not raw_file_basename:
-            raw_file_basename = os.path.join(
-                                    os.path.expanduser(self.config['save_data_dir']),
-                                    'LARGE_MOVIES')
+            raw_file_basename = os.path.join(self.config['save_data_dir'],'LARGE_MOVIES')
 
         if len(cam_ids) == 0:
             cam_ids = self.remote_api.external_get_cam_ids()
@@ -1979,9 +1978,7 @@ class MainBrain(object):
     def start_small_recording(self, raw_file_basename=None, *cam_ids):
         nowstr = time.strftime( '%Y%m%d_%H%M%S' )
         if not raw_file_basename:
-            raw_file_basename = os.path.join(
-                                    os.path.expanduser(self.config['save_data_dir']),
-                                    'SMALL_MOVIES')
+            raw_file_basename = os.path.join(self.config['save_data_dir'],'SMALL_MOVIES')
         if len(cam_ids) == 0:
             cam_ids = self.remote_api.external_get_cam_ids()
         for cam_id in cam_ids:
@@ -2092,6 +2089,7 @@ class MainBrain(object):
             return path
 
     def set_save_data_dir(self, path):
+        path = flydra.rosutils.decode_url(path)
         if os.path.isdir(path):
             save_data_dir = path
         else:
@@ -2101,6 +2099,7 @@ class MainBrain(object):
                 return None
         self.config['save_data_dir'] = save_data_dir
         self.save_config()
+        print 'saving data to %s' % save_data_dir
         return save_data_dir
 
     def is_saving_data(self):
@@ -2112,17 +2111,16 @@ class MainBrain(object):
 
         if not filename:
             filename = time.strftime('DATA%Y%m%d_%H%M%S.h5')
-        filename = os.path.join(
-                    os.path.expanduser(self.config['save_data_dir']),
-                    filename)
+        filename = os.path.join(self.config['save_data_dir'],filename)
 
         if os.path.exists(filename):
             raise RuntimeError("will not overwrite data file")
 
-        self.pub_data_file.publish(filename)
+        self.h5filename = filename
+        self.pub_data_file.publish(self.h5filename)
 
         self.timestamp_modeler.block_activity = True
-        self.h5file = PT.openFile(filename, mode="w", title="Flydra data file")
+        self.h5file = PT.openFile(self.h5filename, mode="w", title="Flydra data file")
         expected_rows = int(1e6)
         ct = self.h5file.createTable # shorthand
         root = self.h5file.root # shorthand
@@ -2186,11 +2184,14 @@ class MainBrain(object):
                 raise ValueError('image cannot be None')
             self.h5file.createArray( img, cam_id, image, 'sample image from %s'%cam_id )
 
+        self.save_config()
+
     def stop_saving_data(self):
         self._service_save_data()
         if self.is_saving_data():
             self.h5file.close()
             self.h5file = None
+            self.h5filename = ''
             self.timestamp_modeler.block_activity = False
         else:
             LOG.info('saving already stopped, cannot stop again')
@@ -2201,10 +2202,11 @@ class MainBrain(object):
         self.h5movie_info = None
         self.h5exp_info = None
         self.h5textlog = None
-        if 1:
-            self.h5data3d_kalman_estimates = None
-            self.h5data3d_ML_estimates = None
-            self.h5_2d_obs = None
+        self.h5data3d_kalman_estimates = None
+        self.h5data3d_ML_estimates = None
+        self.h5_2d_obs = None
+
+        self.save_config()
 
     def _startup_message(self):
         textlog_row = self.h5textlog.row
