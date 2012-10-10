@@ -510,9 +510,16 @@ def doit(output_h5_filename=None,
                     ax1.legend()
 
                 if 1:
-                    warnings.warn('guesstimate initial orientation (XXX not done)')
-                    up_vec = 0,0,1
-                    q0 = PQmath.orientation_to_quat( up_vec )
+                    # estimate orientation of initial frame
+                    row0 = obj_3d_rows[:1] # take only first row but keep as 1d array
+                    hzlines = np.array([row0['hz_line0'],
+                                        row0['hz_line1'],
+                                        row0['hz_line2'],
+                                        row0['hz_line3'],
+                                        row0['hz_line4'],
+                                        row0['hz_line5']]).T
+                    directions = reconstruct.line_direction(hzlines)
+                    q0 = PQmath.orientation_to_quat( directions[0] )
                     w0 = 0,0,0 # no angular rate
                     init_x = np.array([w0[0],w0[1],w0[2],
                                        q0.x, q0.y, q0.z, q0.w])
