@@ -92,10 +92,14 @@ class ExternalSurfaceCanvas(object):
             np.any( np.isnan( yarr ) )):
             raise ValueError('cannot plot data with nans')
 
-        if color_rgba is None:
-            color_rgba = (1,1,1,1)
         if len(xarr)==1:
             warnings.warn('benu plot() currently only plots line segments')
+        assert len(xarr)==len(yarr)
+        if len(xarr)==0:
+            return
+
+        if color_rgba is None:
+            color_rgba = (1,1,1,1)
         ctx = self._ctx # shorthand
 
         if linewidth is not None:
