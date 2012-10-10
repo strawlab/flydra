@@ -1253,6 +1253,7 @@ class MainBrain(object):
         max_reconstruction_latency_sec=0.06, # 60 msec
         max_N_hypothesis_test=3,
         save_data_dir='~/FLYDRA',
+        camera_calibration='',
     )
 
 
@@ -1599,6 +1600,7 @@ class MainBrain(object):
         #self.listen_thread.setDaemon(True) # don't let this thread keep app alive
         self.remote_api = remote_api
 
+        self._config_change_functions = []
         self._new_camera_functions = []
         self._old_camera_functions = []
 
@@ -1681,6 +1683,11 @@ class MainBrain(object):
         for name, srv in self.ROS_CONTROL_API.iteritems():
             rospy.Service('~%s' % name, srv, self._ros_generic_service_dispatch)
 
+        #final config processing
+        self.load_calibration(self.config['camera_calibration'])
+        self.set_new_tracker(self.config['kalman_model'])
+        self.set_save_data_dir(self.config['save_data_dir'])
+
         main_brain_keeper.register( self )
 
     def _on_experiment_uuid(self, msg):
@@ -1731,6 +1738,8 @@ class MainBrain(object):
         for k,v in self.config.iteritems():
             if k in self.ROS_CONFIGURATION:
                 rospy.set_param("~%s" % k, v)
+        for func in self._config_change_functions:
+            func()
 
     def get_fps(self):
         return self.trigger_device.frames_per_second_actual
@@ -1758,6 +1767,7 @@ class MainBrain(object):
                         cam_id, 'expected_trigger_framerate', actual_new_fps )
                 except Exception,err:
                     LOG.warn('set_camera_property_error %s'%err)
+
             self.config['frames_per_second'] = float(actual_new_fps)
             self.save_config()
 
@@ -1811,9 +1821,13 @@ class MainBrain(object):
         return all
 
     def start_listening(self):
-        # start listen thread
-        #self.listen_thread.setDaemon(True)
+        """ the last thing called before we work - give the config callback watchers a callback
+        to check on the state of the mainbrain post __init__ """
+        self.save_config()
         self.listen_thread.start()
+
+    def set_config_change_callback(self,handler):
+        self._config_change_functions.append(handler)
 
     def set_new_camera_callback(self,handler):
         self._new_camera_functions.append(handler)
@@ -2020,20 +2034,31 @@ class MainBrain(object):
     def load_calibration(self,dirname):
         if self.is_saving_data():
             raise RuntimeError("Cannot (re)load calibration while saving data")
-        connected_cam_ids = self.remote_api.external_get_cam_ids()
-        self.reconstructor = flydra.reconstruct.Reconstructor(dirname)
-        calib_cam_ids = self.reconstructor.get_cam_ids()
 
-        calib_cam_ids = calib_cam_ids
+        if not dirname:
+            return
 
-        self.coord_processor.set_reconstructor(self.reconstructor)
+        dirname = flydra.rosutils.decode_url(dirname)
+        if os.path.exists(dirname):
+            connected_cam_ids = self.remote_api.external_get_cam_ids()
+            self.reconstructor = flydra.reconstruct.Reconstructor(dirname)
+            calib_cam_ids = self.reconstructor.get_cam_ids()
 
-        for cam_id in calib_cam_ids:
-            pmat = self.reconstructor.get_pmat(cam_id)
-            intlin = self.reconstructor.get_intrinsic_linear(cam_id)
-            intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
-            if cam_id in connected_cam_ids:
-                self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin )
+            calib_cam_ids = calib_cam_ids
+
+            self.coord_processor.set_reconstructor(self.reconstructor)
+
+            for cam_id in calib_cam_ids:
+                pmat = self.reconstructor.get_pmat(cam_id)
+                intlin = self.reconstructor.get_intrinsic_linear(cam_id)
+                intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
+                if cam_id in connected_cam_ids:
+                    self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin )
+
+            print 'loaded camera calibration', dirname
+
+            self.config['camera_calibration'] = dirname
+            self.save_config()
 
     def clear_calibration(self):
         if self.is_saving_data():
