@@ -1745,6 +1745,9 @@ class MainBrain(object):
             self.trigger_device.frames_per_second = new_fps
             actual_new_fps = self.trigger_device.frames_per_second_actual
 
+            #the tracker depends on the framerate
+            self.update_tracker_fps(actual_new_fps)
+
         self.timestamp_modeler.synchronize = True # fire event handler
         if new_fps is not None:
             cam_ids = self.remote_api.external_get_cam_ids()
@@ -2046,23 +2049,38 @@ class MainBrain(object):
         for cam_id in cam_ids:
             self.remote_api.external_set_cal( cam_id, None, None, None, None )
 
-    def set_new_tracker(self,kalman_model_name=None):
+        self.save_config()
+
+    def update_tracker_fps(self, fps):
+        self.set_new_tracker(self.dynamic_model_name, fps)
+
+    def set_new_tracker(self, kalman_model_name, new_fps=None):
         if self.is_saving_data():
             raise RuntimeError('will not set Kalman parameters while saving data')
 
-        fps = self.get_fps()
+        self.dynamic_model_name = kalman_model_name
+
+        if self.reconstructor is None:
+            return
+
+        fps = self.get_fps() if new_fps is None else new_fps
         dt = 1.0/fps
+
+        print 'setting model to %s (fps: %s)' % (kalman_model_name, fps)
+
         dynamic_model = flydra.kalman.dynamic_models.get_kalman_model(name=kalman_model_name,dt=dt)
 
         self.kalman_saver_info_instance = flydra_kalman_utils.KalmanSaveInfo(name=kalman_model_name)
         self.KalmanEstimatesDescription = self.kalman_saver_info_instance.get_description()
-        self.dynamic_model=dynamic_model
-        self.dynamic_model_name=kalman_model_name
+        self.dynamic_model = dynamic_model
 
         self.h5_xhat_names = PT.Description(self.KalmanEstimatesDescription().columns)._v_names
 
         # send params over to realtime coords thread
         self.coord_processor.set_new_tracker(kalman_model=dynamic_model)
+
+        self.config['kalman_model'] = kalman_model_name 
+        self.save_config()
 
     def __del__(self):
         self.quit()
