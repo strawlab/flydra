@@ -676,6 +676,11 @@ def doit(h5_filename=None,
                             xplt=np.array([lowerleft[0]-5,
                                            lowerleft[0]+av_im_show.shape[1]+5])
                             yplt=slope*xplt+yintercept
+                            if 1:
+                                # only send non-nan values to plot
+                                plt_good = ~np.isnan(xplt) & ~np.isnan(yplt)
+                                xplt = xplt[ plt_good ]
+                                yplt = yplt[ plt_good ]
 
                             top_row_width = scale*imw*n_ims + (1+n_ims)*margin
                             SHOW_STACK=True
