@@ -85,7 +85,7 @@ else:
 import flydra.reconstruct_utils as reconstruct_utils
 import flydra.reconstruct
 import flydra.version
-import flydra.log
+import flydra.rosutils
 from flydra.reconstruct import do_3d_operations_on_2d_point
 
 import camnode_utils
@@ -97,7 +97,7 @@ if os.name == 'posix' and sys.platform != 'darwin':
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
 
-LOG = flydra.log.Log()
+LOG = flydra.rosutils.Log()
 
 def ros_ensure_valid_name(name):
     return name.replace('-','_')
