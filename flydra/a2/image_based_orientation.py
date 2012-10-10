@@ -293,8 +293,14 @@ def doit(h5_filename=None,
     ca = core_analysis.get_global_CachingAnalyzer()
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(
         kalman_filename)
-    ML_estimates_2d_idxs = data_file.root.ML_estimates_2d_idxs[:]
-
+    try:
+        ML_estimates_2d_idxs = data_file.root.ML_estimates_2d_idxs[:]
+    except tables.exceptions.NoSuchNodeError, err1:
+        # backwards compatibility
+        try:
+            ML_estimates_2d_idxs = data_file.root.kalman_observations_2d_idxs[:]
+        except tables.exceptions.NoSuchNodeError, err2:
+            raise err1
 
     if os.path.exists( output_h5_filename ):
         raise RuntimeError(
