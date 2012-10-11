@@ -2780,19 +2780,28 @@ def get_app_defaults():
 
     return defaults
 
-def main():
-    rospy.init_node('flydra_camera_node',disable_signals=True)
-    rosthread = threading.Thread(target=rospy.spin,name='rosthread')
-    rosthread.daemon = True
+def main(rospy_init_node=True,cmdline_args=None):
+    if rospy_init_node:
+        if cmdline_args is not None:
+            raise Exception("Not supported, makes no sense")
+        cmdline_args = rospy.myargv()[1:]
+        rospy.init_node('flydra_camera_node',disable_signals=True)
+        rosthread = threading.Thread(target=rospy.spin,name='rosthread')
+        rosthread.start()
+
     LOG.info('ROS name: %s' % rospy.get_name())
-    rosthread.start()
-    parse_args_and_run()
-    rospy.signal_shutdown("quit")
+
+    if cmdline_args is None:
+        cmdline_args = sys.argv[1:]
+
+    parse_args_and_run(False, cmdline_args)
+    if rospy_init_node:
+        rospy.signal_shutdown("quit")
 
 def benchmark():
-    parse_args_and_run(benchmark=True)
+    parse_args_and_run(True, sys.argv[1:])
 
-def parse_args_and_run(benchmark=False):
+def parse_args_and_run(benchmark, cmdline_args):
     parser = optparse.OptionParser(usage="%prog [options]",
                           version="%prog "+flydra.version.__version__)
 
@@ -2863,11 +2872,17 @@ def parse_args_and_run(benchmark=False):
 
     parser.add_option("--small-save-radius", type="int",
                       help='half the edge length of .ufmf movies [default: %default]')
+
     parser.add_option("--rosrate", type="float", dest='rosrate', default=30.,
                       help='desired framerate for the ROS raw image emitter (if ROS enabled)')
 
-    (options, args) = parser.parse_args()
-    #print dir(options)
+    parser.add_option("--sleep-first", type="int",
+                      help='time to sleep before initilizing anything (to stop camera discovery races)')
+
+    (options, args) = parser.parse_args(cmdline_args)
+
+    if options.sleep_first is not None:
+        time.sleep(options.sleep_first)
 
     app_state=AppState(options = options,
                        benchmark=benchmark,
