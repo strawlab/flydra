@@ -1237,6 +1237,10 @@ class MainBrain(object):
     """Handle all camera network stuff and interact with application"""
 
     ROS_CONTROL_API = dict(
+        start_collecting_background=(std_srvs.srv.Empty),
+        stop_collecting_background=(std_srvs.srv.Empty),
+        take_background=(std_srvs.srv.Empty),
+        clear_background=(std_srvs.srv.Empty),
         start_saving_data=(std_srvs.srv.Empty),
         stop_saving_data=(std_srvs.srv.Empty),
         start_recording=(std_srvs.srv.Empty),
@@ -1901,17 +1905,35 @@ class MainBrain(object):
         self.remote_api.external_quit( cam_id )
         sys.stdout.flush()
 
+    def start_collecting_background(self, *cam_ids):
+        if len(cam_ids) == 0:
+            cam_ids = self.remote_api.external_get_cam_ids()
+        for cam_id in cam_ids:
+            self.set_collecting_background(cam_id, True)
+
+    def stop_collecting_background(self, *cam_ids):
+        if len(cam_ids) == 0:
+            cam_ids = self.remote_api.external_get_cam_ids()
+        for cam_id in cam_ids:
+            self.set_collecting_background(cam_id, False)
+
     def set_collecting_background(self, cam_id, value):
         self.remote_api.external_send_set_camera_property( cam_id, 'collecting_background', value)
 
     def set_color_filter(self, cam_id, value):
         self.remote_api.external_send_set_camera_property( cam_id, 'color_filter', value)
 
-    def take_background(self,cam_id):
-        self.remote_api.external_take_background(cam_id)
+    def take_background(self,*cam_ids):
+        if len(cam_ids) == 0:
+            cam_ids = self.remote_api.external_get_cam_ids()
+        for cam_id in cam_ids:
+            self.remote_api.external_take_background(cam_id)
 
-    def clear_background(self,cam_id):
-        self.remote_api.external_clear_background(cam_id)
+    def clear_background(self,*cam_ids):
+        if len(cam_ids) == 0:
+            cam_ids = self.remote_api.external_get_cam_ids()
+        for cam_id in cam_ids:
+            self.remote_api.external_clear_background(cam_id)
 
     def send_set_camera_property(self, cam_id, property_name, value):
         self.remote_api.external_send_set_camera_property( cam_id, property_name, value)
