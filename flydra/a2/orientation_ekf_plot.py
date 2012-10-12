@@ -28,7 +28,7 @@ def plot_ori(kalman_filename=None,
     ca = core_analysis.get_global_CachingAnalyzer()
     with openFileSafe( kalman_filename,
                        mode='r') as kh5:
-        kmle = kh5.root.kalman_observations[:] # load into RAM
+        kmle = kh5.root.ML_estimates[:] # load into RAM
 
         if start is not None:
             kmle = kmle[ kmle['frame'] >= start ]

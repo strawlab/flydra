@@ -309,7 +309,7 @@ def doit(h5_filename=None,
     ca = core_analysis.get_global_CachingAnalyzer()
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(
         kalman_filename)
-    kalman_observations_2d_idxs = data_file.root.kalman_observations_2d_idxs[:]
+    ML_estimates_2d_idxs = data_file.root.ML_estimates_2d_idxs[:]
 
 
     if os.path.exists( output_h5_filename ):
@@ -405,7 +405,7 @@ def doit(h5_filename=None,
                     frame2d_idxs = data2d_idxs[h5_2d_row_idxs]
 
                     obs_2d_idx = this_3d_row['obs_2d_idx']
-                    kobs_2d_data = kalman_observations_2d_idxs[int(obs_2d_idx)]
+                    kobs_2d_data = ML_estimates_2d_idxs[int(obs_2d_idx)]
 
                     # Parse VLArray.
                     this_camns = kobs_2d_data[0::2]

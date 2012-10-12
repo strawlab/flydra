@@ -19,7 +19,7 @@ from optparse import OptionParser
 import dynamic_models
 import collections
 import flydra.version
-from flydra.MainBrain import TextLogDescription
+from flydra.data_descriptions import TextLogDescription
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 from flydra.reconstruct import do_3d_operations_on_2d_point
 import flydra.a2.utils as utils
@@ -28,8 +28,8 @@ from flydra.a2.tables_tools import openFileSafe
 # Not really "observations" but ML estimates
 FilteredObservations = flydra_kalman_utils.FilteredObservations
 convert_format = flydra_kalman_utils.convert_format
-tmp = flydra_kalman_utils.kalman_observations_2d_idxs_type
-kalman_observations_2d_idxs_type = tmp
+tmp = flydra_kalman_utils.ML_estimates_2d_idxs_type
+ML_estimates_2d_idxs_type = tmp
 del tmp
 
 class FakeThreadingEvent:
@@ -43,13 +43,53 @@ class FakeThreadingEvent:
         self._set = False
 
 def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
-                  max_err=None, debug=0, kalman_model=None, area_threshold=0):
+                  debug=0, kalman_model=None, area_threshold=0):
     if debug is None:
         debug=0
+
+#############################################################
+##### if two objects get too close, kill the one that has been around the shortest time (P.S. 10-6-12)
+
+    max_dist_threshold=0.02 #might be a good thing to put into dynamic_models
+    kill_obj_number=[]
+
+
+    if np.shape(tracker.live_tracked_objects)>1:
+	for n in range(0,np.shape(tracker.live_tracked_objects[:])[0]):
+
+		if n==np.shape(tracker.live_tracked_objects[:])[0]-1:
+			m=0
+		else:
+			m=n+1
+
+
+		if np.isnan(np.linalg.norm(tracker.live_tracked_objects[n].observations_data[-1]-tracker.live_tracked_objects[m].observations_data[-1]))==False:
+
+		    if np.linalg.norm(tracker.live_tracked_objects[n].observations_data[-1]-tracker.live_tracked_objects[m].observations_data[-1])<max_dist_threshold:
+
+
+			if len(tracker.live_tracked_objects[n].observations_data)<len(tracker.live_tracked_objects[m].observations_data):
+				kill_obj_number=n
+			else:
+				kill_obj_number=m
+
+    ###kill object in question
+
+    if kill_obj_number:
+
+	tracker.dead_tracked_objects.append(tracker.live_tracked_objects.pop(kill_obj_number))
+        tracker._flush_dead_queue()
+
+	kill_obj_number=[]
+
+#############################################################
+
+
     frame_data = tracker.calculate_a_posteriori_estimates(
         frame,frame_data,camn2cam_id,debug2=debug)
 
     frame_data = tracker.remove_duplicate_detections(frame,frame_data)
+    max_err=tracker.kalman_model['hypothesis_test_max_acceptable_error']
 
     # Now, tracked objects have been updated (and their 2D data points
     # removed from consideration), so we can use old flydra
@@ -165,12 +205,12 @@ option to this program.
     if debug > 5:
         print
         print 'At end of frame %d, all live tracked objects:'%frame
-        tracker.live_tracked_objects.rmap( 'debug_info', level=debug )
+        _=[tro.debug_info(level=debug) for tro in tracker.live_tracked_objects]
         print
         print '-'*80
     elif debug > 2:
         print 'At end of frame %d, all live tracked objects:'%frame
-        tracker.live_tracked_objects.rmap( 'debug_info', level=debug )
+        _=[tro.debug_info(level=debug) for tro in tracker.live_tracked_objects]
         print
 
 class KalmanSaver:
@@ -206,18 +246,18 @@ class KalmanSaver:
         self.h5_xhat.attrs.dynamic_model = dynamic_model
 
         self.h5_obs = self.h5file.createTable(
-            self.h5file.root,'kalman_observations', FilteredObservations,
+            self.h5file.root,'ML_estimates', FilteredObservations,
             "observations of tracked object",filters=filters)
 
         self.h5_2d_obs_next_idx = 0
 
-        # Note that kalman_observations_2d_idxs_type() should
+        # Note that ML_estimates_2d_idxs_type() should
         # match dtype with tro.observations_2d.
 
         self.h5_2d_obs = self.h5file.createVLArray(
             self.h5file.root,
-            'kalman_observations_2d_idxs',
-            kalman_observations_2d_idxs_type(),
+            'ML_estimates_2d_idxs',
+            ML_estimates_2d_idxs_type(),
             "camns and idxs")
 
         self.obj_id = -1
@@ -285,7 +325,7 @@ class KalmanSaver:
         if debugADS:
             print
 
-        # becomes obs_2d_idx (index into 'kalman_observations_2d_idxs')
+        # becomes obs_2d_idx (index into 'ML_estimates_2d_idxs')
         this_idxs = numpy.array( this_idxs, dtype=numpy.uint64 )
 
         # save observations ####################################
@@ -367,7 +407,6 @@ def kalmanize(src_filename,
               dynamic_model_name=None,
               debug=False,
               frames_per_second=None,
-              max_err=None,
               area_threshold=0,
               min_observations_to_save=0,
               options=None,
@@ -413,8 +452,7 @@ def kalmanize(src_filename,
                     options.force_minimum_eccentricity):
                     raise ValueError('could not force minimum_eccentricity')
 
-            reconstructor_meters = reconst_orig_units.get_scaled(
-                reconst_orig_units.get_scale_factor())
+            reconstructor_meters = reconst_orig_units
 
             if dest_filename is None:
                 dest_filename = os.path.splitext(
@@ -447,8 +485,8 @@ def kalmanize(src_filename,
                 if 'trigger_CS3' not in parsed:
                     parsed['trigger_CS3'] = 'unknown'
                 textlog_save_lines = [
-                    'kalmanize running at %s fps, (hypothesis_test_max_error %s, top %s, trigger_CS3 %s, flydra_version %s)'%(
-                    str(frames_per_second),str(max_err),str(parsed['top']),
+                    'kalmanize running at %s fps, (top %s, trigger_CS3 %s, flydra_version %s)'%(
+                    str(frames_per_second),str(parsed['top']),
                     str(parsed['trigger_CS3']),flydra.version.__version__),
                     'original file: %s'%(src_filename,),
                     'dynamic model: %s'%(dynamic_model_name,),
@@ -471,7 +509,6 @@ def kalmanize(src_filename,
 
                 tracker = Tracker(
                     reconstructor_meters,
-                    scale_factor=reconst_orig_units.get_scale_factor(),
                     kalman_model=kalman_model,
                     save_all_data=True,
                     area_threshold=area_threshold,
@@ -482,9 +519,6 @@ def kalmanize(src_filename,
                     )
 
                 tracker.set_killed_tracker_callback( h5saver.save_tro )
-
-                print ('max reprojection error to accept new 3D point '
-                       'with hypothesis testing: %.1f (pixels)'%(max_err,))
 
                 # copy timestamp data into newly created kalmanized file
                 if hasattr(results.root,'trigger_clock_info'):
@@ -625,7 +659,7 @@ def kalmanize(src_filename,
                                 else:
                                     process_frame(reconst_orig_units,tracker,
                                                   last_frame,frame_data,camn2cam_id,
-                                                  max_err=max_err,debug=debug,
+                                                  debug=debug,
                                                   kalman_model=kalman_model,
                                                   area_threshold=area_threshold)
                             frame_count += 1
@@ -678,15 +712,6 @@ def kalmanize(src_filename,
 
                         (x_undistorted,y_undistorted) = reconst_orig_units.undistort(
                             cam_id,(x_distorted,y_distorted))
-                        if 0:
-                            (x_undistorted_m,y_undistorted_m) = reconstructor_meters.undistort(
-                                cam_id,(x_distorted,y_distorted))
-                            if x_undistorted != x_undistorted_m:
-                                raise ValueError('scaled reconstructors have different '
-                                                 'distortion!?')
-                            if y_undistorted != y_undistorted_m:
-                                raise ValueError('scaled reconstructors have different '
-                                                 'distortion!?')
 
                         (area,slope,eccentricity,frame_pt_idx) = (row['area'],
                                                                   row['slope'],
@@ -795,7 +820,7 @@ def kalmanize(src_filename,
         print 'saved %s'%accum_frame_spread_filename
 
     if max_all_check_times > sync_error_threshold:
-        if 0:
+        if 1:
             if do_full_kalmanization:
                 print 'max_all_check_times %.2f msec'%(
                     max_all_check_times*1000.0)
@@ -906,11 +931,6 @@ def main():
                       help="frames per second (used for Kalman filtering)")
 
     parser.add_option(
-        "--max-err", type='float',
-        default=50.0,
-        help="maximum mean reprojection error for hypothesis testing algorithm")
-
-    parser.add_option(
         "--exclude-cam-ids", type='string',
         help="camera ids to exclude from reconstruction (space separated)",
         metavar="EXCLUDE_CAM_IDS")
@@ -987,7 +1007,6 @@ def main():
               dynamic_model_name = options.dynamic_model,
               debug = options.debug,
               frames_per_second = options.fps,
-              max_err = options.max_err,
               area_threshold=options.area_threshold,
               min_observations_to_save=options.min_observations_to_save,
               options=options,

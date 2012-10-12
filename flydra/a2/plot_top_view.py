@@ -32,7 +32,6 @@ import densities # from scikits.learn
 import warnings
 
 import pytz, datetime
-pacific = pytz.timezone('US/Pacific')
 
 class Frames2Time:
     def __init__(self,frame0,fps):

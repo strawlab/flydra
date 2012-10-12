@@ -33,7 +33,6 @@ import core_analysis
 
 import warnings
 import pytz, datetime
-pacific = pytz.timezone('US/Pacific')
 
 def ensure_minsize_image( arr, (h,w), fill=0):
     if ((arr.shape[0] < h) or (arr.shape[1] < w)):
@@ -45,8 +44,8 @@ def ensure_minsize_image( arr, (h,w), fill=0):
 class KObsRowCacher:
     def __init__(self,h5):
         self.h5 = h5
-        self.all_rows_obj_ids = h5.root.kalman_observations.read(field='obj_id')
-        self.all_rows_frames = h5.root.kalman_observations.read(field='frame')
+        self.all_rows_obj_ids = h5.root.ML_estimates.read(field='obj_id')
+        self.all_rows_frames = h5.root.ML_estimates.read(field='frame')
         self.cache = {}
     def get(self,obj_id):
         if obj_id in self.cache:
@@ -181,7 +180,6 @@ def doit(fmf_filename=None,
                              'and ability to get framenumbers')
 
         R = reconstruct.Reconstructor(data_file)
-        R = R.get_scaled( R.get_scale_factor() )
 
         print 'loading frame numbers for kalman objects (estimates)'
         kalman_rows = []
@@ -477,7 +475,7 @@ def doit(fmf_filename=None,
 
                     vert_image = R.find2d(cam_id,vert,distorted=True)
                     obs_2d_idx = this_3d_row['obs_2d_idx']
-                    kobs_2d_data = data_file.root.kalman_observations_2d_idxs[int(obs_2d_idx)]
+                    kobs_2d_data = data_file.root.ML_estimates_2d_idxs[int(obs_2d_idx)]
 
                     # parse VLArray
                     this_camns = kobs_2d_data[0::2]
@@ -800,7 +798,7 @@ def doit(fmf_filename=None,
 
                 if style=='debug':
                     try:
-                        strtime = datetime.datetime.fromtimestamp(mainbrain_timestamp,pacific)
+                        strtime = datetime.datetime.fromtimestamp(mainbrain_timestamp)
                     except:
                         strtime = '<no 2d data timestamp>'
                     #draw.text( (0,0), 'frame %d, %s timestamp %s - %s'%(

@@ -153,7 +153,7 @@ def get_caminfo_dicts(results):
         camn2cam_id[camn]=cam_id
     return camn2cam_id, cam_id2camns
 
-def get_results(filename,mode='r+'):
+def get_results(filename,mode='r+',create_camera_summary=False):
     h5file = PT.openFile(filename,mode=mode)
     if hasattr(h5file.root,'data3d_best'):
         frame_col = h5file.root.data3d_best.cols.frame
@@ -181,11 +181,14 @@ def get_results(filename,mode='r+'):
     ##            print 'creating index on data2d_distorted.cols.timestamp ...'
     ##            timestamp_col.createIndex()
     ##            print 'done'
+        pass
 
-        if 0 and not hasattr(h5file.root,'data2d_camera_summary') and h5file._isWritable():
-            print 'creating data2d camera summary ...'
-            create_data2d_camera_summary(h5file)
-            print 'done'
+    if create_camera_summary and not hasattr(h5file.root,'data2d_camera_summary'):
+        if not hasattr(h5file.root,'data2d_distorted'):
+            raise ValueError('need data2d_distorted to make camera summary')
+        print 'creating data2d camera summary ...'
+        create_data2d_camera_summary(h5file)
+        print 'done'
     return h5file
 
 def get_f_xyz_L_err( results, max_err = 10, typ = 'best', include_timestamps=False):
@@ -294,8 +297,8 @@ def create_data2d_camera_summary(results):
     class Data2DCameraSummary(PT.IsDescription):
         cam_id             = PT.StringCol(16,pos=0)
         camn               = PT.Int32Col(pos=1)
-        start_frame        = PT.Int32Col(pos=2)
-        stop_frame         = PT.Int32Col(pos=3)
+        start_frame        = PT.UInt64Col(pos=2)
+        stop_frame         = PT.UInt64Col(pos=3)
         start_timestamp    = PT.FloatCol(pos=4)
         stop_timestamp     = PT.FloatCol(pos=5)
 
@@ -534,8 +537,8 @@ def make_exact_movie_info2(results,movie_dir=None):
     class ExactMovieInfo(PT.IsDescription):
         cam_id             = PT.StringCol(16,pos=0)
         filename           = PT.StringCol(255,pos=1)
-        start_frame        = PT.Int32Col(pos=2)
-        stop_frame         = PT.Int32Col(pos=3)
+        start_frame        = PT.UInt64Col(pos=2)
+        stop_frame         = PT.UInt64Col(pos=3)
         start_timestamp    = PT.FloatCol(pos=4)
         stop_timestamp     = PT.FloatCol(pos=5)
 

@@ -10,6 +10,7 @@ import flydra.analysis.result_utils as result_utils
 import subprocess, collections
 import flydra.a2.ufmf_tools as ufmf_tools
 import flydra.a2.core_analysis as core_analysis
+import flydra.kalman.dynamic_models as dynamic_models
 from flydra.a2.orientation_ekf_fitter import compute_ori_quality
 import flydra.reconstruct as reconstruct
 import flydra.geom as geom
@@ -102,7 +103,7 @@ def load_3d_data(kalman_filename,start=None,stop=None,**kwargs):
         if dynamic_model_name is None:
             dynamic_model_name = extra.get('dynamic_model_name',None)
             if dynamic_model_name is None:
-                dynamic_model_name = 'fly dynamics, high precision calibration, units: mm'
+                dynamic_model_name = dynamic_models.DEFAULT_MODEL
                 warnings.warn('no dynamic model specified, using "%s"'%dynamic_model_name)
             else:
                 print 'detected file loaded with dynamic model "%s"'%dynamic_model_name

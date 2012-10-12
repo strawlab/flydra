@@ -3,6 +3,7 @@
 # 1. make variable eccentricity threshold dependent on area (bigger area = lower threshold)
 from __future__ import with_statement, division
 import threading, time, socket, select, sys, os, copy, struct, math
+import warnings, errno
 import collections
 import traceback
 import Pyro.core
@@ -13,14 +14,15 @@ import numpy as nx
 from numpy import nan, inf
 near_inf = 9.999999e20
 import Queue
-import tables
-import tables as PT
+
 pytables_filt = numpy.asarray
 import atexit
 import pickle, copy
 import pkg_resources
 
-import motmot.utils.config
+import motmot.fview_ext_trig.ttrigger
+import motmot.fview_ext_trig.live_timestamp_modeler
+
 import flydra.version
 import flydra.kalman.flydra_kalman_utils as flydra_kalman_utils
 import flydra.kalman.flydra_tracker
@@ -29,35 +31,28 @@ import flydra.fastgeom as geom
 
 import flydra.data_descriptions
 
-import warnings, errno
-warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
-
 # ensure that pytables uses numpy:
+import tables
+import tables as PT
+assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy'])
+warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
 
-try:
-    import roslib
-    have_ROS = True
-except ImportError, err:
-    have_ROS = False
-    print 'do not have ROS (see http://ros.org )'
-
-if have_ROS:
-    try:
-        roslib.load_manifest('ros_flydra')
-    except roslib.packages.InvalidROSPkgException, err:
-        have_ROS = False
-        print 'have ROS, but ros_flydra manifest could not be loaded'
-    else:
-        import rospy
-        print 'have ROS'
+import roslib
+roslib.load_manifest('rospy')
+roslib.load_manifest('std_srvs')
+roslib.load_manifest('ros_flydra')
+import rospy
+import std_srvs.srv
+from ros_flydra.msg import flydra_mainbrain_super_packet
+from ros_flydra.msg import flydra_mainbrain_packet, flydra_object
+from geometry_msgs.msg import Point, Vector3
 
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
 
-DO_KALMAN= True # Enables/disables Kalman filter based tracking
-MIN_KALMAN_OBSERVATIONS_TO_SAVE = 10 # how many data points are required before saving trajectory?
+MIN_KALMAN_OBSERVATIONS_TO_SAVE = 0 # how many data points are required before saving trajectory?
 
 SHOW_3D_PROCESSING_LATENCY = False
 
@@ -87,31 +82,6 @@ PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
 PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
 PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
 PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_IDX
-
-########
-# persistent configuration data ( implementation in motmot.utils.config )
-def get_rc_params():
-    defaultParams = {
-        'frames_per_second'  : 100.0,
-        'hypothesis_test_max_acceptable_error' : 50.0,
-        'kalman_model' :'EKF mamarama, units: mm',
-        'max_reconstruction_latency_sec':0.06, # 60 msec
-        'max_N_hypothesis_test':3,
-        }
-    fviewrc_fname = motmot.utils.config.rc_fname(filename='mainbrainrc',
-                                                 dirname='.flydra')
-    rc_params = motmot.utils.config.get_rc_params(fviewrc_fname,
-                                                  defaultParams)
-    return rc_params
-def save_rc_params():
-    save_fname = motmot.utils.config.rc_fname(must_already_exist=False,
-                                              filename='mainbrainrc',
-                                              dirname='.flydra')
-    motmot.utils.config.save_rc_params(save_fname,rc_params)
-rc_params = get_rc_params()
-max_reconstruction_latency_sec = rc_params['max_reconstruction_latency_sec']
-max_N_hypothesis_test =  rc_params['max_N_hypothesis_test']
-########
 
 XXX_framenumber = 0
 
@@ -149,32 +119,15 @@ try:
 except:
     hostname = socket.gethostbyname(socket.gethostname())
 
-downstream_hosts = []
-
-if 0:
-    downstream_hosts.append( ('192.168.1.199',28931) ) # projector
-if 0:
-    downstream_hosts.append( ('127.0.0.1',28931) ) # self
-if 0:
-    downstream_hosts.append( ('192.168.1.151',28931) ) # brain1
-
-downstream_kalman_hosts = []
-if 1:
-    downstream_kalman_hosts.append( ('127.0.0.1',28931) ) # localhost
-    downstream_kalman_hosts.append( ('192.168.10.41',28931) ) # wtstim
-#    downstream_kalman_hosts.append( ('255.255.255.255',28931) ) # broadcast to every device on subnet
-if 0:
-    downstream_kalman_hosts.append( ('astraw-office.kicks-ass.net',28931) ) # send off subnet
-
-outgoing_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
 # 2D data format for PyTables:
 Info2D = flydra.data_descriptions.Info2D
+
+TextLogDescription = flydra.data_descriptions.TextLogDescription
 
 class CamSyncInfo(PT.IsDescription):
     cam_id = PT.StringCol(256,pos=0)
     camn   = PT.UInt16Col(pos=1)
-    frame0 = PT.FloatCol(pos=2)
+    hostname = PT.StringCol(2048,pos=2)
 
 class HostClockInfo(PT.IsDescription):
     remote_hostname  = PT.StringCol(255,pos=0)
@@ -194,66 +147,13 @@ class MovieInfo(PT.IsDescription):
     approx_start_frame = PT.Int64Col(pos=2)
     approx_stop_frame  = PT.Int64Col(pos=3)
 
-class Info3D(PT.IsDescription):
-    # This is for the non-Kalman version.
-    frame      = PT.Int64Col(pos=0)
-
-    x          = PT.Float32Col(pos=1)
-    y          = PT.Float32Col(pos=2)
-    z          = PT.Float32Col(pos=3)
-
-    p0         = PT.Float32Col(pos=4)
-    p1         = PT.Float32Col(pos=5)
-    p2         = PT.Float32Col(pos=6)
-    p3         = PT.Float32Col(pos=7)
-    p4         = PT.Float32Col(pos=8)
-    p5         = PT.Float32Col(pos=9)
-
-    timestamp  = PT.FloatCol(pos=10)
-
-    camns_used = PT.StringCol(32,pos=11)
-    mean_dist  = PT.Float32Col(pos=12) # mean 2D reconstruction error
-
-class TextLogDescription(PT.IsDescription):
-    mainbrain_timestamp = PT.FloatCol(pos=0)
-    cam_id = PT.StringCol(255,pos=1)
-    host_timestamp = PT.FloatCol(pos=2)
-    message = PT.StringCol(255,pos=3)
-
 FilteredObservations = flydra_kalman_utils.FilteredObservations
-kalman_observations_2d_idxs_type = flydra_kalman_utils.kalman_observations_2d_idxs_type
+ML_estimates_2d_idxs_type = flydra_kalman_utils.ML_estimates_2d_idxs_type
 
 h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
 
 # allow rapid building of numpy.rec.array:
 Info2DCol_description = PT.Description(Info2D().columns)._v_nestedDescr
-
-def encode_data_packet( corrected_framenumber,
-                        line3d_valid,
-                        outgoing_data,
-                        min_mean_dist):
-
-    # This is for the non-Kalman data. See
-    # kalman.flydra_tracker.Tracker.encode_data_packet and
-    # kalman.data_packets.encode_data_packet() for Kalman version.
-
-    fmt = '<iBfffffffffdf' # XXX I guess this no longer works -- what's the B for? 20071011
-    packable_data = list(outgoing_data)
-    if not line3d_valid:
-        packable_data[3:9] = 0,0,0,0,0,0
-    packable_data.append( min_mean_dist )
-    try:
-        data_packet = struct.pack(fmt,
-                                  corrected_framenumber,
-                                  line3d_valid,
-                                  *packable_data)
-    except SystemError, x:
-        print 'fmt',fmt
-        print 'corrected_framenumber',corrected_framenumber
-        print 'line3d_valid',line3d_valid
-        print 'packable_data',packable_data
-        raise
-    return data_packet
 
 def save_ascii_matrix(filename,m):
     fd=open(filename,mode='wb')
@@ -530,64 +430,51 @@ class CoordRealReceiver(threading.Thread):
 
 class CoordinateSender(threading.Thread):
       """a class to send realtime coordinate data from a separate thread"""
-      def __init__(self,my_queue,my_ros_queue,quit_event):
-          self.my_queue = my_queue
+      def __init__(self,my_ros_queue,quit_event):
           self.my_ros_queue = my_ros_queue
           self.quit_event = quit_event
+          self.pub = None
           name = 'CoordinateSender thread'
           threading.Thread.__init__(self,name=name)
       def run(self):
-          global downstream_kalman_hosts
-          out_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
           block = 1
           timeout = .1
-          encode_super_packet = flydra.kalman.data_packets.encode_super_packet
 
-          if have_ROS:
-              from ros_flydra.msg import flydra_mainbrain_super_packet
-              pub = rospy.Publisher('flydra_mainbrain_super_packets',
-                                    flydra_mainbrain_super_packet)
+          self.pub = rospy.Publisher(
+                                'flydra_mainbrain_super_packets',
+                                flydra_mainbrain_super_packet,
+                                tcp_nodelay=True)
 
           while not self.quit_event.isSet():
-              packets = []
-              packets.append( self.my_queue.get() )
+              ros_packets = []
+              ros_packets.append( self.my_ros_queue.get() )
               while 1:
                   try:
-                      packets.append( self.my_queue.get_nowait() )
+                      ros_packets.append( self.my_ros_queue.get_nowait() )
                   except Queue.Empty:
                       break
-              # now packets is a list of all recent data
-              super_packet = encode_super_packet( packets )
-              for downstream_host in downstream_kalman_hosts:
-                  outgoing_UDP_socket.sendto(super_packet,downstream_host)
-
-              if have_ROS:
-                  ros_packets = []
-                  ros_packets.append( self.my_ros_queue.get() )
-                  while 1:
-                      try:
-                          ros_packets.append( self.my_ros_queue.get_nowait() )
-                      except Queue.Empty:
-                          break
-                  ros_super_packet = flydra_mainbrain_super_packet(packets=ros_packets)
-                  pub.publish(ros_super_packet)
+              ros_super_packet = flydra_mainbrain_super_packet(packets=ros_packets)
+              self.pub.publish(ros_super_packet)
 
 
 class CoordinateProcessor(threading.Thread):
-    def __init__(self,main_brain,save_profiling_data=False,
-                 debug_level=None,
-                 show_sync_errors=True,
-                 show_overall_latency=None):
+    def __init__(self,main_brain,save_profiling_data,
+                 debug_level,
+                 show_sync_errors,
+                 show_overall_latency,
+                 max_reconstruction_latency_sec,
+                 max_N_hypothesis_test):
         global hostname
         self.main_brain = main_brain
         self.debug_level = debug_level
         self.show_overall_latency = show_overall_latency
+        self.max_reconstruction_latency_sec = max_reconstruction_latency_sec
+        self.max_N_hypothesis_test = max_N_hypothesis_test
 
         self.save_profiling_data = save_profiling_data
         if self.save_profiling_data:
             self.data_dict_queue = []
 
-        self.realtime_kalman_data_queue = Queue.Queue()
         self.realtime_ros_packets = Queue.Queue()
 
         self.cam_ids = []
@@ -605,7 +492,7 @@ class CoordinateProcessor(threading.Thread):
         self.reconstructor = None
         self.reconstructor_meters = None
         self.tracker = None
-	self.show_sync_errors=show_sync_errors
+        self.show_sync_errors=show_sync_errors
 
         self.ip2hostname = {}
 
@@ -624,7 +511,9 @@ class CoordinateProcessor(threading.Thread):
         self.realreceiver.setDaemon(True)
         self.realreceiver.start()
 
-        cs = CoordinateSender(self.realtime_kalman_data_queue,self.realtime_ros_packets,self.quit_event)
+        cs = CoordinateSender(
+                self.realtime_ros_packets,
+                self.quit_event)
         cs.setDaemon(True)
         cs.start()
 
@@ -678,15 +567,12 @@ class CoordinateProcessor(threading.Thread):
             self.reconstructor_meters = None
             return
 
-        # get version that operates in meters
-        scale_factor = self.reconstructor.get_scale_factor()
-        self.reconstructor_meters = self.reconstructor.get_scaled(scale_factor)
+        # backwards-compatibility cruft (delete me)
+        self.reconstructor_meters = self.reconstructor
 
     def set_new_tracker(self,kalman_model=None):
         # called from main thread, must lock to send to realtime coord thread
-        scale_factor = self.reconstructor.get_scale_factor()
         tracker = flydra.kalman.flydra_tracker.Tracker(self.reconstructor_meters,
-                                                       scale_factor=scale_factor,
                                                        kalman_model=kalman_model)
         tracker.set_killed_tracker_callback( self.enqueue_finished_tracked_object )
         with self.tracker_lock:
@@ -707,8 +593,6 @@ class CoordinateProcessor(threading.Thread):
     def enqueue_finished_tracked_object(self, tracked_object ):
         # this is from called within the realtime coords thread
         if self.main_brain.is_saving_data():
-            if self.debug_level.isSet():
-                print 'saving finished kalman object with %d frames'%(len(tracked_object.frames),)
             self.main_brain.queue_data3d_kalman_estimates.put(
                 (tracked_object.obj_id,
                  tracked_object.frames, tracked_object.xhats, tracked_object.Ps,
@@ -716,8 +600,21 @@ class CoordinateProcessor(threading.Thread):
                  tracked_object.observations_frames, tracked_object.observations_data,
                  tracked_object.observations_2d, tracked_object.observations_Lcoords,
                  ) )
+        # send a ROS message that this object is dead
+        this_ros_object = flydra_object(obj_id=tracked_object.obj_id,
+                                        position=Point(numpy.nan,numpy.nan,numpy.nan),
+                                        )
+        ros_packet = flydra_mainbrain_packet(
+            framenumber=tracked_object.current_frameno,
+            reconstruction_stamp=rospy.Time.now(),
+            acquire_stamp=rospy.Time.from_sec(0),
+            objects = [this_ros_object])
+        self.realtime_ros_packets.put( ros_packet )
 
-    def connect(self,cam_id):
+        if self.debug_level.isSet():
+            print 'killing obj_id %d:'%tracked_object.obj_id
+
+    def connect(self,cam_id,cam_hostname):
 
         # called from Remote-API thread on camera connect
 
@@ -748,9 +645,8 @@ class CoordinateProcessor(threading.Thread):
             self.last_timestamps.append(IMPOSSIBLE_TIMESTAMP) # arbitrary impossible number
             self.last_framenumbers_delay.append(-1) # arbitrary impossible number
             self.last_framenumbers_skip.append(-1) # arbitrary impossible number
-            self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no,
-                                              'frame0':IMPOSSIBLE_TIMESTAMP}
-            self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, IMPOSSIBLE_TIMESTAMP) )
+            self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no}
+            self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, cam_hostname) )
         return cam2mainbrain_data_port
 
     def disconnect(self,cam_id):
@@ -813,14 +709,12 @@ class CoordinateProcessor(threading.Thread):
         self.cam_id2cam_no[cam_id] = absolute_cam_no
 
         self.general_save_info[cam_id]['absolute_cam_no']=absolute_cam_no
-        self.general_save_info[cam_id]['frame0']=timestamp
 
         self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, timestamp) )
 
     def run(self):
         """main loop of CoordinateProcessor"""
-        global downstream_hosts, best_realtime_data
-        global outgoing_UDP_socket
+        global best_realtime_data
         global XXX_framenumber
 
         if os.name == 'posix':
@@ -848,14 +742,8 @@ class CoordinateProcessor(threading.Thread):
 
         convert_format = flydra_kalman_utils.convert_format # shorthand
 
-        max_error = self.main_brain.get_hypothesis_test_max_error()
-
         if NETWORK_PROTOCOL == 'tcp':
             old_data = {}
-
-        if have_ROS:
-            from ros_flydra.msg import flydra_mainbrain_packet, flydra_object
-            from geometry_msgs.msg import Point, Vector3
 
         debug_drop_fd = None
 
@@ -913,6 +801,7 @@ class CoordinateProcessor(threading.Thread):
                             break
                         predicted_framenumber = n_frames_skipped + self.last_framenumbers_skip[cam_idx] + 1
                         if raw_framenumber<predicted_framenumber:
+                            print 'cam_id',cam_id
                             print 'raw_framenumber',raw_framenumber
                             print 'n_frames_skipped',n_frames_skipped
                             print 'predicted_framenumber',predicted_framenumber
@@ -1101,7 +990,7 @@ class CoordinateProcessor(threading.Thread):
                     if oldest_camera_timestamp is None:
                         ## print 'no latency estimate available -- skipping 3D reconstruction'
                         continue
-                    if (time.time() - oldest_camera_timestamp) > max_reconstruction_latency_sec:
+                    if (time.time() - oldest_camera_timestamp) > self.max_reconstruction_latency_sec:
                         #print 'maximum reconstruction latency exceeded -- skipping 3D reconstruction'
                         continue
 
@@ -1122,7 +1011,7 @@ class CoordinateProcessor(threading.Thread):
                             best_realtime_data = None
                             continue
 
-                        if DO_KALMAN:
+                        if 1:
                             with self.tracker_lock:
                                 if self.tracker is None: # tracker isn't instantiated yet...
                                     best_realtime_data = None
@@ -1138,21 +1027,27 @@ class CoordinateProcessor(threading.Thread):
                                 pluecker_coords_by_camn = self.tracker.calculate_a_posteriori_estimates(
                                     corrected_framenumber,
                                     pluecker_coords_by_camn,
-                                    self.camn2cam_id)
+                                    self.camn2cam_id,
+                                    debug2=self.debug_level.isSet())
 
                                 if self.debug_level.isSet():
-                                    print '%d live objects:'%(self.tracker.live_tracked_objects.how_many_are_living(),),
-                                    results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
-                                    Xs = []
+                                    print '%d live objects:'%(self.tracker.how_many_are_living(),),
+                                    results = [tro.get_most_recent_data() \
+                                                   for tro in self.tracker.live_tracked_objects]
                                     for result in results:
                                         if result is None:
                                             continue
                                         obj_id,last_xhat,P = result
-                                        print last_xhat[:3]
+                                        Pmean = numpy.sqrt(numpy.sum([P[i,i]**2 for i in range(3)]))
+                                        print 'obj_id %d: (%.3f, %.3f, %.3f), Pmean: %.3f'%(obj_id,
+                                                                                            last_xhat[0],
+                                                                                            last_xhat[1],
+                                                                                            last_xhat[2],
+                                                                                            Pmean)
                                     print
 
                                 if self.save_profiling_data:
-                                    self.data_dict_queue.append(('ntrack',self.tracker.live_tracked_objects.how_many_are_living()))
+                                    self.data_dict_queue.append(('ntrack',self.tracker.how_many_are_living()))
 
                                 now = time.time()
                                 if SHOW_3D_PROCESSING_LATENCY:
@@ -1185,14 +1080,15 @@ class CoordinateProcessor(threading.Thread):
                                     # "hypothesis testing" algorithm on remaining data to see if there
                                     # are new objects.
 
-                                    scale_factor = self.tracker.scale_factor
-                                    results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' ) # reverse map
+                                    results = [ tro.get_most_recent_data() \
+                                                    for tro in self.tracker.live_tracked_objects]
+
                                     Xs = []
                                     for result in results:
                                         if result is None:
                                             continue
                                         obj_id,last_xhat,P = result
-                                        X = last_xhat[0]/scale_factor, last_xhat[1]/scale_factor, last_xhat[2]/scale_factor
+                                        X = last_xhat[0], last_xhat[1], last_xhat[2]
                                         Xs.append(X)
                                     if len(Xs):
                                         best_realtime_data = Xs, 0.0
@@ -1218,13 +1114,16 @@ class CoordinateProcessor(threading.Thread):
                                 if len(found_data_dict) >= 2:
                                     # Can't do any 3D math without at least 2 cameras giving good
                                     # data.
+                                    max_error = \
+                                        self.tracker.kalman_model['hypothesis_test_max_acceptable_error']
+
                                     try:
                                         (this_observation_orig_units, this_observation_Lcoords_orig_units, cam_ids_used,
                                          min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
                                             self.reconstructor,
                                             found_data_dict,
                                             max_error,
-                                            max_n_cams=max_N_hypothesis_test,
+                                            max_n_cams=self.max_N_hypothesis_test,
                                             )
                                     except ru.NoAcceptablePointFound, err:
                                         pass
@@ -1250,99 +1149,30 @@ class CoordinateProcessor(threading.Thread):
                                                                        this_observation_idxs
                                                                        )
                                 if 1:
-                                    if self.tracker.live_tracked_objects.how_many_are_living():
-                                        data_packet = self.tracker.encode_data_packet(
-                                            corrected_framenumber,
-                                            oldest_camera_timestamp,now)
-                                        if data_packet is not None:
-                                            self.realtime_kalman_data_queue.put(data_packet)
-                                        if have_ROS:
-                                            results = self.tracker.live_tracked_objects.rmap( 'get_most_recent_data' )
-                                            ros_objects = []
-                                            for result in results:
-                                                if result is None:
-                                                    continue
-                                                obj_id,xhat,P = result
-                                                this_ros_object = flydra_object(obj_id=obj_id,
-                                                                                position=Point(*xhat[:3]),
-                                                                                velocity=Vector3(*xhat[3:6]),
-                                                                                posvel_covariance_diagonal=numpy.diag(P)[:6].tolist())
-                                                ros_objects.append( this_ros_object )
-                                            ros_packet = flydra_mainbrain_packet(
-                                                framenumber=corrected_framenumber,
-                                                reconstruction_stamp=rospy.Time.from_sec(now),
-                                                acquire_stamp=rospy.Time.from_sec(oldest_camera_timestamp),
-                                                objects = ros_objects)
-                                            self.realtime_ros_packets.put( ros_packet )
+                                    if self.tracker.how_many_are_living():
+                                        #publish state to ROS
+                                        results = [tro.get_most_recent_data() \
+                                                       for tro in self.tracker.live_tracked_objects]
+                                        ros_objects = []
+                                        for result in results:
+                                            if result is None:
+                                                continue
+                                            obj_id,xhat,P = result
+                                            this_ros_object = flydra_object(obj_id=obj_id,
+                                                                            position=Point(*xhat[:3]),
+                                                                            velocity=Vector3(*xhat[3:6]),
+                                                                            posvel_covariance_diagonal=numpy.diag(P)[:6].tolist())
+                                            ros_objects.append( this_ros_object )
+                                        ros_packet = flydra_mainbrain_packet(
+                                            framenumber=corrected_framenumber,
+                                            reconstruction_stamp=rospy.Time.from_sec(now),
+                                            acquire_stamp=rospy.Time.from_sec(oldest_camera_timestamp),
+                                            objects = ros_objects)
+                                        self.realtime_ros_packets.put( ros_packet )
 
                                 if SHOW_3D_PROCESSING_LATENCY:
                                     start_3d_proc_c = time.time()
 
-                        else: # closes "if DO_KALMAN:"
-
-                            found_data_dict = {} # old "good" points will go in here
-                            for cam_id, this_point in data_dict.iteritems():
-                                if not numpy.isnan(this_point[0]): # only use if point was found
-                                    found_data_dict[cam_id] = this_point[:9]
-
-                            if len(found_data_dict) < 2:
-                                # Can't do any 3D math without at least 2
-                                # cameras giving good data.
-                                continue
-
-                            try:
-                                # hypothesis testing algorithm
-                                (X, line3d, cam_ids_used,min_mean_dist
-                                 ) = ru.hypothesis_testing_algorithm__find_best_3d(
-                                    self.reconstructor,
-                                    found_data_dict,
-                                    max_n_cams=max_N_hypothesis_test,
-                                    )
-                            except:
-                                # this prevents us from bombing this thread...
-                                print 'WARNING:'
-                                traceback.print_exc()
-                                print 'SKIPPED 3d calculation for this frame.'
-                                continue
-                            cam_nos_used = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
-
-                            if line3d is None:
-                                line3d = nan, nan, nan, nan, nan, nan
-                                line3d_valid = False
-                            else:
-                                line3d_valid = True
-
-                            find3d_time = time.time()
-
-                            x,y,z=X
-                            outgoing_data = [x,y,z]
-                            outgoing_data.extend( line3d ) # 6 component vector
-                            outgoing_data.append( find3d_time )
-
-                            if len(downstream_hosts):
-                                # This is for the non-Kalman data. See
-                                # tracker.encode_data_packet() for
-                                # Kalman version.
-                                data_packet = encode_data_packet(
-                                    corrected_framenumber,
-                                    line3d_valid,
-                                    outgoing_data,
-                                    min_mean_dist,
-                                    )
-
-                            # realtime 3d data
-                            best_realtime_data = [X], min_mean_dist
-                            try:
-                                for downstream_host in downstream_hosts:
-                                    outgoing_UDP_socket.sendto(data_packet,downstream_host)
-                            except:
-                                print 'WARNING: could not send 3d point data over UDP'
-                                print
-                            if self.main_brain.is_saving_data():
-                                self.main_brain.queue_data3d_best.put( (corrected_framenumber,
-                                                                        outgoing_data,
-                                                                        cam_nos_used,
-                                                                        min_mean_dist) )
                         if SHOW_3D_PROCESSING_LATENCY:
                             stop_3d_proc = time.time()
                             dur_3d_proc_msec = (stop_3d_proc - start_3d_proc)*1e3
@@ -1425,13 +1255,33 @@ class CoordinateProcessor(threading.Thread):
                 if len(deferred_2d_data):
                     self.main_brain.queue_data2d.put( deferred_2d_data )
 
-        if DO_KALMAN:
+        if 1:
             with self.tracker_lock:
                 if self.tracker is not None:
                     self.tracker.kill_all_trackers() # save (if necessary) all old data
 
 class MainBrain(object):
     """Handle all camera network stuff and interact with application"""
+
+    ROS_CONTROL_API = dict(
+        start_saving_data=(std_srvs.srv.Empty),
+        stop_saving_data=(std_srvs.srv.Empty),
+        start_recording=(std_srvs.srv.Empty),
+        stop_recording=(std_srvs.srv.Empty),
+        start_small_recording=(std_srvs.srv.Empty),
+        stop_small_recording=(std_srvs.srv.Empty),
+        do_synchronization=(std_srvs.srv.Empty),
+        quit=(std_srvs.srv.Empty),
+    )
+
+    ROS_CONFIGURATION = dict(
+        frames_per_second=100.0,
+        kalman_model='EKF mamarama, units: mm',
+        max_reconstruction_latency_sec=0.06, # 60 msec
+        max_N_hypothesis_test=3,
+        save_data_dir='~/FLYDRA',
+    )
+
 
     class RemoteAPI(Pyro.core.ObjBase):
 
@@ -1484,7 +1334,9 @@ class MainBrain(object):
                     scalar_control_info = copy.deepcopy(cam['scalar_control_info'])
                     fqdn = cam['fqdn']
                     port = cam['port']
-            return scalar_control_info, fqdn, port
+                    ip = cam['ip']
+                    camnode_ros_name = cam['camnode_ros_name']
+            return scalar_control_info, fqdn, port, ip, camnode_ros_name
 
         def external_get_image_fps_points(self, cam_id):
             ### XXX should extend to include lines
@@ -1587,12 +1439,12 @@ class MainBrain(object):
                 with cam_lock:
                     cam['commands']['clear_bg']=None
 
-        def external_set_cal( self, cam_id, pmat, intlin, intnonlin, scale_factor):
+        def external_set_cal( self, cam_id, pmat, intlin, intnonlin):
             with self.cam_info_lock:
                 cam = self.cam_info[cam_id]
                 cam_lock = cam['lock']
                 with cam_lock:
-                    cam['commands']['cal']= pmat, intlin, intnonlin, scale_factor
+                    cam['commands']['cal']= pmat, intlin, intnonlin
                     cam['is_calibrated'] = True
         # === thread boundary =========================================
 
@@ -1618,34 +1470,6 @@ class MainBrain(object):
 
         # ================================================================
         #
-        # Methods called remotely from listeners
-        #
-        # These all get called in their own thread.  Don't call across
-        # the thread boundary without using locks, especially to GUI
-        # or OpenGL.
-        #
-        # ================================================================
-
-        def register_downstream_kalman_host(self,host,port):
-            global downstream_kalman_hosts
-            addr = (host,port)
-            if addr not in downstream_kalman_hosts:
-                print 'appending to kalman host list:',addr
-                downstream_kalman_hosts.append( (host,port) )
-            else:
-                print 'already in kalman host list:',addr
-
-        def remove_downstream_kalman_host(self,host,port):
-            global downstream_kalman_hosts
-            host_tuple = (host,port)
-            try:
-                i = downstream_kalman_hosts.index( host_tuple )
-            except ValueError:
-                return # could not find entry
-            del downstream_kalman_hosts[i]
-
-        # ================================================================
-        #
         # Methods called remotely from cameras
         #
         # These all get called in their own thread.  Don't call across
@@ -1654,22 +1478,22 @@ class MainBrain(object):
         #
         # ================================================================
 
-        def register_new_camera(self,cam_no,scalar_control_info,port,force_cam_id=None):
+        def register_new_camera(self,cam_guid,scalar_control_info,port,camnode_ros_name):
             """register new camera, return cam_id (caller: remote camera)"""
 
+            assert camnode_ros_name is not None
             caller= self.daemon.getLocalStorage().caller # XXX Pyro hack??
             caller_addr= caller.addr
             caller_ip, caller_port = caller_addr
             fqdn = socket.getfqdn(caller_ip)
 
-            if force_cam_id is None:
-                cam_id = '%s_%d'%(fqdn,cam_no)
-            else:
-                cam_id = force_cam_id
+            print "REGISTER NEW CAMERA %s on %s @ ros node %s" % (cam_guid,fqdn,camnode_ros_name)
+            cam2mainbrain_data_port = self.main_brain.coord_processor.connect(cam_guid,fqdn)
 
-            cam2mainbrain_data_port = self.main_brain.coord_processor.connect(cam_id)
             with self.cam_info_lock:
-                self.cam_info[cam_id] = {'commands':{}, # command queue for cam
+                if cam_guid in self.cam_info:
+                    raise RuntimeError("camera with guid %s already exists" % cam_guid)
+                self.cam_info[cam_guid] = {'commands':{}, # command queue for cam
                                          'lock':threading.Lock(), # prevent concurrent access
                                          'image':None,  # most recent image from cam
                                          'fps':None,    # most recept fps from cam
@@ -1677,14 +1501,15 @@ class MainBrain(object):
                                          'caller':caller,
                                          'scalar_control_info':scalar_control_info,
                                          'fqdn':fqdn,
+                                         'ip':caller_ip,
                                          'port':port,
+                                         'camnode_ros_name':camnode_ros_name,
                                          'cam2mainbrain_data_port':cam2mainbrain_data_port,
                                          'is_calibrated':False, # has 3D calibration been sent yet?
                                          }
             self.no_cams_connected.clear()
             with self.changed_cam_lock:
-                self.new_cam_ids.append(cam_id)
-            return cam_id
+                self.new_cam_ids.append(cam_guid)
 
         def set_image(self,cam_id,coord_and_image):
             """set most recent image (caller: remote camera)"""
@@ -1773,14 +1598,11 @@ class MainBrain(object):
     def __init__(self,server=None,save_profiling_data=False, show_sync_errors=True):
         global main_brain_keeper, hostname
 
-        import motmot.fview_ext_trig.ttrigger
-        import motmot.fview_ext_trig.live_timestamp_modeler
-
         if server is not None:
             hostname = server
         print 'running mainbrain at hostname "%s"'%hostname
 
-        assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
+        self.load_config()
 
         self.debug_level = threading.Event()
         self.show_overall_latency = threading.Event()
@@ -1788,7 +1610,7 @@ class MainBrain(object):
         self.trigger_device_lock = threading.Lock()
         with self.trigger_device_lock:
             self.trigger_device = motmot.fview_ext_trig.ttrigger.DeviceModel()
-            self.trigger_device.frames_per_second = rc_params['frames_per_second']
+            self.trigger_device.frames_per_second = self.config['frames_per_second']
             self.timestamp_modeler = motmot.fview_ext_trig.live_timestamp_modeler.LiveTimestampModeler()
             self.timestamp_modeler.set_trigger_device( self.trigger_device )
 
@@ -1819,7 +1641,7 @@ class MainBrain(object):
 
         self.num_cams = 0
         self.MainBrain_cam_ids_copy = [] # keep a copy of all cam_ids connected
-        self._fqdns_by_cam_id = {}
+        self._ip_addrs_by_cam_id = {}
         self.set_new_camera_callback(self.IncreaseCamCounter)
         self.set_new_camera_callback(self.SendExpectedFPS)
         self.set_new_camera_callback(self.SendCalibration)
@@ -1840,12 +1662,10 @@ class MainBrain(object):
         self.h5trigger_clock_info = None
         self.h5movie_info = None
         self.h5textlog = None
-        if DO_KALMAN:
+        if 1:
             self.h5data3d_kalman_estimates = None
-            self.h5data3d_kalman_observations = None
+            self.h5data3d_ML_estimates = None
             self.h5_2d_obs = None
-        else:
-            self.h5data3d_best = None
 
         # Queues of information to save
         self.queue_data2d          = Queue.Queue()
@@ -1856,15 +1676,14 @@ class MainBrain(object):
 
         self.queue_data3d_kalman_estimates = Queue.Queue()
 
-        self.hypothesis_test_max_error = LockedValue(
-            rc_params['hypothesis_test_max_acceptable_error']) # maximum reprojection error
-
         self.coord_processor = CoordinateProcessor(self,
-                                                   save_profiling_data=save_profiling_data,
-                                                   debug_level=self.debug_level,
-                                                   show_overall_latency=self.show_overall_latency,
-                                                   show_sync_errors=show_sync_errors,
-                                                   )
+                                   save_profiling_data=save_profiling_data,
+                                   debug_level=self.debug_level,
+                                   show_overall_latency=self.show_overall_latency,
+                                   show_sync_errors=show_sync_errors,
+                                   max_reconstruction_latency_sec=self.config['max_reconstruction_latency_sec'],
+                                   max_N_hypothesis_test=self.config['max_N_hypothesis_test'])
+
         #self.coord_processor.setDaemon(True)
         self.coord_processor.start()
 
@@ -1876,10 +1695,56 @@ class MainBrain(object):
         self.timestamp_echo_receiver.setDaemon(True)
         self.timestamp_echo_receiver.start()
 
+        self._init_ros_interface()
+
         main_brain_keeper.register( self )
 
-        if have_ROS:
-            rospy.init_node('flydra_mainbrain')
+    def _ros_generic_service_dispatch(self, req):
+        calledservice = req._connection_header['service']
+        calledfunction = calledservice.split('/')[-1]
+        if calledfunction in self.ROS_CONTROL_API:
+            srvclass = self.ROS_CONTROL_API[calledfunction]
+
+            #dynamically build the request and response argument lists for the mainbrain api
+            #call. This requires the mainbrain api have the same calling signature as the
+            #service definitions, and, if you want to return something over ros, the return
+            #type signature must again match the service return type signature
+
+            respclass = srvclass._response_class
+
+            #determine the args to pass to the function based on the srv description (which
+            #is embodied in __slots__, a variable created by the ros build system to list
+            #the attributes (i.e. parameters only) of the request
+            kwargs = {}
+            for attr in req.__slots__:
+                kwargs[attr] = getattr(req,attr)
+
+            print "calling mainbrain api %s with args %s" % (calledfunction,kwargs)
+
+            result = getattr(self, calledfunction)(**kwargs)
+
+            kwargs = {}
+            for i,attr in enumerate(respclass.__slots__):
+                kwargs[attr] = result[i]
+
+            print "result = %s (marshaling over ros as %s klass %s)" % (result,kwargs,respclass)
+
+            return respclass(**kwargs)
+
+    def _init_ros_interface(self):
+        for name, srv in self.ROS_CONTROL_API.iteritems():
+            rospy.Service('~%s' % name, srv, self._ros_generic_service_dispatch)
+
+    def load_config(self):
+        self.config = {}
+        for k,v in self.ROS_CONFIGURATION.iteritems():
+            self.config[k] = rospy.get_param('~%s' % k, v)
+        print self.config
+
+    def save_config(self):
+        for k,v in self.config.iteritems():
+            if k in self.ROS_CONFIGURATION:
+                rospy.set_param("~%s" % k, v)
 
     def get_fps(self):
         return self.trigger_device.frames_per_second_actual
@@ -1904,16 +1769,8 @@ class MainBrain(object):
                         cam_id, 'expected_trigger_framerate', actual_new_fps )
                 except Exception,err:
                     print 'ERROR:',err
-            rc_params['frames_per_second'] = actual_new_fps
-            save_rc_params()
-
-    def get_hypothesis_test_max_error(self):
-        return self.hypothesis_test_max_error.get()
-
-    def set_hypothesis_test_max_error(self,val):
-        self.hypothesis_test_max_error.set(val)
-        rc_params['hypothesis_test_max_acceptable_error'] = val
-        save_rc_params()
+            self.config['frames_per_second'] = float(actual_new_fps)
+            self.save_config()
 
     def IncreaseCamCounter(self,cam_id,scalar_control_info,fqdn_and_port):
         self.num_cams += 1
@@ -1927,8 +1784,7 @@ class MainBrain(object):
             pmat = self.reconstructor.get_pmat(cam_id)
             intlin = self.reconstructor.get_intrinsic_linear(cam_id)
             intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
-            scale_factor = self.reconstructor.get_scale_factor()
-            self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin, scale_factor)
+            self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin)
 
     def DecreaseCamCounter(self,cam_id):
         try:
@@ -1943,17 +1799,17 @@ class MainBrain(object):
         return self.num_cams
 
     def get_scalarcontrolinfo(self, cam_id):
-        sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
         return sci
 
     def get_widthheight(self, cam_id):
-        sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
         w = sci['width']
         h = sci['height']
         return w,h
 
     def get_roi(self, cam_id):
-        sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
         lbrt = sci['roi']
         return lbrt
 
@@ -1961,7 +1817,7 @@ class MainBrain(object):
         cam_ids = self.remote_api.external_get_cam_ids()
         all = {}
         for cam_id in cam_ids:
-            sci, fqdn, port = self.remote_api.external_get_info(cam_id)
+            sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
             all[cam_id] = sci
         return all
 
@@ -1984,9 +1840,9 @@ class MainBrain(object):
                 continue # inserted and then removed
             if self.is_saving_data():
                 raise RuntimeError("Cannot add new camera while saving data")
-            scalar_control_info, fqdn, port = self.remote_api.external_get_info(cam_id)
+            sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
             for new_cam_func in self._new_camera_functions:
-                new_cam_func(cam_id,scalar_control_info,(fqdn,port))
+                new_cam_func(cam_id,sci,(fqdn,port))
 
         for cam_id in old_cam_ids:
             for old_cam_func in self._old_camera_functions:
@@ -2007,7 +1863,6 @@ class MainBrain(object):
         self._check_latencies()
 
     def _trigger_framecount_check(self):
-        import motmot.fview_ext_trig.live_timestamp_modeler
         try:
             tmp = self.timestamp_modeler.update(return_last_measurement_info=True)
             start_timestamp, stop_timestamp, framecount, tcnt = tmp
@@ -2020,13 +1875,13 @@ class MainBrain(object):
         timestamp_echo_listener_port = flydra.common_variables.timestamp_echo_listener_port
 
         for cam_id in self.MainBrain_cam_ids_copy:
-            if cam_id not in self._fqdns_by_cam_id:
-                sci, fqdn, cam2mainbrain_port = self.remote_api.external_get_info(cam_id)
-                self._fqdns_by_cam_id[cam_id] = fqdn
+            if cam_id not in self._ip_addrs_by_cam_id:
+                sci, fqdn, cam2mainbrain_port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
+                self._ip_addrs_by_cam_id[cam_id] = ip
             else:
-                fqdn = self._fqdns_by_cam_id[cam_id]
+                ip = self._ip_addrs_by_cam_id[cam_id]
             buf = struct.pack( timestamp_echo_fmt1, time.time() )
-            self.outgoing_latency_UDP_socket.sendto(buf,(fqdn,timestamp_echo_listener_port))
+            self.outgoing_latency_UDP_socket.sendto(buf,(ip,timestamp_echo_listener_port))
 
     def get_last_image_fps(self, cam_id):
         # XXX should extend to include lines
@@ -2079,51 +1934,78 @@ class MainBrain(object):
         else:
             self.show_overall_latency.clear()
 
-    def start_recording(self, cam_id, raw_file_basename):
+    def start_recording(self, raw_file_basename=None, *cam_ids):
         global XXX_framenumber
+        nowstr = time.strftime( '%Y%m%d_%H%M%S' )
 
-        self.remote_api.external_start_recording( cam_id, raw_file_basename)
-        approx_start_frame = XXX_framenumber
-        self._currently_recording_movies[ cam_id ] = (raw_file_basename, approx_start_frame)
-        if self.is_saving_data():
-            self.h5movie_info.row['cam_id'] = cam_id
-            self.h5movie_info.row['filename'] = raw_file_basename+'.fmf'
-            self.h5movie_info.row['approx_start_frame'] = approx_start_frame
-            self.h5movie_info.row.append()
-            self.h5movie_info.flush()
+        if not raw_file_basename:
+            raw_file_basename = os.path.join(
+                                    os.path.expanduser(self.config['save_data_dir']),
+                                    'LARGE_MOVIES')
 
-    def stop_recording(self, cam_id):
+        if len(cam_ids) == 0:
+            cam_ids = self.remote_api.external_get_cam_ids()
+
+        for cam_id in cam_ids:
+            raw_file_name = os.path.join(raw_file_basename,
+                                         "full_%s_%s" % (nowstr, cam_id))
+            self.remote_api.external_start_recording( cam_id, raw_file_name)
+            approx_start_frame = XXX_framenumber
+            self._currently_recording_movies[ cam_id ] = (raw_file_name, approx_start_frame)
+            if self.is_saving_data():
+                self.h5movie_info.row['cam_id'] = cam_id
+                self.h5movie_info.row['filename'] = raw_file_name+'.fmf'
+                self.h5movie_info.row['approx_start_frame'] = approx_start_frame
+                self.h5movie_info.row.append()
+                self.h5movie_info.flush()
+
+    def stop_recording(self, *cam_ids):
         global XXX_framenumber
-        self.remote_api.external_stop_recording(cam_id)
-        approx_stop_frame = XXX_framenumber
-        raw_file_basename, approx_start_frame = self._currently_recording_movies[ cam_id ]
-        del self._currently_recording_movies[ cam_id ]
-        # modify save file to include approximate movie stop time
-        if self.is_saving_data():
-            nrow = None
-            for r in self.h5movie_info:
-                # get row in table
-                if (r['cam_id'] == cam_id and r['filename'] == raw_file_basename+'.fmf' and
-                    r['approx_start_frame']==approx_start_frame):
-                    nrow =r.nrow
-                    break
-            if nrow is not None:
-                nrowi = int(nrow) # pytables bug workaround...
-                assert nrowi == nrow # pytables bug workaround...
-                approx_stop_framei = int(approx_stop_frame)
-                assert approx_stop_framei == approx_stop_frame
+        if len(cam_ids) == 0:
+            cam_ids = self.remote_api.external_get_cam_ids()
+        for cam_id in cam_ids:
+            self.remote_api.external_stop_recording(cam_id)
+            approx_stop_frame = XXX_framenumber
+            raw_file_basename, approx_start_frame = self._currently_recording_movies[ cam_id ]
+            del self._currently_recording_movies[ cam_id ]
+            # modify save file to include approximate movie stop time
+            if self.is_saving_data():
+                nrow = None
+                for r in self.h5movie_info:
+                    # get row in table
+                    if (r['cam_id'] == cam_id and r['filename'] == raw_file_basename+'.fmf' and
+                        r['approx_start_frame']==approx_start_frame):
+                        nrow =r.nrow
+                        break
+                if nrow is not None:
+                    nrowi = int(nrow) # pytables bug workaround...
+                    assert nrowi == nrow # pytables bug workaround...
+                    approx_stop_framei = int(approx_stop_frame)
+                    assert approx_stop_framei == approx_stop_frame
 
-                new_columns = numpy.rec.fromarrays([[approx_stop_framei]], formats='i8')
-                self.h5movie_info.modifyColumns(start=nrowi, columns=new_columns, names=['approx_stop_frame'])
-            else:
-                raise RuntimeError("could not find row to save movie stop frame.")
+                    new_columns = numpy.rec.fromarrays([[approx_stop_framei]], formats='i8')
+                    self.h5movie_info.modifyColumns(start=nrowi, columns=new_columns, names=['approx_stop_frame'])
+                else:
+                    raise RuntimeError("could not find row to save movie stop frame.")
 
-    def start_small_recording(self, cam_id, small_filename):
-        self.remote_api.external_start_small_recording( cam_id,
-                                                        small_filename)
+    def start_small_recording(self, raw_file_basename=None, *cam_ids):
+        nowstr = time.strftime( '%Y%m%d_%H%M%S' )
+        if not raw_file_basename:
+            raw_file_basename = os.path.join(
+                                    os.path.expanduser(self.config['save_data_dir']),
+                                    'SMALL_MOVIES')
+        if len(cam_ids) == 0:
+            cam_ids = self.remote_api.external_get_cam_ids()
+        for cam_id in cam_ids:
+            raw_file_name = os.path.join(raw_file_basename,
+                                         "small_%s_%s" % (nowstr, cam_id))
+            self.remote_api.external_start_small_recording(cam_id, raw_file_name)
 
-    def stop_small_recording(self, cam_id):
-        self.remote_api.external_stop_small_recording(cam_id)
+    def stop_small_recording(self, *cam_ids):
+        if len(cam_ids) == 0:
+            cam_ids = self.remote_api.external_get_cam_ids()
+        for cam_id in cam_ids:
+            self.remote_api.external_stop_small_recording(cam_id)
 
     def quit(self):
         """closes any files being saved and closes camera connections"""
@@ -2165,9 +2047,8 @@ class MainBrain(object):
             pmat = self.reconstructor.get_pmat(cam_id)
             intlin = self.reconstructor.get_intrinsic_linear(cam_id)
             intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
-            scale_factor = self.reconstructor.get_scale_factor()
             if cam_id in connected_cam_ids:
-                self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin, scale_factor )
+                self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin )
 
     def clear_calibration(self):
         if self.is_saving_data():
@@ -2201,10 +2082,34 @@ class MainBrain(object):
     def __del__(self):
         self.quit()
 
+    def _safe_makedir(self, path):
+        """ raises OSError if path cannot be made """
+        if not os.path.exists(path):
+            os.makedirs(path)
+            return path
+
+    def set_save_data_dir(self, path):
+        if os.path.isdir(path):
+            save_data_dir = path
+        else:
+            try:
+                save_data_dir = self._safe_makedir(path)
+            except OSError:
+                return None
+        self.config['save_data_dir'] = save_data_dir
+        self.save_config()
+        return save_data_dir
+
     def is_saving_data(self):
         return self.h5file is not None
 
-    def start_saving_data(self, filename):
+    def start_saving_data(self, filename=None):
+        if not filename:
+            filename = time.strftime('DATA%Y%m%d_%H%M%S.h5')
+        filename = os.path.join(
+                    os.path.expanduser(self.config['save_data_dir']),
+                    filename)
+
         if os.path.exists(filename):
             raise RuntimeError("will not overwrite data file")
 
@@ -2228,31 +2133,28 @@ class MainBrain(object):
         self._startup_message()
         if self.reconstructor is not None:
             self.reconstructor.save_to_h5file(self.h5file)
-            if DO_KALMAN:
+            if 1:
                 self.h5data3d_kalman_estimates = ct(root,'kalman_estimates', self.KalmanEstimatesDescription,
                                                     "3d data (from Kalman filter)",
                                                     expectedrows=expected_rows)
                 self.h5data3d_kalman_estimates.attrs.dynamic_model_name = self.dynamic_model_name
                 self.h5data3d_kalman_estimates.attrs.dynamic_model = self.dynamic_model
 
-                self.h5data3d_kalman_observations = ct(root,'kalman_observations', FilteredObservations,
-                                                       "3d data (input to Kalman filter)",
+                self.h5data3d_ML_estimates = ct(root,'ML_estimates', FilteredObservations,
+                                                       'dynamics-free maximum liklihood estimates',
                                                        expectedrows=expected_rows)
                 self.h5_2d_obs = self.h5file.createVLArray(self.h5file.root,
-                                                           'kalman_observations_2d_idxs',
-                                                           kalman_observations_2d_idxs_type(), # dtype should match with tro.observations_2d
+                                                           'ML_estimates_2d_idxs',
+                                                           ML_estimates_2d_idxs_type(), # dtype should match with tro.observations_2d
                                                            "camns and idxs")
                 self.h5_2d_obs_next_idx = 0
-            else:
-                self.h5data3d_best = ct(root,'data3d_best', Info3D,
-                                        "3d data (best)",
-                                        expectedrows=expected_rows)
 
         general_save_info=self.coord_processor.get_general_cam_info()
         for cam_id,dd in general_save_info.iteritems():
             self.h5cam_info.row['cam_id'] = cam_id
             self.h5cam_info.row['camn']   = dd['absolute_cam_no']
-            self.h5cam_info.row['frame0'] = dd['frame0']
+            with self.remote_api.cam_info_lock:
+                self.h5cam_info.row['hostname'] = self.remote_api.cam_info[cam_id]['fqdn']
             self.h5cam_info.row.append()
         self.h5cam_info.flush()
 
@@ -2279,12 +2181,10 @@ class MainBrain(object):
         self.h5trigger_clock_info = None
         self.h5movie_info = None
         self.h5textlog = None
-        if DO_KALMAN:
+        if 1:
             self.h5data3d_kalman_estimates = None
-            self.h5data3d_kalman_observations = None
+            self.h5data3d_ML_estimates = None
             self.h5_2d_obs = None
-        else:
-            self.h5data3d_best = None
 
     def _startup_message(self):
         textlog_row = self.h5textlog.row
@@ -2297,11 +2197,10 @@ class MainBrain(object):
         list_of_textlog_data = [
             (timestamp,cam_id,timestamp,
              ('MainBrain running at %s fps, (top %s, '
-              'hypothesis_test_max_error %s, trigger_CS3 %s, FOSC %s, flydra_version %s, '
+              'trigger_CS3 %s, FOSC %s, flydra_version %s, '
               'time_tzname0 %s)'%(
             str(self.trigger_device.frames_per_second_actual),
             str(self.trigger_device._t3_state.timer3_top),
-            str(self.get_hypothesis_test_max_error()),
             str(self.trigger_device._t3_state.timer3_CS),
             str(self.trigger_device.FOSC),
             flydra.version.__version__,
@@ -2385,15 +2284,15 @@ class MainBrain(object):
         if self.h5cam_info is not None:
             cam_info_row = self.h5cam_info.row
             for cam_info in list_of_cam_info:
-                cam_id, absolute_cam_no, frame0 = cam_info
+                cam_id, absolute_cam_no, camhost = cam_info
                 cam_info_row['cam_id'] = cam_id
                 cam_info_row['camn']   = absolute_cam_no
-                cam_info_row['frame0'] = frame0
+                cam_info_row['hostname'] = camhost
                 cam_info_row.append()
 
             self.h5cam_info.flush()
 
-        if DO_KALMAN:
+        if 1:
             # ** 3d data - kalman **
             q = self.queue_data3d_kalman_estimates
 
@@ -2405,21 +2304,13 @@ class MainBrain(object):
             except Queue.Empty:
                 pass
             if self.h5data3d_kalman_estimates is not None:
-##                print 'saving kalman data (%d objects)'%(
-##                    len(list_of_3d_data),)
                 for (obj_id, tro_frames, tro_xhats, tro_Ps, tro_timestamps,
                      obs_frames, obs_data,
                      observations_2d, obs_Lcoords) in list_of_3d_data:
 
-
                     if len(obs_frames)<MIN_KALMAN_OBSERVATIONS_TO_SAVE:
-                        # only save data with at least 10 observations
-                        if self.debug_level.isSet():
-                            print 'not saving kalman object -- too few observations to save'
+                        # only save data with at least N observations
                         continue
-
-                    if self.debug_level.isSet():
-                        print 'saving kalman object %d'%(obj_id,)
 
                     # save observation 2d data indexes
                     this_idxs = []
@@ -2429,7 +2320,7 @@ class MainBrain(object):
                         self.h5_2d_obs_next_idx += 1
                     self.h5_2d_obs.flush()
 
-                    this_idxs = numpy.array( this_idxs, dtype=numpy.uint64 ) # becomes obs_2d_idx (index into 'kalman_observations_2d_idxs')
+                    this_idxs = numpy.array( this_idxs, dtype=numpy.uint64 ) # becomes obs_2d_idx (index into 'ML_estimates_2d_idxs')
 
                     # save observations
                     observations_frames = numpy.array(obs_frames, dtype=numpy.uint64)
@@ -2442,8 +2333,8 @@ class MainBrain(object):
                     array_list = [obj_id_array,observations_frames]+list_of_obs+[this_idxs]+list_of_lines
                     obs_recarray = numpy.rec.fromarrays(array_list, names = h5_obs_names)
 
-                    self.h5data3d_kalman_observations.append(obs_recarray)
-                    self.h5data3d_kalman_observations.flush()
+                    self.h5data3d_ML_estimates.append(obs_recarray)
+                    self.h5data3d_ML_estimates.flush()
 
                     # save xhat info (kalman estimates)
                     frames = numpy.array(tro_frames, dtype=numpy.uint64)
@@ -2461,47 +2352,6 @@ class MainBrain(object):
 
                     self.h5data3d_kalman_estimates.append( xhats_recarray )
                     self.h5data3d_kalman_estimates.flush()
-
-        else:
-            # ** 3d data - hypothesis testing **
-            q = self.queue_data3d_best
-            h5table = self.h5data3d_best
-
-            #   clear queue
-            list_of_3d_data = []
-            try:
-                while True:
-                    list_of_3d_data.append( q.get(0) )
-            except Queue.Empty:
-                pass
-            #   save
-            if h5table is not None:
-                row = h5table.row
-                for data3d in list_of_3d_data:
-                    corrected_framenumber, outgoing_data, cam_nos_used, mean_dist = data3d
-                    cam_nos_used.sort()
-                    cam_nos_used_str = ' '.join( map(str, cam_nos_used) )
-
-                    row['frame']=corrected_framenumber
-
-                    row['x']=outgoing_data[0]
-                    row['y']=outgoing_data[1]
-                    row['z']=outgoing_data[2]
-
-                    row['p0']=outgoing_data[3]
-                    row['p1']=outgoing_data[4]
-                    row['p2']=outgoing_data[5]
-                    row['p3']=outgoing_data[6]
-                    row['p4']=outgoing_data[7]
-                    row['p5']=outgoing_data[8]
-
-                    row['timestamp']=outgoing_data[9]
-
-                    row['camns_used']=cam_nos_used_str
-                    row['mean_dist']=mean_dist
-                    row.append()
-
-                h5table.flush()
 
         # ** camera info **
         #   clear queue

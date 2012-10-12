@@ -129,21 +129,22 @@ cdef class TrackedObject:
     TrackedObject handles all internal units in meters, but external interfaces are original units
 
     """
-    cdef long current_frameno, max_frames_skipped
+    cdef readonly long current_frameno
+    cdef readonly long last_frameno_with_data
+    cdef long max_frames_skipped
     cdef mybool kill_me, save_all_data
     cdef double area_threshold, area_threshold_for_orientation
 
     cdef object reconstructor_meters, my_kalman
-    cdef double scale_factor
     cdef object distorted_pixel_euclidian_distance_accept
     cdef double max_variance
     cdef object ekf_observation_covariance_pixels
 
-    cdef public object frames, xhats, timestamps, Ps, observations_data, observations_Lcoords
-    cdef public object observations_frames, observations_2d
+    cdef readonly object frames, xhats, timestamps, Ps, observations_data, observations_Lcoords
+    cdef readonly object observations_frames, observations_2d
     cdef int disable_image_stat_gating, orientation_consensus
     cdef object fake_timestamp
-    cdef public u_int32_t obj_id
+    cdef readonly u_int32_t obj_id
     cdef object ekf_kalman_A, ekf_kalman_Q
 
     def __init__(self,
@@ -154,7 +155,6 @@ cdef class TrackedObject:
                  first_observation_Lcoords_orig_units, # first data
                  first_observation_camns,
                  first_observation_idxs,
-                 scale_factor=None,
                  kalman_model=None,
                  save_all_data=False,
                  double area_threshold=0.0,
@@ -171,7 +171,6 @@ cdef class TrackedObject:
         obj_id - unique identifier for each object
         frame - frame number of first observation data
         first_observation_orig_units - first observation (in arbitrary units)
-        scale_factor - how to convert from arbitrary units (of observations) into meters (e.g. 1e-3 for mm)
         kalman_model - Kalman parameters
         area_threshold - minimum area to consider for tracking use
         """
@@ -187,18 +186,14 @@ cdef class TrackedObject:
         self.fake_timestamp = fake_timestamp
 
         self.current_frameno = frame
-        if scale_factor is None:
-            print 'WARNING: no scale_factor given in flydra_tracker, assuming 1e-3'
-            self.scale_factor = 1e-3
-        else:
-            self.scale_factor = scale_factor
-        first_observation_meters = first_observation_orig_units*self.scale_factor
+        self.last_frameno_with_data = frame
+        first_observation_meters = first_observation_orig_units
         if first_observation_Lcoords_orig_units is None:
             first_observation_Lcoords = NO_LCOORDS
         else:
             line3d_orig_units = flydra.geom.line_from_HZline(first_observation_Lcoords_orig_units) # PlueckerLine instance
             loc = line3d_orig_units.closest() # closest point on line to origin
-            loc_meters = loc*self.scale_factor
+            loc_meters = loc
             line3d_meters = flydra.geom.line_from_points( loc_meters, loc_meters+line3d_orig_units.direction() )
             first_observation_Lcoords = line3d_meters.to_hz()
         ss = kalman_model['ss']
@@ -317,31 +312,26 @@ cdef class TrackedObject:
         # For each frame that was skipped, step the Kalman filter.
         # Since we have no observation, the estimated error will
         # rise.
-        cdef long i,frames_skipped
+        cdef long i, frames_since_update
+        cdef long frames_skipped
         cdef double Pmean
-        frames_skipped = frame-self.current_frameno-1
+        frames_since_update = frame-self.current_frameno-1
 
         if debug1>2:
             print 'doing',self,'============--'
+            print 'updating for %d frames since update'%(frames_since_update,)
 
-        if frames_skipped > self.max_frames_skipped:
-            self.kill_me = True # don't run Kalman filter, just quit
-            if debug1>2:
-                print 'killed because too many frames skipped'
-        else:
-            if debug1>2:
-                print 'updating for %d frames skipped'%(frames_skipped,)
-            for i in range(frames_skipped):
-                if isinstance(self.my_kalman, kalman_ekf.EKF):
-                    xhat, P = self.my_kalman.step(self.ekf_kalman_A,
-                                                  self.ekf_kalman_Q)
-                else:
-                    xhat, P = self.my_kalman.step()
-                ############ save outputs ###############
-                self.frames.append( self.current_frameno + i + 1 )
-                self.xhats.append( xhat )
-                self.timestamps.append( 0.0 )
-                self.Ps.append( P )
+        for i in range(frames_since_update):
+            if isinstance(self.my_kalman, kalman_ekf.EKF):
+                xhat, P = self.my_kalman.step(self.ekf_kalman_A,
+                                              self.ekf_kalman_Q)
+            else:
+                xhat, P = self.my_kalman.step()
+            ############ save outputs ###############
+            self.frames.append( self.current_frameno + i + 1 )
+            self.xhats.append( xhat )
+            self.timestamps.append( 0.0 )
+            self.Ps.append( P )
 
         this_observations_2d_hash = None
         used_camns_and_idxs = []
@@ -407,8 +397,15 @@ cdef class TrackedObject:
             # threshold at which it should be terminated.
             if Pmean > self.max_variance:
                 self.kill_me = True
-                if debug1>1:
+                if debug1>=1:
                     print 'will kill next time because Pmean too large (%f > %f)'%(Pmean,self.max_variance)
+
+            frames_skipped = frame - self.last_frameno_with_data
+            if frames_skipped > self.max_frames_skipped:
+                self.kill_me = True
+                if debug1>=1:
+                    print 'will kill next time because frames skipped (%f > %f)'%(frames_skipped,
+                                                                                  self.max_frames_skipped)
 
             ############ save outputs ###############
             self.frames.append( frame )
@@ -420,6 +417,7 @@ cdef class TrackedObject:
             self.Ps.append( P )
 
             if observation_meters is not None:
+                self.last_frameno_with_data = frame
                 self.observations_frames.append( frame )
                 self.observations_data.append( observation_meters )
                 if Lcoords is None:

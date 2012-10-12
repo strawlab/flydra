@@ -22,7 +22,7 @@ PT_TUPLE_IDX_SUMSQF_VAL_IDX = 13
 # 2D data format for PyTables:
 class Info2D(PT.IsDescription):
     camn         = PT.UInt16Col(pos=0)
-    frame        = PT.UInt64Col(pos=1)
+    frame        = PT.Int64Col(pos=1)
     timestamp    = PT.FloatCol(pos=2) # when the image trigger happened (returned by timestamp modeler on MainBrain)
     cam_received_timestamp  = PT.FloatCol(pos=3) # when the image was acquired by flydra software (on camera computer)
     x            = PT.Float32Col(pos=4)
@@ -34,3 +34,9 @@ class Info2D(PT.IsDescription):
     cur_val      = PT.UInt8Col(pos=10)
     mean_val     = PT.Float32Col(pos=11)
     sumsqf_val   = PT.Float32Col(pos=12) # estimate of <x^2> (running_sumsqf)
+
+class TextLogDescription(PT.IsDescription):
+    mainbrain_timestamp = PT.FloatCol(pos=0)
+    cam_id = PT.StringCol(255,pos=1)
+    host_timestamp = PT.FloatCol(pos=2)
+    message = PT.StringCol(255,pos=3)

@@ -85,9 +85,9 @@ def get_dynamics_free_MLE_info(filename):
     ca = core_analysis.get_global_CachingAnalyzer()
     tmp1, unique_object_ids, tmp3, h5, extra = ca.initial_file_load(filename)
 
-    if hasattr(h5.root,'kalman_observations'):
+    if hasattr(h5.root,'ML_estimates'):
 
-        data = h5.root.kalman_observations
+        data = h5.root.ML_estimates
 
         frames = data.read(field='frame')
         results['start_frame'] = np.min(frames)

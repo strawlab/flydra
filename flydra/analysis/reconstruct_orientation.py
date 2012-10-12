@@ -10,7 +10,7 @@ def reconstruct_line_3ds( kresults, recon2, use_obj_id, return_fXl=False ):
     
     data2d = kresults.root.data2d_distorted # make sure we have 2d data table
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(kresults)
-    kobs_2d = kresults.root.kalman_observations_2d_idxs
+    kobs_2d = kresults.root.ML_estimates_2d_idxs
     
     obj_ids = kresults.root.kalman_estimates.read(field='obj_id',flavor='numpy')
 
@@ -20,27 +20,27 @@ def reconstruct_line_3ds( kresults, recon2, use_obj_id, return_fXl=False ):
         obj_id_find=use_obj_id
 
         
-    observation_frame_idxs = kresults.root.kalman_observations.getWhereList(
-        kresults.root.kalman_observations.cols.obj_id==obj_id_find,
+    observation_frame_idxs = kresults.root.ML_estimates.getWhereList(
+        kresults.root.ML_estimates.cols.obj_id==obj_id_find,
         flavor='numpy')
     
-    observation_frames = kresults.root.kalman_observations.readCoordinates(
+    observation_frames = kresults.root.ML_estimates.readCoordinates(
         observation_frame_idxs,
         field='frame',
         flavor='numpy')
-    observation_xs = kresults.root.kalman_observations.readCoordinates(
+    observation_xs = kresults.root.ML_estimates.readCoordinates(
         observation_frame_idxs,
         field='x',
         flavor='numpy')
-    observation_ys = kresults.root.kalman_observations.readCoordinates(
+    observation_ys = kresults.root.ML_estimates.readCoordinates(
         observation_frame_idxs,
         field='y',
         flavor='numpy')
-    observation_zs = kresults.root.kalman_observations.readCoordinates(
+    observation_zs = kresults.root.ML_estimates.readCoordinates(
         observation_frame_idxs,
         field='z',
         flavor='numpy')
-    obs_2d_idxs = kresults.root.kalman_observations.readCoordinates(
+    obs_2d_idxs = kresults.root.ML_estimates.readCoordinates(
         observation_frame_idxs,
         field='obs_2d_idx',
         flavor='numpy')

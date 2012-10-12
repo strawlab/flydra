@@ -8,7 +8,10 @@ import os, sys, math
 import warnings
 
 import pkg_resources
-from enthought.tvtk.api import tvtk
+try:
+    from enthought.tvtk.api import tvtk
+except ImportError:
+    from tvtk.api import tvtk
 import numpy
 import numpy as np
 import tables as PT
@@ -22,8 +25,6 @@ import flydra.analysis.result_utils as result_utils
 import flydra.a2.xml_stimulus as xml_stimulus
 import flydra.a2.flypos
 import flydra.analysis.PQmath as PQmath
-
-pacific = pytz.timezone('US/Pacific')
 
 import cgtypes # cgkit 1.x
 import flydra.a2.pos_ori2fu
@@ -46,7 +47,6 @@ def do_show_cameras(results, renderers, frustums=True, axes=True, labels=True, c
         R = results
     else:
         R = reconstruct.Reconstructor(results)
-    R = R.get_scaled( R.get_scale_factor() )
 
     if centers:
         cam_centers = tvtk.Points()
@@ -197,21 +197,14 @@ def do_show_cameras(results, renderers, frustums=True, axes=True, labels=True, c
     return actors
 
 def set_color_for_obj_id(obj_id,a):
-    if 1:
-        warnings.warn('HACK to set obj_id color')
-        if obj_id==178:
-            a.property.color = 0, .45, .70
-        else:
-            a.property.color = .3, .65, .10
-    else:
-        if obj_id%4==0:
-            a.property.color = .9, .8, 0
-        if obj_id%4==1:
-            a.property.color = 0, .45, .70
-        if obj_id%4==2:
-            a.property.color = .3, .65, .10
-        if obj_id%4==3:
-            a.property.color = 0, 1, 0
+    if obj_id%4==0:
+        a.property.color = .9, .8, 0
+    if obj_id%4==1:
+        a.property.color = 0, .45, .70
+    if obj_id%4==2:
+        a.property.color = .3, .65, .10
+    if obj_id%4==3:
+        a.property.color = 0, 1, 0
 
 def doit(filename,
          show_obj_ids=False,
@@ -510,7 +503,7 @@ def doit(filename,
                 dur = my_rows['timestamp'][-1] - my_timestamp
                 print '%d 3D triangulation started at %s (took %.2f seconds)'%(
                     obj_id,
-                    datetime.datetime.fromtimestamp(my_timestamp,pacific),
+                    datetime.datetime.fromtimestamp(my_timestamp),
                     dur)
                 print '  estimate frames: %d - %d (%d frames)'%(
                     my_rows['frame'][0],

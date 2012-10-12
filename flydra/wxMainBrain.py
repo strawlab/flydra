@@ -45,6 +45,10 @@ if SCROLLED:
 
 import motmot.wxvalidatedtext.wxvalidatedtext as wxvt
 
+import roslib
+roslib.load_manifest('rospy')
+import rospy
+
  # trigger extraction
 RESFILE = pkg_resources.resource_filename(__name__,"flydra_server.xrc")
 pkg_resources.resource_filename(__name__,"flydra_server_art.png")
@@ -743,8 +747,8 @@ class wxMainBrainApp(wx.App):
         kalman_param_string = ctrl.GetStringSelection()
         name=str(kalman_param_string)
 
-        MainBrain.rc_params['kalman_model'] = name
-        MainBrain.save_rc_params()
+        self.main_brain.config['kalman_model'] = name
+        self.main_brain.save_config()
 
         if self.main_brain.reconstructor is not None:
             print 'setting model to',name
@@ -908,11 +912,8 @@ class wxMainBrainApp(wx.App):
             self.record_raw.SetValue(False)
             return
         try:
-            nowstr = time.strftime( '%Y%m%d_%H%M%S' )
             for cam_id in cam_ids:
-                basename = '~/FLYDRA_LARGE_MOVIES/full_%s_%s'%(nowstr,cam_id)
-                self.main_brain.start_recording(cam_id,
-                                                basename)
+                self.main_brain.start_recording(None,cam_id)
                 self._currently_recording_cams.append(cam_id)
             self.statusbar.SetStatusText('Recording started on %d cameras'%(
                 len(self._currently_recording_cams),),0)
@@ -949,11 +950,8 @@ class wxMainBrainApp(wx.App):
             self.record_small.SetValue(False)
             return
         try:
-            nowstr = time.strftime( '%Y%m%d_%H%M%S' )
             for cam_id in cam_ids:
-                basename = '~/FLYDRA_SMALL_MOVIES/small_%s_%s'%(nowstr,cam_id)
-                self.main_brain.start_small_recording(cam_id,
-                                                      basename)
+                self.main_brain.start_small_recording(None, cam_id)
                 self._currently_recording_small_cams.append(cam_id)
             self.statusbar.SetStatusText('Small recording started on %d cameras'%(
                 len(self._currently_recording_small_cams),),0)
@@ -1078,12 +1076,6 @@ class wxMainBrainApp(wx.App):
         sizer.Add(control, 1, wx.EXPAND)
         panel.SetSizer( sizer )
 
-    def OnHypothesisTestMaxError(self,event):
-        ctrl = xrc.XRCCTRL(self.status_panel,
-                       "HYPOTHESIS_TEST_MAX_ERR")
-        val = float(ctrl.GetValue())
-        self.main_brain.set_hypothesis_test_max_error(val)
-
     def OnManualTriggerDevice1(self,event):
         sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sender.sendto('1',(MainBrain.hostname,common_variables.trigger_network_socket_port))
@@ -1179,17 +1171,15 @@ class wxMainBrainApp(wx.App):
             self.pass_all_keystrokes = False
 
     def OnStartSavingData(self, event=None):
-        display_save_filename = time.strftime( 'DATA%Y%m%d_%H%M%S.h5' )
-        save_filename = os.path.join( self.save_data_dir, display_save_filename )
-        if 1:
-            try:
-                self.main_brain.start_saving_data(save_filename)
-                self.statusbar.SetStatusText("Saving data to '%s'"%save_filename)
-                self.statusbar.SetStatusText(display_save_filename,2)
-            except:
-                self.statusbar.SetStatusText("Error saving data to '%s', see console"%save_filename)
-                self.statusbar.SetStatusText("",2)
-                raise
+        save_filename = time.strftime( 'DATA%Y%m%d_%H%M%S.h5' )
+        try:
+            self.main_brain.start_saving_data(save_filename)
+            self.statusbar.SetStatusText("Saving data to '%s'"%save_filename)
+            self.statusbar.SetStatusText(save_filename,2)
+        except:
+            self.statusbar.SetStatusText("Error saving data to '%s', see console"%save_filename)
+            self.statusbar.SetStatusText("",2)
+            raise
 
     def OnStopSavingData(self, event=None):
         self.main_brain.stop_saving_data()
@@ -1317,14 +1307,6 @@ class wxMainBrainApp(wx.App):
         self.main_brain = main_brain
 
         if 1:
-            ctrl = xrc.XRCCTRL(self.status_panel,
-                               "HYPOTHESIS_TEST_MAX_ERR")
-            ctrl.SetValue(str(self.main_brain.get_hypothesis_test_max_error()))
-            wxvt.Validator(ctrl,
-                           ctrl.GetId(),
-                           self.OnHypothesisTestMaxError,
-                           validate_positive_float)
-        if 1:
             fps = self.main_brain.get_fps()
             model_names = flydra.kalman.dynamic_models.get_model_names()
 
@@ -1334,7 +1316,7 @@ class wxMainBrainApp(wx.App):
             found_rc_default = None
             for i,model_name in enumerate(model_names):
                 ctrl.Append(model_name)
-                if MainBrain.rc_params['kalman_model'] == model_name:
+                if self.main_brain.config['kalman_model'] == model_name:
                     found_rc_default = i
             ctrl.GetParent().GetSizer().Layout()
             if not found_rc_default:
@@ -1765,6 +1747,8 @@ def main():
 
     (options, args) = parser.parse_args()
 
+    rospy.init_node('flydra_mainbrain')
+
     global use_opengl, use_video_preview
     use_opengl = options.use_opengl
     use_video_preview = options.use_video_preview
@@ -1775,8 +1759,7 @@ def main():
     # create main_brain server (not started yet)
     main_brain = MainBrain.MainBrain(server=options.server,
                                      save_profiling_data=options.save_profiling_data,
-                                     show_sync_errors=options.show_sync_errors,
-                                     )
+                                     show_sync_errors=options.show_sync_errors)
 
     try:
         # connect server to GUI
