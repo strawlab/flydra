@@ -45,6 +45,7 @@ roslib.load_manifest('std_srvs')
 roslib.load_manifest('ros_flydra')
 import rospy
 import std_srvs.srv
+import std_msgs.msg
 from ros_flydra.msg import flydra_mainbrain_super_packet
 from ros_flydra.msg import flydra_mainbrain_packet, flydra_object
 from geometry_msgs.msg import Point, Vector3
@@ -1695,6 +1696,11 @@ class MainBrain(object):
         self.timestamp_echo_receiver.setDaemon(True)
         self.timestamp_echo_receiver.start()
 
+        self.pub_data_file = rospy.Publisher(
+                                'flydra_mainbrain_data_file',
+                                std_msgs.msg.String,
+                                latch=True)
+
         self._init_ros_interface()
 
         main_brain_keeper.register( self )
@@ -2112,6 +2118,8 @@ class MainBrain(object):
 
         if os.path.exists(filename):
             raise RuntimeError("will not overwrite data file")
+
+        self.pub_data_file.publish(filename)
 
         self.timestamp_modeler.block_activity = True
         self.h5file = PT.openFile(filename, mode="w", title="Flydra data file")

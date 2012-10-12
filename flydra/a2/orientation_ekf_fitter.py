@@ -324,7 +324,14 @@ def doit(output_h5_filename=None,
                 # copy everything from source to dest
                 input_node._f_copy(output_h5.root,recursive=True)
 
-            dest_table = output_h5.root.ML_estimates
+            try:
+                dest_table = output_h5.root.ML_estimates
+            except tables.exceptions.NoSuchNodeError, err1:
+                # backwards compatibility
+                try:
+                    dest_table = output_h5.root.kalman_observations
+                except tables.exceptions.NoSuchNodeError, err2:
+                    raise err1
             for colname in ['hz_line%d'%i for i in range(6)]:
                 clear_col(dest_table,colname)
             dest_table.flush()
@@ -510,9 +517,16 @@ def doit(output_h5_filename=None,
                     ax1.legend()
 
                 if 1:
-                    warnings.warn('guesstimate initial orientation (XXX not done)')
-                    up_vec = 0,0,1
-                    q0 = PQmath.orientation_to_quat( up_vec )
+                    # estimate orientation of initial frame
+                    row0 = obj_3d_rows[:1] # take only first row but keep as 1d array
+                    hzlines = np.array([row0['hz_line0'],
+                                        row0['hz_line1'],
+                                        row0['hz_line2'],
+                                        row0['hz_line3'],
+                                        row0['hz_line4'],
+                                        row0['hz_line5']]).T
+                    directions = reconstruct.line_direction(hzlines)
+                    q0 = PQmath.orientation_to_quat( directions[0] )
                     w0 = 0,0,0 # no angular rate
                     init_x = np.array([w0[0],w0[1],w0[2],
                                        q0.x, q0.y, q0.z, q0.w])
