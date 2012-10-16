@@ -2110,6 +2110,9 @@ class MainBrain(object):
         return self.h5file is not None
 
     def start_saving_data(self, filename=None):
+        if self.is_saving_data():
+            return
+
         if not filename:
             filename = time.strftime('DATA%Y%m%d_%H%M%S.h5')
         filename = os.path.join(
