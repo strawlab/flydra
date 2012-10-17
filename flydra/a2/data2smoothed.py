@@ -307,16 +307,34 @@ def main(hdf5_only=False):
         outfilename = options.dest_file
 
     kwargs = core_analysis.get_options_kwargs(options)
-    convert(infilename,outfilename,
-            file_time_data=options.file2d,
-            save_timestamps = not options.no_timestamps,
-            start_obj_id=options.start_obj_id,
-            stop_obj_id=options.stop_obj_id,
-            obj_only=options.obj_only,
-            dynamic_model_name=options.dynamic_model,
-            return_smoothed_directions = True,
-            hdf5 = do_hdf5,
-            **kwargs)
+    if options.profile:
+        import cProfile
+
+        out_stats_filename = outfilename + '.profile'
+        print 'profiling, stats will be saved to %r'%out_stats_filename
+        cProfile.runctx('''convert(infilename,outfilename,
+                file_time_data=options.file2d,
+                save_timestamps = not options.no_timestamps,
+                start_obj_id=options.start_obj_id,
+                stop_obj_id=options.stop_obj_id,
+                obj_only=options.obj_only,
+                dynamic_model_name=options.dynamic_model,
+                return_smoothed_directions = True,
+                hdf5 = do_hdf5,
+                **kwargs)''',
+                        globals(), locals(), out_stats_filename)
+
+    else:
+        convert(infilename,outfilename,
+                file_time_data=options.file2d,
+                save_timestamps = not options.no_timestamps,
+                start_obj_id=options.start_obj_id,
+                stop_obj_id=options.stop_obj_id,
+                obj_only=options.obj_only,
+                dynamic_model_name=options.dynamic_model,
+                return_smoothed_directions = True,
+                hdf5 = do_hdf5,
+                **kwargs)
 
 if __name__=='__main__':
     main()
