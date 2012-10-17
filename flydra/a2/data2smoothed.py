@@ -119,6 +119,7 @@ def convert(infilename,
 
         print 'caching Kalman obj_ids...'
         obs_obj_ids = table_kobs.read(field='obj_id')
+        fast_obs_obj_ids = utils.FastFinder( obs_obj_ids )
         print 'finding unique obj_ids...'
         unique_obj_ids = numpy.unique(obs_obj_ids)
         print '(found %d)'%(len(unique_obj_ids),)
@@ -144,12 +145,10 @@ def convert(infilename,
 
         pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(unique_obj_ids)).start()
 
+        all_idxs = fast_obs_obj_ids.get_idx_of_equal(unique_obj_ids)
         for obj_id_enum,obj_id in enumerate(unique_obj_ids):
             pbar.update(obj_id_enum)
-            valid_cond = obs_obj_ids == obj_id
-            idxs = numpy.nonzero(valid_cond)[0]
-            idx0 = numpy.min(idxs)
-
+            idx0 = all_idxs[obj_id_enum]
             framenumber = table_kobs_frame[idx0]
             remote_timestamp = numpy.nan
 
