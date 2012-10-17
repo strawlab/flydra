@@ -138,16 +138,8 @@ def convert(infilename,
         table_kobs_frame = table_kobs_frame.astype(numpy.int64)
         assert table_kobs_frame.dtype == table_data2d_frames.dtype # otherwise very slow
 
-        string_widget = StringWidget()
-        objs_per_sec_widget = progressbar.FileTransferSpeed(unit='obj_ids ')
-        widgets=['stage 1 of 2: ', string_widget, objs_per_sec_widget,
-                 progressbar.Percentage(), progressbar.Bar(), progressbar.ETA()]
-
-        pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(unique_obj_ids)).start()
-
         all_idxs = fast_obs_obj_ids.get_idx_of_equal(unique_obj_ids)
         for obj_id_enum,obj_id in enumerate(unique_obj_ids):
-            pbar.update(obj_id_enum)
             idx0 = all_idxs[obj_id_enum]
             framenumber = table_kobs_frame[idx0]
             remote_timestamp = numpy.nan
@@ -173,10 +165,7 @@ def convert(infilename,
             mainbrain_timestamp = remote_timestamp*gain[remote_hostname] + offset[remote_hostname] # find mainbrain timestamp
 
             timestamp_time[obj_id_enum] = mainbrain_timestamp
-            string_widget.set_string( '[obj_id: % 5d time: %s]'%(
-                obj_id, time.asctime(time.localtime(mainbrain_timestamp))))
 
-        pbar.finish()
         h5file_raw.close()
         if close_h52d:
             h52d.close()
@@ -211,7 +200,7 @@ def convert(infilename,
 
     string_widget = StringWidget()
     objs_per_sec_widget = progressbar.FileTransferSpeed(unit='obj_ids ')
-    widgets=['stage 2 of 2: ', string_widget, objs_per_sec_widget,
+    widgets=[string_widget, objs_per_sec_widget,
              progressbar.Percentage(), progressbar.Bar(), progressbar.ETA()]
     pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(obj_ids)).start()
 
