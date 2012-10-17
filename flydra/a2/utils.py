@@ -373,6 +373,14 @@ def test_get_idx_of_equal():
     expected = np.array([1,6,2])
     assert np.allclose(actual,expected)
 
+def test_get_idx_of_equal_ints():
+    a = np.array([ 10, 0, 2, 3, 3, 2, 1, -2 ])
+    af = FastFinder(a)
+    bs = [ 0, 1, 2, -2 ]
+    actual = af.get_idx_of_equal(bs)
+    expected = np.array([1,6,2,7])
+    assert np.allclose(actual,expected)
+
 def test_get_idx_of_equal_missing():
     a = np.array([ 10, 0, 2, 3, 3, 2.1, 1, 2.3 ])
     af = FastFinder(a)
