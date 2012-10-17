@@ -13,6 +13,7 @@ import tables
 import flydra.analysis.result_utils as result_utils
 import flydra.a2.utils as utils
 from flydra.a2.orientation_ekf_fitter import compute_ori_quality
+import progressbar
 import warnings
 
 def cam_id2hostname(cam_id, h52d):
@@ -27,6 +28,15 @@ def cam_id2hostname(cam_id, h52d):
         # old style
         hostname = '_'.join(   cam_id.split('_')[:-1] )
     return hostname
+
+class StringWidget(progressbar.Widget):
+    def set_string(self,ts):
+        self.ts = ts
+    def update(self, pbar):
+        if hasattr(self,'ts'):
+            return self.ts
+        else:
+            return ''
 
 def convert(infilename,
             outfilename,
@@ -127,9 +137,15 @@ def convert(infilename,
         table_kobs_frame = table_kobs_frame.astype(numpy.int64)
         assert table_kobs_frame.dtype == table_data2d_frames.dtype # otherwise very slow
 
+        string_widget = StringWidget()
+        objs_per_sec_widget = progressbar.FileTransferSpeed(unit='obj_ids ')
+        widgets=['stage 1 of 2: ', string_widget, objs_per_sec_widget,
+                 progressbar.Percentage(), progressbar.Bar(), progressbar.ETA()]
+
+        pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(unique_obj_ids)).start()
+
         for obj_id_enum,obj_id in enumerate(unique_obj_ids):
-            if obj_id_enum%100==0:
-                print '%d of %d'%(obj_id_enum,len(unique_obj_ids))
+            pbar.update(obj_id_enum)
             valid_cond = obs_obj_ids == obj_id
             idxs = numpy.nonzero(valid_cond)[0]
             idx0 = numpy.min(idxs)
@@ -158,13 +174,10 @@ def convert(infilename,
             mainbrain_timestamp = remote_timestamp*gain[remote_hostname] + offset[remote_hostname] # find mainbrain timestamp
 
             timestamp_time[obj_id_enum] = mainbrain_timestamp
-            if obj_id_enum%100==0:
-                try:
-                    print time.asctime(time.localtime(mainbrain_timestamp))
-                except:
-                    print '** no timestamp **'
-                print
+            string_widget.set_string( '[obj_id: % 5d time: %s]'%(
+                obj_id, time.asctime(time.localtime(mainbrain_timestamp))))
 
+        pbar.finish()
         h5file_raw.close()
         if close_h52d:
             h52d.close()
@@ -197,11 +210,17 @@ def convert(infilename,
     allqualrows=[]
     failed_quality = False
 
+    string_widget = StringWidget()
+    objs_per_sec_widget = progressbar.FileTransferSpeed(unit='obj_ids ')
+    widgets=['stage 2 of 2: ', string_widget, objs_per_sec_widget,
+             progressbar.Percentage(), progressbar.Bar(), progressbar.ETA()]
+    pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(obj_ids)).start()
+
     for i,obj_id in enumerate(obj_ids):
         if obj_id > stop_obj_id:
             break
-        if i%100 == 0:
-            print '%d of %d'%(i,len(obj_ids))
+        string_widget.set_string( '[obj_id: % 5d]'%obj_id )
+        pbar.update(i)
         try:
             rows = ca.load_data(obj_id,
                                 infilename,
@@ -220,6 +239,7 @@ def convert(infilename,
             allqualrows.append( qualrows )
         except ValueError:
             failed_quality = True
+    pbar.finish()
 
     allrows = numpy.concatenate( allrows )
     if not failed_quality:
