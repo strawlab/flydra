@@ -50,6 +50,9 @@ from ros_flydra.msg import flydra_mainbrain_super_packet
 from ros_flydra.msg import flydra_mainbrain_packet, flydra_object
 from geometry_msgs.msg import Point, Vector3
 
+import flydra.log
+LOG = flydra.log.Log()
+
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
 
@@ -168,16 +171,6 @@ def get_best_realtime_data():
     best_realtime_data = None
     return data
 
-##def DEBUG(msg=''):
-##    print msg,'line',sys._getframe().f_back.f_lineno,', thread', threading.currentThread()
-##    #for t in threading.enumerate():
-##    #    print '   ',t
-
-def DEBUG(msg=''):
-    return
-
-
-
 class TimestampEchoReceiver(threading.Thread):
     def __init__(self,main_brain):
         self.main_brain = main_brain
@@ -200,10 +193,10 @@ class TimestampEchoReceiver(threading.Thread):
             try:
                 timestamp_echo_buf, (timestamp_echo_remote_ip,cam_port) = timestamp_echo_gatherer.recvfrom(4096)
             except Exception, err:
-                print 'WARNING: unknown Exception receiving timestamp echo data:',str(err)
+                LOG.warn('unknown Exception receiving timestamp echo data: %s' % err)
                 continue
             except:
-                print 'WARNING: unknown error (non-Exception!) receiving timestamp echo data'
+                LOG.warn('unknown error (non-Exception!) receiving timestamp echo data')
                 continue
 
             stop_timestamp = time.time()
@@ -228,11 +221,11 @@ class TimestampEchoReceiver(threading.Thread):
                 start_timestamp, remote_timestamp, stop_timestamp = srs
                 clock_diff_msec = abs(remote_timestamp-start_timestamp)*1e3
                 if clock_diff_msec > 1:
-                    print '%s : clock diff: %.3f msec(measurement err: %.3f msec)'%(
+                    LOG.info('%s : clock diff: %.3f msec(measurement err: %.3f msec)'%(
                         remote_hostname,
                         clock_diff_msec,
                         roundtrip_duration[rowidx]*1e3,
-                        )
+                        ))
 
                 self.main_brain.queue_host_clock_info.put(  (remote_hostname,
                                                              start_timestamp,
@@ -242,8 +235,8 @@ class TimestampEchoReceiver(threading.Thread):
                     measurement_duration = roundtrip_duration[rowidx]
                     clock_diff = stop_timestamp-remote_timestamp
 
-                    print '%s: the remote diff is %.1f msec (within 0-%.1f msec accuracy)'%(
-                        remote_hostname, clock_diff*1000, measurement_duration*1000)
+                    LOG.debug('%s: the remote diff is %.1f msec (within 0-%.1f msec accuracy)'%(
+                        remote_hostname, clock_diff*1000, measurement_duration*1000))
 
 class TrigReceiver(threading.Thread):
     def __init__(self,main_brain):
@@ -263,10 +256,10 @@ class TrigReceiver(threading.Thread):
             try:
                 trig_buf, (remote_ip,cam_port) = trigger_network_socket.recvfrom(4096)
             except Exception, err:
-                print 'WARNING: unknown Exception receiving trigger data:',str(err)
+                LOG.warn('unknown Exception receiving trigger data: %s' % err)
                 continue
             except:
-                print 'WARNING: unknown error (non-Exception!) receiving trigger data'
+                LOG.warn('unknown error (non-Exception!) receiving trigger data')
                 continue
 
             if trig_buf=='1':
@@ -366,28 +359,27 @@ class CoordRealReceiver(threading.Thread):
                     in_ready, out_ready, exc_ready = select.select( listen_sockets,
                                                                     empty_list, empty_list, 0.0)
                 except select.error, exc:
-                    print 'select.error on server socket, ignoring...'
+                    LOG.warn('select.error on server socket, ignoring...')
                 except socket.error, exc:
-                    print 'socket.error on server socket, ignoring...'
+                    LOG.warn('socket.error on server socket, ignoring...')
                 else:
                     for sockobj in in_ready:
                         with self.socket_lock:
                             cam_id = self.server_sockets[sockobj]
                         client_sockobj, addr = sockobj.accept()
                         client_sockobj.setblocking(0)
-                        print cam_id, 'connected from',addr
+                        LOG.info("%s connected from %s" % (cam_id,addr))
                         with self.socket_lock:
                             self.listen_sockets[client_sockobj]=cam_id
-            DEBUG('1')
             with self.socket_lock:
                 listen_sockets = self.listen_sockets.keys()
             try:
                 in_ready, out_ready, exc_ready = select.select( listen_sockets,
                                                                 empty_list, empty_list, timeout )
             except select.error, exc:
-                print 'select.error on listen socket, ignoring...'
+                LOG.warn('select.error on listen socket, ignoring...')
             except socket.error, exc:
-                print 'socket.error on listen socket, ignoring...'
+                LOG.warn('socket.error on listen socket, ignoring...')
             else:
                 if not len(in_ready):
                     continue
@@ -399,7 +391,7 @@ class CoordRealReceiver(threading.Thread):
                         with self.socket_lock:
                             cam_id = self.listen_sockets[sockobj]
                     except KeyError,ValueError:
-                        print 'strange - what is in my listen sockets list?',sockobj
+                        LOG.warn('strange - what is in my listen sockets list: %r' % sockobj)
                         # XXX camera was dropped?
                         continue
 
@@ -407,10 +399,10 @@ class CoordRealReceiver(threading.Thread):
                         try:
                             data, addr = sockobj.recvfrom(4096)
                         except Exception, err:
-                            print 'WARNING: unknown Exception receiving UDP data:',str(err)
+                            LOG.warn('unknown Exception receiving UDP data: %s' % err)
                             continue
                         except:
-                            print 'WARNING: unknown error (non-Exception!) receiving UDP data:'
+                            LOG.warn('unknown error (non-Exception!) receiving UDP data:')
                             continue
                     elif NETWORK_PROTOCOL == 'tcp':
                         data = sockobj.recv(4096)
@@ -426,7 +418,7 @@ class CoordRealReceiver(threading.Thread):
                         (timestamp, camn_received_time, framenumber,
                          n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
                         recv_latency_msec = (time.time()-camn_received_time)*1e3
-                        print 'recv_latency_msec % 3.1f'%recv_latency_msec
+                        LOG.info('recv_latency_msec % 3.1f'%recv_latency_msec)
                     self.out_queue.put((cam_id, data ))
 
 class CoordinateSender(threading.Thread):
@@ -613,7 +605,7 @@ class CoordinateProcessor(threading.Thread):
         self.realtime_ros_packets.put( ros_packet )
 
         if self.debug_level.isSet():
-            print 'killing obj_id %d:'%tracked_object.obj_id
+            LOG.debug('killing obj_id %d:'%tracked_object.obj_id)
 
     def connect(self,cam_id,cam_hostname):
 
@@ -667,12 +659,12 @@ class CoordinateProcessor(threading.Thread):
         if self.save_profiling_data:
             fname = "data_for_kalman_profiling.pkl"
             fullpath = os.path.abspath(fname)
-            print "saving data for profiling to %s"%fullpath
+            LOG.info("saving data for profiling to %s"%fullpath)
             to_save = self.data_dict_queue
             save_fd = open(fullpath,mode="wb")
             pickle.dump( to_save, save_fd )
             save_fd.close()
-            print "done saving"
+            LOG.info("done saving")
         self.quit_event.set()
         self.join() # wait until CoordReveiver thread quits
 
@@ -683,11 +675,11 @@ class CoordinateProcessor(threading.Thread):
                       new_data_framenumbers):
 
         if self.main_brain.is_saving_data():
-            print 'ERROR: re-synchronized while saving data!'
+            LOG.warn('re-synchronized while saving data!')
             return
 
         if self.last_timestamps[cam_idx] != IMPOSSIBLE_TIMESTAMP:
-            print cam_id,'(re)synchronized'
+            LOG.info('%s (re)synchronized'%cam_id)
             # discard all previous data
             for k in realtime_coord_dict.keys():
                 del realtime_coord_dict[k]
@@ -697,9 +689,8 @@ class CoordinateProcessor(threading.Thread):
             for k in oldest_timestamp_by_corrected_framenumber.keys():
                 del oldest_timestamp_by_corrected_framenumber[k]
             new_data_framenumbers.clear()
-
-        #else:
-        #    print cam_id,'first 2D coordinates received'
+        else:
+            LOG.info('%s first 2D coordinates received'%cam_id)
 
         # make new absolute_cam_no to indicate new synchronization state
         self.max_absolute_cam_nos += 1
@@ -723,9 +714,9 @@ class CoordinateProcessor(threading.Thread):
                 max_priority = posix_sched.get_priority_max( posix_sched.FIFO )
                 sched_params = posix_sched.SchedParam(max_priority)
                 posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
-                print 'excellent, 3D reconstruction thread running in maximum prioity mode'
+                LOG.info('excellent, 3D reconstruction thread running in maximum prioity mode')
             except Exception, x:
-                print 'WARNING: could not run in maximum priority mode (PID %d): %s'%(os.getpid(),str(x))
+                LOG.warn('could not run in maximum priority mode (PID %d): %s'%(os.getpid(),str(x)))
 
         header_fmt = '<ddliI'
         header_size = struct.calcsize(header_fmt)
@@ -768,7 +759,7 @@ class CoordinateProcessor(threading.Thread):
                     try:
                         cam_idx = self.cam_ids.index(cam_id)
                     except ValueError, err:
-                        print 'ERROR: ignoring lost cam_id %s'%(cam_id,)
+                        LOG.warn('ignoring lost cam_id %s'%cam_id)
                         continue
                     absolute_cam_no = self.absolute_cam_nos[cam_idx]
 
@@ -802,18 +793,17 @@ class CoordinateProcessor(threading.Thread):
                             break
                         predicted_framenumber = n_frames_skipped + self.last_framenumbers_skip[cam_idx] + 1
                         if raw_framenumber<predicted_framenumber:
-                            print 'cam_id',cam_id
-                            print 'raw_framenumber',raw_framenumber
-                            print 'n_frames_skipped',n_frames_skipped
-                            print 'predicted_framenumber',predicted_framenumber
-                            print 'self.last_framenumbers_skip[cam_idx]',self.last_framenumbers_skip[cam_idx]
+                            LOG.fatal('cam_id %s'%cam_id)
+                            LOG.fatal('raw_framenumber %s'%raw_framenumber)
+                            LOG.fatal('n_frames_skipped %s'%n_frames_skipped)
+                            LOG.fatal('predicted_framenumber %s'%predicted_framenumber)
+                            LOG.fatal('self.last_framenumbers_skip[cam_idx] %s'%self.last_framenumbers_skip[cam_idx])
                             raise RuntimeError('got framenumber already received or skipped!')
                         elif raw_framenumber>predicted_framenumber:
                             if not self.last_framenumbers_skip[cam_idx]==-1:
                                 # this is not the first frame
-
                                 # probably because network buffer filled up before we emptied it
-                                print '  WARNING: frame data loss %s'%(cam_id,)
+                                LOG.warn('frame data loss %s'%cam_id)
 
                             if ATTEMPT_DATA_RECOVERY:
                                 if not self.last_framenumbers_skip[cam_idx]==-1:
@@ -971,8 +961,8 @@ class CoordinateProcessor(threading.Thread):
                     finish_packet_sorting_time = time.time()
                     min_packet_gather_dur = finish_packet_sorting_time-max_incoming_remote_timestamp
                     max_packet_gather_dur = finish_packet_sorting_time-min_incoming_remote_timestamp
-                    print 'proc dur: % 3.1f % 3.1f'%(min_packet_gather_dur*1e3,
-                                                     max_packet_gather_dur*1e3)
+                    LOG.info('proc dur: % 3.1f % 3.1f'%(min_packet_gather_dur*1e3,
+                                                     max_packet_gather_dur*1e3))
 
                 finished_corrected_framenumbers = [] # for quick deletion
 
@@ -989,17 +979,17 @@ class CoordinateProcessor(threading.Thread):
                 for corrected_framenumber in new_data_framenumbers:
                     oldest_camera_timestamp, n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
                     if oldest_camera_timestamp is None:
-                        ## print 'no latency estimate available -- skipping 3D reconstruction'
+                        #LOG.info('no latency estimate available -- skipping 3D reconstruction')
                         continue
                     if (time.time() - oldest_camera_timestamp) > self.max_reconstruction_latency_sec:
-                        #print 'maximum reconstruction latency exceeded -- skipping 3D reconstruction'
+                        #LOG.info('maximum reconstruction latency exceeded -- skipping 3D reconstruction')
                         continue
 
                     data_dict = realtime_coord_dict[corrected_framenumber]
                     if len(data_dict)==len(self.cam_ids): # all camera data arrived
 
                         if self.debug_level.isSet():
-                            print 'frame %d'%(corrected_framenumber,)
+                            LOG.debug('frame %d'%(corrected_framenumber))
 
                         if SHOW_3D_PROCESSING_LATENCY:
                             start_3d_proc = time.time()
@@ -1032,7 +1022,7 @@ class CoordinateProcessor(threading.Thread):
                                     debug2=self.debug_level.isSet())
 
                                 if self.debug_level.isSet():
-                                    print '%d live objects:'%(self.tracker.how_many_are_living(),),
+                                    LOG.debug('%d live objects:'%self.tracker.how_many_are_living())
                                     results = [tro.get_most_recent_data() \
                                                    for tro in self.tracker.live_tracked_objects]
                                     for result in results:
@@ -1040,12 +1030,11 @@ class CoordinateProcessor(threading.Thread):
                                             continue
                                         obj_id,last_xhat,P = result
                                         Pmean = numpy.sqrt(numpy.sum([P[i,i]**2 for i in range(3)]))
-                                        print 'obj_id %d: (%.3f, %.3f, %.3f), Pmean: %.3f'%(obj_id,
+                                        LOG.debug('obj_id %d: (%.3f, %.3f, %.3f), Pmean: %.3f'%(obj_id,
                                                                                             last_xhat[0],
                                                                                             last_xhat[1],
                                                                                             last_xhat[2],
-                                                                                            Pmean)
-                                    print
+                                                                                            Pmean))
 
                                 if self.save_profiling_data:
                                     self.data_dict_queue.append(('ntrack',self.tracker.how_many_are_living()))
@@ -1057,18 +1046,18 @@ class CoordinateProcessor(threading.Thread):
                                     oldest_camera_timestamp, n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
                                     if n>0:
                                         if 0:
-                                            print 'overall latency %d: %.1f msec (oldest: %s now: %s)'%(
+                                            LOG.info('overall latency %d: %.1f msec (oldest: %s now: %s)'%(
                                                 n,
                                                 (now-oldest_camera_timestamp)*1e3,
                                                 repr(oldest_camera_timestamp),
                                                 repr(now),
-                                                )
+                                                ))
                                         else:
 
-                                            print 'overall latency (%d camera detected 2d points): %.1f msec (note: may exclude camera->camera computer latency)'%(
+                                            LOG.info('overall latency (%d camera detected 2d points): %.1f msec (note: may exclude camera->camera computer latency)'%(
                                                 n,
                                                 (now-oldest_camera_timestamp)*1e3,
-                                                )
+                                                ))
 
                                 if 1:
                                     # The above calls
@@ -1181,11 +1170,11 @@ class CoordinateProcessor(threading.Thread):
                             dur_3d_proc_msec_b = (start_3d_proc_b - start_3d_proc)*1e3
                             dur_3d_proc_msec_c = (start_3d_proc_c - start_3d_proc)*1e3
 
-                            print 'dur_3d_proc_msec % 3.1f % 3.1f % 3.1f % 3.1f'%(
+                            LOG.info('dur_3d_proc_msec % 3.1f % 3.1f % 3.1f % 3.1f'%(
                                 dur_3d_proc_msec,
                                 dur_3d_proc_msec_a,
                                 dur_3d_proc_msec_b,
-                                dur_3d_proc_msec_c)
+                                dur_3d_proc_msec_c))
 
                 for finished in finished_corrected_framenumbers:
                     if 1:
@@ -1193,7 +1182,7 @@ class CoordinateProcessor(threading.Thread):
                         if 0:
                             timestamps_by_cam_id = numpy.array(timestamp_check_dict[finished].values())
                             for xy in timestamp_check_dict[finished].iteritems():
-                                print repr(xy)
+                                LOG.debug('ts %r'%xy)
 
                         if 1:
                             diff_from_start = []
@@ -1204,7 +1193,7 @@ class CoordinateProcessor(threading.Thread):
                         if self.show_sync_errors:
                             if len(timestamps_by_cam_id):
                                 if numpy.max(abs(timestamps_by_cam_id - timestamps_by_cam_id[0])) > 0.005:
-                                    print 'timestamps off by more than 5 msec -- synchronization error'
+                                    LOG.warn('timestamps off by more than 5 msec -- synchronization error')
 
                     del realtime_coord_dict[finished]
                     del timestamp_check_dict[finished]
@@ -1223,7 +1212,7 @@ class CoordinateProcessor(threading.Thread):
                 # re-sync, but who cares?
 
                 if len(realtime_coord_dict)>100:
-                    print 'Cameras not synchronized or network dropping packets -- unmatched 2D data accumulating'
+                    LOG.warn('Cameras not synchronized or network dropping packets -- unmatched 2D data accumulating')
                     k=realtime_coord_dict.keys()
                     k.sort()
 
@@ -1234,14 +1223,14 @@ class CoordinateProcessor(threading.Thread):
                         this_cam_ids = data_dict.keys()
                         missing_cam_id_guess = list(set(self.cam_ids) - set( this_cam_ids ))
                         if len(missing_cam_id_guess):
-                            print ' a guess at missing cam_id(s):',list(set(self.cam_ids) - set( this_cam_ids ))
+                            LOG.warn('a guess at missing cam_id(s): %r'%list(set(self.cam_ids) - set( this_cam_ids )))
 
                     for ki in k[:-50]:
                         del realtime_coord_dict[ki]
                         del timestamp_check_dict[ki]
 
                 if len(realtime_kalman_coord_dict)>100:
-                    print 'deleting unused 3D data (this should be a rare occurrance)'
+                    LOG.warn('deleting unused 3D data (this should be a rare occurrance)')
                     k=realtime_kalman_coord_dict.keys()
                     k.sort()
                     for ki in k[:-50]:
@@ -1456,16 +1445,15 @@ class MainBrain(object):
                 try:
                     hr(0.1) # block on select for n seconds
                 except select.error, err:
-                    print 'select.error on RemoteAPI.listen(), ignoring...'
+                    LOG.warn('select.error on RemoteAPI.listen(), ignoring...')
                     continue
-                DEBUG('2')
                 with self.cam_info_lock:
                     cam_ids = self.cam_info.keys()
                 for cam_id in cam_ids:
                     with self.cam_info_lock:
                         connected = self.cam_info[cam_id]['caller'].connected
                     if not connected:
-                        print 'main_brain WARNING: lost %s at %s'%(cam_id,time.asctime())
+                        LOG.warn('main_brain WARNING: lost %s at %s'%(cam_id,time.asctime()))
                         self.close(cam_id)
             self.thread_done.set()
 
@@ -1488,7 +1476,7 @@ class MainBrain(object):
             caller_ip, caller_port = caller_addr
             fqdn = socket.getfqdn(caller_ip)
 
-            print "REGISTER NEW CAMERA %s on %s @ ros node %s" % (cam_guid,fqdn,camnode_ros_name)
+            LOG.info("REGISTER NEW CAMERA %s on %s @ ros node %s" % (cam_guid,fqdn,camnode_ros_name))
             cam2mainbrain_data_port = self.main_brain.coord_processor.connect(cam_guid,fqdn)
 
             with self.cam_info_lock:
@@ -1521,7 +1509,6 @@ class MainBrain(object):
                     self.cam_info[cam_id]['image'] = coord_and_image
 
         def receive_missing_data(self, cam_id, framenumber_offset, missing_data ):
-            #print 'received missing data from camera %s (offset %d):'%(cam_id, framenumber_offset)
             if len(missing_data)==0:
                 # no missing data
                 return
@@ -1543,7 +1530,7 @@ class MainBrain(object):
                         mean_val = point_tuple[PT_TUPLE_IDX_MEAN_VAL_IDX]
                         sumsqf_val = point_tuple[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
                     except:
-                        print >> sys.stderr, 'error while appending point_tuple',point_tuple
+                        LOG.warn('error while appending point_tuple %r'%point_tuple)
                         raise
                     if corrected_framenumber is None:
                         # don't bother saving if we don't know when it was from
@@ -1579,7 +1566,7 @@ class MainBrain(object):
 
         def log_message(self,cam_id,host_timestamp,message):
             mainbrain_timestamp = time.time()
-            print 'received log message from %s: %s'%(cam_id,message)
+            LOG.info('received log message from %s: %s'%(cam_id,message))
             self.message_queue.put( (mainbrain_timestamp,cam_id,host_timestamp,message) )
 
         def close(self,cam_id):
@@ -1601,7 +1588,7 @@ class MainBrain(object):
 
         if server is not None:
             hostname = server
-        print 'running mainbrain at hostname "%s"'%hostname
+        LOG.info('running mainbrain at hostname "%s"'%hostname)
 
         self.load_config()
 
@@ -1725,7 +1712,7 @@ class MainBrain(object):
             for attr in req.__slots__:
                 kwargs[attr] = getattr(req,attr)
 
-            print "calling mainbrain api %s with args %s" % (calledfunction,kwargs)
+            LOG.debug("calling mainbrain api %s with args %s" % (calledfunction,kwargs))
 
             result = getattr(self, calledfunction)(**kwargs)
 
@@ -1733,7 +1720,7 @@ class MainBrain(object):
             for i,attr in enumerate(respclass.__slots__):
                 kwargs[attr] = result[i]
 
-            print "result = %s (marshaling over ros as %s klass %s)" % (result,kwargs,respclass)
+            LOG.debug("result = %s (marshaling over ros as %s klass %s)" % (result,kwargs,respclass))
 
             return respclass(**kwargs)
 
@@ -1745,7 +1732,6 @@ class MainBrain(object):
         self.config = {}
         for k,v in self.ROS_CONFIGURATION.iteritems():
             self.config[k] = rospy.get_param('~%s' % k, v)
-        print self.config
 
     def save_config(self):
         for k,v in self.config.iteritems():
@@ -1774,7 +1760,7 @@ class MainBrain(object):
                     self.send_set_camera_property(
                         cam_id, 'expected_trigger_framerate', actual_new_fps )
                 except Exception,err:
-                    print 'ERROR:',err
+                    LOG.warn('set_camera_property_error %s'%err)
             self.config['frames_per_second'] = float(actual_new_fps)
             self.save_config()
 
@@ -1796,7 +1782,7 @@ class MainBrain(object):
         try:
             idx = self.MainBrain_cam_ids_copy.index( cam_id )
         except ValueError, err:
-            print 'IGNORING ERROR: DecreaseCamCounter() called with non-existant cam_id'
+            LOG.warn('IGNORING ERROR: DecreaseCamCounter() called with non-existant cam_id')
             return
         self.num_cams -= 1
         del self.MainBrain_cam_ids_copy[idx]
@@ -2025,14 +2011,14 @@ class MainBrain(object):
                 self.close_camera(cam_id)
             except Pyro.errors.ProtocolError:
                 # disconnection results in error
-                print 'ignoring exception on',cam_id
+                LOG.warn('ignoring exception on %s'%cam_id)
                 pass
         self.remote_api.no_cams_connected.wait(2.0)
         self.remote_api.quit_now.set() # tell thread to finish
         self.remote_api.thread_done.wait(0.5) # wait for thread to finish
         if not self.remote_api.no_cams_connected.isSet():
             cam_ids = self.remote_api.cam_info.keys()
-            print 'cameras failed to quit cleanly: %s'%str(cam_ids)
+            LOG.warn('cameras failed to quit cleanly: %s'%cam_ids)
             #raise RuntimeError('cameras failed to quit cleanly: %s'%str(cam_ids))
 
         self.stop_saving_data()
@@ -2185,7 +2171,7 @@ class MainBrain(object):
             self.h5file = None
             self.timestamp_modeler.block_activity = False
         else:
-            DEBUG('saving already stopped, cannot stop again')
+            LOG.info('saving already stopped, cannot stop again')
         self.h5data2d = None
         self.h5cam_info = None
         self.h5host_clock_info = None
@@ -2235,7 +2221,6 @@ class MainBrain(object):
             # request from camera computers any data that we're missing
             missing_data_dict = self.coord_processor.get_missing_data_dict()
             for camn, (cam_id, framenumber_offset, list_of_missing_framenumbers) in missing_data_dict.iteritems():
-                #print 'requesting from camn %d: %d frames %s'%(camn,len(list_of_missing_framenumbers), numpy.array(list_of_missing_framenumbers) )
                 self.remote_api.external_request_missing_data(cam_id,camn,framenumber_offset,list_of_missing_framenumbers)
 
     def _service_save_data(self):
@@ -2269,7 +2254,7 @@ class MainBrain(object):
         if 1:
             for textlog_data in list_of_textlog_data:
                 (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
-                print 'MESSAGE: %s %s "%s"'%(cam_id, time.asctime(time.localtime(host_timestamp)), message)
+                LOG.debug('MESSAGE: %s %s "%s"'%(cam_id, time.asctime(time.localtime(host_timestamp)), message))
         #   save
         if self.h5textlog is not None and len(list_of_textlog_data):
             textlog_row = self.h5textlog.row
