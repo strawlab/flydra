@@ -127,9 +127,6 @@ def plot_ori(kalman_filename=None,
 
             qual = compute_ori_quality(kh5,rows_this_obj['frame'],obj_id)
             if 1:
-                if fps is None:
-                    fps = 1.0/200.0
-
                 orinan = np.array(orient,copy=True)
                 orinan[ qual < 3.0 ] = np.nan
                 sori = ori_smooth(orinan,frames_per_second=fps)
