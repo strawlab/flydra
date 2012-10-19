@@ -1,7 +1,29 @@
 from __future__ import division
 from __future__ import with_statement
 
-from orientation_ekf_fitter import *
+import flydra.analysis.result_utils as result_utils
+import flydra.a2.core_analysis as core_analysis
+import tables
+import numpy as np
+import flydra.reconstruct as reconstruct
+import collections, time, sys, os
+from optparse import OptionParser
+
+from tables_tools import clear_col, openFileSafe
+import flydra.kalman.ekf as kalman_ekf
+import flydra.analysis.PQmath as PQmath
+import flydra.geom as geom
+import cgtypes # cgkit 1.x
+import sympy
+from sympy import Symbol, Matrix, sqrt, latex, lambdify
+import pickle
+import warnings
+from flydra.kalman.ori_smooth import ori_smooth
+from orientation_ekf_fitter import compute_ori_quality
+import analysis_options
+
+D2R = np.pi/180.0
+R2D = 180.0/np.pi
 
 def plot_ori(kalman_filename=None,
              h5=None,
@@ -9,6 +31,7 @@ def plot_ori(kalman_filename=None,
              start=None,
              stop=None,
              output_filename=None,
+             options=None,
              ):
     if output_filename is not None:
         import matplotlib
@@ -25,9 +48,27 @@ def plot_ori(kalman_filename=None,
     else:
         camn2cam_id = {}
 
+    use_kalman_smoothing=options.use_kalman_smoothing
+    fps = options.fps
+    dynamic_model = options.dynamic_model
+
     ca = core_analysis.get_global_CachingAnalyzer()
+
+    (obj_ids, use_obj_ids, is_mat_file, data_file,
+     extra) = ca.initial_file_load(kalman_filename)
+
+    if dynamic_model is None:
+        dynamic_model = extra['dynamic_model_name']
+        print 'detected file loaded with dynamic model "%s"'%dynamic_model
+        if dynamic_model.startswith('EKF '):
+            dynamic_model = dynamic_model[4:]
+        print '  for smoothing, will use dynamic model "%s"'%dynamic_model
+
     with openFileSafe( kalman_filename,
                        mode='r') as kh5:
+        if fps is None:
+            fps = result_utils.get_fps( kh5, fail_on_error=True )
+
         kmle = kh5.root.ML_estimates[:] # load into RAM
 
         if start is not None:
@@ -60,10 +101,11 @@ def plot_ori(kalman_filename=None,
 
         # now, generate plots
         fig = plt.figure()
-        ax1 = fig.add_subplot(411)
-        ax2 = fig.add_subplot(412,sharex=ax1)
-        ax3 = fig.add_subplot(413,sharex=ax1)
-        ax4 = fig.add_subplot(414,sharex=ax1)
+        ax1 = fig.add_subplot(511)
+        ax2 = fig.add_subplot(512,sharex=ax1)
+        ax3 = fig.add_subplot(513,sharex=ax1)
+        ax4 = fig.add_subplot(514,sharex=ax1)
+        ax5 = fig.add_subplot(515,sharex=ax1)
         for obj_id in use_obj_ids:
             table = all_obj_ids[obj_id]
             rows = table[:]
@@ -106,17 +148,48 @@ def plot_ori(kalman_filename=None,
 
             qual = compute_ori_quality(kh5,rows_this_obj['frame'],obj_id)
             if 1:
-                if fps is None:
-                    fps = 1.0/200.0
-
                 orinan = np.array(orient,copy=True)
-                orinan[ qual < 3.0 ] = np.nan
+                if options.ori_qual is not None and options.ori_qual != 0:
+                    orinan[ qual < options.ori_qual ] = np.nan
                 sori = ori_smooth(orinan,frames_per_second=fps)
                 ax3.plot(frame,sori[:,0],'r-',mew=0,ms=2.0)#,label='x')
                 ax3.plot(frame,sori[:,1],'g-',mew=0,ms=2.0)#,label='y')
                 ax3.plot(frame,sori[:,2],'b-',mew=0,ms=2.0)#,label='z')
 
             ax4.plot(frame, qual, 'b-')#, mew=0, ms=3 )
+
+            # --------------
+            kalman_rows = ca.load_data( obj_id, kh5,
+                                        use_kalman_smoothing=use_kalman_smoothing,
+                                        dynamic_model_name = dynamic_model,
+                                        return_smoothed_directions = options.smooth_orientations,
+                                        frames_per_second=fps,
+                                        up_dir=options.up_dir,
+                                        min_ori_quality_required=options.ori_qual,
+                                        )
+            frame = kalman_rows['frame']
+            cond = np.ones( frame.shape, dtype=np.bool)
+            if options.start is not None:
+                cond &= (options.start <= frame)
+            if options.stop is not None:
+                cond &= (frame <= options.stop)
+            kalman_rows=kalman_rows[cond]
+
+            frame = kalman_rows['frame']
+            Dx = Dy = Dz = None
+            if options.smooth_orientations:
+                Dx = kalman_rows['dir_x']
+                Dy = kalman_rows['dir_y']
+                Dz = kalman_rows['dir_z']
+            elif 'rawdir_x' in kalman_rows.dtype.fields:
+                Dx = kalman_rows['rawdir_x']
+                Dy = kalman_rows['rawdir_y']
+                Dz = kalman_rows['rawdir_z']
+
+            ax5.plot( frame, Dx, 'r-', label='dx')
+            ax5.plot( frame, Dy, 'g-', label='dy')
+            ax5.plot( frame, Dz, 'b-', label='dz')
+
     ax1.xaxis.set_major_formatter(mticker.FormatStrFormatter("%d"))
     ax1.set_ylabel('theta (deg)')
     ax1.legend()
@@ -125,10 +198,14 @@ def plot_ori(kalman_filename=None,
     ax2.legend()
 
     ax3.set_ylabel('ori')
-    ax3.set_xlabel('frame')
     ax3.legend()
 
     ax4.set_ylabel('quality')
+
+    ax5.set_ylabel('dir')
+    ax5.set_xlabel('frame')
+    ax5.legend()
+
     if output_filename is None:
         plt.show()
     else:
@@ -138,18 +215,15 @@ def main():
     usage = '%prog [options]'
 
     parser = OptionParser(usage)
-    parser.add_option('-k', "--kalman-file", dest="kalman_filename",
-                      type='string',
-                      help=".h5 file with kalman data and 3D reconstructor")
+    analysis_options.add_common_options( parser )
     parser.add_option("--h5", type='string',
                       help=".h5 file with data2d_distorted (REQUIRED)")
-    parser.add_option("--obj-only", type="string")
     parser.add_option("--output-filename",type="string")
-    parser.add_option("--start", type='int', default=None,
-                      help="frame number to begin analysis on")
-
-    parser.add_option("--stop", type='int', default=None,
-                      help="frame number to end analysis on")
+    parser.add_option("--ori-qual", type='float', default=None,
+                      help=('minimum orientation quality to use'))
+    parser.add_option("--smooth-orientations", action='store_true',
+                      help="if displaying orientations, use smoothed data",
+                      default=False)
     (options, args) = parser.parse_args()
     if options.kalman_filename is None:
         raise ValueError('--kalman-file option must be specified')
@@ -161,6 +235,7 @@ def main():
              stop=options.stop,
              obj_only=options.obj_only,
              output_filename=options.output_filename,
+             options=options,
              )
 
 if __name__=='__main__':
