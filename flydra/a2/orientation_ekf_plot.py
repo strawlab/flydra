@@ -1,8 +1,29 @@
 from __future__ import division
 from __future__ import with_statement
 
-from orientation_ekf_fitter import *
+import flydra.analysis.result_utils as result_utils
+import flydra.a2.core_analysis as core_analysis
+import tables
+import numpy as np
+import flydra.reconstruct as reconstruct
+import collections, time, sys, os
+from optparse import OptionParser
+
+from tables_tools import clear_col, openFileSafe
+import flydra.kalman.ekf as kalman_ekf
+import flydra.analysis.PQmath as PQmath
+import flydra.geom as geom
+import cgtypes # cgkit 1.x
+import sympy
+from sympy import Symbol, Matrix, sqrt, latex, lambdify
+import pickle
+import warnings
+from flydra.kalman.ori_smooth import ori_smooth
+from orientation_ekf_fitter import compute_ori_quality
 import analysis_options
+
+D2R = np.pi/180.0
+R2D = 180.0/np.pi
 
 def plot_ori(kalman_filename=None,
              h5=None,
