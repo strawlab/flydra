@@ -149,7 +149,8 @@ def plot_ori(kalman_filename=None,
             qual = compute_ori_quality(kh5,rows_this_obj['frame'],obj_id)
             if 1:
                 orinan = np.array(orient,copy=True)
-                orinan[ qual < 3.0 ] = np.nan
+                if options.ori_qual is not None and options.ori_qual != 0:
+                    orinan[ qual < options.ori_qual ] = np.nan
                 sori = ori_smooth(orinan,frames_per_second=fps)
                 ax3.plot(frame,sori[:,0],'r-',mew=0,ms=2.0)#,label='x')
                 ax3.plot(frame,sori[:,1],'g-',mew=0,ms=2.0)#,label='y')
