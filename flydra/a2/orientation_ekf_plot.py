@@ -226,7 +226,7 @@ def main():
                       default=False)
     (options, args) = parser.parse_args()
     if options.kalman_filename is None:
-        raise ValueError('--kalman-file option must be specified')
+        raise ValueError('--kalman (-K) option must be specified')
     if options.obj_only is not None:
         options.obj_only = core_analysis.parse_seq(options.obj_only)
     plot_ori(kalman_filename=options.kalman_filename,
