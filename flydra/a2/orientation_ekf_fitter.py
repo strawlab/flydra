@@ -534,6 +534,7 @@ def doit(output_h5_filename=None,
                                         row0['hz_line5']]).T
                     directions = reconstruct.line_direction(hzlines)
                     q0 = PQmath.orientation_to_quat( directions[0] )
+                    assert not np.isnan(q0.x), "cannot start with missing orientation"
                     w0 = 0,0,0 # no angular rate
                     init_x = np.array([w0[0],w0[1],w0[2],
                                        q0.x, q0.y, q0.z, q0.w])
