@@ -419,14 +419,20 @@ def doit(output_h5_filename=None,
                 pt_idx_by_camn_by_frame = collections.defaultdict(dict)
                 min_frame = np.inf
                 max_frame = -np.inf
-                for this_3d_row in obj_3d_rows:
+
+                start_idx = None
+                for this_idx,this_3d_row in enumerate(obj_3d_rows):
                     # iterate over each sample in the current camera
                     framenumber = this_3d_row['frame']
-                    if framenumber < min_frame:
-                        min_frame = framenumber
-                    if framenumber > max_frame:
-                        max_frame = framenumber
 
+                    if not np.isnan(this_3d_row['hz_line0']):
+                        # We have a valid initial 3d orientation guess.
+                        if framenumber < min_frame:
+                            min_frame = framenumber
+                            assert start_idx is None, "frames out of order?"
+                            start_idx = this_idx
+
+                    max_frame = max(max_frame,framenumber)
                     h5_2d_row_idxs = h5_frame_qfi.get_frame_idxs(framenumber)
 
                     frame2d = data2d[h5_2d_row_idxs]
@@ -471,6 +477,9 @@ def doit(output_h5_filename=None,
                             x0d_by_camn_by_frame[camn][framenumber]=row['x']
                             y0d_by_camn_by_frame[camn][framenumber]=row['y']
                             pt_idx_by_camn_by_frame[camn][framenumber]=camn_pt_no
+
+                assert start_idx is not None, "could not find valid start frame"
+                obj_3d_rows = obj_3d_rows[start_idx:]
 
                 # now collect in a numpy array for all cam
 
