@@ -2499,7 +2499,7 @@ class AppState(object):
                 except KeyError:
                     LOG.warn('main brain appears to have lost cam_id %s' % cam_id)
                 except Exception, x:
-                    LOG.warn('Remote traceback:\n%s', ''.join(Pyro.util.getPyroTraceback(x)))
+                    LOG.warn('Remote traceback:\n%s' % ''.join(Pyro.util.getPyroTraceback(x)))
                     raise
                 else:
                     self.handle_commands(cam_no,cmds)

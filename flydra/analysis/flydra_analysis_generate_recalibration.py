@@ -7,13 +7,17 @@ from numpy import nan, pi
 import tables as PT
 import pytz # from http://pytz.sourceforge.net/
 import datetime
-import sys, os
+import os.path
+import sys
+import progressbar
 from optparse import OptionParser
+
 import flydra.reconstruct
 import flydra.analysis.result_utils as result_utils
-import progressbar
-import numpy
-from flydra.reconstruct import save_ascii_matrix
+
+import roslib
+roslib.load_manifest('motmot_ros_utils')
+import rosutils.formats
 
 config_template = """[Files]
 Basename: %(basename)s
@@ -263,43 +267,68 @@ def do_it(filename,
     if reconstructor is not None:
         cam_centers = numpy.asarray([reconstructor.get_camera_center(cam_id)[:,0]
                                      for cam_id in cam_ids])
-        save_ascii_matrix(cam_centers,os.path.join(calib_dir,'original_cam_centers.dat'))
+        flydra.reconstruct.save_ascii_matrix(cam_centers,os.path.join(calib_dir,'original_cam_centers.dat'))
 
     save_calibration_directory(IdMat=IdMat,
                                points=points,
                                cam_ids=cam_ids,
                                Res=Res,
                                calib_dir=calib_dir,
-                               )
+                               intrinsics_reconstructor=options.undistort_intrinsics_reconstructor,
+                               intrinsics_yaml=options.undistort_intrinsics_yaml)
+
     results.close()
     h5_2d_data.close()
 
     if row_keys is not None:
         row_keys = numpy.array(row_keys)
-        save_ascii_matrix(row_keys,os.path.join(calib_dir,'obj_ids_zero_indexed.dat'),isint=True)
+        flydra.reconstruct.save_ascii_matrix(row_keys,os.path.join(calib_dir,'obj_ids_zero_indexed.dat'),isint=True)
 
 def save_calibration_directory(IdMat=None,
                                points=None,
                                Res=None,
                                calib_dir=None,
                                cam_ids=None,
-                               radial_distortion=False,
                                square_pixels=True,
-                               reconstructor=None, # only needed if radial_distortion==True
-                               num_cameras_fill=-1):
+                               num_cameras_fill=-1,
+                               intrinsics_reconstructor=None,
+                               intrinsics_yaml=None):
+
+    if intrinsics_reconstructor and intrinsics_yaml:
+        raise ValueError("undistortion possible using reconstructor or yaml, not both")
+
     basename = 'basename'
 
     # This will overwrite the file that was just created with
     # better defaults.
 
-    if radial_distortion:
-        if reconstrcutor is None:
-            raise ValueError('reconstructor must be specified if '
-                             'radial_distortion is True')
+    undo_radial_distortion = False
+
+    if intrinsics_reconstructor and os.path.exists(intrinsics_reconstructor):
+        reconstructor = flydra.reconstruct.Reconstructor(cal_source=intrinsics_reconstructor)
+        ok = 0
         for i, cam_id in enumerate(cam_ids):
-            fname = '%s%d.rad'%(basename,i+1)
-            scc = reconstructor.get_SingleCameraCalibration(cam_id)
-            scc.helper.save_to_rad_file( os.path.join(calib_dir,fname) )
+            try:
+                fname = '%s%d.rad'%(basename,i+1)
+                scc = reconstructor.get_SingleCameraCalibration(cam_id)
+                scc.helper.save_to_rad_file( os.path.join(calib_dir,fname) )
+                ok += 1
+            except Exception, ex:
+                print "reconstructor error saving rad file ", ex
+        undo_radial_distortion = ok == len(cam_ids)
+
+    if intrinsics_yaml and os.path.exists(intrinsics_yaml):
+        ok = 0
+        for i, cam_id in enumerate(cam_ids):
+            yamlname = os.path.join(intrinsics_yaml, "%s.yaml" % cam_id)
+            fname = os.path.join(calib_dir,'%s%d.rad'%(basename,i+1))
+            if os.path.exists(yamlname):
+                try:
+                    rosutils.formats.camera_calibration_yaml_to_radfile(yamlname,fname)
+                except ValueError, exc:
+                    print "error saving rad file %s " % fname, exc
+                ok += 1
+        undo_radial_distortion = ok == len(cam_ids)
 
     num_cameras = len(cam_ids)            
     if num_cameras_fill == -1:
@@ -311,7 +340,7 @@ def save_calibration_directory(IdMat=None,
         basename = basename,
         num_cameras = num_cameras,
         num_cameras_fill = num_cameras_fill,
-        undo_radial_int = int(radial_distortion),
+        undo_radial_int = int(undo_radial_distortion),
         square_pixels_int = int(square_pixels),
         )
 
@@ -319,9 +348,9 @@ def save_calibration_directory(IdMat=None,
     fd.write( config_template % vars )
     fd.close()
 
-    save_ascii_matrix(IdMat,os.path.join(calib_dir,'IdMat.dat'))
-    save_ascii_matrix(points,os.path.join(calib_dir,'points.dat'))
-    save_ascii_matrix(Res,os.path.join(calib_dir,'Res.dat'),isint=True)
+    flydra.reconstruct.save_ascii_matrix(IdMat,os.path.join(calib_dir,'IdMat.dat'))
+    flydra.reconstruct.save_ascii_matrix(points,os.path.join(calib_dir,'points.dat'))
+    flydra.reconstruct.save_ascii_matrix(Res,os.path.join(calib_dir,'Res.dat'),isint=True)
 
     fd = open(os.path.join(calib_dir,'camera_order.txt'),'w')
     for cam_id in cam_ids:
@@ -387,6 +416,18 @@ To ignore 3D trajectories and simply use all data::
                       "be used to calculate the position of the missing point. In general, set this to 0 "
                       "(disable) or -1 (use all cameras). Only choose other values if you know what you are doing.",
                       default=-1)
+
+    parser.add_option("--undistort-intrinsics-yaml",
+                      help="path to a directory containing .yaml files, as created by the OpenCV/ROS "
+                      "camera calibration tools. If yaml files corresponding to the ID of every camera "
+                      "are found then UNDO_RADIAL is set in the multicamselfcal config, and radial distortion "
+                      "is corrected before computing calibration")
+
+    parser.add_option("--undistort-intrinsics-reconstructor",
+                      help="path to a reconstructor dir/xml file. If intrinsics for "
+                      "every camera are known then radial distortion "
+                      "is corrected before computing calibration")
+
 
     (options, args) = parser.parse_args()
 

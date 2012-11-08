@@ -255,8 +255,12 @@ def main(hdf5_only=False):
     # hdf5_only is to maintain backwards compatibility...
     usage = '%prog FILE [options]'
     parser = OptionParser(usage)
+    if hdf5_only:
+        dest_help = "filename of output .h5 file"
+    else:
+        dest_help = "filename of output .mat file"
     parser.add_option("--dest-file", type='string', default=None,
-                      help="save to mat file")
+                      help=dest_help)
     parser.add_option("--time-data", dest="file2d", type='string',
                       help="hdf5 file with 2d data FILE2D used to calculate timestamp information",
                       metavar="FILE2D")

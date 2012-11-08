@@ -33,7 +33,6 @@ class Log:
         if self.to_ros:
             #loginfo prints to stdout
             rospy.loginfo(x)
-            self._write(None, sys.stdout) #flush
             return
         if self.to_console:
             self._write(x, sys.stdout)
@@ -47,11 +46,15 @@ class Log:
     def warn(self, x):
         if self.to_ros:
             rospy.logwarn(x)
+            #logwarn prints to stderr
+            return
         if self.to_console:
             self._write(x, sys.stderr)
 
     def fatal(self, x):
         if self.to_ros:
             rospy.logfatal(x)
+            #logwarn prints to stderr
+            return
         if self.to_console:
             self._write(x, sys.stderr)

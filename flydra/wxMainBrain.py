@@ -2,7 +2,6 @@
 import sys, threading, time, os, copy, socket
 import traceback
 import MainBrain
-from MainBrain import DEBUG
 import wx
 from wx import xrc
 import numpy
@@ -978,7 +977,6 @@ class wxMainBrainApp(wx.App):
                     self.main_brain.stop_recording(cam_id)
                 except KeyError, x:
                     print '%s: %s'%(x.__class__,str(x)),
-                    MainBrain.DEBUG()
                 self._currently_recording_cams.remove(cam_id)
                 n_stopped+=1
             self.statusbar.SetStatusText('Recording stopped on %d cameras'%(
@@ -999,7 +997,6 @@ class wxMainBrainApp(wx.App):
                     self.main_brain.stop_small_recording(cam_id)
                 except KeyError, x:
                     print '%s: %s'%(x.__class__,str(x)),
-                    MainBrain.DEBUG()
                 self._currently_recording_small_cams.remove(cam_id)
                 n_stopped+=1
             self.statusbar.SetStatusText('Small recording stopped on %d cameras'%(
@@ -1434,7 +1431,6 @@ class wxMainBrainApp(wx.App):
         self.main_brain.do_synchronization()
 
     def OnUpdateRawImages(self, event):
-        DEBUG('5')
         if self.current_page in ['preview','snapshot']:
             for cam_id in self.cameras.keys():
                 try:
@@ -1449,7 +1445,6 @@ class wxMainBrainApp(wx.App):
         if (now-self.last_timer) > 1.0:
             print 'timer took more than 1 sec to be called!'
         self.last_timer = now
-        DEBUG('4')
         if not hasattr(self,'main_brain'):
             return # quitting
         self.main_brain.service_pending() # may call OnNewCamera, OnOldCamera, etc

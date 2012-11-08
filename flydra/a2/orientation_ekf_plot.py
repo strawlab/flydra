@@ -106,6 +106,12 @@ def plot_ori(kalman_filename=None,
         ax3 = fig.add_subplot(513,sharex=ax1)
         ax4 = fig.add_subplot(514,sharex=ax1)
         ax5 = fig.add_subplot(515,sharex=ax1)
+
+        min_frame_range = np.inf
+        max_frame_range = -np.inf
+
+        if options.print_status:
+            print '%d object IDs in file'%(len(use_obj_ids),)
         for obj_id in use_obj_ids:
             table = all_obj_ids[obj_id]
             rows = table[:]
@@ -115,6 +121,9 @@ def plot_ori(kalman_filename=None,
 
             if stop is not None:
                 rows = rows[ rows['frame'] <= stop ]
+
+            if options.print_status:
+                print 'obj_id %d: %d rows of EKF data'%(obj_id,len(rows))
 
             frame=rows['frame']
             # get camns
@@ -128,6 +137,11 @@ def plot_ori(kalman_filename=None,
                 theta = rows['theta%d'%camn]
                 used = rows['used%d'%camn]
                 dist = rows['dist%d'%camn]
+
+                frf = np.array(frame,dtype=np.float)
+                min_frame_range = min( np.min( frf ), min_frame_range )
+                max_frame_range = max( np.max( frf ), max_frame_range )
+
                 line,=ax1.plot(frame,theta*R2D,'o',mew=0,ms=2.0,label=label)
                 c = line.get_color()
                 ax2.plot(frame[used],dist[used]*R2D,'o',color=c,
@@ -137,6 +151,8 @@ def plot_ori(kalman_filename=None,
             # plot 3D orientation
             mle_row_cond = all_mle_obj_ids==obj_id
             rows_this_obj = kmle[mle_row_cond]
+            if options.print_status:
+                print 'obj_id %d: %d rows of ML data'%(obj_id,len(rows_this_obj))
             frame = rows_this_obj['frame']
             hz = [rows_this_obj['hz_line%d'%i] for i in range(6)]
             #hz = np.rec.fromarrays(hz,names=['hz%d'%for i in range(6)])
@@ -151,10 +167,17 @@ def plot_ori(kalman_filename=None,
                 orinan = np.array(orient,copy=True)
                 if options.ori_qual is not None and options.ori_qual != 0:
                     orinan[ qual < options.ori_qual ] = np.nan
-                sori = ori_smooth(orinan,frames_per_second=fps)
-                ax3.plot(frame,sori[:,0],'r-',mew=0,ms=2.0)#,label='x')
-                ax3.plot(frame,sori[:,1],'g-',mew=0,ms=2.0)#,label='y')
-                ax3.plot(frame,sori[:,2],'b-',mew=0,ms=2.0)#,label='z')
+                try:
+                    sori = ori_smooth(orinan,frames_per_second=fps)
+                except AssertionError:
+                    if options.print_status:
+                        print 'not plotting smoothed ori for object id %d'%(obj_id,)
+                    else:
+                        pass
+                else:
+                    ax3.plot(frame,sori[:,0],'r-',mew=0,ms=2.0)#,label='x')
+                    ax3.plot(frame,sori[:,1],'g-',mew=0,ms=2.0)#,label='y')
+                    ax3.plot(frame,sori[:,2],'b-',mew=0,ms=2.0)#,label='z')
 
             ax4.plot(frame, qual, 'b-')#, mew=0, ms=3 )
 
@@ -186,9 +209,10 @@ def plot_ori(kalman_filename=None,
                 Dy = kalman_rows['rawdir_y']
                 Dz = kalman_rows['rawdir_z']
 
-            ax5.plot( frame, Dx, 'r-', label='dx')
-            ax5.plot( frame, Dy, 'g-', label='dy')
-            ax5.plot( frame, Dz, 'b-', label='dz')
+            if Dx is not None:
+                ax5.plot( frame, Dx, 'r-', label='dx')
+                ax5.plot( frame, Dy, 'g-', label='dy')
+                ax5.plot( frame, Dz, 'b-', label='dz')
 
     ax1.xaxis.set_major_formatter(mticker.FormatStrFormatter("%d"))
     ax1.set_ylabel('theta (deg)')
@@ -206,6 +230,7 @@ def plot_ori(kalman_filename=None,
     ax5.set_xlabel('frame')
     ax5.legend()
 
+    ax1.set_xlim(min_frame_range,max_frame_range)
     if output_filename is None:
         plt.show()
     else:
@@ -224,9 +249,11 @@ def main():
     parser.add_option("--smooth-orientations", action='store_true',
                       help="if displaying orientations, use smoothed data",
                       default=False)
+    parser.add_option('--print-status', action='store_true',
+                      help="print status messages")
     (options, args) = parser.parse_args()
     if options.kalman_filename is None:
-        raise ValueError('--kalman-file option must be specified')
+        raise ValueError('--kalman (-K) option must be specified')
     if options.obj_only is not None:
         options.obj_only = core_analysis.parse_seq(options.obj_only)
     plot_ori(kalman_filename=options.kalman_filename,

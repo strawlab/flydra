@@ -345,6 +345,9 @@ def doit(output_h5_filename=None,
                 ax5=fig1.add_subplot(515,sharex=ax1)
                 ax1.xaxis.set_major_formatter(mticker.FormatStrFormatter("%d"))
 
+                min_frame_range = np.inf
+                max_frame_range = -np.inf
+
             reconst = reconstruct.Reconstructor(kh5)
 
             camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
@@ -416,14 +419,20 @@ def doit(output_h5_filename=None,
                 pt_idx_by_camn_by_frame = collections.defaultdict(dict)
                 min_frame = np.inf
                 max_frame = -np.inf
-                for this_3d_row in obj_3d_rows:
+
+                start_idx = None
+                for this_idx,this_3d_row in enumerate(obj_3d_rows):
                     # iterate over each sample in the current camera
                     framenumber = this_3d_row['frame']
-                    if framenumber < min_frame:
-                        min_frame = framenumber
-                    if framenumber > max_frame:
-                        max_frame = framenumber
 
+                    if not np.isnan(this_3d_row['hz_line0']):
+                        # We have a valid initial 3d orientation guess.
+                        if framenumber < min_frame:
+                            min_frame = framenumber
+                            assert start_idx is None, "frames out of order?"
+                            start_idx = this_idx
+
+                    max_frame = max(max_frame,framenumber)
                     h5_2d_row_idxs = h5_frame_qfi.get_frame_idxs(framenumber)
 
                     frame2d = data2d[h5_2d_row_idxs]
@@ -469,6 +478,9 @@ def doit(output_h5_filename=None,
                             y0d_by_camn_by_frame[camn][framenumber]=row['y']
                             pt_idx_by_camn_by_frame[camn][framenumber]=camn_pt_no
 
+                assert start_idx is not None, "could not find valid start frame"
+                obj_3d_rows = obj_3d_rows[start_idx:]
+
                 # now collect in a numpy array for all cam
 
                 assert int(min_frame)==min_frame
@@ -510,6 +522,10 @@ def doit(output_h5_filename=None,
                             absolute_frame_number,np.nan)
 
                     if options.show:
+                        frf = np.array(frame_range,dtype=np.float)
+                        min_frame_range = min( np.min( frf ), min_frame_range )
+                        max_frame_range = max( np.max( frf ), max_frame_range )
+
                         ax1.plot(frame_range,slope2modpi(slopes[:,j]),'.',
                                  label=camn2cam_id[camn])
 
@@ -527,6 +543,7 @@ def doit(output_h5_filename=None,
                                         row0['hz_line5']]).T
                     directions = reconstruct.line_direction(hzlines)
                     q0 = PQmath.orientation_to_quat( directions[0] )
+                    assert not np.isnan(q0.x), "cannot start with missing orientation"
                     w0 = 0,0,0 # no angular rate
                     init_x = np.array([w0[0],w0[1],w0[2],
                                        q0.x, q0.y, q0.z, q0.w])
@@ -887,6 +904,7 @@ def doit(output_h5_filename=None,
         fd.close()
 
     if options.show:
+        ax1.set_xlim(min_frame_range,max_frame_range)
         plt.show()
 
 def is_orientation_fit(filename):
@@ -1001,6 +1019,10 @@ def compute_ori_quality(kh5, orig_frames, obj_id, smooth_len=10):
     for origi,frame in enumerate(orig_frames):
         cond = frames==frame
         idxs = np.nonzero(cond)[0]
+        if len(idxs)==0:
+            results[origi] = np.nan
+            continue
+
         assert len(idxs)==1
         idx = idxs[0]
         this_row = table_ram[idx]
