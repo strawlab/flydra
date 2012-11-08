@@ -107,6 +107,9 @@ def plot_ori(kalman_filename=None,
         ax4 = fig.add_subplot(514,sharex=ax1)
         ax5 = fig.add_subplot(515,sharex=ax1)
 
+        min_frame_range = np.inf
+        max_frame_range = -np.inf
+
         if options.print_status:
             print '%d object IDs in file'%(len(use_obj_ids),)
         for obj_id in use_obj_ids:
@@ -134,6 +137,11 @@ def plot_ori(kalman_filename=None,
                 theta = rows['theta%d'%camn]
                 used = rows['used%d'%camn]
                 dist = rows['dist%d'%camn]
+
+                frf = np.array(frame,dtype=np.float)
+                min_frame_range = min( np.min( frf ), min_frame_range )
+                max_frame_range = max( np.max( frf ), max_frame_range )
+
                 line,=ax1.plot(frame,theta*R2D,'o',mew=0,ms=2.0,label=label)
                 c = line.get_color()
                 ax2.plot(frame[used],dist[used]*R2D,'o',color=c,
@@ -222,6 +230,7 @@ def plot_ori(kalman_filename=None,
     ax5.set_xlabel('frame')
     ax5.legend()
 
+    ax1.set_xlim(min_frame_range,max_frame_range)
     if output_filename is None:
         plt.show()
     else:
