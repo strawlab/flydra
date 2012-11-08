@@ -1019,6 +1019,10 @@ def compute_ori_quality(kh5, orig_frames, obj_id, smooth_len=10):
     for origi,frame in enumerate(orig_frames):
         cond = frames==frame
         idxs = np.nonzero(cond)[0]
+        if len(idxs)==0:
+            results[origi] = np.nan
+            continue
+
         assert len(idxs)==1
         idx = idxs[0]
         this_row = table_ram[idx]
