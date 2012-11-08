@@ -345,6 +345,9 @@ def doit(output_h5_filename=None,
                 ax5=fig1.add_subplot(515,sharex=ax1)
                 ax1.xaxis.set_major_formatter(mticker.FormatStrFormatter("%d"))
 
+                min_frame_range = np.inf
+                max_frame_range = -np.inf
+
             reconst = reconstruct.Reconstructor(kh5)
 
             camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
@@ -510,6 +513,10 @@ def doit(output_h5_filename=None,
                             absolute_frame_number,np.nan)
 
                     if options.show:
+                        frf = np.array(frame_range,dtype=np.float)
+                        min_frame_range = min( np.min( frf ), min_frame_range )
+                        max_frame_range = max( np.max( frf ), max_frame_range )
+
                         ax1.plot(frame_range,slope2modpi(slopes[:,j]),'.',
                                  label=camn2cam_id[camn])
 
@@ -887,6 +894,7 @@ def doit(output_h5_filename=None,
         fd.close()
 
     if options.show:
+        ax1.set_xlim(min_frame_range,max_frame_range)
         plt.show()
 
 def is_orientation_fit(filename):
