@@ -279,24 +279,30 @@ class CoordRealReceiver(threading.Thread):
         name = 'CoordRealReceiver thread'
         threading.Thread.__init__(self,name=name)
 
-    def add_socket(self,cam2mainbrain_data_port,cam_id):
+    def add_socket(self, cam_id):
         global hostname
 
+        port = -1
         if NETWORK_PROTOCOL == 'udp':
             sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sockobj.bind((hostname, cam2mainbrain_data_port))
+            sockobj.bind((hostname, 0))
             sockobj.setblocking(0)
             with self.socket_lock:
                 self.listen_sockets[sockobj]=cam_id
+                _,port = sockobj.getsockname()
         elif NETWORK_PROTOCOL == 'tcp':
             sockobj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sockobj.bind((hostname, cam2mainbrain_data_port))
+            sockobj.bind((hostname, 0))
             sockobj.listen(1)
             sockobj.setblocking(0)
             with self.socket_lock:
                 self.server_sockets[ sockobj ] = cam_id
+                _,port = sockobj.getsockname()
         else:
             raise ValueError('unknown NETWORK_PROTOCOL')
+
+        return port
+
     def remove_socket(self,cam_id):
         with self.socket_lock:
             for sockobj, test_cam_id in self.listen_sockets.iteritems():
@@ -598,11 +604,9 @@ class CoordinateProcessor(threading.Thread):
         with self.all_data_lock:
             self.cam_ids.append(cam_id)
 
-            # find cam2mainbrain_data_port
-            if len(self.cam2mainbrain_data_ports)>0:
-                cam2mainbrain_data_port = max(self.cam2mainbrain_data_ports)+1
-            else:
-                cam2mainbrain_data_port = flydra.common_variables.min_cam2mainbrain_data_port # arbitrary number
+            # create and bind socket to listen to. add_socket uses an ephemerial
+            # socket (i.e. the OS assigns a high and free port for us)
+            cam2mainbrain_data_port =self.realreceiver.add_socket(cam_id)
             self.cam2mainbrain_data_ports.append( cam2mainbrain_data_port )
 
             # find absolute_cam_no
@@ -613,8 +617,6 @@ class CoordinateProcessor(threading.Thread):
             self.camn2cam_id[absolute_cam_no] = cam_id
             self.cam_id2cam_no[cam_id] = absolute_cam_no
 
-            # create and bind socket to listen to
-            self.realreceiver.add_socket(cam2mainbrain_data_port,cam_id)
             self.last_timestamps.append(IMPOSSIBLE_TIMESTAMP) # arbitrary impossible number
             self.last_framenumbers_delay.append(-1) # arbitrary impossible number
             self.last_framenumbers_skip.append(-1) # arbitrary impossible number
