@@ -125,31 +125,11 @@ except:
 
 # 2D data format for PyTables:
 Info2D = flydra.data_descriptions.Info2D
-
 TextLogDescription = flydra.data_descriptions.TextLogDescription
-
-class CamSyncInfo(PT.IsDescription):
-    cam_id = PT.StringCol(256,pos=0)
-    camn   = PT.UInt16Col(pos=1)
-    hostname = PT.StringCol(2048,pos=2)
-
-class HostClockInfo(PT.IsDescription):
-    remote_hostname  = PT.StringCol(255,pos=0)
-    start_timestamp  = PT.FloatCol(pos=1)
-    remote_timestamp = PT.FloatCol(pos=2)
-    stop_timestamp   = PT.FloatCol(pos=3)
-
-class TriggerClockInfo(PT.IsDescription):
-    start_timestamp  = PT.FloatCol(pos=0)
-    framecount       = PT.Int64Col(pos=1)
-    tcnt             = PT.UInt16Col(pos=2)
-    stop_timestamp   = PT.FloatCol(pos=3)
-
-class MovieInfo(PT.IsDescription):
-    cam_id             = PT.StringCol(16,pos=0)
-    filename           = PT.StringCol(255,pos=1)
-    approx_start_frame = PT.Int64Col(pos=2)
-    approx_stop_frame  = PT.Int64Col(pos=3)
+CamSyncInfo = flydra.data_descriptions.CamSyncInfo
+HostClockInfo = flydra.data_descriptions.HostClockInfo
+TriggerClockInfo = flydra.data_descriptions.TriggerClockInfo
+MovieInfo = flydra.data_descriptions.MovieInfo
 
 FilteredObservations = flydra_kalman_utils.FilteredObservations
 ML_estimates_2d_idxs_type = flydra_kalman_utils.ML_estimates_2d_idxs_type
