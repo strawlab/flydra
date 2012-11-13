@@ -2782,8 +2782,12 @@ def get_app_defaults():
 
 def main():
     rospy.init_node('flydra_camera_node',disable_signals=True)
+    rosthread = threading.Thread(target=rospy.spin,name='rosthread')
+    rosthread.daemon = True
     LOG.info('ROS name: %s' % rospy.get_name())
+    rosthread.start()
     parse_args_and_run()
+    rospy.signal_shutdown("quit")
 
 def benchmark():
     parse_args_and_run(benchmark=True)
