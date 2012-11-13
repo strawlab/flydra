@@ -64,3 +64,6 @@ class MovieInfo(PT.IsDescription):
     approx_start_frame = PT.Int64Col(pos=2)
     approx_stop_frame  = PT.Int64Col(pos=3)
 
+class ExperimentInfo(PT.IsDescription):
+    uuid               = PT.StringCol(32,pos=0)
+

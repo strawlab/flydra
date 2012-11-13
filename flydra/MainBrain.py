@@ -130,6 +130,7 @@ CamSyncInfo = flydra.data_descriptions.CamSyncInfo
 HostClockInfo = flydra.data_descriptions.HostClockInfo
 TriggerClockInfo = flydra.data_descriptions.TriggerClockInfo
 MovieInfo = flydra.data_descriptions.MovieInfo
+ExperimentInfo = flydra.data_descriptions.ExperimentInfo
 
 FilteredObservations = flydra_kalman_utils.FilteredObservations
 ML_estimates_2d_idxs_type = flydra_kalman_utils.ML_estimates_2d_idxs_type
@@ -1629,6 +1630,7 @@ class MainBrain(object):
         self.h5host_clock_info = None
         self.h5trigger_clock_info = None
         self.h5movie_info = None
+        self.h5exp_info = None
         self.h5textlog = None
         if 1:
             self.h5data3d_kalman_estimates = None
@@ -1667,10 +1669,22 @@ class MainBrain(object):
                                 'flydra_mainbrain_data_file',
                                 std_msgs.msg.String,
                                 latch=True)
+        self.exp_uuid = None
+        self.sub_exp_uuid = rospy.Subscriber(
+                                'experiment/uuid',
+                                std_msgs.msg.String,
+                                self._on_experiment_uuid)
 
         self._init_ros_interface()
 
         main_brain_keeper.register( self )
+
+    def _on_experiment_uuid(self, msg):
+        self.exp_uuid = msg.data
+        if self.is_saving_data():
+            self.h5exp_info.row['uuid'] = self.exp_uuid
+            self.h5exp_info.row.append()
+            self.h5exp_info.flush()
 
     def _ros_generic_service_dispatch(self, req):
         calledservice = req._connection_header['service']
@@ -2107,6 +2121,17 @@ class MainBrain(object):
                                expectedrows=500)
         self.h5textlog = ct(root,'textlog', TextLogDescription,
                             "text log")
+        self.h5exp_info = ct(root,'experiment_info', ExperimentInfo, "ExperimentInfo",
+                             expectedrows=100)
+
+        #add any existing experiment uuid
+        if self.exp_uuid is None:
+            LOG.warn('no experiment started, please generate a UUID')
+        else:
+            self.h5exp_info.row['uuid'] = self.exp_uuid
+            self.h5exp_info.row.append()
+            self.h5exp_info.flush()
+
         self._startup_message()
         if self.reconstructor is not None:
             self.reconstructor.save_to_h5file(self.h5file)
@@ -2157,6 +2182,7 @@ class MainBrain(object):
         self.h5host_clock_info = None
         self.h5trigger_clock_info = None
         self.h5movie_info = None
+        self.h5exp_info = None
         self.h5textlog = None
         if 1:
             self.h5data3d_kalman_estimates = None
