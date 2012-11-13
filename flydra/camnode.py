@@ -2147,6 +2147,7 @@ class AppState(object):
             try:
                 self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
                 main_brain_version = self.main_brain.get_version()
+                LOG.info('connected to mainbrain %s' % main_brain_URI)
             except:
                 LOG.fatal('ERROR while connecting to main brain %s' % main_brain_URI)
                 raise
@@ -2289,11 +2290,9 @@ class AppState(object):
                 scalar_control_info['expected_trigger_framerate'] = 0.0
 
                 # register self with remote server
-                port = 9834 + cam_no # for local Pyro server
                 cam_id = self.all_cam_ids[cam_no]
                 self.main_brain.register_new_camera(cam_id,
                                                     scalar_control_info,
-                                                    port,
                                                     camnode_ros_name = rospy.get_name())
                 cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(cam_id)
 

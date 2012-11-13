@@ -1573,7 +1573,7 @@ class wxMainBrainApp(wx.App):
             if isinstance(event,wx.IdleEvent):
                 event.RequestMore()
 
-    def OnNewCamera(self, cam_id, scalar_control_info, fqdnport):
+    def OnNewCamera(self, cam_id, scalar_control_info, fqdn):
         # bookkeeping
         self.cameras[cam_id] = {'scalar_control_info':scalar_control_info,
                                 }
