@@ -1652,7 +1652,11 @@ class MainBrain(object):
 
         #setup ROS
         self.pub_data_file = rospy.Publisher(
-                                'flydra_mainbrain_data_file',
+                                'flydra_mainbrain/data_file',
+                                std_msgs.msg.String,
+                                latch=True)
+        self.pub_calib_file = rospy.Publisher(
+                                'flydra_mainbrain/calibration',
                                 std_msgs.msg.String,
                                 latch=True)
 
@@ -2056,8 +2060,7 @@ class MainBrain(object):
                 if cam_id in connected_cam_ids:
                     self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin )
 
-            print 'loaded camera calibration', dirname
-
+            self.pub_calib_file.publish(dirname)
             self.config['camera_calibration'] = dirname
             self.save_config()
 
