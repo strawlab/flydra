@@ -219,51 +219,6 @@ class TimestampEchoReceiver(threading.Thread):
                     LOG.debug('%s: the remote diff is %.1f msec (within 0-%.1f msec accuracy)'%(
                         remote_hostname, clock_diff*1000, measurement_duration*1000))
 
-class TrigReceiver(threading.Thread):
-    def __init__(self,main_brain):
-        self.main_brain = main_brain
-
-        name = 'TrigReceiver thread'
-        threading.Thread.__init__(self,name=name)
-
-    def run(self):
-        global hostname
-
-        trigger_network_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        port = flydra.common_variables.trigger_network_socket_port
-        trigger_network_socket.bind((hostname, port))
-
-        while 1: # XXX enable quit
-            try:
-                trig_buf, (remote_ip,cam_port) = trigger_network_socket.recvfrom(4096)
-            except Exception, err:
-                LOG.warn('unknown Exception receiving trigger data: %s' % err)
-                continue
-            except:
-                LOG.warn('unknown error (non-Exception!) receiving trigger data')
-                continue
-
-            if trig_buf=='1':
-                with self.main_brain.trigger_device_lock:
-                    pre_timestamp = time.time()
-                    self.main_brain.trigger_device.ext_trig1 = True
-                    # hmm, calling log_message is normally what the cameras do..
-                    self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG1')
-
-            elif trig_buf=='2':
-                with self.main_brain.trigger_device_lock:
-                    pre_timestamp = time.time()
-                    self.main_brain.trigger_device.ext_trig2 = True
-                    # hmm, calling log_message is normally what the cameras do..
-                    self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG2')
-
-            elif trig_buf=='3':
-                with self.main_brain.trigger_device_lock:
-                    pre_timestamp = time.time()
-                    self.main_brain.trigger_device.ext_trig3 = True
-                    # hmm, calling log_message is normally what the cameras do..
-                    self.main_brain.remote_api.log_message('<mainbrain>',pre_timestamp,'EXTTRIG3')
-
 class CoordRealReceiver(threading.Thread):
     # called from CoordinateProcessor thread
     def __init__(self,quit_event):
@@ -1660,13 +1615,8 @@ class MainBrain(object):
                                    show_sync_errors=show_sync_errors,
                                    max_reconstruction_latency_sec=self.config['max_reconstruction_latency_sec'],
                                    max_N_hypothesis_test=self.config['max_N_hypothesis_test'])
-
         #self.coord_processor.setDaemon(True)
         self.coord_processor.start()
-
-        self.trig_receiver = TrigReceiver(self)
-        self.trig_receiver.setDaemon(True)
-        self.trig_receiver.start()
 
         self.timestamp_echo_receiver = TimestampEchoReceiver(self)
         self.timestamp_echo_receiver.setDaemon(True)
