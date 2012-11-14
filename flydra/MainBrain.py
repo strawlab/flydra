@@ -60,6 +60,8 @@ MIN_KALMAN_OBSERVATIONS_TO_SAVE = 0 # how many data points are required before s
 
 SHOW_3D_PROCESSING_LATENCY = False
 
+ENORMOUS_HACK_SLEEP_PREVENT_SOCKET_STARVATION = 0.001
+
 import flydra.common_variables
 NETWORK_PROTOCOL = flydra.common_variables.NETWORK_PROTOCOL
 ATTEMPT_DATA_RECOVERY = True
@@ -171,6 +173,7 @@ class TimestampEchoReceiver(threading.Thread):
         last_clock_diff_measurements = collections.defaultdict(list)
 
         while 1:
+            time.sleep(ENORMOUS_HACK_SLEEP_PREVENT_SOCKET_STARVATION)
             try:
                 timestamp_echo_buf, (timestamp_echo_remote_ip,cam_port) = timestamp_echo_gatherer.recvfrom(4096)
             except Exception, err:
@@ -704,6 +707,7 @@ class CoordinateProcessor(threading.Thread):
         debug_drop_fd = None
 
         while not self.quit_event.isSet():
+            time.sleep(ENORMOUS_HACK_SLEEP_PREVENT_SOCKET_STARVATION)
             incoming_2d_data = self.realreceiver.get_data() # blocks
             if not len(incoming_2d_data):
                 continue
