@@ -1666,8 +1666,9 @@ class MainBrain(object):
                                 std_msgs.msg.String,
                                 self._on_experiment_uuid)
 
+        self.services = {}
         for name, srv in self.ROS_CONTROL_API.iteritems():
-            rospy.Service('~%s' % name, srv, self._ros_generic_service_dispatch)
+            self.services[name] = rospy.Service('~%s' % name, srv, self._ros_generic_service_dispatch)
 
         #final config processing
         self.load_calibration(self.config['camera_calibration'])
@@ -2092,7 +2093,7 @@ class MainBrain(object):
         fps = self.get_fps() if new_fps is None else new_fps
         dt = 1.0/fps
 
-        print 'setting model to %s (fps: %s)' % (kalman_model_name, fps)
+        LOG.info('setting model to %s (fps: %s)' % (kalman_model_name, fps))
 
         dynamic_model = flydra.kalman.dynamic_models.get_kalman_model(name=kalman_model_name,dt=dt)
 
