@@ -1945,17 +1945,16 @@ class MainBrain(object):
 
     def start_recording(self, raw_file_basename=None, *cam_ids):
         global XXX_framenumber
-        nowstr = time.strftime( '%Y%m%d_%H%M%S' )
+        nowstr = time.strftime('%Y%m%d_%H%M%S')
 
         if not raw_file_basename:
-            raw_file_basename = os.path.join(self.config['save_data_dir'],'LARGE_MOVIES')
+            raw_file_basename = self.config['save_data_dir']
 
         if len(cam_ids) == 0:
             cam_ids = self.remote_api.external_get_cam_ids()
 
         for cam_id in cam_ids:
-            raw_file_name = os.path.join(raw_file_basename,
-                                         "full_%s_%s" % (nowstr, cam_id))
+            raw_file_name = os.path.join(raw_file_basename,"%s.%s" % (nowstr, cam_id))
             self.remote_api.external_start_recording( cam_id, raw_file_name)
             approx_start_frame = XXX_framenumber
             self._currently_recording_movies[ cam_id ] = (raw_file_name, approx_start_frame)
@@ -1996,14 +1995,13 @@ class MainBrain(object):
                     raise RuntimeError("could not find row to save movie stop frame.")
 
     def start_small_recording(self, raw_file_basename=None, *cam_ids):
-        nowstr = time.strftime( '%Y%m%d_%H%M%S' )
+        nowstr = time.strftime('%Y%m%d_%H%M%S')
         if not raw_file_basename:
-            raw_file_basename = os.path.join(self.config['save_data_dir'],'SMALL_MOVIES')
+            raw_file_basename = self.config['save_data_dir']
         if len(cam_ids) == 0:
             cam_ids = self.remote_api.external_get_cam_ids()
         for cam_id in cam_ids:
-            raw_file_name = os.path.join(raw_file_basename,
-                                         "small_%s_%s" % (nowstr, cam_id))
+            raw_file_name = os.path.join(raw_file_basename, "%s.%s" % (nowstr, cam_id))
             self.remote_api.external_start_small_recording(cam_id, raw_file_name)
 
     def stop_small_recording(self, *cam_ids):
@@ -2140,7 +2138,7 @@ class MainBrain(object):
             return
 
         if not filename:
-            filename = time.strftime('DATA%Y%m%d_%H%M%S.h5')
+            filename = time.strftime('%Y%m%d_%H%M%S.mainbrain.h5')
         filename = os.path.join(self.config['save_data_dir'],filename)
 
         if os.path.exists(filename):

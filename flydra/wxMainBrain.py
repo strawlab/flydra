@@ -877,16 +877,8 @@ class wxMainBrainApp(wx.App):
     def OnRecordRawStart(self):
         if len(self._currently_recording_cams) != 0:
             raise RuntimeError("currently recording!")
-
         cam_choice = xrc.XRCCTRL(self.record_raw_panel,
                              "record_raw_cam_select_checklist")
-##        filename_text_entry = xrc.XRCCTRL(self.record_raw_panel,
-##                                      "record_raw_filename")
-##        raw_filename = filename_text_entry.GetValue()
-##        if raw_filename.endswith('.fmf'):
-##            bg_filename = raw_filename[:-4] + '_bg.fmf'
-##        else:
-##            bg_filename = raw_filename + '.bg.fmf'
         cam_ids = []
         for i in range(cam_choice.GetCount()):
             if cam_choice.IsChecked(i):
@@ -918,13 +910,6 @@ class wxMainBrainApp(wx.App):
 
         cam_choice = xrc.XRCCTRL(self.record_raw_panel,
                              "record_raw_cam_select_checklist")
-##        filename_text_entry = xrc.XRCCTRL(self.record_raw_panel,
-##                                      "record_small_filename")
-##        small_filename = filename_text_entry.GetValue()
-##        if small_filename.endswith('.fmf'):
-##            small_datafile_filename = small_filename[:-4] + '.smd'
-##        else:
-##            small_datafile_filename = small_filename + '.smd'
         cam_ids = []
         for i in range(cam_choice.GetCount()):
             if cam_choice.IsChecked(i):
@@ -1136,7 +1121,7 @@ class wxMainBrainApp(wx.App):
             self.pass_all_keystrokes = False
 
     def OnStartSavingData(self, event=None):
-        save_filename = time.strftime( 'DATA%Y%m%d_%H%M%S.h5' )
+        save_filename = time.strftime( '%Y%m%d_%H%M%S.mainbrain.h5' )
         try:
             self.main_brain.start_saving_data(save_filename)
         except:
