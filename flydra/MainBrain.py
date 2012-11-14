@@ -461,7 +461,7 @@ class CoordinateProcessor(threading.Thread):
 
         self.queue_synchronze_ros_msgs = Queue.Queue()
         self.ts = RealtimeROSSenderThread(
-                        'flydra_mainbrain/sychronize',
+                        'flydra_mainbrain/synchronize',
                         std_msgs.msg.String,
                         False,
                         self.queue_synchronze_ros_msgs,
