@@ -189,7 +189,7 @@ def flatten_image_stack( image_framenumbers, ims,
     all_framenumbers = np.arange(image_framenumbers[0],
                                  image_framenumbers[-1]+1,
                                  dtype=np.int64)
-   
+
     assert N%2==1
     offset = N//2
 
@@ -201,37 +201,21 @@ def flatten_image_stack( image_framenumbers, ims,
         orig_idxs_in_average = []
         ims_to_average = []
         coords_to_average = []
-
-########ps modified #makes it only stack every other frame - only really works for stack-n-frames=5
-	
-	if N!=5:
-	        raise ValueError('stack is not = 5 images')
-	
-	frame_range=range( center_fno-offset, center_fno+offset+1 )
-	
-	frame_range = (frame_range[0],frame_range[2],frame_range[4])
-
-
-        for fno in frame_range:
-         	idx = np.searchsorted(image_framenumbers,fno,side='right')-1
-            	if image_framenumbers[idx] == fno:
-                	orig_idxs_in_average.append(idx)
-                	ims_to_average.append( ims[idx] )
-                	coords_to_average.append( im_coords[idx] )
-	    	
-########ps
+        for fno in range( center_fno-offset, center_fno+offset+1 ):
+            idx = np.searchsorted(image_framenumbers,fno,side='right')-1
+            if image_framenumbers[idx] == fno:
+                orig_idxs_in_average.append(idx)
+                ims_to_average.append( ims[idx] )
+                coords_to_average.append( im_coords[idx] )
 
         n_images = len(coords_to_average)
-
         if 1:
 
             # XXX this is not very efficient.
             to_av = np.array(ims_to_average)
             ## print 'fno %d: min %.1f max %.1f'%(center_fno, to_av.min(), to_av.max())
             #av_im = np.mean( to_av, axis=0 )
-	 
-	    
-	
+
             if to_av.shape == (0,):
                 av_im = np.zeros( (2,2), dtype=np.uint8 ) # just create a small blank image
                 mean_lowerleft = np.array( [np.nan, np.nan] )
@@ -241,7 +225,7 @@ def flatten_image_stack( image_framenumbers, ims,
                 mean_lowerleft = np.mean( coords_to_average[:,:2], axis=0)
             results.append( (center_fno, av_im,
                              mean_lowerleft, camn_pt_no, center_idx,
-                             orig_idxs_in_average,n_images) ) #ps added n_images
+                             orig_idxs_in_average) )
     return results
 
 def clip_and_math( raw_image, mean_image, xy, roiradius, maxsize ):
@@ -309,14 +293,8 @@ def doit(h5_filename=None,
     ca = core_analysis.get_global_CachingAnalyzer()
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(
         kalman_filename)
-    try:
-        ML_estimates_2d_idxs = data_file.root.ML_estimates_2d_idxs[:]
-    except tables.exceptions.NoSuchNodeError, err1:
-        # backwards compatibility
-        try:
-            ML_estimates_2d_idxs = data_file.root.kalman_observations_2d_idxs[:]
-        except tables.exceptions.NoSuchNodeError, err2:
-            raise err1
+    ML_estimates_2d_idxs = data_file.root.ML_estimates_2d_idxs[:]
+
 
     if os.path.exists( output_h5_filename ):
         raise RuntimeError(
@@ -384,17 +362,11 @@ def doit(h5_filename=None,
                     this_obj_raw_images = collections.defaultdict(list)
                     this_obj_mean_images = collections.defaultdict(list)
                 this_obj_absdiff_images = collections.defaultdict(list)
-                this_obj_absdiff_images2 = collections.defaultdict(list) #ps added
                 this_obj_morphed_images = collections.defaultdict(list)
                 this_obj_morph_failures = collections.defaultdict(list)
                 this_obj_im_coords = collections.defaultdict(list)
                 this_obj_com_coords = collections.defaultdict(list)
                 this_obj_camn_pt_no = collections.defaultdict(list)
-
-		y_old=np.array([25,25,25,25]) #ps
-		x_old=np.array([25,25,25,25]) #ps
-		old_morphed_im=np.ones((50,50),int) #ps
-	
 
                 for this_3d_row in obj_3d_rows:
                     # iterate over each sample in the current camera
@@ -488,95 +460,42 @@ def doit(h5_filename=None,
 
                         max_absdiff_im = absdiff_im.max()
                         intermediate_thresh=intermediate_thresh_frac*max_absdiff_im
-
-			######### ps - blacks out points that are not brighter than .7 threshold (very high)
-			absdiff_im2=absdiff_im + 0
-			absdiff_im2[ absdiff_im <= (.7*max_absdiff_im)] = 0
-
-			#########
                         absdiff_im[ absdiff_im <= intermediate_thresh] = 0
 
-			
                         if erode>0:
                             morphed_im = scipy.ndimage.grey_erosion(absdiff_im,
                                                                     size=erode)
-
+                            ## morphed_im = scipy.ndimage.binary_erosion(absdiff_im>1).astype(np.float32)*255.0
                         else:
                             morphed_im = absdiff_im
-	
-#                       y0_roi,x0_roi = scipy.ndimage.center_of_mass(morphed_im)
 
+                        y0_roi,x0_roi = scipy.ndimage.center_of_mass(morphed_im)
+                        x0=im_coords[0]+x0_roi
+                        y0=im_coords[1]+y0_roi
 
-			#track 2 birds ps-------------------------
-
-
-			if cam_id=='cam1_0':
-				cam_number=0
-			if cam_id=='cam2_0':
-				cam_number=1
-			if cam_id=='cam3_0':
-				cam_number=2
-			if cam_id=='cam4_0':
-				cam_number=3
-			
-			lbl,n_lbl=scipy.ndimage.label(absdiff_im2)
-			
-			#yx_roi now has 3 columns, 1 and 2 are x and y coordinates, 3 is distance from previous frame COM. Each row represents one of the clusters of points found.
-			yx_roi=np.zeros((n_lbl,3))
-			for n in range(1,n_lbl+1):
-				yx_roi[n-1,0],yx_roi[n-1,1]=scipy.ndimage.center_of_mass(absdiff_im2,lbl,[n])			
-				yx_roi[n-1,2]=np.sqrt(((yx_roi[n-1,0]-y_old[cam_number])**2)+((yx_roi[n-1,1]-x_old[cam_number])**2))			
-				
-
-			#takes the COM of the cluster closest to the previous frame COM, as long as a cluster is found less than 15 pixels away from previous COM. Otherwise it takes the location of the previos COM as the current COM.
-
-			if np.min(yx_roi[:,2])<=15:
-				y0_roi=yx_roi[yx_roi[:,2]==np.min(yx_roi[:,2]),0][0]
-				x0_roi=yx_roi[yx_roi[:,2]==np.min(yx_roi[:,2]),1][0]
-				
- 	                        x0=float(im_coords[0])+float(x0_roi)
-           	                y0=float(im_coords[1])+float(y0_roi)
-
-				x_old[cam_number]=x0_roi
-				y_old[cam_number]=y0_roi
-
-
-
-
-			else:
-
-				x0_roi=x_old[cam_number]
-				y0_roi=y_old[cam_number]
-
-				x0=float(im_coords[0])+float(x0_roi)				
-   				y0=float(im_coords[1])+float(y0_roi)
-
-
-#------------------######ps - next, to do the image processing, it uses the morphed_im which is modified by the settings contained in the options. It looks for the blob of pixels closest to the old COM (found previously) and then blacks out everything else.
-			
                         if 1:
                             morphed_im_binary = morphed_im > 0
                             labels,n_labels = scipy.ndimage.label(morphed_im_binary)
                             morph_fail_because_multiple_blobs = False
 
-			 
-			    a=[]
                             if n_labels > 1:
-						
-				a=np.where(labels!=0)
-				b=a[0]-y0_roi
-				c=a[1]-x0_roi
-				d=np.sqrt((b**2)+(c**2))				
-				label_max=labels[a[0][d==np.min(d)],a[1][d==np.min(d)]]				
-				morphed_im[labels!=label_max]=0
+                                x0,y0 = np.nan, np.nan
+                                # More than one blob -- don't allow image.
+                                if 1:
+                                    # for min flattening
+                                    morphed_im = np.empty( morphed_im.shape, dtype=np.uint8 )
+                                    morphed_im.fill(255)
+                                    morph_fail_because_multiple_blobs = True
+                                else:
+                                    # for mean flattening
+                                    morphed_im = np.zeros_like( morphed_im )
+                                    morph_fail_because_multiple_blobs = True
 
-#----------------------------------- ps ^
- 			this_obj_framenumbers[camn].append( framenumber )
+                        this_obj_framenumbers[camn].append( framenumber )
                         if save_images:
                             this_obj_raw_images[camn].append((raw_im,im_coords))
                             this_obj_mean_images[camn].append(mean_im)
                         this_obj_absdiff_images[camn].append(absdiff_im)
-                        this_obj_absdiff_images2[camn].append(absdiff_im2) #ps
                         this_obj_morphed_images[camn].append(morphed_im)
                         this_obj_morph_failures[camn].append(morph_fail_because_multiple_blobs)
                         this_obj_im_coords[camn].append(im_coords)
@@ -599,13 +518,11 @@ def doit(h5_filename=None,
                         raw_images = this_obj_raw_images[camn]
                         mean_images = this_obj_mean_images[camn]
                     absdiff_images = this_obj_absdiff_images[camn]
-                    absdiff_images2 = this_obj_absdiff_images2[camn] #ps
                     morphed_images = this_obj_morphed_images[camn]
                     morph_failures = np.array(this_obj_morph_failures[camn])
                     im_coords = this_obj_im_coords[camn]
                     com_coords = this_obj_com_coords[camn]
                     camn_pt_no_array = this_obj_camn_pt_no[camn]
-	    	   
 
                     all_framenumbers = np.arange(image_framenumbers[0],
                                                  image_framenumbers[-1]+1)
@@ -678,15 +595,10 @@ def doit(h5_filename=None,
 
                     for (fno, av_im, lowerleft,
                          orig_data2d_rownum, orig_idx,
-                         orig_idxs_in_average,n_images) in results: #ps added n_images
-
-			
-
+                         orig_idxs_in_average) in results:
 
                         # Clip image to reduce moment arms.
-
                         av_im[av_im <= final_thresh] = 0
-			
 
                         fail_fit = False
                         fast_av_im = FastImage.asfastimage( av_im.astype(np.uint8) )
@@ -696,9 +608,9 @@ def doit(h5_filename=None,
                         except realtime_image_analysis.FitParamsError, err:
                             fail_fit = True
 
-#                        this_morph_failures = morph_failures[orig_idxs_in_average] 	#ps removed
-#                        n_failed_images = #np.sum( this_morph_failures)		#ps removed
-                        n_good_images = n_images #stack_N_images-n_failed_images	#ps modified
+                        this_morph_failures = morph_failures[orig_idxs_in_average]
+                        n_failed_images = np.sum( this_morph_failures)
+                        n_good_images = stack_N_images-n_failed_images
                         if n_good_images >= stack_N_images_min:
                             n_images_is_acceptable = True
                         else:
@@ -739,10 +651,9 @@ def doit(h5_filename=None,
                             raw_im, raw_coords = raw_images[orig_idx]
                             mean_im = mean_images[orig_idx]
                             absdiff_im = absdiff_images[orig_idx]
-			    absdiff_im2 = absdiff_images2[orig_idx] #ps added
                             morphed_im = morphed_images[orig_idx]
                             raw_l, raw_b = raw_coords[:2]
-		
+
                             imh, imw = raw_im.shape[:2]
                             n_ims = 5
 
@@ -759,11 +670,6 @@ def doit(h5_filename=None,
                             xplt=np.array([lowerleft[0]-5,
                                            lowerleft[0]+av_im_show.shape[1]+5])
                             yplt=slope*xplt+yintercept
-                            if 1:
-                                # only send non-nan values to plot
-                                plt_good = ~np.isnan(xplt) & ~np.isnan(yplt)
-                                xplt = xplt[ plt_good ]
-                                yplt = yplt[ plt_good ]
 
                             top_row_width = scale*imw*n_ims + (1+n_ims)*margin
                             SHOW_STACK=True
@@ -827,10 +733,10 @@ def doit(h5_filename=None,
 
                                             if do_rts_smoothing:
                                                 sx0,sy0=com_coords_smooth[s_orig_idx]
-                                                X1 = [sx0] #ps modified
-                                                Y1 = [sy0] #ps modified
+                                                X = [sx0]
+                                                Y = [sy0]
                                                  # the RTS smoothed coords in green
-                                                canv.scatter(X1,Y1,
+                                                canv.scatter(X,Y,
                                                              color_rgba=(.5,1,.5,1))
 
                                             if s_orig_idx==orig_idx:
@@ -890,10 +796,10 @@ def doit(h5_filename=None,
                                        shadow_offset=1,
                                        )
 
-#ps-------------------------Display absdiff_im  (instead of morphed_im; moved to 4th frame)
-                            display_rect = (4*margin+(scale*imw)*3, margin,
+                            # Display absdiff_im
+                            display_rect = (3*margin+(scale*imw)*2, margin,
                                             scale*absdiff_im.shape[1],
-                                            scale*absdiff_im.shape[0]) #ps modified
+                                            scale*absdiff_im.shape[0])
                             user_rect = (raw_l,raw_b,imw,imh)
                             absdiff_clip = np.clip(absdiff_im*contrast_scale,0,255)
                             with canv.set_user_coords(display_rect, user_rect,
@@ -908,30 +814,27 @@ def doit(h5_filename=None,
                                        color_rgba=(.5,.5,.9,1),
                                        shadow_offset=1,
                                        )
-			
-			    #Display absdiff_im2 (high contrast image)
-                            display_rect = (3*margin+(scale*imw)*2, margin,
-                                            scale*absdiff_im2.shape[1],
-                                            scale*absdiff_im2.shape[0])
+
+                            # Display morphed_im
+                            display_rect = (4*margin+(scale*imw)*3, margin,
+                                            scale*morphed_im.shape[1],
+                                            scale*morphed_im.shape[0])
                             user_rect = (raw_l,raw_b,imw,imh)
-                            absdiff_clip2 = np.clip(absdiff_im2*contrast_scale,0,255)
+                            morphed_clip = np.clip(morphed_im*contrast_scale,0,255)
                             with canv.set_user_coords(display_rect, user_rect,
                                                       transform=cam_id2view[cam_id],
                                                       ):
-                                canv.imshow(absdiff_clip2.astype(np.uint8),
+                                canv.imshow(morphed_clip.astype(np.uint8),
                                             raw_l,raw_b)
-                                canv.scatter(X,Y,color_rgba=(1,.5,.5,1))
-
-                            if 1:
-                                canv.text( 'absdiff2',
+                            if 0:
+                                canv.text( 'morphed',
                                            display_rect[0],
                                            display_rect[1]+display_rect[3],
                                            font_size=font_size,
                                            color_rgba=(.5,.5,.9,1),
                                            shadow_offset=1,
                                            )
-#ps-----------------------
-   			    
+
                             # Display time-averaged absdiff_im
                             display_rect = (5*margin+(scale*imw)*4, margin,
                                             scale*av_im_show.shape[1],
@@ -1046,7 +949,7 @@ def main():
 
     ufmf_filenames = options.ufmfs.split(os.pathsep)
     ## print 'ufmf_filenames',ufmf_filenames
-    ## print 'options.h5',options.h5\
+    ## print 'options.h5',options.h5
 
     if options.view is not None:
         view = eval(options.view)
