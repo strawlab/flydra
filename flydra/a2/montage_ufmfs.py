@@ -661,7 +661,7 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     if movie_cam_ids is not None:
         movie_cam_ids = movie_cam_ids.split( os.pathsep )
 #####ps
-    # make sure temp[2]-temp[4] is the orientation from the input file
+    # make sure temp[6]-temp[8] is the orientation from the input file
 
     frames_to_include = options.frames_to_include
     if frames_to_include is not None:
