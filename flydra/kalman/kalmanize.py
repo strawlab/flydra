@@ -52,35 +52,46 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
 
     max_dist_threshold=0.02 #might be a good thing to put into dynamic_models
     kill_obj_number=[]
+  
+
 
 
     if np.shape(tracker.live_tracked_objects)>1:
+	
 	for n in range(0,np.shape(tracker.live_tracked_objects[:])[0]):
-
-		if n==np.shape(tracker.live_tracked_objects[:])[0]-1:
-			m=0
-		else:
-			m=n+1
-
-
+				
+#		if n==np.shape(tracker.live_tracked_objects[:])[0]-1:
+#			m=0
+#		else:
+#			m=n+1
+	    for m in range(0,np.shape(tracker.live_tracked_objects[:])[0]):
+	      if n==m:
+		continue
+	      else:	
+    
 		if np.isnan(np.linalg.norm(tracker.live_tracked_objects[n].observations_data[-1]-tracker.live_tracked_objects[m].observations_data[-1]))==False:
 
 		    if np.linalg.norm(tracker.live_tracked_objects[n].observations_data[-1]-tracker.live_tracked_objects[m].observations_data[-1])<max_dist_threshold:
-
-
+			
 			if len(tracker.live_tracked_objects[n].observations_data)<len(tracker.live_tracked_objects[m].observations_data):
 				kill_obj_number=n
 			else:
 				kill_obj_number=m
 
+
+
+
+
+
     ###kill object in question
 
     if kill_obj_number:
-
+	
 	tracker.dead_tracked_objects.append(tracker.live_tracked_objects.pop(kill_obj_number))
         tracker._flush_dead_queue()
-
+	
 	kill_obj_number=[]
+
 
 #############################################################
 
