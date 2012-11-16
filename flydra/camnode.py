@@ -172,7 +172,6 @@ class DummySocket:
         return
 
 import flydra.common_variables
-NETWORK_PROTOCOL = flydra.common_variables.NETWORK_PROTOCOL
 
 import motmot.realtime_image_analysis.realtime_image_analysis as realtime_image_analysis
 
@@ -635,13 +634,7 @@ class ProcessCamClass(object):
         if self.benchmark:
             coord_socket = DummySocket()
         else:
-            if NETWORK_PROTOCOL == 'udp':
-                coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            elif NETWORK_PROTOCOL == 'tcp':
-                coord_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                coord_socket.connect((self.main_brain_ipaddr,self.cam2mainbrain_port))
-            else:
-                raise ValueError('unknown NETWORK_PROTOCOL')
+            coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         old_ts = time.time()
         old_fn = None
@@ -985,16 +978,12 @@ class ProcessCamClass(object):
                 if 0:
                     local_processing_time = (time.time()-cam_received_time)*1e3
                     LOG.debug('local_processing_time % 3.1f'%local_processing_time)
-                if NETWORK_PROTOCOL == 'udp':
-                    try:
-                        coord_socket.sendto(data,(self.main_brain_ipaddr,self.cam2mainbrain_port))
-                    except socket.error, err:
-                        LOG.warn('WARNING: ignoring error: %s' % traceback.format_exc())
 
-                elif NETWORK_PROTOCOL == 'tcp':
-                    coord_socket.send(data)
-                else:
-                    raise ValueError('unknown NETWORK_PROTOCOL')
+                try:
+                    coord_socket.sendto(data,(self.main_brain_ipaddr,self.cam2mainbrain_port))
+                except socket.error, err:
+                    LOG.warn('WARNING: ignoring error: %s' % traceback.format_exc())
+
                 if DEBUG_DROP:
                     debug_fd.write('%d,%d\n'%(framenumber,len(points)))
 

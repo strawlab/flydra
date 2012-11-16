@@ -1,7 +1,5 @@
 MINIMUM_ECCENTRICITY = 1.4 # threshold to fit line
 
-NETWORK_PROTOCOL = 'udp'
-
 timestamp_echo_listener_port = 28992 # on cameras
 timestamp_echo_fmt1 = '<d'
 timestamp_echo_fmt_diff = '<d'

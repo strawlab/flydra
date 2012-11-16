@@ -63,7 +63,7 @@ SHOW_3D_PROCESSING_LATENCY = False
 ENORMOUS_HACK_SLEEP_PREVENT_SOCKET_STARVATION = 0.001
 
 import flydra.common_variables
-NETWORK_PROTOCOL = flydra.common_variables.NETWORK_PROTOCOL
+
 ATTEMPT_DATA_RECOVERY = True
 #ATTEMPT_DATA_RECOVERY = False
 
@@ -245,23 +245,12 @@ class CoordRealReceiver(threading.Thread):
         global hostname
 
         port = -1
-        if NETWORK_PROTOCOL == 'udp':
-            sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sockobj.bind((hostname, 0))
-            sockobj.setblocking(0)
-            with self.socket_lock:
-                self.listen_sockets[sockobj]=cam_id
-                _,port = sockobj.getsockname()
-        elif NETWORK_PROTOCOL == 'tcp':
-            sockobj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sockobj.bind((hostname, 0))
-            sockobj.listen(1)
-            sockobj.setblocking(0)
-            with self.socket_lock:
-                self.server_sockets[ sockobj ] = cam_id
-                _,port = sockobj.getsockname()
-        else:
-            raise ValueError('unknown NETWORK_PROTOCOL')
+        sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sockobj.bind((hostname, 0))
+        sockobj.setblocking(0)
+        with self.socket_lock:
+            self.listen_sockets[sockobj]=cam_id
+            _,port = sockobj.getsockname()
 
         return port
 
@@ -300,25 +289,6 @@ class CoordRealReceiver(threading.Thread):
             header_fmt = '<ddliI'
             header_size = struct.calcsize(header_fmt)
         while not self.quit_event.isSet():
-            if NETWORK_PROTOCOL == 'tcp':
-                with self.socket_lock:
-                    listen_sockets = self.server_sockets.keys()
-                try:
-                    in_ready, out_ready, exc_ready = select.select( listen_sockets,
-                                                                    empty_list, empty_list, 0.0)
-                except select.error, exc:
-                    LOG.warn('select.error on server socket, ignoring...')
-                except socket.error, exc:
-                    LOG.warn('socket.error on server socket, ignoring...')
-                else:
-                    for sockobj in in_ready:
-                        with self.socket_lock:
-                            cam_id = self.server_sockets[sockobj]
-                        client_sockobj, addr = sockobj.accept()
-                        client_sockobj.setblocking(0)
-                        LOG.info("%s connected from %s" % (cam_id,addr))
-                        with self.socket_lock:
-                            self.listen_sockets[client_sockobj]=cam_id
             with self.socket_lock:
                 listen_sockets = self.listen_sockets.keys()
             try:
@@ -343,19 +313,14 @@ class CoordRealReceiver(threading.Thread):
                         # XXX camera was dropped?
                         continue
 
-                    if NETWORK_PROTOCOL == 'udp':
-                        try:
-                            data, addr = sockobj.recvfrom(4096)
-                        except Exception, err:
-                            LOG.warn('unknown Exception receiving UDP data: %s' % err)
-                            continue
-                        except:
-                            LOG.warn('unknown error (non-Exception!) receiving UDP data:')
-                            continue
-                    elif NETWORK_PROTOCOL == 'tcp':
-                        data = sockobj.recv(4096)
-                    else:
-                        raise ValueError('unknown NETWORK_PROTOCOL')
+                    try:
+                        data, addr = sockobj.recvfrom(4096)
+                    except Exception, err:
+                        LOG.warn('unknown Exception receiving UDP data: %s' % err)
+                        continue
+                    except:
+                        LOG.warn('unknown error (non-Exception!) receiving UDP data:')
+                        continue
 
                     if BENCHMARK_2D_GATHER:
                         header = data[:header_size]
@@ -701,9 +666,6 @@ class CoordinateProcessor(threading.Thread):
 
         convert_format = flydra_kalman_utils.convert_format # shorthand
 
-        if NETWORK_PROTOCOL == 'tcp':
-            old_data = {}
-
         debug_drop_fd = None
 
         while not self.quit_event.isSet():
@@ -731,11 +693,7 @@ class CoordinateProcessor(threading.Thread):
                         continue
                     absolute_cam_no = self.absolute_cam_nos[cam_idx]
 
-                    if NETWORK_PROTOCOL == 'tcp':
-                        data = old_data.get( sockobj, '')
-                        data += newdata
-                    else:
-                        data = newdata
+                    data = newdata
 
                     while len(data):
                         header = data[:header_size]
@@ -918,10 +876,6 @@ class CoordinateProcessor(threading.Thread):
                             oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ] = trigger_timestamp, inc_val
 
                         new_data_framenumbers.add( corrected_framenumber ) # insert into set
-
-                    # preserve unprocessed data
-                    if NETWORK_PROTOCOL == 'tcp':
-                        old_data[sockobj] = data
 
                 if BENCHMARK_GATHER:
                     incoming_remote_received_timestamps = numpy.array(incoming_remote_received_timestamps)
