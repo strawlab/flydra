@@ -135,9 +135,9 @@ def load_3d_data(kalman_filename,start=None,stop=None,**kwargs):
     return data3d, dataqual3d
 
 def make_montage( h5_filename,
-		  frames_test, #ps
-	 	  nth_frame, #ps
-		  use_file_orientations=False,#ps
+                  frames_test, #ps
+                  nth_frame, #ps
+                  use_file_orientations=False,#ps
                   cfg_filename=None,
                   ufmf_dir=None,
                   dest_dir = None,
@@ -248,12 +248,12 @@ def make_montage( h5_filename,
 
 	if count!=0 and count!=nth_frame:
 		count=count+1
-		
+
 		continue
 	frame2=frame2+1
 	count=1
-	
-	
+
+
 #####
 
 
@@ -472,10 +472,10 @@ def make_montage( h5_filename,
                             dx = np.array([row['dir_x'], row['dir_y'], row['dir_z'], np.zeros_like(row['x'])]).T
 
 
-			######### ps  
+			######### ps
 
 			    a=frames_test[frames_test[:,1]==row[0]]
-			    
+
 			    if not use_file_orientations:
                             	if frame not in a:
 					continue
@@ -667,16 +667,16 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     if frames_to_include is not None:
 
 	inFile = open(frames_to_include,"r")
-	lines = inFile.readlines()	
+	lines = inFile.readlines()
 
    	frames_test= np.zeros(((len(lines)-1),5), float)
 
    	for N in range(1,len(lines)):
-			
-		temp = str(lines[N]).split(',')    			
+
+		temp = str(lines[N]).split(',')
 		frames_test[N-1,:]=(float(temp[0]),float(temp[1]),float(temp[6]),float(temp[7]),float(temp[8]))
 
-	
+
     nth_frame= int(options.nth_frame)
     use_file_orientations=options.use_file_orientations
     if use_file_orientations==True:
