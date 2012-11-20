@@ -477,18 +477,18 @@ def make_montage( h5_filename,
 			    a=frames_test[frames_test[:,1]==row[0]]
 
 			    if not use_file_orientations:
-                            	if frame not in a:
-					continue
-			    else:
+                                if frame not in a:
+                                        continue
+                            else:
 
-			    	if frame in a:
-					b=a[a[:,0]==frame]
-					dx=np.array([b[0,2], b[0,3], b[0,4], np.zeros_like(row['x'])]).T
-			    	else:
-					continue
-			########
+                                if frame in a:
+                                        b=a[a[:,0]==frame]
+                                        dx=np.array([b[0,2], b[0,3], b[0,4], np.zeros_like(row['x'])]).T
+                                else:
+                                        continue
+                        ########
 
-			    X1 = X0 + dx*orientation_3d_line_length
+                            X1 = X0 + dx*orientation_3d_line_length
                             if np.any( np.isnan(X1) ):
                                 continue
                             pts = np.vstack( [X0, X1] )
@@ -640,10 +640,10 @@ transform='rot 180' # rotate the image 180 degrees (See transform
                        help="path of csv file from which to include frames")
 
     parser.add_option( "--nth-frame", type="string", default=1, #ps
-		       help="nth-frame to save")
+                       help="nth-frame to save")
 
     parser.add_option( "--use-file-orientations", action='store_true', default=False, #ps
-		       help="use orientations from input file")
+                       help="use orientations from input file")
 
 
     core_analysis.add_options_to_parser(parser)
@@ -666,21 +666,21 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     frames_to_include = options.frames_to_include
     if frames_to_include is not None:
 
-	inFile = open(frames_to_include,"r")
-	lines = inFile.readlines()
+        inFile = open(frames_to_include,"r")
+        lines = inFile.readlines()
 
-   	frames_test= np.zeros(((len(lines)-1),5), float)
+        frames_test= np.zeros(((len(lines)-1),5), float)
 
-   	for N in range(1,len(lines)):
+        for N in range(1,len(lines)):
 
-		temp = str(lines[N]).split(',')
-		frames_test[N-1,:]=(float(temp[0]),float(temp[1]),float(temp[6]),float(temp[7]),float(temp[8]))
+                temp = str(lines[N]).split(',')
+                frames_test[N-1,:]=(float(temp[0]),float(temp[1]),float(temp[6]),float(temp[7]),float(temp[8]))
 
 
     nth_frame= int(options.nth_frame)
     use_file_orientations=options.use_file_orientations
     if use_file_orientations==True:
-	print "WARNING: using orientations from file"
+        print "WARNING: using orientations from file"
 
 #####
 
@@ -688,9 +688,9 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     h5_filename = args[0]
     kwargs = core_analysis.get_options_kwargs(options)
     make_montage( h5_filename,
-		  frames_test, #ps
-		  nth_frame, #ps
-		  use_file_orientations,#ps
+                  frames_test, #ps
+                  nth_frame, #ps
+                  use_file_orientations,#ps
                   kalman_filename = options.kalman_filename,
                   cfg_filename = options.config,
                   ufmf_dir = options.ufmf_dir,
