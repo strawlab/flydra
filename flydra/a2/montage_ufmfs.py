@@ -151,7 +151,7 @@ def make_montage( h5_filename,
                   **kwargs):
     config = get_config_defaults()
     if cfg_filename is not None:
-        loaded_cfg = cherrypy._cpconfig.as_dict( cfg_filename )
+        loaded_cfg = cherrypy.lib.reprconf.as_dict( cfg_filename )
         for section in loaded_cfg:
             config[section].update( loaded_cfg.get(section,{}) )
     else:
