@@ -815,7 +815,7 @@ def kalmanize(src_filename,
         print 'saved %s'%accum_frame_spread_filename
 
     if max_all_check_times > sync_error_threshold:
-        if 1:
+        if not options.keep_sync_errors:
             if do_full_kalmanization:
                 print 'max_all_check_times %.2f msec'%(
                     max_all_check_times*1000.0)
@@ -947,6 +947,9 @@ def main():
 
     parser.add_option("--debug", type="int",
                       metavar="DEBUG")
+
+    parser.add_option('--keep-sync-errors', action='store_true',
+                      default=False, help='keep files with sync errors')
 
     parser.add_option("--area-threshold", type='float',
                       default=0.0,

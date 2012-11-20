@@ -125,31 +125,11 @@ except:
 
 # 2D data format for PyTables:
 Info2D = flydra.data_descriptions.Info2D
-
 TextLogDescription = flydra.data_descriptions.TextLogDescription
-
-class CamSyncInfo(PT.IsDescription):
-    cam_id = PT.StringCol(256,pos=0)
-    camn   = PT.UInt16Col(pos=1)
-    hostname = PT.StringCol(2048,pos=2)
-
-class HostClockInfo(PT.IsDescription):
-    remote_hostname  = PT.StringCol(255,pos=0)
-    start_timestamp  = PT.FloatCol(pos=1)
-    remote_timestamp = PT.FloatCol(pos=2)
-    stop_timestamp   = PT.FloatCol(pos=3)
-
-class TriggerClockInfo(PT.IsDescription):
-    start_timestamp  = PT.FloatCol(pos=0)
-    framecount       = PT.Int64Col(pos=1)
-    tcnt             = PT.UInt16Col(pos=2)
-    stop_timestamp   = PT.FloatCol(pos=3)
-
-class MovieInfo(PT.IsDescription):
-    cam_id             = PT.StringCol(16,pos=0)
-    filename           = PT.StringCol(255,pos=1)
-    approx_start_frame = PT.Int64Col(pos=2)
-    approx_stop_frame  = PT.Int64Col(pos=3)
+CamSyncInfo = flydra.data_descriptions.CamSyncInfo
+HostClockInfo = flydra.data_descriptions.HostClockInfo
+TriggerClockInfo = flydra.data_descriptions.TriggerClockInfo
+MovieInfo = flydra.data_descriptions.MovieInfo
 
 FilteredObservations = flydra_kalman_utils.FilteredObservations
 ML_estimates_2d_idxs_type = flydra_kalman_utils.ML_estimates_2d_idxs_type
@@ -299,24 +279,30 @@ class CoordRealReceiver(threading.Thread):
         name = 'CoordRealReceiver thread'
         threading.Thread.__init__(self,name=name)
 
-    def add_socket(self,cam2mainbrain_data_port,cam_id):
+    def add_socket(self, cam_id):
         global hostname
 
+        port = -1
         if NETWORK_PROTOCOL == 'udp':
             sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sockobj.bind((hostname, cam2mainbrain_data_port))
+            sockobj.bind((hostname, 0))
             sockobj.setblocking(0)
             with self.socket_lock:
                 self.listen_sockets[sockobj]=cam_id
+                _,port = sockobj.getsockname()
         elif NETWORK_PROTOCOL == 'tcp':
             sockobj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sockobj.bind((hostname, cam2mainbrain_data_port))
+            sockobj.bind((hostname, 0))
             sockobj.listen(1)
             sockobj.setblocking(0)
             with self.socket_lock:
                 self.server_sockets[ sockobj ] = cam_id
+                _,port = sockobj.getsockname()
         else:
             raise ValueError('unknown NETWORK_PROTOCOL')
+
+        return port
+
     def remove_socket(self,cam_id):
         with self.socket_lock:
             for sockobj, test_cam_id in self.listen_sockets.iteritems():
@@ -618,11 +604,9 @@ class CoordinateProcessor(threading.Thread):
         with self.all_data_lock:
             self.cam_ids.append(cam_id)
 
-            # find cam2mainbrain_data_port
-            if len(self.cam2mainbrain_data_ports)>0:
-                cam2mainbrain_data_port = max(self.cam2mainbrain_data_ports)+1
-            else:
-                cam2mainbrain_data_port = flydra.common_variables.min_cam2mainbrain_data_port # arbitrary number
+            # create and bind socket to listen to. add_socket uses an ephemerial
+            # socket (i.e. the OS assigns a high and free port for us)
+            cam2mainbrain_data_port =self.realreceiver.add_socket(cam_id)
             self.cam2mainbrain_data_ports.append( cam2mainbrain_data_port )
 
             # find absolute_cam_no
@@ -633,8 +617,6 @@ class CoordinateProcessor(threading.Thread):
             self.camn2cam_id[absolute_cam_no] = cam_id
             self.cam_id2cam_no[cam_id] = absolute_cam_no
 
-            # create and bind socket to listen to
-            self.realreceiver.add_socket(cam2mainbrain_data_port,cam_id)
             self.last_timestamps.append(IMPOSSIBLE_TIMESTAMP) # arbitrary impossible number
             self.last_framenumbers_delay.append(-1) # arbitrary impossible number
             self.last_framenumbers_skip.append(-1) # arbitrary impossible number
@@ -1323,10 +1305,9 @@ class MainBrain(object):
                 with cam_lock:
                     scalar_control_info = copy.deepcopy(cam['scalar_control_info'])
                     fqdn = cam['fqdn']
-                    port = cam['port']
                     ip = cam['ip']
                     camnode_ros_name = cam['camnode_ros_name']
-            return scalar_control_info, fqdn, port, ip, camnode_ros_name
+            return scalar_control_info, fqdn, ip, camnode_ros_name
 
         def external_get_image_fps_points(self, cam_id):
             ### XXX should extend to include lines
@@ -1467,7 +1448,7 @@ class MainBrain(object):
         #
         # ================================================================
 
-        def register_new_camera(self,cam_guid,scalar_control_info,port,camnode_ros_name):
+        def register_new_camera(self,cam_guid,scalar_control_info,camnode_ros_name):
             """register new camera, return cam_id (caller: remote camera)"""
 
             assert camnode_ros_name is not None
@@ -1491,7 +1472,6 @@ class MainBrain(object):
                                          'scalar_control_info':scalar_control_info,
                                          'fqdn':fqdn,
                                          'ip':caller_ip,
-                                         'port':port,
                                          'camnode_ros_name':camnode_ros_name,
                                          'cam2mainbrain_data_port':cam2mainbrain_data_port,
                                          'is_calibrated':False, # has 3D calibration been sent yet?
@@ -1764,14 +1744,14 @@ class MainBrain(object):
             self.config['frames_per_second'] = float(actual_new_fps)
             self.save_config()
 
-    def IncreaseCamCounter(self,cam_id,scalar_control_info,fqdn_and_port):
+    def IncreaseCamCounter(self,cam_id,scalar_control_info,fqdn):
         self.num_cams += 1
         self.MainBrain_cam_ids_copy.append( cam_id )
 
-    def SendExpectedFPS(self,cam_id,scalar_control_info,fqdn_and_port):
+    def SendExpectedFPS(self,cam_id,scalar_control_info,fqdn):
         self.send_set_camera_property( cam_id, 'expected_trigger_framerate', self.trigger_device.frames_per_second_actual )
 
-    def SendCalibration(self,cam_id,scalar_control_info,fqdn_and_port):
+    def SendCalibration(self,cam_id,scalar_control_info,fqdn):
         if self.reconstructor is not None and cam_id in self.reconstructor.get_cam_ids():
             pmat = self.reconstructor.get_pmat(cam_id)
             intlin = self.reconstructor.get_intrinsic_linear(cam_id)
@@ -1791,17 +1771,17 @@ class MainBrain(object):
         return self.num_cams
 
     def get_scalarcontrolinfo(self, cam_id):
-        sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
         return sci
 
     def get_widthheight(self, cam_id):
-        sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
         w = sci['width']
         h = sci['height']
         return w,h
 
     def get_roi(self, cam_id):
-        sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
         lbrt = sci['roi']
         return lbrt
 
@@ -1809,7 +1789,7 @@ class MainBrain(object):
         cam_ids = self.remote_api.external_get_cam_ids()
         all = {}
         for cam_id in cam_ids:
-            sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
+            sci, fqdn, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
             all[cam_id] = sci
         return all
 
@@ -1832,9 +1812,9 @@ class MainBrain(object):
                 continue # inserted and then removed
             if self.is_saving_data():
                 raise RuntimeError("Cannot add new camera while saving data")
-            sci, fqdn, port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
+            sci, fqdn, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
             for new_cam_func in self._new_camera_functions:
-                new_cam_func(cam_id,sci,(fqdn,port))
+                new_cam_func(cam_id,sci,fqdn)
 
         for cam_id in old_cam_ids:
             for old_cam_func in self._old_camera_functions:
@@ -1868,7 +1848,7 @@ class MainBrain(object):
 
         for cam_id in self.MainBrain_cam_ids_copy:
             if cam_id not in self._ip_addrs_by_cam_id:
-                sci, fqdn, cam2mainbrain_port, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
+                sci, fqdn, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
                 self._ip_addrs_by_cam_id[cam_id] = ip
             else:
                 ip = self._ip_addrs_by_cam_id[cam_id]

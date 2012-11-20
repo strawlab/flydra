@@ -1573,7 +1573,7 @@ class wxMainBrainApp(wx.App):
             if isinstance(event,wx.IdleEvent):
                 event.RequestMore()
 
-    def OnNewCamera(self, cam_id, scalar_control_info, fqdnport):
+    def OnNewCamera(self, cam_id, scalar_control_info, fqdn):
         # bookkeeping
         self.cameras[cam_id] = {'scalar_control_info':scalar_control_info,
                                 }
@@ -1742,13 +1742,14 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    rospy.init_node('flydra_mainbrain')
+    rospy.init_node('flydra_mainbrain',disable_signals=True)
+    rosthread = threading.Thread(target=rospy.spin,name='rosthread')
+    rosthread.daemon = True
 
     global use_opengl, use_video_preview
     use_opengl = options.use_opengl
     use_video_preview = options.use_video_preview
     # initialize GUI
-    #app = App(redirect=1,filename='flydra_log.txt')
     app = wxMainBrainApp(0)
 
     # create main_brain server (not started yet)
@@ -1756,16 +1757,14 @@ def main():
                                      save_profiling_data=options.save_profiling_data,
                                      show_sync_errors=options.show_sync_errors)
 
-    try:
-        # connect server to GUI
-        app.attach_and_start_main_brain(main_brain)
 
-        # hand control to GUI
+    try:
+        app.attach_and_start_main_brain(main_brain)
+        rosthread.start()
         app.MainLoop()
         del app
-
     finally:
-        # stop main_brain server
+        rospy.signal_shutdown('quit')
         main_brain.quit()
 
 if __name__ == '__main__':

@@ -2147,6 +2147,7 @@ class AppState(object):
             try:
                 self.main_brain = Pyro.core.getProxyForURI(main_brain_URI)
                 main_brain_version = self.main_brain.get_version()
+                LOG.info('connected to mainbrain %s' % main_brain_URI)
             except:
                 LOG.fatal('ERROR while connecting to main brain %s' % main_brain_URI)
                 raise
@@ -2289,11 +2290,9 @@ class AppState(object):
                 scalar_control_info['expected_trigger_framerate'] = 0.0
 
                 # register self with remote server
-                port = 9834 + cam_no # for local Pyro server
                 cam_id = self.all_cam_ids[cam_no]
                 self.main_brain.register_new_camera(cam_id,
                                                     scalar_control_info,
-                                                    port,
                                                     camnode_ros_name = rospy.get_name())
                 cam2mainbrain_port = self.main_brain.get_cam2mainbrain_port(cam_id)
 
@@ -2404,32 +2403,6 @@ class AppState(object):
         self.last_measurement_time = [time_func() for i in range(num_cams)]
         self.last_return_info_check = [ 0.0 for i in range(num_cams)]
 
-        ##################################################################
-        #
-        # Set up listener to trigger recording
-        #
-        ##################################################################
-
-        self.recvsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        my_host = '' # get fully qualified hostname
-        my_port = 30043 # arbitrary number
-
-        try:
-            self.recvsock.bind((my_host, my_port))
-            LOG.info('created udp server on port %s' % my_port)
-        except socket.error, err:
-            if err.args[0]==98: # port in use
-                warnings.warn('self.recvsock not available because port in use')
-                self.recvsock = None
-
-        if self.recvsock is not None:
-            self.recvsock.setblocking(0)
-
-        self.recording = 0
-        self.timer = 0
-
-
-
     def get_image_sources(self):
         return self._image_sources
 
@@ -2503,44 +2476,6 @@ class AppState(object):
                     raise
                 else:
                     self.handle_commands(cam_no,cmds)
-
-            # trigger recording
-            if 1:
-
-                msg = None
-
-                if self.recvsock is not None:
-                    try:
-                        msg, addr = self.recvsock.recvfrom(4096)
-                    except socket.error, err:
-                        if err.args[0] == 11: #Resource temporarily unavailable
-                            pass
-                if msg=='record_ufmf':
-                    self.timer = time.time()
-                if msg=='record_ufmf' and self.recording==0:
-
-                    self.recording = 1
-                    LOG.info('saving movies')
-
-                    if 1:
-                        for cam_no, cam_id in enumerate(self.all_cam_ids):
-                            small_saver = self.all_small_savers[cam_no]
-                            if small_saver is None:
-                                LOG.warn('no small save thread -- cannot save small movies')
-                                continue
-
-                            small_filebasename = time.strftime( 'CAM_NODE_MOV_%Y%m%d_%H%M%S_camid_' + repr(cam_no) + '.ufmf')
-                            small_saver.start_recording(small_filebasename=small_filebasename)
-
-                elif msg==None and self.recording==1 and time.time()-self.timer >= 4:
-                    LOG.warn('stop saving movies')
-                    self.recording = 0
-                    for cam_no, cam_id in enumerate(self.all_cam_ids):
-                        small_saver = self.all_small_savers[cam_no]
-                        small_saver.stop_recording()
-
-
-
 
             # test if all closed
             all_closed = True
@@ -2847,8 +2782,12 @@ def get_app_defaults():
 
 def main():
     rospy.init_node('flydra_camera_node',disable_signals=True)
+    rosthread = threading.Thread(target=rospy.spin,name='rosthread')
+    rosthread.daemon = True
     LOG.info('ROS name: %s' % rospy.get_name())
+    rosthread.start()
     parse_args_and_run()
+    rospy.signal_shutdown("quit")
 
 def benchmark():
     parse_args_and_run(benchmark=True)
