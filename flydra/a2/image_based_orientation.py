@@ -86,7 +86,7 @@ def plot_image_subregion(raw_im, mean_im, absdiff_im,
     user_l, user_b, user_r, user_t = user_coords
 
     # setup transform
-    # calculate image boundary (user coords)
+    #   calculate image boundary (user coords)
 
     for im_idx,im in enumerate(imtypes):
         if im=='raw':
@@ -132,8 +132,8 @@ def plot_image_subregion(raw_im, mean_im, absdiff_im,
         ## print 'device_l-user_l, device_b-user_b',device_l-user_l, device_b-user_b
         ## #ctx.translate(device_l-user_l, device_b-user_b)
         ## if scale!= 1.0:
-        ## ctx.scale( scale, scale )
-        ## #raise NotImplementedError('')
+        ##     ctx.scale( scale, scale )
+        ##     #raise NotImplementedError('')
         ## ctx.translate(device_l-user_l, device_b-user_b)
         ## #print 'square_edge/roisize, square_edge/roisize',square_edge/roisize, square_edge/roisize
         ## #ctx.scale( roisize/square_edge, square_edge/roisize)
@@ -272,13 +272,13 @@ def doit(h5_filename=None,
          ):
     """
 
-Copy all data in .h5 file (specified by h5_filename) to a new .h5
-file in which orientations are set based on image analysis of
-.ufmf files. Tracking data to associate 2D points from subsequent
-frames is read from the .h5 kalman file specified by
-kalman_filename.
+    Copy all data in .h5 file (specified by h5_filename) to a new .h5
+    file in which orientations are set based on image analysis of
+    .ufmf files. Tracking data to associate 2D points from subsequent
+    frames is read from the .h5 kalman file specified by
+    kalman_filename.
 
-"""
+    """
     if view is None:
         view = [ 'orig' for f in ufmf_filenames ]
     else:
