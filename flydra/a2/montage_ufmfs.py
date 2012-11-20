@@ -473,19 +473,19 @@ def make_montage( h5_filename,
 
 
 			######### ps
+                            if frames_test is not None:
+                                a=frames_test[frames_test[:,1]==row[0]]
 
-			    a=frames_test[frames_test[:,1]==row[0]]
-
-			    if not use_file_orientations:
-                                if frame not in a:
-                                        continue
-                            else:
-
-                                if frame in a:
-                                        b=a[a[:,0]==frame]
-                                        dx=np.array([b[0,2], b[0,3], b[0,4], np.zeros_like(row['x'])]).T
+                                if not use_file_orientations:
+                                    if frame not in a:
+                                            continue
                                 else:
-                                        continue
+
+                                    if frame in a:
+                                            b=a[a[:,0]==frame]
+                                            dx=np.array([b[0,2], b[0,3], b[0,4], np.zeros_like(row['x'])]).T
+                                    else:
+                                            continue
                         ########
 
                             X1 = X0 + dx*orientation_3d_line_length
@@ -675,7 +675,8 @@ transform='rot 180' # rotate the image 180 degrees (See transform
 
                 temp = str(lines[N]).split(',')
                 frames_test[N-1,:]=(float(temp[0]),float(temp[1]),float(temp[6]),float(temp[7]),float(temp[8]))
-
+    else:
+        frames_test = None
 
     nth_frame= int(options.nth_frame)
     use_file_orientations=options.use_file_orientations
