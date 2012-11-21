@@ -108,8 +108,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
     dynamic_models = {}
 
     ######################################
-
-    # 'mamarama, units: mm':
+    # 'hbird, units: mm':
     # process covariance
 
     base_model_dict = _get_fixed_vel_model(dt)
@@ -143,16 +142,63 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
         # birth model
         hypothesis_test_max_acceptable_error=1,
         min_dist_to_believe_new_meters=.1,
-        min_dist_to_believe_new_sigma=3.0, #10
+        min_dist_to_believe_new_sigma=3.0,
 
-        initial_position_covariance_estimate=1e-4, #1e-3
-        #initial_velocity_covariance_estimate=10,
-
-        # support existing object
-        #n_sigma_accept=20, #20 geometric euclidian distance
+        initial_position_covariance_estimate=1e-4,
 
         # death model
-        max_variance_dist_meters=.01, #.25
+        max_variance_dist_meters=.01,
+        max_frames_skipped=10,
+
+        # kalman filter parameters
+        Q=Q,
+        R=R)
+    newdict.update(base_model_dict)
+    dynamic_models['hbird, units: mm'] = newdict
+
+    ######################################
+
+    # 'mamarama, units: mm':
+    # process covariance
+
+    base_model_dict = _get_fixed_vel_model(dt)
+    ss = base_model_dict['ss']
+    os = base_model_dict['os']
+
+    if 1:
+        # this form is after N. Shimkin's lecture notes in
+        # Estimation and Identification in Dynamical Systems
+        # http://webee.technion.ac.il/people/shimkin/Estimation09/ch8_target.pdf
+        assert ss==6
+        T33 = dt**3/3.0
+        T22 = dt**2/2.0
+        T   = dt
+        Q = numpy.array( [[ T33,   0,   0,     T22,   0,   0],
+                          [   0, T33,   0,       0, T22,   0],
+                          [   0,   0, T33,       0,   0, T22],
+                          [   T22,   0, 0,       T,   0,   0],
+                          [     0, T22, 0,       0,   T,   0],
+                          [     0, 0, T22,       0,   0,   T]])
+    # the scale of the covariance
+    Q = 0.01*Q
+
+    # measurement noise covariance matrix
+    R = 1e-7*numpy.eye(os)
+
+    newdict = dict(
+
+        # data association parameters
+
+        # birth model
+        hypothesis_test_max_acceptable_error=5.0,
+        min_dist_to_believe_new_meters=0.2,
+        min_dist_to_believe_new_sigma=10.0,
+
+        initial_position_covariance_estimate=1e-3,
+        initial_velocity_covariance_estimate=10,
+
+        # death model
+        max_variance_dist_meters=0.25,
         max_frames_skipped=10,
 
         # kalman filter parameters
@@ -161,6 +207,52 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
     newdict.update(base_model_dict)
     dynamic_models['mamarama, units: mm'] = newdict
 
+
+    ######################################
+
+    # 'hydra, units: m':
+    # process covariance
+
+    # WARNING: these parameters haven't been tested since the
+    # consolidation of the flydra calibration stuff in July-August
+    # 2012.
+
+    base_model_dict = _get_fixed_vel_model(dt)
+    ss = base_model_dict['ss']
+    os = base_model_dict['os']
+
+    Q = numpy.zeros((ss,ss))
+    for i in range(0,3):
+        Q[i,i] = (0.01)**2
+    for i in range(3,6):
+        Q[i,i] = (0.5)**2
+
+    Q = Q*1000**2 # convert to meters
+
+    # measurement noise covariance matrix
+    R = 1e-3*numpy.eye(os)
+
+    newdict = dict(
+
+        # data association parameters
+
+        # birth model
+        hypothesis_test_max_acceptable_error=50.0,
+        min_dist_to_believe_new_meters=0.08, # 8 cm
+        min_dist_to_believe_new_sigma=3.0,
+
+        initial_position_covariance_estimate=1e-6,
+        initial_velocity_covariance_estimate=1,
+
+        # death model
+        max_variance_dist_meters=0.08,
+        max_frames_skipped=10,
+
+        # kalman filter parameters
+        Q=Q,
+        R=R)
+    newdict.update(base_model_dict)
+    dynamic_models['hydra, units: m'] = newdict
 
     ## ##################################################
 
@@ -236,16 +328,14 @@ class HydraMEKFAllParams(EKFAllParams):
             self['max_variance_dist_meters']=2 # let grow huge
 
 class HbirdEKFAllParams(EKFAllParams):
-    # WARNING: these parameters haven't been tested since the
-    # consolidation of the flydra calibration stuff in July-August
-    # 2012.
-
+    """Hummingbird non-linear dynamic model for EKF"""
     def __init__(self,dt=None):
         super( HbirdEKFAllParams, self).__init__()
         assert dt is not None
-        linear_dict = get_kalman_model( name='mamarama, units: mm',
+        linear_dict = get_kalman_model( name='hbird, units: mm',
                                         dt=dt )
 
+ 
         # update some parameters from linear model
         for key in [
                     'initial_position_covariance_estimate',
@@ -259,12 +349,10 @@ class HbirdEKFAllParams(EKFAllParams):
                     'max_variance_dist_meters',
                     ]:
             self[key] = linear_dict[key]
-        self['ekf_observation_covariance_pixels'] = numpy.array(
-            [[15.0, 0.0],
-             [0.0, 15.0]],
-            dtype=numpy.float64 )
-        # distance in the raw image plane (i.e. before radial undistortion)
-        self['distorted_pixel_euclidian_distance_accept']=15.0
+        self['ekf_observation_covariance_pixels'] = numpy.array( [[1.0, 0.0],
+                                                                  [0.0, 1.0]],
+                                                                 dtype=numpy.float64 )
+        self['distorted_pixel_euclidian_distance_accept']=20.0 # distance in the raw image plane (i.e. before radial undistortion)
 
 ekf_models = {'EKF mamarama, units: mm':MamaramaMMEKFAllParams,
               'EKF hydra, units: m':HydraMEKFAllParams,
