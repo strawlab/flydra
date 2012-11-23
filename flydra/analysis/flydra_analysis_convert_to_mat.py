@@ -160,6 +160,7 @@ def do_it(filename=None,
                                                  ('timestamps','first_timestamp_secs'),
                                                  ('timestamps','first_timestamp_nsecs'),
                                                  ],
+                      'experiment_info': [('experiment_uuid','uuid')],
                       }
         # gather data
         data_dict = {}
