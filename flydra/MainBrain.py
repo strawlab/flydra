@@ -2078,7 +2078,7 @@ class MainBrain(object):
                 return None
         self.config['save_data_dir'] = save_data_dir
         self.save_config()
-        print 'saving data to %s' % save_data_dir
+        LOG.info('saving data to %s' % save_data_dir)
         return save_data_dir
 
     def is_saving_data(self):
