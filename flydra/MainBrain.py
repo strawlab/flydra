@@ -1616,7 +1616,7 @@ class MainBrain(object):
 
         self.exp_uuid = None
         self.sub_exp_uuid = rospy.Subscriber(
-                                'experiment/uuid',
+                                'experiment_uuid',
                                 std_msgs.msg.String,
                                 self._on_experiment_uuid)
 
