@@ -3,8 +3,10 @@ import numpy as np
 import sys
 import get_clock_sync
 import flydra.analysis.result_utils as result_utils
+import matplotlib.pyplot as plt
 
 def main():
+    do_plot = True
     debug=False
     #debug=True
 
@@ -32,8 +34,12 @@ def main():
     print 'fps',fps
     print [repr(i) for i in time_model.framestamp2timestamp(np.array([0,1,2]))]
 
+    if do_plot:
+        fig = plt.figure()
+        ax = None
+
     if 1:
-        for camn in camns:
+        for camn_enum, camn in enumerate(camns):
             cam_id = camn2cam_id[camn]
 
             cond1 = cam_info['cam_id']==cam_id
@@ -52,16 +58,30 @@ def main():
 
             latency_sec = cam_received_timestamp-trigger_timestamp
             mean_latency_sec = latency_sec.mean()
+            max_latency_sec = np.max(latency_sec)
 
             ## for i in range(len(frame)):
             ##     print frame[i], repr(trigger_timestamp[i]), repr(cam_received_timestamp[i])
             ##     if i>=10:
             ##         break
 
-            print '%s: mean latency %.1f +/- %.1f msec'%(
+            print '%s: mean latency: %.1f (estimate error: %.1f msec) worst latency: %.1f'%(
                 cam_id,
                 mean_latency_sec*1000.0,
-                worst_sync_dict[hostname]*1000.0)
+                worst_sync_dict[hostname]*1000.0,
+                max_latency_sec*1000.0,
+                )
+
+            if do_plot:
+                ax = fig.add_subplot(len(camns),1,camn_enum,sharex=ax)
+                ax.plot( mydata['frame'], latency_sec*1000.0, '.', label='%s %s'%(hostname,cam_id) )
+                ax.legend()
+
+    if do_plot:
+        ax.set_ylabel('latency (msec)')
+        ax.set_xlabel('frame')
+        plt.show()
+
 
 if __name__=='__main__':
     main()
