@@ -24,6 +24,7 @@ def main():
 
     # read all data
     d2d = results.root.data2d_distorted[:]
+    cam_info = results.root.cam_info[:]
     results.close()
 
     dt = time_model.framestamp2timestamp(1)-time_model.framestamp2timestamp(0)
@@ -31,11 +32,13 @@ def main():
     print 'fps',fps
     print [repr(i) for i in time_model.framestamp2timestamp(np.array([0,1,2]))]
 
-    for hostname in hostnames:
+    if 1:
         for camn in camns:
             cam_id = camn2cam_id[camn]
-            if not cam_id.startswith(hostname):
-                continue
+
+            cond1 = cam_info['cam_id']==cam_id
+            assert np.sum(cond1)==1
+            hostname = str(cam_info[ cond1 ]['hostname'][0])
 
             cond = d2d['camn']==camn
             mydata = d2d[cond]
