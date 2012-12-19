@@ -225,12 +225,10 @@ class CoordRealReceiver(threading.Thread):
         self.out_queue = Queue.Queue()
         with self.socket_lock:
             self.listen_sockets = {}
-            self.server_sockets = {}
 
         threading.Thread.__init__(self,name='CoordRealReceiver thread')
 
     def add_socket(self, cam_id):
-        port = -1
         sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sockobj.bind((self.hostname, 0))
         sockobj.setblocking(0)
@@ -246,11 +244,6 @@ class CoordRealReceiver(threading.Thread):
                 if cam_id == test_cam_id:
                     sockobj.close()
                     del self.listen_sockets[sockobj]
-                    break # XXX naughty to delete item inside iteration
-            for sockobj, test_cam_id in self.server_sockets.iteritems():
-                if cam_id == test_cam_id:
-                    sockobj.close()
-                    del self.server_sockets[sockobj]
                     break # XXX naughty to delete item inside iteration
 
     def get_data(self):
