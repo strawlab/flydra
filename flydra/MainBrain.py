@@ -118,11 +118,6 @@ class LockedValue:
 
 best_realtime_data=None
 
-try:
-    hostname = socket.gethostbyname('mainbrain')
-except:
-    hostname = socket.gethostbyname(socket.gethostname())
-
 # 2D data format for PyTables:
 Info2D = flydra.data_descriptions.Info2D
 TextLogDescription = flydra.data_descriptions.TextLogDescription
@@ -155,9 +150,7 @@ def get_best_realtime_data():
 class TimestampEchoReceiver(threading.Thread):
     def __init__(self,main_brain):
         self.main_brain = main_brain
-
-        name = 'TimestampEchoReceiver thread'
-        threading.Thread.__init__(self,name=name)
+        threading.Thread.__init__(self,name='TimestampEchoReceiver thread')
 
     def run(self):
         ip2hostname = {}
@@ -166,7 +159,7 @@ class TimestampEchoReceiver(threading.Thread):
 
         timestamp_echo_gatherer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         port = flydra.common_variables.timestamp_echo_gatherer_port
-        timestamp_echo_gatherer.bind((hostname, port))
+        timestamp_echo_gatherer.bind((self.main_brain.hostname, port))
 
         last_clock_diff_measurements = collections.defaultdict(list)
 
@@ -224,9 +217,8 @@ class TimestampEchoReceiver(threading.Thread):
 
 class CoordRealReceiver(threading.Thread):
     # called from CoordinateProcessor thread
-    def __init__(self,quit_event):
-        global hostname
-
+    def __init__(self,hostname,quit_event):
+        self.hostname = hostname
         self.quit_event = quit_event
         self.socket_lock = threading.Lock()
 
@@ -235,15 +227,12 @@ class CoordRealReceiver(threading.Thread):
             self.listen_sockets = {}
             self.server_sockets = {}
 
-        name = 'CoordRealReceiver thread'
-        threading.Thread.__init__(self,name=name)
+        threading.Thread.__init__(self,name='CoordRealReceiver thread')
 
     def add_socket(self, cam_id):
-        global hostname
-
         port = -1
         sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sockobj.bind((hostname, 0))
+        sockobj.bind((self.hostname, 0))
         sockobj.setblocking(0)
         with self.socket_lock:
             self.listen_sockets[sockobj]=cam_id
@@ -365,7 +354,7 @@ class CoordinateProcessor(threading.Thread):
                  show_overall_latency,
                  max_reconstruction_latency_sec,
                  max_N_hypothesis_test):
-        global hostname
+        self.hostname = main_brain.hostname
         self.main_brain = main_brain
         self.debug_level = debug_level
         self.show_overall_latency = show_overall_latency
@@ -407,7 +396,7 @@ class CoordinateProcessor(threading.Thread):
 
         self.general_save_info = {}
 
-        self.realreceiver = CoordRealReceiver(self.quit_event)
+        self.realreceiver = CoordRealReceiver(self.hostname, self.quit_event)
         self.realreceiver.setDaemon(True)
         self.realreceiver.start()
 
@@ -542,9 +531,6 @@ class CoordinateProcessor(threading.Thread):
     def connect(self,cam_id,cam_hostname):
 
         # called from Remote-API thread on camera connect
-
-        global hostname
-
         assert not self.main_brain.is_saving_data()
 
         with self.all_data_lock:
@@ -1502,11 +1488,10 @@ class MainBrain(object):
     # main MainBrain class
 
     def __init__(self,server=None,save_profiling_data=False, show_sync_errors=True):
-        global main_brain_keeper, hostname
+        global main_brain_keeper
 
-        if server is not None:
-            hostname = server
-        LOG.info('running mainbrain at hostname "%s"'%hostname)
+        self.hostname = socket.gethostbyname(server)
+        LOG.info('running mainbrain at hostname "%s" (%s)' % (server,self.hostname))
 
         self.load_config()
 
@@ -1525,7 +1510,7 @@ class MainBrain(object):
         port = flydra.common_variables.mainbrain_port
 
         # start Pyro server
-        daemon = Pyro.core.Daemon(host=hostname,port=port)
+        daemon = Pyro.core.Daemon(host=self.hostname,port=port)
         remote_api = MainBrain.RemoteAPI(); remote_api.post_init(self)
         URI=daemon.connect(remote_api,'main_brain')
 
