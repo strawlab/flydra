@@ -448,21 +448,6 @@ class wxMainBrainApp(wx.App):
         wx.EVT_BUTTON(clear_cal, clear_cal.GetId(), self.OnClearCal)
 
         ctrl = xrc.XRCCTRL(self.cam_preview_panel,
-                           "MANUAL_TRIGGER_DEVICE_PREVIEW1") # EXT TRIG1
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnManualTriggerDevice1)
-
-        ctrl = xrc.XRCCTRL(self.cam_preview_panel,
-                           "MANUAL_TRIGGER_DEVICE_PREVIEW2") # EXT TRIG2
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnManualTriggerDevice2)
-
-        ctrl = xrc.XRCCTRL(self.cam_preview_panel,
-                           "MANUAL_TRIGGER_DEVICE_PREVIEW3") # EXT TRIG3
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnManualTriggerDevice3)
-
-        ctrl = xrc.XRCCTRL(self.cam_preview_panel,
                            "MANUAL_RECORD_RAW_TOGGLE")
         wx.EVT_BUTTON(ctrl, ctrl.GetId(),self.OnRecordRawButton)
 
@@ -1012,21 +997,6 @@ class wxMainBrainApp(wx.App):
         cam_choice.Delete(i)
 
     def InitStatusPanel(self):
-        ctrl = xrc.XRCCTRL(self.status_panel,
-                           "MANUAL_TRIGGER_DEVICE_STATUS1") # EXT TRIG1
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnManualTriggerDevice1)
-
-        ctrl = xrc.XRCCTRL(self.status_panel,
-                           "MANUAL_TRIGGER_DEVICE_STATUS2") # EXT TRIG2
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnManualTriggerDevice2)
-
-        ctrl = xrc.XRCCTRL(self.status_panel,
-                           "MANUAL_TRIGGER_DEVICE_STATUS3") # EXT TRIG3
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnManualTriggerDevice3)
-
         panel = xrc.XRCCTRL(self.status_panel,'TRAITED_STATUS_PANEL')
         sizer = wx.BoxSizer(wx.HORIZONTAL)
 
@@ -1036,18 +1006,6 @@ class wxMainBrainApp(wx.App):
         #control.GetParent().SetMinSize(control.GetMinSize())
         sizer.Add(control, 1, wx.EXPAND)
         panel.SetSizer( sizer )
-
-    def OnManualTriggerDevice1(self,event):
-        sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sender.sendto('1',(MainBrain.hostname,common_variables.trigger_network_socket_port))
-
-    def OnManualTriggerDevice2(self,event):
-        sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sender.sendto('2',(MainBrain.hostname,common_variables.trigger_network_socket_port))
-
-    def OnManualTriggerDevice3(self,event):
-        sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sender.sendto('3',(MainBrain.hostname,common_variables.trigger_network_socket_port))
 
     def OnLoadCalFile(self,event):
         self.OnLoadCalCore(event,wx.FileDialog,
