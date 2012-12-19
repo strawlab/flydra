@@ -1588,7 +1588,6 @@ class MainBrain(object):
                                 std_msgs.msg.String,
                                 latch=True)
 
-        self.exp_uuid = None
         self.sub_exp_uuid = rospy.Subscriber(
                                 'experiment_uuid',
                                 std_msgs.msg.String,
@@ -1607,9 +1606,8 @@ class MainBrain(object):
         main_brain_keeper.register( self )
 
     def _on_experiment_uuid(self, msg):
-        self.exp_uuid = msg.data
         if self.is_saving_data():
-            self.h5exp_info.row['uuid'] = self.exp_uuid
+            self.h5exp_info.row['uuid'] = msg.data
             self.h5exp_info.row.append()
             self.h5exp_info.flush()
 
@@ -2095,14 +2093,6 @@ class MainBrain(object):
                             "text log")
         self.h5exp_info = ct(root,'experiment_info', ExperimentInfo, "ExperimentInfo",
                              expectedrows=100)
-
-        #add any existing experiment uuid
-        if self.exp_uuid is None:
-            LOG.warn('no experiment started, please generate a UUID')
-        else:
-            self.h5exp_info.row['uuid'] = self.exp_uuid
-            self.h5exp_info.row.append()
-            self.h5exp_info.flush()
 
         self._startup_message()
         if self.reconstructor is not None:
