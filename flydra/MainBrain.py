@@ -272,7 +272,7 @@ class CoordRealReceiver(threading.Thread):
         empty_list = []
         BENCHMARK_2D_GATHER = False
         if BENCHMARK_2D_GATHER:
-            header_fmt = '<ddliI'
+            header_fmt = flydra.common_variables.recv_pt_header_fmt
             header_size = struct.calcsize(header_fmt)
         while not self.quit_event.isSet():
             with self.socket_lock:
@@ -633,9 +633,9 @@ class CoordinateProcessor(threading.Thread):
             except Exception, x:
                 LOG.warn('could not run in maximum priority mode (PID %d): %s'%(os.getpid(),str(x)))
 
-        header_fmt = '<ddliI'
+        header_fmt = flydra.common_variables.recv_pt_header_fmt
         header_size = struct.calcsize(header_fmt)
-        pt_fmt = '<dddddddddBBddBddddddBdd' # keep in sync with camnode.py
+        pt_fmt = flydra.common_variables.recv_pt_fmt
         pt_size = struct.calcsize(pt_fmt)
 
         realtime_coord_dict = {}

@@ -6,5 +6,8 @@ timestamp_echo_fmt_diff = '<d'
 timestamp_echo_gatherer_port = 28993 # on MainBrain
 timestamp_echo_fmt2 = '<dd'
 
+recv_pt_fmt = '<dddddddddBBddBddddddBdd'
+recv_pt_header_fmt = '<ddliI'
+
 emulated_camera_control = 9645
 mainbrain_port = 9833

@@ -180,9 +180,6 @@ if sys.platform == 'win32':
 else:
     time_func = time.time
 
-pt_fmt = '<dddddddddBBddBddddddBdd' # keep in sync with MainBrain.py
-small_datafile_fmt = '<dII'
-
 def TimestampEcho():
     # create listening socket
     sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -548,7 +545,7 @@ class ProcessCamClass(object):
             if numpy.isinf(slope):
                 slope = near_inf
 
-            # see pt_fmt struct definition:
+            # see flydra.common_variables.recv_pt_fmt struct definition:
             pt = (x0_abs, y0_abs, area, slope, eccentricity,
                   p1, p2, p3, p4, line_found, slope_found,
                   x0u, y0u,
@@ -967,11 +964,12 @@ class ProcessCamClass(object):
                         self.clear_threshold_shared.get_nowait() )
 
                 # XXX could speed this with a join operation I think
-                data = struct.pack('<ddliI',timestamp,cam_received_time,
+                data = struct.pack(flydra.common_variables.recv_pt_header_fmt,
+                                   timestamp,cam_received_time,
                                    framenumber,len(points),n_frames_skipped)
                 for point_tuple in points:
                     try:
-                        data = data + struct.pack(pt_fmt,*point_tuple)
+                        data = data + struct.pack(flydra.common_variables.recv_pt_fmt,*point_tuple)
                     except:
                         LOG.warn('error-causing data: %s' % (point_tuple,))
                         raise
