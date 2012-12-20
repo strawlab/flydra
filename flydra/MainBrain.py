@@ -1147,19 +1147,20 @@ class CoordinateProcessor(threading.Thread):
 class MainBrain(object):
     """Handle all camera network stuff and interact with application"""
 
+    #See commits explaining socket starvation on why these are not all enabled
     ROS_CONTROL_API = dict(
-        start_collecting_background=(std_srvs.srv.Empty),
-        stop_collecting_background=(std_srvs.srv.Empty),
-        take_background=(std_srvs.srv.Empty),
-        clear_background=(std_srvs.srv.Empty),
+#        start_collecting_background=(std_srvs.srv.Empty),
+#        stop_collecting_background=(std_srvs.srv.Empty),
+#        take_background=(std_srvs.srv.Empty),
+#        clear_background=(std_srvs.srv.Empty),
         start_saving_data=(std_srvs.srv.Empty),
         stop_saving_data=(std_srvs.srv.Empty),
-        start_recording=(std_srvs.srv.Empty),
-        stop_recording=(std_srvs.srv.Empty),
-        start_small_recording=(std_srvs.srv.Empty),
-        stop_small_recording=(std_srvs.srv.Empty),
+#        start_recording=(std_srvs.srv.Empty),
+#        stop_recording=(std_srvs.srv.Empty),
+#        start_small_recording=(std_srvs.srv.Empty),
+#        stop_small_recording=(std_srvs.srv.Empty),
         do_synchronization=(std_srvs.srv.Empty),
-        quit=(std_srvs.srv.Empty),
+#        quit=(std_srvs.srv.Empty),
     )
 
     ROS_CONFIGURATION = dict(
@@ -1593,10 +1594,9 @@ class MainBrain(object):
                                 std_msgs.msg.String,
                                 self._on_experiment_uuid)
 
-        #See commits explaining socket starvation on why this is needed
-        #self.services = {}
-        #for name, srv in self.ROS_CONTROL_API.iteritems():
-        #    self.services[name] = rospy.Service('~%s' % name, srv, self._ros_generic_service_dispatch)
+        self.services = {}
+        for name, srv in self.ROS_CONTROL_API.iteritems():
+            self.services[name] = rospy.Service('~%s' % name, srv, self._ros_generic_service_dispatch)
 
         #final config processing
         self.load_calibration(self.config['camera_calibration'])
