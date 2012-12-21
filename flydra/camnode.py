@@ -1603,7 +1603,7 @@ class _Camera(object):
         pass
 
     def get_framerate(self):
-        return 123456
+        return 100
 
     def get_num_camera_properties(self):
         return 0
@@ -1723,7 +1723,7 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
         rospy.set_param(parampath, v)
 
     def set_framerate(self, *args):
-        raise 1
+        raise NotImplementedError
 
 class FakeCameraFromNetwork(_Camera):
     def __init__(self,guid,frame_size):
@@ -1768,9 +1768,9 @@ class FakeCameraFromNetwork(_Camera):
 
 class FakeCameraFromRNG(_Camera):
     def __init__(self,guid,frame_size):
+        print guid*10
         _Camera.__init__(self, guid)
         self.frame_size = frame_size
-        self.remote = None
         self.last_timestamp = 0.0
         self.last_count = -1
 
@@ -1847,7 +1847,7 @@ class FakeCameraFromFMF(_Camera):
         result = self._curframe.get() >= len( self.fmf_recarray['frame'] )
         return result
 
-def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
+def create_cam_for_emulation_image_source( filename_or_pseudofilename, cam_no ):
     """factory function to create fake camera and ImageSourceModel"""
     fname = filename_or_pseudofilename
     if fname.endswith('.fmf'):
@@ -1900,7 +1900,7 @@ def create_cam_for_emulation_image_source( filename_or_pseudofilename ):
                               'raw':raw}
     elif fname == '<rng>':
         width, height = 640, 480
-        cam = FakeCameraFromRNG('fakecam1',(width,height))
+        cam = FakeCameraFromRNG('fakecam%s' % cam_no,(width,height))
         ImageSourceModel = ImageSourceFakeCamera
         with cam.lock:
             l,b,w,h = cam.get_frame_roi()
@@ -2051,15 +2051,18 @@ class AppState(object):
             if benchmark: # emulate full images with random number generator
                 # call factory function
                 (cam, ImageSourceModel, initial_image_dict) = \
-                      create_cam_for_emulation_image_source( '<rng>' )
+                      create_cam_for_emulation_image_source( '<rng>', cam_no )
+                self.all_cam_ids[cam_no] = cam.guid
             elif options.simulate_point_extraction: # emulate points
                 # call factory function
                 (cam, ImageSourceModel,
-                 initial_image_dict)  = create_cam_for_emulation_image_source( image_sources[cam_no] )
+                 initial_image_dict)  = create_cam_for_emulation_image_source( image_sources[cam_no], cam_no )
+                self.all_cam_ids[cam_no] = cam.guid
             elif emulation_image_sources: # emulate full images
                 # call factory function
                 (cam, ImageSourceModel,
-                 initial_image_dict)  = create_cam_for_emulation_image_source( emulation_image_sources[cam_no] )
+                 initial_image_dict)  = create_cam_for_emulation_image_source( emulation_image_sources[cam_no], cam_no )
+                self.all_cam_ids[cam_no] = cam.guid
             else:
                 #cam_id is the libcamiface number of the camera
                 cam_id = cam_order[cam_no]
