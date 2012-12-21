@@ -1344,7 +1344,7 @@ class wxMainBrainApp(wx.App):
                 dlg.ShowModal()
             finally:
                 dlg.Destroy()
-        realtime_data=MainBrain.get_best_realtime_data() # gets global data
+        realtime_data = self.main_brain.best_realtime_data
         if realtime_data is not None:
             Xs,min_mean_dist=realtime_data
             data3d = Xs[0]

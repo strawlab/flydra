@@ -87,8 +87,6 @@ PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
 PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
 PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_IDX
 
-XXX_framenumber = 0
-
 class MainBrainKeeper:
     def __init__(self):
         self.kept = []
@@ -116,8 +114,6 @@ class LockedValue:
             pass
         return self._val
 
-best_realtime_data=None
-
 # 2D data format for PyTables:
 Info2D = flydra.data_descriptions.Info2D
 TextLogDescription = flydra.data_descriptions.TextLogDescription
@@ -140,12 +136,6 @@ def save_ascii_matrix(filename,m):
     for row in m:
         fd.write( ' '.join(map(str,row)) )
         fd.write( '\n' )
-
-def get_best_realtime_data():
-    global best_realtime_data
-    data = best_realtime_data
-    best_realtime_data = None
-    return data
 
 class TimestampEchoReceiver(threading.Thread):
     def __init__(self,main_brain):
@@ -614,8 +604,6 @@ class CoordinateProcessor(threading.Thread):
 
     def run(self):
         """main loop of CoordinateProcessor"""
-        global best_realtime_data
-        global XXX_framenumber
 
         if os.name == 'posix':
             try:
@@ -800,7 +788,7 @@ class CoordinateProcessor(threading.Thread):
 
                         self.last_timestamps[cam_idx]=trigger_timestamp
                         self.last_framenumbers_delay[cam_idx]=raw_framenumber
-                        XXX_framenumber = corrected_framenumber
+                        self.main_brain.framenumber = corrected_framenumber
 
                         if self.main_brain.is_saving_data():
                             for point_tuple in points_distorted:
@@ -897,13 +885,13 @@ class CoordinateProcessor(threading.Thread):
 
                         if self.reconstructor is None:
                             # can't do any 3D math without calibration information
-                            best_realtime_data = None
+                            self.main_brain.best_realtime_data = None
                             continue
 
                         if 1:
                             with self.tracker_lock:
                                 if self.tracker is None: # tracker isn't instantiated yet...
-                                    best_realtime_data = None
+                                    self.main_brain.best_realtime_data = None
                                     continue
 
                                 pluecker_coords_by_camn = realtime_kalman_coord_dict[corrected_framenumber]
@@ -979,9 +967,9 @@ class CoordinateProcessor(threading.Thread):
                                         X = last_xhat[0], last_xhat[1], last_xhat[2]
                                         Xs.append(X)
                                     if len(Xs):
-                                        best_realtime_data = Xs, 0.0
+                                        self.main_brain.best_realtime_data = Xs, 0.0
                                     else:
-                                        best_realtime_data = None
+                                        self.main_brain.best_realtime_data = None
 
                                 if SHOW_3D_PROCESSING_LATENCY:
                                     start_3d_proc_b = time.time()
@@ -1538,6 +1526,11 @@ class MainBrain(object):
 
         self._currently_recording_movies = {}
 
+        # Attributes accessed by other threads (see the corresponding @property
+        # get/set-ters of the attribute for locking (if any)
+        self._best_realtime_data = None
+        self._framenumber = 0
+
         self.reconstructor = None
 
         # Attributes which come in use when saving data occurs
@@ -1642,6 +1635,24 @@ class MainBrain(object):
             LOG.debug("result = %s (marshaling over ros as %s klass %s)" % (result,kwargs,respclass))
 
             return respclass(**kwargs)
+
+    @property
+    def framenumber(self):
+        return self._framenumber
+
+    @framenumber.setter
+    def framenumber(self, value):
+        self._framenumber = value
+
+    @property
+    def best_realtime_data(self):
+        data = self._best_realtime_data
+        self._best_realtime_data = None
+        return data
+
+    @best_realtime_data.setter
+    def best_realtime_data(self, value):
+        self._best_realtime_data = value
 
     def load_config(self):
         self.config = {}
@@ -1871,7 +1882,6 @@ class MainBrain(object):
             self.show_overall_latency.clear()
 
     def start_recording(self, raw_file_basename=None, *cam_ids):
-        global XXX_framenumber
         nowstr = time.strftime('%Y%m%d_%H%M%S')
 
         if not raw_file_basename:
@@ -1883,7 +1893,7 @@ class MainBrain(object):
         for cam_id in cam_ids:
             raw_file_name = os.path.join(raw_file_basename,"%s.%s" % (nowstr, cam_id))
             self.remote_api.external_start_recording( cam_id, raw_file_name)
-            approx_start_frame = XXX_framenumber
+            approx_start_frame = self.framenumber
             self._currently_recording_movies[ cam_id ] = (raw_file_name, approx_start_frame)
             if self.is_saving_data():
                 self.h5movie_info.row['cam_id'] = cam_id
@@ -1893,12 +1903,11 @@ class MainBrain(object):
                 self.h5movie_info.flush()
 
     def stop_recording(self, *cam_ids):
-        global XXX_framenumber
         if len(cam_ids) == 0:
             cam_ids = self.remote_api.external_get_cam_ids()
         for cam_id in cam_ids:
             self.remote_api.external_stop_recording(cam_id)
-            approx_stop_frame = XXX_framenumber
+            approx_stop_frame = self.framenumber
             raw_file_basename, approx_start_frame = self._currently_recording_movies[ cam_id ]
             del self._currently_recording_movies[ cam_id ]
             # modify save file to include approximate movie stop time
