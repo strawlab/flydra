@@ -154,7 +154,6 @@ setup(name='flydra',
     'flydra_trigger_latency_measure = flydra.trigger.latency_measure:main',
 
 # camera calibration
-    'flydra_analysis_calibration_export = flydra.analysis.export_calibration:main',
     'flydra_analysis_calibration_align_gui = flydra.a2.calibration_align_gui:main',
     'flydra_analysis_generate_recalibration = flydra.analysis.flydra_analysis_generate_recalibration:main',
     'flydra_analysis_align_calibration = flydra.reconstruct:align_calibration',
