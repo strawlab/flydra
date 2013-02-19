@@ -1657,11 +1657,11 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
         # auto select format7_0 mode
         N_modes = cam_iface.get_num_modes(cam_no)
         use_mode = None
-        if show_cam_details:
+        if self._show_cam_details:
             LOG.info('camera info: %s' % (cam_iface.get_camera_info(cam_no),))
         for i in range(N_modes):
             mode_string = cam_iface.get_mode_string(cam_no,i)
-            if show_cam_details:
+            if self._show_cam_details:
                 LOG.info('  mode %d: %s'%(i,mode_string))
             if 'format7_0' in mode_string.lower():
                 use_mode = i
@@ -1673,7 +1673,7 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
         # cache trigger mode names
         self._trigger_mode_numbers_from_name = {}
         N_trigger_modes = self.get_num_trigger_modes()
-        if show_cam_details:
+        if self._show_cam_details:
             LOG.info('  %d available trigger modes:'%N_trigger_modes)
             LOG.info('  current trigger modes: %d' % self.get_trigger_mode_number())
             for i in range(N_trigger_modes):
@@ -1706,8 +1706,10 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
                 cam_iface.Camera.set_camera_property(self,prop_num,paramval,0)
             elif k == "trigger_mode":
                 if paramval < 0:
+                    LOG.info("trigger_mode number not set or correct (%s), setting camera to max framerate" % paramval)
                     cam_iface.Camera.set_framerate(self, 999)
                 else:
+                    LOG.info("setting trigger_mode number = %s" % paramval)
                     cam_iface.Camera.set_trigger_mode_number(self, paramval)
 
     def set_camera_property(self, prop_num, prop_value, auto):
