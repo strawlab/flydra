@@ -355,6 +355,12 @@ class ProcessCamClass(rospy.SubscribeListener):
         self.pub_img_rate = float(options.rosrate)
         self.pub_img_lasttime = time.time()
 
+        self.pub_rate = rospy.Publisher('%s/framerate'%self.ros_namespace,
+                                         std_msgs.msg.Float32,
+                                         tcp_nodelay=True)
+        self.pub_rate_lasttime = time.time()
+        self.pub_rate_lastframe = 0
+
         self.benchmark = benchmark
         self.options = options
         self.globals = globals
@@ -566,6 +572,12 @@ class ProcessCamClass(rospy.SubscribeListener):
 
     def _service_ros(self, framenumber, hw_roi_frame, chainbuf):
         now = time.time()
+
+        if (now - self.pub_rate_lasttime) > 2.0:
+            self.pub_rate_lasttime = now
+            fps = (framenumber - self.pub_rate_lastframe) / 2.0
+            self.pub_rate_lastframe = framenumber
+            self.pub_rate.publish(fps)
             
         #maybe this is racy, but its only for debugging. Don't serialize images
         #if noone is subscribed
