@@ -67,7 +67,9 @@ import camnode_colors
 
 import roslib;
 roslib.load_manifest('sensor_msgs')
-from sensor_msgs.msg import Image
+import sensor_msgs.msg
+import std_msgs.msg
+
 import rospy
 
 if not BENCHMARK:
@@ -312,7 +314,7 @@ def get_free_buffer_from_pool(pool):
         if not buf._i_promise_to_return_buffer_to_the_pool:
             pool.return_buffer(buf)
 
-class ProcessCamClass(object):
+class ProcessCamClass(rospy.SubscribeListener):
     def __init__(self,
                  cam2mainbrain_port=None,
                  cam_id=None,
@@ -344,13 +346,14 @@ class ProcessCamClass(object):
                  ):
 
         self.ros_namespace = cam_id
-        # register a new publisher
-        self.publisher = rospy.Publisher('%s/image_raw'%self.ros_namespace,
-                                         Image,
-                                         tcp_nodelay=True,
-                                         )
-        self.rosrate = float(options.rosrate)
-        self.lasttime = time.time()
+
+        self.pub_img_n_subscribed = 0
+        self.pub_img = rospy.Publisher('%s/image_raw'%self.ros_namespace,
+                                         sensor_msgs.msg.Image,
+                                         subscriber_listener=self,
+                                         tcp_nodelay=True)
+        self.pub_img_rate = float(options.rosrate)
+        self.pub_img_lasttime = time.time()
 
         self.benchmark = benchmark
         self.options = options
@@ -408,6 +411,12 @@ class ProcessCamClass(object):
 
         self._chain = camnode_utils.ChainLink()
         self._initial_image_dict = initial_image_dict
+
+    def peer_subscribe(self, topic_name, topic_publish, peer_publish):
+        self.pub_img_n_subscribed += 1
+
+    def peer_unsubscribe(self, topic_name, num_peers):
+        self.pub_img_n_subscribed -= 1
 
     def get_chain(self):
         return self._chain
@@ -555,10 +564,20 @@ class ProcessCamClass(object):
             points.append( pt )
         return points
 
-    def _publish_ros_image(self, framenumber, hw_roi_frame, chainbuf):
+    def _service_ros(self, framenumber, hw_roi_frame, chainbuf):
         now = time.time()
-        if now-self.lasttime+0.005 > 1./(self.rosrate):
-            msg = Image()
+            
+        #maybe this is racy, but its only for debugging. Don't serialize images
+        #if noone is subscribed
+        if self.pub_img_n_subscribed <= 0:
+            return
+
+        if self.pub_img_rate <= 0:
+            return
+
+        if now-self.pub_img_lasttime+0.005 > 1./(self.pub_img_rate):
+
+            msg = sensor_msgs.msg.Image()
             msg.header.seq=framenumber
             msg.header.stamp=rospy.Time.from_sec(now) # XXX TODO: once camera trigger is ROS node, get accurate timestamp
             msg.header.frame_id = "0"
@@ -586,8 +605,8 @@ class ProcessCamClass(object):
             msg.step = width
             msg.data = npbuf.tostring() # let numpy convert to string
 
-            self.publisher.publish(msg)
-            self.lasttime = now
+            self.pub_img.publish(msg)
+            self.pub_img_lasttime = now
 
     def mainloop(self):
 
@@ -754,7 +773,7 @@ class ProcessCamClass(object):
 
                 # publish on ROS network
                 if not self.benchmark:
-                    self._publish_ros_image(framenumber, hw_roi_frame, chainbuf)
+                    self._service_ros(framenumber, hw_roi_frame, chainbuf)
 
                 if 1:
                     if old_fn is None:
