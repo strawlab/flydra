@@ -631,7 +631,7 @@ class ProcessCamClass(rospy.SubscribeListener):
             debug_fd = open('debug_framedrop_cam.txt',mode='w')
 
         # questionable optimization: speed up by eliminating namespace lookups
-        cam_quit_event_isSet = globals['cam_quit_event'].isSet
+        process_quit_event_isSet = globals['process_quit_event'].isSet
         bg_frame_number = -1
         clear_background_isSet = globals['clear_background'].isSet
         clear_background_clear = globals['clear_background'].clear
@@ -1405,8 +1405,8 @@ class ImageSource(threading.Thread):
     def run(self):
         LOG.info('ImageSource running in process %s' % os.getpid())
         buffer_pool = self.buffer_pool
-        cam_quit_event_isSet = self.quit_event.isSet
-        while not cam_quit_event_isSet():
+        process_quit_event_isSet = self.quit_event.isSet
+        while not process_quit_event_isSet():
             self._block_until_ready() # no-op for realtime camera processing
             if buffer_pool.get_num_outstanding_buffers() > 100:
                 # Grab some frames (wait) until the number of
@@ -2069,7 +2069,7 @@ class AppState(object):
             globals['saved_bg_frame']=False
 
             # control flow events for threading model
-            globals['cam_quit_event'] = threading.Event()
+            globals['process_quit_event'] = threading.Event()
             globals['listen_thread_done'] = threading.Event()
             globals['take_background'] = threading.Event()
             globals['clear_background'] = threading.Event()
@@ -2139,7 +2139,7 @@ class AppState(object):
                                                 buffer_pool = buffer_pool,
                                                 debug_acquire = options.debug_acquire,
                                                 cam_id = self.all_cam_ids[cam_no],
-                                                quit_event = globals['cam_quit_event'],
+                                                quit_event = globals['process_quit_event'],
                                                 )
                 if benchmark: # should maybe be for any simulated camera in non-GUI mode?
                     image_source.register_buffer_pool( buffer_pool )
@@ -2434,7 +2434,7 @@ class AppState(object):
 
     def quit_function(self,exit_value):
         for globals in self.globals:
-            globals['cam_quit_event'].set()
+            globals['process_quit_event'].set()
 
         for thread in self.critical_threads:
             if thread.isAlive():
