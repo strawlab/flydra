@@ -385,7 +385,7 @@ class CoordinateProcessor(threading.Thread):
 
         self.queue_realtime_ros_packets = Queue.Queue()
         self.tp = RealtimeROSSenderThread(
-                        'flydra_mainbrain/super_packets',
+                        '~super_packets',
                         flydra_mainbrain_super_packet,
                         True,
                         self.queue_realtime_ros_packets,
@@ -395,7 +395,7 @@ class CoordinateProcessor(threading.Thread):
 
         self.queue_synchronze_ros_msgs = Queue.Queue()
         self.ts = RealtimeROSSenderThread(
-                        'flydra_mainbrain/synchronize',
+                        '~synchronize',
                         std_msgs.msg.String,
                         False,
                         self.queue_synchronze_ros_msgs,
@@ -404,7 +404,7 @@ class CoordinateProcessor(threading.Thread):
         self.ts.start()
 
         self.te = RealtimeROSSenderThread(
-                        'flydra_mainbrain/error',
+                        '~error',
                         FlydraError,
                         False,
                         self.main_brain.queue_error_ros_msgs,
@@ -1574,12 +1574,12 @@ class MainBrain(object):
 
         #setup ROS
         self.pub_data_file = rospy.Publisher(
-                                'flydra_mainbrain/data_file',
+                                '~data_file',
                                 std_msgs.msg.String,
                                 latch=True)
         self.pub_data_file.publish('')
         self.pub_calib_file = rospy.Publisher(
-                                'flydra_mainbrain/calibration',
+                                '~calibration',
                                 std_msgs.msg.String,
                                 latch=True)
         self.pub_calib_file.publish('')
