@@ -1577,10 +1577,12 @@ class MainBrain(object):
                                 'flydra_mainbrain/data_file',
                                 std_msgs.msg.String,
                                 latch=True)
+        self.pub_data_file.publish('')
         self.pub_calib_file = rospy.Publisher(
                                 'flydra_mainbrain/calibration',
                                 std_msgs.msg.String,
                                 latch=True)
+        self.pub_calib_file.publish('')
 
         self.sub_exp_uuid = rospy.Subscriber(
                                 'experiment_uuid',
@@ -2148,6 +2150,7 @@ class MainBrain(object):
             self.h5file.close()
             self.h5file = None
             self.h5filename = ''
+            self.pub_data_file.publish(self.h5filename)
             self.timestamp_modeler.block_activity = False
         else:
             LOG.info('saving already stopped, cannot stop again')
