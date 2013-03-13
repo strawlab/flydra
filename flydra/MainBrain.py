@@ -1474,6 +1474,7 @@ class MainBrain(object):
 
         self.hostname = socket.gethostbyname(server)
         LOG.info('running mainbrain at hostname "%s" (%s)' % (server,self.hostname))
+        LOG.info('ros node name "%s"' % rospy.get_name())
 
         self.load_config()
 
