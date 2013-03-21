@@ -297,8 +297,8 @@ class ExternalSurfaceCanvas(object):
 def test_benu():
     import tempfile
     tmp_fname = tempfile.mktemp('.png')
-    canv = Canvas(tmp_fname,1024,1024)
-    device_rect = (256,256,512,512)
+    canv = Canvas(tmp_fname,500,500)
+    device_rect = (100,100,300,300)
     ux0 = 0
     uy0 = 0
     uw = 50
