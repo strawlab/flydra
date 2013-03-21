@@ -321,17 +321,24 @@ def test_benu():
                               transform=transform):
         for pt in pts:
             canv.scatter( [pt[0]], [pt[1]] )
-        # draw boundary in user coords
-        canv.plot( [ux0,ux0,ux1,ux1,ux0],[uy0,uy1,uy1,uy0,uy0], color_rgba=(1,0,0,1))
+        # draw red boundary in user coords
+        canv.plot( [ux0,ux0,ux1,ux1,ux0],[uy0,uy1,uy1,uy0,uy0],
+                   color_rgba=(1,0,0,1))
 
     if 1:
         # draw boundary of above coord system
-        canv.plot( [device_rect[0],        device_rect[0],         device_rect[0]+device_rect[2], device_rect[0]+device_rect[2], device_rect[0],],
-                   [device_rect[1], device_rect[1]+device_rect[3], device_rect[1]+device_rect[3],       device_rect[1],          device_rect[1],],
-                   color_rgba=(0,0.5,0,1) )
+        canv.plot( [device_rect[0],device_rect[0],
+                    device_rect[0]+device_rect[2],
+                    device_rect[0]+device_rect[2],
+                    device_rect[0],],
+                   [device_rect[1],device_rect[1]+device_rect[3],
+                    device_rect[1]+device_rect[3],device_rect[1],
+                    device_rect[1],],
+                   color_rgba=(0,0.5,0,1) ) # dark green
 
-    # draw star
-    canv.poly( [0,50,100,0,100,0], [100,0,100,50,50,100], color_rgba=(0,0,1,1), edgewidth=5 )
+    # draw blue star
+    canv.poly( [0,50,100,0,100,0], [100,0,100,50,50,100], color_rgba=(0,0,1,1),
+               edgewidth=5 )
 
 
     for pt in pts:
