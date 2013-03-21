@@ -317,6 +317,8 @@ def test_benu():
              (1,3),
              (6,2),
              ]
+
+    # test the with statement using as
     with canv.set_user_coords(device_rect, user_rect,
                               transform=transform) as canv2:
         for pt in pts:
@@ -325,6 +327,13 @@ def test_benu():
         # draw red boundary in user coords
         canv2.plot( [ux0,ux0,ux1,ux1,ux0],[uy0,uy1,uy1,uy0,uy0],
                    color_rgba=(1,0,0,1))
+
+    # test the with statement (not using as)
+    with canv.set_user_coords(device_rect, user_rect,
+                              transform=transform):
+        for pt in pts:
+            canv.scatter( [pt[0]], [pt[1]], radius=0.5,
+                          color_rgba=(0.2,0.2,0.6,0.5) )
 
     if 1:
         # draw boundary of above coord system
