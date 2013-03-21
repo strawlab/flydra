@@ -282,7 +282,7 @@ class ExternalSurfaceCanvas(object):
             self._ctx.clip()
             self._ctx.new_path()
         try:
-            yield
+            yield self
         finally:
             if clip:
                 self._ctx.restore()
@@ -318,11 +318,12 @@ def test_benu():
              (6,2),
              ]
     with canv.set_user_coords(device_rect, user_rect,
-                              transform=transform):
+                              transform=transform) as canv2:
         for pt in pts:
-            canv.scatter( [pt[0]], [pt[1]] )
+            canv2.scatter( [pt[0]], [pt[1]] )
+
         # draw red boundary in user coords
-        canv.plot( [ux0,ux0,ux1,ux1,ux0],[uy0,uy1,uy1,uy0,uy0],
+        canv2.plot( [ux0,ux0,ux1,ux1,ux0],[uy0,uy1,uy1,uy0,uy0],
                    color_rgba=(1,0,0,1))
 
     if 1:
