@@ -9,7 +9,6 @@ from __future__ import division, with_statement
 import cairo
 import os, warnings
 import numpy as np
-import contextlib
 from benu_colormaps import cmaps
 
 D2R = np.pi/180.0
@@ -248,7 +247,6 @@ class ExternalSurfaceCanvas(object):
             raise ValueError("unknown transform '%s'"%transform)
         return matrix
 
-    @contextlib.contextmanager
     def set_user_coords(self, device_rect, user_rect,
                         clip=True,
                         transform=None ):
@@ -270,29 +268,41 @@ class ExternalSurfaceCanvas(object):
             how user_rect is transformed into device_rect. One of 'orig',
             'rot -90', 'rot 180', 'rot 90'.
         """
-        user_l, user_b, user_w, user_h = user_rect
-        orig_matrix = self._ctx.get_matrix()
-        matrix = self._get_matrix_for_transform(device_rect,user_rect,
-                                                transform=transform)
-        self._ctx.set_matrix(matrix)
-        if clip:
-            self._ctx.save()
-            self._ctx.rectangle(user_l,user_b,
-                          user_w,user_h)
-            self._ctx.clip()
-            self._ctx.new_path()
-        try:
-            yield self
-        finally:
-            if clip:
-                self._ctx.restore()
-            self._ctx.set_matrix(orig_matrix)
+        return ContextManager(self, device_rect, user_rect, clip, transform)
 
     def get_transformed_point(self,x,y,device_rect,user_rect,
                               transform=None):
         matrix = self._get_matrix_for_transform(device_rect,user_rect,
                                                 transform=transform)
         return matrix.transform_point(x,y)
+
+class ContextManager:
+    def __init__(self, canv, device_rect, user_rect, clip, transform):
+        self.canv = canv
+        self.device_rect = device_rect
+        self.user_rect = user_rect
+        self.clip = clip
+        self.transform = transform
+
+    def __enter__(self):
+        user_l, user_b, user_w, user_h = self.user_rect
+        new_matrix = self.canv._get_matrix_for_transform(self.device_rect,self.user_rect,
+                                                         transform=self.transform)
+
+        self.orig_matrix = self.canv._ctx.get_matrix()
+        self.canv._ctx.set_matrix(new_matrix)
+
+        if self.clip:
+            self.canv._ctx.save()
+            self.canv._ctx.rectangle(user_l,user_b,
+                                     user_w,user_h)
+            self.canv._ctx.clip()
+            self.canv._ctx.new_path()
+        return self.canv
+    def __exit__(self,exc_type, exc_value, traceback):
+        if self.clip:
+            self.canv._ctx.restore()
+        self.canv._ctx.set_matrix(self.orig_matrix)
 
 def test_benu():
     import tempfile
