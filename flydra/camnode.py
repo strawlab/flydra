@@ -2147,7 +2147,6 @@ class AppState(object):
                 controller = image_source.spawn_controller()
 
                 image_source.setDaemon(True)
-                image_source.start()
                 self._image_sources[cam_no] = image_source
                 self._image_controllers[cam_no]= controller
             else:
@@ -2425,6 +2424,13 @@ class AppState(object):
         self.n_raw_frames = [0 for i in range(num_cams)]
         self.last_measurement_time = [time_func() for i in range(num_cams)]
         self.last_return_info_check = [ 0.0 for i in range(num_cams)]
+
+        for cam_no in range(num_cams):
+            cam = self.all_cams[cam_no]
+            with cam.lock:
+                image_source = self._image_sources[cam_no]
+                if image_source is not None:
+                    image_source.start()
 
     def get_image_sources(self):
         return self._image_sources
