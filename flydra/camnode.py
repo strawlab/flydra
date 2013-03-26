@@ -2566,7 +2566,8 @@ class AppState(object):
             LOG.fatal(traceback.format_exc())
             self.quit_function(1)
 
-    def handle_commands(self, cam_no, cmds):
+    def handle_commands(self, cam_no, cmds_orig):
+        cmds = cmds_orig.copy() # copy dict to prevent potential threading issues
         if cmds:
             cam_processor = self.all_cam_processors[cam_no]
             saver = self.all_savers[cam_no]
