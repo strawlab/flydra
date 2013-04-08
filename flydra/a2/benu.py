@@ -13,6 +13,14 @@ from benu_colormaps import cmaps
 
 D2R = np.pi/180.0
 
+def scale(w, h, x, y, maximum=True):
+    # see http://code.activestate.com/recipes/577575-scale-rectangle-while-keeping-aspect-ratio/
+    nw = y * w // h
+    nh = x * h // w
+    if maximum ^ (nw >= x):
+        return nw or 1, y
+    return x, nh or 1
+
 def numpy2cairo(raw,cmap=None):
     raw=np.asarray(raw)
     if raw.dtype!=np.uint8:
