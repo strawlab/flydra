@@ -72,7 +72,7 @@ class ExternalSurfaceCanvas(object):
             self._ctx.paint()
             self._ctx.restore()
 
-    def imshow(self,im,l,b,filter='nearest',cmap=None):
+    def imshow(self,im,l,b,filter='best',cmap=None):
         """show image im at location (l,b)
 
         filter can be one of ['best', 'bilinear', 'fast', 'gaussian',
