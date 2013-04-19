@@ -64,10 +64,8 @@ def convert(infilename,
 
         try:
             table_kobs   = h5file_raw.root.ML_estimates # table to get framenumbers from
-            kobs_2d = h5file_raw.root.ML_estimates_2d_idxs # VLArray linking two
         except tables.exceptions.NoSuchNodeError, err:
             table_kobs   = h5file_raw.root.kalman_observations # table to get framenumbers from
-            kobs_2d = h5file_raw.root.kalman_observations_2d_idxs # VLArray linking two
 
         if file_time_data is None:
             h52d = h5file_raw
