@@ -1554,7 +1554,7 @@ class CachingAnalyzer:
                 except tables.exceptions.NoSuchNodeError, err:
                     orig_rows = kresults.root.kalman_observations.readCoordinates(
                         obs_idxs)
-                    
+
 
                 if len(orig_rows)==0:
                     raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
