@@ -605,6 +605,8 @@ def choose_orientations(rows, directions, frames_per_second=None,
     costprevnew = [0,0]
     costprev = [0,0]
 
+    orig_np_err_settings = np.seterr(invalid='ignore') # we expect some nans below
+
     # iterate over each time point
     for i in range(1,len(directions)):
         #ADS print 'i',i
@@ -701,6 +703,7 @@ def choose_orientations(rows, directions, frames_per_second=None,
         for i in idxs:
             print 'ultimate directions:'
             print 'frame',frames[i],directions[i]
+    np.seterr(**orig_np_err_settings)
     return directions
 
 class PreSmoothedDataCache(object):
