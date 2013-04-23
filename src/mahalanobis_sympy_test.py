@@ -22,7 +22,7 @@ S=sympy.Matrix(([S00,S01,S02],[S10,S11,S12],[S20,S21,S22]))
 pre=post.T
 
 maha3=(pre*S*post)[0,0]
-(a,b,c,d,e,f,s)=sympy.symbols('abcdefs')
+(a,b,c,d,e,f,s)=[sympy.Symbol(x) for x in ('abcdefs')]
 tmp = maha3
 tmp = tmp.subs(y0,'a+s*d')
 tmp = tmp.subs(y1,'b+s*e')
