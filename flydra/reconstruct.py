@@ -431,8 +431,6 @@ class SingleCameraCalibration:
         if len(res) != 2:
             raise ValueError('len(res) must be 2 (res = %s)'%repr(res))
 
-        self._scaled_cache = {}
-
         self.cam_id=cam_id
         self.Pmat=Pmat
         self.res=res
@@ -1553,13 +1551,7 @@ def align_calibration():
                        help="new camera locations alignment file path")
 
      parser.add_option("--align-reconstructor", type='string',
-                       help="new reconstructor with new camera locations")
-
-     parser.add_option("--scaled", action='store_true',
-                       default=False,
-                       help=('Set if the alignment should be '
-                             'applied to the scaled calibration'),
-                       )
+                       help="reconstructor with desired camera locations")
 
      parser.add_option("--output-xml", action='store_true',
                        default=False,
@@ -1588,10 +1580,7 @@ def align_calibration():
      if os.path.exists(dst):
          raise RuntimeError('destination %s exists'%dst)
 
-     if options.scaled:
-         srcR = origR.get_scaled()
-     else:
-         srcR = origR
+     srcR = origR
 
      except_cams = []
 
