@@ -478,7 +478,11 @@ def doit(output_h5_filename=None,
                             y0d_by_camn_by_frame[camn][framenumber]=row['y']
                             pt_idx_by_camn_by_frame[camn][framenumber]=camn_pt_no
 
-                assert start_idx is not None, "could not find valid start frame"
+                if start_idx is None:
+                    warnings.warn( "skipping obj_id %d: "
+                                   "could not find valid start frame"%obj_id )
+                    continue
+
                 obj_3d_rows = obj_3d_rows[start_idx:]
 
                 # now collect in a numpy array for all cam

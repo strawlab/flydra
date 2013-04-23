@@ -55,17 +55,17 @@ def convert(infilename,
     if stop_obj_id is None:
         stop_obj_id=numpy.inf
 
+    h5file_raw = tables.openFile(infilename,mode='r')
+    extra_vars = {}
+
     if save_timestamps:
         print 'STAGE 1: finding timestamps'
         print 'opening file %s...'%infilename
 
-        h5file_raw = tables.openFile(infilename,mode='r')
         try:
             table_kobs   = h5file_raw.root.ML_estimates # table to get framenumbers from
-            kobs_2d = h5file_raw.root.ML_estimates_2d_idxs # VLArray linking two
         except tables.exceptions.NoSuchNodeError, err:
             table_kobs   = h5file_raw.root.kalman_observations # table to get framenumbers from
-            kobs_2d = h5file_raw.root.kalman_observations_2d_idxs # VLArray linking two
 
         if file_time_data is None:
             h52d = h5file_raw
@@ -166,16 +166,25 @@ def convert(infilename,
 
             timestamp_time[obj_id_enum] = mainbrain_timestamp
 
-        h5file_raw.close()
+        extra_vars['obj_ids'] = unique_obj_ids
+        extra_vars['timestamps'] = timestamp_time
+
         if close_h52d:
             h52d.close()
 
-        extra_vars = {'obj_ids':unique_obj_ids,
-                      'timestamps':timestamp_time,
-                      }
         print 'STAGE 2: running Kalman smoothing operation'
-    else:
-        extra_vars = None
+
+    #also save the experiment data if present
+    try:
+        table_experiment = h5file_raw.root.experiment_info
+        try:
+            extra_vars['experiment_uuid'] = table_experiment.read(field='uuid')
+        except KeyError:
+            pass
+    except tables.exceptions.NoSuchNodeError:
+        pass
+
+    h5file_raw.close()
 
     ca = core_analysis.get_global_CachingAnalyzer()
     all_obj_ids, obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(infilename)
