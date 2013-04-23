@@ -217,7 +217,8 @@ class TestNonlinearDistortion:
     def tst_roundtrip(self, xys_orig_distorted, helper_args ):
         helper = reconstruct_utils.ReconstructHelper( *helper_args )
         for xy_orig_distorted in xys_orig_distorted:
-            xy_undistorted = helper.undistort( xy_orig_distorted[0], xy_orig_distorted[1] )
+            xy_undistorted = helper.undistort( xy_orig_distorted[0], xy_orig_distorted[1],
+                                               n_iterations=50 )
             xy_distorted = helper.distort( xy_undistorted[0], xy_undistorted[1] )
             assert numpy.allclose( xy_distorted, xy_orig_distorted )
 
@@ -233,7 +234,8 @@ class TestNonlinearDistortion:
     def tst_undistort_orig(self, distorted_xys, helper_args ):
         helper = reconstruct_utils.ReconstructHelper( *helper_args )
         for xy in distorted_xys:
-            undistorted_xy = helper.undistort(*xy)
+            undistorted_xy = helper.undistort(*xy,
+                                              n_iterations=50)
             redistorted_xy = helper.distort( *undistorted_xy )
 
             assert numpy.allclose( xy, redistorted_xy)
