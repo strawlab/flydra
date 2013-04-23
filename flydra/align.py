@@ -76,7 +76,8 @@ def estsimt(X1,X2):
 
 def build_xform(s,R,t):
     T = np.zeros((4,4),dtype=np.float)
-    T[:3,:3] = s*R
+    T[:3,:3] = R
+    T = s*T
     T[:3,3] = t
     T[3,3]=1.0
     return T

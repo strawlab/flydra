@@ -1317,10 +1317,8 @@ class Reconstructor:
 
     def find2d(self,cam_id,X,Lcoords=None,distorted=False):
         # see Hartley & Zisserman (2003) p. 449
-        if type(X)==tuple or type(X)==list:
-            rank1=True
-        else:
-            rank1 = len(X.shape)==1 # assuming array type
+        X = np.array(X)
+        rank1 = X.ndim==1
         if rank1:
             # make homogenous coords, rank2
             if len(X) == 3:
@@ -1328,7 +1326,8 @@ class Reconstructor:
             else:
                 X = X[:,nx.newaxis] # 4 rows, 1 column
         else:
-            X = nx.transpose(X) # 4 rows, N columns
+            assert X.shape[1]==4
+            X = X.T # 4 rows, N columns
         Pmat = self.Pmat[cam_id]
         x=nx.dot(Pmat,X)
 
