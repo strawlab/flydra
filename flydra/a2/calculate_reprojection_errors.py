@@ -113,8 +113,8 @@ def calculate_reprojection_errors(h5_filename=None,
 
     # save to disk
     store = pandas.HDFStore(output_h5_filename)
-    store['reprojection'] = reprojection
-    store['cameras'] = cam_df
+    store.append('reprojection', reprojection, data_columns=reprojection.columns)
+    store.append('cameras', cam_df)
     store.close()
 
 def main():
