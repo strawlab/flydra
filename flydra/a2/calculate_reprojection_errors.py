@@ -124,6 +124,8 @@ def main():
 
     parser.add_argument("h5", type=str,
                         help=".h5 file with data2d_distorted")
+    parser.add_argument('-k', "--kalman-file",
+                        help="file with 3D data (if different that file with data2d_distorted)")
     parser.add_argument("--output-h5", type=str,
                         help="filename for output .h5 file with data2d_distorted")
     parser.add_argument("--start", type=int, default=None,
@@ -133,11 +135,14 @@ def main():
 
     args = parser.parse_args()
 
+    if args.kalman_file is None:
+        args.kalman_file = args.h5
+
     if args.output_h5 is None:
-        args.output_h5 = args.h5 + '.repro_errors.h5'
+        args.output_h5 = args.kalman_file + '.repro_errors.h5'
 
     calculate_reprojection_errors(h5_filename=args.h5,
-                                  kalman_filename=args.h5,
+                                  kalman_filename=args.kalman_file,
                                   output_h5_filename=args.output_h5,
                                   start=args.start,
                                   stop=args.stop,
