@@ -1511,13 +1511,15 @@ def test():
 
 def align_calibration():
      usage = """%prog [options]
+     Creates a new reconstructor from an existing reconstructor and a new
+     description of camera centres (such as another reconstructor, a raw
+     alignment file, or an explicit list of camera centres).
 
-     Requires an alignment file. This can either be a raw file, or the
-     list of camera locations.
-
-     A raw alignment file (specified with --align-raw) should have
-     contents like the following, where s is scale, R is a 3x3
-     rotation matrix, and t is a 3 vector specifying translation::
+     Raw alignment files supported include json (--align-json)
+     and python syntax (--align-raw, the file is exec'd).
+     The file should have contents like the following,
+     where s is scale, R is a 3x3 rotation matrix, and t is a 3 vector
+     specifying translation::
 
        s=0.89999324180965479
        R=[[0.99793608705515335, 0.041419147873301365, -0.04907158385969549],
@@ -1550,6 +1552,9 @@ def align_calibration():
      parser.add_option("--align-cams", type='string',
                        help="new camera locations alignment file path")
 
+     parser.add_option("--align-reconstructor", type='string',
+                       help="new reconstructor with new camera locations")
+
      parser.add_option("--scaled", action='store_true',
                        default=False,
                        help=('Set if the alignment should be '
@@ -1566,9 +1571,8 @@ def align_calibration():
          raise ValueError('--orig-reconstructor must be specified')
 
      if options.align_raw is None and options.align_cams is None and \
-             options.align_json is None:
-         raise ValueError(
-             'either --align-raw or --align-cams --align-json must be specified')
+             options.align_json is None and options.align_reconstructor is None:
+         raise ValueError('an --align-XXX method must be specified')
 
      src=options.orig_reconstructor
      origR = Reconstructor(cal_source=src)
@@ -1589,6 +1593,8 @@ def align_calibration():
      else:
          srcR = origR
 
+     except_cams = []
+
      import flydra.align as align
      if options.align_raw is not None:
          mylocals = {}
@@ -1606,8 +1612,19 @@ def align_calibration():
          new_cam_centers = load_ascii_matrix(options.align_cams).T
          print 'new_cam_centers',new_cam_centers.T
          s,R,t = align.estsimt(orig_cam_centers,new_cam_centers)
-     else:
-         assert options.align_json is not None
+     elif options.align_reconstructor is not None:
+         cam_ids = srcR.get_cam_ids()
+         print cam_ids
+         ccs = [srcR.get_camera_center(cam_id)[:,0] for cam_id in cam_ids if cam_id not in except_cams]
+         print 'ccs',ccs
+         orig_cam_centers = np.array(ccs).T
+         print 'orig_cam_centers',orig_cam_centers.T
+         tmpR = Reconstructor(cal_source=options.align_reconstructor)
+         nccs = [tmpR.get_camera_center(cam_id)[:,0] for cam_id in cam_ids if cam_id not in except_cams]
+         new_cam_centers = np.array(nccs).T
+         print 'new_cam_centers',new_cam_centers.T
+         s,R,t = align.estsimt(orig_cam_centers,new_cam_centers)
+     elif options.align_json is not None:
          import json
          with open(options.align_json,mode='r') as fd:
              buf = fd.read()
@@ -1615,6 +1632,8 @@ def align_calibration():
          s = mylocals['s']
          R = np.array(mylocals['R'])
          t = np.array(mylocals['t'])
+     else:
+         raise Exception("Alignment not supported")
 
      print 's',s
      print 'R',R
@@ -1627,6 +1646,8 @@ def align_calibration():
          alignedR.save_to_xml_filename(dst)
      else:
          alignedR.save_to_files_in_new_directory(dst)
+
+     print "wrote", dst
 
 if __name__=='__main__':
     test()
