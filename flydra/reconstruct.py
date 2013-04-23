@@ -729,7 +729,14 @@ def SingleCameraCalibration_from_xml(elem, helper=None):
     res = numpy.array(numpy.mat(elem.find("resolution").text))[0,:]
     if not helper:
         helper_elem = elem.find("non_linear_parameters")
-        helper = reconstruct_utils.ReconstructHelper_from_xml(helper_elem)
+        if helper_elem is not None:
+            helper = reconstruct_utils.ReconstructHelper_from_xml(helper_elem)
+        else:
+            # make with no non-linear stuff (i.e. make linear)
+            helper = reconstruct_utils.ReconstructHelper(1,1, # focal length
+                                                         0,0, # image center
+                                                         0,0, # radial distortion
+                                                         0,0) # tangential distortion
 
     return SingleCameraCalibration(cam_id=cam_id,
                                    Pmat=pmat,
