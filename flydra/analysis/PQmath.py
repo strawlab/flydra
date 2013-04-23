@@ -168,39 +168,39 @@ convert orientation to euler angles (in radians)
 
 results are yaw, pitch (no roll is provided)
 
->>> orientation_to_euler( (1, 0, 0) )
+>>> print orientation_to_euler( (1, 0, 0) )
 (0.0, 0.0)
 
->>> orientation_to_euler( (0, 1, 0) )
+>>> print orientation_to_euler( (0, 1, 0) )
 (1.5707963267948966, 0.0)
 
->>> orientation_to_euler( (-1, 0, 0) )
-(3.1415926535897931, 0.0)
+>>> print orientation_to_euler( (-1, 0, 0) )
+(3.141592653589793, 0.0)
 
->>> orientation_to_euler( (0, -1, 0) )
+>>> print orientation_to_euler( (0, -1, 0) )
 (-1.5707963267948966, 0.0)
 
->>> orientation_to_euler( (0, 0, 1) )
+>>> print orientation_to_euler( (0, 0, 1) )
 (0.0, 1.5707963267948966)
 
->>> orientation_to_euler( (0, 0, -1) )
+>>> print orientation_to_euler( (0, 0, -1) )
 (0.0, -1.5707963267948966)
 
->>> orientation_to_euler( (0,0,0) ) # This is not a unit vector.
+>>> print orientation_to_euler( (0,0,0) ) # This is not a unit vector.
 Traceback (most recent call last):
     ...
 AssertionError
 
 >>> r1=math.sqrt(2)/2
 
->>> math.pi/4
-0.78539816339744828
+>>> print math.pi/4
+0.785398163397
 
->>> orientation_to_euler( (r1,0,r1) )
-(0.0, 0.78539816339744828)
+>>> print orientation_to_euler( (r1,0,r1) )
+(0.0, 0.7853981633974483)
 
->>> orientation_to_euler( (r1,r1,0) )
-(0.78539816339744828, 0.0)
+>>> print orientation_to_euler( (r1,r1,0) )
+(0.7853981633974483, 0.0)
 
 """
 
