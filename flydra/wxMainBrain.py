@@ -1027,7 +1027,7 @@ class wxMainBrainApp(wx.App):
             dlg.Destroy()
             self.pass_all_keystrokes = False
         if doit:
-            self.main_brain.load_calibration(calib_dir)
+            self.main_brain.load_calibration(str(calib_dir))
 
     def OnClearCal(self,event):
         self.main_brain.clear_calibration()
