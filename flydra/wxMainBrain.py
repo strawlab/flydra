@@ -44,8 +44,9 @@ if SCROLLED:
 import motmot.wxvalidatedtext.wxvalidatedtext as wxvt
 
 import roslib
-roslib.load_manifest('rospy')
+roslib.load_manifest('ros_flydra')
 import rospy
+import ros_flydra.msg
 
  # trigger extraction
 RESFILE = pkg_resources.resource_filename(__name__,"flydra_server.xrc")
@@ -129,6 +130,8 @@ class wxMainBrainApp(wx.App):
                 import motmot.wxglvideo.simple_overlay as wxglvideo
             else:
                 import motmot.wxvideo.wxvideo as wxglvideo
+
+        self.pub_best_pose = rospy.Publisher("~best_pose", ros_flydra.msg.BestPose)
 
         self.pass_all_keystrokes = False
         wx.InitAllImageHandlers()
@@ -1352,6 +1355,12 @@ class wxMainBrainApp(wx.App):
             xrc.XRCCTRL(self.status_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
             xrc.XRCCTRL(self.status_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
             xrc.XRCCTRL(self.status_panel,'err').SetValue('% 8.1f'%min_mean_dist)
+            best = ros_flydra.msg.BestPose()
+            best.pose.position.x = data3d[0]
+            best.pose.position.y = data3d[1]
+            best.pose.position.z = data3d[2]
+            best.error = min_mean_dist
+            self.pub_best_pose.publish(best)
             if min_mean_dist <= 10.0:
                 if self.detect_sound is not None and self.status_traits.audio_notification.enabled:
                     now = time.time()
