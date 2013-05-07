@@ -2011,7 +2011,7 @@ class MainBrain(object):
         self.coord_processor.set_reconstructor(self.reconstructor)
 
         for cam_id in cam_ids:
-            self.remote_api.external_set_cal( cam_id, None, None, None, None )
+            self.remote_api.external_set_cal( cam_id, None, None, None )
 
         self.save_config()
 
