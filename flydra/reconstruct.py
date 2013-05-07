@@ -1552,8 +1552,8 @@ def align_calibration():
      parser.add_option("--align-reconstructor", type='string',
                        help="reconstructor with desired camera locations")
 
-     parser.add_option("--output-xml", action='store_true',
-                       default=False,
+     parser.add_option("--output-xml", action='store_true', default=False,
+                       help="save the new reconstructor in xml format"
                        )
 
      (options, args) = parser.parse_args()
