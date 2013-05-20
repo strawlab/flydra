@@ -1252,7 +1252,7 @@ class CoordinateProcessor(threading.Thread):
                                         if data_packet is not None:
                                             self.realtime_kalman_data_queue.put(data_packet)
                                         if have_ROS:
-                                        results = [tro.get_most_recent_data() \
+                                            results = [tro.get_most_recent_data() \
                                                         for tro in self.tracker.live_tracked_objects]
                                             ros_objects = []
                                             for result in results:
