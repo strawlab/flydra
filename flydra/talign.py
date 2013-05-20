@@ -1,6 +1,6 @@
 from __future__ import division
-import enthought.traits.api as traits
-from enthought.traits.ui.api import View, Item, Group
+import traits.api as traits
+from traitsui.api import View, Item, Group
 import cgtypes # import cgkit 1.x
 import numpy as np
 
@@ -95,3 +95,34 @@ class Alignment(traits.HasTraits):
         T = np.dot(flip,T)
         #T = np.dot(T,flip)
         return T
+
+    def as_dict(self):
+        qx = cgtypes.quat().fromAngleAxis( self.r_x*D2R, cgtypes.vec3(1,0,0))
+        qy = cgtypes.quat().fromAngleAxis( self.r_y*D2R, cgtypes.vec3(0,1,0))
+        qz = cgtypes.quat().fromAngleAxis( self.r_z*D2R, cgtypes.vec3(0,0,1))
+        Rx = cgmat2np(qx.toMat3())
+        Ry = cgmat2np(qy.toMat3())
+        Rz = cgmat2np(qz.toMat3())
+        _R = np.dot(Rx, np.dot(Ry,Rz))
+
+        # convert bool to -1 or 1
+        fx = fy = fz = 1
+        if self.flip_x: fx = -1
+        if self.flip_y: fy = -1
+        if self.flip_z: fz = -1
+
+        flip = np.array([[fx, 0, 0],
+                         [ 0,fy, 0],
+                         [ 0, 0,fz]], dtype=np.float)
+        _R = np.dot(flip,_R)
+
+        s = float(self.s)
+        t = map( float, [self.tx, self.ty, self.tz] )
+        R = []
+        for row in _R:
+            R.append( map( float, [i for i in row] ) )
+
+        result = {'s':s,
+                  't':t,
+                  'R':R}
+        return result

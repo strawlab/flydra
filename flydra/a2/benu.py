@@ -56,25 +56,9 @@ def numpy2cairo(raw,cmap=None):
         raw.shape[1]*4)#, raw.shape[0]*3)
     return in_surface
 
-class Canvas(object):
-    """A drawing surface which handles coordinate transforms"""
-    def __init__(self,fname,width,height,color_rgba=None):
-        self._output_ext = os.path.splitext(fname)[1].lower()
-        if self._output_ext == '.pdf':
-            output_surface = cairo.PDFSurface(fname,
-                                              width, height)
-        elif self._output_ext == '.svg':
-            output_surface = cairo.SVGSurface(fname,
-                                              width, height)
-        elif self._output_ext == '.png':
-            output_surface = cairo.ImageSurface(
-                cairo.FORMAT_ARGB32,width, height)
-        else:
-            raise ValueError('unknown output extension %s'%self._output_ext)
-        self._surf = output_surface
-        self._ctx = cairo.Context(self._surf)
-        self._fname = fname
-
+class ExternalSurfaceCanvas(object):
+    def __init__(self,context,color_rgba=None):
+        self._ctx = context
         if color_rgba is not None:
             self._ctx.save()
             self._ctx.set_source_rgba(*color_rgba)
@@ -108,10 +92,14 @@ class Canvas(object):
             np.any( np.isnan( yarr ) )):
             raise ValueError('cannot plot data with nans')
 
-        if color_rgba is None:
-            color_rgba = (1,1,1,1)
         if len(xarr)==1:
             warnings.warn('benu plot() currently only plots line segments')
+        assert len(xarr)==len(yarr)
+        if len(xarr)==0:
+            return
+
+        if color_rgba is None:
+            color_rgba = (1,1,1,1)
         ctx = self._ctx # shorthand
 
         if linewidth is not None:
@@ -173,23 +161,6 @@ class Canvas(object):
 
         if markeredgewidth is not None:
             ctx.set_line_width(orig_linewidth)
-
-    def save(self):
-        """save output to file"""
-        if self._output_ext == '.png':
-            self._surf.write_to_png(self._fname)
-        else:
-            self._ctx.show_page()
-            self._surf.finish()
-
-    def as_numpy(self):
-        """save output to file"""
-        assert self._output_ext == '.png'
-        buf = self._surf.get_data()
-
-        a = np.frombuffer(buf, np.uint8)
-        a.shape = (self._surf.get_width(), self._surf.get_height(), 4)
-        return a
 
     def text(self,text,x,y,color_rgba=None,font_size=10,shadow_offset=None):
         """draw text"""
@@ -373,6 +344,42 @@ def test_benu():
     ## with c.set_user_coords(1,2):
     ##     pass
 
+class Canvas(ExternalSurfaceCanvas):
+    """A drawing surface which handles coordinate transforms"""
+    def __init__(self,fname,width,height,**kwargs):
+        self._output_ext = os.path.splitext(fname)[1].lower()
+        if self._output_ext == '.pdf':
+            output_surface = cairo.PDFSurface(fname,
+                                              width, height)
+        elif self._output_ext == '.svg':
+            output_surface = cairo.SVGSurface(fname,
+                                              width, height)
+        elif self._output_ext == '.png':
+            output_surface = cairo.ImageSurface(
+                cairo.FORMAT_ARGB32,width, height)
+        else:
+            raise ValueError('unknown output extension %s'%self._output_ext)
+        self._surf = output_surface
+        context = cairo.Context(self._surf)
+        self._fname = fname
+        super(Canvas,self).__init__(context,**kwargs)
+
+    def save(self):
+        """save output to file"""
+        if self._output_ext == '.png':
+            self._surf.write_to_png(self._fname)
+        else:
+            self._ctx.show_page()
+            self._surf.finish()
+
+    def as_numpy(self):
+        """save output to file"""
+        assert self._output_ext == '.png'
+        buf = self._surf.get_data()
+
+        a = np.frombuffer(buf, np.uint8)
+        a.shape = (self._surf.get_width(), self._surf.get_height(), 4)
+        return a
 
 if __name__=='__main__':
     test_benu()

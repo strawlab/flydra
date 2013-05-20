@@ -4,23 +4,26 @@
 
 from os.path import join, dirname
 import warnings
-from enthought.tvtk.api import tvtk
-from enthought.pyface.api import GUI
+from tvtk.api import tvtk
+from pyface.api import GUI
 # The core Engine.
-from enthought.mayavi.core.engine import Engine
-from enthought.mayavi.core.ui.engine_view import EngineView
+from mayavi.core.engine import Engine
+from mayavi.core.ui.engine_view import EngineView
 # Usual MayaVi imports
-from enthought.mayavi.sources.api import VTKXMLFileReader, VTKDataSource
-from enthought.mayavi.modules.api import Outline, ScalarCutPlane, Streamline
+from mayavi.sources.api import VTKXMLFileReader, VTKDataSource
+from mayavi.modules.api import Outline, ScalarCutPlane, Streamline
 import numpy
 import numpy as np
+import tables
+import sys
+import json
 
-import enthought.mayavi.tools.sources as sources
-from enthought.mayavi.sources.array_source import ArraySource
-from enthought.mayavi.modules.vectors import Vectors
+import mayavi.tools.sources as sources
+from mayavi.sources.array_source import ArraySource
+from mayavi.modules.vectors import Vectors
 
-import enthought.traits.api as traits
-from enthought.traits.ui.api import View, Item, Group, Handler, HGroup, \
+import traits.api as traits
+from traitsui.api import View, Item, Group, Handler, HGroup, \
      VGroup, RangeEditor
 
 import argparse
@@ -33,10 +36,18 @@ import flydra.analysis.result_utils as result_utils
 
 import cgtypes # import cgkit 1.x
 
-from enthought.pyface.api import Widget, Window
-from enthought.tvtk.pyface.api import Scene, DecoratedScene
-from enthought.pyface.api import SplitApplicationWindow
-from enthought.pyface.api import FileDialog, OK
+from pyface.api import Widget, Window
+from tvtk.pyface.api import Scene, DecoratedScene
+from pyface.api import SplitApplicationWindow
+from pyface.api import FileDialog, OK
+
+try:
+    import pcl
+    have_pcl = True
+    pcl_import_error = None
+except ImportError, err:
+    have_pcl = False
+    pcl_import_error = err
 
 def hom2vtk(arr):
     """convert 3D homogeneous coords to VTK"""
@@ -44,11 +55,13 @@ def hom2vtk(arr):
 
 class CalibrationAlignmentWindow(Widget):
     params = traits.Instance( talign.Alignment )
+    save_align_json = traits.Button(label='Save alignment data as .json file')
     save_new_cal = traits.Button(label='Save new calibration as .xml file')
     save_new_cal_dir = traits.Button(label='Save new calibration as directory')
 
     traits_view = View( Group( ( Item( 'params', style='custom',
                                        show_label=False),
+                                 Item( 'save_align_json', show_label = False ),
                                  Item( 'save_new_cal', show_label = False ),
                                  Item( 'save_new_cal_dir', show_label = False ),
                                  )),
@@ -105,6 +118,17 @@ class CalibrationAlignmentWindow(Widget):
         scaled = self.reconstructor
         alignedR = scaled.get_aligned_copy(M)
         return alignedR
+
+    def _save_align_json_fired(self):
+        wildcard = 'JSON files (*.json)|*.json|' + FileDialog.WILDCARD_ALL
+        dialog = FileDialog(#parent=self.window.control,
+                            title='Save alignment as .json file',
+                            action='save as', wildcard=wildcard
+                            )
+        if dialog.open() == OK:
+            buf = json.dumps(self.params.as_dict())
+            with open(dialog.path,mode='w') as fd:
+                fd.write(buf)
 
     def _save_new_cal_fired(self):
         wildcard = 'XML files (*.xml)|*.xml|' + FileDialog.WILDCARD_ALL
@@ -169,7 +193,9 @@ class IVTKWithCalGUI(SplitApplicationWindow):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('h5_filename')
+    parser.add_argument('filename',
+                        help='name of flydra .hdf5 or .pcd (libpcl) file',
+                        )
 
     parser.add_argument("--stim-xml",
                         type=str,
@@ -184,37 +210,74 @@ def main():
                       metavar="RADIUS")
 
     parser.add_argument("--obj-only", type=str)
-    
+
     parser.add_argument("--obj-filelist", type=str,
                       help="use object ids from list in text file",
                       )
 
+    parser.add_argument(
+        "-r", "--reconstructor", dest="reconstructor_path",
+        type=str,
+        help=("calibration/reconstructor path (if not specified, "
+              "defaults to FILE)"))
+
     args = parser.parse_args()
     options = args # optparse OptionParser backwards compatibility
 
-    h5_filename=args.h5_filename
+    # Is the input an h5 file?
+    if tables.isHDF5File(args.filename):
+        h5_filename=args.filename
+    else:
+        h5_filename=None
+
+    # If not, is it a .pcd (point cloud) file?
+    if h5_filename is None:
+        if not have_pcl:
+            print >> sys.stderr, "PCL required to try non-HDF5 file as .PCD file"
+            raise pcl_import_error
+        pcd = pcl.PointCloud()
+        pcd.from_file( args.filename )
+        use_obj_ids = [0]
+    else:
+        pcd = None
 
     if options.obj_only is not None:
         obj_only = core_analysis.parse_seq(options.obj_only)
     else:
         obj_only = None
 
-    ca = core_analysis.get_global_CachingAnalyzer()
-    obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(
-        h5_filename)
-    R = reconstruct.Reconstructor(data_file).get_scaled()
-    fps = result_utils.get_fps( data_file, fail_on_error=False )
+    reconstructor_path = args.reconstructor_path
 
-    if fps is None:
-        fps = 100.0
-        warnings.warn('Setting fps to default value of %f'%fps)
+    if h5_filename is not None:
+        ca = core_analysis.get_global_CachingAnalyzer()
+        obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(
+            h5_filename)
+        if reconstructor_path is None:
+            reconstructor_path = data_file
+    else:
+        if reconstructor_path is None:
+            raise RuntimeError('must specify reconstructor from CLI if not using .h5 files')
+
+    R = reconstruct.Reconstructor(reconstructor_path).get_scaled()
+
+    if h5_filename is not None:
+        fps = result_utils.get_fps( data_file, fail_on_error=False )
+
+        if fps is None:
+            fps = 100.0
+            warnings.warn('Setting fps to default value of %f'%fps)
+    else:
+        fps = 1.0
 
     if options.stim_xml is None:
         raise ValueError(
             'stim_xml must be specified (how else will you align the data?')
 
     if options.stim_xml is not None:
-        file_timestamp = data_file.filename[4:19]
+        if h5_filename is not None:
+            file_timestamp = data_file.filename[4:19]
+        else:
+            file_timestamp = None
         stim_xml = xml_stimulus.xml_stimulus_from_filename(
             options.stim_xml,
             timestamp_string=file_timestamp,
@@ -223,9 +286,9 @@ def main():
             fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
         except xml_stimulus.WrongXMLTypeError:
             pass
-            
-            
-            
+
+
+
         else:
             include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp(
                 timestamp_string=file_timestamp )
@@ -244,31 +307,36 @@ def main():
     y = []
     z = []
     speed = []
-    
+
     if options.obj_filelist is not None:
         obj_filelist=options.obj_filelist
     else:
         obj_filelist=None
-    
+
     if obj_filelist is not None:
         obj_only = 1
-    
+
     if obj_only is not None:
         if obj_filelist is not None:
             data = np.loadtxt(obj_filelist,delimiter=',')
-            obj_only = np.array(data[:,0], dtype='int') 
+            obj_only = np.array(data[:,0], dtype='int')
             print obj_only
-    
+
         use_obj_ids = numpy.array(obj_only)
 
     for obj_id_enum,obj_id in enumerate(use_obj_ids):
-        rows = ca.load_data( obj_id, data_file,
-                                use_kalman_smoothing=False,
-                                #dynamic_model_name = dynamic_model_name,
-                                #frames_per_second=fps,
-                                #up_dir=up_dir,
-                                )
-        verts = numpy.array( [rows['x'], rows['y'], rows['z']] ).T
+        if h5_filename is not None:
+            rows = ca.load_data( obj_id, data_file,
+                                    use_kalman_smoothing=False,
+                                    #dynamic_model_name = dynamic_model_name,
+                                    #frames_per_second=fps,
+                                    #up_dir=up_dir,
+                                    )
+            verts = numpy.array( [rows['x'], rows['y'], rows['z']] ).T
+        else:
+            assert obj_id==0
+            verts = pcd.to_array()
+            print 'verts.shape',verts.shape
         if len(verts)>=3:
             verts_central_diff = verts[2:,:] - verts[:-2,:]
             dt = 1.0/fps
@@ -279,11 +347,11 @@ def main():
         else:
             speeds = numpy.zeros( (verts.shape[0],) )
 
-        if len(rows['x']) != len(speeds):
+        if verts.shape[0] != len(speeds):
             raise ValueError('mismatch length of x data and speeds')
-        x.append( rows['x'] )
-        y.append( rows['y'] )
-        z.append( rows['z'] )
+        x.append( verts[:,0] )
+        y.append( verts[:,1] )
+        z.append( verts[:,2] )
         speed.append(speeds)
 
     if 0:
@@ -302,7 +370,8 @@ def main():
                     z.append( [vi[2]] )
                     speed.append( [100.0] )
 
-    data_file.close()
+    if h5_filename:
+        data_file.close()
     x = np.concatenate(x)
     y = np.concatenate(y)
     z = np.concatenate(z)
@@ -321,7 +390,7 @@ def main():
     e.start()
 
     # Create a new scene.
-    from enthought.tvtk.tools import ivtk
+    from tvtk.tools import ivtk
     #viewer = ivtk.IVTK(size=(600,600))
     viewer = IVTKWithCalGUI(size=(800,600))
     viewer.open()

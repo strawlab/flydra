@@ -1,7 +1,7 @@
 from __future__ import division
 import math
 import numpy
-from enthought.tvtk.api import tvtk
+from tvtk.api import tvtk
 import conditions
 import stimulus_positions
 import flydra.geom as geom

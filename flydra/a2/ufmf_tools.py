@@ -161,7 +161,7 @@ def iterate_frames(h5_filename,
                 if not len(this_camn_tss):
                     # no h5 data for this cam_id at this frame
                     continue
-                this_camn_ts=np.unique1d(this_camn_tss)
+                this_camn_ts=np.unique(this_camn_tss)
                 assert len(this_camn_ts)==1
                 this_camn_ts = this_camn_ts[0]
 

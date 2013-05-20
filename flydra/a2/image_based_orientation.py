@@ -293,8 +293,14 @@ def doit(h5_filename=None,
     ca = core_analysis.get_global_CachingAnalyzer()
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(
         kalman_filename)
-    ML_estimates_2d_idxs = data_file.root.ML_estimates_2d_idxs[:]
-
+    try:
+        ML_estimates_2d_idxs = data_file.root.ML_estimates_2d_idxs[:]
+    except tables.exceptions.NoSuchNodeError, err1:
+        # backwards compatibility
+        try:
+            ML_estimates_2d_idxs = data_file.root.kalman_observations_2d_idxs[:]
+        except tables.exceptions.NoSuchNodeError, err2:
+            raise err1
 
     if os.path.exists( output_h5_filename ):
         raise RuntimeError(
@@ -670,6 +676,11 @@ def doit(h5_filename=None,
                             xplt=np.array([lowerleft[0]-5,
                                            lowerleft[0]+av_im_show.shape[1]+5])
                             yplt=slope*xplt+yintercept
+                            if 1:
+                                # only send non-nan values to plot
+                                plt_good = ~np.isnan(xplt) & ~np.isnan(yplt)
+                                xplt = xplt[ plt_good ]
+                                yplt = yplt[ plt_good ]
 
                             top_row_width = scale*imw*n_ims + (1+n_ims)*margin
                             SHOW_STACK=True

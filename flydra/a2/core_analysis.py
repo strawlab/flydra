@@ -301,7 +301,7 @@ def kalman_smooth(orig_rows,
     obs = numpy.vstack(( x,y,z )).T
 
     if dynamic_model_name is None:
-        dynamic_model_name = 'fly dynamics, high precision calibration, units: mm'
+        dynamic_model_name = flydra.kalman.dynamic_models.DEFAULT_MODEL
         warnings.warn('No Kalman model specified. Using "%s" for Kalman smoothing'%(dynamic_model_name,))
 
     model = flydra.kalman.dynamic_models.get_kalman_model(name=dynamic_model_name,dt=(1.0/frames_per_second))
@@ -1388,7 +1388,15 @@ class CachingAnalyzer:
                 idxs.append( numpy.nonzero(obs_obj_ids == oi)[0] )
             idxs = numpy.concatenate( idxs )
 
-        rows = kresults.root.ML_estimates.readCoordinates(idxs)
+        try:
+            rows = kresults.root.ML_estimates.readCoordinates(idxs)
+        except tables.exceptions.NoSuchNodeError, err1:
+            #backwards compatibility
+            try:
+                rows = kresults.root.kalman_observations.readCoordinates(idxs)
+            except tables.exceptions.NoSuchNodeError, err2:
+                raise err1
+
         if not len(rows):
             raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
 
@@ -1537,9 +1545,13 @@ class CachingAnalyzer:
 
                 # Kalman observations are already always in meters, no
                 # scale factor needed
-
-                orig_rows = kresults.root.ML_estimates.readCoordinates(
-                    obs_idxs)
+                try:
+                    orig_rows = kresults.root.ML_estimates.readCoordinates(
+                        obs_idxs)
+                except tables.exceptions.NoSuchNodeError, err:
+                    orig_rows = kresults.root.kalman_observations.readCoordinates(
+                        obs_idxs)
+                    
 
                 if len(orig_rows)==0:
                     raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
@@ -2015,6 +2027,8 @@ class CachingAnalyzer:
         obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
         if hasattr(kresults.root,'ML_estimates'):
             obs_obj_ids = kresults.root.ML_estimates.read(field='obj_id')
+        elif hasattr(kresults.root,'kalman_observations'):
+            obs_obj_ids = kresults.root.kalman_observations.read(field='obj_id')
         else:
             obs_obj_ids = []
         unique_obj_ids = numpy.unique(obs_obj_ids)
@@ -2129,7 +2143,7 @@ class TestCoreAnalysis:
             self.data_files.append( data_file )
             self.is_mat_files.append( is_mat_file )
             fps = 100.0
-            kalman_model = 'fly dynamics, high precision calibration, units: mm'
+            kalman_model = flydra.kalman.dynamic_models.DEFAULT_MODEL
             self.fps.append( fps )
             self.dynamic_model.append(kalman_model)
 
@@ -2187,8 +2201,7 @@ class TestCoreAnalysis:
                         method='position based',
                         method_params={'downsample':1,
                                        },
-                        dynamic_model_name=
-                        'fly dynamics, high precision calibration, units: mm',
+                        dynamic_model_name=flydra.kalman.dynamic_models.DEFAULT_MODEL,
                         )
                 except NoObjectIDError:
                     pass
@@ -2219,14 +2232,22 @@ class TestCoreAnalysis:
                 continue
             for obj_id in test_obj_ids:
                 ######## 1. load observations
-                obs_obj_ids = data_file.root.ML_estimates.read(
-                    field='obj_id')
+                try:
+                    obs_obj_ids = data_file.root.ML_estimates.read(
+                        field='obj_id')
+                except tables.exceptions.NoSuchNodeError, err:
+                    obs_obj_ids = data_file.root.kalman_observations.read(
+                        field='obj_id')
                 obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
 
                 # Kalman observations are already always in meters, no
                 # scale factor needed
-                orig_rows = data_file.root.ML_estimates.readCoordinates(
-                    obs_idxs)
+                try:
+                    orig_rows = data_file.root.ML_estimates.readCoordinates(
+                        obs_idxs)
+                except tables.exceptions.NoSuchNodeError, err:
+                    orig_rows = data_file.root.kalman_observations.readCoordinates(
+                        obs_idxs)
 
                 ######## 2. perform Kalman smoothing
                 rows = observations2smoothed(obj_id,orig_rows,

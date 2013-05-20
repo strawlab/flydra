@@ -8,15 +8,35 @@ import sys, os, time
 import flydra.a2.core_analysis as core_analysis
 from optparse import OptionParser
 import flydra.analysis.flydra_analysis_convert_to_mat
+import flydra.kalman.dynamic_models as dynamic_models
 import tables
 import flydra.analysis.result_utils as result_utils
 import flydra.a2.utils as utils
 from flydra.a2.orientation_ekf_fitter import compute_ori_quality
+import progressbar
 import warnings
 
-def cam_id2hostname(cam_id):
-    hostname = '_'.join(   cam_id.split('_')[:-1] )
+def cam_id2hostname(cam_id, h52d):
+    ci = h52d.root.cam_info[:]
+    if 'hostname' in ci.dtype.names:
+        # new style
+        cond = ci['cam_id']==cam_id
+        rows = ci[cond]
+        assert len(rows)==1
+        hostname = rows['hostname'][0]
+    else:
+        # old style
+        hostname = '_'.join(   cam_id.split('_')[:-1] )
     return hostname
+
+class StringWidget(progressbar.Widget):
+    def set_string(self,ts):
+        self.ts = ts
+    def update(self, pbar):
+        if hasattr(self,'ts'):
+            return self.ts
+        else:
+            return ''
 
 def convert(infilename,
             outfilename,
@@ -40,8 +60,12 @@ def convert(infilename,
         print 'opening file %s...'%infilename
 
         h5file_raw = tables.openFile(infilename,mode='r')
-        table_kobs   = h5file_raw.root.ML_estimates # table to get framenumbers from
-        kobs_2d = h5file_raw.root.ML_estimates_2d_idxs # VLArray linking two
+        try:
+            table_kobs   = h5file_raw.root.ML_estimates # table to get framenumbers from
+            kobs_2d = h5file_raw.root.ML_estimates_2d_idxs # VLArray linking two
+        except tables.exceptions.NoSuchNodeError, err:
+            table_kobs   = h5file_raw.root.kalman_observations # table to get framenumbers from
+            kobs_2d = h5file_raw.root.kalman_observations_2d_idxs # VLArray linking two
 
         if file_time_data is None:
             h52d = h5file_raw
@@ -61,7 +85,9 @@ def convert(infilename,
 
         print 'caching raw 2D data...',
         sys.stdout.flush()
-        table_data2d_frames = table_data2d.read(field='frame').astype(numpy.uint64) # cast to uint64 for fast searching
+        table_data2d_frames = table_data2d.read(field='frame')
+        assert numpy.max(table_data2d_frames) < 2**63
+        table_data2d_frames = table_data2d_frames.astype(numpy.int64)
         #table_data2d_frames_find = fastsearch.binarysearch.BinarySearcher( table_data2d_frames )
         table_data2d_frames_find = utils.FastFinder( table_data2d_frames )
         table_data2d_camns = table_data2d.read(field='camn')
@@ -93,6 +119,7 @@ def convert(infilename,
 
         print 'caching Kalman obj_ids...'
         obs_obj_ids = table_kobs.read(field='obj_id')
+        fast_obs_obj_ids = utils.FastFinder( obs_obj_ids )
         print 'finding unique obj_ids...'
         unique_obj_ids = numpy.unique(obs_obj_ids)
         print '(found %d)'%(len(unique_obj_ids),)
@@ -107,15 +134,13 @@ def convert(infilename,
         print 'finding 2d data for each obj_id...'
         timestamp_time = numpy.zeros( unique_obj_ids.shape, dtype=numpy.float64)
         table_kobs_frame = table_kobs.read(field='frame')
+        assert numpy.max(table_kobs_frame) < 2**63
+        table_kobs_frame = table_kobs_frame.astype(numpy.int64)
         assert table_kobs_frame.dtype == table_data2d_frames.dtype # otherwise very slow
 
+        all_idxs = fast_obs_obj_ids.get_idx_of_equal(unique_obj_ids)
         for obj_id_enum,obj_id in enumerate(unique_obj_ids):
-            if obj_id_enum%100==0:
-                print '%d of %d'%(obj_id_enum,len(unique_obj_ids))
-            valid_cond = obs_obj_ids == obj_id
-            idxs = numpy.nonzero(valid_cond)[0]
-            idx0 = numpy.min(idxs)
-
+            idx0 = all_idxs[obj_id_enum]
             framenumber = table_kobs_frame[idx0]
             remote_timestamp = numpy.nan
 
@@ -131,16 +156,15 @@ def convert(infilename,
                 continue
 
             cam_id = camn2cam_id[this_camn]
-            remote_hostname = cam_id2hostname(cam_id)
+            remote_hostname = cam_id2hostname(cam_id, h52d)
+            if remote_hostname not in gain:
+                warnings.warn('no host %s in timestamp data. making up '
+                              'data.'%remote_hostname)
+                gain[remote_hostname]=1.0
+                offset[remote_hostname]=0.0
             mainbrain_timestamp = remote_timestamp*gain[remote_hostname] + offset[remote_hostname] # find mainbrain timestamp
 
             timestamp_time[obj_id_enum] = mainbrain_timestamp
-            if obj_id_enum%100==0:
-                try:
-                    print time.asctime(time.localtime(mainbrain_timestamp))
-                except:
-                    print '** no timestamp **'
-                print
 
         h5file_raw.close()
         if close_h52d:
@@ -162,7 +186,7 @@ def convert(infilename,
     if dynamic_model_name is None:
         dynamic_model_name = extra.get('dynamic_model_name',None)
         if dynamic_model_name is None:
-            dynamic_model_name = 'fly dynamics, high precision calibration, units: mm'
+            dynamic_model_name = dynamic_models.DEFAULT_MODEL
             warnings.warn('no dynamic model specified, using "%s"'%dynamic_model_name)
         else:
             print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
@@ -174,11 +198,17 @@ def convert(infilename,
     allqualrows=[]
     failed_quality = False
 
+    string_widget = StringWidget()
+    objs_per_sec_widget = progressbar.FileTransferSpeed(unit='obj_ids ')
+    widgets=[string_widget, objs_per_sec_widget,
+             progressbar.Percentage(), progressbar.Bar(), progressbar.ETA()]
+    pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(obj_ids)).start()
+
     for i,obj_id in enumerate(obj_ids):
         if obj_id > stop_obj_id:
             break
-        if i%100 == 0:
-            print '%d of %d'%(i,len(obj_ids))
+        string_widget.set_string( '[obj_id: % 5d]'%obj_id )
+        pbar.update(i)
         try:
             rows = ca.load_data(obj_id,
                                 infilename,
@@ -197,6 +227,7 @@ def convert(infilename,
             allqualrows.append( qualrows )
         except ValueError:
             failed_quality = True
+    pbar.finish()
 
     allrows = numpy.concatenate( allrows )
     if not failed_quality:
@@ -217,16 +248,25 @@ def convert(infilename,
         )
     ca.close()
 
-def main():
+def export_flydra_hdf5():
+    main(hdf5_only=True)
+
+def main(hdf5_only=False):
+    # hdf5_only is to maintain backwards compatibility...
     usage = '%prog FILE [options]'
     parser = OptionParser(usage)
+    if hdf5_only:
+        dest_help = "filename of output .h5 file"
+    else:
+        dest_help = "filename of output .mat file"
     parser.add_option("--dest-file", type='string', default=None,
-                      help="save to mat file")
+                      help=dest_help)
     parser.add_option("--time-data", dest="file2d", type='string',
                       help="hdf5 file with 2d data FILE2D used to calculate timestamp information",
                       metavar="FILE2D")
     parser.add_option("--no-timestamps",action='store_true',dest='no_timestamps',default=False)
-    parser.add_option("--hdf5",action='store_true',default=False,help='save output as .hdf5 file (not .mat)')
+    if not hdf5_only:
+        parser.add_option("--hdf5",action='store_true',default=False,help='save output as .hdf5 file (not .mat)')
     parser.add_option("--start-obj-id",default=None,type='int',help='last obj_id to save')
     parser.add_option("--stop-obj-id",default=None,type='int',help='last obj_id to save')
     parser.add_option("--obj-only", type="string")
@@ -262,9 +302,14 @@ def main():
         warnings.warn('DeprecationWarning: --stop will be phased out in favor of --stop-obj-id')
         options.stop_obj_id = options.stop
 
+    if hdf5_only:
+        do_hdf5 = True
+    else:
+        do_hdf5 = options.hdf5
+
     infilename = args[0]
     if options.dest_file is None:
-        if options.hdf5:
+        if do_hdf5:
             # import h5py early so if we don't have it we know sooner rather than later.
             import h5py
             outfilename = os.path.splitext(infilename)[0] + '_smoothed.h5'
@@ -274,16 +319,34 @@ def main():
         outfilename = options.dest_file
 
     kwargs = core_analysis.get_options_kwargs(options)
-    convert(infilename,outfilename,
-            file_time_data=options.file2d,
-            save_timestamps = not options.no_timestamps,
-            start_obj_id=options.start_obj_id,
-            stop_obj_id=options.stop_obj_id,
-            obj_only=options.obj_only,
-            dynamic_model_name=options.dynamic_model,
-            return_smoothed_directions = True,
-            hdf5 = options.hdf5,
-            **kwargs)
+    if options.profile:
+        import cProfile
+
+        out_stats_filename = outfilename + '.profile'
+        print 'profiling, stats will be saved to %r'%out_stats_filename
+        cProfile.runctx('''convert(infilename,outfilename,
+                file_time_data=options.file2d,
+                save_timestamps = not options.no_timestamps,
+                start_obj_id=options.start_obj_id,
+                stop_obj_id=options.stop_obj_id,
+                obj_only=options.obj_only,
+                dynamic_model_name=options.dynamic_model,
+                return_smoothed_directions = True,
+                hdf5 = do_hdf5,
+                **kwargs)''',
+                        globals(), locals(), out_stats_filename)
+
+    else:
+        convert(infilename,outfilename,
+                file_time_data=options.file2d,
+                save_timestamps = not options.no_timestamps,
+                start_obj_id=options.start_obj_id,
+                stop_obj_id=options.stop_obj_id,
+                obj_only=options.obj_only,
+                dynamic_model_name=options.dynamic_model,
+                return_smoothed_directions = True,
+                hdf5 = do_hdf5,
+                **kwargs)
 
 if __name__=='__main__':
     main()

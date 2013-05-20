@@ -42,9 +42,9 @@ class DateFormatter:
         self.tz = tz
 
     def format_date(self, x, pos=None):
-        return str(datetime.datetime.fromtimestamp(x,self.tz))
-        ## return datetime.datetime.fromtimestamp(x,self.tz).strftime(
-        ##     '%Y-%m-%d %H:%M:%S.%f')
+        val = datetime.datetime.fromtimestamp(x,self.tz)
+        return val.strftime(
+            '%Y-%m-%d %H:%M:%S.%f')
 
 def doit(
          filenames=None,
@@ -80,15 +80,18 @@ def doit(
 
         if options.show_source_name:
             figtitle = filename
+            if kalman_filename is not None:
+                figtitle += ' '+kalman_filename
         else:
             figtitle = ''
         if options.obj_only is not None:
             figtitle += ' only showing objects: ' + ' '.join(
                 map(str,options.obj_only))
         if figtitle != '':
-            pylab.figtext(0,0,figtitle)
+            pylab.figtext(0.01,0.01,figtitle,verticalalignment='bottom')
 
         h5 = PT.openFile( filename, mode='r' )
+        timezone = result_utils.get_tz( h5 )
         if options.spreadh5 is not None:
             h5spread = PT.openFile(options.spreadh5, mode='r')
         else:
@@ -184,18 +187,17 @@ def doit(
                 if n_valid >= 1:
                     ax.plot( xdata, data['x'], 'ro',  ms=2, mew=0 )
                     ax.plot( xdata, data['y'], 'go',  ms=2, mew=0 )
-            ax.text(0.1,0,'%s: %d pts'%(cam_id,cam_id_n_valid),
+            ax.text(0.1,0,'%s %s: %d pts'%(cam_id,cam_id2camns[cam_id],cam_id_n_valid),
                     horizontalalignment='left',
                     verticalalignment='bottom',
                     transform = ax.transAxes,
                     )
-            ax.set_ylabel('%s\npixels'%cam_id)
+            ax.set_ylabel('pixels')
             if not options.timestamps:
                 ax.set_xlim( (start_frame, stop_frame) )
         ax.set_xlabel('frame')
         if options.timestamps:
-            tz = result_utils.get_tz( h5 )
-            df = DateFormatter(tz)
+            df = DateFormatter(timezone)
             ax.xaxis.set_major_formatter(
                 ticker.FuncFormatter(df.format_date))
         else:
@@ -316,8 +318,13 @@ def doit(
                     # no observation this frame
                     continue
                 obs_2d_idx = this_3d_row['obs_2d_idx']
-                kobs_2d_data = data_file.root.ML_estimates_2d_idxs[
-                    int(obs_2d_idx)]
+                try:
+                    kobs_2d_data = data_file.root.ML_estimates_2d_idxs[
+                        int(obs_2d_idx)]
+                except tables.exceptions.NoSuchNodeError, err:
+                    # backwards compatibility
+                    kobs_2d_data = data_file.root.kalman_observations_2d_idxs[
+                        int(obs_2d_idx)]
 
                 # parse VLArray
                 this_camns = kobs_2d_data[0::2]
@@ -473,10 +480,16 @@ def doit(
 
                     if options.timestamps:
                         ax.set_xlabel('time (sec)')
+                        df = DateFormatter(timezone)
+                        ax.xaxis.set_major_formatter(
+                            ticker.FuncFormatter(df.format_date))
+                        for label in ax.get_xticklabels():
+                            label.set_rotation(30)
+
                     else:
                         ax.set_xlabel('frame')
-                    ax.xaxis.set_major_formatter(
-                        ticker.FormatStrFormatter("%d"))
+                        ax.xaxis.set_major_formatter(
+                            ticker.FormatStrFormatter("%d"))
                     ax.yaxis.set_major_formatter(
                         ticker.FormatStrFormatter("%s"))
 
@@ -485,7 +498,11 @@ def doit(
                 # this is forked from flydra_analysis_plot_kalman_2d.py
 
                 kresults = PT.openFile(kalman_filename,mode='r')
-                kobs = kresults.root.ML_estimates
+                try:
+                    kobs = kresults.root.ML_estimates
+                except tables.exceptions.NoSuchNodeError:
+                    # backward compatibility
+                    kobs = kresults.root.kalman_observations
                 kframes = kobs.read(field='frame')
                 if frame_start is not None:
                     k_after_start = numpy.nonzero( kframes>=frame_start )[0]
@@ -508,7 +525,11 @@ def doit(
                 obs_2d_idxs = kobs.read(field='obs_2d_idx')[k_use_idxs]
                 kframes = kframes[k_use_idxs]
 
-                kobs_2d = kresults.root.ML_estimates_2d_idxs
+                try:
+                    kobs_2d = kresults.root.ML_estimates_2d_idxs
+                except tables.exceptions.NoSuchNodeError:
+                    # backwards compatibility
+                    kobs_2d = kresults.root.kalman_observations_2d_idxs
                 # this will be slooow...
                 used_cam_ids = collections.defaultdict(list)
                 for obs_2d_idx,kframe in zip(obs_2d_idxs,kframes):

@@ -10,6 +10,7 @@ import flydra.analysis.result_utils as result_utils
 import subprocess, collections
 import flydra.a2.ufmf_tools as ufmf_tools
 import flydra.a2.core_analysis as core_analysis
+import flydra.kalman.dynamic_models as dynamic_models
 from flydra.a2.orientation_ekf_fitter import compute_ori_quality
 import flydra.reconstruct as reconstruct
 import flydra.geom as geom
@@ -100,7 +101,7 @@ def load_3d_data(kalman_filename,start=None,stop=None,**kwargs):
         if dynamic_model_name is None:
             dynamic_model_name = extra.get('dynamic_model_name',None)
             if dynamic_model_name is None:
-                dynamic_model_name = 'fly dynamics, high precision calibration, units: mm'
+                dynamic_model_name = dynamic_models.DEFAULT_MODEL
                 warnings.warn('no dynamic model specified, using "%s"'%dynamic_model_name)
             else:
                 print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
@@ -134,6 +135,9 @@ def load_3d_data(kalman_filename,start=None,stop=None,**kwargs):
     return data3d, dataqual3d
 
 def make_montage( h5_filename,
+                  frames_test, #ps
+                  nth_frame, #ps
+                  use_file_orientations=False,#ps
                   cfg_filename=None,
                   ufmf_dir=None,
                   dest_dir = None,
@@ -150,13 +154,13 @@ def make_montage( h5_filename,
                   **kwargs):
     config = get_config_defaults()
     if cfg_filename is not None:
-        loaded_cfg = cherrypy._cpconfig.as_dict( cfg_filename )
+        loaded_cfg = cherrypy.lib.reprconf.as_dict( cfg_filename )
         for section in loaded_cfg:
             config[section].update( loaded_cfg.get(section,{}) )
     else:
         warnings.warn('no configuration file specified -- using defaults')
 
-    orientation_3d_line_length = 0.1
+    orientation_3d_line_length = 0.2
 
     if (config['what to show']['show_3d_smoothed_position'] or
         config['what to show']['show_3d_MLE_position'] or
@@ -223,6 +227,9 @@ def make_montage( h5_filename,
 
     blank_images = {}
 
+    count = 0 #ps
+    frame2 = 0 #ps
+
     all_frame_montages = []
     for frame_enum,(frame_dict,frame) in enumerate(ufmf_tools.iterate_frames(
         h5_filename, movie_fnames,
@@ -235,6 +242,20 @@ def make_montage( h5_filename,
         camn2cam_id = camn2cam_id,
         )):
         tracker_data = frame_dict['tracker_data']
+
+### ps: nth_frame
+
+
+	if count!=0 and count!=nth_frame:
+		count=count+1
+
+		continue
+	frame2=frame2+1
+	count=1
+
+
+#####
+
 
         if data3d is not None:
             this_frame_3d_data = data3d[data3d['frame']==frame]
@@ -449,6 +470,24 @@ def make_montage( h5_filename,
                                 continue
                             X0 = np.array([row['x'], row['y'], row['z'], np.ones_like(row['x'])]).T
                             dx = np.array([row['dir_x'], row['dir_y'], row['dir_z'], np.zeros_like(row['x'])]).T
+
+
+			######### ps
+                            if frames_test is not None:
+                                a=frames_test[frames_test[:,1]==row[0]]
+
+                                if not use_file_orientations:
+                                    if frame not in a:
+                                            continue
+                                else:
+
+                                    if frame in a:
+                                            b=a[a[:,0]==frame]
+                                            dx=np.array([b[0,2], b[0,3], b[0,4], np.zeros_like(row['x'])]).T
+                                    else:
+                                            continue
+                        ########
+
                             X1 = X0 + dx*orientation_3d_line_length
                             if np.any( np.isnan(X1) ):
                                 continue
@@ -483,7 +522,7 @@ def make_montage( h5_filename,
                         for i in range(len(xarr)):
                             obj_id = this_frame_3d_data['obj_id'][i]
                             canv.text( '%d'%obj_id, xarr[i], yarr[i],
-                                       font_size=4,
+                                       font_size=15,
                                        color_rgba=(1,0,0,1) )
 
                 if workaround_ffmpeg2theora_bug:
@@ -498,7 +537,7 @@ def make_montage( h5_filename,
             saved_fnames.append( save_fname_path )
 
         target = os.path.join(dest_dir, 'movie%s_frame%07d.jpg'%(
-            datetime_str,frame_enum+1 ))
+            datetime_str,frame2 ))
         # All cameras saved for this frame, make montage
         title = '%s frame %d'%( datetime_str, frame )
         montage(saved_fnames, title, target)
@@ -597,6 +636,16 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     parser.add_option( "--caminfo-h5-filename", type="string",
                        help="path of h5 file from which to load caminfo")
 
+    parser.add_option( "--frames-to-include", type="string", #ps
+                       help="path of csv file from which to include frames")
+
+    parser.add_option( "--nth-frame", type="string", default=1, #ps
+                       help="nth-frame to save")
+
+    parser.add_option( "--use-file-orientations", action='store_true', default=False, #ps
+                       help="use orientations from input file")
+
+
     core_analysis.add_options_to_parser(parser)
     (options, args) = parser.parse_args()
 
@@ -611,10 +660,38 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     movie_cam_ids = options.movie_cam_ids
     if movie_cam_ids is not None:
         movie_cam_ids = movie_cam_ids.split( os.pathsep )
+#####ps
+    # make sure temp[6]-temp[8] is the orientation from the input file
+
+    frames_to_include = options.frames_to_include
+    if frames_to_include is not None:
+
+        inFile = open(frames_to_include,"r")
+        lines = inFile.readlines()
+
+        frames_test= np.zeros(((len(lines)-1),5), float)
+
+        for N in range(1,len(lines)):
+
+                temp = str(lines[N]).split(',')
+                frames_test[N-1,:]=(float(temp[0]),float(temp[1]),float(temp[6]),float(temp[7]),float(temp[8]))
+    else:
+        frames_test = None
+
+    nth_frame= int(options.nth_frame)
+    use_file_orientations=options.use_file_orientations
+    if use_file_orientations==True:
+        print "WARNING: using orientations from file"
+
+#####
+
 
     h5_filename = args[0]
     kwargs = core_analysis.get_options_kwargs(options)
     make_montage( h5_filename,
+                  frames_test, #ps
+                  nth_frame, #ps
+                  use_file_orientations,#ps
                   kalman_filename = options.kalman_filename,
                   cfg_filename = options.config,
                   ufmf_dir = options.ufmf_dir,
