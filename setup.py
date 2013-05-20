@@ -1,20 +1,7 @@
 from setuptools import setup, find_packages
 from distutils.core import Extension # actually monkey-patched by setuptools
+from Cython.Build import cythonize
 import sys
-
-# Make sure that some dependencies are installed
-try:
-    # Copied from pytables's setup.py.
-    from Pyrex.Distutils import build_ext
-except ImportError:
-    print ("Please install pyrex (or manually run cython on the .pyx files). "
-           "I need this to compile some extensions.")
-    print ("Try: ")
-    print ("      pip install pyrex")
-    print ("")
-    print ("Type 'c' to continue without pyrex")
-    if raw_input('Press any key to continue...').lower() != 'c':
-        sys.exit(-1)
 
 # Set this to true to compile the extensions that depend on FastImage.
 # Those are not strictly necessary for running some of the analysis tools.
@@ -36,7 +23,7 @@ version = flydra.version.__version__
 import numpy as np
 
 ext_modules = []
-
+pyrex_modules = [] # really Pyrex, not Cython
 
 
 
@@ -60,7 +47,7 @@ if not LIGHT_INSTALL:
 
 
 
-    ext_modules.append(Extension(name='flydra.camnode_colors',
+    pyrex_modules.append(Extension(name='flydra.camnode_colors',
                                  sources=['flydra/camnode_colors.pyx','flydra/colors.c']+ipp_sources,
                                  include_dirs=ipp_include_dirs,
                                  library_dirs=ipp_library_dirs,
@@ -77,7 +64,7 @@ ext_modules.append(Extension(name='flydra.pmat_jacobian',
                              sources=['src/pmat_jacobian.pyx']))
 
 ext_modules.append(Extension(name='flydra.kalman.flydra_tracked_object',
-                             sources=['src/flydra_tracked_object.c'])) # auto-generate with cython
+                             sources=['src/flydra_tracked_object.pyx']))
 
 ext_modules.append(Extension(name='flydra.mahalanobis',
                              sources=['src/mahalanobis.pyx']))
@@ -86,9 +73,9 @@ ext_modules.append(Extension(name='flydra.fastgeom',
                              sources=['src/fastgeom.pyx']))
 
 ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
-                             sources=['flydra/a2/fastfinder_help.c'],
+                             sources=['flydra/a2/fastfinder_help.pyx'],
                              include_dirs=[np.get_include()],
-                             )) # auto-generate with cython
+                             ))
 
 setup(name='flydra',
       version=version,
@@ -97,7 +84,7 @@ setup(name='flydra',
       description='multi-headed fly-tracking beast',
       packages = find_packages(),
       test_suite = 'nose.collector',
-      ext_modules= ext_modules,
+      ext_modules= cythonize(ext_modules)+pyrex_modules,
       entry_points = {
     'console_scripts': [
 
@@ -135,7 +122,6 @@ setup(name='flydra',
 # analysis - not yet classified
     'flydra_analysis_convert_to_mat = flydra.analysis.flydra_analysis_convert_to_mat:main',
     'flydra_analysis_plot_clock_drift = flydra.analysis.flydra_analysis_plot_clock_drift:main',
-    'flydra_analysis_plot_cameras = flydra.analysis.flydra_analysis_plot_cameras:main',
     'flydra_analysis_plot_kalman_2d = flydra.a2.plot_kalman_2d:main',
     'flydra_analysis_plot_summary = flydra.a2.plot_summary:main',
     'flydra_analysis_plot_timeseries_2d_3d = flydra.a2.plot_timeseries_2d_3d:main',
@@ -147,6 +133,7 @@ setup(name='flydra',
     'kdviewer = flydra.a2.kdviewer:main',
     'kdmovie_saver = flydra.a2.kdmovie_saver:main',
     'flydra_analysis_data2smoothed = flydra.a2.data2smoothed:main',
+    'flydra_analysis_export_flydra_hdf5 = flydra.a2.data2smoothed:export_flydra_hdf5',
     'flydra_textlog2csv = flydra.a2.flydra_textlog2csv:main',
     'flydra_analysis_print_kalmanize_makefile_location = flydra.a2.print_kalmanize_makefile_location:main',
 
