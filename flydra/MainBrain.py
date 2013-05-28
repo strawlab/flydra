@@ -602,6 +602,10 @@ class CoordinateProcessor(threading.Thread):
 
         self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, timestamp) )
 
+        #because saving usually follows synchronization, ensure we have a recent
+        #image to put in the h5 file
+        self.main_brain.remote_api.external_request_image_async(cam_id)
+
     def run(self):
         """main loop of CoordinateProcessor"""
 
