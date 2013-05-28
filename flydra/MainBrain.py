@@ -1588,11 +1588,17 @@ class MainBrain(object):
                                 std_msgs.msg.String,
                                 latch=True)
         self.pub_calib_file.publish('')
+        self.pub_num_cams = rospy.Publisher(
+                                '~num_cameras',
+                                std_msgs.msg.UInt32,
+                                latch=True)
+        self.pub_num_cams.publish(0)
 
         self.sub_exp_uuid = rospy.Subscriber(
                                 'experiment_uuid',
                                 std_msgs.msg.String,
                                 self._on_experiment_uuid)
+
 
         self.services = {}
         for name, srv in self.ROS_CONTROL_API.iteritems():
@@ -1707,6 +1713,7 @@ class MainBrain(object):
     def IncreaseCamCounter(self,cam_id,scalar_control_info,fqdn):
         self.num_cams += 1
         self.MainBrain_cam_ids_copy.append( cam_id )
+        self.pub_num_cams.publish(self.num_cams)
 
     def SendExpectedFPS(self,cam_id,scalar_control_info,fqdn):
         self.send_set_camera_property( cam_id, 'expected_trigger_framerate', self.trigger_device.frames_per_second_actual )
@@ -1726,6 +1733,7 @@ class MainBrain(object):
             return
         self.num_cams -= 1
         del self.MainBrain_cam_ids_copy[idx]
+        self.pub_num_cams.publish(self.num_cams)
 
     def get_num_cams(self):
         return self.num_cams
