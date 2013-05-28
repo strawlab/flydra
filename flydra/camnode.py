@@ -2903,7 +2903,7 @@ def parse_args_and_run(benchmark, cmdline_args):
     parser.add_option("--small-save-radius", type="int",
                       help='half the edge length of .ufmf movies [default: %default]')
 
-    parser.add_option("--rosrate", type="float", dest='rosrate', default=5.,
+    parser.add_option("--rosrate", type="float", dest='rosrate', default=1.,
                       help='desired framerate for the ROS raw image emitter (if ROS enabled)')
 
     parser.add_option("--sleep-first", type="int",
