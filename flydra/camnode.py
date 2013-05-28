@@ -1725,12 +1725,15 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
         _Camera.__init__(self, guid)
 
     def _get_rosparam_path(self, paramname):
-        return "/%s/%s" % (self.guid, paramname)
+        return "%s/%s" % (self.guid, paramname)
 
     def load_configuration(self):
         for k,v in self.ROS_PROPERTIES.iteritems():
             parampath = self._get_rosparam_path(k)
-            paramval = rospy.get_param(parampath, v)
+            paramval = rospy.get_param(
+                        "flydra/%s" % k,                #try in the flydra namespace first
+                        rospy.get_param(parampath, v)   #try in the private namespace (with default)
+            )
             if k in self._prop_numbers_from_name:
                 prop_num = self._prop_numbers_from_name[k]
                 #call directly to camiface, these parameters are already from the parameter server
