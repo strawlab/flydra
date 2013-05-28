@@ -1147,12 +1147,11 @@ class MainBrain(object):
 #        clear_background=(std_srvs.srv.Empty),
         start_saving_data=(std_srvs.srv.Empty),
         stop_saving_data=(std_srvs.srv.Empty),
-#        start_recording=(std_srvs.srv.Empty),
-#        stop_recording=(std_srvs.srv.Empty),
-#        start_small_recording=(std_srvs.srv.Empty),
-#        stop_small_recording=(std_srvs.srv.Empty),
+        start_recording=(std_srvs.srv.Empty),
+        stop_recording=(std_srvs.srv.Empty),
+        start_small_recording=(std_srvs.srv.Empty),
+        stop_small_recording=(std_srvs.srv.Empty),
         do_synchronization=(std_srvs.srv.Empty),
-#        quit=(std_srvs.srv.Empty),
     )
 
     ROS_CONFIGURATION = dict(
@@ -1161,6 +1160,7 @@ class MainBrain(object):
         max_reconstruction_latency_sec=0.06, # 60 msec
         max_N_hypothesis_test=3,
         save_data_dir='~/FLYDRA',
+        save_movie_dir='~/FLYDRA_MOVIES',
         camera_calibration='',
     )
 
@@ -1594,6 +1594,7 @@ class MainBrain(object):
                                 latch=True)
         self.pub_num_cams.publish(0)
 
+        self.experiment_uuid = None
         self.sub_exp_uuid = rospy.Subscriber(
                                 'experiment_uuid',
                                 std_msgs.msg.String,
@@ -1612,8 +1613,9 @@ class MainBrain(object):
         main_brain_keeper.register( self )
 
     def _on_experiment_uuid(self, msg):
+        self.experiment_uuid = msg.data
         if self.is_saving_data():
-            self.h5exp_info.row['uuid'] = msg.data
+            self.h5exp_info.row['uuid'] = self.experiment_uuid
             self.h5exp_info.row.append()
             self.h5exp_info.flush()
 
@@ -1898,15 +1900,22 @@ class MainBrain(object):
 
     def start_recording(self, raw_file_basename=None, *cam_ids):
         nowstr = time.strftime('%Y%m%d_%H%M%S')
-
         if not raw_file_basename:
-            raw_file_basename = self.config['save_data_dir']
+            if self.experiment_uuid is not None:
+                raw_file_basename = os.path.join(
+                                        self.config['save_movie_dir'],
+                                        self.experiment_uuid,
+                )
+            else:
+                raw_file_basename = os.path.join(
+                                        self.config['save_movie_dir'],
+                                        nowstr,
+                )
 
         if len(cam_ids) == 0:
             cam_ids = self.remote_api.external_get_cam_ids()
-
         for cam_id in cam_ids:
-            raw_file_name = os.path.join(raw_file_basename,"%s.%s" % (nowstr, cam_id))
+            raw_file_name = os.path.join(raw_file_basename, cam_id, nowstr)
             self.remote_api.external_start_recording( cam_id, raw_file_name)
             approx_start_frame = self.framenumber
             self._currently_recording_movies[ cam_id ] = (raw_file_name, approx_start_frame)
@@ -1948,11 +1957,21 @@ class MainBrain(object):
     def start_small_recording(self, raw_file_basename=None, *cam_ids):
         nowstr = time.strftime('%Y%m%d_%H%M%S')
         if not raw_file_basename:
-            raw_file_basename = self.config['save_data_dir']
+            if self.experiment_uuid is not None:
+                raw_file_basename = os.path.join(
+                                        self.config['save_movie_dir'],
+                                        self.experiment_uuid,
+                )
+            else:
+                raw_file_basename = os.path.join(
+                                        self.config['save_movie_dir'],
+                                        nowstr,
+                )
+
         if len(cam_ids) == 0:
             cam_ids = self.remote_api.external_get_cam_ids()
         for cam_id in cam_ids:
-            raw_file_name = os.path.join(raw_file_basename, "%s.%s" % (nowstr, cam_id))
+            raw_file_name = os.path.join(raw_file_basename, cam_id, nowstr)
             self.remote_api.external_start_small_recording(cam_id, raw_file_name)
 
     def stop_small_recording(self, *cam_ids):
