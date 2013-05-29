@@ -269,6 +269,7 @@ def doit(h5_filename=None,
          stack_N_images_min=None,
          old_sync_timestamp_source=False,
          do_rts_smoothing=True,
+         roiradius=5
          ):
     """
 
@@ -457,9 +458,10 @@ def doit(h5_filename=None,
                         # images is not the same as simply averaging the
                         # full frame.
 
-                        roiradius = 25
-                        warnings.warn('roiradius hard-coded to %d: could be set '
-                                      'from 3D tracking'%roiradius)
+                        #roiradius = 25
+                        warnings.warn('roiradius set to %d'%roiradius)
+                        #print 'roiradius = %i'% (roiradius)
+
                         tmp = clip_and_math( image, mean_image, xy, roiradius,
                                              maxsize )
                         im_coords, raw_im, mean_im, absdiff_im = tmp
@@ -944,6 +946,9 @@ def main():
                       default=False,
                       help="use data2d['timestamp'] to find matching ufmf frame")
 
+    parser.add_option("--roi", type='int', default=25,
+                      help="radius of interest, default 25")
+
     (options, args) = parser.parse_args()
 
     if options.ufmfs is None:
@@ -983,6 +988,7 @@ def main():
          stack_N_images_min=options.stack_N_images_min,
          old_sync_timestamp_source=options.old_sync_timestamp_source,
          do_rts_smoothing=options.do_rts_smoothing,
+         roiradius=options.roi,
          )
 
 if __name__=='__main__':
