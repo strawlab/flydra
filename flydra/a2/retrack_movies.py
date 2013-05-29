@@ -38,9 +38,8 @@ def retrack_movies( h5_filename,
                     ufmf_dir = None,
                     cfg_filename=None,
                     ufmf_filenames=None,
+                    save_debug_images=False
                     ):
-
-    save_debug_images = False
 
     # 2D data format for PyTables:
     Info2D = flydra.data_descriptions.Info2D
@@ -59,7 +58,7 @@ def retrack_movies( h5_filename,
     # get name of data
     config = get_config_defaults()
     if cfg_filename is not None:
-        loaded_cfg = cherrypy._cpconfig.as_dict( cfg_filename )
+        loaded_cfg = cherrypy.lib.reprconf.as_dict( cfg_filename )
         for section in loaded_cfg:
             config[section].update( loaded_cfg.get(section,{}) )
     default_camcfg = config['default']
@@ -326,6 +325,10 @@ def main():
                       help=("sequence of .ufmf filenames "
                             "(e.g. 'cam1.ufmf:cam2.ufmf')"))
 
+    parser.add_option("--save-images", action='store_true', default=False,
+                      help=("save images"))
+
+
     (options, args) = parser.parse_args()
 
     if len(args)!=0:
@@ -351,4 +354,5 @@ def main():
                     stop = options.stop,
                     output_h5_filename=options.output_h5,
                     ufmf_filenames=ufmf_filenames,
+                    save_debug_images=options.save_images,
                     )
