@@ -2815,13 +2815,8 @@ class AppState(object):
             elif key == 'stop_small_recording':
                 small_saver.stop_recording()
             elif key == 'cal':
-<<<<<<< HEAD
                 print 'setting calibration'
-                pmat, intlin, intnonlin, scale_factor = cmds[key]
-=======
-                LOG.info('setting calibration')
                 pmat, intlin, intnonlin = cmds[key]
->>>>>>> 161f76d... Remove scale factors from flydra.reconstructor. Closes #5.
 
                 # XXX TODO: FIXME: thread crossing bug
                 # these three should always be done together in this order:
