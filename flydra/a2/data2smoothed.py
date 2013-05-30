@@ -22,7 +22,8 @@ def cam_id2hostname(cam_id, h52d):
         # new style
         cond = ci['cam_id']==cam_id
         rows = ci[cond]
-        assert len(rows)==1
+        if len(rows) != 1:
+            raise ValueError("multiple/no hostnames for observation: %s" % (rows,))
         hostname = rows['hostname'][0]
     else:
         # old style
@@ -156,7 +157,11 @@ def convert(infilename,
                 continue
 
             cam_id = camn2cam_id[this_camn]
-            remote_hostname = cam_id2hostname(cam_id, h52d)
+            try:
+                remote_hostname = cam_id2hostname(cam_id, h52d)
+            except ValueError, e:
+                print 'error getting hostname of cam: %s' % e.message
+                continue
             if remote_hostname not in gain:
                 warnings.warn('no host %s in timestamp data. making up '
                               'data.'%remote_hostname)
