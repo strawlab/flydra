@@ -82,7 +82,13 @@ def calculate_reprojection_errors(h5_filename=None,
                     cond = ((frame2d['camn']==camn) &
                             (frame2d['frame_pt_idx']==camn_pt_no))
                     idxs = np.nonzero(cond)[0]
-                    assert len(idxs)==1
+                    if len(idxs)==0:
+                        #no frame for that camera (start or stop of file)
+                        continue
+                    elif len(idxs)>1:
+                        print "MEGA WARNING MULTIPLE 2D POINTS\n", camn, camn_pt_no,"\n\n"
+                        continue
+
                     idx = idxs[0]
 
                     frame2d_row = frame2d[idx]
