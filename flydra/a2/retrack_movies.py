@@ -48,8 +48,11 @@ def retrack_movies( h5_filename,
 
     if ufmf_filenames is None:
         ufmf_filenames = auto_discover_ufmfs.find_ufmfs( h5_filename,
-                                                      ufmf_dir=ufmf_dir,
-                                                      careful=True )
+                                                         ufmf_dir=ufmf_dir,
+                                                         careful=True )
+    print 'ufmf_filenames: %r'%ufmf_filenames
+    if len(ufmf_filenames)==0:
+        raise RuntimeError('nothing to do (autodetection of .ufmf files failed)')
 
     if os.path.exists( output_h5_filename ):
         raise RuntimeError(
