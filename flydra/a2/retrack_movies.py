@@ -1,6 +1,6 @@
 from __future__ import with_statement
 import motmot.ufmf.ufmf as ufmf_mod
-import sys, os, tempfile, re, contextlib, warnings
+import sys, os, tempfile, re, contextlib, warnings, errno
 from optparse import OptionParser
 import flydra.a2.auto_discover_ufmfs as auto_discover_ufmfs
 import numpy as np
@@ -29,6 +29,16 @@ def get_config_defaults():
     result = collections.defaultdict(dict)
     result['default']=default
     return result
+
+def mkdir_p(path):
+    # From
+    # http://stackoverflow.com/questions/600268/mkdir-p-functionality-in-python
+    try:
+        os.makedirs(path)
+    except OSError as exc: # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else: raise
 
 def retrack_movies( h5_filename,
                     output_h5_filename=None,
@@ -261,8 +271,11 @@ def retrack_movies( h5_filename,
                             detected_points = True
 
                         if save_debug_images:
-                            save_fname_path = 'debug/debug_%s_%d.png'%(cam_id,
-                                                                       frame)
+                            save_dir = 'debug'
+                            mkdir_p(save_dir)
+                            save_fname = 'debug_%s_%d.png'%(cam_id,
+                                                            frame)
+                            save_fname_path = os.path.join(save_dir,save_fname)
                             print 'saving',save_fname_path
                             import benu
                             canv=benu.Canvas(save_fname_path,width,height)
