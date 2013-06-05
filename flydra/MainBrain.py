@@ -2287,7 +2287,7 @@ class MainBrain(object):
             str(self.trigger_device._t3_state.timer3_CS),
             str(self.trigger_device.FOSC),
             flydra.version.__version__,
-            time.tzname[0],
+            'US/Pacific',
             ))),
             (timestamp,cam_id,timestamp, 'using flydra version %s'%(
              flydra.version.__version__,)),
