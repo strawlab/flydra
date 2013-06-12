@@ -10,4 +10,3 @@ recv_pt_fmt = '<dddddddddBBddBddddddBdd'
 recv_pt_header_fmt = '<ddliI'
 
 emulated_camera_control = 9645
-mainbrain_port = 9833

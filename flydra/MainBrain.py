@@ -4,13 +4,14 @@
 from __future__ import with_statement, division
 import threading, time, socket, select, sys, os, copy, struct, math
 import warnings, errno
+import json
 import collections
 import traceback
-import Pyro.core
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
 import numpy
 import numpy as nx
+import numpy as np
 from numpy import nan, inf
 near_inf = 9.999999e20
 import Queue
@@ -48,6 +49,9 @@ import std_srvs.srv
 import std_msgs.msg
 from ros_flydra.msg import flydra_mainbrain_super_packet
 from ros_flydra.msg import flydra_mainbrain_packet, flydra_object, FlydraError
+from ros_flydra.srv import MainBrainGetVersion, MainBrainRegisterNewCamera
+import ros_flydra.srv
+import ros_flydra.cv2_bridge
 from geometry_msgs.msg import Point, Vector3
 
 import flydra.rosutils
@@ -70,13 +74,6 @@ if os.name == 'posix':
         import posix_sched
     except ImportError, err:
         warnings.warn('Could not open posix_sched module')
-
-Pyro.config.PYRO_MULTITHREADED = 0 # We do the multithreading around here...
-
-Pyro.config.PYRO_TRACELEVEL = 3
-Pyro.config.PYRO_USER_TRACELEVEL = 3
-Pyro.config.PYRO_DETAILED_TRACEBACK = 1
-Pyro.config.PYRO_PRINT_REMOTE_TRACEBACK = 1
 
 IMPOSSIBLE_TIMESTAMP = -10.0
 
@@ -1152,6 +1149,12 @@ class MainBrain(object):
         start_small_recording=(std_srvs.srv.Empty),
         stop_small_recording=(std_srvs.srv.Empty),
         do_synchronization=(std_srvs.srv.Empty),
+
+        get_version=(MainBrainGetVersion),
+        register_new_camera=(MainBrainRegisterNewCamera),
+        get_and_clear_commands=(ros_flydra.srv.MainBrainGetAndClearCommands),
+        set_image=(ros_flydra.srv.MainBrainSetImage),
+        close_xcamera=(ros_flydra.srv.MainBrainCloseCamera),
     )
 
     ROS_CONFIGURATION = dict(
@@ -1165,7 +1168,7 @@ class MainBrain(object):
     )
 
 
-    class RemoteAPI(Pyro.core.ObjBase):
+    class RemoteAPI:
 
         # ================================================================
         #
@@ -1173,12 +1176,8 @@ class MainBrain(object):
         #
         # ================================================================
 
-        def get_version(self):
-            return flydra.version.__version__
-
         def post_init(self, main_brain):
             """call after __init__"""
-            # let Pyro handle __init__
             self.cam_info = {}
             self.cam_info_lock = threading.Lock()
             self.changed_cam_lock = threading.Lock()
@@ -1226,7 +1225,6 @@ class MainBrain(object):
                 cam_lock = cam['lock']
                 with cam_lock:
                     coord_and_image = cam['image']
-                    fps = cam['fps']
                     points_distorted = cam['points_distorted'][:]
             # NB: points are distorted (and therefore align
             # with distorted image)
@@ -1234,6 +1232,7 @@ class MainBrain(object):
                 image_coords, image = coord_and_image
             else:
                 image_coords, image = None, None
+            fps = np.nan
             return image, fps, points_distorted, image_coords
 
         def external_send_set_camera_property( self, cam_id, property_name, value):
@@ -1327,26 +1326,6 @@ class MainBrain(object):
                 with cam_lock:
                     cam['commands']['cal']= pmat, intlin, intnonlin
                     cam['is_calibrated'] = True
-        # === thread boundary =========================================
-
-        def listen(self,daemon):
-            """thread mainloop"""
-            hr = daemon.handleRequests
-            while not self.quit_now.isSet():
-                try:
-                    hr(0.1) # block on select for n seconds
-                except select.error, err:
-                    LOG.warn('select.error on RemoteAPI.listen(), ignoring...')
-                    continue
-                with self.cam_info_lock:
-                    cam_ids = self.cam_info.keys()
-                for cam_id in cam_ids:
-                    with self.cam_info_lock:
-                        connected = self.cam_info[cam_id]['caller'].connected
-                    if not connected:
-                        LOG.warn('main_brain WARNING: lost %s at %s'%(cam_id,time.asctime()))
-                        self.close(cam_id)
-            self.thread_done.set()
 
         # ================================================================
         #
@@ -1358,14 +1337,11 @@ class MainBrain(object):
         #
         # ================================================================
 
-        def register_new_camera(self,cam_guid,scalar_control_info,camnode_ros_name):
-            """register new camera, return cam_id (caller: remote camera)"""
+        def register_new_camera(self,cam_guid,scalar_control_info,camnode_ros_name,cam_hostname,cam_ip):
+            """register new camera (caller: remote camera)"""
 
             assert camnode_ros_name is not None
-            caller= self.daemon.getLocalStorage().caller # XXX Pyro hack??
-            caller_addr= caller.addr
-            caller_ip, caller_port = caller_addr
-            fqdn = socket.getfqdn(caller_ip)
+            fqdn = cam_hostname
 
             LOG.info("REGISTER NEW CAMERA %s on %s @ ros node %s" % (cam_guid,fqdn,camnode_ros_name))
             cam2mainbrain_data_port = self.main_brain.coord_processor.connect(cam_guid,fqdn)
@@ -1376,12 +1352,10 @@ class MainBrain(object):
                 self.cam_info[cam_guid] = {'commands':{}, # command queue for cam
                                          'lock':threading.Lock(), # prevent concurrent access
                                          'image':None,  # most recent image from cam
-                                         'fps':None,    # most recept fps from cam
                                          'points_distorted':[], # 2D image points
-                                         'caller':caller,
                                          'scalar_control_info':scalar_control_info,
                                          'fqdn':fqdn,
-                                         'ip':caller_ip,
+                                         'ip':cam_ip,
                                          'camnode_ros_name':camnode_ros_name,
                                          'cam2mainbrain_data_port':cam2mainbrain_data_port,
                                          'is_calibrated':False, # has 3D calibration been sent yet?
@@ -1389,6 +1363,7 @@ class MainBrain(object):
             self.no_cams_connected.clear()
             with self.changed_cam_lock:
                 self.new_cam_ids.append(cam_guid)
+            return cam2mainbrain_data_port
 
         def set_image(self,cam_id,coord_and_image):
             """set most recent image (caller: remote camera)"""
@@ -1431,14 +1406,6 @@ class MainBrain(object):
                                             +point_tuple[:5]
                                             +(frame_pt_idx,cur_val,mean_val,sumsqf_val))
             self.main_brain.queue_data2d.put(deferred_2d_data)
-
-        def set_fps(self,cam_id,fps):
-            """set most recent fps (caller: remote camera)"""
-            with self.cam_info_lock:
-                cam = self.cam_info[cam_id]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    self.cam_info[cam_id]['fps'] = fps
 
         def get_and_clear_commands(self,cam_id):
             with self.cam_info_lock:
@@ -1492,20 +1459,8 @@ class MainBrain(object):
             self.timestamp_modeler = motmot.fview_ext_trig.live_timestamp_modeler.LiveTimestampModeler()
             self.timestamp_modeler.set_trigger_device( self.trigger_device )
 
-        Pyro.core.initServer(banner=0)
-
-        port = flydra.common_variables.mainbrain_port
-
-        # start Pyro server
-        daemon = Pyro.core.Daemon(host=self.hostname,port=port)
         remote_api = MainBrain.RemoteAPI(); remote_api.post_init(self)
-        URI=daemon.connect(remote_api,'main_brain')
 
-        # create (but don't start) listen thread
-        self.listen_thread=threading.Thread(target=remote_api.listen,
-                                            name='RemoteAPI-Thread',
-                                            args=(daemon,))
-        #self.listen_thread.setDaemon(True) # don't let this thread keep app alive
         self.remote_api = remote_api
 
         self._config_change_functions = []
@@ -1639,15 +1594,11 @@ class MainBrain(object):
             for attr in req.__slots__:
                 kwargs[attr] = getattr(req,attr)
 
-            LOG.debug("calling mainbrain api %s with args %s" % (calledfunction,kwargs))
-
             result = getattr(self, calledfunction)(**kwargs)
 
             kwargs = {}
             for i,attr in enumerate(respclass.__slots__):
                 kwargs[attr] = result[i]
-
-            LOG.debug("result = %s (marshaling over ros as %s klass %s)" % (result,kwargs,respclass))
 
             return respclass(**kwargs)
 
@@ -1686,6 +1637,38 @@ class MainBrain(object):
 
     def set_fps(self,fps):
         self.do_synchronization(new_fps=fps)
+
+    def get_version(self):
+        return std_msgs.msg.String(flydra.version.__version__),
+
+    def register_new_camera(self,
+                            cam_guid,
+                            scalar_control_info_json,
+                            camnode_ros_name,
+                            cam_hostname,
+                            cam_ip):
+        scalar_control_info = json.loads( scalar_control_info_json.data )
+        port = self.remote_api.register_new_camera(cam_guid=cam_guid.data,
+                                                   scalar_control_info=scalar_control_info,
+                                                   camnode_ros_name=camnode_ros_name.data,
+                                                   cam_hostname=cam_hostname.data,
+                                                   cam_ip=cam_ip.data)
+        return [std_msgs.msg.Int32(port)]
+
+    def get_and_clear_commands(self,cam_id):
+        cmds = self.remote_api.get_and_clear_commands(cam_id.data)
+        cmds_json = json.dumps(cmds)
+        return [std_msgs.msg.String(cmds_json)]
+
+    def set_image(self,cam_id, left, bottom, image):
+        cam_id = cam_id.data
+        lb = left.data, bottom.data
+        image = ros_flydra.cv2_bridge.imgmsg_to_numpy(image)
+        self.remote_api.set_image(cam_id, (lb,image))
+
+    def close_xcamera(self,cam_id):
+        cam_id = cam_id.data
+        self.remote_api.close(cam_id)
 
     def do_synchronization(self,new_fps=None):
         if self.is_saving_data():
@@ -1767,7 +1750,6 @@ class MainBrain(object):
         """ the last thing called before we work - give the config callback watchers a callback
         to check on the state of the mainbrain post __init__ """
         self.save_config()
-        self.listen_thread.start()
 
     def set_config_change_callback(self,handler):
         self._config_change_functions.append(handler)
@@ -1988,12 +1970,7 @@ class MainBrain(object):
             cam_ids = self.remote_api.cam_info.keys()
 
         for cam_id in cam_ids:
-            try:
-                self.close_camera(cam_id)
-            except Pyro.errors.ProtocolError:
-                # disconnection results in error
-                LOG.warn('ignoring exception on %s'%cam_id)
-                pass
+            self.close_camera(cam_id)
         self.remote_api.no_cams_connected.wait(2.0)
         self.remote_api.quit_now.set() # tell thread to finish
         self.remote_api.thread_done.wait(0.5) # wait for thread to finish
