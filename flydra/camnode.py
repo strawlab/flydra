@@ -2130,7 +2130,11 @@ class AppState(object):
             self.all_cams[cam_no] = cam
             if cam is not None:
                 with cam.lock:
-                    cam.start_camera()  # start camera
+                    try:
+                        cam.start_camera()  # start camera
+                    except:
+                        print 'FAILED to open camera %s'%cam.guid
+                        raise
             self.cam_status[cam_no]= 'started'
             if ImageSourceModel is not None:
                 with cam.lock:
