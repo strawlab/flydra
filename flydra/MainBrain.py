@@ -1708,7 +1708,10 @@ class MainBrain(object):
             pmat = self.reconstructor.get_pmat(cam_id)
             intlin = self.reconstructor.get_intrinsic_linear(cam_id)
             intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
-            self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin)
+            self.remote_api.external_set_cal( cam_id,
+                                              np.array(pmat).tolist(),
+                                              np.array(intlin).tolist(),
+                                              np.array(intnonlin).tolist())
 
     def DecreaseCamCounter(self,cam_id):
         try:

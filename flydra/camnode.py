@@ -2735,6 +2735,9 @@ class AppState(object):
             elif key == 'cal':
                 LOG.info('setting calibration')
                 pmat, intlin, intnonlin = cmds[key]
+                pmat = np.array(pmat)
+                intlin = np.array(intlin)
+                intnonlin = np.array(intnonlin)
 
                 # XXX TODO: FIXME: thread crossing bug
                 # these three should always be done together in this order:
