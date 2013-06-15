@@ -99,27 +99,6 @@ def filter_comments(lines_tmp):
         lines.append(line)
     return lines
 
-def load_ascii_matrix(filename):
-    fd=open(filename,mode='rb')
-    buf = fd.read()
-    fd.close()
-    lines = buf.split('\n')[:-1]
-    lines = filter_comments( lines )
-    return nx.array([map(float,line.split()) for line in lines])
-
-def test_load_ascii_matrix():
-    contents = '''   5.1468544e+00  -1.8892933e-01  -3.7855949e+00  -6.3683613e+02
-  -4.1691492e-01  -6.2570417e+00  -7.0782063e-01   2.4157199e+03
-  -1.7169043e-03  -2.2409402e-04  -4.2079099e-03   6.6955409e+00
-'''
-    import tempfile
-    fname = tempfile.mktemp()
-    fd = open(fname,mode='w')
-    fd.write(contents)
-    fd.close()
-    result = load_ascii_matrix(fname)
-    assert result.shape == (3,4)
-
 def save_ascii_matrix(M,fd,isint=False):
     def fmt(f):
         if isint:
@@ -948,7 +927,7 @@ class Reconstructor:
             res_fd = open(os.path.join(use_cal_source,'Res.dat'),'r')
             for i, cam_id in enumerate(cam_ids):
                 fname = 'camera%d.Pmat.cal'%(i+1)
-                pmat = load_ascii_matrix(opj(use_cal_source,fname)) # 3 rows x 4 columns
+                pmat = np.loadtxt(opj(use_cal_source,fname)) # 3 rows x 4 columns
                 if do_normalize_pmat:
                     pmat_orig = pmat
                     pmat = normalize_pmat(pmat)
@@ -1597,7 +1576,7 @@ def align_calibration():
          print 'ccs',ccs
          orig_cam_centers = np.array(ccs).T
          print 'orig_cam_centers',orig_cam_centers.T
-         new_cam_centers = load_ascii_matrix(options.align_cams).T
+         new_cam_centers = np.loadtxt(options.align_cams).T
          print 'new_cam_centers',new_cam_centers.T
          s,R,t = align.estsimt(orig_cam_centers,new_cam_centers)
      elif options.align_reconstructor is not None:
