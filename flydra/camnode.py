@@ -2487,6 +2487,9 @@ class AppState(object):
                     cmds=self.main_brain.get_and_clear_commands(cam_id)
                 except KeyError:
                     LOG.warn('main brain appears to have lost cam_id %s' % cam_id)
+                except rospy.ServiceException:
+                    #mainbrain shutting down
+                    pass
                 else:
                     self.handle_commands(cam_no,cmds)
 
