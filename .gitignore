@@ -11,4 +11,3 @@ flydra.egg-info
 src/flydra_tracked_object.c
 flydra/a2/fastfinder_help.c
 src/mahalanobis.c
-src/pmat_jacobian.c

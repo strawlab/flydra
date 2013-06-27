@@ -1,2 +1,3 @@
 _fastgeom.c
 _reconstruct_utils.c
+_pmat_jacobian.c

@@ -60,8 +60,8 @@ if not LIGHT_INSTALL:
 ext_modules.append(Extension(name='_reconstruct_utils',
                              sources=['src/_reconstruct_utils.pyx']))
 
-ext_modules.append(Extension(name='flydra.pmat_jacobian',
-                             sources=['src/pmat_jacobian.pyx']))
+ext_modules.append(Extension(name='_pmat_jacobian',
+                             sources=['src/_pmat_jacobian.pyx']))
 
 ext_modules.append(Extension(name='flydra.kalman.flydra_tracked_object',
                              sources=['src/flydra_tracked_object.pyx']))
