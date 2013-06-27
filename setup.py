@@ -69,8 +69,8 @@ ext_modules.append(Extension(name='flydra.kalman.flydra_tracked_object',
 ext_modules.append(Extension(name='flydra.mahalanobis',
                              sources=['src/mahalanobis.pyx']))
 
-ext_modules.append(Extension(name='flydra.fastgeom',
-                             sources=['src/fastgeom.pyx']))
+ext_modules.append(Extension(name='_fastgeom',
+                             sources=['src/_fastgeom.pyx']))
 
 ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
                              sources=['flydra/a2/fastfinder_help.pyx'],

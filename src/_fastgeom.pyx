@@ -1,4 +1,5 @@
 # emacs, this is -*-Python-*- mode
+
 def make_ThreeTuple(a,b,c):
     return ThreeTuple((a,b,c))
 
