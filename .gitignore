@@ -7,7 +7,6 @@ srv_gen
 *.pyc
 *~
 flydra/camnode_colors.c
-src/reconstruct_utils.c
 flydra.egg-info
 src/flydra_tracked_object.c
 flydra/a2/fastfinder_help.c

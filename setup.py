@@ -57,8 +57,8 @@ if not LIGHT_INSTALL:
                                  extra_compile_args=ipp_extra_compile_args,
                                  ))
 
-ext_modules.append(Extension(name='flydra.reconstruct_utils',
-                             sources=['src/reconstruct_utils.pyx']))
+ext_modules.append(Extension(name='_reconstruct_utils',
+                             sources=['src/_reconstruct_utils.pyx']))
 
 ext_modules.append(Extension(name='flydra.pmat_jacobian',
                              sources=['src/pmat_jacobian.pyx']))
