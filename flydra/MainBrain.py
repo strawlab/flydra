@@ -49,7 +49,6 @@ import std_srvs.srv
 import std_msgs.msg
 from ros_flydra.msg import flydra_mainbrain_super_packet
 from ros_flydra.msg import flydra_mainbrain_packet, flydra_object, FlydraError
-from ros_flydra.srv import MainBrainGetVersion, MainBrainRegisterNewCamera
 import ros_flydra.srv
 import ros_flydra.cv2_bridge
 from geometry_msgs.msg import Point, Vector3
@@ -1150,8 +1149,8 @@ class MainBrain(object):
         stop_small_recording=(std_srvs.srv.Empty),
         do_synchronization=(std_srvs.srv.Empty),
 
-        get_version=(MainBrainGetVersion),
-        register_new_camera=(MainBrainRegisterNewCamera),
+        get_version=(ros_flydra.srv.MainBrainGetVersion),
+        register_new_camera=(ros_flydra.srv.MainBrainRegisterNewCamera),
         get_and_clear_commands=(ros_flydra.srv.MainBrainGetAndClearCommands),
         set_image=(ros_flydra.srv.MainBrainSetImage),
         close_xcamera=(ros_flydra.srv.MainBrainCloseCamera),
