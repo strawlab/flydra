@@ -23,6 +23,7 @@ WARN_CALIB_DIFF = False
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
 
+NO_BACKWARDS_COMPAT = int(os.environ.get('FLYDRA_NO_BACKWARDS_COMPAT','0'))
 
 def mat2quat(m):
     """Initialize q from either a mat3 or mat4 and returns self."""
@@ -704,6 +705,19 @@ def SingleCameraCalibration_from_xml(elem, helper=None):
     cam_id = elem.find("cam_id").text
     pmat = numpy.array(numpy.mat(elem.find("calibration_matrix").text))
     res = numpy.array(numpy.mat(elem.find("resolution").text))[0,:]
+    scale_elem = elem.find("scale_factor")
+    if NO_BACKWARDS_COMPAT:
+        assert scale_elem is None, 'XML file has outdated <scale_factor>'
+    else:
+        if scale_elem is not None:
+            # backwards compatibility
+            scale = float( scale_elem.text )
+            if scale != 1.0:
+                warnings.warn('converting old scaled calibration')
+                scale_array = numpy.ones((3,4))
+                scale_array[:,3] = scale # mulitply last column by scale
+                pmat = scale_array*pmat # element-wise multiplication
+
     if not helper:
         helper_elem = elem.find("non_linear_parameters")
         if helper_elem is not None:
@@ -963,6 +977,20 @@ class Reconstructor:
                 res = tuple(results.root.calibration.resolution.__getattr__(cam_id))
                 K = nx.array(results.root.calibration.intrinsic_linear.__getattr__(cam_id))
                 nlparams = tuple(results.root.calibration.intrinsic_nonlinear.__getattr__(cam_id))
+                try:
+                    scale = nx.array(results.root.calibration.scale_factor2meters.__getattr__(cam_id))
+                except PT.exceptions.NoSuchNodeError:
+                    pass
+                else:
+                    if NO_BACKWARDS_COMPAT:
+                        raise("old 'scale_factor2meters' present in h5 file")
+
+                    if scale != 1.0:
+                        warnings.warn('converting old scaled calibration')
+                        scale_array = numpy.ones((3,4))
+                        scale_array[:,3] = scale # mulitply last column by scale
+                        pmat = scale_array*pmat # element-wise multiplication
+
                 self.Pmat[cam_id] = pmat
                 self.Res[cam_id] = res
                 self._helper[cam_id] = reconstruct_utils.ReconstructHelper(
