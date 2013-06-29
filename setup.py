@@ -63,8 +63,8 @@ ext_modules.append(Extension(name='_reconstruct_utils',
 ext_modules.append(Extension(name='_pmat_jacobian',
                              sources=['src/_pmat_jacobian.pyx']))
 
-ext_modules.append(Extension(name='flydra.kalman.flydra_tracked_object',
-                             sources=['src/flydra_tracked_object.pyx']))
+ext_modules.append(Extension(name='_flydra_tracked_object',
+                             sources=['src/_flydra_tracked_object.pyx']))
 
 ext_modules.append(Extension(name='flydra.mahalanobis',
                              sources=['src/mahalanobis.pyx']))
