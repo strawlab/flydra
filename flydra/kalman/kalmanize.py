@@ -2,9 +2,9 @@ from __future__ import with_statement
 import numpy
 import numpy as np
 import flydra.reconstruct
-import flydra.reconstruct_utils as ru
+import _reconstruct_utils as ru
 #import flydra.geom as geom
-import flydra.fastgeom as geom
+import _fastgeom as geom
 import time, math
 from flydra.analysis.result_utils import get_results, get_caminfo_dicts, \
      get_resolution, get_fps, read_textlog_header

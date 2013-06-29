@@ -3,7 +3,7 @@ import reconstruct
 import pkg_resources
 import flydra.reconstruct_utils as reconstruct_utils
 import flydra.geom
-import flydra.fastgeom
+import _fastgeom as fastgeom
 import flydra.undistort
 import numpy
 import numpy as np
@@ -16,7 +16,7 @@ import pickle
 class TestGeomParametric:
     def test_geom(self):
         for mod in [flydra.geom,
-                    flydra.fastgeom]:
+                    fastgeom]:
             for x1 in [1,100,10000]:
                 for y1 in [5,50,500]:
                     for z1 in [-10,234,0]:
@@ -60,7 +60,7 @@ class TestGeomParametric:
         line.dist2()
 
     def tst_line_closest1(self,geom):
-        if geom is flydra.fastgeom:
+        if geom is fastgeom:
             return # not implemented
         xaxis=geom.line_from_points(geom.ThreeTuple((0,0,0)),
                                     geom.ThreeTuple((1,0,0)))

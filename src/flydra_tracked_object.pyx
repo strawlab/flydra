@@ -11,7 +11,7 @@ import time, sys
 import adskalman.adskalman as kalman
 import flydra.kalman.ekf as kalman_ekf
 #import flydra.geom as geom
-import flydra.fastgeom as geom
+import _fastgeom as geom
 import flydra.geom
 import flydra.mahalanobis as mahalanobis
 import math, struct

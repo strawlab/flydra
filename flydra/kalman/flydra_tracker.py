@@ -2,7 +2,7 @@ import numpy
 import numpy as np
 import flydra.kalman.ekf as kalman_ekf
 #import flydra.geom as geom
-import flydra.fastgeom as geom
+import _fastgeom as geom
 import flydra.geom
 import os, math, struct
 import flydra.data_descriptions as data_descriptions

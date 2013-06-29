@@ -3,12 +3,12 @@ opj=os.path.join
 import numpy as np
 import numpy as nx
 import numpy
-import flydra.reconstruct_utils as reconstruct_utils # in pyrex/C for speed
+import _reconstruct_utils as reconstruct_utils # in pyrex/C for speed
 import time
 from flydra.common_variables import MINIMUM_ECCENTRICITY as DEFAULT_MINIMUM_ECCENTRICITY
 import scipy.linalg
 import traceback
-import flydra.pmat_jacobian
+import _pmat_jacobian # in pyrex/C for speed
 #import flydra.talign
 import xml.etree.ElementTree as ET
 import StringIO, warnings
@@ -1018,7 +1018,7 @@ class Reconstructor:
             self.Pmat[cam_id] = numpy.array(self.Pmat[cam_id])
 
             self.pmat_inv[cam_id] = numpy.linalg.pinv(self.Pmat[cam_id])
-            self.pinhole_model_with_jacobian[cam_id] = flydra.pmat_jacobian.PinholeCameraModelWithJacobian(self.Pmat[cam_id])
+            self.pinhole_model_with_jacobian[cam_id] = _pmat_jacobian.PinholeCameraModelWithJacobian(self.Pmat[cam_id])
 
         self.cam_combinations = [s for s in setOfSubsets(cam_ids) if len(s) >=2]
         def cmpfunc(a,b):
