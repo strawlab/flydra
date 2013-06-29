@@ -8,7 +8,7 @@ import flydra.undistort
 import numpy
 import numpy as np
 import scipy.optimize
-import flydra.mahalanobis
+import _mahalanobis as mahalanobis
 import xml.etree.ElementTree as ET
 import StringIO
 import pickle
@@ -246,7 +246,7 @@ class TestMahalanobis(unittest.TestCase):
         mu = (10,1)
         S = numpy.eye(2)
         S_inv = np.linalg.inv( S )
-        loc2d = flydra.mahalanobis.line_fit_2d( line_2d, mu, S_inv)
+        loc2d = mahalanobis.line_fit_2d( line_2d, mu, S_inv)
         assert numpy.allclose(loc2d, (10.0,0.0) )
 
     def test_3d(self):
@@ -255,7 +255,7 @@ class TestMahalanobis(unittest.TestCase):
         mu = numpy.array((10.0,1,0,0,0,0))
         S = numpy.eye(6)
         S_inv = np.linalg.inv( S[:3,:3] )
-        loc3d = flydra.mahalanobis.line_fit_3d( ln, mu, S_inv)
+        loc3d = mahalanobis.line_fit_3d( ln, mu, S_inv)
         assert numpy.allclose(loc3d, (10.0, 0.0, 0.0) )
 
     def test_dist(self):
@@ -263,5 +263,5 @@ class TestMahalanobis(unittest.TestCase):
         y = numpy.array(( 2, 0, 0))
         sigma = numpy.eye(3)
         sigma_inv = np.linalg.inv( sigma )
-        four = flydra.mahalanobis.dist2( x, y, sigma_inv )
+        four = mahalanobis.dist2( x, y, sigma_inv )
         assert four==4.0

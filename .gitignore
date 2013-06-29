@@ -9,4 +9,3 @@ srv_gen
 flydra/camnode_colors.c
 flydra.egg-info
 flydra/a2/fastfinder_help.c
-src/mahalanobis.c

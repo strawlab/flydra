@@ -66,8 +66,8 @@ ext_modules.append(Extension(name='_pmat_jacobian',
 ext_modules.append(Extension(name='_flydra_tracked_object',
                              sources=['src/_flydra_tracked_object.pyx']))
 
-ext_modules.append(Extension(name='flydra.mahalanobis',
-                             sources=['src/mahalanobis.pyx']))
+ext_modules.append(Extension(name='_mahalanobis',
+                             sources=['src/_mahalanobis.pyx']))
 
 ext_modules.append(Extension(name='_fastgeom',
                              sources=['src/_fastgeom.pyx']))
