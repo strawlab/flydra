@@ -244,7 +244,7 @@ def do_it(filename,
     cam_centers = []
     cam_calibrations = []
 
-    mcsc = MultiCamSelfCal(calib_dir, use_nth_frame=5, mcscdir="/home/strawlab/Straw/MultiCamSelfCal.git/MultiCamSelfCal/")
+    mcsc = MultiCamSelfCal(calib_dir, use_nth_frame=5 )
 
     if creconstructor is not None:
         cam_centers = numpy.asarray([creconstructor.get_camera_center(cam_id)[:,0]
