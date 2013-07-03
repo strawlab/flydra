@@ -2011,6 +2011,8 @@ class MainBrain(object):
             self.pub_calib_file.publish(dirname)
             self.config['camera_calibration'] = dirname
             self.save_config()
+        else:
+            raise ValueError('you specified loading calibration from %r, but that path does not exist'%dirname)
 
     def clear_calibration(self):
         if self.is_saving_data():
