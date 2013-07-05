@@ -140,6 +140,10 @@ def test_align():
     print 't=%s'%repr(t.tolist())
     Xnew = align_points( s,R,t, orig_points )
 
+    # measure distance between elements
+    mean_absdiff = np.mean( abs(Xnew[:3]-new_points).flatten() )
+    assert mean_absdiff < 0.05
+
     pmat_orig = np.array([[1,2,3,4],
                           [5,6,7,8],
                           [9,10,11,12]],dtype=np.float)
