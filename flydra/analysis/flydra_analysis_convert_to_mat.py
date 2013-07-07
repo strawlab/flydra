@@ -191,7 +191,8 @@ def do_it(filename=None,
                 else:
                     arr[new_colname]= data[orig_colname]
 
-            data_dict[table_name] = arr
+            if len(arr)>0: # don't save empty data (h5py doesn't like it)
+                data_dict[table_name] = arr
 
         # save as h5 file
         save_as_flydra_hdf5(newfilename, data_dict, tzname, fps)
