@@ -461,6 +461,42 @@ class SingleCameraCalibration:
                 numpy.allclose(self.res,other.res) and
                 self.helper == other.helper)
 
+    def convert_to_camera_model(self):
+        import roslib; roslib.load_manifest('camera_model')
+        import camera_model
+
+        K, R = self.get_KR()
+        if not camera_model.camera_model.is_rotation_matrix(R):
+            # RQ may return left-handed rotation matrix. Make right-handed.
+            R2 = -R
+            K2 = -K
+            assert np.allclose(np.dot(K2,R2), np.dot(K,R))
+            K,R = K2,R2
+
+        P = np.zeros((3,4))
+        P[:3,:3] = K
+        KK = self.helper.get_K()
+
+        k1,k2,p1,p2 = self.helper.get_nlparams()
+        distortion = [k1,k2,p1,p2,0]
+
+        C = self.get_cam_center()
+        rot = R
+        t = -np.dot(rot, C)[:,0]
+
+        d = {'width':self.res[0],
+             'height':self.res[1],
+             'P':P,
+             'K':KK,
+             'R':None,
+             'translation':t,
+             'rotation':rot,
+             'D':distortion,
+             'name':self.cam_id,
+             }
+        cnew = camera_model.CameraModel.load_camera_from_dict(d)
+        return cnew
+
     def get_pmat(self):
         return self.Pmat
 
@@ -1039,6 +1075,16 @@ class Reconstructor:
 
         if close_cal_source:
             use_cal_source.close()
+
+    def convert_to_camera_model(self):
+        import roslib; roslib.load_manifest('camera_model')
+        import camera_model
+
+        orig_sccs = [self.get_SingleCameraCalibration(cam_id)
+                     for cam_id in self.cam_ids]
+        cams = [o.convert_to_camera_model() for o in orig_sccs]
+        result = camera_model.MultiCameraSystem(cams)
+        return result
 
     def get_scaled(self):
         """return a copy of self. (DEPRECATED.)"""
