@@ -1,1 +1,1 @@
-nosetests --eval-attr="not (known_fail or slow_command)"
+nosetests --eval-attr="not (known_fail or slow_command)" $*
