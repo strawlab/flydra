@@ -9,7 +9,7 @@ from flydra.common_variables import MINIMUM_ECCENTRICITY as DEFAULT_MINIMUM_ECCE
 import scipy.linalg
 import traceback
 import _pmat_jacobian # in pyrex/C for speed
-#import flydra.talign
+import flydra.align
 import xml.etree.ElementTree as ET
 import StringIO, warnings
 import cgtypes
@@ -510,8 +510,7 @@ class SingleCameraCalibration:
         return copy
 
     def get_aligned_copy(self, M):
-        import flydra.talign
-        aligned_Pmat = flydra.talign.align_pmat(M,self.Pmat)
+        aligned_Pmat = flydra.align.align_pmat2(M,self.Pmat)
         aligned = SingleCameraCalibration(cam_id=self.cam_id,
                                           Pmat=aligned_Pmat,
                                           res=self.res,

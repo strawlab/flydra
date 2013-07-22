@@ -6,10 +6,6 @@ import numpy as np
 
 D2R = np.pi/180.0
 
-def align_pmat( M, P ):
-    P = np.dot(P,np.dual.inv(M))
-    return P
-
 def cgmat2np(cgkit_mat):
     """convert cgkit matrix to numpy matrix"""
     arr = np.array(cgkit_mat.toList())

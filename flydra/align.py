@@ -98,6 +98,10 @@ def align_pmat( s,R,T, P ):
     P = np.dot(P,scipy.linalg.inv(T))
     return P
 
+def align_pmat2( M, P ):
+    P = np.dot(P,np.dual.inv(M))
+    return P
+
 def test_align():
     orig_points = np.array([
         [3.36748406,  1.61036404,  3.55147255],
