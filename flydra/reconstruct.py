@@ -494,7 +494,7 @@ class SingleCameraCalibration:
              'D':distortion,
              'name':self.cam_id,
              }
-        cnew = camera_model.CameraModel.load_camera_from_dict(d)
+        cnew = camera_model.CameraModel.from_dict(d)
         return cnew
 
     def get_pmat(self):
