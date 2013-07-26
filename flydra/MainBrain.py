@@ -1885,6 +1885,9 @@ class MainBrain(object):
             cam_ids = self.remote_api.external_get_cam_ids()
         for cam_id in cam_ids:
             self.remote_api.external_stop_recording(cam_id)
+            if cam_id not in self._currently_recording_movies:
+                # we're not actually saving...
+                continue
             approx_stop_frame = self.framenumber
             raw_file_basename, approx_start_frame = self._currently_recording_movies[ cam_id ]
             del self._currently_recording_movies[ cam_id ]

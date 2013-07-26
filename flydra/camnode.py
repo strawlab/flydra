@@ -1179,10 +1179,13 @@ class SaveCamData(object):
 
                 elif cmd[0] == 'stop':
                     LOG.info('done saving movies')
-                    raw_movie.close()
-                    bg_movie.close()
-                    std_movie.close()
-                    state = 'pass'
+                    if state=='saving':
+                        raw_movie.close()
+                        bg_movie.close()
+                        std_movie.close()
+                        state = 'pass'
+                    else:
+                        LOG.warn("Hmm, you want me to stop saving movies, but I'm not")
 
             # 2: block for image data
             with camnode_utils.use_buffer_from_chain(self._chain) as chainbuf: # must do on every frame
