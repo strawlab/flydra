@@ -267,22 +267,10 @@ class CoordRealReceiver(threading.Thread):
                 # now gather all data waiting on the sockets
 
                 for sockobj in in_ready:
-                    try:
-                        with self.socket_lock:
-                            cam_id = self.listen_sockets[sockobj]
-                    except KeyError,ValueError:
-                        LOG.warn('strange - what is in my listen sockets list: %r' % sockobj)
-                        # XXX camera was dropped?
-                        continue
+                    with self.socket_lock:
+                        cam_id = self.listen_sockets[sockobj]
 
-                    try:
-                        data, addr = sockobj.recvfrom(4096)
-                    except Exception, err:
-                        LOG.warn('unknown Exception receiving UDP data: %s' % err)
-                        continue
-                    except:
-                        LOG.warn('unknown error (non-Exception!) receiving UDP data:')
-                        continue
+                    data, addr = sockobj.recvfrom(4096)
 
                     if BENCHMARK_2D_GATHER:
                         header = data[:header_size]
