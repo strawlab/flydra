@@ -649,11 +649,7 @@ class CoordinateProcessor(threading.Thread):
                 deferred_2d_data = []
                 for cam_id, newdata in incoming_2d_data:
 
-                    try:
-                        cam_idx = self.cam_ids.index(cam_id)
-                    except ValueError, err:
-                        LOG.warn('ignoring lost cam_id %s'%cam_id)
-                        continue
+                    cam_idx = self.cam_ids.index(cam_id)
                     absolute_cam_no = self.absolute_cam_nos[cam_idx]
 
                     data = newdata
