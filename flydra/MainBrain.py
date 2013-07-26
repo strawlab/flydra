@@ -628,8 +628,6 @@ class CoordinateProcessor(threading.Thread):
                 incoming_remote_received_timestamps = []
 
             with self.all_data_lock:
-            #self.all_data_lock.acquire(latency_warn_msec=1.0)
-
                 deferred_2d_data = []
                 for cam_id, newdata in incoming_2d_data:
 
