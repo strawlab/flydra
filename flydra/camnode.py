@@ -27,7 +27,6 @@ must be settable. Ideally, this would be possible from a Python API
 from __future__ import division
 from __future__ import with_statement
 
-import pkg_resources
 import os
 BENCHMARK = int(os.environ.get('FLYDRA_BENCHMARK',0))
 FLYDRA_BT = int(os.environ.get('FLYDRA_BT',0)) # threaded benchmark
@@ -42,7 +41,7 @@ near_inf = 9.999999e20
 bright_non_gaussian_cutoff = 255
 bright_non_gaussian_replacement = 5
 
-import threading, time, socket, sys, struct, select, math, warnings, optparse
+import threading, time, socket, sys, struct, warnings, optparse
 import traceback
 import Queue
 import numpy
@@ -680,7 +679,6 @@ class ProcessCamClass(rospy.SubscribeListener):
         self._globals = globals
 
         # questionable optimization: speed up by eliminating namespace lookups
-        process_quit_event_isSet = globals['process_quit_event'].isSet
         bg_frame_number = -1
         clear_background_isSet = globals['clear_background'].isSet
         clear_background_clear = globals['clear_background'].clear
@@ -762,8 +760,6 @@ class ProcessCamClass(rospy.SubscribeListener):
         self._running_sumsqf_full = running_sumsqf_full # make accessible to other code
 
         noisy_pixels_mask_full = FastImage.FastImage8u(max_frame_size)
-        mean_duration_no_bg = 0.0053 # starting value
-        mean_duration_bg = 0.020 # starting value
 
         # set ROI views of full-frame images
         running_mean8u_im = running_mean8u_im_full.roi(cur_roi_l, cur_roi_b, cur_fisize) # set ROI view
@@ -859,7 +855,6 @@ class ProcessCamClass(rospy.SubscribeListener):
                 old_ts = timestamp
                 old_fn = framenumber
 
-                work_start_time = time.time()
                 #print 'erode value', self.n_erode_absdiff_shared.get_nowait()
                 xpoints = self.realtime_analyzer.do_work(hw_roi_frame,
                                                          timestamp, framenumber, use_roi2,
@@ -882,8 +877,6 @@ class ProcessCamClass(rospy.SubscribeListener):
                     chainbuf.mean8u_im_full = numpy.array(running_mean8u_im_full,copy=True)
                     chainbuf.compareframe8u_full = numpy.array(compareframe8u_full,copy=True)
                 points = self._convert_to_wire_order( xpoints, hw_roi_frame, running_mean_im, running_sumsqf)
-
-                work_done_time = time.time()
 
                 # allow other thread to see images
                 imname = globals['export_image_name'] # figure out what is wanted # XXX theoretically could have threading issue
@@ -1059,7 +1052,7 @@ class ProcessCamClass(rospy.SubscribeListener):
 
                 try:
                     coord_socket.sendto(data,(self.main_brain_ipaddr,self.cam2mainbrain_port))
-                except socket.error, err:
+                except socket.error:
                     LOG.warn('WARNING: ignoring error: %s' % traceback.format_exc())
 
                 if 0 and self.new_roi.isSet():
@@ -1093,7 +1086,6 @@ class ProcessCamClass(rospy.SubscribeListener):
                     mean2 = mean2_full.roi(l, b, cur_fisize)  # set ROI view
                     std2 = std2_full.roi(l, b, cur_fisize)  # set ROI view
                     running_stdframe = running_stdframe_full.roi(l, b, cur_fisize)  # set ROI view
-                    compareframe = compareframe_full.roi(l, b, cur_fisize)  # set ROI view
                     compareframe8u = compareframe8u_full.roi(l, b, cur_fisize)  # set ROI view
                     running_sumsqf = running_sumsqf_full.roi(l, b, cur_fisize)  # set ROI view
                     noisy_pixels_mask = noisy_pixels_mask_full.roi(l, b, cur_fisize)  # set ROI view
@@ -1529,9 +1521,7 @@ class ImageSourceFromCamera(ImageSource):
             with self.cam.lock:
                 trash = self.cam.grab_next_frame_blocking()
         except cam_iface.BuffersOverflowed:
-            msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
-            self.log_message_queue.put((self.cam_id,now,msg))
-            LOG.warn(msg)
+            LOG.warn('ERROR: buffers overflowed on %s'%(self.cam_id,))
         except cam_iface.FrameDataMissing:
             pass
         except cam_iface.FrameDataCorrupt:
@@ -2444,7 +2434,6 @@ class AppState(object):
         targets = {}
         for cam_no, (cam_id, chain) in enumerate(zip(self.all_cam_ids,
                                                      self.all_cam_chains)):
-            globals = self.globals[cam_no]
             base_kwargs = dict(cam_id=cam_id)
 
             if kwargs is not None:
@@ -2510,8 +2499,6 @@ class AppState(object):
                     last_frames = self.last_frames_by_cam[cam_no]
                     last_points = self.last_points_by_cam[cam_no]
                     last_points_framenumbers = self.last_points_framenumbers_by_cam[cam_no]
-
-                    now = time_func() # roughly flydra_camera_node.py line 1504
 
                     # Get new raw frames from grab thread.
                     get_raw_frame = globals['incoming_raw_frames'].get_nowait
