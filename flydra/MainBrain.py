@@ -68,7 +68,7 @@ ATTEMPT_DATA_RECOVERY = True
 if os.name == 'posix':
     try:
         import posix_sched
-    except ImportError, err:
+    except ImportError:
         warnings.warn('Could not open posix_sched module')
 
 IMPOSSIBLE_TIMESTAMP = -10.0
@@ -149,7 +149,7 @@ class TimestampEchoReceiver(threading.Thread):
         while 1:
             try:
                 timestamp_echo_buf, (timestamp_echo_remote_ip,cam_port) = timestamp_echo_gatherer.recvfrom(4096)
-            except Exception, err:
+            except Exception as err:
                 LOG.warn('unknown Exception receiving timestamp echo data: %s' % err)
                 continue
             except:
@@ -596,7 +596,7 @@ class CoordinateProcessor(threading.Thread):
                 sched_params = posix_sched.SchedParam(max_priority)
                 posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
                 LOG.info('excellent, 3D reconstruction thread running in maximum prioity mode')
-            except Exception, x:
+            except Exception as x:
                 LOG.warn('could not run in maximum priority mode (PID %d): %s'%(os.getpid(),str(x)))
 
         header_fmt = flydra.common_variables.recv_pt_header_fmt
@@ -1669,7 +1669,7 @@ class MainBrain(object):
                 try:
                     self.send_set_camera_property(
                         cam_id, 'expected_trigger_framerate', actual_new_fps )
-                except Exception,err:
+                except Exception as err:
                     LOG.warn('set_camera_property_error %s'%err)
 
             self.config['frames_per_second'] = float(actual_new_fps)
