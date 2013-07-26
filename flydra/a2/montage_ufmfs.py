@@ -58,30 +58,35 @@ def montage(fnames, title, target):
     #print CMD
     subprocess.check_call(CMD,shell=True)
 
-def load_3d_raw_data(kalman_filename,**kwargs):
+def load_3d_raw_data(kalman_filename,require_qual=True,**kwargs):
     with openFileSafe( kalman_filename, mode='r' ) as kh5:
         ca = core_analysis.get_global_CachingAnalyzer()
         all_obj_ids, obj_ids, is_mat_file, data_file, extra = \
                      ca.initial_file_load(kalman_filename)
         allrows = []
-        allqualrows = []
+        if require_qual:
+            allqualrows = []
         this_kw = {'min_ori_quality_required':kwargs['min_ori_quality_required'],
                    'ori_quality_smooth_len':kwargs['ori_quality_smooth_len']}
         for obj_id in obj_ids:
             rows = ca.load_dynamics_free_MLE_position( obj_id, kalman_filename,
                                                        **this_kw)
             allrows.append( rows )
-            if np.any( ~np.isnan( rows['hz_line0'] )):
-                qualrows = compute_ori_quality(data_file,
-                                               rows['frame'],
-                                               obj_id,
-                                               smooth_len=0)
-            else:
-                qualrows = np.zeros_like(rows['hz_line0'])
-            allqualrows.append( qualrows )
+            if require_qual:
+                if np.any( ~np.isnan( rows['hz_line0'] )):
+                    qualrows = compute_ori_quality(data_file,
+                                                   rows['frame'],
+                                                   obj_id,
+                                                   smooth_len=0)
+                else:
+                    qualrows = np.zeros_like(rows['hz_line0'])
+                allqualrows.append( qualrows )
     data3d = np.concatenate(allrows)
-    dataqual3d = np.concatenate(allqualrows)
-    return data3d, dataqual3d
+    if require_qual:
+        dataqual3d = np.concatenate(allqualrows)
+        return data3d, dataqual3d
+    else:
+        return data3d
 
 def is_obj_in_frame_range( obj_id, all_obj_ids, frames, start=None, stop=None):
     valid_cond = np.ones( frames.shape, dtype=np.bool)
@@ -92,7 +97,7 @@ def is_obj_in_frame_range( obj_id, all_obj_ids, frames, start=None, stop=None):
     valid_obj_ids = all_obj_ids[ valid_cond ]
     return bool(np.sum(valid_obj_ids==obj_id))
 
-def load_3d_data(kalman_filename,start=None,stop=None,**kwargs):
+def load_3d_data(kalman_filename,start=None,stop=None,require_qual=True,**kwargs):
     with openFileSafe( kalman_filename, mode='r' ) as kh5:
         ca = core_analysis.get_global_CachingAnalyzer()
         all_obj_ids, obj_ids, is_mat_file, data_file, extra = \
@@ -110,7 +115,8 @@ def load_3d_data(kalman_filename,start=None,stop=None,**kwargs):
                 dynamic_model_name = dynamic_model_name[4:]
             print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
         allrows = []
-        allqualrows = []
+        if require_qual:
+            allqualrows = []
         for obj_id in obj_ids:
             if not is_obj_in_frame_range( obj_id, all_obj_ids, extra['frames'], start=start, stop=stop):
                 # obj_id not in range of frames that we're analyzing now
@@ -125,15 +131,19 @@ def load_3d_data(kalman_filename,start=None,stop=None,**kwargs):
             except core_analysis.NotEnoughDataToSmoothError:
                 warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
                 continue
-            qualrows = compute_ori_quality(data_file,
-                                           rows['frame'],
-                                           obj_id,
-                                           smooth_len=0)
             allrows.append( rows )
-            allqualrows.append( qualrows )
+            if require_qual:
+                qualrows = compute_ori_quality(data_file,
+                                               rows['frame'],
+                                               obj_id,
+                                               smooth_len=0)
+                allqualrows.append( qualrows )
     data3d = np.concatenate(allrows)
-    dataqual3d = np.concatenate(allqualrows)
-    return data3d, dataqual3d
+    if require_qual:
+        dataqual3d = np.concatenate(allqualrows)
+        return data3d, dataqual3d
+    else:
+        return data3d
 
 def make_montage( h5_filename,
                   cfg_filename=None,
@@ -174,11 +184,30 @@ def make_montage( h5_filename,
             raise ValueError('need kalman filename to show object labels')
 
     if kalman_filename is not None:
-        data3d, dataqual_3d = load_3d_data(kalman_filename,start=start,stop=stop,
-                                           **kwargs)
+        if (config['what to show']['show_3d_smoothed_orientation'] or
+            config['what to show']['show_3d_raw_orientation'] or
+            config['what to show']['show_3d_raw_chosen_orientation']):
+            need_quality_data = True
+        else:
+            need_quality_data = False
+
+        if need_quality_data:
+            # need data about quality of tracking
+            data3d, dataqual_3d = load_3d_data(kalman_filename,start=start,stop=stop,
+                                               require_qual=True, **kwargs)
+        else:
+            data3d = load_3d_data(kalman_filename,start=start,stop=stop,
+                                  require_qual=False, **kwargs)
+            dataqual_3d = None
+
+
         if (config['what to show']['show_3d_MLE_position'] or
             config['what to show']['show_3d_raw_orientation']):
-            data_raw_3d, dataqual_raw_3d = load_3d_raw_data(kalman_filename,**kwargs)
+            if need_quality_data:
+                data_raw_3d, dataqual_raw_3d = load_3d_raw_data(kalman_filename,**kwargs)
+            else:
+                data_raw_3d = load_3d_raw_data(kalman_filename,require_qual=False,**kwargs)
+                dataqual_raw_3d = None
         else:
             data_raw_3d, dataqual_raw_3d = None, None
         R = reconstruct.Reconstructor(kalman_filename)
@@ -244,14 +273,20 @@ def make_montage( h5_filename,
 
         if data3d is not None:
             this_frame_3d_data = data3d[data3d['frame']==frame]
-            this_frame_dataqual = dataqual_3d[data3d['frame']==frame]
+            if dataqual_3d is None:
+                this_frame_dataqual = None
+            else:
+                this_frame_dataqual = dataqual_3d[data3d['frame']==frame]
         else:
             this_frame_3d_data = None
             this_frame_dataqual = None
 
         if data_raw_3d is not None:
             this_frame_raw_3d_data = data_raw_3d[data_raw_3d['frame']==frame]
-            this_frame_raw_dataqual = dataqual_raw_3d[data_raw_3d['frame']==frame]
+            if dataqual_raw_3d is None:
+                this_frame_raw_dataqual = None
+            else:
+                this_frame_raw_dataqual = dataqual_raw_3d[data_raw_3d['frame']==frame]
         else:
             this_frame_raw_3d_data = None
             this_frame_raw_dataqual = None
