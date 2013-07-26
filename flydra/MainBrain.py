@@ -1288,6 +1288,7 @@ class MainBrain(object):
                 cmd_str = ' '.join(map(repr,camn_and_list))
                 with cam_lock:
                     cam['commands']['request_missing']=cmd_str
+            LOG.info('requested missing data from %s. offset %d, frames %s'%(cam_id,framenumber_offset,list_of_missing_framenumbers))
 
         def external_clear_background( self, cam_id):
             with self.cam_info_lock:
