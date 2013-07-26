@@ -647,11 +647,6 @@ class CoordinateProcessor(threading.Thread):
                         if BENCHMARK_GATHER:
                             incoming_remote_received_timestamps.append( camn_received_time )
 
-                        DEBUG_DROP = self.main_brain.remote_api.cam_info[cam_id]['scalar_control_info']['debug_drop']
-                        if DEBUG_DROP:
-                            if debug_drop_fd is None:
-                                debug_drop_fd = open('debug_framedrop.txt',mode='w')
-                            debug_drop_fd.write('%d,%d\n'%(raw_framenumber,n_pts))
                         points_in_pluecker_coords_meters = []
                         points_undistorted = []
                         points_distorted = []

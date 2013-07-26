@@ -678,9 +678,6 @@ class ProcessCamClass(rospy.SubscribeListener):
         globals = self.globals
 
         self._globals = globals
-        DEBUG_DROP = globals['debug_drop']
-        if DEBUG_DROP:
-            debug_fd = open('debug_framedrop_cam.txt',mode='w')
 
         # questionable optimization: speed up by eliminating namespace lookups
         process_quit_event_isSet = globals['process_quit_event'].isSet
@@ -1064,9 +1061,6 @@ class ProcessCamClass(rospy.SubscribeListener):
                     coord_socket.sendto(data,(self.main_brain_ipaddr,self.cam2mainbrain_port))
                 except socket.error, err:
                     LOG.warn('WARNING: ignoring error: %s' % traceback.format_exc())
-
-                if DEBUG_DROP:
-                    debug_fd.write('%d,%d\n'%(framenumber,len(points)))
 
                 if 0 and self.new_roi.isSet():
                     with self.new_roi_data_lock:
@@ -2058,7 +2052,6 @@ class AppState(object):
             self.globals[cam_no] = {} # intialize
             globals = self.globals[cam_no] # shorthand
 
-            globals['debug_drop']=options.debug_drop
             globals['debug_acquire']=options.debug_acquire
             globals['incoming_raw_frames']=Queue.Queue()
             globals['raw_fmf_and_bg_fmf']=None
@@ -2299,7 +2292,6 @@ class AppState(object):
                 scalar_control_info['roi'] = 0,0,width-1,height-1
                 scalar_control_info['max_framerate'] = cam.get_framerate()
                 scalar_control_info['collecting_background']=globals['collecting_background'].isSet()
-                scalar_control_info['debug_drop']=globals['debug_drop']
                 scalar_control_info['expected_trigger_framerate'] = 0.0
 
                 # register self with remote server
@@ -2771,7 +2763,6 @@ def get_app_defaults():
                     red_only=0,
                     clear_threshold = 0.3,
 
-                    debug_drop=False,
                     debug_acquire=False,
                     disable_ifi_warning=False,
                     num_points=20,
