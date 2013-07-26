@@ -501,7 +501,7 @@ def make_montage( h5_filename,
             canv.save()
             saved_fnames.append( save_fname_path )
 
-        target = os.path.join(dest_dir, 'movie%s_frame%07d.jpg'%(
+        target = os.path.join(dest_dir, 'movie%s_frame%07d.png'%(
             datetime_str,frame_enum+1 ))
         # All cameras saved for this frame, make montage
         title = '%s frame %d'%( datetime_str, frame )
@@ -516,7 +516,7 @@ def make_montage( h5_filename,
         orig_dir = os.path.abspath(os.curdir)
         os.chdir(dest_dir)
         try:
-            CMD = 'ffmpeg2theora -v 10 movie%s_frame%%07d.jpg -o movie%s.ogv'%(
+            CMD = 'ffmpeg2theora -v 10 movie%s_frame%%07d.png -o movie%s.ogv'%(
                 datetime_str,datetime_str)
             subprocess.check_call(CMD,shell=True)
         finally:
