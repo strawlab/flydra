@@ -229,12 +229,12 @@ class CoordRealReceiver(threading.Thread):
                     del self.listen_sockets[sockobj]
                     break # XXX naughty to delete item inside iteration
 
-    def get_data(self):
+    def get_data(self,timeout):
         Q = self.out_queue
         L = []
 
         try:
-            L.append( Q.get(1,.1) ) # block for 0.1 second timeout for the first item
+            L.append( Q.get(1,timeout) ) # block=True
             while 1:
                 # don't wait for next items, but collect them if they're there
                 L.append( Q.get_nowait() )
@@ -242,7 +242,6 @@ class CoordRealReceiver(threading.Thread):
             pass
         return L
 
-    # called from CoordRealReceiver thread
     def run(self):
         timeout=.1
         empty_list = []
@@ -618,7 +617,7 @@ class CoordinateProcessor(threading.Thread):
         debug_drop_fd = None
 
         while not self.quit_event.isSet():
-            incoming_2d_data = self.realreceiver.get_data() # blocks
+            incoming_2d_data = self.realreceiver.get_data(0.1) # blocks for max 0.1 sec
             if not len(incoming_2d_data):
                 continue
 
