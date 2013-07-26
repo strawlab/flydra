@@ -11,7 +11,6 @@ PLOTPANEL = True
 if PLOTPANEL:
     from MatplotlibPanel import PlotPanel
 import common_variables
-import flydra.kalman.dynamic_models
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 import flydra.data_descriptions
 
@@ -45,8 +44,9 @@ if SCROLLED:
 import motmot.wxvalidatedtext.wxvalidatedtext as wxvt
 
 import roslib
-roslib.load_manifest('rospy')
+roslib.load_manifest('ros_flydra')
 import rospy
+import ros_flydra.msg
 
  # trigger extraction
 RESFILE = pkg_resources.resource_filename(__name__,"flydra_server.xrc")
@@ -130,6 +130,8 @@ class wxMainBrainApp(wx.App):
                 import motmot.wxglvideo.simple_overlay as wxglvideo
             else:
                 import motmot.wxvideo.wxvideo as wxglvideo
+
+        self.pub_best_pose = rospy.Publisher("~best_pose", ros_flydra.msg.BestPose)
 
         self.pass_all_keystrokes = False
         wx.InitAllImageHandlers()
@@ -449,21 +451,6 @@ class wxMainBrainApp(wx.App):
         wx.EVT_BUTTON(clear_cal, clear_cal.GetId(), self.OnClearCal)
 
         ctrl = xrc.XRCCTRL(self.cam_preview_panel,
-                           "MANUAL_TRIGGER_DEVICE_PREVIEW1") # EXT TRIG1
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnManualTriggerDevice1)
-
-        ctrl = xrc.XRCCTRL(self.cam_preview_panel,
-                           "MANUAL_TRIGGER_DEVICE_PREVIEW2") # EXT TRIG2
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnManualTriggerDevice2)
-
-        ctrl = xrc.XRCCTRL(self.cam_preview_panel,
-                           "MANUAL_TRIGGER_DEVICE_PREVIEW3") # EXT TRIG3
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnManualTriggerDevice3)
-
-        ctrl = xrc.XRCCTRL(self.cam_preview_panel,
                            "MANUAL_RECORD_RAW_TOGGLE")
         wx.EVT_BUTTON(ctrl, ctrl.GetId(),self.OnRecordRawButton)
 
@@ -740,21 +727,6 @@ class wxMainBrainApp(wx.App):
             if param not in ('roi','width','height'):
                 print 'WARNING: could not update panel display for',param
 
-    def OnKalmanParametersChange(self,event=None):
-        ctrl = xrc.XRCCTRL(self.status_panel,
-                           "kalman_parameters_choice")
-        kalman_param_string = ctrl.GetStringSelection()
-        name=str(kalman_param_string)
-
-        self.main_brain.config['kalman_model'] = name
-        self.main_brain.save_config()
-
-        if self.main_brain.reconstructor is not None:
-            print 'setting model to',name
-            self.main_brain.set_new_tracker(kalman_model_name=name)
-        else:
-            print 'no reconstructor, not setting kalman model'
-
     def PreviewPerCamClose(self,cam_id):
         previewPerCamPanel=self.cameras[cam_id]['previewPerCamPanel']
         previewPerCamPanel.DestroyChildren()
@@ -893,16 +865,8 @@ class wxMainBrainApp(wx.App):
     def OnRecordRawStart(self):
         if len(self._currently_recording_cams) != 0:
             raise RuntimeError("currently recording!")
-
         cam_choice = xrc.XRCCTRL(self.record_raw_panel,
                              "record_raw_cam_select_checklist")
-##        filename_text_entry = xrc.XRCCTRL(self.record_raw_panel,
-##                                      "record_raw_filename")
-##        raw_filename = filename_text_entry.GetValue()
-##        if raw_filename.endswith('.fmf'):
-##            bg_filename = raw_filename[:-4] + '_bg.fmf'
-##        else:
-##            bg_filename = raw_filename + '.bg.fmf'
         cam_ids = []
         for i in range(cam_choice.GetCount()):
             if cam_choice.IsChecked(i):
@@ -934,13 +898,6 @@ class wxMainBrainApp(wx.App):
 
         cam_choice = xrc.XRCCTRL(self.record_raw_panel,
                              "record_raw_cam_select_checklist")
-##        filename_text_entry = xrc.XRCCTRL(self.record_raw_panel,
-##                                      "record_small_filename")
-##        small_filename = filename_text_entry.GetValue()
-##        if small_filename.endswith('.fmf'):
-##            small_datafile_filename = small_filename[:-4] + '.smd'
-##        else:
-##            small_datafile_filename = small_filename + '.smd'
         cam_ids = []
         for i in range(cam_choice.GetCount()):
             if cam_choice.IsChecked(i):
@@ -1043,26 +1000,6 @@ class wxMainBrainApp(wx.App):
         cam_choice.Delete(i)
 
     def InitStatusPanel(self):
-        ctrl = xrc.XRCCTRL(self.status_panel,
-                           "kalman_parameters_choice")
-        wx.EVT_CHOICE(ctrl, ctrl.GetId(),
-                      self.OnKalmanParametersChange)
-
-        ctrl = xrc.XRCCTRL(self.status_panel,
-                           "MANUAL_TRIGGER_DEVICE_STATUS1") # EXT TRIG1
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnManualTriggerDevice1)
-
-        ctrl = xrc.XRCCTRL(self.status_panel,
-                           "MANUAL_TRIGGER_DEVICE_STATUS2") # EXT TRIG2
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnManualTriggerDevice2)
-
-        ctrl = xrc.XRCCTRL(self.status_panel,
-                           "MANUAL_TRIGGER_DEVICE_STATUS3") # EXT TRIG3
-        wx.EVT_BUTTON(ctrl, ctrl.GetId(),
-                      self.OnManualTriggerDevice3)
-
         panel = xrc.XRCCTRL(self.status_panel,'TRAITED_STATUS_PANEL')
         sizer = wx.BoxSizer(wx.HORIZONTAL)
 
@@ -1072,18 +1009,6 @@ class wxMainBrainApp(wx.App):
         #control.GetParent().SetMinSize(control.GetMinSize())
         sizer.Add(control, 1, wx.EXPAND)
         panel.SetSizer( sizer )
-
-    def OnManualTriggerDevice1(self,event):
-        sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sender.sendto('1',(MainBrain.hostname,common_variables.trigger_network_socket_port))
-
-    def OnManualTriggerDevice2(self,event):
-        sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sender.sendto('2',(MainBrain.hostname,common_variables.trigger_network_socket_port))
-
-    def OnManualTriggerDevice3(self,event):
-        sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sender.sendto('3',(MainBrain.hostname,common_variables.trigger_network_socket_port))
 
     def OnLoadCalFile(self,event):
         self.OnLoadCalCore(event,wx.FileDialog,
@@ -1105,20 +1030,9 @@ class wxMainBrainApp(wx.App):
             dlg.Destroy()
             self.pass_all_keystrokes = False
         if doit:
-            self.main_brain.load_calibration(calib_dir)
-            cal_status_check = xrc.XRCCTRL(self.cam_preview_panel,
-                                       "CAL_STATUS_CHECK")
-            cal_status_check.Enable(True)
-            cal_status_check.SetValue(True)
-            cal_status_check.Enable(False)
-            self.OnKalmanParametersChange() # send current Kalman parameters
+            self.main_brain.load_calibration(str(calib_dir))
 
     def OnClearCal(self,event):
-        cal_status_check = xrc.XRCCTRL(self.cam_preview_panel,
-                                       "CAL_STATUS_CHECK")
-        cal_status_check.Enable(True)
-        cal_status_check.SetValue(False)
-        cal_status_check.Enable(False)
         self.main_brain.clear_calibration()
 
     def OnFixedColorRange(self, event):
@@ -1168,11 +1082,9 @@ class wxMainBrainApp(wx.App):
             self.pass_all_keystrokes = False
 
     def OnStartSavingData(self, event=None):
-        save_filename = time.strftime( 'DATA%Y%m%d_%H%M%S.h5' )
+        save_filename = time.strftime( '%Y%m%d_%H%M%S.mainbrain.h5' )
         try:
             self.main_brain.start_saving_data(save_filename)
-            self.statusbar.SetStatusText("Saving data to '%s'"%save_filename)
-            self.statusbar.SetStatusText(save_filename,2)
         except:
             self.statusbar.SetStatusText("Error saving data to '%s', see console"%save_filename)
             self.statusbar.SetStatusText("",2)
@@ -1181,7 +1093,6 @@ class wxMainBrainApp(wx.App):
     def OnStopSavingData(self, event=None):
         self.main_brain.stop_saving_data()
         self.statusbar.SetStatusText("Saving stopped")
-        self.statusbar.SetStatusText("",2)
 
     def OnToggleDebuggingText(self, event=None):
         level = self.main_brain.get_debug_level()
@@ -1302,28 +1213,7 @@ class wxMainBrainApp(wx.App):
 
     def attach_and_start_main_brain(self,main_brain):
         self.main_brain = main_brain
-
-        if 1:
-            fps = self.main_brain.get_fps()
-            model_names = flydra.kalman.dynamic_models.get_model_names()
-
-            ctrl = xrc.XRCCTRL(self.status_panel,
-                               "kalman_parameters_choice")
-
-            found_rc_default = None
-            for i,model_name in enumerate(model_names):
-                ctrl.Append(model_name)
-                if self.main_brain.config['kalman_model'] == model_name:
-                    found_rc_default = i
-            ctrl.GetParent().GetSizer().Layout()
-            if not found_rc_default:
-                found_rc_default = 0
-                print 'WARNING: could not find rc default for kalman model name'
-            else:
-                print 'found model name %d: %s'%(i,model_names[i])
-            ctrl.SetSelection( found_rc_default )
-            self.OnKalmanParametersChange()
-
+        self.main_brain.set_config_change_callback(self.OnConfigChange)
         self.main_brain.set_new_camera_callback(self.OnNewCamera)
         self.main_brain.set_old_camera_callback(self.OnOldCamera)
         self.main_brain.start_listening()
@@ -1457,7 +1347,7 @@ class wxMainBrainApp(wx.App):
                 dlg.ShowModal()
             finally:
                 dlg.Destroy()
-        realtime_data=MainBrain.get_best_realtime_data() # gets global data
+        realtime_data = self.main_brain.best_realtime_data
         if realtime_data is not None:
             Xs,min_mean_dist=realtime_data
             data3d = Xs[0]
@@ -1465,6 +1355,12 @@ class wxMainBrainApp(wx.App):
             xrc.XRCCTRL(self.status_panel,'y_pos').SetValue('% 8.1f'%data3d[1])
             xrc.XRCCTRL(self.status_panel,'z_pos').SetValue('% 8.1f'%data3d[2])
             xrc.XRCCTRL(self.status_panel,'err').SetValue('% 8.1f'%min_mean_dist)
+            best = ros_flydra.msg.BestPose()
+            best.pose.position.x = data3d[0]
+            best.pose.position.y = data3d[1]
+            best.pose.position.z = data3d[2]
+            best.error = min_mean_dist
+            self.pub_best_pose.publish(best)
             if min_mean_dist <= 10.0:
                 if self.detect_sound is not None and self.status_traits.audio_notification.enabled:
                     now = time.time()
@@ -1582,6 +1478,22 @@ class wxMainBrainApp(wx.App):
         self.SnapshotPerCamInit(cam_id)
         self.RecordRawPerCamInit(cam_id)
         self.update_wx()
+
+    def OnConfigChange(self):
+        if not hasattr(self,"main_brain"):
+            #race when closing
+            return
+
+        #is a calibration loaded
+        is_calib = self.main_brain.reconstructor is not None
+        cal_status_check = xrc.XRCCTRL(self.cam_preview_panel, "CAL_STATUS_CHECK")
+        cal_status_check.Enable(True)
+        cal_status_check.SetValue(is_calib)
+        cal_status_check.Enable(False)
+
+        #are we saving data
+        save_filename = self.main_brain.h5filename
+        self.statusbar.SetStatusText(save_filename,2)
 
     def _get_cam_id_for_button(self, button):
         container = button.GetParent()

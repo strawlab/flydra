@@ -57,20 +57,20 @@ if not LIGHT_INSTALL:
                                  extra_compile_args=ipp_extra_compile_args,
                                  ))
 
-ext_modules.append(Extension(name='flydra.reconstruct_utils',
-                             sources=['src/reconstruct_utils.pyx']))
+ext_modules.append(Extension(name='_reconstruct_utils',
+                             sources=['src/_reconstruct_utils.pyx']))
 
-ext_modules.append(Extension(name='flydra.pmat_jacobian',
-                             sources=['src/pmat_jacobian.pyx']))
+ext_modules.append(Extension(name='_pmat_jacobian',
+                             sources=['src/_pmat_jacobian.pyx']))
 
-ext_modules.append(Extension(name='flydra.kalman.flydra_tracked_object',
-                             sources=['src/flydra_tracked_object.pyx']))
+ext_modules.append(Extension(name='_flydra_tracked_object',
+                             sources=['src/_flydra_tracked_object.pyx']))
 
-ext_modules.append(Extension(name='flydra.mahalanobis',
-                             sources=['src/mahalanobis.pyx']))
+ext_modules.append(Extension(name='_mahalanobis',
+                             sources=['src/_mahalanobis.pyx']))
 
-ext_modules.append(Extension(name='flydra.fastgeom',
-                             sources=['src/fastgeom.pyx']))
+ext_modules.append(Extension(name='_fastgeom',
+                             sources=['src/_fastgeom.pyx']))
 
 ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
                              sources=['flydra/a2/fastfinder_help.pyx'],
@@ -155,7 +155,6 @@ setup(name='flydra',
     'flydra_trigger_latency_measure = flydra.trigger.latency_measure:main',
 
 # camera calibration
-    'flydra_analysis_calibration_export = flydra.analysis.export_calibration:main',
     'flydra_analysis_calibration_align_gui = flydra.a2.calibration_align_gui:main',
     'flydra_analysis_generate_recalibration = flydra.analysis.flydra_analysis_generate_recalibration:main',
     'flydra_analysis_align_calibration = flydra.reconstruct:align_calibration',

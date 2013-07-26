@@ -49,6 +49,10 @@ except ImportError, err:
     have_pcl = False
     pcl_import_error = err
 
+import roslib
+roslib.load_manifest('tf')
+import tf.transformations
+
 def hom2vtk(arr):
     """convert 3D homogeneous coords to VTK"""
     return (arr[:3,:]/arr[3,:]).T
@@ -75,6 +79,7 @@ class CalibrationAlignmentWindow(Widget):
     def __init__(self, parent, **traits):
         super(CalibrationAlignmentWindow, self).__init__(**traits)
         self.params = talign.Alignment()
+
         self.control = self.edit_traits(parent=parent,
                                         kind='subpanel',
                                         context={'h1':self.params, # XXX ???
@@ -82,7 +87,7 @@ class CalibrationAlignmentWindow(Widget):
                                         ).control
         self.params.on_trait_change( self._params_changed )
 
-    def set_data(self,orig_data_verts,orig_data_speeds,reconstructor):
+    def set_data(self,orig_data_verts,orig_data_speeds,reconstructor,align_json):
         self.orig_data_verts = orig_data_verts
         self.orig_data_speeds = orig_data_speeds
         self.reconstructor = reconstructor
@@ -103,6 +108,21 @@ class CalibrationAlignmentWindow(Widget):
         pd.point_data.scalars.name = 'speed'
         self.viewed_data = VTKDataSource(data=pd,
                                          name='aligned data')
+
+        if align_json:
+            j = json.loads(open(align_json).read())
+            self.params.s = j["s"]
+            for i,k in enumerate(("tx", "ty", "tz")):
+                setattr(self.params, k, j["t"][i])
+
+            R = np.array(j["R"])
+            rx,ry,rz = np.rad2deg(tf.transformations.euler_from_matrix(R, 'sxyz'))
+
+            self.params.r_x = rx
+            self.params.r_y = ry
+            self.params.r_z = rz
+
+            self._params_changed()
 
     def _params_changed(self):
         if self.orig_data_verts is None or self.viewed_data is None:
@@ -202,6 +222,12 @@ def main():
                         default=None,
                         help="name of XML file with stimulus info",
                         required=True,
+                        )
+
+    parser.add_argument("--align-json",
+                        type=str,
+                        default=None,
+                        help="previously exported json file containing s,R,T",
                         )
 
     parser.add_argument("--radius", type=float,
@@ -396,7 +422,7 @@ def main():
     viewer.open()
     e.new_scene(viewer)
 
-    viewer.cal_align.set_data(verts,speed,R)
+    viewer.cal_align.set_data(verts,speed,R,args.align_json)
 
     if 0:
         # Do this if you need to see the MayaVi tree view UI.

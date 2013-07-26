@@ -99,24 +99,6 @@
         <border>15</border>
       </object>
       <object class="sizeritem">
-        <object class="wxBoxSizer">
-          <orient>wxHORIZONTAL</orient>
-          <object class="sizeritem">
-            <object class="wxStaticText">
-              <label>Kalman filter parameters:</label>
-            </object>
-            <flag>wxALIGN_CENTRE_VERTICAL</flag>
-          </object>
-          <object class="sizeritem">
-            <object class="wxChoice" name="kalman_parameters_choice">
-              <content/>
-            </object>
-          </object>
-        </object>
-        <flag>wxALL|wxALIGN_CENTRE</flag>
-        <border>15</border>
-      </object>
-      <object class="sizeritem">
         <object class="wxStaticBoxSizer">
           <label>Calibration based on Kalman filter output</label>
           <orient>wxVERTICAL</orient>
@@ -167,28 +149,7 @@
         <flag>wxALL|wxALIGN_CENTRE</flag>
         <border>15</border>
       </object>
-      <object class="sizeritem">
-        <object class="wxBoxSizer">
-          <orient>wxHORIZONTAL</orient>
-          <object class="sizeritem">
-            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE_STATUS1">
-              <label>Manually send EXT_TRIG1</label>
-            </object>
-          </object>
-          <object class="sizeritem">
-            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE_STATUS2">
-              <label>Manually send EXT_TRIG2</label>
-            </object>
-          </object>
-          <object class="sizeritem">
-            <object class="wxButton" name="MANUAL_TRIGGER_DEVICE_STATUS3">
-              <label>Manually send EXT_TRIG3</label>
-            </object>
-          </object>
-        </object>
-        <flag>wxALL|wxALIGN_CENTRE</flag>
-        <border>10</border>
-      </object>
+      
       <object class="sizeritem">
         <object class="wxPanel" name="TRAITED_STATUS_PANEL"/>
         <option>1</option>

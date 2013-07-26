@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import numpy
+import numpy as np
 import scipy.linalg
 import sys
 
@@ -15,12 +16,7 @@ if len( sys.argv ) < 2:
                       [-1.03528e2,   2.33212e1,  4.59607e2,  -6.32525e5 ],
                       [ 7.07107e-1, -3.53553e-1, 6.12372e-1, -9.18559e2 ]] )
 else:
-    def load_ascii_matrix(filename):
-        fd=open(filename,mode='rb')
-        buf = fd.read()
-        lines = buf.split('\n')[:-1]
-        return numpy.array([map(float,line.split()) for line in lines])
-    P=load_ascii_matrix( sys.argv[1] )
+    P=np.loadtxt( sys.argv[1] )
 
 orig_determinant = numpy.linalg.det
 def determinant( A ):

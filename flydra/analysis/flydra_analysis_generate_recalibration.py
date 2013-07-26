@@ -3,46 +3,18 @@ import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy'])
 
 import numpy
-from numpy import nan, pi
 import tables as PT
-import pytz # from http://pytz.sourceforge.net/
-import datetime
+
 import os.path
 import sys
 import progressbar
+import tempfile
 from optparse import OptionParser
+
+from multicamselfcal.execute import MultiCamSelfCal
 
 import flydra.reconstruct
 import flydra.analysis.result_utils as result_utils
-
-import roslib
-roslib.load_manifest('motmot_ros_utils')
-import rosutils.formats
-
-config_template = """[Files]
-Basename: %(basename)s
-Image-Extension: jpg
-
-[Images]
-Subpix: 0.5
-
-[Calibration]
-Num-Cameras: %(num_cameras)s
-Num-Projectors: 0
-Nonlinear-Parameters: 30    0    1    0    0    0
-Nonlinear-Update: 1   0   1   0   0   0
-Initial-Tolerance: 10
-Do-Global-Iterations: 0
-Global-Iteration-Threshold: 0.5
-Global-Iteration-Max: 100
-Num-Cameras-Fill: %(num_cameras_fill)s
-Do-Bundle-Adjustment: 1
-Undo-Radial: %(undo_radial_int)s
-Min-Points-Value: 30
-N-Tuples: 3
-Square-Pixels: %(square_pixels_int)s
-Use-Nth-Frame: 5
-"""
 
 def create_new_row(d2d, this_camns, this_camn_idxs, cam_ids, camn2cam_id, npoints_by_cam_id):
     n_pts = 0
@@ -264,18 +236,50 @@ def do_it(filename,
         Res.append( imsize )
     Res = numpy.array( Res )
 
-    if reconstructor is not None:
-        cam_centers = numpy.asarray([reconstructor.get_camera_center(cam_id)[:,0]
+    if options.camera_center_reconstructor:
+        creconstructor = flydra.reconstruct.Reconstructor(cal_source=options.camera_center_reconstructor)
+    else:
+        creconstructor = reconstructor
+
+    cam_centers = []
+    cam_calibrations = []
+
+    mcsc = MultiCamSelfCal(calib_dir, use_nth_frame=5 )
+
+    if creconstructor is not None:
+        cam_centers = numpy.asarray([creconstructor.get_camera_center(cam_id)[:,0]
                                      for cam_id in cam_ids])
         flydra.reconstruct.save_ascii_matrix(cam_centers,os.path.join(calib_dir,'original_cam_centers.dat'))
 
-    save_calibration_directory(IdMat=IdMat,
-                               points=points,
+
+    intrinsics_reconstructor = options.undistort_intrinsics_reconstructor
+    if intrinsics_reconstructor and os.path.exists(intrinsics_reconstructor):
+        tdir = tempfile.mkdtemp()
+        reconstructor = flydra.reconstruct.Reconstructor(cal_source=intrinsics_reconstructor)
+        for i, cam_id in enumerate(cam_ids):
+            fname = os.path.join(tdir, "%s.rad" % cam_id)
+            scc = reconstructor.get_SingleCameraCalibration(cam_id)
+            scc.helper.save_to_rad_file(fname)
+            cam_calibrations.append(fname)
+
+    intrinsics_yaml = options.undistort_intrinsics_yaml
+    if intrinsics_yaml and os.path.exists(intrinsics_yaml):
+        for cam_id in cam_ids:
+            fname = os.path.join(intrinsics_yaml, "%s.yaml" % cam_id)
+            cam_calibrations.append(fname)
+
+    undo_radial_distortion = len(cam_calibrations) == len(cam_ids)
+
+    mcsc.create_calibration_directory(
                                cam_ids=cam_ids,
+                               IdMat=IdMat,
+                               points=points,
                                Res=Res,
-                               calib_dir=calib_dir,
-                               intrinsics_reconstructor=options.undistort_intrinsics_reconstructor,
-                               intrinsics_yaml=options.undistort_intrinsics_yaml)
+                               cam_calibrations=cam_calibrations,
+                               cam_centers=cam_centers,
+                               radial_distortion=undo_radial_distortion,
+                               square_pixels=1,
+                               num_cameras_fill=options.num_cameras_fill)
 
     results.close()
     h5_2d_data.close()
@@ -284,78 +288,14 @@ def do_it(filename,
         row_keys = numpy.array(row_keys)
         flydra.reconstruct.save_ascii_matrix(row_keys,os.path.join(calib_dir,'obj_ids_zero_indexed.dat'),isint=True)
 
-def save_calibration_directory(IdMat=None,
-                               points=None,
-                               Res=None,
-                               calib_dir=None,
-                               cam_ids=None,
-                               square_pixels=True,
-                               num_cameras_fill=-1,
-                               intrinsics_reconstructor=None,
-                               intrinsics_yaml=None):
-
-    if intrinsics_reconstructor and intrinsics_yaml:
-        raise ValueError("undistortion possible using reconstructor or yaml, not both")
-
-    basename = 'basename'
-
-    # This will overwrite the file that was just created with
-    # better defaults.
-
-    undo_radial_distortion = False
-
-    if intrinsics_reconstructor and os.path.exists(intrinsics_reconstructor):
-        reconstructor = flydra.reconstruct.Reconstructor(cal_source=intrinsics_reconstructor)
-        ok = 0
-        for i, cam_id in enumerate(cam_ids):
-            try:
-                fname = '%s%d.rad'%(basename,i+1)
-                scc = reconstructor.get_SingleCameraCalibration(cam_id)
-                scc.helper.save_to_rad_file( os.path.join(calib_dir,fname) )
-                ok += 1
-            except Exception, ex:
-                print "reconstructor error saving rad file ", ex
-        undo_radial_distortion = ok == len(cam_ids)
-
-    if intrinsics_yaml and os.path.exists(intrinsics_yaml):
-        ok = 0
-        for i, cam_id in enumerate(cam_ids):
-            yamlname = os.path.join(intrinsics_yaml, "%s.yaml" % cam_id)
-            fname = os.path.join(calib_dir,'%s%d.rad'%(basename,i+1))
-            if os.path.exists(yamlname):
-                try:
-                    rosutils.formats.camera_calibration_yaml_to_radfile(yamlname,fname)
-                except ValueError, exc:
-                    print "error saving rad file %s " % fname, exc
-                ok += 1
-        undo_radial_distortion = ok == len(cam_ids)
-
-    num_cameras = len(cam_ids)            
-    if num_cameras_fill == -1:
-        num_cameras_fill = num_cameras
-    elif num_cameras_fill > num_cameras:
-        raise ValueError('num_cameras_fill cannot be greater than num_cameras')
-
-    vars = dict(
-        basename = basename,
-        num_cameras = num_cameras,
-        num_cameras_fill = num_cameras_fill,
-        undo_radial_int = int(undo_radial_distortion),
-        square_pixels_int = int(square_pixels),
-        )
-
-    fd = open( os.path.join(calib_dir,'multicamselfcal.cfg'), mode='w' )
-    fd.write( config_template % vars )
-    fd.close()
-
-    flydra.reconstruct.save_ascii_matrix(IdMat,os.path.join(calib_dir,'IdMat.dat'))
-    flydra.reconstruct.save_ascii_matrix(points,os.path.join(calib_dir,'points.dat'))
-    flydra.reconstruct.save_ascii_matrix(Res,os.path.join(calib_dir,'Res.dat'),isint=True)
-
-    fd = open(os.path.join(calib_dir,'camera_order.txt'),'w')
-    for cam_id in cam_ids:
-        fd.write('%s\n'%cam_id)
-    fd.close()
+    if options.run_mcsc:
+        caldir = mcsc.execute(silent=False)
+        print "\nfinished: result in ",caldir
+        if options.output_xml:
+            fname = os.path.join(caldir, "reconstructor.xml")
+            recon = flydra.reconstruct.Reconstructor(cal_source=caldir)
+            recon.save_to_xml_filename(fname)
+            print "\nfinished: new reconstructor in", fname
 
 def main():
     usage = '%prog FILE EFILE [options]'
@@ -423,11 +363,21 @@ To ignore 3D trajectories and simply use all data::
                       "are found then UNDO_RADIAL is set in the multicamselfcal config, and radial distortion "
                       "is corrected before computing calibration")
 
+    parser.add_option("--camera-center-reconstructor",
+                      help="path to a reconstructor dir/xml file. The camera centers are"
+                      "used to maximally align the new calibration to the centers of the"
+                      "cameras in this reconstructor")
+
     parser.add_option("--undistort-intrinsics-reconstructor",
                       help="path to a reconstructor dir/xml file. If intrinsics for "
                       "every camera are known then radial distortion "
                       "is corrected before computing calibration")
 
+    parser.add_option("--run-mcsc", action='store_true', default=False,
+                      help='run multicamselfcal on the exported data')
+
+    parser.add_option("--output-xml", action='store_true', default=False,
+                      help="save the new reconstructor in xml format")
 
     (options, args) = parser.parse_args()
 

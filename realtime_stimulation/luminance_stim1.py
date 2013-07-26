@@ -24,7 +24,6 @@ if 1:
 if 1:
     #sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     #mainbrain = ('192.168.10.42')
-    #sender.sendto('x',(MainBrain.hostname,common_variables.trigger_network_socket_port))
 
     Pyro.core.initClient(banner=0)
     port = 9833

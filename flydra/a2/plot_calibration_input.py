@@ -3,8 +3,8 @@ import pkg_resources
 import os
 from optparse import OptionParser
 import numpy
+import numpy as np
 import pylab
-import flydra.reconstruct as reconstruct
 
 def doit(caldir):
     filename = os.path.join(caldir,'camera_order.txt')
@@ -13,13 +13,13 @@ def doit(caldir):
 
     filename = os.path.join(caldir,'obj_ids_zero_indexed.dat')
     if os.path.exists(filename):
-        idx_and_obj_id = reconstruct.load_ascii_matrix(filename)
+        idx_and_obj_id = np.loadtxt(filename)
     else:
         idx_and_obj_id = None
 
     filename = os.path.join(caldir,'points.dat')
 
-    points = reconstruct.load_ascii_matrix(filename)
+    points = np.loadtxt(filename)
     print points.shape
     N_cams = points.shape[0]//3
     assert N_cams*3 == points.shape[0]

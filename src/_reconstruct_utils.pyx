@@ -191,7 +191,7 @@ cdef class ReconstructHelper:
     def get_nlparams(self):
         return (self.k1, self.k2, self.p1, self.p2)
 
-    def undistort(self, double x_kk, double y_kk):
+    def undistort(self, double x_kk, double y_kk, int n_iterations=5):
         """undistort 2D coordinate pair
 
         Iteratively performs an undistortion using camera intrinsic
@@ -222,7 +222,7 @@ cdef class ReconstructHelper:
         x = xd
         y = yd
 
-        for i from 0<=i<5:
+        for i from 0<=i<n_iterations:
             r_2 = x*x + y*y
             k_radial = 1.0 + (self.k1) * r_2 + (self.k2) * r_2*r_2
             delta_x = 2.0 * (self.p1)*x*y + (self.p2)*(r_2 + 2.0*x*x)

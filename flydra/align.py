@@ -76,7 +76,8 @@ def estsimt(X1,X2):
 
 def build_xform(s,R,t):
     T = np.zeros((4,4),dtype=np.float)
-    T[:3,:3] = s*R
+    T[:3,:3] = R
+    T = s*T
     T[:3,3] = t
     T[3,3]=1.0
     return T
@@ -95,6 +96,10 @@ def align_points( s,R,T, X ):
 def align_pmat( s,R,T, P ):
     T = build_xform(s,R,T)
     P = np.dot(P,scipy.linalg.inv(T))
+    return P
+
+def align_pmat2( M, P ):
+    P = np.dot(P,np.dual.inv(M))
     return P
 
 def test_align():
@@ -138,6 +143,10 @@ def test_align():
     print 'R=%s'%repr(R.tolist())
     print 't=%s'%repr(t.tolist())
     Xnew = align_points( s,R,t, orig_points )
+
+    # measure distance between elements
+    mean_absdiff = np.mean( abs(Xnew[:3]-new_points).flatten() )
+    assert mean_absdiff < 0.05
 
     pmat_orig = np.array([[1,2,3,4],
                           [5,6,7,8],

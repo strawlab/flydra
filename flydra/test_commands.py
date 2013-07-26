@@ -106,7 +106,7 @@ if 0:
 # non-image based commands
 command_info =  [
     {'cmd':('flydra_kalmanize %(DATAFILE2D)s --reconstructor=%(CALIB)s '
-            '--max-err=10.0 --min-observations-to-save=10 '
+            '--min-observations-to-save=10 '
             '--dest-file=%(target)s'),
      'title':'Re-run the data association algorithm',
      'noshow_cmd':' --fake-timestamp=123456.7',

@@ -140,7 +140,7 @@ def generate_calibration(n_cameras = 5,
         scc = reconstruct.SingleCameraCalibration_from_basic_pmat(P,
                                                                   cam_id=cam_id,
                                                                   res=res,
-                                                                  scale_factor=1.0)
+                                                                  )
         sccs.append(scc)
         if 1:
             # XXX test

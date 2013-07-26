@@ -3,13 +3,13 @@ opj=os.path.join
 import numpy as np
 import numpy as nx
 import numpy
-import flydra.reconstruct_utils as reconstruct_utils # in pyrex/C for speed
+import _reconstruct_utils as reconstruct_utils # in pyrex/C for speed
 import time
 from flydra.common_variables import MINIMUM_ECCENTRICITY as DEFAULT_MINIMUM_ECCENTRICITY
 import scipy.linalg
 import traceback
-import flydra.pmat_jacobian
-#import flydra.talign
+import _pmat_jacobian # in pyrex/C for speed
+import flydra.align
 import xml.etree.ElementTree as ET
 import StringIO, warnings
 import cgtypes
@@ -23,6 +23,7 @@ WARN_CALIB_DIFF = False
 L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
 
+NO_BACKWARDS_COMPAT = int(os.environ.get('FLYDRA_NO_BACKWARDS_COMPAT','0'))
 
 def mat2quat(m):
     """Initialize q from either a mat3 or mat4 and returns self."""
@@ -98,27 +99,6 @@ def filter_comments(lines_tmp):
             continue # nothing on this line
         lines.append(line)
     return lines
-
-def load_ascii_matrix(filename):
-    fd=open(filename,mode='rb')
-    buf = fd.read()
-    fd.close()
-    lines = buf.split('\n')[:-1]
-    lines = filter_comments( lines )
-    return nx.array([map(float,line.split()) for line in lines])
-
-def test_load_ascii_matrix():
-    contents = '''   5.1468544e+00  -1.8892933e-01  -3.7855949e+00  -6.3683613e+02
-  -4.1691492e-01  -6.2570417e+00  -7.0782063e-01   2.4157199e+03
-  -1.7169043e-03  -2.2409402e-04  -4.2079099e-03   6.6955409e+00
-'''
-    import tempfile
-    fname = tempfile.mktemp()
-    fd = open(fname,mode='w')
-    fd.write(contents)
-    fd.close()
-    result = load_ascii_matrix(fname)
-    assert result.shape == (3,4)
 
 def save_ascii_matrix(M,fd,isint=False):
     def fmt(f):
@@ -431,8 +411,6 @@ class SingleCameraCalibration:
         if len(res) != 2:
             raise ValueError('len(res) must be 2 (res = %s)'%repr(res))
 
-        self._scaled_cache = {}
-
         self.cam_id=cam_id
         self.Pmat=Pmat
         self.res=res
@@ -483,6 +461,42 @@ class SingleCameraCalibration:
                 numpy.allclose(self.res,other.res) and
                 self.helper == other.helper)
 
+    def convert_to_camera_model(self):
+        import roslib; roslib.load_manifest('camera_model')
+        import camera_model
+
+        K, R = self.get_KR()
+        if not camera_model.camera_model.is_rotation_matrix(R):
+            # RQ may return left-handed rotation matrix. Make right-handed.
+            R2 = -R
+            K2 = -K
+            assert np.allclose(np.dot(K2,R2), np.dot(K,R))
+            K,R = K2,R2
+
+        P = np.zeros((3,4))
+        P[:3,:3] = K
+        KK = self.helper.get_K()
+
+        k1,k2,p1,p2 = self.helper.get_nlparams()
+        distortion = [k1,k2,p1,p2,0]
+
+        C = self.get_cam_center()
+        rot = R
+        t = -np.dot(rot, C)[:,0]
+
+        d = {'width':self.res[0],
+             'height':self.res[1],
+             'P':P,
+             'K':KK,
+             'R':None,
+             'translation':t,
+             'rotation':rot,
+             'D':distortion,
+             'name':self.cam_id,
+             }
+        cnew = camera_model.CameraModel.from_dict(d)
+        return cnew
+
     def get_pmat(self):
         return self.Pmat
 
@@ -496,8 +510,7 @@ class SingleCameraCalibration:
         return copy
 
     def get_aligned_copy(self, M):
-        import flydra.talign
-        aligned_Pmat = flydra.talign.align_pmat(M,self.Pmat)
+        aligned_Pmat = flydra.align.align_pmat2(M,self.Pmat)
         aligned = SingleCameraCalibration(cam_id=self.cam_id,
                                           Pmat=aligned_Pmat,
                                           res=self.res,
@@ -727,9 +740,29 @@ def SingleCameraCalibration_from_xml(elem, helper=None):
     cam_id = elem.find("cam_id").text
     pmat = numpy.array(numpy.mat(elem.find("calibration_matrix").text))
     res = numpy.array(numpy.mat(elem.find("resolution").text))[0,:]
+    scale_elem = elem.find("scale_factor")
+    if NO_BACKWARDS_COMPAT:
+        assert scale_elem is None, 'XML file has outdated <scale_factor>'
+    else:
+        if scale_elem is not None:
+            # backwards compatibility
+            scale = float( scale_elem.text )
+            if scale != 1.0:
+                warnings.warn('converting old scaled calibration')
+                scale_array = numpy.ones((3,4))
+                scale_array[:,3] = scale # mulitply last column by scale
+                pmat = scale_array*pmat # element-wise multiplication
+
     if not helper:
         helper_elem = elem.find("non_linear_parameters")
-        helper = reconstruct_utils.ReconstructHelper_from_xml(helper_elem)
+        if helper_elem is not None:
+            helper = reconstruct_utils.ReconstructHelper_from_xml(helper_elem)
+        else:
+            # make with no non-linear stuff (i.e. make linear)
+            helper = reconstruct_utils.ReconstructHelper(1,1, # focal length
+                                                         0,0, # image center
+                                                         0,0, # radial distortion
+                                                         0,0) # tangential distortion
 
     return SingleCameraCalibration(cam_id=cam_id,
                                    Pmat=pmat,
@@ -943,7 +976,7 @@ class Reconstructor:
             res_fd = open(os.path.join(use_cal_source,'Res.dat'),'r')
             for i, cam_id in enumerate(cam_ids):
                 fname = 'camera%d.Pmat.cal'%(i+1)
-                pmat = load_ascii_matrix(opj(use_cal_source,fname)) # 3 rows x 4 columns
+                pmat = np.loadtxt(opj(use_cal_source,fname)) # 3 rows x 4 columns
                 if do_normalize_pmat:
                     pmat_orig = pmat
                     pmat = normalize_pmat(pmat)
@@ -979,6 +1012,20 @@ class Reconstructor:
                 res = tuple(results.root.calibration.resolution.__getattr__(cam_id))
                 K = nx.array(results.root.calibration.intrinsic_linear.__getattr__(cam_id))
                 nlparams = tuple(results.root.calibration.intrinsic_nonlinear.__getattr__(cam_id))
+                try:
+                    scale = nx.array(results.root.calibration.scale_factor2meters.__getattr__(cam_id))
+                except PT.exceptions.NoSuchNodeError:
+                    pass
+                else:
+                    if NO_BACKWARDS_COMPAT:
+                        raise("old 'scale_factor2meters' present in h5 file")
+
+                    if scale != 1.0:
+                        warnings.warn('converting old scaled calibration')
+                        scale_array = numpy.ones((3,4))
+                        scale_array[:,3] = scale # mulitply last column by scale
+                        pmat = scale_array*pmat # element-wise multiplication
+
                 self.Pmat[cam_id] = pmat
                 self.Res[cam_id] = res
                 self._helper[cam_id] = reconstruct_utils.ReconstructHelper(
@@ -1006,7 +1053,7 @@ class Reconstructor:
             self.Pmat[cam_id] = numpy.array(self.Pmat[cam_id])
 
             self.pmat_inv[cam_id] = numpy.linalg.pinv(self.Pmat[cam_id])
-            self.pinhole_model_with_jacobian[cam_id] = flydra.pmat_jacobian.PinholeCameraModelWithJacobian(self.Pmat[cam_id])
+            self.pinhole_model_with_jacobian[cam_id] = _pmat_jacobian.PinholeCameraModelWithJacobian(self.Pmat[cam_id])
 
         self.cam_combinations = [s for s in setOfSubsets(cam_ids) if len(s) >=2]
         def cmpfunc(a,b):
@@ -1027,6 +1074,16 @@ class Reconstructor:
 
         if close_cal_source:
             use_cal_source.close()
+
+    def convert_to_camera_model(self):
+        import roslib; roslib.load_manifest('camera_model')
+        import camera_model
+
+        orig_sccs = [self.get_SingleCameraCalibration(cam_id)
+                     for cam_id in self.cam_ids]
+        cams = [o.convert_to_camera_model() for o in orig_sccs]
+        result = camera_model.MultiCameraSystem(cams)
+        return result
 
     def get_scaled(self):
         """return a copy of self. (DEPRECATED.)"""
@@ -1312,10 +1369,8 @@ class Reconstructor:
 
     def find2d(self,cam_id,X,Lcoords=None,distorted=False):
         # see Hartley & Zisserman (2003) p. 449
-        if type(X)==tuple or type(X)==list:
-            rank1=True
-        else:
-            rank1 = len(X.shape)==1 # assuming array type
+        X = np.array(X)
+        rank1 = X.ndim==1
         if rank1:
             # make homogenous coords, rank2
             if len(X) == 3:
@@ -1323,7 +1378,8 @@ class Reconstructor:
             else:
                 X = X[:,nx.newaxis] # 4 rows, 1 column
         else:
-            X = nx.transpose(X) # 4 rows, N columns
+            assert X.shape[1]==4
+            X = X.T # 4 rows, N columns
         Pmat = self.Pmat[cam_id]
         x=nx.dot(Pmat,X)
 
@@ -1504,13 +1560,15 @@ def test():
 
 def align_calibration():
      usage = """%prog [options]
+     Creates a new reconstructor from an existing reconstructor and a new
+     description of camera centres (such as another reconstructor, a raw
+     alignment file, or an explicit list of camera centres).
 
-     Requires an alignment file. This can either be a raw file, or the
-     list of camera locations.
-
-     A raw alignment file (specified with --align-raw) should have
-     contents like the following, where s is scale, R is a 3x3
-     rotation matrix, and t is a 3 vector specifying translation::
+     Raw alignment files supported include json (--align-json)
+     and python syntax (--align-raw, the file is exec'd).
+     The file should have contents like the following,
+     where s is scale, R is a 3x3 rotation matrix, and t is a 3 vector
+     specifying translation::
 
        s=0.89999324180965479
        R=[[0.99793608705515335, 0.041419147873301365, -0.04907158385969549],
@@ -1543,14 +1601,11 @@ def align_calibration():
      parser.add_option("--align-cams", type='string',
                        help="new camera locations alignment file path")
 
-     parser.add_option("--scaled", action='store_true',
-                       default=False,
-                       help=('Set if the alignment should be '
-                             'applied to the scaled calibration'),
-                       )
+     parser.add_option("--align-reconstructor", type='string',
+                       help="reconstructor with desired camera locations")
 
-     parser.add_option("--output-xml", action='store_true',
-                       default=False,
+     parser.add_option("--output-xml", action='store_true', default=False,
+                       help="save the new reconstructor in xml format"
                        )
 
      (options, args) = parser.parse_args()
@@ -1559,9 +1614,8 @@ def align_calibration():
          raise ValueError('--orig-reconstructor must be specified')
 
      if options.align_raw is None and options.align_cams is None and \
-             options.align_json is None:
-         raise ValueError(
-             'either --align-raw or --align-cams --align-json must be specified')
+             options.align_json is None and options.align_reconstructor is None:
+         raise ValueError('an --align-XXX method must be specified')
 
      src=options.orig_reconstructor
      origR = Reconstructor(cal_source=src)
@@ -1577,10 +1631,9 @@ def align_calibration():
      if os.path.exists(dst):
          raise RuntimeError('destination %s exists'%dst)
 
-     if options.scaled:
-         srcR = origR.get_scaled()
-     else:
-         srcR = origR
+     srcR = origR
+
+     except_cams = []
 
      import flydra.align as align
      if options.align_raw is not None:
@@ -1596,11 +1649,22 @@ def align_calibration():
          print 'ccs',ccs
          orig_cam_centers = np.array(ccs).T
          print 'orig_cam_centers',orig_cam_centers.T
-         new_cam_centers = load_ascii_matrix(options.align_cams).T
+         new_cam_centers = np.loadtxt(options.align_cams).T
          print 'new_cam_centers',new_cam_centers.T
          s,R,t = align.estsimt(orig_cam_centers,new_cam_centers)
-     else:
-         assert options.align_json is not None
+     elif options.align_reconstructor is not None:
+         cam_ids = srcR.get_cam_ids()
+         print cam_ids
+         ccs = [srcR.get_camera_center(cam_id)[:,0] for cam_id in cam_ids if cam_id not in except_cams]
+         print 'ccs',ccs
+         orig_cam_centers = np.array(ccs).T
+         print 'orig_cam_centers',orig_cam_centers.T
+         tmpR = Reconstructor(cal_source=options.align_reconstructor)
+         nccs = [tmpR.get_camera_center(cam_id)[:,0] for cam_id in cam_ids if cam_id not in except_cams]
+         new_cam_centers = np.array(nccs).T
+         print 'new_cam_centers',new_cam_centers.T
+         s,R,t = align.estsimt(orig_cam_centers,new_cam_centers)
+     elif options.align_json is not None:
          import json
          with open(options.align_json,mode='r') as fd:
              buf = fd.read()
@@ -1608,6 +1672,8 @@ def align_calibration():
          s = mylocals['s']
          R = np.array(mylocals['R'])
          t = np.array(mylocals['t'])
+     else:
+         raise Exception("Alignment not supported")
 
      print 's',s
      print 'R',R
@@ -1620,6 +1686,8 @@ def align_calibration():
          alignedR.save_to_xml_filename(dst)
      else:
          alignedR.save_to_files_in_new_directory(dst)
+
+     print "wrote", dst
 
 if __name__=='__main__':
     test()
