@@ -10,17 +10,7 @@ if 1:
     import tables.flavor
     tables.flavor.restrict_flavors(keep=['numpy'])
 
-def find_ufmfs(filename,ufmf_dir=None,careful=False):
-
-    ufmf_template = 'small_%(date_time)s_%(cam_id)s.ufmf$'
-    date_time_re = '([0-9]{8}_[0-9]{6})'
-    ufmf_template_re = ufmf_template.replace('%(date_time)s',date_time_re)
-
-    if ufmf_dir is None:
-        ufmf_dir = os.path.split( os.path.abspath( filename ))[0]
-    all_ufmfs = glob.glob(os.path.join(ufmf_dir,'*.ufmf'))
-    all_ufmfs.sort()
-
+def get_h5_start_stop(filename,careful=True):
     h5 = tables.openFile(filename,mode='r')
     try:
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
@@ -48,6 +38,21 @@ def find_ufmfs(filename,ufmf_dir=None,careful=False):
         h5_start = h5_start_quick
         h5_stop = h5_stop_quick
     h5.close()
+
+    return h5_start, h5_stop
+
+def find_ufmfs(filename,ufmf_dir=None,careful=True):
+
+    ufmf_template = 'small_%(date_time)s_%(cam_id)s.ufmf$'
+    date_time_re = '([0-9]{8}_[0-9]{6})'
+    ufmf_template_re = ufmf_template.replace('%(date_time)s',date_time_re)
+
+    if ufmf_dir is None:
+        ufmf_dir = os.path.split( os.path.abspath( filename ))[0]
+    all_ufmfs = glob.glob(os.path.join(ufmf_dir,'*.ufmf'))
+    all_ufmfs.sort()
+
+    h5_start, h5_stop = get_h5_start_stop(filename,careful=careful)
 
     possible_ufmfs = []
 

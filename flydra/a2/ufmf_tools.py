@@ -1,7 +1,7 @@
 from __future__ import with_statement
 import motmot.ufmf.ufmf as ufmf_mod
 import motmot.FlyMovieFormat.FlyMovieFormat as fmf_mod
-import sys, os, tempfile, re, contextlib, warnings
+import sys, os, tempfile, re, contextlib, warnings, time
 from optparse import OptionParser
 import flydra.a2.auto_discover_ufmfs as auto_discover_ufmfs
 import numpy as np
@@ -16,13 +16,34 @@ from tables_tools import openFileSafe
 
 ufmf_fname_regex = re.compile(r'small_([0-9]+)_([0-9]+)_(.*)')
 def get_cam_id_from_ufmf_fname(ufmf_fname):
+    cam_id = None
+
+    # cam_id in fname (2008 flydra approach) -----------------
     a = os.path.split( ufmf_fname )[-1]
     b = os.path.splitext(a)[0]
     matchobj = ufmf_fname_regex.search(b)
-    if matchobj is None:
+    if matchobj is not None:
+        date, datetime_str, cam_id= matchobj.groups()
+
+    # cam_id in path (2013 flydra approach ) -----------------------
+    if cam_id is None:
+        base1, filepart = os.path.split(ufmf_fname)
+        base2, maybe_camid = os.path.split( base1 )
+        base3, datetime_str = os.path.split( base2 )
+        try:
+            struct_time = time.strptime(datetime_str,'%Y%m%d_%H%M%S')
+            approx_start = time.mktime(struct_time)
+        except RuntimeError:
+            pass
+        else:
+            # if the parent directory is datetime, this is likely the camid
+            if os.path.splitext(filepart)[0] == datetime_str:
+                cam_id = maybe_camid
+
+    if cam_id is None:
         raise ValueError('could not guess cam_id from filename %s'%(
-            ufmf_fname,))
-    date, time, cam_id= matchobj.groups()
+                ufmf_fname,))
+
     return cam_id
 
 def iterate_frames(h5_filename,
@@ -56,6 +77,7 @@ def iterate_frames(h5_filename,
                                              white_background=white_background,
                                              **kwargs)
         tss = ufmf.get_all_timestamps()
+        ufmf.seek(0)
         ufmfs[ufmf_fname] = (ufmf, cam_id, tss)
         min_ts = np.min(tss)
         max_ts = np.max(tss)
@@ -165,9 +187,17 @@ def iterate_frames(h5_filename,
                 assert len(this_camn_ts)==1
                 this_camn_ts = this_camn_ts[0]
 
+                if isinstance(ufmf, ufmf_mod.FlyMovieEmulator):
+                    is_real_ufmf = True
+                else:
+                    is_real_ufmf = False
+
                 # optimistic: get next frame. it's probably the one we want
                 try:
-                    image,image_ts,more = ufmf.get_next_frame(_return_more=True)
+                    if is_real_ufmf:
+                        image,image_ts,more  = ufmf.get_next_frame(_return_more=True)
+                    else:
+                        image,image_ts  = ufmf.get_next_frame()
                 except ufmf_mod.NoMoreFramesException:
                     image_ts = None
                 if this_camn_ts != image_ts:
@@ -184,8 +214,12 @@ def iterate_frames(h5_filename,
                             abs( tss - this_camn_ts ) < 0.0025)[0]
                     assert len(ufmf_frame_idxs)==1
                     ufmf_frame_no = ufmf_frame_idxs[0]
-                    image,image_ts,more = ufmf.get_frame(ufmf_frame_no,
-                                                         _return_more=True)
+                    if is_real_ufmf:
+                        image,image_ts,more = ufmf.get_frame(ufmf_frame_no,
+                                                             _return_more=True)
+                    else:
+                        image,image_ts = ufmf.get_frame(ufmf_frame_no)
+
                     del ufmf_frame_no, ufmf_frame_idxs
                 coding = ufmf.get_format()
                 if imops.is_coding_color(coding):
@@ -202,6 +236,7 @@ def iterate_frames(h5_filename,
                     this_cam_h5_data['cam_received_timestamp'][0],
                     'ufmf_frame_timestamp':this_cam_h5_data[timestamp_name][0],
                     }
-                per_frame_dict[ufmf_fname].update(more)
+                if is_real_ufmf:
+                    per_frame_dict[ufmf_fname].update(more)
             per_frame_dict['tracker_data']=this_h5_data
             yield (per_frame_dict,frame)

@@ -3,6 +3,7 @@ import motmot.ufmf.ufmf as ufmf_mod
 import sys, os, tempfile, re, contextlib, warnings
 from optparse import OptionParser
 import flydra.a2.auto_discover_ufmfs as auto_discover_ufmfs
+import flydra.a2.auto_discover_movies as auto_discover_movies
 import numpy as np
 import tables
 import flydra.a2.utils as utils
@@ -188,6 +189,8 @@ def make_montage( h5_filename,
     min_ori_qual = config['what to show']['minimum_display_orientation_quality']
 
     if movie_fnames is None:
+        movie_fnames = auto_discover_movies.find_movies( h5_filename )
+    if len(movie_fnames)==0:
         movie_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
                                                        ufmf_dir=ufmf_dir,
                                                        careful=True )
