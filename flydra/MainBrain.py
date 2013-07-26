@@ -54,7 +54,7 @@ import ros_flydra.cv2_bridge
 from geometry_msgs.msg import Point, Vector3
 
 import flydra.rosutils
-LOG = flydra.rosutils.Log()
+LOG = flydra.rosutils.Log(to_ros=True)
 
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock

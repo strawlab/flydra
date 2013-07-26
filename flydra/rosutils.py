@@ -12,9 +12,10 @@ import sys
 import errno
 
 class Log:
-    to_ros = False
     to_console = True
     force_output = None
+    def __init__(self, to_ros=False):
+        self.to_ros = to_ros
 
     def _write(self, x, f):
         _file = self.force_output if self.force_output != None else f
