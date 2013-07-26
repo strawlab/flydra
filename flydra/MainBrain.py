@@ -516,7 +516,6 @@ class CoordinateProcessor(threading.Thread):
             self.last_framenumbers_delay.append(-1) # arbitrary impossible number
             self.last_framenumbers_skip.append(-1) # arbitrary impossible number
             self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no}
-            self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, cam_hostname) )
         return cam2mainbrain_data_port
 
     def disconnect(self,cam_id):
@@ -579,8 +578,6 @@ class CoordinateProcessor(threading.Thread):
         self.cam_id2cam_no[cam_id] = absolute_cam_no
 
         self.general_save_info[cam_id]['absolute_cam_no']=absolute_cam_no
-
-        self.main_brain.queue_cam_info.put(  (cam_id, absolute_cam_no, timestamp) )
 
         #because saving usually follows synchronization, ensure we have a recent
         #image to put in the h5 file
@@ -1483,7 +1480,6 @@ class MainBrain(object):
 
         # Queues of information to save
         self.queue_data2d          = Queue.Queue()
-        self.queue_cam_info        = Queue.Queue()
         self.queue_host_clock_info = Queue.Queue()
         self.queue_trigger_clock_info = Queue.Queue()
         self.queue_data3d_best     = Queue.Queue()
@@ -2238,26 +2234,6 @@ class MainBrain(object):
                 textlog_row.append()
 
             self.h5textlog.flush()
-
-        # ** camera info **
-        #   clear queue
-        list_of_cam_info = []
-        try:
-            while True:
-                list_of_cam_info.append( self.queue_cam_info.get(0) )
-        except Queue.Empty:
-            pass
-        #   save
-        if self.h5cam_info is not None:
-            cam_info_row = self.h5cam_info.row
-            for cam_info in list_of_cam_info:
-                cam_id, absolute_cam_no, camhost = cam_info
-                cam_info_row['cam_id'] = cam_id
-                cam_info_row['camn']   = absolute_cam_no
-                cam_info_row['hostname'] = camhost
-                cam_info_row.append()
-
-            self.h5cam_info.flush()
 
         if 1:
             # ** 3d data - kalman **
