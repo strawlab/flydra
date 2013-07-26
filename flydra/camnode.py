@@ -95,7 +95,7 @@ if os.name == 'posix' and sys.platform != 'darwin':
 import flydra.debuglock
 DebugLock = flydra.debuglock.DebugLock
 
-LOG = flydra.rosutils.Log()
+LOG = flydra.rosutils.Log(to_ros=True)
 
 def ros_ensure_valid_name(name):
     return name.replace('-','_')
@@ -726,7 +726,7 @@ class ProcessCamClass(rospy.SubscribeListener):
             except Exception, x:
                 msg = 'WARNING: could not run in maximum priority mode:', str(x)
             self.log_message_queue.put((self.cam_id,time.time(),msg))
-            print msg
+            LOG.info(msg)
 
         #FastImage.set_debug(3) # let us see any images malloced, should only happen on hardware ROI size change
 
