@@ -254,7 +254,7 @@ def make_montage( h5_filename,
             this_frame_raw_3d_data = None
             this_frame_raw_dataqual = None
 
-        if config['what to show']['zoom_obj'] is not None:
+        if config['what to show']['zoom_obj']:
             zoom_cond_3d = this_frame_3d_data['obj_id']==config['what to show']['zoom_obj']
             if np.sum( zoom_cond_3d ) == 0:
                 # object not in this frame
@@ -308,7 +308,7 @@ def make_montage( h5_filename,
                     device_y = 0
                     device_x = (fix_w-device_w)/2.0
                 user_rect = (0,0,image.shape[1],image.shape[0])
-            elif config['what to show']['zoom_obj'] is not None:
+            elif config['what to show']['zoom_obj']:
                 device_x = 0
                 device_y = 0
                 device_w = config['what to show']['zoom_orig_pixels']*config['what to show']['zoom_factor']
