@@ -2,15 +2,13 @@
 # TODO:
 # 1. make variable eccentricity threshold dependent on area (bigger area = lower threshold)
 from __future__ import with_statement, division
-import threading, time, socket, select, sys, os, copy, struct, math
-import warnings, errno
+import threading, time, socket, select, sys, os, copy, struct
+import warnings
 import json
 import collections
-import traceback
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
 import numpy
-import numpy as nx
 import numpy as np
 from numpy import nan, inf
 near_inf = 9.999999e20
@@ -18,8 +16,7 @@ import Queue
 
 pytables_filt = numpy.asarray
 import atexit
-import pickle, copy
-import pkg_resources
+import pickle
 
 import motmot.fview_ext_trig.ttrigger
 import motmot.fview_ext_trig.live_timestamp_modeler
@@ -259,9 +256,9 @@ class CoordRealReceiver(threading.Thread):
             try:
                 in_ready, out_ready, exc_ready = select.select( listen_sockets,
                                                                 empty_list, empty_list, timeout )
-            except select.error, exc:
+            except select.error:
                 LOG.warn('select.error on listen socket, ignoring...')
-            except socket.error, exc:
+            except socket.error:
                 LOG.warn('socket.error on listen socket, ignoring...')
             else:
                 if not len(in_ready):
@@ -997,7 +994,7 @@ class CoordinateProcessor(threading.Thread):
                                             max_error,
                                             max_n_cams=self.max_N_hypothesis_test,
                                             )
-                                    except ru.NoAcceptablePointFound, err:
+                                    except ru.NoAcceptablePointFound:
                                         pass
                                     else:
                                         this_observation_camns = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
@@ -1711,7 +1708,7 @@ class MainBrain(object):
     def DecreaseCamCounter(self,cam_id):
         try:
             idx = self.MainBrain_cam_ids_copy.index( cam_id )
-        except ValueError, err:
+        except ValueError:
             LOG.warn('IGNORING ERROR: DecreaseCamCounter() called with non-existant cam_id')
             return
         self.num_cams -= 1
@@ -1793,7 +1790,7 @@ class MainBrain(object):
             tmp = self.timestamp_modeler.update(return_last_measurement_info=True)
             start_timestamp, stop_timestamp, framecount, tcnt = tmp
             self.queue_trigger_clock_info.put((start_timestamp, framecount, tcnt, stop_timestamp))
-        except motmot.fview_ext_trig.live_timestamp_modeler.ImpreciseMeasurementError, err:
+        except motmot.fview_ext_trig.live_timestamp_modeler.ImpreciseMeasurementError:
             pass
 
     def _check_latencies(self):
