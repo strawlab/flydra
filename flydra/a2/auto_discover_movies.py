@@ -3,14 +3,14 @@ from .auto_discover_ufmfs import get_h5_start_stop
 
 DEFAULT_MOVIE_SUBDIR = '~/FLYDRA_MOVIES'
 
-def find_movies(h5_fname,verbose=True):
+def find_movies(h5_fname,verbose=True,candidate_index=0):
     '''find movies (.ufmf or .fmf) which are in canonical location'''
     h5_start, h5_stop = get_h5_start_stop(h5_fname)
     if verbose:
         print 'h5_start, h5_stop',h5_start, h5_stop
     test_path = os.path.expanduser(DEFAULT_MOVIE_SUBDIR)
     maybe_dirnames = glob.glob( os.path.join(test_path,'*') )
-    candidate = None
+    candidates = []
 
     for maybe_dirname in maybe_dirnames:
         if not os.path.isdir(maybe_dirname):
@@ -23,13 +23,20 @@ def find_movies(h5_fname,verbose=True):
             print '  option: %s: %s'%(maybe_dirname, approx_start)
 
         if (h5_start <= approx_start) and (h5_stop >= approx_start):
-            assert candidate is None
-            candidate = (maybe_dirname, basename)
+            if verbose:
+                print '    valid!'
+            candidates.append( (maybe_dirname, basename) )
 
-    if candidate is None:
+    if len(candidates) == 0:
         return []
 
+    candidate = candidates[candidate_index]
     (dirname, basename) = candidate
+
+    if len(candidates) > 1:
+        print '%d candidate movies available, choosing %s/%s'%(len(candidates),
+                                                               dirname, basename)
+
     cam_ids = os.listdir(dirname)
     results = []
     mode = None

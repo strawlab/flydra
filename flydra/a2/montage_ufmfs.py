@@ -149,6 +149,7 @@ def make_montage( h5_filename,
                   caminfo_h5_filename = None,
                   colormap = None,
                   kalman_filename = None,
+                  candidate_index = 0,
                   **kwargs):
     config = get_config_defaults()
     if cfg_filename is not None:
@@ -189,7 +190,8 @@ def make_montage( h5_filename,
     min_ori_qual = config['what to show']['minimum_display_orientation_quality']
 
     if movie_fnames is None:
-        movie_fnames = auto_discover_movies.find_movies( h5_filename )
+        movie_fnames = auto_discover_movies.find_movies( h5_filename,
+                                                         candidate_index=candidate_index)
     if len(movie_fnames)==0:
         movie_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
                                                        ufmf_dir=ufmf_dir,
@@ -601,6 +603,9 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     parser.add_option( "--caminfo-h5-filename", type="string",
                        help="path of h5 file from which to load caminfo")
 
+    parser.add_option( "--candidate", type="int", default=0,
+                       help="when multiple auto-discovered movie options, the index to take")
+
     core_analysis.add_options_to_parser(parser)
     (options, args) = parser.parse_args()
 
@@ -632,4 +637,5 @@ transform='rot 180' # rotate the image 180 degrees (See transform
                   movie_cam_ids = movie_cam_ids,
                   caminfo_h5_filename = options.caminfo_h5_filename,
                   colormap = options.colormap,
+                  candidate_index = options.candidate,
                   **kwargs)
