@@ -1464,6 +1464,7 @@ class MainBrain(object):
         self.reconstructor = None
 
         # Attributes which come in use when saving data occurs
+        self._service_save_data_lock = threading.Lock()
         self.h5file = None
         self.h5filename = ''
         self.h5data2d = None
@@ -1752,7 +1753,7 @@ class MainBrain(object):
         diff = now - self.last_saved_data_time
         if diff >= 5.0: # request missing data and save data every 5 seconds
             self._request_missing_data()
-            self._service_save_data()
+            self._locked_service_save_data()
             self.last_saved_data_time = now
 
         diff = now - self.last_trigger_framecount_check_time
@@ -2131,13 +2132,17 @@ class MainBrain(object):
         self.save_config()
 
     def stop_saving_data(self):
-        self._service_save_data()
+      with self._service_save_data_lock:
+        LOG.info('entering final save data service call')
+        self._service_save_data() # we absolutely want to save
+        LOG.info('entering done with final save data service call')
         if self.is_saving_data():
             self.h5file.close()
             self.h5file = None
             self.h5filename = ''
             self.pub_data_file.publish(self.h5filename)
             self.timestamp_modeler.block_activity = False
+            LOG.info('closed h5 file')
         else:
             LOG.info('saving already stopped, cannot stop again')
         self.h5data2d = None
@@ -2192,6 +2197,10 @@ class MainBrain(object):
             missing_data_dict = self.coord_processor.get_missing_data_dict()
             for camn, (cam_id, framenumber_offset, list_of_missing_framenumbers) in missing_data_dict.iteritems():
                 self.remote_api.external_request_missing_data(cam_id,camn,framenumber_offset,list_of_missing_framenumbers)
+
+    def _locked_service_save_data(self):
+        with self._service_save_data_lock:
+            self._service_save_data()
 
     def _service_save_data(self):
         # ** 2d data **
