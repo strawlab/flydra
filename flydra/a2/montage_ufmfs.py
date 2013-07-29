@@ -37,6 +37,7 @@ def get_config_defaults():
             'max_resolution': None,
             'obj_labels':False,
             'linewidth':1.0,
+            'show_cam_id':False,
             }
     default = collections.defaultdict(dict)
     default['what to show']=what
@@ -521,6 +522,11 @@ def make_montage( h5_filename,
                                        font_size=14,
                                        color_rgba=(1,0,0,1) )
 
+                if config['what to show']['show_cam_id']:
+                    canv.text( '%s'%cam_id, 0,20,
+                               font_size=14,
+                               color_rgba=(1,0,0,1) )
+
                 if workaround_ffmpeg2theora_bug:
                     # first frame should get a colored pixel so that
                     # ffmpeg doesn't interpret the whole move as grayscale
@@ -579,6 +585,7 @@ zoom_orig_pixels = 50
 zoom_factor = 5
 obj_labels = False
 linewidth = 1.0
+show_cam_id = False
 
 Config files may also have sections such as:
 
