@@ -518,7 +518,7 @@ def make_montage( h5_filename,
                         for i in range(len(xarr)):
                             obj_id = this_frame_3d_data['obj_id'][i]
                             canv.text( '%d'%obj_id, xarr[i], yarr[i],
-                                       font_size=4,
+                                       font_size=14,
                                        color_rgba=(1,0,0,1) )
 
                 if workaround_ffmpeg2theora_bug:
