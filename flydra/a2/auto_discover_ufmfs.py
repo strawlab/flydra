@@ -56,6 +56,10 @@ def find_ufmfs(filename,ufmf_dir=None,careful=True):
 
     possible_ufmfs = []
 
+    with tables.openFile(filename,mode='r') as h5:
+        camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
+    cam_ids = cam_id2camns.keys()
+
     for cam_id in cam_ids:
         # find likely ufmfs for each cam_id in .h5 file
         this_cam_re = ufmf_template_re.replace('%(cam_id)s',cam_id)
