@@ -421,13 +421,7 @@ def make_montage( h5_filename,
                         X = np.array([this_frame_3d_data['x'], this_frame_3d_data['y'], this_frame_3d_data['z'], np.ones_like(this_frame_3d_data['x'])]).T
                         xarr,yarr = R.find2d( cam_id, X, distorted = True )
                         canv.scatter(xarr, yarr,
-                                     color_rgba=(0,0,0,1),
-                                     radius=10,
-                                     markeredgewidth=config['what to show']['linewidth'],
-                                     )
-                        # draw shadow
-                        canv.scatter(xarr+config['what to show']['linewidth'], yarr+config['what to show']['linewidth'],
-                                     color_rgba=(1,1,1,1),
+                                     color_rgba=(0,1,1,1),
                                      radius=10,
                                      markeredgewidth=config['what to show']['linewidth'],
                                      )
