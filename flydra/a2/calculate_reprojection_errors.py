@@ -2,6 +2,7 @@ import argparse
 import numpy as np
 import pandas
 import collections
+import progressbar
 import os
 
 import flydra.a2.core_analysis as core_analysis
@@ -9,11 +10,21 @@ import flydra.analysis.result_utils as result_utils
 from flydra.a2.tables_tools import openFileSafe
 import flydra.reconstruct as reconstruct
 
+class StringWidget(progressbar.Widget):
+    def set_string(self,ts):
+        self.ts = ts
+    def update(self, pbar):
+        if hasattr(self,'ts'):
+            return self.ts
+        else:
+            return ''
+
 def calculate_reprojection_errors(h5_filename=None,
                                   output_h5_filename=None,
                                   kalman_filename=None,
                                   start=None,
                                   stop=None,
+                                  show_progress=False,
                                   ):
     if os.path.exists( output_h5_filename ):
         raise RuntimeError(
@@ -42,7 +53,18 @@ def calculate_reprojection_errors(h5_filename=None,
         h5_framenumbers = data2d['frame']
         h5_frame_qfi = result_utils.QuickFrameIndexer(h5_framenumbers)
 
+        if show_progress:
+            string_widget = StringWidget()
+            objs_per_sec_widget = progressbar.FileTransferSpeed(unit='obj_ids ')
+            widgets=[string_widget, objs_per_sec_widget,
+                     progressbar.Percentage(), progressbar.Bar(), progressbar.ETA()]
+            pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(use_obj_ids)).start()
+
         for obj_id_enum,obj_id in enumerate(use_obj_ids):
+            if show_progress:
+                string_widget.set_string( '[obj_id: % 5d]'%obj_id )
+                pbar.update(obj_id_enum)
+
             obj_3d_rows = ca.load_dynamics_free_MLE_position( obj_id,
                                                               data_file)
             for this_3d_row in obj_3d_rows:
@@ -138,7 +160,8 @@ def main():
                         help="frame number to begin analysis on")
     parser.add_argument("--stop", type=int, default=None,
                         help="frame number to end analysis on")
-
+    parser.add_argument('--progress', action='store_true', default=False,
+                        help='show progress bar on console')
     args = parser.parse_args()
 
     if args.kalman_file is None:
@@ -152,6 +175,7 @@ def main():
                                   output_h5_filename=args.output_h5,
                                   start=args.start,
                                   stop=args.stop,
+                                  show_progress=args.progress,
                                   )
 
 if __name__=='__main__':
