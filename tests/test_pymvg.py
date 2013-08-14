@@ -5,9 +5,9 @@ import numpy as np
 sample_cal = pkg_resources.resource_filename('flydra.a2',
                                              'sample_calibration.xml')
 
-def test_camera_model():
+def test_pymvg():
     R1 = reconstruct.Reconstructor(sample_cal)
-    R2 = R1.convert_to_camera_model()
+    R2 = R1.convert_to_pymvg()
 
     pts_3d = [ (0.0, 0.0, 0.0),
                (0.1, 0.0, 0.0),

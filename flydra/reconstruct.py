@@ -382,6 +382,77 @@ def test_angles_near2():
     b = 2.92753197003
     assert angles_near(a,b,eps=10.0*D2R,mod_pi=True) == False
 
+def test_pymvg_roundtrip():
+    from pymvg import CameraModel, MultiCameraSystem
+
+    # ----------- with no distortion ------------------------
+    center1 = np.array( (0, 0.0, 5) )
+    center2 = np.array( (1, 0.0, 5) )
+
+    lookat = np.array( (0,1,0))
+
+    cam1 = CameraModel.load_camera_simple(fov_x_degrees=90,
+                                          name='cam1',
+                                          eye=center1,
+                                          lookat=lookat)
+    cam2 = CameraModel.load_camera_simple(fov_x_degrees=90,
+                                          name='cam2',
+                                          eye=center2,
+                                          lookat=lookat)
+    mvg = MultiCameraSystem( cameras=[cam1, cam2] )
+    R = Reconstructor.from_pymvg(mvg)
+    mvg2 = R.convert_to_pymvg()
+
+    cam_ids = ['cam1','cam2']
+    for distorted in [True,False]:
+        for cam_id in cam_ids:
+            v1 = mvg.find2d(  cam_id, lookat, distorted=distorted )
+            v2 = R.find2d(    cam_id, lookat, distorted=distorted )
+            v3 = mvg2.find2d( cam_id, lookat, distorted=distorted )
+            assert np.allclose(v1,v2)
+            assert np.allclose(v1,v3)
+
+    # ----------- with distortion ------------------------
+    cam1dd = cam1.to_dict()
+    cam1dd['D'] = (0.1, 0.2, 0.3, 0.4, 0.0)
+    cam1d = CameraModel.from_dict(cam1dd)
+
+    cam2dd = cam2.to_dict()
+    cam2dd['D'] = (0.11, 0.21, 0.31, 0.41, 0.0)
+    cam2d = CameraModel.from_dict(cam2dd)
+
+    mvgd = MultiCameraSystem( cameras=[cam1d, cam2d] )
+    Rd = Reconstructor.from_pymvg(mvgd)
+    mvg2d = Rd.convert_to_pymvg()
+    cam_ids = ['cam1','cam2']
+    for distorted in [True,False]:
+        for cam_id in cam_ids:
+            v1 = mvgd.find2d(  cam_id, lookat, distorted=distorted )
+            v2 = Rd.find2d(    cam_id, lookat, distorted=distorted )
+            v3 = mvg2d.find2d( cam_id, lookat, distorted=distorted )
+            assert np.allclose(v1,v2)
+            assert np.allclose(v1,v3)
+
+    # ------------ with distortion at different focal length ------
+    mydir = os.path.dirname(__file__)
+    caldir = os.path.join(mydir,'sample_calibration')
+    print mydir
+    print caldir
+    R3 = Reconstructor(caldir)
+    mvg3 = R3.convert_to_pymvg()
+    #R4 = Reconstructor.from_pymvg(mvg3)
+    mvg3b = MultiCameraSystem.from_mcsc( caldir )
+
+    for distorted in [True,False]:
+        for cam_id in R3.cam_ids:
+            v1 = R3.find2d(   cam_id, lookat, distorted=distorted )
+            v2 = mvg3.find2d( cam_id, lookat, distorted=distorted )
+            #v3 = R4.find2d(   cam_id, lookat, distorted=distorted )
+            v4 = mvg3b.find2d( cam_id, lookat, distorted=distorted )
+            assert np.allclose(v1,v2)
+            #assert np.allclose(v1,v3)
+            assert np.allclose(v1,v4)
+
 class SingleCameraCalibration:
     """Complete per-camera calibration information.
 
@@ -452,6 +523,41 @@ class SingleCameraCalibration:
 
         self.pmat_inv = numpy.linalg.pinv(self.Pmat)
 
+    @classmethod
+    def from_pymvg(cls, pymvg_cam):
+        pmat = pymvg_cam.get_pmat()
+        camdict = pymvg_cam.to_dict()
+        if np.sum(abs(np.array(camdict['D']))) != 0:
+            rect = np.array(pymvg_cam.to_dict()['R'])
+            rdiff = rect - np.eye(3)
+            rsum = np.sum(abs(rdiff.ravel()))
+            if rsum != 0:
+                raise NotImplementedError('no support for rectification')
+            d = np.array(camdict['D'])
+            assert d.ndim==1
+            assert d.shape==(5,)
+            assert d[4] == 0.0
+            #fc1, fc1, cc1, cc2
+            r1, r2, t1, t2 = d[:4]
+            K = pymvg_cam.get_K()
+            fc1 = K[0,0]
+            fc2 = K[1,1]
+            cc1 = K[0,2]
+            cc2 = K[1,2]
+            helper = reconstruct_utils.ReconstructHelper(fc1,fc2, # focal length
+                                                         cc1,cc2, # image center
+                                                         r1,r2, # radial distortion
+                                                         t1,t2) # tangential distortion
+        else:
+            helper = None
+        cam_id = camdict['name']
+        result = cls( cam_id=cam_id,
+                      Pmat=pmat,
+                      res=(camdict['width'],camdict['height']),
+                      helper = None,
+                      )
+        return result
+
     def __ne__(self,other):
         return not (self==other)
 
@@ -461,12 +567,14 @@ class SingleCameraCalibration:
                 numpy.allclose(self.res,other.res) and
                 self.helper == other.helper)
 
-    def convert_to_camera_model(self):
-        import roslib; roslib.load_manifest('camera_model')
-        import camera_model
+    def convert_to_pymvg(self):
+        import pymvg.pymvg as pymvg
+
+        if not self.helper.simple:
+            raise ValueError('this camera cannot be converted to PyMVG')
 
         K, R = self.get_KR()
-        if not camera_model.camera_model.is_rotation_matrix(R):
+        if not pymvg.is_rotation_matrix(R):
             # RQ may return left-handed rotation matrix. Make right-handed.
             R2 = -R
             K2 = -K
@@ -476,6 +584,28 @@ class SingleCameraCalibration:
         P = np.zeros((3,4))
         P[:3,:3] = K
         KK = self.helper.get_K()
+
+        # (ab)use PyMVG's rectification to do coordinate transform
+        # for MCSC's undistortion.
+
+        # The intrinsic parameters used for 3D -> 2D.
+        ex = P[0,0]
+        bx = P[0,2]
+        Sx = P[0,3]
+        ey = P[1,1]
+        by = P[1,2]
+        Sy = P[1,3]
+
+        # Parameters used to define undistortion coordinates.
+        fx = KK[0,0]
+        fy = KK[1,1]
+        cx = KK[0,2]
+        cy = KK[1,2]
+
+        rect = np.array([[ ex/fx,     0, (bx+Sx-cx)/fx ],
+                         [     0, ey/fy, (by+Sy-cy)/fy ],
+                         [     0,     0,       1       ]]).T
+
 
         k1,k2,p1,p2 = self.helper.get_nlparams()
         distortion = [k1,k2,p1,p2,0]
@@ -488,13 +618,13 @@ class SingleCameraCalibration:
              'height':self.res[1],
              'P':P,
              'K':KK,
-             'R':None,
+             'R':rect,
              'translation':t,
              'rotation':rot,
              'D':distortion,
              'name':self.cam_id,
              }
-        cnew = camera_model.CameraModel.from_dict(d)
+        cnew = pymvg.CameraModel.from_dict(d,max_skew_ratio=10)
         return cnew
 
     def get_pmat(self):
@@ -1075,14 +1205,20 @@ class Reconstructor:
         if close_cal_source:
             use_cal_source.close()
 
-    def convert_to_camera_model(self):
-        import roslib; roslib.load_manifest('camera_model')
-        import camera_model
+    @classmethod
+    def from_pymvg(cls, mvg):
+        d = mvg.get_camera_dict()
+        sccs = [ SingleCameraCalibration.from_pymvg(d[k]) for k in d ]
+        result = cls(sccs)
+        return result
+
+    def convert_to_pymvg(self):
+        import pymvg.pymvg as pymvg
 
         orig_sccs = [self.get_SingleCameraCalibration(cam_id)
                      for cam_id in self.cam_ids]
-        cams = [o.convert_to_camera_model() for o in orig_sccs]
-        result = camera_model.MultiCameraSystem(cams)
+        cams = [o.convert_to_pymvg() for o in orig_sccs]
+        result = pymvg.MultiCameraSystem(cams)
         return result
 
     def get_scaled(self):
