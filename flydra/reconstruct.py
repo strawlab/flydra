@@ -12,7 +12,7 @@ import _pmat_jacobian # in pyrex/C for speed
 import flydra.align
 import xml.etree.ElementTree as ET
 import StringIO, warnings
-import cgtypes
+import cgtypes # ubuntu: python-cgkit1
 from optparse import OptionParser
 
 R2D = 180.0/np.pi
