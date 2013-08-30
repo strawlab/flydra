@@ -30,7 +30,7 @@ import weakref
 import warnings, tempfile
 import unittest
 import pkg_resources
-from nose.plugins.attrib import attr as nose_attr
+from nose.plugins.attrib import attr as nose_attr # ubuntu: apt-get install python-nose
 
 def add_options_to_parser(parser):
     parser.add_option("--velocity-weight-gain",default=0.5,type='float')
