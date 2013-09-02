@@ -13,6 +13,9 @@ def doit(filename=None):
 
         arr = getattr(image_table,cam_id)
         image = arr.read()
+        if image.ndim==3 and image.shape[2]==1:
+            # only a single "color" channel
+            image = image[:,:,0] # drop a dimension (3D->2D)
         mean_luminance = numpy.mean(image.flat)
         print '%s: %dx%d, mean luminance %.1f'%(cam_id,
                                                 image.shape[1],
