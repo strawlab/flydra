@@ -2,7 +2,6 @@ import numpy
 import numpy as nx
 import numpy.linalg as linalg
 from numpy import inf, nan
-import matplotlib.delaunay as delaunay
 
 import math
 
@@ -380,6 +379,7 @@ class DistortionMesh:
 
         # Now, triangulate the distorted coordinates viewed through
         # lens and create a map back to the undistorted grid.
+        import matplotlib.delaunay as delaunay
         self._tri = delaunay.Triangulation(numpy.ravel(distorted_x),numpy.ravel(distorted_y))
         self._interp_x = self._tri.nn_interpolator(numpy.ravel(Xu))
         self._interp_y = self._tri.nn_interpolator(numpy.ravel(Yu))
