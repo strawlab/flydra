@@ -21,7 +21,7 @@ def doit(filename=None):
                                                 image.shape[1],
                                                 image.shape[0],
                                                 mean_luminance)
-        scipy.misc.pilutil.imsave( '%s.bmp'%(cam_id,), image )
+        scipy.misc.pilutil.imsave( '%s.png'%(cam_id,), image )
     results.close()
 
 def main():
