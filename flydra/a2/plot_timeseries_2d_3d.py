@@ -120,6 +120,11 @@ def doit(
                 these_rows = h5.root.data2d_distorted.read(start=start_idx,
                                                            stop=stop_idx+1)
                 all_data.append(these_rows)
+            if len(all_data)==0:
+                print 'file %s has no frames in range %s - %s' % ( filename,
+                                                                   start,
+                                                                   stop )
+                continue
             all_data = np.concatenate( all_data )
             del valid_cond, frames, start_idx, stop_idx, these_rows, read_idxs
         else:
