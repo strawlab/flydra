@@ -18,9 +18,6 @@ pytables_filt = numpy.asarray
 import atexit
 import pickle
 
-import motmot.fview_ext_trig.ttrigger
-import motmot.fview_ext_trig.live_timestamp_modeler
-
 import flydra.version
 import flydra.kalman.flydra_kalman_utils as flydra_kalman_utils
 import flydra.kalman.flydra_tracker
@@ -41,6 +38,7 @@ import roslib
 roslib.load_manifest('rospy')
 roslib.load_manifest('std_srvs')
 roslib.load_manifest('ros_flydra')
+roslib.load_manifest('triggerbox')
 import rospy
 import std_srvs.srv
 import std_msgs.msg
@@ -49,6 +47,7 @@ from ros_flydra.msg import flydra_mainbrain_packet, flydra_object, FlydraError
 import ros_flydra.srv
 import ros_flydra.cv2_bridge
 from geometry_msgs.msg import Point, Vector3
+from triggerbox.triggerbox_client import TriggerboxClient
 
 import flydra.rosutils
 LOG = flydra.rosutils.Log(to_ros=True)
@@ -59,6 +58,8 @@ DebugLock = flydra.debuglock.DebugLock
 MIN_KALMAN_OBSERVATIONS_TO_SAVE = 0 # how many data points are required before saving trajectory?
 
 SHOW_3D_PROCESSING_LATENCY = False
+
+SYNC_INTERVAL = 2.0
 
 import flydra.common_variables
 
@@ -675,7 +676,7 @@ class CoordinateProcessor(threading.Thread):
                                     with self.request_data_lock:
                                         tmp_queue = self.request_data.setdefault(absolute_cam_no,Queue.Queue())
 
-                                    tmp_framenumber_offset = self.main_brain.timestamp_modeler.get_frame_offset(cam_id)
+                                    tmp_framenumber_offset = self.main_brain.frame_offsets[cam_id]
                                     tmp_queue.put( (cam_id,  tmp_framenumber_offset, missing_frame_numbers) )
                                     del tmp_framenumber_offset
                                     del tmp_queue # drop reference to queue
@@ -745,9 +746,10 @@ class CoordinateProcessor(threading.Thread):
                         #  * using time.time() can fail if the network
                         #    latency jitter is on the order of the
                         #    inter frame interval.
-                        tmp = self.main_brain.timestamp_modeler.register_frame(
-                            cam_id,raw_framenumber,camn_received_time,full_output=True)
-                        trigger_timestamp, corrected_framenumber, did_frame_offset_change = tmp
+                        tmp = self.main_brain.register_frame(
+                            cam_id,raw_framenumber)
+                        corrected_framenumber, did_frame_offset_change = tmp
+                        trigger_timestamp = self.trigger_device.framestamp2timestamp( corrected_framenumber )
                         if did_frame_offset_change:
                             self.OnSynchronize( cam_idx, cam_id, raw_framenumber, trigger_timestamp,
                                                 realtime_coord_dict,
@@ -1128,6 +1130,7 @@ class MainBrain(object):
 
     ROS_CONFIGURATION = dict(
         frames_per_second=100.0,
+        triggerbox_namespace='/trig1',
         kalman_model='EKF mamarama, units: mm',
         max_reconstruction_latency_sec=0.06, # 60 msec
         max_N_hypothesis_test=3,
@@ -1422,12 +1425,11 @@ class MainBrain(object):
         self.debug_level = threading.Event()
         self.show_overall_latency = threading.Event()
 
-        self.trigger_device_lock = threading.Lock()
-        with self.trigger_device_lock:
-            self.trigger_device = motmot.fview_ext_trig.ttrigger.DeviceModel()
-            self.trigger_device.frames_per_second = self.config['frames_per_second']
-            self.timestamp_modeler = motmot.fview_ext_trig.live_timestamp_modeler.LiveTimestampModeler()
-            self.timestamp_modeler.set_trigger_device( self.trigger_device )
+        self.trigger_device = TriggerboxClient(host_node=self.config['triggerbox_namespace'])
+        self.trigger_device.set_frames_per_second( self.config['frames_per_second'] )
+        self.frame_offsets = {}
+        self.last_frame_times = {}
+        self.block_triggerbox_activity = False
 
         remote_api = MainBrain.RemoteAPI(); remote_api.post_init(self)
 
@@ -1452,7 +1454,6 @@ class MainBrain(object):
         self.set_old_camera_callback(self.DecreaseCamCounter)
 
         self.last_saved_data_time = 0.0
-        self.last_trigger_framecount_check_time = 0.0
 
         self._currently_recording_movies = {}
 
@@ -1544,6 +1545,23 @@ class MainBrain(object):
             self.h5exp_info.row.append()
             self.h5exp_info.flush()
 
+    def register_frame(self, id_string, framenumber):
+        full_output=True
+        frame_timestamp = time.time()
+        last_frame_timestamp = self.last_frame_times.get(id_string,-np.inf)
+        this_interval = frame_timestamp-last_frame_timestamp
+        print 'this_interval',this_interval
+
+        did_frame_offset_change = False
+        if this_interval > SYNC_INTERVAL:
+            self.frame_offsets[id_string] = framenumber-2 # XXX FIXME: why the magic -2 here?!?!
+            did_frame_offset_change = True
+
+        self.last_frame_times[id_string] = frame_timestamp
+
+        corrected_framenumber = framenumber-self.frame_offsets[id_string]
+        return corrected_framenumber, did_frame_offset_change
+
     def _ros_generic_service_dispatch(self, req):
         calledservice = req._connection_header['service']
         calledfunction = calledservice.split('/')[-1]
@@ -1603,7 +1621,7 @@ class MainBrain(object):
             func()
 
     def get_fps(self):
-        return self.trigger_device.frames_per_second_actual
+        return self.trigger_device.get_frames_per_second()
 
     def set_fps(self,fps):
         self.do_synchronization(new_fps=fps)
@@ -1644,15 +1662,17 @@ class MainBrain(object):
         if self.is_saving_data():
             raise RuntimeError('will not (re)synchronize while saving data')
 
+        assert self.block_triggerbox_activity == False
+
         if new_fps is not None:
-            self.trigger_device.frames_per_second = new_fps
-            actual_new_fps = self.trigger_device.frames_per_second_actual
+            self.trigger_device.set_frames_per_second( new_fps )
+            actual_new_fps = self.trigger_device.get_frames_per_second()
 
             #the tracker depends on the framerate
             self.update_tracker_fps(actual_new_fps)
 
         self.coord_processor.mainbrain_is_attempting_synchronizing()
-        self.timestamp_modeler.synchronize = True # fire event handler
+        self.trigger_device.synchronize(SYNC_INTERVAL+1.0)
         if new_fps is not None:
             cam_ids = self.remote_api.external_get_cam_ids()
             for cam_id in cam_ids:
@@ -1671,7 +1691,7 @@ class MainBrain(object):
         self.pub_num_cams.publish(self.num_cams)
 
     def SendExpectedFPS(self,cam_id,scalar_control_info,fqdn):
-        self.send_set_camera_property( cam_id, 'expected_trigger_framerate', self.trigger_device.frames_per_second_actual )
+        self.send_set_camera_property( cam_id, 'expected_trigger_framerate', self.trigger_device.get_frames_per_second() )
 
     def SendCalibration(self,cam_id,scalar_control_info,fqdn):
         if self.reconstructor is not None and cam_id in self.reconstructor.get_cam_ids():
@@ -1756,20 +1776,7 @@ class MainBrain(object):
             self._locked_service_save_data()
             self.last_saved_data_time = now
 
-        diff = now - self.last_trigger_framecount_check_time
-        if diff >= 5.0:
-            self._trigger_framecount_check()
-            self.last_trigger_framecount_check_time = now
-
         self._check_latencies()
-
-    def _trigger_framecount_check(self):
-        try:
-            tmp = self.timestamp_modeler.update(return_last_measurement_info=True)
-            start_timestamp, stop_timestamp, framecount, tcnt = tmp
-            self.queue_trigger_clock_info.put((start_timestamp, framecount, tcnt, stop_timestamp))
-        except motmot.fview_ext_trig.live_timestamp_modeler.ImpreciseMeasurementError:
-            pass
 
     def _check_latencies(self):
         timestamp_echo_fmt1 = flydra.common_variables.timestamp_echo_fmt1
@@ -2072,7 +2079,7 @@ class MainBrain(object):
         self.h5filename = filename
         self.pub_data_file.publish(self.h5filename)
 
-        self.timestamp_modeler.block_activity = True
+        self.block_triggerbox_activity = True
         self.h5file = PT.openFile(self.h5filename, mode="w", title="Flydra data file")
         expected_rows = int(1e6)
         ct = self.h5file.createTable # shorthand
@@ -2141,7 +2148,7 @@ class MainBrain(object):
             self.h5file = None
             self.h5filename = ''
             self.pub_data_file.publish(self.h5filename)
-            self.timestamp_modeler.block_activity = False
+            self.block_triggerbox_activity = False
             LOG.info('closed h5 file')
         else:
             LOG.info('saving already stopped, cannot stop again')
@@ -2168,13 +2175,9 @@ class MainBrain(object):
 
         list_of_textlog_data = [
             (timestamp,cam_id,timestamp,
-             ('MainBrain running at %s fps, (top %s, '
-              'trigger_CS3 %s, FOSC %s, flydra_version %s, '
+             ('MainBrain running at %s fps, (flydra_version %s, '
               'time_tzname0 %s)'%(
-            str(self.trigger_device.frames_per_second_actual),
-            str(self.trigger_device._t3_state.timer3_top),
-            str(self.trigger_device._t3_state.timer3_CS),
-            str(self.trigger_device.FOSC),
+            str(self.trigger_device.get_frames_per_second()),
             flydra.version.__version__,
             time.tzname[0],
             ))),
