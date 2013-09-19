@@ -749,7 +749,7 @@ class CoordinateProcessor(threading.Thread):
                         tmp = self.main_brain.register_frame(
                             cam_id,raw_framenumber)
                         corrected_framenumber, did_frame_offset_change = tmp
-                        trigger_timestamp = self.trigger_device.framestamp2timestamp( corrected_framenumber )
+                        trigger_timestamp = self.main_brain.trigger_device.framestamp2timestamp( corrected_framenumber )
                         if did_frame_offset_change:
                             self.OnSynchronize( cam_idx, cam_id, raw_framenumber, trigger_timestamp,
                                                 realtime_coord_dict,
@@ -1550,7 +1550,6 @@ class MainBrain(object):
         frame_timestamp = time.time()
         last_frame_timestamp = self.last_frame_times.get(id_string,-np.inf)
         this_interval = frame_timestamp-last_frame_timestamp
-        print 'this_interval',this_interval
 
         did_frame_offset_change = False
         if this_interval > SYNC_INTERVAL:
