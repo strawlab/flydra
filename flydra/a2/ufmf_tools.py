@@ -20,7 +20,9 @@ def get_cam_id_from_ufmf_fname(ufmf_fname):
 
     # cam_id in fname (2008 flydra approach) -----------------
     a = os.path.split( ufmf_fname )[-1]
-    b = os.path.splitext(a)[0]
+    b,mode = os.path.splitext(a)
+    mode = mode[1:]
+    assert mode in ['ufmf','fmf']
     matchobj = ufmf_fname_regex.search(b)
     if matchobj is not None:
         date, datetime_str, cam_id= matchobj.groups()
@@ -35,6 +37,11 @@ def get_cam_id_from_ufmf_fname(ufmf_fname):
             approx_start = time.mktime(struct_time)
         except RuntimeError:
             pass
+        except ValueError:
+            datetime_str2 = filepart
+            struct_time = time.strptime(datetime_str2,'%Y%m%d_%H%M%S.'+mode)
+            # if the above succeeded, it was a timestamp. thus we have 2013-08 version.
+            cam_id =  maybe_camid
         else:
             # if the parent directory is datetime, this is likely the camid
             if os.path.splitext(filepart)[0] == datetime_str:
