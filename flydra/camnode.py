@@ -493,9 +493,6 @@ class ProcessCamClass(rospy.SubscribeListener):
             self._pmat = None
             self._camera_center = None
             self._pmat_inv = None
-            self._pmat_meters = None
-            self._pmat_meters_inv = None
-            self._camera_center_meters = None
             return
 
         self._pmat = numpy.asarray(value)
@@ -516,20 +513,6 @@ class ProcessCamClass(rospy.SubscribeListener):
 
         self._camera_center = nx.array( [ X/T, Y/T, Z/T, 1.0 ] )
         self._pmat_inv = numpy.dual.pinv(self._pmat)
-
-        self._pmat_meters = self._pmat # element-wise multiplication
-        self._pmat_meters_inv = numpy.dual.pinv(self._pmat_meters)
-        P = self._pmat_meters
-        # find camera center in 3D world coordinates
-        col0_asrow = P[nx.newaxis,:,0]
-        col1_asrow = P[nx.newaxis,:,1]
-        col2_asrow = P[nx.newaxis,:,2]
-        col3_asrow = P[nx.newaxis,:,3]
-        X = determinant(  r_[ col1_asrow, col2_asrow, col3_asrow ] )
-        Y = -determinant( r_[ col0_asrow, col2_asrow, col3_asrow ] )
-        Z = determinant(  r_[ col0_asrow, col1_asrow, col3_asrow ] )
-        T = -determinant( r_[ col0_asrow, col1_asrow, col2_asrow ] )
-        self._camera_center_meters = nx.array( [ X/T, Y/T, Z/T, 1.0 ] )
 
     def make_reconstruct_helper(self, intlin, intnonlin):
         if intlin is None and intnonlin is None:
@@ -583,11 +566,11 @@ class ProcessCamClass(rospy.SubscribeListener):
                 if line_found:
 
                     # (If we have self._hlper _pmat_inv, we can assume we have
-                    # self._pmat_inv and sef._pmat_meters.)
+                    # self._pmat_inv and sef._camera_center.)
                     (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4,
                      ray5) = do_3d_operations_on_2d_point(self._hlper,x0u,y0u,
-                                                          self._pmat_inv, self._pmat_meters_inv,
-                                                          self._camera_center, self._camera_center_meters,
+                                                          self._pmat_inv,
+                                                          self._camera_center,
                                                           x0_abs, y0_abs,
                                                           rise, run)
                     ray_valid = True

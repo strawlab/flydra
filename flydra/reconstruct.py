@@ -283,8 +283,8 @@ def intersect_planes_to_find_line(P):
 
 def do_3d_operations_on_2d_point(helper,
                                  x0u, y0u, # undistorted coords
-                                 pmat_inv, pmat_meters_inv,
-                                 camera_center, camera_center_meters,
+                                 pmat_inv,
+                                 camera_center,
                                  x0_abs, y0_abs, # distorted coords
                                  rise, run):
     """this function is a hack"""
@@ -337,11 +337,11 @@ def do_3d_operations_on_2d_point(helper,
 
     # calculate pluecker coords of 3D ray from camera center to point
     # calculate 3D coords of point on image plane
-    X0meters = numpy.dot(pmat_meters_inv, found_point_image_plane )
-    X0meters = X0meters[:3]/X0meters[3] # convert to shape = (3,)
+    X0 = numpy.dot(pmat_inv, found_point_image_plane )
+    X0 = X0[:3]/X0[3] # convert to shape = (3,)
     # project line
-    pluecker_meters = pluecker_from_verts(X0meters,camera_center_meters)
-    (ray0, ray1, ray2, ray3, ray4, ray5) = pluecker_meters # unpack
+    pluecker = pluecker_from_verts(X0,camera_center)
+    (ray0, ray1, ray2, ray3, ray4, ray5) = pluecker # unpack
 
     return (p1, p2, p3, p4,
             ray0, ray1, ray2, ray3, ray4, ray5)
@@ -792,16 +792,13 @@ class SingleCameraCalibration:
         # homogeneous coords for camera centers
         camera_center = np.ones((4,))
         camera_center[:3] = self.get_cam_center()[:,0]
-        camera_center_meters = np.ones((4,))
-        camera_center_meters[:3] = meter_me.get_cam_center()[:,0]
         try:
             tmp = do_3d_operations_on_2d_point(self.helper, x0u, y0u,
-                                               self.pmat_inv, pmat_meters_inv,
-                                               camera_center, camera_center_meters,
+                                               self.pmat_inv,
+                                               camera_center,
                                                x0d, y0d, rise, run)
         except:
             print 'camera_center',camera_center
-            print 'camera_center_meters',camera_center_meters
             raise
         (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4, ray5) = tmp
         plane = (p1, p2, p3, p4)
