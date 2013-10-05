@@ -174,10 +174,10 @@ def norm_vec(V):
     Va = np.asarray(V,dtype=np.float64) # force double precision floats
     if len(Va.shape)==1:
         # vector
-        U = Va/math.sqrt(Va[0]**2 + Va[1]**2 + Va[2]**2) # normalize
+        U = Va/math.sqrt(np.sum(Va**2)) # normalize
     else:
         assert Va.shape[1] == 3
-        Vamags = nx.sqrt(Va[:,0]**2 + Va[:,1]**2 + Va[:,2]**2)
+        Vamags = nx.sqrt(np.sum(Va**2,axis=1))
         U = Va/Vamags[:,nx.newaxis]
     return U
 
