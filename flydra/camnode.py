@@ -166,6 +166,8 @@ class ROSMainBrain:
                                                           ros_flydra.srv.MainBrainGetAndClearCommands)
         self._set_image = rospy.ServiceProxy('/flydra_mainbrain/set_image',
                                              ros_flydra.srv.MainBrainSetImage)
+        self._receive_missing_data = rospy.ServiceProxy('/flydra_mainbrain/receive_missing_data',
+                                             ros_flydra.srv.MainBrainReceiveMissingData)
         self._close_camera = rospy.ServiceProxy('/flydra_mainbrain/close_camera',
                                              ros_flydra.srv.MainBrainCloseCamera)
 
@@ -210,6 +212,13 @@ class ROSMainBrain:
         req.image = ros_flydra.cv2_bridge.numpy_to_imgmsg(arr)
 
         self._set_image(req)
+
+    def receive_missing_data(self, cam_id, framenumber_offset, missing_data):
+        req = ros_flydra.srv.MainBrainReceiveMissingData()
+        req.cam_id = cam_id
+        req.framenumber_offset = framenumber_offset
+        req.missing_data_json_buf = json.dumps( missing_data )
+        self._receive_missing_data(req)
 
     def close(self, cam_id):
         req = ros_flydra.srv.MainBrainCloseCameraRequest()

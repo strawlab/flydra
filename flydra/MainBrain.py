@@ -1123,6 +1123,7 @@ class MainBrain(object):
         register_new_camera=(ros_flydra.srv.MainBrainRegisterNewCamera),
         get_and_clear_commands=(ros_flydra.srv.MainBrainGetAndClearCommands),
         set_image=(ros_flydra.srv.MainBrainSetImage),
+        receive_missing_data=(ros_flydra.srv.MainBrainReceiveMissingData),
         close_xcamera=(ros_flydra.srv.MainBrainCloseCamera),
     )
 
@@ -1344,6 +1345,8 @@ class MainBrain(object):
                     self.cam_info[cam_id]['image'] = coord_and_image
 
         def receive_missing_data(self, cam_id, framenumber_offset, missing_data ):
+            rospy.loginfo('received requested stale data for frame %d' % framenumber_offset)
+
             if len(missing_data)==0:
                 # no missing data
                 return
@@ -1635,6 +1638,10 @@ class MainBrain(object):
         lb = left.data, bottom.data
         image = ros_flydra.cv2_bridge.imgmsg_to_numpy(image)
         self.remote_api.set_image(cam_id, (lb,image))
+
+    def receive_missing_data(self, cam_id, framenumber_offset, missing_data_json_buf):
+        missing_data = json.loads( missing_data_json_buf )
+        self.remote_api.receive_missing_data(cam_id, framenumber_offset, missing_data)
 
     def close_xcamera(self,cam_id):
         cam_id = cam_id.data
