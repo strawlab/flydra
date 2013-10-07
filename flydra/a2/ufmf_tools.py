@@ -70,6 +70,7 @@ def iterate_frames(h5_filename,
     last_ufmf_ts = np.inf
     ufmfs = {}
     cam_ids = []
+    global_data = {'width_heights': {}}
     for movie_idx,ufmf_fname in enumerate(ufmf_fnames):
         if movie_cam_ids is not None:
             cam_id = movie_cam_ids[movie_idx]
@@ -83,6 +84,8 @@ def iterate_frames(h5_filename,
             ufmf = ufmf_mod.FlyMovieEmulator(ufmf_fname,
                                              white_background=white_background,
                                              **kwargs)
+
+        global_data['width_heights'][cam_id] = ( ufmf.get_width(), ufmf.get_height() )
         tss = ufmf.get_all_timestamps()
         ufmf.seek(0)
         ufmfs[ufmf_fname] = (ufmf, cam_id, tss)
@@ -246,4 +249,5 @@ def iterate_frames(h5_filename,
                 if is_real_ufmf:
                     per_frame_dict[ufmf_fname].update(more)
             per_frame_dict['tracker_data']=this_h5_data
+            per_frame_dict['global_data']=global_data # on every iteration, pass our global data
             yield (per_frame_dict,frame)
