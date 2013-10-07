@@ -53,7 +53,7 @@ class Tracker:
         self.disable_image_stat_gating = disable_image_stat_gating
         self.orientation_consensus = orientation_consensus
         self.fake_timestamp = fake_timestamp
-        self.cur_obj_id = 0
+        self.cur_obj_id = 1
 
         # set values for passing to TrackedObject
         self.max_frames_skipped = max_frames_skipped

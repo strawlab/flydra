@@ -221,7 +221,7 @@ class KalmanSaver:
             ML_estimates_2d_idxs_type(),
             "camns and idxs")
 
-        self.obj_id = -1
+        self.obj_id = 0
 
         self.h5textlog = self.h5file.createTable(
             self.h5file.root,'textlog',TextLogDescription,'text log')
