@@ -1,3 +1,13 @@
+"""Get Flydra Image Latency.
+
+Usage:
+  flydra_analysis_get_2D_image_latency FILENAME
+
+Options:
+  -h --help     Show this screen.
+"""
+from docopt import docopt
+
 import tables
 import numpy as np
 import sys
@@ -6,11 +16,13 @@ import flydra.analysis.result_utils as result_utils
 import matplotlib.pyplot as plt
 
 def main():
+    args = docopt(__doc__, version='Naval Fate 2.0')
+
     do_plot = True
     debug=False
     #debug=True
 
-    filename = sys.argv[1]
+    filename = args['FILENAME']
     results = tables.openFile(filename,mode='r')
     time_model=result_utils.get_time_model_from_data(results,debug=debug)
     worst_sync_dict = get_clock_sync.get_worst_sync_dict(results)
