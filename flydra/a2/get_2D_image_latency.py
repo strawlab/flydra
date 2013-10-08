@@ -1,10 +1,11 @@
 """Get Flydra Image Latency.
 
 Usage:
-  flydra_analysis_get_2D_image_latency FILENAME
+  flydra_analysis_get_2D_image_latency FILENAME [options]
 
 Options:
   -h --help     Show this screen.
+  --show        Draw plots.
 """
 from docopt import docopt
 
@@ -18,7 +19,7 @@ import matplotlib.pyplot as plt
 def main():
     args = docopt(__doc__, version='Naval Fate 2.0')
 
-    do_plot = True
+    do_plot = args['--show']
     debug=False
     #debug=True
 
@@ -40,11 +41,6 @@ def main():
     d2d = results.root.data2d_distorted[:]
     cam_info = results.root.cam_info[:]
     results.close()
-
-    dt = time_model.framestamp2timestamp(1)-time_model.framestamp2timestamp(0)
-    fps = 1.0/dt
-    print 'fps',fps
-    print [repr(i) for i in time_model.framestamp2timestamp(np.array([0,1,2]))]
 
     if do_plot:
         fig = plt.figure()
@@ -78,12 +74,12 @@ def main():
             ##     if i>=10:
             ##         break
 
-            print '%s: median latency: %.1f mean latency: %.1f (estimate error: %.1f msec) worst latency: %.1f'%(
+            print '%s: median: %.1f, mean: %.1f, worst: %.1f (estimate error: %.1f msec)'%(
                 cam_id,
                 median_latency_sec*1000.0,
                 mean_latency_sec*1000.0,
-                worst_sync_dict[hostname]*1000.0,
                 max_latency_sec*1000.0,
+                worst_sync_dict[hostname]*1000.0,
                 )
 
             if do_plot:
