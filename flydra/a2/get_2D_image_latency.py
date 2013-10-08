@@ -47,8 +47,11 @@ def main():
         ax = None
 
     if 1:
-        for camn_enum, camn in enumerate(camns):
-            cam_id = camn2cam_id[camn]
+        for camn_enum, cam_id in enumerate(cam_ids):
+            camns = cam_id2camns[cam_id]
+            if not len(camns)==1:
+                raise NotImplementedError
+            camn=camns[0]
 
             cond1 = cam_info['cam_id']==cam_id
             assert np.sum(cond1)==1
