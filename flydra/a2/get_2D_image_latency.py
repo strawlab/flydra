@@ -17,7 +17,7 @@ import flydra.analysis.result_utils as result_utils
 import matplotlib.pyplot as plt
 
 def main():
-    args = docopt(__doc__, version='Naval Fate 2.0')
+    args = docopt(__doc__)
 
     do_plot = args['--show']
     debug=False
