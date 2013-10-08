@@ -15,13 +15,13 @@ def get_worst_sync_dict(filename_or_h5_file):
 
     hci = kresults.root.host_clock_info
     tbl = hci[:]
+    cam_info = kresults.root.cam_info[:]
 
     if opened:
         kresults.close()
 
     hostnames = tbl['remote_hostname']
     uhostnames = numpy.unique(hostnames)
-
     result = {}
 
     for hostname in uhostnames:
@@ -45,6 +45,12 @@ def get_worst_sync_dict(filename_or_h5_file):
 
         meas_err_at_worst = max_measurement_error[idx]
         result[hostname]=worst
+
+    # special case: a single host called localhost in one place and real hostname in another
+    if len(uhostnames)==1 and uhostnames[0]=='localhost':
+        hostnames2 = numpy.unique(cam_info['hostname'])
+        if len(hostnames2)==1:
+            result[hostnames2[0]]=result['localhost']
     return result
 
 def main():
