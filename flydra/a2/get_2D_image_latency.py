@@ -69,6 +69,7 @@ def main():
             cam_received_timestamp = mydata['cam_received_timestamp']
 
             latency_sec = cam_received_timestamp-trigger_timestamp
+            median_latency_sec = np.median( latency_sec )
             mean_latency_sec = latency_sec.mean()
             max_latency_sec = np.max(latency_sec)
 
@@ -77,8 +78,9 @@ def main():
             ##     if i>=10:
             ##         break
 
-            print '%s: mean latency: %.1f (estimate error: %.1f msec) worst latency: %.1f'%(
+            print '%s: median latency: %.1f mean latency: %.1f (estimate error: %.1f msec) worst latency: %.1f'%(
                 cam_id,
+                median_latency_sec*1000.0,
                 mean_latency_sec*1000.0,
                 worst_sync_dict[hostname]*1000.0,
                 max_latency_sec*1000.0,
