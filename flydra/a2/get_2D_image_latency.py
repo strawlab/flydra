@@ -59,6 +59,23 @@ def main():
 
             frame = mydata['frame']
 
+            if 1:
+                # Find frames that we never received.  Note that
+                # frames we received but with no detections are saved
+                # with a single feature point at coords (nan,nan).
+
+                frame_sorted = np.sort(frame) # We can get out-of-order frames.
+                frame_min = frame_sorted[0]
+                frame_max = frame_sorted[-1]
+
+                fdiff = frame_sorted[1:] - frame_sorted[:-1]
+
+                skips = (fdiff - 1) # IFI of 1 is not a skip, but normal. (We also have IFIs of 0.)
+                skips = skips[skips > 0]
+                n_skipped = np.sum( skips )
+                n_total = frame_max-frame_min
+                frac_skipped = n_skipped/float(n_total)
+
             trigger_timestamp = time_model.framestamp2timestamp(frame)
 
             # on camera computer:
@@ -69,17 +86,13 @@ def main():
             mean_latency_sec = latency_sec.mean()
             max_latency_sec = np.max(latency_sec)
 
-            ## for i in range(len(frame)):
-            ##     print frame[i], repr(trigger_timestamp[i]), repr(cam_received_timestamp[i])
-            ##     if i>=10:
-            ##         break
-
-            print '%s: median: %.1f, mean: %.1f, worst: %.1f (estimate error: %.1f msec)'%(
+            print '%s: median: %.1f, mean: %.1f, worst: %.1f (estimate error: %.1f msec). %.2f%% skipped'%(
                 cam_id,
                 median_latency_sec*1000.0,
                 mean_latency_sec*1000.0,
                 max_latency_sec*1000.0,
                 worst_sync_dict[hostname]*1000.0,
+                frac_skipped*100.0,
                 )
 
             if do_plot:
