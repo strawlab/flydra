@@ -182,10 +182,13 @@ def convert(infilename,
     #also save the experiment data if present
     try:
         table_experiment = h5file_raw.root.experiment_info
+        uuid=None
         try:
-            extra_vars['experiment_uuid'] = table_experiment.read(field='uuid')
-        except KeyError:
+            uuid = table_experiment.read(field='uuid')
+        except (KeyError,tables.exceptions.HDF5ExtError):
             pass
+        else:
+            extra_vars['experiment_uuid'] = uuid
     except tables.exceptions.NoSuchNodeError:
         pass
 
