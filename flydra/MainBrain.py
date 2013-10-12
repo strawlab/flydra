@@ -142,6 +142,7 @@ class TimestampEchoReceiver(threading.Thread):
 
         timestamp_echo_gatherer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         port = flydra.common_variables.timestamp_echo_gatherer_port
+        rospy.loginfo('MainBrain TimestampEchoReceiver binding %s' % ( (self.main_brain.hostname, port), ))
         timestamp_echo_gatherer.bind((self.main_brain.hostname, port))
 
         last_clock_diff_measurements = collections.defaultdict(list)
