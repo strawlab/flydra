@@ -214,7 +214,7 @@ class ROSMainBrain:
         self._set_image(req)
 
     def receive_missing_data(self, cam_id, framenumber_offset, missing_data):
-        req = ros_flydra.srv.MainBrainReceiveMissingData()
+        req = ros_flydra.srv.MainBrainReceiveMissingDataRequest()
         req.cam_id = cam_id
         req.framenumber_offset = framenumber_offset
         req.missing_data_json_buf = json.dumps( missing_data )
