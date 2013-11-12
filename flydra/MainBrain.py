@@ -1108,9 +1108,9 @@ class MainBrain(object):
 
     #See commits explaining socket starvation on why these are not all enabled
     ROS_CONTROL_API = dict(
-#        start_collecting_background=(std_srvs.srv.Empty),
-#        stop_collecting_background=(std_srvs.srv.Empty),
-#        take_background=(std_srvs.srv.Empty),
+        start_collecting_background=(std_srvs.srv.Empty),
+        stop_collecting_background=(std_srvs.srv.Empty),
+        take_background=(std_srvs.srv.Empty),
 #        clear_background=(std_srvs.srv.Empty),
         start_saving_data=(std_srvs.srv.Empty),
         stop_saving_data=(std_srvs.srv.Empty),
