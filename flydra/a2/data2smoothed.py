@@ -99,11 +99,10 @@ def convert(infilename,
         drift_estimates = result_utils.drift_estimates( h52d )
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h52d)
 
-        hostnames = drift_estimates['hostnames']
         gain = {}; offset = {};
         print 'hostname time_gain time_offset'
         print '-------- --------- -----------'
-        for i,hostname in enumerate(hostnames):
+        for i,hostname in enumerate(drift_estimates.get('hostnames',[])):
             tgain, toffset = result_utils.model_remote_to_local(
                 drift_estimates['remote_timestamp'][hostname][::10],
                 drift_estimates['local_timestamp'][hostname][::10])
