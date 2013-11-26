@@ -185,6 +185,12 @@ in a launch file, this would for example look like this::
 
     <node name="flydra_camera_node" pkg="ros_flydra" type="camnode" args="--num-buffers=100  --background-frame-alpha=0.01 --background-frame-interval=80 --num-points=6 --sleep-first=5 --mask-images=$(find flycave)/calibration/flycube1/oct_2013/Basler_21275576_mask.png:$(find flycave)/calibration/flycube1/oct_2013/Basler_21275577_mask.png:$(find flycave)/calibration/flycube1/oct_2013/Basler_21283674_mask.png:$(find flycave)/calibration/flycube1/oct_2013/Basler_21283677_mask.png:$(find flycave)/calibration/flycube1/oct_2013/Basler_21359437_mask.png" />
 
+Watch out! The masks in the launch file (e.g. 'flydra.node' are in the OPPOSITE ORDER than the camera names in the .yaml file (e.g. 'flydra.yaml').
+You can check this in the console output of the camnode::
+
+    ----------------------------------------------------------------------------------------------------
+    Camera guid ='Basler_21275577'
+    has mask image: '/opt/ros/ros-flycave.electric.boost1.46/flycave/calibration/flycube1/oct_2013/Basler_21275577_mask.png'
 
 
 Note that, as flydra_camera_node supports multiple cameras, you may
