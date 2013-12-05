@@ -621,7 +621,7 @@ class ProcessCamClass(rospy.SubscribeListener):
             fps = (framenumber - self.pub_rate_lastframe) / 2.0
             self.pub_rate_lastframe = framenumber
             self.pub_rate.publish(fps)
-            
+
         #maybe this is racy, but its only for debugging. Don't serialize images
         #if noone is subscribed
         if self.pub_img_n_subscribed <= 0:
@@ -2176,6 +2176,8 @@ class AppState(object):
 
                 if mask_images is not None:
                     mask_image_fname = mask_images[cam_no]
+                    print("----------------------------------------------------------------------------------------------------")
+                    print("Camera guid ='%s' \n has mask image: '%s'" % (self.all_cam_ids[cam_no], mask_image_fname))
                     im = scipy.misc.pilutil.imread( mask_image_fname )
                     if len(im.shape) != 3:
                         raise ValueError('mask image must have color channels')
